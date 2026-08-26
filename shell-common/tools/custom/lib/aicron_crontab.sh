@@ -59,34 +59,35 @@ aicron_crontab_strip() {
     '
 }
 
-# Add or replace job <1>'s block: <2> = schedule, <3> = absolute path of
-# aicron.sh. Stripping first is what makes a repeated `add` a replace rather
-# than a second block.
-aicron_crontab_install() {
+# stdin becomes the new table. Both editors below go through here, so the
+# temp file (which is what stops a half-written table reaching `crontab -`)
+# and the exit code of the install exist in one place.
+aicron_crontab_write() {
     local _tmp _rc
     _tmp="${TMPDIR:-/tmp}/aicron-crontab.$$"
-    {
-        aicron_crontab_dump | aicron_crontab_strip "$1"
-        printf '# BEGIN aicron:%s\n' "$1"
-        printf '%s %s run %s\n' "$2" "$3" "$1"
-        printf '# END aicron:%s\n' "$1"
-    } >"${_tmp}" 2>/dev/null
+    cat >"${_tmp}" 2>/dev/null
     crontab - <"${_tmp}"
     _rc=$?
     rm -f "${_tmp}"
     return ${_rc}
 }
 
+# Add or replace job <1>'s block: <2> = schedule, <3> = absolute path of
+# aicron.sh. Stripping first is what makes a repeated `add` a replace rather
+# than a second block.
+aicron_crontab_install() {
+    {
+        aicron_crontab_dump | aicron_crontab_strip "$1"
+        printf '# BEGIN aicron:%s\n' "$1"
+        printf '%s %s run %s\n' "$2" "$3" "$1"
+        printf '# END aicron:%s\n' "$1"
+    } | aicron_crontab_write
+}
+
 # Drop job <1>'s block(s). The state file is deliberately left alone — a
 # removed job that gets re-added keeps its pause flag and its last result.
 aicron_crontab_uninstall() {
-    local _tmp _rc
-    _tmp="${TMPDIR:-/tmp}/aicron-crontab.$$"
-    aicron_crontab_dump | aicron_crontab_strip "$1" >"${_tmp}" 2>/dev/null
-    crontab - <"${_tmp}"
-    _rc=$?
-    rm -f "${_tmp}"
-    return ${_rc}
+    aicron_crontab_dump | aicron_crontab_strip "$1" | aicron_crontab_write
 }
 
 # NF-1 — run <2..> under an exclusive lock on <1> so two aicron processes

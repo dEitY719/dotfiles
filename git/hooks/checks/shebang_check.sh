@@ -4,13 +4,11 @@ get_expected_shebang() {
     local repo_root="$1"
     local abs_path="$2"
 
-    # `*` in a bash pattern matches `/` as well, so the custom/ arm below would
-    # otherwise also claim custom/lib/*.sh. Those are sourced POSIX-sh helpers,
-    # never executed, and belong to the generic shell-common #!/bin/sh rule —
-    # which is why the nested case is excluded here rather than re-listed.
-    if [[ "$abs_path" == "$repo_root/shell-common/tools/custom/"*/* ]]; then
-        echo "${DOTFILES_HOOKS_SHEBANG_SHELL_COMMON:-#!/bin/sh}"
-    elif [[ "$abs_path" == "$repo_root/shell-common/tools/custom/"* ]]; then
+    # Only tools/custom *entry points* get the bash shebang; the source-only
+    # helpers in its subdirectories fall through to the generic shell-common
+    # #!/bin/sh rule below rather than restating it here. custom_tool_class
+    # (shared.sh) owns that distinction.
+    if [[ "$(custom_tool_class "${abs_path#"$repo_root"/}")" == "entrypoint" ]]; then
         echo "${DOTFILES_HOOKS_SHEBANG_SHELL_COMMON_CUSTOM:-#!/bin/bash}"
     elif [[ "$abs_path" == "$repo_root/shell-common"* ]]; then
         echo "${DOTFILES_HOOKS_SHEBANG_SHELL_COMMON:-#!/bin/sh}"

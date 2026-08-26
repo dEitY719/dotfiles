@@ -6,14 +6,9 @@ check_auto_executable_in_custom() {
     local repo_rel_path="$3"
     local output_file="$4"
 
-    # The nested-path arm is load-bearing: in a `case` pattern `*` matches `/`
-    # too, so `custom/*.sh` alone would also match `custom/lib/*.sh`. Files
-    # under lib/ are source-only helpers (mode 0644) with no main() to guard.
-    case "$repo_rel_path" in
-        shell-common/tools/custom/*/*) return 0 ;;
-        shell-common/tools/custom/*.sh) ;;
-        *) return 0 ;;
-    esac
+    # Entry points only — files under a subdirectory are source-only helpers
+    # (mode 0644) with no main() to guard. custom_tool_class lives in shared.sh.
+    [ "$(custom_tool_class "$repo_rel_path")" = "entrypoint" ] || return 0
 
     local tmp_file
     tmp_file=$(mktemp "$tmpdir/custom_stage_XXXXXX.txt")

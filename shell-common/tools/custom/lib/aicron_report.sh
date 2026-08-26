@@ -18,40 +18,35 @@
 
 # --- small shared helpers -------------------------------------------------
 
-# "yes"/"no" for humans; the JSON path uses real booleans instead.
-aicron_report_yesno() {
-    if [ "$1" = "true" ]; then
-        printf 'yes'
-    else
-        printf 'no'
-    fi
-}
-
-# One line summarising the last run, or "never".
+# One line summarising the last run, or "never". The three keys are written
+# together by aicron_state_record, so they are read together too — one jq over
+# the state file instead of one per key, on a path `list` walks per job.
 aicron_report_last() {
-    local _run _exit _dur
-    _run=$(aicron_state_read "$1" '.last_run')
+    local _f _v _run
+    _f=$(aicron_state_file "$1")
+    _v=""
+    [ -f "${_f}" ] && _v=$(jq -r '
+        "\(.last_run // "")|\(.last_exit // "?")|\(.last_duration_sec // "?")"
+    ' "${_f}" 2>/dev/null)
+    _run="${_v%%|*}"
     if [ -z "${_run}" ]; then
         printf 'never'
         return 0
     fi
-    _exit=$(aicron_state_read "$1" '.last_exit')
-    _dur=$(aicron_state_read "$1" '.last_duration_sec')
-    printf '%s (exit %s, %ss)' "${_run}" "${_exit:-?}" "${_dur:-?}"
+    _v="${_v#*|}"
+    printf '%s (exit %s, %ss)' "${_run}" "${_v%%|*}" "${_v#*|}"
 }
 
 # The JSON object for one job. <2> is an extra object merged over it (or the
 # literal `null`), which is how `status` adds its `running` key without a
 # second copy of this shape.
 aicron_report_job_json() {
-    local _sched _script _desc _inst _paused _state
+    local _sched _script _desc _inst _state
     _sched=$(aicron_manifest_schedule "$1")
     _script=$(aicron_manifest_script "$1") || _script=""
     _desc=$(aicron_manifest_description "$1")
     _inst=false
     aicron_crontab_installed "$1" && _inst=true
-    _paused=false
-    aicron_state_paused "$1" && _paused=true
     _state=$(aicron_state_json "$1")
 
     jq -n -c \
@@ -60,7 +55,6 @@ aicron_report_job_json() {
         --arg script "${_script}" \
         --arg description "${_desc}" \
         --argjson installed "${_inst}" \
-        --argjson paused "${_paused}" \
         --argjson state "${_state}" \
         --argjson extra "$2" '
         {
@@ -69,7 +63,7 @@ aicron_report_job_json() {
             script: $script,
             description: $description,
             installed: $installed,
-            paused: $paused,
+            paused: ($state.paused // false),
             last_run: ($state.last_run // null),
             last_exit: ($state.last_exit // null),
             last_duration_sec: ($state.last_duration_sec // null)
@@ -123,32 +117,33 @@ aicron_report_list() {
 # <1> = job, <2> = "json" or "text".
 aicron_report_status() {
     local _running _extra _desc _sched _inst _paused _last _log
-    _running=false
-    aicron_state_running "$1" && _running=true
 
     if [ "$2" = "json" ]; then
+        _running=false
+        aicron_state_running "$1" && _running=true
         _extra=$(printf '{"running":%s}' "${_running}")
         aicron_report_job_json "$1" "${_extra}"
         return 0
     fi
 
+    # The text view wants yes/no, so it builds yes/no — the same way the list
+    # loop below does, rather than through a boolean and back again.
     _desc=$(aicron_manifest_description "$1")
     _sched=$(aicron_manifest_schedule "$1")
-    _inst=false
-    aicron_crontab_installed "$1" && _inst=true
-    _paused=false
-    aicron_state_paused "$1" && _paused=true
+    _inst=no
+    aicron_crontab_installed "$1" && _inst=yes
+    _paused=no
+    aicron_state_paused "$1" && _paused=yes
+    _running=no
+    aicron_state_running "$1" && _running=yes
     _last=$(aicron_report_last "$1")
     _log=$(aicron_run_log_path "$1")
 
     ux_header "aicron status: $1"
     ux_table_row "description" "${_desc}"
     ux_table_row "schedule" "${_sched}"
-    _inst=$(aicron_report_yesno "${_inst}")
     ux_table_row "installed" "${_inst}"
-    _paused=$(aicron_report_yesno "${_paused}")
     ux_table_row "paused" "${_paused}"
-    _running=$(aicron_report_yesno "${_running}")
     ux_table_row "running now" "${_running}"
     ux_table_row "last run" "${_last}"
     ux_table_row "log" "${_log}"
@@ -162,24 +157,27 @@ aicron_doctor_scan() {
     local _tmp _n _script _f _base _sd
     _tmp="${TMPDIR:-/tmp}/aicron-doctor.$$"
 
-    # (a) a marker block whose job left the manifest, and
-    # (d) two blocks claiming the same job.
-    aicron_crontab_names >"${_tmp}.all" 2>/dev/null || : >"${_tmp}.all"
-    sort -u "${_tmp}.all" >"${_tmp}.uniq"
+    # Both crontab findings come off one sorted dump, and the manifest job list
+    # is read before them so "installed but not in the manifest" is a set
+    # difference rather than a jq call per installed block.
+    aicron_manifest_names >"${_tmp}.jobs" 2>/dev/null || : >"${_tmp}.jobs"
+    aicron_crontab_names 2>/dev/null | sort >"${_tmp}.all" || : >"${_tmp}.all"
+
+    # (a) a marker block whose job left the manifest.
+    uniq "${_tmp}.all" | grep -F -x -v -f "${_tmp}.jobs" >"${_tmp}.orphan" 2>/dev/null || true
     while IFS= read -r _n; do
         [ -n "${_n}" ] || continue
-        if ! aicron_manifest_has "${_n}"; then
-            printf 'orphan crontab block: aicron:%s is installed but absent from the manifest\n' "${_n}"
-        fi
-    done <"${_tmp}.uniq"
-    sort "${_tmp}.all" | uniq -d >"${_tmp}.dup"
+        printf 'orphan crontab block: aicron:%s is installed but absent from the manifest\n' "${_n}"
+    done <"${_tmp}.orphan"
+
+    # (d) two blocks claiming the same job.
+    uniq -d "${_tmp}.all" >"${_tmp}.dup" 2>/dev/null || : >"${_tmp}.dup"
     while IFS= read -r _n; do
         [ -n "${_n}" ] || continue
         printf 'duplicate marker blocks in the crontab for job %s\n' "${_n}"
     done <"${_tmp}.dup"
 
     # (b) a manifest job whose script is not on disk.
-    aicron_manifest_names >"${_tmp}.jobs" 2>/dev/null || : >"${_tmp}.jobs"
     while IFS= read -r _n; do
         [ -n "${_n}" ] || continue
         _script=$(aicron_manifest_script "${_n}") || _script=""
@@ -188,7 +186,7 @@ aicron_doctor_scan() {
         fi
     done <"${_tmp}.jobs"
 
-    rm -f "${_tmp}.all" "${_tmp}.uniq" "${_tmp}.dup" "${_tmp}.jobs"
+    rm -f "${_tmp}.all" "${_tmp}.orphan" "${_tmp}.dup" "${_tmp}.jobs"
 
     # (c) a state file that stopped being JSON.
     _sd=$(aicron_state_dir)

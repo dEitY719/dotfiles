@@ -16,25 +16,12 @@ check_direct_exec_guard() {
     local repo_rel_path="$3"
     local output_file="$4"
 
-    # Only check tools/custom files (executable scripts, not sourced).
-    #
-    # The nested-path arm comes first and is load-bearing: in a `case` pattern
-    # `*` matches `/` as well, so `shell-common/tools/custom/*.sh` alone also
-    # matches `shell-common/tools/custom/lib/foo.sh`. Files under `lib/` are
-    # source-only helpers (mode 0644, never executed), and the guard this check
-    # demands dereferences ${BASH_SOURCE[0]} — a bad substitution under dash,
-    # which would break the POSIX-sh entry points that source them. The golden
-    # rules script checks the same rule with a real glob, which never recursed.
-    case "$repo_rel_path" in
-        shell-common/tools/custom/*/*)
-            return 0
-            ;;
-        shell-common/tools/custom/*.sh)
-            ;;
-        *)
-            return 0
-            ;;
-    esac
+    # Only check tools/custom entry points (executed scripts, not sourced).
+    # Files under a subdirectory are source-only helpers, and the guard this
+    # check demands dereferences ${BASH_SOURCE[0]} — a bad substitution under
+    # dash, which would break the POSIX-sh entry points that source them.
+    # custom_tool_class (shared.sh) is the SSOT for that distinction.
+    [ "$(custom_tool_class "$repo_rel_path")" = "entrypoint" ] || return 0
 
     local abs_path="$repo_root/$repo_rel_path"
     [ -f "$abs_path" ] || return 0

@@ -47,12 +47,19 @@ aicron_manifest_has() {
     [ "${_c:-0}" -gt 0 ]
 }
 
+# The one substitution the manifest gets, defined once so the "$HOME and
+# nothing else expands, and never through eval" rule has a single home. Every
+# jq program below prepends it and is handed $h.
+# shellcheck disable=SC2016  # jq program text — $h is jq's variable, not the shell's
+_AICRON_JQ_EXPAND='def expand: gsub("\\$\\{HOME\\}"; $h) | gsub("\\$HOME"; $h);'
+
 # Raw read of one field: <1> = job, <2> = a jq expression applied to the job
-# object (e.g. `.schedule // ""`).
+# object (e.g. `.schedule // ""`, or `.log | expand`).
 aicron_manifest_get() {
     local _m
     _m=$(aicron_manifest_file)
-    jq -r --arg n "$1" ".jobs[]? | select(.name == \$n) | $2" "${_m}" 2>/dev/null
+    jq -r --arg n "$1" --arg h "${HOME:-}" \
+        "${_AICRON_JQ_EXPAND} .jobs[]? | select(.name == \$n) | $2" "${_m}" 2>/dev/null
 }
 
 aicron_manifest_schedule() {
@@ -79,22 +86,18 @@ aicron_manifest_script() {
 # The job's `log` override, already $HOME-expanded, or nothing when the job
 # does not set one (the caller then falls back to the default log path).
 aicron_manifest_log() {
-    local _m
-    _m=$(aicron_manifest_file)
-    jq -r --arg n "$1" --arg h "${HOME:-}" '
-        def expand: gsub("\\$\\{HOME\\}"; $h) | gsub("\\$HOME"; $h);
-        .jobs[]? | select(.name == $n) | (.log // "") | tostring | expand
-    ' "${_m}" 2>/dev/null
+    aicron_manifest_get "$1" '(.log // "") | tostring | expand'
 }
 
 # `defaults.env` overridden by the job's own `env`, as KEY=VALUE lines with
 # $HOME expanded. Consumed by aicron_run.sh, which hands the lines straight to
 # `env` rather than sourcing them.
+# Not routed through aicron_manifest_get: this one reads .defaults at the
+# document root, outside the job object that helper selects.
 aicron_manifest_env() {
     local _m
     _m=$(aicron_manifest_file)
-    jq -r --arg n "$1" --arg h "${HOME:-}" '
-        def expand: gsub("\\$\\{HOME\\}"; $h) | gsub("\\$HOME"; $h);
+    jq -r --arg n "$1" --arg h "${HOME:-}" "${_AICRON_JQ_EXPAND}"'
         ((.defaults.env // {}) + ((.jobs[]? | select(.name == $n) | .env) // {}))
         | to_entries[]
         | "\(.key)=\(.value | tostring | expand)"
@@ -106,13 +109,5 @@ aicron_manifest_env() {
 # tick starts in $HOME with no repo under it, and hard-coding one user's home
 # would make the version-controlled manifest machine-specific.
 aicron_manifest_args() {
-    local _m
-    _m=$(aicron_manifest_file)
-    jq -r --arg n "$1" --arg h "${HOME:-}" '
-        def expand: gsub("\\$\\{HOME\\}"; $h) | gsub("\\$HOME"; $h);
-        ((.jobs[]? | select(.name == $n) | .args) // [])
-        | .[]
-        | tostring
-        | expand
-    ' "${_m}" 2>/dev/null
+    aicron_manifest_get "$1" '(.args // []) | .[] | tostring | expand'
 }
