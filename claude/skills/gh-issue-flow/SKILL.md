@@ -73,11 +73,12 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    `Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 4")`
 5. **Step 2.4.1 — Wake merge-train dispatcher** (only if 2.3 succeeded; runs
    regardless of Step 2.4's own soft-fail outcome; non-fatal) — fires
-   `aicron run merge-train` once so the dispatcher checks immediately instead
-   of waiting up to the cron backstop period. A missing `aicron.sh` or a
-   dispatcher failure prints one `[WARN]` line and the chain continues — the
-   dispatcher's own NF-1 locking already prevents a duplicate train. Detail:
-   `references/merge-train-wake.md`.
+   `aicron run merge-train` **in the background, not awaited** (a real train
+   launch can block ~4 min on its own `--wait` confirmation, which the
+   rebase steps below don't need) so the dispatcher checks immediately
+   instead of waiting up to the cron backstop period. Only a missing
+   `aicron.sh` prints a `[WARN]` line; the dispatcher's own NF-1 locking
+   already prevents a duplicate train. Detail: `references/merge-train-wake.md`.
 6. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
    rebase-resolve; a fresh PR usually prints "이미 충돌 없음 — skip".
    `Skill(gh:pr-resolve-conflict, "<PR_NUM>")`

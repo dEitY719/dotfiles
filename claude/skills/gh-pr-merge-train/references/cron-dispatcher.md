@@ -14,6 +14,11 @@ Register it with something like:
 */15 * * * * /path/to/pr_merge_train_cron.sh --cwd ~/dotfiles >> ~/.local/state/pr-merge-train/cron.log 2>&1
 ```
 
+Illustrative only — the actual schedule of this repo's `merge-train` job is
+whatever `shell-common/tools/custom/cron-jobs.json` says (`*/5 * * * *` as of
+#1482), installed via `aicron add merge-train`, not a hand-edited crontab
+line. Treat that manifest, not the example above, as the schedule SSOT.
+
 `--dry-run` reports what a tick would launch without taking the lock or opening
 a pane.
 

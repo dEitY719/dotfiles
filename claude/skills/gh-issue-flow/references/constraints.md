@@ -14,10 +14,12 @@
   dirty working tree breaks `git rebase`.
 - **Merge-train wake soft-fail exception (#1482).** Step 2.4.1
   (`aicron run merge-train`) fires right after Step 2.4, whether or not 2.4
-  succeeded — it is not a `Skill()` call and never stops the flow. A missing
-  `aicron.sh` or a non-zero dispatcher exit (including the dispatcher
-  declining because a train is already live, per NF-1) is a single `[WARN]`
-  and the flow continues to Step 2.5. Detail:
+  succeeded — it is not a `Skill()` call and never stops the flow. It is
+  launched **backgrounded** (harness `run_in_background`, not awaited) so
+  the dispatcher's own up-to-~4-min `herdr agent prompt --wait` never
+  delays Step 2.5/2.5.1, which don't depend on its outcome. Only a missing
+  `aicron.sh` (checked synchronously, before launch) is a single `[WARN]`;
+  the dispatcher's own exit code is never observed by this step. Detail:
   `references/merge-train-wake.md`.
 - Step 2.5.1 (gh:pr-resolve-outdated) does a clean rebase-sync when the
   base moved forward with no conflicts; it is a no-op when the PR is
@@ -59,9 +61,12 @@
   markdown headers, no per-step bullet summaries. Such text reads as
   a turn-ending answer and re-introduces the early-stop. The only
   prose allowed inside Step 2 is the final Step 3 report. The quality
-  gate now runs inside the delegated Step 2.4 (`devx:pr-review-all`),
-  so Step 2 is a clean six-`Skill()` sequence with no inline gate
-  dispatch or Bash commit+push between calls.
+  gate runs inside the delegated Step 2.4 (`devx:pr-review-all`), so
+  Step 2 is a six-`Skill()` sequence with no inline gate dispatch or
+  Bash commit+push between calls — **except** the one documented,
+  backgrounded, non-fatal Step 2.4.1 dispatcher wake (#1482), which is
+  not a `Skill()` call and adds no prose. It is the sole intentional
+  exception; do not add a second one without updating this line.
 - **Do NOT stop after any sub-skill completes.** Each step (2.1 through
   2.5.1, including the Step 2.4 quality gate and the Step 2.4.1 merge-train
   wake) is a waypoint, not a final answer. Continue to the next step
