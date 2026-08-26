@@ -107,4 +107,4 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 - 내용은 한 줄 = 한 항목, `- 변경: **요약**` 형식. 한 이슈가 항목을 여러 개 남기면 같은 파일에 여러 줄로 적는다. 줄바꿈·하위 불릿은 금지(수집기가 비어 있지 않은 모든 줄을 항목으로 싣는다).
 - 같은 날짜 안 정렬은 파일명 오름차순이다.
 - 포맷 강제: `mise run lint-docs` (`scripts/lint_changelog_fragments.sh`). 회귀 테스트는 `tests/bats/lint/changelog_fragments.bats`.
-- 이 changelog는 일일/주간 보고 허브(my-share)가 수집해 보고서를 생성한다 — `changelog.md` 와 `changelog.d/` 를 모두 읽는다.
+- 이 changelog는 일일/주간 보고 허브(my-share)가 수집해 보고서를 생성한다.
