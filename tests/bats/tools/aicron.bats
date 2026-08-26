@@ -968,13 +968,15 @@ EOF
         [ -f "${_f}" ] || fail "guard target is missing, so this test proves nothing: ${_f}"
     done
 
-    run grep -REn '[$][$]' "${_sources[@]}"
+    run grep -En '[$][$]' "${_sources[@]}"
     assert_failure 1
 
-    # Positive control: the same invocation still reports a match, so the 1
-    # above means the sources are clean rather than that grep went blind.
+    # Positive control over the SAME operand list plus one planted file: a
+    # fixture-only control would prove the pattern still matches something,
+    # not that this invocation — this source list, this glob expansion —
+    # still reports a match when one of its own files goes bad.
     printf '_tmp="${TMPDIR}/aicron.$$"\n' >"${_WORK_DIR}/pid_derived.sh"
-    run grep -REn '[$][$]' "${_WORK_DIR}/pid_derived.sh"
+    run grep -En '[$][$]' "${_sources[@]}" "${_WORK_DIR}/pid_derived.sh"
     assert_success
 }
 
