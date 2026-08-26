@@ -57,6 +57,10 @@ setup() {
 }
 
 teardown() {
+    # `_run_child_suite` holds the child's stdin fifo open on fd 8. A bats
+    # assertion aborts the test body at the failing line, so closing it there
+    # is not enough — the same reason the two cleanups below live here.
+    exec 8>&- 2>/dev/null || true
     if [ -n "${_LOCK_HOLDER_PID}" ]; then
         kill "${_LOCK_HOLDER_PID}" 2>/dev/null || true
         wait "${_LOCK_HOLDER_PID}" 2>/dev/null || true
@@ -558,6 +562,24 @@ _install_stubs() {
 # NAME=VALUE. The VAR=VALUE assignments are appended after the defaults, and
 # `env` applies assignments left to right, so a test can override any of them
 # (PATH included) without restating the whole sandbox.
+#
+# `</dev/null 3>&-` on the invocation below is load-bearing, not tidiness
+# (issue #1473) — the same fd hazard `_hold_lock` documents, one layer out:
+#
+#   </dev/null  the tick shells out to the `gh` stub, whose `api graphql`
+#               branch drains stdin the way the real `gh api` does. Without
+#               this the stub inherits *bats' own* stdin, and whenever that is
+#               a pipe whose writer never closes (an agent harness, `ssh`
+#               without `-n`, any `cmd | bats` wrapper) the `cat` blocks
+#               forever: the tick never exits, `run` never returns and the test
+#               prints no TAP line at all — the whole run hangs with nothing to
+#               point at. The stub already excused a tty (PR #1469), which
+#               covered only the interactive case. The tick is a cron job, so
+#               /dev/null is also what it gets in production.
+#   3>&-        bats streams TAP on fd 3 and will not finish a test until every
+#               inheritor closes it. Closing it for the tick means a child that
+#               outlives the script cannot freeze the run into a result-less
+#               hang; the worst it can do is fail loudly.
 _run_tick() {
     local _unset=() _env=()
     while [ "$#" -gt 1 ] && [ "$1" = "-u" ]; do
@@ -583,7 +605,7 @@ _run_tick() {
         "IW_STALL_RECOVER_SLEEP=0" \
         "IW_LIMIT_OBSERVE_SLEEP=0" \
         "${_env[@]}" \
-        bash "${SCRIPT}" "$@"
+        bash "${SCRIPT}" "$@" </dev/null 3>&-
 }
 
 _log_count() {
@@ -649,6 +671,57 @@ _hold_lock() {
         _i=$((_i + 1))
     done
     [ -s "${_ready}" ]
+}
+
+# Run the @test cases fed on stdin as a throwaway suite in a *child* bats, and
+# leave that child's exit status and TAP output in `$status` / `$output`.
+#
+# This is how the "a red test reports red instead of hanging" guarantee becomes
+# a test: bats has no native "expect this case to fail", so the subject has to
+# be a bats run of its own. The child suite is this file's own helper section —
+# everything above the first `@test` — so it inherits the real setup, teardown
+# and stubs, and any future change to them is exercised here too.
+#
+# Two things make the child run the *hanging* configuration (issue #1473):
+#
+#   fd 8      a fifo opened read-write, so the child's stdin is a pipe with a
+#             live writer that never sends EOF — the shape an agent harness,
+#             `ssh` without `-n` or a `cmd | bats` wrapper hands to bats, and
+#             the shape that used to leave a stdin-draining stub blocked
+#             forever inside the tick. Opening it `<>` from this process is
+#             what keeps the reproduction free of a background writer that
+#             would itself have to be reaped.
+#   timeout   the outer bound. A regression must surface as a bounded 124, not
+#             as a hang that takes the whole suite down with it — every
+#             assertion below therefore refutes 124 explicitly.
+_run_child_suite() {
+    # No `timeout` means no bound, and an unbounded child bats is the very
+    # thing these cases refuse to allow — skip rather than risk it.
+    command -v timeout >/dev/null 2>&1 || skip "timeout(1) not available"
+
+    local _dir="${_WORK_DIR}/probe"
+    local _file="${_dir}/probe.bats"
+    mkdir -p "${_dir}"
+
+    # `load '../test_helper'` resolves against the *child* file's directory, so
+    # it has to be re-pointed at the real tree before the copy leaves it.
+    sed -e "/^@test /,\$d" \
+        -e "s|^load '../test_helper'$|load '${DOTFILES_ROOT}/tests/bats/test_helper'|" \
+        "${BATS_TEST_FILENAME}" >"${_file}"
+    cat >>"${_file}"
+
+    mkfifo "${_dir}/stdin"
+    exec 8<>"${_dir}/stdin"
+    run timeout 60 "${DOTFILES_ROOT}/tests/bats/lib/bats-core/bin/bats" \
+        "${_file}" <&8
+    exec 8>&-
+}
+
+# `$status` 124 is `timeout`'s "the child never finished" — the exact defect
+# these cases exist to catch, so it gets its own message rather than being
+# folded into a generic status assertion.
+_assert_not_hung() {
+    [ "${status}" -ne 124 ] || fail "the child bats run hung (timeout): $1"
 }
 
 # ---------------------------------------------------------------------------
@@ -1862,7 +1935,8 @@ _two_repo_fixture() {
     mkdir -p "${_tmp}"
     # Open-coded rather than via _run_tick: this test needs XDG_STATE_HOME
     # *absent*, and the helper always assigns it — `env` applies assignments
-    # after its own -u options, so -u could not win.
+    # after its own -u options, so -u could not win. The one thing it must not
+    # drop is the helper's `</dev/null 3>&-`; see _run_tick for why (#1473).
     run env -u HOME -u XDG_STATE_HOME \
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
@@ -1871,7 +1945,7 @@ _two_repo_fixture() {
         "TMPDIR=${_tmp}" \
         "IW_IDLE_POLL_SLEEP=0" \
         "IW_LIMIT_OBSERVE_SLEEP=0" \
-        bash "${SCRIPT}"
+        bash "${SCRIPT}" </dev/null 3>&-
     refute_output --partial "unbound variable"
 }
 
@@ -2273,4 +2347,67 @@ _two_repo_fixture() {
     assert_success
     assert_output --partial "Rate-limit gate open"
     refute_output --partial "herdr not found"
+}
+
+# ---------------------------------------------------------------------------
+# The suite fails loudly (issue #1473)
+# ---------------------------------------------------------------------------
+#
+# A red case in this file used to print no result line at all: the tick handed
+# its stubs bats' own stdin, a stub drained it, and on a stdin that never sends
+# EOF the drain blocked forever — one regression turned a red run into a stuck
+# one, in CI and in the terminal alike. These cases run a deliberately red
+# child suite under exactly that stdin and assert it comes back red *and*
+# bounded, so the harness can never go back to swallowing its own failures.
+
+@test "issue_watcher_cron: a red assertion after a healthy tick reports not ok" {
+    _run_child_suite <<'PROBE'
+@test "probe: healthy tick then a red assertion" {
+    _run_tick
+    assert_output --partial "THIS-STRING-CANNOT-APPEAR"
+}
+PROBE
+    _assert_not_hung "healthy tick"
+    assert_equal "${status}" 1
+    assert_output --partial "not ok 1 probe: healthy tick then a red assertion"
+}
+
+@test "issue_watcher_cron: a red assertion after a failed dispatch reports not ok" {
+    _run_child_suite <<'PROBE'
+@test "probe: failed dispatch then a red assertion" {
+    _run_tick "HERDR_PROMPT_MODE=fail"
+    assert_output --partial "THIS-STRING-CANNOT-APPEAR"
+}
+PROBE
+    _assert_not_hung "failed dispatch"
+    assert_equal "${status}" 1
+    assert_output --partial "not ok 1 probe: failed dispatch then a red assertion"
+}
+
+@test "issue_watcher_cron: a red assertion without a tick still reports not ok" {
+    # The control: this shape always reported red, and must keep doing so —
+    # it is what proves the two cases above measure the tick, not bats.
+    _run_child_suite <<'PROBE'
+@test "probe: no tick, just a red assertion" {
+    assert_equal "x" "y"
+}
+PROBE
+    _assert_not_hung "no tick"
+    assert_equal "${status}" 1
+    assert_output --partial "not ok 1 probe: no tick, just a red assertion"
+}
+
+@test "issue_watcher_cron: a green suite stays green on a never-EOF stdin" {
+    # The other half of the guarantee: the fix must not have bought a bounded
+    # red run by breaking the passing path. A full tick, same stdin, still 0.
+    _run_child_suite <<'PROBE'
+@test "probe: healthy tick, honest assertion" {
+    _run_tick
+    assert_success
+    assert_output --partial "dispatched"
+}
+PROBE
+    _assert_not_hung "green suite"
+    assert_equal "${status}" 0
+    assert_output --partial "ok 1 probe: healthy tick, honest assertion"
 }
