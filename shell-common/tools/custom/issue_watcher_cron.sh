@@ -158,7 +158,9 @@ _IW_LIMIT_BACKOFF_SECONDS="1800"
 # minutes — review gate included — so a prompt that provably reached the pane
 # and is idle again a minute later did not finish early, it never started.
 _IW_LIMIT_OBSERVE_SEC="60"
-_IW_LIMIT_OBSERVE_POLLS=$(_iw_cap "${IW_LIMIT_OBSERVE_POLLS-}" 6 IW_LIMIT_OBSERVE_POLLS)
+# A fixed divisor of the window above, not a policy cap like the _IW_MAX_*
+# knobs, so it stays a bare constant the way _IW_STALL_RECOVER_ATTEMPTS does.
+_IW_LIMIT_OBSERVE_POLLS="6"
 # Gap between those polls, derived so the two values above stay the SSOT.
 # Overridable (to 0) for the same reason _IW_IDLE_POLL_SLEEP is: the bats suite
 # must not pay a real minute per gate test.
@@ -1306,8 +1308,7 @@ _iw_stall_recover_via_enter() {
 # the command runs top-level rather than inside a subagent, which is what took
 # this path out of the `SubagentStop` guard gap (#1434).
 _iw_prompt_issue() {
-    local _agent="$1" _number="$2" _prompt _json _code _rc=0 _seq0 _post_stall_status
-    local _fail_code
+    local _agent="$1" _number="$2" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code
 
     _prompt="/gh-issue-flow ${_number}"
     _IW_STALL_RECOVER_ERROR=""
@@ -1351,12 +1352,9 @@ _iw_prompt_issue() {
     # says `agent_prompt_stalled`, but the pane being unreachable is what a
     # human needs to read in the cron log (PR #1449 codex review). No caller
     # branches on this string — since #1444 the gate reads whether the dispatch
-    # succeeded, never why it failed.
-    if [ -n "${_IW_STALL_RECOVER_ERROR}" ]; then
-        _fail_code="${_IW_STALL_RECOVER_ERROR}"
-    else
-        _fail_code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
-    fi
+    # succeeded, never why it failed. `_code` is already parsed above: reaching
+    # here means the dispatch failed, which is exactly the branch that set it.
+    _fail_code="${_IW_STALL_RECOVER_ERROR:-${_code}}"
     ux_error "herdr agent prompt failed for agent ${_agent} (${_fail_code:-unknown})."
     return 1
 }
@@ -1573,19 +1571,25 @@ _iw_limit_observe() {
         _i=$((_i + 1))
         _alive=""
 
-        while IFS= read -r _agent; do
+        # fd 3, not stdin: the loop body runs `herdr`, which would otherwise
+        # swallow the rest of the agent list and silently shorten the
+        # observation to its first entry (PR #1447 agy review).
+        while IFS= read -r _agent <&3; do
             [ -n "${_agent}" ] || continue
             _status=$(_iw_agent_status "${_agent}") || _status=""
             case "${_status}" in
             working | blocked)
                 _alive="${_agent}"
-                _seen="${_agent}"
                 break
                 ;;
             esac
-        done <<EOF
+        done 3<<EOF
 ${_agents}
 EOF
+        # `_alive` is this poll's answer and is cleared above every round;
+        # `_seen` latches so the caller can tell "fell back" from "never
+        # started".
+        [ -z "${_alive}" ] || _seen="${_alive}"
     done
 
     if [ -n "${_alive}" ]; then
@@ -1602,25 +1606,26 @@ EOF
 # gate has already decided by the time this runs, and nothing here can change
 # that decision. `--format text` gives the pane as plain lines; an error
 # response comes back as JSON on stdout, which is skipped rather than logged as
-# if it were pane content.
+# if it were pane content. That skip is decided by `_iw_json_value`, not by a
+# byte-prefix match on the envelope: pane text is not JSON, so the filter reads
+# as "no such field" for real output and names the code for a real error.
 _iw_limit_evidence() {
     local _agents="$1" _agent _text _line
 
-    while IFS= read -r _agent; do
+    # fd 3, not stdin: the loop body runs `herdr` (PR #1447 agy review).
+    while IFS= read -r _agent <&3; do
         [ -n "${_agent}" ] || continue
         _text=$(herdr agent read "${_agent}" --lines "${_IW_LIMIT_EVIDENCE_LINES}" \
             --format text 2>/dev/null) || _text=""
-        case "${_text}" in
-        '' | '{"error"'*)
+        if [ -z "${_text}" ] || [ -n "$(printf '%s' "${_text}" | _iw_json_value '.error.code')" ]; then
             ux_info "No pane output captured for ${_agent}."
             continue
-            ;;
-        esac
+        fi
         ux_info "Pane tail for ${_agent} (evidence only — not a gate input):"
         printf '%s\n' "${_text}" | while IFS= read -r _line; do
             ux_bullet_sub "${_line}"
         done
-    done <<EOF
+    done 3<<EOF
 ${_agents}
 EOF
 }
@@ -1634,19 +1639,19 @@ EOF
 # would hold the watcher over a single transient herdr blip; 2 buys that
 # evidence for one extra tick (~5 min).
 _iw_limit_record() {
-    local _agents="$1" _alive="" _regressed="" _strikes _now _rc=0
+    local _agents="$1" _alive="" _strikes _now
 
     # Nothing reached a pane this tick: no evidence either way, so the strike
     # count stays exactly where it was.
     [ -n "${_agents}" ] || return 0
 
-    _alive=$(_iw_limit_observe "${_agents}") || _rc=$?
-    if [ "${_rc}" -eq 0 ]; then
+    # On failure `_alive` carries the agent that reached `working` earlier in
+    # the window, if any — see _iw_limit_observe.
+    if _alive=$(_iw_limit_observe "${_agents}"); then
         ux_info "Agent ${_alive} held 'working' for ${_IW_LIMIT_OBSERVE_SEC}s — quota is not exhausted, gate cleared."
         _iw_limit_clear
         return 0
     fi
-    _regressed="${_alive}"
 
     _strikes=$(_iw_limit_read strikes)
     case "${_strikes}" in
@@ -1654,8 +1659,8 @@ _iw_limit_record() {
     esac
     _strikes=$((_strikes + 1))
 
-    if [ -n "${_regressed}" ]; then
-        ux_warning "Agent ${_regressed} reached 'working' and fell back inside ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
+    if [ -n "${_alive}" ]; then
+        ux_warning "Agent ${_alive} reached 'working' and fell back inside ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
     else
         ux_warning "No dispatched agent reached 'working' within ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
     fi
@@ -1950,7 +1955,7 @@ EOF
         if [ "${_rc}" -eq 0 ]; then
             _dispatched=$((_dispatched + 1))
             # Confirmed submitted, so this pane is a valid witness for the
-            # quota. Collected rather than judged here — see below.
+            # quota — collected here, judged after the loop.
             _confirmed="${_confirmed}$(_iw_agent_name "${_repo}" "${_number}")
 "
         else
