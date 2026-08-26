@@ -162,7 +162,8 @@ _dotfiles_root_warn_if_foreign_source() {
     [ -f "$_dwfs_self" ] || return 0
     command -v git >/dev/null 2>&1 || return 0
 
-    _dwfs_canonical="${HOME:-}/dotfiles"
+    [ -n "${HOME:-}" ] || return 0
+    _dwfs_canonical="${HOME}/dotfiles"
     [ -d "$_dwfs_canonical" ] || return 0
 
     _dwfs_dir=$(dirname "$_dwfs_self" 2>/dev/null) || return 0

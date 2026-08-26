@@ -263,6 +263,18 @@ _setup_foreign_repo() {
     if [ ! -e "$_REAL_HOME_1454/dotfiles/.git" ]; then
         skip "no ~/dotfiles checkout on this host"
     fi
+    # ~/dotfiles existing is not enough: on a host where it is an unrelated
+    # clone (a fork developed elsewhere, a leftover from an old setup) the
+    # guard is *right* to warn, so asserting silence would false-fail. Reuse
+    # the production repo-identity helper so this check can never drift from
+    # the one under test.
+    . "$HELPER"
+    _this_common=$(_dotfiles_root_git_common_dir "$(dirname "$HELPER")")
+    _canon_common=$(_dotfiles_root_git_common_dir "$_REAL_HOME_1454/dotfiles")
+    if [ "$_this_common" != "$_canon_common" ]; then
+        skip "~/dotfiles on this host is a different repository than this checkout"
+    fi
+
     run env HOME="$_REAL_HOME_1454" bash -c \
         ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$HELPER'"
     assert_success
