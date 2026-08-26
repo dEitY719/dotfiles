@@ -205,6 +205,31 @@ _gh_pr_review_require_internal_cli() {
     return 0
 }
 
+# _gh_pr_review_argv_prompt_or_fail — shared MAX_ARG_STRLEN guard for AI
+# CLIs that take the whole prompt as a value argument instead of --file or
+# stdin (agy --print, hermes -z). The kernel caps a single argv string at
+# MAX_ARG_STRLEN (32 pages = 131072 bytes on Linux) — passing an oversized
+# prompt straight through would blow past that as a bare "Argument list
+# too long" exec failure, so this guards it explicitly up front.
+# Args: $1 = CLI label for the error message (e.g. "agy --print"),
+#       $2 = prompt_file to read, $3 = file to write an over-limit or
+#       read-error message to.
+# On success prints the prompt content on stdout and returns 0; on
+# failure returns 1 with nothing on stdout.
+_gh_pr_review_argv_prompt_or_fail() {
+    local _cli_label="$1"
+    local _prompt_file="$2"
+    local _err_file="$3"
+    local _size
+    _size=$(wc -c <"$_prompt_file")
+    if [ "$_size" -ge 131072 ]; then
+        printf '%s: prompt is %s bytes, over the %s-byte argv limit (MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.\n' \
+            "$_cli_label" "$_size" 131072 >"$_err_file"
+        return 1
+    fi
+    cat "$_prompt_file" 2>"$_err_file"
+}
+
 # _gh_pr_review_resolve_claude_account — for --ai claude --user <name>,
 # loads the claude integration helper (`_claude_resolve_account`) and
 # returns the resolved CLAUDE_CONFIG_DIR on stdout. Exits 1 with the
@@ -353,13 +378,10 @@ _gh_pr_review_run_ai() {
         }
     fi
     local _rc=0
-    local _prompt_size
     local _prompt_content
     local _opencode_workdir
     # Used by the opencode case below only: opencode takes a short
     # instruction as argv with the diff attached via --file "$prompt_file".
-    # hermes does NOT use this — `hermes -z` takes the full prompt content
-    # as its argv value (see the hermes case).
     local _ai_file_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
     case "$ai" in
     codex)
@@ -367,19 +389,12 @@ _gh_pr_review_run_ai() {
         ;;
     agy)
         # `agy --print` runs the Antigravity CLI non-interactively but
-        # takes the prompt as a value argument, not stdin. The kernel caps
-        # a single argv string at MAX_ARG_STRLEN (32 pages = 131072 bytes
-        # on Linux) — a large PR diff would blow past that as a bare
-        # "Argument list too long" exec failure, so guard it explicitly.
-        _prompt_size=$(wc -c <"$prompt_file")
-        if [ "$_prompt_size" -ge 131072 ]; then
-            printf 'agy --print: prompt is %s bytes, over the %s-byte argv limit (MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.\n' \
-                "$_prompt_size" 131072 >"$_stderr_file"
-            _rc=1
-        elif ! _prompt_content=$(cat "$prompt_file" 2>"$_stderr_file"); then
-            _rc=1
-        else
+        # takes the prompt as a value argument, not stdin — guarded by
+        # _gh_pr_review_argv_prompt_or_fail (shared with the hermes case).
+        if _prompt_content=$(_gh_pr_review_argv_prompt_or_fail "agy --print" "$prompt_file" "$_stderr_file"); then
             agy --print "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
+        else
+            _rc=1
         fi
         ;;
     claude)
@@ -393,22 +408,14 @@ _gh_pr_review_run_ai() {
         # Confirmed against real `hermes --help` output on an internal PC
         # (issue #1452): there is no `exec` subcommand — the one-shot
         # non-interactive flag is `-z` / `--oneshot`, and like `agy --print`
-        # it takes the prompt as a value argument rather than --file/stdin.
-        # So this mirrors the agy case exactly, MAX_ARG_STRLEN guard
-        # included.
+        # it takes the prompt as a value argument rather than --file/stdin,
+        # guarded by the same _gh_pr_review_argv_prompt_or_fail helper.
         if ! _gh_pr_review_require_internal_cli hermes >"$_stderr_file" 2>&1; then
             _rc=1
+        elif _prompt_content=$(_gh_pr_review_argv_prompt_or_fail "hermes -z" "$prompt_file" "$_stderr_file"); then
+            hermes -z "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
         else
-            _prompt_size=$(wc -c <"$prompt_file")
-            if [ "$_prompt_size" -ge 131072 ]; then
-                printf 'hermes -z: prompt is %s bytes, over the %s-byte argv limit (MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.\n' \
-                    "$_prompt_size" 131072 >"$_stderr_file"
-                _rc=1
-            elif ! _prompt_content=$(cat "$prompt_file" 2>"$_stderr_file"); then
-                _rc=1
-            else
-                hermes -z "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
-            fi
+            _rc=1
         fi
         ;;
     opencode)
