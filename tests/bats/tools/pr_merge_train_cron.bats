@@ -537,6 +537,7 @@ _hold_lock() {
     _run_tick HERDR_TAB_FAIL=1
     assert_failure
     _assert_logged "herdr tab create"
+    _refute_logged "herdr agent start"
     _refute_logged "herdr agent prompt"
 }
 
