@@ -422,3 +422,16 @@ teardown() {
     run grep -q '^>.*gh:issue-create' "$_flow"
     assert_failure
 }
+
+@test "docs: the structured-payload example passes --no-ask as a call arg" {
+    # PR #1466 agy/codex: grepping for the bare string is not enough.
+    # gh:issue-create reads flags from its Args, never from the prompt
+    # text, so `--no-ask` sitting inside the STRUCTURED heredoc body is
+    # invisible to it and the gate still stalls the unattended run.
+    _flow="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-proceed/references/execution-flow.md"
+    run grep -q '^Skill(gh:issue-create, "--no-ask",' "$_flow"
+    assert_success
+    # Nothing may reintroduce it as a payload field line.
+    run grep -q '^--no-ask$' "$_flow"
+    assert_failure
+}
