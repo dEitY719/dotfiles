@@ -38,26 +38,18 @@
 ## What the skill does
 
 1. Binds `TARGET_REPO` / `TARGET_HOST` from one remote URL (`references/github-target.md`).
-2. Reads the repo ruleset's `required_approving_review_count` once — `0` means
-   the platform does not require approval, so the approval check is skipped
-   (D-5). Lookup failure is **fail-closed**: approval is treated as required.
-3. Lists your own open PRs, drops drafts and anything updated in the last
+2. Lists your own open PRs, drops drafts and anything updated in the last
    **11 minutes** (D-6), and sorts `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`,
    ties by ascending number (D-2).
+3. Reads the repo ruleset's `required_approving_review_count` once, for the
+   queue's base branch — `0` means the platform does not require approval, so
+   the approval check is skipped (D-5). Lookup failure is **fail-closed**:
+   approval is treated as required.
 4. Processes **one PR at a time**. Immediately before each one it re-queries
    state (F-3), because the previous merge changed it.
-5. Routes on `mergeStateStatus` / `mergeable` (D-1):
-
-   | `mergeStateStatus` | `mergeable` | action |
-   |---|---|---|
-   | `CLEAN` | `MERGEABLE` | `gh:pr-merge` directly |
-   | `BEHIND` | `MERGEABLE` | `gh:pr-resolve-outdated` → merge |
-   | `DIRTY` | `CONFLICTING` | `gh:pr-resolve-conflict` → merge |
-   | `UNSTABLE` | `MERGEABLE` | failing check → `gh:pr-resolve-ci-fail`; still running → wait |
-   | `BLOCKED` | — | record the reason, skip |
-   | `UNKNOWN` | `UNKNOWN` | poll, then re-evaluate; skip after 3 polls |
-   | `DRAFT` | — | skip |
-
+5. Routes on `mergeStateStatus` / `mergeable` through the D-1 table — the one
+   copy lives in `references/routing-table.md`. Which atom each row reaches is
+   summarised under "Atom skills it calls" below.
 6. Caps remediation at **3 attempts per PR** (F-5). Over that, the PR is
    `[FAILED]` and the train moves on (F-6).
 7. Prints a per-PR `[MERGED]` / `[SKIPPED]` / `[FAILED]` report with reasons (F-9).
@@ -81,6 +73,7 @@
 | `gh:pr-resolve-conflict` | `DIRTY` + `CONFLICTING` — the LLM-judgement row |
 | `gh:pr-resolve-ci-fail` | `UNSTABLE` with a failing check — the other LLM-judgement row |
 | `gh:pr-merge` | every row that reaches a mergeable state |
+| none | `BLOCKED` / `DRAFT` skip; `UNSTABLE` still running and `UNKNOWN` poll first |
 
 ## Related skills
 

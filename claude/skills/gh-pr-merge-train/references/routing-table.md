@@ -8,9 +8,13 @@ judgement (`DIRTY`, `UNSTABLE`-with-a-failure) delegate it to an atom skill.
 Immediately before processing each PR (F-3):
 
 ```bash
-GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
-  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url
+STATE=$(GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
+  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url)
 ```
+
+Keep `$STATE`. Every question the rest of this file asks about the PR is
+answered by a `jq` over it — re-fetching the same PR to read one more field is
+a round trip the state you already hold has covered.
 
 ## The table
 
@@ -33,9 +37,8 @@ situations share that word, and conflating them is how a train starts "fixing"
 a test that had not finished running:
 
 ```bash
-GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
-  --json statusCheckRollup \
-  --jq '[.statusCheckRollup[]? | {name: (.name // .context), status, conclusion}]'
+printf '%s' "$STATE" |
+  jq '[.statusCheckRollup[]? | {name: (.name // .context), status, conclusion}]'
 ```
 
 | Rollup contains | Action |
@@ -74,5 +77,5 @@ Three polls without resolution is `[SKIPPED]`, re-evaluated next tick.
 
 An atom skill returning success means *it* succeeded, not that the PR is now
 mergeable — another train step, or a colleague, may have moved the base in
-between. Always re-run the `gh pr view` above and re-enter the table before
-calling `gh:pr-merge`. That re-entry is what the 3-attempt cap (F-5) counts.
+between. Always re-run the `gh pr view` above (refreshing `$STATE`) and re-enter the
+table before calling `gh:pr-merge`. That re-entry is what the 3-attempt cap (F-5) counts.

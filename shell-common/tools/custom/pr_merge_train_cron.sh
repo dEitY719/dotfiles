@@ -9,14 +9,10 @@
 #   3) 깨울 만한 대상 PR 이 있는가 (`gh pr list --author @me`, D-6 조용한 기간 적용)
 #   4) herdr workspace -> tab -> agent -> `/gh-pr-merge-train <owner/repo>`
 #
-# 왜 train 본체가 셸이 아닌가 (D-8). issue-watcher 는 dispatch 가 서로 독립·병렬
-# 이라 fire-and-forget 이 성립하지만, merge train 은 **직렬이고 각 단계가 앞
-# 단계의 완료에 의존**한다. 셸이 fire-and-forget 으로 던지면 순서가 깨지고, 매
-# 단계를 블로킹 대기하려면 결국 한 프로세스가 전 구간을 들고 있어야 한다. 그
-# 프로세스는 충돌 해결과 CI 수정 두 지점에서 LLM 이 필요하므로 claude 세션이
-# 맞다. 그래서 이 파일에는 tick 의 선행 조건 판정만 있다 — 라우팅 표(D-1)·정렬
-# (D-2)·시도 상한(F-5)·리포트(F-9)는 전부 스킬 쪽 텍스트이고, 여기에 셸로 다시
-# 구현하면 서로 드리프트하는 SSOT 가 둘 생긴다.
+# 이 파일에는 tick 의 선행 조건 판정만 있다 — 라우팅 표(D-1)·정렬(D-2)·시도
+# 상한(F-5)·리포트(F-9)는 전부 스킬 쪽 텍스트이다. train 본체가 왜 셸이 아니라
+# claude 세션인지(D-8), NF-1 이 왜 두 겹인지의 근거는 한 곳에만 둔다:
+#   claude/skills/gh-pr-merge-train/references/cron-dispatcher.md
 #
 # GitHub 에 어떤 쓰기도 하지 않는다 — 머지·코멘트·라벨 변경 없음. 조회 전용이다.
 #
@@ -48,10 +44,6 @@ fi
 _PMT_STATE_SUBDIR="pr-merge-train"
 _PMT_LOCK_BASENAME=".lock"
 
-# Field separator, resolved once — `IFS="$(printf '\t')"` written into a loop
-# header re-forks `printf` on every iteration.
-_PMT_TAB=$(printf '\t')
-
 # D-6 — quiet period, in minutes. `gh:issue-flow` Step 2.4 schedules
 # `gh:pr-reply` four minutes after the PR is opened (`--defer-reply 4`), so a
 # train that merges inside that window drops the review replies and the
@@ -82,11 +74,14 @@ _PMT_WORKSPACE_PREFIX="mt-"
 # 있지만 `--wait` 는 프롬프트가 *접수* 될 때까지만 기다린다. tick 이 겹치지 않게
 # 막는 것은 flock 이므로 이 값은 cron 주기와 무관하다.
 _PMT_TIMEOUT_MS="240000"
-# Gap between the post-start idle checks (see _pmt_wait_for_idle). Overridable
-# so the bats suite does not pay ~5s of real sleep per cold-agent path.
+# Post-start idle checks (see _pmt_wait_for_idle): 10 checks 0.5s apart, ~5s.
+# The gap is overridable so the bats suite does not pay that in real sleep on
+# every cold-agent path.
+_PMT_IDLE_POLL_MAX="10"
 _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 
-# CLAUDE_CONFIG_DIR for the pane this tick opens. Resolved once per tick.
+# CLAUDE_CONFIG_DIR for the pane this tick opens. Resolved once, and only on
+# the path that actually opens one (see _pmt_bind_config_dir).
 _PMT_CONFIG_DIR=""
 # Set by --dry-run: report what the tick would do, mutate nothing.
 _PMT_DRY_RUN=0
@@ -145,12 +140,14 @@ _pmt_now() {
 # Helpers — the GitHub target (#1403 / #1407)
 # ============================================================
 
-# Bind `owner/repo` and the host from one and the same remote URL, so the
-# dispatcher's single `gh` call cannot drift to another server. Echoes
-# `<owner/repo><TAB><host>`; returns non-zero (with the reason on stderr) when
-# the checkout has no usable remote — the tick must not guess a target.
+# Bind `_PMT_REPO` and `_PMT_HOST` from one and the same remote URL, so the
+# dispatcher's single `gh` call cannot drift to another server. Returns
+# non-zero (with the reason in the cron log) when the checkout has no usable
+# remote — the tick must not guess a target. Assigns the globals rather than
+# echoing them, so every diagnostic here can go straight to the log instead of
+# competing with a value on stdout.
 _pmt_bind_target() {
-    local _remote_url _repo _host
+    local _remote_url
 
     if [ ! -f "${_PMT_SHELL_COMMON}/functions/gh_host.sh" ]; then
         ux_error "gh_host.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot resolve the GitHub target."
@@ -160,25 +157,20 @@ _pmt_bind_target() {
     . "${_PMT_SHELL_COMMON}/functions/gh_host.sh" || return 1
 
     _remote_url=$(git remote get-url origin 2>/dev/null) || {
-        ux_error "No 'origin' remote in $(pwd) — cannot resolve the merge-train target."
-        # >&2 because this function's stdout is the binding itself: an ux_info
-        # written to stdout would be swallowed by the caller's `$( )` and never
-        # reach the cron log. ux_error already writes to stderr on its own.
-        ux_info "Run the tick with --cwd pointing at a checkout that has one." >&2
+        ux_error "No 'origin' remote in ${PWD} — cannot resolve the merge-train target."
+        ux_info "Run the tick with --cwd pointing at a checkout that has one."
         return 1
     }
 
-    _repo=$(_gh_parse_owner_repo_url "${_remote_url}" 2>/dev/null) || {
+    _PMT_REPO=$(_gh_parse_owner_repo_url "${_remote_url}" 2>/dev/null) || {
         ux_error "Cannot parse owner/repo from origin's URL: ${_remote_url}"
         return 1
     }
-    _host=$(_gh_host_from_url "${_remote_url}" 2>/dev/null) || _host=$(_gh_resolve_host)
-    [ -n "${_host}" ] || {
+    _PMT_HOST=$(_gh_host_from_url "${_remote_url}" 2>/dev/null) || _PMT_HOST=$(_gh_resolve_host)
+    [ -n "${_PMT_HOST}" ] || {
         ux_error "Cannot resolve the GitHub host for ${_remote_url} — refusing to run unpinned (#1403)."
         return 1
     }
-
-    printf '%s\t%s' "${_repo}" "${_host}"
 }
 
 # ============================================================
@@ -224,17 +216,9 @@ _pmt_target_count() {
 # Preconditions 1-2 — one train at a time (NF-1)
 # ============================================================
 
-# Two layers guard NF-1 and neither one subsumes the other.
-#
-# The flock below covers *ticks*: two cron periods overlapping, or a manual run
-# racing a scheduled one. It cannot cover the train, because the tick is
-# short-lived (seconds) while the session it spawns is long-lived (a merge
-# train over N PRs runs for many minutes) — the tick that started the train has
-# already exited and dropped the lock long before the train finishes.
-#
-# So the second layer asks herdr directly whether the previously started train
-# agent is still doing something. Together: the lock stops two dispatchers, the
-# agent probe stops a second train.
+# Layer 1 of NF-1: this lock covers *ticks* only. It cannot cover the train,
+# which outlives the tick that started it — that is _pmt_train_state's job.
+# Why neither layer subsumes the other: `references/cron-dispatcher.md`.
 _pmt_acquire_lock() {
     local _dir _lock
     _dir=$(_pmt_state_dir)
@@ -265,19 +249,12 @@ _pmt_acquire_lock() {
     fi
 }
 
-# Echo the herdr agent name for <owner/repo>: `pmt-<owner>-<repo>`, with
-# anything outside herdr's safe name charset folded to `-`.
-_pmt_agent_name() {
-    printf '%s%s' "${_PMT_AGENT_PREFIX}" \
-        "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-')"
-}
-
-# Echo the herdr workspace label for <owner/repo>. Prefixed so it can never
-# collide with an issue-watcher workspace, which labels by the checkout's
-# directory basename.
-_pmt_workspace_label() {
-    printf '%s%s' "${_PMT_WORKSPACE_PREFIX}" \
-        "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-')"
+# Echo `<prefix $1><slug of $2>`, with anything outside herdr's safe name
+# charset folded to `-`. Both herdr names the tick derives are this shape:
+#   ${_PMT_AGENT_PREFIX}      the agent, e.g. `pmt-acme-dotfiles`
+#   ${_PMT_WORKSPACE_PREFIX}  the workspace label, e.g. `mt-acme-dotfiles`
+_pmt_slug() {
+    printf '%s%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '-')"
 }
 
 # Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
@@ -372,6 +349,22 @@ _pmt_resolve_config_dir() {
     )
 }
 
+# Set _PMT_CONFIG_DIR for this tick's pane. Returns non-zero only for a real
+# routing failure; an unset HOME degrades to "no routing" with a warning,
+# because a pane without account routing still beats no train at all.
+_pmt_bind_config_dir() {
+    _PMT_CONFIG_DIR=$(_pmt_resolve_config_dir)
+    case "$?" in
+    0) return 0 ;;
+    2)
+        _PMT_CONFIG_DIR=""
+        ux_warning "HOME is unset — starting claude without CLAUDE_CONFIG_DIR account routing."
+        return 0
+        ;;
+    esac
+    return 1
+}
+
 _pmt_herdr_create() {
     local _cwd="$1" _label="$2"
     shift 2
@@ -404,16 +397,17 @@ _pmt_workspace_for_label() {
     printf '%s' "${_ws}"
 }
 
-# Open the train's tab and echo `<pane_id><TAB><tab_id>`.
+# Open the train's tab and echo its pane id. The response also carries a
+# `tab_id`, which nothing here needs: the agent is addressed by pane, and the
+# *next* tick finds this session by agent name, not by tab.
 _pmt_tab_create() {
-    local _ws="$1" _cwd="$2" _label="$3" _json _pane _tab
+    local _ws="$1" _cwd="$2" _label="$3" _json _pane
 
     _json=$(_pmt_herdr_create "${_cwd}" "${_label}" tab create --workspace "${_ws}") || return 1
 
     _pane=$(printf '%s' "${_json}" | _pmt_json_first pane_id)
-    _tab=$(printf '%s' "${_json}" | _pmt_json_first tab_id)
     [ -n "${_pane}" ] || return 1
-    printf '%s\t%s' "${_pane}" "${_tab}"
+    printf '%s' "${_pane}"
 }
 
 # `-- ARG...` is passed through to the pane's claude invocation. Unattended
@@ -431,29 +425,22 @@ _pmt_agent_start() {
 # still dispatches, because a stalled prompt is reported rather than silently
 # booked as a started train.
 _pmt_wait_for_idle() {
-    local _agent="$1" _i=0 _status _get_failed=0
+    local _agent="$1" _i=0 _status _get_failed=0 _detail=""
 
-    while [ "${_i}" -lt 10 ]; do
+    while [ "${_i}" -lt "${_PMT_IDLE_POLL_MAX}" ]; do
         if _status=$(_pmt_agent_status "${_agent}"); then
             [ "${_status}" != "idle" ] || return 0
         else
             _get_failed=$((_get_failed + 1))
         fi
         _i=$((_i + 1))
-        [ "${_i}" -lt 10 ] || break
+        [ "${_i}" -lt "${_PMT_IDLE_POLL_MAX}" ] || break
         [ "${_PMT_IDLE_POLL_SLEEP}" = "0" ] || sleep "${_PMT_IDLE_POLL_SLEEP}"
     done
 
-    if [ "${_get_failed}" -gt 0 ]; then
-        ux_warning "Agent ${_agent} did not report idle within ~5s (${_get_failed}/10 health-check failures) — prompting anyway."
-    else
-        ux_warning "Agent ${_agent} did not report idle within ~5s — prompting anyway."
-    fi
-}
-
-# Echo herdr's JSON response on stdout; the exit code is herdr's own.
-_pmt_prompt_once() {
-    herdr agent prompt "$1" "$2" --wait --timeout "${_PMT_TIMEOUT_MS}" 2>/dev/null
+    [ "${_get_failed}" -eq 0 ] ||
+        _detail=" (${_get_failed}/${_PMT_IDLE_POLL_MAX} health-check failures)"
+    ux_warning "Agent ${_agent} did not report idle within ~5s${_detail} — prompting anyway."
 }
 
 # Hand the whole train over to the session. This is the one place where the
@@ -463,7 +450,8 @@ _pmt_prompt_train() {
 
     _prompt="/gh-pr-merge-train ${_PMT_REPO}"
 
-    _json=$(_pmt_prompt_once "${_agent}" "${_prompt}") || _rc=$?
+    _json=$(herdr agent prompt "${_agent}" "${_prompt}" \
+        --wait --timeout "${_PMT_TIMEOUT_MS}" 2>/dev/null) || _rc=$?
     if [ "${_rc}" -eq 0 ]; then
         ux_success "Dispatched to ${_agent}: ${_prompt}"
         return 0
@@ -479,21 +467,25 @@ _pmt_prompt_train() {
 
 # Open a fresh workspace/tab/agent for the train and prompt it.
 _pmt_launch_fresh() {
-    local _agent="$1" _cwd="$2" _label _ws _pane_tab _pane _tab
+    local _agent="$1" _cwd="$2" _label _ws _pane
 
-    _label=$(_pmt_workspace_label "${_PMT_REPO}")
+    _label=$(_pmt_slug "${_PMT_WORKSPACE_PREFIX}" "${_PMT_REPO}")
+
+    # Only this path opens a pane, so this is the only path that needs an
+    # account to open it with. Resolving it in main() would make every reuse
+    # tick — the common case once a train pane is open — pay for a subshell,
+    # a sourced claude.sh and a setup-mode read whose result it never uses,
+    # and let a routing failure end a tick that was not going to route.
+    _pmt_bind_config_dir || return 1
 
     _ws=$(_pmt_workspace_for_label "${_label}" "${_cwd}") || {
         ux_error "No herdr workspace for ${_label} — ending this tick."
         return 1
     }
-    _pane_tab=$(_pmt_tab_create "${_ws}" "${_cwd}" "merge-train") || {
+    _pane=$(_pmt_tab_create "${_ws}" "${_cwd}" "merge-train") || {
         ux_error "herdr tab create failed for ${_PMT_REPO} — ending this tick."
         return 1
     }
-    IFS="${_PMT_TAB}" read -r _pane _tab <<EOF
-${_pane_tab}
-EOF
     _pmt_agent_start "${_agent}" "${_pane}" || {
         ux_error "herdr agent start ${_agent} failed on pane ${_pane} — ending this tick."
         return 1
@@ -521,7 +513,6 @@ _pmt_usage() {
     ux_bullet_sub "2. herdr agent get ${_PMT_AGENT_PREFIX}<owner>-<repo> — a running train blocks a new one"
     ux_bullet_sub "3. gh pr list --author @me --state open — is there anything to merge"
     ux_bullet_sub "4. herdr workspace -> tab -> claude -> /gh-pr-merge-train <owner/repo>"
-    ux_bullet_sub "the train itself runs inside that claude session, never in this shell (D-8)"
     ux_bullet_sub "no PR is ever written to from here — no merge, comment or label change"
     ux_bullet "target PRs"
     ux_bullet_sub "your own PRs only (--author @me) — a colleague's PR is never auto-merged (D-7)"
@@ -530,7 +521,6 @@ _pmt_usage() {
     ux_bullet_sub "gh pr list failure ends the tick: never merge without knowing state"
     ux_bullet "duplicate-start guard (NF-1)"
     ux_bullet_sub "the lock covers overlapping ticks; the agent probe covers the running train"
-    ux_bullet_sub "the tick is short-lived, the train session is not — the lock alone cannot see it"
     ux_bullet_sub "agent working/blocked -> hold; idle -> reuse the pane; missing -> open a new one"
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_LOCK_BASENAME}   (tick lock)"
@@ -547,7 +537,7 @@ _pmt_usage() {
 # ============================================================
 
 main() {
-    local _cwd="" _target _agent _binding _state
+    local _cwd="" _target _agent _state
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -608,11 +598,8 @@ main() {
         exit 1
     fi
 
-    _binding=$(_pmt_bind_target) || exit 1
-    IFS="${_PMT_TAB}" read -r _PMT_REPO _PMT_HOST <<EOF
-${_binding}
-EOF
-    _agent=$(_pmt_agent_name "${_PMT_REPO}")
+    _pmt_bind_target || exit 1
+    _agent=$(_pmt_slug "${_PMT_AGENT_PREFIX}" "${_PMT_REPO}")
 
     # The dry run answers ahead of both guards, deliberately: taking the lock
     # would make a dry run silently no-op while a real tick is mid-cycle —
@@ -646,28 +633,17 @@ EOF
         exit 0
     fi
 
-    # Resolved once, before any pane is opened: the train session inherits one
-    # claude account for its whole run.
-    _PMT_CONFIG_DIR=$(_pmt_resolve_config_dir)
-    case "$?" in
-    0) ;;
-    2)
-        _PMT_CONFIG_DIR=""
-        ux_warning "HOME is unset — starting claude without CLAUDE_CONFIG_DIR account routing."
-        ;;
-    *)
-        exit 1
-        ;;
-    esac
-
     ux_info "${_target} target PR(s) on ${_PMT_REPO} — starting the merge train."
 
     if [ "${_state}" = "reuse" ]; then
         # The previous train's pane is open and idle: prompt it again rather
-        # than stacking a second tab on the workspace every cron period.
+        # than stacking a second tab on the workspace every cron period. The
+        # pane already carries the account it was opened with, so no
+        # CLAUDE_CONFIG_DIR is resolved on this path.
         _pmt_prompt_train "${_agent}" || exit 1
     else
-        _pmt_launch_fresh "${_agent}" "$(pwd)" || exit 1
+        # PWD, not $(pwd): the --cwd handling above already cd'd here.
+        _pmt_launch_fresh "${_agent}" "${PWD}" || exit 1
     fi
 
     ux_success "Tick complete — merge train handed to ${_agent}."

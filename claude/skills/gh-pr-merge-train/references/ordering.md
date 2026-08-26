@@ -55,7 +55,7 @@ mandatory**: the state you read when you built the queue is stale by the time
 you reach the second PR, and acting on it would route the PR down the wrong row
 of the D-1 table.
 
-Treat the Step 3 queue as an **ordering**, not as a state snapshot.
+Treat the Step 2 queue as an **ordering**, not as a state snapshot.
 
 ## D-6 — the 11-minute quiet period
 

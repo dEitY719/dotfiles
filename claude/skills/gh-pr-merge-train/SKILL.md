@@ -36,19 +36,11 @@ any `gh` call** — `TARGET_REPO` / `TARGET_HOST` / `GH_HOST` come from one and
 the same remote URL (#1403/#1407). An explicit `owner/repo` positional pins
 `TARGET_REPO` directly; the host still comes from the remote URL.
 
-## Step 2: Read the approval policy once
-
-Read the repo ruleset's `required_approving_review_count` per
-`references/approval-gate.md`. `0` → the platform does not require approval, so
-the train skips the approval check (D-5). Non-zero → an unapproved PR is
-`[SKIPPED]`, never merged. **Ruleset lookup failure is fail-closed**: treat
-approval as required. Merges are hard to undo.
-
-## Step 3: Collect and order the queue
+## Step 2: Collect and order the queue
 
 ```bash
 GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state open \
-  --limit 50 --json number,updatedAt,isDraft,mergeable,mergeStateStatus,title
+  --limit 50 --json number,updatedAt,isDraft,mergeable,mergeStateStatus,baseRefName,title
 ```
 
 `--author @me` is not optional (D-7) — never auto-merge a colleague's PR. Drop
@@ -58,6 +50,16 @@ Ordering rationale and the quiet-period rationale: `references/ordering.md`.
 
 **`gh pr list` failure ends the run** with an empty report — never merge
 without knowing state.
+
+## Step 3: Read the approval policy once
+
+Read the repo ruleset's `required_approving_review_count` per
+`references/approval-gate.md`, using the queue's `baseRefName` — that is why
+this follows Step 2 rather than preceding it, and why no extra call is needed
+to learn the base. `0` → the platform does not require approval, so the train
+skips the approval check (D-5). Non-zero → an unapproved PR is `[SKIPPED]`,
+never merged. **Ruleset lookup failure is fail-closed**: treat approval as
+required. Merges are hard to undo.
 
 ## Step 4: Run the train — one PR at a time
 
