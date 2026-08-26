@@ -1554,22 +1554,37 @@ _iw_limit_gate_check() {
 
 # Poll the tick's confirmed dispatches for `_IW_LIMIT_OBSERVE_SEC`.
 #
-# Echoes an agent name and returns 0 when one of them is still alive at the end
-# of the window — that is the "quota intact" verdict. Returns non-zero
-# otherwise, echoing the name of an agent that *did* reach `working` earlier in
-# the window if there was one, so the caller can say "fell back" rather than
-# "never started". Echoes nothing when none of them ever moved.
+# Three verdicts, because "the agent is idle" and "herdr would not tell us what
+# the agent is" are different facts and collapsing them is exactly the bug this
+# whole rewrite exists to remove (PR #1468 codex review):
+#
+#   rc 0  one of them is alive at the end of the window — quota intact.
+#         Echoes that agent.
+#   rc 1  the window ended with a readable, non-alive status — the strike
+#         verdict. Echoes an agent that *did* reach `working` earlier in the
+#         window if there was one, so the caller can say "fell back" rather
+#         than "never started"; echoes nothing when none of them ever moved.
+#   rc 2  the deciding poll produced no readable status at all (every
+#         `herdr agent get` errored, or answered without the field). No
+#         evidence either way — the caller leaves the gate untouched.
+#
+# `_iw_agent_status` reports both of its failure modes as an empty string, so
+# emptiness is the absence of evidence, never evidence of idleness. A strike
+# needs a status we actually read.
 #
 # The last poll is the one that decides: `working` has to be *held*, not merely
 # touched. The earlier polls exist only to tell those two failures apart in the
 # log.
 _iw_limit_observe() {
-    local _agents="$1" _i=0 _agent _status _alive="" _seen=""
+    local _agents="$1" _i=0 _agent _status _alive="" _seen="" _readable=0
 
     while [ "${_i}" -lt "${_IW_LIMIT_OBSERVE_POLLS}" ]; do
         [ "${_IW_LIMIT_OBSERVE_SLEEP}" = "0" ] || sleep "${_IW_LIMIT_OBSERVE_SLEEP}"
         _i=$((_i + 1))
         _alive=""
+        # Per-poll, like `_alive`: only the deciding poll's readability counts.
+        # A pane readable 50 seconds ago says nothing about now.
+        _readable=0
 
         # fd 3, not stdin: the loop body runs `herdr`, which would otherwise
         # swallow the rest of the agent list and silently shorten the
@@ -1577,6 +1592,7 @@ _iw_limit_observe() {
         while IFS= read -r _agent <&3; do
             [ -n "${_agent}" ] || continue
             _status=$(_iw_agent_status "${_agent}") || _status=""
+            [ -z "${_status}" ] || _readable=1
             case "${_status}" in
             working | blocked)
                 _alive="${_agent}"
@@ -1596,6 +1612,8 @@ EOF
         printf '%s' "${_alive}"
         return 0
     fi
+
+    [ "${_readable}" -eq 1 ] || return 2
 
     printf '%s' "${_seen}"
     return 1
@@ -1639,17 +1657,23 @@ EOF
 # would hold the watcher over a single transient herdr blip; 2 buys that
 # evidence for one extra tick (~5 min).
 _iw_limit_record() {
-    local _agents="$1" _alive="" _strikes _now
+    local _agents="$1" _alive="" _strikes _now _rc=0
 
     # Nothing reached a pane this tick: no evidence either way, so the strike
     # count stays exactly where it was.
     [ -n "${_agents}" ] || return 0
 
-    # On failure `_alive` carries the agent that reached `working` earlier in
-    # the window, if any — see _iw_limit_observe.
-    if _alive=$(_iw_limit_observe "${_agents}"); then
+    # Three-way, not a boolean: `rc 2` is "herdr never answered", which must not
+    # be booked as idleness. On `rc 1` `_alive` carries the agent that reached
+    # `working` earlier in the window, if any — see _iw_limit_observe.
+    _alive=$(_iw_limit_observe "${_agents}") || _rc=$?
+    if [ "${_rc}" -eq 0 ]; then
         ux_info "Agent ${_alive} held 'working' for ${_IW_LIMIT_OBSERVE_SEC}s — quota is not exhausted, gate cleared."
         _iw_limit_clear
+        return 0
+    fi
+    if [ "${_rc}" -eq 2 ]; then
+        ux_warning "No dispatched agent's status could be read after ${_IW_LIMIT_OBSERVE_SEC}s — herdr unreachable, gate untouched."
         return 0
     fi
 
