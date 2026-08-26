@@ -1943,6 +1943,25 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
+@test "issue_watcher_cron: repeated non-quota failures never close a gate holding a strike" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _run_tick "HERDR_PROMPT_MODE=fail"
+    assert_failure
+    assert_output --partial "not a token-limit signature"
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
+    _run_tick "HERDR_PROMPT_MODE=fail"
+    assert_failure
+    # PR #1462 codex FOLLOW-UP: a strike already on record is the state where a
+    # miscounted non-quota failure tips the gate shut — one more reaches
+    # _IW_LIMIT_STRIKES. The clean-state sibling above cannot reach that edge,
+    # so the dirty start is the case that actually pins the classification.
+    assert_output --partial "not a token-limit signature"
+    refute_output --partial "Rate-limit gate closed"
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+}
+
 @test "issue_watcher_cron: a gate that shuts mid-cycle stops the remaining issues" {
     _set_issues '[
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
