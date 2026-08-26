@@ -326,12 +326,22 @@ run_bats() {
     print_header "Running Bats Shell Unit Tests"
 
     # Per-test timeout (issue #1483): unset → 300, a file's own setup_file()
-    # can raise it further per-file. Exported so both branches below inherit
-    # it — including the `bash -c` children xargs spawns, which get the
-    # environment but not shell locals. The full suite is ~4-5 min, so a
-    # single test still running after 300s is pathological — better a
-    # bounded TAP failure than the multi-hour silent hang of #1483.
-    export BATS_TEST_TIMEOUT="${BATS_TEST_TIMEOUT:-300}"
+    # can raise it further per-file. A non-positive-integer override (e.g.
+    # "0", "-1", "5m") is bash's `local -ri timeout=$1` in bats-core's own
+    # bats_start_timeout_countdown() — an invalid value errors that arithmetic
+    # declaration and silently disables the countdown (codex review, PR
+    # #1492), so it's rejected the same way _resolve_bats_jobs() guards
+    # BATS_JOBS above. Exported so both branches below inherit it — including
+    # the `bash -c` children xargs spawns, which get the environment but not
+    # shell locals. The full suite is ~4-5 min, so a single test still running
+    # after 300s is pathological — better a bounded TAP failure than the
+    # multi-hour silent hang of #1483.
+    local _bats_timeout="${BATS_TEST_TIMEOUT:-300}"
+    case "$_bats_timeout" in
+    '' | *[!0-9]*) _bats_timeout=300 ;;
+    esac
+    [ "$_bats_timeout" -lt 1 ] && _bats_timeout=300
+    export BATS_TEST_TIMEOUT="$_bats_timeout"
 
     local bats_files=()
     while IFS= read -r f; do
@@ -397,8 +407,11 @@ run_bats() {
             n=$(grep -cE '^(ok|not ok)' "$log_file" 2>/dev/null)
             total_tests=$((total_tests + n))
             # bats marks a BATS_TEST_TIMEOUT kill as
-            # `not ok N <name> # timeout after Ns`.
-            n=$(grep -cF '# timeout after ' "$log_file" 2>/dev/null)
+            # `not ok N <name> # timeout after Ns`. Anchored to a `not ok`
+            # TAP line so a test's own output merely containing this text
+            # (a fixture name, an echoed assertion message) isn't
+            # miscounted as a real timeout (agy review, PR #1492).
+            n=$(grep -cE '^not ok .*# timeout after [0-9]+s$' "$log_file" 2>/dev/null)
             timeout_tests=$((timeout_tests + n))
         fi
         if [ "$status_val" != "0" ]; then
