@@ -12,6 +12,13 @@
   simplify changes **synchronously inside `devx:pr-review-all`** before it
   returns, so the tree is clean before the rebase steps 2.5 / 2.5.1 — a
   dirty working tree breaks `git rebase`.
+- **Merge-train wake soft-fail exception (#1482).** Step 2.4.1
+  (`aicron run merge-train`) fires right after Step 2.4, whether or not 2.4
+  succeeded — it is not a `Skill()` call and never stops the flow. A missing
+  `aicron.sh` or a non-zero dispatcher exit (including the dispatcher
+  declining because a train is already live, per NF-1) is a single `[WARN]`
+  and the flow continues to Step 2.5. Detail:
+  `references/merge-train-wake.md`.
 - Step 2.5.1 (gh:pr-resolve-outdated) does a clean rebase-sync when the
   base moved forward with no conflicts; it is a no-op when the PR is
   already up to date.
@@ -56,7 +63,8 @@
   so Step 2 is a clean six-`Skill()` sequence with no inline gate
   dispatch or Bash commit+push between calls.
 - **Do NOT stop after any sub-skill completes.** Each step (2.1 through
-  2.5.1, including the Step 2.4 quality gate) is a waypoint, not a final
-  answer. Continue to the next step immediately. The only valid stopping
-  points are: a step failure (output the failure report), or the Step 3
-  success report after all 6 steps complete.
+  2.5.1, including the Step 2.4 quality gate and the Step 2.4.1 merge-train
+  wake) is a waypoint, not a final answer. Continue to the next step
+  immediately. The only valid stopping points are: a step failure (output
+  the failure report), or the Step 3 success report after all 6 skills
+  complete.
