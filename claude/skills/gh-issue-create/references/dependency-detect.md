@@ -198,8 +198,7 @@ resolves in two clicks.
 That one path is also why the availability claim above needs no capability
 probe. If a target's schema turns out not to expose `addBlockedBy`, the
 mutation is rejected and the operator gets the warning — the same outcome a
-probe would produce, minus a round trip on every run. With the cause attached,
-that rejection now also says so in words.
+probe would produce, minus a round trip on every run.
 
 Known non-error cause of that warning: GitHub's own replication lag. The new
 issue is seconds old when its node id is queried, and a read can miss it.
