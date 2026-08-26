@@ -73,6 +73,30 @@ _source_module() {
     assert_output --partial "ok"
 }
 
+# Issue #1454: the guard read ${BASH_SOURCE[0]}, which zsh never populates,
+# so under zsh it self-disabled on the very first line and every prior test
+# here only ever proved the bash path. Prove the guard really fires when a
+# zsh shell sources this file, with a $HOME whose dotfiles is an unrelated
+# repo. The file is re-sourced explicitly rather than read off zsh/main.zsh
+# Phase 5 because both loaders source with `2>/dev/null` (safe_source /
+# load_category), which would swallow the very stderr under test.
+@test "zsh: #1454 foreign-checkout guard warns when sourced under zsh" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not available"
+    command -v git >/dev/null 2>&1 || skip "git not available"
+
+    local foreign_home="$TEST_TEMP_HOME/foreign-home"
+    mkdir -p "$foreign_home/dotfiles"
+    git -C "$foreign_home/dotfiles" init -q -b main
+    git -C "$foreign_home/dotfiles" -c user.email=t@t -c user.name=t \
+        commit --allow-empty -q -m init
+
+    export HOME="$foreign_home"
+    run_in_zsh '. "$SHELL_COMMON/functions/gh_pr_review.sh"'
+    assert_success
+    assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
+    assert_output --partial "shell-common/functions/gh_pr_review.sh"
+}
+
 # ---------------------------------------------------------------------------
 # Help surface (bypasses all preconditions)
 # ---------------------------------------------------------------------------

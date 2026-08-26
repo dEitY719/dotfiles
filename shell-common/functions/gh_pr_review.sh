@@ -21,11 +21,30 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # directory named `dotfiles` once got sourced instead of this one, surfacing
 # as a bogus "Unknown --ai value". The guard compares our own load path
 # against $HOME/dotfiles and warns on a mismatch; it never blocks.
-# `${BASH_SOURCE[0]-}` keeps zsh's `set -u` from aborting on the unset array.
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh" 2>/dev/null || true
-if command -v _dotfiles_root_warn_if_foreign_source >/dev/null 2>&1; then
-    _dotfiles_root_warn_if_foreign_source "${BASH_SOURCE[0]-}" || true
+#
+# Self-path: zsh never populates $BASH_SOURCE, so reading it there left the
+# guard permanently inert. zsh instead rebinds $0 to the file being sourced
+# (FUNCTION_ARGZERO, on by default) for the duration of this top-level code,
+# so branch on the shell — the same idiom as functions/my_help.sh.
+if [ -n "${ZSH_VERSION-}" ]; then
+    _gpr_selfpath="$0"
+else
+    _gpr_selfpath="${BASH_SOURCE[0]-}"
 fi
+# Defense in depth (#724): a helper that is missing or fails to parse must
+# say so once on stderr rather than disabling the guard in silence. Never
+# fatal — the rest of this file is unrelated to the guard.
+_gpr_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_gpr_helper" ]; then
+    . "$_gpr_helper" || true
+fi
+if command -v _dotfiles_root_warn_if_foreign_source >/dev/null 2>&1; then
+    _dotfiles_root_warn_if_foreign_source "$_gpr_selfpath" || true
+else
+    printf '[gh_pr_review] %s missing or did not define _dotfiles_root_warn_if_foreign_source — #1454 guard skipped (#724).\n' \
+        "$_gpr_helper" >&2
+fi
+unset _gpr_selfpath _gpr_helper
 
 # ============================================================================
 # Section 1 — Argument parser (SSOT, mirrors SKILL.md Step 1)
