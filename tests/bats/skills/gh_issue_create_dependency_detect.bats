@@ -198,15 +198,13 @@ teardown() {
 }
 
 # ── NF-1: Step 4.5 link-outcome classification (#1424 review) ────────
-# $5 carries the stderr captured from whichever GraphQL call failed. It is
-# what makes a permanent defect (argument-schema mismatch) distinguishable
-# from a transient one (replication lag, network) — before #1458 every cause
-# collapsed into the same single line.
+# $5 carries the stderr captured from whichever GraphQL call failed; why it
+# is kept at all is argued in references/dependency-detect.md (#1458).
 @test "link: both ids present and mutation ok → no warning" {
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 0 13 ""
     assert_success
     assert_output ''
-    [ -z "$stderr" ]
+    refute_stderr
 }
 
 @test "link: a successful link stays silent even when stderr was captured" {
@@ -216,28 +214,28 @@ teardown() {
         "I_new" "I_dep" 0 13 "note: unrelated gh chatter"
     assert_success
     assert_output ''
-    [ -z "$stderr" ]
+    refute_stderr
 }
 
 @test "link: null new-issue id → NF-1 warning, mutation never reached" {
     run --separate-stderr gh_issue_create_dep_link_outcome "" "I_dep" 0 13 ""
     assert_success
     assert_output ''
-    [[ "$stderr" == *"[WARN] Blocked by #13 링크 실패"* ]]
+    assert_stderr --partial '[WARN] Blocked by #13 링크 실패'
 }
 
 @test "link: null dep-issue id → NF-1 warning" {
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "" 0 13 ""
     assert_success
     assert_output ''
-    [[ "$stderr" == *"[WARN] Blocked by #13 링크 실패"* ]]
+    assert_stderr --partial '[WARN] Blocked by #13 링크 실패'
 }
 
 @test "link: rejected mutation → NF-1 warning naming that issue" {
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 20 ""
     assert_success
     assert_output ''
-    [[ "$stderr" == *"[WARN] Blocked by #20 링크 실패 — GH UI에서 수동 추가 필요"* ]]
+    assert_stderr --partial '[WARN] Blocked by #20 링크 실패 — GH UI에서 수동 추가 필요'
 }
 
 @test "link: no captured cause → the warning carries no 원인 line" {
@@ -245,17 +243,19 @@ teardown() {
     # produces exactly the one line it always did.
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 20 ""
     assert_success
-    [[ "$stderr" != *"원인:"* ]]
+    assert_output ''
+    refute_stderr --partial '원인:'
 }
 
 @test "link: a non-existent dep number surfaces its GraphQL cause" {
-    # The id lookup, not the mutation, is what fails here — the cause has to
-    # survive that call too, or this verification case is unreachable.
+    # The empty-id branch, which is what a rejected id lookup reduces to
+    # here. That the lookup's stderr survives to become $5 is the drift
+    # guard's job, not this one's — $5 arrives opaque either way.
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "" 0 999 \
         "gh: Could not resolve to an Issue with the number of 999. (repository.depIssue)"
     assert_success
-    [[ "$stderr" == *"[WARN] Blocked by #999 링크 실패"* ]]
-    [[ "$stderr" == *"원인: gh: Could not resolve to an Issue with the number of 999."* ]]
+    assert_stderr --partial '[WARN] Blocked by #999 링크 실패'
+    assert_stderr --partial '원인: gh: Could not resolve to an Issue with the number of 999.'
 }
 
 @test "link: an argument-schema mismatch surfaces verbatim (#1445 regression)" {
@@ -263,8 +263,8 @@ teardown() {
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 13 \
         "gh: Argument 'blockingIssueId' on InputObject 'AddBlockedByInput' is required. Expected type ID!"
     assert_success
-    [[ "$stderr" == *"원인: "* ]]
-    [[ "$stderr" == *"AddBlockedByInput"* ]]
+    assert_stderr --partial '원인: '
+    assert_stderr --partial 'AddBlockedByInput'
 }
 
 @test "link: a multi-line cause is truncated to its first line" {
@@ -273,27 +273,31 @@ teardown() {
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 13 \
         "$(printf 'first line matters\nsecond line must not appear\nthird')"
     assert_success
-    [[ "$stderr" == *"원인: first line matters"* ]]
-    [[ "$stderr" != *"second line must not appear"* ]]
+    assert_stderr --partial '원인: first line matters'
+    refute_stderr --partial 'second line must not appear'
 }
 
 @test "link: the 원인 line is indented directly under its warning" {
     run --separate-stderr gh_issue_create_dep_link_outcome "I_new" "I_dep" 1 13 "boom"
     assert_success
-    [[ "$stderr" == *"수동 추가 필요"$'\n'"    원인: boom"* ]]
+    assert_stderr_line --index 0 --partial '수동 추가 필요'
+    assert_stderr_line --index 1 '    원인: boom'
 }
 
 @test "link: one failing sibling does not disturb the other's success" {
     # Per-N isolation (#1458 verification): #13 fails with a cause, #20 links.
-    run --separate-stderr bash -c "
-        source '${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_issue_create_dependency_detect.sh'
-        gh_issue_create_dep_link_outcome 'I_new' '' 0 13 'gh: Could not resolve to an Issue with the number of 13.'
+    # setup() already sourced the fixture, so this runs in-process — no
+    # second copy of the fixture path to keep in sync.
+    _two_deps() {
+        gh_issue_create_dep_link_outcome 'I_new' '' 0 13 \
+            'gh: Could not resolve to an Issue with the number of 13.'
         gh_issue_create_dep_link_outcome 'I_new' 'I_dep' 0 20 ''
-    "
+    }
+    run --separate-stderr _two_deps
     assert_success
-    [[ "$stderr" == *"Blocked by #13 링크 실패"* ]]
-    [[ "$stderr" == *"원인: gh: Could not resolve"* ]]
-    [[ "$stderr" != *"#20"* ]]
+    assert_stderr --partial 'Blocked by #13 링크 실패'
+    assert_stderr --partial '원인: gh: Could not resolve'
+    refute_stderr --partial '#20'
 }
 
 # ── Drift guard: doc and fixture must share one reference regex ──────
@@ -316,7 +320,11 @@ teardown() {
     BLOCK=$(awk '/^```bash$/ {f=1; next} /^```$/ {f=0} f' "$DOC")
     [ -n "$BLOCK" ]
     [[ "$BLOCK" != *'>/dev/null 2>&1'* ]]
-    [[ "$BLOCK" == *'2>"$_errf"'* ]]
+    [[ "$BLOCK" != *'2>/dev/null'* ]]
+    # Both calls, not just the mutation: the non-existent-number path is
+    # rejected by the id lookup and never reaches addBlockedBy, so a revert
+    # of that one redirect alone is exactly the regression to catch.
+    [ "$(printf '%s\n' "$BLOCK" | grep -cF '2>"$_errf"')" -eq 2 ]
     [[ "$BLOCK" == *"원인: "* ]]
 }
 
