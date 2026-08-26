@@ -153,6 +153,19 @@ _setup_fake_home_dotfiles() {
     : >"$CANON_WT/shell-common/functions/probe.sh"
 }
 
+# Build $SCRATCH/<NAME>/dotfiles as its own standalone repo (a different
+# --git-common-dir than $CANON) and sets FOREIGN to its probe.sh path.
+# Shared by the "genuinely different repo" and "stderr not stdout" tests.
+_setup_foreign_repo() {
+    _sfr_name="${1:?_setup_foreign_repo requires a NAME arg}"
+    FOREIGN_DIR="$SCRATCH/$_sfr_name/dotfiles"
+    mkdir -p "$FOREIGN_DIR/shell-common/functions"
+    (cd "$FOREIGN_DIR" && git init -q -b main && \
+        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init)
+    FOREIGN="$FOREIGN_DIR/shell-common/functions/probe.sh"
+    : >"$FOREIGN"
+}
+
 @test "_dotfiles_root_warn_if_foreign_source: canonical \$HOME/dotfiles path is silent" {
     _setup_fake_home_dotfiles
     run env HOME="$FAKE_HOME" bash -c \
@@ -171,17 +184,13 @@ _setup_fake_home_dotfiles() {
 
 @test "_dotfiles_root_warn_if_foreign_source: a genuinely different repo warns with both paths" {
     _setup_fake_home_dotfiles
-    FOREIGN="$SCRATCH/foreign/dotfiles"
-    mkdir -p "$FOREIGN/shell-common/functions"
-    (cd "$FOREIGN" && git init -q -b main && \
-        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init)
-    : >"$FOREIGN/shell-common/functions/probe.sh"
+    _setup_foreign_repo foreign
 
     run env HOME="$FAKE_HOME" bash -c \
-        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$FOREIGN/shell-common/functions/probe.sh'"
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$FOREIGN'"
     assert_success
     assert_output --partial "[WARN]"
-    assert_output --partial "$FOREIGN/shell-common/functions/probe.sh"
+    assert_output --partial "$FOREIGN"
     assert_output --partial "$CANON"
 }
 
@@ -205,14 +214,10 @@ _setup_fake_home_dotfiles() {
 
 @test "_dotfiles_root_warn_if_foreign_source: warning goes to stderr, not stdout" {
     _setup_fake_home_dotfiles
-    FOREIGN="$SCRATCH/foreign2/dotfiles"
-    mkdir -p "$FOREIGN/shell-common/functions"
-    (cd "$FOREIGN" && git init -q -b main && \
-        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init)
-    : >"$FOREIGN/shell-common/functions/probe.sh"
+    _setup_foreign_repo foreign2
 
     run env HOME="$FAKE_HOME" bash -c \
-        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$FOREIGN/shell-common/functions/probe.sh' 2>/dev/null"
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$FOREIGN' 2>/dev/null"
     assert_success
     assert_output ""
 }

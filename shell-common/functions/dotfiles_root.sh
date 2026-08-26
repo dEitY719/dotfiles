@@ -127,12 +127,16 @@ _dotfiles_root_git_common_dir() {
     _drgcd_dir="${1:-}"
     [ -d "$_drgcd_dir" ] || return 1
 
-    _drgcd_rel=$(cd "$_drgcd_dir" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || return 1
-    [ -n "$_drgcd_rel" ] || return 1
-
     # --git-common-dir is relative to DIR for a main worktree ('.git') and
-    # absolute for a linked worktree, so resolve it from inside DIR.
-    (cd "$_drgcd_dir" 2>/dev/null && cd "$_drgcd_rel" 2>/dev/null && pwd -P) || return 1
+    # absolute for a linked worktree, so resolve it from inside DIR — one
+    # subshell, since the second `cd` must run from wherever the first
+    # landed.
+    (
+        cd "$_drgcd_dir" 2>/dev/null || exit 1
+        _drgcd_rel=$(git rev-parse --git-common-dir 2>/dev/null) || exit 1
+        [ -n "$_drgcd_rel" ] || exit 1
+        cd "$_drgcd_rel" 2>/dev/null && pwd -P
+    ) || return 1
 }
 
 # _dotfiles_root_warn_if_foreign_source SELF_PATH
