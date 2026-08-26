@@ -25,25 +25,12 @@ setup() {
 }
 
 # ---------------------------------------------------------------------------
-# _resolve_bats_timeout
-# ---------------------------------------------------------------------------
-
-@test "_resolve_bats_timeout: defaults to 300 when BATS_TEST_TIMEOUT is unset" {
-    unset BATS_TEST_TIMEOUT
-    run _resolve_bats_timeout
-    assert_success
-    assert_output "300"
-}
-
-@test "_resolve_bats_timeout: an explicit BATS_TEST_TIMEOUT is honored verbatim" {
-    export BATS_TEST_TIMEOUT=42
-    run _resolve_bats_timeout
-    assert_success
-    assert_output "42"
-}
-
-# ---------------------------------------------------------------------------
 # End-to-end: a hanging test becomes a bounded failure
+#
+# (run_bats() resolves the timeout inline as `${BATS_TEST_TIMEOUT:-300}` — a
+# bare bash default expansion, not a helper worth unit-testing on its own.
+# This test exercises the real behavior: an explicit override reaching
+# bats-core and killing a runaway test.)
 # ---------------------------------------------------------------------------
 
 @test "BATS_TEST_TIMEOUT turns a hanging test into a bounded failure" {

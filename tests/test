@@ -268,17 +268,6 @@ _resolve_bats_jobs() {
     _effective_parallel_jobs "$jobs" "$others"
 }
 
-# Resolve run_bats()'s per-test timeout in seconds (issue #1483).
-#   BATS_TEST_TIMEOUT set    → honored verbatim (a file's own setup_file()
-#                              can also raise it further per-file).
-#   BATS_TEST_TIMEOUT unset  → 300. The full suite is ~4-5 min, so a single
-#                              test still running after 300s is pathological
-#                              — better a bounded TAP failure than the
-#                              multi-hour silent hang of #1483.
-_resolve_bats_timeout() {
-    printf '%s\n' "${BATS_TEST_TIMEOUT:-300}"
-}
-
 # Discover the .bats files run_bats() executes, ordered by @test count
 # descending (Longest-Processing-Time scheduling) so the long-pole file starts
 # first and the parallel makespan approaches its floor.
@@ -336,10 +325,13 @@ run_bats() {
 
     print_header "Running Bats Shell Unit Tests"
 
-    # Exported so both branches below inherit it — including the `bash -c`
-    # children xargs spawns, which get the environment but not shell locals.
-    export BATS_TEST_TIMEOUT
-    BATS_TEST_TIMEOUT="$(_resolve_bats_timeout)"
+    # Per-test timeout (issue #1483): unset → 300, a file's own setup_file()
+    # can raise it further per-file. Exported so both branches below inherit
+    # it — including the `bash -c` children xargs spawns, which get the
+    # environment but not shell locals. The full suite is ~4-5 min, so a
+    # single test still running after 300s is pathological — better a
+    # bounded TAP failure than the multi-hour silent hang of #1483.
+    export BATS_TEST_TIMEOUT="${BATS_TEST_TIMEOUT:-300}"
 
     local bats_files=()
     while IFS= read -r f; do
