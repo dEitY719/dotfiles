@@ -120,6 +120,29 @@ elif [ -n "$ZSH_VERSION" ]; then
 fi
 ```
 
+### 7. 공유 함수 파일을 `find`/PATH 탐색으로 자가 발견
+
+```sh
+# WRONG — 비대화형 셸에서 $SHELL_COMMON 이 비면 이름이 같은 아무 체크아웃이나 잡힌다
+src=$(find "$HOME" -name gh_pr_review.sh -path '*/shell-common/functions/*' | head -1)
+. "$src"
+
+# RIGHT — 항상 fallback 패턴으로 고정된 한 곳에서만 source
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_review.sh"
+```
+
+디스크에는 `dotfiles` 라는 이름의 디렉터리가 여럿 존재한다 (예: 다른 repo 의
+submodule 체크아웃). Claude Code subagent 처럼 `$SHELL_COMMON` / `$DOTFILES_ROOT`
+가 unset 인 비대화형 컨텍스트에서 탐색으로 파일을 고르면, 수 주 묵은 사본이
+정본 대신 sourced 되어 `Unknown --ai value: 'hermes'` 같은 엉뚱한 에러로 나타난다
+(#1454). 3번이 하드코드 경로를 금지한다면 이 항목은 **탐색 자체**를 금지한다.
+
+규칙을 어긴 코드를 위한 advisory 안전망으로
+`_dotfiles_root_warn_if_foreign_source "${BASH_SOURCE[0]-}"`
+(`shell-common/functions/dotfiles_root.sh`) 가 있다. 자신의 실제 load 경로가
+`$HOME/dotfiles` 와 다른 git 저장소면 stderr 에 WARN 한 블록을 찍는다. 같은
+저장소의 linked worktree 는 경고하지 않으며, 절대 실행을 막지 않는다.
+
 ## Tool Integration UX-lib Guard
 
 `tools/integrations/<tool>.sh` 의 표준 ux_lib guard:

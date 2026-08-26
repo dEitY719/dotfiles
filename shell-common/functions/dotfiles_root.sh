@@ -118,3 +118,64 @@ _dotfiles_root_canonicalize() {
     fi
     return 0
 }
+
+# _dotfiles_root_git_common_dir DIR
+#
+# Echo the absolute, symlink-resolved --git-common-dir of DIR. Returns 1
+# when DIR is not a git checkout or the path cannot be resolved.
+_dotfiles_root_git_common_dir() {
+    _drgcd_dir="${1:-}"
+    [ -d "$_drgcd_dir" ] || return 1
+
+    _drgcd_rel=$(cd "$_drgcd_dir" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || return 1
+    [ -n "$_drgcd_rel" ] || return 1
+
+    # --git-common-dir is relative to DIR for a main worktree ('.git') and
+    # absolute for a linked worktree, so resolve it from inside DIR.
+    (cd "$_drgcd_dir" 2>/dev/null && cd "$_drgcd_rel" 2>/dev/null && pwd -P) || return 1
+}
+
+# _dotfiles_root_warn_if_foreign_source SELF_PATH
+#
+# Advisory guard (issue #1454): print one WARN block to stderr when the
+# caller was sourced from a checkout that is a different git repository
+# than $HOME/dotfiles. SELF_PATH must be the caller's own
+# ${BASH_SOURCE[0]} — $SHELL_COMMON is deliberately never read here, since
+# a wrong $SHELL_COMMON is precisely the failure this detects; only the
+# actual load path is trustworthy.
+#
+# A linked worktree of the same repository is NOT foreign (both resolve to
+# the same --git-common-dir) and stays silent. Silent no-op when SELF_PATH
+# is empty/missing, git is unavailable, or $HOME/dotfiles is absent or not
+# a git repo — there is nothing to compare against, and warning in a
+# sandboxed HOME would be pure noise.
+#
+# Never blocks: a user intentionally testing an alternate checkout is
+# valid, so this only informs and always returns 0.
+_dotfiles_root_warn_if_foreign_source() {
+    _dwfs_self="${1:-}"
+    [ -n "$_dwfs_self" ] || return 0
+    [ -f "$_dwfs_self" ] || return 0
+    command -v git >/dev/null 2>&1 || return 0
+
+    _dwfs_canonical="${HOME:-}/dotfiles"
+    [ -d "$_dwfs_canonical" ] || return 0
+
+    _dwfs_dir=$(dirname "$_dwfs_self" 2>/dev/null) || return 0
+
+    _dwfs_self_common=$(_dotfiles_root_git_common_dir "$_dwfs_dir") || return 0
+    _dwfs_canonical_common=$(_dotfiles_root_git_common_dir "$_dwfs_canonical") || return 0
+
+    [ "$_dwfs_self_common" != "$_dwfs_canonical_common" ] || return 0
+
+    # Raw printf, not ux_lib: this runs during bootstrap and reaching
+    # ux_lib.sh would require the very $SHELL_COMMON under suspicion.
+    printf '%s\n' \
+        "[WARN] dotfiles: loaded from a foreign checkout (issue #1454)" \
+        "         loaded: ${_dwfs_self}" \
+        "      canonical: ${_dwfs_canonical}" \
+        "  Source shared files via \${SHELL_COMMON:-\$HOME/dotfiles/shell-common}/... — never by find/PATH discovery." \
+        "  Ignore this if you are intentionally testing an alternate checkout." >&2
+
+    return 0
+}
