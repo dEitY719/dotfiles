@@ -30,33 +30,23 @@ fail() {
 
 # 파일명 규칙: <YYYY-MM-DD>-<issue>.md
 is_valid_name() {
+    # 날짜 프리픽스 + 숫자로 시작하는 issue + .md 를 한 패턴으로 거른다.
     case "$1" in
-    *.md) ;;
+    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9]*.md) ;;
     *) return 1 ;;
     esac
+    # issue 부분이 전부 숫자인지 (`1a.b` 같은 잔여 케이스) 확인한다.
     _stem="${1%.md}"
-    case "$_stem" in
-    [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*) ;;
-    *) return 1 ;;
+    case "${_stem#????-??-??-}" in
+    *[!0-9]*) return 1 ;;
     esac
-    _issue="${_stem#????-??-??-}"
-    case "$_issue" in
-    "" | *[!0-9]*) return 1 ;;
-    esac
-    return 0
-}
-
-# 선행 공백/탭 제거 (POSIX 파라미터 확장 — grep/sed 포크 없이).
-lstrip() {
-    _lead="${1%%[! 	]*}"
-    printf '%s' "${1#"$_lead"}"
 }
 
 for file in "$FRAGMENT_DIR"/*; do
     # glob 미매치(빈 디렉터리) 또는 하위 디렉터리는 건너뛴다.
     [ -f "$file" ] || continue
 
-    if ! is_valid_name "$(basename "$file")"; then
+    if ! is_valid_name "${file##*/}"; then
         fail "$file — 파일명이 <YYYY-MM-DD>-<issue>.md 형식이 아닙니다."
         continue
     fi
@@ -65,7 +55,10 @@ for file in "$FRAGMENT_DIR"/*; do
     lineno=0
     while IFS= read -r line || [ -n "$line" ]; do
         lineno=$((lineno + 1))
-        stripped="$(lstrip "$line")"
+
+        # 선행 공백/탭 제거 (POSIX 파라미터 확장 — 줄당 포크 없이).
+        _lead="${line%%[! 	]*}"
+        stripped="${line#"$_lead"}"
 
         # 공백만 있는 줄은 수집기가 버리므로 항목이 아니다 — 허용.
         [ -n "$stripped" ] || continue
