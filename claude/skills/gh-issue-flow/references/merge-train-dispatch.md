@@ -6,7 +6,7 @@ steps 2.5 / 2.5.1. Issue #1482.
 ## The call
 
 ```bash
-aicron run merge-train || true
+nohup aicron run merge-train >/dev/null 2>&1 &
 ```
 
 This is the same invocation the merge-train crontab entry runs on its own
@@ -15,6 +15,13 @@ merge-train` executes `pr_merge_train_cron.sh --cwd "$HOME/dotfiles"` under
 `aicron`'s own logging/locking. Step 2.4.5 does not add a new code path; it
 just triggers the existing one early, once, right when a fresh PR is most
 likely to be waiting for it.
+
+Backgrounded (`nohup ... &`, no foreground wait) rather than run inline: when
+the dispatcher actually finds a train to start, it calls `herdr agent prompt
+--wait --timeout 240000` (`_PMT_TIMEOUT_MS`, `pr_merge_train_cron.sh`) — up
+to 4 minutes just for the prompt to be *accepted*. Running that inline would
+stall Steps 2.5/2.5.1/2.6 behind a call this chain doesn't need to wait on;
+`nohup` keeps the dispatcher alive past this step's own shell exiting.
 
 ## Why the dispatcher, never `gh:pr-merge-train` directly
 
@@ -31,9 +38,10 @@ lock.
 
 ## Why non-fatal, and why it ignores Step 2.4's outcome
 
-- **`|| true`** — `aicron`, `herdr`, or the dispatcher's own preconditions
-  (missing `origin` remote, no open target PR, `gh pr list` failure) can all
-  fail here. None of that is this chain's problem: merge is not part of what
+- **Backgrounded, not awaited** — `aicron`, `herdr`, or the dispatcher's own
+  preconditions (missing `origin` remote, no open target PR, `gh pr list`
+  failure) can all fail here, and this step never inspects the outcome.
+  None of that is this chain's problem: merge is not part of what
   `gh:issue-flow` promises, only a faster nudge toward it. A failure here
   degrades exactly to "the 5-minute crontab tick will find this PR anyway" —
   never a reason to stop a chain that already produced a PR.
@@ -48,7 +56,8 @@ lock.
 
 ## What this deliberately does not do
 
-- Does not skip or shorten `gh:pr-merge-train`'s D-6 quiet period.
+(D-6's quiet period is untouched — see above.)
+
 - Does not touch approval or branch-protection gates (`gh:pr-approve`,
   `--admin-merge`) — this repo requires no PR approval
   (`required_approving_review_count = 0`), and nothing here changes that.

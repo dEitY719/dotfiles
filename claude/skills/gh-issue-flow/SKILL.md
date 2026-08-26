@@ -73,14 +73,17 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    `Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 4")`
 5. **Step 2.4.5 — Wake the merge-train dispatcher** (runs once Step 2.4
    completes — Step 2.4 is soft-fail, so this always executes when 2.3
-   succeeded; non-fatal) — nudges the merge-train cron dispatcher
-   immediately instead of waiting for its next tick, so a fresh PR reaches
-   `gh:pr-merge-train` in seconds rather than up to 5 minutes later. Calls
-   the existing dispatcher script, never `gh:pr-merge-train` directly —
-   the dispatcher owns NF-1 (one train per repo) and silently no-ops if a
-   train is already running. Detail: `references/merge-train-dispatch.md`.
+   succeeded; non-fatal, backgrounded) — nudges the merge-train cron
+   dispatcher immediately instead of waiting for its next tick, so a fresh
+   PR reaches `gh:pr-merge-train` in seconds rather than up to 5 minutes
+   later. Calls the existing dispatcher script, never `gh:pr-merge-train`
+   directly — the dispatcher owns NF-1 (one train per repo) and silently
+   no-ops if a train is already running. Backgrounded because the
+   dispatcher can itself block up to 4 minutes (`herdr agent prompt
+   --wait`); this step must not stall Steps 2.5/2.5.1/2.6 while it waits.
+   Detail: `references/merge-train-dispatch.md`.
    ```bash
-   aicron run merge-train || true
+   nohup aicron run merge-train >/dev/null 2>&1 &
    ```
 6. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
    rebase-resolve; a fresh PR usually prints "이미 충돌 없음 — skip".

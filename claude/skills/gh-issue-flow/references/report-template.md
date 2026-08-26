@@ -14,7 +14,7 @@ gh:issue-flow complete (#<N>)
   [OK] Step 2: gh:commit                (<sha> "<subject>")
   [OK] Step 3: gh:pr                    (PR #<M>)
   [OK] Step 4: devx:pr-review-all       (agy+codex+simplify, reply in 4 min)
-  [OK] Step 4.5: merge-train dispatch   (nudged — pmt-<repo> notified)
+  [OK] Step 4.5: merge-train dispatch   (nudged, backgrounded)
   [OK] Step 5: gh:pr-resolve-conflict   (no conflicts / resolved)
   [OK] Step 5.1: gh:pr-resolve-outdated (up to date / rebased)
   [OK] Step 6: ai-metrics               (~X tokens · ~M h · ~L min)
@@ -28,11 +28,12 @@ detail):
 - `[SKIP] Step 4: devx:pr-review-all  (simplify: no change)` — clean tree, no commit.
 - `[WARN] Step 4: devx:pr-review-all  (<reason>)` — review/simplify error, continued.
 
-Step 4.5 (`aicron run merge-train`) is also soft-fail (`references/merge-train-dispatch.md`)
-and never contributes a `stopped at` report:
-- `[SKIP] Step 4.5: merge-train dispatch  (aicron not found)` — no binary.
-- `[SKIP] Step 4.5: merge-train dispatch  (train already running)` — dispatcher's own NF-1 skip.
-- `[WARN] Step 4.5: merge-train dispatch  (<reason>)` — dispatcher error, continued.
+Step 4.5 (`nohup aicron run merge-train >/dev/null 2>&1 &`,
+`references/merge-train-dispatch.md`) is backgrounded and its output
+discarded — the chain never inspects the outcome (missing `aicron`, an
+already-running train, a dispatcher error are all indistinguishable from
+success at this point), so it always reports `[OK] ... (nudged,
+backgrounded)` and never contributes a `stopped at` report.
 
 If Step 2.6 soft-failed, show `[WARN] Step 6: ai-metrics  (skipped — <reason>)` instead.
 
