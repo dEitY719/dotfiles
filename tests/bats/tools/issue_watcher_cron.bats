@@ -294,6 +294,23 @@ EOF
 #   HERDR_STATUS_AFTER_SENDKEYS  once any `send-keys` has run, `agent get`
 #                             reports this status instead of HERDR_AGENT_STATUS
 #
+# Rate-limit gate (issue #1444). The gate judges what an agent does *after* its
+# prompt lands, so the stub has to be able to answer differently before and
+# after that point, and per agent — one tick can dispatch several.
+#
+#   HERDR_STATUS_AFTER_PROMPT       status `agent get` reports for an agent
+#                                   that has already been prompted
+#   HERDR_STATUS_AFTER_PROMPT_GETS  apply it only to that agent's first N
+#                                   post-prompt `agent get` calls, then fall
+#                                   back to HERDR_AGENT_STATUS — this is how an
+#                                   agent that reaches `working` and then drops
+#                                   out of it inside the window is staged
+#   HERDR_WORKING_AGENTS            space-separated agent names that report
+#                                   `working` once prompted, whatever the
+#                                   settings above say
+#   HERDR_READ_MODE=missing         `agent read` answers agent_not_found (the
+#                                   evidence capture has nothing to log)
+#
 # Each herdr invocation is a fresh process, so the per-call sequences count
 # through marker files next to ${CALL_LOG} rather than through shell state.
 _install_herdr_stub() {
@@ -352,6 +369,18 @@ case "$1 $2" in
         exit 1
     fi
     _status="${HERDR_AGENT_STATUS:-idle}"
+    if [ -f "${CALL_LOG}.prompt.$3" ]; then
+        if [ -n "${HERDR_STATUS_AFTER_PROMPT:-}" ]; then
+            _n=$(_bump "${CALL_LOG}.postget.$3")
+            if [ -z "${HERDR_STATUS_AFTER_PROMPT_GETS:-}" ] ||
+                [ "${_n}" -le "${HERDR_STATUS_AFTER_PROMPT_GETS}" ]; then
+                _status="${HERDR_STATUS_AFTER_PROMPT}"
+            fi
+        fi
+        for _w in ${HERDR_WORKING_AGENTS:-}; do
+            [ "${_w}" = "$3" ] && _status="working"
+        done
+    fi
     if [ -n "${HERDR_STATUS_AFTER_SENDKEYS:-}" ] && [ -f "${CALL_LOG}.sendkeys" ]; then
         _status="${HERDR_STATUS_AFTER_SENDKEYS}"
     fi
@@ -372,7 +401,18 @@ case "$1 $2" in
     _bump "${CALL_LOG}.sendkeys" >/dev/null
     printf '%s\n' '{"id":"cli:agent:send-keys","result":{"ok":true}}'
     ;;
+"agent read")
+    # Evidence capture only (issue #1444). `--format text` gives plain pane
+    # lines; an error comes back as JSON on stdout with exit 0, which is what
+    # the caller has to recognise and skip.
+    if [ "${HERDR_READ_MODE:-ok}" = "missing" ]; then
+        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:read"}'
+        exit 0
+    fi
+    printf '> /gh-issue-flow 11\n5-hour limit reached. Resets at 3pm.\n'
+    ;;
 "agent prompt")
+    _bump "${CALL_LOG}.prompt.$3" >/dev/null
     if [ -n "${HERDR_PROMPT_FAIL_TIMES:-}" ]; then
         _n=$(_bump "${CALL_LOG}.promptcount")
         if [ "${_n}" -le "${HERDR_PROMPT_FAIL_TIMES}" ]; then
@@ -510,6 +550,7 @@ _run_tick() {
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "IW_IDLE_POLL_SLEEP=0" \
         "IW_STALL_RECOVER_SLEEP=0" \
+        "IW_LIMIT_OBSERVE_SLEEP=0" \
         "${_env[@]}" \
         bash "${SCRIPT}" "$@"
 }
@@ -983,12 +1024,12 @@ _hold_lock() {
     _refute_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-1"
 }
 
-@test "issue_watcher_cron: a stale attempt error code cannot book a quota strike" {
-    # Attempt 1 stalls (quota-shaped); attempts 2-3 die at tab create, which is
-    # not quota-shaped. The gate must read the *last* attempt, not the first.
+@test "issue_watcher_cron: a dispatch that never lands is not judged at all" {
+    # Attempt 1 stalls, attempts 2-3 die at tab create. Since #1444 the gate no
+    # longer classifies *why* a dispatch failed — no error code, from any
+    # attempt, can book a strike. Only a prompt confirmed submitted is judged.
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_TAB_FAIL_AFTER=1"
     assert_failure
-    assert_output --partial "not a token-limit signature"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
@@ -1558,11 +1599,11 @@ _two_repo_fixture() {
     [ "$(_log_count 'agent send-keys')" -eq 9 ]
     [ "$(_log_count 'agent prompt')" -eq 3 ]
     assert_output --partial "agent_prompt_stalled"
-    # The reported code stays the gate's token-limit signature, so the ordinary
-    # unresolved stall still books its strike.
-    refute_output --partial "not a token-limit signature"
-    run cat "${_LIMIT_FILE}"
-    assert_output --partial '"strikes": "1"'
+    # Regression lock for issue #1444. This is the *cold start* signature #1443
+    # measured: the prompt was typed but never submitted, so nothing is known
+    # about the quota. Pre-#1444 this exact run booked a strike, and two of them
+    # shut the gate for 30 minutes with the account untouched.
+    [ ! -f "${_LIMIT_FILE}" ]
 }
 
 @test "issue_watcher_cron: agent_prompt_stalled recovery is skipped when the agent is already working" {
@@ -1599,15 +1640,13 @@ _two_repo_fixture() {
     assert_output --partial "pane unreachable"
 }
 
-@test "issue_watcher_cron: a broken pane is not booked as a token-limit stall" {
-    # Regression (PR #1449 codex review, BLOCKER B): the prompt response says
-    # `agent_prompt_stalled`, which is the gate's quota signature. A pane that
-    # cannot be reached at all is an outage the gate cannot fix, so the distinct
-    # code has to win — otherwise a closed pane holds dispatch for 30 minutes.
+@test "issue_watcher_cron: a broken pane is named as an outage, not booked as a strike" {
+    # PR #1449 codex review, BLOCKER B: an unreachable pane must not read as a
+    # spent quota. Since #1444 that follows from the dispatch failing at all —
+    # the distinct code survives only so the cron log names the real fault.
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
     assert_failure
     assert_output --partial "herdr_send_keys_failed"
-    assert_output --partial "not a token-limit signature"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
@@ -1797,35 +1836,144 @@ _two_repo_fixture() {
 }
 
 # ---------------------------------------------------------------------------
-# Rate-limit gate (issue #1436)
+# Rate-limit gate (issues #1436, #1444)
 # ---------------------------------------------------------------------------
+#
+# Since #1444 the gate reads two things and nothing else: was the prompt
+# confirmed submitted, and did the agent that received it hold `working` for
+# _IW_LIMIT_OBSERVE_SEC afterwards. `HERDR_STATUS_AFTER_PROMPT` is what stages
+# the second half — the default `idle` means "the dispatch landed and then
+# nothing happened", which is the quota signature.
 
-@test "issue_watcher_cron: a healthy dispatch leaves no rate-limit state behind" {
-    _run_tick
+@test "issue_watcher_cron: a dispatch whose agent holds working leaves no gate state" {
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
+    assert_output --partial "held 'working' for 60s"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a stalled dispatch records a strike and still exits 1" {
-    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
-    assert_failure
+@test "issue_watcher_cron: a confirmed dispatch that never reaches working records a strike" {
+    # The prompt landed — `agent prompt` succeeded — and a minute later the pane
+    # is still idle. One /gh-issue-flow runs for minutes, so the work never
+    # started.
+    _run_tick
+    assert_success
+    assert_output --partial "No dispatched agent reached 'working' within 60s (1/2)"
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
     assert_output --partial '"backoff_until": "0"'
 }
 
-@test "issue_watcher_cron: two consecutive stalled dispatches close the gate" {
+@test "issue_watcher_cron: an agent that reaches working and falls back records a strike" {
+    # Working for the first two polls of the window, idle for the remaining
+    # four. `working` has to be *held*, not merely touched — and the log has to
+    # say which of the two failures this was.
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working" "HERDR_STATUS_AFTER_PROMPT_GETS=2"
+    assert_success
+    assert_output --partial "reached 'working' and fell back inside 60s (1/2)"
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+}
+
+@test "issue_watcher_cron: a dispatch that never lands leaves the strike count alone" {
+    # Not a strike and not a clear: an unsubmitted prompt is evidence about the
+    # input loop, not about the quota (issue #1444).
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
     assert_failure
-    _add_worktree 11
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+    refute_output --partial '"strikes": "2"'
+}
+
+@test "issue_watcher_cron: two consecutive unproductive ticks close the gate" {
+    _run_tick
+    assert_success
+    # A different issue next tick: strikes count consecutive *ticks*, and the
+    # first one already left a worktree behind for #11.
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
-    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
-    assert_failure
+    _run_tick
+    assert_success
     assert_output --partial "Rate-limit gate closed for 30m"
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "0"'
     refute_output --partial '"backoff_until": "0"'
 }
+
+@test "issue_watcher_cron: one healthy agent clears the slate for the whole tick" {
+    # Issue #1444, 확정 3: one account, one quota. An agent holding `working`
+    # proves the account is not spent, so the tick earns no strike even though
+    # its other dispatches went nowhere — those are issue-specific failures, not
+    # evidence about the quota.
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    _run_tick "IW_DISPATCH_PER_TICK=3" "HERDR_WORKING_AGENTS=iw-acme-dotfiles-12"
+    assert_success
+    assert_output --partial "Agent iw-acme-dotfiles-12 held 'working'"
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: every dispatch in a tick is judged, not just the first" {
+    # The mirror of the test above: with none of the three holding `working` the
+    # tick books exactly one strike, not one per dispatch.
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    _run_tick "IW_DISPATCH_PER_TICK=3"
+    assert_success
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+}
+
+# ---------------------------------------------------------------------------
+# Evidence capture (issue #1444) — logged, never gated on
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: a strike logs the pane tail as evidence" {
+    _run_tick
+    assert_success
+    _assert_logged "agent read iw-acme-dotfiles-11 --lines 40 --format text"
+    assert_output --partial "Pane tail for iw-acme-dotfiles-11 (evidence only"
+    assert_output --partial "5-hour limit reached"
+}
+
+@test "issue_watcher_cron: a healthy tick captures no pane evidence" {
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    _refute_logged "agent read"
+}
+
+@test "issue_watcher_cron: an unreadable pane does not break the strike" {
+    # `agent read` answers JSON-on-stdout with exit 0 when the target is gone.
+    # Logging that as if it were pane content would be worse than saying
+    # nothing, and it must not disturb the verdict either way.
+    _run_tick "HERDR_READ_MODE=missing"
+    assert_success
+    assert_output --partial "No pane output captured for iw-acme-dotfiles-11"
+    refute_output --partial '{"error"'
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+}
+
+@test "issue_watcher_cron: pane text cannot open the gate" {
+    # The pane is shouting about a rate limit and the agent is working anyway.
+    # The behaviour decides; the banner is a log line. A claude release that
+    # reworded it changes nothing here — which is the whole reason the wording
+    # is not a gate input (issue #1444, 확정 2).
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+# ---------------------------------------------------------------------------
+# Backoff, expiry and fail-open (issue #1436 behaviour, preserved)
+# ---------------------------------------------------------------------------
 
 @test "issue_watcher_cron: a closed gate holds the tick without dispatching" {
     mkdir -p "${_STATE_DIR}"
@@ -1864,7 +2012,7 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: an expired backoff reopens the gate and dispatches" {
     mkdir -p "${_STATE_DIR}"
     printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) - 60))" >"${_LIMIT_FILE}"
-    _run_tick
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Rate-limit gate reopened"
     _assert_logged "agent prompt iw-acme-dotfiles-11"
@@ -1874,7 +2022,7 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: an out-of-range future deadline is treated as expired" {
     mkdir -p "${_STATE_DIR}"
     printf '{ "strikes": "0", "backoff_until": "%s" }\n' "$(($(date +%s) + 999999))" >"${_LIMIT_FILE}"
-    _run_tick
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Rate-limit gate reopened"
 }
@@ -1882,7 +2030,7 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a corrupt gate file fails open" {
     mkdir -p "${_STATE_DIR}"
     printf 'not json at all\n' >"${_LIMIT_FILE}"
-    _run_tick
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     _assert_logged "agent prompt iw-acme-dotfiles-11"
 }
@@ -1890,21 +2038,24 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a non-numeric deadline fails open" {
     mkdir -p "${_STATE_DIR}"
     printf '{ "strikes": "0", "backoff_until": "soon" }\n' >"${_LIMIT_FILE}"
-    _run_tick
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "dispatching anyway"
     _assert_logged "agent prompt iw-acme-dotfiles-11"
 }
 
-@test "issue_watcher_cron: a successful dispatch clears accumulated strikes" {
+@test "issue_watcher_cron: a productive tick clears accumulated strikes" {
     mkdir -p "${_STATE_DIR}"
     printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
-    _run_tick
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
 @test "issue_watcher_cron: a stalled dispatch with the agent working earns no strike" {
+    # herdr says `agent_prompt_stalled` but the agent is already working, so
+    # _iw_prompt_issue treats it as delivered — and the same `working` carries
+    # it through the observation window.
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=working"
     assert_success
     [ ! -f "${_LIMIT_FILE}" ]
@@ -1913,7 +2064,6 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a non-quota dispatch failure earns no strike" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    assert_output --partial "not a token-limit signature"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
@@ -1962,21 +2112,9 @@ _two_repo_fixture() {
     assert_output --partial '"strikes": "1"'
 }
 
-@test "issue_watcher_cron: a gate that shuts mid-cycle stops the remaining issues" {
-    _set_issues '[
-      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
-      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
-      {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
-    ]'
-    _run_tick "IW_DISPATCH_PER_TICK=3" "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
-    assert_failure
-    # Two strikes shut the gate, so the third issue is never attempted.
-    _refute_logged "gwt spawn --wt-name issue-13"
-}
-
 @test "issue_watcher_cron: a state dir with no gate file ticks exactly as before" {
     mkdir -p "${_STATE_DIR}"
-    _run_tick
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     _assert_logged "agent prompt iw-acme-dotfiles-11"
     [ ! -f "${_LIMIT_FILE}" ]
@@ -1985,8 +2123,8 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: an unwritable state dir warns but does not change the exit code" {
     mkdir -p "${_STATE_DIR}"
     chmod 500 "${_STATE_DIR}"
-    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
-    assert_failure
+    _run_tick
+    assert_success
     assert_output --partial "rate-limit gate will not survive this tick"
     chmod 700 "${_STATE_DIR}"
 }
