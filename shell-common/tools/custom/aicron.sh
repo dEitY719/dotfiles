@@ -34,21 +34,18 @@
 # ============================================================
 #
 # `set -u` is deliberately switched on at the END of this block, not here:
-# init.sh and ux_lib.sh both test $BASH_VERSION bare to detect their host
-# shell, which under `sh` is an unset parameter and would abort the script
-# before it printed anything. Everything in the bootstrap guards its own
-# expansions with `:-` instead.
-
-# init.sh gives DOTFILES_ROOT / SHELL_COMMON / ux_lib the way every other
-# script in this directory gets them. It is sourced conditionally because its
-# closing direct-exec guard dereferences ${BASH_SOURCE[0]}, which dash rejects
-# outright as a bad substitution — and NF-3 requires this file to run under
-# /bin/sh. The fallbacks below cover everything init.sh would have exported,
-# which is also what makes DOTFILES_TEST_MODE=1 (init.sh returns early, before
-# any export) a working configuration.
-if [ -n "${BASH_VERSION:-}" ] || [ -n "${ZSH_VERSION:-}" ]; then
-    . "$(dirname "$0")/init.sh" || exit 1
-fi
+# ux_lib.sh tests $BASH_VERSION bare to detect its host shell, which under
+# `sh` is an unset parameter and would abort the script before it printed
+# anything. Everything in the bootstrap guards its own expansions with `:-`.
+#
+# This directory's init.sh is deliberately NOT sourced. Everything it exports
+# (DOTFILES_ROOT, SHELL_COMMON) is derived below from this file's own location
+# instead — see the comment there for why that override is wanted — and ux_lib
+# is loaded below as well, so sourcing it would add nothing but a bash-vs-sh
+# fork in the bootstrap. It could not be sourced unconditionally in any case:
+# its closing direct-exec guard dereferences ${BASH_SOURCE[0]}, which dash
+# rejects outright as a bad substitution, and NF-3 requires this file to run
+# under /bin/sh.
 
 # realpath is not guaranteed to exist; this idiom is.
 _AICRON_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
@@ -69,8 +66,8 @@ SHELL_COMMON="$(CDPATH='' cd -- "${_AICRON_DIR}/../.." && pwd)"
 DOTFILES_ROOT="$(CDPATH='' cd -- "${SHELL_COMMON}/.." && pwd)"
 export SHELL_COMMON DOTFILES_ROOT
 
-# Same early return means ux_* can still be undefined here, and every output
-# path below depends on it.
+# Every output path below depends on ux_*, and under `sh` nothing has loaded
+# it yet.
 if ! type ux_header >/dev/null 2>&1; then
     if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
         # shellcheck source=/dev/null
@@ -144,6 +141,25 @@ aicron_resolve_job() {
     return 0
 }
 
+# The plumbing add and remove share: crontab(1) has to exist, the edit runs
+# under the crontab lock, and either failure is exit 3. <1> names the job for
+# the messages; <2..> is the edit to perform.
+aicron_edit_crontab() {
+    _job="$1"
+    shift
+    if ! aicron_crontab_available; then
+        ux_error "crontab command not found — cannot update ${_job}"
+        return 3
+    fi
+    aicron_state_ensure || true
+    _lock=$(aicron_state_crontab_lock)
+    if ! aicron_crontab_guard "${_lock}" "$@"; then
+        ux_error "crontab update failed for ${_job}"
+        return 3
+    fi
+    return 0
+}
+
 aicron_cmd_list() {
     _fmt=text
     while [ "$#" -gt 0 ]; do
@@ -193,11 +209,6 @@ aicron_cmd_add() {
     aicron_manifest_check || return 1
     aicron_resolve_job "${_job}" || return $?
 
-    if ! aicron_crontab_available; then
-        ux_error "crontab command not found — cannot install ${_job}"
-        return 3
-    fi
-
     if [ -z "${_sched}" ]; then
         _sched=$(aicron_manifest_schedule "${_job}")
     fi
@@ -206,13 +217,8 @@ aicron_cmd_add() {
         return 1
     fi
 
-    aicron_state_ensure || true
-    _lock=$(aicron_state_crontab_lock)
-    if ! aicron_crontab_guard "${_lock}" \
-        aicron_crontab_install "${_job}" "${_sched}" "${_AICRON_SELF}"; then
-        ux_error "crontab update failed for ${_job}"
-        return 3
-    fi
+    aicron_edit_crontab "${_job}" \
+        aicron_crontab_install "${_job}" "${_sched}" "${_AICRON_SELF}" || return $?
     ux_success "installed ${_job} — ${_sched}"
 }
 
@@ -221,17 +227,7 @@ aicron_cmd_remove() {
     aicron_resolve_job "$@" || return $?
     _job="$1"
 
-    if ! aicron_crontab_available; then
-        ux_error "crontab command not found — cannot remove ${_job}"
-        return 3
-    fi
-
-    aicron_state_ensure || true
-    _lock=$(aicron_state_crontab_lock)
-    if ! aicron_crontab_guard "${_lock}" aicron_crontab_uninstall "${_job}"; then
-        ux_error "crontab update failed for ${_job}"
-        return 3
-    fi
+    aicron_edit_crontab "${_job}" aicron_crontab_uninstall "${_job}" || return $?
     ux_success "removed ${_job} from the crontab — its state file was kept"
 }
 

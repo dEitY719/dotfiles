@@ -26,9 +26,9 @@
 # naming check flags a function defined here that also shows up inside a
 # double-quoted string. Assign first, quote later.
 
-# 7 MiB. _AICRON_LOG_MAX_BYTES overrides it — the bats suite sets it to a
+# 7 MiB, overridable from the environment — the bats suite sets it to a
 # handful of bytes rather than writing 7 MiB of fixture.
-_AICRON_LOG_MAX_DEFAULT=7340032
+: "${_AICRON_LOG_MAX_BYTES:=7340032}"
 
 # The log this job writes to: its manifest `log` override, else the default
 # under the state dir.
@@ -45,13 +45,12 @@ aicron_run_log_path() {
 # D-7 — one generation, kept with `wc -c` rather than `stat` because the two
 # systems this runs on disagree about `stat`'s flags and `wc` does not.
 aicron_run_rollover() {
-    local _log _max _size
+    local _log _size
     _log="$1"
     [ -f "${_log}" ] || return 0
-    _max="${_AICRON_LOG_MAX_BYTES:-${_AICRON_LOG_MAX_DEFAULT}}"
     _size=$(wc -c <"${_log}" 2>/dev/null | tr -d ' ')
     [ -n "${_size}" ] || return 0
-    if [ "${_size}" -gt "${_max}" ]; then
+    if [ "${_size}" -gt "${_AICRON_LOG_MAX_BYTES}" ]; then
         mv "${_log}" "${_log}.1" 2>/dev/null || true
     fi
     return 0
@@ -108,8 +107,11 @@ aicron_run_exec() {
         env "$@"
         _rc=$?
     fi
-    _end=$(date -u +%s)
-    _stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    # One `date`: the epoch seconds and the stamp describe the same instant,
+    # and two calls could straddle a second boundary.
+    _end=$(date -u '+%s %Y-%m-%dT%H:%M:%SZ')
+    _stamp="${_end#* }"
+    _end="${_end%% *}"
 
     if [ "${_rec}" = "1" ]; then
         aicron_state_record "${_job}" "${_stamp}" "${_rc}" "$((_end - _start))" ||
