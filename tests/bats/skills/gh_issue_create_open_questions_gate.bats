@@ -419,6 +419,6 @@ teardown() {
     assert_success
     # And the NO_INTERACTIVE follow-up note must no longer claim
     # gh:issue-create is un-wired (#1460).
-    run awk '/^> / && /gh:issue-create/ { found = 1 } END { exit found }' "$_flow"
-    assert_success
+    run grep -q '^>.*gh:issue-create' "$_flow"
+    assert_failure
 }

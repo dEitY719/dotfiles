@@ -50,7 +50,7 @@ parse time** (before any step runs).
 | Verb | Implementation |
 |---|---|
 | `continue` | proceed to next step |
-| `file_issue: <template-key>` | `Skill(gh:issue-create, "--no-ask …")` — `--no-ask` is mandatory (#1460): this skill runs unattended, so the Step 3.1 미결 게이트 must auto-decide instead of prompting. Template source: §decision_rules may define named inline templates; `<template-key>` references one by name. No match → minimal default `{title:"<auto>", body:"Filed by /gh:issue-proceed from #<N> step <s>", labels:[]}` |
+| `file_issue: <template-key>` | `Skill(gh:issue-create, "--no-ask …")`. Template source: §decision_rules may define named inline templates; `<template-key>` references one by name. No match → minimal default `{title:"<auto>", body:"Filed by /gh:issue-proceed from #<N> step <s>", labels:[]}` |
 | `queue_doc_patch: <file>` | accumulate; flushed as a single commit + PR at end of loop |
 | `comment_on_self: <body>` | `gh issue comment <PROCEED_N>` |
 | `comment_on_other: <N> <body>` | `gh issue comment <N>` |
@@ -66,8 +66,7 @@ When the skill calls another skill, the payload is **always structured**
 (no free-form prompt):
 
 ```
-Skill(gh:issue-create, prompt=<<STRUCTURED
---no-ask
+Skill(gh:issue-create, "--no-ask", prompt=<<STRUCTURED
 TITLE: <...>
 BODY: <markdown>
 LABELS: <comma-list>
