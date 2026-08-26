@@ -1660,8 +1660,14 @@ _iw_limit_record() {
     local _agents="$1" _alive="" _strikes _now _rc=0
 
     # Nothing reached a pane this tick: no evidence either way, so the strike
-    # count stays exactly where it was.
-    [ -n "${_agents}" ] || return 0
+    # count stays exactly where it was. Said out loud rather than returned
+    # silently — a gate that leaves no trace here is indistinguishable from a
+    # gate that never ran, which is the class of blind assertion issue #1442
+    # went through this suite to remove.
+    if [ -z "${_agents}" ]; then
+        ux_info "No dispatch reached its pane this tick — nothing to judge, gate untouched."
+        return 0
+    fi
 
     # Three-way, not a boolean: `rc 2` is "herdr never answered", which must not
     # be booked as idleness. On `rc 1` `_alive` carries the agent that reached
