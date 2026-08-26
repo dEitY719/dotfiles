@@ -245,7 +245,14 @@ case "$1 $2" in
     # The real `gh api` reads stdin. Draining it here is what makes the
     # candidate-loop fd-3 test meaningful: on plain stdin this swallows the
     # remaining search results (PR #1447 agy review).
-    cat >/dev/null 2>&1 || true
+    #
+    # Skipped when stdin is a terminal (PR #1469 agy review). Running the suite
+    # straight from an interactive shell leaves the tick's stdin on the tty, and
+    # an unconditional `cat` then blocks on the keyboard forever — the run looks
+    # hung with no failing test to point at. A tty is never the fd-3 case this
+    # drain exists to model: the candidate list always arrives on a pipe or a
+    # heredoc, so guarding it costs the test nothing.
+    [ -t 0 ] || cat >/dev/null 2>&1 || true
     [ "${GH_GRAPHQL_FAIL:-0}" = "1" ] && exit 1
     _num=""
     for _a in "$@"; do
