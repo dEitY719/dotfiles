@@ -877,11 +877,10 @@ EOF
 
 @test "estimate_tokens: large byte count rounds to nearest 500" {
     _source_module
-    # 12 000 bytes → 3000 tokens.
+    # 12 000 bytes / 4 = 3000, already on a 500 boundary — exact, not a range.
     run _gh_pr_review_estimate_tokens 12000
     assert_success
-    # Allow a ±500 wobble since the rounding boundary is on 500.
-    [[ "$output" =~ ^[23][05]00$ ]]
+    assert_output "3000"
 }
 
 # ---------------------------------------------------------------------------
