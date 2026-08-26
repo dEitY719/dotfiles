@@ -13,7 +13,7 @@
 #   6) 이미 실행 중 / 이미 처리됨(이슈를 닫는 open PR) / blockedBy OPEN 스킵
 #   7) tick 당 최대 _IW_DISPATCH_PER_TICK 건만 워크트리 + herdr tab + agent 생성
 #   8) `/gh-issue-flow <N>` 프롬프트 전달
-# 토큰 한도 게이트가 닫혀 있으면 사이클 전체를 보류한다 (issue #1436).
+# 토큰 한도 게이트가 닫혀 있으면 사이클 전체를 보류한다 (issue #1436, #1444).
 #
 # 워크트리 존재 여부는 어떤 판정에도 쓰이지 않는다 (issue #1453 NF-1) — 순수
 # 작업 공간이라 언제 지워도 다음 tick 의 결정이 달라지지 않는다.
@@ -147,20 +147,33 @@ _IW_SELECT_STATE_BASENAME="select.json"
 _IW_STALL_RECOVER_ATTEMPTS="3"
 _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 
-# Rate-limit gate (issue #1436). Rationale for each value sits with the gate
-# functions below; the values themselves live here with the rest of the SSOT.
+# Rate-limit gate (issue #1436; judgment input rebuilt in #1444). Rationale for
+# each value sits with the gate functions below; the values themselves live here
+# with the rest of the SSOT.
 _IW_LIMIT_STATE_BASENAME="rate-limit.json"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
+# How long a *confirmed* dispatch has to hold `working` before the tick accepts
+# it as proof the quota is intact (issue #1444). One `/gh-issue-flow` runs for
+# minutes — review gate included — so a prompt that provably reached the pane
+# and is idle again a minute later did not finish early, it never started.
+_IW_LIMIT_OBSERVE_SEC="60"
+_IW_LIMIT_OBSERVE_POLLS=$(_iw_cap "${IW_LIMIT_OBSERVE_POLLS-}" 6 IW_LIMIT_OBSERVE_POLLS)
+# Gap between those polls, derived so the two values above stay the SSOT.
+# Overridable (to 0) for the same reason _IW_IDLE_POLL_SLEEP is: the bats suite
+# must not pay a real minute per gate test.
+_IW_LIMIT_OBSERVE_SLEEP="${IW_LIMIT_OBSERVE_SLEEP:-$((_IW_LIMIT_OBSERVE_SEC / _IW_LIMIT_OBSERVE_POLLS))}"
+# Pane lines captured as evidence when a strike is booked (issue #1444). They
+# go to the cron log for a human to read later; nothing parses them and nothing
+# gates on them.
+_IW_LIMIT_EVIDENCE_LINES="40"
 
-# herdr's `.error.code` from the last failed dispatch attempt, published by
-# _iw_prompt_issue so the rate-limit gate can tell a quota wall from an
-# unrelated herdr failure. Empty whenever the dispatch succeeded.
-_IW_DISPATCH_ERROR_CODE=""
 # Set by _iw_stall_recover_via_enter when `herdr agent send-keys` itself fails —
 # the pane is gone, not merely slow. Kept distinct from the prompt response's
-# own `.error.code` so the rate-limit gate never books a broken pane as a
-# token-limit stall (issue #1443, PR #1449 codex review). Empty otherwise.
+# own `.error.code` so the dispatch log names the outage rather than the stall
+# it is disguised as (issue #1443, PR #1449 codex review). Since #1444 it is a
+# log input only — the gate no longer classifies error codes at all. Empty
+# otherwise.
 _IW_STALL_RECOVER_ERROR=""
 # CLAUDE_CONFIG_DIR for every pane this tick opens. Resolved once per tick.
 _IW_CONFIG_DIR=""
@@ -1294,9 +1307,9 @@ _iw_stall_recover_via_enter() {
 # this path out of the `SubagentStop` guard gap (#1434).
 _iw_prompt_issue() {
     local _agent="$1" _number="$2" _prompt _json _code _rc=0 _seq0 _post_stall_status
+    local _fail_code
 
     _prompt="/gh-issue-flow ${_number}"
-    _IW_DISPATCH_ERROR_CODE=""
     _IW_STALL_RECOVER_ERROR=""
 
     # Baseline taken *before* the prompt is sent, not after a stall is detected:
@@ -1333,17 +1346,18 @@ _iw_prompt_issue() {
         return 0
     fi
 
-    # The rate-limit gate reads this to tell herdr's failure modes apart. A
-    # failed `send-keys` wins over the prompt response's own code: the response
-    # says `agent_prompt_stalled`, which is the gate's token-limit signature,
-    # but the pane being unreachable is an outage the gate cannot fix and must
-    # not shut for 30 minutes over (PR #1449 codex review).
+    # Naming the failure only. A failed `send-keys` wins over the prompt
+    # response's own code because it is the more specific fact: the response
+    # says `agent_prompt_stalled`, but the pane being unreachable is what a
+    # human needs to read in the cron log (PR #1449 codex review). No caller
+    # branches on this string — since #1444 the gate reads whether the dispatch
+    # succeeded, never why it failed.
     if [ -n "${_IW_STALL_RECOVER_ERROR}" ]; then
-        _IW_DISPATCH_ERROR_CODE="${_IW_STALL_RECOVER_ERROR}"
+        _fail_code="${_IW_STALL_RECOVER_ERROR}"
     else
-        _IW_DISPATCH_ERROR_CODE=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
+        _fail_code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
     fi
-    ux_error "herdr agent prompt failed for agent ${_agent} (${_IW_DISPATCH_ERROR_CODE:-unknown})."
+    ux_error "herdr agent prompt failed for agent ${_agent} (${_fail_code:-unknown})."
     return 1
 }
 
@@ -1360,13 +1374,6 @@ _iw_process_issue() {
     while [ "${_attempt}" -le "${_IW_MAX_ATTEMPTS}" ]; do
         _wt=""
         _tab=""
-        # Cleared per *attempt*, not per issue. The rate-limit gate reads this
-        # to decide whether the failure was quota-shaped; if attempt 1 stalled
-        # and attempt 2 died earlier (at `tab create`, which never touches it),
-        # a per-issue reset would let attempt 1's `agent_prompt_stalled` book a
-        # quota strike for what was actually a herdr outage — the exact
-        # misattribution PR #1439's classifier exists to prevent.
-        _IW_DISPATCH_ERROR_CODE=""
 
         if ! _wt=$(_iw_spawn_worktree "${_path}" "${_number}"); then
             ux_warning "Worktree spawn failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
@@ -1399,7 +1406,7 @@ EOF
 }
 
 # ============================================================
-# Rate-limit gate (issue #1436)
+# Rate-limit gate (issue #1436, #1444)
 # ============================================================
 
 # Token-limit exhaustion is invisible to this tick by default: `herdr agent
@@ -1415,24 +1422,53 @@ EOF
 # itself on a timer. It is deliberately evidence-poor and fail-open (NF-1): a
 # detector that can wedge the watcher is worse than the leak it guards.
 #
-# The signal: a spent quota stops the dispatched claude session before it can
-# change state, so herdr's `--wait` draws no transition, answers
-# `agent_prompt_stalled`, the Enter recovery (issue #1443) moves nothing either
-# and `_iw_prompt_issue` fails. `_iw_agent_status` then separates a real wall
-# from an unrelated hiccup: an agent reporting `working`/`blocked` is alive and
-# busy, so that failure earns no strike. A recovery that failed because
-# `send-keys` could not reach the pane at all reports `herdr_send_keys_failed`
-# instead and is filtered out below with the rest of the transport errors.
+# The signal, rebuilt in issue #1444. It used to be `agent_prompt_stalled` plus
+# a non-`working` status, on the premise that a spent quota stops the session
+# before it can change state. #1443 measured that same pair coming out of a
+# *cold start*: claude draws its input box — herdr reads `idle` and
+# `interactive_ready` — before its key-input loop accepts Enter, so the command
+# is typed but never submitted. Both causes produce byte-identical
+# observations, so no classifier over that pair can separate them. Worse, once
+# #1443's Enter recovery repairs the stall the dispatch succeeds, and a gate
+# keyed on the failure would never fire again for any reason.
+#
+# What replaces it is behavioural and reads in two steps:
+#
+#   1. Was the prompt actually submitted? `_iw_prompt_issue` returning 0 is
+#      that proof — either herdr's `--wait` observed the transition, or the
+#      Enter recovery watched `state_change_seq` move (#1443). A dispatch that
+#      failed proves nothing about the quota: it is an input-loop or transport
+#      problem, so the gate is left exactly as it was.
+#   2. Did the submitted work hold? A confirmed dispatch is polled for
+#      `_IW_LIMIT_OBSERVE_SEC`. One `/gh-issue-flow` runs for minutes, so an
+#      agent that never reaches `working`, or falls back to `idle`/`done`
+#      inside that window, did not do the work it was handed. That is the
+#      shape quota exhaustion takes, and it earns the strike.
+#
+# `blocked` counts as alive alongside `working`: an agent waiting on a human is
+# positive evidence the account still has quota, and booking it as exhaustion
+# would be a new false positive of exactly the kind this rewrite removes.
+#
+# Deliberately *not* part of the judgment: the pane's own text. Claude's
+# rate-limit banner wording is version-bound, so a string match would rot into
+# a no-op that is neither fail-open nor fail-closed — an undetectable
+# malfunction. The pane tail is captured when a strike is booked so a human can
+# confirm the call after the fact, and that is all it is for.
 #
 # Pre-#1440 this had to watch the resident `iw-watch` agent instead, because
 # the per-issue panes were opened by a subagent inside that session and their
 # names never came back (`herdr agent list` carries no agent-name field). The
-# tick now chooses those names itself, so the gate watches the dispatch it
-# actually cares about. What made the old indirection sound in the first place
-# still holds and is now direct: `_iw_resolve_config_dir` picks a single
-# CLAUDE_CONFIG_DIR for every pane this tick opens (#1393) — one account, one
-# quota. If account routing ever splits per pane, this reasoning has to be
-# revisited (PR #1439 agy review).
+# tick now chooses those names itself, so the gate watches the panes doing the
+# work rather than the one that spawned them. What made the old indirection
+# sound in the first place still holds and is now direct:
+# `_iw_resolve_config_dir` picks a single CLAUDE_CONFIG_DIR for every pane this
+# tick opens (#1393) — one account, one quota. If account routing ever splits
+# per pane, this reasoning has to be revisited (PR #1439 agy review).
+#
+# One account, one quota is also why the verdict is per *tick* rather than per
+# dispatch: any single agent holding `working` proves the quota is intact for
+# all of them, so one healthy pane clears the slate even when its neighbours
+# died of their own issue-specific problems (issue #1444).
 
 _iw_limit_state_file() {
     printf '%s/%s' "$(_iw_state_dir)" "${_IW_LIMIT_STATE_BASENAME}"
@@ -1518,42 +1554,99 @@ _iw_limit_gate_check() {
     return 1
 }
 
-# Record the outcome of the dispatch just attempted. $1 is _iw_process_issue's
-# exit status, $2 the agent it dispatched to. Two consecutive stalled
-# dispatches shut the gate; one delivered one wipes the slate, so
-# `_IW_LIMIT_STRIKES` really does count consecutive stalls. 1 would hold the
-# watcher over a single transient herdr blip; 2 buys that evidence for one
-# extra tick (~5 min).
+# Poll the tick's confirmed dispatches for `_IW_LIMIT_OBSERVE_SEC`.
+#
+# Echoes an agent name and returns 0 when one of them is still alive at the end
+# of the window — that is the "quota intact" verdict. Returns non-zero
+# otherwise, echoing the name of an agent that *did* reach `working` earlier in
+# the window if there was one, so the caller can say "fell back" rather than
+# "never started". Echoes nothing when none of them ever moved.
+#
+# The last poll is the one that decides: `working` has to be *held*, not merely
+# touched. The earlier polls exist only to tell those two failures apart in the
+# log.
+_iw_limit_observe() {
+    local _agents="$1" _i=0 _agent _status _alive="" _seen=""
+
+    while [ "${_i}" -lt "${_IW_LIMIT_OBSERVE_POLLS}" ]; do
+        [ "${_IW_LIMIT_OBSERVE_SLEEP}" = "0" ] || sleep "${_IW_LIMIT_OBSERVE_SLEEP}"
+        _i=$((_i + 1))
+        _alive=""
+
+        while IFS= read -r _agent; do
+            [ -n "${_agent}" ] || continue
+            _status=$(_iw_agent_status "${_agent}") || _status=""
+            case "${_status}" in
+            working | blocked)
+                _alive="${_agent}"
+                _seen="${_agent}"
+                break
+                ;;
+            esac
+        done <<EOF
+${_agents}
+EOF
+    done
+
+    if [ -n "${_alive}" ]; then
+        printf '%s' "${_alive}"
+        return 0
+    fi
+
+    printf '%s' "${_seen}"
+    return 1
+}
+
+# Copy the tail of each dispatched pane into the cron log when a strike is
+# booked (issue #1444). Evidence for a human reading the log afterwards — the
+# gate has already decided by the time this runs, and nothing here can change
+# that decision. `--format text` gives the pane as plain lines; an error
+# response comes back as JSON on stdout, which is skipped rather than logged as
+# if it were pane content.
+_iw_limit_evidence() {
+    local _agents="$1" _agent _text _line
+
+    while IFS= read -r _agent; do
+        [ -n "${_agent}" ] || continue
+        _text=$(herdr agent read "${_agent}" --lines "${_IW_LIMIT_EVIDENCE_LINES}" \
+            --format text 2>/dev/null) || _text=""
+        case "${_text}" in
+        '' | '{"error"'*)
+            ux_info "No pane output captured for ${_agent}."
+            continue
+            ;;
+        esac
+        ux_info "Pane tail for ${_agent} (evidence only — not a gate input):"
+        printf '%s\n' "${_text}" | while IFS= read -r _line; do
+            ux_bullet_sub "${_line}"
+        done
+    done <<EOF
+${_agents}
+EOF
+}
+
+# Record this tick's outcome. $1 is the newline-separated list of agents whose
+# prompt was confirmed submitted — every other dispatch is excluded upstream
+# because an unsubmitted prompt says nothing about the quota (issue #1444).
+#
+# Two consecutive unproductive ticks shut the gate; one productive tick wipes
+# the slate, so `_IW_LIMIT_STRIKES` really does count consecutive failures. 1
+# would hold the watcher over a single transient herdr blip; 2 buys that
+# evidence for one extra tick (~5 min).
 _iw_limit_record() {
-    local _rc="$1" _agent="$2" _status _strikes _now
+    local _agents="$1" _alive="" _regressed="" _strikes _now _rc=0
 
+    # Nothing reached a pane this tick: no evidence either way, so the strike
+    # count stays exactly where it was.
+    [ -n "${_agents}" ] || return 0
+
+    _alive=$(_iw_limit_observe "${_agents}") || _rc=$?
     if [ "${_rc}" -eq 0 ]; then
-        # A prompt herdr accepted means the agent changed state, i.e. it is
-        # processing — `--wait` would not have returned otherwise.
+        ux_info "Agent ${_alive} held 'working' for ${_IW_LIMIT_OBSERVE_SEC}s — quota is not exhausted, gate cleared."
         _iw_limit_clear
         return 0
     fi
-
-    # Only a stall is quota-shaped. herdr's other failures — `agent_not_found`,
-    # an auth or transport error, a malformed response — say the pane or the
-    # connection broke, not that the account ran dry. Counting them would hold
-    # dispatch for 30 minutes over an outage this gate cannot fix, and would
-    # file it under "token limit" in the cron log where nobody would look for a
-    # broken socket (PR #1439 codex review). Such a failure leaves the strike
-    # count where it is: it is evidence of neither exhaustion nor health.
-    if [ "${_IW_DISPATCH_ERROR_CODE}" != "agent_prompt_stalled" ]; then
-        ux_info "Dispatch failed with '${_IW_DISPATCH_ERROR_CODE:-unknown}' — not a token-limit signature, gate untouched."
-        return 0
-    fi
-
-    _status=$(_iw_agent_status "${_agent}") || _status=""
-    case "${_status}" in
-    working | blocked)
-        ux_info "Dispatch failed but agent ${_agent} is ${_status} — not a token-limit signal, gate untouched."
-        _iw_limit_clear
-        return 0
-        ;;
-    esac
+    _regressed="${_alive}"
 
     _strikes=$(_iw_limit_read strikes)
     case "${_strikes}" in
@@ -1561,22 +1654,28 @@ _iw_limit_record() {
     esac
     _strikes=$((_strikes + 1))
 
+    if [ -n "${_regressed}" ]; then
+        ux_warning "Agent ${_regressed} reached 'working' and fell back inside ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
+    else
+        ux_warning "No dispatched agent reached 'working' within ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
+    fi
+    _iw_limit_evidence "${_agents}"
+
     if [ "${_strikes}" -lt "${_IW_LIMIT_STRIKES}" ]; then
-        ux_warning "Dispatch stalled with agent ${_agent} at '${_status:-none}' (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
         _iw_limit_write "${_strikes}" "0" || true
         return 0
     fi
 
     _now=$(_iw_now)
     if [ -z "${_now}" ]; then
-        ux_warning "Cannot read the clock — rate-limit gate left open despite ${_strikes} failed dispatches."
+        ux_warning "Cannot read the clock — rate-limit gate left open despite ${_strikes} unproductive ticks."
         return 0
     fi
 
     # Claude's quota windows run for hours, so a short backoff would only
     # re-dispatch into the same wall; 30 minutes keeps the recovery latency
     # (F-3) well inside one window while cutting the burn rate to zero.
-    ux_warning "Rate-limit gate closed for $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — ${_strikes} consecutive dispatches stalled with the agent idle (likely token limit)."
+    ux_warning "Rate-limit gate closed for $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — ${_strikes} consecutive ticks whose dispatches never held 'working' (likely token limit)."
     _iw_limit_write "0" "$((_now + _IW_LIMIT_BACKOFF_SECONDS))" || true
 }
 
@@ -1655,8 +1754,11 @@ _iw_usage() {
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_LIMIT_STATE_BASENAME}   (rate-limit gate)"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_SELECT_STATE_BASENAME}       (round-robin cursor; absent = start at the first repo)"
     ux_bullet "rate-limit gate"
-    ux_bullet_sub "${_IW_LIMIT_STRIKES} dispatches in a row that stall with the agent idle close the gate"
-    ux_bullet_sub "other herdr failures (agent_not_found, auth, network) never close it"
+    ux_bullet_sub "a dispatch is judged only once its prompt is confirmed submitted"
+    ux_bullet_sub "healthy means its agent still holds 'working' ${_IW_LIMIT_OBSERVE_SEC}s later"
+    ux_bullet_sub "${_IW_LIMIT_STRIKES} ticks in a row where no dispatched agent does close the gate"
+    ux_bullet_sub "a prompt that never reached the pane leaves the gate exactly as it was"
+    ux_bullet_sub "a strike logs the pane tail as evidence — pane text never opens or closes the gate"
     ux_bullet_sub "while closed the tick holds: no prompt, no worktree, exit 0"
     ux_bullet_sub "it reopens by itself after $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — delete ${_IW_LIMIT_STATE_BASENAME} to reopen it now"
     ux_bullet "claude session (claude-yolo parity)"
@@ -1676,6 +1778,7 @@ _iw_usage() {
 
 main() {
     local _cwd="" _repo _number _path _host _rc _dispatched=0 _failed=0 _candidates _live
+    local _confirmed=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -1843,21 +1946,25 @@ EOF
 
         _rc=0
         _iw_process_issue "${_repo}" "${_number}" "${_path}" || _rc=$?
-        _iw_limit_record "${_rc}" "$(_iw_agent_name "${_repo}" "${_number}")"
 
         if [ "${_rc}" -eq 0 ]; then
             _dispatched=$((_dispatched + 1))
+            # Confirmed submitted, so this pane is a valid witness for the
+            # quota. Collected rather than judged here — see below.
+            _confirmed="${_confirmed}$(_iw_agent_name "${_repo}" "${_number}")
+"
         else
             _failed=$((_failed + 1))
         fi
-
-        # A gate that just shut must not be walked past for the rest of the
-        # cycle — the remaining issues would burn their worktrees against the
-        # same wall.
-        _iw_limit_gate_check || break
     done 3<<EOF
 ${_candidates}
 EOF
+
+    # After the cycle, not inside it: one pane holding `working` clears the
+    # slate for every dispatch this tick made (issue #1444), so the verdict
+    # needs all of them. Nothing inside the loop can shut the gate any more,
+    # which is why the in-loop re-check that used to break out of it is gone.
+    _iw_limit_record "${_confirmed}"
 
     if [ "${_dispatched}" -eq 0 ] && [ "${_failed}" -gt 0 ]; then
         ux_error "Tick complete — 0 dispatched, ${_failed} failed."
