@@ -40,7 +40,9 @@ setup() {
     assert_failure
     assert_output --partial "# timeout after 2s"
     # The whole point: killed near the timeout, nowhere near HANG_SLEEP.
-    ((SECONDS < 10)) || false
+    # Bound is generous (not close to the 2s timeout) to tolerate process-
+    # spawn overhead on loaded/constrained CI runners (agy review, PR #1492).
+    ((SECONDS < 20)) || false
 }
 
 # ---------------------------------------------------------------------------
