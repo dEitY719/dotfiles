@@ -45,12 +45,24 @@ tick that started a train has exited and dropped the lock long before that
 train reaches its second PR.
 
 So the second layer asks herdr directly whether the deterministically named
-train agent (`pmt-<owner>-<repo>`) is still `working` or `blocked`. Together:
-the lock stops a second dispatcher, the agent probe stops a second train.
+train agent is still `working` or `blocked`. Together: the lock stops a second
+dispatcher, the agent probe stops a second train.
 
-An `idle` agent means the previous train finished but its pane is still open —
-the dispatcher prompts that same pane again rather than stacking a new tab on
-the workspace every period.
+That name is `pmt-<host>-<owner>-<repo>`, and the workspace label is
+`mt-<host>-<owner>-<repo>` — **host-qualified, not `owner/repo` alone**.
+`owner/repo` is only unique per server, so a github.com checkout and a GHE
+checkout sharing a slug would block or reuse each other's train, which is the
+same mistake #1403/#1407 pin the host to avoid everywhere else. Folding the
+host into the key keeps that pinning true at the session-identity layer.
+
+An agent that still **resolves** — `idle`, but also `done` or a status herdr
+does not name — means the previous train's pane is still open and still holds
+the name. The dispatcher prompts that same pane rather than opening a second
+one, because `herdr agent start` under a name a live agent holds fails with
+`agent_name_taken`, and a stale pane does not close by itself: mapping those
+statuses to a fresh launch would wedge every later tick on the same collision.
+Only a name that no longer resolves at all (`agent_not_found` — the pane is
+gone, the name is released) earns a new workspace/tab/agent.
 
 ## What the dispatcher deliberately does not do
 
@@ -68,6 +80,7 @@ the workspace every period.
 |---|---|
 | `gh pr list` fails | end the tick, launch nothing — never merge without knowing state |
 | herdr launch fails | end the tick; the next tick retries |
+| `agent start` says `agent_name_taken` | prompt the name's existing holder instead — a second pane under that name is impossible, and failing here would repeat every period |
 | a train is already live | end the tick quietly (NF-1) |
 | zero target PRs | end the tick quietly |
 

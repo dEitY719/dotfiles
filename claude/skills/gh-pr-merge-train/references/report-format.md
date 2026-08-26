@@ -34,8 +34,20 @@ Rules:
 | Status | Meaning | Typical reason |
 |---|---|---|
 | `[MERGED]` | the PR is merged | — |
-| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required`, `BLOCKED: <rule>`, `draft` |
+| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required (reviewDecision=<value>)`, `gh:pr-merge refuses reviewDecision=<value>`, `board status <value> (gh:pr-merge Step 2-B)`, `ruleset unreadable — approval assumed required`, `BLOCKED: <rule>`, `draft` |
 | `[FAILED]` | not merged, **and something actually went wrong** | `conflict unresolved after 3 attempts`, `gh:pr-merge failed: <message>`, `CI fix failed after 3 attempts` |
+
+Three of those reasons — `gh:pr-merge refuses reviewDecision=<value>`,
+`board status <value>`, and `ruleset unreadable` — name a gate that lives
+**downstream**, in `gh:pr-merge` (its Step 2 `reviewDecision` hard stop, its
+Step 2-B project-board column gate) or in a policy that could not be read.
+They are `[SKIPPED]`, never `[FAILED]`, and they are recorded **without
+delegating** — see
+`train-loop.md` → "Gates `gh:pr-merge` owns". A PR refused by one of them is
+refused identically every time, so letting it reach `gh:pr-merge` would spend
+three F-5 attempts to produce a `[FAILED]` that NF-2 leaves no way to clear.
+Naming the column or the `reviewDecision` value is what makes the line
+actionable: the reader knows to move the card or dismiss the review.
 
 The `[SKIPPED]` / `[FAILED]` split is the load-bearing part of this output. A
 cron log full of `[SKIPPED] checks still running` is a healthy train waiting on

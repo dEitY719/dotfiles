@@ -61,9 +61,14 @@ _PMT_QUIET_MINUTES="11"
 # zero", so this is a courtesy cap, not a correctness boundary.
 _PMT_PR_LIMIT="50"
 
-# herdr agent naming. One train per repo, so the name is deterministic and
-# derived from the repo slug — that is what lets the *next* tick find the
-# session this tick started (see _pmt_train_state).
+# herdr agent naming. One train per repo *on one host*, so the name is
+# deterministic and derived from the host-qualified repo slug — that is what
+# lets the *next* tick find the session this tick started (see
+# _pmt_train_state). The host is part of the key because `owner/repo` alone is
+# not unique across servers (#1403/#1407 pin the host everywhere else; leaving
+# it out here would undo that pinning at the session-identity layer): a
+# github.com checkout and a GHE checkout that happen to share a slug would
+# otherwise block or reuse each other's train.
 _PMT_AGENT_PREFIX="pmt-"
 # Workspace label prefix. issue-watcher labels its workspaces with the repo
 # directory's basename; the train must not land in those tabs, so it carries
@@ -204,10 +209,17 @@ _pmt_target_count() {
     [ -n "${_now}" ] || return 1
     _cutoff=$((_now - _PMT_QUIET_MINUTES * 60))
 
+    # `// empty` rather than `// 0` on the timestamp: a missing or unparseable
+    # `updatedAt` must fail *closed*. With `// 0` it became epoch zero, which
+    # is `<= $cutoff` for any clock, so a PR whose timestamp could not be read
+    # counted as a target — the exact direction D-6 exists to prevent (waking a
+    # train that merges before the deferred `gh:pr-reply` lands). `select` over
+    # an empty expression drops the element instead, so an unreadable timestamp
+    # reads as "still inside the quiet period".
     printf '%s' "${_json}" | jq -r --argjson cutoff "${_cutoff}" '
         [ .[]?
           | select((.isDraft // false) | not)
-          | select(((.updatedAt // "") | fromdateiso8601? // 0) <= $cutoff)
+          | select(((.updatedAt // "") | fromdateiso8601? // empty) <= $cutoff)
         ] | length
     ' 2>/dev/null || return 1
 }
@@ -249,10 +261,18 @@ _pmt_acquire_lock() {
     fi
 }
 
+# The identity this tick's herdr names are derived from: host *and* repo, from
+# the one remote URL _pmt_bind_target read them out of. Never the repo alone —
+# see the _PMT_AGENT_PREFIX comment.
+_pmt_target_key() {
+    printf '%s/%s' "${_PMT_HOST}" "${_PMT_REPO}"
+}
+
 # Echo `<prefix $1><slug of $2>`, with anything outside herdr's safe name
-# charset folded to `-`. Both herdr names the tick derives are this shape:
-#   ${_PMT_AGENT_PREFIX}      the agent, e.g. `pmt-acme-dotfiles`
-#   ${_PMT_WORKSPACE_PREFIX}  the workspace label, e.g. `mt-acme-dotfiles`
+# charset folded to `-`. Both herdr names the tick derives are this shape,
+# over `_pmt_target_key`:
+#   ${_PMT_AGENT_PREFIX}      the agent, e.g. `pmt-github.com-acme-dotfiles`
+#   ${_PMT_WORKSPACE_PREFIX}  the workspace label, e.g. `mt-github.com-acme-dotfiles`
 _pmt_slug() {
     printf '%s%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '-')"
 }
@@ -268,12 +288,25 @@ _pmt_agent_status() {
 
 # Classify the previously started train session. Echoes one of:
 #   live     a train is still running — this tick must not start another (NF-1)
-#   reuse    the pane is open and idle, so the finished train's session can be
-#            prompted again instead of stacking a second tab on top of it
+#   reuse    the agent still resolves, so prompt it in place instead of
+#            stacking a second tab on top of it
 #   fresh    no such agent — open a workspace/tab/agent from scratch
 #
-# `done`/`unknown`/anything else reads as `fresh`: the pane is gone or herdr
-# cannot say, and a fresh launch is recoverable while a permanent block is not.
+# The split that matters is "does `herdr agent get` still resolve the name",
+# not "is the status one we recognise" — measured against a live herdr server:
+#
+#   pane destroyed  -> `agent get` fails with `agent_not_found`, the name is
+#                      released, and `agent start` under the same name on a new
+#                      pane succeeds. That is `fresh`, and correct.
+#   agent resolves  -> the name is still held. `agent start` under it on a
+#                      *different* pane fails with `agent_name_taken`, and a
+#                      stale pane does not disappear by itself — so mapping a
+#                      resolvable `done`/`unknown` agent to `fresh` would wedge
+#                      every subsequent tick on the same collision.
+#
+# Hence anything that resolves but is not `working`/`blocked` is `reuse`: the
+# name's holder is the only thing that can be prompted, and prompting an agent
+# that turns out to be unpromptable costs one failed tick, not a permanent one.
 _pmt_train_state() {
     local _status
 
@@ -284,8 +317,7 @@ _pmt_train_state() {
 
     case "${_status}" in
     working | blocked) printf 'live' ;;
-    idle) printf 'reuse' ;;
-    *) printf 'fresh' ;;
+    *) printf 'reuse' ;;
     esac
 }
 
@@ -410,11 +442,21 @@ _pmt_tab_create() {
     printf '%s' "${_pane}"
 }
 
-# `-- ARG...` is passed through to the pane's claude invocation. Unattended
-# cron ticks must never stop on a permission-approval prompt (issue #1393).
+# `-- ARG...` is passed through to the pane's claude invocation. Echoes herdr's
+# response so the caller can read `.error.code`; returns herdr's exit status.
+#
+# `--dangerously-skip-permissions` is required, not a convenience: nobody is at
+# the keyboard of a cron pane, so a single permission prompt would park the
+# train forever instead of failing it (same reason issue_watcher_cron.sh passes
+# it, #1393). What it grants *here* is broader than there, and worth stating:
+# this session merges PRs, so the flag lets it run `gh pr merge` and the
+# rebase/CI-fix atoms without stopping to ask. Two things bound it — NF-2
+# forbids the train from ever calling `gh:pr-merge-emergency`, so the platform's
+# own protections stay in force, and the approval gate (D-5, `approval-gate.md`)
+# is fail-closed, so an unreadable policy skips the PR rather than merging it.
 _pmt_agent_start() {
     herdr agent start "$1" --kind claude --pane "$2" \
-        -- --dangerously-skip-permissions >/dev/null 2>&1
+        -- --dangerously-skip-permissions 2>/dev/null
 }
 
 # Wait for a freshly started agent to report idle before prompting it.
@@ -467,9 +509,9 @@ _pmt_prompt_train() {
 
 # Open a fresh workspace/tab/agent for the train and prompt it.
 _pmt_launch_fresh() {
-    local _agent="$1" _cwd="$2" _label _ws _pane
+    local _agent="$1" _cwd="$2" _label _ws _pane _start_json _code
 
-    _label=$(_pmt_slug "${_PMT_WORKSPACE_PREFIX}" "${_PMT_REPO}")
+    _label=$(_pmt_slug "${_PMT_WORKSPACE_PREFIX}" "$(_pmt_target_key)")
 
     # Only this path opens a pane, so this is the only path that needs an
     # account to open it with. Resolving it in main() would make every reuse
@@ -486,7 +528,19 @@ _pmt_launch_fresh() {
         ux_error "herdr tab create failed for ${_PMT_REPO} — ending this tick."
         return 1
     }
-    _pmt_agent_start "${_agent}" "${_pane}" || {
+    _start_json=$(_pmt_agent_start "${_agent}" "${_pane}") || {
+        # Backstop for the race _pmt_train_state cannot close: the name can be
+        # claimed between the probe and the start (a train launched by a manual
+        # run, say). herdr answers `agent_name_taken` and the holder is by
+        # definition a usable agent, so prompt it rather than ending every
+        # future tick on the same collision. NF-1 is preserved — the name is
+        # what makes "one train" true, and we are talking to its holder.
+        _code=$(printf '%s' "${_start_json}" | _pmt_json_value '.error.code')
+        if [ "${_code}" = "agent_name_taken" ]; then
+            ux_warning "Agent ${_agent} is already registered — prompting the existing session instead of a second one."
+            _pmt_prompt_train "${_agent}"
+            return
+        fi
         ux_error "herdr agent start ${_agent} failed on pane ${_pane} — ending this tick."
         return 1
     }
@@ -510,7 +564,7 @@ _pmt_usage() {
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "tick"
     ux_bullet_sub "1. flock — one tick at a time"
-    ux_bullet_sub "2. herdr agent get ${_PMT_AGENT_PREFIX}<owner>-<repo> — a running train blocks a new one"
+    ux_bullet_sub "2. herdr agent get ${_PMT_AGENT_PREFIX}<host>-<owner>-<repo> — a running train blocks a new one"
     ux_bullet_sub "3. gh pr list --author @me --state open — is there anything to merge"
     ux_bullet_sub "4. herdr workspace -> tab -> claude -> /gh-pr-merge-train <owner/repo>"
     ux_bullet_sub "no PR is ever written to from here — no merge, comment or label change"
@@ -521,11 +575,13 @@ _pmt_usage() {
     ux_bullet_sub "gh pr list failure ends the tick: never merge without knowing state"
     ux_bullet "duplicate-start guard (NF-1)"
     ux_bullet_sub "the lock covers overlapping ticks; the agent probe covers the running train"
-    ux_bullet_sub "agent working/blocked -> hold; idle -> reuse the pane; missing -> open a new one"
+    ux_bullet_sub "agent working/blocked -> hold; still registered -> prompt that pane; missing -> open a new one"
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_LOCK_BASENAME}   (tick lock)"
     ux_bullet "claude session (claude-yolo parity)"
     ux_bullet_sub "the pane runs claude --dangerously-skip-permissions (unattended cron)"
+    ux_bullet_sub "that session can merge — NF-2 (no emergency bypass) and the fail-closed"
+    ux_bullet_sub "approval gate are what bound it, not a permission prompt"
     ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
     ux_bullet_sub "otherwise            → CLAUDE_CONFIG_DIR=\$HOME/.claude-\${CLAUDE_DEFAULT_ACCOUNT:-personal}"
     ux_bullet "crontab"
@@ -599,15 +655,22 @@ main() {
     fi
 
     _pmt_bind_target || exit 1
-    _agent=$(_pmt_slug "${_PMT_AGENT_PREFIX}" "${_PMT_REPO}")
+    _agent=$(_pmt_slug "${_PMT_AGENT_PREFIX}" "$(_pmt_target_key)")
 
     # The dry run answers ahead of both guards, deliberately: taking the lock
     # would make a dry run silently no-op while a real tick is mid-cycle —
     # exactly when a human is most likely to be asking what the train sees.
     if [ "${_PMT_DRY_RUN}" -eq 1 ]; then
         if ! _target=$(_pmt_target_count); then
+            # Non-zero here, unlike the real tick below, and the difference is
+            # deliberate. A real tick exits 0 because cron must not treat a
+            # transient GitHub failure as a hard error — there is nothing to
+            # escalate, the next period retries. `--dry-run` is a human-facing
+            # probe: its caller asked "what does the train see?", and answering
+            # "nothing went wrong" to a question that could not be answered is
+            # the one thing it must not do.
             ux_error "gh pr list failed for ${_PMT_REPO} — a real tick would end here."
-            exit 0
+            exit 1
         fi
         ux_success "Dry run — ${_PMT_REPO} on ${_PMT_HOST}: ${_target} target PR(s)."
         ux_bullet "would prompt agent ${_agent} with /gh-pr-merge-train ${_PMT_REPO}"
@@ -625,6 +688,8 @@ main() {
     fi
 
     if ! _target=$(_pmt_target_count); then
+        # Exit 0, unlike the --dry-run branch above: a transient API failure is
+        # not something cron should mail about, and the next period retries.
         ux_error "gh pr list failed for ${_PMT_REPO} — ending this tick rather than merging blind."
         exit 0
     fi
@@ -636,10 +701,11 @@ main() {
     ux_info "${_target} target PR(s) on ${_PMT_REPO} — starting the merge train."
 
     if [ "${_state}" = "reuse" ]; then
-        # The previous train's pane is open and idle: prompt it again rather
-        # than stacking a second tab on the workspace every cron period. The
-        # pane already carries the account it was opened with, so no
-        # CLAUDE_CONFIG_DIR is resolved on this path.
+        # The previous train's agent still resolves: prompt it again rather
+        # than stacking a second tab on the workspace every cron period — and,
+        # for a `done`/`unknown` agent, rather than colliding with its own name
+        # (`agent_name_taken`) forever. The pane already carries the account it
+        # was opened with, so no CLAUDE_CONFIG_DIR is resolved on this path.
         _pmt_prompt_train "${_agent}" || exit 1
     else
         # PWD, not $(pwd): the --cwd handling above already cd'd here.

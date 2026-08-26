@@ -84,13 +84,35 @@ _make_repo() {
     git -C "${_REPO_DIR}" commit -qm "seed"
 }
 
+# Epoch seconds <1> as the ISO-8601 UTC stamp `gh pr list --json` returns.
+# GNU `date -d @EPOCH` first, then BSD/macOS `date -r EPOCH`, then python3 —
+# the same cascade shape as `tests/bats/skills/_fixtures/date_parsing.sh`,
+# because README.md advertises macOS support and a GNU-only invocation here
+# would take the whole suite down on BSD.
+_epoch_to_iso() {
+    local _epoch="$1" _out=""
+    _out=$(date -u -d "@${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
+        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
+    _out=$(date -u -r "${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
+        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
+    _out=$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp(${_epoch}, datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>/dev/null) \
+        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
+    return 1
+}
+
 # One `gh pr list --json` element: PR <1>, last updated <2> minutes ago,
 # optionally a draft (<3>, default `false`) — a draft is never mergeable, so
 # never a reason to wake a session.
 _pr_json() {
     local _stamp
-    _stamp=$(date -u -d "@$(($(date +%s) - $2 * 60))" +%Y-%m-%dT%H:%M:%SZ)
+    _stamp=$(_epoch_to_iso "$(($(date +%s) - $2 * 60))") || fail "cannot format a timestamp on this platform"
     printf '{"number":%s,"updatedAt":"%s","isDraft":%s}' "$1" "${_stamp}" "${3:-false}"
+}
+
+# A `gh pr list --json` element whose `updatedAt` cannot be read — the raw JSON
+# value <2> is spliced in verbatim (`null`, a quoted garbage string, …).
+_pr_json_raw_stamp() {
+    printf '{"number":%s,"updatedAt":%s,"isDraft":false}' "$1" "$2"
 }
 
 # The array `gh pr list` answers with.
@@ -132,6 +154,8 @@ EOF
 #   HERDR_WORKSPACE_EXISTS=1  `workspace list` already carries the label
 #   HERDR_TAB_FAIL=1      `tab create` errors
 #   HERDR_START_FAIL=1    `agent start` errors
+#   HERDR_START_NAME_TAKEN=1  `agent start` refuses because a live agent still
+#                         holds the name (herdr's real `agent_name_taken`)
 #   HERDR_PROMPT_FAIL=1   `agent prompt` errors
 _install_herdr_stub() {
     cat >"${_BIN_DIR}/herdr" <<'EOF'
@@ -150,7 +174,7 @@ case "$1 $2" in
 "workspace list")
     if [ "${HERDR_WORKSPACE_EXISTS:-0}" = "1" ]; then
         printf '{"id":"cli:workspace:list","result":{"workspaces":[{"label":"%s","workspace_id":"ws-existing"}]}}\n' \
-            "${HERDR_WORKSPACE_LABEL:-mt-acme-dotfiles}"
+            "${HERDR_WORKSPACE_LABEL:-mt-github.com-acme-dotfiles}"
     else
         printf '%s\n' '{"id":"cli:workspace:list","result":{"workspaces":[]}}'
     fi
@@ -164,6 +188,10 @@ case "$1 $2" in
     ;;
 "agent start")
     [ "${HERDR_START_FAIL:-0}" = "1" ] && exit 1
+    if [ "${HERDR_START_NAME_TAKEN:-0}" = "1" ]; then
+        printf '%s\n' '{"error":{"code":"agent_name_taken","message":"agent name is already used; candidates: status=Idle"},"id":"cli:agent:start"}'
+        exit 1
+    fi
     printf '%s\n' '{"id":"cli:agent:start","result":{"agent":{"agent_status":"idle","pane_id":"ws-test-1:p9"}}}'
     ;;
 "agent prompt")
@@ -321,6 +349,8 @@ _hold_lock() {
     _refute_train_started
 }
 
+# Exit 0 on a real tick is deliberate: cron must not treat a transient GitHub
+# failure as a hard error. `--dry-run` is the opposite (see its section below).
 @test "pr_merge_train_cron: a failing gh pr list does not start a train" {
     _run_tick GH_PR_LIST_FAIL=1
     assert_success
@@ -370,6 +400,32 @@ _hold_lock() {
     _refute_train_started
 }
 
+# The quiet period fails *closed*: a timestamp the filter cannot read must not
+# count as a target. The `outside the quiet period` test above is the positive
+# control — the same code path with a readable stamp does wake a session.
+@test "pr_merge_train_cron: a PR with a null updatedAt is not a target" {
+    _set_prs "[$(_pr_json_raw_stamp 11 null)]"
+    _run_tick
+    assert_success
+    assert_output --partial "No target PR"
+    _refute_train_started
+}
+
+@test "pr_merge_train_cron: a PR with an unparseable updatedAt is not a target" {
+    _set_prs "[$(_pr_json_raw_stamp 11 '"not-a-timestamp"')]"
+    _run_tick
+    assert_success
+    assert_output --partial "No target PR"
+    _refute_train_started
+}
+
+@test "pr_merge_train_cron: an unreadable updatedAt does not mask a real target" {
+    _set_prs "[$(_pr_json_raw_stamp 11 null),$(_pr_json 12 30)]"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+}
+
 # ---------------------------------------------------------------------------
 # NF-1 — one train at a time
 # ---------------------------------------------------------------------------
@@ -409,6 +465,33 @@ _hold_lock() {
     assert_success
     _assert_logged "herdr agent prompt"
     _refute_logged "herdr tab create"
+}
+
+# `done`, and anything else herdr answers with, still means the *name resolves*
+# — the pane is open and holding it. Opening a second pane under the same name
+# would be refused with agent_name_taken on this tick and on every later one.
+@test "pr_merge_train_cron: a done train agent is prompted in place, not re-created" {
+    _run_tick PMT_AGENT_STATUS=done
+    assert_success
+    _assert_logged "herdr agent prompt"
+    _refute_logged "herdr tab create"
+}
+
+@test "pr_merge_train_cron: an unrecognised agent status is prompted in place too" {
+    _run_tick PMT_AGENT_STATUS=some-future-status
+    assert_success
+    _assert_logged "herdr agent prompt"
+    _refute_logged "herdr tab create"
+}
+
+# The race the status probe cannot close: the name is claimed between the probe
+# and the start. The tick must still make progress rather than dying here every
+# period — the holder is by definition an agent that can be prompted.
+@test "pr_merge_train_cron: an agent_name_taken start falls back to prompting the holder" {
+    _run_tick HERDR_START_NAME_TAKEN=1
+    assert_success
+    assert_output --partial "already registered"
+    _assert_logged "herdr agent prompt"
 }
 
 @test "pr_merge_train_cron: missing flock degrades to a warning, not a failure" {
@@ -468,6 +551,29 @@ _hold_lock() {
     assert_output --partial "prompt failed"
 }
 
+# `owner/repo` is unique only per server. Two checkouts that share a slug on
+# different hosts must not share a train agent, or one would block or reuse the
+# other's session — the same failure #1403/#1407 pin the host to avoid.
+@test "pr_merge_train_cron: the herdr names are qualified by the host, not just owner/repo" {
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent get pmt-github.com-acme-dotfiles"
+    _assert_logged "--label mt-github.com-acme-dotfiles"
+
+    local _ghe="${_WORK_DIR}/ghe-dotfiles"
+    mkdir -p "${_ghe}"
+    git -C "${_ghe}" init -q
+    git -C "${_ghe}" remote add origin "https://github.samsungds.net/acme/dotfiles.git"
+    _REPO_DIR="${_ghe}"
+    : >"${_LOG}"
+
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent get pmt-github.samsungds.net-acme-dotfiles"
+    _assert_logged "--label mt-github.samsungds.net-acme-dotfiles"
+    _refute_logged "pmt-github.com-acme-dotfiles"
+}
+
 @test "pr_merge_train_cron: the dispatcher never writes to GitHub" {
     _run_tick
     assert_success
@@ -493,6 +599,16 @@ _hold_lock() {
     _run_tick -- --dry-run
     assert_success
     assert_output --partial "Dry run"
+}
+
+# A human asked "what does the train see?". Exiting 0 on a query that could not
+# be answered would tell them everything is fine — the real tick's exit 0 is a
+# cron accommodation and does not apply to a hand-run probe.
+@test "pr_merge_train_cron: --dry-run reports a failing gh pr list as a failed probe" {
+    _run_tick GH_PR_LIST_FAIL=1 -- --dry-run
+    assert_failure
+    assert_output --partial "gh pr list failed"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: --dry-run leaves no state behind" {

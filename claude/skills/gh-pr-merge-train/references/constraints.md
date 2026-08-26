@@ -54,6 +54,21 @@ Step 5 report, and that goes to the operator (or the cron log), not to GitHub.
 Corollary: **this skill makes no writes to GitHub of its own.** Every mutation
 it causes happens inside an atom skill that already owns that mutation's rules.
 
+## Never bypass a gate that belongs to `gh:pr-merge`
+
+`gh:pr-merge` refuses a PR whose `reviewDecision` is a non-empty non-`APPROVED`
+value (its Step 2), and — fail-closed — one whose projectV2 card sits outside
+the `Approved` column (its Step 2-B). Both are repo policy expressed downstream,
+and the train's answer to both is the same: detect the condition **before**
+delegating and record `[SKIPPED] <cause>`. Never spend attempts discovering it,
+because the refusal is deterministic and NF-2 leaves no way to clear the
+`[FAILED]` it would produce (`train-loop.md`).
+
+`GH_PR_MERGE_SKIP_BOARD_CHECK=1` would silence the board gate. **This skill
+never sets it.** Deciding to stand outside a control someone configured is a
+human's call, made once and deliberately; a loop exporting it on schedule is
+the same failure NF-2 forbids in the emergency-merge direction.
+
 ## Never let a PR loop forever
 
 Three remediation attempts per PR (F-5), three polls per wait (train-loop.md).

@@ -41,10 +41,11 @@
 2. Lists your own open PRs, drops drafts and anything updated in the last
    **11 minutes** (D-6), and sorts `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`,
    ties by ascending number (D-2).
-3. Reads the repo ruleset's `required_approving_review_count` once, for the
-   queue's base branch — `0` means the platform does not require approval, so
-   the approval check is skipped (D-5). Lookup failure is **fail-closed**:
-   approval is treated as required.
+3. Reads the repo ruleset's `required_approving_review_count` once per
+   *distinct base branch* in the queue (rulesets are branch-scoped; a
+   single-base queue is one call) — `0` means the platform does not require
+   approval, so the approval check is skipped (D-5). Lookup failure is
+   **fail-closed**: approval is treated as required.
 4. Processes **one PR at a time**. Immediately before each one it re-queries
    state (F-3), because the previous merge changed it.
 5. Routes on `mergeStateStatus` / `mergeable` through the D-1 table — the one
