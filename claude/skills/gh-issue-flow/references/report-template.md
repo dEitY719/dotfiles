@@ -31,9 +31,10 @@ detail):
 If Step 2.6 soft-failed, show `[WARN] Step 6: ai-metrics  (skipped — <reason>)` instead.
 
 Step 4.1 (merge-train wake, #1482) is also soft-fail — never a `stopped at`
-report, never counted in the `<i>/6` step index:
-- `[WARN] Step 4.1: merge-train wake  (<reason>)` — `aicron.sh` missing, or
-  the dispatcher exited non-zero (including a live train declining per NF-1).
+report, never counted in the `<i>/6` step index. It fires in the background
+and is not awaited, so its own exit code is never observed:
+- `[WARN] Step 4.1: merge-train wake  (aicron.sh missing)` — the one
+  synchronously-checked failure path.
 
 If a step failed:
 
