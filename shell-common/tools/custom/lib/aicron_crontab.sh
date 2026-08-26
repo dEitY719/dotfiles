@@ -15,8 +15,15 @@
 # of ours is allowed to reformat, reorder or eat. That is why the edit is an
 # awk filter over `crontab -l` rather than a regenerate-from-manifest write.
 #
+# The same contract is why a FAILED `crontab -l` may never look like an empty
+# one — see aicron_crontab_dump_to. An unreadable table that reads as empty
+# would make the next install write a crontab holding nothing but our own
+# marker block, and every hand-written line would be gone.
+#
 # D-3 also makes this file the answer to "is job X installed" — the crontab is
-# the SSOT for that, never the state file.
+# the SSOT for that, never the state file. That answer is deliberately
+# three-valued (yes / no / unknown), because "unknown" collapsed into "no" is
+# exactly what would let `add` overwrite a table it never managed to read.
 #
 # Note for editors: this file's basename carries an underscore, so the repo's
 # naming check flags a function defined here that also shows up inside a
@@ -26,27 +33,89 @@ aicron_crontab_available() {
     command -v crontab >/dev/null 2>&1
 }
 
-# The current table, or nothing at all. `crontab -l` exits non-zero with "no
-# crontab for <user>" when the table is empty, which is not an error here.
-aicron_crontab_dump() {
-    crontab -l 2>/dev/null || true
+# crontab(1)'s own stderr from the last failed dump, so the caller can name the
+# real reason. It is a global because the dump's output channel is the table
+# itself, and a pipeline would swallow anything returned any other way.
+_AICRON_CRONTAB_ERR=""
+
+# Read the current table into file <1>.
+#
+#   0   <1> holds the table — an EMPTY file when this user simply has no
+#       crontab yet, which is a normal state, not a failure
+#   1   the table could not be read; <1> is emptied and
+#       _AICRON_CRONTAB_ERR carries crontab's stderr
+#
+# `crontab -l` exits non-zero for both cases, so the two are told apart by what
+# it said: "no crontab for <user>" (any case) means the empty table, and so
+# does a non-zero exit that produced no output at all — some locales translate
+# the message away. Anything else is a real failure (EACCES, a broken cron
+# install) and the callers that write must abort on it.
+aicron_crontab_dump_to() {
+    local _dest _errfile _rc _err _low
+    _dest="$1"
+    _AICRON_CRONTAB_ERR=""
+
+    _errfile=$(aicron_mktemp aicron-crontab-err) || {
+        _AICRON_CRONTAB_ERR="could not create a temp file for crontab's stderr"
+        : >"${_dest}"
+        return 1
+    }
+    crontab -l >"${_dest}" 2>"${_errfile}"
+    _rc=$?
+    _err=$(cat "${_errfile}" 2>/dev/null)
+    rm -f "${_errfile}"
+    [ "${_rc}" -eq 0 ] && return 0
+
+    _low=$(printf '%s' "${_err}" | tr '[:upper:]' '[:lower:]')
+    case "${_low}" in
+    *"no crontab for"*)
+        : >"${_dest}"
+        return 0
+        ;;
+    esac
+    if [ -z "${_err}" ] && [ ! -s "${_dest}" ]; then
+        return 0
+    fi
+
+    _AICRON_CRONTAB_ERR="${_err:-crontab -l exited ${_rc}}"
+    : >"${_dest}"
+    return 1
 }
 
-# Every job name that currently owns a marker block, one per line, in table
-# order and including duplicates (doctor needs to see those).
-aicron_crontab_names() {
-    aicron_crontab_dump | sed -n 's/^# BEGIN aicron:\(.*\)$/\1/p'
+# Every job name that owns a marker block in the already-dumped table <1>, one
+# per line, in table order and including duplicates (doctor needs to see
+# those).
+aicron_crontab_names_in() {
+    sed -n 's/^# BEGIN aicron:\(.*\)$/\1/p' "$1"
 }
 
-# How many marker blocks job <1> owns. More than one is a doctor finding.
-aicron_crontab_count() {
-    aicron_crontab_names | grep -c -x -F -- "$1" || true
+# How many marker blocks job <2> owns in the dumped table <1>. More than one is
+# a doctor finding.
+aicron_crontab_count_in() {
+    aicron_crontab_names_in "$1" | grep -c -x -F -- "$2" || true
 }
 
-aicron_crontab_installed() {
-    local _n
-    _n=$(aicron_crontab_count "$1")
-    [ "${_n:-0}" -gt 0 ]
+# "yes", "no" or "unknown" for job <1>, dumping the table itself. The views
+# that answer this for many jobs at once dump ONCE and call
+# aicron_crontab_count_in instead of paying for a `crontab -l` per job.
+aicron_crontab_state() {
+    local _f _n
+    _f=$(aicron_mktemp aicron-crontab) || {
+        printf 'unknown'
+        return 0
+    }
+    if ! aicron_crontab_dump_to "${_f}"; then
+        rm -f "${_f}"
+        printf 'unknown'
+        return 0
+    fi
+    _n=$(aicron_crontab_count_in "${_f}" "$1")
+    rm -f "${_f}"
+    if [ "${_n:-0}" -gt 0 ]; then
+        printf 'yes'
+    else
+        printf 'no'
+    fi
 }
 
 # stdin -> stdout, minus every marker block belonging to job <1>. Anything
@@ -64,7 +133,10 @@ aicron_crontab_strip() {
 # and the exit code of the install exist in one place.
 aicron_crontab_write() {
     local _tmp _rc
-    _tmp="${TMPDIR:-/tmp}/aicron-crontab.$$"
+    _tmp=$(aicron_mktemp aicron-crontab-new) || {
+        ux_error "could not create a temp file for the new crontab"
+        return 1
+    }
     cat >"${_tmp}" 2>/dev/null
     crontab - <"${_tmp}"
     _rc=$?
@@ -76,18 +148,44 @@ aicron_crontab_write() {
 # aicron.sh. Stripping first is what makes a repeated `add` a replace rather
 # than a second block.
 aicron_crontab_install() {
+    local _cur _rc
+    _cur=$(aicron_mktemp aicron-crontab) || {
+        ux_error "could not create a temp file for the crontab dump"
+        return 1
+    }
+    if ! aicron_crontab_dump_to "${_cur}"; then
+        rm -f "${_cur}"
+        ux_error "could not read the current crontab (${_AICRON_CRONTAB_ERR}) — refusing to rewrite it"
+        return 1
+    fi
     {
-        aicron_crontab_dump | aicron_crontab_strip "$1"
+        aicron_crontab_strip "$1" <"${_cur}"
         printf '# BEGIN aicron:%s\n' "$1"
         printf '%s %s run %s\n' "$2" "$3" "$1"
         printf '# END aicron:%s\n' "$1"
     } | aicron_crontab_write
+    _rc=$?
+    rm -f "${_cur}"
+    return ${_rc}
 }
 
 # Drop job <1>'s block(s). The state file is deliberately left alone — a
 # removed job that gets re-added keeps its pause flag and its last result.
 aicron_crontab_uninstall() {
-    aicron_crontab_dump | aicron_crontab_strip "$1" | aicron_crontab_write
+    local _cur _rc
+    _cur=$(aicron_mktemp aicron-crontab) || {
+        ux_error "could not create a temp file for the crontab dump"
+        return 1
+    }
+    if ! aicron_crontab_dump_to "${_cur}"; then
+        rm -f "${_cur}"
+        ux_error "could not read the current crontab (${_AICRON_CRONTAB_ERR}) — refusing to rewrite it"
+        return 1
+    fi
+    aicron_crontab_strip "$1" <"${_cur}" | aicron_crontab_write
+    _rc=$?
+    rm -f "${_cur}"
+    return ${_rc}
 }
 
 # NF-1 — run <2..> under an exclusive lock on <1> so two aicron processes

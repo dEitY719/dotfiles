@@ -18,13 +18,20 @@ write_staged_or_worktree_to_tmp() {
 }
 
 # The one place that says what a path under shell-common/tools/custom/ is:
-# "entrypoint" for the flat *.sh scripts, "lib" for anything in a
-# subdirectory (source-only helpers, mode 0644, never executed), empty for
-# everything else. The nested arm has to come first because `*` matches `/`
-# in a shell pattern, so `custom/*.sh` alone would also claim `custom/lib/*.sh`.
+# "entrypoint" for the flat *.sh scripts, "lib" for the source-only helpers in
+# custom/lib/ (mode 0644, never executed), empty for everything else.
+#
+# The exception is lib/ specifically, not "any subdirectory": a future nested
+# layout that does hold executables must fall through to the generic rules and
+# be judged by them, rather than inheriting an exemption written for source-only
+# helpers. Both nested arms have to come before the flat one because `*` matches
+# `/` in a shell pattern, so `custom/*.sh` alone would claim every nested path
+# too — and the empty arm is what keeps a nested file out of both classes
+# instead of silently becoming either a lib or an entry point.
 custom_tool_class() {
     case "$1" in
-        shell-common/tools/custom/*/*) echo "lib" ;;
+        shell-common/tools/custom/lib/*) echo "lib" ;;
+        shell-common/tools/custom/*/*) ;;
         shell-common/tools/custom/*.sh) echo "entrypoint" ;;
     esac
 }

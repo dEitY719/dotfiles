@@ -19,11 +19,29 @@
 #   logs/<job>.log    the default log, plus one rolled generation .log.1
 #   .crontab.lock     serialises crontab read-modify-write (NF-1)
 #
+# It also owns aicron_mktemp, the one place any part of aicron is allowed to
+# create a temp file — see the comment on that function.
+#
 # Note for editors: this file's basename carries an underscore, so the repo's
 # naming check (git/hooks/checks/naming_check.sh) flags any function defined
 # here that also appears inside a double-quoted string. That is why every
 # call site below assigns first (`_d=$(aicron_state_dir)`) instead of
 # inlining `"$(aicron_state_dir)"`.
+
+# A private temp file whose name cannot be guessed, printed on stdout.
+#
+# Every temp path in aicron goes through here. The predictable
+# TMPDIR/aicron-<thing>.<pid> shape this replaces is attackable on a shared
+# /tmp: anyone who can plant a symlink at that path before we open it
+# redirects the write — and one of those writes is a crontab dump, another is
+# a job's exit code. `mktemp` failing is a hard failure with no fallback,
+# because a fallback to a fixed name is the hole itself.
+aicron_mktemp() {
+    local _t
+    _t=$(mktemp "${TMPDIR:-/tmp}/$1.XXXXXX" 2>/dev/null) || return 1
+    [ -n "${_t}" ] || return 1
+    printf '%s' "${_t}"
+}
 
 aicron_state_dir() {
     printf '%s' "${AICRON_STATE_DIR:-${XDG_STATE_HOME:-${HOME:-}/.local/state}/aicron}"
@@ -110,7 +128,10 @@ aicron_state_apply() {
     local _f _tmp
     _f=$(aicron_state_file "$1")
     shift
-    _tmp="${_f}.tmp.$$"
+    # Same directory as the target so the closing `mv` stays a rename inside
+    # one filesystem, and unguessable for the same reason every other temp
+    # name here is.
+    _tmp=$(mktemp "${_f}.tmp.XXXXXX" 2>/dev/null) || return 1
     if [ -f "${_f}" ] && jq -e . "${_f}" >/dev/null 2>&1; then
         jq "$@" "${_f}" >"${_tmp}" 2>/dev/null || {
             rm -f "${_tmp}"
@@ -142,16 +163,31 @@ aicron_state_record() {
         '.last_run = $r | .last_exit = $e | .last_duration_sec = $d'
 }
 
-# True when a run of <1> currently holds the job lock. Probing with a
-# non-blocking flock is the only honest answer: a PID file would go stale the
-# moment a run is killed.
-aicron_state_running() {
-    local _lock
+# "running", "idle" or "unknown" for job <1>. Probing with a non-blocking
+# flock is the only honest answer: a PID file would go stale the moment a run
+# is killed.
+#
+# The third value is the point. flock(1) answers 0 for "the lock is free" and
+# 1 for "someone holds it", but anything else — no flock binary, a lock file
+# it cannot open (66) — means the probe never found out. Reporting that as
+# "not running" is what makes a wedged job look healthy on a dashboard, so it
+# is reported as unknown and the caller says so.
+aicron_state_probe() {
+    local _lock _rc
     _lock=$(aicron_state_lock "$1")
-    [ -f "${_lock}" ] || return 1
-    command -v flock >/dev/null 2>&1 || return 1
-    if flock -n "${_lock}" true >/dev/null 2>&1; then
-        return 1
-    fi
-    return 0
+    [ -f "${_lock}" ] || {
+        printf 'idle'
+        return 0
+    }
+    command -v flock >/dev/null 2>&1 || {
+        printf 'unknown'
+        return 0
+    }
+    flock -n "${_lock}" true >/dev/null 2>&1
+    _rc=$?
+    case "${_rc}" in
+    0) printf 'idle' ;;
+    1) printf 'running' ;;
+    *) printf 'unknown' ;;
+    esac
 }

@@ -18,6 +18,14 @@
 # outcomes, not incidents. Step 8 propagates on purpose too — a real failure
 # has to stay diagnosable, both in the mail cron sends and in the state file.
 #
+# D-8 — the exit codes this file can produce, on top of the router's 1 and 2:
+#
+#   0   the job succeeded, or step 2/3 declined to run it
+#   4   the run took the lock and then died without reporting a code (OOM,
+#       SIGKILL). Its own code is unknowable; what must not happen is cron
+#       being told 0, so this one is reported as the failure it is.
+#   *   the job's own exit code
+#
 # Nothing here evaluates manifest content. The env lines go to `env` as
 # NAME=VALUE arguments and the args go to the script as argv; neither passes
 # through a shell.
@@ -29,6 +37,12 @@
 # 7 MiB, overridable from the environment — the bats suite sets it to a
 # handful of bytes rather than writing 7 MiB of fixture.
 : "${_AICRON_LOG_MAX_BYTES:=7340032}"
+
+# What the rc file holds between "the lock was taken" and "the job returned".
+# Finding it still there means the run started and never got to write a real
+# code — the caller turns that into exit 4 rather than the silent 0 an empty
+# file (the lock was declined, nothing ran) means.
+_AICRON_RC_STARTED=started
 
 # The log this job writes to: its manifest `log` override, else the default
 # under the state dir.
@@ -69,8 +83,15 @@ aicron_run_exec() {
         aicron_run_rollover "${_log}"
     fi
 
-    _envfile="${TMPDIR:-/tmp}/aicron-env.$$"
-    _argfile="${TMPDIR:-/tmp}/aicron-args.$$"
+    _envfile=$(aicron_mktemp aicron-env) || {
+        ux_error "could not create a temp file for ${_job}'s environment"
+        return 1
+    }
+    _argfile=$(aicron_mktemp aicron-args) || {
+        rm -f "${_envfile}"
+        ux_error "could not create a temp file for ${_job}'s arguments"
+        return 1
+    }
     aicron_manifest_env "${_job}" >"${_envfile}" 2>/dev/null || : >"${_envfile}"
     aicron_manifest_args "${_job}" >"${_argfile}" 2>/dev/null || : >"${_argfile}"
 
@@ -142,8 +163,11 @@ aicron_run_job() {
 
     _rec=1
     if ! aicron_state_ensure; then
+        # Both halves matter: the lock file lives in that same directory, so
+        # losing it costs the single-instance guarantee as well as the record,
+        # and two overlapping cron ticks can then run the job at once.
         _sd=$(aicron_state_dir)
-        ux_warning "state dir is not writable (${_sd}) — running ${_job} without recording"
+        ux_warning "state dir is not writable (${_sd}) — running ${_job} unrecorded AND without single-instance protection"
         _rec=0
     fi
 
@@ -155,13 +179,24 @@ aicron_run_job() {
     fi
 
     # The subshell's own exit status cannot carry the job's code (it collides
-    # with the "lock was busy" answer), so the code travels through a file:
-    # an empty one means step 3 declined and the run never happened.
+    # with the "lock was busy" answer), so the code travels through a file —
+    # and the file has to distinguish three things, not two:
+    #
+    #   empty      step 3 declined the lock; nothing ran               -> 0
+    #   `started`  the lock was taken and the subshell died before it
+    #              could write a code (OOM, SIGKILL)                   -> 4
+    #   a number   the job's own exit code                             -> it
+    #
+    # Without the sentinel the middle case is indistinguishable from the
+    # first, and a job killed mid-run reports success to cron.
     _lock=$(aicron_state_lock "${_job}")
-    _rcfile="${TMPDIR:-/tmp}/aicron-rc.$$"
-    rm -f "${_rcfile}"
+    _rcfile=$(aicron_mktemp aicron-rc) || {
+        ux_error "could not create a temp file to carry ${_job}'s exit code"
+        return 1
+    }
     (
         flock -n 9 || exit 0
+        printf '%s' "${_AICRON_RC_STARTED}" >"${_rcfile}"
         aicron_run_exec "${_job}" "${_script}" 1
         printf '%s' "$?" >"${_rcfile}"
     ) 9>>"${_lock}"
@@ -172,5 +207,9 @@ aicron_run_job() {
     fi
     _rc=$(cat "${_rcfile}")
     rm -f "${_rcfile}"
+    if [ "${_rc}" = "${_AICRON_RC_STARTED}" ]; then
+        ux_error "${_job} took the run lock and then died without reporting an exit code — treating it as a failure, not a success"
+        return 4
+    fi
     return "${_rc}"
 }

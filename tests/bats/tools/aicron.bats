@@ -167,6 +167,68 @@ _write_manifest() {
 EOF
 }
 
+# A `crontab` whose `-l` fails for a REAL reason (EACCES, a broken install) —
+# not the benign "no crontab for <user>" the default stub reports for an empty
+# table. Telling those two apart is the whole of B1.
+_break_crontab_dump() {
+    cat >"${_BIN_DIR}/crontab" <<EOF
+#!/usr/bin/env bash
+printf 'crontab %s\n' "\$*" >>"${_LOG}"
+case "\${1:-}" in
+    -l)
+        echo "crontab: cannot read /var/spool/cron/crontabs/tester: Permission denied" >&2
+        exit 1
+        ;;
+    -)
+        cat >"${_CRONTAB_FILE}"
+        exit 0
+        ;;
+esac
+exit 1
+EOF
+    chmod +x "${_BIN_DIR}/crontab"
+}
+
+# A `crontab` that, while aicron is mid-dump, plants a symlink at every temp
+# path the old fixed-name scheme (`${TMPDIR}/aicron-crontab.$$`) could have
+# picked, pointing at ${_WORK_DIR}/victim.
+#
+# The pid is not guessed: this stub is forked BY aicron, so $PPID is either
+# aicron's own shell or the subshell it ran the dump in, and /proc gives the
+# parent of that. Under the old code the very next write followed one of those
+# symlinks and created the victim file; under mktemp names nothing can.
+_install_planting_crontab_stub() {
+    cat >"${_BIN_DIR}/crontab" <<EOF
+#!/usr/bin/env bash
+printf 'crontab %s\n' "\$*" >>"${_LOG}"
+if [ "\${1:-}" = "-l" ]; then
+    _p="\$PPID"
+    _i=0
+    while [ -n "\$_p" ] && [ "\$_p" != "1" ] && [ "\$_i" -lt 6 ]; do
+        ln -sfn "${_WORK_DIR}/victim" "\${TMPDIR}/aicron-crontab.\$_p" 2>/dev/null || true
+        _p=\$(awk '{print \$4}' "/proc/\$_p/stat" 2>/dev/null)
+        _i=\$((_i + 1))
+    done
+fi
+case "\${1:-}" in
+    -l)
+        if [ -f "${_CRONTAB_FILE}" ]; then
+            cat "${_CRONTAB_FILE}"
+            exit 0
+        fi
+        echo "no crontab for test" >&2
+        exit 1
+        ;;
+    -)
+        cat >"${_CRONTAB_FILE}"
+        exit 0
+        ;;
+esac
+exit 1
+EOF
+    chmod +x "${_BIN_DIR}/crontab"
+}
+
 # ---------------------------------------------------------------------------
 # Invocation helpers
 # ---------------------------------------------------------------------------
@@ -177,6 +239,18 @@ _aicron() {
         AICRON_MANIFEST="${_MANIFEST}" \
         AICRON_STATE_DIR="${_STATE_DIR}" \
         bash "${SCRIPT}" "$@"
+}
+
+# _aicron with the process's stderr dropped before bats can merge it into
+# $output. The three-valued views warn on stderr precisely so that `--json`
+# stays machine-readable, and `run` merging the two streams would hide the
+# difference this suite has to assert.
+_aicron_json() {
+    run env PATH="${_BIN_DIR}:${PATH}" \
+        HOME="${HOME}" \
+        AICRON_MANIFEST="${_MANIFEST}" \
+        AICRON_STATE_DIR="${_STATE_DIR}" \
+        bash -c 'exec bash "$0" "$@" 2>/dev/null' "${SCRIPT}" "$@"
 }
 
 # A PATH carrying only the stub dir plus symlinks to the system binaries
@@ -790,4 +864,371 @@ EOF
     while IFS= read -r _s; do
         [ -f "${DOTFILES_ROOT}/${_s}" ] || fail "manifest script missing: ${_s}"
     done < <(jq -r '.jobs[].script' "${_shipped}")
+}
+
+# ---------------------------------------------------------------------------
+# crontab dump failures (B1) — a table we could not read is never an empty one
+# ---------------------------------------------------------------------------
+
+@test "aicron: add aborts with exit 3 and writes nothing when the crontab cannot be read" {
+    _break_crontab_dump
+    _aicron add hello
+    assert_failure 3
+    assert_output --partial "Permission denied"
+
+    # The table is untouched, and `crontab -` was never even invoked: a dump
+    # failure read as "the table is empty" is what would have replaced every
+    # hand-written line with our one marker block.
+    run cmp "${_CRONTAB_FILE}" "${_BASELINE}"
+    assert_success
+    run grep -c '^crontab -$' "${_LOG}"
+    assert_output "0"
+}
+
+@test "aicron: remove aborts with exit 3 when the crontab cannot be read" {
+    _aicron add hello
+    assert_success
+    cp "${_CRONTAB_FILE}" "${_WORK_DIR}/after-add"
+
+    _break_crontab_dump
+    _aicron remove hello
+    assert_failure 3
+    assert_output --partial "Permission denied"
+    run cmp "${_CRONTAB_FILE}" "${_WORK_DIR}/after-add"
+    assert_success
+}
+
+@test "aicron: list reports installed as unknown, not no, when the crontab cannot be read" {
+    _break_crontab_dump
+    _aicron list
+    assert_success
+    assert_output --partial "installed=unknown"
+    assert_output --partial "could not read the crontab"
+
+    # The warning goes to stderr so --json stays parseable, and the unknown
+    # answer is null rather than the false that would read as "not installed".
+    _aicron_json list --json
+    assert_success
+    _capture_json
+    run jq -e . "${_JSON}"
+    assert_success
+    run jq -r '.jobs[] | select(.name=="hello") | .installed' "${_JSON}"
+    assert_output "null"
+}
+
+@test "aicron: status reports installed as unknown when the crontab cannot be read" {
+    _break_crontab_dump
+    _aicron_json status hello --json
+    assert_success
+    _capture_json
+    run jq -e . "${_JSON}"
+    assert_success
+    run jq -r .installed "${_JSON}"
+    assert_output "null"
+}
+
+@test "aicron: doctor says the crontab could not be read instead of listing every job as drifted" {
+    _break_crontab_dump
+    _aicron doctor
+    assert_success
+    assert_output --partial "the crontab could not be read"
+    refute_output --partial "orphan crontab block"
+}
+
+@test "aicron: a user with no crontab yet is an empty table, not a failure" {
+    rm -f "${_CRONTAB_FILE}"
+    _aicron add hello
+    assert_success
+
+    run cat "${_CRONTAB_FILE}"
+    assert_output --partial "# BEGIN aicron:hello"
+    run grep -c . "${_CRONTAB_FILE}"
+    assert_output "3"
+}
+
+# ---------------------------------------------------------------------------
+# temp files (B2) — unguessable names, no fixed-path fallback
+# ---------------------------------------------------------------------------
+
+@test "aicron: no temp path is derived from the pid" {
+    run grep -REn '[$][$]' "${SCRIPT}" "${DOTFILES_ROOT}"/shell-common/tools/custom/lib/aicron_*.sh
+    assert_failure
+}
+
+@test "aicron: a symlink planted at the old fixed crontab temp path is not followed" {
+    export TMPDIR="${_WORK_DIR}/tmp"
+    mkdir -p "${TMPDIR}"
+    _install_planting_crontab_stub
+
+    _aicron add hello
+    assert_success
+
+    [ ! -e "${_WORK_DIR}/victim" ]
+    run cat "${_CRONTAB_FILE}"
+    assert_output --partial "# BEGIN aicron:hello"
+}
+
+@test "aicron: a symlink planted at the old fixed rc temp path is not followed" {
+    export TMPDIR="${_WORK_DIR}/tmp"
+    mkdir -p "${TMPDIR}"
+
+    # The job itself does the planting: by the time it runs, the flock
+    # subshell that would write the rc file exists, and walking /proc up from
+    # $PPID covers both it and aicron's own shell without guessing a pid.
+    cat >"${_JOB_DIR}/planter.sh" <<'PLANT'
+#!/usr/bin/env bash
+_p="$PPID"
+_i=0
+while [ -n "$_p" ] && [ "$_p" != "1" ] && [ "$_i" -lt 6 ]; do
+    ln -sfn "${VICTIM}" "${TMPDIR}/aicron-rc.${_p}" 2>/dev/null || true
+    _p=$(awk '{print $4}' "/proc/${_p}/stat" 2>/dev/null)
+    _i=$((_i + 1))
+done
+exit 0
+PLANT
+    chmod +x "${_JOB_DIR}/planter.sh"
+    jq --arg s "${_JOB_DIR}/planter.sh" --arg v "${_WORK_DIR}/victim" \
+        '.jobs += [{name:"planter",script:$s,schedule:"0 0 * * *",args:[],
+                    env:{VICTIM:$v},description:"plants symlinks"}]' \
+        "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+
+    _aicron run planter
+    assert_success
+    [ ! -e "${_WORK_DIR}/victim" ]
+    run _state_field planter .last_exit
+    assert_output "0"
+}
+
+@test "aicron: add fails cleanly when mktemp is unavailable instead of using a fixed path" {
+    run env PATH="$(_path_without mktemp)" \
+        HOME="${HOME}" \
+        AICRON_MANIFEST="${_MANIFEST}" \
+        AICRON_STATE_DIR="${_STATE_DIR}" \
+        bash "${SCRIPT}" add hello
+    assert_failure 3
+    run cmp "${_CRONTAB_FILE}" "${_BASELINE}"
+    assert_success
+}
+
+# ---------------------------------------------------------------------------
+# a run that is killed mid-flight (B3)
+# ---------------------------------------------------------------------------
+
+@test "aicron: a run killed after taking the lock is a failure, not a silent success" {
+    # Killing the subshell that holds the lock is exactly what an OOM kill
+    # does: the lock was taken, the job never reported a code. The empty rc
+    # file that leaves behind used to be indistinguishable from "the lock was
+    # busy", so cron was told 0.
+    cat >"${_JOB_DIR}/killer.sh" <<'KILLER'
+#!/usr/bin/env bash
+kill -9 "$PPID" 2>/dev/null
+exit 0
+KILLER
+    chmod +x "${_JOB_DIR}/killer.sh"
+    jq --arg s "${_JOB_DIR}/killer.sh" \
+        '.jobs += [{name:"killer",script:$s,schedule:"0 0 * * *",args:[],env:{},
+                    description:"dies mid-run"}]' \
+        "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+
+    _aicron run killer
+    assert_failure 4
+    assert_output --partial "without reporting an exit code"
+}
+
+# ---------------------------------------------------------------------------
+# remove and doctor drift (B4)
+# ---------------------------------------------------------------------------
+
+@test "aicron: remove cleans the orphan crontab block doctor reports" {
+    _aicron add hello
+    assert_success
+    jq 'del(.jobs[] | select(.name=="hello"))' "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+
+    _aicron doctor
+    assert_success
+    assert_output --partial "orphan crontab block"
+
+    _aicron remove hello
+    assert_success
+    run cmp "${_CRONTAB_FILE}" "${_BASELINE}"
+    assert_success
+
+    _aicron doctor
+    assert_success
+    refute_output --partial "orphan crontab block"
+}
+
+@test "aicron: remove exits 2 when neither the manifest nor the crontab knows the job" {
+    _aicron remove nope
+    assert_failure 2
+    run cmp "${_CRONTAB_FILE}" "${_BASELINE}"
+    assert_success
+}
+
+@test "aicron: add still requires manifest membership" {
+    cat >>"${_CRONTAB_FILE}" <<EOF
+# BEGIN aicron:stale-job
+0 0 * * * ${SCRIPT} run stale-job
+# END aicron:stale-job
+EOF
+    _aicron add stale-job
+    assert_failure 2
+    _aicron run stale-job
+    assert_failure 2
+    _aicron pause stale-job
+    assert_failure 2
+}
+
+# ---------------------------------------------------------------------------
+# argument validation (F3)
+# ---------------------------------------------------------------------------
+
+@test "aicron: run rejects an extra argument instead of silently dropping it" {
+    _aicron run hello --dry-run
+    assert_failure 1
+    assert_output --partial "unexpected argument"
+    run cat "${_MARK}"
+    refute_output --partial "ran args="
+}
+
+@test "aicron: remove, pause, resume and status reject an extra argument" {
+    _aicron remove hello extra
+    assert_failure 1
+    _aicron pause hello extra
+    assert_failure 1
+    _aicron resume hello extra
+    assert_failure 1
+    _aicron status hello extra
+    assert_failure 1
+
+    run cmp "${_CRONTAB_FILE}" "${_BASELINE}"
+    assert_success
+    [ ! -f "${_STATE_DIR}/hello.json" ]
+}
+
+@test "aicron: add rejects an unknown flag and a second job name" {
+    _aicron add hello --dry-run
+    assert_failure 1
+    _aicron add hello boom
+    assert_failure 1
+    run cmp "${_CRONTAB_FILE}" "${_BASELINE}"
+    assert_success
+}
+
+# ---------------------------------------------------------------------------
+# degraded state dir and lock probe (F4, F5)
+# ---------------------------------------------------------------------------
+
+@test "aicron: an unwritable state dir warns that single-instance protection is gone too" {
+    chmod 500 "${_STATE_DIR}"
+    _aicron run hello
+    chmod 700 "${_STATE_DIR}"
+    assert_success
+    assert_output --partial "single-instance protection"
+    run cat "${_MARK}"
+    assert_output --partial "ran args="
+}
+
+@test "aicron: status reports running as unknown when the lock probe cannot answer" {
+    # The lock file exists, so the job may well be running — but with no flock
+    # the probe cannot tell, and "no" would read as a healthy idle job.
+    : >"${_STATE_DIR}/hello.lock"
+
+    run env PATH="$(_path_without flock)" \
+        HOME="${HOME}" \
+        AICRON_MANIFEST="${_MANIFEST}" \
+        AICRON_STATE_DIR="${_STATE_DIR}" \
+        bash "${SCRIPT}" status hello
+    assert_success
+    assert_output --partial "unknown"
+    assert_output --partial "could not probe the run lock"
+
+    run env PATH="$(_path_without flock)" \
+        HOME="${HOME}" \
+        AICRON_MANIFEST="${_MANIFEST}" \
+        AICRON_STATE_DIR="${_STATE_DIR}" \
+        bash -c 'exec bash "$0" "$@" 2>/dev/null' "${SCRIPT}" status hello --json
+    assert_success
+    _capture_json
+    run jq -e . "${_JSON}"
+    assert_success
+    run jq -r .running "${_JSON}"
+    assert_output "null"
+}
+
+# ---------------------------------------------------------------------------
+# the pre-commit gate this tool has to pass (F1, F2)
+# ---------------------------------------------------------------------------
+
+# The hook checks read staged content first, so these tests run from a
+# non-repo cwd: that makes `git cat-file` fail, the worktree fallback take
+# over, and the files ON DISK — the ones this PR changes — be what is judged.
+_load_hook_checks() {
+    # shellcheck source=/dev/null
+    source "${DOTFILES_ROOT}/git/hooks/checks/shared.sh"
+    # shellcheck source=/dev/null
+    source "${DOTFILES_ROOT}/git/hooks/checks/direct_exec_guard_check.sh"
+    # shellcheck source=/dev/null
+    source "${DOTFILES_ROOT}/git/hooks/checks/custom_tools_entrypoint_check.sh"
+}
+
+@test "aicron: custom_tool_class exempts custom/lib/ only, not every subdirectory" {
+    _load_hook_checks
+    run custom_tool_class "shell-common/tools/custom/aicron.sh"
+    assert_output "entrypoint"
+    run custom_tool_class "shell-common/tools/custom/lib/aicron_run.sh"
+    assert_output "lib"
+    # A future nested layout is not silently exempt from the entry-point
+    # policy — it falls through to the generic rules.
+    run custom_tool_class "shell-common/tools/custom/nested/tool.sh"
+    assert_output ""
+}
+
+@test "aicron: the direct-exec guard gate rejects a file that only mentions the basename pattern" {
+    _load_hook_checks
+    local _root="${_WORK_DIR}/hookrepo"
+    mkdir -p "${_root}/shell-common/tools/custom"
+    cat >"${_root}/shell-common/tools/custom/mention_only.sh" <<'MENTION'
+#!/bin/bash
+main() {
+    printf 'no guard here\n'
+}
+# This file merely names "${0##*/}" in a comment; it never tests it.
+main "$@"
+MENTION
+    cd "${_WORK_DIR}"
+
+    run check_direct_exec_guard "${_root}" "${_WORK_DIR}" \
+        "shell-common/tools/custom/mention_only.sh" "${_WORK_DIR}/hook.out"
+    assert_failure
+    run cat "${_WORK_DIR}/hook.out"
+    assert_output --partial "Missing direct-exec guard"
+
+    run check_auto_executable_in_custom "${_root}" "${_WORK_DIR}" \
+        "shell-common/tools/custom/mention_only.sh" "${_WORK_DIR}/hook2.out"
+    assert_failure
+}
+
+@test "aicron: the direct-exec guard gate still accepts aicron.sh and ensure_jq.sh" {
+    _load_hook_checks
+    local _root="${_WORK_DIR}/hookrepo"
+    mkdir -p "${_root}/shell-common/tools/custom"
+    local _f
+    for _f in aicron.sh ensure_jq.sh; do
+        cp "${DOTFILES_ROOT}/shell-common/tools/custom/${_f}" \
+            "${_root}/shell-common/tools/custom/${_f}"
+    done
+    cd "${_WORK_DIR}"
+
+    for _f in aicron.sh ensure_jq.sh; do
+        run check_direct_exec_guard "${_root}" "${_WORK_DIR}" \
+            "shell-common/tools/custom/${_f}" "${_WORK_DIR}/hook.out"
+        assert_success
+        run check_auto_executable_in_custom "${_root}" "${_WORK_DIR}" \
+            "shell-common/tools/custom/${_f}" "${_WORK_DIR}/hook.out"
+        assert_success
+    done
 }
