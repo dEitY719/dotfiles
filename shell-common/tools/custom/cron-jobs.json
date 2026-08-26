@@ -18,7 +18,7 @@
     {
       "name": "merge-train",
       "script": "shell-common/tools/custom/pr_merge_train_cron.sh",
-      "schedule": "*/23 * * * *",
+      "schedule": "*/5 * * * *",
       "args": ["--cwd", "$HOME/dotfiles"],
       "env": {},
       "description": "열린 PR 을 순차 정리·머지"
