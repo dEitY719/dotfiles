@@ -536,12 +536,14 @@ _hold_lock() {
 @test "pr_merge_train_cron: a herdr tab failure ends the tick without a prompt" {
     _run_tick HERDR_TAB_FAIL=1
     assert_failure
+    _assert_logged "herdr tab create"
     _refute_logged "herdr agent prompt"
 }
 
 @test "pr_merge_train_cron: a herdr agent start failure ends the tick without a prompt" {
     _run_tick HERDR_START_FAIL=1
     assert_failure
+    _assert_logged "herdr agent start"
     _refute_logged "herdr agent prompt"
 }
 
