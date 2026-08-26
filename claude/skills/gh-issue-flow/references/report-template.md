@@ -14,6 +14,7 @@ gh:issue-flow complete (#<N>)
   [OK] Step 2: gh:commit                (<sha> "<subject>")
   [OK] Step 3: gh:pr                    (PR #<M>)
   [OK] Step 4: devx:pr-review-all       (agy+codex+simplify, reply in 4 min)
+  [OK] Step 4.1: merge-train wake       (dispatcher fired)
   [OK] Step 5: gh:pr-resolve-conflict   (no conflicts / resolved)
   [OK] Step 5.1: gh:pr-resolve-outdated (up to date / rebased)
   [OK] Step 6: ai-metrics               (~X tokens · ~M h · ~L min)
@@ -28,6 +29,11 @@ detail):
 - `[WARN] Step 4: devx:pr-review-all  (<reason>)` — review/simplify error, continued.
 
 If Step 2.6 soft-failed, show `[WARN] Step 6: ai-metrics  (skipped — <reason>)` instead.
+
+Step 4.1 (merge-train wake, #1482) is also soft-fail — never a `stopped at`
+report, never counted in the `<i>/6` step index:
+- `[WARN] Step 4.1: merge-train wake  (<reason>)` — `aicron.sh` missing, or
+  the dispatcher exited non-zero (including a live train declining per NF-1).
 
 If a step failed:
 
