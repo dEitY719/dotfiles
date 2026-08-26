@@ -16,8 +16,19 @@ check_direct_exec_guard() {
     local repo_rel_path="$3"
     local output_file="$4"
 
-    # Only check tools/custom files (executable scripts, not sourced)
+    # Only check tools/custom files (executable scripts, not sourced).
+    #
+    # The nested-path arm comes first and is load-bearing: in a `case` pattern
+    # `*` matches `/` as well, so `shell-common/tools/custom/*.sh` alone also
+    # matches `shell-common/tools/custom/lib/foo.sh`. Files under `lib/` are
+    # source-only helpers (mode 0644, never executed), and the guard this check
+    # demands dereferences ${BASH_SOURCE[0]} — a bad substitution under dash,
+    # which would break the POSIX-sh entry points that source them. The golden
+    # rules script checks the same rule with a real glob, which never recursed.
     case "$repo_rel_path" in
+        shell-common/tools/custom/*/*)
+            return 0
+            ;;
         shell-common/tools/custom/*.sh)
             ;;
         *)
@@ -36,10 +47,17 @@ check_direct_exec_guard() {
     # Pattern 1: if [ "${BASH_SOURCE[0]}" = "$0" ]
     # Pattern 2: [[ "${BASH_SOURCE[0]}" == "$0" ]]
     # Pattern 3: if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]
+    # Pattern 4: if [ "${0##*/}" = "<name>.sh" ]   — the basename guard
+    #
+    # Pattern 4 is what a POSIX-sh entry point has to use: dash aborts on
+    # ${BASH_SOURCE[0]} with "Bad substitution" before the test is even
+    # evaluated, so patterns 1-3 are unavailable to any script that must also
+    # run under /bin/sh (ensure_jq.sh, aicron.sh). tests/golden_rules already
+    # accepted this pattern; this list had drifted behind it.
 
     local has_guard=0
 
-    if grep -qE 'if \[ "\$\{BASH_SOURCE\[0\]\}" = "\$0" \]|if \[\[ "\$\{BASH_SOURCE\[0\]\}" == "\$0" \]\]|if \[ "\$\{BASH_SOURCE\[0\]:-\$0\}" = "\$0" \]' "$tmp_file" 2>/dev/null; then
+    if grep -qE 'if \[ "\$\{BASH_SOURCE\[0\]\}" = "\$0" \]|if \[\[ "\$\{BASH_SOURCE\[0\]\}" == "\$0" \]\]|if \[ "\$\{BASH_SOURCE\[0\]:-\$0\}" = "\$0" \]|"\$\{0##\*/\}"' "$tmp_file" 2>/dev/null; then
         has_guard=1
     fi
 

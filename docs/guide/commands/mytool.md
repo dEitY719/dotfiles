@@ -23,6 +23,7 @@
 
 - Executable utility scripts in ~/dotfiles/shell-common/tools/custom
 - **Tool** — Description
+- **aicron** — Manifest-driven management of this machine's cron jobs (i...
 - **analyze_bash_scripts** — Scan a directory of bash files and emit a Markdown summar...
 - **check_apt** — Comprehensive APT sources configuration diagnostic script
 - **check_cargo** — Comprehensive Cargo configuration diagnostic script
@@ -89,7 +90,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 66 custom tools available
+- Total: 67 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage

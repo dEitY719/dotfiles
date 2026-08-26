@@ -46,7 +46,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 3. help 함수 (apt_help, git_help)? → `functions/*_help.sh`
 4. 셸에서 호출하는 유틸 함수? → `functions/*.sh`
 5. 3rd-party 도구 wrapper (npm, docker)? → `tools/integrations/*.sh`
-6. 명시적 실행 스크립트? → `tools/custom/*.sh`
+6. 명시적 실행 스크립트? → `tools/custom/*.sh` (본체가 커지면 로직은 `tools/custom/lib/*.sh` 로 분리하고 진입점은 라우팅만)
 7. bash/zsh-only? → `bash/*.bash` 또는 `zsh/*.zsh`
 8. 프로젝트별? → `projects/<project>/*.sh`
 
@@ -59,7 +59,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 | Help function | `functions/*_help.sh` | yes | `apt_help()` — row 함수는 `docs/guide/commands/` 자동생성 소스 (#1262) |
 | Utility function | `functions/*.sh` | yes | `devx()`, `gitlog()` |
 | 3rd-party wrapper | `tools/integrations/*.sh` | yes | `npm.sh`, `docker.sh` |
-| Executable script | `tools/custom/*.sh` | **no** | `install_npm.sh`, `setup.sh` |
+| Executable script | `tools/custom/*.sh` (+ `lib/*.sh`) | **no** | `install_npm.sh` · `aicron.sh` + `lib/aicron_*.sh` |
 | Shell-specific | `bash/*.bash` 또는 `zsh/*.zsh` | varies | bash prompt setup |
 | Project-specific | `projects/<name>/*.sh` | yes | finrx utilities |
 
