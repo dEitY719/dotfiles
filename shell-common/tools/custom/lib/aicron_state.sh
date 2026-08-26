@@ -102,20 +102,25 @@ aicron_state_paused() {
     [ "${_v}" = "true" ]
 }
 
-# Merge <2>=<3> (a JSON value) into the state file, replacing a corrupt or
-# missing file with a fresh object rather than failing.
-aicron_state_set() {
-    local _f _tmp _base
+# The atomic write both setters below share: apply the jq arguments and
+# program in <2..> to job <1>'s state object and swap the result in. A file
+# that is missing, or that stopped being JSON, is replaced by a fresh object
+# rather than failing the write.
+aicron_state_apply() {
+    local _f _tmp
     _f=$(aicron_state_file "$1")
-    _base='{}'
-    if [ -f "${_f}" ] && jq -e . "${_f}" >/dev/null 2>&1; then
-        _base=$(cat "${_f}")
-    fi
+    shift
     _tmp="${_f}.tmp.$$"
-    if ! printf '%s' "${_base}" |
-        jq --arg k "$2" --argjson v "$3" '.[$k] = $v' >"${_tmp}" 2>/dev/null; then
-        rm -f "${_tmp}"
-        return 1
+    if [ -f "${_f}" ] && jq -e . "${_f}" >/dev/null 2>&1; then
+        jq "$@" "${_f}" >"${_tmp}" 2>/dev/null || {
+            rm -f "${_tmp}"
+            return 1
+        }
+    else
+        printf '%s' '{}' | jq "$@" >"${_tmp}" 2>/dev/null || {
+            rm -f "${_tmp}"
+            return 1
+        }
     fi
     mv "${_tmp}" "${_f}" 2>/dev/null || {
         rm -f "${_tmp}"
@@ -123,27 +128,18 @@ aicron_state_set() {
     }
 }
 
+# Merge <2>=<3> (a JSON value) into the state file.
+aicron_state_set() {
+    # shellcheck disable=SC2016  # jq program text — $k/$v are jq's variables
+    aicron_state_apply "$1" --arg k "$2" --argjson v "$3" '.[$k] = $v'
+}
+
 # D-5 step 7 — the three run-result keys, written together so a state file can
 # never carry a last_run from one execution and a last_exit from another.
 aicron_state_record() {
-    local _f _tmp _base
-    _f=$(aicron_state_file "$1")
-    _base='{}'
-    if [ -f "${_f}" ] && jq -e . "${_f}" >/dev/null 2>&1; then
-        _base=$(cat "${_f}")
-    fi
-    _tmp="${_f}.tmp.$$"
-    if ! printf '%s' "${_base}" | jq \
-        --arg r "$2" --argjson e "$3" --argjson d "$4" \
-        '.last_run = $r | .last_exit = $e | .last_duration_sec = $d' \
-        >"${_tmp}" 2>/dev/null; then
-        rm -f "${_tmp}"
-        return 1
-    fi
-    mv "${_tmp}" "${_f}" 2>/dev/null || {
-        rm -f "${_tmp}"
-        return 1
-    }
+    # shellcheck disable=SC2016  # jq program text — $r/$e/$d are jq's variables
+    aicron_state_apply "$1" --arg r "$2" --argjson e "$3" --argjson d "$4" \
+        '.last_run = $r | .last_exit = $e | .last_duration_sec = $d'
 }
 
 # True when a run of <1> currently holds the job lock. Probing with a
