@@ -2125,7 +2125,9 @@ _two_repo_fixture() {
     assert_failure
     # Positive control (issue #1442; rationale at "a held tick leaves the gate
     # deadline untouched") — must precede `run cat`, which replaces $output.
-    assert_output --partial "not a token-limit signature"
+    # Since #1444 the gate judges submission, not error codes, so the line that
+    # proves it ran is the no-confirmed-dispatch notice.
+    assert_output --partial "nothing to judge, gate untouched"
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
 }
@@ -2133,13 +2135,13 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: repeated non-quota failures never close the gate" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    assert_output --partial "not a token-limit signature"
+    assert_output --partial "nothing to judge, gate untouched"
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    # Positive control (issue #1442; same rationale): two stalls in a row shut
-    # the gate, two non-quota failures must not.
-    assert_output --partial "not a token-limit signature"
+    # Positive control (issue #1442; same rationale): two unproductive ticks
+    # shut the gate, two ticks whose prompts never landed must not.
+    assert_output --partial "nothing to judge, gate untouched"
     refute_output --partial "Rate-limit gate closed"
     [ ! -f "${_LIMIT_FILE}" ]
 }
@@ -2149,7 +2151,7 @@ _two_repo_fixture() {
     printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    assert_output --partial "not a token-limit signature"
+    assert_output --partial "nothing to judge, gate untouched"
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
@@ -2157,7 +2159,9 @@ _two_repo_fixture() {
     # miscounted non-quota failure tips the gate shut — one more reaches
     # _IW_LIMIT_STRIKES. The clean-state sibling above cannot reach that edge,
     # so the dirty start is the case that actually pins the classification.
-    assert_output --partial "not a token-limit signature"
+    # #1444 keeps the edge and moves the classifier: an unlanded prompt is not
+    # judged at all, so the strike count must be untouched either way.
+    assert_output --partial "nothing to judge, gate untouched"
     refute_output --partial "Rate-limit gate closed"
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
