@@ -695,14 +695,11 @@ _gh_pr_review_human_h() {
 # 4-bytes-per-token heuristic, rounded to nearest 500, floor 1000.
 # Args: $1 = prompt size in bytes (a number, NOT a path).
 #
-# This used to take the PROMPT_FILE path and `wc -c` it here, which meant
-# the estimate was measured long after the AI CLI had run — and issue #1474
-# showed the temp prompt file can vanish before that point. A missing file
-# then read as 0 bytes, which the floor rule below silently turned into a
-# plausible-looking "~1000 tokens" footer instead of a visible failure.
-# Taking the byte count as an argument keeps this pure arithmetic: the
-# caller measures the file while it is guaranteed to exist (right after
-# it is written) and owns the reporting of any read failure.
+# Issue #1474 — this used to `wc -c` the PROMPT_FILE path itself, in Step 6,
+# long after the file could have vanished; the floor rule then dressed the
+# resulting 0 up as a plausible "~1000 tokens". The caller now measures the
+# file while it still exists and owns reporting a read failure — see the
+# measurement right after _gh_pr_review_build_prompt.
 _gh_pr_review_estimate_tokens() {
     local raw="$1"
     local tokens
@@ -1202,11 +1199,10 @@ EOF
     # normal small PR. Capturing the byte count here decouples the reported
     # figure from the file's lifetime. A failed read is reported, never
     # silently folded into 0 — that is the exact ambiguity #1474 was about.
-    PROMPT_BYTES=$(wc -c <"$PROMPT_FILE" 2>/dev/null) || PROMPT_BYTES=""
-    if [ -z "$PROMPT_BYTES" ]; then
-        echo "Could not read prompt file for the token estimate — file missing?" >&2
+    PROMPT_BYTES=$(wc -c <"$PROMPT_FILE" 2>/dev/null) || {
+        echo "[WARN] Could not read prompt file for the token estimate — file missing?" >&2
         PROMPT_BYTES=0
-    fi
+    }
 
     # ---- Step 5: dispatch external AI CLI ----
     # Tee CLI stdout: stream to the user's terminal verbatim AND capture

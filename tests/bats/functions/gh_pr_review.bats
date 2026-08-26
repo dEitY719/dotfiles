@@ -886,13 +886,8 @@ EOF
 
 # ---------------------------------------------------------------------------
 # Token estimate is decoupled from PROMPT_FILE's lifetime (issue #1474)
-#
-# The estimator used to re-read PROMPT_FILE from disk in Step 6, long after
-# the AI CLI had run. PR #1462 showed the file can be gone by then: `wc -c`
-# failed, the old `|| echo 0` swallowed it, and the floor rule turned that
-# into a "~1000 tokens" footer indistinguishable from a genuinely small PR.
-# gh_pr_review now measures the prompt right after it is written and carries
-# the byte count forward, so these drive the public entry point end to end.
+# See gh_pr_review.sh — the measurement moved to just after the prompt is
+# built; that comment is the single home for why.
 # ---------------------------------------------------------------------------
 
 @test "gh_pr_review: PROMPT_FILE vanishing before Step 6 does not zero the token estimate" {
@@ -909,10 +904,11 @@ EOF
     local tokfile="$TEST_TEMP_HOME/tokens.txt"
     _gh_pr_review_build_comment_body() { printf '%s\n' "$5" >"$tokfile"; }
 
+    # `_stub_gh_noop` (via the preconditions helper) already created this
+    # directory and put it on PATH.
     local stub_dir="$TEST_TEMP_HOME/bin"
-    mkdir -p "$stub_dir"
     # The CLI itself succeeds, but the prompt file is gone by the time it
-    # returns — the #1462 symptom, root cause still open.
+    # returns — the #1474 symptom, root cause still open.
     cat >"$stub_dir/codex" <<'EOF'
 #!/bin/sh
 rm -f /tmp/gh-pr-review-prompt.codex.1474.*
@@ -940,13 +936,10 @@ EOF
         rm -f "$2"
         return 0
     }
-    _gh_pr_review_build_comment_body() { return 0; }
 
-    local stub_dir="$TEST_TEMP_HOME/bin"
-    mkdir -p "$stub_dir"
-    printf '#!/bin/sh\necho "[PRAISE] a.sh:1 — ok"\nexit 0\n' >"$stub_dir/codex"
-    chmod +x "$stub_dir/codex"
-
+    # No codex stub is needed: Step 5 redirects the (now missing) prompt file
+    # into the CLI, so the run aborts at the redirection before any binary is
+    # execed. This test asserts only that the warning fired first.
     run gh_pr_review --ai codex --no-post-comment 1474
     assert_output --partial "Could not read prompt file for the token estimate"
 }
