@@ -57,7 +57,7 @@ placeholder.
 `gh:pr-merge` misrouted reads one PR from the wrong server and stops. This
 skill misrouted would enumerate **another repo's** open PRs and then rebase and
 merge against them, one after another, unattended. The binding is what makes
-the queue in Step 3 and the merges in Step 4 provably the same repo.
+the queue in Step 2 and the merges in Step 4 provably the same repo.
 
 ## Threading it into the atom skills
 

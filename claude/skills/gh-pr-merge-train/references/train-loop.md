@@ -6,9 +6,9 @@ each other's base.
 
 ## The loop
 
-For each PR `N` in the Step 3 queue order:
+For each PR `N` in the Step 2 queue order:
 
-1. **Re-query state** (F-3). The previous merge invalidated whatever Step 3
+1. **Re-query state** (F-3). The previous merge invalidated whatever Step 2
    read. `gh pr view` per `routing-table.md`.
 2. **Approval gate** — if the ruleset requires approval and `reviewDecision !=
    APPROVED`, record `[SKIPPED] approval required` and go to the next PR. See
@@ -60,7 +60,7 @@ skill was called and nothing was changed.
 | `gh:pr-merge` | that PR is `[FAILED]`; next PR |
 | approval gate | that PR is `[SKIPPED]`; next PR |
 | `gh pr view` on one PR | that PR is `[SKIPPED] state unreadable`; next PR |
-| `gh pr list` in Step 3 | **the run ends** — with no queue there is nothing to skip *to*, and merging without knowing state is the one thing this skill must never do |
+| `gh pr list` in Step 2 | **the run ends** — with no queue there is nothing to skip *to*, and merging without knowing state is the one thing this skill must never do |
 
 One stuck PR must never hold the others. That is the whole point of the train
 over a hand-run sequence: the human version stops at the first hard PR, and the
