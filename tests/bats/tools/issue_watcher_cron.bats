@@ -702,20 +702,89 @@ _hold_lock() {
 #             forever inside the tick. Opening it `<>` from this process is
 #             what keeps the reproduction free of a background writer that
 #             would itself have to be reaped.
-#   timeout   the outer bound. A regression must surface as a bounded 124, not
+#   watchdog  the outer bound. A regression must surface as a bounded 124, not
 #             as a hang that takes the whole suite down with it — every
 #             assertion below therefore refutes 124 explicitly.
-_run_child_suite() {
-    # No `timeout` means no bound, and an unbounded child bats is the very
-    # thing these cases refuse to allow — skip rather than risk it.
-    command -v timeout >/dev/null 2>&1 || skip "timeout(1) not available"
 
+# The bound a child bats run is held to. A child here runs one case and comes
+# back in well under a second even counting bats' own startup, so this is a
+# wide margin — and still short enough that a returning hang costs CI seconds
+# rather than the minutes the old 60 would have.
+_CHILD_SUITE_TIMEOUT=15
+
+# The bound, without `timeout(1)`. That binary is coreutils, and stock macOS
+# ships neither it nor a `gtimeout` on PATH — gating on it meant these cases
+# skipped wholesale on a platform this repo supports, quietly retiring the one
+# guarantee they exist to hold. So the bound is bash's own.
+#
+# The child runs as a background job under `set -m`, which makes it a process
+# *group* leader; a watchdog kills that whole group once the bound elapses.
+# The group, not the pid, is the point: a hung bats has grandchildren — issue
+# #1473 is exactly a grandchild blocked on a read — and killing only the
+# immediate child would leave them alive holding the fds the caller waits on.
+#
+# The child's real exit code reaches us only through a file it writes itself,
+# just before exiting. So a missing file *is* "the watchdog got there first",
+# with no need to tell a killed child's 137 from an honest one.
+_bounded_bats() {
+    local _out="${_WORK_DIR}/child.out"
+    local _rc="${_WORK_DIR}/child.rc"
+    rm -f "${_out}" "${_rc}" "${_rc}.part"
+
+    local _monitor=0
+    case $- in *m*) _monitor=1 ;; esac
+    set -m
+
+    {
+        "$@" >"${_out}" 2>&1
+        printf '%s\n' "$?" >"${_rc}.part"
+        mv -f "${_rc}.part" "${_rc}"
+    } &
+    local _child=$!
+
+    # The watchdog holds no stdout, no stdin and no fd 3. An inherited write
+    # end here would outlive the kill and stall the caller's capture — the
+    # same trap the orphaned `sleep` in `_hold_lock` documents.
+    #
+    # The pid kill after the group kill is the belt to that brace: should
+    # `set -m` ever not take, `-${_child}` names no group and the `wait` below
+    # would never return. A live leader owns its own pgid, so the negative
+    # form can only ever reach this job's own tree.
+    (
+        sleep "${_CHILD_SUITE_TIMEOUT}"
+        kill -9 -"${_child}" 2>/dev/null
+        kill -9 "${_child}" 2>/dev/null
+    ) >/dev/null 2>&1 <&- 3>&- &
+    local _watchdog=$!
+
+    [ "${_monitor}" -eq 1 ] || set +m
+
+    wait "${_child}" >/dev/null 2>&1
+
+    # Whichever of the two got there first, the other one goes now — by group
+    # as well, or the watchdog's `sleep` would outlive the subshell holding it.
+    kill -9 -"${_watchdog}" >/dev/null 2>&1
+    kill -9 "${_watchdog}" >/dev/null 2>&1
+    wait "${_watchdog}" >/dev/null 2>&1
+
+    cat "${_out}" 2>/dev/null
+
+    [ -f "${_rc}" ] || return 124
+    return "$(cat "${_rc}")"
+}
+
+_run_child_suite() {
     local _dir="${_WORK_DIR}/probe"
     local _file="${_dir}/probe.bats"
     mkdir -p "${_dir}"
 
     # `load '../test_helper'` resolves against the *child* file's directory, so
     # it has to be re-pointed at the real tree before the copy leaves it.
+    #
+    # Invariant this `sed` rests on: every `@test` in this file comes *after*
+    # the helper section, so cutting from the first one takes the helpers and
+    # nothing else. Move a case above them and the child suite silently
+    # swallows it.
     sed -e "/^@test /,\$d" \
         -e "s|^load '../test_helper'$|load '${DOTFILES_ROOT}/tests/bats/test_helper'|" \
         "${BATS_TEST_FILENAME}" >"${_file}"
@@ -723,14 +792,14 @@ _run_child_suite() {
 
     mkfifo "${_dir}/stdin"
     exec 8<>"${_dir}/stdin"
-    run timeout 60 "${DOTFILES_ROOT}/tests/bats/lib/bats-core/bin/bats" \
+    run _bounded_bats "${DOTFILES_ROOT}/tests/bats/lib/bats-core/bin/bats" \
         "${_file}" <&8
     exec 8>&-
 }
 
-# `$status` 124 is `timeout`'s "the child never finished" — the exact defect
-# these cases exist to catch, so it gets its own message rather than being
-# folded into a generic status assertion.
+# `$status` 124 is `_bounded_bats`' "the child never finished" — the exact
+# defect these cases exist to catch, so it gets its own message rather than
+# being folded into a generic status assertion.
 _assert_not_hung() {
     [ "${status}" -ne 124 ] || fail "the child bats run hung (timeout): $1"
 }
