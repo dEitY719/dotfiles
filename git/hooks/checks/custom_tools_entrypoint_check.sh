@@ -6,7 +6,11 @@ check_auto_executable_in_custom() {
     local repo_rel_path="$3"
     local output_file="$4"
 
+    # The nested-path arm is load-bearing: in a `case` pattern `*` matches `/`
+    # too, so `custom/*.sh` alone would also match `custom/lib/*.sh`. Files
+    # under lib/ are source-only helpers (mode 0644) with no main() to guard.
     case "$repo_rel_path" in
+        shell-common/tools/custom/*/*) return 0 ;;
         shell-common/tools/custom/*.sh) ;;
         *) return 0 ;;
     esac
@@ -26,7 +30,11 @@ check_auto_executable_in_custom() {
 
         if [ -n "$tail_calls" ]; then
             local guard_present=0
-            if tail -n "$guard_tail_lines" "$tmp_file" | grep -Eq 'BASH_SOURCE\[0\].*(\$\{?0\}?|\$0)|(\$\{?0\}?|\$0).*BASH_SOURCE\[0\]'; then
+            # The ${0##*/} basename guard is the third accepted form: a script
+            # that must also run under /bin/sh cannot reference BASH_SOURCE at
+            # all, because dash rejects the expansion outright. Same list as
+            # tests/golden_rules/test_golden_rules.sh Rule 2.
+            if tail -n "$guard_tail_lines" "$tmp_file" | grep -Eq 'BASH_SOURCE\[0\].*(\$\{?0\}?|\$0)|(\$\{?0\}?|\$0).*BASH_SOURCE\[0\]|"\$\{0##\*/\}"'; then
                 guard_present=1
             fi
 
