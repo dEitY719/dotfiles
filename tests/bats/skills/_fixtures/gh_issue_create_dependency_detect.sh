@@ -117,7 +117,7 @@ gh_issue_create_dep_link_outcome() {
     fi
 
     _w="[WARN] Blocked by #${_dep_num} 링크 실패 — GH UI에서 수동 추가 필요"
-    _cause=$(printf '%s\n' "$_err" | head -1)
+    _cause=$(printf '%s\n' "$_err" | head -n 1)
     if [ -n "$_cause" ]; then
         _w="${_w}
     원인: ${_cause}"
