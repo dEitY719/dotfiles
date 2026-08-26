@@ -18,8 +18,14 @@ set -eu
 
 FRAGMENT_DIR="${CHANGELOG_FRAGMENT_DIR:-docs/public/changelog.d}"
 
-# 디렉터리가 없으면 검사 대상이 없다 — 조용한 no-op (다른 저장소/부분 체크아웃).
-[ -d "$FRAGMENT_DIR" ] || exit 0
+# changelog.d 가 유일한 changelog 소스이므로 디렉터리 부재는 "검사할 게 없음"이
+# 아니라 소스 전체가 사라진 상태다 — 조용히 통과하면 lint-docs 가 초록인 채로
+# changelog 를 잃는다 (PR #1475 codex). 형제 린터 lint_docs_filenames.sh 와
+# 같은 rc 2 를 쓴다: 1(=위반 발견)과 구별되는 "검사 대상 자체가 없음".
+if [ ! -d "$FRAGMENT_DIR" ]; then
+    echo "lint-changelog-fragments: '$FRAGMENT_DIR' 디렉터리를 찾을 수 없습니다." >&2
+    exit 2
+fi
 
 errors=0
 
@@ -56,22 +62,33 @@ for file in "$FRAGMENT_DIR"/*; do
     while IFS= read -r line || [ -n "$line" ]; do
         lineno=$((lineno + 1))
 
-        # 선행 공백/탭 제거 (POSIX 파라미터 확장 — 줄당 포크 없이).
-        _lead="${line%%[! 	]*}"
-        stripped="${line#"$_lead"}"
-
         # 공백만 있는 줄은 수집기가 버리므로 항목이 아니다 — 허용.
-        [ -n "$stripped" ] || continue
+        # (선행 공백/탭 제거는 POSIX 파라미터 확장 — 줄당 포크 없이.)
+        _lead="${line%%[! 	]*}"
+        [ -n "${line#"$_lead"}" ] || continue
 
-        case "$stripped" in
+        # 아래 검사는 stripped 가 아니라 **원본 줄**을 본다: 들여쓴
+        # `  - 하위 불릿` 은 CLAUDE.md 가 금지하는 형식인데, 선행 공백을
+        # 지우고 보면 정상 항목과 구별되지 않는다.
+        case "$line" in
         \#*)
             fail "$file:$lineno — 마크다운 헤더는 fragment 안에 둘 수 없습니다 (날짜는 파일명이 갖습니다)."
             ;;
-        "- "*)
-            bullets=$((bullets + 1))
+        "- 변경: "*)
+            # 문서가 강제한다고 말하는 형식은 `- 변경: **요약**` 이다.
+            # `- ` 로만 검사하면 계약과 구현이 어긋난다 (PR #1475 codex).
+            _rest="${line#- 변경: }"
+            case "$_rest" in
+            '**'*) _rest="${_rest#'**'}" ;;
+            *) _rest="" ;;
+            esac
+            case "$_rest" in
+            *'**'*) bullets=$((bullets + 1)) ;;
+            *) fail "$file:$lineno — 요약은 \`**\` 로 강조해야 합니다 ('- 변경: **요약**'): $line" ;;
+            esac
             ;;
         *)
-            fail "$file:$lineno — 항목은 '- ' 로 시작해야 합니다: $stripped"
+            fail "$file:$lineno — 항목은 '- 변경: **요약**' 형식이어야 합니다: $line"
             ;;
         esac
     done <"$file"
