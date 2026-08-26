@@ -310,6 +310,14 @@ EOF
 #                                   settings above say
 #   HERDR_READ_MODE=missing         `agent read` answers agent_not_found (the
 #                                   evidence capture has nothing to log)
+#   HERDR_GET_FAIL_AFTER_PROMPT=1   `agent get` errors once that agent has been
+#                                   prompted — herdr unreachable during the
+#                                   observation window only, leaving dispatch
+#                                   itself untouched
+#   HERDR_GET_FAIL_AFTER_PROMPT_SKIP=N  let that agent's first N post-prompt
+#                                   `agent get` calls answer normally, then
+#                                   error — stages "readable early in the
+#                                   window, unreadable at the poll that decides"
 #
 # Each herdr invocation is a fresh process, so the per-call sequences count
 # through marker files next to ${CALL_LOG} rather than through shell state.
@@ -370,6 +378,13 @@ case "$1 $2" in
     fi
     _status="${HERDR_AGENT_STATUS:-idle}"
     if [ -f "${CALL_LOG}.prompt.$3" ]; then
+        if [ "${HERDR_GET_FAIL_AFTER_PROMPT:-0}" = "1" ]; then
+            _n=$(_bump "${CALL_LOG}.postget.$3")
+            if [ "${_n}" -gt "${HERDR_GET_FAIL_AFTER_PROMPT_SKIP:-0}" ]; then
+                printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:get"}'
+                exit 1
+            fi
+        fi
         if [ -n "${HERDR_STATUS_AFTER_PROMPT:-}" ]; then
             _n=$(_bump "${CALL_LOG}.postget.$3")
             if [ -z "${HERDR_STATUS_AFTER_PROMPT_GETS:-}" ] ||
@@ -1831,6 +1846,7 @@ _two_repo_fixture() {
         "IW_WATCHED_REPOS=${_WATCH_FILE}" \
         "TMPDIR=${_tmp}" \
         "IW_IDLE_POLL_SLEEP=0" \
+        "IW_LIMIT_OBSERVE_SLEEP=0" \
         bash "${SCRIPT}"
     refute_output --partial "unbound variable"
 }
@@ -1929,6 +1945,41 @@ _two_repo_fixture() {
     assert_success
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
+}
+
+@test "issue_watcher_cron: an unreadable agent status is not booked as idle" {
+    # Regression (PR #1468 codex review, BLOCKER): `_iw_agent_status` reports a
+    # failed `herdr agent get` as an empty string, and the gate used to fall
+    # through that into the strike branch — so one transient herdr blip during
+    # the window read as a spent quota. Absence of evidence is not evidence of
+    # idleness; the strike needs a status actually read.
+    _run_tick "HERDR_GET_FAIL_AFTER_PROMPT=1"
+    assert_success
+    assert_output --partial "No dispatched agent's status could be read after 60s"
+    assert_output --partial "gate untouched"
+    [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: an unreadable deciding poll leaves an existing strike alone" {
+    # The gate must not accumulate on unreadable evidence either — not a strike
+    # and not a clear.
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
+    _run_tick "HERDR_GET_FAIL_AFTER_PROMPT=1"
+    assert_success
+    run cat "${_LIMIT_FILE}"
+    assert_output --partial '"strikes": "1"'
+    refute_output --partial '"strikes": "2"'
+}
+
+@test "issue_watcher_cron: readable early polls do not rescue an unreadable deciding poll" {
+    # Intermittent herdr: the first two polls answer `idle`, the remaining four
+    # error. Only the poll that decides counts, and it read nothing — so the
+    # early `idle` readings must not be promoted into a strike.
+    _run_tick "HERDR_GET_FAIL_AFTER_PROMPT=1" "HERDR_GET_FAIL_AFTER_PROMPT_SKIP=2"
+    assert_success
+    assert_output --partial "No dispatched agent's status could be read after 60s"
+    [ ! -f "${_LIMIT_FILE}" ]
 }
 
 # ---------------------------------------------------------------------------
