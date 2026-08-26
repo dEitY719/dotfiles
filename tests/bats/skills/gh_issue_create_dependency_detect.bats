@@ -22,21 +22,31 @@ bats_require_minimum_version 1.5.0
 
 load '../test_helper'
 
-# Captured at file-load time, i.e. before setup()'s sandbox replaces $HOME
-# and $XDG_CONFIG_HOME. `gh` reads its credentials from the real config dir;
-# under the sandbox every run looks unauthenticated, so the live-schema check
+# gh's own config-dir resolution order, evaluated at file-load time — i.e.
+# before setup()'s sandbox replaces $HOME and $XDG_CONFIG_HOME. Under the
+# sandbox alone every run looks unauthenticated, so the live-schema check
 # below would skip forever instead of ever detecting drift.
-_REAL_GH_HOME="$HOME"
-_REAL_GH_XDG_CONFIG_HOME="${XDG_CONFIG_HOME-}"
+#
+# Naming the directory directly (rather than restoring the developer's real
+# $HOME, PR #1465 codex review) is what keeps the blast radius at "read one
+# config file": $HOME and $XDG_CONFIG_HOME stay sandboxed, so nothing this
+# suite runs can write to the developer's home no matter how gh behaves.
+_REAL_GH_CONFIG_DIR="${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}"
 
-# Run a command with the real gh config visible again. Read-only use only —
-# the sandbox exists to stop tests writing to the developer's home.
 _gh_real_config() {
-    if [ -n "$_REAL_GH_XDG_CONFIG_HOME" ]; then
-        env HOME="$_REAL_GH_HOME" XDG_CONFIG_HOME="$_REAL_GH_XDG_CONFIG_HOME" "$@"
-    else
-        env -u XDG_CONFIG_HOME HOME="$_REAL_GH_HOME" "$@"
-    fi
+    GH_CONFIG_DIR="$_REAL_GH_CONFIG_DIR" "$@"
+}
+
+# Prints only the fenced code blocks of $1, fence lines excluded. The doc's
+# prose and its executable snippets have different drift rules — see the
+# #1457 offline guard below.
+_doc_code_blocks() {
+    awk '/^```/ { inblock = !inblock; next } inblock' "$1"
+}
+
+# Returns 0 when $2 appears inside a fenced code block of the doc at $1.
+_doc_code_contains() {
+    _doc_code_blocks "$1" | grep -Fq "$2"
 }
 
 setup() {
@@ -255,8 +265,14 @@ teardown() {
     run grep -Fq 'addBlockedBy(input:{issueId:$issueId, blockingIssueId:$blockingIssueId})' "$DOC"
     assert_success
 
-    # And the drifted spelling survives nowhere in the file.
-    run grep -Fq 'blockedByIds' "$DOC"
+    # And the drifted spelling survives in none of the doc's executable
+    # snippets. Scoped to fenced code, not the whole file (PR #1465, agy +
+    # codex both): a whole-file ban would also forbid the prose from ever
+    # naming the old spelling to explain the #1445 history, which is exactly
+    # the kind of context the next reader needs. Coverage is unchanged —
+    # the two positive assertions above already pin the prose line and the
+    # mutation string, so a revert in either place still turns this red.
+    run _doc_code_contains "$DOC" 'blockedByIds'
     assert_failure
 }
 
@@ -267,6 +283,15 @@ teardown() {
     # switched off, and detection is not lost — one networked run catches the
     # drift. github.com is queried explicitly because that is the host whose
     # shape the doc records.
+    #
+    # Where that networked run happens (PR #1465, codex): `git/hooks/pre-push`
+    # runs `mise run test` on every push, and this repo deliberately has no CI
+    # test lane to wire into — #754 moved the whole suite to that hook, SSOT
+    # in `docs/.ssot/local-test-policy.md`. The pushing machine is the same one
+    # that just authenticated `gh`, so the guard runs for real on the path that
+    # matters. It is a developer-machine guarantee, not a server-side one: a
+    # push with `SKIP_LOCAL_PYTEST=1`, or from a shell with no gh auth, skips
+    # it — which is what the offline guard above is there to cover.
     command -v gh >/dev/null 2>&1 || skip "gh not installed"
     # `auth token`, not `auth status`: it answers the same question from the
     # local config instead of verifying the token against the API, so the
