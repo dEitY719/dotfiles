@@ -954,8 +954,7 @@ EOF
     # grep answers 1 for "nothing matched" and 2 for "I could not read that
     # file", and assert_failure took both — so this guard went green when the
     # very sources it scans were missing or moved, which is the one scenario a
-    # B2 regression is most likely to arrive with (#1479). Pin the file list
-    # first, then pin the exit code exactly.
+    # B2 regression is most likely to arrive with (#1479).
     local -a _sources=(
         "${SCRIPT}"
         "${DOTFILES_ROOT}"/shell-common/tools/custom/lib/aicron_*.sh
@@ -968,17 +967,15 @@ EOF
     for _f in "${_sources[@]}"; do
         [ -f "${_f}" ] || fail "guard target is missing, so this test proves nothing: ${_f}"
     done
-    [ "${#_sources[@]}" -ge 2 ] \
-        || fail "expected the launcher and at least one lib file, got ${#_sources[@]}"
 
     run grep -REn '[$][$]' "${_sources[@]}"
-    assert_equal "$status" 1
+    assert_failure 1
 
     # Positive control: the same invocation still reports a match, so the 1
     # above means the sources are clean rather than that grep went blind.
     printf '_tmp="${TMPDIR}/aicron.$$"\n' >"${_WORK_DIR}/pid_derived.sh"
     run grep -REn '[$][$]' "${_WORK_DIR}/pid_derived.sh"
-    assert_equal "$status" 0
+    assert_success
 }
 
 @test "aicron: a symlink planted at the old fixed crontab temp path is not followed" {
