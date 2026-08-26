@@ -57,9 +57,12 @@ setup() {
 }
 
 teardown() {
-    # `_run_child_suite` holds the child's stdin fifo open on fd 8. A bats
-    # assertion aborts the test body at the failing line, so closing it there
-    # is not enough — the same reason the two cleanups below live here.
+    # `_run_child_suite` opens the child's stdin fifo on fd 8 and closes it
+    # itself once the child bats run returns — but bash's `errexit` can abort
+    # the helper between the `mkfifo`/`exec` that opens fd 8 and the `exec`
+    # that closes it, leaving fd 8 open with no test-body assertion to blame.
+    # This backstop closes it unconditionally, the same reason the two
+    # cleanups below live here.
     exec 8>&- 2>/dev/null || true
     if [ -n "${_LOCK_HOLDER_PID}" ]; then
         kill "${_LOCK_HOLDER_PID}" 2>/dev/null || true
@@ -554,17 +557,9 @@ _install_stubs() {
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Run one tick with the stubs on PATH and an isolated XDG_STATE_HOME.
-#
-#   _run_tick [-u VAR ...] [VAR=VALUE ...] [-- script-flag ...]
-#
-# `-u VAR` pairs must come first — `env` only parses options ahead of the first
-# NAME=VALUE. The VAR=VALUE assignments are appended after the defaults, and
-# `env` applies assignments left to right, so a test can override any of them
-# (PATH included) without restating the whole sandbox.
-#
-# `</dev/null 3>&-` on the invocation below is load-bearing, not tidiness
-# (issue #1473) — the same fd hazard `_hold_lock` documents, one layer out:
+# Run "$@" — an invocation ending in `bash "${SCRIPT}" ...` — with stdin and
+# bats' TAP fd closed. Load-bearing, not tidiness (issue #1473), the same fd
+# hazard `_hold_lock` documents, one layer out:
 #
 #   </dev/null  the tick shells out to the `gh` stub, whose `api graphql`
 #               branch drains stdin the way the real `gh api` does. Without
@@ -580,6 +575,22 @@ _install_stubs() {
 #               inheritor closes it. Closing it for the tick means a child that
 #               outlives the script cannot freeze the run into a result-less
 #               hang; the worst it can do is fail loudly.
+#
+# Every call site that invokes the tick script goes through this — not a
+# per-call-site `</dev/null 3>&-` — so a future call site cannot silently drop
+# the fix by omission.
+_run_script() {
+    "$@" </dev/null 3>&-
+}
+
+# Run one tick with the stubs on PATH and an isolated XDG_STATE_HOME.
+#
+#   _run_tick [-u VAR ...] [VAR=VALUE ...] [-- script-flag ...]
+#
+# `-u VAR` pairs must come first — `env` only parses options ahead of the first
+# NAME=VALUE. The VAR=VALUE assignments are appended after the defaults, and
+# `env` applies assignments left to right, so a test can override any of them
+# (PATH included) without restating the whole sandbox.
 _run_tick() {
     local _unset=() _env=()
     while [ "$#" -gt 1 ] && [ "$1" = "-u" ]; do
@@ -592,7 +603,7 @@ _run_tick() {
     done
     [ "$#" -eq 0 ] || shift
 
-    run env \
+    run _run_script env \
         "${_unset[@]}" \
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
@@ -605,7 +616,7 @@ _run_tick() {
         "IW_STALL_RECOVER_SLEEP=0" \
         "IW_LIMIT_OBSERVE_SLEEP=0" \
         "${_env[@]}" \
-        bash "${SCRIPT}" "$@" </dev/null 3>&-
+        bash "${SCRIPT}" "$@"
 }
 
 _log_count() {
@@ -1935,9 +1946,10 @@ _two_repo_fixture() {
     mkdir -p "${_tmp}"
     # Open-coded rather than via _run_tick: this test needs XDG_STATE_HOME
     # *absent*, and the helper always assigns it — `env` applies assignments
-    # after its own -u options, so -u could not win. The one thing it must not
-    # drop is the helper's `</dev/null 3>&-`; see _run_tick for why (#1473).
-    run env -u HOME -u XDG_STATE_HOME \
+    # after its own -u options, so -u could not win. Still routed through
+    # _run_script so the #1473 fd fix applies here too, structurally rather
+    # than by a restated redirect.
+    run _run_script env -u HOME -u XDG_STATE_HOME \
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
         "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
@@ -1945,7 +1957,7 @@ _two_repo_fixture() {
         "TMPDIR=${_tmp}" \
         "IW_IDLE_POLL_SLEEP=0" \
         "IW_LIMIT_OBSERVE_SLEEP=0" \
-        bash "${SCRIPT}" </dev/null 3>&-
+        bash "${SCRIPT}"
     refute_output --partial "unbound variable"
 }
 
