@@ -693,11 +693,19 @@ _gh_pr_review_human_h() {
 }
 
 # 4-bytes-per-token heuristic, rounded to nearest 500, floor 1000.
-# Args: $1 = path to PROMPT_FILE.
+# Args: $1 = prompt size in bytes (a number, NOT a path).
+#
+# This used to take the PROMPT_FILE path and `wc -c` it here, which meant
+# the estimate was measured long after the AI CLI had run — and issue #1474
+# showed the temp prompt file can vanish before that point. A missing file
+# then read as 0 bytes, which the floor rule below silently turned into a
+# plausible-looking "~1000 tokens" footer instead of a visible failure.
+# Taking the byte count as an argument keeps this pure arithmetic: the
+# caller measures the file while it is guaranteed to exist (right after
+# it is written) and owns the reporting of any read failure.
 _gh_pr_review_estimate_tokens() {
-    local f="$1"
-    local raw tokens
-    raw=$(wc -c <"$f" 2>/dev/null || echo 0)
+    local raw="$1"
+    local tokens
     tokens=$((raw / 4))
     tokens=$(((tokens + 250) / 500 * 500))
     [ "$tokens" -lt 1000 ] && tokens=1000
@@ -1108,7 +1116,7 @@ EOF
     # AI_STDERR_FILE is _gh_pr_review_run_ai's stderr capture, allocated
     # here rather than inside that helper so the INT/TERM handler below can
     # reach it too (issue #1294 — see the helper's own comment).
-    local PROMPT_FILE BODY_FILE AI_OUT AI_STDERR_FILE
+    local PROMPT_FILE BODY_FILE AI_OUT AI_STDERR_FILE PROMPT_BYTES
     PROMPT_FILE=$(_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER") || {
         echo "Could not create prompt temp file under /tmp" >&2
         return 1
@@ -1186,6 +1194,20 @@ EOF
         return 1
     }
 
+    # Measure the prompt *now*, while the file is guaranteed to exist — it
+    # was just written one line above. Step 6's token estimate used to
+    # re-read PROMPT_FILE from disk, long after the AI CLI ran, and issue
+    # #1474 showed the file can be gone by then (root cause still open);
+    # the footer then reported a floor-1000 estimate that looked like a
+    # normal small PR. Capturing the byte count here decouples the reported
+    # figure from the file's lifetime. A failed read is reported, never
+    # silently folded into 0 — that is the exact ambiguity #1474 was about.
+    PROMPT_BYTES=$(wc -c <"$PROMPT_FILE" 2>/dev/null) || PROMPT_BYTES=""
+    if [ -z "$PROMPT_BYTES" ]; then
+        echo "Could not read prompt file for the token estimate — file missing?" >&2
+        PROMPT_BYTES=0
+    fi
+
     # ---- Step 5: dispatch external AI CLI ----
     # Tee CLI stdout: stream to the user's terminal verbatim AND capture
     # it for the PR comment body. `set -o pipefail` is scoped to this
@@ -1234,7 +1256,7 @@ EOF
 
     # ---- Step 6: post PR comment ----
     local TOKENS HUMAN_H ELAPSED
-    TOKENS=$(_gh_pr_review_estimate_tokens "$PROMPT_FILE")
+    TOKENS=$(_gh_pr_review_estimate_tokens "$PROMPT_BYTES")
     HUMAN_H=$(_gh_pr_review_human_h "$review")
     ELAPSED=$((($(date +%s) - START_TS) / 60))
 

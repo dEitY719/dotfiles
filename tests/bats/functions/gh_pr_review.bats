@@ -865,27 +865,90 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Token estimator
+# Token estimator (issue #1474: takes a byte count, not a path)
 # ---------------------------------------------------------------------------
 
-@test "estimate_tokens: tiny file rounds up to floor 1000" {
+@test "estimate_tokens: tiny byte count rounds up to floor 1000" {
     _source_module
-    local f="$TEST_TEMP_HOME/tiny.txt"
-    printf 'hi' >"$f"
-    run _gh_pr_review_estimate_tokens "$f"
+    run _gh_pr_review_estimate_tokens 2
     assert_success
     assert_output "1000"
 }
 
-@test "estimate_tokens: large file rounds to nearest 500" {
+@test "estimate_tokens: large byte count rounds to nearest 500" {
     _source_module
-    local f="$TEST_TEMP_HOME/big.txt"
-    # ~12 000 bytes → ~3000 tokens.
-    yes "abcd1234" | head -c 12000 >"$f"
-    run _gh_pr_review_estimate_tokens "$f"
+    # 12 000 bytes → 3000 tokens.
+    run _gh_pr_review_estimate_tokens 12000
     assert_success
     # Allow a ±500 wobble since the rounding boundary is on 500.
     [[ "$output" =~ ^[23][05]00$ ]]
+}
+
+# ---------------------------------------------------------------------------
+# Token estimate is decoupled from PROMPT_FILE's lifetime (issue #1474)
+#
+# The estimator used to re-read PROMPT_FILE from disk in Step 6, long after
+# the AI CLI had run. PR #1462 showed the file can be gone by then: `wc -c`
+# failed, the old `|| echo 0` swallowed it, and the floor rule turned that
+# into a "~1000 tokens" footer indistinguishable from a genuinely small PR.
+# gh_pr_review now measures the prompt right after it is written and carries
+# the byte count forward, so these drive the public entry point end to end.
+# ---------------------------------------------------------------------------
+
+@test "gh_pr_review: PROMPT_FILE vanishing before Step 6 does not zero the token estimate" {
+    _source_module
+    _stub_gh_pr_review_preconditions
+    _gh_pr_review_resolve_pr_number() { echo "1474"; }
+    # A prompt far above the floor, so a regression to the old
+    # re-read-from-disk path is unmistakable (30000 vs 1000).
+    _gh_pr_review_build_prompt() {
+        yes "abcd1234" | head -c 120000 >"$2"
+    }
+    # Capture the tokens argument ($5) Step 6 hands the body builder — the
+    # value that ends up in the PR comment's ai-metrics footer.
+    local tokfile="$TEST_TEMP_HOME/tokens.txt"
+    _gh_pr_review_build_comment_body() { printf '%s\n' "$5" >"$tokfile"; }
+
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    # The CLI itself succeeds, but the prompt file is gone by the time it
+    # returns — the #1462 symptom, root cause still open.
+    cat >"$stub_dir/codex" <<'EOF'
+#!/bin/sh
+rm -f /tmp/gh-pr-review-prompt.codex.1474.*
+echo "[PRAISE] a.sh:1 — ok"
+exit 0
+EOF
+    chmod +x "$stub_dir/codex"
+
+    run gh_pr_review --ai codex --no-post-comment 1474
+    assert_success
+
+    # 120 000 bytes / 4 = 30 000 tokens — the size measured before the file
+    # disappeared, not the floor-1000 fallback.
+    run cat "$tokfile"
+    assert_output "30000"
+}
+
+@test "gh_pr_review: unreadable prompt file at measure time warns instead of silently reporting 0" {
+    _source_module
+    _stub_gh_pr_review_preconditions
+    _gh_pr_review_resolve_pr_number() { echo "1474"; }
+    # Report success while leaving no file behind — the only way the early
+    # measurement can fail, and the case the old `|| echo 0` hid.
+    _gh_pr_review_build_prompt() {
+        rm -f "$2"
+        return 0
+    }
+    _gh_pr_review_build_comment_body() { return 0; }
+
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\necho "[PRAISE] a.sh:1 — ok"\nexit 0\n' >"$stub_dir/codex"
+    chmod +x "$stub_dir/codex"
+
+    run gh_pr_review --ai codex --no-post-comment 1474
+    assert_output --partial "Could not read prompt file for the token estimate"
 }
 
 # ---------------------------------------------------------------------------
