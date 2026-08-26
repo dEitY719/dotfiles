@@ -11,6 +11,10 @@
 
 load '../test_helper'
 
+# Captured at file-load time — setup_isolated_home replaces $HOME with a
+# tmpdir, and the #1454 guard reads $HOME directly.
+_REAL_HOME_1454="$HOME"
+
 setup() {
     setup_isolated_home
     SCRATCH="$TEST_TEMP_HOME/scratch"
@@ -123,4 +127,139 @@ teardown() {
     "
     assert_success
     assert_output "rc=0"
+}
+
+# ---------------------------------------------------------------------------
+# _dotfiles_root_warn_if_foreign_source (issue #1454)
+#
+# The function reads $HOME directly, so each case fakes a HOME whose
+# `dotfiles` child is the scratch repo under test. $MAIN is renamed-in-place
+# by symlink-free layout: HOME is $SCRATCH and the canonical checkout is
+# $SCRATCH/dotfiles, built as a sibling of $MAIN.
+# ---------------------------------------------------------------------------
+
+# Build $SCRATCH/dotfiles (the fake $HOME/dotfiles) as a main worktree, plus
+# $SCRATCH/dotfiles-wt as a linked worktree of that same repo.
+_setup_fake_home_dotfiles() {
+    FAKE_HOME="$SCRATCH"
+    CANON="$FAKE_HOME/dotfiles"
+    CANON_WT="$FAKE_HOME/dotfiles-wt"
+    mkdir -p "$CANON/shell-common/functions"
+    (cd "$CANON" && git init -q -b main && \
+        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init && \
+        git worktree add -q -b wtbranch "$CANON_WT" >/dev/null 2>&1)
+    mkdir -p "$CANON_WT/shell-common/functions"
+    : >"$CANON/shell-common/functions/probe.sh"
+    : >"$CANON_WT/shell-common/functions/probe.sh"
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: canonical \$HOME/dotfiles path is silent" {
+    _setup_fake_home_dotfiles
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$CANON/shell-common/functions/probe.sh'"
+    assert_success
+    assert_output ""
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: linked worktree of the same repo is silent" {
+    _setup_fake_home_dotfiles
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$CANON_WT/shell-common/functions/probe.sh'"
+    assert_success
+    assert_output ""
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: a genuinely different repo warns with both paths" {
+    _setup_fake_home_dotfiles
+    FOREIGN="$SCRATCH/foreign/dotfiles"
+    mkdir -p "$FOREIGN/shell-common/functions"
+    (cd "$FOREIGN" && git init -q -b main && \
+        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init)
+    : >"$FOREIGN/shell-common/functions/probe.sh"
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$FOREIGN/shell-common/functions/probe.sh'"
+    assert_success
+    assert_output --partial "[WARN]"
+    assert_output --partial "$FOREIGN/shell-common/functions/probe.sh"
+    assert_output --partial "$CANON"
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: submodule checkout named dotfiles warns" {
+    _setup_fake_home_dotfiles
+    PARENT="$SCRATCH/parent"
+    mkdir -p "$PARENT"
+    (cd "$PARENT" && git init -q -b main && \
+        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init && \
+        git -c protocol.file.allow=always submodule add -q "$MAIN" dotfiles)
+    SUB="$PARENT/dotfiles"
+    mkdir -p "$SUB/shell-common/functions"
+    : >"$SUB/shell-common/functions/probe.sh"
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$SUB/shell-common/functions/probe.sh'"
+    assert_success
+    assert_output --partial "[WARN]"
+    assert_output --partial "$SUB/shell-common/functions/probe.sh"
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: warning goes to stderr, not stdout" {
+    _setup_fake_home_dotfiles
+    FOREIGN="$SCRATCH/foreign2/dotfiles"
+    mkdir -p "$FOREIGN/shell-common/functions"
+    (cd "$FOREIGN" && git init -q -b main && \
+        git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init)
+    : >"$FOREIGN/shell-common/functions/probe.sh"
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$FOREIGN/shell-common/functions/probe.sh' 2>/dev/null"
+    assert_success
+    assert_output ""
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: missing \$HOME/dotfiles is silent" {
+    EMPTY_HOME="$SCRATCH/emptyhome"
+    mkdir -p "$EMPTY_HOME"
+    : >"$MAIN/probe.sh"
+    run env HOME="$EMPTY_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$MAIN/probe.sh'"
+    assert_success
+    assert_output ""
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: empty SELF_PATH is a silent no-op" {
+    _setup_fake_home_dotfiles
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source ''"
+    assert_success
+    assert_output ""
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: missing SELF_PATH arg is a silent no-op" {
+    _setup_fake_home_dotfiles
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source"
+    assert_success
+    assert_output ""
+}
+
+@test "_dotfiles_root_warn_if_foreign_source: nonexistent SELF_PATH file is a silent no-op" {
+    _setup_fake_home_dotfiles
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '/no/such/file.sh'"
+    assert_success
+    assert_output ""
+}
+
+# The dotfiles repo's own tree is the real-world regression case: this suite
+# runs from a linked worktree, which must never warn when ~/dotfiles is the
+# same repository.
+@test "_dotfiles_root_warn_if_foreign_source: this checkout against a real ~/dotfiles is silent" {
+    if [ ! -e "$_REAL_HOME_1454/dotfiles/.git" ]; then
+        skip "no ~/dotfiles checkout on this host"
+    fi
+    run env HOME="$_REAL_HOME_1454" bash -c \
+        ". '$HELPER' && _dotfiles_root_warn_if_foreign_source '$HELPER'"
+    assert_success
+    assert_output ""
 }

@@ -17,6 +17,16 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
+# Advisory only (issue #1454): a stale copy of this file living in another
+# directory named `dotfiles` once got sourced instead of this one, surfacing
+# as a bogus "Unknown --ai value". The guard compares our own load path
+# against $HOME/dotfiles and warns on a mismatch; it never blocks.
+# `${BASH_SOURCE[0]-}` keeps zsh's `set -u` from aborting on the unset array.
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh" 2>/dev/null || true
+if command -v _dotfiles_root_warn_if_foreign_source >/dev/null 2>&1; then
+    _dotfiles_root_warn_if_foreign_source "${BASH_SOURCE[0]-}" || true
+fi
+
 # ============================================================================
 # Section 1 — Argument parser (SSOT, mirrors SKILL.md Step 1)
 # ============================================================================
