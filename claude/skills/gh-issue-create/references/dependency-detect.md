@@ -193,18 +193,29 @@ editing one without the other turns the suite red.
 
 Since #1457 it also pins the `addBlockedBy` argument shape, two ways:
 
-- **Offline** — a string assertion that the mutation above still names
-  `blockingIssueId`, and that the rejected array spelling from #1445 appears
-  nowhere in this file. That second assertion is why the drifted name is
-  never written out here even as an example: doing so would turn the suite
-  red on its own text.
+- **Offline** — string assertions that the prose shape line and the mutation
+  above both still name `blockingIssueId`, plus a negative one that the
+  rejected `blockedByIds` array spelling from #1445 survives in none of this
+  file's **fenced code blocks**. The negative half is scoped to fenced code
+  on purpose (PR #1465 review): a whole-file ban would also forbid this
+  paragraph from naming the old spelling at all, and the history is worth
+  writing down. Coverage does not narrow — the two positive assertions
+  already pin both places the name appears.
 - **Live schema** — `AddBlockedByInput`'s input fields are read back from
   the real API by introspection and compared against the shape recorded at
   the top of this file. This is not a mock; it is a read-only query against
-  the server whose shape this doc records. Without
-  network or `gh` auth it **skips** rather than fails, so an offline shell
-  never goes red over an unrelated concern — one networked run is enough to
-  catch drift.
+  the server whose shape this doc records. Without network or `gh` auth it
+  **skips** rather than fails, so an offline shell never goes red over an
+  unrelated concern.
+
+That skip raises a fair question — who ever runs the networked half? The
+answer is `git/hooks/pre-push`, which runs `mise run test` on every push;
+this repo has no CI test lane by design (#754 moved the suite to that hook,
+SSOT in `docs/.ssot/local-test-policy.md`). The pushing machine is the one
+that just authenticated `gh`, so the guard fires on the path that matters.
+It is a developer-machine guarantee rather than a server-side one — a push
+with `SKIP_LOCAL_PYTEST=1`, or from a shell without `gh` auth, skips it, and
+the offline half is what covers that case.
 
 The two fail on different things on purpose: the offline check catches an
 accidental edit here, the live one catches an upstream schema change.
