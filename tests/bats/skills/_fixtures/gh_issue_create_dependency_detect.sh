@@ -98,12 +98,8 @@ gh_issue_create_detect_deps() {
 # can never be handed to addBlockedBy as a literal "null".
 #
 # $5's first line is appended to the warning as an indented `원인:` line
-# (#1458). Discarding it made every cause — permission, network, bad
-# number, argument-schema mismatch — collapse into one indistinguishable
-# sentence, which is why #1445 stayed unfixed: the server was naming the
-# defect in plain text and nothing ever printed it. Only the first line
-# is carried; the rest would swamp the Step 5 report and adds nothing to
-# the permanent-vs-transient split.
+# (#1458) — first line only, so the rest cannot swamp the Step 5 report.
+# Why the cause is kept at all is argued in the doc this file mirrors.
 #
 # Stdout: nothing when the link was applied.
 # Stderr: the NF-1 warning otherwise — one line, plus the 원인 line when a
