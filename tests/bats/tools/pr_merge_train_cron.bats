@@ -1,0 +1,534 @@
+#!/usr/bin/env bats
+# tests/bats/tools/pr_merge_train_cron.bats
+# Tests for pr_merge_train_cron.sh — the merge-train cron dispatcher (#1470).
+#
+# The dispatcher is deliberately thin: it answers three questions and then
+# hands the whole train over to a claude session (D-8). So this suite covers
+# exactly those three responsibilities and nothing more —
+#
+#   NF-1  a train already running (this tick's lock, or a live train agent
+#         left by a previous tick) must not earn a second train
+#   F-1/F-8/D-7  are there PRs worth waking a session for at all
+#   D-8   the herdr workspace -> tab -> agent -> prompt launch
+#
+# The train's own behaviour (the D-1 routing table, the D-2 ordering, the
+# per-PR attempt cap, the approval gate, the report format) is skill-prompt
+# text, not shell, and is deliberately NOT asserted here — a shell test of it
+# would only be testing a fixture of the prompt.
+#
+# Two PATH stubs stand in for the outside world and log every invocation to
+# ${_LOG} so the tests can assert on *which* calls were made:
+#
+#   gh     `pr list` only — canned and steerable per test. Every other
+#          subcommand is logged and refused: the dispatcher never writes to
+#          GitHub, and this is what makes that a test rather than a claim.
+#   herdr  workspace/tab/agent, with canned JSON matching the shapes
+#          issue_watcher_cron.bats measured on a live herdr server.
+
+load '../test_helper'
+
+SCRIPT="${DOTFILES_ROOT}/shell-common/tools/custom/pr_merge_train_cron.sh"
+
+setup() {
+    setup_isolated_home
+    _WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pr-merge-train-test.XXXXXX")"
+    _BIN_DIR="${_WORK_DIR}/bin"
+    _STATE_HOME="${_WORK_DIR}/state"
+    _STATE_DIR="${_STATE_HOME}/pr-merge-train"
+    _LOCK_FILE="${_STATE_DIR}/.lock"
+    _LOG="${_WORK_DIR}/calls.log"
+    _REPO_DIR="${_WORK_DIR}/dotfiles"
+    _LOCK_HOLDER_PID=""
+    mkdir -p "${_BIN_DIR}"
+    : >"${_LOG}"
+
+    # CLAUDE_CONFIG_DIR account routing (#1393): the tick resolves the claude
+    # account dir before it opens the pane, so the default account has to
+    # exist inside the isolated $HOME. Pinned rather than inherited so the
+    # developer's own shell env cannot steer the tests.
+    export CLAUDE_ENABLED_ACCOUNTS="personal"
+    unset CLAUDE_DEFAULT_ACCOUNT
+    mkdir -p "${HOME}/.claude-personal"
+
+    _make_repo
+    # One target PR, comfortably outside the quiet period, is the default —
+    # every launch test starts from "there is work to do".
+    _set_prs "[$(_pr_json 11 30)]"
+    _install_stubs
+}
+
+teardown() {
+    if [ -n "${_LOCK_HOLDER_PID}" ]; then
+        kill "${_LOCK_HOLDER_PID}" 2>/dev/null || true
+        wait "${_LOCK_HOLDER_PID}" 2>/dev/null || true
+    fi
+    rm -rf "${_WORK_DIR}"
+    teardown_isolated_home
+}
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+# A real git repo with a real `origin`. The dispatcher resolves owner/repo and
+# the host from that remote URL (the #1403 binding), so mocking `git remote`
+# away would test the mock rather than the resolution.
+_make_repo() {
+    mkdir -p "${_REPO_DIR}"
+    git -C "${_REPO_DIR}" init -q
+    git -C "${_REPO_DIR}" config user.email "test@example.com"
+    git -C "${_REPO_DIR}" config user.name "test"
+    git -C "${_REPO_DIR}" remote add origin "https://github.com/acme/dotfiles.git"
+    printf 'seed\n' >"${_REPO_DIR}/README.md"
+    git -C "${_REPO_DIR}" add -A
+    git -C "${_REPO_DIR}" commit -qm "seed"
+}
+
+# One `gh pr list --json` element: PR <1>, last updated <2> minutes ago.
+_pr_json() {
+    local _stamp
+    _stamp=$(date -u -d "@$(($(date +%s) - $2 * 60))" +%Y-%m-%dT%H:%M:%SZ)
+    printf '{"number":%s,"updatedAt":"%s","isDraft":false}' "$1" "${_stamp}"
+}
+
+# Same, but a draft PR — never mergeable, so never a reason to wake a session.
+_pr_json_draft() {
+    local _stamp
+    _stamp=$(date -u -d "@$(($(date +%s) - $2 * 60))" +%Y-%m-%dT%H:%M:%SZ)
+    printf '{"number":%s,"updatedAt":"%s","isDraft":true}' "$1" "${_stamp}"
+}
+
+# The array `gh pr list` answers with.
+_set_prs() {
+    printf '%s\n' "$1" >"${_WORK_DIR}/prs.json"
+}
+
+# ---------------------------------------------------------------------------
+# Stubs
+# ---------------------------------------------------------------------------
+
+# gh: `pr list` is the only call the dispatcher makes. Anything else is logged
+# and fails — the dispatcher is read-only on GitHub by contract.
+#
+#   GH_PR_LIST_FAIL=1   `pr list` errors (the "never merge without knowing
+#                       state" path)
+_install_gh_stub() {
+    cat >"${_BIN_DIR}/gh" <<'EOF'
+#!/bin/sh
+printf 'gh %s\n' "$*" >>"${CALL_LOG}"
+
+case "$1 $2" in
+"pr list")
+    [ "${GH_PR_LIST_FAIL:-0}" = "1" ] && exit 1
+    cat "${GH_PRS_FILE}"
+    exit 0
+    ;;
+esac
+exit 1
+EOF
+    chmod +x "${_BIN_DIR}/gh"
+}
+
+# herdr: the launch pipeline plus the liveness probe.
+#
+#   PMT_AGENT_STATUS      status `agent get` reports for the train agent.
+#                         Unset (default) = no such agent, i.e. no train has
+#                         ever run — `agent get` exits 1 with agent_not_found.
+#   HERDR_WORKSPACE_EXISTS=1  `workspace list` already carries the label
+#   HERDR_TAB_FAIL=1      `tab create` errors
+#   HERDR_START_FAIL=1    `agent start` errors
+#   HERDR_PROMPT_FAIL=1   `agent prompt` errors
+_install_herdr_stub() {
+    cat >"${_BIN_DIR}/herdr" <<'EOF'
+#!/bin/sh
+printf 'herdr %s\n' "$*" >>"${CALL_LOG}"
+
+case "$1 $2" in
+"agent get")
+    if [ -z "${PMT_AGENT_STATUS:-}" ]; then
+        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:get"}'
+        exit 1
+    fi
+    printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s","state_change_seq":1}}}\n' \
+        "${PMT_AGENT_STATUS}"
+    ;;
+"workspace list")
+    if [ "${HERDR_WORKSPACE_EXISTS:-0}" = "1" ]; then
+        printf '{"id":"cli:workspace:list","result":{"workspaces":[{"label":"%s","workspace_id":"ws-existing"}]}}\n' \
+            "${HERDR_WORKSPACE_LABEL:-mt-acme-dotfiles}"
+    else
+        printf '%s\n' '{"id":"cli:workspace:list","result":{"workspaces":[]}}'
+    fi
+    ;;
+"workspace create")
+    printf '%s\n' '{"id":"cli:workspace:create","result":{"workspace":{"workspace_id":"ws-test-1"},"root_pane":{"pane_id":"ws-test-1:p1"}}}'
+    ;;
+"tab create")
+    [ "${HERDR_TAB_FAIL:-0}" = "1" ] && exit 1
+    printf '%s\n' '{"id":"cli:tab:create","result":{"tab":{"tab_id":"ws-test-1:t9"},"pane":{"pane_id":"ws-test-1:p9"}}}'
+    ;;
+"agent start")
+    [ "${HERDR_START_FAIL:-0}" = "1" ] && exit 1
+    printf '%s\n' '{"id":"cli:agent:start","result":{"agent":{"agent_status":"idle","pane_id":"ws-test-1:p9"}}}'
+    ;;
+"agent prompt")
+    if [ "${HERDR_PROMPT_FAIL:-0}" = "1" ]; then
+        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:prompt"}'
+        exit 1
+    fi
+    printf '%s\n' '{"id":"cli:agent:prompt","result":{"ok":true}}'
+    ;;
+esac
+exit 0
+EOF
+    chmod +x "${_BIN_DIR}/herdr"
+}
+
+_install_stubs() {
+    _install_gh_stub
+    _install_herdr_stub
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+# Run one tick with the stubs on PATH and an isolated XDG_STATE_HOME.
+#
+#   _run_tick [VAR=VALUE ...] [-- script-flag ...]
+#
+# `env` applies assignments left to right, so a test can override any of the
+# defaults (PATH included) without restating the whole sandbox.
+_run_tick() {
+    local _env=()
+    while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do
+        _env+=("$1")
+        shift
+    done
+    [ "$#" -eq 0 ] || shift
+
+    run env \
+        "PATH=${_BIN_DIR}:${PATH}" \
+        "CALL_LOG=${_LOG}" \
+        "GH_PRS_FILE=${_WORK_DIR}/prs.json" \
+        "XDG_STATE_HOME=${_STATE_HOME}" \
+        "PMT_IDLE_POLL_SLEEP=0" \
+        "${_env[@]}" \
+        bash "${SCRIPT}" --cwd "${_REPO_DIR}" "$@"
+}
+
+# Call-log assertions that leave `$output` and `$status` alone — tests pair
+# these with `assert_output` on the tick's own output, and a `run grep` here
+# would overwrite both.
+_assert_logged() {
+    grep -qF -- "$1" "${_LOG}" || fail "expected in call log: $1"
+}
+
+_refute_logged() {
+    ! grep -qF -- "$1" "${_LOG}" || fail "unexpected in call log: $1"
+}
+
+_log_count() {
+    grep -c -- "$1" "${_LOG}" 2>/dev/null || true
+}
+
+# A PATH that carries only the stub dir plus symlinks to the system binaries
+# the tick needs — minus the ones named as arguments. Deleting a stub is not
+# enough to make a binary missing: `command -v` keeps walking the inherited
+# PATH and finds the real one.
+_path_without() {
+    local _d="${_WORK_DIR}/sysbin" _b _p _skip
+    rm -rf "${_d}"
+    mkdir -p "${_d}"
+
+    for _b in sh bash env git jq awk sed grep head tail cat cut tr sort \
+        uniq date mkdir rmdir rm ln basename dirname sleep mktemp flock tput \
+        uname wc chmod find id stty locale; do
+        _skip=0
+        for _p in "$@"; do
+            [ "${_b}" != "${_p}" ] || _skip=1
+        done
+        [ "${_skip}" -eq 0 ] || continue
+        _p=$(command -v "${_b}" 2>/dev/null) || continue
+        ln -sf "${_p}" "${_d}/${_b}" 2>/dev/null || true
+    done
+
+    printf '%s:%s' "${_BIN_DIR}" "${_d}"
+}
+
+# Hold an exclusive flock on the tick's lock file in a background process
+# until teardown kills it, so the script under test sees a contended lock.
+# Blocks until the holder has actually acquired the lock.
+_hold_lock() {
+    local _ready="${_WORK_DIR}/lock-held"
+    mkdir -p "${_STATE_DIR}"
+    flock -x "${_LOCK_FILE}" \
+        sh -c "printf held >'${_ready}'; sleep 30" >/dev/null 2>&1 &
+    _LOCK_HOLDER_PID=$!
+
+    local _i=0
+    while [ ! -s "${_ready}" ] && [ "${_i}" -lt 200 ]; do
+        sleep 0.05
+        _i=$((_i + 1))
+    done
+    [ -s "${_ready}" ]
+}
+
+# ---------------------------------------------------------------------------
+# Syntax & help
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: bash syntax check" {
+    run bash -n "${SCRIPT}"
+    assert_success
+}
+
+@test "pr_merge_train_cron: --help exits 0 and prints usage" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "Usage: pr_merge_train_cron.sh"
+    assert_output --partial "--cwd"
+    assert_output --partial "--dry-run"
+}
+
+@test "pr_merge_train_cron: --help makes no gh or herdr calls" {
+    run env "PATH=${_BIN_DIR}:${PATH}" "CALL_LOG=${_LOG}" \
+        bash "${SCRIPT}" --help
+    assert_success
+    _refute_logged "gh "
+    _refute_logged "herdr "
+}
+
+@test "pr_merge_train_cron: --help documents the crontab registration example" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "pr_merge_train_cron.sh"
+    assert_output --partial "cron.log"
+}
+
+# ---------------------------------------------------------------------------
+# Target-PR precondition (F-1, D-6, D-7)
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: no target PR launches no session and exits 0" {
+    _set_prs '[]'
+    _run_tick
+    assert_success
+    assert_output --partial "No target PR"
+    _refute_logged "herdr tab create"
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a failing gh pr list does not start a train" {
+    _run_tick GH_PR_LIST_FAIL=1
+    assert_success
+    assert_output --partial "gh pr list failed"
+    _refute_logged "herdr tab create"
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: the PR query is scoped to the author's own PRs" {
+    _run_tick
+    assert_success
+    _assert_logged "--author @me"
+}
+
+@test "pr_merge_train_cron: the PR query is host-pinned and repo-scoped" {
+    _run_tick
+    assert_success
+    _assert_logged "--repo acme/dotfiles"
+}
+
+@test "pr_merge_train_cron: a PR updated inside the quiet period is not a target" {
+    _set_prs "[$(_pr_json 11 2)]"
+    _run_tick
+    assert_success
+    assert_output --partial "No target PR"
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a PR updated outside the quiet period is a target" {
+    _set_prs "[$(_pr_json 11 30)]"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a quiet-period PR does not mask an older sibling" {
+    _set_prs "[$(_pr_json 11 2),$(_pr_json 12 30)]"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a draft PR is not a target" {
+    _set_prs "[$(_pr_json_draft 11 30)]"
+    _run_tick
+    assert_success
+    assert_output --partial "No target PR"
+    _refute_logged "herdr agent prompt"
+}
+
+# ---------------------------------------------------------------------------
+# NF-1 — one train at a time
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: a tick is skipped while another instance holds the lock" {
+    _hold_lock
+    _run_tick
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: the lock is released so the next tick runs" {
+    _run_tick
+    assert_success
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a working train agent from a previous tick blocks a new train" {
+    _run_tick PMT_AGENT_STATUS=working
+    assert_success
+    assert_output --partial "train is already running"
+    _refute_logged "herdr tab create"
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a blocked train agent also blocks a new train" {
+    _run_tick PMT_AGENT_STATUS=blocked
+    assert_success
+    assert_output --partial "train is already running"
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: an idle train agent is reused rather than blocking" {
+    _run_tick PMT_AGENT_STATUS=idle
+    assert_success
+    _assert_logged "herdr agent prompt"
+    _refute_logged "herdr tab create"
+}
+
+@test "pr_merge_train_cron: missing flock degrades to a warning, not a failure" {
+    _run_tick "PATH=$(_path_without flock)"
+    assert_success
+    assert_output --partial "without single-instance protection"
+    _assert_logged "herdr agent prompt"
+}
+
+# ---------------------------------------------------------------------------
+# D-8 — the launch pipeline
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: the happy path creates a workspace, a tab and an agent" {
+    _run_tick
+    assert_success
+    _assert_logged "herdr workspace create"
+    _assert_logged "herdr tab create"
+    _assert_logged "herdr agent start"
+}
+
+@test "pr_merge_train_cron: an existing workspace is reused" {
+    _run_tick HERDR_WORKSPACE_EXISTS=1
+    assert_success
+    _refute_logged "herdr workspace create"
+    _assert_logged "herdr tab create"
+}
+
+@test "pr_merge_train_cron: the session is prompted with the train slash command once" {
+    _run_tick
+    assert_success
+    _assert_logged "/gh-pr-merge-train acme/dotfiles"
+    [ "$(_log_count 'herdr agent prompt')" -eq 1 ]
+}
+
+@test "pr_merge_train_cron: the pane runs claude with permissions skipped" {
+    _run_tick
+    assert_success
+    _assert_logged "--dangerously-skip-permissions"
+}
+
+@test "pr_merge_train_cron: a herdr tab failure ends the tick without a prompt" {
+    _run_tick HERDR_TAB_FAIL=1
+    assert_failure
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a herdr agent start failure ends the tick without a prompt" {
+    _run_tick HERDR_START_FAIL=1
+    assert_failure
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a failed prompt is reported as a failed tick" {
+    _run_tick HERDR_PROMPT_FAIL=1
+    assert_failure
+    assert_output --partial "prompt failed"
+}
+
+@test "pr_merge_train_cron: the dispatcher never writes to GitHub" {
+    _run_tick
+    assert_success
+    _refute_logged "gh pr merge"
+    _refute_logged "gh pr edit"
+    _refute_logged "gh pr comment"
+    _refute_logged "gh api"
+}
+
+# ---------------------------------------------------------------------------
+# --dry-run
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: --dry-run reports the target count and launches nothing" {
+    _run_tick -- --dry-run
+    assert_success
+    assert_output --partial "Dry run"
+    _refute_logged "herdr tab create"
+    _refute_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: --dry-run does not take the tick lock" {
+    _hold_lock
+    _run_tick -- --dry-run
+    assert_success
+    assert_output --partial "Dry run"
+}
+
+@test "pr_merge_train_cron: --dry-run leaves no state behind" {
+    _run_tick -- --dry-run
+    assert_success
+    [ ! -e "${_LOCK_FILE}" ]
+}
+
+# ---------------------------------------------------------------------------
+# Argument handling
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: an unknown option fails with a usage pointer" {
+    run bash "${SCRIPT}" --nope
+    assert_failure
+    assert_output --partial "Unknown option"
+}
+
+@test "pr_merge_train_cron: --cwd without a path fails" {
+    run bash "${SCRIPT}" --cwd
+    assert_failure
+    assert_output --partial "--cwd requires"
+}
+
+@test "pr_merge_train_cron: a checkout with no origin remote fails with a reason" {
+    git -C "${_REPO_DIR}" remote remove origin
+    _run_tick
+    assert_failure
+    assert_output --partial "No 'origin' remote"
+    assert_output --partial "--cwd"
+    _refute_logged "gh pr list"
+}
+
+@test "pr_merge_train_cron: an unreachable --cwd fails" {
+    run bash "${SCRIPT}" --cwd "${_WORK_DIR}/nowhere"
+    assert_failure
+    assert_output --partial "Cannot cd"
+}
