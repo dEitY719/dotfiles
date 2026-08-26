@@ -35,13 +35,13 @@ run_linter() {
     printf -- '- 변경: **A**\n' >"$FRAG_DIR/2026-08-13-1103.md"
     printf -- '- 변경: **B**\n- 변경: **C**\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 0 ]
+    assert_success
 }
 
 @test "missing fragment directory is a silent no-op" {
     rm -rf "$FRAG_DIR"
     run_linter
-    [ "$status" -eq 0 ]
+    assert_success
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -51,22 +51,22 @@ run_linter() {
 @test "filename without the date prefix fails" {
     printf -- '- 변경: **A**\n' >"$FRAG_DIR/changelog-entry.md"
     run_linter
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"changelog-entry.md"* ]]
-    [[ "$output" == *"파일명"* ]]
+    assert_failure 1
+    assert_output --partial "changelog-entry.md"
+    assert_output --partial "파일명"
 }
 
 @test "filename with a non-numeric issue suffix fails" {
     printf -- '- 변경: **A**\n' >"$FRAG_DIR/2026-08-26-issue.md"
     run_linter
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"2026-08-26-issue.md"* ]]
+    assert_failure 1
+    assert_output --partial "2026-08-26-issue.md"
 }
 
 @test "filename with the date prefix and a numeric suffix passes (positive control)" {
     printf -- '- 변경: **A**\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 0 ]
+    assert_success
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -76,14 +76,14 @@ run_linter() {
 @test "fragment containing a date header fails" {
     printf -- '## 2026-08-26\n- 변경: **A**\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"헤더"* ]]
+    assert_failure 1
+    assert_output --partial "헤더"
 }
 
 @test "same fragment without the header passes (positive control)" {
     printf -- '- 변경: **A**\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 0 ]
+    assert_success
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -93,15 +93,15 @@ run_linter() {
 @test "empty fragment fails" {
     : >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"비어"* ]]
+    assert_failure 1
+    assert_output --partial "비어"
 }
 
 @test "whitespace-only fragment fails" {
     printf -- '   \n\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"비어"* ]]
+    assert_failure 1
+    assert_output --partial "비어"
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -111,14 +111,14 @@ run_linter() {
 @test "non-bullet line fails" {
     printf -- '- 변경: **A**\n그냥 산문 한 줄\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"산문 한 줄"* ]]
+    assert_failure 1
+    assert_output --partial "산문 한 줄"
 }
 
 @test "blank line between bullets passes (positive control)" {
     printf -- '- 변경: **A**\n\n- 변경: **B**\n' >"$FRAG_DIR/2026-08-26-1471.md"
     run_linter
-    [ "$status" -eq 0 ]
+    assert_success
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -128,9 +128,9 @@ run_linter() {
 @test "the repository's own changelog.d passes" {
     run env CHANGELOG_FRAGMENT_DIR="${_BATS_REAL_DOTFILES_ROOT}/docs/public/changelog.d" \
         sh "$LINTER"
-    [ "$status" -eq 0 ]
+    assert_success
 }
 
 @test "changelog.md is gone — fragments are the only source" {
-    [ ! -e "${_BATS_REAL_DOTFILES_ROOT}/docs/public/changelog.md" ]
+    assert [ ! -e "${_BATS_REAL_DOTFILES_ROOT}/docs/public/changelog.md" ]
 }

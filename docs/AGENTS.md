@@ -9,7 +9,9 @@
 - **Review**: open in markdown viewer (VS Code, grip)
 - **Line count**: `wc -l docs/**/*.md`
 - **Markdown lint**: 비활성화 — 자동 실행 금지
-- **파일명 린트**: `mise run lint-docs` — docs 파일명 kebab-case 검사 (`adr/`·`requirement/` 강제, 나머지 warn-only, #1027)
+- **Docs 린트**: `mise run lint-docs` — 두 개를 순차 실행한다.
+  - `scripts/lint_docs_filenames.sh` — docs 파일명 kebab-case 검사 (`adr/`·`requirement/` 강제, 나머지 warn-only, #1027)
+  - `scripts/lint_changelog_fragments.sh` — `public/changelog.d/` fragment 의 파일명·내용 형식 강제 (#1471)
 
 # Golden Rules
 
