@@ -41,6 +41,11 @@ _gh_real_config() {
 
 setup() {
     setup_isolated_home
+    # One definition for every doc-guard below. Two copies is how a skill-dir
+    # rename updates one and misses the other — and a stale path is not loud
+    # here: `run grep -Fq ... "$DOC"` on a missing file exits non-zero, so the
+    # "the drifted spelling appears nowhere" assertion would pass vacuously.
+    DOC="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-create/references/dependency-detect.md"
     # shellcheck disable=SC1091
     source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_issue_create_dependency_detect.sh"
 }
@@ -217,7 +222,6 @@ teardown() {
     # exercise. Without this guard, editing one and not the other leaves the
     # suite green while shipped behaviour diverges. Same pattern as
     # post_gh_pr_create_hook.bats T20.
-    DOC="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-create/references/dependency-detect.md"
     run grep -Fq "$_GH_DEPS_REF" "$DOC"
     assert_success
 }
@@ -242,7 +246,6 @@ teardown() {
     # skill actually executes, so a revert to the rejected array form must
     # turn this suite red with no network at all — the live check below
     # skips in that situation and would leave the tree undefended.
-    DOC="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-create/references/dependency-detect.md"
 
     # The prose that records the verified input shape.
     run grep -Fq '{issueId: ID!, blockingIssueId: ID!}' "$DOC"
