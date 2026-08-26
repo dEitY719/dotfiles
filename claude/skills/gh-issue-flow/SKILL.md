@@ -71,13 +71,24 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    simplify commit lands before the 2.5/2.5.1 rebase steps. Detail:
    `references/quality-gate-step.md`.
    `Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 4")`
-5. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
+5. **Step 2.4.5 — Wake the merge-train dispatcher** (runs once Step 2.4
+   completes — Step 2.4 is soft-fail, so this always executes when 2.3
+   succeeded; non-fatal) — nudges the merge-train cron dispatcher
+   immediately instead of waiting for its next tick, so a fresh PR reaches
+   `gh:pr-merge-train` in seconds rather than up to 5 minutes later. Calls
+   the existing dispatcher script, never `gh:pr-merge-train` directly —
+   the dispatcher owns NF-1 (one train per repo) and silently no-ops if a
+   train is already running. Detail: `references/merge-train-dispatch.md`.
+   ```bash
+   aicron run merge-train || true
+   ```
+6. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
    rebase-resolve; a fresh PR usually prints "이미 충돌 없음 — skip".
    `Skill(gh:pr-resolve-conflict, "<PR_NUM>")`
-6. **Step 2.5.1 — gh:pr-resolve-outdated** (only if 2.5 succeeded) — clean
+7. **Step 2.5.1 — gh:pr-resolve-outdated** (only if 2.5 succeeded) — clean
    rebase-sync when the base moved forward with no conflicts; no-op if already
    up to date. `Skill(gh:pr-resolve-outdated, "<PR_NUM>")`
-7. **Step 2.6 — Post AI Metrics to Issue** (only if 2.5.1 succeeded;
+8. **Step 2.6 — Post AI Metrics to Issue** (only if 2.5.1 succeeded;
    soft-fail) — aggregate flow-level metrics comment on the linked Issue.
    Full procedure: `references/ai-metrics-step.md`.
 
