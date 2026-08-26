@@ -148,6 +148,6 @@ Read-only. 위 단계가 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 보�
 ## 참고
 
 - 설계 이슈: [#677](https://github.com/dEitY719/dotfiles/issues/677) (settings.json 머지 부분은 2026-08-18 종료)
-- settings.json 소유권 이관 (2026-08-18): `claude/AGENTS.md` → Configuration Files, `docs/public/changelog.md`
+- settings.json 소유권 이관 (2026-08-18): `claude/AGENTS.md` → Configuration Files, `docs/public/changelog.d/2026-08-18-806.md`
 - AGENTS.md (자동화·리뷰어용 SSOT): `aws/AGENTS.md`
 - 메모리: `samsung-internal-llm-gateway`, `user-dual-pc-workflow`

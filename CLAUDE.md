@@ -102,5 +102,9 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ## 변경 기록 (changelog)
 
-- 사용자 가시·운영·스키마·배포·비자명 동작 변경을 완료하면 `docs/public/changelog.md`를 갱신한다(항목이 불필요하면 그 이유를 명시). 포맷: `## YYYY-MM-DD` 헤더 아래 `- 변경: **요약**`.
-- 이 changelog는 일일/주간 보고 허브(my-share)가 수집해 보고서를 생성한다.
+- 사용자 가시·운영·스키마·배포·비자명 동작 변경을 완료하면 `docs/public/changelog.d/` 에 **fragment 파일 1개**를 추가한다(항목이 불필요하면 그 이유를 명시). 단일 `changelog.md` 는 #1471 에서 제거됐다 — 모든 PR 이 같은 줄에 삽입해 충돌이 상시화되고 중복 날짜 헤더까지 뚫렸기 때문이다.
+- 파일명은 `<YYYY-MM-DD>-<issue>.md` (예: `docs/public/changelog.d/2026-08-26-1471.md`). 날짜를 파일명이 들고 있으므로 **파일 안에는 `##` 날짜 헤더를 쓰지 않는다**.
+- 내용은 한 줄 = 한 항목, `- 변경: **요약**` 형식. 한 이슈가 항목을 여러 개 남기면 같은 파일에 여러 줄로 적는다. 줄바꿈·하위 불릿은 금지(수집기가 비어 있지 않은 모든 줄을 항목으로 싣는다).
+- 같은 날짜 안 정렬은 파일명 오름차순이다.
+- 포맷 강제: `mise run lint-docs` (`scripts/lint_changelog_fragments.sh`). 회귀 테스트는 `tests/bats/lint/changelog_fragments.bats`.
+- 이 changelog는 일일/주간 보고 허브(my-share)가 수집해 보고서를 생성한다 — `changelog.md` 와 `changelog.d/` 를 모두 읽는다.

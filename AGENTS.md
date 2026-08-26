@@ -69,5 +69,7 @@ See **[Claude Code](./claude/AGENTS.md)** for skills management, multi-CLI regis
 
 # 변경 기록 (changelog)
 
-- 사용자 가시·운영·스키마·배포·비자명 동작 변경 완료 시 `docs/public/changelog.md`를 갱신한다(불필요하면 이유 명시). 포맷: `## YYYY-MM-DD` 아래 `- 변경: **요약**`.
-- 일일/주간 보고 허브(my-share)가 이 changelog를 수집한다.
+- 사용자 가시·운영·스키마·배포·비자명 동작 변경 완료 시 `docs/public/changelog.d/<YYYY-MM-DD>-<issue>.md` 를 새로 추가한다(불필요하면 이유 명시). 단일 `changelog.md` 는 #1471 에서 제거됐다.
+- 날짜는 파일명이 갖는다 — 파일 안에 `##` 헤더를 쓰지 않는다. 한 줄 = 한 항목, `- 변경: **요약**`.
+- 포맷 강제: `mise run lint-docs` (`scripts/lint_changelog_fragments.sh`).
+- 일일/주간 보고 허브(my-share)가 이 fragment 들을 수집한다.
