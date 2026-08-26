@@ -90,7 +90,12 @@ both node ids in one round trip (aliases), then mutate:
 
 ```bash
 DEP_WARNINGS=""
-_errf=$(mktemp)
+# A failed mktemp must not turn the cause capture into a redirection
+# error on an empty variable — fall back to a PID-scoped path. No EXIT
+# trap: Step 4.5 never aborts (NF-1), so the rm below is always reached,
+# and a trap here would silently replace the one create-cmd.md installs
+# for its own $BODY when both blocks run in the same shell.
+_errf=$(mktemp) || _errf="${TMPDIR:-/tmp}/gh-issue-create-dep-$$.err"
 for N in $DEP_NUMS; do
     # `// ""` on both ids is what keeps a GraphQL null out of the mutation:
     # a missing issue resolves to null, and interpolating that would send the
@@ -134,7 +139,7 @@ for N in $DEP_NUMS; do
     # the operator actually reads.
     if [ "$_rc" -ne 0 ]; then
         _w="[WARN] Blocked by #${N} 링크 실패 — GH UI에서 수동 추가 필요"
-        _cause=$(head -1 "$_errf")
+        _cause=$(head -n 1 "$_errf")
         if [ -n "$_cause" ]; then
             _w="${_w}
     원인: ${_cause}"
