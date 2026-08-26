@@ -1145,6 +1145,20 @@ EOF
     refute_output --partial "[exec]"
 }
 
+@test "run_ai hermes: prompt one byte under MAX_ARG_STRLEN (131071 bytes) → still succeeds, hermes invoked" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_hermes_echo
+    local f="$TEST_TEMP_HOME/almost-big.txt"
+    # 131071 bytes — one under the guard's `-ge 131072` boundary.
+    head -c 131071 /dev/zero | tr '\0' 'x' >"$f"
+
+    run _gh_pr_review_run_ai hermes "$f"
+    assert_success
+    assert_output --partial "hermes args: [-z]"
+    refute_output --partial "over the 131072-byte argv limit"
+}
+
 @test "run_ai hermes: prompt at/over MAX_ARG_STRLEN (131072 bytes) → fails with clear message, hermes never invoked" {
     _source_module
     _dotfiles_setup_mode() { echo internal; }

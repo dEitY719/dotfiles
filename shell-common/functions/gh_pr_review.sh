@@ -221,7 +221,10 @@ _gh_pr_review_argv_prompt_or_fail() {
     local _prompt_file="$2"
     local _err_file="$3"
     local _size
-    _size=$(wc -c <"$_prompt_file")
+    if ! _size=$(wc -c <"$_prompt_file"); then
+        printf '%s: could not determine prompt file size\n' "$_cli_label" >"$_err_file"
+        return 1
+    fi
     if [ "$_size" -ge 131072 ]; then
         printf '%s: prompt is %s bytes, over the %s-byte argv limit (MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.\n' \
             "$_cli_label" "$_size" 131072 >"$_err_file"

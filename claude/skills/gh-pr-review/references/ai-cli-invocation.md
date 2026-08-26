@@ -77,12 +77,19 @@ quote the first stderr line and exit 1.
 ## `--ai agy`
 
 ```sh
-agy --print < "$PROMPT_FILE"
+agy --print "$(cat "$PROMPT_FILE")"
 ```
 
-`agy --print` runs the Antigravity CLI non-interactively, reading the
-prompt (and appended diff) from stdin. Model selection intentionally
-falls back to agy's own default; no `--model` flag is passed.
+`agy --print` runs the Antigravity CLI non-interactively, but takes the
+prompt (and appended diff) as a **value argument**, not stdin. Model
+selection intentionally falls back to agy's own default; no `--model`
+flag is passed.
+
+Like `hermes -z` below, this carries the `MAX_ARG_STRLEN` (131072-byte)
+argv-limit guard: a prompt of 131072 bytes or more is refused up front
+rather than blowing up as a bare "Argument list too long" exec failure.
+Both CLIs share the same guard implementation
+(`_gh_pr_review_argv_prompt_or_fail` in `gh_pr_review.sh`).
 
 Stderr policy is identical to codex: non-zero exit → noise-filtered
 summary + full stderr tail + persistent stderr log on disk. The stderr
