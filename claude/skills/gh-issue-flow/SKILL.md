@@ -76,7 +76,9 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    succeeded; non-fatal, backgrounded) — nudges the merge-train cron
    dispatcher immediately instead of waiting for its next tick, so a fresh
    PR reaches `gh:pr-merge-train` in seconds rather than up to 5 minutes
-   later. Calls the dispatcher script by its full path, never `aicron` as a
+   later (whether it is *acted on* that soon still depends on D-6's 11-minute
+   quiet period — detail: `references/merge-train-dispatch.md`). Calls the
+   dispatcher script by its full path, never `aicron` as a
    bare command — `aicron` is a shell function guarded behind the repo's
    interactive-shell check, so it silently resolves to nothing in a
    non-interactive `Bash` tool call. Never `gh:pr-merge-train` directly,

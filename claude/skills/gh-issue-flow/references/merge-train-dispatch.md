@@ -92,3 +92,27 @@ lock.
   `claude/skills/gh-pr-merge-train/references/cron-dispatcher.md`). That
   backstop's interval is shortened separately (issue #1482) so the worst-case
   wait after a dropped nudge stays short.
+- Does not retime an already-installed crontab. `cron-jobs.json`'s `schedule`
+  field is only read when `aicron add`/`aicron remove` runs — an existing
+  crontab entry keeps whatever interval it was installed with until someone
+  re-installs it. Merging a `cron-jobs.json` schedule change is therefore not
+  self-applying; each machine that already has `merge-train` installed needs
+  one manual reinstall after pulling the change:
+  ```bash
+  aicron remove merge-train && aicron add merge-train
+  ```
+  This is a per-machine operational step, not something a PR diff can carry
+  out on its own — there is no CI step here that could reach into a
+  developer's live crontab (issue #1482 review, codex).
+
+## The nudge does not bypass D-6 — it only shortens how soon the train checks
+
+Reaching the dispatcher "in seconds" (above) is not the same as the PR being
+acted on in seconds. `gh:pr-merge-train`'s own Step 2 re-applies the 11-minute
+quiet period (D-6) authoritatively when it builds its queue — if Step 2.4
+(review + simplify) finished in under 11 minutes, the PR this nudge just woke
+the dispatcher for can still be filtered out of that first pass, in which case
+it waits for the next trigger (another `gh:issue-flow` run's Step 2.4.5, or
+the crontab backstop) same as if this step didn't exist. The nudge only
+removes the *dispatcher-level* wait (up to the crontab interval); it never
+shortens D-6 itself (issue #1482 review, agy).
