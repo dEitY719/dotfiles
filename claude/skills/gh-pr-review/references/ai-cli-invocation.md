@@ -3,9 +3,10 @@
 Maps the five supported `--ai` values to concrete CLI commands. The
 prompt (built from `references/review-presets.md`) is passed via
 **stdin** by default; the PR diff is appended to that same stdin
-payload. Exceptions: `agy --print` takes the prompt as an argv string,
-and `opencode run` / `hermes exec` receive a short instruction as argv plus
-`--file "$PROMPT_FILE"` because stdin is not their supported review path.
+payload. Exceptions: `agy --print` and `hermes -z` take the whole prompt as
+an argv string value, and `opencode run` receives a short instruction as
+argv plus `--file "$PROMPT_FILE"` because stdin is not its supported review
+path.
 
 ## PATH pre-flight
 
@@ -172,6 +173,14 @@ passes it with `--dir`, and removes it after the run. The PR worktree is
 not the OpenCode process directory, so relative agent writes do not leak
 into the caller checkout or race with `/simplify`.
 
+**Runs slow — budget 8–10 minutes.** The CodeMate backend can take several
+minutes for a full review. Any caller that dispatches this lane through a
+subagent Bash call must raise that call's timeout explicitly instead of
+relying on the ambient 2-minute default: a short timeout kills the run
+mid-flight and leaves truncated/garbage stdout (typically a one-line plan
+fragment such as "먼저 관련 파일을 확인하겠습니다"), which must never be
+posted as a completed review.
+
 ## `--ai hermes`
 
 ```sh
@@ -181,26 +190,33 @@ into the caller checkout or race with `/simplify`.
     exit 1
 }
 
-hermes exec "첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘." \
-    --file "$PROMPT_FILE"
+hermes -z "$(cat "$PROMPT_FILE")"
 ```
 
 `hermes` is the Samsung DS internal AI coding CLI (setup module: `hermes/`),
 so the lane is gated to internal PCs exactly like `opencode` — a stray
 binary on a personal PC cannot reach the internal provider.
 
-**Assumption pending real-CLI verification (issue #1377 Open Questions):**
-hermes-agent's non-interactive review subcommand is not yet confirmed —
-`hermes-help` and `hermes/AGENTS.md` document `hermes doctor`,
-`hermes config`, and `hermes --version` only. The invocation above mirrors
-the opencode pattern (short instruction argv + `--file "$PROMPT_FILE"`)
-with `exec` as the verb, matching codex's naming for agentic dev CLIs.
-Revisit once `hermes --help` is checked on an internal PC. Until then a
-wrong verb surfaces as a normal non-zero exit → soft SKIP in
-`devx:pr-review-all`, never a hard failure of the other lanes.
+`hermes -z` (long form `--oneshot`) is hermes's one-shot non-interactive
+flag. This is confirmed against real `hermes --help` output on an internal
+PC (issue #1452): the actual subcommand list is `chat, model, moa, …,
+send, …` — there is **no** `exec` subcommand, so the earlier
+`hermes exec … --file` shape could never have worked.
+
+Like `agy --print`, `hermes -z` takes the prompt as a **value argument**,
+not via `--file` or stdin, so this lane carries the same `MAX_ARG_STRLEN`
+guard: a prompt of 131072 bytes or more is refused up front with
+`hermes -z: prompt is <n> bytes, over the 131072-byte argv limit
+(MAX_ARG_STRLEN) — use --ai codex or --ai claude for this PR instead.`
+rather than blowing up as a bare "Argument list too long" exec failure.
 
 No `--model` flag is passed; hermes uses whatever endpoint its own config
 resolves (custom LLM endpoints are handled by `hermes/setup.sh`).
+
+**Runs slow — budget 8–10 minutes**, for the same reason as `--ai opencode`
+above (shared internal backend). A caller dispatching this lane via a
+subagent Bash call must set a long timeout; a short one kills the run and
+leaves truncated stdout that must not be posted as a completed review.
 
 ## Step 5 dispatch procedure (`_gh_pr_review_run_ai`)
 
@@ -209,7 +225,7 @@ Step 5 of the skill delegates to `_gh_pr_review_run_ai` in
 `PROMPT_FILE` into the chosen CLI with the exact invocation shape
 documented above (`codex exec --color=never`, `agy --print`, `claude -p`,
 `opencode run ... --model codemate/CodeLLMPro --dir ... --file`, or
-`hermes exec ... --file`, plus the
+`hermes -z "$(cat "$PROMPT_FILE")"`, plus the
 `CLAUDE_CONFIG_DIR` injection for `--user`). Stdout streams to
 the user verbatim — no reformatting, no summarization, no truncation.
 
