@@ -51,15 +51,16 @@ Ordering rationale and the quiet-period rationale: `references/ordering.md`.
 **`gh pr list` failure ends the run** with an empty report — never merge
 without knowing state.
 
-## Step 3: Read the approval policy once
+## Step 3: Read the approval policy per base branch
 
 Read the repo ruleset's `required_approving_review_count` per
-`references/approval-gate.md`, using the queue's `baseRefName` — that is why
-this follows Step 2 rather than preceding it, and why no extra call is needed
-to learn the base. `0` → the platform does not require approval, so the train
-skips the approval check (D-5). Non-zero → an unapproved PR is `[SKIPPED]`,
-never merged. **Ruleset lookup failure is fail-closed**: treat approval as
-required. Merges are hard to undo.
+`references/approval-gate.md`, **once per distinct `baseRefName`**, cached per
+base — rulesets are branch-scoped, so a single-base queue still costs one call.
+That is why this follows Step 2: the queue already carries the bases. `0` → the
+platform requires no approval (D-5). Non-zero → an unapproved PR is `[SKIPPED]`.
+**Lookup failure is fail-closed**: treat approval as required. Even with the
+gate off, a non-empty non-`APPROVED` `reviewDecision` is `[SKIPPED]` before
+`gh:pr-merge` is called — it would refuse, and NF-2 forbids clearing that.
 
 ## Step 4: Run the train — one PR at a time
 
