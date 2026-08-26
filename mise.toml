@@ -52,10 +52,15 @@ run = [
 ]
 
 [tasks.lint-docs]
-description = "Docs 파일명 kebab-case 린터 (issue #1027)"
+description = "Docs 린터 (파일명 kebab-case #1027 + changelog fragment #1471)"
 # adr/ + requirement/ 는 강제(FAIL), 나머지 docs/ 는 warn-only.
 # 레거시 위반 일괄 정리는 별도 이슈로 분리한다.
-run = "sh scripts/lint_docs_filenames.sh"
+# changelog fragment 는 파일명·헤더 부재·빈 파일·불릿 형식을 강제(FAIL)한다 —
+# 규칙이 산문에만 있던 시절 중복 날짜 헤더가 뚫린 것이 근거 (#1471).
+run = [
+    "sh scripts/lint_docs_filenames.sh",
+    "sh scripts/lint_changelog_fragments.sh",
+]
 
 # ─── Test gate ───────────────────────────────────────────────────────
 [tasks.test]
