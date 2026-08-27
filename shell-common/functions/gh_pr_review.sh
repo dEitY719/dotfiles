@@ -25,26 +25,27 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # Self-path: zsh never populates $BASH_SOURCE, so reading it there left the
 # guard permanently inert. zsh instead rebinds $0 to the file being sourced
 # (FUNCTION_ARGZERO, on by default) for the duration of this top-level code,
-# so branch on the shell — the same idiom as functions/my_help.sh.
+# so branch on the shell — the same idiom as functions/my_help.sh. This
+# branch is irreducibly per-file: inside a function, $0 is the function's
+# own name, so it cannot move into dotfiles_root.sh.
+#
+# Everything after it (probe + call + #724 diagnostic) lives exactly once,
+# in _dotfiles_root_guard_self (issue #1505).
 if [ -n "${ZSH_VERSION-}" ]; then
-    _gpr_selfpath="$0"
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    _drg_self="${BASH_SOURCE[0]-}"
 else
-    _gpr_selfpath="${BASH_SOURCE[0]-}"
+    _drg_self=""
 fi
-# Defense in depth (#724): a helper that is missing or fails to parse must
-# say so once on stderr rather than disabling the guard in silence. Never
-# fatal — the rest of this file is unrelated to the guard.
-_gpr_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
-if [ -r "$_gpr_helper" ]; then
-    . "$_gpr_helper" || true
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
 fi
-if command -v _dotfiles_root_warn_if_foreign_source >/dev/null 2>&1; then
-    _dotfiles_root_warn_if_foreign_source "$_gpr_selfpath" || true
-else
-    printf '[gh_pr_review] %s missing or did not define _dotfiles_root_warn_if_foreign_source — #1454 guard skipped (#724).\n' \
-        "$_gpr_helper" >&2
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "gh-pr-review"
 fi
-unset _gpr_selfpath _gpr_helper
+unset _drg_self _drg_helper
 
 # ============================================================================
 # Section 1 — Argument parser (SSOT, mirrors SKILL.md Step 1)

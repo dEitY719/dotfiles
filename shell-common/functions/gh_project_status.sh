@@ -76,6 +76,34 @@
 # before defining `_gh_project_status_sync`, breaking the workflow with
 # `command not found` (exit 127). See PR #497 / CI run 25601743398.
 
+# Advisory only (issue #1454, propagated by #1505): warn once on stderr when
+# this file was sourced from a checkout that is a different git repo than
+# $HOME/dotfiles. Never blocks, and deliberately NOT wrapped in an
+# interactive guard — see the NOTE above; the guard function is itself a
+# silent no-op outside the genuine foreign-checkout case.
+#
+# The self-path branch must stay here at file top level — zsh rebinds $0 to
+# the sourced file (FUNCTION_ARGZERO) only for this file's own statements,
+# and inside a function $0 is the function's own name. Plain POSIX sh has
+# neither $0-rebinding nor $BASH_SOURCE, and would abort on the bash array
+# syntax, hence the $BASH_VERSION arm. Everything after it lives once, in
+# _dotfiles_root_guard_self.
+if [ -n "${ZSH_VERSION-}" ]; then
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    _drg_self="${BASH_SOURCE[0]-}"
+else
+    _drg_self=""
+fi
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
+fi
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "gh_project_status"
+fi
+unset _drg_self _drg_helper
+
 # Ensure GH_HOST is set before any `gh` call so requests route to the
 # correct host. On the internal PC (GHE = github.samsungds.net) a caller
 # that does not export GH_HOST would otherwise let `gh` default to

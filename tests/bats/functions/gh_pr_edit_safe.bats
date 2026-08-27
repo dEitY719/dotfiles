@@ -337,3 +337,44 @@ STUB
     assert_output --partial \
         "BUG: _gh_pr_edit_safe_{label,body} undefined after source"
 }
+
+# ---------------------------------------------------------------------------
+# #1454 foreign-checkout guard, propagated to this file by issue #1505.
+#
+# Mirrors tests/bats/functions/gh_pr_review.bats — zsh is the case that
+# matters: the guard reads ${BASH_SOURCE[0]}, which bash always populated but
+# zsh never does, so before #1454 the zsh path self-disabled on its first
+# line. The file is re-sourced explicitly rather than read off the loader's
+# own pass because both loaders source with `2>/dev/null` (safe_source /
+# load_category), which would swallow the very stderr under test.
+# ---------------------------------------------------------------------------
+
+_setup_foreign_home_1505() {
+    FOREIGN_HOME_1505="$TEST_TEMP_HOME/foreign-home-1505"
+    mkdir -p "$FOREIGN_HOME_1505/dotfiles"
+    git -C "$FOREIGN_HOME_1505/dotfiles" init -q -b main
+    git -C "$FOREIGN_HOME_1505/dotfiles" -c user.email=t@t -c user.name=t \
+        commit --allow-empty -q -m init
+    export HOME="$FOREIGN_HOME_1505"
+}
+
+@test "zsh: #1505 foreign-checkout guard warns when gh_pr_edit_safe.sh is sourced under zsh" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not available"
+    command -v git >/dev/null 2>&1 || skip "git not available"
+
+    _setup_foreign_home_1505
+    run_in_zsh '. "$SHELL_COMMON/functions/gh_pr_edit_safe.sh"'
+    assert_success
+    assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
+    assert_output --partial "shell-common/functions/gh_pr_edit_safe.sh"
+}
+
+@test "bash: #1505 foreign-checkout guard warns when gh_pr_edit_safe.sh is sourced under bash" {
+    command -v git >/dev/null 2>&1 || skip "git not available"
+
+    _setup_foreign_home_1505
+    run_in_bash '. "$SHELL_COMMON/functions/gh_pr_edit_safe.sh"'
+    assert_success
+    assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
+    assert_output --partial "shell-common/functions/gh_pr_edit_safe.sh"
+}
