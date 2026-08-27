@@ -442,6 +442,17 @@ _gh_pr_review_run_ai() {
     # under the >=600000ms Bash-tool timeout SKILL.md Step 5 mandates for
     # these two lanes. Overridable so tests need not wait 9 minutes.
     local _slow_cli_timeout_sec="${GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC:-540}"
+    # PR #1542 review (codex): an unvalidated override turns a typo'd
+    # GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC into an immediate `timeout` usage
+    # failure instead of "a longer bound". `0` is also rejected — GNU
+    # `timeout 0` means "no limit", which would silently defeat #1506.
+    case "$_slow_cli_timeout_sec" in
+    '' | *[!0-9.]* | 0 | 0.0)
+        printf '[WARN] GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=%s is not a valid positive number — using default 540.\n' \
+            "$_slow_cli_timeout_sec" >&2
+        _slow_cli_timeout_sec=540
+        ;;
+    esac
     # Used by the opencode case below only: opencode takes a short
     # instruction as argv with the diff attached via --file "$prompt_file".
     local _ai_file_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
