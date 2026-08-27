@@ -62,6 +62,14 @@ The library automatically handles the paths for its internal Python dependencies
 *   Use `mytool/demo_ux.sh` to interactively test UX features.
 *   Run `mytool/check_ux_consistency.sh` to ensure adherence to guidelines.
 
+## Table Formatting
+
+`ux_table_row` 의 첫 컬럼(라벨)은 20칸으로 정렬된다.
+
+*   줄일 수 있는 라벨은 20자 이하로 유지한다.
+*   정확한 명령 구문처럼 줄일 수 없는 라벨(예: `claude mcp remove <name>`)은 그대로 넘긴다. 20자를 넘으면 `ux_table_row` 가 라벨을 한 줄에 먼저 출력하고 설명을 다음 줄로 넘겨 구분자 정렬을 유지한다.
+*   따라서 호출부에서 긴 라벨을 따로 처리할 필요가 없다. 라벨 길이를 강제하는 lint 는 두지 않는다 (#1501).
+
 ## Best Practices
 
 *   **Never hardcode colors**: Always use `UX_PRIMARY`, `UX_SUCCESS`, etc.
