@@ -31,15 +31,11 @@ equivalent for — the duplicate-attempt detector of 3.3b (issue #1507).
 The HARD aborts (3.1, 3.2) come before any mutation (3.3, 3.4) so an
 abort never leaves a stale claim or board state.
 
-**Why 3.3b sits between 3.3 and 3.4**: self-assign is the cheap,
-idempotent broadcast — do it first so the claim is visible no matter
-what the duplicate check concludes. But the warning has to land *before*
-3.4 mutates the board, so the human reads "another session may already
-own this" while the board still shows the pre-run truth. Running it
-after 3.4 would mean this run's own `In progress` write is already mixed
-into the state the user is being asked to judge. It is deliberately not
-earlier than 3.3 either: it costs a search API call, and there is no
-point paying for it on an issue 3.2 is about to refuse.
+**Why 3.3b sits between 3.3 and 3.4**: not earlier than 3.3, because it
+costs a search API call and there is no point paying for it on an issue
+3.2 is about to refuse; not later than 3.4, so the warning reads against
+the board's pre-run state rather than mixed in with this run's own
+`In progress` write.
 
 ## Substep detail
 
@@ -170,10 +166,9 @@ return 0
 back; the point is to send the human to the PR list, not to enumerate it.
 
 **Why silence on the empty result matters**: this guard fires on every
-implement run, and the overwhelmingly common answer is "no duplicate".
-A warning that also prints when nothing is wrong is a warning people
-learn to scroll past — which would cost exactly the signal #1507 exists
-to add. No match → no output at all.
+implement run, so a line that also prints on the common "no duplicate"
+case would train users to scroll past it — costing exactly the signal
+#1507 exists to add.
 
 **Soft-fail rule** (NF-1): any failure of the search itself → **no
 output, continue**:
@@ -229,13 +224,17 @@ The helper (`shell-common/functions/gh_project_status.sh`) handles:
   those moved should override the helper or skip with
   `GH_ISSUE_SKIP_BOARD_TRANSITION=1` and run the transition manually.
 
-**Warn when `--only-from` absorbs the write (#1507, F-2)**: read the
-card's current Status before handing off to the helper, and when it is
+**Warn when `--only-from` absorbs the write (#1507, F-2)**: before
+handing off to `_gh_project_status_sync`, read the card's current
+Status with the same SSOT query helper `gh-pr-merge`'s board-approval
+gate uses (`_gh_project_status_query_current`, also from
+`gh_project_status.sh` — see
+`../gh-pr-merge/references/board-approval-gate.sh.md`), and when it is
 neither `Backlog` nor `Ready`, print one line before the (no-op)
 mutation:
 
 ```
-status = current Status of the card on the board
+status = `_gh_project_status_query_current issue <N> "$TARGET_REPO"`
 
 if status not in ("Backlog", "Ready"):
     print "[WARN] Issue #<N> Status 가 이미 \"<status>\" 입니다 — 다른 세션이 이미 착수했을 수 있습니다."
@@ -250,8 +249,10 @@ have moved the board without opening a PR yet, or opened a PR in a repo
 with no board at all. A restart of your own abandoned run also lands
 here, which is fine — the line is advisory, not a refusal.
 
-Reading the Status is itself best-effort: if the lookup errors, skip the
-warning and let the helper run as usual (NF-1).
+Reading the Status is itself best-effort: a non-zero return from
+`_gh_project_status_query_current` (missing scope, network error, no
+board) skips the warning and lets `_gh_project_status_sync` run as
+usual (NF-1) — the same soft-fail posture 3.3b uses.
 - **Verify pair (race absorption, #393)**: after the mutation the
   helper sleeps `_GH_PROJECT_STATUS_VERIFY_SLEEP` (default 1 s) and
   re-queries. Re-issues the mutation once if a builtin workflow

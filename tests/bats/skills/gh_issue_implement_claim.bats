@@ -13,11 +13,14 @@
 #   6. No board attached                                → board skip
 #   7. GH_ISSUE_SKIP_* env vars individually skip       → matching branch
 #   8. Duplicate-attempt detection (#1507)              → soft [WARN], never blocks
-#      8a. open PR already closes the issue             → warn naming the PR
+#      8a. open PR already closes the issue (first of   → warn naming the first PR
+#          several wins when multiple are open)
 #      8b. no open PR                                   → silent (no false positive)
 #      8c. GH_ISSUE_SKIP_DUPLICATE_CHECK=1              → silent
 #      8d. search API failure                           → silent, still rc=0
 #      8e. board Status already "In progress"           → warn + already-in-progress
+#      8f. board Status "Backlog"                       → unchanged 'synced', no warn
+#      8g. no board attached                            → 'no-board' wins over Status
 
 load '../test_helper'
 
@@ -186,19 +189,12 @@ teardown() {
 
 # ---------- Case 8: Duplicate-attempt detection (#1507) ----------
 
-@test "claim 3.3b: open PR already closing the issue → soft [WARN] naming the PR" {
-    FAKE_OPEN_PRS_CLOSING="1488"
+@test "claim 3.3b: open PR already closing the issue → soft [WARN] naming the first PR" {
+    FAKE_OPEN_PRS_CLOSING="1488,1489"
     run gh_issue_duplicate_pr_guard 1482
     assert_success    # soft — never blocks
     assert_output --partial '[WARN]'
     assert_output --partial '#1482'
-    assert_output --partial '#1488'
-}
-
-@test "claim 3.3b: first PR of several is the one named" {
-    FAKE_OPEN_PRS_CLOSING="1488,1489"
-    run gh_issue_duplicate_pr_guard 1482
-    assert_success
     assert_output --partial '#1488'
 }
 
@@ -234,14 +230,9 @@ teardown() {
     assert_output --partial 'already-in-progress'
 }
 
-@test "claim 3.4: board Status Backlog/Ready → unchanged 'synced', no warn" {
+@test "claim 3.4: board Status 'Backlog' → unchanged 'synced', no warn ('Ready' covered by Case 1)" {
     FAKE_BOARD_ATTACHED=1
     FAKE_BOARD_STATUS="Backlog"
-    run gh_issue_board_transition_decide 1482
-    assert_success
-    assert_output 'synced'
-
-    FAKE_BOARD_STATUS="Ready"
     run gh_issue_board_transition_decide 1482
     assert_success
     assert_output 'synced'
