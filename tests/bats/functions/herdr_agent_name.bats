@@ -193,3 +193,38 @@ run_han() {
     assert_success
     assert_output --partial "sourced"
 }
+
+# ---------------------------------------------------------------------------
+# T20: the known collision, pinned rather than hidden
+#
+# Dropping the host and the owner costs uniqueness on both axes (PR #1532
+# review, codex). #1530's 확정 사항 accepted that trade-off to fit herdr's
+# 32-character budget, and `docs/.ssot/watched-repos.json` currently holds one
+# entry, so neither collision is reachable. This test asserts the collision
+# *exists* so it is a documented property with a name, not a surprise: the day
+# a second owner or host joins the watch list, whoever adds the digest suffix
+# deletes this test on purpose instead of discovering the routing bug in
+# production.
+# ---------------------------------------------------------------------------
+
+@test "T20: KNOWN LIMITATION — same repo basename under different owners collides" {
+    run_han 'herdr_agent_name iw acme/dotfiles issue-11'
+    assert_success
+    assert_output "iw-dotfiles-issue-11"
+
+    run_han 'herdr_agent_name iw other/dotfiles issue-11'
+    assert_success
+    # Same name as above. Two watched repos would share one herdr agent, and
+    # the second dispatch's prompt would land on the first one's pane.
+    assert_output "iw-dotfiles-issue-11"
+}
+
+@test "T20b: KNOWN LIMITATION — same repo name on different hosts collides" {
+    run_han 'herdr_agent_name mt github.com/acme/dotfiles'
+    assert_success
+    assert_output "mt-dotfiles"
+
+    run_han 'herdr_agent_name mt github.samsungds.net/acme/dotfiles'
+    assert_success
+    assert_output "mt-dotfiles"
+}
