@@ -86,8 +86,14 @@ gone, the name is released) earns a new workspace/tab/agent.
 | `gh pr list` fails | end the tick, launch nothing — never merge without knowing state |
 | herdr launch fails | end the tick; the next tick retries |
 | `agent start` says `agent_name_taken` | prompt the name's existing holder instead — a second pane under that name is impossible, and failing here would repeat every period |
+| `agent start` says `agent_pane_busy` | retry up to 3 times with a short backoff — a pane's shell is not interactive the instant `tab create` answers (#1512). Still failing after that: close the tab and end the tick |
 | a train is already live | end the tick quietly (NF-1) |
 | zero target PRs | end the tick quietly |
 
 Every one of these is "do nothing and try again next period". A dispatcher that
-retried harder would be the thing most likely to produce two trains.
+retried a *prompt* harder would be the thing most likely to produce two trains —
+a prompt that looked stalled may well have landed. The `agent_pane_busy` retry
+is not that: it repeats a start that registered no agent at all, on a pane that
+holds none, so no attempt can produce a second train. The failed start also
+leaves its tab behind, which is why that path closes it (#1512) — cron ticks
+every few minutes, and the workspace had collected dozens of dead tabs.
