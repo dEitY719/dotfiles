@@ -33,8 +33,11 @@ If Step 2.6 soft-failed, show `[WARN] Step 6: ai-metrics  (skipped — <reason>)
 Step 4.1 (merge-train wake, #1482) is also soft-fail — never a `stopped at`
 report, never counted in the `<i>/6` step index. It fires in the background
 and is not awaited, so its own exit code is never observed:
+- `[SKIP] Step 4.1: merge-train wake  (remote != origin)` — Step 1's `REMOTE`
+  wasn't `origin`; the dispatcher only tracks `$HOME/dotfiles`'s own `origin`
+  remote (#1498).
 - `[WARN] Step 4.1: merge-train wake  (aicron.sh missing)` — the one
-  synchronously-checked failure path.
+  synchronously-checked failure path on the `origin` path.
 
 If a step failed:
 
