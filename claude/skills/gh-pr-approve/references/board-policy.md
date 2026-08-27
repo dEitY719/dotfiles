@@ -34,10 +34,10 @@ unconditionally and BLOCKING PRs landed in `Approved` (PR #1349). The
 env var `GH_PR_REPLY_AUTO_APPROVE_REPOS` and its `~/.zshrc.local`
 wiring are gone with it.
 
-The same rule cascades into `gh:pr-merge`: a card whose Status is not
-`Approved` cannot be merged via the regular `/gh-pr-merge` skill — the
-caller is redirected to `/gh-pr-merge-emergency` for an admin override
-with audit trail.
+This rule used to cascade into `gh:pr-merge` as a merge-time refusal.
+That cascade was removed in #1513 — see "2. Merge gate (read side)"
+below. The column is now advisory for merge purposes; `gh:pr-merge`
+gates on `reviewDecision` and CI only.
 
 ## Why fail-closed instead of advisory
 
@@ -50,11 +50,12 @@ board:
 - Teammate review is captured by the board column, not by GitHub's
   reviewer mechanism — the column is what the team eyes when triaging.
 
-A fail-closed guard at both write points (transition + merge) keeps the
-column meaningful: when you see a PR in `Approved`, it actually has been
-through reviewer eyes.
+A fail-closed guard on the transition keeps the column meaningful: when
+you see a PR in `Approved`, it actually has been through reviewer eyes.
+(The merge-side half of this argument no longer holds on a repo with no
+reachable approval signal at all — see enforcement point 2.)
 
-## Two enforcement points
+## Enforcement points
 
 ### 1. Transition into the column (write side)
 
@@ -69,18 +70,29 @@ This guard was added in #393 along with the verify pair — both are
 defenses against the same class of bug (Status drifts away from what the
 helper thinks it set).
 
-### 2. Merge gate (read side)
+### 2. Merge gate (read side) — **removed in #1513**
 
-`gh:pr-merge` Step 2-B (added by #397) reads the current board Status
-before merging. If Status `!= Approved`, the merge is refused and the
-operator is redirected to `gh:pr-merge-emergency`. Escape:
-`GH_PR_MERGE_SKIP_BOARD_CHECK=1` for repos in transition or for
-single-shot bypass with audit trail.
+`gh:pr-merge` Step 2-B (added by #397) used to read the current board
+Status before merging and refuse anything outside `Approved`, with
+`GH_PR_MERGE_SKIP_BOARD_CHECK=1` as the escape. Both the step and the
+env var are gone.
 
-The two checks are intentionally redundant. If the helper's transition
-guard is bypassed, the merge gate still catches it; if the merge gate
-is bypassed (env var), the audit issue created by
-`gh:pr-merge-emergency` records it.
+The gate was permanently un-satisfiable on `dEitY719/dotfiles`. That
+repo has no branch protection and every PR is self-authored, and GitHub
+forbids approving your own PR; `agy` / `codex` reviews post as
+`COMMENTED`, so `reviewDecision` never becomes `APPROVED` and the
+builtin `Code review approved` workflow never fires. With neither the
+manual nor the automated promotion path available, no card could ever
+reach `Approved`, and every merge was blocked. Adding a
+protection-absent exception (as the `reviewDecision` gate has) would
+have been equivalent to permanent disablement here, since this repo
+never has protection — so the gate was deleted outright rather than
+left in place as dead policy.
+
+What remains: enforcement point 1 above is unaffected, and `gh:pr-merge`
+Step 2 still hard-stops on a non-empty non-`APPROVED` `reviewDecision`.
+On a repo that *does* have branch protection, that Step 2 gate is the
+one doing the work.
 
 ## Out of scope
 
@@ -103,6 +115,6 @@ guard.
 
 - `references/board-approved-sync.sh.md` — Step 4.5 promotion block.
 - `shell-common/functions/gh_project_status.sh` — write-side guard impl.
-- `claude/skills/gh-pr-merge/SKILL.md` Step 2-B — merge-gate impl.
-- `claude/skills/gh-pr-merge/references/board-policy.md` — cross-link.
+- `claude/skills/gh-pr-merge/references/board-policy.md` — cross-link
+  (records the #1513 removal of the merge gate).
 - `docs/.ssot/github-project-board.md` — column semantics SSOT.

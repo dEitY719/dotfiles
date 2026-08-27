@@ -42,6 +42,11 @@ Status 필드는 아래 6개 옵션을 이 순서로 가진다:
   워크플로우가 PR 카드를 `In progress`로 되돌린다 — 수정·재푸시
   후 `In review`로 수동 복귀시킨 뒤 이어서 `Approved → Done`
   으로 진행한다.
+  단 `dEitY719/dotfiles` 에서는 `Approved` 가 **머지 전제조건이
+  아니다** (#1513). 컬럼 자체는 남아 있고 `/gh-pr-approve` 로
+  수동 기록할 수 있지만, `/gh-pr-merge` 는 보드 Status 를 읽지
+  않으므로 카드가 `In review` 에 있어도 머지된다 — `Approved` 는
+  이 저장소에서 강제성 없는 참고 표시다.
 
 `Ready`는 두 카드 타입 모두 방문하지 않는다. 미래 확장(예:
 "분석 완료·착수 대기" 단계가 필요해지는 시점) 여지로 남겨둔다.
@@ -54,7 +59,7 @@ Status 필드는 아래 6개 옵션을 이 순서로 가진다:
 | Ready       | (사용 안 함)                                    | (사용 안 함)                 |
 | In progress | 작업 중 (브랜치 생성, 커밋 진행) / 연결된 PR 오픈 | 리뷰 피드백 반영 중 (Changes requested 루프) |
 | In review   | (사용 안 함 — Issue는 도달하지 않음, #289)       | 본인의 리뷰 대기             |
-| Approved    | (사용 안 함 — Issue는 도달하지 않음)             | 리뷰 승인됨 — 작성자가 머지 여부를 판단하는 단계 |
+| Approved    | (사용 안 함 — Issue는 도달하지 않음)             | 리뷰 승인됨 — 작성자가 머지 여부를 판단하는 단계 (이 저장소에서는 머지 게이트 아님, #1513) |
 | Done        | 연결된 PR 머지로 close됨                         | 머지 완료                   |
 
 ## 카드 정책 (Open Question #1 결정)
@@ -184,9 +189,10 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   requested` 빌트인이 카드를 `In progress` 로 떨어뜨린 뒤 복귀가
   자동이 아닌 경로(수동 push, `/gh-pr-resolve-ci-fail`, 전건 Declined
   인 reply 라운드)가 존재하기 때문이다. 그대로 두면 `/gh-pr-approve`
-  가 승격을 거부하고 `gh:pr-merge` Step 2-B 가 `Status != Approved`
-  로 fail-close 해, 정상 리뷰를 거친 PR 이 장부 문제만으로 emergency
-  머지 경로로 밀려난다.
+  가 승격을 거부해 정상 리뷰를 거친 PR 의 카드가 장부상 `In progress`
+  에 잔류한다 (#1513 이전에는 여기에 더해 `gh:pr-merge` Step 2-B 가
+  `Status != Approved` 로 fail-close 해 emergency 머지 경로로 밀려났다
+  — 그 머지 게이트는 폐지됐다).
   어느 쪽이든 `Done` 은 `--only-from` 목록에 없으므로, 이미 머지된 PR
   에 잘못 호출되어도 카드가 역행하지 않는다 — `Done` 배제가 이 필터의
   실질적 방어 지점이다.

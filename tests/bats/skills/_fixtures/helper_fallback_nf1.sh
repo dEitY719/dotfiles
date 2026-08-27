@@ -4,7 +4,6 @@
 # documented in issue #644 and applied across (canonical pattern relocated
 # from SKILL.md bodies into references/ by #862 PR-NW-4 for progressive
 # disclosure; the owning SKILL.md Step points at the reference verbatim):
-#   claude/skills/gh-pr-merge/references/board-approval-gate.sh.md  (Step 2-B)
 #   claude/skills/gh-pr-merge/references/project-board-sync.md      (Step 4)
 #   claude/skills/gh-commit/SKILL.md                                (Step 5)
 #   claude/skills/gh-pr-reply/references/board-sync-in-review.sh.md (Step 6.5)

@@ -51,12 +51,8 @@ check FAILURE/pending; `reviewDecision != APPROVED` → suggest
 `INFO: No branch protection on <baseRefName> — accepting empty reviewDecision.`
 (a non-empty non-APPROVED value still stops).
 
-## Step 2-B: Project Board Approval Gate (fail-closed)
-
-Rule set + `gh-pr-approve` cross-link in `references/board-policy.md`. Run the
-board approval gate per `references/board-approval-gate.sh.md` (fail-closed;
-helper-missing → silent-skip; `GH_PR_MERGE_SKIP_BOARD_CHECK=1` to bypass). Runs
-**before** Step 3; gates on the projectV2 board column.
+The projectV2 board Status is **not** a merge gate (#1513) — do not read it
+here. Rationale + the retired Step 2-B in `references/board-policy.md`.
 
 ## Step 3: Merge (no confirmation)
 

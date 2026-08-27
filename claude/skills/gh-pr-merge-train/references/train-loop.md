@@ -141,24 +141,19 @@ the F-5 attempt counter. A PR that trips one is refused identically on every
 attempt and on every later tick, so it burns three attempts, lands `[FAILED]`,
 and stays `[FAILED]` — NF-2 forbids `gh:pr-merge-emergency`, the only thing
 that would clear it. **Detect these before delegating and record `[SKIPPED]`
-with the specific cause.** Two of them matter here:
+with the specific cause.** One of them matters here:
 
 | `gh:pr-merge` gate | What the train must do |
 |---|---|
 | Step 2 `reviewDecision != APPROVED` (non-empty, non-`APPROVED` always stops, regardless of any ruleset) | `[SKIPPED] gh:pr-merge refuses reviewDecision=<value>` — see `approval-gate.md` → "Why the gate being off is not sufficient" |
-| Step 2-B project-board approval gate — fail-closed on the projectV2 Status column, so a card outside `Approved` is refused | `[SKIPPED] board status <value> (gh:pr-merge Step 2-B)` |
 
-On a board-configured repo the second one is the common case, not an edge:
-`gh:issue-flow` opens PRs whose cards start outside `Approved`, and nothing in
-this train moves them. Reporting that as a bare `[FAILED]` tells the reader
-nothing they can act on; naming the column tells them exactly what to move.
+Reporting that as a bare `[FAILED]` tells the reader nothing they can act on;
+naming the `reviewDecision` value tells them exactly what to dismiss.
 
-`GH_PR_MERGE_SKIP_BOARD_CHECK=1` exists and this skill **must not set it**. The
-board gate is a repo-level policy decision — `gh:pr-approve` owns the write
-side, `docs/.ssot/github-project-board.md` owns the column semantics — and an
-unattended loop quietly exporting a bypass is exactly the shape of NF-2's
-prohibition: a train deciding, on schedule, to stand outside a control a human
-put there. A human who wants the bypass sets it deliberately, once.
+The projectV2 board Status is **not** one of these gates. `gh:pr-merge`'s
+Step 2-B board check was removed in #1513, so a card sitting outside `Approved`
+— which is the normal state for a PR `gh:issue-flow` just opened — is no longer
+a reason to skip. Do not query the board here.
 
 ## Attempt accounting (F-5)
 
@@ -200,7 +195,7 @@ skill was called and nothing was changed.
 | `gh:pr-resolve-conflict` stops at a documented stop point (ambiguous conflict, user-side abort) | `[FAILED]` naming `$SCRATCH_DIR` for manual resume; **scratch worktree is NOT removed** ("Teardown — the one exception" above); no further attempts this run; next PR |
 | `gh:pr-merge` | that PR is `[FAILED]`; next PR |
 | approval gate | that PR is `[SKIPPED]`; next PR |
-| a `gh:pr-merge` gate detected up front (`reviewDecision`, board status) | that PR is `[SKIPPED]` with the cause named; **no attempt is spent** |
+| a `gh:pr-merge` gate detected up front (`reviewDecision`) | that PR is `[SKIPPED]` with the cause named; **no attempt is spent** |
 | `gh pr view` on one PR | that PR is `[SKIPPED] state unreadable`; next PR |
 | `gh pr list` in Step 2 | **the run ends** — with no queue there is nothing to skip *to*, and merging without knowing state is the one thing this skill must never do |
 

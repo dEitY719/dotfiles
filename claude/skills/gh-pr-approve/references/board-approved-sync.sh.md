@@ -50,12 +50,15 @@ A narrower `--only-from "In review"` was tried first and rejected: the
 runs `/gh-pr-reply` and it actually pushes fix commits (its Step 6.5).
 On every other route back — a manual push, `/gh-pr-resolve-ci-fail`, a
 reply round where every comment was declined — the card stays at
-`In progress`, `/gh-pr-approve` silently refuses to promote it, and
-`gh:pr-merge` Step 2-B then fail-closes on `Status != Approved`. That
-pushes a normally-reviewed PR onto the emergency merge path for a
-bookkeeping reason. Requiring the card to have *visibly* passed through
-`In review` is not worth that failure mode; the human running
-`/gh-pr-approve` is the review signal.
+`In progress` and `/gh-pr-approve` silently refuses to promote it. Before
+#1513, `gh:pr-merge` Step 2-B would then fail-close on `Status !=
+Approved`, pushing a normally-reviewed PR onto the emergency merge path
+for a bookkeeping reason — that specific consequence is gone now that
+Step 2-B is retired, but the underlying point stands: requiring the
+card to have *visibly* passed through `In review` before it can reach
+`Approved` is not worth complicating this guard for; the human running
+`/gh-pr-approve` is the review signal, regardless of which column the
+card came from.
 
 ## The block (soft-fail — never blocks the Step 5 report)
 

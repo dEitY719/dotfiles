@@ -84,7 +84,6 @@ teardown() {
     # inlining for gh-pr.)
     local f
     for f in \
-        "claude/skills/gh-pr-merge/references/board-approval-gate.sh.md" \
         "claude/skills/gh-pr-merge/references/project-board-sync.md" \
         "claude/skills/gh-commit/SKILL.md" \
         "claude/skills/gh-pr-reply/references/board-sync-in-review.sh.md" \
