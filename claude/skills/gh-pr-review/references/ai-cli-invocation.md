@@ -186,7 +186,14 @@ subagent Bash call must raise that call's timeout explicitly instead of
 relying on the ambient 2-minute default: a short timeout kills the run
 mid-flight and leaves truncated/garbage stdout (typically a one-line plan
 fragment such as "먼저 관련 파일을 확인하겠습니다"), which must never be
-posted as a completed review.
+posted as a completed review. Two enforcement layers now back that up
+(issue #1506): `_gh_pr_review_run_ai` wraps this invocation in `timeout`
+(540s default, `GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC` overrides) so a hang
+becomes a clean exit 124, which the existing non-zero gate in
+`gh_pr_review` already turns into a skipped Step 6; and the calling Bash
+tool call must still set an explicit `timeout` of ≥ `600000` ms per
+SKILL.md Step 5, so the harness's ambient timeout cannot SIGKILL the
+process tree before that 540s bound fires.
 
 ## `--ai hermes`
 
@@ -224,6 +231,12 @@ resolves (custom LLM endpoints are handled by `hermes/setup.sh`).
 above (shared internal backend). A caller dispatching this lane via a
 subagent Bash call must set a long timeout; a short one kills the run and
 leaves truncated stdout that must not be posted as a completed review.
+Same two enforcement layers as `--ai opencode` (issue #1506): the `timeout`
+wrap inside `_gh_pr_review_run_ai` (540s default,
+`GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC` overrides) converts a hang into exit
+124 so the existing non-zero gate skips Step 6 on its own, and the calling
+Bash tool call must still carry an explicit ≥ `600000` ms `timeout` per
+SKILL.md Step 5 so the ambient one never wins the race.
 
 ## Step 5 dispatch procedure (`_gh_pr_review_run_ai`)
 

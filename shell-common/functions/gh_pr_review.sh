@@ -366,6 +366,25 @@ _gh_pr_review_mktemp_prompt() {
     _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX"
 }
 
+# _gh_pr_review_timeout — bounded-run wrapper for the slow internal-PC CLIs
+# (issue #1506). Args: $1 = seconds, $2.. = command + argv.
+#
+# `timeout` is GNU coreutils and is absent on a stock macOS, so this degrades
+# to running the command unbounded rather than hard-failing — same shape as
+# `_wsl_check_timeout` in shell-common/functions/wsl_check.sh, kept local to
+# this file for the same reason (one call site family, no shared contract).
+#
+# Deliberately no `--preserve-status`: the default exit code 124 is what makes
+# "we killed it" distinguishable from any exit code the CLI produces itself.
+_gh_pr_review_timeout() {
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "$@"
+    else
+        shift
+        "$@"
+    fi
+}
+
 # _gh_pr_review_run_ai — pipes PROMPT_FILE into the chosen AI CLI per
 # references/ai-cli-invocation.md. Returns the CLI's exit code. On
 # non-zero exit, prints the full captured stderr (indented) to the
@@ -412,6 +431,17 @@ _gh_pr_review_run_ai() {
     local _rc=0
     local _prompt_content
     local _opencode_workdir
+    # Issue #1506: opencode / hermes routinely run 8-10 minutes and had no
+    # bounded exit path at all. Without this the only bound is whatever
+    # ambient timeout the *caller* (a Bash tool call, a CI step) happens to
+    # impose — and when that fires it SIGKILLs the whole process tree, so the
+    # `_rc -ne 0` gate in gh_pr_review() that skips Step 6 comment-posting
+    # never gets to run, leaving a truncated fragment of CLI output looking
+    # like a completed review. Bounding it here turns a hang into a clean
+    # non-zero exit that gate already handles. 540s = 9 min, deliberately
+    # under the >=600000ms Bash-tool timeout SKILL.md Step 5 mandates for
+    # these two lanes. Overridable so tests need not wait 9 minutes.
+    local _slow_cli_timeout_sec="${GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC:-540}"
     # Used by the opencode case below only: opencode takes a short
     # instruction as argv with the diff attached via --file "$prompt_file".
     local _ai_file_instruction="첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘."
@@ -445,7 +475,8 @@ _gh_pr_review_run_ai() {
         if ! _gh_pr_review_require_internal_cli hermes >"$_stderr_file" 2>&1; then
             _rc=1
         elif _prompt_content=$(_gh_pr_review_argv_prompt_or_fail "hermes -z" "$prompt_file" "$_stderr_file"); then
-            hermes -z "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
+            _gh_pr_review_timeout "$_slow_cli_timeout_sec" \
+                hermes -z "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
         else
             _rc=1
         fi
@@ -460,7 +491,8 @@ _gh_pr_review_run_ai() {
             }
         fi
         if [ "$_rc" -eq 0 ]; then
-            opencode run "$_ai_file_instruction" \
+            _gh_pr_review_timeout "$_slow_cli_timeout_sec" \
+                opencode run "$_ai_file_instruction" \
                 --model codemate/CodeLLMPro \
                 --dir "$_opencode_workdir" \
                 --file "$prompt_file" 2>"$_stderr_file" || _rc=$?
@@ -478,12 +510,26 @@ _gh_pr_review_run_ai() {
         # banner. Falls back to the literal first line so an unknown
         # CLI startup message still produces something.
         local _summary="" _line
-        while IFS= read -r _line; do
-            if ! _gh_pr_review_stderr_is_noise "$_line"; then
-                _summary="$_line"
-                break
-            fi
-        done <"$_stderr_file"
+        # Issue #1506: exit 124 is _gh_pr_review_timeout's "I killed it"
+        # signal. Whatever the CLI managed to write to stderr before the kill
+        # is a fragment, not a cause, so name the timeout outright instead of
+        # letting the generic first-non-noise-line summary imply the CLI
+        # reported a failure of its own.
+        if [ "$_rc" -eq 124 ]; then
+            case "$ai" in
+            opencode | hermes)
+                _summary="timed out after ${_slow_cli_timeout_sec}s — killed before completion, no review posted (issue #1506)"
+                ;;
+            esac
+        fi
+        if [ -z "$_summary" ]; then
+            while IFS= read -r _line; do
+                if ! _gh_pr_review_stderr_is_noise "$_line"; then
+                    _summary="$_line"
+                    break
+                fi
+            done <"$_stderr_file"
+        fi
         if [ -z "$_summary" ]; then
             _summary=$(head -n 1 "$_stderr_file" 2>/dev/null)
         fi

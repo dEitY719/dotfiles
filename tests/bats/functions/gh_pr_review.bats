@@ -1299,6 +1299,93 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# _gh_pr_review_run_ai — slow-CLI timeout bound (issue #1506). opencode and
+# hermes routinely run 8-10 minutes and previously had no bounded exit path,
+# so an ambient caller-side timeout could SIGKILL the tree before the
+# `_rc -ne 0` gate in gh_pr_review() could skip Step 6 comment-posting.
+# GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC keeps these fast instead of waiting 540s.
+# ---------------------------------------------------------------------------
+
+# Slow stub: sleeps, then prints the marker only if it survived the sleep.
+# The marker's absence is the proof the process was killed, not merely raced.
+_stub_slow_cli() {
+    local name="$1" sleep_sec="$2"
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/$name" <<EOF
+#!/bin/sh
+sleep $sleep_sec
+echo "SLOW_CLI_REVIEW_OUTPUT"
+exit 0
+EOF
+    chmod +x "$stub_dir/$name"
+    export PATH="$stub_dir:$PATH"
+}
+
+@test "run_ai opencode: exceeding GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC kills the CLI, no output survives" {
+    if ! command -v timeout >/dev/null 2>&1; then
+        skip "coreutils timeout not available — wrapper degrades to unbounded"
+    fi
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_slow_cli opencode 3
+    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=1
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai opencode "$f"
+    assert_failure 124
+    assert_output --partial "timed out after 1s"
+    assert_output --partial "no review posted (issue #1506)"
+    refute_output --partial "SLOW_CLI_REVIEW_OUTPUT"
+}
+
+@test "run_ai hermes: exceeding GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC kills the CLI, no output survives" {
+    if ! command -v timeout >/dev/null 2>&1; then
+        skip "coreutils timeout not available — wrapper degrades to unbounded"
+    fi
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_slow_cli hermes 3
+    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=1
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai hermes "$f"
+    assert_failure 124
+    assert_output --partial "timed out after 1s"
+    refute_output --partial "SLOW_CLI_REVIEW_OUTPUT"
+}
+
+@test "run_ai opencode: a CLI finishing inside the bound is unaffected by the timeout wrap" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_slow_cli opencode 1
+    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=10
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai opencode "$f"
+    assert_success
+    assert_output --partial "SLOW_CLI_REVIEW_OUTPUT"
+    refute_output --partial "timed out after"
+}
+
+@test "run_ai hermes: a CLI finishing inside the bound is unaffected by the timeout wrap" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_slow_cli hermes 1
+    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=10
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai hermes "$f"
+    assert_success
+    assert_output --partial "SLOW_CLI_REVIEW_OUTPUT"
+    refute_output --partial "timed out after"
+}
+
+# ---------------------------------------------------------------------------
 # _gh_pr_review_run_ai — stderr temp file uses the SSOT allocator (issue #1286
 # item 1). It used to call `mktemp` raw, so an unwritable /tmp aborted the
 # whole review even though the module already had a safe fallback; and the
