@@ -308,29 +308,23 @@ _pmt_acquire_lock() {
     fi
 }
 
-# The identity the tick's *workspace label* is derived from: host and repo,
-# from the one remote URL _pmt_bind_target read them out of. Host-qualified
-# because `owner/repo` is only unique per server (#1403/#1407).
+# Echo the tick's herdr *workspace label* — e.g. `mt-github.com-acme-dotfiles`.
+# Host and repo come from the one remote URL _pmt_bind_target read them out of;
+# the label is host-qualified because `owner/repo` is only unique per server
+# (#1403/#1407).
 #
-# The agent name no longer comes from here (#1530) — it goes through
-# `herdr_agent_name` over `_PMT_REPO` alone, because herdr's 32-character
-# budget has no room for the host. See the _PMT_AGENT_PREFIX comment.
-_pmt_target_key() {
-    printf '%s/%s' "${_PMT_HOST}" "${_PMT_REPO}"
-}
-
-# Echo `<prefix $1><slug of $2>` for the *workspace label* — e.g.
-# `${_PMT_WORKSPACE_PREFIX}` over `_pmt_target_key`, giving
-# `mt-github.com-acme-dotfiles`.
-#
-# Label-only since #1530. The agent name no longer comes from here: this fold
-# keeps uppercase and dots (they are inside the `tr -c` set), which herdr's
-# `^[a-z][a-z0-9_-]{0,31}$` rejects. Labels are not validated by herdr and
-# carry no length budget, so they keep the wider, host-qualified form; agent
-# names go through `herdr_agent_name`. Do not route an agent name back through
-# this function.
-_pmt_slug() {
-    printf '%s%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '-')"
+# This builds a label and nothing else since #1530. The agent name used to come
+# from the same generic `<prefix><slug>` helper, and that fold *keeps* uppercase
+# and dots (both are inside the `tr -c` set) — which herdr's
+# `^[a-z][a-z0-9_-]{0,31}$` rejects, so the train never started once. Labels are
+# not validated by herdr and carry no length budget, so they keep the wider,
+# host-qualified form; agent names go through `herdr_agent_name` over
+# `_PMT_REPO` alone, because 32 characters have no room for the host (see the
+# _PMT_AGENT_PREFIX comment). Taking no prefix argument is what keeps the two
+# apart: there is no longer a generic slug helper an agent tag can be fed to.
+_pmt_workspace_label() {
+    printf '%s%s' "${_PMT_WORKSPACE_PREFIX}" \
+        "$(printf '%s/%s' "${_PMT_HOST}" "${_PMT_REPO}" | tr -c 'A-Za-z0-9._-' '-')"
 }
 
 # Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
@@ -669,7 +663,7 @@ _pmt_prompt_train() {
 _pmt_launch_fresh() {
     local _agent="$1" _cwd="$2" _label _ws _msg _cause
 
-    _label=$(_pmt_slug "${_PMT_WORKSPACE_PREFIX}" "$(_pmt_target_key)")
+    _label=$(_pmt_workspace_label)
 
     # Only this path opens a pane, so this is the only path that needs an
     # account to open it with. Resolving it in main() would make every reuse

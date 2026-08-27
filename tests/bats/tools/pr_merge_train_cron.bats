@@ -696,9 +696,8 @@ _hold_lock() {
     _refute_logged "pmt-github.com-acme-dotfiles"
 
     local _name
-    _name=$(grep -oE 'herdr agent start [^ ]+' "${_LOG}" | head -1 | awk '{print $4}')
-    [[ "${_name}" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
-        || fail "not a valid herdr agent name: '${_name}'"
+    _name=$(awk '$2 == "agent" && $3 == "start" { print $4; exit }' "${_LOG}")
+    assert_valid_herdr_name "${_name}"
 }
 
 # The agent name is the NF-1 singleton lock: `_pmt_train_state` asks herdr
