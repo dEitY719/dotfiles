@@ -459,11 +459,20 @@ ux_table_row() {
     local col1="$1"
     local col2="$2"
     local col3="${3:-}"
+    local label="$col1"
+
+    # 20자를 넘는 라벨은 %-20s 가 자르지 않고 그대로 밀어내 구분자와 뒤 컬럼의
+    # 정렬을 깨뜨린다. 라벨을 따로 한 줄에 내보내고 이어지는 줄의 라벨 칸을
+    # 비워, 구분자가 평범한 행과 같은 열에 오게 한다.
+    if [ "${#col1}" -gt 20 ]; then
+        printf "  ${UX_PRIMARY}%s${UX_RESET}\n" "$col1"
+        label=""
+    fi
 
     if [ -n "$col3" ]; then
-        printf "  ${UX_PRIMARY}%-20s${UX_RESET} ${UX_MUTED}│${UX_RESET} %-30s ${UX_MUTED}│${UX_RESET} %s\n" "$col1" "$col2" "$col3"
+        printf "  ${UX_PRIMARY}%-20s${UX_RESET} ${UX_MUTED}│${UX_RESET} %-30s ${UX_MUTED}│${UX_RESET} %s\n" "$label" "$col2" "$col3"
     else
-        printf "  ${UX_PRIMARY}%-20s${UX_RESET} ${UX_MUTED}:${UX_RESET} %s\n" "$col1" "$col2"
+        printf "  ${UX_PRIMARY}%-20s${UX_RESET} ${UX_MUTED}:${UX_RESET} %s\n" "$label" "$col2"
     fi
 }
 
