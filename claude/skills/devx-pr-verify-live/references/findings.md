@@ -101,7 +101,7 @@ SKILL.md 의 **발견 처리 단계**를 뒷받침한다 — 후보를 스스로
 
 ## 5. 등록은 `gh:issue-create` 에 위임한다
 
-발견 1건마다 `Skill(gh:issue-create)` 를 호출한다.
+발견 1건마다 `Skill(gh:issue-create, "--assignee @me")` 를 호출한다.
 본문 골격 · 라벨 SSOT 판정 · ai-metrics 푸터는 **그 스킬이 SSOT** 다.
 
 **여기서 템플릿을 재기술하지 않는다** — 재기술하면 그쪽이 바뀔 때 두 곳이 어긋난다.
