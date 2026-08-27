@@ -178,9 +178,12 @@ def _tokenize(segment: str) -> list[str]:
         return [t.strip("\"'") for t in segment.split()]
 
 
+_REDIRECT_RE: re.Pattern[str] = re.compile(r"\d*(?:>>|>|<<|<)")
+
+
 def _is_redirect(token: str) -> bool:
     """True for redirect-ish tokens (`>/dev/null`, `2>&1`, `<`, `>>out`)."""
-    return bool(re.match(r"^\d*(?:>>|>|<<|<)", token))
+    return bool(_REDIRECT_RE.match(token))
 
 
 def _pgrep_pattern(tokens: list[str], start: int) -> str | None:
@@ -196,7 +199,7 @@ def _pgrep_pattern(tokens: list[str], start: int) -> str | None:
         tok = tokens[i]
         if _is_redirect(tok):
             # Skip a bare redirect operator plus its target.
-            if re.fullmatch(r"\d*(?:>>|>|<<|<)", tok):
+            if _REDIRECT_RE.fullmatch(tok):
                 i += 2
             else:
                 i += 1
@@ -206,7 +209,7 @@ def _pgrep_pattern(tokens: list[str], start: int) -> str | None:
             break
         if tok.startswith("--"):
             name, sep, _value = tok.partition("=")
-            if name in ("--full",):
+            if name == "--full":
                 full_match = True
             if not sep and name in _PGREP_LONG_VALUE_OPTS:
                 i += 2
