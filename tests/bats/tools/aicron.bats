@@ -875,6 +875,39 @@ EOF
     refute_output --partial "schedule drift"
 }
 
+@test "aicron: doctor does not false-positive on manifest whitespace padding (#1496 review, agy)" {
+    _aicron add hello
+    assert_success
+    # Column-aligned padding in a hand-edited manifest is valid cron syntax
+    # but not byte-identical to the crontab's normalized single-space form —
+    # the comparison must collapse it, not treat it as drift.
+    jq '(.jobs[] | select(.name=="hello") | .schedule) = "*/5   *   *   *   *"' \
+        "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+
+    _aicron doctor
+    assert_success
+    refute_output --partial "schedule drift"
+}
+
+@test "aicron: doctor compares @-macro schedules too, not just 5-field ones (#1496 review, codex)" {
+    jq '(.jobs[] | select(.name=="hello") | .schedule) = "@daily"' \
+        "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+    _aicron add hello
+    assert_success
+
+    jq '(.jobs[] | select(.name=="hello") | .schedule) = "@weekly"' \
+        "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+
+    _aicron doctor
+    assert_success
+    assert_output --partial "schedule drift for job hello"
+    assert_output --partial '"@weekly"'
+    assert_output --partial '"@daily"'
+}
+
 # ---------------------------------------------------------------------------
 # shipped manifest
 # ---------------------------------------------------------------------------
