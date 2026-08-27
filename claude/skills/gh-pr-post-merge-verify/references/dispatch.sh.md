@@ -13,10 +13,8 @@ Executable mirror + regression suite:
 WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
 VERIFY_SKILL=""
 if [ -r "$WATCHED_FILE" ]; then
-    if VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" \
+    if ! VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" \
         '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null); then
-        :
-    else
         # The file exists but is not JSON: a broken SSOT, not an opt-out.
         printf '[WARN] gh:pr-post-merge-verify: %s is not valid JSON — post-merge verification skipped.\n' \
             "$WATCHED_FILE"
@@ -37,9 +35,33 @@ pmv_json_first() {
         '[.. | objects | .[$k]? // empty] | map(select(type == "string")) | first // empty' \
         2>/dev/null || return 0
 }
-pmv_json_value() { jq -r "${1} // empty" 2>/dev/null || return 0; }
+# `.error.code` off a failed herdr answer, or empty. Fixed filter, so nothing
+# is ever interpolated into the jq program text.
+pmv_error_code() { jq -r '.error.code // empty' 2>/dev/null || return 0; }
 pmv_slug() { printf '%s%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '-')"; }
 pmv_physical_path() { (cd -P "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"; }
+
+# tab_id of a live agent sitting on <physical path>: rc 0 = matched, rc 1 =
+# herdr could not be asked, rc 3 = herdr answered and nothing is on that path.
+# An empty answer from herdr is "unknown", never "nothing running" — the one
+# mistake this signal cannot afford (issue_watcher_cron.sh's lesson). Match
+# BOTH cwd and foreground_cwd, prefix-match the PHYSICAL path, and never match
+# on an empty prefix (it would select an unrelated tab).
+pmv_tab_for_cwd() {
+    [ -n "$1" ] || return 3
+    _pmv_json=$(herdr agent list 2>/dev/null) || return 1
+    [ -n "$_pmv_json" ] || return 1
+    _pmv_tab=$(printf '%s' "$_pmv_json" | jq -r --arg p "$1" '
+        if (.result.agents | type) == "array" then
+          [ .result.agents[]?
+            | select(((.cwd // "") | startswith($p)) or ((.foreground_cwd // "") | startswith($p)))
+            | .tab_id // empty ]
+          | map(select(type == "string" and . != "")) | first // empty
+        else error("no agent list") end
+    ' 2>/dev/null) || return 1
+    [ -n "$_pmv_tab" ] || return 3
+    printf '%s' "$_pmv_tab"
+}
 
 # --- the main checkout (never a worktree) ---------------------------------
 # `main_checkout` from the registry when set; otherwise git's common dir,
@@ -57,33 +79,16 @@ IMPL_WT=$(git worktree list --porcelain 2>/dev/null |
         /^worktree / { p = substr($0, 10) }
         $0 == ("branch " b) { print p; exit }
     ')
-IMPL_TAB=""
-if [ -n "$IMPL_WT" ]; then
-    # An empty answer from herdr is "unknown", never "nothing running" — the
-    # one mistake this signal cannot afford (issue_watcher_cron.sh's lesson).
-    # Match BOTH cwd and foreground_cwd, prefix-match the PHYSICAL path, and
-    # never match on an empty prefix (it would select an unrelated tab).
-    AGENTS_JSON=$(herdr agent list 2>/dev/null) || AGENTS_JSON=""
-    IMPL_PHYS=$(pmv_physical_path "$IMPL_WT")
-    if [ -n "$AGENTS_JSON" ] && [ -n "$IMPL_PHYS" ]; then
-        IMPL_TAB=$(printf '%s' "$AGENTS_JSON" | jq -r --arg p "$IMPL_PHYS" '
-            if (.result.agents | type) == "array" then
-              [ .result.agents[]?
-                | select(((.cwd // "") | startswith($p)) or ((.foreground_cwd // "") | startswith($p)))
-                | .tab_id // empty ]
-              | map(select(type == "string" and . != "")) | first // empty
-            else error("no agent list") end
-        ' 2>/dev/null) || IMPL_TAB=""
-    fi
-fi
 if [ -z "$IMPL_WT" ]; then
     printf '[INFO] gh:pr-post-merge-verify: no local worktree for %s — nothing to close.\n' "$HEAD_BRANCH"
-elif [ -z "$IMPL_TAB" ]; then
-    printf '[INFO] gh:pr-post-merge-verify: no live herdr tab on %s — nothing to close.\n' "$IMPL_WT"
-elif herdr tab close "$IMPL_TAB" >/dev/null 2>&1; then
-    printf '[INFO] gh:pr-post-merge-verify: closed implementation tab %s (%s).\n' "$IMPL_TAB" "$IMPL_WT"
+elif IMPL_TAB=$(pmv_tab_for_cwd "$(pmv_physical_path "$IMPL_WT")"); then
+    if herdr tab close "$IMPL_TAB" >/dev/null 2>&1; then
+        printf '[INFO] gh:pr-post-merge-verify: closed implementation tab %s (%s).\n' "$IMPL_TAB" "$IMPL_WT"
+    else
+        printf '[WARN] gh:pr-post-merge-verify: herdr tab close %s failed — continuing.\n' "$IMPL_TAB"
+    fi
 else
-    printf '[WARN] gh:pr-post-merge-verify: herdr tab close %s failed — continuing.\n' "$IMPL_TAB"
+    printf '[INFO] gh:pr-post-merge-verify: no live herdr tab on %s — nothing to close.\n' "$IMPL_WT"
 fi
 
 # --- 3. F-3: the main checkout must be clean and rebased, or we stop -------
@@ -136,7 +141,7 @@ if ! START_JSON=$(herdr agent start "$PMV_AGENT" --kind claude --pane "$NEW_PANE
     # Race backstop: the name can be claimed between the probe and the start,
     # and its holder is by definition a usable agent — prompt it rather than
     # failing the dispatch (same backstop as _pmt_launch_fresh).
-    START_CODE=$(printf '%s' "$START_JSON" | pmv_json_value '.error.code')
+    START_CODE=$(printf '%s' "$START_JSON" | pmv_error_code)
     if [ "$START_CODE" != "agent_name_taken" ]; then
         printf '[WARN] gh:pr-post-merge-verify: herdr agent start %s failed on pane %s (%s) — verification skipped.\n' \
             "$PMV_AGENT" "$NEW_PANE" "${START_CODE:-unknown}"
@@ -151,7 +156,7 @@ fi
 VERIFY_PROMPT="/$(printf '%s' "$VERIFY_SKILL" | tr ':' '-') ${PR_NUMBER}"
 if ! PROMPT_JSON=$(herdr agent prompt "$PMV_AGENT" "$VERIFY_PROMPT" \
     --wait --until idle --timeout "${PMV_PROMPT_TIMEOUT_MS:-900000}" 2>/dev/null); then
-    PROMPT_CODE=$(printf '%s' "$PROMPT_JSON" | pmv_json_value '.error.code')
+    PROMPT_CODE=$(printf '%s' "$PROMPT_JSON" | pmv_error_code)
     printf '[WARN] gh:pr-post-merge-verify: herdr agent prompt %s failed (%s) — attach and run it by hand.\n' \
         "$PMV_AGENT" "${PROMPT_CODE:-unknown}"
 fi

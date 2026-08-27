@@ -75,9 +75,10 @@ pmv_json_first() {
         2>/dev/null || return 0
 }
 
-# One string field from JSON on stdin, e.g. '.error.code'.
-pmv_json_value() {
-    jq -r "${1} // empty" 2>/dev/null || return 0
+# `.error.code` off a failed herdr answer on stdin, or empty. Fixed filter, so
+# nothing is ever interpolated into the jq program text.
+pmv_error_code() {
+    jq -r '.error.code // empty' 2>/dev/null || return 0
 }
 
 # ============================================================
@@ -344,7 +345,7 @@ gh_pr_post_merge_verify() {
         # Race backstop, same as _pmt_launch_fresh: the name can be claimed
         # between the probe and the start, and its holder is by definition a
         # usable agent — prompt it rather than failing the dispatch.
-        _code=$(printf '%s' "$_out" | pmv_json_value '.error.code')
+        _code=$(printf '%s' "$_out" | pmv_error_code)
         if [ "$_code" != "agent_name_taken" ]; then
             printf '[WARN] gh:pr-post-merge-verify: herdr agent start %s failed on pane %s (%s) — verification skipped.\n' \
                 "$_agent" "$_pane" "${_code:-unknown}"
@@ -355,7 +356,7 @@ gh_pr_post_merge_verify() {
 
     # --- 6. hand the verification over ---
     if ! _out=$(pmv_agent_prompt "$_agent" "$(pmv_verify_prompt "$_skill" "$_pr")"); then
-        _code=$(printf '%s' "$_out" | pmv_json_value '.error.code')
+        _code=$(printf '%s' "$_out" | pmv_error_code)
         printf '[WARN] gh:pr-post-merge-verify: herdr agent prompt %s failed (%s) — attach and run it by hand.\n' \
             "$_agent" "${_code:-unknown}"
     fi
