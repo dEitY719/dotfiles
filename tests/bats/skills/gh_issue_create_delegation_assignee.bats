@@ -11,17 +11,12 @@
 # NF-1: gh:issue-create 스킬 자체는 이 이슈의 범위가 아니다 — 마지막
 # 회귀 가드가 그 4개 파일이 HEAD 와 바이트 동일한지 확인한다.
 #
-# 순수 정적 콘텐츠 검사다: 네트워크도 gh 호출도 없다.
+# 순수 정적 콘텐츠 검사다: 네트워크도 gh 호출도 없다. 모든 테스트가
+# _BATS_REAL_DOTFILES_ROOT 아래 파일을 grep/git diff 로만 읽는다 —
+# $HOME/$ZDOTDIR/$XDG_* 를 건드리지 않으므로 setup_isolated_home 은
+# 불필요하다.
 
 load '../test_helper'
-
-setup() {
-    setup_isolated_home
-}
-
-teardown() {
-    teardown_isolated_home
-}
 
 # -- 1. gh:pr-approve follow-up issue creation --------------------------------
 
@@ -59,10 +54,12 @@ APPROVAL_TEMPLATES="claude/skills/gh-pr-approve/references/approval-templates.md
 
 @test "pr-approve: Don'ts documents the --assignee @me exemption" {
     local f="${_BATS_REAL_DOTFILES_ROOT}/${APPROVAL_TEMPLATES}"
-    run grep -F -- '--assignee @me' "$f"
-    assert_success
-    # The exemption rationale must live next to the rule it exempts.
+    # The exemption rationale must live next to the rule it exempts, so the
+    # flag should appear at least twice: once in the `gh issue create` block,
+    # once in the Don'ts exemption sentence. -ge 2 already implies the grep
+    # matched, so a separate plain-grep assertion would be redundant.
     run grep -c -F -- '--assignee @me' "$f"
+    assert_success
     [ "$output" -ge 2 ]
 }
 
