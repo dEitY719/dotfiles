@@ -21,6 +21,10 @@
 # Stand-in for `command -v herdr >/dev/null 2>&1`.
 _pmv_herdr_present() { [ "${FAKE_HERDR_PRESENT:-1}" = "1" ]; }
 
+# Stand-in for `command -v jq >/dev/null 2>&1`. Without jq the registry cannot
+# be read at all, so the feature is unavailable — silently, never a WARN.
+_pmv_jq_present() { [ "${FAKE_JQ_PRESENT:-1}" = "1" ]; }
+
 # Stand-in for the `herdr` CLI. Records its argv into $FAKE_HERDR_LOG when the
 # test sets it, echoes $FAKE_HERDR_OUT_<SUB_CMD> and returns
 # $FAKE_HERDR_RC_<SUB_CMD> (e.g. FAKE_HERDR_OUT_TAB_CREATE, defaults rc 0).
@@ -40,15 +44,29 @@ _pmv_git_worktree_list() {
     return "${FAKE_WORKTREE_RC:-0}"
 }
 
+# Stand-in for `git -C <root> rev-parse --show-toplevel`. Empty output means
+# "not a git worktree" — what a bogus or empty MAIN_ROOT produces.
+_pmv_git_toplevel() {
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'toplevel %s\n' "$1" >>"$FAKE_GIT_LOG"
+    printf '%s' "${FAKE_MAIN_TOPLEVEL-$1}"
+}
+
+# Stand-in for `git -C <root> rev-parse --abbrev-ref HEAD`. Answers `HEAD` on a
+# detached checkout, exactly as git does.
+_pmv_git_current_branch() {
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'branch %s\n' "$1" >>"$FAKE_GIT_LOG"
+    printf '%s' "${FAKE_MAIN_BRANCH-main}"
+}
+
 # Stand-in for `git -C <root> status --porcelain` being non-empty.
 _pmv_git_is_dirty() {
     [ -z "${FAKE_GIT_LOG-}" ] || printf 'status %s\n' "$1" >>"$FAKE_GIT_LOG"
     [ "${FAKE_MAIN_DIRTY:-0}" = "1" ]
 }
 
-# Stand-in for `git -C <root> fetch origin main && git -C <root> rebase origin/main`.
+# Stand-in for `git -C <root> fetch <remote> <base> && git -C <root> rebase <remote>/<base>`.
 _pmv_git_sync() {
-    [ -z "${FAKE_GIT_LOG-}" ] || printf 'sync %s\n' "$1" >>"$FAKE_GIT_LOG"
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'sync %s %s %s\n' "$1" "$2" "$3" >>"$FAKE_GIT_LOG"
     return "${FAKE_SYNC_RC:-0}"
 }
 
@@ -96,6 +114,10 @@ pmv_error_code() {
 pmv_gate() {
     local _file="$1" _repo="$2" _val _rc
 
+    # No jq → the registry cannot be read, so the feature is unavailable. That
+    # is rc 1 (skip silently), never rc 2: an absent tool is not a broken SSOT,
+    # and gh:pr-merge's contract is that an unwatched repo prints nothing.
+    _pmv_jq_present || return 1
     [ -r "$_file" ] || return 1
 
     _val=$(jq -r --arg r "$_repo" '.[$r].verify_skill // empty' "$_file" 2>/dev/null)
@@ -104,6 +126,21 @@ pmv_gate() {
     [ -n "$_val" ] || return 1
 
     printf '%s' "$_val"
+}
+
+# pmv_verify_skill_allowed <verify_skill>
+#
+# The registry value is typed into a session started with
+# `--dangerously-skip-permissions`, so it is an *input to a prompt*, not a
+# label. Anything outside this allowlist is refused before a single herdr
+# mutation runs — a registry someone else can edit must not be able to steer
+# an unattended agent. Keep this list in sync with
+# `references/watched-repos-schema.md`.
+pmv_verify_skill_allowed() {
+    case "$1" in
+    devx:pr-verify-merged | devx:pr-verify-live) return 0 ;;
+    esac
+    return 1
 }
 
 # pmv_main_root <watched_file> <owner/repo> <git_common_dir>
@@ -126,6 +163,31 @@ pmv_main_root() {
     fi
 
     printf '%s' "${_common%/.git}"
+}
+
+# pmv_validate_main_root <main_root>. rc 0 = usable.
+#
+# An empty or bogus MAIN_ROOT is the quietly dangerous case: `git -C "" status`
+# fails, which the dirty check reads as "clean", and the later
+# `git -C "$MAIN_ROOT" rebase --abort` then fires wherever the shell happens to
+# stand. So the path must resolve to a git worktree root before ANY step runs,
+# the impl-tab close included.
+pmv_validate_main_root() {
+    local _root="$1" _top
+
+    if [ -n "$_root" ]; then
+        _top=$(_pmv_git_toplevel "$_root")
+    else
+        _top=""
+    fi
+
+    if [ -z "$_root" ] || [ -z "$_top" ] ||
+        [ "$(pmv_physical_path "$_top")" != "$(pmv_physical_path "$_root")" ]; then
+        printf '[WARN] gh:pr-post-merge-verify: main checkout "%s" is not a git worktree root — verification skipped.\n' "$_root"
+        return 1
+    fi
+
+    return 0
 }
 
 # ============================================================
@@ -187,13 +249,16 @@ pmv_tab_for_cwd() {
     [ -n "$_json" ] || return 1
 
     # Both columns, because they answer at different moments: `cwd` is where the
-    # pane was opened and `foreground_cwd` is where its shell stands now. Prefix
-    # match, because an agent in a subdirectory of the worktree is still that
-    # session (PR #1456 review).
+    # pane was opened and `foreground_cwd` is where its shell stands now. The
+    # match is the path itself or a directory BELOW it — a bare startswith()
+    # would let `/work/repo-11` match the prefix `/work/repo-1` and close a
+    # sibling checkout's tab (PR #1518 review). Subdirectories still count: an
+    # agent inside the worktree is still that session (PR #1456 review).
     _tab=$(printf '%s' "$_json" | jq -r --arg p "$_path" '
+        def under($b): . == $b or startswith($b + "/");
         if (.result.agents | type) == "array" then
           [ .result.agents[]?
-            | select(((.cwd // "") | startswith($p)) or ((.foreground_cwd // "") | startswith($p)))
+            | select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))
             | .tab_id // empty ]
           | map(select(type == "string" and . != "")) | first // empty
         else error("no agent list") end
@@ -207,18 +272,36 @@ pmv_tab_for_cwd() {
 # F-3 — the main checkout
 # ============================================================
 
-# pmv_sync_main <main_root>. rc 0 = the checkout is on a clean, rebased main.
-# Anything else warns and returns 1, and the caller must STOP: verifying stale
-# code proves nothing, so there is no point opening a session for it.
+# pmv_sync_main <main_root> <remote> <base_branch>. rc 0 = the checkout is on a
+# clean, rebased base branch. Anything else warns and returns 1, and the caller
+# must STOP: verifying stale code proves nothing, so there is no point opening
+# a session for it.
+#
+# `<remote>` is the skill's `[remote]` positional (default `origin`) and
+# `<base_branch>` is the merged PR's `baseRefName`; neither is hardcoded,
+# because a watched repo may default to `master`/`develop` or be reached
+# through `upstream`. An empty `<base_branch>` falls back to the checkout's own
+# current branch — never to a literal `main`, and never on a detached HEAD.
 pmv_sync_main() {
-    local _root="$1"
+    local _root="$1" _remote="${2:-origin}" _base="${3-}" _cur
 
     if _pmv_git_is_dirty "$_root"; then
         printf '[WARN] gh:pr-post-merge-verify: %s has uncommitted changes — not rebasing, verification skipped.\n' "$_root"
         return 1
     fi
 
-    if ! _pmv_git_sync "$_root"; then
+    # Rebasing without checking what HEAD is on would rewrite the history of
+    # whatever feature branch the main checkout happens to be parked on.
+    _cur=$(_pmv_git_current_branch "$_root")
+    [ "$_cur" != "HEAD" ] || _cur=""
+    [ -n "$_base" ] || _base="$_cur"
+    if [ -z "$_base" ] || [ "$_cur" != "$_base" ]; then
+        printf '[WARN] gh:pr-post-merge-verify: %s is on %s, not the base branch %s — not rebasing, verification skipped.\n' \
+            "$_root" "${_cur:-(detached HEAD)}" "${_base:-(unknown)}"
+        return 1
+    fi
+
+    if ! _pmv_git_sync "$_root" "$_remote" "$_base"; then
         # Restore, never resolve: an abandoned conflicted rebase would leave the
         # user's main checkout unusable, but picking sides is the human's call.
         _pmv_git_rebase_abort "$_root"
@@ -257,10 +340,19 @@ pmv_workspace_for_root() {
 pmv_tab_create() {
     local _ws="$1" _cwd="$2" _label="$3" _json _tab _pane
 
-    set -- tab create --workspace "$_ws" --cwd "$_cwd" --label "$_label" --no-focus
-    [ -z "${CLAUDE_CONFIG_DIR-}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR}"
-
-    _json=$(_pmv_herdr "$@") || return 1
+    # Spelled out twice rather than accumulated with `set --`: the dispatch
+    # block this mirrors is pasted at the top level of the caller's shell, where
+    # `set --` would destroy the caller's own "$1", "$2", … (PR #1518 review).
+    # POSIX sh has no arrays, so an if/else over the full command line is the
+    # only form that is both safe and portable.
+    if [ -n "${CLAUDE_CONFIG_DIR-}" ]; then
+        _json=$(_pmv_herdr tab create --workspace "$_ws" --cwd "$_cwd" \
+            --label "$_label" --no-focus \
+            --env "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR}") || return 1
+    else
+        _json=$(_pmv_herdr tab create --workspace "$_ws" --cwd "$_cwd" \
+            --label "$_label" --no-focus) || return 1
+    fi
     _pane=$(printf '%s' "$_json" | pmv_json_first pane_id)
     [ -n "$_pane" ] || return 1
     _tab=$(printf '%s' "$_json" | pmv_json_first tab_id)
@@ -288,13 +380,19 @@ pmv_agent_prompt() {
 # Orchestrator
 # ============================================================
 
-# gh_pr_post_merge_verify <pr> <owner/repo> <host> <main_root> <head_branch> <watched_file>
+# gh_pr_post_merge_verify <pr> <owner/repo> <host> <main_root> <head_branch> \
+#                          <watched_file> [remote] [base_branch]
+#
+# `[remote]` is the skill's `[remote]` positional (default `origin`) and
+# `[base_branch]` is the merged PR's `baseRefName`; both are threaded through
+# instead of hardcoding `origin`/`main` (PR #1518 review).
 #
 # Always returns 0: every failure mode is a soft-fail (F-6), because the caller
 # — gh:pr-merge — has already merged and already printed its report.
 gh_pr_post_merge_verify() {
     local _pr="$1" _repo="$2" _host="$3" _main="$4" _branch="$5" _file="$6"
-    local _skill _rc _wt _tab _ws _pane _agent _newtab _out _code
+    local _remote="${7:-origin}" _base="${8-}"
+    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code
 
     _skill=$(pmv_gate "$_file" "$_repo")
     _rc=$?
@@ -305,25 +403,46 @@ gh_pr_post_merge_verify() {
     # Unregistered repo or no registry at all: behave exactly as before #1511.
     [ "$_rc" -eq 0 ] || return 0
 
+    # The registry value ends up in an unattended, skip-permissions agent's
+    # prompt, so it is allowlisted before anything is touched.
+    if ! pmv_verify_skill_allowed "$_skill"; then
+        printf '[WARN] gh:pr-post-merge-verify: verify_skill "%s" for %s is not one of devx:pr-verify-merged, devx:pr-verify-live — verification skipped.\n' \
+            "$_skill" "$_repo"
+        return 0
+    fi
+
     # herdr absent → the whole feature is a no-op, silently.
     _pmv_herdr_present || return 0
+
+    # A main checkout that is not a git worktree root makes every later git
+    # probe fail open, so it is checked before the first side effect.
+    pmv_validate_main_root "$_main" || return 0
 
     # --- 1/2. close the implementation tab (best-effort, never blocking) ---
     _wt=$(pmv_worktree_for_branch "$_branch")
     if [ -z "$_wt" ]; then
         printf '[INFO] gh:pr-post-merge-verify: no local worktree for %s — nothing to close.\n' "$_branch"
-    elif _tab=$(pmv_tab_for_cwd "$(pmv_physical_path "$_wt")"); then
-        if _pmv_herdr tab close "$_tab" >/dev/null 2>&1; then
-            printf '[INFO] gh:pr-post-merge-verify: closed implementation tab %s (%s).\n' "$_tab" "$_wt"
-        else
-            printf '[WARN] gh:pr-post-merge-verify: herdr tab close %s failed — continuing.\n' "$_tab"
-        fi
     else
-        printf '[INFO] gh:pr-post-merge-verify: no live herdr tab on %s — nothing to close.\n' "$_wt"
+        _tab=$(pmv_tab_for_cwd "$(pmv_physical_path "$_wt")")
+        _tabrc=$?
+        if [ "$_tabrc" -eq 0 ]; then
+            if _pmv_herdr tab close "$_tab" >/dev/null 2>&1; then
+                printf '[INFO] gh:pr-post-merge-verify: closed implementation tab %s (%s).\n' "$_tab" "$_wt"
+            else
+                printf '[WARN] gh:pr-post-merge-verify: herdr tab close %s failed — continuing.\n' "$_tab"
+            fi
+        elif [ "$_tabrc" -eq 1 ]; then
+            # rc 1 is "herdr could not be asked", NOT "nothing is running there".
+            # Reporting it as "nothing to close" is exactly the conflation
+            # rationale.md forbids.
+            printf '[WARN] gh:pr-post-merge-verify: herdr could not be queried — implementation tab on %s left alone.\n' "$_wt"
+        else
+            printf '[INFO] gh:pr-post-merge-verify: no live herdr tab on %s — nothing to close.\n' "$_wt"
+        fi
     fi
 
-    # --- 3. main checkout must be clean and rebased, or we stop here ---
-    pmv_sync_main "$_main" || return 0
+    # --- 3. main checkout must be clean, on the base branch, and rebased ---
+    pmv_sync_main "$_main" "$_remote" "$_base" || return 0
 
     # --- 4. the verification tab ---
     _ws=$(pmv_workspace_for_root "$_main")

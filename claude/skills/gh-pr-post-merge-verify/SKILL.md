@@ -26,25 +26,29 @@ stop (no herdr calls, no git calls). That file tables the positionals
 
 Automates the manual post-merge routine for **registered repos only**: close
 the tab that implemented the PR, bring the main checkout up to date, and hand
-the verification to a fresh session. It never verifies anything itself and it
-never touches GitHub — `gh:pr-merge` has already merged and reported by the
-time this runs.
+the verification to a fresh session. It never verifies anything itself and
+never *writes* to GitHub — `gh:pr-merge` has already merged and reported.
 
-**Every failure is soft.** This skill always exits 0 with a one-line `[WARN]`,
-because its caller's report must print either way (F-6). The one exception is
-a stale main checkout: that stops the run before a session is opened, since
-verifying stale code proves nothing.
+**Every failure is soft** — one `[WARN]` line, exit 0 — because its caller's
+report must print either way (F-6). The one exception is a stale main
+checkout: verifying stale code proves nothing, so that stops the run.
 
 ## Step 1: Gate on `docs/.ssot/watched-repos.json` (F-1)
 
 ```bash
 WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
-VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
+VERIFY_SKILL=""
+if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
+    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
+fi
 ```
 
-- Empty `VERIFY_SKILL`, or an unreadable file → **do nothing at all**, no
-  output. An unwatched repo must behave exactly as it did before #1511.
+- Empty `VERIFY_SKILL`, an unreadable file, or no `jq` → **do nothing at
+  all**, no output. An unwatched repo behaves exactly as before #1511.
 - `jq` non-zero (the file exists but is not JSON) → one `[WARN]`, then skip.
+- `VERIFY_SKILL` outside the allowlist (`devx:pr-verify-merged`,
+  `devx:pr-verify-live`) → one `[WARN]`, stop before any herdr call. It reaches
+  a `--dangerously-skip-permissions` agent's prompt, so it is never free text.
 - `command -v herdr` missing → silent no-op.
 
 Schema and registration procedure: `references/watched-repos-schema.md`.
@@ -55,9 +59,12 @@ Same binding as `gh:pr-merge` — repo **and** host from one remote URL
 (#1403/#1407); see `../gh-pr-merge/references/github-target.md`. No API call
 is made: the slug is only the registry key and part of the agent name.
 
-Also bind `HEAD_BRANCH`, the merged PR's head branch. `gh:pr-merge` already
-read it in its own Step 2 (`headRefName`) and passes it down; standalone, read
-it from the PR the same way, host-pinned and repo-scoped.
+Also bind `HEAD_BRANCH` and `BASE_BRANCH` (the merged PR's head/base branches)
+plus `REMOTE` (the `[remote]` positional, default `origin`). `gh:pr-merge`
+already read both refs in its own Step 2 and passes them down; standalone,
+recover them with the host-pinned `gh pr view` in `references/dispatch.sh.md`
+→ "Inputs". Step 3 fetches and rebases with those — never a literal
+`origin`/`main`.
 
 ## Step 3: Run the dispatch
 
@@ -66,24 +73,25 @@ Paste `references/dispatch.sh.md` verbatim. It performs, in order:
 1. `git worktree list --porcelain` → the local path of the merged head branch.
 2. `herdr agent list` → the `tab_id` whose `cwd`/`foreground_cwd` sits on that
    path → `herdr tab close <tab_id>`. Not found → note it and continue (F-2).
-3. `git -C "$MAIN_ROOT" fetch origin main && git -C "$MAIN_ROOT" rebase origin/main`.
-   Dirty tree or conflict → `[WARN]`, `rebase --abort`, **stop** (F-3).
-4. `herdr tab create --workspace <ws> --cwd "$MAIN_ROOT" --label "pr-<N>"` (F-4).
-5. `herdr agent start pmv-<host>-<owner>-<repo>-<N> --kind claude --pane <pane>
+3. `git -C "$MAIN_ROOT" fetch "$REMOTE" "$BASE_BRANCH"` + `rebase "$REMOTE/$BASE_BRANCH"`,
+   only once `MAIN_ROOT` is a git worktree root and its HEAD is on
+   `BASE_BRANCH`. Dirty tree, wrong/detached branch, or conflict → `[WARN]`,
+   `rebase --abort`, **stop** (F-3).
+4. `herdr tab create --workspace <ws> --cwd "$MAIN_ROOT" --label "pr-<N>"`, then
+   `herdr agent start pmv-<host>-<owner>-<repo>-<N> --kind claude --pane <pane>
    -- --dangerously-skip-permissions` (F-4).
-6. `herdr agent prompt <agent> "/<verify-skill> <N>" --wait --until idle` (F-5).
-7. Report the new `tab_id`, the agent name, and the `herdr agent attach` hint.
+5. `herdr agent prompt <agent> "/<verify-skill> <N>" --wait --until idle` (F-5),
+   then report the new `tab_id`, the agent name, and the `attach` hint.
 
-The executable form of every decision above is mirrored in
-`tests/bats/skills/_fixtures/gh_pr_post_merge_verify.sh` — change one, change
-both.
+Every decision above is mirrored executably in
+`tests/bats/skills/_fixtures/gh_pr_post_merge_verify.sh` — change one, change both.
 
 ## Constraints
 
 - Never resolve a rebase conflict, and never `--force` anything.
 - Never open more than one session per PR — no batching, no retries.
-- Never write to GitHub. Never touch the unattended
-  `pr_merge_train_cron.sh` path (out of scope by #1511's non-goals).
+- Never *write* to GitHub — the head/base ref read is its only API call, and
+  never touch the unattended `pr_merge_train_cron.sh` path (#1511 non-goal).
 - Never act on a repo missing from `watched-repos.json`.
 
 ## Related Skills
