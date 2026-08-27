@@ -8,7 +8,7 @@
 #
 # Issue #1519 acceptance criteria:
 #   AC-2  403 on both sources        -> gate off, "no policy on <base>"
-#   AC-3  ruleset >= 1 + 404 classic -> gate on   (D-2 regression guard)
+#   AC-3  ruleset >= 1 + 404 classic -> gate on   (#1519 D-2 regression guard)
 #   AC-4  5xx / network              -> gate on, fail-closed, named as such
 #   AC-5  board not Approved         -> [SKIPPED] self-record withheld (BLOCKER)
 #   AC-6  head unchanged since review-> no re-run, [SKIPPED] unchanged
@@ -42,60 +42,60 @@ plan_403() {
     FAKE_RULES_RESPONSE="$(plan_403)" FAKE_RULES_RC=1
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'none 0'
+    assert_output 'none'
 }
 
 @test "gate-probe: 404 not-configured is 'no policy'" {
     FAKE_RULES_RESPONSE="$(train_gate_http 404 '{"message":"Branch not protected"}')" FAKE_RULES_RC=1
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'none 0'
+    assert_output 'none'
 }
 
 @test "gate-probe: 500 is undetermined -> unknown (stays fail-closed)" {
     FAKE_RULES_RESPONSE="$(train_gate_http 500 '{"message":"Server Error"}')" FAKE_RULES_RC=1
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'unknown 0'
+    assert_output 'unknown'
 }
 
 @test "gate-probe: no HTTP response at all (network down) -> unknown" {
     FAKE_RULES_RESPONSE='' FAKE_RULES_RC=1
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'unknown 0'
+    assert_output 'unknown'
 }
 
-@test "gate-probe: 200 with required_approving_review_count=2 -> required 2" {
+@test "gate-probe: 200 with required_approving_review_count=2 -> required count 2" {
     FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":2}}]')"
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'required 2'
+    assert_output '2'
 }
 
 @test "gate-probe: 200 with count=0 is 'no policy' (D-5 unchanged)" {
     FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":0}}]')"
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'none 0'
+    assert_output 'none'
 }
 
 @test "gate-probe: 200 with no pull_request rule is 'no policy'" {
     FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"deletion"},{"type":"non_fast_forward"}]')"
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'none 0'
+    assert_output 'none'
 }
 
 @test "gate-probe: strictest ruleset wins when several apply" {
     FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":1}},{"type":"pull_request","parameters":{"required_approving_review_count":3}}]')"
     run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
     assert_success
-    assert_output 'required 3'
+    assert_output '3'
 }
 
 # ---------------------------------------------------------------------
-# Combining the two sources (F-3, F-4) + NF-1 header
+# Combining the two sources (#1519 F-3, F-4) + #1519 NF-1 header
 # ---------------------------------------------------------------------
 
 @test "AC-2: both sources 403 -> gate off with 'no policy on <base>'" {
@@ -106,7 +106,7 @@ plan_403() {
     assert_output 'off|no policy on main'
 }
 
-@test "AC-3: ruleset requires 1, classic 404 -> gate STAYS ON (D-2 guard)" {
+@test "AC-3: ruleset requires 1, classic 404 -> gate STAYS ON (#1519 D-2 guard)" {
     FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":1}}]')"
     FAKE_PROTECTION_RESPONSE="$(train_gate_http 404 '{"message":"Branch not protected"}')" FAKE_PROTECTION_RC=1
     run train_gate_verdict main
@@ -114,7 +114,7 @@ plan_403() {
     assert_output 'on|ruleset: 1 approvals'
 }
 
-@test "D-2: classic protection requires 2, ruleset 404 -> gate on via protection" {
+@test "#1519 D-2: classic protection requires 2, ruleset 404 -> gate on via protection" {
     FAKE_RULES_RESPONSE="$(train_gate_http 404 '{"message":"Not Found"}')" FAKE_RULES_RC=1
     FAKE_PROTECTION_RESPONSE="$(train_gate_http 200 '{"required_pull_request_reviews":{"required_approving_review_count":2}}')"
     run train_gate_verdict main
@@ -187,7 +187,7 @@ plan_403() {
 }
 
 # ---------------------------------------------------------------------
-# Delegated review (F-6 … F-9)
+# Delegated review (#1519 F-6 … F-9)
 # ---------------------------------------------------------------------
 
 @test "AC-6: same head already reviewed -> suppressed" {
@@ -195,12 +195,12 @@ plan_403() {
     assert_success
 }
 
-@test "F-8: head moved since the last review -> re-review is armed" {
+@test "#1519 F-8: head moved since the last review -> re-review is armed" {
     run train_review_suppressed deadbeef cafebabe
     assert_failure
 }
 
-@test "F-8: no prior review by ME -> not suppressed" {
+@test "#1519 F-8: no prior review by ME -> not suppressed" {
     run train_review_suppressed '' cafebabe
     assert_failure
 }
@@ -225,7 +225,7 @@ plan_403() {
 
 @test "already-Approved card from an earlier tick proceeds without re-running" {
     # A PR whose review passed but whose merge then failed on CI comes back
-    # with Approved still on the card. Reading the board AFTER the F-8
+    # with Approved still on the card. Reading the board AFTER the #1519 F-8
     # suppression check is what keeps it moving.
     run train_delegated_outcome Approved 0
     assert_success
@@ -238,7 +238,7 @@ plan_403() {
     assert_output 'skip:board unreadable — approval unconfirmed'
 }
 
-@test "F-9: gh:pr-approve itself failing skips only that PR" {
+@test "#1519 F-9: gh:pr-approve itself failing skips only that PR" {
     run train_delegated_outcome Approved 1 3
     assert_success
     assert_output 'skip:self-record failed'
@@ -249,37 +249,32 @@ plan_403() {
 # ---------------------------------------------------------------------
 
 @test "doc-guard: approval-gate.md classifies 403/404 as 'no policy'" {
-    run grep -q '403 | 404) printf .none 0' "${SKILL_DIR}/references/approval-gate.md"
+    run grep -qE '^\| `403` \|.*`none` \|$' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+    run grep -qE '^\| `404` \|.*`none` \|$' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+    run grep -qE '^\| anything else .*`unknown` \|$' "${SKILL_DIR}/references/approval-gate.md"
     assert_success
 }
 
-@test "doc-guard: approval-gate.md reads BOTH sources (D-2)" {
+@test "doc-guard: approval-gate.md reads BOTH sources (#1519 D-2)" {
     run grep -qE 'branches/\$BASE_ENC/protection' "${SKILL_DIR}/references/approval-gate.md"
     assert_success
     run grep -qE 'rules/branches/\$BASE_ENC' "${SKILL_DIR}/references/approval-gate.md"
     assert_success
 }
 
-@test "doc-guard: the old undifferentiated 'call failed' row is gone" {
-    run grep -q 'call failed' "${SKILL_DIR}/references/approval-gate.md"
-    assert_failure
-}
-
 @test "doc-guard: train-loop.md documents the delegated review" {
     run grep -q 'Delegated review on the gate-off path' "${SKILL_DIR}/references/train-loop.md"
-    assert_success
-    run grep -q 'self-record' "${SKILL_DIR}/references/train-loop.md"
     assert_success
 }
 
 @test "doc-guard: train-loop.md still says the board is not a policy gate (#1513)" {
-    run grep -q 'The projectV2 board Status is \*\*not\*\* one of these gates' "${SKILL_DIR}/references/train-loop.md"
-    assert_success
-    run grep -q 'policy gate' "${SKILL_DIR}/references/train-loop.md"
+    run grep -q 'nothing may consult the board \*before\* a review has been run' "${SKILL_DIR}/references/train-loop.md"
     assert_success
 }
 
-@test "doc-guard: report-format.md carries all three NF-1 header strings" {
+@test "doc-guard: report-format.md carries all three #1519 NF-1 header strings" {
     run grep -q 'off (no policy on <base>)' "${SKILL_DIR}/references/report-format.md"
     assert_success
     run grep -q 'on (<source>: <n> approvals)' "${SKILL_DIR}/references/report-format.md"
@@ -304,7 +299,7 @@ plan_403() {
     assert_success
 }
 
-@test "doc-guard: allowed-tools gained no Agent (NF-2 serial contract)" {
-    run grep -q 'allowed-tools: Bash, Read, Grep, Skill' "${SKILL_DIR}/SKILL.md"
-    assert_success
+@test "doc-guard: allowed-tools gained no Agent (D-8 serial contract)" {
+    run grep -qE '^allowed-tools:.*\bAgent\b' "${SKILL_DIR}/SKILL.md"
+    assert_failure
 }

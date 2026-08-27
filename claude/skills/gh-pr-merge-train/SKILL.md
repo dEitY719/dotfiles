@@ -57,12 +57,11 @@ Read `required_approving_review_count` from **both** rulesets and classic
 branch protection per `references/approval-gate.md`, **once per distinct
 `baseRefName`**, cached per base — two calls per base, never per PR. Either
 source requiring `>= 1` → gate on, unapproved PRs `[SKIPPED]`; both reporting
-no policy → off (D-5). Classify by **HTTP status, not exit code**: `403`/`404`
-mean no policy can apply, 5xx / 401 / network mean undetermined and stay
-fail-closed — collapsing the two is what made unattended merges impossible on
-free-plan private repos (#1519). Even with the gate off, a non-empty
-non-`APPROVED` `reviewDecision` is `[SKIPPED]` before `gh:pr-merge` is called —
-it would refuse, and NF-2 forbids clearing that.
+no policy → off (D-5). Classify by **HTTP status, not exit code**: a `403`/`404`
+is "no policy", not a failed lookup, and only a genuinely undetermined answer
+stays fail-closed (#1519). Even with the gate off, a non-empty non-`APPROVED`
+`reviewDecision` is `[SKIPPED]` before `gh:pr-merge` is called — it would
+refuse, and NF-2 forbids clearing that.
 
 ## Step 4: Run the train — one PR at a time
 
@@ -72,7 +71,7 @@ invalidated everything behind it), route through the D-1 table
 (`references/routing-table.md`), then merge with `Skill(gh:pr-merge, "<N>")`.
 Gate off with an empty `reviewDecision` first runs one
 `Skill(gh:pr-approve, "<N> <remote> --self-record")` and reads the board back as
-its verdict — no approval, no merge, and no re-run for an already-reviewed head.
+its verdict — no approval, no merge.
 The `BEHIND` / `DIRTY` rows rebase inside a **detached scratch worktree** the
 train creates and unconditionally removes per attempt (#1493). Attempts are
 capped at 3 per PR (F-5); a failure skips that PR and the train continues

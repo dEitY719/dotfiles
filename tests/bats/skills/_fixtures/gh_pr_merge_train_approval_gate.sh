@@ -50,7 +50,7 @@ train_gate_http() {
 
 # ---------------------------------------------------------------------
 # Mirrors approval-gate.md -> "Classify each source by HTTP status".
-# Echoes "<verdict> <count>": required <n> | none 0 | unknown 0.
+# Echoes `none`, `unknown`, or the required approval count (>= 1).
 # ---------------------------------------------------------------------
 _gate_probe() {
     local _path="$1" _jq="$2" _out _status _n
@@ -59,18 +59,18 @@ _gate_probe() {
     case "$_status" in
         2??) ;;
         403 | 404)
-            printf 'none 0\n'
+            echo none
             return 0
             ;;
         *)
-            printf 'unknown 0\n'
+            echo unknown
             return 0
             ;;
     esac
-    _n=$(printf '%s\n' "$_out" | sed -n '/^\r\{0,1\}$/,$p' | sed '1d' | jq -r "$_jq" 2>/dev/null)
+    _n=$(printf '%s\n' "$_out" | sed '1,/^\r\{0,1\}$/d' | jq -r "$_jq" 2>/dev/null)
     case "$_n" in
-        '' | null | 0) printf 'none 0\n' ;;
-        *) printf 'required %s\n' "$_n" ;;
+        '' | null | 0) echo none ;;
+        *) echo "$_n" ;;
     esac
 }
 
@@ -78,30 +78,24 @@ _RULES_JQ='[.[] | select(.type == "pull_request") | .parameters.required_approvi
 _PROTECTION_JQ='.required_pull_request_reviews.required_approving_review_count // empty'
 
 # ---------------------------------------------------------------------
-# Mirrors approval-gate.md -> "Combining the two sources" (F-3, F-4) and
-# report-format.md -> "The `approval gate:` field" (NF-1).
+# Mirrors approval-gate.md -> "Combining the two sources" (#1519 F-3, F-4)
+# and report-format.md -> "The `approval gate:` field" (#1519 NF-1).
 # Echoes "<on|off>|<header text>".
 # ---------------------------------------------------------------------
 _gate_combine() {
     local _base="$1" _ruleset="$2" _classic="$3"
-    local _max=-1 _unknown=0 _src='' _pair _name _verdict _count
-    for _pair in "ruleset $_ruleset" "protection $_classic"; do
-        # shellcheck disable=SC2086
-        set -- $_pair
-        _name="$1" _verdict="$2" _count="$3"
-        case "$_verdict" in
-            required)
-                if [ "$_count" -gt "$_max" ]; then
-                    _max="$_count"
-                    _src="$_name"
-                fi
-                ;;
-            unknown) _unknown=1 ;;
-        esac
-    done
+    local _max=0 _src=''
+    case "$_ruleset" in
+        none | unknown) ;;
+        *) _max="$_ruleset" _src=ruleset ;;
+    esac
+    case "$_classic" in
+        none | unknown) ;;
+        *) [ "$_classic" -gt "$_max" ] && { _max="$_classic" _src=protection; } ;;
+    esac
     if [ "$_max" -ge 1 ]; then
         printf 'on|%s: %s approvals\n' "$_src" "$_max"
-    elif [ "$_unknown" -eq 1 ]; then
+    elif [ "$_ruleset" = unknown ] || [ "$_classic" = unknown ]; then
         printf 'on|fail-closed: %s policy unreadable\n' "$_base"
     else
         printf 'off|no policy on %s\n' "$_base"
@@ -122,26 +116,20 @@ train_gate_verdict() {
 # ---------------------------------------------------------------------
 train_pr_route() {
     local _gate="$1" _rd="$2"
-    if [ "$_gate" = "on" ]; then
-        [ "$_rd" = "APPROVED" ] && {
-            printf 'proceed\n'
-            return 0
-        }
-        printf 'skip:approval required (reviewDecision=%s)\n' "$_rd"
-        return 0
-    fi
     [ "$_rd" = "APPROVED" ] && {
         printf 'proceed\n'
         return 0
     }
-    [ -n "$_rd" ] && {
+    if [ "$_gate" = "on" ]; then
+        printf 'skip:approval required (reviewDecision=%s)\n' "$_rd"
+    elif [ -n "$_rd" ]; then
         printf 'skip:gh:pr-merge refuses reviewDecision=%s\n' "$_rd"
-        return 0
-    }
-    printf 'delegate\n'
+    else
+        printf 'delegate\n'
+    fi
 }
 
-# F-8: the same head was already reviewed by $ME. Returns 0 when the
+# #1519 F-8: the same head was already reviewed by $ME. Returns 0 when the
 # delegated review must NOT be re-run.
 train_review_suppressed() {
     local _last="$1" _head="$2"
@@ -151,7 +139,7 @@ train_review_suppressed() {
 # ---------------------------------------------------------------------
 # Mirrors train-loop.md -> "Delegated review on the gate-off path" step 3.
 # $1 board Status ("" = unreadable), $2 ran_this_tick (1|0),
-# $3 skill_rc (non-zero = the gh:pr-approve call itself failed, F-9).
+# $3 skill_rc (non-zero = the gh:pr-approve call itself failed, #1519 F-9).
 # ---------------------------------------------------------------------
 train_delegated_outcome() {
     local _board="$1" _ran="$2" _rc="${3-0}"
