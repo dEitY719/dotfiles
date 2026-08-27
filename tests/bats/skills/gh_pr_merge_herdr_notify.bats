@@ -37,7 +37,15 @@ branch refs/heads/wt/issue-1508/1
 "
     export FAKE_WORKTREE_LIST
 
+    # Every stubbed subcommand is appended here, so NF-2 can be asserted on the
+    # calls actually made rather than only on the source text (cf.
+    # gh_pr_merge_board_gate.bats' FAKE_HELPER_LOG).
+    FAKE_CALL_LOG="${TEST_TEMP_HOME}/calls.log"
+    export FAKE_CALL_LOG
+    : >"$FAKE_CALL_LOG"
+
     git() {
+        printf 'git %s\n' "$*" >>"$FAKE_CALL_LOG"
         if [ "$1" = "worktree" ] && [ "$2" = "list" ]; then
             printf '%s' "${FAKE_WORKTREE_LIST-}"
             return 0
@@ -48,6 +56,7 @@ branch refs/heads/wt/issue-1508/1
     # Shadow `herdr` with the two read-only enumerations the fixture calls.
     # FAKE_AGENT_RC lets a test simulate a dead local herdr server.
     herdr() {
+        printf 'herdr %s\n' "$*" >>"$FAKE_CALL_LOG"
         if [ "$1" = "agent" ] && [ "$2" = "list" ]; then
             [ "${FAKE_AGENT_RC:-0}" -eq 0 ] || return "$FAKE_AGENT_RC"
             printf '%s' "${FAKE_AGENT_JSON-}"
@@ -70,17 +79,16 @@ branch refs/heads/wt/issue-1508/1
 teardown() {
     teardown_isolated_home
     unset -f git herdr 2>/dev/null || true
-    unset WT_DIR FAKE_WORKTREE_LIST FAKE_AGENT_JSON FAKE_WORKSPACE_JSON FAKE_AGENT_RC
+    unset WT_DIR FAKE_WORKTREE_LIST FAKE_AGENT_JSON FAKE_WORKSPACE_JSON FAKE_AGENT_RC FAKE_CALL_LOG
 }
 
 # Build an agent-list JSON payload from one or more `cwd|tab_id|status|ws_id`
 # specs, so each test states only the fields it cares about.
 _agents_json() {
     local spec sep="" out='{"result":{"agents":['
+    local cwd tab st ws
     for spec in "$@"; do
-        local cwd="${spec%%|*}" rest="${spec#*|}"
-        local tab="${rest%%|*}"; rest="${rest#*|}"
-        local st="${rest%%|*}"; local ws="${rest#*|}"
+        IFS='|' read -r cwd tab st ws <<<"$spec"
         out+="${sep}{\"cwd\":\"${cwd}\",\"tab_id\":\"${tab}\",\"agent_status\":\"${st}\",\"workspace_id\":\"${ws}\"}"
         sep=","
     done
@@ -109,7 +117,7 @@ _agents_json() {
     FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|working|ws-1")"
     run gh_pr_merge_herdr_notify "wt/issue-1508/1"
     assert_success
-    refute_output --partial '[INFO]'
+    # Empty output is the stronger assertion — it subsumes "no [INFO] line".
     [ -z "$output" ]
 }
 
@@ -117,7 +125,6 @@ _agents_json() {
     FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|blocked|ws-1")"
     run gh_pr_merge_herdr_notify "wt/issue-1508/1"
     assert_success
-    refute_output --partial '[INFO]'
     [ -z "$output" ]
 }
 
@@ -232,6 +239,40 @@ herdr workspace list'
     # git is used exactly once, for the porcelain worktree enumeration.
     run bash -c "grep -oE 'git [a-z]+ [a-z]+' '$fixture' | sort -u"
     assert_output 'git worktree list'
+}
+
+@test "herdr-notify (NF-2): a full idle run invokes only read-only subcommands" {
+    # Runtime counterpart to the two static greps above: whatever the source
+    # text looks like, every call this step actually made must be an
+    # enumeration — a mutating call built through indirection would show up
+    # here even though it matches no literal grep.
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|idle|ws-1")"
+    run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    run bash -c "cut -d' ' -f1-3 '$FAKE_CALL_LOG' | sort -u"
+    assert_output 'git worktree list
+herdr agent list
+herdr workspace list'
+}
+
+@test "herdr-notify: reference doc and fixture have not drifted apart" {
+    # The fixture is a hand-kept mirror of the doc's bash block (house pattern,
+    # cf. helper_fallback_nf1.bats). Pin the load-bearing literals so editing
+    # only one side turns this suite red instead of silently diverging.
+    local doc="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/references/herdr-tab-notify.sh.md"
+    local fixture="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_herdr_notify.sh"
+    local f pat
+    for pat in \
+        "[INFO] herdr tab %s/%s is idle for the merged branch's worktree (%s)" \
+        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' \
+        '.result.agents[]? | select(.cwd == $cwd)' \
+        '.result.workspaces[]? | select(.workspace_id == $id) | .label' \
+        '= "idle" ]'; do
+        for f in "$doc" "$fixture"; do
+            run grep -F -- "$pat" "$f"
+            assert_success
+        done
+    done
 }
 
 @test "herdr-notify: SKILL.md Step 4 points at the reference doc" {
