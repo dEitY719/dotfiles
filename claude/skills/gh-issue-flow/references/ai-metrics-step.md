@@ -34,9 +34,20 @@ e. Post the aggregate comment on the linked issue (body template below),
    Skip the post entirely when `GH_DISABLE_AI_METRICS=1` (issue #399);
    the six sub-skills already honour the same env var, so a disabled
    run leaves zero ai-metrics artifacts on the issue or PR.
+   **Re-derive `GH_HOST`/`TARGET_REPO` fresh in this same Bash call from the
+   literal `<remote>` value** — do not trust that Step 1's export survived
+   the five `Skill()` calls in between (#1498, PR #1539 review: a Bash tool
+   call is not guaranteed to inherit an earlier call's exports). Paste
+   `references/target-binding.md`'s block again here with `<remote>`
+   substituted literally, same as Step 1 did.
 f. On failure: print `[WARN] ai-metrics comment failed (<reason>) — continuing.`
 
 ```bash
+. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
+REMOTE_URL=$(git remote get-url "<remote>")
+TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
+TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
+
 if [ "${GH_DISABLE_AI_METRICS:-0}" = "1" ]; then
     : # ai-metrics comment skipped via GH_DISABLE_AI_METRICS
 else

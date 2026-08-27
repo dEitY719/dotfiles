@@ -15,10 +15,13 @@
 - **Merge-train wake soft-fail exception (#1482).** Step 2.4.1
   (`aicron run merge-train`) fires right after Step 2.4, whether or not 2.4
   succeeded — it is not a `Skill()` call and never stops the flow. It only
-  fires when Step 1's exported `REMOTE` is `origin`; any other remote is a
-  silent skip, not a failure (#1498 — see "Guarded to `origin` only" in
-  `references/merge-train-wake.md`). When it does fire, it is launched
-  **backgrounded** (harness `run_in_background`, not awaited) so
+  fires when the literal `<remote>` resolves to the same repo URL as
+  `$HOME/dotfiles`'s own `origin`; any other remote is a silent skip, not a
+  failure (#1498 — see "Guarded to `$HOME/dotfiles`'s own `origin` only" in
+  `references/merge-train-wake.md`). This guard is never a live `$REMOTE`
+  env-var read — PR #1539 review found that fragile (a Bash tool call is
+  not guaranteed to inherit an earlier call's exports). When it does fire,
+  it is launched **backgrounded** (harness `run_in_background`, not awaited) so
   the dispatcher's own up-to-~4-min `herdr agent prompt --wait` never
   delays Step 2.5/2.5.1, which don't depend on its outcome. Only a missing
   `aicron.sh` (checked synchronously, before launch) is a single `[WARN]`;
