@@ -116,7 +116,11 @@ _gh_pr_lint_run() {
     fi
 
     # Compute the PR's changed-file set against the base branch.
-    _changed=$(git diff --name-only "$_base...HEAD" 2>/dev/null)
+    # --diff-filter=d (lowercase = exclude) drops deletions: a file gone from
+    # the worktree has nothing left to lint, and every tool below (shellcheck,
+    # actionlint, pre-commit) errors trying to open a path that no longer
+    # exists rather than skipping it.
+    _changed=$(git diff --name-only --diff-filter=d "$_base...HEAD" 2>/dev/null)
     if [ -z "$_changed" ]; then
         _gh_pr_lint__log "no changed files vs $_base — skip"
         unset _base _changed

@@ -253,6 +253,27 @@ TOX
 }
 
 # ---------------------------------------------------------------------------
+# Case 2d — a deleted .sh file must not be handed to shellcheck: it no
+# longer exists on disk, so the tool errors trying to open it instead of
+# skipping it. `git diff --name-only` includes deletions by default;
+# `--diff-filter=d` (lowercase = exclude) drops them before any tool sees
+# the changed-file set (reproduced against a real deleted fixture in #1513).
+# ---------------------------------------------------------------------------
+
+@test "deleted .sh file → excluded from shellcheck's changed-file set" {
+    _stage_changes "foo.sh:echo hi" "gone.sh:echo bye"
+    (cd "$REPO_DIR" && git rm -q gone.sh && git commit -q -m "delete gone.sh")
+    _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    assert_output --partial "running shellcheck on 1 file(s)"
+    assert_output --partial "shellcheck passed"
+    run grep -cF '[foo.sh]' "$TOOL_LOG"
+    assert_output "1"
+    run grep -c 'gone.sh' "$TOOL_LOG"
+    assert_output "0"
+}
+
+# ---------------------------------------------------------------------------
 # Case 2z — issue #1328 regression: the same filtering must work when the
 # helper is sourced into a *zsh* session.
 #
