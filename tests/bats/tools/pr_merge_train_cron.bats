@@ -683,13 +683,47 @@ _hold_lock() {
     assert_output --partial "prompt failed"
 }
 
-# `owner/repo` is unique only per server. Two checkouts that share a slug on
-# different hosts must not share a train agent, or one would block or reuse the
-# other's session — the same failure #1403/#1407 pin the host to avoid.
-@test "pr_merge_train_cron: the herdr names are qualified by the host, not just owner/repo" {
+# herdr refuses `agent start` unless the name matches
+# `^[a-z][a-z0-9_-]{0,31}$`. The pre-#1530 name (`pmt-github.com-acme-dotfiles`)
+# carried both a dot and, on a real owner like `dEitY719`, uppercase — so every
+# tick's start was rejected and the train never ran once. This pins the shape
+# herdr actually accepts.
+@test "pr_merge_train_cron: the train agent's name satisfies herdr's rule" {
     _run_tick
     assert_success
-    _assert_logged "herdr agent get pmt-github.com-acme-dotfiles"
+    _assert_logged "herdr agent get mt-dotfiles"
+    _assert_logged "herdr agent start mt-dotfiles"
+    _refute_logged "pmt-github.com-acme-dotfiles"
+
+    local _name
+    _name=$(grep -oE 'herdr agent start [^ ]+' "${_LOG}" | head -1 | awk '{print $4}')
+    [[ "${_name}" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
+        || fail "not a valid herdr agent name: '${_name}'"
+}
+
+# The agent name is the NF-1 singleton lock: `_pmt_train_state` asks herdr
+# whether an agent by this exact name is still working, so two ticks against
+# the same repo must compute the same string. A per-tick discriminator (a PR
+# number, a timestamp) would make every tick miss the running train and start
+# a second one merging onto the same base.
+@test "pr_merge_train_cron: the train agent's name is stable across ticks" {
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent get mt-dotfiles"
+
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent get mt-dotfiles"
+}
+
+# The workspace label is NOT an agent name — herdr does not validate it, and
+# the label is what finds an already-open workspace. It stays host-qualified
+# (#1403/#1407): dropping the host there would strand the existing workspace
+# and buys nothing, because labels have no 32-character budget to save.
+@test "pr_merge_train_cron: the workspace label stays qualified by the host" {
+    _run_tick
+    assert_success
     _assert_logged "--label mt-github.com-acme-dotfiles"
 
     local _ghe="${_WORK_DIR}/ghe-dotfiles"
@@ -701,9 +735,8 @@ _hold_lock() {
 
     _run_tick
     assert_success
-    _assert_logged "herdr agent get pmt-github.samsungds.net-acme-dotfiles"
     _assert_logged "--label mt-github.samsungds.net-acme-dotfiles"
-    _refute_logged "pmt-github.com-acme-dotfiles"
+    _refute_logged "--label mt-github.com-acme-dotfiles"
 }
 
 @test "pr_merge_train_cron: the dispatcher never writes to GitHub" {
