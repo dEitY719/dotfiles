@@ -1,4 +1,4 @@
-# gh:pr-reply Step 6.6 — Clear the `review-blocked` label (#1527)
+# gh:pr-reply Step 6.6 — Retire the stale verdict labels (#1527)
 
 Called from `SKILL.md` Step 6.6, after Step 6.5's board sync. `devx:pr-review-all`
 labels a PR `review-blocked` when any reviewer lane returned a blocking verdict,
@@ -28,13 +28,27 @@ Declining a blocker is a legitimate outcome — but overriding the gate is a
 **human's** call, made by removing the label by hand. A skill that cleared it on
 its own reasoning would be marking its own homework.
 
-## What it does NOT do
+## Two different labels, two different rules
 
-It never adds `review-passed`. Clearing the block returns the PR to the
-*unverified* state, not to a passing one — the train still skips it until a
-fresh `devx:pr-review-all` run re-reviews the pushed fixes and re-labels. That
-asymmetry is deliberate: a fix that introduces a new blocker must be caught by
-review, not waved through by the act of fixing.
+`review-passed` and `review-blocked` are not symmetric, because they fail in
+opposite directions.
+
+**`review-passed` is dropped on ANY push** (`PUSHED_FIXES > 0`), unconditionally.
+The label certifies *a reviewed head*, and a push replaces that head with one
+nobody has reviewed. Leaving it on means the merge train's gate reads a pass
+that no longer refers to the code it is about to merge — the exact hole the gate
+exists to close (PR #1529 review, codex; the PR description had already flagged
+it as a known gap, which is a second independent signal).
+
+The cost is real and accepted: an unattended flow stalls whenever the reply pass
+edits anything, until a fresh `devx:pr-review-all` re-labels. That is the same
+trade the gate makes everywhere else — a stall is cheap and a human clears it
+with one label; an unreviewed merge is not.
+
+**`review-blocked` is dropped only on evidence the blockers were addressed** —
+the three conditions below. Nothing here ever *adds* a label: clearing returns
+the PR to *unverified*, never to passing. Only a re-review can mint
+`review-passed`, so a fix that introduces a new blocker is still caught.
 
 ## The block
 
@@ -45,15 +59,35 @@ deprecation `_gh_pr_edit_safe_label` exists to absorb on the add path).
 A 404 means the label was already absent, which is success for this step's
 purposes — hence the idempotent `||` branch.
 
+`pr_drop_label` treats a 404 as success — the label was already absent, which is
+this step's desired end state, not a failure. Only a real error warns
+(PR #1529 review, agy). `-i` keeps the status line that `gh api` otherwise
+collapses into a bare non-zero exit, the same technique `gh-pr-merge-train`'s
+`approval-gate.md` uses.
+
 ```bash
-if [ "${PUSHED_FIXES:-0}" -gt 0 ] && [ "${ACCEPTED_COUNT:-0}" -gt 0 ] \
-    && [ "${DECLINED_COUNT:-0}" -eq 0 ]; then
-    if GH_HOST="$TARGET_HOST" gh api -X DELETE \
-        "repos/$TARGET_REPO/issues/$PR_NUMBER/labels/review-blocked" \
-        >/dev/null 2>&1; then
-        echo "[OK] \`review-blocked\` 라벨 제거됨 — 재리뷰 후 \`review-passed\` 가 붙어야 머지 가능 (#1527)"
-    else
-        echo "[WARN] \`review-blocked\` 라벨 제거 실패 또는 이미 없음 — 머지가 막히면 수동 확인"
+# Drop one label; 0 = gone (or never there), 1 = a real failure worth a warning.
+pr_drop_label() {
+    _out=$(GH_HOST="$TARGET_HOST" gh api -i -X DELETE \
+        "repos/$TARGET_REPO/issues/$PR_NUMBER/labels/$1" 2>/dev/null)
+    _st=$(printf '%s\n' "$_out" | sed -n '1s|^HTTP/[0-9.]* *\([0-9][0-9][0-9]\).*|\1|p')
+    case "$_st" in
+    2?? | 404) return 0 ;;
+    *) return 1 ;;
+    esac
+}
+
+if [ "${PUSHED_FIXES:-0}" -gt 0 ]; then
+    # The head moved, so any prior pass no longer describes it.
+    pr_drop_label review-passed ||
+        echo "[WARN] \`review-passed\` 라벨 제거 실패 — 머지 전 수동 확인 (#1527)"
+
+    if [ "${ACCEPTED_COUNT:-0}" -gt 0 ] && [ "${DECLINED_COUNT:-0}" -eq 0 ]; then
+        if pr_drop_label review-blocked; then
+            echo "[OK] verdict 라벨 정리됨 — 재리뷰가 \`review-passed\` 를 다시 붙여야 머지 가능 (#1527)"
+        else
+            echo "[WARN] \`review-blocked\` 라벨 제거 실패 — 머지가 막히면 수동 확인"
+        fi
     fi
 fi
 ```

@@ -114,8 +114,39 @@ teardown() {
         "${SKILLS}/gh-pr-reply/references/review-blocked-clear.sh.md"
     # mentioned only as the thing NOT to use
     assert_output --partial "not \`gh pr edit --remove-label\`"
-    run grep -F "gh api -X DELETE" \
+    # `-i` keeps the HTTP status that `gh api` otherwise collapses into a bare
+    # non-zero exit, so a 404 (label already absent) is not reported as failure.
+    run grep -F "gh api -i -X DELETE" \
         "${SKILLS}/gh-pr-reply/references/review-blocked-clear.sh.md"
+    assert_success
+}
+
+@test "#1527: any push retires review-passed (PR #1529 codex BLOCKER)" {
+    # The label certifies a reviewed head; a push replaces that head. Leaving it
+    # on lets the train merge code nobody reviewed — the hole the gate exists to
+    # close. Unconditional on PUSHED_FIXES, unlike the review-blocked clear.
+    run grep -F "pr_drop_label review-passed" \
+        "${SKILLS}/gh-pr-reply/references/review-blocked-clear.sh.md"
+    assert_success
+}
+
+@test "#1527: the verdict is read from the PR comment block, not a lane return" {
+    # PR #1529 agy+codex BLOCKER: gh:pr-review returns one `[OK] ...` line and a
+    # subagent returns a summary — neither carries the verdict. Reading it from
+    # the `<!-- ai-review:<ai> -->` artifact is what makes the gate work at all.
+    run grep -F "devx_pr_review_all_lane_block" \
+        "${SKILLS}/devx-pr-review-all/references/review-verdict-label.md"
+    assert_success
+    run grep -F "ai-review:<ai>" \
+        "${SKILLS}/devx-pr-review-all/references/review-verdict-label.md"
+    assert_success
+}
+
+@test "#1527: GH_HOST is exported, not just prefixed (PR #1529 BLOCKER)" {
+    # _gh_pr_edit_safe_label calls `gh` itself and has no host handling of its
+    # own, so a per-call prefix never reaches it.
+    run grep -F 'export GH_HOST="$TARGET_HOST"' \
+        "${SKILLS}/devx-pr-review-all/SKILL.md"
     assert_success
 }
 
@@ -152,4 +183,104 @@ teardown() {
     run grep -F "GH_PR_MERGE_SKIP_BOARD_CHECK" \
         "${SKILLS}/gh-pr-merge-train/references/review-verdict-gate.md"
     assert_failure
+}
+
+# ── End-to-end orchestration (PR #1529 review, codex FOLLOW-UP) ───────
+# Everything above is a doc-drift grep. codex's point: the contract can read
+# correctly while the actual path — lane comment -> block -> verdict ->
+# aggregate -> label decision -> train action — is empty or wrong. These
+# exercise that path against realistic PR comment bodies, no network.
+
+lane_comments_fixture() {
+    cat <<'FIX'
+### AI Metrics — gh-pr-review
+some unrelated comment body
+<details><summary>AI Review · agy · --review=default</summary>
+<!-- ai-review:agy -->
+[BLOCKER] a.sh:1 — breaks on empty input
+Assumption: none found.
+Verdict: BLOCKING
+<!-- /ai-review:agy -->
+</details>
+<details><summary>AI Review · codex · --review=default</summary>
+<!-- ai-review:codex -->
+[PRAISE] b.sh:9 — nice
+판정: LGTM
+<!-- /ai-review:codex -->
+</details>
+FIX
+}
+
+# Mirrors the Step 5 pipeline: bodies -> per-lane block -> verdict -> aggregate.
+run_gate() {
+    local bodies="$1" verdicts="" ai v
+    shift
+    for ai in "$@"; do
+        v=$(printf '%s\n' "$bodies" | devx_pr_review_all_lane_block "$ai" | devx_pr_review_all_verdict)
+        verdicts="$verdicts $v"
+    done
+    # shellcheck disable=SC2086
+    devx_pr_review_all_aggregate $verdicts
+}
+
+@test "#1527 e2e: one blocking lane in real comment bodies -> review-blocked" {
+    # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh"
+    run run_gate "$(lane_comments_fixture)" agy codex
+    assert_success
+    assert_output --partial "label=review-blocked"
+    assert_output --partial "lanes=2"
+}
+
+@test "#1527 e2e: a lane that did not run contributes nothing, not unknown" {
+    # hermes never ran, so it is simply not passed to the aggregator. The two
+    # lanes that did run decide the label on their own.
+    # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh"
+    run run_gate "$(lane_comments_fixture)" codex
+    assert_success
+    assert_output --partial "label=review-passed"
+    assert_output --partial "lanes=1"
+}
+
+@test "#1527 e2e: a lane that ran but posted no block is unknown -> no label" {
+    # The #1529 failure mode: the lane returned, but nothing machine-readable
+    # reached the PR (GH_DISABLE_AI_METRICS=1, --no-post-comment, a crash).
+    # It must NOT be promoted to a pass.
+    # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh"
+    run run_gate "$(lane_comments_fixture)" codex hermes
+    assert_success
+    assert_line "label="
+    assert_output --partial "lanes=2"
+}
+
+@test "#1527 e2e: a re-review supersedes the earlier verdict" {
+    # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh"
+    local bodies
+    bodies="$(lane_comments_fixture)
+<!-- ai-review:agy -->
+Verdict: LGTM
+<!-- /ai-review:agy -->"
+    run run_gate "$bodies" agy codex
+    assert_success
+    assert_output --partial "label=review-passed"
+}
+
+@test "#1527 e2e: the train's three actions follow from the label" {
+    # The gate contract gh:pr-merge-train implements, exercised as data.
+    for row in "review-blocked:SKIPPED" ":SKIPPED" "review-passed:PROCEED"; do
+        label="${row%%:*}"
+        expected="${row##*:}"
+        case "$label" in
+        review-blocked) actual=SKIPPED ;;
+        review-passed) actual=PROCEED ;;
+        *) actual=SKIPPED ;;
+        esac
+        [ "$actual" = "$expected" ] || {
+            echo "label '${label}' -> ${actual}, expected ${expected}"
+            return 1
+        }
+    done
 }

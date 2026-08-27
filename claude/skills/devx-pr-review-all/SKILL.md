@@ -37,8 +37,12 @@ and stop. Capture `pr`, `remote`, `reply_mode`, `reply_delay`, and `START_TS`.
 
 ## Step 2: Pre-flight
 
-- Resolve `TARGET_REPO` **and `TARGET_HOST`** from `<remote>`'s URL and pass
-  `-R <TARGET_REPO>` / `GH_HOST="$TARGET_HOST"` on every `gh` call (#1403, #1407).
+- Resolve `TARGET_REPO` **and `TARGET_HOST`** from `<remote>`'s URL, then
+  **`export GH_HOST="$TARGET_HOST"`** and pass `-R <TARGET_REPO>` on every `gh`
+  call (#1403, #1407). The export is load-bearing, not tidiness: Step 5's
+  `_gh_pr_edit_safe_label` calls `gh` itself and contains no host handling of
+  its own, so a per-call prefix never reaches it and the label add lands on gh
+  CLI's default host (PR #1529 review, agy + codex).
 - PR state must be `OPEN` and not draft (`gh pr view <pr> -R <TARGET_REPO>`)
   → else exit 1 `PR #<pr> is <state>; aborting`.
 - `gh auth status` returns 0 → else exit 1 with the gh error line.
@@ -50,8 +54,11 @@ and stop. Capture `pr`, `remote`, `reply_mode`, `reply_delay`, and `START_TS`.
 The five lanes dispatch together in a single turn. agy/codex/opencode/hermes
 are comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
 
-**Capture each reviewer lane's raw output** — Step 5 parses its closing verdict line;
-a lane that did not run contributes none (`references/review-verdict-label.md`).
+**Record which lanes RAN** — that is all Step 3 owes Step 5. The verdict itself
+is *not* read from a lane's return value: `gh:pr-review` returns one `[OK] …`
+line and a subagent returns a summary, neither of which carries it. Step 5 reads
+it from the `<!-- ai-review:<ai> -->` block each lane posted to the PR instead
+(`references/review-verdict-label.md`).
 
 - **agy** — if `command -v agy`, an Agent runs
   `Skill(gh:pr-review, "--ai agy <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
@@ -79,10 +86,11 @@ Await all lanes, then:
 
 ## Step 5: Aggregate verdicts into the merge-gate label
 
-`devx_pr_review_all_verdict` per lane that RAN → `devx_pr_review_all_aggregate` over
-those verdicts → apply via `_gh_pr_edit_safe_label`, clearing the opposite label first.
-Exact block, label table, fail-closed rules: `references/review-verdict-label.md`.
-Soft-fail throughout.
+Fetch the PR's comments once, then per lane that RAN:
+`devx_pr_review_all_lane_block <ai>` → `devx_pr_review_all_verdict` →
+`devx_pr_review_all_aggregate` over those verdicts → apply via
+`_gh_pr_edit_safe_label`, clearing the opposite label first. Exact block, label
+table, fail-closed rules: `references/review-verdict-label.md`. Soft-fail throughout.
 
 `review-blocked` if any lane blocked; `review-passed` only if ≥1 lane ran and none
 blocked or came back `unknown`; **no label otherwise** — "not checked" is never

@@ -168,15 +168,17 @@ devx_pr_review_all_verdict() {
     # a reviewer may wrap the line in, drop a leading list dash. Then keep
     # only lines that *start* with the verdict key — a finding line like
     # `[BLOCKER] a.sh:1 — ...` must never be mistaken for the verdict.
-    # A value that opens with `[` is the preset's own template echoed back
-    # (`판정: [LGTM|우려있음|블로킹]`) and is dropped; a bracket later in the
-    # line is ordinary detail (`판정: 블로킹 [4건]`) and is kept. Last one
-    # wins: the presets require the verdict to be the final line.
+    # The preset's own template echoed back (`판정: [LGTM|우려있음|블로킹]`) is
+    # dropped, keyed on the `|` alternation that only a template carries — NOT
+    # on the leading `[`, which a reviewer legitimately keeps around a real
+    # answer (`Verdict: [BLOCKING]`, PR #1529 review, agy). Brackets are then
+    # stripped from the value so both spellings land on the same token. Last
+    # one wins: the presets require the verdict to be the final line.
     _line=$(
         sed -e 's/：/:/g' -e 's/[*`_#>]//g' \
             -e 's/^[[:space:]]*-[[:space:]]*//' -e 's/^[[:space:]]*//' |
             grep -iE '^(판정|verdict)[[:space:]]*:' |
-            grep -viE '^(판정|verdict)[[:space:]]*:[[:space:]]*\[' |
+            grep -vF '|' |
             tail -n 1
     )
 
@@ -187,7 +189,7 @@ devx_pr_review_all_verdict() {
 
     _value=$(
         printf '%s\n' "$_line" |
-            sed -e 's/^[^:]*://' -e 's/^[[:space:]]*//' |
+            sed -e 's/^[^:]*://' -e 's/[][]//g' -e 's/^[[:space:]]*//' |
             tr '[:lower:]' '[:upper:]'
     )
 
@@ -224,4 +226,44 @@ devx_pr_review_all_aggregate() {
     printf '%s\n' "label=$_label"
     printf '%s\n' "lanes=$_lanes"
     return 0
+}
+
+# Harvest one reviewer lane's raw output from the PR comment bodies on stdin.
+#
+# Step 3 dispatches each lane as a subagent, and `gh:pr-review` guarantees only
+# a one-line `[OK] PR #N reviewed by <ai> — comment: <URL>` as its return
+# value — the verdict is nowhere in it. Reading the verdict out of a subagent's
+# prose would make the merge gate depend on how an agent chose to summarise
+# itself; every lane would land on `unknown`, no label would ever be written,
+# and the train would skip every PR forever (PR #1529 review, agy + codex,
+# independently).
+#
+# So the verdict is read back from the artifact the lane already wrote:
+# `gh:pr-review` Step 6 posts the reviewer's raw output wrapped in
+# `<!-- ai-review:<ai> -->` markers, synchronously, before it returns. That is
+# a durable machine-readable record, not a summary.
+#
+# This is still producer-side parsing: `devx:pr-review-all` reads *its own*
+# lanes' output to mint the label. `gh:pr-merge-train` never parses a comment.
+#
+#   devx_pr_review_all_lane_block <ai>   # comment bodies on stdin
+#     -> that lane's raw block, or nothing
+#
+# The LAST complete block wins: a re-review posts a second comment and its
+# verdict supersedes. An unterminated block (a truncated or still-being-written
+# comment) is never harvested — half a review is not a verdict.
+devx_pr_review_all_lane_block() {
+    [ -n "${1-}" ] || return 0
+    # `beg`/`fin`, not `open`/`close`: `close` is an awk built-in and using it
+    # as a variable is a syntax error in POSIX awk.
+    awk -v ai="$1" '
+        BEGIN {
+            beg = "<!-- ai-review:"  ai " -->"
+            fin = "<!-- /ai-review:" ai " -->"
+        }
+        index($0, beg)               { collecting = 1; buf = ""; next }
+        collecting && index($0, fin) { collecting = 0; last = buf; next }
+        collecting                   { buf = buf $0 "\n" }
+        END                          { printf "%s", last }
+    '
 }

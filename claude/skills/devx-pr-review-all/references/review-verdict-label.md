@@ -26,24 +26,51 @@ from moving, and a human can add or remove it at any time.
 
 Each of the four reviewer lanes (`agy`, `codex`, `opencode`, `hermes`) ends its
 output with a mandatory verdict line — `판정: [LGTM|우려있음|블로킹]` or
-`Verdict: [LGTM|CONCERNS|BLOCKING]` (`gh-pr-review/references/review-presets.md`).
-Capture each lane's raw output in Step 3, then per lane:
+`Verdict: [LGTM|CONCERNS|BLOCKING]` (`gh-pr-review/references/review-presets.md`,
+rendered at runtime by `_gh_pr_review_common_prefix` in `gh_pr_review.sh`).
+
+**Do not try to read that line out of the lane's return value.** `gh:pr-review`
+guarantees exactly one line back — `[OK] PR #<N> reviewed by <ai> … — comment:
+<URL>` — and Step 3 runs each lane as a subagent, which returns a *summary* of
+what it did. Neither carries the verdict. A gate built on that would have every
+lane parse as `unknown`, never write a label, and leave `gh:pr-merge-train`
+skipping every PR forever (PR #1529 review — agy and codex found this
+independently).
+
+Read it from the artifact the lane already wrote instead. `gh:pr-review` Step 6
+posts the reviewer's raw output to the PR wrapped in `<!-- ai-review:<ai> -->`
+markers, synchronously, before it returns — a durable machine-readable record
+rather than a summary. Fetch the comments **once**, then per lane:
 
 ```sh
 . "${SHELL_COMMON}/functions/devx_pr_review_all.sh"
-VERDICT=$(printf '%s\n' "$LANE_OUTPUT" | devx_pr_review_all_verdict)
+BODIES=$(GH_HOST="$TARGET_HOST" gh api --paginate \
+    "repos/$TARGET_REPO/issues/$pr/comments" --jq '.[].body')
+
+VERDICT=$(printf '%s\n' "$BODIES" | devx_pr_review_all_lane_block "$ai" \
+    | devx_pr_review_all_verdict)
 # -> blocking | concerns | lgtm | unknown
 ```
+
+`devx_pr_review_all_lane_block` takes the **last complete** block for that lane,
+so a re-review supersedes an earlier verdict, and it ignores an unterminated
+block — half a review is not a verdict.
+
+This is still producer-side parsing, which is the point: `devx:pr-review-all`
+reads *its own* lanes' output to mint the label. `gh:pr-merge-train` never
+parses a comment body, and a reviewer changing its format still fails closed
+here rather than unlocking the gate.
+
+**When the block is missing.** `gh:pr-review` skips the whole PR comment under
+`GH_DISABLE_AI_METRICS=1`, and `--no-post-comment` suppresses it too. Either
+way the lane yields no block → `unknown` → no label → the train skips the PR.
+That is the correct direction: with the record suppressed there is no evidence
+the review passed.
 
 A lane that **did not run** (`command -v` empty, non-internal PC, non-zero exit —
 every `[SKIP]`/`[WARN]` row of the Step 7 report) contributes **no verdict at
 all**. It is not an `unknown`; it is simply absent from the aggregation. The
 `/simplify` lane never contributes — it produces no verdict.
-
-Run all three shell blocks of Step 5 — per-lane verdict, aggregate, label — in
-**one** Bash tool call. The tool keeps no shell state between calls, so a split
-loses the sourced functions and `$VERDICTS`/`$label`, and an empty `$label`
-silently reads as "no verdict".
 
 Then aggregate over the lanes that did run. Read the two `key=value` lines with
 `sed`, not `eval` — the values are controlled, but a parser that cannot execute

@@ -165,3 +165,111 @@ EOF
     assert_success
     assert_output --partial "lanes=3"
 }
+
+# ── Lane block extraction (PR #1529 review, agy+codex BLOCKER) ────────
+# Step 3 dispatches each reviewer lane as a subagent, and `gh:pr-review`
+# guarantees only a one-line `[OK] PR #N reviewed by <ai> — comment: <URL>`
+# as its return value. Nothing carries the verdict back, so every lane would
+# parse as `unknown` → no label → `gh:pr-merge-train` skips every PR forever.
+#
+# The fix is to stop depending on subagent prose: `gh:pr-review` Step 6 posts
+# the reviewer's raw output inside `<!-- ai-review:<ai> -->` markers before it
+# returns, so the verdict is read back from that artifact instead.
+
+@test "lane block: extracts the marked block for the named lane" {
+    run devx_pr_review_all_lane_block codex <<'EOF'
+<!-- ai-review:codex -->
+[BLOCKER] a.sh:1 — nope
+판정: 블로킹
+<!-- /ai-review:codex -->
+EOF
+    assert_success
+    assert_line "판정: 블로킹"
+}
+
+@test "lane block: picks the right lane when several are present" {
+    run devx_pr_review_all_lane_block agy <<'EOF'
+<!-- ai-review:codex -->
+판정: 블로킹
+<!-- /ai-review:codex -->
+<!-- ai-review:agy -->
+Verdict: LGTM
+<!-- /ai-review:agy -->
+EOF
+    assert_success
+    assert_line "Verdict: LGTM"
+    refute_output --partial "블로킹"
+}
+
+@test "lane block: the LAST block wins when a lane was re-reviewed" {
+    # A re-review posts a second comment; the newest verdict is the live one.
+    run devx_pr_review_all_lane_block agy <<'EOF'
+<!-- ai-review:agy -->
+Verdict: LGTM
+<!-- /ai-review:agy -->
+<!-- ai-review:agy -->
+Verdict: BLOCKING
+<!-- /ai-review:agy -->
+EOF
+    assert_success
+    assert_line "Verdict: BLOCKING"
+    refute_output --partial "LGTM"
+}
+
+@test "lane block: absent lane yields nothing (-> unknown downstream)" {
+    run devx_pr_review_all_lane_block hermes <<'EOF'
+<!-- ai-review:codex -->
+판정: LGTM
+<!-- /ai-review:codex -->
+EOF
+    assert_success
+    assert_output ""
+}
+
+@test "lane block: an unterminated block is not harvested" {
+    # A truncated comment must not hand back a half-read verdict.
+    run devx_pr_review_all_lane_block codex <<'EOF'
+<!-- ai-review:codex -->
+판정: 블로킹
+EOF
+    assert_success
+    assert_output ""
+}
+
+@test "lane block: end-to-end -> verdict token" {
+    run bash -c '
+        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        printf "%s\n" "<!-- ai-review:agy -->" "Verdict: BLOCKING" "<!-- /ai-review:agy -->" \
+          | devx_pr_review_all_lane_block agy | devx_pr_review_all_verdict'
+    assert_success
+    assert_output "blocking"
+}
+
+# ── Bracketed single verdict (PR #1529 review, agy BLOCKER) ───────────
+# The template guard dropped any value opening with `[`, which also threw away
+# a real verdict a reviewer left bracketed. Only the template's `|` alternation
+# marks an echo; a single bracketed token is a genuine verdict.
+
+@test "verdict: bracketed single verdict still parses (English)" {
+    run devx_pr_review_all_verdict <<<"Verdict: [BLOCKING]"
+    assert_success
+    assert_output "blocking"
+}
+
+@test "verdict: bracketed single verdict still parses (Korean)" {
+    run devx_pr_review_all_verdict <<<"판정: [블로킹]"
+    assert_success
+    assert_output "blocking"
+}
+
+@test "verdict: the full template alternation is still rejected" {
+    run devx_pr_review_all_verdict <<<"Verdict: [LGTM|CONCERNS|BLOCKING]"
+    assert_success
+    assert_output "unknown"
+}
+
+@test "verdict: the Korean template alternation is still rejected" {
+    run devx_pr_review_all_verdict <<<"판정: [LGTM|우려있음|블로킹]"
+    assert_success
+    assert_output "unknown"
+}
