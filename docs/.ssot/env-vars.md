@@ -51,19 +51,11 @@ Persist for a session:
 export GH_DISABLE_AI_METRICS=1
 ```
 
-### `GH_PR_MERGE_SKIP_BOARD_CHECK`
+### `GH_PR_MERGE_SKIP_BOARD_CHECK` (retired, #1513)
 
-| Field | Value |
-|---|---|
-| Default | unset |
-| Active when | set to `1` |
-| Scope | `gh:pr-merge` board approval gate (Step 4-B) |
-| Source SSOT | `claude/skills/gh-pr-merge/SKILL.md` |
-| Issue | [#397](https://github.com/dEitY719/dotfiles/issues/397) |
-
-When `1`, bypasses the projectV2 board "Approved" check inside
-`gh:pr-merge`. Used during board-config transitions where the
-authoritative status moves between fields.
+Removed together with `gh:pr-merge` Step 2-B — there is no longer a
+board approval gate to bypass. Setting it has no effect. Rationale:
+`claude/skills/gh-pr-merge/references/board-policy.md`.
 
 ### `GH_PROJECT_STATUS_SYNC`
 

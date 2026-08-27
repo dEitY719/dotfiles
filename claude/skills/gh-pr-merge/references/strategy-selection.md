@@ -111,7 +111,7 @@ Lead with an explicit verdict line, then the structured key-values:
   URL:        <pr-url>
 ```
 
-A hard stop before the merge (un-approved, conflicting, failing checks,
-board gate) instead prints a `[FAIL] PR #<N> not merged — <reason>` line
+A hard stop before the merge (un-approved, conflicting, failing checks)
+instead prints a `[FAIL] PR #<N> not merged — <reason>` line
 and the redirect (e.g. `/gh-pr-merge-emergency`). The Merge SHA renders as
 `(pending)` when GitHub has not yet computed `mergeCommit.oid`.
