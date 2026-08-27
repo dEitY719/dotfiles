@@ -6,6 +6,7 @@
 |--------|-------------|---------|
 | `[pr-number]` | Positional 1 — target PR to resolve, e.g. `168`. | PR attached to the current branch |
 | `[remote]` | Positional 2 — git remote whose repo owns the PR. | `origin` |
+| `--worktree <path>` | Run every git command in `<path>` instead of the current checkout. Requires an explicit `pr-number`. | current checkout |
 | `-h` / `--help` / `help` | Print this help verbatim and stop. No API calls. | — |
 
 ## Usage
@@ -14,8 +15,15 @@
 /gh-pr-resolve-conflict              # PR attached to current branch, origin
 /gh-pr-resolve-conflict 168          # explicit PR, origin
 /gh-pr-resolve-conflict 168 upstream # explicit PR, upstream remote
+/gh-pr-resolve-conflict 168 origin --worktree /path/to/scratch   # rebase there
 /gh-pr-resolve-conflict -h           # this help
 ```
+
+`--worktree` exists for `gh:pr-merge-train`: the PR's head branch is usually
+already checked out in the worktree `gh:issue-flow` opened it from, so the train
+hands over a detached scratch worktree it created and will destroy. The push
+then uses an explicit `HEAD:refs/heads/<head>` refspec, since a detached HEAD
+names no branch, and the auto-stash never fires — the scratch tree is clean.
 
 ## When to use this skill
 
@@ -53,7 +61,10 @@
 - **Backup SHA** printed before the rebase — `git reset --hard <sha>`
   restores the pre-rebase state; `git reflog` is always available too.
 - **Stash** — only auto-applied if preflight detects a dirty tree, and
-  always announced. Popped at the end even on failure paths.
+  always announced. Popped at the end even on failure paths. Never fires
+  under `--worktree`, where the tree is clean by construction.
+- **Worktree lifecycle is the caller's** — with `--worktree <path>` the skill
+  operates inside that path but never creates or removes it.
 - **`--force-with-lease`** — rejects the push if someone else pushed to
   the branch while you rebased. The skill stops; it does NOT silently
   re-fetch and re-rebase.

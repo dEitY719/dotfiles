@@ -68,8 +68,11 @@ For each PR in queue order, run the loop in `references/train-loop.md`:
 **re-query state immediately before processing** (F-3 — the previous merge
 invalidated everything behind it), route through the D-1 table
 (`references/routing-table.md`), then merge with `Skill(gh:pr-merge, "<N>")`.
-Attempts are capped at 3 per PR (F-5); a failure skips that one PR and the
-train continues (F-6). Never process two PRs concurrently.
+The `BEHIND` / `DIRTY` rows rebase inside a **detached scratch worktree** the
+train creates and unconditionally removes per attempt (#1493) — never in this
+checkout, whose branch may already be held by another worktree. Attempts are
+capped at 3 per PR (F-5); a failure skips that one PR and the train continues
+(F-6). Never process two PRs concurrently.
 
 ## Step 5: Report
 
@@ -91,7 +94,7 @@ assistant text, never via a `Bash` heredoc or `Write`.
 
 ## Related Skills
 
-Atoms this train calls unchanged: `gh:pr-resolve-outdated` · `gh:pr-resolve-conflict`
+Atoms this train calls: `gh:pr-resolve-outdated` · `gh:pr-resolve-conflict`
 · `gh:pr-resolve-ci-fail` · `gh:pr-merge`. Deliberately **not** called:
 `gh:pr-merge-emergency` (NF-2). Upstream producer of the PRs this train drains:
 `gh:issue-flow`. Unattended trigger: `shell-common/tools/custom/pr_merge_train_cron.sh`

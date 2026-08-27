@@ -23,7 +23,10 @@ recoverable.
 ## Auto-stash
 
 Triggered only when preflight detects a non-empty working tree
-(`git status --porcelain` prints any line).
+(`git status --porcelain` prints any line). In `--worktree` mode that trigger
+can never fire — the caller created the scratch worktree seconds earlier and
+nothing has written to it — so the whole stash flow is skipped, and the final
+report's `Stash:` line is omitted.
 
 1. Announce before running:
 
@@ -57,6 +60,10 @@ Triggered only when preflight detects a non-empty working tree
 Always resolve marker paths through `git rev-parse --git-path`. In a git
 worktree the actual paths are under `.git/worktrees/<wt>/`, and hardcoded
 `.git/<name>` checks silently miss the marker.
+
+In `--worktree` mode this guard still runs — a scratch worktree abandoned
+mid-rebase by an interrupted run is exactly what it catches — with every `git`
+below taking `-C "<path>"`.
 
 ```bash
 for name in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
@@ -108,6 +115,12 @@ fi
 The default branch should never be force-pushed by this skill. If the
 PR's head IS the default branch (cross-fork PR where the head came from
 a fork), that's out of scope — tell the user and stop.
+
+In `--worktree` mode `git -C "<path>" rev-parse --abbrev-ref HEAD` answers
+`HEAD` — the worktree is detached and has no branch to compare. The guard is
+not dropped, it moves to the thing that is actually at risk: compare `HEAD_REF`
+(the PR's `headRefName`, which the push refspec targets) against `DEFAULT`, and
+refuse on a match.
 
 ## Recovery cheat-sheet (for the final report)
 

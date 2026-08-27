@@ -29,11 +29,19 @@ Record `START_TS=$(date +%s)` immediately for Step 5.
 |---|---|---|
 | `[pr-number]` | PR to resolve; auto-detect from branch if omitted | branch PR |
 | `[remote]` | Remote owning the PR's repo | `origin` |
+| `[--worktree <path>]` | Run every git command in `<path>` instead of the current checkout | current checkout |
+
+`--worktree <path>` makes `pr-number` **mandatory** — the caller
+(`gh:pr-merge-train`) hands over a detached worktree, which has no current
+branch to auto-detect a PR from. Everything else in this skill is unchanged;
+without the flag the behaviour is exactly what it was.
 
 Bind `TARGET_HOST` + `TARGET_REPO` from the remote's URL **before any `gh`
 call** (`references/github-target.md`, #1403), check `gh` auth, and enforce the
 hard preconditions (git repo · not default branch · clean tree · no in-progress
-rebase) per `references/preflight.md`. Capture `BACKUP_SHA=$(git rev-parse HEAD)`.
+rebase) per `references/preflight.md` — that file also lists which of them
+`--worktree` mode drops and why. Capture `BACKUP_SHA=$(git rev-parse HEAD)`
+(in `--worktree` mode, `git -C "<path>" rev-parse HEAD`).
 
 ## Step 2: Mergeable Triage
 
@@ -54,6 +62,8 @@ git fetch "$REMOTE" "$BASE"
 git rebase "$REMOTE/$BASE"
 ```
 
+In `--worktree` mode both become `git -C "<path>" ...`.
+
 Rebase exits non-zero with conflicts → `git rebase --abort` immediately,
 print `[FAIL] rebase produced conflicts — use /gh-pr-resolve-conflict
 <PR_NUMBER>` + exit 4. Never auto-guess — hand off to the sister skill.
@@ -65,6 +75,16 @@ Only after `git rebase` exits 0 and the tree is clean:
 ```bash
 git push --force-with-lease "$REMOTE" HEAD
 ```
+
+In `--worktree` mode, use the explicit refspec instead — a detached HEAD has
+no branch for `git` to infer a destination from, and a bare `HEAD` would be
+refused:
+
+```bash
+git -C "<path>" push --force-with-lease "$REMOTE" HEAD:refs/heads/$HEAD_REF
+```
+
+`HEAD_REF` is the `headRefName` Step 2 already read.
 
 Never plain `--force`. Rejected (remote advanced while rebasing) →
 `[FAIL] remote advanced — re-fetch and retry` + exit 6. Never silently
@@ -90,6 +110,7 @@ ai-metrics footer follows the sister-skill pattern; skip when
 - Never run on the repo's default branch.
 - Never auto-resolve conflicts — delegate to `gh:pr-resolve-conflict` (exit 4).
 - Never retry a rejected `--force-with-lease`; never auto-stash (clean tree required).
+- Never create or remove the `--worktree` path. The caller owns its lifecycle.
 
 ## Related Skills
 
