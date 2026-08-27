@@ -40,18 +40,38 @@ one call per source.
 ```bash
 # Classify one policy source. Echoes `none`, `unknown`, or the required
 # approval count (>= 1). Exactly one API call.
+#
+# Both unknown-verdict rules below are fail-closed by construction: `none`
+# is only ever reached by an explicitly recognised answer, so an unforeseen
+# response shape turns the gate ON rather than off.
 _gate_probe() {
     _path="$1" _jq="$2"
     _out=$(GH_HOST="$TARGET_HOST" gh api -i "$_path" 2>/dev/null)
     _status=$(printf '%s\n' "$_out" | sed -n '1s|^HTTP/[0-9.]* *\([0-9][0-9][0-9]\).*|\1|p')
+    _body=$(printf '%s\n' "$_out" | sed '1,/^\r\{0,1\}$/d')
     case "$_status" in
         2??) ;;                               # fall through, parse the body
-        403 | 404) echo none; return 0 ;;     # no policy can apply here
+        404) echo none; return 0 ;;           # the feature is not configured here
+        403)
+            # NOT every 403 means "no policy". Only the plan-limit message
+            # does; permission, rate-limit and SSO denials are unreadable
+            # policy and must fail closed (PR #1526 agy+codex review).
+            case "$_body" in
+                *"Upgrade to GitHub Pro"*) echo none ;;
+                *) echo unknown ;;
+            esac
+            return 0
+            ;;
         *) echo unknown; return 0 ;;          # 5xx, 401, network, no response
     esac
-    _n=$(printf '%s\n' "$_out" | sed '1,/^\r\{0,1\}$/d' | jq -r "$_jq" 2>/dev/null)
+    # A 2xx with no body, or a body `jq` cannot parse, is NOT "no policy" —
+    # it is an unparsed answer. Distinguish jq's *failure* (non-zero exit)
+    # from jq's *empty result* (exit 0, no output = the rule is absent).
+    [ -n "$(printf '%s' "$_body" | tr -d '[:space:]')" ] || { echo unknown; return 0; }
+    _n=$(printf '%s\n' "$_body" | jq -r "$_jq" 2>/dev/null) || { echo unknown; return 0; }
     case "$_n" in
         '' | null | 0) echo none ;;
+        *[!0-9]*) echo unknown ;;             # not a plain count -> unparsed
         *) echo "$_n" ;;
     esac
 }
@@ -64,7 +84,25 @@ CLASSIC=$(_gate_probe "repos/$TARGET_REPO/branches/$BASE_ENC/protection" \
 ```
 
 An empty `$_status` — no HTTP response at all — falls to `*` and is `unknown`.
-That is the case fail-closed exists for, and it is now the *only* case.
+
+### `none` is a whitelist, never a fallback
+
+Every path to `none` names the exact answer that produced it: a `404`, a `403`
+whose body carries GitHub's plan-limit message, or a `2xx` whose body parsed
+cleanly into "no rule" / `0`. Everything else — a `403` from a permission,
+rate-limit or SAML/SSO denial, a `2xx` with an empty body, a body `jq` cannot
+parse, a count that is not a plain integer — lands on `unknown` and the gate
+stays on.
+
+That asymmetry is the whole point. `unknown` costs a `[SKIPPED]` the next tick
+retries; `none` on a repo that really does require approvals is an unreviewed
+merge. `#1519` narrowed which answers are definitive; it must never widen
+which answers are *assumed* definitive.
+
+The `403` split is what the PR #1526 review added: the original patch keyed on
+the status alone, and GitHub reuses `403` for "your plan lacks this feature",
+"your token may not read this", "you are rate limited", and "this org needs
+SSO". Only the first is a statement about the policy.
 
 ### Per-source verdicts
 
@@ -73,8 +111,10 @@ That is the case fail-closed exists for, and it is now the *only* case.
 | `2xx`, count `>= 1` | approvals are required | `<n>` |
 | `2xx`, count `0` | a rule exists and asks for **zero** approvals | `none` |
 | `2xx`, no matching rule | this source imposes no PR review rule | `none` |
-| `403` | the plan does not have this feature — no policy *can* exist | `none` |
+| `403` + `Upgrade to GitHub Pro` in the body | the plan does not have this feature — no policy *can* exist | `none` |
+| `403`, any other body | permission / rate-limit / SSO denial — the policy is unreadable, not absent | `unknown` |
 | `404` | the feature exists but is not configured for this base | `none` |
+| `2xx` with an empty or unparseable body | an answer arrived but was not understood | `unknown` |
 | anything else (5xx, 401, network, no response) | genuinely undetermined | `unknown` |
 
 ### Combining the two sources (#1519 F-3, F-4)
@@ -94,7 +134,8 @@ field" carries the reason and is what the doc-guard tests pin.
 
 `403 Upgrade to GitHub Pro or make this repository public to enable this
 feature` and `404 Branch not protected` are statements *about the policy*, not
-failures to read it. On a free-plan private repo the ruleset endpoint answers
+failures to read it. (A `404` here cannot be a hidden access failure: Step 2's
+`gh pr list` already succeeded against this repo, so the token can see it.) On a free-plan private repo the ruleset endpoint answers
 403 for every base, forever. Treating that as "approval required" invents a
 rule the platform cannot enforce, and on a `--author @me` train it is
 unclearable: `gh:pr-approve` cannot approve a self-authored PR, and NF-2
