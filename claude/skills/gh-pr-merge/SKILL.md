@@ -94,13 +94,14 @@ Print **only** the compact report (format in `references/strategy-selection.md` 
 ```bash
 WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
 VERIFY_SKILL=""
-if [ -r "$WATCHED_FILE" ]; then
+if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
     VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
 fi
 ```
 
-Empty `VERIFY_SKILL` (repo not registered, or no registry) → **do nothing at
-all**: no output, no dispatch. Otherwise call
+Empty `VERIFY_SKILL` (repo not registered, no registry, or no `jq` — the
+feature is then simply unavailable) → **do nothing at all**: no output, no
+dispatch, and no `[WARN]` either. Otherwise call
 `Skill(gh:pr-post-merge-verify, "<N> <remote>")` and stop — that skill owns
 every step and every failure mode (all soft-fail, so this report stands
 regardless). Detail: `claude/skills/gh-pr-post-merge-verify/SKILL.md`.
