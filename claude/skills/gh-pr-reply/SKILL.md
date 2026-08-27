@@ -47,8 +47,10 @@ reference's "Bot service notices" section (service-notice classification,
 single-line ack in Step 5, counted separately in Step 7).
 
 **Step 2.5 early exit:** if this yields **zero unaddressed threads** after
-dedup, print exactly `No unaddressed review comments — nothing to do.` and
-**stop** — do not run Steps 3–7, do not post ai-metrics, do not push.
+dedup, first run the `reply-pending` removal block of
+`references/reply-pending-label-removal.sh.md` (this exit path is why it lives
+there and not inline in Step 6), then print exactly `No unaddressed review
+comments — nothing to do.` and **stop**: no Steps 3–7, no ai-metrics, no push.
 
 ## Step 3: Evaluate Each Comment
 
@@ -79,12 +81,11 @@ skipped push → `PUSHED_FIXES=0`. If `PUSHED_FIXES > 0`, push the PR card
 back to `In review` per `references/board-sync-in-review.sh.md` (soft-fail;
 no-op when `PUSHED_FIXES == 0`).
 
-Then **unconditionally** remove the `reply-pending` label per
-`references/reply-pending-label-removal.sh.md` — REST DELETE, 404 absorbed as a
-soft-fail. `devx:pr-review-all`'s `defer` branch adds it and
-`gh:pr-merge-train` hard-skips any PR carrying it, so leaving it on would wedge
-the PR out of the train forever (#1524). An inline-reply run never had the
-label; the 404 makes that a safe no-op, so there is no branch to write.
+Then **unconditionally** run the same removal block Step 2.5 does —
+`references/reply-pending-label-removal.sh.md`. Between the two call sites the
+label is cleared on every exit short of a crash, which is the point:
+`devx:pr-review-all`'s `defer` branch adds it and `gh:pr-merge-train` skips any
+PR carrying it, so a label left on wedges the PR out of the train (#1524).
 
 ## Step 7: Report
 

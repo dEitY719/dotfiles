@@ -84,21 +84,53 @@ reply pass slower than 11 minutes outlives the window, and the train merges a
 PR whose replies and `/simplify` fixes are still in flight — which is what
 happened to PR #1522 (issue #1524, bug A).
 
-So there is now a real signal, checked **regardless of elapsed time**:
+So there is now a real signal, checked **regardless of the quiet period**:
 
 | Signal | Set by | Cleared by |
 |---|---|---|
 | `reply-pending` label | `devx:pr-review-all` Step 5, `defer` branch | `gh:pr-reply` Step 6, unconditionally |
 
-A PR carrying `reply-pending` is **never** a train target, no matter how long
-ago it was updated. The quiet period stays on as the **backstop** for the two
-cases the label cannot cover:
+A PR carrying `reply-pending` is not a train target however far outside the
+11-minute quiet period it sits.
+
+#### The label expires — 90 minutes, then the quiet period takes over
+
+The hard skip is **bounded**, and the bound is what makes the backstop below
+real rather than aspirational. The window is
+`_gh_pr_merge_train_reply_pending_stale_minutes` — default `90` minutes,
+overridable with `GH_PR_MERGE_TRAIN_REPLY_PENDING_STALE_MINUTES`, defined in
+the same `shell-common/functions/gh_pr_merge_train.sh` as the quiet period, and
+the `90` written here is a citation of it, not a second definition.
+
+Measured against the same `updatedAt` the quiet period reads: adding a label
+bumps a PR's `updatedAt`, so that stamp is "when the label landed" at the
+earliest — no separate clock is needed.
+
+| `reply-pending` | `updatedAt` age | Verdict |
+|---|---|---|
+| yes | `< 90 min` | **dropped** — a deferred reply pass is still plausibly running |
+| yes | `>= 90 min` | label is **stale**; falls through to the ordinary quiet-period check |
+| no | — | ordinary quiet-period check |
+
+`90` is sized as *longer than any healthy deferred reply pass, shorter than a
+wedged PR is tolerable*: 4 minutes of scheduled defer + a `devx:pr-review-all`
+fan-out + a `gh:pr-reply` pass that on a heavily reviewed PR walks dozens of
+threads, edits, commits and pushes — generously an hour — plus slack. It is
+~8x the quiet period, so the two windows can never be mistaken for each other.
+
+Without the bound, a label nobody ever removes excludes its PR from the train
+**forever** (PR #1545 review, codex BLOCKER). With it, "the remover died"
+degrades to "the PR waits out 90 minutes" — at most six 15-minute cron ticks.
+
+So the quiet period stays on as the **backstop** for the two cases the label
+cannot cover:
 
 1. PRs opened by hand or by another tool, which never got the label at all.
-2. A session that died between adding the label and removing it — its PR would
-   otherwise be excluded forever, so the label is not allowed to be the only
-   gate either. (A stuck label is cleared by hand, or by the next `gh:pr-reply`
-   run on that PR.)
+2. A session that died between adding the label and removing it. Its PR is held
+   for the staleness window and then judged by the quiet period like any other
+   — the label is not allowed to be the only gate, and it is not allowed to be
+   a permanent one. (A stuck label is still cleared by hand, or by the next
+   `gh:pr-reply` run on that PR; expiry only stops it from wedging the train.)
 
 ### One filter, two callers — not a coincidence
 
