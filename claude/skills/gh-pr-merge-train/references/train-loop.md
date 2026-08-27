@@ -46,8 +46,11 @@ ME=$(GH_HOST="$TARGET_HOST" gh api user -q .login)
 
 HEAD_OID=$(GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
     --json headRefOid -q .headRefOid)
-LAST_OID=$(GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/pulls/$N/reviews" \
-    --jq "[.[] | select(.user.login == \"$ME\")] | last | .commit_id // empty")
+# --paginate: reviews come 30 per page, and a long-lived PR can push the
+# most recent $ME review off page 1. --jq runs per page, so take the last
+# match across the whole stream rather than `last` within one page.
+LAST_OID=$(GH_HOST="$TARGET_HOST" gh api --paginate "repos/$TARGET_REPO/pulls/$N/reviews" \
+    --jq ".[] | select(.user.login == \"$ME\") | .commit_id" | tail -n 1)
 ```
 
 `$ME` is the authenticated login, not the PR author — the suppression asks
