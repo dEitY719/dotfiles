@@ -85,7 +85,7 @@ gone, the name is released) earns a new workspace/tab/agent.
 |---|---|
 | `gh pr list` fails | end the tick, launch nothing — never merge without knowing state |
 | herdr launch fails | end the tick, closing the tab this tick opened if no agent was ever placed on it (#1512); the next tick retries |
-| `agent start` says `agent_name_taken` | prompt the name's existing holder instead — a second pane under that name is impossible, and failing here would repeat every period |
+| `agent start` says `agent_name_taken` | close this tick's tab, then prompt the name's existing holder — a second pane under that name is impossible, and failing here would repeat every period. The holder is on another pane, so the tab this tick opened holds nothing and is closed like any other failed start (#1512) |
 | `agent start` says `agent_pane_busy` | make up to 3 start attempts with a short backoff — a pane's shell is not interactive the instant `tab create` answers (#1512) |
 | a train is already live | end the tick quietly (NF-1) |
 | zero target PRs | end the tick quietly |
