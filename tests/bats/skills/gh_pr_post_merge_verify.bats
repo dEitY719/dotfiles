@@ -21,7 +21,8 @@
 # PR #1518 review hardening, one test each:
 #   R-1  main checkout on the wrong branch / detached  -> WARN, no rebase
 #   R-2  remote + base branch are threaded, never hardcoded origin/main
-#   R-3  verify_skill is allowlisted before any herdr mutation
+#   R-3  verify_skill is allowlisted before any herdr mutation, but only
+#        once herdr itself is present (no herdr => silent, AC-5)
 #   R-4  MAIN_ROOT must resolve to a git worktree root
 #   R-5  a sibling path must not match the tab prefix
 #   R-7  "herdr unreachable" and "nothing running" are different lines
@@ -505,6 +506,17 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
     assert_success
     run pmv_verify_skill_allowed devx:pr-verify-live
     assert_success
+}
+
+@test "R-3: with no herdr, even a bad registry value stays silent (AC-5)" {
+    # The allowlist sits AFTER the herdr probe on purpose: a machine that
+    # cannot run the feature at all must print nothing, which is the
+    # acceptance criterion "herdr 미설치 → 스킬 전체가 조용히 스킵".
+    printf '{"acme/dotfiles":{"verify_skill":"evil:do-something-else"}}\n' >"$WATCHED"
+    FAKE_HERDR_PRESENT=0
+    run dispatch
+    assert_success
+    assert_output ""
 }
 
 @test "R-3: anything else is refused" {

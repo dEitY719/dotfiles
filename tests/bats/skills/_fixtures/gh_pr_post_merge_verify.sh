@@ -403,16 +403,17 @@ gh_pr_post_merge_verify() {
     # Unregistered repo or no registry at all: behave exactly as before #1511.
     [ "$_rc" -eq 0 ] || return 0
 
+    # herdr absent → the whole feature is a no-op, silently.
+    _pmv_herdr_present || return 0
+
     # The registry value ends up in an unattended, skip-permissions agent's
-    # prompt, so it is allowlisted before anything is touched.
+    # prompt, so it is allowlisted after the herdr probe (a machine that cannot
+    # run the feature stays silent) but before anything is touched.
     if ! pmv_verify_skill_allowed "$_skill"; then
         printf '[WARN] gh:pr-post-merge-verify: verify_skill "%s" for %s is not one of devx:pr-verify-merged, devx:pr-verify-live — verification skipped.\n' \
             "$_skill" "$_repo"
         return 0
     fi
-
-    # herdr absent → the whole feature is a no-op, silently.
-    _pmv_herdr_present || return 0
 
     # A main checkout that is not a git worktree root makes every later git
     # probe fail open, so it is checked before the first side effect.

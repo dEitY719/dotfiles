@@ -25,10 +25,12 @@ if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
     fi
 fi
 [ -n "$VERIFY_SKILL" ] || return 0 2>/dev/null || exit 0
+command -v herdr >/dev/null 2>&1 || return 0 2>/dev/null || exit 0
 # The registry value is typed into a session started with
 # `--dangerously-skip-permissions`, so it is an input to a prompt, not a label.
-# Allowlist it here — before a tab is closed or anything else is touched — so a
-# registry someone else can edit cannot steer an unattended agent.
+# Allowlist it here — after the herdr probe (a machine that cannot run the
+# feature stays silent, AC-5) but before a tab is closed or anything else is
+# touched, so a registry someone else can edit cannot steer an unattended agent.
 case "$VERIFY_SKILL" in
 devx:pr-verify-merged | devx:pr-verify-live) ;;
 *)
@@ -37,7 +39,6 @@ devx:pr-verify-merged | devx:pr-verify-live) ;;
     return 0 2>/dev/null || exit 0
     ;;
 esac
-command -v herdr >/dev/null 2>&1 || return 0 2>/dev/null || exit 0
 
 # --- helpers --------------------------------------------------------------
 # First string value of a flat key anywhere in the document. `herdr tab create`
