@@ -10,21 +10,36 @@ else lands here):
 3. Project board Status transition (`In progress`).
 4. `Depends on #M` cross-issue check.
 
+On top of those it adds one dotfiles-native guard AgentToolbox has no
+equivalent for — the duplicate-attempt detector of 3.3b (issue #1507).
+
 ## Substep order — why this sequence
 
 ```
-3.1 Fetch issue              (gates everything; CLOSED refusal here)
-3.2 Block-label guard        (HARD abort; cheapest "no" — never write to
+3.1  Fetch issue              (gates everything; CLOSED refusal here)
+3.2  Block-label guard        (HARD abort; cheapest "no" — never write to
                               an issue we won't work on)
-3.3 Self-assign              (broadcast claim ASAP, before mode dispatch)
-3.4 Board Status transition  (idempotent; verify-pair absorbs race)
-3.5 Depends-on guard         (slowest — N+1 issue lookups; do last and
+3.3  Self-assign              (broadcast claim ASAP, before mode dispatch)
+3.3b Duplicate open-PR guard  (soft warn; runs once the claim is out there
+                              but before the board is touched)
+3.4  Board Status transition  (idempotent; verify-pair absorbs race)
+3.5  Depends-on guard         (slowest — N+1 issue lookups; do last and
                               soft-warn so blockers learned mid-loop
                               don't undo the claim)
 ```
 
 The HARD aborts (3.1, 3.2) come before any mutation (3.3, 3.4) so an
 abort never leaves a stale claim or board state.
+
+**Why 3.3b sits between 3.3 and 3.4**: self-assign is the cheap,
+idempotent broadcast — do it first so the claim is visible no matter
+what the duplicate check concludes. But the warning has to land *before*
+3.4 mutates the board, so the human reads "another session may already
+own this" while the board still shows the pre-run truth. Running it
+after 3.4 would mean this run's own `In progress` write is already mixed
+into the state the user is being asked to judge. It is deliberately not
+earlier than 3.3 either: it costs a search API call, and there is no
+point paying for it on an issue 3.2 is about to refuse.
 
 ## Substep detail
 
@@ -120,6 +135,58 @@ same posture.
 The implement flow proceeds — the claim is informational, not load-
 bearing.
 
+### 3.3b Duplicate open-PR guard (soft)
+
+**Goal**: catch the case 3.3 structurally cannot — *I* am already the
+assignee because *another one of my own sessions* claimed this issue
+minutes ago from a sibling worktree. To 3.3 that is indistinguishable
+from a plain restart, so it returns `noop-self` and says nothing. Issue
+#1482 was implemented twice, 13 minutes apart, producing PRs #1488 and
+#1489 that later collided in a merge train.
+
+The reliable fingerprint of "someone already did this" is an **open PR
+that closes this issue**. Read-only, one search call, one warning line.
+It never blocks: a second session is sometimes exactly what the user
+wants (a rewrite, an abandoned first attempt), so the decision stays
+with the human.
+
+**Algorithm**:
+
+```
+if "GH_ISSUE_SKIP_DUPLICATE_CHECK" set:
+    return 0
+
+prs = `GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" \
+         --state open --search "Closes #<N> in:body" --json number -q '.[].number'`
+
+if prs == []:
+    return 0    # silent — no output on the common path
+
+print "[WARN] Issue #<N> 을 이미 닫는 open PR #<M> 이 있습니다 — 중복 구현 가능성. 계속 진행하기 전에 확인하세요."
+return 0
+```
+
+`<M>` is the first PR the search returns — one line however many come
+back; the point is to send the human to the PR list, not to enumerate it.
+
+**Why silence on the empty result matters**: this guard fires on every
+implement run, and the overwhelmingly common answer is "no duplicate".
+A warning that also prints when nothing is wrong is a warning people
+learn to scroll past — which would cost exactly the signal #1507 exists
+to add. No match → no output at all.
+
+**Soft-fail rule** (NF-1): any failure of the search itself → **no
+output, continue**:
+- Transient API / network error.
+- Search unavailable or rate-limited on this host.
+- `gh` too old to support `--search` on `pr list`.
+
+Unlike 3.3, a failure here is not even worth a warn line: the check is
+an advisory read, and a "could not check for duplicates" line on an
+otherwise-fine run is noise of the same kind the previous paragraph
+rejects. Never abort — a duplicate warning that blocks would break every
+legitimate restart.
+
 ### 3.4 Board Status transition
 
 **Goal**: move the issue card from `Backlog`/`Ready` to `In progress`
@@ -161,6 +228,30 @@ The helper (`shell-common/functions/gh_project_status.sh`) handles:
   (`In design`, `Spec`, etc.) are left untouched; teams that want
   those moved should override the helper or skip with
   `GH_ISSUE_SKIP_BOARD_TRANSITION=1` and run the transition manually.
+
+**Warn when `--only-from` absorbs the write (#1507, F-2)**: read the
+card's current Status before handing off to the helper, and when it is
+neither `Backlog` nor `Ready`, print one line before the (no-op)
+mutation:
+
+```
+status = current Status of the card on the board
+
+if status not in ("Backlog", "Ready"):
+    print "[WARN] Issue #<N> Status 가 이미 \"<status>\" 입니다 — 다른 세션이 이미 착수했을 수 있습니다."
+```
+
+This changes nothing about the mutation — the helper's whitelist still
+absorbs it, exactly as before. It only stops the absorption from being
+*silent*. A card already sitting in `In progress` is the board-side
+fingerprint of the same duplicate-session failure 3.3b watches for on
+the PR side, and the two signals are independent: the other session may
+have moved the board without opening a PR yet, or opened a PR in a repo
+with no board at all. A restart of your own abandoned run also lands
+here, which is fine — the line is advisory, not a refusal.
+
+Reading the Status is itself best-effort: if the lookup errors, skip the
+warning and let the helper run as usual (NF-1).
 - **Verify pair (race absorption, #393)**: after the mutation the
   helper sleeps `_GH_PROJECT_STATUS_VERIFY_SLEEP` (default 1 s) and
   re-queries. Re-issues the mutation once if a builtin workflow
@@ -214,7 +305,8 @@ not abort — the dependency check is informational.
 |---|---|---|
 | `GH_ISSUE_BLOCK_LABELS` | `do-not-work,on-hold,보류,⏸️ Postpone,reference` | Comma-separated block-label list for 3.2. Spaces inside a label are part of the label (don't pad commas). `reference` marks 참고용/구현 불필요 issues (issue #1226). |
 | `GH_ISSUE_SKIP_SELF_ASSIGN` | unset | When `1`, skip 3.3 entirely. |
-| `GH_ISSUE_SKIP_BOARD_TRANSITION` | unset | When `1`, skip 3.4 entirely. |
+| `GH_ISSUE_SKIP_DUPLICATE_CHECK` | unset | When `1`, skip 3.3b entirely — no search call, no warning. For a deliberate second implementation of the same issue (issue #1507). |
+| `GH_ISSUE_SKIP_BOARD_TRANSITION` | unset | When `1`, skip 3.4 entirely (its F-2 Status warning included). |
 | `GH_ISSUE_SKIP_DEPS_CHECK` | unset | When `1`, skip 3.5 entirely. |
 
 There is **no** env var to bypass 3.2 (block-label guard). That is
@@ -222,17 +314,25 @@ intentional — see "Block-label guard (fail-closed)" above.
 
 ## Behavior matrix
 
-| Case | 3.2 block | 3.3 self-assign | 3.4 board | 3.5 deps | Net |
-|---|---|---|---|---|---|
-| Normal (board, unassigned, deps OK) | pass | add `@me` | `In progress` (verified) | OK | proceed |
-| Block-label attached | **abort exit 2** | n/a | n/a | n/a | refuse |
-| Already self-assigned | pass | no-op | `In progress` | OK | proceed |
-| Assigned to another user | pass | warn + skip | `In progress` | OK | proceed |
-| Dependency `#M` OPEN | pass | add `@me` | `In progress` | warn | proceed |
-| No board attached | pass | add `@me` | silent skip | OK | proceed |
-| `GH_ISSUE_SKIP_SELF_ASSIGN=1` | pass | skip | `In progress` | OK | proceed |
-| `GH_ISSUE_SKIP_BOARD_TRANSITION=1` | pass | add `@me` | skip | OK | proceed |
-| `GH_ISSUE_SKIP_DEPS_CHECK=1` | pass | add `@me` | `In progress` | skip | proceed |
+| Case | 3.2 block | 3.3 self-assign | 3.3b dup PR | 3.4 board | 3.5 deps | Net |
+|---|---|---|---|---|---|---|
+| Normal (board, unassigned, deps OK) | pass | add `@me` | silent | `In progress` (verified) | OK | proceed |
+| Block-label attached | **abort exit 2** | n/a | n/a | n/a | n/a | refuse |
+| Already self-assigned | pass | no-op | silent | `In progress` | OK | proceed |
+| Assigned to another user | pass | warn + skip | silent | `In progress` | OK | proceed |
+| Dependency `#M` OPEN | pass | add `@me` | silent | `In progress` | warn | proceed |
+| No board attached | pass | add `@me` | silent | silent skip | OK | proceed |
+| Open PR already closes `#N` | pass | no-op | **warn** | `In progress` | OK | proceed |
+| Board Status already `In progress` | pass | no-op | silent | **warn** + no-op | OK | proceed |
+| Duplicate search API error | pass | add `@me` | silent | `In progress` | OK | proceed |
+| `GH_ISSUE_SKIP_SELF_ASSIGN=1` | pass | skip | silent | `In progress` | OK | proceed |
+| `GH_ISSUE_SKIP_DUPLICATE_CHECK=1` | pass | add `@me` | skip | `In progress` | OK | proceed |
+| `GH_ISSUE_SKIP_BOARD_TRANSITION=1` | pass | add `@me` | silent | skip | OK | proceed |
+| `GH_ISSUE_SKIP_DEPS_CHECK=1` | pass | add `@me` | silent | `In progress` | skip | proceed |
+
+The two duplicate-attempt rows are the #1507 additions; "silent" in the
+3.3b column means the guard ran and found nothing, which is the normal
+outcome. Both warn rows still end in `proceed` — neither signal blocks.
 
 ## Placement rationale (why Step 3, not earlier or later)
 
@@ -263,7 +363,7 @@ intentional — see "Block-label guard (fail-closed)" above.
 ## Test fixture
 
 `tests/bats/skills/_fixtures/gh_issue_implement_claim.sh` mirrors
-the four substep functions verbatim. The bats suite at
+the five substep functions verbatim. The bats suite at
 `tests/bats/skills/gh_issue_implement_claim.bats` exercises the
-seven-case behavior matrix above. Any change to substep logic must
+eight-case behavior matrix above. Any change to substep logic must
 land in both files (and this doc).

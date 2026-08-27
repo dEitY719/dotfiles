@@ -16,6 +16,12 @@
 #   FAKE_DEPS_STATES    — "M:STATE,M2:STATE2" map for dep-issue lookup
 #                         (e.g. "100:CLOSED,101:OPEN"). Missing key → OPEN.
 #   FAKE_BOARD_ATTACHED — "1" if a projectV2 is attached, "0" otherwise.
+#   FAKE_BOARD_STATUS   — current board Status column ("Backlog", "Ready",
+#                         "In progress", ...). Unset → treated as
+#                         Backlog/Ready, i.e. the pre-#1507 behavior.
+#   FAKE_OPEN_PRS_CLOSING     — comma-separated PR numbers that are open and
+#                               close this issue. Empty → none found.
+#   FAKE_DUPLICATE_PR_API_FAIL — "1" simulates the PR search itself erroring.
 
 # 3.2 Block-label guard. Returns 2 (refusal) when any label on the
 # issue matches an entry in GH_ISSUE_BLOCK_LABELS; 0 otherwise.
@@ -82,13 +88,44 @@ gh_issue_self_assign_decide() {
     return 0
 }
 
+# 3.3b Duplicate open-PR guard (#1507). Read-only, soft, never blocks:
+# warns once when an open PR already closes this issue, which is the
+# fingerprint of another session in a sibling worktree having started
+# the same issue under the same account.
+# Always returns 0. Prints one "[WARN] ..." line, or nothing.
+gh_issue_duplicate_pr_guard() {
+    local _issue_num="${1:-?}"
+
+    if [ "${GH_ISSUE_SKIP_DUPLICATE_CHECK:-0}" = "1" ]; then
+        return 0
+    fi
+    # NF-1 soft-fail: the search itself errored → stay silent, continue.
+    if [ "${FAKE_DUPLICATE_PR_API_FAIL:-0}" = "1" ]; then
+        return 0
+    fi
+
+    local _prs_csv="${FAKE_OPEN_PRS_CLOSING-}"
+    [ -z "$_prs_csv" ] && return 0
+
+    # Name the first match — one line, however many PRs came back.
+    local _first="${_prs_csv%%,*}"
+    printf '[WARN] Issue #%s 을 이미 닫는 open PR #%s 이 있습니다 — 중복 구현 가능성. 계속 진행하기 전에 확인하세요.\n' \
+        "$_issue_num" "$_first"
+    return 0
+}
+
 # 3.4 Board Status transition decision. Returns 0 in all cases (the
 # real helper is best-effort), but emits a single tag word so tests
 # can verify which branch ran:
-#   "skip"     — GH_ISSUE_SKIP_BOARD_TRANSITION=1
-#   "no-board" — FAKE_BOARD_ATTACHED=0 (no projectV2 attached)
-#   "synced"   — would invoke _gh_project_status_sync
+#   "skip"                — GH_ISSUE_SKIP_BOARD_TRANSITION=1
+#   "no-board"            — FAKE_BOARD_ATTACHED=0 (no projectV2 attached)
+#   "already-in-progress" — Status outside {Backlog,Ready}, so the real
+#                           helper's --only-from whitelist absorbs the
+#                           mutation. Preceded by an F-2 [WARN] line (#1507).
+#   "synced"              — would invoke _gh_project_status_sync
 gh_issue_board_transition_decide() {
+    local _issue_num="${1:-?}"
+
     if [ "${GH_ISSUE_SKIP_BOARD_TRANSITION:-0}" = "1" ]; then
         printf 'skip'
         return 0
@@ -97,6 +134,18 @@ gh_issue_board_transition_decide() {
         printf 'no-board'
         return 0
     fi
+
+    # F-2 (#1507): --only-from "Backlog,Ready" silently no-ops on every
+    # other column. Say so out loud — an already-"In progress" card is
+    # how a duplicate session looks from the board's side.
+    local _status="${FAKE_BOARD_STATUS-}"
+    if [ -n "$_status" ] && [ "$_status" != "Backlog" ] && [ "$_status" != "Ready" ]; then
+        printf '[WARN] Issue #%s Status 가 이미 "%s" 입니다 — 다른 세션이 이미 착수했을 수 있습니다.\n' \
+            "$_issue_num" "$_status"
+        printf 'already-in-progress'
+        return 0
+    fi
+
     printf 'synced'
     return 0
 }
