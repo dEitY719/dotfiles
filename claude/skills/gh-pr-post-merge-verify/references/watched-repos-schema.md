@@ -19,9 +19,22 @@ carries data plus one `$`-prefixed metadata key.
 
 | Key | Required | Meaning |
 |---|---|---|
-| `verify_skill` | yes | `devx:pr-verify-merged` or `devx:pr-verify-live`. Typed into the new session as its dash form (`/devx-pr-verify-merged <N>`). |
+| `verify_skill` | yes | **Allowlisted**: `devx:pr-verify-merged` or `devx:pr-verify-live`, nothing else. Typed into the new session as its dash form (`/devx-pr-verify-merged <N>`). |
 | `main_checkout` | no | Absolute or `~`-relative path of the original checkout to rebase. Omitted → derived from `git rev-parse --path-format=absolute --git-common-dir` with the trailing `/.git` stripped, which resolves the main checkout even when the skill runs inside a linked worktree. |
 | `note` | no | Free text for humans. Never read by the skill. |
+
+## Why `verify_skill` is an allowlist, not free text
+
+The value does not label anything — it is interpolated into
+`herdr agent prompt` for a session started with
+`--dangerously-skip-permissions`, i.e. it is an input to an unattended agent's
+prompt. A registry file is editable by anyone who can edit the repo (or, in a
+worktree, anyone who can write `$DOTFILES_ROOT`), so the dispatch refuses any
+value outside the two known skills with one `[WARN]` and stops **before** the
+first herdr mutation — a bad registry never even closes a tab. Adding a third
+verification skill means adding it to that allowlist in all three places:
+`references/dispatch.sh.md`, `tests/bats/skills/_fixtures/gh_pr_post_merge_verify.sh`,
+and this table.
 
 ## Reserved keys
 

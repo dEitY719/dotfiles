@@ -34,6 +34,24 @@ host on every `gh` call; leaving it out of the session identity would undo
 that pinning one layer down, and a github.com checkout and a GHES checkout
 sharing a slug would collide on one herdr agent name.
 
+## Why the base branch and remote are threaded in, not assumed
+
+`fetch origin main` bakes in two assumptions the registry does not make. A
+watched repo's default branch may be `master` or `develop`, and a registered
+repo may be reached through `upstream` rather than `origin` — the skill even
+advertises a `[remote]` positional it was then ignoring. Worse, rebasing
+without first checking what `MAIN_ROOT`'s HEAD is on would rewrite the history
+of whatever feature branch that checkout happened to be parked on. So the
+remote comes from the positional, the base branch from the merged PR's
+`baseRefName`, and a HEAD that is not on that branch (a detached one included)
+stops the run the same way a dirty tree does.
+
+`MAIN_ROOT` itself is validated first, before any step: `git -C "" status`
+*fails*, and a failing status reads as "clean", after which
+`git -C "$MAIN_ROOT" rebase --abort` would fire in whatever checkout the shell
+happens to stand in. A path that is not a git worktree root makes the whole
+dispatch unusable, so it is refused before the impl tab is even closed.
+
 ## Why a rebase failure is the only hard stop
 
 Every other failure costs a missing convenience. This one costs a **wrong
@@ -53,11 +71,18 @@ reported.
 Lesson carried over from `_iw_live_agents` in
 `shell-common/tools/custom/issue_watcher_cron.sh`: a herdr that answers
 nothing is not a herdr saying no agent is there. Reading it as "nothing
-running" is the one mistake this signal cannot afford. Matching also uses
-**both** `cwd` and `foreground_cwd` (the pane's opening directory and where
-its shell stands now), prefix-matches on the **physical** path (a worktree can
-be reached through a symlink), and refuses an empty path outright — an empty
-prefix matches every agent and would close an unrelated tab.
+running" is the one mistake this signal cannot afford, so the two answers get
+two different lines: "herdr could not be queried — tab left alone" is a
+`[WARN]`, and "no live herdr tab — nothing to close" is an `[INFO]`. Printing
+the second for both would be exactly the conflation this section forbids.
+
+Matching also uses **both** `cwd` and `foreground_cwd` (the pane's opening
+directory and where its shell stands now), compares **physical** paths (a
+worktree can be reached through a symlink), and refuses an empty path outright
+— an empty prefix matches every agent and would close an unrelated tab. The
+comparison is on a path **boundary**, not a bare `startswith`: `/work/repo-1`
+must not match the sibling checkout `/work/repo-11`, while `/work/repo-1`
+itself and anything under `/work/repo-1/` must.
 
 ## Why the pane id is read by leaf name
 

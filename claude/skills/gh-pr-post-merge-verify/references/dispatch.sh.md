@@ -12,7 +12,10 @@ Executable mirror + regression suite:
 # --- 0. F-1 gate. Unregistered repo => do nothing at all, no output. -------
 WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
 VERIFY_SKILL=""
-if [ -r "$WATCHED_FILE" ]; then
+# No jq → the registry cannot be read, so the feature is simply unavailable.
+# Silent, never a WARN: an absent tool is not a broken SSOT, and gh:pr-merge's
+# gate (which carries the same condition) must print nothing either way.
+if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
     if ! VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" \
         '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null); then
         # The file exists but is not JSON: a broken SSOT, not an opt-out.
@@ -22,6 +25,18 @@ if [ -r "$WATCHED_FILE" ]; then
     fi
 fi
 [ -n "$VERIFY_SKILL" ] || return 0 2>/dev/null || exit 0
+# The registry value is typed into a session started with
+# `--dangerously-skip-permissions`, so it is an input to a prompt, not a label.
+# Allowlist it here — before a tab is closed or anything else is touched — so a
+# registry someone else can edit cannot steer an unattended agent.
+case "$VERIFY_SKILL" in
+devx:pr-verify-merged | devx:pr-verify-live) ;;
+*)
+    printf '[WARN] gh:pr-post-merge-verify: verify_skill "%s" for %s is not one of devx:pr-verify-merged, devx:pr-verify-live — verification skipped.\n' \
+        "$VERIFY_SKILL" "$TARGET_REPO"
+    return 0 2>/dev/null || exit 0
+    ;;
+esac
 command -v herdr >/dev/null 2>&1 || return 0 2>/dev/null || exit 0
 
 # --- helpers --------------------------------------------------------------
@@ -45,16 +60,18 @@ pmv_physical_path() { (cd -P "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"; 
 # herdr could not be asked, rc 3 = herdr answered and nothing is on that path.
 # An empty answer from herdr is "unknown", never "nothing running" — the one
 # mistake this signal cannot afford (issue_watcher_cron.sh's lesson). Match
-# BOTH cwd and foreground_cwd, prefix-match the PHYSICAL path, and never match
-# on an empty prefix (it would select an unrelated tab).
+# BOTH cwd and foreground_cwd against the PHYSICAL path, on a path BOUNDARY
+# (the path itself or something under it) so `/work/repo-11` does not match
+# `/work/repo-1`, and never match on an empty prefix.
 pmv_tab_for_cwd() {
     [ -n "$1" ] || return 3
     _pmv_json=$(herdr agent list 2>/dev/null) || return 1
     [ -n "$_pmv_json" ] || return 1
     _pmv_tab=$(printf '%s' "$_pmv_json" | jq -r --arg p "$1" '
+        def under($b): . == $b or startswith($b + "/");
         if (.result.agents | type) == "array" then
           [ .result.agents[]?
-            | select(((.cwd // "") | startswith($p)) or ((.foreground_cwd // "") | startswith($p)))
+            | select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))
             | .tab_id // empty ]
           | map(select(type == "string" and . != "")) | first // empty
         else error("no agent list") end
@@ -72,6 +89,19 @@ case "$MAIN_ROOT" in
 '') MAIN_ROOT=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
     MAIN_ROOT="${MAIN_ROOT%/.git}" ;;
 esac
+# An empty or bogus MAIN_ROOT is the quietly dangerous case: `git -C "" status`
+# fails, which the dirty check below reads as "clean", and the later
+# `git -C "$MAIN_ROOT" rebase --abort` then fires wherever the shell stands. So
+# it must resolve to a git worktree root BEFORE the first side effect (the
+# impl-tab close) — a broken MAIN_ROOT makes the whole dispatch unusable.
+MAIN_TOP=""
+[ -z "$MAIN_ROOT" ] || MAIN_TOP=$(git -C "$MAIN_ROOT" rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$MAIN_ROOT" ] || [ -z "$MAIN_TOP" ] ||
+    [ "$(pmv_physical_path "$MAIN_TOP")" != "$(pmv_physical_path "$MAIN_ROOT")" ]; then
+    printf '[WARN] gh:pr-post-merge-verify: main checkout "%s" is not a git worktree root — verification skipped.\n' \
+        "$MAIN_ROOT"
+    return 0 2>/dev/null || exit 0
+fi
 
 # --- 1/2. F-2: close the implementation tab (best-effort, never blocking) --
 IMPL_WT=$(git worktree list --porcelain 2>/dev/null |
@@ -81,23 +111,43 @@ IMPL_WT=$(git worktree list --porcelain 2>/dev/null |
     ')
 if [ -z "$IMPL_WT" ]; then
     printf '[INFO] gh:pr-post-merge-verify: no local worktree for %s — nothing to close.\n' "$HEAD_BRANCH"
-elif IMPL_TAB=$(pmv_tab_for_cwd "$(pmv_physical_path "$IMPL_WT")"); then
-    if herdr tab close "$IMPL_TAB" >/dev/null 2>&1; then
-        printf '[INFO] gh:pr-post-merge-verify: closed implementation tab %s (%s).\n' "$IMPL_TAB" "$IMPL_WT"
-    else
-        printf '[WARN] gh:pr-post-merge-verify: herdr tab close %s failed — continuing.\n' "$IMPL_TAB"
-    fi
 else
-    printf '[INFO] gh:pr-post-merge-verify: no live herdr tab on %s — nothing to close.\n' "$IMPL_WT"
+    IMPL_TAB=$(pmv_tab_for_cwd "$(pmv_physical_path "$IMPL_WT")")
+    IMPL_RC=$?
+    if [ "$IMPL_RC" -eq 0 ]; then
+        if herdr tab close "$IMPL_TAB" >/dev/null 2>&1; then
+            printf '[INFO] gh:pr-post-merge-verify: closed implementation tab %s (%s).\n' "$IMPL_TAB" "$IMPL_WT"
+        else
+            printf '[WARN] gh:pr-post-merge-verify: herdr tab close %s failed — continuing.\n' "$IMPL_TAB"
+        fi
+    elif [ "$IMPL_RC" -eq 1 ]; then
+        # rc 1 is "herdr could not be asked", NOT "nothing is running there" —
+        # reporting the two the same way is the conflation rationale.md forbids.
+        printf '[WARN] gh:pr-post-merge-verify: herdr could not be queried — implementation tab on %s left alone.\n' "$IMPL_WT"
+    else
+        printf '[INFO] gh:pr-post-merge-verify: no live herdr tab on %s — nothing to close.\n' "$IMPL_WT"
+    fi
 fi
 
-# --- 3. F-3: the main checkout must be clean and rebased, or we stop -------
+# --- 3. F-3: clean, on the base branch, and rebased — or we stop -----------
 if [ -n "$(git -C "$MAIN_ROOT" status --porcelain 2>/dev/null)" ]; then
     printf '[WARN] gh:pr-post-merge-verify: %s has uncommitted changes — not rebasing, verification skipped.\n' "$MAIN_ROOT"
     return 0 2>/dev/null || exit 0
 fi
-if ! (git -C "$MAIN_ROOT" fetch origin main &&
-    git -C "$MAIN_ROOT" rebase origin/main) >/dev/null 2>&1; then
+# Rebasing without checking what HEAD is on would rewrite the history of
+# whatever feature branch the main checkout happens to be parked on. A detached
+# HEAD stops here too: it has no branch to compare, so it can never match.
+REMOTE="${REMOTE:-origin}"
+MAIN_BRANCH=$(git -C "$MAIN_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null)
+[ "$MAIN_BRANCH" != "HEAD" ] || MAIN_BRANCH=""
+[ -n "${BASE_BRANCH-}" ] || BASE_BRANCH="$MAIN_BRANCH"
+if [ -z "$BASE_BRANCH" ] || [ "$MAIN_BRANCH" != "$BASE_BRANCH" ]; then
+    printf '[WARN] gh:pr-post-merge-verify: %s is on %s, not the base branch %s — not rebasing, verification skipped.\n' \
+        "$MAIN_ROOT" "${MAIN_BRANCH:-(detached HEAD)}" "${BASE_BRANCH:-(unknown)}"
+    return 0 2>/dev/null || exit 0
+fi
+if ! (git -C "$MAIN_ROOT" fetch "$REMOTE" "$BASE_BRANCH" &&
+    git -C "$MAIN_ROOT" rebase "${REMOTE}/${BASE_BRANCH}") >/dev/null 2>&1; then
     # Restore, never resolve: picking sides is the human's call, but leaving
     # the user's main checkout parked mid-rebase is a worse failure.
     git -C "$MAIN_ROOT" rebase --abort >/dev/null 2>&1 || true
@@ -118,9 +168,18 @@ if [ -z "$WS_ID" ]; then
     return 0 2>/dev/null || exit 0
 fi
 
-set -- tab create --workspace "$WS_ID" --cwd "$MAIN_ROOT" --label "pr-${PR_NUMBER}" --no-focus
-[ -z "${CLAUDE_CONFIG_DIR-}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR}"
-TAB_JSON=$(herdr "$@" 2>/dev/null) || TAB_JSON=""
+# Spelled out twice rather than accumulated with `set --`: this block is pasted
+# at the top level of the caller's shell, where `set --` would destroy the
+# caller's own "$1", "$2", … POSIX sh has no arrays, so an if/else over the
+# full command line is the only form that is both safe and portable.
+if [ -n "${CLAUDE_CONFIG_DIR-}" ]; then
+    TAB_JSON=$(herdr tab create --workspace "$WS_ID" --cwd "$MAIN_ROOT" \
+        --label "pr-${PR_NUMBER}" --no-focus \
+        --env "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR}" 2>/dev/null) || TAB_JSON=""
+else
+    TAB_JSON=$(herdr tab create --workspace "$WS_ID" --cwd "$MAIN_ROOT" \
+        --label "pr-${PR_NUMBER}" --no-focus 2>/dev/null) || TAB_JSON=""
+fi
 NEW_PANE=$(printf '%s' "$TAB_JSON" | pmv_json_first pane_id)
 NEW_TAB=$(printf '%s' "$TAB_JSON" | pmv_json_first tab_id)
 if [ -z "$NEW_PANE" ]; then
@@ -176,11 +235,28 @@ printf '  attach: herdr agent attach %s\n' "$PMV_AGENT"
 | `PR_NUMBER` | Step 1 | The merged PR |
 | `TARGET_REPO` / `TARGET_HOST` | Step 2 | One remote URL, #1403/#1407 |
 | `HEAD_BRANCH` | caller | The merged PR's head branch, used to find the impl worktree |
+| `BASE_BRANCH` | caller | The merged PR's base branch (`baseRefName`). Empty → the main checkout's current branch, and a detached HEAD stops the run |
+| `REMOTE` | Step 1, optional | The `[remote]` positional; default `origin`. `fetch`/`rebase` use it, never a hardcoded `origin` |
 | `PMV_PROMPT_TIMEOUT_MS` | env, optional | `herdr agent prompt --wait` cap, default 900000 (15 min) |
 
 `--wait --until idle` waits for the dispatched session to settle, so the
 timeout is generous. Hitting it is a `[WARN]`, not a failure: the prompt has
 already landed, and the attach hint is still printed.
+
+`gh:pr-merge` already read both refs in its own Step 2 pre-flight and passes
+them down. Standalone, recover them from the same PR — host-pinned and
+repo-scoped, the only GitHub call this skill makes and a read:
+
+```bash
+GH_HOST="$TARGET_HOST" gh pr view "$PR_NUMBER" --repo "$TARGET_REPO" \
+    --json headRefName,baseRefName -q '.headRefName + " " + .baseRefName'
+```
+
+`REMOTE`/`BASE_BRANCH` are never hardcoded to `origin`/`main`: a watched repo
+may default to `master` or `develop`, and a registered repo may be reached
+through `upstream`. The fallbacks keep the block from ever expanding to
+`git fetch "" ""` — `REMOTE` defaults to `origin`, and an empty `BASE_BRANCH`
+becomes the main checkout's own current branch, never a detached HEAD.
 
 ## herdr JSON shapes this relies on (verified against herdr 0.7.5)
 

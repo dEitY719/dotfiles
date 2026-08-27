@@ -18,6 +18,14 @@
 #   E-5  agent start fails      -> WARN, no prompt
 #   E-6  agent_name_taken       -> WARN, but the existing session IS prompted
 #   E-7  prompt fails           -> WARN, report still prints
+# PR #1518 review hardening, one test each:
+#   R-1  main checkout on the wrong branch / detached  -> WARN, no rebase
+#   R-2  remote + base branch are threaded, never hardcoded origin/main
+#   R-3  verify_skill is allowlisted before any herdr mutation
+#   R-4  MAIN_ROOT must resolve to a git worktree root
+#   R-5  a sibling path must not match the tab prefix
+#   R-7  "herdr unreachable" and "nothing running" are different lines
+#   R-8  no jq -> the feature is unavailable, silently
 # Plus unit-level pins on the pieces that are easy to get subtly wrong:
 # host-qualified agent naming, the flat-key pane scan, main-checkout
 # resolution from a linked worktree, and the two ways `herdr agent list`
@@ -72,8 +80,8 @@ branch refs/heads/wt/issue-77/1
 teardown() {
     teardown_isolated_home
     unset PMV_PROMPT_TIMEOUT_MS
-    unset FAKE_HERDR_PRESENT FAKE_HERDR_LOG FAKE_GIT_LOG FAKE_WORKTREE_PORCELAIN \
-        FAKE_WORKTREE_RC FAKE_MAIN_DIRTY FAKE_SYNC_RC \
+    unset FAKE_HERDR_PRESENT FAKE_JQ_PRESENT FAKE_HERDR_LOG FAKE_GIT_LOG FAKE_WORKTREE_PORCELAIN \
+        FAKE_WORKTREE_RC FAKE_MAIN_DIRTY FAKE_SYNC_RC FAKE_MAIN_BRANCH FAKE_MAIN_TOPLEVEL \
         FAKE_HERDR_OUT_AGENT_LIST FAKE_HERDR_OUT_WORKTREE_LIST \
         FAKE_HERDR_OUT_TAB_CREATE FAKE_HERDR_OUT_AGENT_START FAKE_HERDR_OUT_AGENT_PROMPT \
         FAKE_HERDR_RC_AGENT_LIST FAKE_HERDR_RC_TAB_CREATE FAKE_HERDR_RC_TAB_CLOSE \
@@ -81,7 +89,8 @@ teardown() {
 }
 
 dispatch() {
-    gh_pr_post_merge_verify 77 "${1:-acme/dotfiles}" github.com "$MAIN_ROOT" wt/issue-77/1 "$WATCHED"
+    gh_pr_post_merge_verify 77 "${1:-acme/dotfiles}" github.com "$MAIN_ROOT" wt/issue-77/1 \
+        "$WATCHED" "${2-}" "${3-}"
 }
 
 # --- F-1: the watched-repos.json gate -------------------------------------
@@ -427,4 +436,207 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
     assert_output "$MAIN_ROOT"
     run pmv_worktree_for_branch wt/issue-99/1
     assert_output ""
+}
+
+# --- PR #1518 review: BLOCKER-1 / BLOCKER-2, the rebase preconditions ------
+
+@test "R-1: a main checkout parked on another branch is never rebased" {
+    FAKE_MAIN_BRANCH=feature/unrelated
+    run dispatch acme/dotfiles origin main
+    assert_success
+    assert_output --partial "[WARN]"
+    assert_output --partial "is on feature/unrelated, not the base branch main"
+    refute_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "sync "
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab create"
+}
+
+@test "R-1: a detached HEAD stops the run instead of rebasing it" {
+    FAKE_MAIN_BRANCH=HEAD
+    run dispatch
+    assert_success
+    assert_output --partial "is on (detached HEAD), not the base branch (unknown)"
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "sync "
+}
+
+@test "R-1: a detached HEAD stops even when the caller passed a base branch" {
+    FAKE_MAIN_BRANCH=HEAD
+    run dispatch acme/dotfiles origin main
+    assert_success
+    assert_output --partial "is on (detached HEAD), not the base branch main"
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "sync "
+}
+
+@test "R-2: the remote positional and the PR's base branch are what get fetched" {
+    FAKE_MAIN_BRANCH=develop
+    run dispatch acme/dotfiles upstream develop
+    assert_success
+    assert_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "sync ${MAIN_ROOT} upstream develop"
+    refute_output --partial "origin"
+    refute_output --partial " main"
+}
+
+@test "R-2: an empty base branch falls back to the checkout's own branch" {
+    # Never a literal `main`: a watched repo may default to master/develop.
+    FAKE_MAIN_BRANCH=master
+    run dispatch
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "sync ${MAIN_ROOT} origin master"
+}
+
+@test "R-2: an empty remote falls back to origin, never to an empty word" {
+    run pmv_sync_main "$MAIN_ROOT" "" main
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "sync ${MAIN_ROOT} origin main"
+}
+
+# --- PR #1518 review: BLOCKER-3, the verify_skill allowlist ----------------
+
+@test "R-3: both shipped verification skills are accepted" {
+    run pmv_verify_skill_allowed devx:pr-verify-merged
+    assert_success
+    run pmv_verify_skill_allowed devx:pr-verify-live
+    assert_success
+}
+
+@test "R-3: anything else is refused" {
+    run pmv_verify_skill_allowed devx:pr-verify-anything
+    [ "$status" -eq 1 ]
+    run pmv_verify_skill_allowed ""
+    [ "$status" -eq 1 ]
+}
+
+@test "R-3: a registry value off the allowlist warns before any herdr call" {
+    # It is typed into a --dangerously-skip-permissions agent's prompt, so a
+    # bad registry must not even get as far as closing a tab.
+    printf '{"acme/dotfiles":{"verify_skill":"evil:do-something-else"}}\n' >"$WATCHED"
+    run dispatch
+    assert_success
+    assert_output --partial "[WARN]"
+    assert_output --partial "verify_skill \"evil:do-something-else\" for acme/dotfiles is not one of"
+    refute_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+    run cat "$FAKE_GIT_LOG"
+    assert_output ""
+}
+
+# --- PR #1518 review: BLOCKER-4, MAIN_ROOT must be a git worktree root -----
+
+@test "R-4: an empty main checkout is refused before anything is touched" {
+    run gh_pr_post_merge_verify 77 acme/dotfiles github.com "" wt/issue-77/1 "$WATCHED"
+    assert_success
+    assert_output --partial "is not a git worktree root"
+    refute_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+}
+
+@test "R-4: a path that is not a git worktree root is refused" {
+    FAKE_MAIN_TOPLEVEL=""
+    run dispatch
+    assert_success
+    assert_output --partial "main checkout \"${MAIN_ROOT}\" is not a git worktree root"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab close"
+    refute_output --partial "tab create"
+}
+
+@test "R-4: a path INSIDE the checkout is not its root" {
+    FAKE_MAIN_TOPLEVEL="$MAIN_ROOT"
+    run gh_pr_post_merge_verify 77 acme/dotfiles github.com "${MAIN_ROOT}/git" \
+        wt/issue-77/1 "$WATCHED"
+    assert_success
+    assert_output --partial "is not a git worktree root"
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "sync "
+}
+
+# --- PR #1518 review: BLOCKER-5, the prefix needs a path boundary ----------
+
+@test "R-5: a sibling checkout sharing a prefix is not matched" {
+    # /work/repo-11 must not answer for /work/repo-1.
+    FAKE_HERDR_OUT_AGENT_LIST="{\"result\":{\"agents\":[{\"cwd\":\"${IMPL_WT}1\",\"foreground_cwd\":\"${IMPL_WT}1\",\"tab_id\":\"wV:tSIB\"}]}}"
+    run pmv_tab_for_cwd "$IMPL_WT"
+    [ "$status" -eq 3 ]
+    assert_output ""
+}
+
+@test "R-5: the path itself and its subdirectories still match" {
+    FAKE_HERDR_OUT_AGENT_LIST="{\"result\":{\"agents\":[{\"cwd\":\"${IMPL_WT}\",\"tab_id\":\"wV:tSELF\"}]}}"
+    run pmv_tab_for_cwd "$IMPL_WT"
+    assert_success
+    assert_output "wV:tSELF"
+
+    FAKE_HERDR_OUT_AGENT_LIST="{\"result\":{\"agents\":[{\"cwd\":\"${IMPL_WT}/sub/deep\",\"tab_id\":\"wV:tSUB\"}]}}"
+    run pmv_tab_for_cwd "$IMPL_WT"
+    assert_success
+    assert_output "wV:tSUB"
+}
+
+@test "R-5: a sibling worktree's tab is not closed by the dispatch" {
+    FAKE_HERDR_OUT_AGENT_LIST="{\"result\":{\"agents\":[{\"cwd\":\"${IMPL_WT}1\",\"tab_id\":\"wV:tSIB\"}]}}"
+    run dispatch
+    assert_success
+    assert_output --partial "no live herdr tab on ${IMPL_WT}"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab close"
+}
+
+# --- PR #1518 review: FOLLOW-UP-6/7/8 -------------------------------------
+
+@test "R-6: the dispatch block never uses \`set --\` (it would eat \$1, \$2, ...)" {
+    # The block is pasted at the top level of the caller's shell, so `set --`
+    # there would destroy the caller's own arguments. Comment lines are skipped
+    # — the rationale for NOT using it is allowed to name it.
+    run bash -c "grep -vE '^[[:space:]]*#' '${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md' | grep -n 'set --'"
+    [ "$status" -ne 0 ]
+}
+
+@test "R-7: an unreachable herdr WARNs, it does not claim 'nothing to close'" {
+    FAKE_HERDR_OUT_AGENT_LIST=""
+    run dispatch
+    assert_success
+    assert_output --partial "[WARN]"
+    assert_output --partial "herdr could not be queried — implementation tab on ${IMPL_WT} left alone"
+    refute_output --partial "nothing to close"
+    assert_output --partial "post-merge verification dispatched"
+}
+
+@test "R-7: an answered-but-empty herdr is an INFO 'nothing to close'" {
+    FAKE_HERDR_OUT_AGENT_LIST='{"result":{"agents":[]}}'
+    run dispatch
+    assert_success
+    assert_output --partial "[INFO] gh:pr-post-merge-verify: no live herdr tab on ${IMPL_WT} — nothing to close."
+    refute_output --partial "could not be queried"
+}
+
+@test "R-8: no jq → the feature is unavailable, silently" {
+    FAKE_JQ_PRESENT=0
+    run dispatch
+    assert_success
+    assert_output ""
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+    run cat "$FAKE_GIT_LOG"
+    assert_output ""
+}
+
+@test "R-8: both watched-repos gates carry the same jq guard" {
+    # gh:pr-merge's gate and the dispatch block's step-0 gate must agree, or an
+    # unregistered repo stops being byte-identical to pre-#1511.
+    run grep -c 'if command -v jq >/dev/null 2>&1 && \[ -r "$WATCHED_FILE" \]; then' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/SKILL.md"
+    assert_output "1"
+    run grep -c 'if command -v jq >/dev/null 2>&1 && \[ -r "$WATCHED_FILE" \]; then' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md"
+    assert_output "1"
 }
