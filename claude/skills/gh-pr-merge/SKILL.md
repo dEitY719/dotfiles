@@ -93,8 +93,9 @@ Print **only** the compact report (format in `references/strategy-selection.md` 
 
 ```bash
 WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
+VERIFY_SKILL=""
 if [ -r "$WATCHED_FILE" ]; then
-    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE")
+    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
 fi
 ```
 

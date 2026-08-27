@@ -103,6 +103,22 @@ does **not** fall through to auto-detect. A bare `gh repo view` reports
 what `gh repo set-default` chose, not git's origin, so silently rescuing a
 typo could sync a different repo's board.
 
+### `PMV_PROMPT_TIMEOUT_MS`
+
+| Field | Value |
+|---|---|
+| Default | `900000` (15 min) |
+| Active when | set to a millisecond count |
+| Scope | `gh:pr-post-merge-verify` — the `herdr agent prompt --wait --until idle` cap |
+| Source SSOT | `claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md` |
+| Issue | [#1511](https://github.com/dEitY719/dotfiles/issues/1511) |
+
+Caps how long the dispatch waits for the verification session to settle
+after the prompt lands. Generous by default because `--until idle` waits
+for a whole verification turn. Hitting the cap is a `[WARN]`, never a
+failure — the prompt has already been delivered and the `herdr agent
+attach` hint still prints.
+
 ### `TARGET_REPO`
 
 | Field | Value |

@@ -71,6 +71,7 @@ branch refs/heads/wt/issue-77/1
 
 teardown() {
     teardown_isolated_home
+    unset PMV_PROMPT_TIMEOUT_MS
     unset FAKE_HERDR_PRESENT FAKE_HERDR_LOG FAKE_GIT_LOG FAKE_WORKTREE_PORCELAIN \
         FAKE_WORKTREE_RC FAKE_MAIN_DIRTY FAKE_SYNC_RC \
         FAKE_HERDR_OUT_AGENT_LIST FAKE_HERDR_OUT_WORKTREE_LIST \
@@ -401,6 +402,22 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
     run pmv_main_root "${_BATS_REAL_DOTFILES_ROOT}/docs/.ssot/watched-repos.json" \
         dEitY719/dotfiles "${MAIN_ROOT}/.git"
     assert_output "${HOME}/dotfiles"
+}
+
+@test "timeout: the prompt cap defaults to 900000ms when the env var is unset" {
+    run dispatch
+    assert_success
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "--wait --until idle --timeout 900000"
+}
+
+@test "timeout: PMV_PROMPT_TIMEOUT_MS overrides the default prompt cap" {
+    export PMV_PROMPT_TIMEOUT_MS=1234
+    run dispatch
+    assert_success
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "--wait --until idle --timeout 1234"
+    refute_output --partial "--timeout 900000"
 }
 
 @test "worktree lookup: the branch decides the path, not the directory name" {
