@@ -17,6 +17,7 @@
 # Usage:
 #   _gh_pr_merge_train_quiet_minutes
 #   _gh_pr_merge_train_filter_targets --now <epoch-seconds> [--minutes <n>]
+#   <one gh-pr-view JSON object> | _gh_pr_merge_train_has_reply_pending_label
 #
 # `_gh_pr_merge_train_quiet_minutes`
 #   Echo the quiet period in minutes. Default 11; override with the env var
@@ -69,6 +70,15 @@
 #   - gh:pr-reply         REMOVES it when the reply pass completes (Step 6)
 # The quiet period stays as the BACKSTOP: PRs opened by hand or by another tool
 # never get the label, and a session that died mid-pass never removes it.
+#
+# `_gh_pr_merge_train_has_reply_pending_label`
+#   The same "does `.labels[]` contain `reply-pending`" question, asked of ONE
+#   PR object (not an array) on stdin. `_gh_pr_merge_train_filter_targets`
+#   above answers it for the whole queue at Step 2; `references/routing-table.md`
+#   F-3 asks it again per PR, right before acting, because a label can be
+#   *added mid-run* (a deferred devx:pr-review-all pass) after Step 2 already
+#   built the queue. Both call sites run this one function so the predicate
+#   itself cannot drift apart the way the quiet-minutes number used to (#1524).
 #
 # NOTE: This file intentionally has NO interactive guard. It is a pure
 # function-defining library (no top-level side effects) sourced from two
@@ -161,6 +171,15 @@ _gh_pr_merge_train_filter_targets() {
     printf '%s\n' "$_out"
 }
 
+# Read one PR object (the shape `gh pr view --json labels,...` answers with,
+# not an array) on stdin. 0 = it carries the `reply-pending` label, 1 =
+# it does not (including malformed / missing `labels`). See the header note
+# above for why this exists alongside `_gh_pr_merge_train_filter_targets`
+# instead of routing-table.md re-deriving the same jq expression by hand.
+_gh_pr_merge_train_has_reply_pending_label() {
+    jq -e '[ .labels[]?.name? ] | index("reply-pending")' >/dev/null 2>&1
+}
+
 # Self-check (issue #724): catch silent breakage where this file sources
 # cleanly but its public functions never get defined — an interactive-guard
 # regression, a syntax error mid-file, a future rename. Both call sites treat a
@@ -168,7 +187,8 @@ _gh_pr_merge_train_filter_targets() {
 # warning is what names the cause. rc stays 0 — sourcing must not fail.
 for _gh_pmt_selfcheck_fn in \
     _gh_pr_merge_train_quiet_minutes \
-    _gh_pr_merge_train_filter_targets; do
+    _gh_pr_merge_train_filter_targets \
+    _gh_pr_merge_train_has_reply_pending_label; do
     command -v "$_gh_pmt_selfcheck_fn" >/dev/null 2>&1 && continue
     printf '[gh_pr_merge_train] BUG: %s undefined after source — the merge-train target filter will not run. See dotfiles #724 / #1524.\n' \
         "$_gh_pmt_selfcheck_fn" >&2

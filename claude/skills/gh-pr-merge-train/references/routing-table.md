@@ -37,7 +37,7 @@ Two conditions **short-circuit the table** — check both before reading
 | `labels[].name` contains `reply-pending` | `[SKIPPED] reply-pending — review reply not yet complete` |
 
 ```bash
-printf '%s' "$STATE" | jq -e '[.labels[]?.name] | index("reply-pending")' >/dev/null \
+printf '%s' "$STATE" | _gh_pr_merge_train_has_reply_pending_label \
   && echo "[SKIPPED] reply-pending"
 ```
 
@@ -46,6 +46,10 @@ PRs from the queue via `_gh_pr_merge_train_filter_targets`. The re-check earns
 its place because a label can be **added mid-run** — a deferred
 `devx:pr-review-all` reply pass can fire minutes after Step 2 built the queue,
 and F-3's re-query is the only thing that would see it (#1524).
+`_gh_pr_merge_train_has_reply_pending_label` is the single-PR sibling of
+`_gh_pr_merge_train_filter_targets` — same `gh_pr_merge_train.sh` sourced in
+Step 2, same predicate, so the two checks cannot drift apart the way the
+quiet-minutes number used to.
 
 The two rebase rows (`BEHIND`, `DIRTY`) never operate on the current checkout.
 The train builds a detached scratch worktree for `headRefName` first and passes

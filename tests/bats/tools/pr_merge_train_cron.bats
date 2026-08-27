@@ -84,21 +84,9 @@ _make_repo() {
     git -C "${_REPO_DIR}" commit -qm "seed"
 }
 
-# Epoch seconds <1> as the ISO-8601 UTC stamp `gh pr list --json` returns.
-# GNU `date -d @EPOCH` first, then BSD/macOS `date -r EPOCH`, then python3 —
-# the same cascade shape as `tests/bats/skills/_fixtures/date_parsing.sh`,
-# because README.md advertises macOS support and a GNU-only invocation here
-# would take the whole suite down on BSD.
-_epoch_to_iso() {
-    local _epoch="$1" _out=""
-    _out=$(date -u -d "@${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
-        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
-    _out=$(date -u -r "${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
-        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
-    _out=$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp(${_epoch}, datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>/dev/null) \
-        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
-    return 1
-}
+# `_epoch_to_iso` is shared via test_helper.bash (`load '../test_helper'`
+# above already pulls it in) — every suite that builds `gh pr list` fixtures
+# uses the one GNU/BSD/python3 cascade rather than its own copy.
 
 # One `gh pr list --json` element: PR <1>, last updated <2> minutes ago,
 # optionally a draft (<3>, default `false`) — a draft is never mergeable, so
