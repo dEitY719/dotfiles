@@ -30,6 +30,36 @@
 # the body pure-definitions makes the file safe to source from any
 # context — interactive, non-interactive, or `bash -c`.
 
+# Advisory only (issue #1454, propagated by #1505): warn once on stderr when
+# this file was sourced from a checkout that is a different git repo than
+# $HOME/dotfiles. Never blocks, and deliberately NOT wrapped in an
+# interactive guard — see the PR #704 note above; the guard function is
+# itself a silent no-op outside the genuine foreign-checkout case.
+#
+# The self-path branch must stay here at file top level — zsh rebinds $0 to
+# the sourced file (FUNCTION_ARGZERO) only for this file's own statements,
+# and inside a function $0 is the function's own name. This file is real
+# POSIX sh sourced by git hooks, so the bash array form is reached only
+# when $BASH_VERSION proves bash: dash aborts with "Bad substitution" the
+# moment it expands ${BASH_SOURCE[0]}. Everything after the branch lives
+# once, in _dotfiles_root_guard_self.
+if [ -n "${ZSH_VERSION-}" ]; then
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    # shellcheck disable=SC3028  # bash-only var, gated by $BASH_VERSION above
+    _drg_self="${BASH_SOURCE[0]-}"
+else
+    _drg_self=""
+fi
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
+fi
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "gh_host"
+fi
+unset _drg_self _drg_helper
+
 # _gh_resolve_host — print the active GitHub host on stdout.
 #
 # Reads `_dotfiles_setup_mode` (defined in

@@ -12,6 +12,35 @@
 # user's `$pr` / `$remote` / `$url`. Callers read the stdout `key=value`
 # contract, never the shell variables.
 
+# Advisory only (issue #1454, propagated by #1505): warn once on stderr when
+# this file was sourced from a checkout that is a different git repo than
+# $HOME/dotfiles. Never blocks, and deliberately NOT wrapped in an
+# interactive guard — this is a pure function-defining library that
+# non-interactive skill callers rely on; the guard function is itself a
+# silent no-op outside the genuine foreign-checkout case.
+#
+# The self-path branch must stay here at file top level — zsh rebinds $0 to
+# the sourced file (FUNCTION_ARGZERO) only for this file's own statements,
+# and inside a function $0 is the function's own name. Plain POSIX sh has
+# neither $0-rebinding nor $BASH_SOURCE, and would abort on the bash array
+# syntax, hence the $BASH_VERSION arm. Everything after it lives once, in
+# _dotfiles_root_guard_self.
+if [ -n "${ZSH_VERSION-}" ]; then
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    _drg_self="${BASH_SOURCE[0]-}"
+else
+    _drg_self=""
+fi
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
+fi
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "devx_pr_verify_live"
+fi
+unset _drg_self _drg_helper
+
 _devx_pr_verify_live_pos_int() {
     case "$1" in
     "" | *[!0-9]*) return 1 ;;
