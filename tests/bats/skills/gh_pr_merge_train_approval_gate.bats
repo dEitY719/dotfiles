@@ -299,6 +299,26 @@ plan_403() {
     assert_success
 }
 
+@test "doc-guard: constraints.md documents the delegated-review exception" {
+    # The old blanket "Never review, never approve" contradicted step 2b.
+    run grep -q 'Never form a review judgement of its own' "${SKILL_DIR}/references/constraints.md"
+    assert_success
+    run grep -q 'self-record' "${SKILL_DIR}/references/constraints.md"
+    assert_success
+}
+
+@test "doc-guard: help.md no longer claims a single-source, one-call gate" {
+    run grep -q "repo ruleset's .required_approving_review_count. once per" "${SKILL_DIR}/references/help.md"
+    assert_failure
+    run grep -q 'classic branch protection' "${SKILL_DIR}/references/help.md"
+    assert_success
+}
+
+@test "doc-guard: help.md lists gh:pr-approve among the atoms" {
+    run grep -q 'gh:pr-approve' "${SKILL_DIR}/references/help.md"
+    assert_success
+}
+
 @test "doc-guard: allowed-tools gained no Agent (D-8 serial contract)" {
     run grep -qE '^allowed-tools:.*\bAgent\b' "${SKILL_DIR}/SKILL.md"
     assert_failure

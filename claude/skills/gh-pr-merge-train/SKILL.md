@@ -27,7 +27,7 @@ metadata:
 
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output its
 content verbatim, then stop. **No API calls.** That file tables the positionals
-(`[owner/repo]`, `[remote]`) and names the five atom skills the train calls.
+(`[owner/repo]`, `[remote]`) and names the atom skills the train calls.
 
 ## Step 1: Bind the GitHub target
 
