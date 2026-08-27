@@ -147,6 +147,24 @@ _IW_SELECT_STATE_BASENAME="select.json"
 _IW_STALL_RECOVER_ATTEMPTS="3"
 _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 
+# Start retrying (issue #1525, the same defect #1512 fixed on the merge-train
+# side). `herdr tab create` answers before the pane's shell is interactive, so
+# `agent start` on it is refused with `agent_pane_busy` — a timing race against
+# a pane that is perfectly good a moment later. herdr rejects it immediately
+# rather than waiting, so `agent start --timeout` (which only extends the
+# readiness wait) cannot help; another attempt on the *same* pane can.
+#
+# This is a different layer from _IW_MAX_ATTEMPTS, which cleans the attempt up
+# and builds a new worktree and a new, equally cold tab — three tries at the
+# same race. That is what left 130 consecutive ticks with 0 dispatches. The two
+# bounds are independent and both still hold.
+#
+# Bounded in *attempts*, not retries, so the `start N/MAX` warning reads exactly
+# true. The gap is overridable for the same reason _IW_STALL_RECOVER_SLEEP is —
+# the bats suite must not pay a real wait per retry test.
+_IW_START_ATTEMPT_MAX="3"
+_IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-2}"
+
 # Rate-limit gate (issue #1436; judgment input rebuilt in #1444). Rationale for
 # each value sits with the gate functions below; the values themselves live here
 # with the rest of the SSOT.
@@ -190,6 +208,16 @@ _IW_LIMIT_EVIDENCE_LINES="40"
 # log input only — the gate no longer classifies error codes at all. Empty
 # otherwise.
 _IW_STALL_RECOVER_ERROR=""
+# Set by _iw_start_agent_retrying to the herdr error code and the human sentence
+# behind the start it gave up on — empty when herdr named neither on either
+# stream (issue #1525). Log inputs only; nothing branches on them.
+_IW_START_CODE=""
+_IW_START_MESSAGE=""
+# The file herdr's stderr is captured to. Global, not local, so the signal trap
+# that removes it can still name it — a `local` would be unset by the time the
+# trap fires and `set -u` would turn the cleanup into its own error (the same
+# point agy raised on PR #1517).
+_IW_ERRF=""
 # CLAUDE_CONFIG_DIR for every pane this tick opens. Resolved once per tick.
 _IW_CONFIG_DIR=""
 # Set by --dry-run: collect and report candidates, mutate nothing.
@@ -1208,9 +1236,90 @@ _iw_agent_seq() {
 
 # `-- ARG...` is passed through to the pane's claude invocation. Unattended
 # cron ticks must never stop on a permission-approval prompt (issue #1393).
+#
+# stderr goes to the file named by $3 rather than /dev/null (#1525, the same
+# defect class as #1445/#1458): herdr is free to answer on either stream and in
+# cron it answers on stderr, so discarding it threw away the one sentence that
+# named the failure — `agent_pane_busy`. stdout stays on the pipe because the
+# caller reads `.error.code` off it, which is why this is a file and not `2>&1`.
 _iw_agent_start() {
     herdr agent start "$1" --kind claude --pane "$2" \
-        -- --dangerously-skip-permissions >/dev/null 2>&1
+        -- --dangerously-skip-permissions 2>"$3"
+}
+
+# Echo the herdr error code behind a failed call: <1> is herdr's stdout, <2> the
+# file its stderr was captured to. stdout first, stderr as the fallback. Both
+# are consulted because the stream herdr picks is not ours to choose — and in
+# production it picked the one nobody was reading. Echoes nothing when neither
+# stream carried a parsable error document.
+_iw_herdr_error_code() {
+    local _json="$1" _errfile="$2" _code
+
+    _code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
+    if [ -z "${_code}" ] && [ -s "${_errfile}" ]; then
+        _code=$(_iw_json_value '.error.code' <"${_errfile}")
+    fi
+    printf '%s' "${_code}"
+}
+
+# The human half of the same document: herdr's own sentence about the failure,
+# from the stderr file <1>. `.error.message` first, because what herdr writes to
+# stderr is a JSON document and dumping it raw into a cron log buries the
+# sentence inside braces. Falls back to the first raw line, which is what a
+# non-JSON stderr (a crash, a shell error) carries — and is also what keeps this
+# working if herdr ever changes its JSON shape. Echoes nothing on an empty file.
+_iw_herdr_error_message() {
+    local _errfile="$1" _msg
+
+    [ -s "${_errfile}" ] || return 0
+    _msg=$(_iw_json_value '.error.message' <"${_errfile}")
+    [ -n "${_msg}" ] || _msg=$(head -n 1 "${_errfile}" 2>/dev/null)
+    printf '%s' "${_msg}"
+}
+
+# Start agent <1> on pane <2>, retrying only the #1525 `agent_pane_busy` race.
+# 0 = an agent is running on the pane, 1 = gave up, with _IW_START_CODE naming
+# the last failure and _IW_START_MESSAGE carrying herdr's sentence about it.
+#
+# Each attempt truncates the capture file, so a retry that fails differently can
+# never be reported with the previous attempt's cause.
+_iw_start_agent_retrying() {
+    local _agent="$1" _pane="$2" _json _attempt=1 _rc=1
+
+    _IW_START_CODE=""
+    _IW_START_MESSAGE=""
+    # A capture file we cannot open costs the *cause*, not the start: herdr
+    # names nothing we can read, so nothing is retryable, but the one attempt
+    # is still worth making. /dev/null keeps every reader below correct — it is
+    # never `-s`, so both parsers simply answer "no such field".
+    _IW_ERRF=$(mktemp) || _IW_ERRF="/dev/null"
+    trap 'rm -f "${_IW_ERRF}"' EXIT INT TERM
+
+    while :; do
+        if _json=$(_iw_agent_start "${_agent}" "${_pane}" "${_IW_ERRF}"); then
+            _rc=0
+            break
+        fi
+        _IW_START_CODE=$(_iw_herdr_error_code "${_json}" "${_IW_ERRF}")
+        _IW_START_MESSAGE=$(_iw_herdr_error_message "${_IW_ERRF}")
+
+        # The one failure worth another attempt (#1525): the pane was created
+        # moments ago and its shell is not interactive yet. Only this code — a
+        # failure that does not name itself is not a race we understand, and
+        # ending the attempt immediately keeps that contract intact.
+        if [ "${_IW_START_CODE}" != "agent_pane_busy" ] ||
+            [ "${_attempt}" -ge "${_IW_START_ATTEMPT_MAX}" ]; then
+            break
+        fi
+
+        ux_warning "herdr agent start ${_agent} hit agent_pane_busy on pane ${_pane} (start ${_attempt}/${_IW_START_ATTEMPT_MAX}) — retrying in ${_IW_START_RETRY_SLEEP}s."
+        [ "${_IW_START_RETRY_SLEEP}" = "0" ] || sleep "${_IW_START_RETRY_SLEEP}"
+        _attempt=$((_attempt + 1))
+    done
+
+    trap - EXIT INT TERM
+    [ "${_IW_ERRF}" = "/dev/null" ] || rm -f "${_IW_ERRF}"
+    return "${_rc}"
 }
 
 # Wait for a freshly started agent to report idle before prompting it.
@@ -1378,6 +1487,7 @@ _iw_prompt_issue() {
 _iw_process_issue() {
     local _repo="$1" _number="$2" _path="$3"
     local _attempt=1 _agent _label _wt="" _ws="" _pane_tab="" _pane="" _tab=""
+    local _cause="" _msg=""
 
     _agent=$(_iw_agent_name "${_repo}" "${_number}")
     _label=$(_iw_workspace_label "${_repo}" "${_path}")
@@ -1400,8 +1510,17 @@ _iw_process_issue() {
             IFS="${_IW_TAB}" read -r _pane _tab <<EOF
 ${_pane_tab}
 EOF
-            if ! _iw_agent_start "${_agent}" "${_pane}"; then
-                ux_warning "herdr agent start ${_agent} failed on pane ${_pane} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
+            if ! _iw_start_agent_retrying "${_agent}" "${_pane}"; then
+                # One line, plus the sentence herdr actually gave, indented
+                # under it (#1445's idiom). Without it every cause — a busy
+                # pane, a dead server, a rejected account — converged on the
+                # same unhelpful sentence, which is precisely why #1525 sat
+                # unnoticed through 21 failed starts.
+                _cause="${_IW_START_MESSAGE:-${_IW_START_CODE}}"
+                _msg="herdr agent start ${_agent} failed on pane ${_pane} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
+                [ -z "${_cause}" ] || _msg="${_msg}
+    원인: ${_cause}"
+                ux_warning "${_msg}"
             elif _iw_wait_for_idle "${_agent}" && _iw_prompt_issue "${_agent}" "${_number}"; then
                 ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
                 return 0
