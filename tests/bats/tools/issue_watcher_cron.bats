@@ -569,6 +569,20 @@ EOF
     chmod +x "${_BIN_DIR}/gwt"
 }
 
+# Make the tick's one `mktemp` call fail. The script has exactly one (the
+# herdr-stderr capture file in _iw_start_agent_retrying), so shadowing the
+# binary for the tick's own PATH exercises that fallback and nothing else —
+# bats' own mktemp calls run in the parent, before this stub is on PATH.
+_install_failing_mktemp() {
+    cat >"${_BIN_DIR}/mktemp" <<'EOF'
+#!/bin/sh
+printf 'mktemp %s\n' "$*" >>"${CALL_LOG}"
+printf 'mktemp: failed to create file\n' >&2
+exit 1
+EOF
+    chmod +x "${_BIN_DIR}/mktemp"
+}
+
 _install_stubs() {
     _install_gh_stub
     _install_herdr_stub
@@ -1857,6 +1871,43 @@ _two_repo_fixture() {
     _run_tick "HERDR_START_FAIL=1"
     assert_failure
     [ "$(_log_count 'agent start')" -eq 3 ]
+}
+
+# PR #1528 review (codex, FOLLOW-UP). herdr picks the stream, not us — that is
+# why _iw_herdr_error_code reads stdout first and stderr second. The *message*
+# helper read only stderr, so a failure herdr answered on stdout arrived with
+# its code but no sentence. `agent_name_taken` is exactly that shape.
+#
+# Both halves must survive: the code is what a human greps a cron log for
+# (`grep -c agent_pane_busy` is how #1525 was measured), the sentence is what
+# they read once they find it.
+@test "issue_watcher_cron: a stdout-only failure reports both its code and herdr's sentence" {
+    _run_tick "HERDR_START_NAME_TAKEN=1"
+    assert_failure
+    assert_output --partial "agent_name_taken"
+    assert_output --partial "agent name is already used"
+}
+
+# PR #1528 review (agy, BLOCKER). When `mktemp` fails there is no capture file,
+# so no error code can be read and nothing is retryable — but the start itself
+# is still worth one attempt, and losing the cause must not cost the dispatch.
+@test "issue_watcher_cron: a start still dispatches when the stderr capture file cannot be opened" {
+    _install_failing_mktemp
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
+}
+
+# Same fallback on the failing side: the tick reports the failure and cleans up
+# rather than dying on the unreadable capture file, and it claims no cause it
+# could not actually read.
+@test "issue_watcher_cron: a failed start without a capture file reports no invented cause" {
+    _install_failing_mktemp
+    _run_tick "HERDR_START_PANE_BUSY=99"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 3 ]
+    refute_output --partial "원인:"
+    _assert_logged "tab close ws-test-1:t9"
 }
 
 @test "issue_watcher_cron: a spawn failure that never resolves gives up without a prompt" {

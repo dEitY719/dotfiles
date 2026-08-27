@@ -1262,18 +1262,25 @@ _iw_herdr_error_code() {
     printf '%s' "${_code}"
 }
 
-# The human half of the same document: herdr's own sentence about the failure,
-# from the stderr file <1>. `.error.message` first, because what herdr writes to
-# stderr is a JSON document and dumping it raw into a cron log buries the
-# sentence inside braces. Falls back to the first raw line, which is what a
-# non-JSON stderr (a crash, a shell error) carries — and is also what keeps this
-# working if herdr ever changes its JSON shape. Echoes nothing on an empty file.
+# The human half of the same document: herdr's own sentence about the failure.
+# Same two inputs and the same stdout-first order as _iw_herdr_error_code —
+# herdr picks the stream, not us, so a helper that read only one of them would
+# hand back a code with no sentence for every failure answered on the other.
+# `agent_name_taken` is exactly that shape (PR #1528 review, codex).
+#
+# `.error.message` before any raw text, because what herdr writes is a JSON
+# document and dumping it verbatim buries the sentence inside braces exactly
+# where a cron log is read in a hurry. The first raw stderr line is the last
+# resort: it is what a non-JSON stream (a crash, a shell error) carries, and
+# what keeps this working if herdr ever changes its JSON shape.
 _iw_herdr_error_message() {
-    local _errfile="$1" _msg
+    local _json="$1" _errfile="$2" _msg
 
-    [ -s "${_errfile}" ] || return 0
-    _msg=$(_iw_json_value '.error.message' <"${_errfile}")
-    [ -n "${_msg}" ] || _msg=$(head -n 1 "${_errfile}" 2>/dev/null)
+    _msg=$(printf '%s' "${_json}" | _iw_json_value '.error.message')
+    if [ -z "${_msg}" ] && [ -s "${_errfile}" ]; then
+        _msg=$(_iw_json_value '.error.message' <"${_errfile}")
+        [ -n "${_msg}" ] || _msg=$(head -n 1 "${_errfile}" 2>/dev/null)
+    fi
     printf '%s' "${_msg}"
 }
 
@@ -1292,8 +1299,16 @@ _iw_start_agent_retrying() {
     # names nothing we can read, so nothing is retryable, but the one attempt
     # is still worth making. /dev/null keeps every reader below correct — it is
     # never `-s`, so both parsers simply answer "no such field".
-    _IW_ERRF=$(mktemp) || _IW_ERRF="/dev/null"
-    trap 'rm -f "${_IW_ERRF}"' EXIT INT TERM
+    #
+    # The trap is armed only on the branch that has a file to remove. Arming it
+    # unconditionally put `/dev/null` in reach of the trap's own `rm -f`, which
+    # — unlike the guarded removal at the end — would have run on any signal
+    # landing in this window (PR #1528 review, agy).
+    if _IW_ERRF=$(mktemp); then
+        trap 'rm -f "${_IW_ERRF}"' EXIT INT TERM
+    else
+        _IW_ERRF="/dev/null"
+    fi
 
     while :; do
         if _json=$(_iw_agent_start "${_agent}" "${_pane}" "${_IW_ERRF}"); then
@@ -1319,10 +1334,13 @@ _iw_start_agent_retrying() {
     # Only the give-up path is ever read, and the capture file still holds the
     # last attempt's stderr right here — so a retry that goes on to win pays
     # nothing for the sentence describing the failure it recovered from.
-    [ "${_rc}" -eq 0 ] || _IW_START_MESSAGE=$(_iw_herdr_error_message "${_IW_ERRF}")
+    [ "${_rc}" -eq 0 ] || _IW_START_MESSAGE=$(_iw_herdr_error_message "${_json}" "${_IW_ERRF}")
 
-    trap - EXIT INT TERM
-    [ "${_IW_ERRF}" = "/dev/null" ] || rm -f "${_IW_ERRF}"
+    # Mirrors the arming above: no file, no trap to clear and nothing to remove.
+    if [ "${_IW_ERRF}" != "/dev/null" ]; then
+        trap - EXIT INT TERM
+        rm -f "${_IW_ERRF}"
+    fi
     return "${_rc}"
 }
 
@@ -1520,8 +1538,13 @@ EOF
                 # pane, a dead server, a rejected account — converged on the
                 # same unhelpful sentence, which is precisely why #1525 sat
                 # unnoticed through 21 failed starts.
-                _cause="${_IW_START_MESSAGE:-${_IW_START_CODE}}"
-                _msg="herdr agent start ${_agent} failed on pane ${_pane} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
+                # The code goes on the main line and the sentence under it —
+                # the code is the token a human greps a cron log for
+                # (`grep -c agent_pane_busy` is how #1525 was measured), the
+                # sentence is what they read once they have found it. Folding
+                # the two into one field would cost whichever half lost.
+                _cause="${_IW_START_MESSAGE}"
+                _msg="herdr agent start ${_agent} failed on pane ${_pane} (${_IW_START_CODE:-unknown}, attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
                 [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
                 ux_warning "${_msg}"
