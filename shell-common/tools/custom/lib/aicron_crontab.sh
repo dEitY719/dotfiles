@@ -95,22 +95,30 @@ aicron_crontab_count_in() {
     aicron_crontab_names_in "$1" | grep -c -x -F -- "$2" || true
 }
 
-# Every job's installed 5-field cron schedule in the already-dumped table
-# <1>, one `<job><TAB><schedule>` line per marker block. The schedule line
-# inside a marker block is always `<5 schedule fields> <script> run <job>`
-# (see the BEGIN/END contract at the top of this file), so the first 5
-# whitespace fields are the schedule regardless of how the script path is
-# spelled. A job with no block in the table has no line here. Only the first
-# block counts for a duplicate job — doctor already reports duplicates
-# separately (#1496). One dump, like aicron_crontab_names_in, so a caller
-# comparing every job's schedule pays for one awk pass instead of one per job.
+# Every job's installed cron schedule in the already-dumped table <1>, one
+# `<job><TAB><schedule>` line per marker block. The schedule line inside a
+# marker block is always `<schedule> <script> run <job>` (see the BEGIN/END
+# contract at the top of this file); `<schedule>` is either the 5 standard
+# cron fields or a single `@`-macro (`@daily`, `@reboot`, ... — `aicron add
+# --schedule` never validates the format it installs, #1496 review). A job
+# with no block in the table has no line here. Only the first block counts
+# for a duplicate job — doctor already reports duplicates separately.
+# One dump, like aicron_crontab_names_in, so a caller comparing every job's
+# schedule pays for one awk pass instead of one per job.
 aicron_crontab_schedules_in() {
     awk '
         /^# BEGIN aicron:/ { tag = substr($0, 16); on = 1; next }
         /^# END aicron:/   { on = 0 }
-        on == 1 && NF >= 5 && !(tag in seen) {
+        on == 1 && !(tag in seen) {
+            if ($1 ~ /^@/) {
+                sched = $1
+            } else if (NF >= 5) {
+                sched = $1 " " $2 " " $3 " " $4 " " $5
+            } else {
+                next
+            }
             seen[tag] = 1
-            print tag "\t" $1, $2, $3, $4, $5
+            print tag "\t" sched
         }
     ' "$1"
 }

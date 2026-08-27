@@ -263,11 +263,23 @@ aicron_doctor_scan() {
         # schedules), joined in a single awk pass — the same "dump once"
         # idiom (a)/(d) use above, instead of a jq call and an awk call per
         # manifest job. An orphan or a duplicate never doubles up as a drift
-        # finding too: only jobs present in both dumps are compared.
+        # finding too: only jobs present in both dumps are compared. The
+        # manifest side's whitespace is normalised before comparing (collapse
+        # runs of spaces/tabs to one, trim ends): a hand-edited manifest may
+        # pad a schedule for column alignment, and the installed side is
+        # always single-spaced by aicron_crontab_schedules_in's own field
+        # rebuild — comparing raw strings would false-positive on that
+        # formatting difference alone (#1496 review, agy).
         aicron_manifest_schedules >"${_tmp}.mfsched" 2>/dev/null || : >"${_tmp}.mfsched"
         aicron_crontab_schedules_in "${_tmp}.table" >"${_tmp}.crsched" 2>/dev/null || : >"${_tmp}.crsched"
         awk -F'\t' '
-            NR == FNR { mf[$1] = $2; next }
+            NR == FNR {
+                _s = $2
+                gsub(/[ \t]+/, " ", _s)
+                gsub(/^ | $/, "", _s)
+                mf[$1] = _s
+                next
+            }
             ($1 in mf) && mf[$1] != $2 {
                 printf "schedule drift for job %s: manifest says \"%s\", crontab has \"%s\" — reinstall with \"aicron remove %s && aicron add %s\"\n", $1, mf[$1], $2, $1, $1
             }
