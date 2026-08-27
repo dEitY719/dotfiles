@@ -36,12 +36,24 @@ default, so the train passes no strategy argument at all (D-4). Passing one
 explicitly would be a second place for the policy to drift out of sync with the
 repo's actual settings.
 
-## Never review, never approve
+## Never form a review judgement of its own
 
 `gh:issue-flow` Step 2.4 already ran `devx:pr-review-all` on every PR this
-train drains. Re-reviewing here would duplicate that work with less context,
-and approving is impossible anyway — GitHub forbids approving your own PR, and
-`--author @me` means every PR here is yours.
+train drains, and GitHub forbids approving your own PR — with `--author @me`,
+every PR here is yours, so no approving review is obtainable at all.
+
+**The one delegated exception (#1519 D-3).** When the approval gate reads
+*off*, no platform rule is asking for a review, and merging on that basis
+alone would put unexamined code on the base branch. In that one case the train
+runs `Skill(gh:pr-approve, "<N> <remote> --self-record")` once and reads the
+board back as its verdict (`train-loop.md` → "Delegated review on the gate-off
+path"). That is not this skill reviewing: the judgement, the BLOCKER
+classification, and the board write all belong to `gh:pr-approve`, and the
+train only routes on the answer. The constraint it preserves is the real one —
+**the train never decides whether a PR is good.**
+
+It also does not duplicate Step 2.4: a self-record review runs at most once per
+head (`#1519 F-8`), and only on PRs the platform leaves ungated.
 
 ## Never write ai-metrics from the train
 

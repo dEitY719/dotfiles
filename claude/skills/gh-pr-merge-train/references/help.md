@@ -32,8 +32,10 @@
   it.
 - **You need an admin bypass.** The train never calls
   `gh:pr-merge-emergency` (NF-2). Run that skill yourself, deliberately.
-- **The PRs still need review.** The train does not review; `gh:issue-flow`
-  Step 2.4 already ran `devx:pr-review-all`.
+- **The PRs still need a human's judgement.** The train forms no opinion of
+  its own: `gh:issue-flow` Step 2.4 already ran `devx:pr-review-all`, and where
+  the approval gate is off the train delegates one `gh:pr-approve
+  --self-record` pass rather than deciding anything itself (#1519 D-3).
 
 ## What the skill does
 
@@ -41,13 +43,20 @@
 2. Lists your own open PRs, drops drafts and anything updated in the last
    **11 minutes** (D-6), and sorts `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`,
    ties by ascending number (D-2).
-3. Reads the repo ruleset's `required_approving_review_count` once per
-   *distinct base branch* in the queue (rulesets are branch-scoped; a
-   single-base queue is one call) — `0` means the platform does not require
-   approval, so the approval check is skipped (D-5). Lookup failure is
-   **fail-closed**: approval is treated as required.
+3. Reads `required_approving_review_count` once per *distinct base branch* in
+   the queue, from **both** rulesets and classic branch protection (policies
+   are branch-scoped; a single-base queue is two calls). Either source asking
+   for `>= 1` turns the gate on; both reporting no policy turns it off (D-5).
+   The verdict is classified by **HTTP status**: `403` (plan does not have the
+   feature) and `404` (not configured) mean no policy can apply here, while
+   5xx / 401 / no response are genuinely undetermined and stay **fail-closed**
+   (#1519 F-2). The report header names which of the three happened.
 4. Processes **one PR at a time**. Immediately before each one it re-queries
    state (F-3), because the previous merge changed it.
+   When the gate is off and `reviewDecision` is empty, it first runs one
+   `gh:pr-approve --self-record` and merges only if that review promoted the
+   board card — a withheld approval skips the PR, and an already-reviewed head
+   is never re-reviewed (#1519 F-6 … F-9).
 5. Routes on `mergeStateStatus` / `mergeable` through the D-1 table — the one
    copy lives in `references/routing-table.md`. Which atom each row reaches is
    summarised under "Atom skills it calls" below.
@@ -61,8 +70,11 @@
 ## What the skill will NOT do
 
 - Merge without knowing state — a failed `gh pr list` ends the run.
-- Merge an unapproved PR where the ruleset requires approval, or where the
-  ruleset could not be read at all.
+- Merge an unapproved PR where either policy source requires approval, or
+  where a source's state is genuinely undetermined (5xx / 401 / no response).
+  A `403`/`404` is **not** that case — it is a definitive "no policy here".
+- Merge a gate-off PR whose delegated `gh:pr-approve --self-record` review
+  withheld approval.
 - Call `gh:pr-merge-emergency`, or file an incident issue.
 - Pass a merge strategy — `gh:pr-merge`'s default rebase is what
   `required_linear_history` allows (D-4).
@@ -76,6 +88,7 @@
 | `gh:pr-resolve-outdated` | `BEHIND` + `MERGEABLE` — clean rebase onto the moved base, in a scratch worktree |
 | `gh:pr-resolve-conflict` | `DIRTY` + `CONFLICTING` — the LLM-judgement row, in a scratch worktree |
 | `gh:pr-resolve-ci-fail` | `UNSTABLE` with a failing check — the other LLM-judgement row |
+| `gh:pr-approve` | `--self-record`, once per head, only when the approval gate is off and `reviewDecision` is empty (#1519 D-3) |
 | `gh:pr-merge` | every row that reaches a mergeable state |
 | none | `BLOCKED` / `DRAFT` skip; `UNSTABLE` still running and `UNKNOWN` poll first |
 
