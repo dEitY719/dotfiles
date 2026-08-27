@@ -140,7 +140,7 @@ gh_issue_board_transition_decide() {
     # how a duplicate session looks from the board's side.
     local _status="${FAKE_BOARD_STATUS-}"
     if [ -n "$_status" ] && [ "$_status" != "Backlog" ] && [ "$_status" != "Ready" ]; then
-        printf '[WARN] Issue #%s Status 가 이미 "%s" 입니다 — 다른 세션이 이미 착수했을 수 있습니다.\n' \
+        printf '[WARN] Issue #%s Status 가 이미 "%s" 입니다 — 다른 세션의 중복 착수이거나, 이슈가 이미 다른 단계로 넘어갔을 수 있습니다.\n' \
             "$_issue_num" "$_status"
         printf 'already-in-progress'
         return 0
