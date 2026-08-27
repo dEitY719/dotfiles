@@ -40,9 +40,11 @@
 ## What the skill does
 
 1. Binds `TARGET_REPO` / `TARGET_HOST` from one remote URL (`references/github-target.md`).
-2. Lists your own open PRs, drops drafts and anything updated in the last
-   **11 minutes** (D-6), and sorts `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`,
-   ties by ascending number (D-2).
+2. Lists your own open PRs and runs them through the shared filter
+   `_gh_pr_merge_train_filter_targets` (`shell-common/functions/gh_pr_merge_train.sh`,
+   #1524) — drafts, PRs carrying the `reply-pending` label, and anything
+   updated in the last **11 minutes** (D-6) are dropped — then sorts
+   `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`, ties by ascending number (D-2).
 3. Reads `required_approving_review_count` once per *distinct base branch* in
    the queue, from **both** rulesets and classic branch protection (policies
    are branch-scoped; a single-base queue is two calls). Either source asking
