@@ -8,32 +8,25 @@ releases it once the blockers have actually been addressed.
 
 ## When it runs
 
-All three must hold:
+All three must hold — each rules out a different way the clear would be wrong:
 
-1. Step 6 pushed at least one fix commit (`PUSHED_FIXES > 0`).
-2. At least one comment this run was `ACCEPT` / `ACCEPT-PARTIAL`
-   (`ACCEPTED_COUNT > 0`).
-3. **No comment this run was `DECLINE`** (`DECLINED_COUNT == 0`).
+- **`PUSHED_FIXES > 0`** — no push means nothing changed on the branch, so the
+  blocking verdict still stands exactly as written.
+- **`ACCEPTED_COUNT > 0`** — a push carrying no `ACCEPT` / `ACCEPT-PARTIAL`
+  comment (an unrelated commit that happened to land) is not evidence a blocker
+  was fixed.
+- **`DECLINED_COUNT == 0`** — one `DECLINE` anywhere in the run holds the label
+  (#1527, PR #1529 codex review). The verdict is a single line for the whole
+  review, not per-comment, so `gh:pr-reply` cannot tell which comment the
+  reviewer considered blocking: "accepted one thing, declined another" is
+  indistinguishable from "declined the blocker, fixed a nit". The rule is
+  deliberately blunt and errs the way the gate itself does — declining an
+  out-of-scope nit costs a manual label removal, the looser rule costs an
+  unreviewed merge.
 
-Why each:
-
-- No push → nothing changed on the branch, so the blocking verdict still stands
-  as written. All-`DECLINE` / all-`QUESTION` runs leave the label alone.
-- A push with no accepted comment (an unrelated commit that happened to land)
-  is not evidence a blocker was fixed.
-- **A single `DECLINE` anywhere in the run blocks the clear** (#1527, PR #1529
-  codex review). `gh:pr-reply` does not know which comments the reviewer
-  considered blocking — the verdict is one line for the whole review, not
-  per-comment. So "I accepted one thing and declined another" is
-  indistinguishable from "I declined the blocker and fixed a nit", and clearing
-  on the first would silently release the gate on the second.
-
-That third rule is deliberately blunt, and it errs the same direction as the
-gate itself: declining an out-of-scope nit costs a manual label removal, while
-the looser rule costs an unreviewed merge. Declining a blocker is a legitimate
-outcome — but overriding the gate is a **human's** call, made by removing the
-label by hand. A skill that cleared it on its own reasoning would be marking its
-own homework.
+Declining a blocker is a legitimate outcome — but overriding the gate is a
+**human's** call, made by removing the label by hand. A skill that cleared it on
+its own reasoning would be marking its own homework.
 
 ## What it does NOT do
 

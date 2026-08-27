@@ -20,11 +20,8 @@ dotfiles 저장소를 포함한 임의의 GitHub repo 에 적용할 **10개 핵�
   (`gh:pr-resolve-conflict`) 등 **파이프라인 상태** 라벨은 10개 이슈 분류
   라벨에 포함되지 않는다 — 각 라벨의 SSOT 는 그것을 발급하는 스킬의
   references 에 있다.
-- 예외적으로 `review-blocked` / `review-passed` (`devx:pr-review-all` →
-  `gh:pr-merge-train` 머지 게이트, #1527) 는 파이프라인 라벨이면서도 아래
-  "파이프라인 상태 라벨" feed 로 **함께 동기화한다**. 라벨이 없으면 게이트가
-  영구 교착이라(자동 생성 금지, #326) 부트스트랩 경로가 반드시 필요하기
-  때문이다. 10개 SSOT 에 편입하는 것이 아니라 별도 feed 로 나란히 둔다.
+- 단, `review-blocked` / `review-passed` (#1527) 는 10개 SSOT 에 편입하지 않은
+  채 아래 "파이프라인 상태 라벨" feed 로 **함께 동기화한다** — 이유는 그 절에.
 
 차용 근거 / 설계 논의: issue #1226.
 

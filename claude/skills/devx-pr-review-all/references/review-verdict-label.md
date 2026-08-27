@@ -6,18 +6,16 @@ SSOT for the two PR labels this skill emits and the merge train consumes.
 
 ## The labels
 
-| label | color | meaning |
-|---|---|---|
-| `review-blocked` | `b60205` | at least one reviewer lane returned a blocking verdict |
-| `review-passed` | `0e8a16` | every lane that ran returned a non-blocking verdict, and at least one lane ran |
+| label | meaning |
+|---|---|
+| `review-blocked` | at least one reviewer lane returned a blocking verdict |
+| `review-passed` | every lane that ran returned a non-blocking verdict, and at least one lane ran |
 
-Neither is part of the 10-label SSOT (`gh-label-bootstrap/references/gh-labels.md`)
-— like `CI fail` and `conflict` they are a **pipeline-state** label system, not an
-issue-classification one. Unlike those two they *are* provisioned by
-`gh:label-bootstrap`, from that file's separate `pipeline|` feed, and `--prune`
-keeps them. **That is the rollout path** (#1527, PR #1529 codex review): without
-it a repo that lacks the labels can never get them, since the add path refuses to
-auto-create — so the gate would deadlock with every PR unlabelled and skipped.
+Neither is part of the 10-label SSOT — like `CI fail` and `conflict` they are a
+**pipeline-state** label system, not an issue-classification one. Unlike those
+two they *are* provisioned by `gh:label-bootstrap`, from the separate `pipeline|`
+feed in `gh-label-bootstrap/references/gh-labels.md`, which also holds their
+canonical colors. See "Bootstrapping the labels" below for why that path exists.
 
 **Absence is the third state, and it means "not verified".** A PR with neither
 label has not been shown to pass review — the train skips it. That is what makes
@@ -103,14 +101,18 @@ fi
 flips `review-blocked` to `review-passed` has to clear the old one or the train
 sees both and — per its own precedence rule — keeps skipping.
 
+## Bootstrapping the labels
+
 `_gh_pr_edit_safe_label` returns 3 when the label does not exist in the repo and
 **refuses to auto-create it** (`feedback_gh_label_no_autocreate.md`, #326). That
 is deliberate: silently creating labels from a code path is how typo'd labels
-enter a repo. The bootstrap is therefore explicit and human-invoked — once per
-repo, before the gate is expected to pass anything:
+enter a repo. But without *some* rollout path a repo that lacks the labels could
+never get them, and the gate would deadlock — every PR unlabelled, every PR
+skipped. So the bootstrap is explicit and human-invoked, once per repo, before
+the gate is expected to pass anything:
 
 ```sh
-/gh-label-bootstrap <owner>/<repo>
+/gh-label-bootstrap --repo <owner>/<repo>
 ```
 
 It reads the `pipeline|` feed in `gh-label-bootstrap/references/gh-labels.md`,

@@ -180,12 +180,10 @@ run_bootstrap() {
 }
 
 # ── Pipeline-state labels (#1527) ─────────────────────────────────────
-# `review-blocked` / `review-passed` are the merge-train's verdict gate.
-# `_gh_pr_edit_safe_label` refuses to auto-create a missing label (#326), so
-# without a bootstrap path the gate deadlocks: every PR stays unlabelled and
-# `gh:pr-merge-train` skips all of them forever (PR #1529 codex review).
-# They live in their own SSOT feed, kept apart from the 10 issue-classification
-# labels — no aliases, but prune must never delete them.
+# `review-blocked` / `review-passed` are the merge-train's verdict gate. They
+# live in their own SSOT feed, kept apart from the 10 issue-classification
+# labels — no aliases, but prune must never delete them. Why the bootstrap
+# path has to exist at all: gh-labels.md, "파이프라인 상태 라벨".
 
 @test "pipeline labels are POSTed when missing (#1527)" {
     set_existing ""
@@ -207,12 +205,11 @@ run_bootstrap() {
     set_existing review-blocked review-passed
     run_bootstrap --prune
     assert_success
-    if grep -q 'labels/review-blocked -X DELETE' "$MOCK_LOG"; then
-        echo "prune must not delete the verdict gate label" && return 1
-    fi
-    if grep -q 'labels/review-passed -X DELETE' "$MOCK_LOG"; then
-        echo "prune must not delete the verdict gate label" && return 1
-    fi
+    for label in review-blocked review-passed; do
+        if grep -q "labels/${label} -X DELETE" "$MOCK_LOG"; then
+            echo "prune must not delete the verdict gate label ${label}" && return 1
+        fi
+    done
 }
 
 @test "pipeline labels are not treated as rename aliases (#1527)" {

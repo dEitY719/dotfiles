@@ -11,8 +11,9 @@ set -euo pipefail
 #
 # Behavior (see references/gh-labels.md for the authoritative spec):
 #   1. Alias renames first  — PATCH old -> new_name (preserves issue/PR links).
-#   2. SSOT 10 apply         — PATCH if exists (force color/description sync),
-#                              POST if missing.
+#   2. SSOT apply            — PATCH if exists (force color/description sync),
+#                              POST if missing. Covers the 10-label feed and
+#                              the pipeline-state feed (#1527) alike.
 #   3. Prune (only --prune)  — DELETE labels outside SSOT ∪ alias-targets ∪
 #                              allowlist, computed AFTER renames.
 #
@@ -152,20 +153,14 @@ main() {
     alias_feed="$(printf '%s\n' "$ssot_content" | grep -E '^[[:space:]]*[a-z]+\|[a-z]+$' || true)"
     [ -n "$feed" ] || die "no label feed found in $ssot_file"
 
-    # Pipeline-state labels (#1527) — a separate feed, not part of the 10-label
-    # SSOT: they carry pipeline state (the merge-train verdict gate), not issue
-    # classification, and they have no aliases. They are still synced and
-    # prune-protected here, because `_gh_pr_edit_safe_label` refuses to
-    # auto-create a missing label (#326) — with no bootstrap path the gate
-    # deadlocks, leaving every PR unlabelled and therefore `[SKIPPED]` forever.
-    # The `pipeline|` prefix is what keeps the two feeds apart; it is stripped
-    # before the rows join `$feed`, so the sync loop below needs no change.
-    # The feed is optional: an SSOT without it is not an error.
+    # Pipeline-state labels (#1527) — kept in their own feed (rationale and
+    # rollout: references/gh-labels.md, "파이프라인 상태 라벨"). Stripping the
+    # `pipeline|` prefix normalizes the rows to the shape above, so they join
+    # `$feed` and inherit the sync loop, the keep-set and prune protection
+    # unchanged. Optional: an SSOT without the feed is not an error.
     pipeline_feed="$(printf '%s\n' "$ssot_content" |
-        sed -n -E 's/^[[:space:]]*pipeline\|([a-z][a-z0-9-]*\|[0-9a-fA-F]{6}\|.*)$/\1/p' || true)"
-    if [ -n "$pipeline_feed" ]; then
-        feed="$(printf '%s\n%s' "$feed" "$pipeline_feed")"
-    fi
+        sed -n -E 's/^[[:space:]]*pipeline\|([a-z][a-z0-9-]*\|[0-9a-fA-F]{6}\|.*)$/\1/p')"
+    feed="$(printf '%s\n%s' "$feed" "$pipeline_feed")"
 
     # SSOT label names (for keep-set membership).
     local ssot_names
@@ -209,7 +204,7 @@ main() {
         fi
     done <<<"$alias_feed"
 
-    # --- 2. SSOT 10 apply --------------------------------------------------
+    # --- 2. SSOT apply -----------------------------------------------------
     local name
     while IFS='|' read -r name color desc; do
         [ -z "$name" ] && continue
