@@ -50,6 +50,6 @@ skill just operates inside it.
   *refusal* is not dropped, it retargets: compare the PR's `headRefName` (what
   the push refspec writes to) against the repo default and stop on a match.
 - Keep the git-repo and no-in-progress-operation checks, scoped with
-  `-C "<path>"` — a stale scratch directory left by an interrupted run can
+  `-C "<path>"` — a stale scratch worktree left by an interrupted run can
   still be handed over.
 - This skill never creates or removes `<path>`. The caller owns it.
