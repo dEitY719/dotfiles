@@ -228,15 +228,9 @@ No `--model` flag is passed; hermes uses whatever endpoint its own config
 resolves (custom LLM endpoints are handled by `hermes/setup.sh`).
 
 **Runs slow — budget 8–10 minutes**, for the same reason as `--ai opencode`
-above (shared internal backend). A caller dispatching this lane via a
-subagent Bash call must set a long timeout; a short one kills the run and
-leaves truncated stdout that must not be posted as a completed review.
-Same two enforcement layers as `--ai opencode` (issue #1506): the `timeout`
-wrap inside `_gh_pr_review_run_ai` (540s default,
-`GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC` overrides) converts a hang into exit
-124 so the existing non-zero gate skips Step 6 on its own, and the calling
-Bash tool call must still carry an explicit ≥ `600000` ms `timeout` per
-SKILL.md Step 5 so the ambient one never wins the race.
+above (shared internal backend), and is bound by the same two enforcement
+layers described there (issue #1506): the internal `timeout` wrap and the
+caller's own ≥ `600000` ms Bash-tool timeout.
 
 ## Step 5 dispatch procedure (`_gh_pr_review_run_ai`)
 
