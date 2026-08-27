@@ -232,7 +232,7 @@ aicron_report_status() {
 
 # Emits one finding per line on stdout, nothing when everything agrees.
 aicron_doctor_scan() {
-    local _tmp _n _script _f _base _sd
+    local _tmp _n _script _f _base _sd _mf_sched _cr_sched
     _tmp=$(aicron_mktemp aicron-doctor) || return 0
 
     # Both crontab findings come off one sorted dump, and the manifest job list
@@ -256,6 +256,20 @@ aicron_doctor_scan() {
             [ -n "${_n}" ] || continue
             printf 'duplicate marker blocks in the crontab for job %s\n' "${_n}"
         done <"${_tmp}.dup"
+
+        # (e) a job installed under a schedule the manifest no longer agrees
+        # with — the manifest changed and the crontab was never reinstalled
+        # (#1496). Checked per manifest job, not per crontab block, so an
+        # orphan or a duplicate never doubles up as a drift finding too.
+        while IFS= read -r _n; do
+            [ -n "${_n}" ] || continue
+            _mf_sched=$(aicron_manifest_schedule "${_n}")
+            _cr_sched=$(aicron_crontab_schedule_in "${_tmp}.table" "${_n}")
+            if [ -n "${_cr_sched}" ] && [ "${_cr_sched}" != "${_mf_sched}" ]; then
+                printf 'schedule drift for job %s: manifest says "%s", crontab has "%s" — reinstall with "aicron remove %s && aicron add %s"\n' \
+                    "${_n}" "${_mf_sched}" "${_cr_sched}" "${_n}" "${_n}"
+            fi
+        done <"${_tmp}.jobs"
     else
         # Not a finding about one job: nothing crontab-derived below can be
         # trusted, so say that instead of reporting every job as uninstalled.
