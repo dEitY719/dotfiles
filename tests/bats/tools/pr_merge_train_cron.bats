@@ -153,10 +153,22 @@ EOF
 #                         ever run — `agent get` exits 1 with agent_not_found.
 #   HERDR_WORKSPACE_EXISTS=1  `workspace list` already carries the label
 #   HERDR_TAB_FAIL=1      `tab create` errors
-#   HERDR_START_FAIL=1    `agent start` errors
+#   HERDR_START_FAIL=1    `agent start` errors, saying nothing at all — the
+#                         unexplained failure, with no parsable error code
 #   HERDR_START_NAME_TAKEN=1  `agent start` refuses because a live agent still
 #                         holds the name (herdr's real `agent_name_taken`)
+#   HERDR_START_PANE_BUSY=N   the first N `agent start` calls lose the #1512
+#                         race (`agent_pane_busy`), the rest succeed. Counted
+#                         in a file, not an env var: the stub is a fresh
+#                         process per call, so nothing it exports survives.
+#   HERDR_START_PANE_BUSY_ALWAYS=1  every `agent start` loses that race
+#   HERDR_TAB_CLOSE_FAIL=1  `tab close` errors — the cleanup of an orphaned tab
+#                         is best effort and must not become a second failure
 #   HERDR_PROMPT_FAIL=1   `agent prompt` errors
+#
+# The `agent_pane_busy` document goes to **stderr**, which is not decoration:
+# that is where herdr really put it, and a dispatcher that redirects the stream
+# to /dev/null sees an unexplained failure instead of a named race (#1512).
 _install_herdr_stub() {
     cat >"${_BIN_DIR}/herdr" <<'EOF'
 #!/bin/sh
@@ -192,7 +204,25 @@ case "$1 $2" in
         printf '%s\n' '{"error":{"code":"agent_name_taken","message":"agent name is already used; candidates: status=Idle"},"id":"cli:agent:start"}'
         exit 1
     fi
+    if [ "${HERDR_START_PANE_BUSY_ALWAYS:-0}" = "1" ]; then
+        printf '%s\n' '{"error":{"code":"agent_pane_busy","message":"agent target pane ws-test-1:p9 is not an available shell"},"id":"cli:agent:start"}' >&2
+        exit 1
+    fi
+    if [ "${HERDR_START_PANE_BUSY:-0}" != "0" ]; then
+        _seen_file="${CALL_LOG%/*}/start-attempts"
+        _seen=$(cat "${_seen_file}" 2>/dev/null) || _seen=0
+        _seen=$((_seen + 1))
+        printf '%s\n' "${_seen}" >"${_seen_file}"
+        if [ "${_seen}" -le "${HERDR_START_PANE_BUSY}" ]; then
+            printf '%s\n' '{"error":{"code":"agent_pane_busy","message":"agent target pane ws-test-1:p9 is not an available shell"},"id":"cli:agent:start"}' >&2
+            exit 1
+        fi
+    fi
     printf '%s\n' '{"id":"cli:agent:start","result":{"agent":{"agent_status":"idle","pane_id":"ws-test-1:p9"}}}'
+    ;;
+"tab close")
+    [ "${HERDR_TAB_CLOSE_FAIL:-0}" = "1" ] && exit 1
+    printf '%s\n' '{"id":"cli:tab:close","result":{"ok":true}}'
     ;;
 "agent prompt")
     if [ "${HERDR_PROMPT_FAIL:-0}" = "1" ]; then
@@ -236,6 +266,7 @@ _run_tick() {
         "GH_PRS_FILE=${_WORK_DIR}/prs.json" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "PMT_IDLE_POLL_SLEEP=0" \
+        "PMT_START_RETRY_SLEEP=0" \
         "${_env[@]}" \
         bash "${SCRIPT}" --cwd "${_REPO_DIR}" "$@"
 }
@@ -546,6 +577,83 @@ _hold_lock() {
     assert_failure
     _assert_logged "herdr agent start"
     _refute_logged "herdr agent prompt"
+}
+
+# ---------------------------------------------------------------------------
+# #1512 — the `agent_pane_busy` race on a pane that was just created
+# ---------------------------------------------------------------------------
+#
+# A tab's shell is not interactive the instant `tab create` answers, so
+# `agent start` on it can be refused with `agent_pane_busy` and return
+# immediately. In cron that lost every single tick for weeks. It is a timing
+# race, not a defect in the pane, so the second attempt is the fix — the pane
+# is fine a moment later.
+
+@test "pr_merge_train_cron: a transient agent_pane_busy is retried and the train still starts" {
+    _run_tick HERDR_START_PANE_BUSY=1
+    assert_success
+    [ "$(_log_count 'herdr agent start')" -eq 2 ]
+    _assert_logged "/gh-pr-merge-train acme/dotfiles"
+}
+
+# The retry is bounded, and the bound is the whole point: cron re-runs every
+# few minutes anyway, so a tick that kept trying would only hold the lock
+# while the *next* tick is the thing that should be deciding.
+@test "pr_merge_train_cron: a permanent agent_pane_busy stops after the retry budget" {
+    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1
+    assert_failure
+    [ "$(_log_count 'herdr agent start')" -eq 3 ]
+    _refute_logged "herdr agent prompt"
+}
+
+# The tab was opened by this tick and now holds nothing. Leaving it behind is
+# what filled the merge-train workspace with 40+ dead tabs, one per cron
+# period — the failure was invisible, but its litter was not.
+@test "pr_merge_train_cron: a start that never succeeds closes the tab it opened" {
+    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1
+    assert_failure
+    _assert_logged "herdr tab close ws-test-1:t9"
+}
+
+# The #1458 regression guard. herdr names this race precisely, on stderr; the
+# dispatcher used to throw that stream away and report a generic failure, so
+# the log said only "start failed" for weeks. Restoring `2>/dev/null` to
+# _pmt_agent_start must make this test red.
+@test "pr_merge_train_cron: a failed start reports the cause herdr gave on stderr" {
+    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1
+    assert_failure
+    assert_output --partial "agent_pane_busy"
+    assert_output --partial "원인:"
+    assert_output --partial "is not an available shell"
+}
+
+# The name-taken path hands the tick to a *live* agent on some other pane, and
+# the fresh tab is the one this tick just opened — but the agent it wanted is
+# elsewhere and healthy, so there is no failed launch to clean up after and the
+# close would be the tick's only destructive act.
+@test "pr_merge_train_cron: an agent_name_taken start does not close the tab" {
+    _run_tick HERDR_START_NAME_TAKEN=1
+    assert_success
+    _refute_logged "herdr tab close"
+}
+
+# Only the one known race is retried. An `agent start` that fails without
+# naming itself is not a race we understand, and ending the tick immediately —
+# the contract since #1470 — keeps it that way. It still gets the cleanup.
+@test "pr_merge_train_cron: an unexplained start failure is not retried but is cleaned up" {
+    _run_tick HERDR_START_FAIL=1
+    assert_failure
+    [ "$(_log_count 'herdr agent start')" -eq 1 ]
+    _assert_logged "herdr tab close ws-test-1:t9"
+}
+
+# Cleanup is best effort by design: the tick has already failed, and a herdr
+# that cannot close the tab is not a second, different verdict to report.
+@test "pr_merge_train_cron: a failing tab close does not change the tick's verdict" {
+    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1 HERDR_TAB_CLOSE_FAIL=1
+    assert_failure
+    _assert_logged "herdr tab close ws-test-1:t9"
+    assert_output --partial "agent_pane_busy"
 }
 
 @test "pr_merge_train_cron: a failed prompt is reported as a failed tick" {
