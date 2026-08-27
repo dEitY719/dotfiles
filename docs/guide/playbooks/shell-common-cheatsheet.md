@@ -138,10 +138,47 @@ submodule 체크아웃). Claude Code subagent 처럼 `$SHELL_COMMON` / `$DOTFILE
 (#1454). 3번이 하드코드 경로를 금지한다면 이 항목은 **탐색 자체**를 금지한다.
 
 규칙을 어긴 코드를 위한 advisory 안전망으로
-`_dotfiles_root_warn_if_foreign_source "${BASH_SOURCE[0]-}"`
-(`shell-common/functions/dotfiles_root.sh`) 가 있다. 자신의 실제 load 경로가
-`$HOME/dotfiles` 와 다른 git 저장소면 stderr 에 WARN 한 블록을 찍는다. 같은
-저장소의 linked worktree 는 경고하지 않으며, 절대 실행을 막지 않는다.
+`_dotfiles_root_warn_if_foreign_source` (`shell-common/functions/dotfiles_root.sh`)
+가 있다. 자신의 실제 load 경로가 `$HOME/dotfiles` 와 다른 git 저장소면 stderr 에
+WARN 한 블록을 찍는다. 같은 저장소의 linked worktree 는 경고하지 않으며, 절대
+실행을 막지 않는다. 비대화형 skill 호출자가 직접 source 하는 shell-common 파일
+(예: `gh_pr_review.sh`, `gh_host.sh`)은 이 가드를 켜야 한다 — 정확한 복붙 스니펫은
+아래 "Foreign-Checkout Guard Snippet" 참고. `${BASH_SOURCE[0]-}` 단독으로는 zsh 에서
+항상 비어 있어 가드가 영구히 무력화되므로 (zsh 는 `$0` 을 리바인드) 단독 사용 금지.
+
+## Foreign-Checkout Guard Snippet (#1454 / #1505)
+
+비대화형 skill 이 직접 source 하는 `shell-common/functions/*.sh` 파일(git hook 이
+source 하는 파일 포함)의 표준 가드. 파일 최상단, 함수 정의 이전에 붙인다. `LABEL`
+만 파일마다 바꾼다 — 나머지는 7개 파일에 걸쳐 문자 그대로 동일해야 한다(자기 경로
+탐지는 zsh 의 `FUNCTION_ARGZERO` 특성상 공유 함수로 옮길 수 없어 파일마다 반복이
+불가피하다; probe + 호출 + `#724` 진단은 `_dotfiles_root_guard_self` 하나로 이미
+SSOT 화됨):
+
+```sh
+if [ -n "${ZSH_VERSION-}" ]; then
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    _drg_self="${BASH_SOURCE[0]-}"
+else
+    _drg_self=""
+fi
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
+fi
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "LABEL"
+else
+    printf '[LABEL] %s missing or did not define _dotfiles_root_guard_self — #1454 guard skipped (#724).\n' \
+        "$_drg_helper" >&2
+fi
+unset _drg_self _drg_helper
+```
+
+`else` 분기를 빼먹지 말 것 — `dotfiles_root.sh` 자체가 없거나 source 에 실패해
+`_dotfiles_root_guard_self` 가 정의되지 않은 경우, 이 `else` 가 없으면 진단 메시지
+없이 조용히 가드가 꺼진다 (#1505 에서 실제로 빠졌던 회귀).
 
 ## Tool Integration UX-lib Guard
 
