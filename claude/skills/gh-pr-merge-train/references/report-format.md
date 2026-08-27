@@ -7,7 +7,7 @@ assistant text — never a `Bash` heredoc, never `Write` (#1270).
 
 ```
 == merge train: <owner/repo> ==
-queue: <n> PR(s)  ·  approval gate: <on|off>  ·  quiet period: 11m
+queue: <n> PR(s)  ·  approval gate: <verdict>  ·  quiet period: 11m
 
 [MERGED]  #1466  refactor(issue-watcher): simplify   (BEHIND -> resolve-outdated -> merged)
 [MERGED]  #1467  fix(gh-pr-reply): ...               (CLEAN -> merged)
@@ -29,16 +29,35 @@ Rules:
   `--author @me`) are **not** listed — they were never candidates. Mention them
   only as a count, if at all.
 
+## The `approval gate:` field (NF-1)
+
+Exactly one of three strings, from `approval-gate.md`'s combine table:
+
+| Header | Means |
+|---|---|
+| `off (no policy on <base>)` | neither rulesets nor classic protection require an approval on this base — the delegated review supplies the signal instead |
+| `on (<source>: <n> approvals)` | `<source>` is `ruleset` or `protection`; the strictest count wins |
+| `on (fail-closed: <base> policy unreadable)` | the policy is genuinely undetermined (5xx, 401, network) — **not** a 403/404 |
+
+Distinguishing the three is the point, not decoration. #1519's symptom was a
+header reading `on (fail-closed: ruleset unreadable)` on a free-plan repo where
+no ruleset can exist — a bug that looked, for its whole lifetime, exactly like
+a transient API problem. A header that cannot tell "undetermined" from "there
+is nothing to determine" hides the next instance of it just as well.
+
+Mixed-base queues carry one clause per distinct base, `·`-separated:
+`approval gate: main=off (no policy) · release/2026.08=on (ruleset: 1 approvals)`.
+
 ## Status vocabulary
 
 | Status | Meaning | Typical reason |
 |---|---|---|
 | `[MERGED]` | the PR is merged | — |
-| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required (reviewDecision=<value>)`, `gh:pr-merge refuses reviewDecision=<value>`, `ruleset unreadable — approval assumed required`, `BLOCKED: <rule>`, `draft` |
+| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required (reviewDecision=<value>)`, `gh:pr-merge refuses reviewDecision=<value>`, `policy unreadable — approval assumed required`, `self-record withheld approval (BLOCKER)`, `approval withheld (unchanged since review)`, `board unreadable — approval unconfirmed`, `self-record failed`, `BLOCKED: <rule>`, `draft` |
 | `[FAILED]` | not merged, **and something actually went wrong** | `conflict unresolved after 3 attempts`, `gh:pr-merge failed: <message>`, `CI fix failed after 3 attempts` |
 
 Two of those reasons — `gh:pr-merge refuses reviewDecision=<value>` and
-`ruleset unreadable` — name a gate that lives **downstream**, in `gh:pr-merge`
+`policy unreadable` — name a gate that lives **downstream**, in `gh:pr-merge`
 (its Step 2 `reviewDecision` hard stop) or in a policy that could not be read.
 They are `[SKIPPED]`, never `[FAILED]`, and they are recorded **without
 delegating** — see
@@ -47,6 +66,20 @@ refused identically every time, so letting it reach `gh:pr-merge` would spend
 three F-5 attempts to produce a `[FAILED]` that NF-2 leaves no way to clear.
 Naming the `reviewDecision` value is what makes the line actionable: the reader
 knows which review to dismiss.
+
+Four more come from the step-2b delegated review
+(`train-loop.md` → "Delegated review on the gate-off path"), and the wording
+distinguishes what a reader has to do about each:
+
+| Reason | What happened | Cleared by |
+|---|---|---|
+| `self-record withheld approval (BLOCKER)` | the review ran this tick and found a blocker | pushing a fix (new head re-arms the review) |
+| `approval withheld (unchanged since review)` | the same head was already reviewed and declined — **not re-reviewed**, by design (F-8) | pushing a fix, or promoting the card by hand |
+| `board unreadable — approval unconfirmed` | the review's verdict could not be read back | the next tick, usually |
+| `self-record failed` | `gh:pr-approve` itself errored (F-9) | the next tick |
+
+None of the four spends an F-5 attempt, and none is ever `[FAILED]`: a
+withheld approval is a working review, not a broken train.
 
 The `[SKIPPED]` / `[FAILED]` split is the load-bearing part of this output. A
 cron log full of `[SKIPPED] checks still running` is a healthy train waiting on
@@ -62,6 +95,6 @@ unattended loop nobody reads.
 - Queue empty after filtering → header plus `queue: 0 PR(s)` and
   `nothing to do`. Not an error; the dispatcher normally prevents this from
   even starting a session.
-- Ruleset unreadable → the header's `approval gate:` reads
-  `on (fail-closed: ruleset unreadable)`, so the reason every unapproved PR was
-  skipped is visible once, at the top, rather than repeated per line.
+- Policy undetermined → the header's `approval gate:` reads
+  `on (fail-closed: <base> policy unreadable)`, so the reason every unapproved
+  PR was skipped is visible once, at the top, rather than repeated per line.
