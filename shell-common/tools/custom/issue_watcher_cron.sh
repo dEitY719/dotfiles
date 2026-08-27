@@ -1301,7 +1301,6 @@ _iw_start_agent_retrying() {
             break
         fi
         _IW_START_CODE=$(_iw_herdr_error_code "${_json}" "${_IW_ERRF}")
-        _IW_START_MESSAGE=$(_iw_herdr_error_message "${_IW_ERRF}")
 
         # The one failure worth another attempt (#1525): the pane was created
         # moments ago and its shell is not interactive yet. Only this code — a
@@ -1316,6 +1315,11 @@ _iw_start_agent_retrying() {
         [ "${_IW_START_RETRY_SLEEP}" = "0" ] || sleep "${_IW_START_RETRY_SLEEP}"
         _attempt=$((_attempt + 1))
     done
+
+    # Only the give-up path is ever read, and the capture file still holds the
+    # last attempt's stderr right here — so a retry that goes on to win pays
+    # nothing for the sentence describing the failure it recovered from.
+    [ "${_rc}" -eq 0 ] || _IW_START_MESSAGE=$(_iw_herdr_error_message "${_IW_ERRF}")
 
     trap - EXIT INT TERM
     [ "${_IW_ERRF}" = "/dev/null" ] || rm -f "${_IW_ERRF}"
