@@ -923,13 +923,12 @@ EOF
     # Proof the deletion actually happened, so the test itself cannot
     # silently stop reproducing the #1474 symptom.
     local deleted_marker="$TEST_TEMP_HOME/prompt_actually_deleted.marker"
-    rm -f "$deleted_marker"
     # The CLI itself succeeds, but the prompt file is gone by the time it
     # returns — the #1474 symptom, root cause still open.
     cat >"$stub_dir/codex" <<EOF
 #!/bin/sh
 prompt_path=\$(cat "$pathfile" 2>/dev/null)
-if [ -n "\$prompt_path" ] && [ -e "\$prompt_path" ]; then
+if [ -e "\$prompt_path" ]; then
     rm -f "\$prompt_path"
     [ ! -e "\$prompt_path" ] && : >"$deleted_marker"
 fi
