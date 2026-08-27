@@ -15,7 +15,10 @@ For each PR `N` in the Step 2 queue order:
    once per run — rulesets are branch-scoped). Gate on and `reviewDecision !=
    APPROVED` → `[SKIPPED] approval required`, next PR. Gate **off** but
    `reviewDecision` non-empty and not `APPROVED` → also `[SKIPPED]`, naming the
-   value — see the next section for why that check cannot be skipped.
+   value — see "Gates `gh:pr-merge` owns" for why that check cannot be skipped.
+2b. **Delegated review** (gate **off** and `reviewDecision == ""` only) — run
+   the sequence in "Delegated review on the gate-off path" below. It either
+   clears the PR for Step 3 or records a `[SKIPPED]` and moves on.
 3. **Route** through the D-1 table.
 4. **Remediate** with the atom skill the row names, if any. For the `BEHIND`
    and `DIRTY` rows that means the scratch-worktree sequence below, not a bare
@@ -24,6 +27,64 @@ For each PR `N` in the Step 2 queue order:
    is mergeable now.
 6. **Merge** — `Skill(gh:pr-merge, "<N>")`. No strategy argument (D-4).
 7. **Record** the outcome and continue.
+
+## Delegated review on the gate-off path (step 2b, F-6 … F-9)
+
+The gate being off means the platform asks for no approval — not that nothing
+should be reviewed (`approval-gate.md` → "Why the gate being off still runs a
+review"). Before merging such a PR the train runs one review and reads the
+board back as its verdict.
+
+Reached only when **the gate is off and `reviewDecision` is `""`**. Every other
+combination was already decided in step 2: an `APPROVED` PR proceeds untouched,
+and a non-empty non-`APPROVED` one is `[SKIPPED]` before it gets here, so a
+review a human explicitly blocked is never handed to a self-record run.
+
+```bash
+HEAD_OID=$(GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
+    --json headRefOid -q .headRefOid)
+LAST_OID=$(GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/pulls/$N/reviews" \
+    --jq "[.[] | select(.user.login == \"$ME\")] | last | .commit_id // empty")
+```
+
+1. **Suppress a repeat review (F-8).** `LAST_OID` non-empty and equal to
+   `HEAD_OID` means this exact head was already reviewed by `$ME` — skip to
+   step 3 without calling anything. Otherwise run
+   `Skill(gh:pr-approve, "<N> <remote> --self-record")` once. Never twice, and
+   never a retry (F-7).
+2. **Read the verdict (D-4)** — `_gh_project_status_query_current pr <N>
+   "$TARGET_REPO"` from `shell-common/functions/gh_project_status.sh`.
+3. **Decide:**
+
+| Board Status | Reviewed this tick? | Outcome |
+|---|---|---|
+| `Approved` | either | proceed to step 3 — merge |
+| anything else | yes, just ran | `[SKIPPED] self-record withheld approval (BLOCKER)` |
+| anything else | no, suppressed by F-8 | `[SKIPPED] approval withheld (unchanged since review)` |
+| unreadable | either | `[SKIPPED] board unreadable — approval unconfirmed` |
+| — | the skill call itself errored | `[SKIPPED] self-record failed` (F-9) |
+
+Reading the board **after** the suppression check is what keeps a stalled-but-
+approved PR moving: a PR whose review passed on an earlier tick but whose merge
+then failed on CI comes back with `Approved` still on the card, so row 1 clears
+it without paying for a second review. F-8's suppression only ever produces a
+`[SKIPPED]` for a PR the review actually declined.
+
+Nothing here spends an F-5 attempt — no remediation was performed. Every row
+above is `[SKIPPED]`, never `[FAILED]`: each becomes actionable the moment
+someone pushes a fix (which changes `HEAD_OID` and re-arms the review) or
+promotes the card by hand.
+
+**Why inside the loop and not once over the queue.** Only PRs past the D-6
+quiet period reach it, so `devx:pr-review-all`'s `--defer-reply 4`
+`gh:pr-reply` has landed and CI has settled — the review sees the PR's final
+state. Reviewing the whole queue up front would review code that the train's
+own subsequent merges then move out from under.
+
+**Serial by construction (NF-2).** The train already processes one PR at a
+time, so these reviews serialise for free — which is why `allowed-tools` still
+needs no `Agent`. `gh:pr-approve` carries its own, and `Skill()` nesting
+reaches it.
 
 ## Detached scratch worktree (step 4, `BEHIND` / `DIRTY` only)
 
@@ -155,6 +216,15 @@ Step 2-B board check was removed in #1513, so a card sitting outside `Approved`
 — which is the normal state for a PR `gh:issue-flow` just opened — is no longer
 a reason to skip. Do not query the board here.
 
+That retirement is about the board as a **policy gate**, standing in for a
+platform approval the repo never granted; used that way it blocked every
+self-authored PR forever. Step 2b's read is a different thing wearing the same
+column: `gh:pr-approve` is the only skill that writes `Approved` (#1350) and
+only promotes when it found no BLOCKER, so the train is reading the return
+value of a review it just ran — not asking the board for permission. Keep the
+two apart: nothing may consult the board *before* a review has been run for
+this head.
+
 ## Attempt accounting (F-5)
 
 Keep one counter per PR, starting at 0. Increment it on **each remediation
@@ -195,6 +265,7 @@ skill was called and nothing was changed.
 | `gh:pr-resolve-conflict` stops at a documented stop point (ambiguous conflict, user-side abort) | `[FAILED]` naming `$SCRATCH_DIR` for manual resume; **scratch worktree is NOT removed** ("Teardown — the one exception" above); no further attempts this run; next PR |
 | `gh:pr-merge` | that PR is `[FAILED]`; next PR |
 | approval gate | that PR is `[SKIPPED]`; next PR |
+| the step-2b delegated review (withheld, suppressed, board unreadable, or the `gh:pr-approve` call itself) | that PR is `[SKIPPED]` with the matching reason; **no attempt is spent**; next PR |
 | a `gh:pr-merge` gate detected up front (`reviewDecision`) | that PR is `[SKIPPED]` with the cause named; **no attempt is spent** |
 | `gh pr view` on one PR | that PR is `[SKIPPED] state unreadable`; next PR |
 | `gh pr list` in Step 2 | **the run ends** — with no queue there is nothing to skip *to*, and merging without knowing state is the one thing this skill must never do |

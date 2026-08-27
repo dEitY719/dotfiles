@@ -46,21 +46,23 @@ GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state ope
 `--author @me` is not optional (D-7) — never auto-merge a colleague's PR. Drop
 every PR updated within the last **11 minutes** (D-6) and every draft. Sort
 `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`, ties by ascending PR number (D-2).
-Ordering rationale and the quiet-period rationale: `references/ordering.md`.
+Ordering and quiet-period rationale: `references/ordering.md`.
 
 **`gh pr list` failure ends the run** with an empty report — never merge
 without knowing state.
 
 ## Step 3: Read the approval policy per base branch
 
-Read the repo ruleset's `required_approving_review_count` per
-`references/approval-gate.md`, **once per distinct `baseRefName`**, cached per
-base — rulesets are branch-scoped, so a single-base queue still costs one call.
-That is why this follows Step 2: the queue already carries the bases. `0` → the
-platform requires no approval (D-5). Non-zero → an unapproved PR is `[SKIPPED]`.
-**Lookup failure is fail-closed**: treat approval as required. Even with the
-gate off, a non-empty non-`APPROVED` `reviewDecision` is `[SKIPPED]` before
-`gh:pr-merge` is called — it would refuse, and NF-2 forbids clearing that.
+Read `required_approving_review_count` from **both** rulesets and classic
+branch protection per `references/approval-gate.md`, **once per distinct
+`baseRefName`**, cached per base — two calls per base, never per PR. Either
+source requiring `>= 1` → gate on, unapproved PRs `[SKIPPED]`; both reporting
+no policy → off (D-5). Classify by **HTTP status, not exit code**: `403`/`404`
+mean no policy can apply, 5xx / 401 / network mean undetermined and stay
+fail-closed — collapsing the two is what made unattended merges impossible on
+free-plan private repos (#1519). Even with the gate off, a non-empty
+non-`APPROVED` `reviewDecision` is `[SKIPPED]` before `gh:pr-merge` is called —
+it would refuse, and NF-2 forbids clearing that.
 
 ## Step 4: Run the train — one PR at a time
 
@@ -68,10 +70,12 @@ For each PR in queue order, run the loop in `references/train-loop.md`:
 **re-query state immediately before processing** (F-3 — the previous merge
 invalidated everything behind it), route through the D-1 table
 (`references/routing-table.md`), then merge with `Skill(gh:pr-merge, "<N>")`.
+Gate off with an empty `reviewDecision` first runs one
+`Skill(gh:pr-approve, "<N> <remote> --self-record")` and reads the board back as
+its verdict — no approval, no merge, and no re-run for an already-reviewed head.
 The `BEHIND` / `DIRTY` rows rebase inside a **detached scratch worktree** the
-train creates and unconditionally removes per attempt, never in this checkout
-(`references/train-loop.md` → "Detached scratch worktree", #1493). Attempts are
-capped at 3 per PR (F-5); a failure skips that one PR and the train continues
+train creates and unconditionally removes per attempt (#1493). Attempts are
+capped at 3 per PR (F-5); a failure skips that PR and the train continues
 (F-6). Never process two PRs concurrently.
 
 ## Step 5: Report
@@ -87,7 +91,9 @@ assistant text, never via a `Bash` heredoc or `Write`.
 - **Never abort the whole train** for one PR's failure (F-6).
 - **No merge strategy argument** — `gh:pr-merge`'s default rebase is what
   `required_linear_history` allows (D-4).
-- **No review judgement** — `gh:issue-flow` already ran `devx:pr-review-all`.
+- **No review judgement of its own** — `gh:issue-flow` already ran
+  `devx:pr-review-all`, and the gate-off path delegates to `gh:pr-approve`
+  rather than deciding anything here.
 - **No ai-metrics comment.** Every atom the train calls posts its own; a
   train-level one would only duplicate them on the same PR.
 - Full list: `references/constraints.md`.
@@ -95,7 +101,8 @@ assistant text, never via a `Bash` heredoc or `Write`.
 ## Related Skills
 
 Atoms this train calls: `gh:pr-resolve-outdated` · `gh:pr-resolve-conflict`
-· `gh:pr-resolve-ci-fail` · `gh:pr-merge`. Deliberately **not** called:
+· `gh:pr-resolve-ci-fail` · `gh:pr-approve` (`--self-record`, gate-off path
+only) · `gh:pr-merge`. Deliberately **not** called:
 `gh:pr-merge-emergency` (NF-2). Upstream producer of the PRs this train drains:
 `gh:issue-flow`. Unattended trigger: `shell-common/tools/custom/pr_merge_train_cron.sh`
 (`references/cron-dispatcher.md`).
