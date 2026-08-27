@@ -9,38 +9,94 @@ A subagent hand-wrote this to wait on a sibling subagent and it spun for
     do sleep 5; done
 
 `pgrep -f` matches the FULL command line of every process, including the
-very shell that is running the loop -- and that shell's command line
-contains `a7ab696cc6e841cc7` literally (twice: once in the `.output`
-path, once as the pgrep pattern). So `pgrep` always finds itself, `!
-pgrep` is permanently false, and the exit condition can never become
-true. The `[ -s ... ]` half had been true since minute one.
+very shell that is running the loop -- and that command line contains
+`a7ab696cc6e841cc7` literally, if only as pgrep's own argument. So
+`pgrep` always finds itself, `! pgrep` is permanently false, and the
+exit condition can never become true. The `[ -s ... ]` half had been
+true since minute one.
 
 Prompt rules only lower the frequency of this; the harness has to refuse
 the command mechanically. This hook does exactly that, for two narrow
 shapes and nothing else.
 
-Blocked shape 1 -- self-matching `pgrep -f`
-    A `pgrep` invocation whose flags include `f` (`-f`, `-af`, `--full`)
-    where the *literal* search pattern also occurs somewhere else in the
-    same command string. That second occurrence is the proof: the token
-    is baked into the invoking shell's command line, so the match is
-    guaranteed and self-referential.
+Blocked shape 1 -- a self-matching `pgrep -f` used as a loop's exit test
+    Detection is **loop-context based, not occurrence-count based.** An
+    earlier draft of this hook gated on "the literal pattern appears
+    twice in the command string"; both halves of that were wrong.
 
-    The remedy the reason recommends is the character class
-    (`[a]7ab696...`), NOT plain `| grep -vx "$$"`. Measured under the
-    Claude Code Bash tool, `pgrep -f` returns TWO self-matches: the inner
-    shell (`$$`) *and* the outer `zsh -c <snapshot> && eval '<command>'`
-    wrapper, whose own command line embeds the command verbatim. #1521
-    saw the same pair (pids 179954 + 1226029). So excluding `$$` removes
-    only one of the two and the loop still never exits. The character
-    class removes both, because nothing on either command line matches
-    the *pattern* any more.
+    Wrong as a *sufficient* condition (false positives): the count was a
+    raw substring count with no word boundaries, so `pgrep -f ep` denied
+    itself -- `ep` occurs once inside the literal word `pgrep` and once
+    as the operand.
+
+    Wrong as a *necessary* condition (the dangerous false negative): a
+    pattern occurring only once is not safe inside a loop. The Claude
+    Code Bash tool runs every command as `zsh -c <snapshot> && eval
+    '<command>'`, so the wrapper process's own command line *is* the
+    command text -- which trivially contains the pattern, because
+    pgrep's own argument is part of it. `until ! pgrep -f gunicorn; do
+    sleep 1; done` therefore spins forever even though `gunicorn`
+    appears exactly once.
+
+    So the real danger signal is not "how often does the token appear",
+    it is "is this `pgrep -f <literal>` the thing deciding whether a
+    loop keeps spinning". A one-shot `pgrep -f <literal>` cannot hang --
+    nothing re-checks it -- and is always allowed. The hook denies only
+    when all of these hold:
+
+      - the pgrep does full-command-line matching (`-f`, `-af`,
+        `--full`), and
+      - its search pattern is a literal (see the escapes below), and
+      - the invocation sits inside an `until`/`while` construct's *test*
+        (between the keyword and its `do`), not merely somewhere in the
+        same command string, and
+      - that loop's body contains a `sleep`, and
+      - a successful pgrep keeps the loop spinning rather than ending
+        it: `until ! pgrep ...` or `while pgrep ...`. The mirrored forms
+        (`until pgrep ...`, `while ! pgrep ...`) exit on the very first
+        iteration -- still wrong, but not a hang, so out of mandate.
+
+    The one sanctioned remedy is the character class (`[a]7ab696...`),
+    NOT `| grep -vx "$$"`. Measured under the Claude Code Bash tool,
+    `pgrep -f` returns TWO self-matches: the inner shell (`$$`) *and*
+    the outer `zsh -c <snapshot> && eval '<command>'` wrapper, whose own
+    command line embeds the command verbatim. #1521 saw the same pair
+    (pids 179954 + 1226029). So excluding `$$` removes only one of the
+    two and the loop still never exits. The character class removes
+    both, because nothing on either command line matches the *pattern*
+    any more.
+
+    Consequently `$$` is **not** an allow signal anywhere in this hook.
+    An earlier draft skipped the whole check whenever `$$` appeared
+    anywhere in the command, which (a) contradicted the measurement just
+    above -- it treated a fix the hook itself documents as insufficient
+    as proof of safety -- and (b) was trivially defeated by an unrelated
+    `$$`, e.g. `echo $$; until ! pgrep -f token; do sleep 1; done`. With
+    detection now gated on loop context, dropping the bypass costs
+    nothing: every one-shot `pgrep -f ... | grep -vx "$$"` is already
+    allowed for being one-shot.
 
 Blocked shape 2 -- polling a subagent's `tasks/*.output`
-    An `until`/`while` loop with a `sleep` in it that watches a
-    `tasks/<id>.output` path. Subagent completion is already pushed to
-    the parent by the harness, so this loop is redundant even when it
-    *does* terminate. Remedy in the reason: don't wait, end the turn.
+    An `until`/`while` loop whose *test* watches a `tasks/<id>.output`
+    path and whose body contains a `sleep`. Subagent completion is
+    already pushed to the parent by the harness, so this loop is
+    redundant even when it *does* terminate. Remedy in the reason: don't
+    wait, end the turn.
+
+    The three ingredients must be structurally connected, i.e. the path
+    reference has to be inside the same loop construct as the sleep.
+    Checking them independently anywhere in the string denied
+    `ls tasks/test.output && while ! pg_isready; do sleep 1; done`,
+    where the `tasks/*.output` mention is an unrelated one-shot `ls` and
+    the loop polls something else entirely.
+
+    Not attempted: proving a loop is *bounded*. A retry loop with a
+    counter or a timeout can terminate, and this hook will still deny it
+    when it polls `tasks/*.output` with a sleep. Deciding boundedness of
+    arbitrary shell statically is not a regex-tractable problem, and
+    #1521's stated philosophy is that "완전 근절은 목표가 아니다" --
+    close the observed shape, keep the escape hatch
+    (`BASH_WAIT_LOOP_GUARD_BYPASS=1`) for the rest.
 
 Deliberately NOT blocked (false-positive guard -- read before widening)
     The Monitor tool's own documentation *recommends* the generic
@@ -55,17 +111,14 @@ Deliberately NOT blocked (false-positive guard -- read before widening)
     loops" would put this hook in direct conflict with harness guidance.
 
     Likewise rule 1 stays provably-safe-only. It never fires when:
+      - the pgrep is not in a loop's exit test -- a one-shot call cannot
+        hang, whatever it matches. This is the overwhelmingly common,
+        safe case;
       - the pattern is not a literal (`pgrep -f "$PAT"`) -- its runtime
         value is unknowable statically, so self-match cannot be proven;
-      - the command mentions `$$` anywhere -- the author is demonstrably
-        PID-aware, so this is treated as an opt-out rather than an
-        accident. (Note it is a weak fix, per the two-match measurement
-        above; the hook allows it but the reason text steers people to
-        the character class instead.);
       - the pattern carries a `[...]` character class -- the classic
-        regex trick that makes the literal fail to match itself;
-      - the pattern occurs exactly once, i.e. only as pgrep's own
-        argument. That is the overwhelmingly common, safe case.
+        regex trick that makes the literal fail to match itself, and the
+        only remedy this hook actually endorses.
 
 Safety rails (fail open, always -- never trap the user):
     - empty / unreadable / malformed stdin -> exit 0, no output
@@ -134,20 +187,29 @@ _PGREP_LONG_VALUE_OPTS: frozenset[str] = frozenset(
 # A `tasks/<something>.output` path -- the subagent completion file of #1521.
 _TASKS_OUTPUT_RE: re.Pattern[str] = re.compile(r"tasks/[^\s'\"`;|&)]*\.output")
 
-_LOOP_KEYWORD_RE: re.Pattern[str] = re.compile(r"(?:^|[\s;&|({])(?:until|while)\s")
+# `until` / `while` and their `do` / `done` bookends, as whole words. Used to
+# carve a command into loop constructs so the checks below can require that
+# the dangerous ingredients sit inside the *same* loop, not merely in the same
+# command string.
+_LOOP_START_RE: re.Pattern[str] = re.compile(r"(?:^|[\s;&|(){}])(until|while)(?=\s)")
+_DO_KEYWORD_RE: re.Pattern[str] = re.compile(r"(?:^|[\s;&|(){}])(do)(?=[\s;]|$)")
+_DONE_KEYWORD_RE: re.Pattern[str] = re.compile(r"(?:^|[\s;&|(){}])(done)(?=[\s;)&|]|$)")
+
 _SLEEP_RE: re.Pattern[str] = re.compile(r"(?:^|[\s;&|({])sleep(?:\s|$)")
 
 _PGREP_REASON = (
-    "차단: 자기매칭이 확정된 `pgrep -f` 입니다 (issue #1521).\n"
-    "`pgrep -f` 는 전체 커맨드라인을 매치하므로, 검색 패턴 {pattern!r} 이 이 명령 문자열 "
-    "안에 다시 등장하는 순간 pgrep 은 자기 자신(이 명령을 실행하는 셸)을 매치합니다. "
-    "따라서 `pgrep` 은 항상 성공하고 `! pgrep` 은 항상 거짓 — 이걸 종료 조건으로 쓰는 "
-    "루프는 영원히 끝나지 않습니다 (실측 49분).\n"
+    "차단: 루프의 종료 조건으로 쓰인 자기매칭 `pgrep -f` 입니다 (issue #1521).\n"
+    "`pgrep -f` 는 전체 커맨드라인을 매치합니다. 그리고 Claude Code 의 Bash 도구는 명령을 "
+    "`zsh -c <snapshot> && eval '<command>'` 래퍼로 감싸 실행하므로, 이 루프를 돌리고 있는 "
+    "셸/래퍼의 커맨드라인 자체가 이 명령 문자열이고 그 안에는 검색 패턴 {pattern!r} 이 "
+    "(다름 아닌 pgrep 자신의 인자로) 들어 있습니다. 따라서 pgrep 은 매 반복마다 자기 자신을 "
+    "찾아내고, 이 루프의 종료 조건은 영원히 성립하지 않습니다 (실측 49분).\n"
+    "패턴이 명령 안에 한 번만 나와도 마찬가지입니다 — 래퍼가 명령 전체를 품고 있기 때문입니다.\n"
     "권장 회피: 첫 글자를 문자클래스로 감싸세요 — pgrep -f '[{first}]{rest}'\n"
-    '(`| grep -vx "$$"` 만으로는 부족합니다: Claude Code 의 Bash 도구는 명령을 '
-    "`zsh -c ... eval '<command>'` 래퍼로 감싸 실행하므로 자기매칭이 안쪽 셸과 바깥 "
-    "래퍼 2개로 잡힙니다. `$$` 배제는 그중 하나만 지웁니다 — #1521 의 pid 179954 + "
-    "1226029 가 정확히 이 쌍입니다.)\n"
+    '(`| grep -vx "$$"` 는 해법이 아닙니다: 자기매칭은 안쪽 셸과 바깥 래퍼 2개로 잡히는데 '
+    "`$$` 배제는 그중 하나만 지웁니다 — #1521 의 pid 179954 + 1226029 가 정확히 이 쌍입니다. "
+    "문자클래스는 두 커맨드라인 모두에서 패턴 자체를 매치되지 않게 만드는 유일한 확실한 "
+    "회피입니다.)\n"
     "그리고 서브에이전트를 기다리는 중이라면 애초에 폴링이 불필요합니다 — "
     "하네스가 완료 시 자동으로 알려줍니다."
 )
@@ -236,18 +298,39 @@ def _pgrep_pattern(tokens: list[str], start: int) -> str | None:
     return operands[0]
 
 
-def _check_pgrep_self_match(command: str) -> str | None:
-    """Return a deny reason when `command` contains a provably self-matching pgrep."""
-    if "pgrep" not in command:
-        return None
+def _loop_constructs(command: str) -> list[tuple[str, str, str]]:
+    """Carve `command` into `(keyword, test, body)` triples, one per loop.
 
-    # The author is PID-aware somewhere in this command (`| grep -vx "$$"`,
-    # `MYPID=$$`, ...). That is the documented remedy -- never block it.
-    if "$$" in command:
-        _trace("command references $$; assuming deliberate self-exclusion")
-        return None
+    `test` is the text between the `until`/`while` keyword and its `do`;
+    `body` is the text between that `do` and the matching `done` (or the
+    end of the command when the loop is unterminated). A loop with no
+    `do` at all is not a loop construct and is skipped.
+    """
+    loops: list[tuple[str, str, str]] = []
+    for match in _LOOP_START_RE.finditer(command):
+        keyword = match.group(1)
+        test_start = match.end(1)
+        do_match = _DO_KEYWORD_RE.search(command, test_start)
+        if not do_match:
+            continue
+        body_start = do_match.end(1)
+        done_match = _DONE_KEYWORD_RE.search(command, body_start)
+        body_end = done_match.start(1) if done_match else len(command)
+        loops.append((keyword, command[test_start : do_match.start(1)], command[body_start:body_end]))
+    return loops
 
-    for segment in _SEGMENT_SPLIT_RE.split(command):
+
+def _spinning_pgrep_pattern(keyword: str, test: str) -> str | None:
+    """Return the literal pattern of a `pgrep -f` that keeps this loop spinning.
+
+    `test` is a loop's exit condition. A `pgrep -f <literal>` in there
+    always matches the very wrapper running the loop, so its result is a
+    constant. Which constant keeps the loop alive depends on the keyword
+    and on negation: `until ! pgrep ...` never becomes true, and
+    `while pgrep ...` never becomes false. The mirror images exit on the
+    first iteration -- wrong, but not a hang, so not this hook's business.
+    """
+    for segment in _SEGMENT_SPLIT_RE.split(test):
         if "pgrep" not in segment:
             continue
         tokens = _tokenize(segment)
@@ -265,32 +348,57 @@ def _check_pgrep_self_match(command: str) -> str | None:
             if "[" in pattern:
                 _trace(f"pgrep pattern {pattern!r} uses a character class; allowing")
                 continue
-            # The pattern occurs once as pgrep's own argument. A second
-            # occurrence means it is also baked into this shell's command
-            # line -> the match is guaranteed and self-referential.
-            if command.count(pattern) < 2:
-                _trace(f"pgrep pattern {pattern!r} occurs once; allowing")
+            negated = idx > 0 and tokens[idx - 1] == "!"
+            spins = negated if keyword == "until" else not negated
+            if not spins:
+                _trace(f"`{keyword}` + negated={negated} exits on match; allowing")
                 continue
-            _trace(f"pgrep pattern {pattern!r} recurs in the command; denying")
-            return _PGREP_REASON.format(
-                pattern=pattern,
-                first=pattern[0],
-                rest=pattern[1:],
-            )
+            return pattern
+    return None
+
+
+def _check_pgrep_self_match(command: str) -> str | None:
+    """Return a deny reason when a self-matching `pgrep -f` gates a sleep loop."""
+    if "pgrep" not in command:
+        return None
+
+    for keyword, test, body in _loop_constructs(command):
+        if "pgrep" not in test:
+            continue
+        if not _SLEEP_RE.search(body):
+            _trace("loop body has no sleep; allowing")
+            continue
+        pattern = _spinning_pgrep_pattern(keyword, test)
+        if not pattern:
+            continue
+        _trace(f"pgrep pattern {pattern!r} gates a `{keyword}` sleep loop; denying")
+        return _PGREP_REASON.format(
+            pattern=pattern,
+            first=pattern[0],
+            rest=pattern[1:],
+        )
     return None
 
 
 def _check_tasks_output_poll(command: str) -> str | None:
-    """Return a deny reason for an infinite `tasks/*.output` polling loop."""
-    hit = _TASKS_OUTPUT_RE.search(command)
-    if not hit:
+    """Return a deny reason for an infinite `tasks/*.output` polling loop.
+
+    The path reference must sit in the loop's own exit condition and the
+    `sleep` in that same loop's body. Merely finding both somewhere in
+    the command string denied unrelated pairs such as
+    `ls tasks/test.output && while ! pg_isready; do sleep 1; done`.
+    """
+    if ".output" not in command:
         return None
-    if not _LOOP_KEYWORD_RE.search(command):
-        return None
-    if not _SLEEP_RE.search(command):
-        return None
-    _trace(f"tasks output poll loop on {hit.group(0)!r}; denying")
-    return _TASKS_POLL_REASON.format(path=hit.group(0))
+    for _keyword, test, body in _loop_constructs(command):
+        hit = _TASKS_OUTPUT_RE.search(test)
+        if not hit:
+            continue
+        if not _SLEEP_RE.search(body):
+            continue
+        _trace(f"tasks output poll loop on {hit.group(0)!r}; denying")
+        return _TASKS_POLL_REASON.format(path=hit.group(0))
+    return None
 
 
 def _deny(reason: str) -> None:
