@@ -15,19 +15,22 @@ read-only `list` (NF-2). A `working`/`blocked` agent prints nothing at
 all: silence, not a second info line (F-4).
 
 ```bash
-# F-1: locate the local worktree checked out on the merged branch.
-# substr() rather than $2 so a worktree path containing spaces still
-# resolves; --porcelain guarantees the "worktree <path>" / "branch <ref>"
-# line pairing this relies on.
-BRANCH="${HEAD_REF}"
-WT_PATH=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/${BRANCH}" \
-    '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' | head -1)
+# NF-1: every gate here is a silent skip. Either tool missing (the expected
+# state on any machine without the agent runner), or no worktree (the merge
+# ran on a different machine) → the merge report is unaffected. The two
+# builtin `command -v` gates come first so that common case never pays for
+# the worktree scan below.
+if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    # F-1: locate the local worktree checked out on the merged branch.
+    # substr() rather than $2 so a worktree path containing spaces still
+    # resolves; --porcelain guarantees the "worktree <path>" / "branch <ref>"
+    # line pairing this relies on.
+    BRANCH="${HEAD_REF}"
+    WT_PATH=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/${BRANCH}" \
+        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' | head -1)
 
-# NF-1: every gate below is a silent skip. No worktree (the merge ran on a
-# different machine), no herdr, no jq → the merge report is unaffected.
-if [ -n "$WT_PATH" ] && command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     # F-2: read-only agent enumeration; match on cwd == worktree path.
-    if AGENT_JSON=$(herdr agent list 2>/dev/null); then
+    if [ -n "$WT_PATH" ] && AGENT_JSON=$(herdr agent list 2>/dev/null); then
         # head -1: two agents on one cwd is abnormal — take the first,
         # ignore the rest, warn about nothing (Error Cases).
         MATCH=$(printf '%s' "$AGENT_JSON" | jq -r --arg cwd "$WT_PATH" \
@@ -35,9 +38,7 @@ if [ -n "$WT_PATH" ] && command -v herdr >/dev/null 2>&1 && command -v jq >/dev/
              | "\(.tab_id)\t\(.agent_status)\t\(.workspace_id)"' 2>/dev/null | head -1)
 
         if [ -n "$MATCH" ]; then
-            TAB_ID=$(printf '%s' "$MATCH" | cut -f1)
-            AGENT_STATUS=$(printf '%s' "$MATCH" | cut -f2)
-            WS_ID=$(printf '%s' "$MATCH" | cut -f3)
+            IFS=$'\t' read -r TAB_ID AGENT_STATUS WS_ID <<<"$MATCH"
 
             # F-4: working/blocked/anything-but-idle prints nothing at all,
             # and does not even pay for the second lookup.

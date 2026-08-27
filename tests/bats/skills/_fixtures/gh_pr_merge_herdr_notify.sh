@@ -30,21 +30,24 @@
 # enumerations are invoked, never a state-changing herdr/git command.
 gh_pr_merge_herdr_notify() {
     local _branch="$1"
-    [ -n "$_branch" ] || return 0
+
+    # NF-1: every gate here is a silent skip. Either tool missing (the
+    # expected state on any machine without the agent runner), or no worktree
+    # (the merge ran on a different machine) → the merge report is unaffected.
+    # The two builtin `command -v` gates come first so that common case never
+    # pays for the worktree scan below.
+    command -v herdr >/dev/null 2>&1 || return 0
+    command -v jq >/dev/null 2>&1 || return 0
 
     # F-1: locate the local worktree checked out on the merged branch.
     # substr() rather than $2 so a worktree path containing spaces still
     # resolves; --porcelain guarantees the "worktree <path>" / "branch <ref>"
-    # line pairing this relies on.
+    # line pairing this relies on. An empty branch matches nothing, so the
+    # empty-HEAD_REF case falls out of this same gate.
     local _wt_path
     _wt_path=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/${_branch}" \
         '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' | head -1)
-
-    # NF-1: every gate below is a silent skip. No worktree (the merge ran on
-    # a different machine), no herdr, no jq → the merge report is unaffected.
     [ -n "$_wt_path" ] || return 0
-    command -v herdr >/dev/null 2>&1 || return 0
-    command -v jq >/dev/null 2>&1 || return 0
 
     # F-2: read-only agent enumeration; match on cwd == worktree path.
     local _agent_json
@@ -59,9 +62,7 @@ gh_pr_merge_herdr_notify() {
     [ -n "$_match" ] || return 0
 
     local _tab_id _agent_status _ws_id _ws_label
-    _tab_id=$(printf '%s' "$_match" | cut -f1)
-    _agent_status=$(printf '%s' "$_match" | cut -f2)
-    _ws_id=$(printf '%s' "$_match" | cut -f3)
+    IFS=$'\t' read -r _tab_id _agent_status _ws_id <<<"$_match"
 
     # F-4: working/blocked/anything-but-idle prints nothing at all.
     [ "$_agent_status" = "idle" ] || return 0
