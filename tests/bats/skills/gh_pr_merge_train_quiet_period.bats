@@ -32,20 +32,10 @@ setup() {
 # Fixtures
 # ---------------------------------------------------------------------------
 
-# Epoch seconds <1> as the ISO-8601 UTC stamp `gh pr list --json` returns.
-# GNU `date -d @EPOCH`, then BSD/macOS `date -r EPOCH`, then python3 — the same
-# cascade as tests/bats/tools/pr_merge_train_cron.bats, because README.md
-# advertises macOS support.
-_epoch_to_iso() {
-    local _epoch="$1" _out=""
-    _out=$(date -u -d "@${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
-        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
-    _out=$(date -u -r "${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
-        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
-    _out=$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp(${_epoch}, datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>/dev/null) \
-        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
-    return 1
-}
+# `_epoch_to_iso` is shared via test_helper.bash (`load '../test_helper'`
+# above already pulls it in) — same GNU/BSD/python3 cascade
+# tests/bats/tools/pr_merge_train_cron.bats uses, because README.md advertises
+# macOS support.
 
 # One `gh pr list --json` element: PR <1>, updated <2> minutes before _NOW,
 # draft <3> (default false), labels <4> (raw JSON array, default `[]`).
@@ -82,8 +72,8 @@ _kept_numbers() {
     assert_success
 }
 
-@test "gh_pr_merge_train: sourcing defines both public functions" {
-    run bash -c ". '${HELPER}' && command -v _gh_pr_merge_train_quiet_minutes && command -v _gh_pr_merge_train_filter_targets"
+@test "gh_pr_merge_train: sourcing defines all three public functions" {
+    run bash -c ". '${HELPER}' && command -v _gh_pr_merge_train_quiet_minutes && command -v _gh_pr_merge_train_filter_targets && command -v _gh_pr_merge_train_has_reply_pending_label"
     assert_success
 }
 
@@ -210,6 +200,27 @@ _kept_numbers() {
     run bash -c ". '${HELPER}'; printf '%s' '$(printf '[%s]' "$(_pr 11 5)")' | _gh_pr_merge_train_filter_targets --now ${_NOW} --minutes 2 | jq -r '.[].number'"
     assert_success
     assert_output "11"
+}
+
+# ---------------------------------------------------------------------------
+# _gh_pr_merge_train_has_reply_pending_label — the single-PR sibling
+# routing-table.md's F-3 re-check calls, instead of hand-rolling its own jq
+# match on the same question the array filter above already answers.
+# ---------------------------------------------------------------------------
+
+@test "gh_pr_merge_train: has_reply_pending_label succeeds when the label is present" {
+    run bash -c ". '${HELPER}'; printf '%s' '$(_pr 11 30 false '[{"name":"reply-pending"}]')' | _gh_pr_merge_train_has_reply_pending_label"
+    assert_success
+}
+
+@test "gh_pr_merge_train: has_reply_pending_label fails when the label is absent" {
+    run bash -c ". '${HELPER}'; printf '%s' '$(_pr 11 30)' | _gh_pr_merge_train_has_reply_pending_label"
+    assert_failure
+}
+
+@test "gh_pr_merge_train: has_reply_pending_label fails when labels is missing entirely" {
+    run bash -c ". '${HELPER}'; printf '%s' '{\"number\":11}' | _gh_pr_merge_train_has_reply_pending_label"
+    assert_failure
 }
 
 # ---------------------------------------------------------------------------
