@@ -46,7 +46,7 @@ if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
                 # Label is cosmetic — fall back to the raw workspace id when
                 # this read-only lookup fails or the workspace is unlabeled.
                 WS_LABEL=$(herdr workspace list 2>/dev/null | jq -r --arg id "$WS_ID" \
-                    '.result.workspaces[]? | select(.workspace_id == $id) | .label' 2>/dev/null | head -1)
+                    '.result.workspaces[]? | select(.workspace_id == $id) | .label // empty' 2>/dev/null | head -1)
 
                 # F-3: exactly one line, only for an idle agent.
                 printf "[INFO] herdr tab %s/%s is idle for the merged branch's worktree (%s) — consider: herdr tab close %s / ai-worktree:teardown\n" \
