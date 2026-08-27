@@ -55,6 +55,11 @@ _PMT_LOCK_BASENAME=".lock"
 # purpose: it only has to answer "is there anything worth waking a session
 # for". The skill re-applies it authoritatively at the moment it processes each
 # PR, because minutes pass between this count and that decision.
+#
+# This filter also excludes the PR that just triggered Step 2.4.1's immediate
+# wake call (gh-issue-flow/references/merge-train-wake.md) — its updatedAt is
+# "just now", so it can't be its own tick's target. That doc documents the
+# resulting ~11-16min real latency for the triggering PR (issue #1515).
 _PMT_QUIET_MINUTES="11"
 
 # Upper bound on the open-PR window. The dispatcher only needs "more than
