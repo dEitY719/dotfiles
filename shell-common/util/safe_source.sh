@@ -10,23 +10,6 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# _safe_source_discard_capture CAPTURE_FILE
-#
-# Remove CAPTURE_FILE without printing it. No-op when CAPTURE_FILE is empty
-# (mktemp failed upstream, so there was never anything to capture).
-_safe_source_discard_capture() {
-    [ -n "$1" ] && rm -f "$1"
-}
-
-# _safe_source_flush_capture CAPTURE_FILE
-#
-# Emit CAPTURE_FILE's content to the real stderr (if non-empty), then
-# remove it.
-_safe_source_flush_capture() {
-    [ -n "$1" ] && [ -s "$1" ] && cat "$1" >&2
-    _safe_source_discard_capture "$1"
-}
-
 safe_source() {
     local file_path="$1"
     local error_msg="${2:-File not found}"
@@ -36,43 +19,56 @@ safe_source() {
         return 0
     fi
 
-    # Capture stderr instead of discarding it outright (issue #1504): a
-    # successfully-sourced file's own stderr output (e.g. #1454's
-    # foreign-checkout WARN) must still reach the user, not just an error
-    # path. Falls back to the old discard-everything behavior if mktemp
-    # itself fails.
-    local stderr_capture
-    stderr_capture=$(mktemp 2>/dev/null) || stderr_capture=""
+    # Whether this file's stderr reaches the real stderr is decided up
+    # front, from the path pattern + DEBUG_DOTFILES alone (issue #1504,
+    # PR #1543 review) — never by buffering to a temp file and replaying
+    # conditionally based on the exit code. Buffering was tried first but
+    # forced one mktemp+rm subprocess pair per sourced file on every
+    # interactive startup, changed stderr's live timing/ordering, and
+    # needed two extra global helper functions just to manage the capture
+    # file. Deciding the redirect target up front needs none of that:
+    # `.local.sh` and non-debug "other" files always redirect to
+    # /dev/null (their pre-existing fully-silent behavior, success or
+    # failure alike); important files — the ones #1454's WARN actually
+    # needed visible — are never redirected, so their stderr streams live
+    # exactly like any other command's would.
+    local _category
+    case "$file_path" in
+        *.local.sh) _category=local ;;
+        */tools/integrations/* | */functions/* | */env/*) _category=important ;;
+        *) _category=other ;;
+    esac
 
-    # Source file directly in parent shell (critical for function/alias propagation)
-    # NOTE: MUST NOT use $(...) subshell as it breaks function definitions
-    . "$file_path" 2>"${stderr_capture:-/dev/null}"
+    # Source file directly in parent shell (critical for function/alias
+    # propagation) — NOTE: MUST NOT use $(...) subshell, it breaks
+    # function definitions.
+    if [ "$_category" = "local" ] || { [ "$_category" = "other" ] && [ "${DEBUG_DOTFILES:-0}" != "1" ]; }; then
+        . "$file_path" 2>/dev/null
+    else
+        . "$file_path"
+    fi
     local source_exit=$?
 
     if [ $source_exit -eq 0 ]; then
         # Increment counter after successful source
         SOURCED_FILES_COUNT=$((SOURCED_FILES_COUNT + 1))
-        _safe_source_flush_capture "$stderr_capture"
         return 0
     fi
 
     # Source failed - report error for important files
     # Skip errors for optional files (like .local.sh)
-    case "$file_path" in
-        *.local.sh)
-            # Optional local overrides - silently skip, capture included
-            _safe_source_discard_capture "$stderr_capture"
+    case "$_category" in
+        local)
+            # Optional local overrides - silently skip
             return 0
             ;;
-        */tools/integrations/*|*/functions/*|*/env/*)
-            # Important files - report error, plus whatever the failed
-            # source itself wrote to stderr (e.g. a syntax error)
+        important)
+            # Important files - report error
             if type ux_error >/dev/null 2>&1; then
                 ux_error "${error_msg}: ${file_path}"
             else
                 echo "Error: ${error_msg}: ${file_path}" >&2
             fi
-            _safe_source_flush_capture "$stderr_capture"
             return 1
             ;;
         *)
@@ -83,9 +79,6 @@ safe_source() {
                 else
                     echo "Error: ${error_msg}: ${file_path}" >&2
                 fi
-                _safe_source_flush_capture "$stderr_capture"
-            else
-                _safe_source_discard_capture "$stderr_capture"
             fi
             return 1
             ;;
