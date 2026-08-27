@@ -39,14 +39,22 @@ the same remote URL (#1403/#1407). An explicit `owner/repo` positional pins
 ## Step 2: Collect and order the queue
 
 ```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh"
 GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state open \
-  --limit 50 --json number,updatedAt,isDraft,mergeable,mergeStateStatus,baseRefName,title
+  --limit 50 --json number,updatedAt,isDraft,mergeable,mergeStateStatus,baseRefName,title,labels \
+  | _gh_pr_merge_train_filter_targets --now "$(date +%s)"
 ```
 
-`--author @me` is not optional (D-7) — never auto-merge a colleague's PR. Drop
-every PR updated within the last **11 minutes** (D-6) and every draft. Sort
-`CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`, ties by ascending PR number (D-2).
-Ordering and quiet-period rationale: `references/ordering.md`.
+`--author @me` is not optional (D-7) — never auto-merge a colleague's PR.
+`_gh_pr_merge_train_filter_targets` is the **shared** filter (#1524): it drops
+drafts, every PR carrying the `reply-pending` label, and every PR inside the
+D-6 quiet period — the exact same function
+`shell-common/tools/custom/pr_merge_train_cron.sh` runs, so the two can never
+disagree. **Do not re-implement or paraphrase that filter here** — run it.
+
+Sort the surviving array `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`, ties by
+ascending PR number (D-2). Ordering, the label, and the quiet-period rationale:
+`references/ordering.md`.
 
 **`gh pr list` failure ends the run** with an empty report — never merge
 without knowing state.

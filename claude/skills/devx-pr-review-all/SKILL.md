@@ -77,8 +77,17 @@ Await all lanes, then:
 ## Step 5: pr-reply (per reply_mode)
 
 - `inline` (default) → run `Skill(gh:pr-reply, "<pr> <remote>")` immediately.
-- `defer` → `Skill(devx:schedule, "--time <reply_delay> \"/gh-pr-reply <pr> <remote>\"")`.
+- `defer` → **first** add the `reply-pending` label per
+  `references/reply-pending-label.sh.md` (idempotent `gh label create`, then
+  `_gh_pr_edit_safe_label`; soft-fail — a label failure never blocks the
+  schedule), **then**
+  `Skill(devx:schedule, "--time <reply_delay> \"/gh-pr-reply <pr> <remote>\"")`.
+  The label is what makes `gh:pr-merge-train` hard-skip this PR until the
+  reply pass finishes (#1524); `gh:pr-reply` Step 6 removes it.
 - `none` → skip.
+
+Only `defer` labels: `inline` and `none` defer nothing, so there is no pending
+state to mark.
 
 ## Step 6: Report
 
