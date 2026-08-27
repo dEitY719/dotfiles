@@ -18,6 +18,7 @@ load '../test_helper'
 RUNNER="${BATS_TEST_DIRNAME}/../../test"
 BATS_BIN="${BATS_TEST_DIRNAME}/../lib/bats-core/bin/bats"
 HANG_FIXTURE="${BATS_TEST_DIRNAME}/../_fixtures/hang_timeout.bats"
+TAP_FIXTURE="${BATS_TEST_DIRNAME}/../_fixtures/timeout_aggregate.tap"
 
 setup() {
     # shellcheck source=/dev/null
@@ -27,10 +28,12 @@ setup() {
 # ---------------------------------------------------------------------------
 # End-to-end: a hanging test becomes a bounded failure
 #
-# (run_bats() resolves the timeout inline as `${BATS_TEST_TIMEOUT:-300}` — a
-# bare bash default expansion, not a helper worth unit-testing on its own.
-# This test exercises the real behavior: an explicit override reaching
-# bats-core and killing a runaway test.)
+# (The pure halves of the mechanism — resolving/sanitizing the timeout and
+# counting the kills out of a TAP log — have their own unit tests further
+# down, against _resolve_bats_timeout() and _count_bats_timeouts(). Neither
+# can prove the part that actually matters: that the value we export really
+# reaches bats-core and really kills a runaway test. That is this test's job,
+# and the only reason it pays the cost of spawning a real bats run.)
 # ---------------------------------------------------------------------------
 
 @test "BATS_TEST_TIMEOUT turns a hanging test into a bounded failure" {
@@ -75,4 +78,69 @@ setup() {
     run _bats_failure_summary 2 30 400 3
     assert_success
     assert_output "bats: 2 of 30 files failed (400 tests total, 3 timed out)"
+}
+
+# ---------------------------------------------------------------------------
+# _resolve_bats_timeout — the sanitize guard run_bats() exports through
+#
+# Any value that is not a positive integer must land back on 300: bats-core's
+# bats_start_timeout_countdown() declares `local -ri timeout=$1`, which errors
+# on a bogus value and silently disables the countdown — leaving exactly the
+# unbounded hang #1483 exists to prevent (codex review, PR #1492).
+# ---------------------------------------------------------------------------
+
+@test "_resolve_bats_timeout: unset BATS_TEST_TIMEOUT defaults to 300" {
+    unset BATS_TEST_TIMEOUT
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "300"
+}
+
+@test "_resolve_bats_timeout: an empty BATS_TEST_TIMEOUT falls back to 300" {
+    export BATS_TEST_TIMEOUT=""
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "300"
+}
+
+@test "_resolve_bats_timeout: zero falls back to 300" {
+    export BATS_TEST_TIMEOUT=0
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "300"
+}
+
+@test "_resolve_bats_timeout: a negative value falls back to 300" {
+    export BATS_TEST_TIMEOUT=-1
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "300"
+}
+
+@test "_resolve_bats_timeout: a non-integer string falls back to 300" {
+    export BATS_TEST_TIMEOUT=5m
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "300"
+}
+
+@test "_resolve_bats_timeout: a positive integer passes through verbatim" {
+    export BATS_TEST_TIMEOUT=45
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "45"
+}
+
+# ---------------------------------------------------------------------------
+# _count_bats_timeouts — only real `not ok ... # timeout after Ns` TAP lines
+#
+# The fixture holds one genuine kill plus the two near-misses the `^not ok`
+# anchor exists to reject, so a regression that drops the anchor (or the
+# `not ok` requirement) counts 2 or 3 instead of 1 (agy review, PR #1492).
+# ---------------------------------------------------------------------------
+
+@test "_count_bats_timeouts: counts only the genuine timeout TAP line" {
+    run _count_bats_timeouts "$TAP_FIXTURE"
+    assert_success
+    assert_output "1"
 }
