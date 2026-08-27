@@ -232,7 +232,7 @@ aicron_report_status() {
 
 # Emits one finding per line on stdout, nothing when everything agrees.
 aicron_doctor_scan() {
-    local _tmp _n _script _f _base _sd _mf_sched _cr_sched
+    local _tmp _n _script _f _base _sd
     _tmp=$(aicron_mktemp aicron-doctor) || return 0
 
     # Both crontab findings come off one sorted dump, and the manifest job list
@@ -259,17 +259,19 @@ aicron_doctor_scan() {
 
         # (e) a job installed under a schedule the manifest no longer agrees
         # with — the manifest changed and the crontab was never reinstalled
-        # (#1496). Checked per manifest job, not per crontab block, so an
-        # orphan or a duplicate never doubles up as a drift finding too.
-        while IFS= read -r _n; do
-            [ -n "${_n}" ] || continue
-            _mf_sched=$(aicron_manifest_schedule "${_n}")
-            _cr_sched=$(aicron_crontab_schedule_in "${_tmp}.table" "${_n}")
-            if [ -n "${_cr_sched}" ] && [ "${_cr_sched}" != "${_mf_sched}" ]; then
-                printf 'schedule drift for job %s: manifest says "%s", crontab has "%s" — reinstall with "aicron remove %s && aicron add %s"\n' \
-                    "${_n}" "${_mf_sched}" "${_cr_sched}" "${_n}" "${_n}"
-            fi
-        done <"${_tmp}.jobs"
+        # (#1496). One dump of each side (manifest schedules, installed
+        # schedules), joined in a single awk pass — the same "dump once"
+        # idiom (a)/(d) use above, instead of a jq call and an awk call per
+        # manifest job. An orphan or a duplicate never doubles up as a drift
+        # finding too: only jobs present in both dumps are compared.
+        aicron_manifest_schedules >"${_tmp}.mfsched" 2>/dev/null || : >"${_tmp}.mfsched"
+        aicron_crontab_schedules_in "${_tmp}.table" >"${_tmp}.crsched" 2>/dev/null || : >"${_tmp}.crsched"
+        awk -F'\t' '
+            NR == FNR { mf[$1] = $2; next }
+            ($1 in mf) && mf[$1] != $2 {
+                printf "schedule drift for job %s: manifest says \"%s\", crontab has \"%s\" — reinstall with \"aicron remove %s && aicron add %s\"\n", $1, mf[$1], $2, $1, $1
+            }
+        ' "${_tmp}.mfsched" "${_tmp}.crsched"
     else
         # Not a finding about one job: nothing crontab-derived below can be
         # trusted, so say that instead of reporting every job as uninstalled.
@@ -285,7 +287,8 @@ aicron_doctor_scan() {
         fi
     done <"${_tmp}.jobs"
 
-    rm -f "${_tmp}" "${_tmp}.table" "${_tmp}.all" "${_tmp}.orphan" "${_tmp}.dup" "${_tmp}.jobs"
+    rm -f "${_tmp}" "${_tmp}.table" "${_tmp}.all" "${_tmp}.orphan" "${_tmp}.dup" "${_tmp}.jobs" \
+        "${_tmp}.mfsched" "${_tmp}.crsched"
 
     # (c) a state file that stopped being JSON.
     _sd=$(aicron_state_dir)
