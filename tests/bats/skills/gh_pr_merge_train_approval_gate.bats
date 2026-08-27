@@ -20,6 +20,8 @@ FIXTURE='tests/bats/skills/_fixtures/gh_pr_merge_train_approval_gate.sh'
 
 setup() {
     setup_isolated_home
+    FAKE_PATH_LOG="$(mktemp)"
+    export FAKE_PATH_LOG
     # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
     SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train"
@@ -28,6 +30,8 @@ setup() {
 teardown() {
     teardown_isolated_home
     unset FAKE_RULES_RESPONSE FAKE_RULES_RC FAKE_PROTECTION_RESPONSE FAKE_PROTECTION_RC
+    [ -n "${FAKE_PATH_LOG-}" ] && rm -f "$FAKE_PATH_LOG"
+    unset FAKE_PATH_LOG
 }
 
 plan_403() {
@@ -138,12 +142,70 @@ plan_403() {
     assert_output 'on|ruleset: 1 approvals'
 }
 
-@test "base with a slash keeps its percent-encoding in the header" {
+@test "a base with a slash is percent-encoded into BOTH endpoint paths" {
+    # Regression guard for PR #1526 review: the header text alone proved
+    # nothing about the request. Assert the encoded ref actually reaches the
+    # API as one path segment, on the ruleset AND the protection endpoint.
     FAKE_RULES_RESPONSE="$(plan_403)" FAKE_RULES_RC=1
     FAKE_PROTECTION_RESPONSE="$(plan_403)" FAKE_PROTECTION_RC=1
     run train_gate_verdict 'release/2026.08'
     assert_success
     assert_output 'off|no policy on release/2026.08'
+
+    run cat "$FAKE_PATH_LOG"
+    assert_output --partial 'repos/o/r/rules/branches/release%2F2026.08'
+    assert_output --partial 'repos/o/r/branches/release%2F2026.08/protection'
+    refute_output --partial 'branches/release/2026.08'
+}
+
+@test "403 permission denial is UNKNOWN, not 'no policy' (fail-closed)" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 403 '{"message":"Resource not accessible by personal access token"}')" FAKE_RULES_RC=1
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown'
+}
+
+@test "403 rate-limit is UNKNOWN, not 'no policy'" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 403 '{"message":"API rate limit exceeded for user ID 1."}')" FAKE_RULES_RC=1
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown'
+}
+
+@test "403 SAML/SSO denial is UNKNOWN, not 'no policy'" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 403 '{"message":"Resource protected by organization SAML enforcement."}')" FAKE_RULES_RC=1
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown'
+}
+
+@test "a permission 403 on ONE source keeps the whole gate on" {
+    FAKE_RULES_RESPONSE="$(plan_403)" FAKE_RULES_RC=1
+    FAKE_PROTECTION_RESPONSE="$(train_gate_http 403 '{"message":"Must have admin rights to Repository."}')" FAKE_PROTECTION_RC=1
+    run train_gate_verdict main
+    assert_success
+    assert_output 'on|fail-closed: main policy unreadable'
+}
+
+@test "2xx with an unparseable body is UNKNOWN, not 'no policy'" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '<html>502 upstream</html>')" FAKE_RULES_RC=0
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown'
+}
+
+@test "2xx with an empty body is UNKNOWN, not 'no policy'" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '')" FAKE_RULES_RC=0
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown'
+}
+
+@test "2xx whose shape shifted (object where an array was expected) is UNKNOWN" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '{"message":"Moved Permanently"}')" FAKE_RULES_RC=0
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown'
 }
 
 # ---------------------------------------------------------------------
@@ -248,12 +310,21 @@ plan_403() {
 # Doc guards — the fixture above is only trustworthy while the docs agree
 # ---------------------------------------------------------------------
 
-@test "doc-guard: approval-gate.md classifies 403/404 as 'no policy'" {
-    run grep -qE '^\| `403` \|.*`none` \|$' "${SKILL_DIR}/references/approval-gate.md"
+@test "doc-guard: approval-gate.md splits 403 by body, keeps 404 as 'no policy'" {
+    run grep -qE '^\| `403` \+ `Upgrade to GitHub Pro`.*`none` \|$' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+    run grep -qE '^\| `403`, any other body \|.*`unknown` \|$' "${SKILL_DIR}/references/approval-gate.md"
     assert_success
     run grep -qE '^\| `404` \|.*`none` \|$' "${SKILL_DIR}/references/approval-gate.md"
     assert_success
     run grep -qE '^\| anything else .*`unknown` \|$' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+    run grep -q '`none` is a whitelist, never a fallback' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+}
+
+@test "doc-guard: train-loop.md paginates the reviews read (#1526 review)" {
+    run grep -q 'gh api --paginate "repos/\$TARGET_REPO/pulls/\$N/reviews"' "${SKILL_DIR}/references/train-loop.md"
     assert_success
 }
 

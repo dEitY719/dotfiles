@@ -47,10 +47,12 @@
    the queue, from **both** rulesets and classic branch protection (policies
    are branch-scoped; a single-base queue is two calls). Either source asking
    for `>= 1` turns the gate on; both reporting no policy turns it off (D-5).
-   The verdict is classified by **HTTP status**: `403` (plan does not have the
-   feature) and `404` (not configured) mean no policy can apply here, while
-   5xx / 401 / no response are genuinely undetermined and stay **fail-closed**
-   (#1519 F-2). The report header names which of the three happened.
+   The verdict is classified by **HTTP status and body**: a `404` (not
+   configured), or a `403` carrying GitHub's plan-limit message, means no
+   policy can apply here. Everything else — a `403` from a permission,
+   rate-limit or SSO denial, a 5xx, a 401, no response, or a `2xx` whose body
+   will not parse — is undetermined and stays **fail-closed** (#1519 F-2).
+   The report header names which of the three happened.
 4. Processes **one PR at a time**. Immediately before each one it re-queries
    state (F-3), because the previous merge changed it.
    When the gate is off and `reviewDecision` is empty, it first runs one

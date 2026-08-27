@@ -7,8 +7,12 @@
 #
 # Issue #1519: `gh api` collapses every failure into a non-zero exit, so
 # the train read a free-plan `403 Upgrade to GitHub Pro...` as "policy
-# unreadable" and fail-closed forever. A 403/404 is a definitive answer
-# about the policy; only 5xx / 401 / no-response are undetermined.
+# unreadable" and fail-closed forever.
+#
+# `none` is a WHITELIST, never a fallback: a 404, a 403 carrying GitHub's
+# plan-limit message, or a cleanly-parsed 2xx. Every other answer — a 403
+# from permission / rate-limit / SSO, a blank or unparseable 2xx body — is
+# `unknown` and keeps the gate on (PR #1526 agy+codex review).
 #
 # Keep this file in sync with those two docs. If a snippet or a decision
 # row changes, mirror it here so the bats suite catches the drift.
@@ -30,6 +34,9 @@ gh() {
         esac
         shift
     done
+    # Record every probed path so tests can assert the percent-encoding the
+    # doc's `@uri` step produces actually reaches the API (PR #1526 review).
+    [ -n "${FAKE_PATH_LOG-}" ] && printf '%s\n' "$path" >>"$FAKE_PATH_LOG"
     case "$path" in
         *rules/branches*)
             printf '%s' "${FAKE_RULES_RESPONSE-}"
@@ -53,13 +60,23 @@ train_gate_http() {
 # Echoes `none`, `unknown`, or the required approval count (>= 1).
 # ---------------------------------------------------------------------
 _gate_probe() {
-    local _path="$1" _jq="$2" _out _status _n
+    local _path="$1" _jq="$2" _out _status _body _n
     _out=$(gh api -i "$_path" 2>/dev/null)
     _status=$(printf '%s\n' "$_out" | sed -n '1s|^HTTP/[0-9.]* *\([0-9][0-9][0-9]\).*|\1|p')
+    _body=$(printf '%s\n' "$_out" | sed '1,/^\r\{0,1\}$/d')
     case "$_status" in
         2??) ;;
-        403 | 404)
+        404)
             echo none
+            return 0
+            ;;
+        403)
+            # Only the plan-limit message means "no policy can exist";
+            # permission / rate-limit / SSO denials fail closed.
+            case "$_body" in
+                *"Upgrade to GitHub Pro"*) echo none ;;
+                *) echo unknown ;;
+            esac
             return 0
             ;;
         *)
@@ -67,9 +84,17 @@ _gate_probe() {
             return 0
             ;;
     esac
-    _n=$(printf '%s\n' "$_out" | sed '1,/^\r\{0,1\}$/d' | jq -r "$_jq" 2>/dev/null)
+    [ -n "$(printf '%s' "$_body" | tr -d '[:space:]')" ] || {
+        echo unknown
+        return 0
+    }
+    _n=$(printf '%s\n' "$_body" | jq -r "$_jq" 2>/dev/null) || {
+        echo unknown
+        return 0
+    }
     case "$_n" in
         '' | null | 0) echo none ;;
+        *[!0-9]*) echo unknown ;;
         *) echo "$_n" ;;
     esac
 }
@@ -104,9 +129,13 @@ _gate_combine() {
 
 # One base branch end to end: probe both sources, combine, echo the verdict.
 train_gate_verdict() {
-    local _base="$1" _ruleset _classic
-    _ruleset=$(_gate_probe "repos/o/r/rules/branches/$_base" "$_RULES_JQ")
-    _classic=$(_gate_probe "repos/o/r/branches/$_base/protection" "$_PROTECTION_JQ")
+    local _base="$1" _base_enc _ruleset _classic
+    # Mirrors the doc's `BASE_ENC=$(jq -rn --arg b "$BASE" '"'"'$b|@uri'"'"')`
+    # step — both endpoints take the ref as ONE path segment, so a base like
+    # release/2026.08 must arrive as release%2F2026.08.
+    _base_enc=$(jq -rn --arg b "$_base" '$b|@uri')
+    _ruleset=$(_gate_probe "repos/o/r/rules/branches/$_base_enc" "$_RULES_JQ")
+    _classic=$(_gate_probe "repos/o/r/branches/$_base_enc/protection" "$_PROTECTION_JQ")
     _gate_combine "$_base" "$_ruleset" "$_classic"
 }
 
