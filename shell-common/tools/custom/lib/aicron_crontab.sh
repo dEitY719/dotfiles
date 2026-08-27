@@ -95,6 +95,21 @@ aicron_crontab_count_in() {
     aicron_crontab_names_in "$1" | grep -c -x -F -- "$2" || true
 }
 
+# The 5-field cron schedule installed for job <2> in the already-dumped table
+# <1>, or empty when that job owns no block there. The schedule line inside a
+# marker block is always `<5 schedule fields> <script> run <job>` (see the
+# BEGIN/END contract at the top of this file), so the first 5 whitespace
+# fields are the schedule regardless of how the script path is spelled.
+# Stops at the first block on a duplicate job — doctor already reports
+# duplicates separately (#1496).
+aicron_crontab_schedule_in() {
+    awk -v tag="$2" '
+        $0 == "# BEGIN aicron:" tag { on = 1; next }
+        $0 == "# END aicron:" tag   { on = 0 }
+        on == 1 && NF >= 5 { print $1, $2, $3, $4, $5; exit }
+    ' "$1"
+}
+
 # "yes", "no" or "unknown" for job <1>, dumping the table itself. The views
 # that answer this for many jobs at once dump ONCE and call
 # aicron_crontab_count_in instead of paying for a `crontab -l` per job.

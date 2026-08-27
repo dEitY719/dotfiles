@@ -851,6 +851,30 @@ EOF
     assert_output --partial "duplicate"
 }
 
+@test "aicron: doctor detects a manifest job installed under a stale schedule (#1496)" {
+    _aicron add hello
+    assert_success
+    # The manifest changed after `add` ran — mirrors #1496: the crontab was
+    # never reinstalled, so the two schedules disagree.
+    jq '(.jobs[] | select(.name=="hello") | .schedule) = "*/9 * * * *"' \
+        "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+
+    _aicron doctor
+    assert_success
+    assert_output --partial "schedule drift for job hello"
+    assert_output --partial '"*/9 * * * *"'
+    assert_output --partial '"*/5 * * * *"'
+}
+
+@test "aicron: doctor stays quiet when the installed schedule matches the manifest" {
+    _aicron add hello
+    assert_success
+    _aicron doctor
+    assert_success
+    refute_output --partial "schedule drift"
+}
+
 # ---------------------------------------------------------------------------
 # shipped manifest
 # ---------------------------------------------------------------------------
