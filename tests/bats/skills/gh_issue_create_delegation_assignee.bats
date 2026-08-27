@@ -93,6 +93,27 @@ APPROVAL_TEMPLATES="claude/skills/gh-pr-approve/references/approval-templates.md
     assert_output --partial 'Skill(gh:issue-create, "--assignee @me")'
 }
 
+@test "pr-verify-live: SKILL.md Step 7 delegation passes --assignee @me" {
+    # findings.md re-describes the same call site in prose (checked above),
+    # but SKILL.md's own Step 7 is the actual skill contract — a stale
+    # bare call there survives even if findings.md is correct (PR #1540
+    # agy + codex review, both independently caught this).
+    local f="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/devx-pr-verify-live/SKILL.md"
+    [ -f "$f" ] || {
+        echo "missing: $f"
+        return 1
+    }
+    run grep -F -- 'Skill(gh:issue-create' "$f"
+    assert_success
+    assert_output --partial '--assignee @me'
+    # No bare (argument-less) delegation may survive.
+    run grep -F -- 'Skill(gh:issue-create)' "$f"
+    [ "$status" -ne 0 ] || {
+        echo "bare Skill(gh:issue-create) still present in $f"
+        return 1
+    }
+}
+
 # -- NF-1 regression guard ----------------------------------------------------
 
 @test "NF-1: gh-issue-create skill files are byte-identical to HEAD" {
