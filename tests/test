@@ -277,11 +277,20 @@ _resolve_bats_jobs() {
 # it's rejected the same way _resolve_bats_jobs() guards BATS_JOBS above.
 # The full suite is ~4-5 min, so a single test still running after 300s is
 # pathological — better a bounded TAP failure than a multi-hour silent hang.
+#
+# A digit-only string is not automatically safe, though: bash arithmetic
+# treats a leading-zero numeral as octal, so "08" — accepted by the
+# [!0-9] filter above — still errors bats-core's `local -ri` (or silently
+# reinterprets "010" as 8, not 10) unless forced to base 10 here first
+# (agy + codex review, PR #1544). A 10+ digit string is rejected outright:
+# nobody sets a sane timeout that large, and forcing base 10 on one risks
+# overflowing bash's own 64-bit arithmetic before it ever reaches bats-core.
 _resolve_bats_timeout() {
     local timeout="${BATS_TEST_TIMEOUT:-300}"
     case "$timeout" in
-    '' | *[!0-9]*) timeout=300 ;;
+    '' | *[!0-9]* | ??????????*) timeout=300 ;;
     esac
+    timeout=$((10#$timeout))
     [ "$timeout" -lt 1 ] && timeout=300
     printf '%s\n' "$timeout"
 }
@@ -316,10 +325,19 @@ _bats_failure_summary() {
 # bats marks such a kill as `not ok N <name> # timeout after Ns`. Anchored to
 # a `not ok` TAP line so a test's own output merely containing this text (a
 # fixture name, an echoed assertion message) isn't miscounted as a real
-# timeout (agy review, PR #1492). grep -c always prints a count (0 on no
-# match), so callers need no fallback.
+# timeout (agy review, PR #1492).
+#
+# `grep -c` prints a count on stdout for a readable file (0 on no match),
+# but exits 1 whenever that count is 0, and prints nothing at all — exit 2,
+# no "0" — for a missing/unreadable file. Both would break a caller under
+# `set -e` and the second would make callers here miscount an empty log as
+# unset (agy + codex review, PR #1544). Capturing into a local first and
+# defaulting empty to "0" makes the function's own exit always 0 and its
+# output always a number, matching what callers already assumed.
 _count_bats_timeouts() {
-    grep -cE '^not ok .*# timeout after [0-9]+s$' "$1" 2>/dev/null
+    local n
+    n=$(grep -cE '^not ok .*# timeout after [0-9]+s$' "$1" 2>/dev/null)
+    printf '%s\n' "${n:-0}"
 }
 
 # Shared by run_bats()'s two "shell unit tests couldn't run" early-return
