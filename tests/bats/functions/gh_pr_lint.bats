@@ -261,8 +261,26 @@ TOX
 # ---------------------------------------------------------------------------
 
 @test "deleted .sh file → excluded from shellcheck's changed-file set" {
-    _stage_changes "foo.sh:echo hi" "gone.sh:echo bye"
+    # gone.sh must exist on `main` *before* the feature branch's own commits
+    # so that `git diff main...HEAD` reports a real deletion (D). Adding and
+    # removing a file entirely within the feature branch is a net no-op that
+    # never appears in the diff at all — that variant would pass identically
+    # with or without the --diff-filter=d fix, silently testing nothing
+    # (agy review, PR #1516).
+    (
+        cd "$REPO_DIR" || exit 1
+        git checkout -q main
+        printf 'echo bye\n' >gone.sh
+        git add gone.sh
+        git commit -q -m "add gone.sh to main"
+        git checkout -q feature
+        git merge -q main -m "merge main" --ff
+    )
+    _stage_changes "foo.sh:echo hi"
     (cd "$REPO_DIR" && git rm -q gone.sh && git commit -q -m "delete gone.sh")
+    run bash -c "cd '${REPO_DIR}' && git diff --name-status main...HEAD"
+    assert_output --partial "D	gone.sh"
+    assert_output --partial "A	foo.sh"
     _run_helper stubs '_gh_pr_lint_run main 2>&1'
     assert_output --partial "rc=0"
     assert_output --partial "running shellcheck on 1 file(s)"

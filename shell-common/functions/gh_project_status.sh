@@ -420,7 +420,8 @@ _gh_project_status_query_current() {
     [ -z "$_kind" ] && return 1
     [ -z "$_num" ] && return 1
 
-    # Public entry point (gh-pr-merge Step 2-B gate) — also route to the
+    # Public entry point (gh-issue-implement 3.4 F-2 duplicate-status warning,
+    # #1507; post-gh-pr-create.sh's PR-card poll) — also route to the
     # correct host when invoked directly without GH_HOST (issue #804).
     _gh_project_status_ensure_host
 
@@ -679,7 +680,8 @@ _gh_project_status_in_list() {
 # A name earns a slot by being called from outside this file, or by being a
 # dependency of one that is:
 #   - _gh_project_status_sync          (write API; used by every gh-* skill)
-#   - _gh_project_status_query_current (read API; gh-pr-merge Step 2-B gate;
+#   - _gh_project_status_query_current (read API; gh-issue-implement 3.4 F-2
+#     warning + post-gh-pr-create.sh's PR-card poll, #1507/#1513;
 #     rc 0 = answered — value or "no board", rc 1 = query failed,
 #     rc 2 = query failed on a missing `project` scope, see #1354/#1356)
 #   - _gh_project_status_normalize_repo (slug parser; called cross-file by
