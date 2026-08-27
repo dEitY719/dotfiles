@@ -40,16 +40,44 @@ Before delegating, with `<head>` = the `headRefName` already in `$STATE`:
 
 ```bash
 git fetch "$REMOTE" "<head>"
-GIT_COMMON_DIR=$(git rev-parse --git-common-dir)
+GIT_COMMON_DIR=$(git rev-parse --path-format=absolute --git-common-dir)
 SCRATCH_DIR="${GIT_COMMON_DIR}/pr-merge-train-scratch/pr-<N>"
+
+# Stale-leftover guard: a crashed/killed prior run, or an unresolved conflict
+# handoff (see "Teardown — the one exception" below), can leave this same
+# path behind. Never blindly wipe it — a leftover rebase-in-progress marker
+# means a human may be resolving it by hand right now.
+if [ -e "$SCRATCH_DIR" ]; then
+    if [ -e "$(git -C "$SCRATCH_DIR" rev-parse --git-path rebase-merge 2>/dev/null)" ] ||
+       [ -e "$(git -C "$SCRATCH_DIR" rev-parse --git-path rebase-apply 2>/dev/null)" ]; then
+        echo "[SKIPPED] scratch worktree at $SCRATCH_DIR still has an unresolved handoff — resolve manually or remove it, then re-run."
+        # skip this PR (F-6) — do not touch $SCRATCH_DIR, do not proceed below.
+    else
+        git worktree remove --force "$SCRATCH_DIR" 2>/dev/null || rm -rf "$SCRATCH_DIR"
+        git worktree prune
+    fi
+fi
+
 mkdir -p "$(dirname "$SCRATCH_DIR")"
 git worktree add --detach "$SCRATCH_DIR" "$REMOTE/<head>"
 ```
 
 The `fetch` is not optional: this session's checkout has no reason to hold a
-current `$REMOTE/<head>` — the branch was pushed from a *different* worktree —
-and starting the scratch worktree from a stale (or absent) tracking ref would
-have the atom force-push a rewind over commits it never saw.
+current `$REMOTE/<head>` — the branch was pushed from a *different* worktree.
+Fetching it explicitly first is what makes `$REMOTE/<head>` below trustworthy:
+with the standard clone fetch refspec (`+refs/heads/*:refs/remotes/<remote>/*`,
+the default for every `git remote add` / `git clone`) a plain `git fetch
+"$REMOTE" "<head>"` updates the remote-tracking ref `$REMOTE/<head>` itself,
+not only `FETCH_HEAD` — skipping the fetch is what would leave that ref stale
+(or absent) and have the atom force-push a rewind over commits it never saw.
+
+`--path-format=absolute` (git 2.31+) matters here: `--git-common-dir` alone
+prints a path **relative to the current working directory** in a plain
+repository (`.git`, or `../../.git` two levels down) — only a linked
+worktree's own `.git` file happens to store an absolute `gitdir:` target,
+which is why a relative `GIT_COMMON_DIR` can look harmless while testing from
+this repo's own worktree layout and still break the moment `$SCRATCH_DIR` is
+read from a different working directory or a plain non-worktree checkout.
 
 `--detach` is what makes this collide-free: the scratch worktree holds a commit,
 not the branch *name*, so it never contests the checkout any other worktree
@@ -72,20 +100,36 @@ an explicit refspec (`HEAD:refs/heads/<head>`), because a detached HEAD has no
 upstream to infer. That contract is the atoms' own — see their
 `references/preflight.md` / `references/rebase-flow.md`.
 
-### Teardown is unconditional
+### Teardown — the one exception
 
-Once the atom returns — **success, failure, or handoff, no exceptions**:
+Tear down once the atom returns, in every case **except** one:
+`gh:pr-resolve-conflict` stopping at one of its own documented stop points
+(`references/conflict-handling.md` → "Stop points" — an ambiguous conflict it
+refuses to auto-resolve, or a user-side abort). That stop leaves the tree
+**deliberately** conflicted for a human to finish by hand — the atom's own
+constraint already forbids it from deleting `--worktree`'s path itself; tearing
+it down here, right after, would just relocate the same mistake into the
+caller and destroy the exact state the atom promised to leave behind. In that
+one case: report `$SCRATCH_DIR` in the `[FAILED]` row instead of removing it,
+and skip this PR for the rest of the run — a human resumes it manually
+(`git -C "$SCRATCH_DIR" ...`, per the atom's own report) or re-runs the train
+once it's resolved and pushed. The stale-leftover guard above is what makes a
+later run safe to encounter that surviving path again.
+
+Every other outcome — clean success, a mechanical rebase failure
+`gh:pr-resolve-outdated` hands off with (exit 4, no human input taken yet),
+or `git worktree add` itself failing — tears down unconditionally:
 
 ```bash
 git worktree remove --force "$SCRATCH_DIR" ||
   { rm -rf "$SCRATCH_DIR" && git worktree prune; }
 ```
 
-The failure paths are exactly the ones that would leak: a PR that lands
-`[FAILED]` is retried on the next tick, and a train on a cron schedule would
-accumulate one abandoned worktree per tick per stuck PR — each one a full
-checkout, and each one still registered in `git worktree list`. Tearing down
-only on the happy path is how that starts.
+The failure paths are exactly the ones that would leak otherwise: a PR that
+lands `[FAILED]` is retried on the next tick, and a train on a cron schedule
+would accumulate one abandoned worktree per tick per stuck PR — each one a
+full checkout, and each one still registered in `git worktree list`. Tearing
+down only on the happy path is how that starts.
 
 Creating, delegating, and tearing down is **one** remediation round: the round
 still costs exactly one attempt, unchanged from the accounting below.
@@ -153,6 +197,7 @@ skill was called and nothing was changed.
 | What failed | Consequence |
 |---|---|
 | `gh:pr-resolve-*`, or the `git worktree add` that stages it | attempt +1; at 3, `[FAILED]`, next PR |
+| `gh:pr-resolve-conflict` stops at a documented stop point (ambiguous conflict, user-side abort) | `[FAILED]` naming `$SCRATCH_DIR` for manual resume; **scratch worktree is NOT removed** ("Teardown — the one exception" above); no further attempts this run; next PR |
 | `gh:pr-merge` | that PR is `[FAILED]`; next PR |
 | approval gate | that PR is `[SKIPPED]`; next PR |
 | a `gh:pr-merge` gate detected up front (`reviewDecision`, board status) | that PR is `[SKIPPED]` with the cause named; **no attempt is spent** |
