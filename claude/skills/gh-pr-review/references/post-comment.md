@@ -162,14 +162,11 @@ tokens=$(((tokens + 250) / 500 * 500))
 [ "$tokens" -lt 1000 ] && tokens=1000
 ```
 
-The byte count itself is measured by the Step 6 caller **right after the
-prompt is written**, not re-read at comment-post time — issue #1474 fixed a
-prior bug where a late re-read could return 0 for a since-vanished prompt
-file, and the floor rule then dressed that 0 up as a plausible "~1000
-tokens" estimate. A failed read is now reported (`[WARN] Could not read
-prompt file for the token estimate — file missing?`), never silently
-folded into 0. Per "Step 6 delegation" above, this doc does not duplicate
-the measurement site or the arithmetic — read the shell function for both.
+The byte count itself is measured right after Step 3+4 builds the prompt,
+not re-read at Step 6 comment-post time — the issue #1474 fix. Read the
+comment above `_gh_pr_review_estimate_tokens` and its caller in
+`gh_pr_review.sh` for the full rationale and the exact `[WARN]` text; this
+doc only tracks the arithmetic shown above.
 
 The 4-bytes-per-token heuristic is conservative for English/Korean
 mixed PR bodies. Refine when a tokenizer-backed metric becomes part
