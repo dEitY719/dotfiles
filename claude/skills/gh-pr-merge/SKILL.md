@@ -73,6 +73,11 @@ Run the two post-merge board reconciliations (PR card → Done; linked Issue car
 auto-detect repos without a projectV2 attachment and silently return; failures
 hit stderr, never block the report.
 
+Then run the herdr idle-tab hint per `references/herdr-tab-notify.sh.md` — one
+`[INFO]` line when the merged branch's local worktree still has an idle herdr
+tab (soft-fail and read-only; skip entirely when there is no local worktree, no
+`herdr`, or the agent is not idle — never close a tab or delete a worktree).
+
 After the board sync completes, post the ai-metrics PR comment per
 `references/ai-metrics-comment.sh.md` (soft-fail; skip entirely when `GH_DISABLE_AI_METRICS=1`).
 
