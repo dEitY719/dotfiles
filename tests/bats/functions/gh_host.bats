@@ -280,9 +280,13 @@ teardown() {
 @test "#718: function absent + setup-mode=internal on disk -> GHE (hook context)" {
     echo "internal" > "$HOME/.dotfiles-setup-mode"
     # env -i strips the parent shell so _dotfiles_setup_mode cannot leak in.
-    # PATH must be preserved or `bash`/`tr` won't resolve.
+    # PATH must be preserved or `bash`/`tr` won't resolve. The isolated $HOME
+    # here has no $HOME/dotfiles, so the #1454/#1505 guard's own #724
+    # diagnostic (dotfiles_root.sh unreachable) fires on stderr — swallow it
+    # with `2>/dev/null` exactly as the real caller does (claude/hooks/
+    # post-gh-pr-create.sh:66), so this test only asserts #718 behavior.
     run env -i "HOME=$HOME" "PATH=$PATH" bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
         _gh_resolve_host
     "
     assert_success
@@ -291,8 +295,9 @@ teardown() {
 
 @test "#718: function absent + setup-mode file absent -> github.com" {
     rm -f "$HOME/.dotfiles-setup-mode"
+    # See the #724 note in the previous test — same 2>/dev/null reasoning.
     run env -i "HOME=$HOME" "PATH=$PATH" bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
         _gh_resolve_host
     "
     assert_success

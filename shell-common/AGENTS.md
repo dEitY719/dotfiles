@@ -27,6 +27,8 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 - **Required**: `source "${SHELL_COMMON}/path/to/file.sh"` 또는 `${DOTFILES_ROOT}` 사용
 - **Acceptable (executable script만)**: `source "$(dirname "$0")/file.sh"`
 - **Test**: `bash -i -c 'source main.bash && fn'` + `zsh -c 'source main.zsh && fn'`
+- **Skill 이 standalone `.` 하는 파일** (예: `gh_pr_review.sh`): #1454/#1505 foreign-checkout
+  guard 필수 — 스니펫: cheatsheet → "Foreign-Checkout Guard Snippet"
 
 ## Output Standards
 

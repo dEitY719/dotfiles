@@ -101,6 +101,9 @@ if [ -r "$_drg_helper" ]; then
 fi
 if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
     _dotfiles_root_guard_self "$_drg_self" "gh_project_status"
+else
+    printf '[gh_project_status] %s missing or did not define _dotfiles_root_guard_self — #1454 guard skipped (#724).\n' \
+        "$_drg_helper" >&2
 fi
 unset _drg_self _drg_helper
 
