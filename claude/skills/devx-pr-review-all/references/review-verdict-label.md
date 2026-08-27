@@ -91,7 +91,7 @@ else
     _gh_pr_edit_safe_label "$pr" "$label" --repo "$TARGET_REPO"
     case "$?" in
     0) echo "[OK] PR #$pr labelled \`$label\` (${lanes} lane(s))" ;;
-    3) echo "[WARN] label \`$label\` missing in $TARGET_REPO — bootstrap once: /gh-label-bootstrap $TARGET_REPO" ;;
+    3) echo "[WARN] label \`$label\` missing in $TARGET_REPO — bootstrap once: /gh-label-bootstrap --repo $TARGET_REPO" ;;
     *) echo "[WARN] labelling PR #$pr failed — train will treat it as unverified" ;;
     esac
 fi
