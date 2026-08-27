@@ -2,14 +2,26 @@
 
 Step 1 resolves the host and repo from the `[remote]`'s URL once and exports
 them, so the composition's own `gh` call cannot drift to another server.
+It also exports `REMOTE` itself (#1498) — every later inline Bash step in
+this composition (currently only Step 2.4.1, `references/merge-train-wake.md`)
+reads `$REMOTE` instead of re-deriving it, so a non-`origin` `[remote]`
+argument is visible past Step 1.
+
+Set `REMOTE` to the parsed `[remote]` argument from Step 1 **before** running
+this block — e.g. `REMOTE=upstream` when `/gh-issue-flow <N> upstream` was
+invoked, left unset (defaults to `origin`) otherwise. Do not copy the block
+below verbatim without that assignment; `${REMOTE:-origin}` silently reads as
+`origin` when `REMOTE` was never set, which defeats the whole point of
+threading `[remote]` through the chain.
 
 ```bash
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
-REMOTE_URL=$(git remote get-url "${REMOTE:-origin}")
+REMOTE="${REMOTE:-origin}"
+REMOTE_URL=$(git remote get-url "$REMOTE")
 TARGET_REPO=$(_gh_parse_owner_repo_url "$REMOTE_URL")
 TARGET_HOST=$(_gh_host_from_url "$REMOTE_URL") || TARGET_HOST=$(_gh_resolve_host)
 export GH_HOST="$TARGET_HOST"
-export TARGET_REPO TARGET_HOST
+export REMOTE TARGET_REPO TARGET_HOST
 ```
 
 ## Why the host is passed explicitly

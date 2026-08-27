@@ -52,16 +52,43 @@ Both alternatives were considered and rejected (issue #1482 body, "대안"):
   bypass would also skip the project-board Status gate — a standing
   exception the issue's NF-2 explicitly rules out.
 
+## Guarded to `origin` only (#1498)
+
+`pr_merge_train_cron.sh` (the script `aicron run merge-train` launches) is
+hardcoded to `$HOME/dotfiles`'s own `origin` remote — see "Why the
+`$HOME/dotfiles` fallback is intentional" below. Waking it for a PR that
+`gh:issue-flow` pushed to a different `[remote]` (e.g. `upstream`) nudges a
+dispatcher that has no way to see that PR: harmless, but pointless. The call
+is gated on `$REMOTE`, which Step 1 exports (`references/target-binding.md`,
+#1498) from the same `[remote]` argument every other GitHub-touching step in
+this chain already receives.
+
+**Do not gate this with a fresh `${REMOTE:-origin}` read inside a `Skill()`
+call's own Bash tool invocation without first confirming `$REMOTE` is still
+set** — an earlier version of this guard (dangling commit d3e12471, review
+feedback on PR #1489) read `${REMOTE:-origin}` without Step 1 ever exporting
+`REMOTE`, so the condition was always true regardless of the actual remote.
+That version never reached `main`; #1498 is the first time `REMOTE` is
+actually exported for this to read.
+
 ## The call
 
 ```bash
-_AICRON="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/aicron.sh"
-if [ -x "$_AICRON" ]; then
-    "$_AICRON" run merge-train >/dev/null 2>&1 &
-else
-    printf '[WARN] aicron not found at %s — merge-train dispatcher wake skipped.\n' "$_AICRON" >&2
+if [ "${REMOTE:-origin}" = "origin" ]; then
+    _AICRON="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/aicron.sh"
+    if [ -x "$_AICRON" ]; then
+        "$_AICRON" run merge-train >/dev/null 2>&1 &
+    else
+        printf '[WARN] aicron not found at %s — merge-train dispatcher wake skipped.\n' "$_AICRON" >&2
+    fi
 fi
 ```
+
+No output on the `$REMOTE != origin` path — silent skip, matching this
+skill suite's convention of staying quiet on an expected, non-error path
+(e.g. `gh:issue-implement`'s 3.3b duplicate-PR check). Step 3's report
+reflects it as `[SKIP] Step 4.1: merge-train wake (remote != origin)`
+(`references/report-template.md`).
 
 Called by absolute path (mirrors how cron itself invokes `aicron.sh`), not
 via the `aicron` shell function/alias — the function is guarded by the
@@ -127,8 +154,10 @@ outcome this section says is undesirable.
 
 This step never stops the chain:
 
+- `$REMOTE` (Step 1's export) is not `origin` → silent skip, continue. Not a
+  failure — see "Guarded to `origin` only" above.
 - `aicron.sh` missing at the expected path → one `[WARN]` line, continue.
-  This is the only outcome observed synchronously.
+  This is the only outcome observed synchronously on the `origin` path.
 - Once launched in the background, this step does not wait for or inspect
   `aicron run merge-train`'s exit code — including the case where the
   dispatcher declines because a train is already `live` per NF-1, which is

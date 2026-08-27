@@ -45,11 +45,13 @@ Argument table (`<issue-number>`, `[remote]`, `-h`/`--help`/`help`):
 Record `START_TS=$(date +%s)` for elapsed-time tracking in Step 2.6.
 
 **Bind the GitHub target once, here (#1403)** — resolve host and repo from the
-`[remote]`'s URL and export `GH_HOST` / `TARGET_REPO` / `TARGET_HOST` before
-Step 2. Since #1405 the binding is authoritative for the whole chain —
-`[remote]` is threaded explicitly into 2.1 `gh:issue-implement`, 2.2
-`gh:commit`, 2.3 `gh:pr` and 2.4 `devx:pr-review-all`. Exact block and the
-reason the host is passed explicitly: `references/target-binding.md`.
+`[remote]`'s URL and export `GH_HOST` / `TARGET_REPO` / `TARGET_HOST` /
+`REMOTE` before Step 2. Since #1405 the binding is authoritative for the
+whole chain — `[remote]` is threaded explicitly into 2.1 `gh:issue-implement`,
+2.2 `gh:commit`, 2.3 `gh:pr` and 2.4 `devx:pr-review-all`, and the exported
+`REMOTE` gates Step 2.4.1's inline Bash call (#1498, since it isn't a
+`Skill()` call and has no `<remote>` argument of its own to receive). Exact
+block and the reason the host is passed explicitly: `references/target-binding.md`.
 
 ## Step 2: Chain the Skills
 
@@ -72,7 +74,9 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    `references/quality-gate-step.md`.
    `Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 4")`
 5. **Step 2.4.1 — Wake merge-train dispatcher** (only if 2.3 succeeded; runs
-   regardless of Step 2.4's own soft-fail outcome; non-fatal) — fires
+   regardless of Step 2.4's own soft-fail outcome; non-fatal) — when Step 1's
+   exported `REMOTE` is `origin` (silently skipped otherwise, #1498 — the
+   dispatcher only tracks `$HOME/dotfiles`'s own `origin` remote), fires
    `aicron run merge-train` **in the background, not awaited** (a real train
    launch can block ~4 min on its own `--wait` confirmation, which the
    rebase steps below don't need) so the dispatcher checks immediately
