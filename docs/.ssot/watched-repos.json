@@ -1,0 +1,12 @@
+{
+  "$doc": {
+    "purpose": "Repos opted in to post-merge herdr verification dispatch (issue #1511).",
+    "schema": "claude/skills/gh-pr-post-merge-verify/references/watched-repos-schema.md",
+    "note": "Keys starting with '$' are reserved metadata and are never a repo slug. Every other top-level key is an 'owner/repo' slug; an unlisted repo means the feature is skipped entirely."
+  },
+  "dEitY719/dotfiles": {
+    "verify_skill": "devx:pr-verify-merged",
+    "main_checkout": "~/dotfiles",
+    "note": "No long-running app to point a browser at, so the proof has to come from a fresh clone of the merge commit — devx:pr-verify-merged, not -live."
+  }
+}
