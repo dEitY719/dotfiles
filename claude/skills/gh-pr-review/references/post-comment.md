@@ -152,13 +152,24 @@ are calibration starting points, not gospel — tighten when
 
 ## Token estimation
 
+`_gh_pr_review_estimate_tokens` (`shell-common/functions/gh_pr_review.sh`)
+takes a byte count and applies the pure arithmetic — divide by 4, round to
+the nearest 500, floor 1000:
+
 ```sh
-# Sum prompt template + diff bytes, divide by 4, round to nearest 500.
-RAW_BYTES=$(wc -c < "$PROMPT_FILE")
-TOKENS_RAW=$(( RAW_BYTES / 4 ))
-TOKENS=$(( (TOKENS_RAW + 250) / 500 * 500 ))
-[ "$TOKENS" -lt 1000 ] && TOKENS=1000
+tokens=$((raw / 4))
+tokens=$(((tokens + 250) / 500 * 500))
+[ "$tokens" -lt 1000 ] && tokens=1000
 ```
+
+The byte count itself is measured by the Step 6 caller **right after the
+prompt is written**, not re-read at comment-post time — issue #1474 fixed a
+prior bug where a late re-read could return 0 for a since-vanished prompt
+file, and the floor rule then dressed that 0 up as a plausible "~1000
+tokens" estimate. A failed read is now reported (`[WARN] Could not read
+prompt file for the token estimate — file missing?`), never silently
+folded into 0. Per "Step 6 delegation" above, this doc does not duplicate
+the measurement site or the arithmetic — read the shell function for both.
 
 The 4-bytes-per-token heuristic is conservative for English/Korean
 mixed PR bodies. Refine when a tokenizer-backed metric becomes part
