@@ -131,6 +131,32 @@ setup() {
     assert_output "45"
 }
 
+# A leading-zero numeral is digit-only, so it survives the [!0-9] filter —
+# but bash arithmetic reads a leading zero as octal, which either errors on
+# an invalid octal digit or silently changes the value. Both cases must
+# resolve to the correct base-10 magnitude, not crash and not silently fall
+# back to 300 (agy + codex review, PR #1544).
+@test "_resolve_bats_timeout: a leading-zero value is read as decimal, not octal" {
+    export BATS_TEST_TIMEOUT=08
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "8"
+}
+
+@test "_resolve_bats_timeout: a leading-zero value keeps its decimal magnitude" {
+    export BATS_TEST_TIMEOUT=010
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "10"
+}
+
+@test "_resolve_bats_timeout: an absurdly long digit string falls back to 300" {
+    export BATS_TEST_TIMEOUT=12345678901
+    run _resolve_bats_timeout
+    assert_success
+    assert_output "300"
+}
+
 # ---------------------------------------------------------------------------
 # _count_bats_timeouts — only real `not ok ... # timeout after Ns` TAP lines
 #
@@ -143,4 +169,21 @@ setup() {
     run _count_bats_timeouts "$TAP_FIXTURE"
     assert_success
     assert_output "1"
+}
+
+# grep -c prints nothing (not "0") for a missing/unreadable file, and exits
+# non-zero whenever the count is 0 — either would break a caller under set -e
+# or miscount a clean log as unset (agy + codex review, PR #1544).
+@test "_count_bats_timeouts: a missing file still reports 0 with a successful exit" {
+    run _count_bats_timeouts "${BATS_TEST_TMPDIR}/does-not-exist.tap"
+    assert_success
+    assert_output "0"
+}
+
+@test "_count_bats_timeouts: a log with zero timeouts still exits successfully" {
+    local clean_log="${BATS_TEST_TMPDIR}/no_timeouts.tap"
+    printf '1..1\nok 1 something unrelated\n' >"$clean_log"
+    run _count_bats_timeouts "$clean_log"
+    assert_success
+    assert_output "0"
 }
