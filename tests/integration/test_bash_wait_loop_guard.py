@@ -9,8 +9,17 @@ the `Bash` tool. It reads a JSON event from stdin and either:
                               "permissionDecision": "deny",
                               "permissionDecisionReason": "..."}}
 
-Two narrow shapes are denied: a provably self-matching `pgrep -f`, and an
-infinite `until`/`while` + `sleep` loop polling a `tasks/*.output` file.
+Two narrow shapes are denied, and both are gated on **loop context**, not
+on how often a token happens to appear in the command string:
+
+  1. a literal `pgrep -f` sitting in an `until`/`while` test where a
+     successful match keeps the loop spinning (`until ! pgrep ...` /
+     `while pgrep ...`), with a `sleep` in that same loop's body;
+  2. an `until`/`while` loop whose test watches a `tasks/*.output` path
+     and whose body sleeps.
+
+A one-shot `pgrep -f <literal>` is always allowed -- nothing re-checks
+it, so it cannot hang -- and `$$` is not an allow signal anywhere.
 
 The false-positive guard is the load-bearing half of this suite: the
 harness's own Monitor documentation recommends the generic
@@ -106,8 +115,8 @@ def test_blocks_issue_1521_command_verbatim() -> None:
 
 
 def test_blocks_self_matching_pgrep_f() -> None:
-    """`pgrep -f TOKEN` where TOKEN also appears elsewhere in the command."""
-    cmd = "pgrep -f UNIQUE_TOKEN_XYZ >/dev/null && echo UNIQUE_TOKEN_XYZ running"
+    """`until ! pgrep -f TOKEN` + sleep: the match is guaranteed, so it never exits."""
+    cmd = "until ! pgrep -f UNIQUE_TOKEN_XYZ >/dev/null; do sleep 1; echo UNIQUE_TOKEN_XYZ running; done"
     reason = _assert_denied(_run_hook(_bash_event(cmd)))
     assert "UNIQUE_TOKEN_XYZ" in reason
     # The remedy must be spelled out, and must lead with the character
@@ -119,7 +128,7 @@ def test_blocks_self_matching_pgrep_f() -> None:
 @pytest.mark.parametrize("flags", ["-f", "-af", "-fa", "--full"])
 def test_blocks_every_full_match_flag_spelling(flags: str) -> None:
     """`f` anywhere in the flag bundle, and `--full`, all mean full-cmdline match."""
-    cmd = f"cat tok123abc.log; pgrep {flags} tok123abc"
+    cmd = f"cat tok123abc.log; until ! pgrep {flags} tok123abc; do sleep 1; done"
     _assert_denied(_run_hook(_bash_event(cmd)))
 
 
@@ -129,15 +138,105 @@ def test_blocks_self_matching_pgrep_inside_until_loop() -> None:
     _assert_denied(_run_hook(_bash_event(cmd)))
 
 
+def test_blocks_single_occurrence_pattern_in_until_loop() -> None:
+    """A pattern occurring ONCE is still fatal inside a loop (PR #1547 review).
+
+    The first cut of this hook allowed anything whose literal pattern
+    appeared fewer than two times in the command text. That was the
+    dangerous false negative: the Claude Code Bash tool runs commands as
+    `zsh -c <snapshot> && eval '<command>'`, so the wrapper's own
+    cmdline *is* this command -- which contains `gunicorn` as pgrep's
+    argument. `! pgrep` is therefore permanently false and the loop
+    spins forever, one occurrence or ten.
+    """
+    reason = _assert_denied(_run_hook(_bash_event("until ! pgrep -f gunicorn; do sleep 1; done")))
+    assert "[g]unicorn" in reason
+
+
+def test_blocks_while_pgrep_wait_for_exit_loop() -> None:
+    """`while pgrep ...` (un-negated) is the other never-false spelling."""
+    _assert_denied(_run_hook(_bash_event("while pgrep -f mybuildjob; do sleep 5; done")))
+
+
+def test_blocks_pgrep_loop_despite_unrelated_dollar_dollar() -> None:
+    """An unrelated `$$` must not disarm the check (PR #1547 codex BLOCKER).
+
+    The first cut skipped the entire pgrep rule whenever `$$` occurred
+    anywhere, so a stray `echo $$` bought a free pass for a loop that
+    still hangs. `$$` is no longer an allow signal at all.
+    """
+    cmd = "echo $$; until ! pgrep -f token; do sleep 1; done"
+    _assert_denied(_run_hook(_bash_event(cmd)))
+
+
+def test_blocks_pgrep_loop_using_the_dollar_dollar_exclusion_idiom() -> None:
+    """`| grep -vx "$$"` inside the loop does NOT make it safe, so it is denied.
+
+    This hook's own docstring measures two self-matches under the Bash
+    tool -- the inner shell (`$$`) and the outer `zsh -c ... eval`
+    wrapper (#1521's pids 179954 + 1226029). Excluding `$$` deletes one
+    of the two, so the loop still never exits. Treating the idiom as an
+    opt-out contradicted that measurement; the character class is the
+    only remedy the hook endorses, and the reason text says so.
+    """
+    cmd = 'until ! pgrep -f a7ab696cc6e841cc7 | grep -vx "$$"; do sleep 5; done'
+    reason = _assert_denied(_run_hook(_bash_event(cmd)))
+    assert "[a]7ab696cc6e841cc7" in reason
+
+
 def test_allows_pgrep_f_self_exclusion_idiom() -> None:
-    """`pgrep -f "$PAT" | grep -vx "$$"` is the issue's own suggested fix."""
+    """One-shot `pgrep -f "$PAT" | grep -vx "$$"`: no loop, and no literal pattern.
+
+    Allowed for two independent reasons -- nothing re-checks it, and
+    `"$PAT"` has no statically knowable value -- NOT because of the
+    `$$`, which this hook no longer reads as a safety signal.
+    """
     cmd = 'PAT=a7ab696cc6e841cc7; pgrep -f "$PAT" | grep -vx "$$" && echo "$PAT alive"'
     _assert_allowed(_run_hook(_bash_event(cmd)))
 
 
 def test_allows_pgrep_f_with_literal_and_self_pid_exclusion() -> None:
-    """A literal recurring pattern is fine once the own PID is excluded."""
+    """A one-shot literal pgrep is allowed however often the token recurs.
+
+    Without an enclosing loop there is nothing to re-evaluate the
+    condition, so a spurious self-match costs one wrong answer, never a
+    hang. The `grep -vx "$$"` here is incidental.
+    """
     cmd = 'pgrep -f a7ab696cc6e841cc7 | grep -vx "$$" > a7ab696cc6e841cc7.pids'
+    _assert_allowed(_run_hook(_bash_event(cmd)))
+
+
+def test_allows_short_pattern_that_is_a_substring_of_pgrep() -> None:
+    """`pgrep -f ep` must not self-deny (PR #1547 agy BLOCKER).
+
+    The old occurrence-count gate used a raw substring count, so `ep`
+    scored two hits -- one inside the literal word `pgrep`, one as the
+    operand -- and a plain one-shot lookup was denied. Pinned here so
+    the count-based logic can never come back.
+    """
+    _assert_allowed(_run_hook(_bash_event("pgrep -f ep >/dev/null 2>&1")))
+
+
+@pytest.mark.parametrize("cmd", ["pgrep -f grep", "pgrep -f p", "pgrep -f full", "pgrep -f f"])
+def test_allows_one_shot_pgrep_with_pgrep_substring_patterns(cmd: str) -> None:
+    """Same class of false positive for any pattern inside `pgrep`/`-f`/`--full`."""
+    _assert_allowed(_run_hook(_bash_event(cmd)))
+
+
+def test_allows_pgrep_loop_that_exits_on_first_match() -> None:
+    """`until pgrep ...` terminates immediately -- wrong, but not a hang.
+
+    A guaranteed self-match makes an un-negated `until` test true on
+    iteration one. This hook's mandate is loops that can never end, so
+    the shape stays out of scope rather than getting a deny reason that
+    would be factually false about it.
+    """
+    _assert_allowed(_run_hook(_bash_event("until pgrep -f gunicorn; do sleep 1; done")))
+
+
+def test_allows_pgrep_in_loop_body_rather_than_condition() -> None:
+    """A pgrep that is not the exit test does not decide whether the loop ends."""
+    cmd = "until [ -f build/done ]; do pgrep -f gunicorn; sleep 1; done"
     _assert_allowed(_run_hook(_bash_event(cmd)))
 
 
@@ -153,8 +252,14 @@ def test_allows_pgrep_f_with_variable_pattern() -> None:
 
 
 def test_allows_plain_non_recurring_pgrep_f() -> None:
-    """The common, safe case: the pattern appears only as pgrep's argument."""
+    """The common, safe case: a one-shot lookup with no loop around it."""
     _assert_allowed(_run_hook(_bash_event("pgrep -f gunicorn >/dev/null 2>&1")))
+
+
+def test_allows_one_shot_pgrep_f_with_recurring_literal() -> None:
+    """Even a token repeated all over a one-shot command cannot hang."""
+    cmd = "pgrep -f UNIQUE_TOKEN_XYZ >/dev/null && echo UNIQUE_TOKEN_XYZ running"
+    _assert_allowed(_run_hook(_bash_event(cmd)))
 
 
 def test_allows_pgrep_without_full_flag() -> None:
@@ -197,6 +302,23 @@ def test_allows_one_shot_tasks_output_read() -> None:
 def test_allows_tasks_output_loop_without_sleep() -> None:
     """A bounded `for`-style read over outputs is not an infinite poll."""
     cmd = 'for f in tasks/*.output; do wc -l "$f"; done'
+    _assert_allowed(_run_hook(_bash_event(cmd)))
+
+
+def test_allows_unrelated_tasks_output_mention_next_to_a_loop() -> None:
+    """The three ingredients must be structurally connected (PR #1547 agy FOLLOW-UP).
+
+    The first cut looked for a `tasks/*.output` path, a loop keyword and
+    a `sleep` independently anywhere in the string, so a one-shot `ls`
+    of an output file poisoned a completely unrelated readiness poll.
+    """
+    cmd = "ls tasks/test.output && while ! pg_isready; do sleep 1; done"
+    _assert_allowed(_run_hook(_bash_event(cmd)))
+
+
+def test_allows_tasks_output_read_inside_an_unrelated_polling_loop() -> None:
+    """A loop whose *test* is unrelated is not a tasks/*.output poll."""
+    cmd = "until [ -f build/ready ]; do cat tasks/abc123.output; sleep 1; done"
     _assert_allowed(_run_hook(_bash_event(cmd)))
 
 
