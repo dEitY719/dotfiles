@@ -6,6 +6,7 @@
 |--------|-------------|---------|
 | `[pr-number]` | Positional 1 — target PR to sync, e.g. `782`. | PR attached to the current branch |
 | `[remote]` | Positional 2 — git remote whose repo owns the PR. | `origin` |
+| `--worktree <path>` | Run every git command in `<path>` instead of the current checkout. Requires an explicit `pr-number`. | current checkout |
 | `-h` / `--help` / `help` | Print this help verbatim and stop. No API calls. | — |
 
 ## Usage
@@ -14,8 +15,15 @@
 /gh-pr-resolve-outdated              # PR attached to current branch, origin
 /gh-pr-resolve-outdated 782          # explicit PR, origin
 /gh-pr-resolve-outdated 782 upstream # explicit PR, upstream remote
+/gh-pr-resolve-outdated 782 origin --worktree /path/to/scratch   # rebase there
 /gh-pr-resolve-outdated -h           # this help
 ```
+
+`--worktree` exists for `gh:pr-merge-train`: the PR's head branch is usually
+already checked out in the worktree `gh:issue-flow` opened it from, so the train
+hands over a detached scratch worktree it created and will destroy. The push
+then uses an explicit `HEAD:refs/heads/<head>` refspec, since a detached HEAD
+names no branch.
 
 ## When to use this skill
 
@@ -68,7 +76,9 @@
   and re-rebase (lost-update risk).
 - **Default-branch refusal** — exit 2 if run while checked out on
   `main` (or the repo's configured default).
-- **Worktree-safe** — only the current worktree's branch is touched.
+- **Worktree-safe** — only the current worktree's branch is touched, or, with
+  `--worktree <path>`, only that path. The skill never creates or removes the
+  worktree it is pointed at; the caller owns it.
 
 ## Exit codes
 

@@ -9,7 +9,7 @@ Immediately before processing each PR (F-3):
 
 ```bash
 STATE=$(GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
-  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,url)
+  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,url)
 ```
 
 Keep `$STATE`. Every question the rest of this file asks about the PR is
@@ -21,14 +21,19 @@ a round trip the state you already hold has covered.
 | `mergeStateStatus` | `mergeable` | Action |
 |---|---|---|
 | `CLEAN` | `MERGEABLE` | `Skill(gh:pr-merge, "<N>")` directly |
-| `BEHIND` | `MERGEABLE` | `Skill(gh:pr-resolve-outdated, "<N>")` → re-query → merge |
-| `DIRTY` | `CONFLICTING` | `Skill(gh:pr-resolve-conflict, "<N>")` → re-query → merge |
+| `BEHIND` | `MERGEABLE` | `gh:pr-resolve-outdated` in a scratch worktree → re-query → merge |
+| `DIRTY` | `CONFLICTING` | `gh:pr-resolve-conflict` in a scratch worktree → re-query → merge |
 | `UNSTABLE` | `MERGEABLE` | inspect `statusCheckRollup` — see below |
 | `BLOCKED` | — | record the reason, `[SKIPPED]` |
 | `UNKNOWN` | `UNKNOWN` | poll, then re-evaluate; `[SKIPPED]` after 3 polls |
 | `DRAFT` | — | `[SKIPPED]` (a draft is not a merge candidate) |
 
 `isDraft == true` short-circuits the table: skip before reading anything else.
+
+The two rebase rows (`BEHIND`, `DIRTY`) never operate on the current checkout.
+The train builds a detached scratch worktree for `headRefName` first and passes
+its path to the atom via `--worktree` — that is why `headRefName` is in the
+`--json` list above. Mechanics: `train-loop.md` → "Detached scratch worktree".
 
 ## `UNSTABLE` — split on the rollup, not on the status
 

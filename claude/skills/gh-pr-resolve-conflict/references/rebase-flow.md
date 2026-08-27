@@ -3,6 +3,21 @@
 Every `gh` call below assumes `TARGET_HOST` / `TARGET_REPO` are already bound
 and exported by Step 1 per `references/github-target.md` (#1403, #1407).
 
+## `--worktree` mode
+
+When Step 1 parsed `--worktree <path>`, every **git** command in this file runs
+as `git -C "<path>" ...` — preconditions, base resolution, fetch, rebase,
+status, push. The `gh` calls are unaffected: they read the PR from the API, not
+from a checkout. The push additionally switches to an explicit refspec (see
+"Push"). No `cd`, ever: leaving the session's own working directory alone is
+the reason the flag exists.
+
+The path is a detached scratch worktree `gh:pr-merge-train` created for exactly
+this call and will remove afterwards (#1493) — this skill never creates or
+deletes it.
+
+Without the flag every command below is read literally, unchanged.
+
 ## Preconditions (parallel batch)
 
 Run all four in a single tool message. Any failure → stop immediately.
@@ -33,13 +48,24 @@ Stop conditions:
 Dirty working tree is NOT a stop — it triggers the stash flow in
 `safety.md`.
 
+In `--worktree` mode a freshly created detached worktree is headless and clean,
+so `git status --porcelain` is empty by construction (no stash flow) and
+`--abbrev-ref HEAD` answers `HEAD` rather than a branch name — the
+default-branch refusal is made against `HEAD_REF` instead, per `safety.md` →
+"Never run on the default branch". The git-repo and in-progress-marker checks
+still run under `-C "<path>"`: a scratch directory left behind by an interrupted
+run can be handed over mid-rebase.
+
 ## Resolve base branch
 
-Prefer the PR's actual base (not the repo default):
+Prefer the PR's actual base (not the repo default). Read the head ref in the
+same call — `--worktree` mode's push needs it:
 
 ```bash
-BASE=$(GH_HOST="$TARGET_HOST" gh pr view "$PR" --repo "$TARGET_REPO" \
-    --json baseRefName -q .baseRefName)
+REFS=$(GH_HOST="$TARGET_HOST" gh pr view "$PR" --repo "$TARGET_REPO" \
+    --json baseRefName,headRefName)
+BASE=$(printf '%s' "$REFS" | jq -r .baseRefName)
+HEAD_REF=$(printf '%s' "$REFS" | jq -r .headRefName)
 ```
 
 Fall back to `GH_HOST="$TARGET_HOST" gh repo view --repo "$TARGET_REPO" --json
@@ -55,6 +81,9 @@ echo "backup SHA: $BACKUP_SHA  (git reset --hard $BACKUP_SHA to undo)"
 git rebase "$REMOTE/$BASE"
 ```
 
+`--worktree` mode: `git -C "<path>" fetch ...`, `git -C "<path>" rev-parse HEAD`,
+`git -C "<path>" rebase ...`.
+
 Exit codes:
 
 | Exit | Meaning | Action |
@@ -69,6 +98,13 @@ Only after `git rebase` exits 0 and `git status` is clean:
 
 ```bash
 git push --force-with-lease "$REMOTE" HEAD
+```
+
+In `--worktree` mode, spell the destination out — the worktree is detached, so
+bare `HEAD` gives `git` no branch to push to:
+
+```bash
+git -C "<path>" push --force-with-lease "$REMOTE" HEAD:refs/heads/$HEAD_REF
 ```
 
 Rejection modes:

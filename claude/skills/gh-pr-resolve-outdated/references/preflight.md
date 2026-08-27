@@ -1,6 +1,7 @@
 # Step 1 — args, repo resolution, and hard preconditions
 
-Positional args: `[pr-number] [remote]`, both optional.
+Positional args: `[pr-number] [remote]`, both optional. One flag:
+`[--worktree <path>]`.
 
 - `remote` — default `origin`; missing → `git remote -v` + exit 2. Bind
   `TARGET_HOST` + `TARGET_REPO` from that one remote URL **before any `gh`
@@ -27,3 +28,28 @@ Positional args: `[pr-number] [remote]`, both optional.
 
 Capture `BACKUP_SHA=$(git rev-parse HEAD)` and print it for
 `git reset --hard <sha>` recovery.
+
+## `--worktree <path>` mode
+
+`gh:pr-merge-train` cannot check the PR's head branch out here: `gh:issue-flow`
+opened that PR from its own worktree, which still holds the branch. It passes a
+**detached scratch worktree** it created and will destroy instead, and this
+skill just operates inside it.
+
+- `pr-number` becomes **mandatory**. Auto-detect is unavailable — a detached
+  worktree has no current branch, so `gh pr view` has nothing to resolve a PR
+  from. Missing → `[FAIL] --worktree requires an explicit PR number` + exit 2.
+- Every git command in this skill runs as `git -C "<path>" ...` — preconditions,
+  fetch, rebase, push, status. No `cd`; the session's own checkout is never
+  touched, which is half the point of the flag.
+- `BACKUP_SHA=$(git -C "<path>" rev-parse HEAD)`.
+- **Skip** the clean-working-tree and current-branch-≠-default checks as
+  written. A worktree created seconds ago by `git worktree add --detach` is
+  clean by construction, and `--abbrev-ref HEAD` answers `HEAD` because it is
+  detached — neither check can return anything else. The default-branch
+  *refusal* is not dropped, it retargets: compare the PR's `headRefName` (what
+  the push refspec writes to) against the repo default and stop on a match.
+- Keep the git-repo and no-in-progress-operation checks, scoped with
+  `-C "<path>"` — a stale scratch directory left by an interrupted run can
+  still be handed over.
+- This skill never creates or removes `<path>`. The caller owns it.
