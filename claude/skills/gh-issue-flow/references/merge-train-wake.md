@@ -63,13 +63,11 @@ is gated on `$REMOTE`, which Step 1 exports (`references/target-binding.md`,
 #1498) from the same `[remote]` argument every other GitHub-touching step in
 this chain already receives.
 
-**Do not gate this with a fresh `${REMOTE:-origin}` read inside a `Skill()`
-call's own Bash tool invocation without first confirming `$REMOTE` is still
-set** — an earlier version of this guard (dangling commit d3e12471, review
-feedback on PR #1489) read `${REMOTE:-origin}` without Step 1 ever exporting
-`REMOTE`, so the condition was always true regardless of the actual remote.
-That version never reached `main`; #1498 is the first time `REMOTE` is
-actually exported for this to read.
+**Do not gate this with `${REMOTE:-origin}` unless Step 1 has actually
+exported `REMOTE`** — a rejected earlier draft of this guard (PR #1489
+review feedback) read `${REMOTE:-origin}` before Step 1 ever exported it,
+so the condition was always true regardless of the actual remote. #1498 is
+the first version where `REMOTE` is genuinely exported for this to read.
 
 ## The call
 
