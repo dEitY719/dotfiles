@@ -626,14 +626,36 @@ _hold_lock() {
     assert_output --partial "is not an available shell"
 }
 
-# The name-taken path hands the tick to a *live* agent on some other pane, and
-# the fresh tab is the one this tick just opened — but the agent it wanted is
-# elsewhere and healthy, so there is no failed launch to clean up after and the
-# close would be the tick's only destructive act.
-@test "pr_merge_train_cron: an agent_name_taken start does not close the tab" {
+# What herdr writes to stderr is a JSON document, so dumping its first line
+# verbatim buries the sentence inside braces exactly where a cron log is read
+# in a hurry. The cause line carries `.error.message` alone; the raw document
+# must not reach the log (PR #1517 review, codex).
+@test "pr_merge_train_cron: the cause line carries the message, not the raw JSON" {
+    _run_tick HERDR_START_PANE_BUSY=99
+    assert_failure
+    refute_output --partial '{"error"'
+}
+
+# The name-taken path hands the tick to a *live* agent, and the fresh tab is
+# the one this tick just opened, on which no agent was ever placed. The holder
+# we go on to prompt lives on some *other* pane, so this tab
+# is orphan state of exactly the kind #1512 exists to stop leaking — one per
+# probe/start race, on a job that ticks every few minutes. Prompting the holder
+# and closing the tab are independent acts; doing only the first is the leak.
+@test "pr_merge_train_cron: an agent_name_taken start closes the tab it opened" {
     _run_tick HERDR_START_NAME_TAKEN=1
     assert_success
-    _refute_logged "herdr tab close"
+    _assert_logged "herdr tab close ws-test-1:t9"
+    _assert_logged "herdr agent prompt"
+}
+
+# Order matters, and only in one direction: the close precedes the prompt so a
+# prompt that fails cannot strand the tab behind it. Asserted as a failed tick
+# that still cleaned up, which is the case the ordering exists for.
+@test "pr_merge_train_cron: a name_taken tab is closed even when the prompt fails" {
+    _run_tick HERDR_START_NAME_TAKEN=1 HERDR_PROMPT_FAIL=1
+    assert_failure
+    _assert_logged "herdr tab close ws-test-1:t9"
 }
 
 # Only the one known race is retried. An `agent start` that fails without

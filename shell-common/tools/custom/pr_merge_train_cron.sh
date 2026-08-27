@@ -108,6 +108,11 @@ _PMT_CONFIG_DIR=""
 # _PMT_HOST, _PMT_CONFIG_DIR). The tab id is what orphan cleanup closes (#1512).
 _PMT_PANE_ID=""
 _PMT_TAB_ID=""
+# The stderr capture file handed to _pmt_agent_start. Global, not local, so the
+# EXIT/INT/TERM trap that removes it can still name it after the function that
+# created it has returned — a `local` would be unset by then and `set -u` would
+# turn the cleanup into its own error (PR #1517 review, agy).
+_PMT_ERRF=""
 # Set by --dry-run: report what the tick would do, mutate nothing.
 _PMT_DRY_RUN=0
 # The GitHub target, bound once in main() from the checkout's `origin` (#1403).
@@ -474,6 +479,14 @@ _pmt_tab_create() {
 # been handed. Never changes the tick's verdict: the tick has already failed,
 # and a herdr that cannot close the tab is not a second, different failure to
 # report. A missing tab id is a no-op, not an error.
+#
+# Raw `herdr`, not _pmt_herdr_create: that wrapper exists to append the
+# pane-*creation* flags (--cwd/--label/--no-focus/--env CLAUDE_CONFIG_DIR),
+# and `herdr tab close` takes a bare positional tab id and rejects options.
+# The account routing it carries is for the claude process a new pane starts,
+# not for herdr's own connection, so closing a tab by id needs none of it —
+# same reason `agent get`, `workspace list` and `agent prompt` all call herdr
+# directly (PR #1517 review, codex).
 _pmt_tab_close() {
     local _tab="$1"
 
@@ -521,6 +534,22 @@ _pmt_herdr_error_code() {
         _code=$(_pmt_json_value '.error.code' <"${_errfile}")
     fi
     printf '%s' "${_code}"
+}
+
+# The human half of the same document: herdr's own sentence about the failure,
+# from the stderr file <1>. `.error.message` first, because what herdr writes
+# to stderr is a JSON document and dumping it raw into a cron log buries the
+# sentence inside braces (PR #1517 review, codex). Falls back to the first raw
+# line, which is what a non-JSON stderr (a crash, a shell error) carries — and
+# is also what keeps this working if herdr ever changes its JSON shape. Echoes
+# nothing when the file is empty.
+_pmt_herdr_error_message() {
+    local _errfile="$1" _msg
+
+    [ -s "${_errfile}" ] || return 0
+    _msg=$(_pmt_json_value '.error.message' <"${_errfile}")
+    [ -n "${_msg}" ] || _msg=$(head -n 1 "${_errfile}" 2>/dev/null)
+    printf '%s' "${_msg}"
 }
 
 # Set by _pmt_start_agent_retrying to the code of the attempt it gave up on —
@@ -607,7 +636,7 @@ _pmt_prompt_train() {
 
 # Open a fresh workspace/tab/agent for the train and prompt it.
 _pmt_launch_fresh() {
-    local _agent="$1" _cwd="$2" _label _ws _errf _msg _cause
+    local _agent="$1" _cwd="$2" _label _ws _msg _cause
 
     _label=$(_pmt_slug "${_PMT_WORKSPACE_PREFIX}" "$(_pmt_target_key)")
 
@@ -627,21 +656,27 @@ _pmt_launch_fresh() {
         return 1
     }
 
-    _errf=$(mktemp) || {
+    # The trap covers the window where a signal can land between mktemp and the
+    # rm below — a cron tick killed mid-start otherwise leaves the file in /tmp
+    # forever (PR #1517 review, agy). It is cleared, not left armed, so the
+    # function's own `rm` stays the normal path and nothing fires twice.
+    _PMT_ERRF=$(mktemp) || {
         ux_error "cannot open a capture file for herdr's stderr — ending this tick."
         _pmt_tab_close "${_PMT_TAB_ID}"
         return 1
     }
-    if _pmt_start_agent_retrying "${_agent}" "${_PMT_PANE_ID}" "${_errf}"; then
-        rm -f "${_errf}"
+    trap 'rm -f "${_PMT_ERRF}"' EXIT INT TERM
+    if _pmt_start_agent_retrying "${_agent}" "${_PMT_PANE_ID}" "${_PMT_ERRF}"; then
+        trap - EXIT INT TERM
+        rm -f "${_PMT_ERRF}"
         _pmt_wait_for_idle "${_agent}"
         _pmt_prompt_train "${_agent}"
         return
     fi
     # herdr's own sentence about the failure, read before the file goes away.
-    # Only the first line: enough to tell causes apart, short enough for a log.
-    _cause=$(head -n 1 "${_errf}" 2>/dev/null)
-    rm -f "${_errf}"
+    _cause=$(_pmt_herdr_error_message "${_PMT_ERRF}")
+    trap - EXIT INT TERM
+    rm -f "${_PMT_ERRF}"
 
     # Backstop for the race _pmt_train_state cannot close: the name can be
     # claimed between the probe and the start (a train launched by a manual
@@ -650,11 +685,14 @@ _pmt_launch_fresh() {
     # tick on the same collision. NF-1 is preserved — the name is what makes
     # "one train" true, and we are talking to its holder.
     #
-    # No tab close on this path: the agent we hand the train to lives on some
-    # other pane and is healthy, so there is no failed launch to clean up
-    # after — closing here would only kill a usable session.
+    # The tab still closes. The agent we prompt lives on some *other* pane —
+    # this tick's tab never received one and is exactly the orphan #1512 is
+    # about, so keeping it would leak a dead tab on every probe/start race
+    # (PR #1517 review, codex). Closing precedes the prompt so a prompt that
+    # fails cannot strand it either.
     if [ "${_PMT_START_CODE}" = "agent_name_taken" ]; then
         ux_warning "Agent ${_agent} is already registered — prompting the existing session instead of a second one."
+        _pmt_tab_close "${_PMT_TAB_ID}"
         _pmt_prompt_train "${_agent}"
         return
     fi
