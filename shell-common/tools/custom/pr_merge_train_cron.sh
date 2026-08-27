@@ -6,7 +6,9 @@
 # 직접 돌리지 않는다 — 선행 조건 3개만 확인하고 claude 세션 하나를 띄운 뒤 끝난다:
 #   1) 이번 tick 이 유일한 tick 인가 (flock)
 #   2) 직전 tick 이 띄운 train 세션이 아직 살아 있는가 (herdr agent get)
-#   3) 깨울 만한 대상 PR 이 있는가 (`gh pr list --author @me`, D-6 조용한 기간 적용)
+#   3) 깨울 만한 대상 PR 이 있는가 (`gh pr list --author @me` + 스킬과 공유하는
+#      필터 `_gh_pr_merge_train_filter_targets`: draft / `reply-pending` 라벨 /
+#      D-6 조용한 기간, #1524)
 #   4) herdr workspace -> tab -> agent -> `/gh-pr-merge-train <owner/repo>`
 #
 # 이 파일에는 tick 의 선행 조건 판정만 있다 — 라우팅 표(D-1)·정렬(D-2)·시도
@@ -37,6 +39,18 @@ if ! type ux_header >/dev/null 2>&1; then
     fi
 fi
 
+# The target filter (draft / `reply-pending` / quiet period) and the quiet
+# period itself, shared verbatim with the `gh:pr-merge-train` skill (#1524).
+# A hard failure, not a degradation: counting targets *is* this tick's job, and
+# a dispatcher that guessed the filter would be the duplicated-logic bug #1524
+# removed. Same precedent as the gh_host.sh check in _pmt_bind_target.
+if [ ! -f "${_PMT_SHELL_COMMON}/functions/gh_pr_merge_train.sh" ]; then
+    ux_error "gh_pr_merge_train.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot filter target PRs."
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "${_PMT_SHELL_COMMON}/functions/gh_pr_merge_train.sh" || exit 1
+
 # ============================================================
 # Constants (SSOT for the dispatcher)
 # ============================================================
@@ -44,24 +58,25 @@ fi
 _PMT_STATE_SUBDIR="pr-merge-train"
 _PMT_LOCK_BASENAME=".lock"
 
-# D-6 — quiet period, in minutes. `gh:issue-flow` Step 2.4 schedules
-# `gh:pr-reply` four minutes after the PR is opened (`--defer-reply 4`), so a
-# train that merges inside that window drops the review replies and the
-# `/simplify` fixes with them. A human running the train by hand never hit this
-# because the wait happened naturally; cron has no such protection. 11 = the
-# 4-minute defer + the reply's own runtime + slack.
+# D-6 — the quiet period is NOT a constant here. Its SSOT, together with the
+# whole target filter (draft / `reply-pending` label / quiet period), is
+# `shell-common/functions/gh_pr_merge_train.sh` — sourced below and called by
+# both this dispatcher and the `gh:pr-merge-train` skill, so the two can no
+# longer disagree (issue #1524). Read
+# `_gh_pr_merge_train_quiet_minutes` when the number is needed for output.
 #
-# The dispatcher applies the same filter the skill does, for a narrower
-# purpose: it only has to answer "is there anything worth waking a session
-# for". The skill re-applies it authoritatively at the moment it processes each
+# The dispatcher and the skill run the same filter for different purposes: the
+# dispatcher only has to answer "is there anything worth waking a session for",
+# while the skill re-applies it authoritatively at the moment it processes each
 # PR, because minutes pass between this count and that decision.
 #
 # This filter also excludes the PR that just triggered Step 2.4.1's immediate
 # wake call (claude/skills/gh-issue-flow/references/merge-train-wake.md) — its
 # updatedAt is "just now", so it can't be its own tick's target. That doc
 # documents the resulting ~11-16min real latency for the triggering PR
-# (issue #1515).
-_PMT_QUIET_MINUTES="11"
+# (issue #1515). Still true post-#1524: the filter itself moved to
+# `_gh_pr_merge_train_filter_targets`, but a brand-new PR's `updatedAt` is
+# still "just now" no matter which code evaluates it.
 
 # Upper bound on the open-PR window. The dispatcher only needs "more than
 # zero", so this is a courtesy cap, not a correctness boundary.
@@ -234,41 +249,31 @@ _pmt_bind_target() {
 # launching a train that would start by guessing (issue #1470, Error Cases:
 # "상태를 모르는 채 머지하지 않는다").
 #
-# Two filters, both mirrored in the skill:
-#   --author @me  D-7. A colleague's PR is never auto-merged.
-#   quiet period  D-6. A PR touched in the last _PMT_QUIET_MINUTES minutes may
-#                 still have a deferred `gh:pr-reply` in flight.
-# Drafts are dropped as well: `DRAFT` is a skip row in the D-1 routing table,
-# so a repo whose only open PR is a draft has nothing for the train to do and
-# must not wake a session every cron period.
+# The `--author @me` scope is this function's own (D-7: a colleague's PR is
+# never auto-merged). Everything else — drafts, the `reply-pending` label, and
+# the D-6 quiet period — is `_gh_pr_merge_train_filter_targets`, the SSOT the
+# `gh:pr-merge-train` skill runs too (#1524). `labels` is in the `--json` list
+# for that filter's sake; nothing here reads it directly.
 _pmt_target_count() {
-    local _json _cutoff _now
+    local _json _filtered _now
 
     _json=$(GH_HOST="${_PMT_HOST}" gh pr list --repo "${_PMT_REPO}" \
         --author @me --state open --limit "${_PMT_PR_LIMIT}" \
-        --json number,updatedAt,isDraft 2>/dev/null) || return 1
+        --json number,updatedAt,isDraft,labels 2>/dev/null) || return 1
     [ -n "${_json}" ] || return 1
 
     _now=$(_pmt_now)
     # No clock means no defensible cutoff. Counting every PR as a target would
     # merge inside the quiet window; counting none would wedge the train
     # permanently. Refusing the tick is the only answer that does neither.
+    # The filter takes the clock as an argument for exactly this reason — it
+    # never reads `date` itself, so this decision stays here.
     [ -n "${_now}" ] || return 1
-    _cutoff=$((_now - _PMT_QUIET_MINUTES * 60))
 
-    # `// empty` rather than `// 0` on the timestamp: a missing or unparseable
-    # `updatedAt` must fail *closed*. With `// 0` it became epoch zero, which
-    # is `<= $cutoff` for any clock, so a PR whose timestamp could not be read
-    # counted as a target — the exact direction D-6 exists to prevent (waking a
-    # train that merges before the deferred `gh:pr-reply` lands). `select` over
-    # an empty expression drops the element instead, so an unreadable timestamp
-    # reads as "still inside the quiet period".
-    printf '%s' "${_json}" | jq -r --argjson cutoff "${_cutoff}" '
-        [ .[]?
-          | select((.isDraft // false) | not)
-          | select(((.updatedAt // "") | fromdateiso8601? // empty) <= $cutoff)
-        ] | length
-    ' 2>/dev/null || return 1
+    _filtered=$(printf '%s' "${_json}" |
+        _gh_pr_merge_train_filter_targets --now "${_now}") || return 1
+
+    printf '%s' "${_filtered}" | jq -r 'length' 2>/dev/null || return 1
 }
 
 # ============================================================
@@ -756,7 +761,8 @@ _pmt_usage() {
     ux_bullet_sub "no PR is ever written to from here — no merge, comment or label change"
     ux_bullet "target PRs"
     ux_bullet_sub "your own PRs only (--author @me) — a colleague's PR is never auto-merged (D-7)"
-    ux_bullet_sub "a PR updated in the last ${_PMT_QUIET_MINUTES}m is excluded (D-6: gh:pr-reply may be in flight)"
+    ux_bullet_sub "a PR updated in the last $(_gh_pr_merge_train_quiet_minutes)m is excluded (D-6: gh:pr-reply may be in flight)"
+    ux_bullet_sub "a PR carrying the reply-pending label is excluded (#1524: the deferred reply pass is still out)"
     ux_bullet_sub "drafts are excluded — DRAFT is a skip row in the routing table"
     ux_bullet_sub "gh pr list failure ends the tick: never merge without knowing state"
     ux_bullet "duplicate-start guard (NF-1)"

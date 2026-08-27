@@ -25,9 +25,12 @@ Rules:
   reason is a bug in the report, not a terse style.
 - `[MERGED]` lines name the **route taken**, so a reader can tell a PR that
   merged straight through from one that needed two remediations.
-- PRs excluded before the queue was built (drafts, inside the quiet period, not
-  `--author @me`) are **not** listed — they were never candidates. Mention them
-  only as a count, if at all.
+- PRs excluded before the queue was built (drafts, `reply-pending`, inside the
+  quiet period, not `--author @me`) are **not** listed — they were never
+  candidates. Mention them only as a count, if at all.
+- A PR that entered the queue and *then* picked up `reply-pending` (the label
+  can be added mid-run) is a normal `[SKIPPED]` line with
+  `reply-pending — review reply not yet complete` as its reason.
 
 ## The `approval gate:` field (#1519 NF-1)
 

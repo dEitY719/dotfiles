@@ -59,7 +59,11 @@ Treat the Step 2 queue as an **ordering**, not as a state snapshot.
 
 ## D-6 — the 11-minute quiet period
 
-Drop every PR whose `updatedAt` is within `11` minutes of now.
+Drop every PR whose `updatedAt` is within `11` minutes of now. The number lives
+in exactly one place — `_gh_pr_merge_train_quiet_minutes` in
+`shell-common/functions/gh_pr_merge_train.sh` (overridable with
+`GH_PR_MERGE_TRAIN_QUIET_MINUTES`) — and the `11` written here is a citation of
+it, not a second definition.
 
 This is a condition that only unattended running creates. `gh:issue-flow`
 Step 2.4 calls `devx:pr-review-all` with `--defer-reply 4`, which **schedules
@@ -72,14 +76,42 @@ naturally while they looked at the PRs. Cron has no such pause.
 
 `11 = 4` (the scheduled defer) `+` the reply pass's own runtime `+` slack.
 
-### The dispatcher applies the same filter, for a narrower reason
+### `reply-pending` — the hard skip; the quiet period is only the backstop
 
-`shell-common/tools/custom/pr_merge_train_cron.sh` also drops quiet-period PRs
-when it counts targets. That is **not** a redundancy to remove: the dispatcher
-is only answering "is there anything worth waking a session for", cheaply and
-before spending a claude session on a queue that would come out empty. This
-skill re-applies the filter **authoritatively**, because minutes pass between
-that count and the moment each PR is actually processed, and a PR can be
-touched again in between.
+The quiet period is a **time-based proxy** for the question that actually
+matters: *has the deferred review-reply pass finished?* Time is a bad proxy. A
+reply pass slower than 11 minutes outlives the window, and the train merges a
+PR whose replies and `/simplify` fixes are still in flight — which is what
+happened to PR #1522 (issue #1524, bug A).
 
-If the two ever disagree, this skill wins — it is the one holding the merge.
+So there is now a real signal, checked **regardless of elapsed time**:
+
+| Signal | Set by | Cleared by |
+|---|---|---|
+| `reply-pending` label | `devx:pr-review-all` Step 5, `defer` branch | `gh:pr-reply` Step 6, unconditionally |
+
+A PR carrying `reply-pending` is **never** a train target, no matter how long
+ago it was updated. The quiet period stays on as the **backstop** for the two
+cases the label cannot cover:
+
+1. PRs opened by hand or by another tool, which never got the label at all.
+2. A session that died between adding the label and removing it — its PR would
+   otherwise be excluded forever, so the label is not allowed to be the only
+   gate either. (A stuck label is cleared by hand, or by the next `gh:pr-reply`
+   run on that PR.)
+
+### One filter, two callers — not a coincidence
+
+`shell-common/tools/custom/pr_merge_train_cron.sh` and this skill call the
+**literal same function**, `_gh_pr_merge_train_filter_targets` in
+`shell-common/functions/gh_pr_merge_train.sh` (issue #1524). Before that fix
+the dispatcher had the filter as real `jq` and this skill had it as prose, so
+the prose half could be — and was — silently skipped by the LLM executing it.
+They cannot drift now: there is one implementation.
+
+The two calls still exist for different reasons. The dispatcher answers "is
+there anything worth waking a session for", cheaply, before spending a claude
+session on a queue that would come out empty. This skill re-runs the filter
+**authoritatively**, because minutes pass between that count and the moment
+each PR is actually processed, and a PR can be touched — or labelled — again
+in between. Same code, later clock.

@@ -70,7 +70,7 @@ declined ones and bot comments.** Read `references/reply-templates.md` for
 POST command shapes, the four body templates, the long-body fallback, and
 the consolidated table reply. Reply in the reviewer's language.
 
-## Step 6: Push the Fix Commits + Sync Board
+## Step 6: Push the Fix Commits + Sync Board + Clear `reply-pending`
 
 If any fixes were committed: `git push` (never force-push unless the user
 asked) and report new commit SHAs alongside the reply summary. Set
@@ -78,6 +78,13 @@ asked) and report new commit SHAs alongside the reply summary. Set
 skipped push → `PUSHED_FIXES=0`. If `PUSHED_FIXES > 0`, push the PR card
 back to `In review` per `references/board-sync-in-review.sh.md` (soft-fail;
 no-op when `PUSHED_FIXES == 0`).
+
+Then **unconditionally** remove the `reply-pending` label per
+`references/reply-pending-label-removal.sh.md` — REST DELETE, 404 absorbed as a
+soft-fail. `devx:pr-review-all`'s `defer` branch adds it and
+`gh:pr-merge-train` hard-skips any PR carrying it, so leaving it on would wedge
+the PR out of the train forever (#1524). An inline-reply run never had the
+label; the 404 makes that a safe no-op, so there is no branch to write.
 
 ## Step 7: Report
 

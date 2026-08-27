@@ -9,7 +9,7 @@ Immediately before processing each PR (F-3):
 
 ```bash
 STATE=$(GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
-  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,url)
+  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,labels,url)
 ```
 
 Keep `$STATE`. Every question the rest of this file asks about the PR is
@@ -28,7 +28,24 @@ a round trip the state you already hold has covered.
 | `UNKNOWN` | `UNKNOWN` | poll, then re-evaluate; `[SKIPPED]` after 3 polls |
 | `DRAFT` | — | `[SKIPPED]` (a draft is not a merge candidate) |
 
-`isDraft == true` short-circuits the table: skip before reading anything else.
+Two conditions **short-circuit the table** — check both before reading
+`mergeStateStatus` at all:
+
+| Condition | Verdict |
+|---|---|
+| `isDraft == true` | `[SKIPPED] draft` |
+| `labels[].name` contains `reply-pending` | `[SKIPPED] reply-pending — review reply not yet complete` |
+
+```bash
+printf '%s' "$STATE" | jq -e '[.labels[]?.name] | index("reply-pending")' >/dev/null \
+  && echo "[SKIPPED] reply-pending"
+```
+
+Both are defense-in-depth: Step 2 already dropped drafts and `reply-pending`
+PRs from the queue via `_gh_pr_merge_train_filter_targets`. The re-check earns
+its place because a label can be **added mid-run** — a deferred
+`devx:pr-review-all` reply pass can fire minutes after Step 2 built the queue,
+and F-3's re-query is the only thing that would see it (#1524).
 
 The two rebase rows (`BEHIND`, `DIRTY`) never operate on the current checkout.
 The train builds a detached scratch worktree for `headRefName` first and passes

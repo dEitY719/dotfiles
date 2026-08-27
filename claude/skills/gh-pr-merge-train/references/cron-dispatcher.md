@@ -86,8 +86,13 @@ gone, the name is released) earns a new workspace/tab/agent.
   second SSOT that drifts.
 - It does **not** write to GitHub. Its only `gh` call is a `pr list` read.
 - It does **not** decide which PRs the train works on. Its target count is a
-  "worth waking a session?" heuristic; this skill re-derives the real queue,
-  and re-applies the quiet-period filter authoritatively (`ordering.md`).
+  "worth waking a session?" heuristic; this skill re-derives the real queue and
+  re-runs the filter authoritatively (`ordering.md`). Both call the *same*
+  function — `_gh_pr_merge_train_filter_targets` in
+  `shell-common/functions/gh_pr_merge_train.sh` (#1524) — so this is one
+  implementation run at two clocks, not two implementations that could drift.
+  Duplicating the filter here as shell *or* as prose is exactly the bug #1524
+  removed.
 
 ## Failure behaviour
 
