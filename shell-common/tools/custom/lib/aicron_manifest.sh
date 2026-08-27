@@ -66,6 +66,16 @@ aicron_manifest_schedule() {
     aicron_manifest_get "$1" '.schedule // ""'
 }
 
+# Every job's name and schedule, tab-separated as `<job><TAB><schedule>`, one
+# per line, in manifest order — mirrors aicron_manifest_names' single-jq-call
+# shape so a caller comparing every job's schedule (aicron_doctor_scan's
+# drift check, #1496) doesn't pay for a jq call per job.
+aicron_manifest_schedules() {
+    local _m
+    _m=$(aicron_manifest_file)
+    jq -r '.jobs[]? | "\(.name)\t\(.schedule // "")"' "${_m}" 2>/dev/null
+}
+
 aicron_manifest_description() {
     aicron_manifest_get "$1" '.description // ""'
 }

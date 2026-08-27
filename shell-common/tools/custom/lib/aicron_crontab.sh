@@ -95,18 +95,23 @@ aicron_crontab_count_in() {
     aicron_crontab_names_in "$1" | grep -c -x -F -- "$2" || true
 }
 
-# The 5-field cron schedule installed for job <2> in the already-dumped table
-# <1>, or empty when that job owns no block there. The schedule line inside a
-# marker block is always `<5 schedule fields> <script> run <job>` (see the
-# BEGIN/END contract at the top of this file), so the first 5 whitespace
-# fields are the schedule regardless of how the script path is spelled.
-# Stops at the first block on a duplicate job — doctor already reports
-# duplicates separately (#1496).
-aicron_crontab_schedule_in() {
-    awk -v tag="$2" '
-        $0 == "# BEGIN aicron:" tag { on = 1; next }
-        $0 == "# END aicron:" tag   { on = 0 }
-        on == 1 && NF >= 5 { print $1, $2, $3, $4, $5; exit }
+# Every job's installed 5-field cron schedule in the already-dumped table
+# <1>, one `<job><TAB><schedule>` line per marker block. The schedule line
+# inside a marker block is always `<5 schedule fields> <script> run <job>`
+# (see the BEGIN/END contract at the top of this file), so the first 5
+# whitespace fields are the schedule regardless of how the script path is
+# spelled. A job with no block in the table has no line here. Only the first
+# block counts for a duplicate job — doctor already reports duplicates
+# separately (#1496). One dump, like aicron_crontab_names_in, so a caller
+# comparing every job's schedule pays for one awk pass instead of one per job.
+aicron_crontab_schedules_in() {
+    awk '
+        /^# BEGIN aicron:/ { tag = substr($0, 16); on = 1; next }
+        /^# END aicron:/   { on = 0 }
+        on == 1 && NF >= 5 && !(tag in seen) {
+            seen[tag] = 1
+            print tag "\t" $1, $2, $3, $4, $5
+        }
     ' "$1"
 }
 
