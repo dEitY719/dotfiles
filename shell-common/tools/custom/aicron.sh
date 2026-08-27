@@ -99,7 +99,7 @@ aicron_usage() {
     ux_table_row "remove <job>" "drop the job's crontab block (also cleans a doctor orphan); the state file is kept"
     ux_table_row "pause <job>" "stop running the job; the crontab entry stays"
     ux_table_row "resume <job>" "undo pause"
-    ux_table_row "status <job> --json" "running now, schedule, last run result"
+    ux_table_row "status <job>" "running now, schedule, last run result (--json for machine-readable)"
     ux_table_row "run <job>" "one execution, identical to the one cron performs"
     ux_table_row "doctor" "check manifest, crontab and state against each other"
     ux_table_row "help" "this text (also -h, --help)"
