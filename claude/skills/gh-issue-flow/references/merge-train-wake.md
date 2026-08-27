@@ -80,18 +80,38 @@ One consequence: the dispatcher's own exit code is never observed here —
 see "Soft-fail policy" below.
 
 **Why the `$HOME/dotfiles` fallback is intentional, not a portability gap.**
-The `${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}` chain
-mirrors the SSOT fallback used throughout this skill suite (e.g.
-`gh-issue-implement/references/claim.md` Step 3.4). Here it does double duty:
-`gh:issue-flow`'s own precondition is a dedicated feature-branch **worktree**,
-never the checkout at `$HOME/dotfiles` — but crontab always calls
-`$HOME/dotfiles/shell-common/tools/custom/aicron.sh` (see
+`gh:issue-flow`'s own precondition is a dedicated feature-branch
+**worktree**, never the checkout at `$HOME/dotfiles` — but crontab always
+calls `$HOME/dotfiles/shell-common/tools/custom/aicron.sh` (see
 `crontab -l`), never a worktree path, because a worktree is torn down after
 its PR merges while the crontab entry is permanent. Waking the *same*
 dispatcher instance cron uses — not a worktree-local copy that may not have
 `aicron`'s installed state/manifest, and would vanish with the worktree —
-is the correct target, so this step deliberately falls through past any
-worktree-scoped `SHELL_COMMON`/`DOTFILES_ROOT` to the live checkout.
+is the correct target. The `${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}`
+chain reaches that target in two tiers, not by falling through past a
+worktree-scoped value:
+
+1. **`SHELL_COMMON` is already canonical (#589).** An interactive shell that
+   started this skill session sourced `bash/main.bash` / `zsh/main.zsh`,
+   which calls `_dotfiles_root_canonicalize` (`shell-common/functions/dotfiles_root.sh:110`)
+   at loader entry. That function walks a linked worktree back to the main
+   worktree via `git rev-parse --git-common-dir` and re-exports both
+   `DOTFILES_ROOT` and `SHELL_COMMON` (`dotfiles_root.sh:116`) to the main
+   checkout path — the same path crontab uses. So in the common case
+   `SHELL_COMMON` is picked first by the `:-` chain and is *already* the
+   live checkout; there is no fall-through happening.
+2. **`$HOME/dotfiles` is the last-resort tier**, used only when
+   `SHELL_COMMON`/`DOTFILES_ROOT` are both unset — a non-interactive
+   environment where no loader ran to canonicalize them.
+
+**Escape hatch interaction.** `DOTFILES_ROOT_NO_CANONICALIZE=1`
+(`_resolve_dotfiles_root_canonical` in `dotfiles_root.sh`) disables tier 1's
+canonicalization for a shell that intentionally wants to test a worktree's
+own dotfiles. If that variable is set in the shell running Step 2.4.1,
+`SHELL_COMMON` stays worktree-scoped and this step wakes the
+**worktree-local** `aicron.sh` instead of the live checkout — the exact
+outcome this section says is undesirable, since the worktree vanishes once
+its PR merges.
 
 ## Soft-fail policy (F-2)
 
