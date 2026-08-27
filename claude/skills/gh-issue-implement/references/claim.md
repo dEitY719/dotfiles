@@ -144,7 +144,10 @@ The reliable fingerprint of "someone already did this" is an **open PR
 that closes this issue**. Read-only, one search call, one warning line.
 It never blocks: a second session is sometimes exactly what the user
 wants (a rewrite, an abandoned first attempt), so the decision stays
-with the human.
+with the human. The search matches both footer keywords this repo's
+`gh:commit` accepts — `Closes` and `Fixes` — since a `Fixes #<N>` PR is
+just as valid a duplicate signal as a `Closes #<N>` one (codex review,
+PR #1509).
 
 **Algorithm**:
 
@@ -153,7 +156,7 @@ if "GH_ISSUE_SKIP_DUPLICATE_CHECK" set:
     return 0
 
 prs = `GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" \
-         --state open --search "Closes #<N> in:body" --json number -q '.[].number'`
+         --state open --search "\"Closes #<N>\" OR \"Fixes #<N>\" in:body" --json number -q '.[].number'`
 
 if prs == []:
     return 0    # silent — no output on the common path
@@ -237,7 +240,7 @@ mutation:
 status = `_gh_project_status_query_current issue <N> "$TARGET_REPO"`
 
 if status not in ("Backlog", "Ready"):
-    print "[WARN] Issue #<N> Status 가 이미 \"<status>\" 입니다 — 다른 세션이 이미 착수했을 수 있습니다."
+    print "[WARN] Issue #<N> Status 가 이미 \"<status>\" 입니다 — 다른 세션의 중복 착수이거나, 이슈가 이미 다른 단계로 넘어갔을 수 있습니다."
 ```
 
 This changes nothing about the mutation — the helper's whitelist still
@@ -248,6 +251,13 @@ the PR side, and the two signals are independent: the other session may
 have moved the board without opening a PR yet, or opened a PR in a repo
 with no board at all. A restart of your own abandoned run also lands
 here, which is fine — the line is advisory, not a refusal.
+
+The wording is deliberately non-committal about *why* the Status isn't
+`Backlog`/`Ready`: the same non-empty complement also includes terminal
+columns like `Done` or custom ones like `Spec`, where "another session
+already started this" would be the wrong read (codex review, PR #1509)
+— the message names the fact (current Status) and offers duplicate-start
+as one possible explanation, not the only one.
 
 Reading the Status is itself best-effort: a non-zero return from
 `_gh_project_status_query_current` (missing scope, network error, no
