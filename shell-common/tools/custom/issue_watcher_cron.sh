@@ -41,6 +41,17 @@ if ! type ux_header >/dev/null 2>&1; then
     fi
 fi
 
+# The herdr agent-name SSOT (#1530). Sourced at file scope rather than lazily
+# because _iw_agent_name is called from both the dispatch loop and the tick's
+# summary, and a tick that discovers the helper missing halfway through would
+# have already opened panes it can no longer address.
+if [ ! -f "${_IW_SHELL_COMMON}/functions/herdr_agent_name.sh" ]; then
+    ux_error "herdr_agent_name.sh not found under ${_IW_SHELL_COMMON}/functions — cannot derive agent names."
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "${_IW_SHELL_COMMON}/functions/herdr_agent_name.sh" || exit 1
+
 # ============================================================
 # Constants (SSOT for the watch cycle)
 # ============================================================
@@ -124,7 +135,12 @@ _IW_PR_LIMIT="100"
 # be unique across every watched repo: `iw-<number>` alone collides the moment
 # two repos both have an issue #11, and herdr would route the second dispatch's
 # prompt at the first one's pane (PR #1447 agy review). See _iw_agent_name.
-_IW_AGENT_PREFIX="iw-"
+#
+# No trailing dash since #1530: `herdr_agent_name` joins the parts. Pre-#1530
+# this folded the owner in verbatim (`iw-<owner>-<repo>-<N>`), which herdr's
+# `^[a-z][a-z0-9_-]{0,31}$` rejects for any owner carrying uppercase — so the
+# watcher dispatched nothing at all in 21 attempts.
+_IW_AGENT_PREFIX="iw"
 # `herdr agent prompt --wait` 한 번의 상한 — 4분. tick 이 겹치지 않게 막는 것은
 # flock 이므로 이 값은 cron 주기와 무관하다. 무응답 pane 하나가 tick 을 무한정
 # 붙들지 않게 하는 것이 목적이다.
@@ -422,7 +438,7 @@ _IW_LIVE_AGENTS_LOADED=0
 # Emit `<owner/repo><TAB><number>` for every issue whose worktree currently has
 # a live herdr agent pane. Non-zero when herdr could not be asked at all.
 #
-# `herdr agent list` carries no agent-name field, so the `iw-<repo>-<n>` names
+# `herdr agent list` carries no agent-name field, so the `iw-<repo>-issue-<n>` names
 # this tick chooses cannot be matched back by name. What it does carry is each
 # pane's `cwd`, and every dispatched pane is opened on the issue's worktree
 # (`_iw_tab_create` passes it as --cwd) — so joining that column against
@@ -1201,11 +1217,14 @@ _iw_tab_create() {
 }
 
 # Echo the herdr agent name for <owner/repo> issue <number>:
-# `iw-<owner>-<repo>-<number>`, with anything outside herdr's safe name charset
-# folded to `-`.
+# `iw-<repo>-issue-<number>`. Composition and the character rules behind it are
+# the SSOT this file shares with pr_merge_train_cron.sh and
+# gh:pr-post-merge-verify — shell-common/functions/herdr_agent_name.sh (#1530).
+# Returns non-zero (and echoes nothing) when the repo cannot be normalized;
+# every caller here treats an empty name as a failed dispatch rather than
+# starting an agent with a malformed one.
 _iw_agent_name() {
-    printf '%s%s-%s' "${_IW_AGENT_PREFIX}" \
-        "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-')" "$2"
+    herdr_agent_name "${_IW_AGENT_PREFIX}" "$1" "issue-$2"
 }
 
 # Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
@@ -1511,7 +1530,13 @@ _iw_process_issue() {
     local _attempt=1 _agent _label _wt="" _ws="" _pane_tab="" _pane="" _tab=""
     local _cause="" _msg=""
 
-    _agent=$(_iw_agent_name "${_repo}" "${_number}")
+    # A repo whose name normalizes to nothing has no addressable agent, so the
+    # dispatch fails here rather than starting a session under a name no later
+    # tick can look up (#1530).
+    _agent=$(_iw_agent_name "${_repo}" "${_number}") || {
+        ux_warning "Cannot derive a herdr agent name for ${_repo}#${_number} — skipping."
+        return 1
+    }
     _label=$(_iw_workspace_label "${_repo}" "${_path}")
 
     while [ "${_attempt}" -le "${_IW_MAX_ATTEMPTS}" ]; do

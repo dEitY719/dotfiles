@@ -944,8 +944,8 @@ _assert_not_hung() {
     assert_success
     _assert_logged "gwt spawn --wt-name issue-11"
     _assert_logged "tab create --workspace"
-    _assert_logged "agent start iw-acme-dotfiles-11 --kind claude --pane ws-test-1:p9"
-    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
+    _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
 }
 
 @test "issue_watcher_cron: the prompt is the slash command, not a subagent instruction" {
@@ -961,7 +961,7 @@ _assert_not_hung() {
 @test "issue_watcher_cron: the dispatched pane runs claude with --dangerously-skip-permissions" {
     _run_tick
     assert_success
-    _assert_logged "agent start iw-acme-dotfiles-11 --kind claude --pane ws-test-1:p9 -- --dangerously-skip-permissions"
+    _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9 -- --dangerously-skip-permissions"
 }
 
 @test "issue_watcher_cron: the tab is labelled with the issue number" {
@@ -1217,8 +1217,32 @@ _assert_not_hung() {
     assert_success
     # Two watched repos both having an issue #11 would otherwise share one herdr
     # agent name, and the second prompt would land on the first one's pane.
-    _assert_logged "agent start iw-acme-dotfiles-11"
-    _refute_logged "agent start iw-11 "
+    _assert_logged "agent start iw-dotfiles-issue-11"
+    _refute_logged "agent start iw-issue-11 "
+}
+
+# herdr refuses `agent start` unless the name matches
+# `^[a-z][a-z0-9_-]{0,31}$`. The pre-#1530 name folded the owner in verbatim
+# (`iw-<owner>-<repo>-<N>`), so a real owner like `dEitY719` made every name
+# invalid and the watcher dispatched nothing in 21 attempts.
+@test "issue_watcher_cron: the dispatched agent's name satisfies herdr's rule" {
+    _run_tick
+    assert_success
+
+    local _name
+    _name=$(grep -oE 'agent start [^ ]+' "${_LOG}" | head -1 | awk '{print $3}')
+    [[ "${_name}" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
+        || fail "not a valid herdr agent name: '${_name}'"
+}
+
+# An owner with uppercase is the exact shape that broke production — the fold
+# has to happen, and the repo (not the owner) has to be what survives.
+@test "issue_watcher_cron: a mixed-case owner still yields a valid name" {
+    _write_watch_file '[{"repo":"dEitY719/DotFiles","path":"'"${_REPO_DIR}"'"}]'
+    _set_issues '[{"repository":{"nameWithOwner":"dEitY719/DotFiles"},"number":11,"title":"t","labels":[]}]'
+    _run_tick
+    assert_success
+    _assert_logged "agent start iw-dotfiles-issue-11"
 }
 
 @test "issue_watcher_cron: repos with colliding directory names get distinct workspaces" {
@@ -1244,10 +1268,10 @@ _assert_not_hung() {
     assert_success
     # `herdr agent start` returning does not prove the key-input loop accepts
     # Enter yet (#1399) — prompting a cold pane drops the first keystroke.
-    run grep -n "agent get iw-acme-dotfiles-11" "${_LOG}"
+    run grep -n "agent get iw-dotfiles-issue-11" "${_LOG}"
     assert_success
-    _agent_get_line=$(grep -n "agent get iw-acme-dotfiles-11" "${_LOG}" | head -1 | cut -d: -f1)
-    _prompt_line=$(grep -n "agent prompt iw-acme-dotfiles-11" "${_LOG}" | head -1 | cut -d: -f1)
+    _agent_get_line=$(grep -n "agent get iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
+    _prompt_line=$(grep -n "agent prompt iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
     [ "${_agent_get_line}" -lt "${_prompt_line}" ]
 }
 
@@ -1801,7 +1825,7 @@ _two_repo_fixture() {
     # here would mean the outer loop absorbed it, which is the defect.
     [ "$(_log_count 'agent start')" -eq 2 ]
     [ "$(_log_count 'tab create')" -eq 1 ]
-    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
 }
 
 # The retry has to be visible: 130 ticks of silent failure is what made this
@@ -1895,7 +1919,7 @@ _two_repo_fixture() {
     _install_failing_mktemp
     _run_tick
     assert_success
-    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
 }
 
 # Same fallback on the failing side: the tick reports the failure and cleans up
@@ -1920,7 +1944,7 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a spawn that fails once then succeeds still dispatches" {
     _run_tick "GWT_SPAWN_FAIL_TIMES=1"
     assert_success
-    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
 }
 
 @test "issue_watcher_cron: a non-stall prompt failure is not retried within the attempt" {
@@ -1941,7 +1965,7 @@ _two_repo_fixture() {
     # second `agent prompt` would type it on top of itself and Enter would still
     # never land. Exactly one prompt, ever.
     [ "$(_log_count 'agent prompt')" -eq 1 ]
-    _assert_logged "agent send-keys iw-acme-dotfiles-11 Enter"
+    _assert_logged "agent send-keys iw-dotfiles-issue-11 Enter"
     [ "$(_log_count 'agent send-keys')" -eq 1 ]
 }
 
@@ -1949,7 +1973,7 @@ _two_repo_fixture() {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=ok"
     assert_success
     assert_output --partial "state_change_seq"
-    assert_output --partial "Dispatched to iw-acme-dotfiles-11"
+    assert_output --partial "Dispatched to iw-dotfiles-issue-11"
 }
 
 @test "issue_watcher_cron: an unresolved stall presses Enter three times and still reports the stall" {
@@ -2113,7 +2137,7 @@ _two_repo_fixture() {
     _run_tick "PATH=$(_path_without flock)"
     assert_success
     assert_output --partial "without single-instance protection"
-    _assert_logged "agent prompt iw-acme-dotfiles-11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
 # ---------------------------------------------------------------------------
@@ -2276,9 +2300,9 @@ _two_repo_fixture() {
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
     ]'
-    _run_tick "IW_DISPATCH_PER_TICK=3" "HERDR_WORKING_AGENTS=iw-acme-dotfiles-12"
+    _run_tick "IW_DISPATCH_PER_TICK=3" "HERDR_WORKING_AGENTS=iw-dotfiles-issue-12"
     assert_success
-    assert_output --partial "Agent iw-acme-dotfiles-12 held 'working'"
+    assert_output --partial "Agent iw-dotfiles-issue-12 held 'working'"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
@@ -2338,8 +2362,8 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a strike logs the pane tail as evidence" {
     _run_tick
     assert_success
-    _assert_logged "agent read iw-acme-dotfiles-11 --lines 40 --format text"
-    assert_output --partial "Pane tail for iw-acme-dotfiles-11 (evidence only"
+    _assert_logged "agent read iw-dotfiles-issue-11 --lines 40 --format text"
+    assert_output --partial "Pane tail for iw-dotfiles-issue-11 (evidence only"
     assert_output --partial "5-hour limit reached"
 }
 
@@ -2355,7 +2379,7 @@ _two_repo_fixture() {
     # nothing, and it must not disturb the verdict either way.
     _run_tick "HERDR_READ_MODE=missing"
     assert_success
-    assert_output --partial "No pane output captured for iw-acme-dotfiles-11"
+    assert_output --partial "No pane output captured for iw-dotfiles-issue-11"
     refute_output --partial '{"error"'
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
@@ -2411,7 +2435,7 @@ _two_repo_fixture() {
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Rate-limit gate reopened"
-    _assert_logged "agent prompt iw-acme-dotfiles-11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
@@ -2427,7 +2451,7 @@ _two_repo_fixture() {
     printf 'not json at all\n' >"${_LIMIT_FILE}"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
-    _assert_logged "agent prompt iw-acme-dotfiles-11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
 @test "issue_watcher_cron: a non-numeric deadline fails open" {
@@ -2435,7 +2459,7 @@ _two_repo_fixture() {
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "dispatching anyway"
-    _assert_logged "agent prompt iw-acme-dotfiles-11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
 @test "issue_watcher_cron: a productive tick clears accumulated strikes" {
@@ -2512,7 +2536,7 @@ _two_repo_fixture() {
     mkdir -p "${_STATE_DIR}"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
-    _assert_logged "agent prompt iw-acme-dotfiles-11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 

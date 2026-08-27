@@ -67,18 +67,24 @@ _PMT_QUIET_MINUTES="11"
 # zero", so this is a courtesy cap, not a correctness boundary.
 _PMT_PR_LIMIT="50"
 
-# herdr agent naming. One train per repo *on one host*, so the name is
-# deterministic and derived from the host-qualified repo slug — that is what
-# lets the *next* tick find the session this tick started (see
-# _pmt_train_state). The host is part of the key because `owner/repo` alone is
-# not unique across servers (#1403/#1407 pin the host everywhere else; leaving
-# it out here would undo that pinning at the session-identity layer): a
-# github.com checkout and a GHE checkout that happen to share a slug would
-# otherwise block or reuse each other's train.
-_PMT_AGENT_PREFIX="pmt-"
+# herdr agent naming. One train per repo, so the name is deterministic and
+# derived from the repo alone — that is what lets the *next* tick find the
+# session this tick started (see _pmt_train_state). Composed by
+# `herdr_agent_name`, the SSOT this file shares with issue_watcher_cron.sh and
+# gh:pr-post-merge-verify (#1530); the prefix carries no trailing dash because
+# the helper joins the parts. Pre-#1530 this was `pmt-` over a host-qualified
+# slug, which produced `pmt-github.com-<owner>-<repo>` — a name herdr rejects
+# outright (dot, and uppercase from a real owner), so the train never started
+# once in 56 attempts. Dropping the host is the concession that buys the
+# 32-character budget; the rationale and its expiry condition live in
+# shell-common/functions/herdr_agent_name.sh.
+_PMT_AGENT_PREFIX="mt"
 # Workspace label prefix. issue-watcher labels its workspaces with the repo
 # directory's basename; the train must not land in those tabs, so it carries
-# its own prefix (issue #1470, Impact).
+# its own prefix (issue #1470, Impact). Unlike the agent name this stays
+# host-qualified: herdr does not validate labels, the label is how an
+# already-open workspace is found, and shortening it would strand the existing
+# workspace for nothing.
 _PMT_WORKSPACE_PREFIX="mt-"
 
 # `herdr agent prompt --wait` 한 번의 상한 — 4분. train 자체는 수십 분을 돌 수
@@ -192,6 +198,16 @@ _pmt_bind_target() {
     # shellcheck source=/dev/null
     . "${_PMT_SHELL_COMMON}/functions/gh_host.sh" || return 1
 
+    # The herdr name SSOT (#1530). Sourced next to gh_host.sh because both
+    # answer the same question — what this tick's target is called — and a
+    # missing one is the same class of failure.
+    if [ ! -f "${_PMT_SHELL_COMMON}/functions/herdr_agent_name.sh" ]; then
+        ux_error "herdr_agent_name.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot derive the train's agent name."
+        return 1
+    fi
+    # shellcheck source=/dev/null
+    . "${_PMT_SHELL_COMMON}/functions/herdr_agent_name.sh" || return 1
+
     _remote_url=$(git remote get-url origin 2>/dev/null) || {
         ux_error "No 'origin' remote in ${PWD} — cannot resolve the merge-train target."
         ux_info "Run the tick with --cwd pointing at a checkout that has one."
@@ -292,18 +308,27 @@ _pmt_acquire_lock() {
     fi
 }
 
-# The identity this tick's herdr names are derived from: host *and* repo, from
-# the one remote URL _pmt_bind_target read them out of. Never the repo alone —
-# see the _PMT_AGENT_PREFIX comment.
+# The identity the tick's *workspace label* is derived from: host and repo,
+# from the one remote URL _pmt_bind_target read them out of. Host-qualified
+# because `owner/repo` is only unique per server (#1403/#1407).
+#
+# The agent name no longer comes from here (#1530) — it goes through
+# `herdr_agent_name` over `_PMT_REPO` alone, because herdr's 32-character
+# budget has no room for the host. See the _PMT_AGENT_PREFIX comment.
 _pmt_target_key() {
     printf '%s/%s' "${_PMT_HOST}" "${_PMT_REPO}"
 }
 
-# Echo `<prefix $1><slug of $2>`, with anything outside herdr's safe name
-# charset folded to `-`. Both herdr names the tick derives are this shape,
-# over `_pmt_target_key`:
-#   ${_PMT_AGENT_PREFIX}      the agent, e.g. `pmt-github.com-acme-dotfiles`
-#   ${_PMT_WORKSPACE_PREFIX}  the workspace label, e.g. `mt-github.com-acme-dotfiles`
+# Echo `<prefix $1><slug of $2>` for the *workspace label* — e.g.
+# `${_PMT_WORKSPACE_PREFIX}` over `_pmt_target_key`, giving
+# `mt-github.com-acme-dotfiles`.
+#
+# Label-only since #1530. The agent name no longer comes from here: this fold
+# keeps uppercase and dots (they are inside the `tr -c` set), which herdr's
+# `^[a-z][a-z0-9_-]{0,31}$` rejects. Labels are not validated by herdr and
+# carry no length budget, so they keep the wider, host-qualified form; agent
+# names go through `herdr_agent_name`. Do not route an agent name back through
+# this function.
 _pmt_slug() {
     printf '%s%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '-')"
 }
@@ -731,7 +756,7 @@ _pmt_usage() {
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "tick"
     ux_bullet_sub "1. flock — one tick at a time"
-    ux_bullet_sub "2. herdr agent get ${_PMT_AGENT_PREFIX}<host>-<owner>-<repo> — a running train blocks a new one"
+    ux_bullet_sub "2. herdr agent get ${_PMT_AGENT_PREFIX}-<repo> — a running train blocks a new one"
     ux_bullet_sub "3. gh pr list --author @me --state open — is there anything to merge"
     ux_bullet_sub "4. herdr workspace -> tab -> claude -> /gh-pr-merge-train <owner/repo>"
     ux_bullet_sub "no PR is ever written to from here — no merge, comment or label change"
@@ -822,7 +847,10 @@ main() {
     fi
 
     _pmt_bind_target || exit 1
-    _agent=$(_pmt_slug "${_PMT_AGENT_PREFIX}" "$(_pmt_target_key)")
+    _agent=$(herdr_agent_name "${_PMT_AGENT_PREFIX}" "${_PMT_REPO}") || {
+        ux_error "Cannot derive a herdr agent name from ${_PMT_REPO} — ending this tick."
+        exit 1
+    }
 
     # The dry run answers ahead of both guards, deliberately: taking the lock
     # would make a dry run silently no-op while a real tick is mid-cycle —

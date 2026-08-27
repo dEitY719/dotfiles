@@ -42,7 +42,7 @@ event trigger — e.g. this step running while a previous train is still
 Both alternatives were considered and rejected (issue #1482 body, "대안"):
 
 - **Calling `Skill(gh:pr-merge-train)` directly** would bypass NF-1's
-  flock + `herdr agent get pmt-…` double-lock — if several `gh:issue-flow`
+  flock + `herdr agent get mt-…` double-lock — if several `gh:issue-flow`
   sessions finish at the same moment, each would start its own train.
   `pr_merge_train_cron.sh` already implements both locks
   (`claude/skills/gh-pr-merge-train/references/cron-dispatcher.md`); calling

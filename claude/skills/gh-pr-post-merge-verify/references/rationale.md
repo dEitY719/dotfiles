@@ -25,14 +25,26 @@ closing it here, and the difference is what the two know:
 
 Neither supersedes the other, and neither is a prerequisite for the other.
 
-## Why the agent name carries the host
+## Why the agent name does NOT carry the host (#1530)
 
-`pmv-<host>-<owner>-<repo>-<N>` mirrors `_PMT_AGENT_PREFIX` in
-`shell-common/tools/custom/pr_merge_train_cron.sh` for the same reason:
-`owner/repo` alone is not unique across GitHub servers. #1403/#1407 pin the
-host on every `gh` call; leaving it out of the session identity would undo
-that pinning one layer down, and a github.com checkout and a GHES checkout
-sharing a slug would collide on one herdr agent name.
+The name is `mv-<repo>-pr-<N>`, built by `herdr_agent_name` in
+`shell-common/functions/herdr_agent_name.sh` — the SSOT this skill shares with
+`pr_merge_train_cron.sh` and `issue_watcher_cron.sh`.
+
+It used to be `pmv-<host>-<owner>-<repo>-<N>`, mirroring `_PMT_AGENT_PREFIX`
+on the #1403/#1407 argument that `owner/repo` is not unique across GitHub
+servers. That argument is still true — but the name it produced was 37
+characters for this repo and carried a dot besides, and herdr accepts only
+`^[a-z][a-z0-9_-]{0,31}$`. So the host-qualified name did not identify
+sessions across servers; it identified nothing, because `agent start` was
+refused every single time and post-merge verification never ran once.
+
+Thirty-two characters do not fit a host, an owner, a repo and a number. The
+repo and the number are the parts that distinguish the work, so those stay.
+The residual risk is real and bounded: two hosts carrying the same repo name
+would collide on one agent. Today every watched target is one repository on
+one host. When a second host joins the watch list, add a short digest of
+`<host>/<owner>` at the helper — deliberately not pre-built.
 
 ## Why the base branch and remote are threaded in, not assumed
 

@@ -54,8 +54,20 @@ pmv_json_first() {
 # `.error.code` off a failed herdr answer, or empty. Fixed filter, so nothing
 # is ever interpolated into the jq program text.
 pmv_error_code() { jq -r '.error.code // empty' 2>/dev/null || return 0; }
-pmv_slug() { printf '%s%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '-')"; }
 pmv_physical_path() { (cd -P "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"; }
+# herdr agent names come from one SSOT, sourced — never re-implemented here.
+# Three call sites each carrying their own `tr -c 'A-Za-z0-9._-' '-'` copy is
+# what produced #1530: that set keeps uppercase and dots, both of which herdr's
+# `^[a-z][a-z0-9_-]{0,31}$` refuses, so this dispatch never once started a
+# verification session. A missing helper skips the feature rather than
+# guessing a name.
+PMV_NAME_LIB="${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/herdr_agent_name.sh"
+if [ ! -r "$PMV_NAME_LIB" ]; then
+    printf '[WARN] gh:pr-post-merge-verify: %s not readable — verification skipped.\n' "$PMV_NAME_LIB"
+    return 0 2>/dev/null || exit 0
+fi
+# shellcheck source=/dev/null
+. "$PMV_NAME_LIB"
 
 # tab_id of a live agent sitting on <physical path>: rc 0 = matched, rc 1 =
 # herdr could not be asked, rc 3 = herdr answered and nothing is on that path.
@@ -189,10 +201,15 @@ if [ -z "$NEW_PANE" ]; then
 fi
 
 # --- 5. F-4: the agent ----------------------------------------------------
-# Host-qualified: `owner/repo` alone is not unique across GitHub servers, so a
-# slug-only name would undo #1403/#1407's pinning at the session-identity
-# layer (same rationale as _PMT_AGENT_PREFIX).
-PMV_AGENT=$(pmv_slug "pmv-" "${TARGET_HOST}/${TARGET_REPO}-${PR_NUMBER}")
+# `mv-<repo>-pr-<N>`, at most 28 characters. Neither `$TARGET_HOST` nor the
+# owner is in the name: a host-qualified one does not fit herdr's 32-character
+# budget (the pre-#1530 form reached 37 and was refused on every merge). That
+# concession to #1403/#1407, and the condition that would end it, is
+# documented at herdr_agent_name.
+if ! PMV_AGENT=$(herdr_agent_name mv "$TARGET_REPO" "pr-${PR_NUMBER}"); then
+    printf '[WARN] gh:pr-post-merge-verify: cannot derive an agent name for %s — verification skipped.\n' "$TARGET_REPO"
+    return 0 2>/dev/null || exit 0
+fi
 # `--dangerously-skip-permissions` is required, not a convenience: nobody is at
 # the keyboard of this pane, so one permission prompt would park the
 # verification forever instead of failing it (same reason as #1393).
