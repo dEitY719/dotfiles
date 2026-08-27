@@ -72,8 +72,8 @@ _kept_numbers() {
     assert_success
 }
 
-@test "gh_pr_merge_train: sourcing defines all three public functions" {
-    run bash -c ". '${HELPER}' && command -v _gh_pr_merge_train_quiet_minutes && command -v _gh_pr_merge_train_filter_targets && command -v _gh_pr_merge_train_has_reply_pending_label"
+@test "gh_pr_merge_train: sourcing defines all four public functions" {
+    run bash -c ". '${HELPER}' && command -v _gh_pr_merge_train_quiet_minutes && command -v _gh_pr_merge_train_reply_pending_stale_minutes && command -v _gh_pr_merge_train_filter_targets && command -v _gh_pr_merge_train_has_reply_pending_label"
     assert_success
 }
 
@@ -100,6 +100,38 @@ _kept_numbers() {
 }
 
 # ---------------------------------------------------------------------------
+# The reply-pending staleness window (the second, larger constant)
+# ---------------------------------------------------------------------------
+
+@test "gh_pr_merge_train: the reply-pending staleness window defaults to 90 minutes" {
+    run _gh_pr_merge_train_reply_pending_stale_minutes
+    assert_success
+    assert_output "90"
+}
+
+@test "gh_pr_merge_train: GH_PR_MERGE_TRAIN_REPLY_PENDING_STALE_MINUTES overrides the default" {
+    GH_PR_MERGE_TRAIN_REPLY_PENDING_STALE_MINUTES=25 run _gh_pr_merge_train_reply_pending_stale_minutes
+    assert_success
+    assert_output "25"
+}
+
+@test "gh_pr_merge_train: a non-numeric staleness override falls back to 90" {
+    GH_PR_MERGE_TRAIN_REPLY_PENDING_STALE_MINUTES=eventually run _gh_pr_merge_train_reply_pending_stale_minutes
+    assert_success
+    assert_output --partial "90"
+}
+
+# The two windows must not be confusable: the staleness window is the larger
+# one by construction, and the whole design rests on that ordering.
+@test "gh_pr_merge_train: the staleness window is larger than the quiet period" {
+    local _quiet _stale
+    _quiet=$(_gh_pr_merge_train_quiet_minutes)
+    _stale=$(_gh_pr_merge_train_reply_pending_stale_minutes)
+    [ "${_stale}" -gt "${_quiet}" ] \
+        || fail "staleness ${_stale} must exceed the quiet period ${_quiet}"
+}
+
+# ---------------------------------------------------------------------------
 # The filter
 # ---------------------------------------------------------------------------
 
@@ -121,10 +153,60 @@ _kept_numbers() {
     assert_output ""
 }
 
-# The #1524 hard skip: the label wins over elapsed time, which is the whole
-# point — the quiet period is only a time-based proxy for this question.
-@test "gh_pr_merge_train: a reply-pending PR is dropped however old it is" {
+# The #1524 hard skip: the label wins over the quiet period, which is the whole
+# point — the quiet period is only a time-based proxy for this question. 30 min
+# is well outside the 11-minute quiet period and well inside the 90-minute
+# staleness window, so only the label can be the reason this one is dropped.
+@test "gh_pr_merge_train: a fresh reply-pending PR is dropped past the quiet period" {
+    run _kept_numbers "[$(_pr 11 30 false '[{"name":"reply-pending"}]')]"
+    assert_success
+    assert_output ""
+}
+
+# The bounded half of the same rule (PR #1545 review, codex BLOCKER): a label
+# nobody ever removed must not exclude its PR forever. Past the staleness
+# window the label is presumed stale and the PR is judged like any other.
+@test "gh_pr_merge_train: a stale reply-pending PR becomes a target again" {
     run _kept_numbers "[$(_pr 11 300 false '[{"name":"reply-pending"}]')]"
+    assert_success
+    assert_output "11"
+}
+
+# Exactly ON the boundary counts as stale, matching the quiet period's own
+# inclusive `<= cutoff`.
+@test "gh_pr_merge_train: a reply-pending PR exactly at the staleness boundary is a target" {
+    run _kept_numbers "[$(_pr 11 90 false '[{"name":"reply-pending"}]')]"
+    assert_success
+    assert_output "11"
+}
+
+@test "gh_pr_merge_train: one minute inside the staleness boundary is still dropped" {
+    run _kept_numbers "[$(_pr 11 89 false '[{"name":"reply-pending"}]')]"
+    assert_success
+    assert_output ""
+}
+
+# A stale label buys nothing on its own — the ordinary quiet-period check is
+# what the PR falls through TO, not past.
+@test "gh_pr_merge_train: staleness expiry does not exempt a PR from the quiet period" {
+    GH_PR_MERGE_TRAIN_REPLY_PENDING_STALE_MINUTES=1 \
+        run _kept_numbers "[$(_pr 11 2 false '[{"name":"reply-pending"}]')]"
+    assert_success
+    assert_output ""
+}
+
+@test "gh_pr_merge_train: the staleness window is tunable by env var" {
+    # 30 min old: dropped at the default 90, kept once the window shrinks to 20.
+    GH_PR_MERGE_TRAIN_REPLY_PENDING_STALE_MINUTES=20 \
+        run _kept_numbers "[$(_pr 11 30 false '[{"name":"reply-pending"}]')]"
+    assert_success
+    assert_output "11"
+}
+
+# Fail-closed in the second window too: an unreadable stamp must never be read
+# as "old enough to ignore the label".
+@test "gh_pr_merge_train: a reply-pending PR with an unreadable stamp is dropped" {
+    run bash -c ". '${HELPER}'; printf '%s' '[{\"number\":11,\"updatedAt\":null,\"isDraft\":false,\"labels\":[{\"name\":\"reply-pending\"}]}]' | _gh_pr_merge_train_filter_targets --now ${_NOW} | jq -r '.[].number'"
     assert_success
     assert_output ""
 }
@@ -165,7 +247,7 @@ _kept_numbers() {
 }
 
 @test "gh_pr_merge_train: a reply-pending PR does not mask a real target" {
-    run _kept_numbers "[$(_pr 11 300 false '[{"name":"reply-pending"}]'),$(_pr 12 30)]"
+    run _kept_numbers "[$(_pr 11 30 false '[{"name":"reply-pending"}]'),$(_pr 12 30)]"
     assert_success
     assert_output "12"
 }
@@ -270,6 +352,33 @@ _kept_numbers() {
 
 @test "gh_pr_merge_train: ordering.md names the shared filter, not a parallel one" {
     run grep -qF -- "_gh_pr_merge_train_filter_targets" "${TRAIN_ORDERING}"
+    assert_success
+}
+
+# ordering.md D-6 promises the quiet period is a backstop for a session that
+# died before removing the label. That promise is only true because the hard
+# skip expires, so the doc has to name the function that expires it.
+@test "gh_pr_merge_train: ordering.md names the staleness window function" {
+    run grep -qF -- "_gh_pr_merge_train_reply_pending_stale_minutes" "${TRAIN_ORDERING}"
+    assert_success
+}
+
+# The other half of the same wedge: the label must come off on EVERY exit path
+# of gh:pr-reply, so both the Step 2.5 early exit and Step 6 have to point at
+# the one removal block (PR #1545 review, agy BLOCKER).
+@test "gh_pr_merge_train: gh-pr-reply removes reply-pending on both exit paths" {
+    local _skill="${DOTFILES_ROOT}/claude/skills/gh-pr-reply/SKILL.md"
+    local _refs
+    _refs=$(grep -cF -- "reply-pending-label-removal.sh.md" "${_skill}")
+    [ "${_refs}" -ge 2 ] \
+        || fail "gh-pr-reply SKILL.md cites the removal block ${_refs}x; both Step 2.5 and Step 6 must"
+}
+
+# 404 is the ordinary inline-run outcome, not a failure — reporting it as WARN
+# is what buried real auth/network failures in routine noise.
+@test "gh_pr_merge_train: the removal block reports a 404 as OK, not WARN" {
+    run grep -qF -- 'HTTP 404' \
+        "${DOTFILES_ROOT}/claude/skills/gh-pr-reply/references/reply-pending-label-removal.sh.md"
     assert_success
 }
 
