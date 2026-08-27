@@ -126,6 +126,23 @@ run_in_bash() {
     "
 }
 
+# Epoch seconds <1> as the ISO-8601 UTC stamp `gh pr list --json` returns.
+# GNU `date -d @EPOCH` first, then BSD/macOS `date -r EPOCH`, then python3 —
+# README.md advertises macOS support, and a GNU-only invocation here would
+# take every suite that builds `gh pr list` fixtures down on BSD. Shared by
+# every suite that needs one (tools/pr_merge_train_cron.bats,
+# skills/gh_pr_merge_train_quiet_period.bats, …) so the cascade lives once.
+_epoch_to_iso() {
+    local _epoch="$1" _out=""
+    _out=$(date -u -d "@${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
+        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
+    _out=$(date -u -r "${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \
+        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
+    _out=$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp(${_epoch}, datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'))" 2>/dev/null) \
+        && [ -n "${_out}" ] && { printf '%s\n' "${_out}"; return 0; }
+    return 1
+}
+
 # Quote each argument with printf %q and print them space-joined, for
 # interpolation into a `bash -c "..."` command string (e.g. a `for x in ...`
 # list built from bats args). Assign the result with `args_q="$(quote_args ...)"`.
