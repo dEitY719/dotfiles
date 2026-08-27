@@ -158,10 +158,12 @@ EOF
 #   HERDR_START_NAME_TAKEN=1  `agent start` refuses because a live agent still
 #                         holds the name (herdr's real `agent_name_taken`)
 #   HERDR_START_PANE_BUSY=N   the first N `agent start` calls lose the #1512
-#                         race (`agent_pane_busy`), the rest succeed. Counted
-#                         in a file, not an env var: the stub is a fresh
-#                         process per call, so nothing it exports survives.
-#   HERDR_START_PANE_BUSY_ALWAYS=1  every `agent start` loses that race
+#                         race (`agent_pane_busy`), the rest succeed; a number
+#                         above the attempt budget loses it every time.
+#                         Counted in a file, not an env var: the stub is a
+#                         fresh process per call, so nothing it exports
+#                         survives. The counter is per-test — `${CALL_LOG}`
+#                         lives in a `mktemp -d` made fresh by `setup()`.
 #   HERDR_TAB_CLOSE_FAIL=1  `tab close` errors — the cleanup of an orphaned tab
 #                         is best effort and must not become a second failure
 #   HERDR_PROMPT_FAIL=1   `agent prompt` errors
@@ -204,12 +206,8 @@ case "$1 $2" in
         printf '%s\n' '{"error":{"code":"agent_name_taken","message":"agent name is already used; candidates: status=Idle"},"id":"cli:agent:start"}'
         exit 1
     fi
-    if [ "${HERDR_START_PANE_BUSY_ALWAYS:-0}" = "1" ]; then
-        printf '%s\n' '{"error":{"code":"agent_pane_busy","message":"agent target pane ws-test-1:p9 is not an available shell"},"id":"cli:agent:start"}' >&2
-        exit 1
-    fi
     if [ "${HERDR_START_PANE_BUSY:-0}" != "0" ]; then
-        _seen_file="${CALL_LOG%/*}/start-attempts"
+        _seen_file="${CALL_LOG}.start-attempts"
         _seen=$(cat "${_seen_file}" 2>/dev/null) || _seen=0
         _seen=$((_seen + 1))
         printf '%s\n' "${_seen}" >"${_seen_file}"
@@ -596,11 +594,12 @@ _hold_lock() {
     _assert_logged "/gh-pr-merge-train acme/dotfiles"
 }
 
-# The retry is bounded, and the bound is the whole point: cron re-runs every
+# The retrying is bounded, and the bound is the whole point: cron re-runs every
 # few minutes anyway, so a tick that kept trying would only hold the lock
-# while the *next* tick is the thing that should be deciding.
-@test "pr_merge_train_cron: a permanent agent_pane_busy stops after the retry budget" {
-    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1
+# while the *next* tick is the thing that should be deciding. Three *attempts*
+# — one initial plus two retries — is what _PMT_START_ATTEMPT_MAX names.
+@test "pr_merge_train_cron: a permanent agent_pane_busy stops after the attempt budget" {
+    _run_tick HERDR_START_PANE_BUSY=99
     assert_failure
     [ "$(_log_count 'herdr agent start')" -eq 3 ]
     _refute_logged "herdr agent prompt"
@@ -610,7 +609,7 @@ _hold_lock() {
 # what filled the merge-train workspace with 40+ dead tabs, one per cron
 # period — the failure was invisible, but its litter was not.
 @test "pr_merge_train_cron: a start that never succeeds closes the tab it opened" {
-    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1
+    _run_tick HERDR_START_PANE_BUSY=99
     assert_failure
     _assert_logged "herdr tab close ws-test-1:t9"
 }
@@ -620,7 +619,7 @@ _hold_lock() {
 # the log said only "start failed" for weeks. Restoring `2>/dev/null` to
 # _pmt_agent_start must make this test red.
 @test "pr_merge_train_cron: a failed start reports the cause herdr gave on stderr" {
-    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1
+    _run_tick HERDR_START_PANE_BUSY=99
     assert_failure
     assert_output --partial "agent_pane_busy"
     assert_output --partial "원인:"
@@ -650,7 +649,7 @@ _hold_lock() {
 # Cleanup is best effort by design: the tick has already failed, and a herdr
 # that cannot close the tab is not a second, different verdict to report.
 @test "pr_merge_train_cron: a failing tab close does not change the tick's verdict" {
-    _run_tick HERDR_START_PANE_BUSY_ALWAYS=1 HERDR_TAB_CLOSE_FAIL=1
+    _run_tick HERDR_START_PANE_BUSY=99 HERDR_TAB_CLOSE_FAIL=1
     assert_failure
     _assert_logged "herdr tab close ws-test-1:t9"
     assert_output --partial "agent_pane_busy"

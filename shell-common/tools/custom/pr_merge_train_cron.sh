@@ -92,14 +92,22 @@ _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 # immediately rather than waiting, so `--timeout` (which only extends the
 # readiness wait) cannot help; another attempt can. Bounded at 3 because cron
 # re-runs anyway: a tick that kept trying would hold the lock while the *next*
-# tick is the one that should be deciding. The gap is overridable for the same
-# reason _PMT_IDLE_POLL_SLEEP is — the bats suite pays no real sleep.
-_PMT_START_RETRY_MAX="3"
+# tick is the one that should be deciding. Bounded in *attempts*, not retries,
+# so the `attempt N/MAX` warning reads exactly true. The gap between them is
+# overridable for the same reason _PMT_IDLE_POLL_SLEEP is — the bats suite pays
+# no real sleep.
+_PMT_START_ATTEMPT_MAX="3"
 _PMT_START_RETRY_SLEEP="${PMT_START_RETRY_SLEEP:-2}"
 
 # CLAUDE_CONFIG_DIR for the pane this tick opens. Resolved once, and only on
 # the path that actually opens one (see _pmt_bind_config_dir).
 _PMT_CONFIG_DIR=""
+# The pane the train's agent starts on, and the tab holding it — both bound by
+# _pmt_tab_create. Globals rather than a packed return value because that is
+# this file's idiom for a helper with more than one result (cf. _PMT_REPO /
+# _PMT_HOST, _PMT_CONFIG_DIR). The tab id is what orphan cleanup closes (#1512).
+_PMT_PANE_ID=""
+_PMT_TAB_ID=""
 # Set by --dry-run: report what the tick would do, mutate nothing.
 _PMT_DRY_RUN=0
 # The GitHub target, bound once in main() from the checkout's `origin` (#1403).
@@ -441,24 +449,23 @@ _pmt_workspace_for_label() {
     printf '%s' "${_ws}"
 }
 
-# Open the train's tab and echo `<pane_id> <tab_id>`, space separated. Nothing
-# here used to need the `tab_id` — the agent is addressed by pane, and the
-# *next* tick finds this session by agent name, not by tab. Orphan cleanup is
-# what needs it now (#1512): when no agent can be started on this pane the
-# caller closes the tab it just opened, so a cron period that fails stops
-# leaving a dead tab behind on every tick.
+# Open the train's tab, binding _PMT_PANE_ID and _PMT_TAB_ID. Nothing here used
+# to need the `tab_id` — the agent is addressed by pane, and the *next* tick
+# finds this session by agent name, not by tab. Orphan cleanup is what needs it
+# now (#1512): when no agent can be started on this pane the caller closes the
+# tab it just opened, so a cron period that fails stops leaving a dead tab
+# behind on every tick.
 #
 # The pane id is required; the tab id is not, so a response that omits it
-# yields a trailing empty field rather than a failed tab creation.
+# leaves _PMT_TAB_ID empty rather than failing the tab creation.
 _pmt_tab_create() {
-    local _ws="$1" _cwd="$2" _label="$3" _json _pane _tab
+    local _ws="$1" _cwd="$2" _label="$3" _json
 
     _json=$(_pmt_herdr_create "${_cwd}" "${_label}" tab create --workspace "${_ws}") || return 1
 
-    _pane=$(printf '%s' "${_json}" | _pmt_json_first pane_id)
-    [ -n "${_pane}" ] || return 1
-    _tab=$(printf '%s' "${_json}" | _pmt_json_first tab_id)
-    printf '%s %s' "${_pane}" "${_tab}"
+    _PMT_PANE_ID=$(printf '%s' "${_json}" | _pmt_json_first pane_id)
+    [ -n "${_PMT_PANE_ID}" ] || return 1
+    _PMT_TAB_ID=$(printf '%s' "${_json}" | _pmt_json_first tab_id)
 }
 
 # Best-effort close of a tab this tick opened but could never put an agent on.
@@ -499,13 +506,14 @@ _pmt_agent_start() {
         -- --dangerously-skip-permissions 2>"$3"
 }
 
-# Echo the herdr error code behind a failed `agent start`: <1> is herdr's
-# stdout, <2> the file its stderr was captured to. stdout first, stderr as the
-# fallback. Both are consulted because the stream herdr picks is not ours to
-# choose — and in production it picked the one nobody was reading, which is why
-# even the `agent_name_taken` branch below could never fire. Echoes nothing
-# when neither stream carried a parsable error document.
-_pmt_start_error_code() {
+# Echo the herdr error code behind a failed call: <1> is herdr's stdout, <2>
+# the file its stderr was captured to. stdout first, stderr as the fallback.
+# Both are consulted because the stream herdr picks is not ours to choose — and
+# in production it picked the one nobody was reading, which is why even the
+# `agent_name_taken` branch below could never fire. Nothing here is specific to
+# `agent start`; the next call site that captures stderr can use it as is.
+# Echoes nothing when neither stream carried a parsable error document.
+_pmt_herdr_error_code() {
     local _json="$1" _errfile="$2" _code
 
     _code=$(printf '%s' "${_json}" | _pmt_json_value '.error.code')
@@ -513,6 +521,40 @@ _pmt_start_error_code() {
         _code=$(_pmt_json_value '.error.code' <"${_errfile}")
     fi
     printf '%s' "${_code}"
+}
+
+# Set by _pmt_start_agent_retrying to the code of the attempt it gave up on —
+# empty when herdr named none on either stream.
+_PMT_START_CODE=""
+
+# Start agent <1> on pane <2>, retrying only the #1512 `agent_pane_busy` race;
+# herdr's stderr lands in the file named by <3>. 0 = an agent is running on the
+# pane, 1 = gave up, with _PMT_START_CODE naming the last failure and <3>
+# holding herdr's own sentence about it.
+#
+# Each attempt truncates <3>, so a retry that fails differently can never be
+# reported with the previous attempt's cause.
+_pmt_start_agent_retrying() {
+    local _agent="$1" _pane="$2" _errf="$3" _json _attempt=1
+
+    _PMT_START_CODE=""
+    while :; do
+        _json=$(_pmt_agent_start "${_agent}" "${_pane}" "${_errf}") && return 0
+        _PMT_START_CODE=$(_pmt_herdr_error_code "${_json}" "${_errf}")
+
+        # The one failure worth another attempt (#1512): the pane was created
+        # moments ago and its shell is not interactive yet. Only this code —
+        # a failure that does not name itself is not a race we understand, and
+        # ending the tick immediately keeps that contract intact.
+        if [ "${_PMT_START_CODE}" != "agent_pane_busy" ] ||
+            [ "${_attempt}" -ge "${_PMT_START_ATTEMPT_MAX}" ]; then
+            return 1
+        fi
+
+        ux_warning "Agent ${_agent} start failed with agent_pane_busy on pane ${_pane} (attempt ${_attempt}/${_PMT_START_ATTEMPT_MAX}) — retrying in ${_PMT_START_RETRY_SLEEP}s."
+        [ "${_PMT_START_RETRY_SLEEP}" = "0" ] || sleep "${_PMT_START_RETRY_SLEEP}"
+        _attempt=$((_attempt + 1))
+    done
 }
 
 # Wait for a freshly started agent to report idle before prompting it.
@@ -565,8 +607,7 @@ _pmt_prompt_train() {
 
 # Open a fresh workspace/tab/agent for the train and prompt it.
 _pmt_launch_fresh() {
-    local _agent="$1" _cwd="$2" _label _ws _created _pane _tab
-    local _start_json _code _errf _attempt=1 _rc=0 _msg _cause
+    local _agent="$1" _cwd="$2" _label _ws _errf _msg _cause
 
     _label=$(_pmt_slug "${_PMT_WORKSPACE_PREFIX}" "$(_pmt_target_key)")
 
@@ -581,81 +622,54 @@ _pmt_launch_fresh() {
         ux_error "No herdr workspace for ${_label} — ending this tick."
         return 1
     }
-    _created=$(_pmt_tab_create "${_ws}" "${_cwd}" "merge-train") || {
+    _pmt_tab_create "${_ws}" "${_cwd}" "merge-train" || {
         ux_error "herdr tab create failed for ${_PMT_REPO} — ending this tick."
         return 1
     }
-    # `<pane> <tab>`, and the tab half can be absent — command substitution has
-    # already eaten the trailing space by then, so the split has to test for the
-    # separator rather than assume it. `set -u` leaves no room for a guess here.
-    _pane="${_created%% *}"
-    _tab=""
-    case "${_created}" in
-    *' '*) _tab="${_created#* }" ;;
-    esac
 
     _errf=$(mktemp) || {
         ux_error "cannot open a capture file for herdr's stderr — ending this tick."
-        _pmt_tab_close "${_tab}"
+        _pmt_tab_close "${_PMT_TAB_ID}"
         return 1
     }
-
-    # Each attempt truncates ${_errf}, so a retry that fails differently can
-    # never be reported with the previous attempt's cause.
-    while :; do
-        _rc=0
-        _start_json=$(_pmt_agent_start "${_agent}" "${_pane}" "${_errf}") || _rc=$?
-        [ "${_rc}" -ne 0 ] || break
-
-        _code=$(_pmt_start_error_code "${_start_json}" "${_errf}")
-
-        # Backstop for the race _pmt_train_state cannot close: the name can be
-        # claimed between the probe and the start (a train launched by a manual
-        # run, say). herdr answers `agent_name_taken` and the holder is by
-        # definition a usable agent, so prompt it rather than ending every
-        # future tick on the same collision. NF-1 is preserved — the name is
-        # what makes "one train" true, and we are talking to its holder.
-        #
-        # No tab close on this path: the agent we hand the train to lives on
-        # some other pane and is healthy, so there is no failed launch to clean
-        # up after — closing here would only kill a usable session.
-        if [ "${_code}" = "agent_name_taken" ]; then
-            rm -f "${_errf}"
-            ux_warning "Agent ${_agent} is already registered — prompting the existing session instead of a second one."
-            _pmt_prompt_train "${_agent}"
-            return
-        fi
-
-        # The one failure worth another attempt (#1512): the pane was created
-        # moments ago and its shell is not interactive yet. Only this code —
-        # a failure that does not name itself is not a race we understand, and
-        # ending the tick immediately keeps that contract intact.
-        if [ "${_code}" = "agent_pane_busy" ] && [ "${_attempt}" -lt "${_PMT_START_RETRY_MAX}" ]; then
-            ux_warning "Agent ${_agent} start failed with agent_pane_busy on pane ${_pane} (attempt ${_attempt}/${_PMT_START_RETRY_MAX}) — retrying in ${_PMT_START_RETRY_SLEEP}s."
-            [ "${_PMT_START_RETRY_SLEEP}" = "0" ] || sleep "${_PMT_START_RETRY_SLEEP}"
-            _attempt=$((_attempt + 1))
-            continue
-        fi
-
-        # One line, plus the sentence herdr actually gave, indented under it
-        # (#1458's idiom). Without it every cause — a busy pane, a dead server,
-        # a rejected account — converged on the same unhelpful sentence, which
-        # is precisely why #1512 went unnoticed for weeks of failed ticks. Only
-        # the first line: enough to tell those apart, short enough for a log.
-        _msg="herdr agent start ${_agent} failed on pane ${_pane} — ending this tick."
-        _cause=$(head -1 "${_errf}" 2>/dev/null) || _cause=""
-        [ -n "${_cause}" ] || _cause="${_code}"
-        [ -z "${_cause}" ] || _msg="${_msg}
-    원인: ${_cause}"
-        ux_error "${_msg}"
+    if _pmt_start_agent_retrying "${_agent}" "${_PMT_PANE_ID}" "${_errf}"; then
         rm -f "${_errf}"
-        _pmt_tab_close "${_tab}"
-        return 1
-    done
+        _pmt_wait_for_idle "${_agent}"
+        _pmt_prompt_train "${_agent}"
+        return
+    fi
+    # herdr's own sentence about the failure, read before the file goes away.
+    # Only the first line: enough to tell causes apart, short enough for a log.
+    _cause=$(head -n 1 "${_errf}" 2>/dev/null)
     rm -f "${_errf}"
 
-    _pmt_wait_for_idle "${_agent}"
-    _pmt_prompt_train "${_agent}"
+    # Backstop for the race _pmt_train_state cannot close: the name can be
+    # claimed between the probe and the start (a train launched by a manual
+    # run, say). herdr answers `agent_name_taken` and the holder is by
+    # definition a usable agent, so prompt it rather than ending every future
+    # tick on the same collision. NF-1 is preserved — the name is what makes
+    # "one train" true, and we are talking to its holder.
+    #
+    # No tab close on this path: the agent we hand the train to lives on some
+    # other pane and is healthy, so there is no failed launch to clean up
+    # after — closing here would only kill a usable session.
+    if [ "${_PMT_START_CODE}" = "agent_name_taken" ]; then
+        ux_warning "Agent ${_agent} is already registered — prompting the existing session instead of a second one."
+        _pmt_prompt_train "${_agent}"
+        return
+    fi
+
+    # One line, plus the sentence herdr actually gave, indented under it
+    # (#1458's idiom). Without it every cause — a busy pane, a dead server, a
+    # rejected account — converged on the same unhelpful sentence, which is
+    # precisely why #1512 went unnoticed for weeks of failed ticks.
+    [ -n "${_cause}" ] || _cause="${_PMT_START_CODE}"
+    _msg="herdr agent start ${_agent} failed on pane ${_PMT_PANE_ID} — ending this tick."
+    [ -z "${_cause}" ] || _msg="${_msg}
+    원인: ${_cause}"
+    ux_error "${_msg}"
+    _pmt_tab_close "${_PMT_TAB_ID}"
+    return 1
 }
 
 # ============================================================
