@@ -89,6 +89,21 @@ GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -
 
 Print **only** the compact report (format in `references/strategy-selection.md` → "Final report format").
 
+**After** the report has printed, gate on the #1511 watched-repos registry:
+
+```bash
+WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
+if [ -r "$WATCHED_FILE" ]; then
+    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE")
+fi
+```
+
+Empty `VERIFY_SKILL` (repo not registered, or no registry) → **do nothing at
+all**: no output, no dispatch. Otherwise call
+`Skill(gh:pr-post-merge-verify, "<N> <remote>")` and stop — that skill owns
+every step and every failure mode (all soft-fail, so this report stands
+regardless). Detail: `claude/skills/gh-pr-post-merge-verify/SKILL.md`.
+
 ## Constraints
 
 - Never ask for confirmation — running the skill is the confirmation.
@@ -98,4 +113,5 @@ Print **only** the compact report (format in `references/strategy-selection.md` 
 ## Related Skills
 
 `gh:pr-approve` produces the approval this skill gates on · `gh:pr-merge-emergency`
-is the admin-override path when approval cannot be obtained.
+is the admin-override path when approval cannot be obtained · `gh:pr-post-merge-verify`
+is dispatched at the end of Step 5 for repos registered in `docs/.ssot/watched-repos.json`.
