@@ -19,6 +19,32 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
+# Advisory only (issue #1454, propagated by #1505): warn once on stderr when
+# this file was sourced from a checkout that is a different git repo than
+# $HOME/dotfiles. Never blocks.
+#
+# The self-path branch must stay here at file top level — zsh rebinds $0 to
+# the sourced file (FUNCTION_ARGZERO) only for this file's own statements,
+# and inside a function $0 is the function's own name. Plain POSIX sh has
+# neither $0-rebinding nor $BASH_SOURCE, and would abort on the bash array
+# syntax, hence the $BASH_VERSION arm. Everything after it lives once, in
+# _dotfiles_root_guard_self.
+if [ -n "${ZSH_VERSION-}" ]; then
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    _drg_self="${BASH_SOURCE[0]-}"
+else
+    _drg_self=""
+fi
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
+fi
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "gh-pr-reply"
+fi
+unset _drg_self _drg_helper
+
 _gh_pr_reply_state_root() {
     printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/gh-pr-reply"
 }

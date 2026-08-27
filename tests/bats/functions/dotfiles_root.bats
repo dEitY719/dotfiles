@@ -280,3 +280,199 @@ _setup_foreign_repo() {
     assert_success
     assert_output ""
 }
+
+# ---------------------------------------------------------------------------
+# _dotfiles_root_guard_self (issue #1505)
+#
+# The shared caller-side entry point every guarded helper file calls right
+# after sourcing this helper. It owns the `command -v` probe, the call, and
+# the #724 diagnostic — logic that used to be copy-pasted per caller.
+# ---------------------------------------------------------------------------
+
+@test "_dotfiles_root_guard_self: forwards a foreign checkout to the WARN block" {
+    _setup_fake_home_dotfiles
+    _setup_foreign_repo guardself
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_guard_self '$FOREIGN' 'probe_label'"
+    assert_success
+    assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
+    assert_output --partial "$FOREIGN"
+}
+
+@test "_dotfiles_root_guard_self: canonical checkout stays silent" {
+    _setup_fake_home_dotfiles
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' && _dotfiles_root_guard_self '$CANON/shell-common/functions/probe.sh' 'probe_label'"
+    assert_success
+    assert_output ""
+}
+
+# #724: the helper file parsed far enough to define _dotfiles_root_guard_self
+# but a regression left _dotfiles_root_warn_if_foreign_source undefined. That
+# must say so once on stderr instead of disabling the guard in silence.
+@test "_dotfiles_root_guard_self: #724 diagnostic when the warn function is undefined" {
+    _setup_fake_home_dotfiles
+    _setup_foreign_repo guardself724
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' \
+            && unset -f _dotfiles_root_warn_if_foreign_source \
+            && _dotfiles_root_guard_self '$FOREIGN' 'probe_label'"
+    assert_success
+    assert_output --partial "[probe_label]"
+    assert_output --partial "did not define _dotfiles_root_warn_if_foreign_source"
+    assert_output --partial "#1454 guard skipped (#724)"
+    assert_output --partial "functions/dotfiles_root.sh"
+}
+
+@test "_dotfiles_root_guard_self: #724 diagnostic falls back to the 'dotfiles' label" {
+    _setup_fake_home_dotfiles
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' \
+            && unset -f _dotfiles_root_warn_if_foreign_source \
+            && _dotfiles_root_guard_self '/no/such/file.sh'"
+    assert_success
+    assert_output --partial "[dotfiles]"
+    assert_output --partial "#1454 guard skipped (#724)"
+}
+
+@test "_dotfiles_root_guard_self: #724 diagnostic goes to stderr, not stdout" {
+    _setup_fake_home_dotfiles
+
+    run env HOME="$FAKE_HOME" bash -c \
+        ". '$HELPER' \
+            && unset -f _dotfiles_root_warn_if_foreign_source \
+            && _dotfiles_root_guard_self '/no/such/file.sh' 'probe_label' 2>/dev/null"
+    assert_success
+    assert_output ""
+}
+
+# ---------------------------------------------------------------------------
+# Canonical-side cache (issue #1505)
+#
+# The $HOME/dotfiles --git-common-dir lookup is memoized per process so seven
+# guarded helper files in one shell startup don't re-fork it seven times. The
+# cache is keyed on the VALUE of $HOME: bats flips $HOME per test and real
+# callers do it too, so a cache that only remembered "already computed" would
+# hand back the previous HOME's canonical repo and invert the verdict.
+# ---------------------------------------------------------------------------
+
+# Every call is redirected with `2>FILE`, never piped: a pipeline would run
+# the function in a subshell, the cache write would be thrown away, and the
+# test would pass against a broken cache by accident.
+@test "#1505 cache: canonical side is re-resolved after \$HOME changes in-process" {
+    _setup_fake_home_dotfiles
+    _setup_foreign_repo alt
+
+    # $FOREIGN lives in $SCRATCH/alt/dotfiles, so it is foreign under
+    # HOME=$FAKE_HOME and canonical under HOME=$SCRATCH/alt. Three calls in
+    # ONE process, flipping $HOME between them: a cache that is not keyed on
+    # $HOME makes B warn (verified against a deliberately unkeyed build).
+    local script="$BATS_TEST_TMPDIR/cache_home_flip.sh"
+    local outdir="$BATS_TEST_TMPDIR/cache_home_flip_out"
+    mkdir -p "$outdir"
+    cat >"$script" <<'SH'
+. "$HELPER"
+export HOME="$HOME_A"
+_dotfiles_root_warn_if_foreign_source "$SELF" 2>"$OUT/a"
+export HOME="$HOME_B"
+_dotfiles_root_warn_if_foreign_source "$SELF" 2>"$OUT/b"
+export HOME="$HOME_A"
+_dotfiles_root_warn_if_foreign_source "$SELF" 2>"$OUT/c"
+printf 'A=[%s]\n' "$(head -1 "$OUT/a")"
+printf 'B=[%s]\n' "$(head -1 "$OUT/b")"
+printf 'C=[%s]\n' "$(head -1 "$OUT/c")"
+SH
+
+    run env HELPER="$HELPER" HOME_A="$FAKE_HOME" HOME_B="$SCRATCH/alt" \
+        SELF="$FOREIGN" OUT="$outdir" bash "$script"
+    assert_success
+    assert_line --partial "A=[[WARN] dotfiles: loaded from a foreign checkout"
+    assert_line "B=[]"
+    assert_line --partial "C=[[WARN] dotfiles: loaded from a foreign checkout"
+}
+
+@test "#1505 cache: repeated calls under one \$HOME keep the same verdict" {
+    _setup_fake_home_dotfiles
+    _setup_foreign_repo repeat
+
+    local script="$BATS_TEST_TMPDIR/cache_repeat.sh"
+    local outdir="$BATS_TEST_TMPDIR/cache_repeat_out"
+    mkdir -p "$outdir"
+    cat >"$script" <<'SH'
+. "$HELPER"
+export HOME="$HOME_A"
+i=1
+while [ "$i" -le 3 ]; do
+    _dotfiles_root_warn_if_foreign_source "$SELF" 2>"$OUT/r$i"
+    printf 'R%s=[%s]\n' "$i" "$(head -1 "$OUT/r$i")"
+    i=$((i + 1))
+done
+SH
+
+    run env HELPER="$HELPER" HOME_A="$FAKE_HOME" SELF="$FOREIGN" \
+        OUT="$outdir" bash "$script"
+    assert_success
+    assert_line --partial "R1=[[WARN] dotfiles: loaded from a foreign checkout"
+    assert_line --partial "R2=[[WARN] dotfiles: loaded from a foreign checkout"
+    assert_line --partial "R3=[[WARN] dotfiles: loaded from a foreign checkout"
+}
+
+@test "_dotfiles_root_canonical_common_dir: agrees with the uncached resolver" {
+    _setup_fake_home_dotfiles
+
+    run env HOME="$FAKE_HOME" bash -c "
+        . '$HELPER'
+        a=\$(_dotfiles_root_git_common_dir '$CANON')
+        _dotfiles_root_canonical_common_dir '$CANON'
+        b=\"\$_DOTFILES_ROOT_CANON_COMMON\"
+        _dotfiles_root_canonical_common_dir '$CANON'
+        c=\"\$_DOTFILES_ROOT_CANON_COMMON\"
+        [ -n \"\$a\" ] && [ \"\$a\" = \"\$b\" ] && [ \"\$b\" = \"\$c\" ] && echo \"same:\$a\"
+    "
+    assert_success
+    assert_output --partial "same:"
+}
+
+# The memoization writes a global, so it only works when the function is
+# called in the CURRENT shell. A \$(...) capture would silently make every
+# call a cache miss — pin the global-setting contract so a future refactor
+# back to stdout is caught here rather than showing up as lost perf.
+@test "_dotfiles_root_canonical_common_dir: second call is served from the cache" {
+    _setup_fake_home_dotfiles
+
+    run env HOME="$FAKE_HOME" bash -c "
+        . '$HELPER'
+        _dotfiles_root_canonical_common_dir '$CANON'
+        # Point the cached value at a sentinel: a genuine cache hit returns it
+        # untouched, a cache miss would overwrite it with the real path.
+        _DOTFILES_ROOT_CANON_COMMON='SENTINEL'
+        _dotfiles_root_canonical_common_dir '$CANON'
+        echo \"cached=\$_DOTFILES_ROOT_CANON_COMMON\"
+    "
+    assert_success
+    assert_output "cached=SENTINEL"
+}
+
+@test "_dotfiles_root_canonical_common_dir: non-git dir fails and is not cached" {
+    _setup_fake_home_dotfiles
+    mkdir -p "$SCRATCH/notgit"
+
+    run env HOME="$FAKE_HOME" bash -c "
+        . '$HELPER'
+        _dotfiles_root_canonical_common_dir '$SCRATCH/notgit' && echo unexpected-success
+        echo \"rc=\$?\"
+        echo \"empty=[\$_DOTFILES_ROOT_CANON_COMMON]\"
+        # A failed lookup must leave the cache empty so a later, valid
+        # canonical dir under the same \$HOME is still resolved.
+        _dotfiles_root_canonical_common_dir '$CANON' && echo second-ok
+    "
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "empty=[]"
+    assert_output --partial "second-ok"
+    refute_output --partial "unexpected-success"
+}

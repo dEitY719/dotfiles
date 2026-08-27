@@ -139,6 +139,50 @@ _dotfiles_root_git_common_dir() {
     ) || return 1
 }
 
+# _dotfiles_root_canonical_common_dir CANONICAL_DIR
+#
+# Resolve CANONICAL_DIR's --git-common-dir into the global
+# $_DOTFILES_ROOT_CANON_COMMON, memoized per process (issue #1505).
+# Returns 0 with the global set and non-empty, or 1 with it emptied.
+#
+# Why memoize: _dotfiles_root_warn_if_foreign_source runs once per guarded
+# helper file, and every one of those calls re-resolves the identical
+# $HOME/dotfiles --git-common-dir — a subshell plus `git rev-parse` plus two
+# `cd`s each time. With seven helpers wired into one shell startup that is
+# six redundant fork storms.
+#
+# Why a global instead of stdout: a `$(...)` capture runs the function in a
+# subshell, so the cache write would be discarded on every call and the
+# memoization would silently never take effect. Callers must invoke this in
+# the current shell and read the global.
+#
+# The cache is keyed on the *value* of $HOME, not on an "already computed"
+# boolean: $HOME is reassigned within a single process both by the bats
+# suite (setup_isolated_home) and by real `env HOME=... sh -c` callers, and a
+# stale canonical path there would silently invert the guard's verdict.
+# Only successful lookups are cached, so a $HOME/dotfiles that appears later
+# in the same process is still picked up.
+#
+# The self side is deliberately NOT cached — it differs per call site and
+# never repeats within one process.
+_dotfiles_root_canonical_common_dir() {
+    if [ "${_DOTFILES_ROOT_CANON_HOME-}" = "${HOME-}" ] \
+        && [ -n "${_DOTFILES_ROOT_CANON_COMMON-}" ]; then
+        return 0
+    fi
+
+    _DOTFILES_ROOT_CANON_COMMON=$(_dotfiles_root_git_common_dir "${1:-}") || {
+        _DOTFILES_ROOT_CANON_COMMON=""
+        return 1
+    }
+    if [ -z "$_DOTFILES_ROOT_CANON_COMMON" ]; then
+        return 1
+    fi
+
+    _DOTFILES_ROOT_CANON_HOME="${HOME-}"
+    return 0
+}
+
 # _dotfiles_root_warn_if_foreign_source SELF_PATH
 #
 # Advisory guard (issue #1454): print one WARN block to stderr when the
@@ -169,7 +213,10 @@ _dotfiles_root_warn_if_foreign_source() {
     _dwfs_dir=$(dirname "$_dwfs_self" 2>/dev/null) || return 0
 
     _dwfs_self_common=$(_dotfiles_root_git_common_dir "$_dwfs_dir") || return 0
-    _dwfs_canonical_common=$(_dotfiles_root_git_common_dir "$_dwfs_canonical") || return 0
+    # Called in the current shell, NOT via $(...) — the memoization writes a
+    # global, which a subshell capture would throw away (issue #1505).
+    _dotfiles_root_canonical_common_dir "$_dwfs_canonical" || return 0
+    _dwfs_canonical_common="$_DOTFILES_ROOT_CANON_COMMON"
 
     [ "$_dwfs_self_common" != "$_dwfs_canonical_common" ] || return 0
 
@@ -182,5 +229,35 @@ _dotfiles_root_warn_if_foreign_source() {
         "  Source shared files via \${SHELL_COMMON:-\$HOME/dotfiles/shell-common}/... — never by find/PATH discovery." \
         "  Ignore this if you are intentionally testing an alternate checkout." >&2
 
+    return 0
+}
+
+# _dotfiles_root_guard_self SELF_PATH [LABEL]
+#
+# Single SSOT for the caller-side wiring of the #1454 guard (issue #1505).
+# Every shared helper file that skills source non-interactively calls this
+# right after sourcing dotfiles_root.sh, so the `command -v` probe, the
+# call, and the #724 diagnostic exist exactly once repo-wide instead of
+# being copy-pasted per file.
+#
+#   SELF_PATH — the caller's OWN load path. It must be computed in the
+#               caller's top-level code, not here: zsh's FUNCTION_ARGZERO
+#               rebinds $0 to the sourced file only for that file's own
+#               top-level statements, so inside this function $0 is this
+#               function's name and the caller's identity is unrecoverable.
+#   LABEL     — short caller name for the #724 diagnostic prefix
+#               (e.g. "gh_pr_reply"); defaults to "dotfiles".
+#
+# Defense in depth (#724): a helper that is present but failed to parse
+# leaves _dotfiles_root_warn_if_foreign_source undefined. Say so once on
+# stderr rather than disabling the guard in silence. Never fatal.
+_dotfiles_root_guard_self() {
+    if command -v _dotfiles_root_warn_if_foreign_source >/dev/null 2>&1; then
+        _dotfiles_root_warn_if_foreign_source "${1:-}" || true
+    else
+        printf '[%s] %s missing or did not define _dotfiles_root_warn_if_foreign_source — #1454 guard skipped (#724).\n' \
+            "${2:-dotfiles}" \
+            "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh" >&2
+    fi
     return 0
 }
