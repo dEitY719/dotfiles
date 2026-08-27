@@ -10,9 +10,27 @@ itself succeeded, soft-failed, or warned. It sits between Step 2.4 and Step
 Before #1482, the only thing that could start a merge attempt on a fresh PR
 was `pr_merge_train_cron.sh` firing on its own schedule (`*/23 * * * *`
 originally). A PR finished by `gh:issue-flow` could therefore sit idle for up
-to 23 minutes before anything looked at it. This step closes that gap by
-calling the same dispatcher script the cron job calls, once, right after the
-PR exists — cutting the idle time to effectively zero in the common case.
+to 23 minutes before anything looked at it. This step closes part of that gap
+by calling the same dispatcher script the cron job calls, once, right after
+the PR exists.
+
+**It does not, however, cut the triggering PR's own idle time to zero.** The
+dispatcher's target count excludes any PR updated within the last
+`_PMT_QUIET_MINUTES` (11 minutes — D-6 quiet period, see
+`shell-common/tools/custom/pr_merge_train_cron.sh` →
+`_pmt_target_count`, and `gh-pr-merge-train/references/ordering.md` for why
+11). The PR this step just created has an `updatedAt` of "just now", so it
+fails that filter on this very tick — if no other PR in the queue has already
+cleared the quiet period, the wake call ends in "No target PR — nothing to
+wake a session for" and the triggering PR is not touched. It only becomes
+eligible once its own 11-minute quiet period elapses, and from there the
+`*/5 * * * *` cron backstop picks it up within another 5 minutes at most —
+so the triggering PR's real idle time is **~11–16 minutes**, not zero.
+
+What this step *does* reliably shorten is the idle time of **other** PRs
+already sitting in the queue past their quiet period (the common case when
+several `gh:issue-flow` runs are in flight) — those get swept up to 5 minutes
+earlier than waiting for the next cron tick would have.
 
 The cron job is not removed. Its backstop period is shortened to `*/5 * * *
 *` (`shell-common/tools/custom/cron-jobs.json`) so that a dropped or missed
