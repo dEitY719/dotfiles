@@ -511,16 +511,15 @@ _gh_pr_review_run_ai() {
         # CLI startup message still produces something.
         local _summary="" _line
         # Issue #1506: exit 124 is _gh_pr_review_timeout's "I killed it"
-        # signal. Whatever the CLI managed to write to stderr before the kill
-        # is a fragment, not a cause, so name the timeout outright instead of
-        # letting the generic first-non-noise-line summary imply the CLI
-        # reported a failure of its own.
+        # signal, only ever produced by the opencode/hermes branches above
+        # (the only callers of _gh_pr_review_timeout), so no further
+        # per-$ai gate is needed here. Whatever the CLI managed to write to
+        # stderr before the kill is a fragment, not a cause, so name the
+        # timeout outright instead of letting the generic
+        # first-non-noise-line summary imply the CLI reported a failure of
+        # its own.
         if [ "$_rc" -eq 124 ]; then
-            case "$ai" in
-            opencode | hermes)
-                _summary="timed out after ${_slow_cli_timeout_sec}s — killed before completion, no review posted (issue #1506)"
-                ;;
-            esac
+            _summary="timed out after ${_slow_cli_timeout_sec}s — killed before completion, no review posted (issue #1506)"
         fi
         if [ -z "$_summary" ]; then
             while IFS= read -r _line; do

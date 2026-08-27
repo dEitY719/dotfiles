@@ -1322,67 +1322,57 @@ EOF
     export PATH="$stub_dir:$PATH"
 }
 
-@test "run_ai opencode: exceeding GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC kills the CLI, no output survives" {
+# Fractional seconds (GNU timeout accepts them) keep these assertions on the
+# real timeout/sleep interaction without paying whole seconds of wall-clock
+# per test.
+_assert_slow_cli_timeout() {
+    local ai="$1"
     if ! command -v timeout >/dev/null 2>&1; then
         skip "coreutils timeout not available — wrapper degrades to unbounded"
     fi
     _source_module
     _dotfiles_setup_mode() { echo internal; }
-    _stub_slow_cli opencode 3
-    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=1
+    _stub_slow_cli "$ai" 0.3
+    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=0.1
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai opencode "$f"
+    run _gh_pr_review_run_ai "$ai" "$f"
     assert_failure 124
-    assert_output --partial "timed out after 1s"
+    assert_output --partial "timed out after 0.1s"
     assert_output --partial "no review posted (issue #1506)"
     refute_output --partial "SLOW_CLI_REVIEW_OUTPUT"
 }
 
-@test "run_ai hermes: exceeding GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC kills the CLI, no output survives" {
-    if ! command -v timeout >/dev/null 2>&1; then
-        skip "coreutils timeout not available — wrapper degrades to unbounded"
-    fi
+_assert_slow_cli_within_bound() {
+    local ai="$1"
     _source_module
     _dotfiles_setup_mode() { echo internal; }
-    _stub_slow_cli hermes 3
-    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=1
+    _stub_slow_cli "$ai" 0.1
+    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=10
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai hermes "$f"
-    assert_failure 124
-    assert_output --partial "timed out after 1s"
-    refute_output --partial "SLOW_CLI_REVIEW_OUTPUT"
+    run _gh_pr_review_run_ai "$ai" "$f"
+    assert_success
+    assert_output --partial "SLOW_CLI_REVIEW_OUTPUT"
+    refute_output --partial "timed out after"
+}
+
+@test "run_ai opencode: exceeding GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC kills the CLI, no output survives" {
+    _assert_slow_cli_timeout opencode
+}
+
+@test "run_ai hermes: exceeding GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC kills the CLI, no output survives" {
+    _assert_slow_cli_timeout hermes
 }
 
 @test "run_ai opencode: a CLI finishing inside the bound is unaffected by the timeout wrap" {
-    _source_module
-    _dotfiles_setup_mode() { echo internal; }
-    _stub_slow_cli opencode 1
-    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=10
-    local f="$TEST_TEMP_HOME/prompt.txt"
-    printf 'review this diff' >"$f"
-
-    run _gh_pr_review_run_ai opencode "$f"
-    assert_success
-    assert_output --partial "SLOW_CLI_REVIEW_OUTPUT"
-    refute_output --partial "timed out after"
+    _assert_slow_cli_within_bound opencode
 }
 
 @test "run_ai hermes: a CLI finishing inside the bound is unaffected by the timeout wrap" {
-    _source_module
-    _dotfiles_setup_mode() { echo internal; }
-    _stub_slow_cli hermes 1
-    export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=10
-    local f="$TEST_TEMP_HOME/prompt.txt"
-    printf 'review this diff' >"$f"
-
-    run _gh_pr_review_run_ai hermes "$f"
-    assert_success
-    assert_output --partial "SLOW_CLI_REVIEW_OUTPUT"
-    refute_output --partial "timed out after"
+    _assert_slow_cli_within_bound hermes
 }
 
 # ---------------------------------------------------------------------------
