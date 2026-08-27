@@ -185,14 +185,14 @@ dispatch() {
     assert_output --partial "closed implementation tab wV:t42"
     assert_output --partial "post-merge verification dispatched"
     assert_output --partial "tab:    wV:t99 (label pr-77)"
-    assert_output --partial "agent:  pmv-github.com-acme-dotfiles-77"
-    assert_output --partial "attach: herdr agent attach pmv-github.com-acme-dotfiles-77"
+    assert_output --partial "agent:  mv-dotfiles-pr-77"
+    assert_output --partial "attach: herdr agent attach mv-dotfiles-pr-77"
 
     run cat "$FAKE_HERDR_LOG"
     assert_output --partial "herdr tab close wV:t42"
     assert_output --partial "herdr tab create --workspace wV --cwd ${MAIN_ROOT} --label pr-77 --no-focus"
-    assert_output --partial "herdr agent start pmv-github.com-acme-dotfiles-77 --kind claude --pane wV:p99 -- --dangerously-skip-permissions"
-    assert_output --partial "herdr agent prompt pmv-github.com-acme-dotfiles-77 /devx-pr-verify-merged 77 --wait --until idle"
+    assert_output --partial "herdr agent start mv-dotfiles-pr-77 --kind claude --pane wV:p99 -- --dangerously-skip-permissions"
+    assert_output --partial "herdr agent prompt mv-dotfiles-pr-77 /devx-pr-verify-merged 77 --wait --until idle"
 }
 
 @test "A-2: the impl tab is closed BEFORE the verification tab is created" {
@@ -325,7 +325,7 @@ branch refs/heads/main
     FAKE_HERDR_OUT_AGENT_START='{"error":{"code":"pane_not_ready"}}'
     run dispatch
     assert_success
-    assert_output --partial "herdr agent start pmv-github.com-acme-dotfiles-77 failed"
+    assert_output --partial "herdr agent start mv-dotfiles-pr-77 failed"
     assert_output --partial "pane_not_ready"
     run cat "$FAKE_HERDR_LOG"
     refute_output --partial "agent prompt"
@@ -339,7 +339,7 @@ branch refs/heads/main
     assert_output --partial "already registered — prompting the existing session"
     assert_output --partial "post-merge verification dispatched"
     run cat "$FAKE_HERDR_LOG"
-    assert_output --partial "agent prompt pmv-github.com-acme-dotfiles-77"
+    assert_output --partial "agent prompt mv-dotfiles-pr-77"
 }
 
 @test "E-7: a failing prompt warns but the report still prints" {
@@ -347,17 +347,38 @@ branch refs/heads/main
     FAKE_HERDR_OUT_AGENT_PROMPT='{"error":{"code":"agent_prompt_stalled"}}'
     run dispatch
     assert_success
-    assert_output --partial "herdr agent prompt pmv-github.com-acme-dotfiles-77 failed (agent_prompt_stalled)"
+    assert_output --partial "herdr agent prompt mv-dotfiles-pr-77 failed (agent_prompt_stalled)"
     assert_output --partial "post-merge verification dispatched"
 }
 
 # --- unit pins on the easy-to-break pieces --------------------------------
 
-@test "naming: the agent name is host-qualified (#1403/#1407 rationale)" {
+# The pre-#1530 name was `pmv-<host>-<owner>-<repo>-<N>` — 37 characters for
+# this repo, and carrying a dot besides, so herdr refused every `agent start`
+# and post-merge verification never ran once. These pin the shape herdr
+# accepts, including the length budget that made truncation mandatory.
+@test "naming: the agent name satisfies herdr's rule" {
     run pmv_agent_name github.com acme/dotfiles 77
-    assert_output "pmv-github.com-acme-dotfiles-77"
+    assert_output "mv-dotfiles-pr-77"
+    [[ "$output" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
+        || fail "not a valid herdr agent name: '$output'"
+}
+
+@test "naming: a mixed-case owner and a long repo still fit the 32-char budget" {
+    run pmv_agent_name github.com dEitY719/A-Very-Long-Repository-Name 99999
+    assert_success
+    [[ "$output" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
+        || fail "not a valid herdr agent name: '$output'"
+    assert_output "mv-a-very-long-repo-pr-99999"
+}
+
+# The host is deliberately not in the name any more — it does not fit in 32
+# characters alongside the repo. Two hosts sharing a repo name would collide;
+# that trade-off, and the condition that would end it, is documented in
+# shell-common/functions/herdr_agent_name.sh.
+@test "naming: the host is not part of the agent name" {
     run pmv_agent_name ghe.example.com acme/dotfiles 77
-    assert_output "pmv-ghe.example.com-acme-dotfiles-77"
+    assert_output "mv-dotfiles-pr-77"
 }
 
 @test "naming: the skill id becomes a dash-form slash command" {

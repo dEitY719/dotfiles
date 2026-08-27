@@ -33,7 +33,7 @@ dispatch soft-failed and you want to retry it.
    hardcoded, because a watched repo may default to `master`/`develop` or be
    reached through `upstream`.
 6. `herdr tab create --cwd <main checkout> --label pr-<N>`.
-7. `herdr agent start pmv-<host>-<owner>-<repo>-<N> --kind claude --pane <pane>
+7. `herdr agent start mv-<repo>-pr-<N> --kind claude --pane <pane>
    -- --dangerously-skip-permissions`.
 8. `herdr agent prompt <agent> "/<verify-skill> <N>" --wait --until idle`,
    where `<verify-skill>` is the registry's `verify_skill` for that repo —

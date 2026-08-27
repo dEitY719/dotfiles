@@ -3,7 +3,7 @@
 ```
 cron -> shell-common/tools/custom/pr_merge_train_cron.sh   (thin dispatcher, 1 tick)
           |- 1. flock                    — one tick at a time
-          |- 2. herdr agent get pmt-…    — is a train from a previous tick still live
+          |- 2. herdr agent get mt-<repo>  — is a train from a previous tick still live
           |- 3. gh pr list --author @me  — is there anything worth waking a session for
           `- 4. herdr workspace -> tab -> claude -> /gh-pr-merge-train <owner/repo>
 ```
@@ -53,12 +53,22 @@ So the second layer asks herdr directly whether the deterministically named
 train agent is still `working` or `blocked`. Together: the lock stops a second
 dispatcher, the agent probe stops a second train.
 
-That name is `pmt-<host>-<owner>-<repo>`, and the workspace label is
-`mt-<host>-<owner>-<repo>` — **host-qualified, not `owner/repo` alone**.
-`owner/repo` is only unique per server, so a github.com checkout and a GHE
-checkout sharing a slug would block or reuse each other's train, which is the
-same mistake #1403/#1407 pin the host to avoid everywhere else. Folding the
-host into the key keeps that pinning true at the session-identity layer.
+That name is `mt-<repo>` — **no PR or issue number in it**. The name *is* the
+lock, so a per-tick discriminator would make every tick compute a different
+string, find no running train, and start a second one merging onto the same
+base. It is built by `herdr_agent_name`
+(`shell-common/functions/herdr_agent_name.sh`), the SSOT shared with
+`issue_watcher_cron.sh` and `gh:pr-post-merge-verify`.
+
+The workspace label is still `mt-<host>-<owner>-<repo>` — host-qualified, for
+the #1403/#1407 reason that `owner/repo` is only unique per server. The agent
+name is not, and that asymmetry is deliberate (#1530): herdr validates agent
+names against `^[a-z][a-z0-9_-]{0,31}$` and refuses anything else, and the
+old host-qualified `pmt-<host>-<owner>-<repo>` was rejected on all 56 attempts
+— a dot, plus uppercase from a real owner. Labels carry no such rule and no
+length budget, so they keep the wider form; the agent name spends its 32
+characters on the repo. Two hosts sharing a repo name would now collide on one
+train agent; the trade-off and its expiry condition are recorded at the helper.
 
 An agent that still **resolves** — `idle`, but also `done` or a status herdr
 does not name — means the previous train's pane is still open and still holds

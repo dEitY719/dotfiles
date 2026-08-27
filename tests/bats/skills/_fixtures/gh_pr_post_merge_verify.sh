@@ -194,19 +194,21 @@ pmv_validate_main_root() {
 # Naming
 # ============================================================
 
-# Echo `<prefix $1><slug of $2>`, folding anything outside herdr's safe name
-# charset to `-`.
-pmv_slug() {
-    printf '%s%s' "$1" "$(printf '%s' "$2" | tr -c 'A-Za-z0-9._-' '-')"
-}
+# The herdr agent-name SSOT — the very file dispatch.sh.md sources, not a
+# copy of it (#1530). Mirroring the normalizer here would reintroduce exactly
+# the duplication that let three call sites drift into the same broken slug.
+# shellcheck source=/dev/null
+. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/herdr_agent_name.sh"
 
-# pmv_agent_name <host> <owner/repo> <pr>  ->  pmv-<host>-<owner>-<repo>-<N>
+# pmv_agent_name <host> <owner/repo> <pr>  ->  mv-<repo>-pr-<N>
 #
-# Host-qualified for the same reason _PMT_AGENT_PREFIX is (#1403/#1407):
-# `owner/repo` alone is not unique across GitHub servers, so a github.com
-# checkout and a GHES checkout sharing a slug would collide on one agent name.
+# <host> is still an argument — the caller has it bound and the signature is
+# what dispatch.sh.md documents — but it is deliberately not in the name: a
+# host-qualified name does not fit herdr's 32-character budget, which is how
+# the pre-#1530 `pmv-<host>-<owner>-<repo>-<N>` reached 37 characters and was
+# refused on every merge. The trade-off is documented at the helper.
 pmv_agent_name() {
-    pmv_slug "pmv-" "$1/$2-$3"
+    herdr_agent_name mv "$2" "pr-$3"
 }
 
 # pmv_verify_prompt <verify_skill> <pr>  ->  `/devx-pr-verify-merged <N>`

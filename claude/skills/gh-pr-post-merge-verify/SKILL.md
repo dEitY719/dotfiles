@@ -78,7 +78,7 @@ Paste `references/dispatch.sh.md` verbatim. It performs, in order:
    `BASE_BRANCH`. Dirty tree, wrong/detached branch, or conflict → `[WARN]`,
    `rebase --abort`, **stop** (F-3).
 4. `herdr tab create --workspace <ws> --cwd "$MAIN_ROOT" --label "pr-<N>"`, then
-   `herdr agent start pmv-<host>-<owner>-<repo>-<N> --kind claude --pane <pane>
+   `herdr agent start mv-<repo>-pr-<N> --kind claude --pane <pane>
    -- --dangerously-skip-permissions` (F-4).
 5. `herdr agent prompt <agent> "/<verify-skill> <N>" --wait --until idle` (F-5),
    then report the new `tab_id`, the agent name, and the `attach` hint.
