@@ -110,8 +110,7 @@ canonicalization for a shell that intentionally wants to test a worktree's
 own dotfiles. If that variable is set in the shell running Step 2.4.1,
 `SHELL_COMMON` stays worktree-scoped and this step wakes the
 **worktree-local** `aicron.sh` instead of the live checkout — the exact
-outcome this section says is undesirable, since the worktree vanishes once
-its PR merges.
+outcome this section says is undesirable.
 
 ## Soft-fail policy (F-2)
 
