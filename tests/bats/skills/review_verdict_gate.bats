@@ -119,6 +119,31 @@ teardown() {
     assert_success
 }
 
+@test "#1527: the verdict labels have a bootstrap path in gh:label-bootstrap" {
+    # PR #1529 codex BLOCKER: the add path refuses to auto-create (#326), so
+    # without a provisioning route a repo lacking the labels deadlocks — every
+    # PR unlabelled, every PR skipped, forever.
+    run grep -F "pipeline|review-blocked|b60205" \
+        "${SKILLS}/gh-label-bootstrap/references/gh-labels.md"
+    assert_success
+    run grep -F "pipeline|review-passed|0e8a16" \
+        "${SKILLS}/gh-label-bootstrap/references/gh-labels.md"
+    assert_success
+    run grep -F "pipeline_feed" \
+        "${SKILLS}/gh-label-bootstrap/lib/label-bootstrap.sh"
+    assert_success
+}
+
+@test "#1527: clearing review-blocked requires no DECLINE in the run" {
+    # PR #1529 codex FOLLOW-UP: PUSHED_FIXES + ACCEPTED_COUNT alone releases the
+    # gate even when a blocker was declined in the same run. The verdict is one
+    # line for the whole review, so the skill cannot tell which comment was the
+    # blocker — a DECLINE anywhere must hold the label.
+    run grep -F 'DECLINED_COUNT:-0}" -eq 0' \
+        "${SKILLS}/gh-pr-reply/references/review-blocked-clear.sh.md"
+    assert_success
+}
+
 # ── the retired gate must not come back (#1513 interaction) ──────────
 
 @test "#1527: the fix does not resurrect the board Approved gate (#1513)" {

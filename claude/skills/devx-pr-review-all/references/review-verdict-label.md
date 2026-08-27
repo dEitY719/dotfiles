@@ -13,7 +13,11 @@ SSOT for the two PR labels this skill emits and the merge train consumes.
 
 Neither is part of the 10-label SSOT (`gh-label-bootstrap/references/gh-labels.md`)
 — like `CI fail` and `conflict` they are a **pipeline-state** label system, not an
-issue-classification one, and `gh:label-bootstrap` does not sync them.
+issue-classification one. Unlike those two they *are* provisioned by
+`gh:label-bootstrap`, from that file's separate `pipeline|` feed, and `--prune`
+keeps them. **That is the rollout path** (#1527, PR #1529 codex review): without
+it a repo that lacks the labels can never get them, since the add path refuses to
+auto-create — so the gate would deadlock with every PR unlabelled and skipped.
 
 **Absence is the third state, and it means "not verified".** A PR with neither
 label has not been shown to pass review — the train skips it. That is what makes
@@ -89,7 +93,7 @@ else
     _gh_pr_edit_safe_label "$pr" "$label" --repo "$TARGET_REPO"
     case "$?" in
     0) echo "[OK] PR #$pr labelled \`$label\` (${lanes} lane(s))" ;;
-    3) echo "[WARN] label \`$label\` missing in $TARGET_REPO — create it once: gh label create \"$label\" --repo $TARGET_REPO" ;;
+    3) echo "[WARN] label \`$label\` missing in $TARGET_REPO — bootstrap once: /gh-label-bootstrap $TARGET_REPO" ;;
     *) echo "[WARN] labelling PR #$pr failed — train will treat it as unverified" ;;
     esac
 fi
@@ -102,14 +106,17 @@ sees both and — per its own precedence rule — keeps skipping.
 `_gh_pr_edit_safe_label` returns 3 when the label does not exist in the repo and
 **refuses to auto-create it** (`feedback_gh_label_no_autocreate.md`, #326). That
 is deliberate: silently creating labels from a code path is how typo'd labels
-enter a repo. Bootstrap the two labels once per repo by hand:
+enter a repo. The bootstrap is therefore explicit and human-invoked — once per
+repo, before the gate is expected to pass anything:
 
 ```sh
-gh label create review-blocked --color b60205 --repo <owner>/<repo> \
-  --description "리뷰 레인 중 하나 이상이 블로킹 판정 — 머지 금지 (#1527)"
-gh label create review-passed  --color 0e8a16 --repo <owner>/<repo> \
-  --description "실행된 모든 리뷰 레인이 통과 판정 — 머지 게이트 통과 (#1527)"
+/gh-label-bootstrap <owner>/<repo>
 ```
+
+It reads the `pipeline|` feed in `gh-label-bootstrap/references/gh-labels.md`,
+POSTs whatever is missing, PATCHes drift back to the SSOT color, and never
+prunes them. Re-running it is idempotent, so it is safe to fold into ordinary
+repo setup alongside the 10-label sync.
 
 ## Why this lives in the producer
 

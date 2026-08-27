@@ -141,15 +141,31 @@ main() {
     resolve_repo
 
     # --- Parse SSOT plain feeds -------------------------------------------
-    # 10-label feed:  name|<6hex>|description
-    # alias feed:     old|new     (two lowercase words)
+    # 10-label feed:   name|<6hex>|description
+    # alias feed:      old|new     (two lowercase words)
+    # pipeline feed:   pipeline|name|<6hex>|description   (#1527)
     # tr -d '\r' + leading-whitespace tolerance guard against CRLF checkouts
     # and incidental fence indentation (gemini-code-assist review, PR #1229).
-    local feed alias_feed ssot_content
+    local feed alias_feed pipeline_feed ssot_content
     ssot_content="$(tr -d '\r' <"$ssot_file")"
     feed="$(printf '%s\n' "$ssot_content" | grep -E '^[[:space:]]*[A-Za-z][A-Za-z0-9]*\|[0-9a-fA-F]{6}\|' || true)"
     alias_feed="$(printf '%s\n' "$ssot_content" | grep -E '^[[:space:]]*[a-z]+\|[a-z]+$' || true)"
     [ -n "$feed" ] || die "no label feed found in $ssot_file"
+
+    # Pipeline-state labels (#1527) — a separate feed, not part of the 10-label
+    # SSOT: they carry pipeline state (the merge-train verdict gate), not issue
+    # classification, and they have no aliases. They are still synced and
+    # prune-protected here, because `_gh_pr_edit_safe_label` refuses to
+    # auto-create a missing label (#326) — with no bootstrap path the gate
+    # deadlocks, leaving every PR unlabelled and therefore `[SKIPPED]` forever.
+    # The `pipeline|` prefix is what keeps the two feeds apart; it is stripped
+    # before the rows join `$feed`, so the sync loop below needs no change.
+    # The feed is optional: an SSOT without it is not an error.
+    pipeline_feed="$(printf '%s\n' "$ssot_content" |
+        sed -n -E 's/^[[:space:]]*pipeline\|([a-z][a-z0-9-]*\|[0-9a-fA-F]{6}\|.*)$/\1/p' || true)"
+    if [ -n "$pipeline_feed" ]; then
+        feed="$(printf '%s\n%s' "$feed" "$pipeline_feed")"
+    fi
 
     # SSOT label names (for keep-set membership).
     local ssot_names

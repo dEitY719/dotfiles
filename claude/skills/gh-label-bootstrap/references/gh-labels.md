@@ -17,11 +17,14 @@ dotfiles 저장소를 포함한 임의의 GitHub repo 에 적용할 **10개 핵�
   (`.gh-issue-defaults.yml` 매핑), `gh:issue-implement`
   (`reference` 라벨 차단), `gh:pr` (커밋타입 → 라벨 매핑).
 - 범위 밖: `CI fail`(`gh:pr-resolve-ci-fail`), `conflict`
-  (`gh:pr-resolve-conflict`), `review-blocked`/`review-passed`
-  (`devx:pr-review-all` → `gh:pr-merge-train` 머지 게이트, #1527) 등
-  **파이프라인 상태** 라벨 체계는 건드리지 않는다 — 이슈 분류 라벨이 아니고,
-  `gh:label-bootstrap` 이 동기화하지도 않는다. 각 라벨의 SSOT 는 그것을
-  발급하는 스킬의 references 에 있다.
+  (`gh:pr-resolve-conflict`) 등 **파이프라인 상태** 라벨은 10개 이슈 분류
+  라벨에 포함되지 않는다 — 각 라벨의 SSOT 는 그것을 발급하는 스킬의
+  references 에 있다.
+- 예외적으로 `review-blocked` / `review-passed` (`devx:pr-review-all` →
+  `gh:pr-merge-train` 머지 게이트, #1527) 는 파이프라인 라벨이면서도 아래
+  "파이프라인 상태 라벨" feed 로 **함께 동기화한다**. 라벨이 없으면 게이트가
+  영구 교착이라(자동 생성 금지, #326) 부트스트랩 경로가 반드시 필요하기
+  때문이다. 10개 SSOT 에 편입하는 것이 아니라 별도 feed 로 나란히 둔다.
 
 차용 근거 / 설계 논의: issue #1226.
 
@@ -91,7 +94,7 @@ GitHub 기본 제공 라벨은 삭제 후보에서 제외한다:
 
 ## Plain feed (스킬이 직접 파싱)
 
-`gh:label-bootstrap` 의 `lib/label-bootstrap.sh` 가 아래 두 블록을
+`gh:label-bootstrap` 의 `lib/label-bootstrap.sh` 가 아래 세 블록을
 정규식으로 뽑아 쓴다. 표(위)와 값이 어긋나면 안 되므로 이 블록이 유일한
 기계 판독 소스다.
 
@@ -116,6 +119,21 @@ reference|0e8a8a|구현 불필요/참고용 — gh:issue-implement가 구현을 
 bug|fix
 documentation|docs
 build|chore
+```
+
+### 파이프라인 상태 라벨 (`pipeline|name|color|description`)
+
+10개 라벨과 **별개 체계**다 — 이슈 분류가 아니라 파이프라인 상태를 나타내고,
+alias 도 없다. 그래도 `gh:label-bootstrap` 이 함께 동기화하고 `--prune` 에서
+보존한다: `_gh_pr_edit_safe_label` 은 없는 라벨을 자동 생성하지 않으므로(#326),
+부트스트랩 경로가 없으면 `gh:pr-merge-train` 의 판정 게이트가 영구 교착에
+빠진다 — 모든 PR 이 라벨 없이 남아 전부 `[SKIPPED]` 된다 (#1527, PR #1529 codex 리뷰).
+
+`pipeline|` 접두어가 10개 라벨 feed 와 구분하는 표지다.
+
+```
+pipeline|review-blocked|b60205|리뷰 레인 중 하나 이상이 블로킹 판정 — 머지 금지 (#1527)
+pipeline|review-passed|0e8a16|실행된 모든 리뷰 레인이 통과 판정 — 머지 게이트 통과 (#1527)
 ```
 
 ## Related

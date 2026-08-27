@@ -8,18 +8,32 @@ releases it once the blockers have actually been addressed.
 
 ## When it runs
 
-Only when **Step 6 pushed at least one fix commit** (`PUSHED_FIXES > 0`) **and**
-at least one comment this run was classified `ACCEPT` or `ACCEPT-PARTIAL`. Both
-halves matter:
+All three must hold:
+
+1. Step 6 pushed at least one fix commit (`PUSHED_FIXES > 0`).
+2. At least one comment this run was `ACCEPT` / `ACCEPT-PARTIAL`
+   (`ACCEPTED_COUNT > 0`).
+3. **No comment this run was `DECLINE`** (`DECLINED_COUNT == 0`).
+
+Why each:
 
 - No push → nothing changed on the branch, so the blocking verdict still stands
   as written. All-`DECLINE` / all-`QUESTION` runs leave the label alone.
 - A push with no accepted comment (an unrelated commit that happened to land)
   is not evidence a blocker was fixed.
+- **A single `DECLINE` anywhere in the run blocks the clear** (#1527, PR #1529
+  codex review). `gh:pr-reply` does not know which comments the reviewer
+  considered blocking — the verdict is one line for the whole review, not
+  per-comment. So "I accepted one thing and declined another" is
+  indistinguishable from "I declined the blocker and fixed a nit", and clearing
+  on the first would silently release the gate on the second.
 
-Declining a blocker is a legitimate outcome — but it is a **human's** call to
-override the gate, made by removing the label by hand. A skill that cleared it
-on its own reasoning would be marking its own homework.
+That third rule is deliberately blunt, and it errs the same direction as the
+gate itself: declining an out-of-scope nit costs a manual label removal, while
+the looser rule costs an unreviewed merge. Declining a blocker is a legitimate
+outcome — but overriding the gate is a **human's** call, made by removing the
+label by hand. A skill that cleared it on its own reasoning would be marking its
+own homework.
 
 ## What it does NOT do
 
@@ -39,7 +53,8 @@ A 404 means the label was already absent, which is success for this step's
 purposes — hence the idempotent `||` branch.
 
 ```bash
-if [ "${PUSHED_FIXES:-0}" -gt 0 ] && [ "${ACCEPTED_COUNT:-0}" -gt 0 ]; then
+if [ "${PUSHED_FIXES:-0}" -gt 0 ] && [ "${ACCEPTED_COUNT:-0}" -gt 0 ] \
+    && [ "${DECLINED_COUNT:-0}" -eq 0 ]; then
     if GH_HOST="$TARGET_HOST" gh api -X DELETE \
         "repos/$TARGET_REPO/issues/$PR_NUMBER/labels/review-blocked" \
         >/dev/null 2>&1; then

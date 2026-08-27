@@ -178,3 +178,48 @@ run_bootstrap() {
     assert_success
     assert_output --partial "[dry-run] PATCH label 'feat' (color=fbca04)"
 }
+
+# ── Pipeline-state labels (#1527) ─────────────────────────────────────
+# `review-blocked` / `review-passed` are the merge-train's verdict gate.
+# `_gh_pr_edit_safe_label` refuses to auto-create a missing label (#326), so
+# without a bootstrap path the gate deadlocks: every PR stays unlabelled and
+# `gh:pr-merge-train` skips all of them forever (PR #1529 codex review).
+# They live in their own SSOT feed, kept apart from the 10 issue-classification
+# labels — no aliases, but prune must never delete them.
+
+@test "pipeline labels are POSTed when missing (#1527)" {
+    set_existing ""
+    run_bootstrap
+    assert_success
+    grep -q 'repos/acme/widget/labels -X POST -f name=review-blocked -f color=b60205' "$MOCK_LOG"
+    grep -q 'repos/acme/widget/labels -X POST -f name=review-passed -f color=0e8a16' "$MOCK_LOG"
+}
+
+@test "existing pipeline label is PATCHed to the SSOT color (#1527)" {
+    set_existing review-blocked
+    run_bootstrap
+    assert_success
+    grep -q 'repos/acme/widget/labels/review-blocked -X PATCH' "$MOCK_LOG"
+    grep -q 'color=b60205' "$MOCK_LOG"
+}
+
+@test "prune never deletes a pipeline label (#1527)" {
+    set_existing review-blocked review-passed
+    run_bootstrap --prune
+    assert_success
+    if grep -q 'labels/review-blocked -X DELETE' "$MOCK_LOG"; then
+        echo "prune must not delete the verdict gate label" && return 1
+    fi
+    if grep -q 'labels/review-passed -X DELETE' "$MOCK_LOG"; then
+        echo "prune must not delete the verdict gate label" && return 1
+    fi
+}
+
+@test "pipeline labels are not treated as rename aliases (#1527)" {
+    set_existing review-blocked
+    run_bootstrap
+    assert_success
+    if grep -q 'labels/review-blocked -X PATCH -f new_name=review-passed' "$MOCK_LOG"; then
+        echo "pipeline labels have no alias mapping" && return 1
+    fi
+}

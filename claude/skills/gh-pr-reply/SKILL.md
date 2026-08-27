@@ -64,7 +64,8 @@ rules; see `references/reply-templates.md` for the full rubric.
 Keep each fix minimal and scoped — no drive-by refactors. Group related
 fixes into themed commits (one per theme, not per comment), e.g.
 `fix(review): address X …`. Never `--amend` or `--no-verify`. Set `ACCEPTED_COUNT`
-to the number of `ACCEPT`/`ACCEPT-PARTIAL` comments — Step 6 gates on it.
+and `DECLINED_COUNT` to the number of `ACCEPT`/`ACCEPT-PARTIAL` and `DECLINE`
+comments this run — Step 6 gates the `review-blocked` clear on both.
 
 ## Step 5: Reply to Every Comment
 
@@ -80,10 +81,10 @@ asked) and report new commit SHAs alongside the reply summary. Set
 `PUSHED_FIXES` to the count of new SHAs on the remote branch; no fixes /
 skipped push → `PUSHED_FIXES=0`. If `PUSHED_FIXES > 0`, push the PR card
 back to `In review` per `references/board-sync-in-review.sh.md` (soft-fail;
-no-op when `PUSHED_FIXES == 0`). Then, if `PUSHED_FIXES > 0` **and** `ACCEPTED_COUNT
-> 0`, clear `review-blocked` per `references/review-blocked-clear.sh.md` (#1527,
-soft-fail) — never adding `review-passed`: fixing a blocker returns the PR to
-*unverified*.
+no-op when `PUSHED_FIXES == 0`). Then, if `PUSHED_FIXES > 0` **and**
+`ACCEPTED_COUNT > 0` **and** `DECLINED_COUNT == 0`, clear `review-blocked` per
+`references/review-blocked-clear.sh.md` (#1527, soft-fail) — never adding
+`review-passed`: fixing a blocker returns the PR to *unverified*.
 
 Then **unconditionally** run the same removal block Step 2.5 does —
 `references/reply-pending-label-removal.sh.md`. Between the two call sites the
