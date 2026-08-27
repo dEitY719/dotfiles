@@ -229,12 +229,12 @@ The helper (`shell-common/functions/gh_project_status.sh`) handles:
 
 **Warn when `--only-from` absorbs the write (#1507, F-2)**: before
 handing off to `_gh_project_status_sync`, read the card's current
-Status with the same SSOT query helper `gh-pr-merge`'s board-approval
-gate uses (`_gh_project_status_query_current`, also from
-`gh_project_status.sh` — see
-`../gh-pr-merge/references/board-approval-gate.sh.md`), and when it is
-neither `Backlog` nor `Ready`, print one line before the (no-op)
-mutation:
+Status with the same SSOT query helper `gh-pr-merge` used for its
+now-retired board-approval gate (`_gh_project_status_query_current`,
+also from `gh_project_status.sh` — see
+`../gh-pr-merge/references/board-policy.md`, "Retired: Step 2-B
+(removed in #1513)"), and when it is neither `Backlog` nor `Ready`,
+print one line before the (no-op) mutation:
 
 ```
 status = `_gh_project_status_query_current issue <N> "$TARGET_REPO"`
