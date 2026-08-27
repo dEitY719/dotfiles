@@ -104,6 +104,17 @@ worktree-scoped value:
    `SHELL_COMMON`/`DOTFILES_ROOT` are both unset — a non-interactive
    environment where no loader ran to canonicalize them.
 
+**Caveat on both tiers.** The split above assumes the running shell —
+interactive, or a non-interactive agent/automation session — itself sourced
+`bash/main.bash` / `zsh/main.zsh`, or inherited its environment from a parent
+that did. A shell that instead manually exports `SHELL_COMMON`/`DOTFILES_ROOT`,
+or inherits them from a process that never ran the loader, sits outside that
+guarantee: tier 1 can pick up a stale or non-canonical `SHELL_COMMON` value,
+and tier 2 only fires when both variables are literally unset, not merely
+stale. This degrades safely in practice — Step 2.4.1 is a best-effort
+background wake, never load-bearing for the flow itself — but the two tiers
+above describe the common case, not an invariant.
+
 **Escape hatch interaction.** `DOTFILES_ROOT_NO_CANONICALIZE=1`
 (`_resolve_dotfiles_root_canonical` in `dotfiles_root.sh`) disables tier 1's
 canonicalization for a shell that intentionally wants to test a worktree's
