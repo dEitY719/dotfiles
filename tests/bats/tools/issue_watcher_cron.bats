@@ -735,8 +735,14 @@ _bounded_bats() {
     case $- in *m*) _monitor=1 ;; esac
     set -m
 
+    # bats' `run` executes inside a command substitution, and POSIX says the
+    # stdin of an asynchronous list with no explicit redirection is `/dev/null`
+    # — `set -m` does not change that. Without `<&9` here, the child below runs
+    # on `/dev/null` instead of the fifo `_run_script` handed us, and every
+    # never-EOF-stdin regression case in this file passes for the wrong reason.
+    exec 9<&0
     {
-        "$@" >"${_out}" 2>&1
+        "$@" >"${_out}" 2>&1 <&9
         printf '%s\n' "$?" >"${_rc}.part"
         mv -f "${_rc}.part" "${_rc}"
     } &
