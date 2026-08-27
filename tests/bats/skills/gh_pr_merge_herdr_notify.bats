@@ -113,6 +113,20 @@ _agents_json() {
     assert_output --partial '[INFO] herdr tab ws-missing/tab-7 is idle'
 }
 
+@test "herdr-notify: workspace record exists with a JSON null label → falls back to raw id, not the string 'null'" {
+    # `jq -r '.label'` on a null value prints the literal text "null", which
+    # is neither unset nor empty — so `${WS_LABEL:-$WS_ID}` alone would not
+    # catch it. The `// empty` in the jq filter is what makes the fallback
+    # actually fire here. Workspace id deliberately avoids containing "null"
+    # itself, so the assertion below isn't a false negative on the raw id.
+    FAKE_WORKSPACE_JSON='{"result":{"workspaces":[{"workspace_id":"ws-3","label":null}]}}'
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|idle|ws-3")"
+    run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    assert_output --partial '[INFO] herdr tab ws-3/tab-7 is idle'
+    refute_output --partial 'null/tab-7'
+}
+
 @test "herdr-notify: agent_status=working → no hint at all (F-4)" {
     FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|working|ws-1")"
     run gh_pr_merge_herdr_notify "wt/issue-1508/1"
@@ -266,7 +280,7 @@ herdr workspace list'
         "[INFO] herdr tab %s/%s is idle for the merged branch's worktree (%s)" \
         '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' \
         '.result.agents[]? | select(.cwd == $cwd)' \
-        '.result.workspaces[]? | select(.workspace_id == $id) | .label' \
+        '.result.workspaces[]? | select(.workspace_id == $id) | .label // empty' \
         '= "idle" ]'; do
         for f in "$doc" "$fixture"; do
             run grep -F -- "$pat" "$f"

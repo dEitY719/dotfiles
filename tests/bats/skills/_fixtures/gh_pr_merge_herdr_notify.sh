@@ -70,7 +70,7 @@ gh_pr_merge_herdr_notify() {
     # Label is cosmetic — fall back to the raw workspace id when the second
     # read-only lookup fails or the workspace is unlabeled.
     _ws_label=$(herdr workspace list 2>/dev/null | jq -r --arg id "$_ws_id" \
-        '.result.workspaces[]? | select(.workspace_id == $id) | .label' 2>/dev/null | head -1)
+        '.result.workspaces[]? | select(.workspace_id == $id) | .label // empty' 2>/dev/null | head -1)
 
     # F-3: exactly one line, only for an idle agent.
     printf "[INFO] herdr tab %s/%s is idle for the merged branch's worktree (%s) — consider: herdr tab close %s / ai-worktree:teardown\n" \
