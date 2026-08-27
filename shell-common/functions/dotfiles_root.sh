@@ -21,6 +21,23 @@
 # DOTFILES_FORCE_INIT — there is no observable output until the function
 # is invoked.
 
+# Include-once sentinel (issue #1505): an interactive shell sources this
+# file explicitly (bash/main.bash, zsh/main.zsh, for #589 canonicalization),
+# then again via the functions/ autoloader's own pass over
+# shell-common/functions/*.sh, then once more per #1454-guarded helper file
+# below (each does `. "$SHELL_COMMON/functions/dotfiles_root.sh"` itself).
+# Every repeat re-parses this file and redefines its functions for no
+# benefit — skip repeats within one process. `return` (not `exit`) since
+# this only ever runs as a sourced dot-script; the `|| exit 0` fallback
+# covers the (unsupported) case of running it directly.
+if [ -n "${_DOTFILES_ROOT_SH_SOURCED-}" ]; then
+    # shellcheck disable=SC2317  # exit fallback only runs if this file is
+    # executed directly (not sourced), so `return` succeeding makes it look
+    # unreachable to static analysis.
+    return 0 2>/dev/null || exit 0
+fi
+_DOTFILES_ROOT_SH_SOURCED=1
+
 # _resolve_dotfiles_root_canonical CANDIDATE
 #
 # Echo the canonical (main-worktree) directory that should be used as
