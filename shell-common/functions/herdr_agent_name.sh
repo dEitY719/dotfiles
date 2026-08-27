@@ -43,10 +43,11 @@
 # to the last `/` is dropped, so all three reduce to the repository name.
 #
 # Normalization, in order: fold case, replace every character outside herdr's
-# safe set with `-`, collapse runs of `-`, strip leading/trailing `-`, truncate
-# to [max-length] (default 16), then strip a trailing `-` the cut may have
-# exposed. The first character needs no special handling — callers prefix the
-# result, and every prefix starts with a lowercase letter.
+# safe set with `-`, collapse runs of `-`, strip leading `-`, truncate to
+# [max-length] (default 16), then strip any trailing `-` — whether it was
+# already there or the cut exposed it. The first character needs no special
+# handling — callers prefix the result, and every prefix starts with a
+# lowercase letter.
 #
 # Returns 1 with no output when the identifier normalizes to nothing (`...`,
 # an empty string). A caller must never build a name out of that: an empty
@@ -59,16 +60,24 @@ herdr_agent_repo_slug() {
     # host/ and owner/ prefixes: keep only what follows the last slash.
     _han_raw="${_han_raw##*/}"
 
+    # One pipeline, one trailing-dash strip — placed *after* the cut. Stripping
+    # before it as well would be dead work: truncation only removes characters
+    # from the end, so it can expose a trailing dash but never hide one.
     _han_slug=$(
         printf '%s' "${_han_raw}" |
             tr '[:upper:]' '[:lower:]' |
             tr -c 'a-z0-9_-' '-' |
-            sed -e 's/--*/-/g' -e 's/^-*//' -e 's/-*$//'
+            sed -e 's/--*/-/g' -e 's/^-*//' |
+            cut -c "1-${_han_max}" |
+            sed -e 's/-*$//'
     )
-    _han_slug=$(printf '%s' "${_han_slug}" | cut -c "1-${_han_max}" | sed -e 's/-*$//')
 
-    [ -n "${_han_slug}" ] || return 1
+    if [ -z "${_han_slug}" ]; then
+        unset _han_raw _han_max _han_slug
+        return 1
+    fi
     printf '%s' "${_han_slug}"
+    unset _han_raw _han_max _han_slug
 }
 
 # herdr_agent_name <prefix> <identifier> [suffix] — print a valid herdr agent
@@ -85,17 +94,45 @@ herdr_agent_repo_slug() {
 # different name, find no running train, and start a second one merging onto
 # the same base.
 #
-# Returns 1 with no output when <identifier> is unusable — see
-# herdr_agent_repo_slug.
+# Returns 1 with no output when <identifier> is unusable (see
+# herdr_agent_repo_slug), or when the composed name would not satisfy herdr's
+# rule. Only the repo segment is normalized; the prefix and the suffix arrive
+# already formatted from the caller, so the finished name is checked here
+# rather than trusted. That check is the whole point of this file: #1530 was
+# invisible for 76 attempts precisely because nothing verified the name before
+# `herdr agent start` was handed one it would refuse. An over-long prefix, or
+# a suffix built from an issue number that arrived empty (`issue-`, giving
+# `iw-dotfiles-issue-`), fails closed here instead — and every call site
+# already treats a non-zero return as "skip this dispatch".
 herdr_agent_name() {
     _han_prefix="${1-}"
     _han_suffix="${3-}"
 
-    _han_name_slug=$(herdr_agent_repo_slug "${2-}") || return 1
+    _han_name_slug=$(herdr_agent_repo_slug "${2-}") || {
+        unset _han_prefix _han_suffix _han_name_slug
+        return 1
+    }
 
     if [ -n "${_han_suffix}" ]; then
-        printf '%s-%s-%s' "${_han_prefix}" "${_han_name_slug}" "${_han_suffix}"
+        _han_name="${_han_prefix}-${_han_name_slug}-${_han_suffix}"
     else
-        printf '%s-%s' "${_han_prefix}" "${_han_name_slug}"
+        _han_name="${_han_prefix}-${_han_name_slug}"
     fi
+
+    # `^[a-z][a-z0-9_-]{0,31}$`, as a POSIX glob. The trailing-dash case is
+    # stricter than herdr itself: such a name would be *accepted*, which is the
+    # worse failure the repo-slug comment above describes.
+    case "${_han_name}" in
+    [!a-z]* | *[!a-z0-9_-]* | *-)
+        unset _han_prefix _han_suffix _han_name_slug _han_name
+        return 1
+        ;;
+    esac
+    if [ "${#_han_name}" -gt 32 ]; then
+        unset _han_prefix _han_suffix _han_name_slug _han_name
+        return 1
+    fi
+
+    printf '%s' "${_han_name}"
+    unset _han_prefix _han_suffix _han_name_slug _han_name
 }

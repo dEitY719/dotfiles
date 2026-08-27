@@ -1230,9 +1230,8 @@ _assert_not_hung() {
     assert_success
 
     local _name
-    _name=$(grep -oE 'agent start [^ ]+' "${_LOG}" | head -1 | awk '{print $3}')
-    [[ "${_name}" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
-        || fail "not a valid herdr agent name: '${_name}'"
+    _name=$(awk '$2 == "agent" && $3 == "start" { print $4; exit }' "${_LOG}")
+    assert_valid_herdr_name "${_name}"
 }
 
 # An owner with uppercase is the exact shape that broke production — the fold

@@ -360,15 +360,13 @@ branch refs/heads/main
 @test "naming: the agent name satisfies herdr's rule" {
     run pmv_agent_name github.com acme/dotfiles 77
     assert_output "mv-dotfiles-pr-77"
-    [[ "$output" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
-        || fail "not a valid herdr agent name: '$output'"
+    assert_valid_herdr_name "$output"
 }
 
 @test "naming: a mixed-case owner and a long repo still fit the 32-char budget" {
     run pmv_agent_name github.com dEitY719/A-Very-Long-Repository-Name 99999
     assert_success
-    [[ "$output" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] \
-        || fail "not a valid herdr agent name: '$output'"
+    assert_valid_herdr_name "$output"
     assert_output "mv-a-very-long-repo-pr-99999"
 }
 
