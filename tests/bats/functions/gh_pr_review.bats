@@ -1375,6 +1375,22 @@ _assert_slow_cli_within_bound() {
     _assert_slow_cli_within_bound hermes
 }
 
+# PR #1542 review (codex BLOCKER): the two tests above both `skip` whenever
+# GNU `timeout` is unavailable, so the degrade-path itself — the branch stock
+# macOS actually runs — had zero coverage on any machine. This exercises
+# `_gh_pr_review_timeout` directly (not through `_gh_pr_review_run_ai`, which
+# needs no unrelated CLI/network mocking) with a PATH that has no `timeout`
+# binary at all, regardless of what the real test host provides.
+@test "_gh_pr_review_timeout: no timeout binary on PATH still runs the wrapped command unbounded" {
+    _source_module
+    local no_timeout_dir="$TEST_TEMP_HOME/bin_no_timeout"
+    mkdir -p "$no_timeout_dir"
+
+    PATH="$no_timeout_dir" run _gh_pr_review_timeout 5 echo "degrade path ran"
+    assert_success
+    assert_output "degrade path ran"
+}
+
 # ---------------------------------------------------------------------------
 # _gh_pr_review_run_ai — stderr temp file uses the SSOT allocator (issue #1286
 # item 1). It used to call `mktemp` raw, so an unwritable /tmp aborted the
