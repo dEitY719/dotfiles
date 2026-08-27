@@ -100,3 +100,29 @@ _sep_column() {
 
     [ "$normal_col" -eq "$wrapped_col" ]
 }
+
+@test "ux_table_row: CJK label with display width > 20 but char count <= 20 wraps (PR #1546 agy/codex)" {
+    # 11 Korean syllables = 11 chars but 22 display columns (wc -L). A
+    # character-count check (${#col1}, the pre-fix implementation) would not
+    # trigger the wrap here even though the visible label overflows — the
+    # exact false negative agy and codex both flagged on PR #1546.
+    run _run_ux_table_row "한글표시폭테스트라벨용" "CJK 폭 회귀 테스트"
+    assert_success
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[0]}" = "  한글표시폭테스트라벨용" ]
+    assert_output --partial "CJK 폭 회귀 테스트"
+}
+
+@test "ux_table_row: wrapped CJK continuation separator aligns with a normal row" {
+    run _run_ux_table_row "aicron" "Cron helper"
+    assert_success
+    local normal_col
+    normal_col=$(_sep_column "${lines[0]}" ":")
+
+    run _run_ux_table_row "한글표시폭테스트라벨용" "CJK 폭 회귀 테스트"
+    assert_success
+    local wrapped_col
+    wrapped_col=$(_sep_column "${lines[1]}" ":")
+
+    [ "$normal_col" -eq "$wrapped_col" ]
+}
