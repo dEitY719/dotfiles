@@ -464,7 +464,12 @@ ux_table_row() {
     # 20자를 넘는 라벨은 %-20s 가 자르지 않고 그대로 밀어내 구분자와 뒤 컬럼의
     # 정렬을 깨뜨린다. 라벨을 따로 한 줄에 내보내고 이어지는 줄의 라벨 칸을
     # 비워, 구분자가 평범한 행과 같은 열에 오게 한다.
-    if [ "${#col1}" -gt 20 ]; then
+    # ${#col1}은 문자 수를 셀 뿐 터미널 표시 폭이 아니다 — CJK/한글처럼 2칸을
+    # 차지하는 wide character가 섞이면 어긋난다(ux_header와 동일 이유).
+    # `wc -L`로 locale-aware 표시 폭을 구한다.
+    local col1_width
+    col1_width=$(printf '%s' "$col1" | wc -L)
+    if [ "$col1_width" -gt 20 ]; then
         printf "  ${UX_PRIMARY}%s${UX_RESET}\n" "$col1"
         label=""
     fi
