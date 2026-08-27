@@ -173,17 +173,23 @@ _dotfiles_root_git_common_dir() {
 # memoization would silently never take effect. Callers must invoke this in
 # the current shell and read the global.
 #
-# The cache is keyed on the *value* of $HOME, not on an "already computed"
-# boolean: $HOME is reassigned within a single process both by the bats
-# suite (setup_isolated_home) and by real `env HOME=... sh -c` callers, and a
-# stale canonical path there would silently invert the guard's verdict.
-# Only successful lookups are cached, so a $HOME/dotfiles that appears later
-# in the same process is still picked up.
+# The cache is keyed on the *value of the CANONICAL_DIR argument itself*
+# (issue #1505 PR #1548 review, codex+agy) — not on $HOME. The only current
+# caller always builds its argument as "${HOME}/dotfiles", so a $HOME change
+# already produces a different $1 and still busts the cache correctly; keying
+# on $1 additionally keeps a same-$HOME call with a genuinely different
+# CANONICAL_DIR (this function's own documented, general-purpose contract)
+# from returning another directory's stale --git-common-dir. $HOME is
+# reassigned within a single process both by the bats suite
+# (setup_isolated_home) and by real `env HOME=... sh -c` callers, so it must
+# still invalidate — which it does, transitively, via the argument. Only
+# successful lookups are cached, so a $HOME/dotfiles that appears later in
+# the same process is still picked up.
 #
 # The self side is deliberately NOT cached — it differs per call site and
 # never repeats within one process.
 _dotfiles_root_canonical_common_dir() {
-    if [ "${_DOTFILES_ROOT_CANON_HOME-}" = "${HOME-}" ] \
+    if [ "${_DOTFILES_ROOT_CANON_KEY-}" = "${1-}" ] \
         && [ -n "${_DOTFILES_ROOT_CANON_COMMON-}" ]; then
         return 0
     fi
@@ -196,7 +202,7 @@ _dotfiles_root_canonical_common_dir() {
         return 1
     fi
 
-    _DOTFILES_ROOT_CANON_HOME="${HOME-}"
+    _DOTFILES_ROOT_CANON_KEY="${1-}"
     return 0
 }
 

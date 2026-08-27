@@ -457,6 +457,29 @@ SH
     assert_output "cached=SENTINEL"
 }
 
+# PR #1548 review (codex + agy): the cache used to key on $HOME alone even
+# though the function's own contract takes an arbitrary CANONICAL_DIR — a
+# second call under the same $HOME but a genuinely different directory would
+# have returned the first directory's stale --git-common-dir. Keying on the
+# argument itself (not $HOME) fixes this.
+@test "_dotfiles_root_canonical_common_dir: same \$HOME, different CANONICAL_DIR is not served stale" {
+    _setup_fake_home_dotfiles
+    _setup_foreign_repo other
+
+    run env HOME="$FAKE_HOME" bash -c "
+        . '$HELPER'
+        _dotfiles_root_canonical_common_dir '$CANON'
+        a=\"\$_DOTFILES_ROOT_CANON_COMMON\"
+        _dotfiles_root_canonical_common_dir '$FOREIGN_DIR'
+        b=\"\$_DOTFILES_ROOT_CANON_COMMON\"
+        echo \"a=\$a\"
+        echo \"b=\$b\"
+        [ \"\$a\" != \"\$b\" ] && echo distinct
+    "
+    assert_success
+    assert_output --partial "distinct"
+}
+
 @test "_dotfiles_root_canonical_common_dir: non-git dir fails and is not cached" {
     _setup_fake_home_dotfiles
     mkdir -p "$SCRATCH/notgit"

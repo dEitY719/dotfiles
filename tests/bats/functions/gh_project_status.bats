@@ -1421,15 +1421,6 @@ _run_marker_bash() {
 # load_category), which would swallow the very stderr under test.
 # ---------------------------------------------------------------------------
 
-_setup_foreign_home_1505() {
-    FOREIGN_HOME_1505="$TEST_TEMP_HOME/foreign-home-1505"
-    mkdir -p "$FOREIGN_HOME_1505/dotfiles"
-    git -C "$FOREIGN_HOME_1505/dotfiles" init -q -b main
-    git -C "$FOREIGN_HOME_1505/dotfiles" -c user.email=t@t -c user.name=t \
-        commit --allow-empty -q -m init
-    export HOME="$FOREIGN_HOME_1505"
-}
-
 @test "zsh: #1505 foreign-checkout guard warns when gh_project_status.sh is sourced under zsh" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not available"
     command -v git >/dev/null 2>&1 || skip "git not available"
