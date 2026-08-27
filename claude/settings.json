@@ -21,6 +21,17 @@
         "matcher": "Bash"
       }
     ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "${HOME}/dotfiles/claude/hooks/bash_wait_loop_guard.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
