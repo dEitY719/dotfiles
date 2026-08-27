@@ -178,13 +178,14 @@ def test_blocks_tasks_output_until_poll() -> None:
     assert "tasks/abc123.output" in reason
 
 
-def test_blocks_tasks_output_while_poll() -> None:
-    cmd = "while [ ! -s /home/u/.claude/tasks/deadbeef.output ]; do sleep 3; done; echo ok"
-    _assert_denied(_run_hook(_bash_event(cmd)))
-
-
-def test_blocks_tasks_output_glob_poll() -> None:
-    cmd = "until ls tasks/*.output >/dev/null 2>&1; do sleep 1; done"
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "while [ ! -s /home/u/.claude/tasks/deadbeef.output ]; do sleep 3; done; echo ok",
+        "until ls tasks/*.output >/dev/null 2>&1; do sleep 1; done",
+    ],
+)
+def test_blocks_tasks_output_poll_variants(cmd: str) -> None:
     _assert_denied(_run_hook(_bash_event(cmd)))
 
 
