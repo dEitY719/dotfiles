@@ -22,15 +22,30 @@
 #   post-merge-verify   mv-<repo>-pr-<N>         3 + 16 + 4 + 5  = 28
 #
 # The host and the owner are deliberately NOT part of the name. That is a
-# concession, not an oversight: #1403/#1407 pin the host everywhere else
-# because `owner/repo` is not unique across GitHub servers, and dropping it
-# here means a github.com checkout and a GHES checkout sharing a repo name
-# would collide on one agent. It buys the 16 characters the repo needs — a
-# host-qualified name does not fit in 32 at all, which is exactly how
-# post-merge-verify ended up at 37. Today every watched target is one
-# repository on one host, so the collision is unreachable; the moment a second
-# host joins the watch list, add a short digest of `<host>/<owner>` as a
-# suffix here (a separate issue, deliberately not pre-built).
+# concession, not an oversight, and it costs uniqueness on BOTH axes (PR #1532
+# review, codex):
+#
+#   host   a github.com checkout and a GHES checkout sharing a repo name
+#          collide — the pinning #1403/#1407 established everywhere else.
+#   owner  `acme/dotfiles` and `other/dotfiles` collide too, and this one is
+#          reachable from a single host: issue_watcher_cron.sh watches a *list*
+#          of repos, so two same-basename entries would share `iw-dotfiles-
+#          issue-<N>` and herdr would route the second dispatch's prompt at the
+#          first one's pane (the failure PR #1447's review guarded against).
+#
+# What it buys is the 16 characters the repo needs: a host- and owner-qualified
+# name does not fit in 32 at all, which is exactly how post-merge-verify ended
+# up at 37 and was refused on every merge. A name that identifies nothing
+# because herdr rejects it is worse than one that identifies a repo.
+#
+# Reachability today: `docs/.ssot/watched-repos.json` holds exactly one entry
+# (`dEitY719/dotfiles` on github.com), so neither collision can occur. The
+# guard is that fact, not the code — #1530's 확정 사항 fixed the 16-char
+# repo-only shape as a user decision and deferred the fix to a follow-up. When
+# a second host OR a second owner joins the watch list, append a short digest
+# of `<host>/<owner>` here (e.g. `iw-dotfiles-a3f-issue-1530`, 26 chars — it
+# fits). `tests/bats/functions/herdr_agent_name.bats` T20 pins the limitation
+# so it fails visibly rather than silently when that day comes.
 #
 # No interactive guard, for the same reason gh_host.sh has none: the body is
 # pure definitions and produces no output at file scope, and every real caller
