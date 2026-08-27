@@ -46,11 +46,7 @@ safe_source() {
 
     # Source file directly in parent shell (critical for function/alias propagation)
     # NOTE: MUST NOT use $(...) subshell as it breaks function definitions
-    if [ -n "$stderr_capture" ]; then
-        . "$file_path" 2>"$stderr_capture"
-    else
-        . "$file_path" 2>/dev/null
-    fi
+    . "$file_path" 2>"${stderr_capture:-/dev/null}"
     local source_exit=$?
 
     if [ $source_exit -eq 0 ]; then
