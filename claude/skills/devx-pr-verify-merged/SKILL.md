@@ -89,7 +89,7 @@ rebase 는 `~1`, 다중커밋 rebase 는 `~N`)로 같은 입력을 돌린다. �
 ## Step 7: 자기 반증 후 이슈화 (F-8)
 
 후보 1건마다 반증 가설 4종(하네스 오류 · 환경 특수성 · 의도된 동작 · PR 과 무관한 기존 결함)을 먼저 세워
-반증하고, 살아남은 것만 발견 1건 = 이슈 1건으로 `Skill(gh:issue-create)` 에 넘기되 **생성 직전 대상 레포를
+반증하고, 살아남은 것만 발견 1건 = 이슈 1건으로 `Skill(gh:issue-create, "--assignee @me")` 에 넘기되 **생성 직전 대상 레포를
 출력**한다. `--dry-run` 은 본문만, `--no-issue` 는 초안도 안 쓰며, 생성 실패는 본문을 stdout 에 남기고 `[WARN]`.
 
 ## Step 8: 리포트와 PR 코멘트 게시 (`references/report-template.md`)
