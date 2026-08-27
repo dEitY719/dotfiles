@@ -163,10 +163,11 @@ tokens=$(((tokens + 250) / 500 * 500))
 ```
 
 The byte count itself is measured right after Step 3+4 builds the prompt,
-not re-read at Step 6 comment-post time — the issue #1474 fix. Read the
-comment above `_gh_pr_review_estimate_tokens` and its caller in
-`gh_pr_review.sh` for the full rationale and the exact `[WARN]` text; this
-doc only tracks the arithmetic shown above.
+not re-read at Step 6 comment-post time — the issue #1474 mitigation (the
+file-vanishing root cause itself is still open; only the measurement timing
+was fixed). Read the comment above `_gh_pr_review_estimate_tokens` and its
+caller in `gh_pr_review.sh` for the full rationale and the exact `[WARN]`
+text; this doc only tracks the arithmetic shown above.
 
 The 4-bytes-per-token heuristic is conservative for English/Korean
 mixed PR bodies. Refine when a tokenizer-backed metric becomes part
