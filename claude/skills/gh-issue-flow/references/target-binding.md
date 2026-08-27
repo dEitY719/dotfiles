@@ -1,11 +1,9 @@
 # gh:issue-flow — Binding the GitHub target (#1403)
 
 Step 1 resolves the host and repo from the `[remote]`'s URL once and exports
-them, so the composition's own `gh` call cannot drift to another server.
-It also exports `REMOTE` itself (#1498) — every later inline Bash step in
-this composition (currently only Step 2.4.1, `references/merge-train-wake.md`)
-reads `$REMOTE` instead of re-deriving it, so a non-`origin` `[remote]`
-argument is visible past Step 1.
+them, so the composition's own `gh` call cannot drift to another server. It
+also exports `REMOTE` itself (#1498), matching the convention `gh:commit` and
+`gh:pr` already use.
 
 Set `REMOTE` to the parsed `[remote]` argument from Step 1 **before** running
 this block — e.g. `REMOTE=upstream` when `/gh-issue-flow <N> upstream` was
@@ -13,6 +11,17 @@ invoked, left unset (defaults to `origin`) otherwise. Do not copy the block
 below verbatim without that assignment; `${REMOTE:-origin}` silently reads as
 `origin` when `REMOTE` was never set, which defeats the whole point of
 threading `[remote]` through the chain.
+
+**This export is not load-bearing for the flow's two non-`Skill()` inline
+Bash steps (2.4.1, 2.6)** — PR #1539 review (agy + codex) found that a Bash
+tool call is not guaranteed to inherit an earlier call's exports, so a step
+several `Skill()` calls downstream that trusted `$REMOTE` alone could
+silently read the wrong value. Both steps instead re-derive their target
+fresh, in their own Bash call, from the literal `<remote>` value the
+executing agent already knows from parsing it here in Step 1 — see
+`references/merge-train-wake.md` and `references/ai-metrics-step.md`. The
+export below remains useful for anything that stays within Step 1's own
+Bash call, and for consistency with the rest of the skill suite.
 
 ```bash
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"

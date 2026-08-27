@@ -48,9 +48,11 @@ Record `START_TS=$(date +%s)` for elapsed-time tracking in Step 2.6.
 `[remote]`'s URL and export `GH_HOST` / `TARGET_REPO` / `TARGET_HOST` /
 `REMOTE` before Step 2. Since #1405 the binding is authoritative for the
 whole chain — `[remote]` is threaded explicitly into 2.1 `gh:issue-implement`,
-2.2 `gh:commit`, 2.3 `gh:pr` and 2.4 `devx:pr-review-all`, and the exported
-`REMOTE` gates Step 2.4.1's inline Bash call (#1498, since it isn't a
-`Skill()` call and has no `<remote>` argument of its own to receive). Exact
+2.2 `gh:commit`, 2.3 `gh:pr` and 2.4 `devx:pr-review-all`. The two inline Bash
+steps that aren't `Skill()` calls (2.4.1 and 2.6) do **not** rely on this
+export reaching their own, later Bash tool call — each re-derives its target
+fresh from the literal `<remote>` value instead (#1498, PR #1539 review: a
+Bash tool call is not guaranteed to inherit an earlier call's exports). Exact
 block and the reason the host is passed explicitly: `references/target-binding.md`.
 
 ## Step 2: Chain the Skills
@@ -74,15 +76,17 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    `references/quality-gate-step.md`.
    `Skill(devx:pr-review-all, "<PR_NUM> <remote> --defer-reply 4")`
 5. **Step 2.4.1 — Wake merge-train dispatcher** (only if 2.3 succeeded; runs
-   regardless of Step 2.4's own soft-fail outcome; non-fatal) — when Step 1's
-   exported `REMOTE` is `origin` (silently skipped otherwise, #1498 — the
-   dispatcher only tracks `$HOME/dotfiles`'s own `origin` remote), fires
-   `aicron run merge-train` **in the background, not awaited** (a real train
-   launch can block ~4 min on its own `--wait` confirmation, which the
-   rebase steps below don't need) so the dispatcher checks immediately
-   instead of waiting up to the cron backstop period. Only a missing
-   `aicron.sh` prints a `[WARN]` line; the dispatcher's own NF-1 locking
-   already prevents a duplicate train. Detail: `references/merge-train-wake.md`.
+   regardless of Step 2.4's own soft-fail outcome; non-fatal) — when the
+   literal `<remote>` (substituted fresh into this Bash call, never read
+   from `$REMOTE`) resolves to the same repo URL as `$HOME/dotfiles`'s own
+   `origin` (silently skipped otherwise, #1498 — the dispatcher only tracks
+   that one remote), fires `aicron run merge-train` **in the background, not
+   awaited** (a real train launch can block ~4 min on its own `--wait`
+   confirmation, which the rebase steps below don't need) so the dispatcher
+   checks immediately instead of waiting up to the cron backstop period.
+   Only a missing `aicron.sh` prints a `[WARN]` line; the dispatcher's own
+   NF-1 locking already prevents a duplicate train. Detail:
+   `references/merge-train-wake.md`.
 6. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
    rebase-resolve; a fresh PR usually prints "이미 충돌 없음 — skip".
    `Skill(gh:pr-resolve-conflict, "<PR_NUM>")`

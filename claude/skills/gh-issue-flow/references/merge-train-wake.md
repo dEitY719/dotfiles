@@ -52,27 +52,47 @@ Both alternatives were considered and rejected (issue #1482 body, "대안"):
   bypass would also skip the project-board Status gate — a standing
   exception the issue's NF-2 explicitly rules out.
 
-## Guarded to `origin` only (#1498)
+## Guarded to `$HOME/dotfiles`'s own `origin` only (#1498, PR #1539 review)
 
-`pr_merge_train_cron.sh` (the script `aicron run merge-train` launches) is
-hardcoded to `$HOME/dotfiles`'s own `origin` remote — see "Why the
+`pr_merge_train_cron.sh` (the script `aicron run merge-train` launches) only
+ever operates on `$HOME/dotfiles`'s own `origin` remote — see "Why the
 `$HOME/dotfiles` fallback is intentional" below. Waking it for a PR that
-`gh:issue-flow` pushed to a different `[remote]` (e.g. `upstream`) nudges a
-dispatcher that has no way to see that PR: harmless, but pointless. The call
-is gated on `$REMOTE`, which Step 1 exports (`references/target-binding.md`,
-#1498) from the same `[remote]` argument every other GitHub-touching step in
-this chain already receives.
+`gh:issue-flow` pushed somewhere the dispatcher can't see nudges a process
+that will never find that PR: harmless, but pointless. The call is gated on
+whether `<remote>` — the same `[remote]` positional Step 1 resolved
+(`references/target-binding.md`) — points at that **same repo**.
 
-**Do not gate this with `${REMOTE:-origin}` unless Step 1 has actually
-exported `REMOTE`** — a rejected earlier draft of this guard (PR #1489
-review feedback) read `${REMOTE:-origin}` before Step 1 ever exported it,
-so the condition was always true regardless of the actual remote. #1498 is
-the first version where `REMOTE` is genuinely exported for this to read.
+Two failure modes were found and closed together, both from PR #1539 review
+(agy + codex, independently, both BLOCKER):
+
+- **Don't gate on a re-read of `$REMOTE` from the environment.** An earlier
+  draft (dangling commit d3e12471, PR #1489 review) read `${REMOTE:-origin}`
+  before Step 1 ever exported it, so the guard was always true. #1498's first
+  fix exported `REMOTE` in Step 1 for this to read — but a Bash tool call is
+  not guaranteed to inherit a prior call's exports (agy, PR #1539): if the
+  export doesn't survive to this call, `${REMOTE:-origin}` silently falls
+  back to `origin` and fires anyway — the exact failure this guard exists to
+  prevent. **The fix: the executing agent substitutes the literal, already-
+  known `<remote>` value into the Bash call it writes for this step — never
+  a live `$REMOTE` read.** The agent parsed `[remote]` itself in Step 1; that
+  value lives in its own conversational context, not in shell state that can
+  reset between tool calls.
+- **Don't compare by remote *name* alone.** Comparing `<remote> = "origin"`
+  as a string (codex, PR #1539) conflates "named origin" with "is the repo
+  the dispatcher watches" — a fork workflow (`origin` = fork, `upstream` =
+  canonical) would still wake the wrong train on a same-named-but-different
+  remote. The fix: compare the resolved remote's URL against
+  `$HOME/dotfiles`'s own `origin` URL, not the two names.
 
 ## The call
 
 ```bash
-if [ "${REMOTE:-origin}" = "origin" ]; then
+_REMOTE="<remote>"   # <- literal value from Step 1's own arg parsing;
+                      #    the executing agent substitutes it here — never
+                      #    a live `$REMOTE`/`${REMOTE:-origin}` env read.
+_MY_URL=$(git remote get-url "$_REMOTE" 2>/dev/null)
+_DOTFILES_ORIGIN_URL=$(git -C "$HOME/dotfiles" remote get-url origin 2>/dev/null)
+if [ -n "$_MY_URL" ] && [ "$_MY_URL" = "$_DOTFILES_ORIGIN_URL" ]; then
     _AICRON="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/aicron.sh"
     if [ -x "$_AICRON" ]; then
         "$_AICRON" run merge-train >/dev/null 2>&1 &
@@ -82,10 +102,17 @@ if [ "${REMOTE:-origin}" = "origin" ]; then
 fi
 ```
 
-No output on the `$REMOTE != origin` path — silent skip, matching this
-skill suite's convention of staying quiet on an expected, non-error path
-(e.g. `gh:issue-implement`'s 3.3b duplicate-PR check). Step 3's report
-reflects it as `[SKIP] Step 4.1: merge-train wake (remote != origin)`
+In the common single-clone dotfiles setup (the session's own worktree shares
+its remotes with `$HOME/dotfiles`, and `[remote]` defaults to `origin`),
+`$_MY_URL` and `$_DOTFILES_ORIGIN_URL` are the same string, so behavior is
+unchanged from the name-based check. The URL comparison only starts to
+differ — correctly refusing to fire — on a fork clone or a remote pointed at
+a different host/repo than `$HOME/dotfiles`'s own `origin`.
+
+No output on the no-match path — silent skip, matching this skill suite's
+convention of staying quiet on an expected, non-error path (e.g.
+`gh:issue-implement`'s 3.3b duplicate-PR check). Step 3's report reflects it
+as `[SKIP] Step 4.1: merge-train wake  (remote != origin)`
 (`references/report-template.md`).
 
 Called by absolute path (mirrors how cron itself invokes `aicron.sh`), not
@@ -152,8 +179,9 @@ outcome this section says is undesirable.
 
 This step never stops the chain:
 
-- `$REMOTE` (Step 1's export) is not `origin` → silent skip, continue. Not a
-  failure — see "Guarded to `origin` only" above.
+- `<remote>`'s URL doesn't match `$HOME/dotfiles`'s own `origin` URL →
+  silent skip, continue. Not a failure — see "Guarded to `$HOME/dotfiles`'s
+  own `origin` only" above.
 - `aicron.sh` missing at the expected path → one `[WARN]` line, continue.
   This is the only outcome observed synchronously on the `origin` path.
 - Once launched in the background, this step does not wait for or inspect
