@@ -291,7 +291,18 @@ EOF
 #   HERDR_TAB_FAIL_AFTER=N    the first N `tab create` calls succeed, the rest
 #                             error — lets one issue fail two different ways
 #                             across its retry attempts
-#   HERDR_START_FAIL=1        `agent start` errors
+#   HERDR_START_FAIL=1        `agent start` errors, saying nothing at all — the
+#                             unexplained failure, with no parsable error code
+#   HERDR_START_NAME_TAKEN=1  `agent start` refuses because a live agent already
+#                             holds the name (herdr's `agent_name_taken`), on
+#                             stdout — a named failure that is not the pane race
+#   HERDR_START_PANE_BUSY=N   the first N `agent start` calls lose the #1525
+#                             race (`agent_pane_busy`), the rest succeed; a
+#                             number above the attempt budget loses it every
+#                             time. The document goes to **stderr**, which is
+#                             where herdr really put it — a dispatcher that
+#                             redirects that stream to /dev/null sees an
+#                             unexplained failure instead of a named race.
 #   HERDR_AGENT_STATUS        status reported by `agent get` (default: idle)
 #   HERDR_AGENT_GET_FAIL=1    `agent get` returns agent_not_found and exits 1
 #   HERDR_PROMPT_MODE         `agent prompt` behaviour (default: always ok)
@@ -392,6 +403,17 @@ case "$1 $2" in
     ;;
 "agent start")
     [ "${HERDR_START_FAIL:-0}" = "1" ] && exit 1
+    if [ "${HERDR_START_NAME_TAKEN:-0}" = "1" ]; then
+        printf '%s\n' '{"error":{"code":"agent_name_taken","message":"agent name is already used; candidates: status=Idle"},"id":"cli:agent:start"}'
+        exit 1
+    fi
+    if [ "${HERDR_START_PANE_BUSY:-0}" != "0" ]; then
+        _n=$(_bump "${CALL_LOG}.startbusy")
+        if [ "${_n}" -le "${HERDR_START_PANE_BUSY}" ]; then
+            printf '%s\n' '{"error":{"code":"agent_pane_busy","message":"agent target pane ws-test-1:p9 is not an available shell"},"id":"cli:agent:start"}' >&2
+            exit 1
+        fi
+    fi
     printf '%s\n' '{"id":"cli:agent:start","result":{"agent":{"agent_status":"idle","pane_id":"ws-test-1:p9"}}}'
     ;;
 "agent get")
@@ -614,6 +636,7 @@ _run_tick() {
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "IW_IDLE_POLL_SLEEP=0" \
         "IW_STALL_RECOVER_SLEEP=0" \
+        "IW_START_RETRY_SLEEP=0" \
         "IW_LIMIT_OBSERVE_SLEEP=0" \
         "${_env[@]}" \
         bash "${SCRIPT}" "$@"
@@ -1744,6 +1767,96 @@ _two_repo_fixture() {
     _run_tick "HERDR_START_FAIL=1"
     assert_failure
     _assert_logged "tab close ws-test-1:t9"
+}
+
+# ---------------------------------------------------------------------------
+# #1525 — the agent_pane_busy race on a pane that was just created
+# ---------------------------------------------------------------------------
+#
+# A tab's shell is not interactive the instant `tab create` answers, so
+# `agent start` on it is refused with `agent_pane_busy` and returns immediately.
+# In cron that lost every single tick for 130 ticks running. It is a timing
+# race, not a defect in the pane, so another attempt *on the same pane* is the
+# fix — which is exactly what the outer _IW_MAX_ATTEMPTS loop cannot give: it
+# throws the worktree and the tab away and builds a new, equally cold pane.
+
+@test "issue_watcher_cron: a transient agent_pane_busy is retried and the issue still dispatches" {
+    _run_tick "HERDR_START_PANE_BUSY=1"
+    assert_success
+    # The retry is *inner*: the same tab, a second start. A second `tab create`
+    # here would mean the outer loop absorbed it, which is the defect.
+    [ "$(_log_count 'agent start')" -eq 2 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+    _assert_logged "agent prompt iw-acme-dotfiles-11 /gh-issue-flow 11"
+}
+
+# The retry has to be visible: 130 ticks of silent failure is what made this
+# cost a day. The gap comes from IW_START_RETRY_SLEEP, so a hardcoded 2 would
+# read "retrying in 2s" here and fail — the message is the proof the override
+# reached the code, and with it that the bats suite pays no real wait.
+@test "issue_watcher_cron: a retried pane race names itself and its configured gap" {
+    _run_tick "HERDR_START_PANE_BUSY=1"
+    assert_success
+    assert_output --partial "agent_pane_busy"
+    assert_output --partial "retrying in 0s"
+}
+
+# The inner retrying is bounded, and the bound is the point: cron re-runs every
+# few minutes anyway. Three inner *attempts* per outer attempt, three outer
+# attempts — the two layers are independent and both still hold.
+@test "issue_watcher_cron: a permanent agent_pane_busy stops after the inner attempt budget" {
+    _run_tick "HERDR_START_PANE_BUSY=99"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 9 ]
+    [ "$(_log_count 'tab create')" -eq 3 ]
+    _refute_logged "agent prompt"
+}
+
+# Exhausting the inner budget must still fall through to _iw_cleanup_attempt —
+# a retry loop that swallowed the failure would leak a worktree and a tab per
+# outer attempt, which is the litter the issue's log already shows.
+@test "issue_watcher_cron: a start that never succeeds cleans up its worktree and tab" {
+    _run_tick "HERDR_START_PANE_BUSY=99"
+    assert_failure
+    [ "$(_log_count 'tab close ws-test-1:t9')" -eq 3 ]
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-11/"
+}
+
+# The #1445/#1458 regression guard. herdr names this race precisely, on stderr;
+# `_iw_agent_start` used to throw that stream away, so 21 failures in the cron
+# log said only "start failed". Restoring `2>&1 >/dev/null` must make this red.
+@test "issue_watcher_cron: a failed start reports the cause herdr gave on stderr" {
+    _run_tick "HERDR_START_PANE_BUSY=99"
+    assert_failure
+    assert_output --partial "agent_pane_busy"
+    assert_output --partial "is not an available shell"
+}
+
+# What herdr writes to stderr is a JSON document, so dumping it verbatim buries
+# the sentence inside braces exactly where a cron log is read in a hurry.
+@test "issue_watcher_cron: the cause line carries the message, not the raw JSON" {
+    _run_tick "HERDR_START_PANE_BUSY=99"
+    assert_failure
+    refute_output --partial '{"error"'
+}
+
+# Only the one known race is retried. `agent_name_taken` is a named failure,
+# but it is not a race that a second attempt on the same pane can win, so it
+# ends its outer attempt at once — one start per attempt, three in all.
+@test "issue_watcher_cron: a named failure that is not the pane race is never retried" {
+    _run_tick "HERDR_START_NAME_TAKEN=1"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 3 ]
+    assert_output --partial "agent_name_taken"
+}
+
+# A failure that does not name itself is not a race we understand either — the
+# same contract #1512 set on the merge-train side.
+@test "issue_watcher_cron: an unexplained start failure is not retried" {
+    _run_tick "HERDR_START_FAIL=1"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 3 ]
 }
 
 @test "issue_watcher_cron: a spawn failure that never resolves gives up without a prompt" {
