@@ -1,0 +1,310 @@
+#!/usr/bin/env bats
+# tests/bats/skills/gh_pr_merge_train_approval_gate.bats
+# Verify the approval-gate classification and the gate-off delegated review:
+#   claude/skills/gh-pr-merge-train/references/approval-gate.md
+#   claude/skills/gh-pr-merge-train/references/train-loop.md
+#   claude/skills/gh-pr-merge-train/references/report-format.md
+# Source-of-truth fixture: _fixtures/gh_pr_merge_train_approval_gate.sh
+#
+# Issue #1519 acceptance criteria:
+#   AC-2  403 on both sources        -> gate off, "no policy on <base>"
+#   AC-3  ruleset >= 1 + 404 classic -> gate on   (D-2 regression guard)
+#   AC-4  5xx / network              -> gate on, fail-closed, named as such
+#   AC-5  board not Approved         -> [SKIPPED] self-record withheld (BLOCKER)
+#   AC-6  head unchanged since review-> no re-run, [SKIPPED] unchanged
+#   AC-7  this suite
+
+load '../test_helper'
+
+FIXTURE='tests/bats/skills/_fixtures/gh_pr_merge_train_approval_gate.sh'
+
+setup() {
+    setup_isolated_home
+    # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
+    SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train"
+}
+
+teardown() {
+    teardown_isolated_home
+    unset FAKE_RULES_RESPONSE FAKE_RULES_RC FAKE_PROTECTION_RESPONSE FAKE_PROTECTION_RC
+}
+
+plan_403() {
+    train_gate_http 403 '{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature."}'
+}
+
+# ---------------------------------------------------------------------
+# Per-source classification
+# ---------------------------------------------------------------------
+
+@test "gate-probe: 403 plan limit is 'no policy', not a lookup failure (#1519)" {
+    FAKE_RULES_RESPONSE="$(plan_403)" FAKE_RULES_RC=1
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'none 0'
+}
+
+@test "gate-probe: 404 not-configured is 'no policy'" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 404 '{"message":"Branch not protected"}')" FAKE_RULES_RC=1
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'none 0'
+}
+
+@test "gate-probe: 500 is undetermined -> unknown (stays fail-closed)" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 500 '{"message":"Server Error"}')" FAKE_RULES_RC=1
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown 0'
+}
+
+@test "gate-probe: no HTTP response at all (network down) -> unknown" {
+    FAKE_RULES_RESPONSE='' FAKE_RULES_RC=1
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'unknown 0'
+}
+
+@test "gate-probe: 200 with required_approving_review_count=2 -> required 2" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":2}}]')"
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'required 2'
+}
+
+@test "gate-probe: 200 with count=0 is 'no policy' (D-5 unchanged)" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":0}}]')"
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'none 0'
+}
+
+@test "gate-probe: 200 with no pull_request rule is 'no policy'" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"deletion"},{"type":"non_fast_forward"}]')"
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'none 0'
+}
+
+@test "gate-probe: strictest ruleset wins when several apply" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":1}},{"type":"pull_request","parameters":{"required_approving_review_count":3}}]')"
+    run _gate_probe "repos/o/r/rules/branches/main" "$_RULES_JQ"
+    assert_success
+    assert_output 'required 3'
+}
+
+# ---------------------------------------------------------------------
+# Combining the two sources (F-3, F-4) + NF-1 header
+# ---------------------------------------------------------------------
+
+@test "AC-2: both sources 403 -> gate off with 'no policy on <base>'" {
+    FAKE_RULES_RESPONSE="$(plan_403)" FAKE_RULES_RC=1
+    FAKE_PROTECTION_RESPONSE="$(plan_403)" FAKE_PROTECTION_RC=1
+    run train_gate_verdict main
+    assert_success
+    assert_output 'off|no policy on main'
+}
+
+@test "AC-3: ruleset requires 1, classic 404 -> gate STAYS ON (D-2 guard)" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":1}}]')"
+    FAKE_PROTECTION_RESPONSE="$(train_gate_http 404 '{"message":"Branch not protected"}')" FAKE_PROTECTION_RC=1
+    run train_gate_verdict main
+    assert_success
+    assert_output 'on|ruleset: 1 approvals'
+}
+
+@test "D-2: classic protection requires 2, ruleset 404 -> gate on via protection" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 404 '{"message":"Not Found"}')" FAKE_RULES_RC=1
+    FAKE_PROTECTION_RESPONSE="$(train_gate_http 200 '{"required_pull_request_reviews":{"required_approving_review_count":2}}')"
+    run train_gate_verdict main
+    assert_success
+    assert_output 'on|protection: 2 approvals'
+}
+
+@test "AC-4: a 5xx on one source -> gate on, header names fail-closed" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 502 '{"message":"Bad Gateway"}')" FAKE_RULES_RC=1
+    FAKE_PROTECTION_RESPONSE="$(plan_403)" FAKE_PROTECTION_RC=1
+    run train_gate_verdict main
+    assert_success
+    assert_output 'on|fail-closed: main policy unreadable'
+}
+
+@test "a concrete requirement outranks an unknown in the header text" {
+    FAKE_RULES_RESPONSE="$(train_gate_http 200 '[{"type":"pull_request","parameters":{"required_approving_review_count":1}}]')"
+    FAKE_PROTECTION_RESPONSE="$(train_gate_http 500 '{"message":"boom"}')" FAKE_PROTECTION_RC=1
+    run train_gate_verdict main
+    assert_success
+    assert_output 'on|ruleset: 1 approvals'
+}
+
+@test "base with a slash keeps its percent-encoding in the header" {
+    FAKE_RULES_RESPONSE="$(plan_403)" FAKE_RULES_RC=1
+    FAKE_PROTECTION_RESPONSE="$(plan_403)" FAKE_PROTECTION_RC=1
+    run train_gate_verdict 'release/2026.08'
+    assert_success
+    assert_output 'off|no policy on release/2026.08'
+}
+
+# ---------------------------------------------------------------------
+# Per-PR routing (approval-gate.md -> "Applying it per PR")
+# ---------------------------------------------------------------------
+
+@test "route: gate on + APPROVED -> proceed without a delegated review" {
+    run train_pr_route on APPROVED
+    assert_success
+    assert_output 'proceed'
+}
+
+@test "route: gate on + empty reviewDecision -> approval required" {
+    run train_pr_route on ''
+    assert_success
+    assert_output 'skip:approval required (reviewDecision=)'
+}
+
+@test "AC-1 precondition: gate off + empty reviewDecision -> delegate" {
+    run train_pr_route off ''
+    assert_success
+    assert_output 'delegate'
+}
+
+@test "route: gate off + APPROVED -> proceed, no wasted re-review" {
+    run train_pr_route off APPROVED
+    assert_success
+    assert_output 'proceed'
+}
+
+@test "route: gate off + CHANGES_REQUESTED -> skipped before any review runs" {
+    run train_pr_route off CHANGES_REQUESTED
+    assert_success
+    assert_output 'skip:gh:pr-merge refuses reviewDecision=CHANGES_REQUESTED'
+}
+
+@test "route: gate off + REVIEW_REQUIRED -> skipped, never delegated" {
+    run train_pr_route off REVIEW_REQUIRED
+    assert_success
+    assert_output 'skip:gh:pr-merge refuses reviewDecision=REVIEW_REQUIRED'
+}
+
+# ---------------------------------------------------------------------
+# Delegated review (F-6 … F-9)
+# ---------------------------------------------------------------------
+
+@test "AC-6: same head already reviewed -> suppressed" {
+    run train_review_suppressed deadbeef deadbeef
+    assert_success
+}
+
+@test "F-8: head moved since the last review -> re-review is armed" {
+    run train_review_suppressed deadbeef cafebabe
+    assert_failure
+}
+
+@test "F-8: no prior review by ME -> not suppressed" {
+    run train_review_suppressed '' cafebabe
+    assert_failure
+}
+
+@test "AC-1: review promoted the card -> proceed to merge" {
+    run train_delegated_outcome Approved 1
+    assert_success
+    assert_output 'proceed'
+}
+
+@test "AC-5: review withheld -> SKIPPED with the BLOCKER reason, not merged" {
+    run train_delegated_outcome 'In review' 1
+    assert_success
+    assert_output 'skip:self-record withheld approval (BLOCKER)'
+}
+
+@test "AC-6: suppressed re-review reports 'unchanged since review'" {
+    run train_delegated_outcome 'In review' 0
+    assert_success
+    assert_output 'skip:approval withheld (unchanged since review)'
+}
+
+@test "already-Approved card from an earlier tick proceeds without re-running" {
+    # A PR whose review passed but whose merge then failed on CI comes back
+    # with Approved still on the card. Reading the board AFTER the F-8
+    # suppression check is what keeps it moving.
+    run train_delegated_outcome Approved 0
+    assert_success
+    assert_output 'proceed'
+}
+
+@test "board unreadable -> fail-closed skip, approval unconfirmed" {
+    run train_delegated_outcome '' 1
+    assert_success
+    assert_output 'skip:board unreadable — approval unconfirmed'
+}
+
+@test "F-9: gh:pr-approve itself failing skips only that PR" {
+    run train_delegated_outcome Approved 1 3
+    assert_success
+    assert_output 'skip:self-record failed'
+}
+
+# ---------------------------------------------------------------------
+# Doc guards — the fixture above is only trustworthy while the docs agree
+# ---------------------------------------------------------------------
+
+@test "doc-guard: approval-gate.md classifies 403/404 as 'no policy'" {
+    run grep -q '403 | 404) printf .none 0' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+}
+
+@test "doc-guard: approval-gate.md reads BOTH sources (D-2)" {
+    run grep -qE 'branches/\$BASE_ENC/protection' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+    run grep -qE 'rules/branches/\$BASE_ENC' "${SKILL_DIR}/references/approval-gate.md"
+    assert_success
+}
+
+@test "doc-guard: the old undifferentiated 'call failed' row is gone" {
+    run grep -q 'call failed' "${SKILL_DIR}/references/approval-gate.md"
+    assert_failure
+}
+
+@test "doc-guard: train-loop.md documents the delegated review" {
+    run grep -q 'Delegated review on the gate-off path' "${SKILL_DIR}/references/train-loop.md"
+    assert_success
+    run grep -q 'self-record' "${SKILL_DIR}/references/train-loop.md"
+    assert_success
+}
+
+@test "doc-guard: train-loop.md still says the board is not a policy gate (#1513)" {
+    run grep -q 'The projectV2 board Status is \*\*not\*\* one of these gates' "${SKILL_DIR}/references/train-loop.md"
+    assert_success
+    run grep -q 'policy gate' "${SKILL_DIR}/references/train-loop.md"
+    assert_success
+}
+
+@test "doc-guard: report-format.md carries all three NF-1 header strings" {
+    run grep -q 'off (no policy on <base>)' "${SKILL_DIR}/references/report-format.md"
+    assert_success
+    run grep -q 'on (<source>: <n> approvals)' "${SKILL_DIR}/references/report-format.md"
+    assert_success
+    run grep -q 'on (fail-closed: <base> policy unreadable)' "${SKILL_DIR}/references/report-format.md"
+    assert_success
+}
+
+@test "doc-guard: report-format.md lists the four delegated-review reasons" {
+    run grep -q 'self-record withheld approval (BLOCKER)' "${SKILL_DIR}/references/report-format.md"
+    assert_success
+    run grep -q 'approval withheld (unchanged since review)' "${SKILL_DIR}/references/report-format.md"
+    assert_success
+    run grep -q 'board unreadable — approval unconfirmed' "${SKILL_DIR}/references/report-format.md"
+    assert_success
+    run grep -q 'self-record failed' "${SKILL_DIR}/references/report-format.md"
+    assert_success
+}
+
+@test "doc-guard: NF-2 still forbids gh:pr-merge-emergency in the train" {
+    run grep -q 'Never call `gh:pr-merge-emergency`' "${SKILL_DIR}/SKILL.md"
+    assert_success
+}
+
+@test "doc-guard: allowed-tools gained no Agent (NF-2 serial contract)" {
+    run grep -q 'allowed-tools: Bash, Read, Grep, Skill' "${SKILL_DIR}/SKILL.md"
+    assert_success
+}
