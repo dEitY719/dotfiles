@@ -21,15 +21,10 @@ Step 2-B used to read the current board Status via
 (escape: `GH_PR_MERGE_SKIP_BOARD_CHECK=1`). Both the step and the env
 var are gone.
 
-Why: `dEitY719/dotfiles` has no branch protection and every PR is
-self-authored, and GitHub forbids approving your own PR. `agy` / `codex`
-reviews post as `COMMENTED`, so `reviewDecision` never changes and the
-builtin `Code review approved` workflow never fires — leaving no path,
-manual or automated, to move a card into `Approved`. The gate was
-therefore permanently un-satisfiable here and blocked every merge. A
-protection-absent exception would have been equivalent to permanent
-disablement (this repo never has protection), so the gate was deleted
-outright and documented instead.
+Why: see `claude/skills/gh-pr-approve/references/board-policy.md` →
+"2. Merge gate (read side) — removed in #1513" for the full rationale
+(the gate was permanently un-satisfiable on `dEitY719/dotfiles`, so it
+was deleted rather than left as dead policy).
 
 ## See also
 
