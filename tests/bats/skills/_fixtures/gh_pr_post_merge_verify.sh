@@ -202,11 +202,13 @@ pmv_validate_main_root() {
 
 # pmv_agent_name <host> <owner/repo> <pr>  ->  mv-<repo>-pr-<N>
 #
-# <host> is still an argument — the caller has it bound and the signature is
-# what dispatch.sh.md documents — but it is deliberately not in the name: a
-# host-qualified name does not fit herdr's 32-character budget, which is how
-# the pre-#1530 `pmv-<host>-<owner>-<repo>-<N>` reached 37 characters and was
-# refused on every merge. The trade-off is documented at the helper.
+# dispatch.sh.md calls `herdr_agent_name` inline; this wrapper exists so the
+# naming tests can vary <host> and prove it does not reach the name. It is
+# deliberately not in the name: a host-qualified name does not fit herdr's
+# 32-character budget, which is how the pre-#1530
+# `pmv-<host>-<owner>-<repo>-<N>` reached 37 characters and was refused on
+# every merge. The trade-off is documented at the helper. Returns non-zero,
+# like the helper, when no valid name can be built.
 pmv_agent_name() {
     herdr_agent_name mv "$2" "pr-$3"
 }
@@ -462,7 +464,13 @@ gh_pr_post_merge_verify() {
     _pane="${_out##* }"
 
     # --- 5. the agent ---
-    _agent=$(pmv_agent_name "$_host" "$_repo" "$_pr")
+    # Mirrors dispatch.sh.md: a repo that cannot produce a valid herdr name
+    # skips the verification rather than starting a session under a name no
+    # later run can look up (#1530).
+    if ! _agent=$(pmv_agent_name "$_host" "$_repo" "$_pr"); then
+        printf '[WARN] gh:pr-post-merge-verify: cannot derive an agent name for %s — verification skipped.\n' "$_repo"
+        return 0
+    fi
     if ! _out=$(pmv_agent_start "$_agent" "$_pane"); then
         # Race backstop, same as _pmt_launch_fresh: the name can be claimed
         # between the probe and the start, and its holder is by definition a
