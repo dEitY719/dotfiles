@@ -24,9 +24,15 @@ recoverable.
 
 Triggered only when preflight detects a non-empty working tree
 (`git status --porcelain` prints any line). In `--worktree` mode that trigger
-can never fire — the caller created the scratch worktree seconds earlier and
-nothing has written to it — so the whole stash flow is skipped, and the final
-report's `Stash:` line is omitted.
+can never fire *for a freshly created scratch worktree this round* — the
+caller (`gh:pr-merge-train`) just ran `git worktree add`, and nothing has
+written to it yet — so the whole stash flow is skipped, and the final
+report's `Stash:` line is omitted. This is distinct from a worktree the
+caller is *reusing* after an interrupted prior round (a crashed process, or
+one this skill itself left conflicted at a stop point below) — that tree can
+absolutely be dirty or mid-rebase, which is exactly what the in-progress
+operation guard right below exists to catch. "Clean by construction" is a
+claim about the fresh-add case only, never about an arbitrary `<path>`.
 
 1. Announce before running:
 
