@@ -139,16 +139,13 @@ EOF
 @test "aggregate: zero lanes ran -> no label" {
     run devx_pr_review_all_aggregate
     assert_success
-    assert_output --partial "label="
-    refute_output --partial "review-passed"
-    refute_output --partial "review-blocked"
+    assert_line "label="
 }
 
 @test "aggregate: an unknown lane is never promoted to a pass" {
     run devx_pr_review_all_aggregate lgtm unknown
     assert_success
-    refute_output --partial "review-passed"
-    refute_output --partial "review-blocked"
+    assert_line "label="
 }
 
 @test "aggregate: blocking outranks unknown" {
@@ -160,7 +157,7 @@ EOF
 @test "aggregate: garbage token is treated as unknown, not a pass" {
     run devx_pr_review_all_aggregate lgtm ohai
     assert_success
-    refute_output --partial "review-passed"
+    assert_line "label="
 }
 
 @test "aggregate: reports the lane count it decided on" {

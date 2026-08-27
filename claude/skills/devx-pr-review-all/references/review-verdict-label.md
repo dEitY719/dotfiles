@@ -34,9 +34,14 @@ VERDICT=$(printf '%s\n' "$LANE_OUTPUT" | devx_pr_review_all_verdict)
 ```
 
 A lane that **did not run** (`command -v` empty, non-internal PC, non-zero exit —
-every `[SKIP]`/`[WARN]` row of the Step 6 report) contributes **no verdict at
+every `[SKIP]`/`[WARN]` row of the Step 7 report) contributes **no verdict at
 all**. It is not an `unknown`; it is simply absent from the aggregation. The
 `/simplify` lane never contributes — it produces no verdict.
+
+Run all three shell blocks of Step 5 — per-lane verdict, aggregate, label — in
+**one** Bash tool call. The tool keeps no shell state between calls, so a split
+loses the sourced functions and `$VERDICTS`/`$label`, and an empty `$label`
+silently reads as "no verdict".
 
 Then aggregate over the lanes that did run. Read the two `key=value` lines with
 `sed`, not `eval` — the values are controlled, but a parser that cannot execute
@@ -113,3 +118,8 @@ couples the merge gate to every reviewer CLI's output format. A reviewer
 reformatting its verdict line would then silently *unlock* the gate. Parsing
 here means the same reformat produces `unknown`, no label, and a skipped PR:
 the failure direction is the safe one.
+
+The decisive reason, though, is that **only the producer knows which lanes
+ran**. A consumer reading comment bodies cannot tell "lane skipped" from
+"lane ran and posted nothing" — and that distinction *is* the absence-is-not-a-pass
+invariant. It is not recoverable downstream at any level of parsing care.

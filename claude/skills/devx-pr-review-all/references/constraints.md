@@ -52,7 +52,7 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
 - **Delay is not a guarantee — inline reply is the deterministic path.**
   agy/codex/opencode/hermes reviews are synchronous `gh:pr-review` CLI calls: they post the
   PR comment before returning. Because Step 3 awaits all five Agents, the
-  comments exist by the time Step 5 runs, so an **inline** `gh:pr-reply` sees
+  comments exist by the time Step 6 runs, so an **inline** `gh:pr-reply` sees
   them with deterministic ordering — no fixed delay needed. `--defer-reply` is
   a convenience for the issue-flow path (short turns), not a correctness
   requirement; the read-after-write is same-auth and effectively immediate.
@@ -77,7 +77,7 @@ The SKILL.md body lists these as terse rules; the full rationale lives here.
 
 - No emojis anywhere. POSIX-compatible shell snippets (`[ ]`, `>/dev/null 2>&1`).
 
-- **`gh:pr-reply` now takes a `[remote]` positional** (issue #1165) — Step 5
+- **`gh:pr-reply` now takes a `[remote]` positional** (issue #1165) — Step 6
   threads the same `<remote>` this skill parsed as `gh:pr-reply`'s second
   positional arg (`Skill(gh:pr-reply, "<pr> <remote>")`). `gh:pr-reply` then
   resolves `TARGET_REPO` by parsing that remote's URL (SSOT helper

@@ -112,7 +112,8 @@ teardown() {
 @test "#1527: gh:pr-reply removes the label via REST DELETE, not gh pr edit --remove-label" {
     run grep -F "gh pr edit --remove-label" \
         "${SKILLS}/gh-pr-reply/references/review-blocked-clear.sh.md"
-    assert_output --partial "not"
+    # mentioned only as the thing NOT to use
+    assert_output --partial "not \`gh pr edit --remove-label\`"
     run grep -F "gh api -X DELETE" \
         "${SKILLS}/gh-pr-reply/references/review-blocked-clear.sh.md"
     assert_success

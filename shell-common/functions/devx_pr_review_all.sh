@@ -142,6 +142,11 @@ devx_pr_review_all_parse() {
 # it: PR #1518 collected two independent blocking verdicts and merged 32
 # minutes later, because the train's only real gate was CI.
 #
+# That prompt is rendered at runtime by `_gh_pr_review_common_prefix`
+# (gh_pr_review.sh), copied verbatim from
+# claude/skills/gh-pr-review/references/review-presets.md — reword the tokens
+# in either place and the case arm below has to move with them.
+#
 # These two helpers turn that prose into a label the train can gate on.
 # Parsing lives here, in the *producer*, on purpose: if the train parsed
 # comment bodies instead, a reviewer changing its output format would

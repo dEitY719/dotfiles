@@ -37,8 +37,8 @@ and stop. Capture `pr`, `remote`, `reply_mode`, `reply_delay`, and `START_TS`.
 
 ## Step 2: Pre-flight
 
-- Resolve `TARGET_REPO` for `<remote>` and pass `-R <TARGET_REPO>` on every
-  `gh pr`/`gh repo` call.
+- Resolve `TARGET_REPO` **and `TARGET_HOST`** from `<remote>`'s URL and pass
+  `-R <TARGET_REPO>` / `GH_HOST="$TARGET_HOST"` on every `gh` call (#1403, #1407).
 - PR state must be `OPEN` and not draft (`gh pr view <pr> -R <TARGET_REPO>`)
   → else exit 1 `PR #<pr> is <state>; aborting`.
 - `gh auth status` returns 0 → else exit 1 with the gh error line.
