@@ -903,14 +903,36 @@ EOF
     local tokfile="$TEST_TEMP_HOME/tokens.txt"
     _gh_pr_review_build_comment_body() { printf '%s\n' "$5" >"$tokfile"; }
 
+    # Wrap the SSOT naming function (issue #1276) instead of duplicating
+    # its template in the stub below — a hardcoded duplicate glob would
+    # silently no-op (and this test would still pass) if the template ever
+    # changes (issue #1502). The wrapper records whatever path the real
+    # function allocates, so the stub can delete that exact path.
+    eval "$(declare -f _gh_pr_review_mktemp_prompt | sed "1s/^_gh_pr_review_mktemp_prompt/_gh_pr_review_mktemp_prompt_real/")"
+    local pathfile="$TEST_TEMP_HOME/promptfile_path.txt"
+    _gh_pr_review_mktemp_prompt() {
+        local p
+        p=$(_gh_pr_review_mktemp_prompt_real "$@") || return 1
+        printf '%s\n' "$p" >"$pathfile"
+        printf '%s\n' "$p"
+    }
+
     # `_stub_gh_noop` (via the preconditions helper) already created this
     # directory and put it on PATH.
     local stub_dir="$TEST_TEMP_HOME/bin"
+    # Proof the deletion actually happened, so the test itself cannot
+    # silently stop reproducing the #1474 symptom.
+    local deleted_marker="$TEST_TEMP_HOME/prompt_actually_deleted.marker"
+    rm -f "$deleted_marker"
     # The CLI itself succeeds, but the prompt file is gone by the time it
     # returns — the #1474 symptom, root cause still open.
-    cat >"$stub_dir/codex" <<'EOF'
+    cat >"$stub_dir/codex" <<EOF
 #!/bin/sh
-rm -f /tmp/gh-pr-review-prompt.codex.1474.*
+prompt_path=\$(cat "$pathfile" 2>/dev/null)
+if [ -n "\$prompt_path" ] && [ -e "\$prompt_path" ]; then
+    rm -f "\$prompt_path"
+    [ ! -e "\$prompt_path" ] && : >"$deleted_marker"
+fi
 echo "[PRAISE] a.sh:1 — ok"
 exit 0
 EOF
@@ -918,6 +940,10 @@ EOF
 
     run gh_pr_review --ai codex --no-post-comment 1474
     assert_success
+
+    # If this doesn't exist, the stub never actually deleted PROMPT_FILE —
+    # the test would be a false positive.
+    [ -e "$deleted_marker" ]
 
     # 120 000 bytes / 4 = 30 000 tokens — the size measured before the file
     # disappeared, not the floor-1000 fallback.
