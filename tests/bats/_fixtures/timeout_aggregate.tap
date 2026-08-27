@@ -1,0 +1,19 @@
+# tests/bats/_fixtures/timeout_aggregate.tap
+# A frozen bats/TAP log excerpt for _count_bats_timeouts() in tests/test.
+#
+# Deliberately NOT a .bats file: nothing ever executes this, it is only ever
+# grepped. The .tap extension also keeps it out of _discover_bats_files(),
+# which matches -name '*.bats' (and skips _fixtures/ besides).
+#
+# Exactly one line below is a genuine BATS_TEST_TIMEOUT kill; the other two
+# are the near-misses the anchors exist to reject (agy review, PR #1492), and
+# each is tuned to break a specific regex regression:
+#   - the `ok` line quotes a whole timeout TAP line inside its test name, so
+#     dropping the leading `^` starts miscounting it;
+#   - the bare `#` diagnostic ends in `timeout after Ns`, so dropping the
+#     `not ok ` prefix requirement starts miscounting it.
+# Either way the count stops being 1.
+1..3
+ok 1 run_bats: ignores a quoted not ok 9 stub # timeout after 2s
+not ok 3 issue_watcher_cron: waits for the pane # timeout after 300s
+# note: a peer run reported timeout after 5s
