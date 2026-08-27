@@ -55,6 +55,21 @@ train only routes on the answer. The constraint it preserves is the real one —
 It also does not duplicate Step 2.4: a self-record review runs at most once per
 head (`#1519 F-8`), and only on PRs the platform leaves ungated.
 
+What the train *does* do is read that run's verdict, as the `review-blocked` /
+`review-passed` label it left behind (#1527, `review-verdict-gate.md`). Reading
+a label is not reviewing. **Never parse a review comment body to reach the same
+answer**: the verdict is parsed once, by the producer, so that a reviewer
+changing its output format makes the gate fail *closed* (no label, PR skipped)
+instead of silently unlocking it.
+
+## Never treat an unlabelled PR as reviewed
+
+A PR with neither verdict label has not been shown to pass review, and is
+`[SKIPPED]` (#1527). Promoting "not checked" to "passed" — by defaulting, by a
+time backstop, or by an env-var escape hatch — reinstates the exact hole that
+let PR #1518 merge over two blocking verdicts. The escape hatch is a human
+adding the label, deliberately, one PR at a time.
+
 ## Never write ai-metrics from the train
 
 Every atom the train calls (`gh:pr-merge`, `gh:pr-resolve-conflict`, …) posts

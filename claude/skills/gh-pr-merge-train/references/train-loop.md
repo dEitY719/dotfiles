@@ -221,6 +221,12 @@ with the specific cause.** One of them matters here:
 Reporting that as a bare `[FAILED]` tells the reader nothing they can act on;
 naming the `reviewDecision` value tells them exactly what to dismiss.
 
+The **review verdict gate** (`review-verdict-gate.md`, #1527) has the same shape
+but is not `gh:pr-merge`'s: it is applied earlier, in Step 2's queue
+construction, so a `review-blocked` or unlabelled PR never reaches this loop at
+all. Like the row above it is `[SKIPPED]`, costs no attempt, and is retriable the
+moment the label changes.
+
 The projectV2 board Status is **not** one of these gates. `gh:pr-merge`'s
 Step 2-B board check was removed in #1513, so a card sitting outside `Approved`
 — which is the normal state for a PR `gh:issue-flow` just opened — is no longer
@@ -276,6 +282,7 @@ skill was called and nothing was changed.
 | `gh:pr-merge` | that PR is `[FAILED]`; next PR |
 | approval gate | that PR is `[SKIPPED]`; next PR |
 | the step-2b delegated review (withheld, suppressed, board unreadable, or the `gh:pr-approve` call itself) | that PR is `[SKIPPED]` with the matching reason; **no attempt is spent**; next PR |
+| review verdict gate (`review-blocked`, or neither label) | that PR is `[SKIPPED]` at queue construction; **no attempt is spent** |
 | a `gh:pr-merge` gate detected up front (`reviewDecision`) | that PR is `[SKIPPED]` with the cause named; **no attempt is spent** |
 | `gh pr view` on one PR | that PR is `[SKIPPED] state unreadable`; next PR |
 | `gh pr list` in Step 2 | **the run ends** — with no queue there is nothing to skip *to*, and merging without knowing state is the one thing this skill must never do |

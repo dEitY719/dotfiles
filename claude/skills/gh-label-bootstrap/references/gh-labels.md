@@ -17,7 +17,11 @@ dotfiles 저장소를 포함한 임의의 GitHub repo 에 적용할 **10개 핵�
   (`.gh-issue-defaults.yml` 매핑), `gh:issue-implement`
   (`reference` 라벨 차단), `gh:pr` (커밋타입 → 라벨 매핑).
 - 범위 밖: `CI fail`(`gh:pr-resolve-ci-fail`), `conflict`
-  (`gh:pr-resolve-conflict`) 등 별개 라벨 체계는 건드리지 않는다.
+  (`gh:pr-resolve-conflict`), `review-blocked`/`review-passed`
+  (`devx:pr-review-all` → `gh:pr-merge-train` 머지 게이트, #1527) 등
+  **파이프라인 상태** 라벨 체계는 건드리지 않는다 — 이슈 분류 라벨이 아니고,
+  `gh:label-bootstrap` 이 동기화하지도 않는다. 각 라벨의 SSOT 는 그것을
+  발급하는 스킬의 references 에 있다.
 
 차용 근거 / 설계 논의: issue #1226.
 

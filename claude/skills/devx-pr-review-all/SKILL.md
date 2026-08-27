@@ -19,9 +19,9 @@ metadata:
 ## Role
 
 Orchestrate a single PR through all available reviewers at once — agy, codex, opencode, hermes, plus a `/simplify`
-auto-fix pass — commit any auto-fix changes, then reply to review comments inline or deferred. No
-approve/request-changes decision and no manual per-comment authoring. Every reviewer lane is soft-fail.
-Argument/flag table (`<PR#> [remote] [--defer-reply M] [--no-reply]`): `references/help.md`.
+auto-fix pass — commit any auto-fix changes, aggregate every lane's verdict into a `review-blocked` / `review-passed`
+PR label (#1527), then reply to review comments inline or deferred. No approve/request-changes decision and no manual
+per-comment authoring. Every lane is soft-fail. Args (`<PR#> [remote] [--defer-reply M] [--no-reply]`): `references/help.md`.
 
 ## Help
 
@@ -50,6 +50,9 @@ and stop. Capture `pr`, `remote`, `reply_mode`, `reply_delay`, and `START_TS`.
 The five lanes dispatch together in a single turn. agy/codex/opencode/hermes
 are comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
 
+**Capture each reviewer lane's raw output** — Step 5 parses its closing verdict line;
+a lane that did not run contributes none (`references/review-verdict-label.md`).
+
 - **agy** — if `command -v agy`, an Agent runs
   `Skill(gh:pr-review, "--ai agy <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
 - **codex** — if `command -v codex`, an Agent runs
@@ -74,7 +77,18 @@ Await all lanes, then:
 - `/simplify` committed → `git push`.
 - The tree was unchanged → skip.
 
-## Step 5: pr-reply (per reply_mode)
+## Step 5: Aggregate verdicts into the merge-gate label
+
+`devx_pr_review_all_verdict` per lane that RAN → `devx_pr_review_all_aggregate` over
+those verdicts → apply via `_gh_pr_edit_safe_label`, clearing the opposite label first.
+Exact block, label table, fail-closed rules: `references/review-verdict-label.md`.
+Soft-fail throughout.
+
+`review-blocked` if any lane blocked; `review-passed` only if ≥1 lane ran and none
+blocked or came back `unknown`; **no label otherwise** — "not checked" is never
+promoted to "passed", and `gh:pr-merge-train` skips an unlabelled PR (#1527).
+
+## Step 6: pr-reply (per reply_mode)
 
 - `inline` (default) → run `Skill(gh:pr-reply, "<pr> <remote>")` immediately.
 - `defer` → **first** add the `reply-pending` label per
@@ -89,20 +103,21 @@ Await all lanes, then:
 Only `defer` labels: `inline` and `none` defer nothing, so there is no pending
 state to mark.
 
-## Step 6: Report
+## Step 7: Report
 
-Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line, e.g.
-`[OK] PR #<pr> reviewed (agy:OK codex:SKIP opencode:OK hermes:SKIP simplify:committed) — reply: inline`.
+Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line naming the verdict label (or `none`), e.g.
+`[OK] PR #<pr> reviewed (agy:blocking codex:SKIP opencode:lgtm hermes:SKIP simplify:committed) — label: review-blocked — reply: inline`.
 
 ## Constraints (full rationale: `references/constraints.md`)
 
 - Reviewer lanes are soft-fail; `/simplify` commits its own changes before push.
 - Never add `/code-review`; never run bare `git commit`.
 - Inline reply is deterministic; `--defer-reply` is minutes-only and not a guarantee.
+- Verdict labelling is soft-fail and fail-closed — no verdict means no label (#1527).
 - No approve / request-changes here — that is `gh:pr-approve`.
 
 ## Related Skills
 
 `gh:pr-review` (one reviewer at a time — this skill fans out over it) · `gh:pr-reply` / `devx:schedule` (the reply
-pass) · `gh:pr-approve` (the approve/request-changes decision). Reused by `gh:issue-flow` (Step 2.4) as its
-post-PR quality gate.
+pass) · `gh:pr-approve` (the approve/request-changes decision) · `gh:pr-merge-train` (consumes the Step 5 verdict
+label as a hard merge gate, #1527). Reused by `gh:issue-flow` (Step 2.4) as its post-PR quality gate.

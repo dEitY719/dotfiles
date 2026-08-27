@@ -2,7 +2,9 @@
 
 Fan out **every available reviewer** on one PR in parallel — `agy` ∥
 `codex` ∥ `opencode` ∥ `hermes` second opinions ∥ a `/simplify` auto-fix pass (which commits its own
-changes) — then run a reply pass over the resulting review comments. A
+changes) — then aggregate the lanes' verdicts into a
+`review-blocked` / `review-passed` PR label (the merge train's hard gate,
+#1527) and run a reply pass over the resulting review comments. A
 composition skill: it
 orchestrates several reviewers plus a reply, unlike `gh:pr-review` (a single
 external AI, one aggregate comment). It submits **no decision** (approve /
@@ -48,10 +50,15 @@ request-changes) — that is `gh:pr-approve`.
    soft-fail.
 4. Push the auto-fix commit (only if the working tree changed), always with
    an explicit `-m` message.
-5. Reply — inline `gh:pr-reply <pr> <remote>` (default), or deferred via
+5. Aggregate every lane's closing verdict (`판정:` / `Verdict:`) and label the
+   PR `review-blocked` (any lane blocking) or `review-passed` (≥1 lane ran and
+   none blocked). Lanes that did not run contribute nothing, and a PR whose
+   verdict cannot be established is left **unlabelled** — `gh:pr-merge-train`
+   skips it (#1527). Soft-fail.
+6. Reply — inline `gh:pr-reply <pr> <remote>` (default), or deferred via
    `devx:schedule` (`--defer-reply M`), or skipped (`--no-reply`). The
    `<remote>` is threaded so the reply pass resolves the same target repo.
-6. Print one `[OK]`/`[SKIP]`/`[WARN]` report line.
+7. Print one `[OK]`/`[SKIP]`/`[WARN]` report line, naming the verdict label.
 
 ## What the skill will NOT do
 
@@ -60,6 +67,9 @@ request-changes) — that is `gh:pr-approve`.
   v2.1.215, so no skill can invoke it. Run it yourself when you want it; agy,
   codex, and the closing `gh:pr-reply` pass cover the same ground here.
 - Hard-fail because a reviewer CLI is missing or errors — each lane is soft-fail.
+- Label a PR `review-passed` when no lane actually ran, or auto-create either
+  verdict label in a repo that lacks it (#1527) — both are refused, and the
+  unlabelled PR is skipped by the merge train.
 - Run a bare `git commit` — an editor prompt would hang the non-interactive shell.
 - Schedule sub-minute delays — `devx:schedule` is minutes-only; for tight
   ordering use the deterministic inline reply.

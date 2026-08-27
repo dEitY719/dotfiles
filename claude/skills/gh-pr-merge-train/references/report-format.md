@@ -12,9 +12,10 @@ queue: <n> PR(s)  ·  approval gate: <verdict>  ·  quiet period: 11m
 [MERGED]  #1466  refactor(issue-watcher): simplify   (BEHIND -> resolve-outdated -> merged)
 [MERGED]  #1467  fix(gh-pr-reply): ...               (CLEAN -> merged)
 [SKIPPED] #1462  test(issue-watcher): ...            checks still running (3 polls)
+[SKIPPED] #1468  feat(y): ...                        review not verified — no review-passed label
 [FAILED]  #1469  feat(x): ...                        conflict unresolved after 3 attempts
 
-merged 2 · skipped 1 · failed 1
+merged 2 · skipped 2 · failed 1
 ```
 
 Rules:
@@ -31,6 +32,10 @@ Rules:
 - A PR that entered the queue and *then* picked up `reply-pending` (the label
   can be added mid-run) is a normal `[SKIPPED]` line with
   `reply-pending — review reply not yet complete` as its reason.
+- The **review verdict gate** (#1527) is the one exception among the Step 2
+  filters: a PR it drops **is** listed as `[SKIPPED]`, because unlike a draft
+  or a `reply-pending` PR it is a real candidate whose only problem is a label
+  a human can flip.
 
 ## The `approval gate:` field (#1519 NF-1)
 
@@ -57,7 +62,7 @@ is already the clause prefix there, so it drops out of the string itself:
 | Status | Meaning | Typical reason |
 |---|---|---|
 | `[MERGED]` | the PR is merged | — |
-| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required (reviewDecision=<value>)`, `gh:pr-merge refuses reviewDecision=<value>`, `policy unreadable — approval assumed required`, `BLOCKED: <rule>`, `draft`, plus the four delegated-review reasons tabled below |
+| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required (reviewDecision=<value>)`, `gh:pr-merge refuses reviewDecision=<value>`, `policy unreadable — approval assumed required`, `review-blocked — reviewer verdict is blocking`, `review not verified — no review-passed label`, `BLOCKED: <rule>`, `draft`, plus the four delegated-review reasons tabled below |
 | `[FAILED]` | not merged, **and something actually went wrong** | `conflict unresolved after 3 attempts`, `gh:pr-merge failed: <message>`, `CI fix failed after 3 attempts` |
 
 Two of those reasons — `gh:pr-merge refuses reviewDecision=<value>` and

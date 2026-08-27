@@ -133,3 +133,90 @@ devx_pr_review_all_parse() {
     printf '%s\n' "reply_delay=$reply_delay"
     return 0
 }
+
+# ── Review verdict -> merge-gate label (issue #1527) ─────────────────
+#
+# Every gh:pr-review preset mandates a closing verdict line — `판정:
+# [LGTM|우려있음|블로킹]` on a Korean-dominant diff, `Verdict:
+# [LGTM|CONCERNS|BLOCKING]` otherwise. Until #1527 nothing in the repo read
+# it: PR #1518 collected two independent blocking verdicts and merged 32
+# minutes later, because the train's only real gate was CI.
+#
+# These two helpers turn that prose into a label the train can gate on.
+# Parsing lives here, in the *producer*, on purpose: if the train parsed
+# comment bodies instead, a reviewer changing its output format would
+# silently unlock the merge gate. Here a format change makes the lane
+# `unknown`, which is fail-closed — no label, no merge.
+#
+#   devx_pr_review_all_verdict                 # lane output on stdin
+#     -> blocking | concerns | lgtm | unknown
+#   devx_pr_review_all_aggregate <verdict>...  # one arg per lane that RAN
+#     -> label=review-blocked | label=review-passed | label=   (+ lanes=N)
+#
+# Skipped lanes contribute NO argument — "not checked" and "checked and
+# passed" must never collapse into the same state (#1527 확정 사항).
+
+devx_pr_review_all_verdict() {
+    local _line _value
+
+    # Normalize before matching: fullwidth colon -> ASCII, strip the markdown
+    # a reviewer may wrap the line in, drop a leading list dash. Then keep
+    # only lines that *start* with the verdict key — a finding line like
+    # `[BLOCKER] a.sh:1 — ...` must never be mistaken for the verdict.
+    # A value that opens with `[` is the preset's own template echoed back
+    # (`판정: [LGTM|우려있음|블로킹]`) and is dropped; a bracket later in the
+    # line is ordinary detail (`판정: 블로킹 [4건]`) and is kept. Last one
+    # wins: the presets require the verdict to be the final line.
+    _line=$(
+        sed -e 's/：/:/g' -e 's/[*`_#>]//g' \
+            -e 's/^[[:space:]]*-[[:space:]]*//' -e 's/^[[:space:]]*//' |
+            grep -iE '^(판정|verdict)[[:space:]]*:' |
+            grep -viE '^(판정|verdict)[[:space:]]*:[[:space:]]*\[' |
+            tail -n 1
+    )
+
+    if [ -z "$_line" ]; then
+        printf 'unknown\n'
+        return 0
+    fi
+
+    _value=$(
+        printf '%s\n' "$_line" |
+            sed -e 's/^[^:]*://' -e 's/^[[:space:]]*//' |
+            tr '[:lower:]' '[:upper:]'
+    )
+
+    case "$_value" in
+    블로킹* | BLOCKING*) printf 'blocking\n' ;;
+    우려있음* | CONCERNS*) printf 'concerns\n' ;;
+    LGTM*) printf 'lgtm\n' ;;
+    *) printf 'unknown\n' ;;
+    esac
+}
+
+devx_pr_review_all_aggregate() {
+    local _lanes=0 _blocking=0 _unresolved=0 _v _label
+
+    for _v in "$@"; do
+        _lanes=$((_lanes + 1))
+        case "$_v" in
+        blocking) _blocking=1 ;;
+        lgtm | concerns) ;;
+        # `unknown` and anything unrecognized are the same thing: the lane
+        # ran but its verdict could not be established. Fail closed.
+        *) _unresolved=1 ;;
+        esac
+    done
+
+    if [ "$_blocking" -eq 1 ]; then
+        _label="review-blocked"
+    elif [ "$_lanes" -eq 0 ] || [ "$_unresolved" -eq 1 ]; then
+        _label=""
+    else
+        _label="review-passed"
+    fi
+
+    printf '%s\n' "label=$_label"
+    printf '%s\n' "lanes=$_lanes"
+    return 0
+}

@@ -52,8 +52,19 @@ D-6 quiet period — the exact same function
 `shell-common/tools/custom/pr_merge_train_cron.sh` runs, so the two can never
 disagree. **Do not re-implement or paraphrase that filter here** — run it.
 
+**Review verdict gate (#1527)** — then drop every PR carrying `review-blocked`, and
+every PR carrying **neither** verdict label; both are `[SKIPPED]` with a reason, cost
+no attempt, and are retriable next tick. **Absence is a skip, not a pass** — conflating
+"not reviewed" with "review passed" is what let PR #1518 merge over two blocking
+verdicts. Decision table and rationale: `references/review-verdict-gate.md`.
+
+This gate is separate from the shared filter above and runs after it. The two
+answer different questions — `reply-pending` is "is the reply pass still
+running" (#1524, a *timing* signal), the verdict labels are "did review pass"
+(#1527, a *content* signal) — and a PR must clear both.
+
 Sort the surviving array `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`, ties by
-ascending PR number (D-2). Ordering, the label, and the quiet-period rationale:
+ascending PR number (D-2). Ordering, the labels, and the quiet-period rationale:
 `references/ordering.md`.
 
 **`gh pr list` failure ends the run** with an empty report — never merge
@@ -100,13 +111,15 @@ assistant text, never via a `Bash` heredoc or `Write`.
   `required_linear_history` allows (D-4).
 - **No review judgement of its own** — `gh:issue-flow` already ran
   `devx:pr-review-all`, and the gate-off path delegates to `gh:pr-approve`
-  rather than deciding anything here.
+  rather than deciding anything here. The train only *reads* that review run's
+  verdict label, and never parses a review comment body (#1527).
 - **No ai-metrics comment.** Every atom the train calls posts its own; a
   train-level one would only duplicate them on the same PR.
 - Full list: `references/constraints.md`.
 
 ## Related Skills
 
+Producer of the verdict label this train gates on: `devx:pr-review-all` (#1527).
 Atoms this train calls: `gh:pr-resolve-outdated` · `gh:pr-resolve-conflict`
 · `gh:pr-resolve-ci-fail` · `gh:pr-approve` (`--self-record`, gate-off path
 only) · `gh:pr-merge`. Deliberately **not** called:

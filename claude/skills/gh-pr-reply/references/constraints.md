@@ -9,6 +9,14 @@
   change `reviewDecision`, so promoting on them lands unreviewed PRs in
   `Approved` (#1349 regression). The Step 6 `In review` recovery is the only
   board write this skill performs.
+- **Never add `review-passed`, and only clear `review-blocked` after actually
+  pushing an accepted fix** (#1527). `devx:pr-review-all` owns both labels;
+  this skill's single write is releasing the block once `PUSHED_FIXES > 0` and
+  at least one comment was `ACCEPT`/`ACCEPT-PARTIAL`
+  (`references/review-blocked-clear.sh.md`). Clearing it on an all-`DECLINE`
+  run would let a skill overrule a blocking verdict on its own reasoning; adding
+  `review-passed` would let the act of fixing certify the fix. A human removing
+  the label by hand is the intended override.
 - Never close or resolve threads programmatically — leave that to the user.
 - Never fix files outside the PR's diff without flagging scope creep first.
 - Never `--amend`, `--no-verify`, or `--force-push`. If a history rewrite is
