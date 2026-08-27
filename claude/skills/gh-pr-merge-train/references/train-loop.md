@@ -17,11 +17,78 @@ For each PR `N` in the Step 2 queue order:
    `reviewDecision` non-empty and not `APPROVED` → also `[SKIPPED]`, naming the
    value — see the next section for why that check cannot be skipped.
 3. **Route** through the D-1 table.
-4. **Remediate** with the atom skill the row names, if any.
+4. **Remediate** with the atom skill the row names, if any. For the `BEHIND`
+   and `DIRTY` rows that means the scratch-worktree sequence below, not a bare
+   `Skill(...)` call.
 5. **Re-query and re-route.** An atom returning success does not prove the PR
    is mergeable now.
 6. **Merge** — `Skill(gh:pr-merge, "<N>")`. No strategy argument (D-4).
 7. **Record** the outcome and continue.
+
+## Detached scratch worktree (step 4, `BEHIND` / `DIRTY` only)
+
+`gh:issue-flow` opens each PR from the dedicated worktree that implemented the
+issue, so that PR's head branch is **already checked out somewhere else** by
+the time the train reaches it. `git checkout <head>` in this session would fail
+with `fatal: '<branch>' is already used by worktree at '<path>'` — and even
+when it succeeded it would trample the branch the operator has open in the
+worktree they invoked the train from. So the train never checks the head branch
+out at all: it makes a throwaway detached checkout of that branch's tip, hands
+the path to the atom, and deletes it.
+
+Before delegating, with `<head>` = the `headRefName` already in `$STATE`:
+
+```bash
+git fetch "$REMOTE" "<head>"
+GIT_COMMON_DIR=$(git rev-parse --git-common-dir)
+SCRATCH_DIR="${GIT_COMMON_DIR}/pr-merge-train-scratch/pr-<N>"
+mkdir -p "$(dirname "$SCRATCH_DIR")"
+git worktree add --detach "$SCRATCH_DIR" "$REMOTE/<head>"
+```
+
+The `fetch` is not optional: this session's checkout has no reason to hold a
+current `$REMOTE/<head>` — the branch was pushed from a *different* worktree —
+and starting the scratch worktree from a stale (or absent) tracking ref would
+have the atom force-push a rewind over commits it never saw.
+
+`--detach` is what makes this collide-free: the scratch worktree holds a commit,
+not the branch *name*, so it never contests the checkout any other worktree
+already owns. `git worktree add` failing is an ordinary remediation failure —
+attempt +1 (F-5), and at 3 the PR is `[FAILED]` (F-6). It never ends the run.
+
+Then delegate to the atom the D-1 row named, pointing it at that path:
+
+```
+Skill(gh:pr-resolve-outdated, "<N> <remote> --worktree $SCRATCH_DIR")
+Skill(gh:pr-resolve-conflict, "<N> <remote> --worktree $SCRATCH_DIR")
+```
+
+Pass `<remote>` explicitly even when it is the default `origin` — the atoms
+read it as positional 2, and omitting it would leave `--worktree` sitting in
+that slot.
+
+The atom runs every git command as `git -C "$SCRATCH_DIR" ...` and pushes with
+an explicit refspec (`HEAD:refs/heads/<head>`), because a detached HEAD has no
+upstream to infer. That contract is the atoms' own — see their
+`references/preflight.md` / `references/rebase-flow.md`.
+
+### Teardown is unconditional
+
+Once the atom returns — **success, failure, or handoff, no exceptions**:
+
+```bash
+git worktree remove --force "$SCRATCH_DIR" ||
+  { rm -rf "$SCRATCH_DIR" && git worktree prune; }
+```
+
+The failure paths are exactly the ones that would leak: a PR that lands
+`[FAILED]` is retried on the next tick, and a train on a cron schedule would
+accumulate one abandoned worktree per tick per stuck PR — each one a full
+checkout, and each one still registered in `git worktree list`. Tearing down
+only on the happy path is how that starts.
+
+Creating, delegating, and tearing down is **one** remediation round: the round
+still costs exactly one attempt, unchanged from the accounting below.
 
 ## Gates `gh:pr-merge` owns — check them here, not by calling it
 
@@ -85,7 +152,7 @@ skill was called and nothing was changed.
 
 | What failed | Consequence |
 |---|---|
-| `gh:pr-resolve-*` | attempt +1; at 3, `[FAILED]`, next PR |
+| `gh:pr-resolve-*`, or the `git worktree add` that stages it | attempt +1; at 3, `[FAILED]`, next PR |
 | `gh:pr-merge` | that PR is `[FAILED]`; next PR |
 | approval gate | that PR is `[SKIPPED]`; next PR |
 | a `gh:pr-merge` gate detected up front (`reviewDecision`, board status) | that PR is `[SKIPPED]` with the cause named; **no attempt is spent** |

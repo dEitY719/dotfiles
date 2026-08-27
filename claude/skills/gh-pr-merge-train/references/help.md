@@ -51,6 +51,9 @@
 5. Routes on `mergeStateStatus` / `mergeable` through the D-1 table — the one
    copy lives in `references/routing-table.md`. Which atom each row reaches is
    summarised under "Atom skills it calls" below.
+   The two rebase rows run in a **detached scratch worktree** the train creates
+   and deletes per attempt, so a head branch already checked out by
+   `gh:issue-flow` — and the operator's own checkout — are never touched.
 6. Caps remediation at **3 attempts per PR** (F-5). Over that, the PR is
    `[FAILED]` and the train moves on (F-6).
 7. Prints a per-PR `[MERGED]` / `[SKIPPED]` / `[FAILED]` report with reasons (F-9).
@@ -66,12 +69,12 @@
 - Abort the whole train because one PR failed.
 - Process two PRs at once.
 
-## Atom skills it calls (all unchanged)
+## Atom skills it calls
 
 | Skill | Called when |
 |---|---|
-| `gh:pr-resolve-outdated` | `BEHIND` + `MERGEABLE` — clean rebase onto the moved base |
-| `gh:pr-resolve-conflict` | `DIRTY` + `CONFLICTING` — the LLM-judgement row |
+| `gh:pr-resolve-outdated` | `BEHIND` + `MERGEABLE` — clean rebase onto the moved base, in a scratch worktree |
+| `gh:pr-resolve-conflict` | `DIRTY` + `CONFLICTING` — the LLM-judgement row, in a scratch worktree |
 | `gh:pr-resolve-ci-fail` | `UNSTABLE` with a failing check — the other LLM-judgement row |
 | `gh:pr-merge` | every row that reaches a mergeable state |
 | none | `BLOCKED` / `DRAFT` skip; `UNSTABLE` still running and `UNKNOWN` poll first |

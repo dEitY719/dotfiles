@@ -25,7 +25,8 @@ output its content verbatim, then stop. No API calls.
 
 Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 5.
 
-Positional args: `[pr-number] [remote]`. Both optional.
+Positional args: `[pr-number] [remote]`. Both optional. One flag:
+`[--worktree <path>]`.
 
 - `remote` — default `origin`; missing → `git remote -v` and stop. Bind
   `TARGET_HOST` + `TARGET_REPO` from that one remote URL **before any `gh` call** per `references/github-target.md` (#1403).
@@ -33,6 +34,12 @@ Positional args: `[pr-number] [remote]`. Both optional.
   --json number,headRefName,baseRefName,url,mergeable` on the current branch.
   No PR for the branch → stop. No `--repo` on this one call — `gh` rejects
   `--repo` without a PR argument; `references/github-target.md` → "Exception".
+- `--worktree <path>` — run every git command as `git -C "<path>" ...` instead
+  of in the current checkout, and push with an explicit refspec. Makes
+  `pr-number` **mandatory** (a detached scratch worktree has no branch to
+  auto-detect from). Given by `gh:pr-merge-train`, which owns that worktree's
+  creation and removal. Details: `references/rebase-flow.md` → "`--worktree`
+  mode". Without the flag nothing in this skill behaves differently.
 
 **Mergeable preflight** — immediately after resolving `PR_NUMBER`, run the
 host-pinned `gh pr view --json mergeable` short-circuit per `references/rebase-flow.md`
@@ -46,13 +53,15 @@ host-pinned `gh pr view --json mergeable` short-circuit per `references/rebase-f
 - no in-progress rebase/merge/cherry-pick
 
 Capture `BACKUP_SHA=$(git rev-parse HEAD)` and print it so the user can
-`git reset --hard <sha>` if anything goes wrong.
+`git reset --hard <sha>` if anything goes wrong. In `--worktree` mode all of
+these run as `git -C "<path>" ...` and the auto-stash never fires — see
+`references/safety.md`.
 
 ## Step 2: Fetch + Rebase
 
-Run `git fetch "$REMOTE" "$BASE"` then `git rebase "$REMOTE/$BASE"`. Full
-rebase mechanics, stash handling, and abort instructions live in
-`references/rebase-flow.md`.
+Run `git fetch "$REMOTE" "$BASE"` then `git rebase "$REMOTE/$BASE"` (with
+`-C "<path>"` in `--worktree` mode). Full rebase mechanics, stash handling, and
+abort instructions live in `references/rebase-flow.md`.
 
 ## Step 3: Conflict Resolution Loop
 
@@ -66,7 +75,9 @@ conflicts.
 ## Step 4: Push with `--force-with-lease`
 
 Only after `git rebase` exits 0 and the working tree is clean, run
-`git push --force-with-lease "$REMOTE" HEAD`.
+`git push --force-with-lease "$REMOTE" HEAD`. In `--worktree` mode that becomes
+`git -C "<path>" push --force-with-lease "$REMOTE" HEAD:refs/heads/$HEAD_REF` —
+a detached HEAD names no destination branch, so the refspec must be explicit.
 
 Never plain `--force`. If `--force-with-lease` is rejected (someone
 pushed while you rebased), stop and surface the upstream per
@@ -93,6 +104,7 @@ Helper policy (each soft-fail, applies only when `mergeable == MERGEABLE`):
 - Never auto-resolve ambiguous conflicts. Ask the user.
 - Never retry a rejected `--force-with-lease` by fetching and re-rebasing on the user's behalf. Surface divergence and stop.
 - Never skip Step 5. The whole point is clearing the PR warning.
+- Never create or remove the `--worktree` path. The caller owns its lifecycle.
 
 ## Related Skills
 

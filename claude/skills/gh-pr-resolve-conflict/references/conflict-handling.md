@@ -1,5 +1,19 @@
 # gh:pr-resolve-conflict — Conflict Handling
 
+## `--worktree <path>`: paths are not relative to this session
+
+Every `git` command below takes `-C "<path>"`, and `git status --short` then
+prints paths relative to **that** worktree, not to the session's working
+directory. `Read` and `Edit` have no `-C`, so join them yourself — call the
+tools on `<path>/<relative-path>` (an absolute path, since the train passes an
+absolute `<path>`). Editing the unjoined path silently rewrites the same file
+in whatever checkout this session happens to be sitting in — a wrong-repo edit
+that no rebase step would catch.
+
+Shell commands have the same gap: run any lockfile regeneration with the
+worktree as its working directory, e.g. `(cd "<path>" && uv lock)`, since `uv`
+/ `npm` / `pnpm` / `cargo` take no `-C`.
+
 ## Per-commit loop
 
 After `git rebase` stops on a conflict, repeat until `git rebase --continue`
