@@ -69,8 +69,8 @@ For each PR in queue order, run the loop in `references/train-loop.md`:
 invalidated everything behind it), route through the D-1 table
 (`references/routing-table.md`), then merge with `Skill(gh:pr-merge, "<N>")`.
 The `BEHIND` / `DIRTY` rows rebase inside a **detached scratch worktree** the
-train creates and unconditionally removes per attempt (#1493) — never in this
-checkout, whose branch may already be held by another worktree. Attempts are
+train creates and unconditionally removes per attempt, never in this checkout
+(`references/train-loop.md` → "Detached scratch worktree", #1493). Attempts are
 capped at 3 per PR (F-5); a failure skips that one PR and the train continues
 (F-6). Never process two PRs concurrently.
 

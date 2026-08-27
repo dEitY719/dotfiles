@@ -33,7 +33,7 @@ the time the train reaches it. `git checkout <head>` in this session would fail
 with `fatal: '<branch>' is already used by worktree at '<path>'` — and even
 when it succeeded it would trample the branch the operator has open in the
 worktree they invoked the train from. So the train never checks the head branch
-out at all: it makes a throwaway detached checkout of that branch's tip, hands
+out at all: it makes a throwaway scratch worktree at that branch's tip, hands
 the path to the atom, and deletes it.
 
 Before delegating, with `<head>` = the `headRefName` already in `$STATE`:

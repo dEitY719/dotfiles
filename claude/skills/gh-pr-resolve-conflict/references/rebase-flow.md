@@ -53,7 +53,7 @@ so `git status --porcelain` is empty by construction (no stash flow) and
 `--abbrev-ref HEAD` answers `HEAD` rather than a branch name — the
 default-branch refusal is made against `HEAD_REF` instead, per `safety.md` →
 "Never run on the default branch". The git-repo and in-progress-marker checks
-still run under `-C "<path>"`: a scratch directory left behind by an interrupted
+still run under `-C "<path>"`: a scratch worktree left behind by an interrupted
 run can be handed over mid-rebase.
 
 ## Resolve base branch
