@@ -226,3 +226,22 @@ assert_valid_herdr_name() {
     [[ "$1" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] ||
         fail "not a valid herdr agent name: '$1'"
 }
+
+# Build a $HOME whose "dotfiles" child is an unrelated git repo, and point
+# $HOME at it — the #1454/#1505 foreign-checkout guard's regression fixture.
+# Consolidated from six near-identical per-file copies (PR #1548 review,
+# agy) into this single SSOT.
+#
+# Base tmpdir: prefer $TEST_TEMP_HOME (set by setup_isolated_home, already
+# exported and torn down by teardown_isolated_home) when the caller's setup()
+# ran it; fall back to bats' own $BATS_TEST_TMPDIR for suites that don't use
+# setup_isolated_home. This is the one real divergence the six copies had —
+# preserved here rather than forcing every caller onto setup_isolated_home.
+_setup_foreign_home_1505() {
+    FOREIGN_HOME_1505="${TEST_TEMP_HOME:-$BATS_TEST_TMPDIR}/foreign-home-1505"
+    mkdir -p "$FOREIGN_HOME_1505/dotfiles"
+    git -C "$FOREIGN_HOME_1505/dotfiles" init -q -b main
+    git -C "$FOREIGN_HOME_1505/dotfiles" -c user.email=t@t -c user.name=t \
+        commit --allow-empty -q -m init
+    export HOME="$FOREIGN_HOME_1505"
+}
