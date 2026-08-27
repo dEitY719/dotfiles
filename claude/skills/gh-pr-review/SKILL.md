@@ -74,6 +74,11 @@ Delegate to `_gh_pr_review_run_ai` (`shell-common/functions/gh_pr_review.sh`).
 Invocation shapes, stdout streaming, non-zero handling:
 `references/ai-cli-invocation.md` § "Step 5 dispatch procedure".
 
+For `--ai opencode` and `--ai hermes` only: set the Bash tool `timeout`
+parameter of that Step 4+5 call to at least `600000` (ms, 10 min). Never
+rely on the ambient 2-minute default — it kills the run before the
+dispatcher's own 540s bound can fail it cleanly (issue #1506).
+
 ## Step 6: Post PR Comment (default ON)
 
 Delegate to `_gh_pr_review_build_comment_body` +
