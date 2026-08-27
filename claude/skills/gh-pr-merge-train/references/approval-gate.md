@@ -35,24 +35,24 @@ queue. `@uri` turns the slash into `%2F` so the ref stays one path segment.
 `gh api` collapses every failure into a non-zero exit, which is exactly the
 information loss that produced the #1519 bug. Use `-i` so the status line
 survives, and read the body out of the same response — that keeps the cost at
-one call per source (F-5).
+one call per source.
 
 ```bash
-# Classify one policy source. Echoes "<verdict> <count>", verdict one of
-# required | none | unknown. Exactly one API call.
+# Classify one policy source. Echoes `none`, `unknown`, or the required
+# approval count (>= 1). Exactly one API call.
 _gate_probe() {
     _path="$1" _jq="$2"
     _out=$(GH_HOST="$TARGET_HOST" gh api -i "$_path" 2>/dev/null)
     _status=$(printf '%s\n' "$_out" | sed -n '1s|^HTTP/[0-9.]* *\([0-9][0-9][0-9]\).*|\1|p')
     case "$_status" in
-        2??) ;;                                            # fall through, parse the body
-        403 | 404) printf 'none 0\n'    ; return 0 ;;       # no policy can apply here
-        *) printf 'unknown 0\n'         ; return 0 ;;       # 5xx, 401, network, no response
+        2??) ;;                               # fall through, parse the body
+        403 | 404) echo none; return 0 ;;     # no policy can apply here
+        *) echo unknown; return 0 ;;          # 5xx, 401, network, no response
     esac
-    _n=$(printf '%s\n' "$_out" | sed -n '/^\r\{0,1\}$/,$p' | sed '1d' | jq -r "$_jq" 2>/dev/null)
+    _n=$(printf '%s\n' "$_out" | sed '1,/^\r\{0,1\}$/d' | jq -r "$_jq" 2>/dev/null)
     case "$_n" in
-        '' | null | 0) printf 'none 0\n' ;;
-        *) printf 'required %s\n' "$_n" ;;
+        '' | null | 0) echo none ;;
+        *) echo "$_n" ;;
     esac
 }
 
@@ -70,25 +70,27 @@ That is the case fail-closed exists for, and it is now the *only* case.
 
 | Result | Meaning | Verdict |
 |---|---|---|
-| `2xx`, count `>= 1` | approvals are required | `required <n>` |
+| `2xx`, count `>= 1` | approvals are required | `<n>` |
 | `2xx`, count `0` | a rule exists and asks for **zero** approvals | `none` |
 | `2xx`, no matching rule | this source imposes no PR review rule | `none` |
 | `403` | the plan does not have this feature — no policy *can* exist | `none` |
 | `404` | the feature exists but is not configured for this base | `none` |
 | anything else (5xx, 401, network, no response) | genuinely undetermined | `unknown` |
 
-### Combining the two sources (F-3, F-4)
+### Combining the two sources (#1519 F-3, F-4)
 
-| Sources | Gate | Header (NF-1) |
+| Sources | Gate | Header (#1519 NF-1) |
 |---|---|---|
 | either says `required n >= 1` | **on** — strictest `n` wins | `on (<source>: <n> approvals)` |
 | neither requires, at least one `unknown` | **on** — fail-closed | `on (fail-closed: <base> policy unreadable)` |
 | both `none` | **off** | `off (no policy on <base>)` |
 
 `required` outranks `unknown` for the header text only; both mean the gate is
-on. The three header strings are not cosmetic — see NF-1 below.
+on. The three header strings are not cosmetic: distinguishing them is what
+makes #1519's symptom visible — `report-format.md` → "The `approval gate:`
+field" carries the reason and is what the doc-guard tests pin.
 
-## Why 403 and 404 are "no policy", not "lookup failed" (D-1)
+## Why 403 and 404 are "no policy", not "lookup failed" (#1519 D-1)
 
 `403 Upgrade to GitHub Pro or make this repository public to enable this
 feature` and `404 Branch not protected` are statements *about the policy*, not
@@ -101,23 +103,21 @@ every tick with no action any human or skill can take — the same disease as th
 `[FAILED]` this file forbids two sections down, wearing a different name.
 
 `gh-pr-merge/references/strategy-selection.md` → "Branch protection detection"
-already reads the identical signal correctly:
-
-> Rationale for treating 403 and 404 the same: both mean "branch protection is
-> not gating this merge" from the caller's perspective. 403 means the feature
-> is locked by plan; 404 means it is unlocked but not configured. Either way,
-> no rule would have required an approval.
-
-The judgement was already in this repo; only the train disagreed. `#1513` fixed
-the same asymmetry in `gh:pr-merge`'s board gate.
+already states this rule — 403 means the feature is locked by plan, 404 that it
+is unlocked but unconfigured, and neither would have required an approval. The
+*judgement* was already in this repo; only the train disagreed. (Its
+*mechanism* still sniffs `gh api`'s exit code, so it cannot tell a 5xx from a
+403 either; it fails open rather than closed, so the same information loss
+shows up there as an over-permissive read instead of an unclearable skip.)
+`#1513` fixed the same asymmetry in `gh:pr-merge`'s board gate.
 
 **No opt-in gate is required for the off verdict.** If the repo owner put no
 approval policy on this base, the safety boundary is exactly where they put it
 — the same reasoning that makes skipping at `0` legitimate. Off does *not*
 mean "merge unreviewed", though: the off path runs a delegated review first
-(D-3, next section).
+(#1519 D-3, next section).
 
-## Why both sources, and not just `gh:pr-merge`'s one (D-2)
+## Why both sources, and not just `gh:pr-merge`'s one (#1519 D-2)
 
 Making this identical to `gh:pr-merge` — read classic protection only — would
 be a regression, not a simplification. A repo that enforces review purely
@@ -128,7 +128,7 @@ recoverable mistake; in an unattended loop it is a batch of unreviewed merges.
 Reading both and taking the strictest is what makes "off" trustworthy enough to
 act on.
 
-## Why the gate being off still runs a review (D-3, D-4)
+## Why the gate being off still runs a review (#1519 D-3, D-4)
 
 Gate off means "the *platform* does not require an approval". It does not mean
 "nobody needs to look at this". On the off path the train runs
@@ -137,17 +137,12 @@ reads the board back as that review's verdict — the procedure, its re-review
 suppression, and its failure handling are in `train-loop.md` → "Delegated
 review on the gate-off path".
 
-That step is not a rubber stamp. Eight agent-run `--self-record` reviews in the
-issue #1477 session promoted seven and **withheld one**: PR #1490's reviewer
-reproduced, in a worktree A/B, that the four new regression tests did not fail
-without the fix they were meant to lock, and left the card in `In review`
-rather than promote it.
+That step is not a rubber stamp: of eight agent-run `--self-record` reviews in
+the issue #1477 session, one withheld promotion over a real defect.
 
 Reading the board here is **not** a revival of the board *gate* `#1513`
-retired. That gate stood in for platform approval and permanently blocked
-self-authored PRs; this reads back the return value of a review the train
-itself just ran, one tick earlier at most. `train-loop.md` keeps both
-statements side by side so the distinction cannot erode.
+retired — see `train-loop.md` → "Gates `gh:pr-merge` owns", which keeps that
+distinction next to the board read it governs.
 
 ## Why skipping at `0` is not a bypass
 
@@ -214,11 +209,10 @@ Look up the requirement for **that PR's own base**, from the per-base cache
 above — the read happens once per distinct base, not once per PR and not once
 per run. Then apply it against that PR's own `reviewDecision`:
 
-- gate on and `reviewDecision == APPROVED` → proceed, no delegated review.
+- `reviewDecision == APPROVED` → proceed, gate on or off, no delegated review:
+  a real approval already exists and re-reviewing it would be waste.
 - gate on and anything else (`REVIEW_REQUIRED`, `CHANGES_REQUESTED`, `""`) →
   `[SKIPPED] approval required (reviewDecision=<value>)`, next PR.
-- gate off and `reviewDecision == APPROVED` → proceed, no delegated review — a
-  real approval already exists and re-reviewing it would be waste.
 - gate off and `reviewDecision` non-empty and not `APPROVED` →
   `[SKIPPED] gh:pr-merge refuses reviewDecision=<value>`, next PR (previous
   section — this is the case that would otherwise become an unclearable
@@ -229,11 +223,3 @@ per run. Then apply it against that PR's own `reviewDecision`:
 A `CHANGES_REQUESTED` PR is skipped **even when the gate is off**: someone
 explicitly blocked it, and the absence of a platform rule does not overrule a
 human's stated objection.
-
-## NF-1: the header must show which of the three happened
-
-`report-format.md`'s `approval gate:` field carries one of the three strings in
-the combine table. Collapsing them back into one "unreadable" makes #1519's
-symptom invisible again — the bug's whole lifetime was spent looking at a
-header that said `fail-closed: ruleset unreadable` on a repo where no ruleset
-could ever exist.
