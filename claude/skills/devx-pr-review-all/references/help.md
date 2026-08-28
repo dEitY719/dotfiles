@@ -46,16 +46,26 @@ request-changes) — that is `gh:pr-approve`.
    fully in parallel. opencode and hermes run only on internal PCs. `/simplify` mutates the working tree and commits its own
    changes (`refactor(<scope>): simplify per /simplify`). Each lane is
    soft-fail.
-4. Push the auto-fix commit (only if the working tree changed), always with
+4. Aggregate the lanes' closing verdict lines into one merge-gate label —
+   `review-blocked` if any lane blocked, `review-passed` if every lane that
+   ran passed, no label at all otherwise — and write it to the PR. Runs
+   **before** the push, so the head sha still matches what the lanes
+   reviewed. Soft-fail: a labelling failure never blocks the reply pass.
+   Spec: `references/review-verdict-label.md`.
+5. Push the auto-fix commit (only if the working tree changed), always with
    an explicit `-m` message.
-5. Reply — inline `gh:pr-reply <pr> <remote>` (default), or deferred via
+6. Reply — inline `gh:pr-reply <pr> <remote>` (default), or deferred via
    `devx:schedule` (`--defer-reply M`), or skipped (`--no-reply`). The
    `<remote>` is threaded so the reply pass resolves the same target repo.
-6. Print one `[OK]`/`[SKIP]`/`[WARN]` report line.
+7. Print one `[OK]`/`[SKIP]`/`[WARN]` report line, ending with the verdict
+   clause, e.g. `… — reply: inline — verdict: review-passed`.
 
 ## What the skill will NOT do
 
 - Submit `gh pr review --approve` / `--request-changes` — that is `gh:pr-approve`.
+  The verdict label it writes is a **merge-train gate**, not an approval: it
+  never touches `reviewDecision`.
+- Merge anything. `gh:pr-merge-train` reads the label; this skill only writes it.
 - Run `/code-review --fix` — it is user-invocation-only since Claude Code
   v2.1.215, so no skill can invoke it. Run it yourself when you want it; agy,
   codex, and the closing `gh:pr-reply` pass cover the same ground here.

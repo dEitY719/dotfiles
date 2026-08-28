@@ -71,6 +71,23 @@ stays fail-closed (#1519). Even with the gate off, a non-empty non-`APPROVED`
 `reviewDecision` is `[SKIPPED]` before `gh:pr-merge` is called — it would
 refuse, and NF-2 forbids clearing that.
 
+## Step 3.5: Apply the review verdict gate
+
+Over the PRs Step 2 let through — **not** a new API call, the `labels` field
+is already in hand — run the decision table in `references/review-verdict-gate.md`:
+`review-blocked` (even alongside a stale `review-passed`) is
+`[SKIPPED] review-blocked — reviewer verdict is blocking`; neither label is
+`[SKIPPED] review not verified — no review-passed label`; `review-passed`
+alone stays in the queue. Ask with
+`_gh_pr_merge_train_has_review_blocked_label` /
+`_gh_pr_merge_train_has_review_passed_label` (same file Step 2 sourced) — **do
+not** re-derive the `jq` here, and **never** parse a review comment body: the
+verdict is decided by `devx:pr-review-all`, which is the labels' only writer.
+
+**Absence is "not verified", not "passed"** — that is the whole gate (#1527 /
+#1564). Neither outcome spends an F-5 attempt and neither is ever `[FAILED]`.
+There is deliberately no staleness window here, unlike `reply-pending`'s.
+
 ## Step 4: Run the train — one PR at a time
 
 For each PR in queue order, run the loop in `references/train-loop.md`:
@@ -104,7 +121,9 @@ assistant text, never via a `Bash` heredoc or `Write`.
   `required_linear_history` allows (D-4).
 - **No review judgement of its own** — `gh:issue-flow` already ran
   `devx:pr-review-all`, and the gate-off path delegates to `gh:pr-approve`
-  rather than deciding anything here.
+  rather than deciding anything here. Step 3.5 reads that fan-out's verdict
+  **label** and nothing else; parsing a review comment body here is forbidden
+  (`references/review-verdict-gate.md` → "What this gate is not").
 - **No ai-metrics comment.** Every atom the train calls posts its own; a
   train-level one would only duplicate them on the same PR.
 - Full list: `references/constraints.md`.
@@ -115,5 +134,6 @@ Atoms this train calls: `gh:pr-resolve-outdated` · `gh:pr-resolve-conflict`
 · `gh:pr-resolve-ci-fail` · `gh:pr-approve` (`--self-record`, gate-off path
 only) · `gh:pr-merge`. Deliberately **not** called:
 `gh:pr-merge-emergency` (NF-2). Upstream producer of the PRs this train drains:
-`gh:issue-flow`. Unattended trigger: `shell-common/tools/custom/pr_merge_train_cron.sh`
-(`references/cron-dispatcher.md`).
+`gh:issue-flow`; of the Step 3.5 verdict labels it gates on: `devx:pr-review-all`
+(sole writer) and `gh:label-bootstrap` (provisioning). Unattended trigger:
+`shell-common/tools/custom/pr_merge_train_cron.sh` (`references/cron-dispatcher.md`).

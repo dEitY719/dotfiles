@@ -16,25 +16,28 @@ single SSOT script at `lib/label-bootstrap.sh`.
 |---|---|---|
 | `--repo <owner/repo>` | Target repository | auto from `gh repo view` |
 | `--dry-run` | Print the plan (rename/PATCH/POST/prune) without mutations | off |
-| `--prune` | DELETE labels outside SSOT ∪ alias-targets ∪ allowlist | off (never deletes) |
+| `--prune` | DELETE labels outside SSOT ∪ pipeline ∪ alias-targets ∪ allowlist | off (never deletes) |
 | `-h`, `--help`, `help` | Show this help | — |
 
 ## What the skill does
 
 1. Parses the plain-feed blocks in `references/gh-labels.md` (10 labels +
-   3 alias renames) — the one physical SSOT feed. No second hardcoded copy.
+   3 alias renames + 2 `pipeline|`-prefixed labels) — the one physical SSOT
+   feed. No second hardcoded copy.
 2. **Alias renames first**: for `bug->fix`, `documentation->docs`,
    `build->chore`, if the old name exists it is renamed via
    `PATCH .../labels/{old} new_name={new}` (color/description synced in the
    same call). Renaming preserves the label on every issue/PR already
    carrying it — delete+recreate would drop it. If the old name is absent,
    the rename is skipped and the new name is created directly (not an error).
-3. **SSOT 10 apply**: each of `feat`, `fix`, `docs`, `refactor`, `test`,
-   `ci`, `chore`, `skill`, `TODO`, `reference` is PATCHed (color +
-   description synced) if it exists, or POSTed if it does not.
+3. **SSOT 10 + pipeline apply**: each of `feat`, `fix`, `docs`, `refactor`,
+   `test`, `ci`, `chore`, `skill`, `TODO`, `reference` is PATCHed (color +
+   description synced) if it exists, or POSTed if it does not. The two
+   pipeline-state labels `review-blocked` / `review-passed` (#1564) join the
+   same loop, with their `pipeline|` prefix stripped.
 4. **Prune** (only with `--prune`): labels outside
-   (SSOT 10) ∪ (alias targets `fix`/`docs`/`chore`) ∪ (GitHub default
-   allowlist) are DELETEd. Evaluated AFTER renames, so an alias source like
+   (SSOT 10) ∪ (pipeline 2) ∪ (alias targets `fix`/`docs`/`chore`) ∪
+   (GitHub default allowlist) are DELETEd. Evaluated AFTER renames, so an alias source like
    `bug` is never a false-positive candidate. Without `--prune` this step
    is skipped entirely — no listing, no deletes.
 

@@ -9,16 +9,22 @@ until #1527 nothing in the repo read it. PR #1518 collected two independent
 blocking verdicts and merged 32 minutes later, because the merge train's only
 real gate was CI.
 
-**Wiring status.** This document specifies the parser and the call convention
-only. #1563's label-lifecycle invalidation rules **are** implemented: every
-skill that advances a PR's head (`gh:pr-reply`, `gh:pr-resolve-conflict`,
-`gh:pr-resolve-outdated`) now drops the stale verdict through the shared
-`_gh_pr_drop_label` helper, whose header comment in
+**Wiring status — fully wired as of #1564.** All three sides now exist:
+
+| side | where | since |
+|---|---|---|
+| marker (`<!-- ai-review:<ai>:<sha> -->`) | `_gh_pr_review_build_comment_body` in `gh_pr_review.sh` | #1564 |
+| producer (parse → aggregate → label) | `devx:pr-review-all` **Step 3.5**, via `devx_pr_review_all_apply_label` | #1564 |
+| invalidation (drop a stale verdict) | `_gh_pr_drop_label`, called by every head-advancing skill | #1563 |
+| consumer (hard merge gate) | `gh:pr-merge-train` **Step 3.5**, `references/review-verdict-gate.md` | #1564 |
+| provisioning (the labels exist in the repo) | `gh:label-bootstrap` pipeline feed | #1564 |
+
+#1563's label-lifecycle invalidation rules are the piece that makes the rest
+safe: every skill that advances a PR's head (`gh:pr-reply`,
+`gh:pr-resolve-conflict`, `gh:pr-resolve-outdated`) drops the stale verdict
+through the shared `_gh_pr_drop_label` helper, whose header comment in
 `shell-common/functions/gh_pr_edit_safe.sh` is the SSOT for the asymmetry rule
-(`review-passed` always, `review-blocked` only on evidence). The train-side
-hard gate is still tracked in #1564 and is **not** implemented, so no merge
-decision consumes these labels yet — treat the gate call sites below as the
-contract that issue must build against, not as code already running.
+(`review-passed` always, `review-blocked` only on evidence).
 
 ## The labels
 
@@ -30,14 +36,15 @@ contract that issue must build against, not as code already running.
 Neither belongs to the 10-label SSOT (`gh-label-bootstrap/references/gh-labels.md`).
 Like `CI fail` and `conflict` they are **pipeline-state** labels, not
 issue-classification ones, and that document explicitly scopes such labels out.
-Provisioning them is part of #1564.
+They are provisioned from that file's **separate `pipeline|` feed** instead
+(#1564), which `--prune` preserves alongside the base 10.
 
 **Absence is the third state, and it means "not verified".** A PR carrying
 neither label has not been shown to pass review. That is what makes a time
 backstop unnecessary here: a stuck PR is one label away from moving, and a
 human can add or remove it at any time.
 
-## The three helpers
+## The four helpers
 
 ```
 devx_pr_review_all_lane_block <ai> [<head-sha>]   # comment bodies on stdin
@@ -47,9 +54,13 @@ devx_pr_review_all_verdict                        # one lane's raw text on stdin
 devx_pr_review_all_aggregate                      # verdict tokens on stdin,
                                                   #   one per line, one per lane
   -> label=review-blocked | label=review-passed | label=    (+ lanes=N)
+devx_pr_review_all_apply_label <pr> <repo> [host] # verdict tokens on stdin
+  -> aggregates, removes the opposite label, adds the label. One report line.
 ```
 
-All three are pure: stdin in, stdout out, no network, no shell state.
+The first three are pure: stdin in, stdout out, no network, no shell state.
+`devx_pr_review_all_apply_label` is the one that touches GitHub, and it is
+soft-fail by construction — see "Applying the label" below.
 
 ## Reading a lane's verdict
 
@@ -65,18 +76,22 @@ did. Neither carries the verdict. A gate built on that would have every lane
 parse as `unknown`, never write a label, and skip every PR forever.
 
 Read it from the artifact the lane already wrote instead. `gh:pr-review` Step 6
-posts the reviewer's raw output to the PR wrapped in `<!-- ai-review:<ai> -->`
-markers, synchronously, before it returns — a durable machine-readable record
-rather than a summary. Fetch the comments **once**, then per lane:
+posts the reviewer's raw output to the PR wrapped in
+`<!-- ai-review:<ai>:<head-sha> -->` markers, synchronously, before it returns —
+a durable machine-readable record rather than a summary. Fetch the comments
+**once**, then per lane:
 
 ```sh
 . "${SHELL_COMMON}/functions/devx_pr_review_all.sh"
+
+head_sha=$(GH_HOST="$TARGET_HOST" gh pr view "$pr" --repo "$TARGET_REPO" \
+    --json headRefOid --jq .headRefOid)
 
 BODIES=$(GH_HOST="$TARGET_HOST" gh api --paginate \
     "repos/$TARGET_REPO/issues/$pr/comments" --jq '.[].body')
 
 verdict=$(printf '%s\n' "$BODIES" |
-    devx_pr_review_all_lane_block "$ai" |
+    devx_pr_review_all_lane_block "$ai" "$head_sha" |
     devx_pr_review_all_verdict)
 # -> blocking | concerns | lgtm | unknown
 ```
@@ -85,38 +100,40 @@ verdict=$(printf '%s\n' "$BODIES" |
 so a re-review supersedes an earlier verdict, and it ignores an unterminated
 block — half a review is not a verdict.
 
-### Freshness: the optional head-sha
+### Freshness: the head-sha argument
 
-Without a second argument the helper cannot tell a block this run just posted
-from one left by an earlier round. A run that posted nothing —
+The second argument is optional to the *function*, not to a caller that gates a
+merge. Without it the helper cannot tell a block this run just posted from one
+left by an earlier round. A run that posted nothing —
 `GH_DISABLE_AI_METRICS=1`, `--no-post-comment`, or a post that failed — would
 then silently reuse a stale verdict, and a stale verdict can authorize a merge
 of code it never saw.
-
-Pass the PR's head sha to close that hole:
-
-```sh
-head_sha=$(GH_HOST="$TARGET_HOST" gh pr view "$pr" --repo "$TARGET_REPO" \
-    --json headRefOid --jq .headRefOid)
-
-verdict=$(printf '%s\n' "$BODIES" |
-    devx_pr_review_all_lane_block "$ai" "$head_sha" |
-    devx_pr_review_all_verdict)
-```
 
 With a sha given, only `<!-- ai-review:<ai>:<head-sha> -->` … `<!-- /ai-review:<ai>:<head-sha> -->`
 blocks match, both markers must carry the same sha, and a lane with no block for
 that exact ai+sha pair yields nothing — which reads downstream as `unknown`,
 so no label, so no merge. Fail-closed.
 
-> **Producer caveat.** `gh:pr-review`'s marker writer
-> (`shell-common/functions/gh_pr_review.sh`) currently emits the plain
-> `<!-- ai-review:<ai> -->` form with no sha suffix. Passing a head sha against
-> today's comments therefore yields `unknown` for every lane. Emitting the
-> sha-tagged marker is part of the merge-gate wiring (#1564); until it lands,
-> callers should omit the second argument, which is exactly the behavior above
-> without the freshness check. The sha-aware path is fully specified and
-> tested here so the producer change is a one-sided edit when it happens.
+`gh:pr-review`'s marker writer (`_gh_pr_review_build_comment_body` in
+`shell-common/functions/gh_pr_review.sh`) emits the sha-tagged form since
+#1564; the sha comes from the `headRefOid` field of the one consolidated
+`gh pr view` that function's caller already makes, so freshness costs no extra
+round-trip. **Always pass the sha.** Omitting it is not a safer default — it
+is the stale-verdict hole this argument exists to close.
+
+> **Comments posted before #1564** carry the unsuffixed marker and read as
+> `unknown` under the sha-aware path — no label, no merge. That is the
+> documented fail-closed direction: the PR is re-reviewed, and the fresh
+> comment carries the tag. Do **not** add a compatibility path that accepts an
+> untagged block when a sha was requested; it would resurrect exactly the reuse
+> this closes.
+
+**Read the sha before any push of this run.** The lanes reviewed the PR's
+current *remote* head. `devx:pr-review-all`'s own `/simplify` lane may have
+committed locally by the time the verdicts are collected, but Step 4 has not
+pushed yet — so `gh pr view --json headRefOid` still answers the sha the lanes
+actually reviewed. Reading it after the push answers the *new* sha, every lane
+misses, and the gate is silently dead. That is why Step 3.5 sits before Step 4.
 
 ### What the verdict parser accepts
 
@@ -154,7 +171,7 @@ AGG=$(
     for ai in agy codex opencode hermes; do
         lane_ran "$ai" || continue          # a skipped lane contributes NOTHING
         v=$(printf '%s\n' "$BODIES" |
-            devx_pr_review_all_lane_block "$ai" |
+            devx_pr_review_all_lane_block "$ai" "$head_sha" |
             devx_pr_review_all_verdict)
         printf '%s\n' "$v"
     done | devx_pr_review_all_aggregate
@@ -166,6 +183,11 @@ lanes=$(printf '%s\n' "$AGG" | sed -n 's/^lanes=//p')
 Read the two `key=value` lines with `sed`, not `eval` — the values are
 controlled, but a parser that cannot execute anything is the right default for
 something that gates a merge.
+
+In practice the call site pipes the same stream straight into
+`devx_pr_review_all_apply_label` (next section), which does this aggregation
+and the two `sed` reads internally. Reach for `devx_pr_review_all_aggregate`
+directly only when you want the verdict *without* writing a label.
 
 | lanes that ran | outcome | `label` |
 |---|---|---|
@@ -187,43 +209,52 @@ cannot inflate `lanes=` into a false "verified".
 
 ## Applying the label
 
-Add through `_gh_pr_edit_safe_label` (`shell-common/functions/gh_pr_edit_safe.sh`),
-never bare `gh pr edit --add-label` — that silently exits 1 on repos with
-classic Projects attached (#326). Remove the opposite label through the REST
-endpoint, for the same reason. The whole block is **soft-fail**: a labelling
-failure leaves the PR unlabelled, which reads as "not verified".
+`devx_pr_review_all_apply_label` (`shell-common/functions/devx_pr_review_all.sh`)
+owns this. Build the verdict stream and pipe it in — do **not** stage the
+verdicts in a variable and re-expand it (same zsh rule as the section above):
 
 ```sh
-. "${SHELL_COMMON}/functions/gh_pr_edit_safe.sh"
-
-if [ -z "$label" ]; then
-    echo "[WARN] no reviewer lane produced a verdict — PR #$pr left unlabelled"
-else
-    case "$label" in
-    review-blocked) opposite=review-passed ;;
-    *) opposite=review-blocked ;;
-    esac
-
-    GH_HOST="$TARGET_HOST" gh api -X DELETE \
-        "repos/$TARGET_REPO/issues/$pr/labels/$opposite" >/dev/null 2>&1 || :
-
-    _gh_pr_edit_safe_label "$pr" "$label" --repo "$TARGET_REPO"
-    case "$?" in
-    0) echo "[OK] PR #$pr labelled \`$label\` (${lanes} lane(s))" ;;
-    3) echo "[WARN] label \`$label\` missing in $TARGET_REPO — provision it first" ;;
-    *) echo "[WARN] labelling PR #$pr failed — treat the PR as unverified" ;;
-    esac
-fi
+for ai in agy codex opencode hermes; do
+    lane_ran "$ai" || continue          # a skipped lane contributes NOTHING
+    printf '%s\n' "$BODIES" |
+        devx_pr_review_all_lane_block "$ai" "$head_sha" |
+        devx_pr_review_all_verdict
+done | devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST"
 ```
 
-**The opposite label is removed first, and unconditionally.** A re-review that
-flips `review-blocked` to `review-passed` has to clear the old one, or a
-consumer sees both.
+What it does, and why each part is the way it is:
+
+- Adds through `_gh_pr_edit_safe_label` (`shell-common/functions/gh_pr_edit_safe.sh`),
+  never bare `gh pr edit --add-label` — that silently exits 1 on repos with
+  classic Projects attached (#326). The opposite label is removed through the
+  REST endpoint, for the same reason.
+- **The opposite label is removed first, and unconditionally.** A re-review
+  that flips `review-blocked` to `review-passed` has to clear the old one, or a
+  consumer sees both. (`gh:pr-merge-train`'s gate resolves that case
+  deterministically — `review-blocked` wins — but a consumer should never have
+  to.)
+- `GH_HOST` is pinned per call inside a subshell, so a dual-host login cannot
+  write the label to the wrong server (#1403 / #1407) and the caller's own
+  `GH_HOST` survives.
+- **Soft-fail throughout**: rc is 0 for every labelling outcome, because an
+  unlabelled PR already reads as "not verified" downstream. Only a usage error
+  (missing `<pr>`/`<repo>`) returns 2.
+
+It prints exactly one line:
+
+| stream | line |
+|---|---|
+| a `blocking` lane | `[OK] PR #<n> labelled \`review-blocked\` (<k> lane(s))` |
+| ≥1 lane, all non-blocking | `[OK] PR #<n> labelled \`review-passed\` (<k> lane(s))` |
+| empty `label` (no lane, or an `unknown`) | `[WARN] no reviewer lane produced a verdict — PR #<n> left unlabelled` |
+| `_gh_pr_edit_safe_label` rc 3 | `[WARN] label \`<l>\` missing in <repo> — provision it first (gh:label-bootstrap)` |
+| any other non-zero rc | `[WARN] labelling PR #<n> failed — treat the PR as unverified` |
 
 `_gh_pr_edit_safe_label` returns 3 when the label does not exist in the repo and
-**refuses to auto-create it** (`feedback_gh_label_no_autocreate.md`, #326).
-Provisioning the two pipeline labels is therefore an explicit, human-invoked
-step, tracked with the rest of the wiring in #1564.
+**refuses to auto-create it** (`feedback_gh_label_no_autocreate.md`, #326) —
+hence the `gh:label-bootstrap` pointer in that line. Its `pipeline|` feed
+(`gh-label-bootstrap/references/gh-labels.md`) is where the two labels are
+provisioned, and `--prune` preserves them.
 
 ## Why this lives in the producer
 

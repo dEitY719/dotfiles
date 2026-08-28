@@ -736,8 +736,15 @@ _gh_pr_review_build_prompt() {
 # Section 4 — PR comment body builder + post
 # ============================================================================
 # Mirrors references/post-comment.md verbatim. The `<details>` wrappers
-# and the `<!-- ai-review:* -->` / `<!-- ai-metrics:gh-pr-review -->`
-# markers are the SSOT for cross-skill ai-metrics aggregation.
+# and the `<!-- ai-review:<ai>:<head-sha> -->` /
+# `<!-- ai-metrics:gh-pr-review -->` markers are the SSOT for cross-skill
+# ai-metrics aggregation. The `:<head-sha>` suffix on the ai-review marker
+# is the freshness tag `devx:pr-review-all` gates its verdict label on
+# (#1564): without it a verdict left by an earlier round is
+# indistinguishable from one posted against the head under review, and a
+# stale verdict can authorize a merge of code it never saw. Comments posted
+# before #1564 carry the unsuffixed form and read as `unknown` under the
+# sha-aware path — fail-closed, by design.
 
 # Per-preset baseline human-review time (hours). Defaults from
 # references/post-comment.md § "Human time baseline".
@@ -771,9 +778,18 @@ _gh_pr_review_estimate_tokens() {
 
 # Builds the PR comment body to the given output file. Args: $1 = output
 # file, $2 = AI name, $3 = preset, $4 = path to AI stdout, $5 = tokens,
-# $6 = human_h, $7 = elapsed_min. The verbatim AI stdout is inlined
-# between `<!-- ai-review:* -->` markers; the metrics footer follows
-# the dotfiles SSOT (#317 / PR #320 / #367).
+# $6 = human_h, $7 = elapsed_min, $8 = head sha (optional). The verbatim
+# AI stdout is inlined between `<!-- ai-review:<ai>:<head-sha> -->`
+# markers; the metrics footer follows the dotfiles SSOT
+# (#317 / PR #320 / #367).
+#
+# The sha is what makes the marker a claim about ONE commit rather than
+# about the PR in general — `devx_pr_review_all_lane_block <ai> <sha>`
+# harvests only blocks whose open AND close markers carry that exact sha
+# (#1564). An empty 8th arg falls back to the pre-#1564 unsuffixed form
+# rather than emitting a dangling `ai:` tag: the caller could not read
+# `headRefOid`, and a marker claiming freshness it cannot prove is worse
+# than one making no claim at all.
 _gh_pr_review_build_comment_body() {
     local out="$1"
     local ai="$2"
@@ -782,13 +798,17 @@ _gh_pr_review_build_comment_body() {
     local tokens="$5"
     local human_h="$6"
     local elapsed="$7"
+    local head_sha="${8-}"
+
+    local tag="$ai"
+    [ -n "$head_sha" ] && tag="${ai}:${head_sha}"
 
     {
         printf '<details>\n'
         printf '<summary>🤖 AI Review · %s · --review=%s</summary>\n\n' "$ai" "$preset"
-        printf '<!-- ai-review:%s -->\n' "$ai"
+        printf '<!-- ai-review:%s -->\n' "$tag"
         cat "$ai_out"
-        printf '\n<!-- /ai-review:%s -->\n\n' "$ai"
+        printf '\n<!-- /ai-review:%s -->\n\n' "$tag"
         printf '</details>\n\n'
         printf -- '---\n'
         printf '<details>\n'
@@ -936,15 +956,20 @@ _gh_pr_review_resolve_pr_number() {
 }
 
 # _gh_pr_review_fetch_meta — one-shot fetch of every PR field the main
-# entrypoint needs (state, isDraft, baseRefName, headRefName). One
-# network round-trip beats four. The raw JSON is echoed verbatim so the
-# caller can extract whichever subset it cares about; on fetch failure
-# (network blip, no permission, deleted PR) it returns 1 with the raw
-# `gh` stderr suppressed — the caller surfaces the user-facing error.
+# entrypoint needs (state, isDraft, baseRefName, headRefName,
+# headRefOid). One network round-trip beats five. The raw JSON is echoed
+# verbatim so the caller can extract whichever subset it cares about; on
+# fetch failure (network blip, no permission, deleted PR) it returns 1
+# with the raw `gh` stderr suppressed — the caller surfaces the
+# user-facing error.
+#
+# `headRefOid` rides along rather than costing a second `gh pr view`: it
+# is only needed to tag the Step 6 comment marker (#1564), which is the
+# same reason the other four are consolidated here.
 _gh_pr_review_fetch_meta() {
     local pr="$1" repo="$2"
     gh pr view "$pr" --repo "$repo" \
-        --json state,isDraft,baseRefName,headRefName 2>/dev/null
+        --json state,isDraft,baseRefName,headRefName,headRefOid 2>/dev/null
 }
 
 # _gh_pr_review_preflight_pr_state — pure-shell gate on pre-fetched
@@ -1142,10 +1167,11 @@ EOF
     fi
 
     # One consolidated `gh pr view` fetches state + isDraft + base/head
-    # refs in a single round-trip; the preflight gate and the diff
-    # header below both consume this single JSON blob (Rule 19 — fewer
-    # process forks, fewer network calls).
-    local _meta state isDraft base head
+    # refs + the head sha in a single round-trip; the preflight gate, the
+    # diff header, and the Step 6 marker tag below all consume this
+    # single JSON blob (Rule 19 — fewer process forks, fewer network
+    # calls).
+    local _meta state isDraft base head head_sha
     _meta=$(_gh_pr_review_fetch_meta "$PR_NUMBER" "$TARGET_REPO")
     if [ -z "$_meta" ]; then
         echo "PR #$PR_NUMBER could not be fetched from $TARGET_REPO" >&2
@@ -1155,6 +1181,7 @@ EOF
     isDraft=$(printf '%s' "$_meta" | sed -n 's/.*"isDraft":\(true\|false\).*/\1/p')
     base=$(printf '%s' "$_meta" | sed -n 's/.*"baseRefName":"\([^"]*\)".*/\1/p')
     head=$(printf '%s' "$_meta" | sed -n 's/.*"headRefName":"\([^"]*\)".*/\1/p')
+    head_sha=$(printf '%s' "$_meta" | sed -n 's/.*"headRefOid":"\([^"]*\)".*/\1/p')
 
     if ! _gh_pr_review_preflight_pr_state "$PR_NUMBER" "$state" "$isDraft"; then
         return 1
@@ -1317,7 +1344,7 @@ EOF
     ELAPSED=$((($(date +%s) - START_TS) / 60))
 
     _gh_pr_review_build_comment_body "$BODY_FILE" "$ai" "$review" "$AI_OUT" \
-        "$TOKENS" "$HUMAN_H" "$ELAPSED"
+        "$TOKENS" "$HUMAN_H" "$ELAPSED" "$head_sha"
 
     local COMMENT_RESULT
     COMMENT_RESULT=$(_gh_pr_review_post_comment "$PR_NUMBER" "$TARGET_REPO" \

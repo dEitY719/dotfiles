@@ -93,6 +93,23 @@ So there is now a real signal, checked **regardless of the quiet period**:
 A PR carrying `reply-pending` is not a train target however far outside the
 11-minute quiet period it sits.
 
+#### Its sibling signal: the verdict labels (#1564)
+
+`reply-pending` answers *when* — has the reply pass finished. It says nothing
+about *what the reviewers concluded*. That second question is answered by a
+different pair of labels, on a different schedule, in a different step:
+
+| Signal | Set by | Cleared by |
+|---|---|---|
+| `review-blocked` / `review-passed` | `devx:pr-review-all` Step 3.5 (the only writer) | `_gh_pr_drop_label` on any head advance (#1563); the opposite label on a re-review |
+
+The train reads them in Step 3.5, not here: they are **not** part of
+`_gh_pr_merge_train_filter_targets`, because a PR they stop must appear in the
+report with a reason rather than vanish before the queue exists. Table,
+rationale, and the reason strings: `references/review-verdict-gate.md`. Unlike
+`reply-pending`, these labels have **no staleness window** — absence is
+already the blocking state, so there is nothing for time to release.
+
 #### The label expires — 90 minutes, then the quiet period takes over
 
 The hard skip is **bounded**, and the bound is what makes the backstop below

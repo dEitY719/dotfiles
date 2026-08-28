@@ -55,21 +55,27 @@
    rate-limit or SSO denial, a 5xx, a 401, no response, or a `2xx` whose body
    will not parse — is undetermined and stays **fail-closed** (#1519 F-2).
    The report header names which of the three happened.
-4. Processes **one PR at a time**. Immediately before each one it re-queries
+4. Applies the **review verdict gate** to the surviving queue, from the
+   `labels` it already holds — no extra API call. `review-blocked` is
+   `[SKIPPED]`, and so is a PR carrying **neither** verdict label: absence is
+   "not verified", never "passed" (#1564). Only `review-passed` proceeds. The
+   labels are written solely by `devx:pr-review-all`; the train never parses a
+   review comment. Table and rationale: `references/review-verdict-gate.md`.
+5. Processes **one PR at a time**. Immediately before each one it re-queries
    state (F-3), because the previous merge changed it.
    When the gate is off and `reviewDecision` is empty, it first runs one
    `gh:pr-approve --self-record` and merges only if that review promoted the
    board card — a withheld approval skips the PR, and an already-reviewed head
    is never re-reviewed (#1519 F-6 … F-9).
-5. Routes on `mergeStateStatus` / `mergeable` through the D-1 table — the one
+6. Routes on `mergeStateStatus` / `mergeable` through the D-1 table — the one
    copy lives in `references/routing-table.md`. Which atom each row reaches is
    summarised under "Atom skills it calls" below.
    The two rebase rows run in a **detached scratch worktree** the train creates
    and deletes per attempt (`references/train-loop.md` → "Detached scratch
    worktree").
-6. Caps remediation at **3 attempts per PR** (F-5). Over that, the PR is
+7. Caps remediation at **3 attempts per PR** (F-5). Over that, the PR is
    `[FAILED]` and the train moves on (F-6).
-7. Prints a per-PR `[MERGED]` / `[SKIPPED]` / `[FAILED]` report with reasons (F-9).
+8. Prints a per-PR `[MERGED]` / `[SKIPPED]` / `[FAILED]` report with reasons (F-9).
 
 ## What the skill will NOT do
 
@@ -79,6 +85,8 @@
   A `403`/`404` is **not** that case — it is a definitive "no policy here".
 - Merge a gate-off PR whose delegated `gh:pr-approve --self-record` review
   withheld approval.
+- Merge a PR carrying `review-blocked`, or one carrying no verdict label at
+  all — and it will not read a review comment body to second-guess either.
 - Call `gh:pr-merge-emergency`, or file an incident issue.
 - Pass a merge strategy — `gh:pr-merge`'s default rebase is what
   `required_linear_history` allows (D-4).
@@ -100,5 +108,9 @@
 
 - `gh:issue-flow` — produces the parallel PRs this train drains; its Step 2.4
   `--defer-reply 4` is the reason for the 11-minute quiet period.
+- `devx:pr-review-all` — the only writer of the `review-blocked` /
+  `review-passed` labels this train's Step 3.5 gates on (#1564).
+- `gh:label-bootstrap` — provisions those two labels; without them the
+  producer cannot issue either and every PR skips.
 - `gh:pr-merge` — the single-PR case, and the atom this train ends every PR with.
 - `gh:pr-merge-emergency` — deliberately never called (NF-2).

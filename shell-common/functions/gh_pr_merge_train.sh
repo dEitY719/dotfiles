@@ -19,6 +19,8 @@
 #   _gh_pr_merge_train_reply_pending_stale_minutes
 #   _gh_pr_merge_train_filter_targets --now <epoch-seconds> [--minutes <n>]
 #   <one gh-pr-view JSON object> | _gh_pr_merge_train_has_reply_pending_label
+#   <one gh-pr-view JSON object> | _gh_pr_merge_train_has_review_blocked_label
+#   <one gh-pr-view JSON object> | _gh_pr_merge_train_has_review_passed_label
 #
 # `_gh_pr_merge_train_quiet_minutes`
 #   Echo the quiet period in minutes. Default 11; override with the env var
@@ -109,6 +111,33 @@
 #   *added mid-run* (a deferred devx:pr-review-all pass) after Step 2 already
 #   built the queue. Both call sites run this one function so the predicate
 #   itself cannot drift apart the way the quiet-minutes number used to (#1524).
+#
+# The two verdict labels (issue #1564, umbrella #1527):
+# `_gh_pr_merge_train_has_review_blocked_label` /
+# `_gh_pr_merge_train_has_review_passed_label`
+#   Same single-PR-object-on-stdin shape as the reply-pending predicate above,
+#   asked of `review-blocked` / `review-passed`. `devx:pr-review-all` Step 3.5
+#   is their ONLY writer (`devx-pr-review-all/references/review-verdict-label.md`);
+#   the merge train is their only reader, and it reads NOTHING else — no
+#   comment-body parsing lives here, deliberately, so a reviewer reformatting
+#   its verdict line can never *unlock* the gate.
+#
+#   These are NOT folded into `_gh_pr_merge_train_filter_targets` above. That
+#   filter drops its rejects silently, before the queue exists, and
+#   `references/report-format.md` documents those PRs as never listed. #1564
+#   requires the opposite: a per-PR `[SKIPPED]` line naming which of the two
+#   reasons applied, in the same visibility class as the approval gate's own
+#   skip. So the verdict gate is a queue-level step
+#   (`references/review-verdict-gate.md`), run over what this file's array
+#   filter already let through, and these predicates are what it runs.
+#
+#   The decision table lives in that reference; the two invariants that make
+#   it deterministic are: `review-blocked` wins over a stale `review-passed`
+#   if both are somehow present, and the ABSENCE of both is "not verified" —
+#   a skip, never a pass. Absence-is-blocking is also why there is no
+#   staleness window here to match `reply-pending`'s: that label self-expires
+#   because a dead session would otherwise wedge its PR forever, whereas a
+#   verdict-less PR is unwedged by one re-review or one human-added label.
 #
 # NOTE: This file intentionally has NO interactive guard. It is a pure
 # function-defining library (no top-level side effects) sourced from two
@@ -241,6 +270,19 @@ _gh_pr_merge_train_has_reply_pending_label() {
     jq -e '[ .labels[]?.name? ] | index("reply-pending")' >/dev/null 2>&1
 }
 
+# The two verdict-label predicates (#1564). Same contract as the sibling
+# above: one PR object on stdin, 0 = the label is present, 1 = it is not
+# (including malformed / missing `labels`). See the header block for why the
+# gate that consumes them is a queue-level step rather than another clause in
+# `_gh_pr_merge_train_filter_targets`.
+_gh_pr_merge_train_has_review_blocked_label() {
+    jq -e '[ .labels[]?.name? ] | index("review-blocked")' >/dev/null 2>&1
+}
+
+_gh_pr_merge_train_has_review_passed_label() {
+    jq -e '[ .labels[]?.name? ] | index("review-passed")' >/dev/null 2>&1
+}
+
 # Self-check (issue #724): catch silent breakage where this file sources
 # cleanly but its public functions never get defined — an interactive-guard
 # regression, a syntax error mid-file, a future rename. Both call sites treat a
@@ -250,7 +292,9 @@ for _gh_pmt_selfcheck_fn in \
     _gh_pr_merge_train_quiet_minutes \
     _gh_pr_merge_train_reply_pending_stale_minutes \
     _gh_pr_merge_train_filter_targets \
-    _gh_pr_merge_train_has_reply_pending_label; do
+    _gh_pr_merge_train_has_reply_pending_label \
+    _gh_pr_merge_train_has_review_blocked_label \
+    _gh_pr_merge_train_has_review_passed_label; do
     command -v "$_gh_pmt_selfcheck_fn" >/dev/null 2>&1 && continue
     printf '[gh_pr_merge_train] BUG: %s undefined after source — the merge-train target filter will not run. See dotfiles #724 / #1524.\n' \
         "$_gh_pmt_selfcheck_fn" >&2
