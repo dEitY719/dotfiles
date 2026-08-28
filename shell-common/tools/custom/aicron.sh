@@ -118,7 +118,7 @@ aicron_usage() {
     ux_info ""
     ux_section "Examples"
     ux_bullet_sub "aicron list"
-    ux_bullet_sub "aicron add issue-watcher --schedule '*/11 * * * *'"
+    ux_bullet_sub "aicron add issue-watcher --schedule '*/3 * * * *'"
     ux_bullet_sub "aicron pause merge-train"
     ux_bullet_sub "aicron status issue-watcher --json | jq .last_exit"
     return 0
