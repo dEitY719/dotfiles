@@ -371,8 +371,13 @@ _hold_lock() {
 }
 
 @test "pr_merge_train_cron: --help documents the crontab registration example" {
+    # #1586: the example must match the shipped cron-jobs.json cadence
+    # (*/2), or a reader following --help literally installs a cron entry
+    # running 2.5x slower than the manifest's own default — the same drift
+    # class #1579/#1580 caught for issue-watcher's own --help example.
     run bash "${SCRIPT}" --help
     assert_success
+    assert_output --partial "*/2 * * * *"
     assert_output --partial "pr_merge_train_cron.sh"
     assert_output --partial "cron.log"
 }

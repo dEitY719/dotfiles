@@ -1374,3 +1374,11 @@ _shipped_env() {
     assert_success
     assert_line "CLAUDE_DEFAULT_ACCOUNT=work1"
 }
+
+@test "aicron: the shipped merge-train job runs every 2 minutes (#1586)" {
+    # Installing this is a separate step — the crontab keeps whatever schedule
+    # it was added with, and `aicron doctor` is what reports the drift.
+    run _shipped_manifest_call aicron_manifest_schedule merge-train
+    assert_success
+    assert_output "*/2 * * * *"
+}
