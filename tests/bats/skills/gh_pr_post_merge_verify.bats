@@ -140,7 +140,6 @@ _pmv_log_count() { grep -c -- "$1" "$FAKE_HERDR_LOG" || true; }
     assert_output ""
 }
 
-
 # --- A-1 / A-5 / E-1 / E-2: the no-op paths -------------------------------
 
 @test "A-1: an unregistered repo makes no herdr call at all" {
@@ -784,8 +783,10 @@ _PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
 
     # #1555: the block reads IW_WATCHED_REPOS (or the issue-watcher default
     # under HOME), never DOTFILES_ROOT/docs/.ssot — same registry, same
-    # override rule as issue_watcher_cron.sh.
-    run env IW_WATCHED_REPOS="$WATCHED" DOTFILES_ROOT="${TEST_TEMP_HOME}" \
+    # override rule as issue_watcher_cron.sh. No DOTFILES_ROOT here: the
+    # unregistered-repo gate exits before the block ever reaches
+    # PMV_NAME_LIB, which is the only line that reads it.
+    run env IW_WATCHED_REPOS="$WATCHED" \
         TARGET_REPO="acme/not-watched" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
     assert_success
     [ -z "$output" ]
