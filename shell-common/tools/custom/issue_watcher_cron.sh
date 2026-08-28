@@ -2224,7 +2224,7 @@ _iw_usage() {
     ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
     ux_bullet_sub "it must also hold a parseable .credentials.json — a logged-out account stalls every prompt"
     ux_bullet "crontab"
-    ux_bullet_sub "*/5 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
+    ux_bullet_sub "*/3 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
 }
 
 # ============================================================
