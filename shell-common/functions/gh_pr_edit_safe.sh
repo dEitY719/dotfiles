@@ -339,6 +339,7 @@ _gh_pr_drop_label() {
     # host was passed so `gh`'s own default still applies.
     if (
         if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped, per the comment above
             export GH_HOST="$_host"
         fi
         gh api -X DELETE "repos/$_repo/issues/$_pr/labels/$_label_enc"
@@ -355,6 +356,7 @@ _gh_pr_drop_label() {
     local _labels
     _labels=$(
         if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped, per the comment above
             export GH_HOST="$_host"
         fi
         gh api "repos/$_repo/issues/$_pr/labels" --jq '.[].name' 2>/dev/null
