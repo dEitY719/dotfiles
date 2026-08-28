@@ -189,3 +189,28 @@ JSON
     assert_output --partial 'company/ 건너뜀'
     refute_output --partial 'company/marketplaces.json'
 }
+
+@test "reconcile.sh --apply fails clearly when the plugin_sync_title.sh helper cannot be sourced (#1558 codex review)" {
+    # A half-installed / mid-upgrade checkout: shell-common/functions/plugin_sync_title.sh
+    # is unreachable, so _plugin_sync_title never gets defined. --apply must refuse loudly
+    # (empty-subject commits are worse than no commit) rather than silently degrading.
+    _seed_drifted_manifest
+    before=$(git -C "$REPO" rev-list --count HEAD)
+
+    SHELL_COMMON="$TEST_TEMP_HOME/no-such-shell-common" run "$SCRIPT" --apply
+    assert_failure 1
+    assert_output --partial 'plugin_sync_title.sh 를 불러오지 못했습니다'
+
+    after=$(git -C "$REPO" rev-list --count HEAD)
+    [ "$after" -eq "$before" ]
+}
+
+@test "reconcile.sh --check still works when the plugin_sync_title.sh helper cannot be sourced (half-installed tree)" {
+    # --check never builds a commit title, so it must not depend on the helper at all —
+    # only --apply's missing-helper guard should fire.
+    _seed_drifted_manifest
+    SHELL_COMMON="$TEST_TEMP_HOME/no-such-shell-common" run "$SCRIPT" --check
+    assert_failure
+    assert_output --partial '+ understand'
+    refute_output --partial 'plugin_sync_title.sh 를 불러오지 못했습니다'
+}
