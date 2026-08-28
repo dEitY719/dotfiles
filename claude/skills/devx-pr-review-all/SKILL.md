@@ -103,6 +103,25 @@ Await all lanes, then:
 - `/simplify` committed → `git push`.
 - The tree was unchanged → skip.
 
+**If the push happened, drop `review-passed` immediately** (soft-fail, same
+`_gh_pr_drop_label` helper Step 3.5's SSOT already documents). Step 3.5 labels
+against the pre-push head on purpose — but that means a push here moves the
+head *the label just certified* out from under it, without a reviewer having
+seen the auto-fix diff (PR #1598 review, agy CONCERNS + codex BLOCKER). Never
+drop `review-blocked` here — this step holds no evidence any blocker was
+addressed, and the auto-fix commit is unreviewed by construction:
+
+```bash
+if [ "$PUSHED" = "1" ]; then
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
+    if _vl_err=$(_gh_pr_drop_label "$pr" review-passed "$TARGET_REPO" "$TARGET_HOST" 2>&1); then
+        echo "[OK] \`review-passed\` 무효화됨 — /simplify 커밋이 push 되어 이전 판정은 만료"
+    else
+        echo "[WARN] \`review-passed\` 제거 실패 — 리뷰되지 않은 auto-fix 커밋에 판정이 남아 있다: ${_vl_err}"
+    fi
+fi
+```
+
 ## Step 5: pr-reply (per reply_mode)
 
 - `inline` (default) → run `Skill(gh:pr-reply, "<pr> <remote>")` immediately.
