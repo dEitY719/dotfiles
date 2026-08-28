@@ -15,11 +15,33 @@
 # pipeline never started a single session: 76 recorded attempts, 0 successes.
 # One helper, three callers — a fix that lands in one place stays landed.
 #
-# Name shapes, and their worst-case widths against the 32-character budget:
+# Name shapes, and their widths against the 32-character budget:
 #
 #   merge-train         mt-<repo>                3 + 16          = 19
 #   issue-watcher       iw-<repo>-issue-<N>      3 + 16 + 7 + 5  = 31
 #   post-merge-verify   mv-<repo>-pr-<N>         3 + 16 + 4 + 5  = 28
+#
+# These are NOT worst-case widths (#1553) — the `+ 5` / `+ 4` terms assume a
+# 5-digit issue/PR number, an assumption with no headroom check anywhere. The
+# repo segment is capped at 16 by `herdr_agent_repo_slug`, but the number is
+# not capped at all: the real budget for issue-watcher's <N> is
+# `32 - 3 - len(repo) - 7` digits, which SHRINKS as the watched repo's name
+# grows:
+#
+#   repo length   issue-watcher digit budget
+#   8  (dotfiles) 14
+#   12            10
+#   16 (max)      6
+#
+# A 16-char repo with a 7-digit issue number (33 chars) overruns this and
+# `herdr_agent_name` correctly returns 1 — see the length-limit check below.
+# That rejection is fail-closed and intentional (truncating instead would let
+# two different issues collide on one name and defeat the NF-1 lock a caller
+# builds on top of it); what is NOT yet true today is unreachable, since this
+# repo's own slug (`dotfiles`, 8 chars) leaves 14 digits of headroom. The day
+# a repo nearer the 16-char cap joins the watch list, this stops being
+# theoretical — `tests/bats/functions/herdr_agent_name.bats` pins the
+# rejection so it fails loudly rather than silently when that day comes.
 #
 # The host and the owner are deliberately NOT part of the name. That is a
 # concession, not an oversight, and it costs uniqueness on BOTH axes (PR #1532
