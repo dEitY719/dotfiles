@@ -2320,9 +2320,17 @@ main() {
     # list is untracked and user-editable, so no review or lint stands between
     # a second entry and that collision; advisory only, the tick continues
     # either way (#1552).
+    #
+    # Slug through herdr_agent_repo_slug — the same lower-case/normalize/
+    # truncate-to-16 pass herdr_agent_name uses to build the real agent name —
+    # rather than a raw basename cut, so this check tracks the actual
+    # collision condition instead of a looser stand-in for it.
     local _iw_dup
-    _iw_dup=$(_iw_watch_list |
-        awk -F "${_IW_TAB}" '{ sub(/.*\//, "", $1); print $1 }' | sort | uniq -d)
+    _iw_dup=$(
+        _iw_watch_list | while IFS="${_IW_TAB}" read -r _repo _path _host; do
+            herdr_agent_repo_slug "${_repo}" && printf '\n'
+        done | sort | uniq -d
+    )
     if [ -n "${_iw_dup}" ]; then
         ux_warning "watch list has repos sharing a basename (${_iw_dup}) — herdr agent names collide (see herdr_agent_name.sh)." >&2
     fi
