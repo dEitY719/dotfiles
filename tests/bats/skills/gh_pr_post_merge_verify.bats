@@ -1000,16 +1000,17 @@ JSON
 }
 
 @test "1571: dispatch.sh.md settles between agent start and agent prompt, fresh only" {
-    local _doc _start _guard _prompt
+    local _doc _start _settle _prompt
     _doc="$(_pmv_dispatch_doc)"
     _start=$(grep -n 'herdr agent start "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
-    _guard=$(grep -n '^\[ "\$PMV_FRESH_START" = "0" \] || pmv_settle$' "$_doc" | head -1 | cut -d: -f1)
+    _settle=$(grep -n 'pmv_settle$' "$_doc" | awk -F: -v s="$_start" '$1 > s {print $1; exit}' | cut -d: -f1)
     _prompt=$(grep -n 'herdr agent prompt "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
-    [ -n "$_start" ] && [ -n "$_guard" ] && [ -n "$_prompt" ]
-    [ "$_start" -lt "$_guard" ]
-    [ "$_guard" -lt "$_prompt" ]
-    # The fallback branch is the one that clears the flag.
-    run grep -qF -- 'PMV_FRESH_START=0' "$_doc"
+    [ -n "$_start" ] && [ -n "$_settle" ] && [ -n "$_prompt" ]
+    [ "$_start" -lt "$_settle" ]
+    [ "$_settle" -lt "$_prompt" ]
+    # The settle call sits in the `else` branch of the start guard — reached
+    # only on a fresh start, never on the agent_name_taken fallback path.
+    run grep -qF -- 'already registered — prompting the existing session' "$_doc"
     assert_success
 }
 
