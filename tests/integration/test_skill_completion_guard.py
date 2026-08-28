@@ -735,3 +735,255 @@ def test_hook_callable_two_ways(tmp_path: Path, exec_form: list[str]) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# Issue #1550 — the `[flow:async-wait]` grace, per required step.
+#
+# A step whose work was handed to a background/async Agent cannot honestly
+# emit its `[step:<skill>/<id>] OK` marker in the same turn, but the turn
+# ending is a legitimate wait, not abandonment. The model says so on the
+# record with a `[flow:async-wait]` line; the guard excuses THAT step (and
+# only that step) for up to `GH_SKILL_GUARD_ASYNC_WAIT_LIMIT` consecutive
+# turns. The grace is catalog-generic — no skill is special-cased.
+# ---------------------------------------------------------------------------
+
+_ASYNC_WAIT_LIMIT_ENV = "GH_SKILL_GUARD_ASYNC_WAIT_LIMIT"
+
+
+def _async_wait_marker(step: str = "gh-issue-implement/implement", agent: str = "a1") -> str:
+    """The literal marker line, built the way the SKILL.md docs specify it."""
+    return f"[flow:async-wait] step={step} agent={agent} reason=background-worker-delegated"
+
+
+def _async_wait_text(step: str = "gh-issue-implement/implement", agent: str = "a1") -> dict[str, Any]:
+    """One assistant-text turn carrying nothing but the marker."""
+    return _assistant_text(_async_wait_marker(step, agent))
+
+
+def _partially_implemented() -> list[dict[str, Any]]:
+    """The exact incident state from #1550.
+
+    `fetch-issue` / `self-assign` / `board-transition` genuinely completed
+    and were emitted honestly; `implement` and `report` are the delegated
+    work that has not happened yet.
+    """
+    return [
+        _user_text("/gh-issue-implement 42"),
+        _emit_marker("gh-issue-implement", "fetch-issue"),
+        _emit_marker("gh-issue-implement", "self-assign"),
+        _emit_marker("gh-issue-implement", "board-transition"),
+    ]
+
+
+def test_async_wait_reprieves_only_its_own_step(tmp_path: Path) -> None:
+    """Grace covers the marked step and nothing else — the easy thing to get wrong.
+
+    `implement` carries an async-wait marker, `report` carries neither a
+    marker nor an OK. So the hook must still BLOCK, and the reason must name
+    `report` while NOT naming `implement`: a step with zero markers gets no
+    free ride just because a sibling step was reprieved.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/implement"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), "`report` is genuinely outstanding — must still block"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "report" in decision["reason"]
+    assert "implement" not in decision["reason"].split("emit(s) [")[1].split("]")[0], (
+        f"`implement` was reprieved and must not appear in the missing list. reason={decision['reason']!r}"
+    )
+
+
+def test_async_wait_covering_every_outstanding_step_allows_stop(tmp_path: Path) -> None:
+    """When every still-missing step is reprieved, the turn may end."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/implement"),
+            _async_wait_text("gh-issue-implement/report"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"all outstanding steps are async-wait-reprieved. stdout={result.stdout!r}"
+
+
+def test_colon_form_step_prefix_accepted(tmp_path: Path) -> None:
+    """`step=gh:issue-implement/implement` normalizes to the catalog key."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh:issue-implement/implement"),
+            _async_wait_text("gh:issue-implement/report"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"colon form must be accepted. stdout={result.stdout!r}"
+
+
+def test_async_wait_marker_for_another_skill_does_not_reprieve(tmp_path: Path) -> None:
+    """Grace never crosses skills — a `gh-pr/report` marker cannot excuse
+    `gh-issue-implement/report`."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/implement"),
+            _async_wait_text("gh-pr/report"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "report" in decision["reason"]
+
+
+def test_three_async_wait_markers_return_the_step_to_the_blocked_list(tmp_path: Path) -> None:
+    """Repeating the marker with no `OK` in between is stagnation, not waiting."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/report"),
+            _async_wait_text("gh-issue-implement/implement", agent="a1"),
+            _async_wait_text("gh-issue-implement/implement", agent="a2"),
+            _async_wait_text("gh-issue-implement/implement", agent="a3"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), "3 markers for one step exceeds the default limit"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    missing_list = decision["reason"].split("emit(s) [")[1].split("]")[0]
+    assert "implement" in missing_list, f"stagnating step must return to the list. got {missing_list!r}"
+    assert "report" not in missing_list, f"`report` is still within grace. got {missing_list!r}"
+
+
+def test_real_ok_marker_after_async_wait_satisfies_normally(tmp_path: Path) -> None:
+    """The async-wait marker is a stop-gap, never a substitute for the real one.
+
+    Once the delegated work lands and the genuine
+    `[step:gh-issue-implement/implement] OK` is emitted, the step is
+    satisfied through the ordinary path — proven here by repeating the
+    marker far past the grace limit, which would otherwise re-block it.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/implement", agent="a1"),
+            _async_wait_text("gh-issue-implement/implement", agent="a2"),
+            _async_wait_text("gh-issue-implement/implement", agent="a3"),
+            _emit_marker("gh-issue-implement", "implement"),
+            _emit_marker("gh-issue-implement", "report"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"a real OK marker satisfies the step regardless of the streak. stdout={result.stdout!r}"
+    )
+
+
+def test_async_wait_marker_inside_tool_result_does_not_reprieve(tmp_path: Path) -> None:
+    """The marker is assistant-text-only, unlike the step-OK marker.
+
+    This hook DOES read `tool_result` for `[step:.../...] OK` (Bash printf
+    output lands there), so the assistant-text-only scoping of the
+    async-wait marker is a real, separately-implemented decision rather than
+    an inherited default. A `Read` of this hook's source or of
+    `stop-guard.md` puts the literal marker into a `tool_result`; counting it
+    would hand every such read two free turns.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _user_tool_result(
+                "Excerpt from references/stop-guard.md:\n"
+                f"{_async_wait_marker('gh-issue-implement/implement')}\n"
+                f"{_async_wait_marker('gh-issue-implement/report')}\n"
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), "a tool_result marker must be ignored"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    missing_list = decision["reason"].split("emit(s) [")[1].split("]")[0]
+    assert "implement" in missing_list
+    assert "report" in missing_list
+
+
+def test_async_wait_limit_zero_disables_the_grace(tmp_path: Path) -> None:
+    """`GH_SKILL_GUARD_ASYNC_WAIT_LIMIT=0` → the first marker already blocks."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/implement"),
+            _async_wait_text("gh-issue-implement/report"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript), env={_ASYNC_WAIT_LIMIT_ENV: "0"})
+    assert result.returncode == 0
+    assert result.stdout.strip(), "limit 0 means zero grace"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    missing_list = decision["reason"].split("emit(s) [")[1].split("]")[0]
+    assert "implement" in missing_list
+    assert "report" in missing_list
+
+
+@pytest.mark.parametrize(
+    ("marker_count", "should_block"),
+    [(1, False), (2, True)],
+)
+def test_async_wait_limit_one_allows_exactly_one(tmp_path: Path, marker_count: int, should_block: bool) -> None:
+    """`GH_SKILL_GUARD_ASYNC_WAIT_LIMIT=1` → 1 occurrence allows, the 2nd blocks."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/report"),
+            *[_async_wait_text("gh-issue-implement/implement", agent=f"a{i}") for i in range(marker_count)],
+        ],
+    )
+    result = _run_hook(_hook_event(transcript), env={_ASYNC_WAIT_LIMIT_ENV: "1"})
+    assert result.returncode == 0
+    if should_block:
+        assert result.stdout.strip(), f"streak {marker_count} exceeds limit 1 and must block"
+        assert json.loads(result.stdout)["decision"] == "block"
+    else:
+        assert result.stdout.strip() == "", f"streak {marker_count} is within limit 1. stdout={result.stdout!r}"
+
+
+def test_trace_reports_async_wait_reprieve(tmp_path: Path) -> None:
+    """The L1.5 trace must name which steps were excused and by how many markers."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/implement"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript), env={"GH_SKILL_GUARD_TRACE": "1"})
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "block"
+    assert "async_wait_reprieved=implement=1" in result.stderr
+    assert "async_wait_limit=2" in result.stderr
+    assert "outstanding=['report']" in result.stderr

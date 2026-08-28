@@ -190,6 +190,67 @@ When `GH_ISSUE_FLOW_STOP_GUARD_TRACE=1`, each decision logs a
 `[stop-guard] … layer=L1|L1.5` line on stderr so the layer
 attribution is greppable in post-mortems.
 
+## Async-wait exception (#1550)
+
+Everything above treats "the model tried to stop with real work undone" as
+abandonment. That is right except in one case: the model *delegated* the
+undone work to a background/async `Agent` and is waiting for it — the
+Advisor/Worker pattern the user's global `CLAUDE.md` mandates for multi-file
+implementation. Following the policy therefore tripped both this hook and
+its sister `skill_completion_guard.py` every time, and the only escape was
+`GH_SKILL_GUARD_BYPASS=1`, which leaves no record of *why* the turn ended.
+
+**The marker.** Right before ending such a turn, the model prints one
+`(?m)^`-anchored line as plain assistant text:
+
+```
+[flow:async-wait] step=<skill>/<step> agent=<agent-id> reason=background-worker-delegated
+```
+
+`<skill>` is the hyphen-form skill name. For this outer guard `<step>` is
+not parsed semantically — the marker's mere presence is the signal — while
+`skill_completion_guard.py` matches it against a specific required step id.
+`<agent-id>` and the literal `reason=` are recorded for audit only. This is
+the marker's whole point over the bypass flag: the transcript says which
+step, which agent, and on what grounds the turn ended.
+
+**Assistant text only.** Unlike the sister hook's `[step:<skill>/<id>] OK`
+scan — which *must* read `tool_result`, because those markers come out of a
+`printf` in a Bash call — this marker is scanned with
+`include_tool_results=False`, exactly like the L1.5 terminal-marker scan
+above. Same #608 reasoning: a `tool_result` carries arbitrary file content,
+and both `gh_issue_flow_stop_guard.py` and this very document now contain
+the marker line literally as documentation. Reading tool_results for it
+would hand a free grace turn to any `Read` of either file. The asymmetry
+between the two hooks is deliberate; do not "fix" it.
+
+**Count-based, not agent-id-based.** The grace is a *streak*: markers found
+after the last progress event, where progress for this hook means a
+sub-skill `Skill()` invocation. Up to
+`GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT` (default 2) consecutive markers
+with no progress in between are allowed; from the next one the ordinary
+block resumes, with the ordinary reason naming the next chain step. `0`
+disables the grace entirely, so the first marker already blocks. A real
+sub-skill call resets the count to zero, which is what stops a streak
+accumulating across a whole flow.
+
+The issue's own fix plan proposed comparing `agent=` across turns to detect
+"no progress". That was rejected: it makes the guard depend on the model
+reproducing one exact literal id string turn after turn — fragile in
+precisely the situation the marker exists for, and a typo'd or regenerated
+id would silently grant unlimited grace. A repeated marker with nothing else
+happening in between is already sufficient evidence of stagnation, and needs
+nothing from the model but the marker itself.
+
+The check sits **after** the terminal-marker and stale-boundary decisions,
+so both still take priority; the grace only ever changes the outcome on the
+path that would otherwise block. The streak and limit are appended to the
+existing L1.5 trace line.
+
+The marker is a stop-gap for the wait, never a substitute for the real
+completion signal: when the delegated work lands, the genuine step-emit
+markers and the Step 3 report must still be produced normally.
+
 ## SubagentStop registration (#1434)
 
 ### Why
@@ -418,5 +479,22 @@ Re-install via `./setup.sh` to restore the default behaviour.
   falling back), a mid-flow subagent transcript → block, an
   unrelated subagent stop → allow, and the six existing fail-open rails
   re-asserted against a `SubagentStop`-shaped payload.
+- #1550 (async-wait grace): 1 marker → allow, 2 → allow (at the default
+  limit), 3 → block with the ordinary "gh-issue-flow incomplete" reason
+  naming the next sub-skill; a marker followed by a real `Skill(gh:commit)`
+  → the streak resets and the normal 2/6 block applies; the marker inside a
+  `tool_result` is ignored (the #608 class, applied to this marker); and
+  `GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT=0` blocks on the first marker
+  while `=1` allows exactly one.
 
 Run: `pytest tests/integration/test_gh_issue_flow_stop_guard.py -v`.
+
+The sister hook's half of #1550 lives in
+`tests/integration/test_skill_completion_guard.py`: grace reprieves only the
+step its own marker names (a sibling step with no marker still blocks and is
+the only one listed in the reason), colon-form `step=gh:issue-implement/…`
+is accepted, markers never cross skills, a 3rd marker returns the step to
+the blocked list, a real `[step:…] OK` after the marker satisfies the step
+through the ordinary path, the marker inside a `tool_result` is ignored
+(load-bearing here — that hook's step-OK scan *does* read tool_results), and
+`GH_SKILL_GUARD_ASYNC_WAIT_LIMIT` `0` / `1` behave as documented.
