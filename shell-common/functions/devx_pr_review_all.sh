@@ -136,22 +136,12 @@ devx_pr_review_all_parse() {
 
 # ── Review verdict -> merge-gate label (issue #1527, fixed in #1562) ──
 #
-# Every gh:pr-review preset mandates a closing verdict line — `판정:
-# [LGTM|우려있음|블로킹]` on a Korean-dominant diff, `Verdict:
-# [LGTM|CONCERNS|BLOCKING]` otherwise. Until #1527 nothing in the repo read
-# it: PR #1518 collected two independent blocking verdicts and merged 32
-# minutes later, because the train's only real gate was CI.
-#
-# That prompt is rendered at runtime by `_gh_pr_review_common_prefix`
-# (gh_pr_review.sh), copied verbatim from
-# claude/skills/gh-pr-review/references/review-presets.md — reword the tokens
-# in either place and the case arms below have to move with them.
-#
-# These three helpers turn that prose into a label the train can gate on.
-# Parsing lives here, in the *producer*, on purpose: if the train parsed
-# comment bodies instead, a reviewer changing its output format would
-# silently unlock the merge gate. Here a format change makes the lane
-# `unknown`, which is fail-closed — no label, no merge.
+# Turns a reviewer lane's mandatory closing verdict line (`판정: ...` /
+# `Verdict: ...`, rendered at runtime by `_gh_pr_review_common_prefix` in
+# gh_pr_review.sh) into a label the merge train can gate on. Full rationale —
+# the PR #1518 incident, the zsh word-splitting bug, the call-site contract —
+# lives in claude/skills/devx-pr-review-all/references/review-verdict-label.md,
+# which is the SSOT; this is the implementation.
 #
 #   devx_pr_review_all_lane_block <ai> [<head-sha>]  # comment bodies on stdin
 #     -> that lane's raw block, or nothing
@@ -160,12 +150,8 @@ devx_pr_review_all_parse() {
 #   devx_pr_review_all_aggregate                     # verdict tokens on stdin,
 #     -> label=review-blocked | label=review-passed | label=   (+ lanes=N)
 #
-# The aggregate reads stdin, NOT positional args, and that is load-bearing:
-# the natural call site `devx_pr_review_all_aggregate $VERDICTS` relies on the
-# shell word-splitting an unquoted expansion, which zsh does not do without
-# SH_WORD_SPLIT. In zsh every lane's verdict arrived as one argument, so a
-# two-lane PR reported `lanes=1` and lost the blocking verdict outright. A
-# newline-delimited stream behaves identically in bash, zsh and dash.
+# devx_pr_review_all_aggregate reads stdin, NOT positional args — load-bearing,
+# not stylistic; see the doc for the zsh bug that forces it.
 #
 # Skipped lanes contribute NO line — "not checked" and "checked and passed"
 # must never collapse into the same state (#1527 확정 사항).
@@ -253,31 +239,17 @@ devx_pr_review_all_aggregate() {
 }
 
 # Harvest one reviewer lane's raw output from the PR comment bodies on stdin.
+# Reads it back from the `<!-- ai-review:<ai> -->` … `<!-- /ai-review:<ai> -->`
+# markers `gh:pr-review` Step 6 posts (gh_pr_review.sh) — not from a lane's
+# subagent return value, which never carries the verdict. Full rationale:
+# claude/skills/devx-pr-review-all/references/review-verdict-label.md.
 #
-# Step 3 dispatches each lane as a subagent, and `gh:pr-review` guarantees only
-# a one-line `[OK] PR #N reviewed by <ai> — comment: <URL>` as its return
-# value — the verdict is nowhere in it. Reading the verdict out of a subagent's
-# prose would make the merge gate depend on how an agent chose to summarise
-# itself; every lane would land on `unknown`, no label would ever be written,
-# and the train would skip every PR forever.
-#
-# So the verdict is read back from the artifact the lane already wrote:
-# `gh:pr-review` Step 6 posts the reviewer's raw output wrapped in
-# `<!-- ai-review:<ai> -->` markers, synchronously, before it returns. That is
-# a durable machine-readable record, not a summary.
-#
-# The LAST complete block wins: a re-review posts a second comment and its
-# verdict supersedes. An unterminated block (a truncated or still-being-written
-# comment) is never harvested — half a review is not a verdict.
-#
-# The optional <head-sha> is the freshness gate. Without it a block from an
-# earlier round is indistinguishable from one this run just posted, so a run
-# that posted nothing (GH_DISABLE_AI_METRICS=1, --no-post-comment, a failed
-# post) silently reuses a stale verdict — and a stale verdict can authorize a
-# merge of code it never saw. Given a sha, only `<!-- ai-review:<ai>:<sha> -->`
-# blocks match, and a lane with no block for that exact sha yields nothing,
-# which reads downstream as `unknown`. Without it, sha-tagged and plain blocks
-# both match and no freshness claim is made.
+# Contract: the LAST complete block wins (a re-review supersedes); an
+# unterminated block is never harvested. The optional <head-sha> is a
+# freshness gate — given a sha, only `<!-- ai-review:<ai>:<sha> -->` blocks
+# match, and a miss yields nothing (-> `unknown` downstream, fail-closed).
+# Without it, sha-tagged and plain blocks both match and no freshness claim
+# is made.
 devx_pr_review_all_lane_block() {
     [ -n "${1-}" ] || return 0
     awk -v ai="$1" -v sha="${2-}" '
