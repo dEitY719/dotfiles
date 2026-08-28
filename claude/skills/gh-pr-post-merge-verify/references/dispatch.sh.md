@@ -59,6 +59,32 @@ pmv_json_first() {
 # is ever interpolated into the jq program text.
 pmv_error_code() { jq -r '.error.code // empty' 2>/dev/null || return 0; }
 pmv_physical_path() { (cd -P "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"; }
+
+# Settle wait after a herdr call that brings something up (#1571). One value
+# for both of this repo's herdr races, because they are the same race seen
+# twice and splitting them is how a fix keeps missing a third site:
+#   `tab create` -> `agent start`  the pane answers before its shell is
+#       interactive, so the start is refused with `agent_pane_busy`
+#       (issue_watcher_cron.sh's _IW_START_RETRY_SLEEP comment documents it).
+#   `agent start` -> `agent prompt`  herdr answers `"agent_status":"idle"`
+#       straight away, but a freshly drawn claude TUI is idle while its
+#       key-input loop is still unattached, so the prompt is swallowed (#1560).
+# Measured on herdr 0.7.5: ~5s fails every time, ~13s lands. 13 is the repo
+# standard — the twins are _IW_SETTLE_SECONDS / _IW_START_RETRY_SLEEP in
+# shell-common/tools/custom/issue_watcher_cron.sh and _PMT_SETTLE_SECONDS /
+# _PMT_START_RETRY_SLEEP in shell-common/tools/custom/pr_merge_train_cron.sh.
+# Change one, change all five: #1530/#1549 and #1560/#1571 are both the same
+# defect recurring because two of three dispatchers were fixed.
+#
+# The other two dispatchers also *retry* `agent start` on `agent_pane_busy`;
+# this one deliberately does not (#1571 D-3). A wait shrinks the race, a retry
+# survives it — the retry belongs here too, but as part of #1569's shared
+# helper, not as a fourth hand-rolled copy that unification would undo.
+#
+# Overridable, and `0` disables it outright, so the bats suite never sleeps for
+# real (same convention as _IW_IDLE_POLL_SLEEP).
+PMV_SETTLE_SECONDS="${PMV_SETTLE_SECONDS:-13}"
+pmv_settle() { [ "$PMV_SETTLE_SECONDS" = "0" ] || sleep "$PMV_SETTLE_SECONDS"; }
 # herdr agent names come from one SSOT, sourced — never re-implemented here.
 # Three call sites each carrying their own `tr -c 'A-Za-z0-9._-' '-'` copy is
 # what produced #1530: that set keeps uppercase and dots, both of which herdr's
@@ -214,9 +240,15 @@ if ! PMV_AGENT=$(herdr_agent_name mv "$TARGET_REPO" "pr-${PR_NUMBER}"); then
     printf '[WARN] gh:pr-post-merge-verify: cannot derive an agent name for %s — verification skipped.\n' "$TARGET_REPO"
     return 0 2>/dev/null || exit 0
 fi
+# The pane from step 4 is seconds old and its shell may not be interactive yet;
+# starting an agent on it now is what `agent_pane_busy` is. Waited for here
+# rather than right after `tab create` so a repo whose name cannot be derived
+# skips out without paying 13s first.
+pmv_settle
 # `--dangerously-skip-permissions` is required, not a convenience: nobody is at
 # the keyboard of this pane, so one permission prompt would park the
 # verification forever instead of failing it (same reason as #1393).
+PMV_FRESH_START=1
 if ! START_JSON=$(herdr agent start "$PMV_AGENT" --kind claude --pane "$NEW_PANE" \
     -- --dangerously-skip-permissions 2>/dev/null); then
     # Race backstop: the name can be claimed between the probe and the start,
@@ -229,7 +261,12 @@ if ! START_JSON=$(herdr agent start "$PMV_AGENT" --kind claude --pane "$NEW_PANE
         return 0 2>/dev/null || exit 0
     fi
     printf '[WARN] gh:pr-post-merge-verify: agent %s already registered — prompting the existing session.\n' "$PMV_AGENT"
+    PMV_FRESH_START=0
 fi
+# A just-started claude is idle but not yet listening; a session that was
+# already registered has been up for a while and takes the prompt at once, so
+# the fallback path must not pay this (same rule as _pmt_launch_fresh).
+[ "$PMV_FRESH_START" = "0" ] || pmv_settle
 
 # --- 6. F-5: hand the verification over -----------------------------------
 # The registry stores the skill id (`devx:pr-verify-merged`); a pane is typed
@@ -260,6 +297,7 @@ printf '  attach: herdr agent attach %s\n' "$PMV_AGENT"
 | `BASE_BRANCH` | caller | The merged PR's base branch (`baseRefName`). Empty → the main checkout's current branch, and a detached HEAD stops the run |
 | `REMOTE` | Step 1, optional | The `[remote]` positional; default `origin`. `fetch`/`rebase` use it, never a hardcoded `origin` |
 | `PMV_PROMPT_TIMEOUT_MS` | env, optional | `herdr agent prompt --wait` cap, default 900000 (15 min) |
+| `PMV_SETTLE_SECONDS` | env, optional | Wait after each herdr call that brings something up, default 13; `0` disables both waits (#1571) |
 
 `--wait --until idle` waits for the dispatched session to settle, so the
 timeout is generous. Hitting it is a `[WARN]`, not a failure: the prompt has

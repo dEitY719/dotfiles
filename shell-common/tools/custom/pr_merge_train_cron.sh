@@ -121,6 +121,14 @@ _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 # the reuse path prompts a session that has been up for a whole cron period and
 # must not pay 13s per PR. Overridable (to 0) so the bats suite does not sleep
 # for real.
+#
+# 13 is the repo-wide constant for "herdr just brought something up, wait
+# before touching it" (#1571). Its four twins are _PMT_START_RETRY_SLEEP below,
+# _IW_SETTLE_SECONDS / _IW_START_RETRY_SLEEP in issue_watcher_cron.sh, and
+# PMV_SETTLE_SECONDS in
+# claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md. Change one,
+# change all five — #1530/#1549 and #1560/#1571 are both the same defect
+# recurring because only two of the three dispatchers were fixed.
 _PMT_SETTLE_SECONDS="${PMT_SETTLE_SECONDS:-13}"
 
 # `herdr agent start` attempts on a freshly created pane (see _pmt_launch_fresh,
@@ -134,8 +142,17 @@ _PMT_SETTLE_SECONDS="${PMT_SETTLE_SECONDS:-13}"
 # so the `attempt N/MAX` warning reads exactly true. The gap between them is
 # overridable for the same reason _PMT_IDLE_POLL_SLEEP is — the bats suite pays
 # no real sleep.
+#
+# The gap is 13s, not the 2s it shipped with (#1571): this is the *same* class
+# of wait as _PMT_SETTLE_SECONDS above — herdr answered before the thing it
+# brought up was usable — and 2s was shorter than the 5s already measured to
+# fail. Its twins are _PMT_SETTLE_SECONDS above, _IW_SETTLE_SECONDS /
+# _IW_START_RETRY_SLEEP in issue_watcher_cron.sh, and PMV_SETTLE_SECONDS in
+# claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md; all five
+# move together. The wait and this retry are complements, not substitutes — 13s
+# shrinks the race, the retry survives what is left of it.
 _PMT_START_ATTEMPT_MAX="3"
-_PMT_START_RETRY_SLEEP="${PMT_START_RETRY_SLEEP:-2}"
+_PMT_START_RETRY_SLEEP="${PMT_START_RETRY_SLEEP:-13}"
 
 # CLAUDE_CONFIG_DIR for the pane this tick opens. Resolved once, and only on
 # the path that actually opens one (see _pmt_bind_config_dir).

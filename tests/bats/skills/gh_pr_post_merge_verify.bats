@@ -80,7 +80,7 @@ branch refs/heads/wt/issue-77/1
 
 teardown() {
     teardown_isolated_home
-    unset PMV_PROMPT_TIMEOUT_MS
+    unset PMV_PROMPT_TIMEOUT_MS PMV_SETTLE_SECONDS
     unset FAKE_HERDR_PRESENT FAKE_JQ_PRESENT FAKE_HERDR_LOG FAKE_GIT_LOG FAKE_WORKTREE_PORCELAIN \
         FAKE_WORKTREE_RC FAKE_MAIN_DIRTY FAKE_SYNC_RC FAKE_MAIN_BRANCH FAKE_MAIN_TOPLEVEL \
         FAKE_HERDR_OUT_AGENT_LIST FAKE_HERDR_OUT_WORKTREE_LIST \
@@ -93,6 +93,13 @@ dispatch() {
     gh_pr_post_merge_verify 77 "${1:-acme/dotfiles}" github.com "$MAIN_ROOT" wt/issue-77/1 \
         "$WATCHED" "${2-}" "${3-}"
 }
+
+# The settle waits (#1571) are recorded into the herdr log by the fixture's
+# `_pmv_sleep`, so their *order* against `tab create` / `agent start` /
+# `agent prompt` is assertable — a wait that lands on the wrong side of a call
+# is exactly the defect, and a "did it sleep at all" check would miss it.
+_pmv_log_line() { grep -n -- "$1" "$FAKE_HERDR_LOG" | head -1 | cut -d: -f1; }
+_pmv_log_count() { grep -c -- "$1" "$FAKE_HERDR_LOG" || true; }
 
 # --- F-1: the watched-repos.json gate -------------------------------------
 
@@ -862,5 +869,205 @@ JSON
     run grep -qF -- 'Print **only** the compact report' "$_skill"
     assert_success
     run grep -qF -- 'no output, no' "$_skill"
+    assert_success
+}
+
+# --- #1571: the herdr settle waits ----------------------------------------
+#
+# Two calls in this dispatch bring something up that is not usable the instant
+# herdr answers: `tab create` returns a pane whose shell is not interactive yet
+# (`agent start` on it is refused with `agent_pane_busy`), and `agent start`
+# returns `"agent_status":"idle"` for a claude TUI whose key-input loop is not
+# attached yet (the prompt is swallowed and the session sits empty — the #1571
+# report). ~5s was measured to fail every time and ~13s to land (#1560), so 13
+# is the repo standard at both points.
+#
+# Observed by the recorded `sleep` calls, never by wall clock: a timing test
+# that measured elapsed seconds would make the suite pay 26 real seconds per
+# dispatch and still not prove where in the sequence the wait fell.
+
+@test "1571: a fresh dispatch settles before agent start AND before the prompt" {
+    run dispatch
+    assert_success
+    [ "$(_pmv_log_count '^sleep 13$')" -eq 2 ]
+    local _tab _s1 _start _s2 _prompt
+    _tab=$(_pmv_log_line 'herdr tab create')
+    _start=$(_pmv_log_line 'herdr agent start')
+    _prompt=$(_pmv_log_line 'herdr agent prompt')
+    _s1=$(grep -n '^sleep 13$' "$FAKE_HERDR_LOG" | sed -n '1p' | cut -d: -f1)
+    _s2=$(grep -n '^sleep 13$' "$FAKE_HERDR_LOG" | sed -n '2p' | cut -d: -f1)
+    # tab create < settle < agent start < settle < agent prompt
+    [ "$_tab" -lt "$_s1" ]
+    [ "$_s1" -lt "$_start" ]
+    [ "$_start" -lt "$_s2" ]
+    [ "$_s2" -lt "$_prompt" ]
+}
+
+@test "1571: the agent_name_taken fallback settles the pane but not the prompt" {
+    # The pane is still brand new, so the wait before `agent start` is owed
+    # either way; the session the fallback prompts was started by someone else
+    # and is warm by definition, so the second wait is not (#1571 D-2, the same
+    # rule _pmt_launch_fresh follows).
+    FAKE_HERDR_RC_AGENT_START=1
+    FAKE_HERDR_OUT_AGENT_START='{"error":{"code":"agent_name_taken"}}'
+    run dispatch
+    assert_success
+    assert_output --partial "already registered — prompting the existing session"
+    [ "$(_pmv_log_count '^sleep 13$')" -eq 1 ]
+    local _s _start _prompt
+    _s=$(_pmv_log_line '^sleep 13$')
+    _start=$(_pmv_log_line 'herdr agent start')
+    _prompt=$(_pmv_log_line 'herdr agent prompt')
+    [ "$_s" -lt "$_start" ]
+    [ "$_prompt" -gt "$_start" ]
+}
+
+@test "1571: a failed agent start never reaches the prompt settle" {
+    FAKE_HERDR_RC_AGENT_START=1
+    FAKE_HERDR_OUT_AGENT_START='{"error":{"code":"pane_not_ready"}}'
+    run dispatch
+    assert_success
+    assert_output --partial "herdr agent start mv-dotfiles-pr-77 failed"
+    # Only the pre-start wait ran; the dispatch stopped before the prompt one.
+    [ "$(_pmv_log_count '^sleep 13$')" -eq 1 ]
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "agent prompt"
+}
+
+@test "1571: a failed tab create never settles at all" {
+    FAKE_HERDR_RC_TAB_CREATE=1
+    run dispatch
+    assert_success
+    assert_output --partial "herdr tab create failed for label pr-77"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "sleep"
+}
+
+@test "1571: a repo with no derivable agent name settles neither wait" {
+    # The wait sits after the name derivation on purpose: a repo that cannot
+    # produce a herdr-legal name skips out, and paying 13s first would be pure
+    # waste on a path that never touches the pane again.
+    cat >"$WATCHED" <<'JSON'
+{ "acme/...": { "verify_skill": "devx:pr-verify-merged" } }
+JSON
+    run dispatch 'acme/...'
+    assert_success
+    assert_output --partial "cannot derive an agent name"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "sleep"
+}
+
+@test "1571: PMV_SETTLE_SECONDS=0 removes both waits" {
+    # The bats suite must never sleep 13 real seconds twice per dispatch — the
+    # same escape hatch _IW_IDLE_POLL_SLEEP established.
+    export PMV_SETTLE_SECONDS=0
+    run dispatch
+    assert_success
+    assert_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "agent start mv-dotfiles-pr-77"
+    assert_output --partial "agent prompt mv-dotfiles-pr-77"
+    refute_output --partial "sleep"
+}
+
+@test "1571: PMV_SETTLE_SECONDS overrides the duration at both points" {
+    export PMV_SETTLE_SECONDS=7
+    run dispatch
+    assert_success
+    [ "$(_pmv_log_count '^sleep 7$')" -eq 2 ]
+    [ "$(_pmv_log_count '^sleep 13$')" -eq 0 ]
+}
+
+# --- #1571: the shipped block, not just the mirror -------------------------
+
+@test "1571: dispatch.sh.md declares the settle constant with the 13s default" {
+    run grep -qF -- 'PMV_SETTLE_SECONDS="${PMV_SETTLE_SECONDS:-13}"' "$(_pmv_dispatch_doc)"
+    assert_success
+    run grep -qF -- 'pmv_settle() { [ "$PMV_SETTLE_SECONDS" = "0" ] || sleep "$PMV_SETTLE_SECONDS"; }' \
+        "$(_pmv_dispatch_doc)"
+    assert_success
+}
+
+@test "1571: dispatch.sh.md settles between tab create and agent start" {
+    local _doc _tab _settle _start
+    _doc="$(_pmv_dispatch_doc)"
+    _tab=$(grep -n 'TAB_JSON=$(herdr tab create' "$_doc" | head -1 | cut -d: -f1)
+    _settle=$(grep -n '^pmv_settle$' "$_doc" | head -1 | cut -d: -f1)
+    _start=$(grep -n 'herdr agent start "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
+    [ -n "$_tab" ] && [ -n "$_settle" ] && [ -n "$_start" ]
+    [ "$_tab" -lt "$_settle" ]
+    [ "$_settle" -lt "$_start" ]
+}
+
+@test "1571: dispatch.sh.md settles between agent start and agent prompt, fresh only" {
+    local _doc _start _guard _prompt
+    _doc="$(_pmv_dispatch_doc)"
+    _start=$(grep -n 'herdr agent start "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
+    _guard=$(grep -n '^\[ "\$PMV_FRESH_START" = "0" \] || pmv_settle$' "$_doc" | head -1 | cut -d: -f1)
+    _prompt=$(grep -n 'herdr agent prompt "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
+    [ -n "$_start" ] && [ -n "$_guard" ] && [ -n "$_prompt" ]
+    [ "$_start" -lt "$_guard" ]
+    [ "$_guard" -lt "$_prompt" ]
+    # The fallback branch is the one that clears the flag.
+    run grep -qF -- 'PMV_FRESH_START=0' "$_doc"
+    assert_success
+}
+
+@test "1571: dispatch.sh.md does not grow a fourth agent_pane_busy retry loop" {
+    # #1569 unifies the three dispatchers' start logic; a hand-rolled retry
+    # here would be a copy that unification has to undo (#1571 D-3). Comment
+    # lines are skipped — the rationale for NOT retrying names the error code
+    # it is about (same carve-out as R-6 above).
+    run bash -c "grep -vE '^[[:space:]]*#' '$(_pmv_dispatch_doc)' | grep -n 'agent_pane_busy'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}
+
+# --- #1571: the cross-file drift guard ------------------------------------
+#
+# This repo has now shipped the same defect twice by fixing two of the three
+# herdr dispatchers (#1530 -> #1549, #1560 -> #1571). The comments name each
+# other; this pins the values, so the third site cannot quietly stay behind.
+
+_pmv_wait_files() {
+    printf '%s\n' \
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/issue_watcher_cron.sh" \
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/pr_merge_train_cron.sh" \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md"
+}
+
+_PMV_WAIT_ASSIGN='^(_IW_SETTLE_SECONDS|_PMT_SETTLE_SECONDS|PMV_SETTLE_SECONDS|_IW_START_RETRY_SLEEP|_PMT_START_RETRY_SLEEP)='
+
+@test "1571: all five herdr wait constants exist across the three dispatchers" {
+    local _n
+    _n=$(_pmv_wait_files | xargs grep -hE "$_PMV_WAIT_ASSIGN" | wc -l)
+    [ "$_n" -eq 5 ]
+}
+
+@test "1571: no herdr wait constant has drifted off 13" {
+    local _bad
+    _bad=$(_pmv_wait_files | xargs grep -hE "$_PMV_WAIT_ASSIGN" | grep -vE ':-13\}"$' || true)
+    [ -z "$_bad" ] || fail "wait constant not defaulted to 13: ${_bad}"
+}
+
+@test "1571: every herdr wait constant stays env-overridable" {
+    local _bad
+    _bad=$(_pmv_wait_files | xargs grep -hE "$_PMV_WAIT_ASSIGN" |
+        grep -vE '="\$\{[A-Z_]+:-13\}"$' || true)
+    [ -z "$_bad" ] || fail "wait constant is not env-overridable: ${_bad}"
+}
+
+@test "1571: the three dispatchers' wait comments name each other" {
+    local _iw _pmt _doc
+    _iw="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/issue_watcher_cron.sh"
+    _pmt="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/pr_merge_train_cron.sh"
+    _doc="$(_pmv_dispatch_doc)"
+    run grep -qF -- 'PMV_SETTLE_SECONDS' "$_iw"
+    assert_success
+    run grep -qF -- 'PMV_SETTLE_SECONDS' "$_pmt"
+    assert_success
+    run grep -qF -- '_IW_SETTLE_SECONDS' "$_doc"
+    assert_success
+    run grep -qF -- '_PMT_SETTLE_SECONDS' "$_doc"
     assert_success
 }
