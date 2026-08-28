@@ -886,9 +886,12 @@ _assert_not_hung() {
 }
 
 @test "issue_watcher_cron: --help documents the crontab registration example" {
+    # #1579 codex review: the example must match the shipped cron-jobs.json
+    # cadence (*/3), or a reader following --help literally installs a
+    # cron entry running 6x less often than the manifest's own default.
     run bash "${SCRIPT}" --help
     assert_success
-    assert_output --partial "*/5 * * * *"
+    assert_output --partial "*/3 * * * *"
     assert_output --partial "issue_watcher_cron.sh"
     assert_output --partial "cron.log"
 }
