@@ -56,12 +56,25 @@ if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     PMT_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/<head>" \
         '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}')
     if [ -n "$PMT_WT" ] && PMT_AGENTS=$(herdr agent list 2>/dev/null); then
-        # `first`: two agents on one cwd is abnormal — take the first, ignore
-        # the rest, warn about nothing (same rule as the Step 4 hint). The idle
-        # gate stays inside jq, so a tab id exists only for a closable tab —
-        # nothing has to carry a status back out through a delimiter.
-        PMT_TAB=$(printf '%s' "$PMT_AGENTS" | jq -r --arg cwd "$PMT_WT" \
-            '[.result.agents[]? | select(.cwd == $cwd)] | first
+        # Resolve symlinks before comparing: `git worktree list` reports the
+        # path as it was created, herdr reports where the pane actually stands,
+        # and a single symlinked component makes those two strings differ.
+        PMT_PHYS=$( (cd -P "$PMT_WT" 2>/dev/null && pwd -P) || printf '%s\n' "$PMT_WT")
+        # Same predicate as pmv_tab_for_cwd
+        # (../../gh-pr-post-merge-verify/references/dispatch.sh.md) and as
+        # `_iw_live_agents` — the counter whose starvation this block exists to
+        # prevent: match BOTH `cwd` (where the pane was opened) and
+        # `foreground_cwd` (where its shell stands now), on a path BOUNDARY, so
+        # an agent that `cd`-ed one level inside the worktree is still found
+        # while `/work/repo-11` never matches `/work/repo-1`.
+        # `first`: two agents on one worktree is abnormal — take the first,
+        # ignore the rest, warn about nothing (same rule as the Step 4 hint).
+        # The idle gate stays inside jq, so a tab id exists only for a closable
+        # tab — nothing has to carry a status back out through a delimiter.
+        PMT_TAB=$(printf '%s' "$PMT_AGENTS" | jq -r --arg p "$PMT_PHYS" \
+            'def under($b): . == $b or startswith($b + "/");
+             [.result.agents[]?
+              | select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))] | first
              | select(.agent_status == "idle") | .tab_id // empty' 2>/dev/null)
         if [ -n "$PMT_TAB" ]; then
             if herdr tab close "$PMT_TAB" >/dev/null 2>&1; then

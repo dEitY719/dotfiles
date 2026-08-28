@@ -756,6 +756,89 @@ _PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
     [ -z "$output" ]
 }
 
+# --- the soft-fail exit-code contract (PR #1567 review) --------------------
+#
+# Every path through the dispatch is a soft-fail: gh:pr-merge sources it after
+# the merge already happened and after its own report is written, so a non-zero
+# status would abort a caller running under `set -e` over work that succeeded.
+# The tests above pin the *shape* of each terminator; these pin the status.
+
+@test "1565: no path in the extracted dispatch block exits non-zero" {
+    local _out
+    _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    # `return N` inside pmv_tab_for_cwd is a helper's answer to its caller, not
+    # a status the block ever leaves with — only `exit` ends the dispatch.
+    run bash -c "grep -nE 'exit[[:space:]]+[1-9]' '${_out}'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}
+
+@test "1565: the extracted block exits 0 on its unregistered-repo gate" {
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    local _root="${TEST_TEMP_HOME}/fakeroot"
+    mkdir -p "${_root}/docs/.ssot"
+    cp "$WATCHED" "${_root}/docs/.ssot/watched-repos.json"
+
+    run env DOTFILES_ROOT="$_root" TARGET_REPO="acme/not-watched" \
+        TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
+    assert_success
+    [ -z "$output" ]
+}
+
+@test "1565: the extracted block exits 0 on the paths that stop with a WARN" {
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    local _root="${TEST_TEMP_HOME}/fakeroot"
+    mkdir -p "${_root}/docs/.ssot"
+
+    # A herdr stub keeps the run off this machine's real herdr; the block only
+    # needs `command -v herdr` to succeed before it reaches these stops.
+    local _bin="${TEST_TEMP_HOME}/stubbin"
+    mkdir -p "$_bin"
+    printf '#!/bin/sh\nexit 0\n' >"${_bin}/herdr"
+    chmod +x "${_bin}/herdr"
+
+    # 1. A verify_skill outside the allowlist: WARN, stop, status 0.
+    cat >"${_root}/docs/.ssot/watched-repos.json" <<'JSON'
+{ "acme/dotfiles": { "verify_skill": "evil:do-something-else" } }
+JSON
+    run env PATH="${_bin}:${PATH}" DOTFILES_ROOT="$_root" TARGET_REPO="acme/dotfiles" \
+        TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
+    assert_success
+    assert_output --partial 'is not one of devx:pr-verify-merged'
+
+    # 2. The deliberate stale-main-checkout stop: WARN, stop, status 0. Nothing
+    #    has been closed or rebased at that point, and it must stay that way.
+    mkdir -p "${_root}/shell-common/functions"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_name.sh" \
+        "${_root}/shell-common/functions/herdr_agent_name.sh"
+    cat >"${_root}/docs/.ssot/watched-repos.json" <<JSON
+{ "acme/dotfiles": { "verify_skill": "devx:pr-verify-merged",
+  "main_checkout": "${TEST_TEMP_HOME}/not-a-repo" } }
+JSON
+    run env PATH="${_bin}:${PATH}" DOTFILES_ROOT="$_root" TARGET_REPO="acme/dotfiles" \
+        TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
+    assert_success
+    assert_output --partial 'is not a git worktree root'
+}
+
+@test "1565: gh:pr-merge Step 5 cannot leak the staged temp file" {
+    # mktemp'd, sourced, and removed — but the sourced block returns early on
+    # most paths and the caller may run under `set -e`, so the removal has to
+    # be armed as a trap before anything can go wrong.
+    local _skill
+    _skill="$(_pmv_merge_skill)"
+    run grep -qF -- "trap 'rm -f \"\$PMV_SH\"' EXIT INT TERM" "$_skill"
+    assert_success
+    run grep -qF -- 'trap - EXIT INT TERM' "$_skill"
+    assert_success
+}
+
 @test "1565: gh:pr-post-merge-verify survives as a standalone entry point" {
     # Removing the skill would take `/gh-pr-post-merge-verify <N>` — the manual
     # re-run — with it. Step 5 borrows its block; it does not absorb it.

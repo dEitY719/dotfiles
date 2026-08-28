@@ -48,13 +48,27 @@ gh_pr_merge_train_close_impl_tab() {
     local _agent_json
     _agent_json=$(herdr agent list 2>/dev/null) || return 0
 
-    # `first`: two agents on one cwd is abnormal — take the first, ignore the
-    # rest, warn about nothing (same rule as the Step 4 hint). The idle gate
-    # stays inside jq, so a tab id exists only for a closable tab — nothing has
-    # to carry a status back out through a delimiter.
+    # Resolve symlinks before comparing: `git worktree list` reports the path
+    # as it was created, herdr reports where the pane actually stands, and a
+    # single symlinked component makes those two strings differ.
+    local _phys
+    _phys=$( (cd -P "$_wt_path" 2>/dev/null && pwd -P) || printf '%s\n' "$_wt_path")
+
+    # Same predicate as pmv_tab_for_cwd (gh-pr-post-merge-verify's
+    # references/dispatch.sh.md) and as `_iw_live_agents` — the counter whose
+    # starvation this block exists to prevent: match BOTH `cwd` (where the pane
+    # was opened) and `foreground_cwd` (where its shell stands now), on a path
+    # BOUNDARY, so an agent that `cd`-ed one level inside the worktree is still
+    # found while `/work/repo-11` never matches `/work/repo-1`.
+    # `first`: two agents on one worktree is abnormal — take the first, ignore
+    # the rest, warn about nothing (same rule as the Step 4 hint). The idle
+    # gate stays inside jq, so a tab id exists only for a closable tab —
+    # nothing has to carry a status back out through a delimiter.
     local _tab_id
-    _tab_id=$(printf '%s' "$_agent_json" | jq -r --arg cwd "$_wt_path" \
-        '[.result.agents[]? | select(.cwd == $cwd)] | first
+    _tab_id=$(printf '%s' "$_agent_json" | jq -r --arg p "$_phys" \
+        'def under($b): . == $b or startswith($b + "/");
+         [.result.agents[]?
+          | select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))] | first
          | select(.agent_status == "idle") | .tab_id // empty' 2>/dev/null)
 
     [ -n "$_tab_id" ] || return 0

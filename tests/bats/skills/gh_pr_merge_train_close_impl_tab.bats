@@ -19,6 +19,10 @@
 #   5. herdr tab close fails                       → [WARN], never fatal
 #   6. anti-starvation regression: the live count does not grow across N merges
 #   7. doc/fixture drift guard + the SKILL.md pointer
+#   8. PR #1567 review: the lookup matches `.cwd` OR `.foreground_cwd`, on a
+#      path boundary, against the PHYSICAL path — a shell that `cd`'d inside
+#      the worktree and a symlinked worktree path both still resolve, while a
+#      sibling sharing the prefix still does not.
 
 load '../test_helper'
 
@@ -97,6 +101,21 @@ _agents_json() {
     printf '%s]}}' "$out"
 }
 
+# Same, but `cwd` and `foreground_cwd` are set independently:
+# `cwd|foreground_cwd|tab_id|status`. `cwd` is where the pane was opened,
+# `foreground_cwd` where its shell stands now — they diverge the moment the
+# session `cd`s, which is the case _iw_live_agents already counts as live.
+_agents_json_fg() {
+    local spec sep="" out='{"result":{"agents":['
+    local cwd fg tab st
+    for spec in "$@"; do
+        IFS='|' read -r cwd fg tab st <<<"$spec"
+        out+="${sep}{\"cwd\":\"${cwd}\",\"foreground_cwd\":\"${fg}\",\"tab_id\":\"${tab}\",\"agent_status\":\"${st}\"}"
+        sep=","
+    done
+    printf '%s]}}' "$out"
+}
+
 # --- 1. the happy path ----------------------------------------------------
 
 @test "close-impl-tab: an idle agent on the merged worktree gets its tab closed" {
@@ -129,6 +148,96 @@ branch refs/heads/wt/issue-1565/1
     FAKE_AGENT_JSON="$(_agents_json \
         "/home/dev/wt/issue-1000|tab-other|idle" \
         "${WT_DIR}|tab-7|idle")"
+    run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output "tab-7"
+}
+
+# --- 1b. the moved shell and the symlinked path (PR #1567 review) ---------
+#
+# `_iw_live_agents` matches `.cwd` OR `.foreground_cwd`, and pmv_tab_for_cwd
+# matches both on a path boundary against the PHYSICAL path. A lookup that
+# compared only `.cwd`, as a string, left exactly the sessions this step exists
+# to reclaim: the count stayed pinned while the backstop reported nothing to do.
+
+@test "close-impl-tab: an agent whose shell cd'd into a subdir is still closed" {
+    FAKE_AGENT_JSON="$(_agents_json_fg "${WT_DIR}|${WT_DIR}/docs/.ssot|tab-7|idle")"
+    run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output "tab-7"
+}
+
+@test "close-impl-tab: a pane opened inside the worktree (cwd under it) is closed" {
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}/claude/skills|tab-7|idle")"
+    run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output "tab-7"
+}
+
+@test "close-impl-tab: foreground_cwd alone is enough to match the worktree" {
+    # The pane was opened on the main checkout and the shell walked into the
+    # worktree — `.cwd` never matches, `_iw_live_agents` still counts it.
+    FAKE_AGENT_JSON="$(_agents_json_fg "/home/dev/dotfiles|${WT_DIR}/tests|tab-7|idle")"
+    run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output "tab-7"
+}
+
+@test "close-impl-tab: a subdir match still obeys the idle gate" {
+    FAKE_AGENT_JSON="$(_agents_json_fg "${WT_DIR}|${WT_DIR}/docs|tab-7|working")"
+    run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    [ -z "$output" ]
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output ""
+}
+
+@test "close-impl-tab: a sibling path sharing the prefix is not a match" {
+    # `/…/issue-1565` must not swallow `/…/issue-15650` — the boundary is why
+    # the filter appends a slash to the prefix instead of matching it bare.
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}0|tab-other|idle")"
+    run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    [ -z "$output" ]
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output ""
+}
+
+@test "close-impl-tab: a symlinked worktree path still resolves to the agent" {
+    # `git worktree list` answers the path as it was created; herdr answers
+    # where the pane really stands. One symlinked component made the old
+    # string compare miss, and the tab silently survived the merge.
+    local real="${TEST_TEMP_HOME}/real/wt-issue-1565"
+    local link="${TEST_TEMP_HOME}/link-wt"
+    mkdir -p "$real"
+    ln -sfn "$real" "$link"
+
+    FAKE_WORKTREE_LIST="worktree ${link}
+HEAD cccc
+branch refs/heads/wt/issue-1565/1
+"
+    # The agent reports the physical path — the two strings are not equal.
+    FAKE_AGENT_JSON="$(_agents_json "$(cd -P "$real" && pwd -P)|tab-7|idle")"
+    [ "$link" != "$real" ]
+
+    run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output "tab-7"
+}
+
+@test "close-impl-tab: an unresolvable worktree path falls back to the raw string" {
+    # `cd -P` fails for a path that no longer exists on disk; the lookup must
+    # degrade to the literal path rather than to an empty prefix that matches
+    # every agent.
+    FAKE_AGENT_JSON="$(_agents_json \
+        "/home/dev/somewhere-else|tab-other|idle" \
+        "${WT_DIR}|tab-7|idle")"
+    [ ! -e "$WT_DIR" ]
     run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
     assert_success
     run cat "$FAKE_CLOSED_LOG"
@@ -378,7 +487,9 @@ branch refs/heads/wt/issue-2/1
     local f pat
     for pat in \
         '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}' \
-        '.result.agents[]? | select(.cwd == $cwd)' \
+        '" 2>/dev/null && pwd -P)' \
+        'def under($b): . == $b or startswith($b + "/");' \
+        'select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))] | first' \
         'select(.agent_status == "idle")' \
         '.tab_id // empty' \
         '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).' \
