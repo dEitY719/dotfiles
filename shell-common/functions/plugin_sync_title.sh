@@ -146,14 +146,27 @@ _build_sync_title() {
 #
 # A jq failure or a malformed manifest yields no keys, which degrades to the
 # bare <base> rather than an empty subject.
+#
+# The newline-separated list from the helpers is split into positional
+# params with an explicit `while read` loop rather than unquoted `$var`
+# expansion — zsh does not word-split an unquoted parameter by default
+# (no SH_WORD_SPLIT), so `_build_sync_title "$base" $changed` silently
+# collapsed every key into one malformed argument under zsh while working
+# fine under bash/dash (caught by tests/bats/tools/plugin_sync_title_smoke.bats,
+# #1558 codex review). The heredoc form runs the loop in the current shell,
+# not a subshell, so `set --` below actually sticks.
 _plugin_sync_title() {
     _pst_base="$1"
     _pst_changed=$(
         _changed_keys_marketplaces "$2" "$3" 2>/dev/null
         _changed_keys_plugins "$4" "$5" 2>/dev/null
     )
-    # Word splitting is intended: the helpers print one key per line and a
-    # marketplace/plugin key never contains whitespace.
-    # shellcheck disable=SC2086
-    _build_sync_title "$_pst_base" $_pst_changed
+    set --
+    while IFS= read -r _pst_line; do
+        [ -n "$_pst_line" ] || continue
+        set -- "$@" "$_pst_line"
+    done <<PST_EOF
+$_pst_changed
+PST_EOF
+    _build_sync_title "$_pst_base" "$@"
 }
