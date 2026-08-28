@@ -42,23 +42,22 @@ gh_pr_merge_train_close_impl_tab() {
     # empty branch matches nothing, so that case falls out of this same gate.
     local _wt_path
     _wt_path=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/${_branch}" \
-        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' | head -1)
+        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}')
     [ -n "$_wt_path" ] || return 0
 
     local _agent_json
     _agent_json=$(herdr agent list 2>/dev/null) || return 0
 
-    # head -1: two agents on one cwd is abnormal — take the first, ignore the
-    # rest, warn about nothing (same rule as the Step 4 hint).
-    local _match _tab_id _agent_status
-    _match=$(printf '%s' "$_agent_json" | jq -r --arg cwd "$_wt_path" \
-        '.result.agents[]? | select(.cwd == $cwd)
-         | "\(.tab_id)\t\(.agent_status)"' 2>/dev/null | head -1)
-    _tab_id=$(printf '%s' "$_match" | cut -f1)
-    _agent_status=$(printf '%s' "$_match" | cut -f2)
+    # `first`: two agents on one cwd is abnormal — take the first, ignore the
+    # rest, warn about nothing (same rule as the Step 4 hint). The idle gate
+    # stays inside jq, so a tab id exists only for a closable tab — nothing has
+    # to carry a status back out through a delimiter.
+    local _tab_id
+    _tab_id=$(printf '%s' "$_agent_json" | jq -r --arg cwd "$_wt_path" \
+        '[.result.agents[]? | select(.cwd == $cwd)] | first
+         | select(.agent_status == "idle") | .tab_id // empty' 2>/dev/null)
 
     [ -n "$_tab_id" ] || return 0
-    [ "$_agent_status" = "idle" ] || return 0
 
     if herdr tab close "$_tab_id" >/dev/null 2>&1; then
         printf '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).\n' \
