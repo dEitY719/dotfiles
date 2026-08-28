@@ -1282,10 +1282,9 @@ _assert_not_hung() {
     _refute_logged "agent start iw-issue-11 "
 }
 
-# A 16-char repo slug plus a 7-digit issue number overruns herdr's 32-char
-# budget (#1553) — `_iw_agent_name` fails closed and the tick must say this is
-# a *permanent* skip, not a transient one: the same input recurs every tick
-# with no self-correction until the naming scheme changes.
+# Same overrun scenario as `herdr_agent_name.bats` T18b (#1553), run
+# end-to-end here to also pin the permanent-skip WARN wording: the tick must
+# say this is a *permanent* skip, not a transient one.
 @test "issue_watcher_cron: a name overrunning herdr's budget is flagged as a permanent skip" {
     _write_watch_file '[{"repo":"acme/sixteen-char-rep","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
     _set_issues '[{"number":1234567,"repository":{"nameWithOwner":"acme/sixteen-char-rep"},"labels":[]}]'
