@@ -102,8 +102,15 @@ _DEFAULT_ASYNC_WAIT_LIMIT: int = 2
 # `claude/skills/gh-issue-flow/references/stop-guard.md`, both of which now
 # document the marker literally. Reading tool_results here would
 # false-positive on any `Read` of those files (the issue #608 precedent).
+#
+# Optional spaces around each `=` and optional double-quotes around each
+# value are tolerated (agy review, PR #1594 FOLLOW-UP) — an LLM asked to
+# reproduce a fixed-format line is prone to exactly this class of minor
+# formatting drift, and a rigid regex turns that drift into a spurious block
+# instead of the grace it was supposed to grant.
 _ASYNC_WAIT_RE: re.Pattern[str] = re.compile(
-    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=\S+\s+reason=background-worker-delegated\s*$"
+    r'(?m)^\[flow:async-wait\]\s+step\s*=\s*"?(?P<step>[^\s"]+)"?'
+    r'\s+agent\s*=\s*"?[^\s"]+"?\s+reason\s*=\s*"?background-worker-delegated"?\s*$'
 )
 
 
@@ -411,7 +418,24 @@ def _count_async_waits_in_section(
     end: int,
     skill: str,
 ) -> dict[str, int]:
-    """Count `[flow:async-wait]` markers per step id in a section (#1550).
+    """Count TRAILING consecutive `[flow:async-wait]` turns, per step id (#1550).
+
+    A step's count is how many of the TRAILING consecutive assistant
+    messages in the section (walking backward from the section's last
+    message) carried THAT step's marker — not a flat total across the whole
+    section. codex + agy review (PR #1594) both flagged the original
+    flat-total version: an early marker for a step kept excusing it forever
+    after, even on a later turn whose own latest message named no marker at
+    all (or a real `[step:.../...] OK` for a DIFFERENT step, or plain
+    prose). The walk stops the instant a message fails to renew a given
+    step's claim, so the model must keep re-asserting the wait, turn after
+    turn, for grace to keep applying to that step.
+
+    Each assistant message contributes AT MOST 1 to a step's streak — a
+    per-message "did this turn name this step" set, not a count of regex
+    matches within it — so a single turn that happens to mention the marker
+    more than once (e.g. quoted inside explanatory prose) cannot burn
+    through the grace limit by itself (agy review).
 
     Only `role=assistant` text blocks are read, with
     `include_tool_results=False` — see `_ASYNC_WAIT_RE` for why that is
@@ -423,11 +447,12 @@ def _count_async_waits_in_section(
     `step=gh-issue-implement/implement` are both accepted. A value that does
     not name this section's skill is ignored — grace never crosses skills.
     """
-    counts: dict[str, int] = {}
+    per_message_steps: list[set[str]] = []
     for entry in messages[start + 1 : end]:
         msg = _message_payload(entry)
         if msg.get("role") != "assistant":
             continue
+        steps_here: set[str] = set()
         for text in _iter_text_blocks(msg, include_tool_results=False):
             for m in _ASYNC_WAIT_RE.finditer(text):
                 matched_skill, _, step_id = m.group("step").rpartition("/")
@@ -435,7 +460,19 @@ def _count_async_waits_in_section(
                     continue
                 if _normalize_skill(matched_skill) != skill:
                     continue
-                counts[step_id] = counts.get(step_id, 0) + 1
+                steps_here.add(step_id)
+        per_message_steps.append(steps_here)
+
+    all_steps: set[str] = set().union(*per_message_steps) if per_message_steps else set()
+    counts: dict[str, int] = {}
+    for step_id in all_steps:
+        streak = 0
+        for steps_here in reversed(per_message_steps):
+            if step_id not in steps_here:
+                break
+            streak += 1
+        if streak:
+            counts[step_id] = streak
     return counts
 
 

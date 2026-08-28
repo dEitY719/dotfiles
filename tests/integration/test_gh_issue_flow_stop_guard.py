@@ -2698,6 +2698,69 @@ def test_progress_resets_the_async_wait_streak(tmp_path: Path) -> None:
     assert "2/6 sub-skills" in decision["reason"]
 
 
+def test_marker_in_history_but_absent_from_latest_turn_blocks(tmp_path: Path) -> None:
+    """A stale marker must not keep excusing a turn that omits it (PR #1594 review).
+
+    Marker → plain assistant text with no marker and no progress → stop.
+    The original flat-total streak let the FIRST marker grant grace
+    forever; codex and agy both flagged this as BLOCKING. The trailing
+    streak must stop dead at the marker-less message, so this must block —
+    a stale claim from an earlier turn buys nothing on a turn that renews
+    nothing.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _async_wait_text(),
+            _assistant_text("Checking on the background worker's status."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"a stale marker not renewed on the latest turn must not grant grace. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_two_markers_in_one_turn_only_counts_once(tmp_path: Path) -> None:
+    """A turn with the marker repeated (e.g. quoted in explanatory prose) still
+    contributes only 1 to the streak, not 2 (agy review, `findall` regression)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _assistant_text(f"{_async_wait_marker()}\n{_async_wait_marker()}"),
+            _async_wait_text(),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"two markers in one turn plus one more turn is streak 2, still within the default limit. "
+        f"stdout={result.stdout!r}"
+    )
+
+
+def test_async_wait_marker_tolerates_spacing_and_quotes(tmp_path: Path) -> None:
+    """A minor formatting variation (extra spaces, quoted values) still matches
+    (agy review FOLLOW-UP: the regex was too rigid for LLM-reproduced text)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _assistant_text(
+                '[flow:async-wait] step = "gh-issue-implement/implement" '
+                'agent="a1" reason="background-worker-delegated"'
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"quoted/spaced variant must still match. stdout={result.stdout!r}"
+
+
 def test_async_wait_marker_inside_tool_result_does_not_count(tmp_path: Path) -> None:
     """A marker in a `tool_result` is file content, never a turn-ending signal.
 
