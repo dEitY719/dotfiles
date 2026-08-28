@@ -105,11 +105,23 @@ _PMT_AGENT_PREFIX="mt"
 # 있지만 `--wait` 는 프롬프트가 *접수* 될 때까지만 기다린다. tick 이 겹치지 않게
 # 막는 것은 flock 이므로 이 값은 cron 주기와 무관하다.
 _PMT_TIMEOUT_MS="240000"
-# Post-start idle checks (see _pmt_wait_for_idle): 10 checks 0.5s apart, ~5s.
-# The gap is overridable so the bats suite does not pay that in real sleep on
-# every cold-agent path.
+# Post-start idle checks (see _pmt_wait_for_idle): at most 10 checks, this far
+# apart. The gap is overridable so the bats suite does not pay it in real sleep
+# on every cold-agent path. Neither value is the time a healthy launch waits —
+# `herdr agent start` already answers `"agent_status":"idle"`, so the loop
+# returns on its *first* poll and the elapsed time is ~0s. These two only bound
+# the unhealthy case, where the agent never reports idle at all.
 _PMT_IDLE_POLL_MAX="10"
 _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
+
+# Unconditional settle wait between `agent start` and the first prompt
+# (issue #1560); the twin of _IW_SETTLE_SECONDS, whose comment carries the
+# measurement in full. In short: `idle` means "not working", not "accepting
+# keystrokes", so no amount of polling substitutes for it, and raising
+# _PMT_IDLE_POLL_MAX is a no-op. Applied by _pmt_launch_fresh only — the reuse
+# path prompts a session that has been up for a whole cron period and must not
+# pay 13s per PR. Overridable (to 0) so the bats suite does not sleep for real.
+_PMT_SETTLE_SECONDS="${PMT_SETTLE_SECONDS:-13}"
 
 # `herdr agent start` attempts on a freshly created pane (see _pmt_launch_fresh,
 # issue #1512). A pane's shell is not interactive the instant `tab create`
@@ -412,6 +424,16 @@ _pmt_resolve_config_dir() {
             exit 1
         fi
 
+        # A directory that exists is not an account that is logged in
+        # (issue #1561) — `_iw_resolve_config_dir` carries the rationale in
+        # full. Presence and non-emptiness only: no token parsing, no network.
+        if [ ! -r "${_cfg_dir}/.credentials.json" ] ||
+            [ ! -s "${_cfg_dir}/.credentials.json" ]; then
+            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing or empty — the pane would open on 'Not logged in' and every prompt would stall."
+            ux_info "Run: claude-accounts status   (then log that account in)" >&2
+            exit 1
+        fi
+
         printf '%s' "${_cfg_dir}"
     )
 }
@@ -599,10 +621,14 @@ _pmt_start_agent_retrying() {
 # Wait for a freshly started agent to report idle before prompting it.
 # `herdr agent start` only confirms the pane looks interactive — a claude
 # process can have drawn its prompt box before its key-input loop accepts
-# Enter, so the command is typed but never submitted (issue #1399). Capped at
-# ~5s (10 checks, 0.5s apart), far below any sane cron period; hitting the cap
-# still dispatches, because a stalled prompt is reported rather than silently
-# booked as a started train.
+# Enter, so the command is typed but never submitted (issue #1399).
+#
+# This is a *health* check, not the settle wait. A live agent answers `idle` on
+# the first poll, so the normal path leaves here in ~0s — the poll budget only
+# bounds how long a missing agent or a closed pane can hold the tick, and
+# hitting it still prompts, because a stalled prompt is reported rather than
+# silently booked as a started train. The wait that actually makes the prompt
+# land is _pmt_settle, which runs after this (issue #1560).
 _pmt_wait_for_idle() {
     local _agent="$1" _i=0 _status _get_failed=0 _detail=""
 
@@ -617,9 +643,21 @@ _pmt_wait_for_idle() {
         [ "${_PMT_IDLE_POLL_SLEEP}" = "0" ] || sleep "${_PMT_IDLE_POLL_SLEEP}"
     done
 
+    # Counted in checks, not seconds: the gap between them is overridable, so a
+    # wall-clock figure here would be wrong in exactly the runs that read it.
     [ "${_get_failed}" -eq 0 ] ||
         _detail=" (${_get_failed}/${_PMT_IDLE_POLL_MAX} health-check failures)"
-    ux_warning "Agent ${_agent} did not report idle within ~5s${_detail} — prompting anyway."
+    ux_warning "Agent ${_agent} never reported idle in ${_PMT_IDLE_POLL_MAX} checks${_detail} — prompting anyway."
+}
+
+# Let a freshly launched pane settle before typing into it (issue #1560).
+# Separate from _pmt_wait_for_idle on purpose: that one asks herdr a question
+# and can answer "the agent is gone", this one asks nothing and can only wait.
+# Always succeeds — a settle that could fail would skip the prompt it exists to
+# protect, which is a worse outcome than a prompt sent slightly too early.
+_pmt_settle() {
+    [ "${_PMT_SETTLE_SECONDS}" = "0" ] || sleep "${_PMT_SETTLE_SECONDS}" || :
+    return 0
 }
 
 # Hand the whole train over to the session. This is the one place where the
@@ -684,6 +722,11 @@ _pmt_launch_fresh() {
         trap - EXIT INT TERM
         rm -f "${_PMT_ERRF}"
         _pmt_wait_for_idle "${_agent}"
+        # Fresh launch only. The reuse branch in main() and the
+        # `agent_name_taken` fallback below both talk to a session that has
+        # been up for at least a cron period — settling those would cost 13s
+        # per PR for nothing (issue #1560).
+        _pmt_settle
         _pmt_prompt_train "${_agent}"
         return
     fi
@@ -760,6 +803,8 @@ _pmt_usage() {
     ux_bullet_sub "approval gate are what bound it, not a permission prompt"
     ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
     ux_bullet_sub "otherwise            → CLAUDE_CONFIG_DIR=\$HOME/.claude-\${CLAUDE_DEFAULT_ACCOUNT:-personal}"
+    ux_bullet_sub "that directory must exist and hold a non-empty .credentials.json"
+    ux_bullet_sub "  (a logged-out account stalls every prompt — the tick fails fast instead)"
     ux_bullet "crontab"
     ux_bullet_sub "*/15 * * * * /path/to/pr_merge_train_cron.sh --cwd ~/dotfiles >> ~/.local/state/pr-merge-train/cron.log 2>&1"
 }
