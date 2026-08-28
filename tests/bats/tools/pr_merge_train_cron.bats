@@ -280,6 +280,12 @@ _log_count() {
     grep -c -- "$1" "${_LOG}" 2>/dev/null || true
 }
 
+# The value passed to the first `--label` flag in the call log. Field-position
+# lookup, not a fixed column, so it survives flag reordering upstream.
+_pmt_logged_label() {
+    awk '{for (i = 1; i <= NF; i++) if ($i == "--label") { print $(i + 1); exit }}' "${_LOG}"
+}
+
 # A PATH that carries only the stub dir plus symlinks to the system binaries
 # the tick needs — minus the ones named as arguments. Deleting a stub is not
 # enough to make a binary missing: `command -v` keeps walking the inherited
@@ -714,6 +720,15 @@ _hold_lock() {
     _assert_logged "--label mt-dotfiles"
     _refute_logged "--label mt-github.com-acme-dotfiles"
 
+    # `_assert_logged` is a substring match, so it would also pass on a label
+    # that merely starts with `mt-dotfiles`. Pin the whole field instead — the
+    # property under test is "label == agent name", not herdr's agent-name
+    # regex, which does not constrain labels at all. Checked on *both* ticks
+    # below (github.com and GHES), not only the last one — each host gets its
+    # own log, so neither exact match can hide behind the other's pass (#1556
+    # review, agy).
+    assert_equal "$(_pmt_logged_label)" "mt-dotfiles"
+
     local _ghe="${_WORK_DIR}/ghe-dotfiles"
     mkdir -p "${_ghe}"
     git -C "${_ghe}" init -q
@@ -725,14 +740,7 @@ _hold_lock() {
     assert_success
     _assert_logged "--label mt-dotfiles"
     _refute_logged "--label mt-github.samsungds.net-acme-dotfiles"
-
-    # `_assert_logged` is a substring match, so it would also pass on a label
-    # that merely starts with `mt-dotfiles`. Pin the whole field instead — the
-    # property under test is "label == agent name", not herdr's agent-name
-    # regex, which does not constrain labels at all.
-    local _label
-    _label=$(awk '{for (i = 1; i <= NF; i++) if ($i == "--label") { print $(i + 1); exit }}' "${_LOG}")
-    assert_equal "${_label}" "mt-dotfiles"
+    assert_equal "$(_pmt_logged_label)" "mt-dotfiles"
 }
 
 @test "pr_merge_train_cron: the dispatcher never writes to GitHub" {
