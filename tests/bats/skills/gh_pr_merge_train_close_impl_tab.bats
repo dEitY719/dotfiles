@@ -377,10 +377,10 @@ branch refs/heads/wt/issue-2/1
     local fixture="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_train_close_impl_tab.sh"
     local f pat
     for pat in \
-        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' \
+        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}' \
         '.result.agents[]? | select(.cwd == $cwd)' \
-        '"\(.tab_id)\t\(.agent_status)"' \
-        '= "idle" ]' \
+        'select(.agent_status == "idle")' \
+        '.tab_id // empty' \
         '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).' \
         '[WARN] gh:pr-merge-train: herdr tab close %s failed'; do
         for f in "$doc" "$fixture"; do

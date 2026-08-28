@@ -54,16 +54,16 @@ call. Run this **only after** `gh:pr-merge` reported success; a `[SKIPPED]` or
 # never fail the PR it just merged.
 if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
     PMT_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/<head>" \
-        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' | head -1)
+        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}')
     if [ -n "$PMT_WT" ] && PMT_AGENTS=$(herdr agent list 2>/dev/null); then
-        # head -1: two agents on one cwd is abnormal — take the first, ignore
-        # the rest, warn about nothing (same rule as the Step 4 hint).
-        PMT_MATCH=$(printf '%s' "$PMT_AGENTS" | jq -r --arg cwd "$PMT_WT" \
-            '.result.agents[]? | select(.cwd == $cwd)
-             | "\(.tab_id)\t\(.agent_status)"' 2>/dev/null | head -1)
-        PMT_TAB=$(printf '%s' "$PMT_MATCH" | cut -f1)
-        PMT_STATUS=$(printf '%s' "$PMT_MATCH" | cut -f2)
-        if [ -n "$PMT_TAB" ] && [ "$PMT_STATUS" = "idle" ]; then
+        # `first`: two agents on one cwd is abnormal — take the first, ignore
+        # the rest, warn about nothing (same rule as the Step 4 hint). The idle
+        # gate stays inside jq, so a tab id exists only for a closable tab —
+        # nothing has to carry a status back out through a delimiter.
+        PMT_TAB=$(printf '%s' "$PMT_AGENTS" | jq -r --arg cwd "$PMT_WT" \
+            '[.result.agents[]? | select(.cwd == $cwd)] | first
+             | select(.agent_status == "idle") | .tab_id // empty' 2>/dev/null)
+        if [ -n "$PMT_TAB" ]; then
             if herdr tab close "$PMT_TAB" >/dev/null 2>&1; then
                 printf '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).\n' \
                     "$PMT_TAB" "$PMT_WT"
