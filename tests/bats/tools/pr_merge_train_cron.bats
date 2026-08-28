@@ -176,7 +176,7 @@ case "$1 $2" in
 "workspace list")
     if [ "${HERDR_WORKSPACE_EXISTS:-0}" = "1" ]; then
         printf '{"id":"cli:workspace:list","result":{"workspaces":[{"label":"%s","workspace_id":"ws-existing"}]}}\n' \
-            "${HERDR_WORKSPACE_LABEL:-mt-github.com-acme-dotfiles}"
+            "${HERDR_WORKSPACE_LABEL:-mt-dotfiles}"
     else
         printf '%s\n' '{"id":"cli:workspace:list","result":{"workspaces":[]}}'
     fi
@@ -704,14 +704,17 @@ _hold_lock() {
     _assert_logged "herdr agent get mt-dotfiles"
 }
 
-# The workspace label is NOT an agent name — herdr does not validate it, and
-# the label is what finds an already-open workspace. It stays host-qualified
-# (#1403/#1407): dropping the host there would strand the existing workspace
-# and buys nothing, because labels have no 32-character budget to save.
-@test "pr_merge_train_cron: the workspace label stays qualified by the host" {
+# The workspace label equals the agent name (#1549) — herdr does not validate
+# the label, but a train being findable under two different names (`mt-dotfiles`
+# for the agent, `mt-github.com-acme-dotfiles` for the workspace) is exactly the
+# observability gap #1549 fixes. Host/owner stay out of both, same as the agent
+# name (#1530): a second host or owner joining the watch list is the digest
+# case `herdr_agent_name.sh` documents, and it moves both names together.
+@test "pr_merge_train_cron: the workspace label matches the agent name" {
     _run_tick
     assert_success
-    _assert_logged "--label mt-github.com-acme-dotfiles"
+    _assert_logged "--label mt-dotfiles"
+    _refute_logged "--label mt-github.com-acme-dotfiles"
 
     local _ghe="${_WORK_DIR}/ghe-dotfiles"
     mkdir -p "${_ghe}"
@@ -722,8 +725,12 @@ _hold_lock() {
 
     _run_tick
     assert_success
-    _assert_logged "--label mt-github.samsungds.net-acme-dotfiles"
-    _refute_logged "--label mt-github.com-acme-dotfiles"
+    _assert_logged "--label mt-dotfiles"
+    _refute_logged "--label mt-github.samsungds.net-acme-dotfiles"
+
+    local _label
+    _label=$(awk '{for (i = 1; i <= NF; i++) if ($i == "--label") { print $(i + 1); exit }}' "${_LOG}")
+    assert_valid_herdr_name "${_label}"
 }
 
 @test "pr_merge_train_cron: the dispatcher never writes to GitHub" {
