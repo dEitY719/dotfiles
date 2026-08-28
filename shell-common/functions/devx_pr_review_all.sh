@@ -157,7 +157,7 @@ devx_pr_review_all_parse() {
 # must never collapse into the same state (#1527 확정 사항).
 
 devx_pr_review_all_verdict() {
-    local _line _value
+    local _line _value _bracket_inner
 
     # Normalize before matching: fullwidth colon -> ASCII, strip the markdown
     # a reviewer may wrap the line in, drop a leading list dash. Then keep
@@ -182,16 +182,21 @@ devx_pr_review_all_verdict() {
     )
 
     # The unanswered preset template echoed back verbatim is not a verdict.
-    # Its signature is the bracketed alternation `[A|B|C]` — the value opens
-    # with `[` AND carries a `|` inside the brackets. Keying on `|` alone
-    # (the #1527 attempt) threw away real answers like `Verdict: BLOCKING |
-    # 5 findings`; keying on the leading `[` alone throws away `Verdict:
-    # [BLOCKING]`. Both halves are required. The pattern's brackets and pipe
-    # are quoted so `case` reads them as literals, not a bracket expression.
+    # Its signature is the bracketed alternation `[A|B|C]` — the pipe sits
+    # INSIDE the first bracket pair. Checking for `[` and `|` anywhere in the
+    # value (PR #1573 review, agy FOLLOW-UP) misclassified a real verdict
+    # with a bracketed trailing detail, e.g. `[BLOCKING] | [5 findings]`, as
+    # the template. Extract only the first bracket group's content and test
+    # that for a pipe.
     case "$_value" in
-    '['*'|'*']'*)
-        printf 'unknown\n'
-        return 0
+    '['*)
+        _bracket_inner=$(printf '%s\n' "$_value" | sed -n 's/^\[\([^]]*\)\].*/\1/p')
+        case "$_bracket_inner" in
+        *'|'*)
+            printf 'unknown\n'
+            return 0
+            ;;
+        esac
         ;;
     esac
 
@@ -273,11 +278,32 @@ devx_pr_review_all_lane_block() {
             blen = length(beg)
             flen = length(fin)
         }
-        wanted(tagof($0, beg, blen))     { collecting = 1; buf = ""; next }
-        collecting && wanted(tagof($0, fin, flen)) {
-            collecting = 0; last = buf; next
+        {
+            # A collapsed block — open and close markers on the same line —
+            # must be handled before the open-tag rule below: that rule
+            # `next`s immediately, so a close tag trailing on that same line
+            # would never be inspected (PR #1573 review, agy+codex
+            # independently).
+            bp = index($0, beg)
+            if (bp > 0 && wanted(tagof($0, beg, blen))) {
+                bt = tagof($0, beg, blen)
+                rest = substr($0, bp + blen + length(bt) + 4)
+                fp = index(rest, fin)
+                if (fp > 0 && wanted(tagof(rest, fin, flen))) {
+                    last = substr(rest, 1, fp - 1)
+                    next
+                }
+                collecting = 1
+                buf = ""
+                next
+            }
+            if (collecting && wanted(tagof($0, fin, flen))) {
+                collecting = 0
+                last = buf
+                next
+            }
+            if (collecting) { buf = buf $0 "\n" }
         }
-        collecting                       { buf = buf $0 "\n" }
-        END                              { printf "%s", last }
+        END { printf "%s", last }
     '
 }
