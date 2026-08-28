@@ -521,7 +521,7 @@ _iw_live_agents() {
         if (.result.agents | type) == "array"
         then .result.agents[]?
              | (.agent_status // "") as $st
-             | ((.cwd // empty), (.foreground_cwd // empty))
+             | (.cwd, .foreground_cwd) | select(.)
              | [ ., $st ] | @tsv
         else error("no agent list")
         end
@@ -557,10 +557,10 @@ _iw_live_agents() {
                 for (i = 1; i <= m; i++) {
                     if (live[i] == $1 || index(live[i], $1 "/") == 1) {
                         matched = 1
-                        if (state[i] != "idle" && state[i] != "done") working = 1
+                        if (state[i] != "idle" && state[i] != "done") { working = 1; break }
                     }
                 }
-                if (matched) print $2 "\t" $3 "\t" (working ? 0 : 1)
+                if (matched) print $2 "\t" $3 "\t" !working
             }
         ' |
         while IFS="${_IW_TAB}" read -r _repo _number _stopped; do
@@ -576,6 +576,15 @@ _iw_live_agents() {
     [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
 }
 
+# Raw <owner/repo> issue <number> state fetch. The only place the GH_HOST /
+# --json shape is written, so _iw_issue_closed and _iw_cleanup_worktrees stay
+# in lockstep instead of each keeping its own copy of the same `gh` call.
+# Callers decide what a failed read means for them — this just relays it.
+_iw_issue_state() {
+    GH_HOST="$(_iw_repo_host "$1")" gh issue view "$2" --repo "$1" \
+        --json state -q .state
+}
+
 # 0 only when GitHub says <owner/repo> issue <number> is CLOSED. A failed or
 # unparsable read answers "no" on purpose: every caller reclaims something on a
 # yes — a concurrency slot, a worktree — and an unanswered question must never
@@ -587,8 +596,7 @@ _iw_live_agents() {
 _iw_issue_closed() {
     local _state
 
-    _state=$(GH_HOST="$(_iw_repo_host "$1")" gh issue view "$2" --repo "$1" \
-        --json state -q .state </dev/null 2>/dev/null) || return 1
+    _state=$(_iw_issue_state "$1" "$2" </dev/null 2>/dev/null) || return 1
     [ "${_state}" = "CLOSED" ]
 }
 
@@ -1151,7 +1159,7 @@ _iw_select_candidates() {
 # hygiene, not correctness: since NF-1 nothing keys on a worktree's existence,
 # so a worktree that outlives its issue costs disk and nothing else.
 _iw_cleanup_worktrees() {
-    local _wt _repo _number _host _state _root _here _wt_real
+    local _wt _repo _number _state _root _here _wt_real
 
     _here=$(pwd -P)
 
@@ -1169,9 +1177,7 @@ _iw_cleanup_worktrees() {
         case "${_here}/" in "${_wt_real}/"*) continue ;; esac
         ! _iw_live_has "${_repo}" "${_number}" || continue
 
-        _host=$(_iw_repo_host "${_repo}")
-        _state=$(GH_HOST="${_host}" gh issue view "${_number}" --repo "${_repo}" \
-            --json state -q .state 2>/dev/null) || {
+        _state=$(_iw_issue_state "${_repo}" "${_number}" 2>/dev/null) || {
             ux_info "Cannot read ${_repo}#${_number} state — leaving its worktree in place."
             continue
         }

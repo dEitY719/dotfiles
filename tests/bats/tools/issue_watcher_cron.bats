@@ -176,12 +176,7 @@ _set_filler_prs() {
 # it. Both halves are required — that pairing is the running-now signal — so
 # they are set together rather than restated at every concurrency test.
 _set_running() {
-    local _paths=() _n
-    for _n in "$@"; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_live_agents "${_paths[@]}"
+    _set_running_with_status working "$@"
 }
 
 # _set_running's zombie twin (#1596): worktree plus a pane in the given
