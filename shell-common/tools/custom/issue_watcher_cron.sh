@@ -1647,23 +1647,33 @@ EOF
                 [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
                 ux_warning "${_msg}"
-            elif _iw_wait_for_idle "${_agent}" && _iw_settle &&
-                _iw_prompt_issue "${_agent}" "${_number}"; then
-                ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
-                return 0
-            elif [ "$(_iw_agent_status "${_agent}")" = "working" ]; then
-                # A `working` agent is never torn down, whatever the dispatch
-                # reported (#1559). One tick killed a session that was doing
-                # real work three times over, because a failed attempt ran
-                # _iw_cleanup_attempt unconditionally — the prompt call had
-                # failed, the agent had not. Deliberately independent of the
-                # `.error.code` fix in _iw_prompt_once: that parsing is what
-                # silently broke in production, so it is not the only thing
-                # standing between a live session and `gwt remove`.
-                # Only `working` counts — an empty answer is an unreachable
-                # agent, not evidence of work, and still cleans up below.
-                ux_warning "${_agent} reports working despite the failed prompt — keeping worktree ${_wt} and pane ${_pane}, not retrying."
-                return 0
+            elif _iw_wait_for_idle "${_agent}" && _iw_settle; then
+                if _iw_prompt_issue "${_agent}" "${_number}"; then
+                    ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
+                    return 0
+                elif [ "$(_iw_agent_status "${_agent}")" = "working" ]; then
+                    # A `working` agent is never torn down, whatever the dispatch
+                    # reported (#1559). One tick killed a session that was doing
+                    # real work three times over, because a failed attempt ran
+                    # _iw_cleanup_attempt unconditionally — the prompt call had
+                    # failed, the agent had not. Deliberately independent of the
+                    # `.error.code` fix in _iw_prompt_once: that parsing is what
+                    # silently broke in production, so it is not the only thing
+                    # standing between a live session and `gwt remove`.
+                    # Only `working` counts — an empty answer is an unreachable
+                    # agent, not evidence of work, and still cleans up below.
+                    #
+                    # Scoped to *after* _iw_prompt_issue actually ran (agy/codex
+                    # PR #1578 review): this branch used to sit alongside
+                    # _iw_wait_for_idle in the same `&&` chain, so a plain idle
+                    # timeout — the prompt for THIS issue never even sent — could
+                    # also match "working" (the agent busy with unrelated, stale
+                    # state) and get reported as delivered. Nesting it here means
+                    # the guard only ever fires once a prompt attempt for this
+                    # issue was actually made.
+                    ux_warning "${_agent} reports working despite the failed prompt — keeping worktree ${_wt} and pane ${_pane}, not retrying."
+                    return 0
+                fi
             fi
         fi
 
