@@ -248,7 +248,6 @@ pmv_settle
 # `--dangerously-skip-permissions` is required, not a convenience: nobody is at
 # the keyboard of this pane, so one permission prompt would park the
 # verification forever instead of failing it (same reason as #1393).
-PMV_FRESH_START=1
 if ! START_JSON=$(herdr agent start "$PMV_AGENT" --kind claude --pane "$NEW_PANE" \
     -- --dangerously-skip-permissions 2>/dev/null); then
     # Race backstop: the name can be claimed between the probe and the start,
@@ -260,13 +259,14 @@ if ! START_JSON=$(herdr agent start "$PMV_AGENT" --kind claude --pane "$NEW_PANE
             "$PMV_AGENT" "$NEW_PANE" "${START_CODE:-unknown}"
         return 0 2>/dev/null || exit 0
     fi
+    # This session was already registered, so it has been up for a while and
+    # takes the prompt at once — no need to pay the settle wait below.
     printf '[WARN] gh:pr-post-merge-verify: agent %s already registered — prompting the existing session.\n' "$PMV_AGENT"
-    PMV_FRESH_START=0
+else
+    # A just-started claude is idle but not yet listening (#1571) — this
+    # settle wait is what lets it start listening before the prompt lands.
+    pmv_settle
 fi
-# A just-started claude is idle but not yet listening; a session that was
-# already registered has been up for a while and takes the prompt at once, so
-# the fallback path must not pay this (same rule as _pmt_launch_fresh).
-[ "$PMV_FRESH_START" = "0" ] || pmv_settle
 
 # --- 6. F-5: hand the verification over -----------------------------------
 # The registry stores the skill id (`devx:pr-verify-merged`); a pane is typed
