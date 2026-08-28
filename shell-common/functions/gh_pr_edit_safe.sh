@@ -69,15 +69,35 @@
 # Consuming reference docs link here instead of restating this rule.
 #
 # _gh_pr_drop_label return codes:
-#   0  — label removed, OR it was already absent (HTTP 404 → idempotent)
-#   1  — DELETE failed for any other reason (stderr passed through so the
-#        caller can print its own `[WARN]`)
+#   0  — label removed, OR it was verifiably already absent (idempotent)
+#   1  — DELETE failed, and the label is still on the issue OR the state could
+#        not be verified at all (stderr of the original DELETE passed through
+#        so the caller can print its own `[WARN]`)
 #   2  — usage error (missing pr / label / repo)
+#
+# How "already absent" is decided (PR #1583 review, codex BLOCKER): NOT from
+# the DELETE's own error text. GitHub answers a label that is not on the issue,
+# a repo that does not exist, a PR that does not exist and a wrong GH_HOST with
+# the SAME generic `Not Found (HTTP 404)`. Trusting that text would report
+# success to a caller whose repo slug or host was wrong, leaving a stale
+# `review-passed` alive on reviewed-away code — the exact failure #1563 exists
+# to prevent. So a failed DELETE is followed by a verification GET of the
+# issue's ACTUAL label list:
+#   GET ok + label absent  → genuinely idempotent, rc 0, silent
+#   GET ok + label present → the DELETE really failed (permissions, 5xx), rc 1
+#   GET failed             → state unknown (bad repo / PR / host / auth), rc 1
+# Both calls pin GH_HOST through the same subshell, so the verification reads
+# the very server the DELETE was aimed at.
+#
+# The label is percent-encoded before it is spliced into the DELETE URL path:
+# it is a path SEGMENT there (unlike the POST above, where it rides in a `-f`
+# body field), so a label containing `/` or a space would otherwise build a
+# malformed path (agy review, PR #1583). The verification comparison uses the
+# DECODED label — the GET returns decoded names.
 #
 # Unlike the two wrappers above, this helper has no `gh pr edit` primary
 # attempt: a REST DELETE never resolves `projectCards`, so the classic-Projects
-# GraphQL deprecation path (#326) cannot fire. One direct REST call is the
-# whole contract.
+# GraphQL deprecation path (#326) cannot fire. REST is the whole contract.
 #
 # NOTE: This file intentionally has NO interactive guard. It is a pure
 # function-defining library (no top-level side effects) consumed by the
@@ -274,6 +294,28 @@ _gh_pr_edit_safe_body() {
     return 1
 }
 
+# Percent-encode one string for use as a single URL path segment (RFC 3986:
+# everything but the unreserved set `A-Za-z0-9-._~` is escaped, `/` included).
+# Only ever fed a label name, so the O(n) loop costs nothing; it stays in-shell
+# rather than shelling out to jq/python because this file is on the `gh:pr`
+# hot path. `LC_ALL=C` makes ${#s} and the substring byte-wise, so multi-byte
+# UTF-8 labels encode one %XX per byte, as the RFC requires. bash/zsh only —
+# same as the `local` used throughout this file (see the shell=bash directive).
+_gh_pr_edit_safe__urlencode() {
+    local _s="$1" _out="" _c _i=0 _len
+    local LC_ALL=C
+    _len=${#_s}
+    while [ "$_i" -lt "$_len" ]; do
+        _c=${_s:_i:1}
+        case "$_c" in
+            [A-Za-z0-9._~-]) _out="$_out$_c" ;;
+            *)               _out="$_out$(printf '%%%02X' "'$_c")" ;;
+        esac
+        _i=$((_i + 1))
+    done
+    printf '%s' "$_out"
+}
+
 _gh_pr_drop_label() {
     local _pr="$1" _label="$2" _repo="$3" _host="${4-}"
 
@@ -285,6 +327,11 @@ _gh_pr_drop_label() {
     local _err
     _err=$(mktemp) || return 2
 
+    # The label is a URL path SEGMENT here — encode it so `/` or a space in a
+    # label name cannot forge a different path (PR #1583 review).
+    local _label_enc
+    _label_enc=$(_gh_pr_edit_safe__urlencode "$_label")
+
     # `gh api` takes no --repo flag, so the repo lives in the path (#658), and
     # the host is pinned via GH_HOST so a dual-host login cannot delete the
     # label off the wrong server (#1403 / #1407). The export happens inside a
@@ -294,21 +341,40 @@ _gh_pr_drop_label() {
         if [ -n "$_host" ]; then
             export GH_HOST="$_host"
         fi
-        gh api -X DELETE "repos/$_repo/issues/$_pr/labels/$_label"
+        gh api -X DELETE "repos/$_repo/issues/$_pr/labels/$_label_enc"
     ) >/dev/null 2>"$_err"; then
         rm -f "$_err"
         return 0
     fi
 
-    # Idempotent: the label was already absent. `gh` collapses every failure
-    # into one non-zero exit, so the 404 has to be read out of stderr text
-    # (`gh: Not Found (HTTP 404)` matches either pattern). Not a warning —
-    # "already gone" is the normal, most common outcome.
-    if grep -Eq 'HTTP 404|Not Found' "$_err"; then
+    # The DELETE failed, and `gh` collapses every failure into one non-zero
+    # exit. Its stderr cannot tell "label not on this issue" apart from "no
+    # such repo / PR / host" — GitHub returns the same generic
+    # `Not Found (HTTP 404)` for all of them. So don't read the error text:
+    # ask the issue for its real label list, over the same pinned host.
+    local _labels
+    _labels=$(
+        if [ -n "$_host" ]; then
+            export GH_HOST="$_host"
+        fi
+        gh api "repos/$_repo/issues/$_pr/labels" --jq '.[].name' 2>/dev/null
+    ) || {
+        # Verification itself failed — the issue was never reached, so the
+        # DELETE's failure is NOT a benign "already absent". Never swallow.
+        cat "$_err" >&2
+        rm -f "$_err"
+        return 1
+    }
+
+    # Compare the DECODED label: the GET returns names, not URL segments.
+    if ! printf '%s\n' "$_labels" | grep -Fxq -- "$_label"; then
+        # Genuinely idempotent — "already gone" is the normal, most common
+        # outcome, so it stays silent (the caller prints its own `[OK]`).
         rm -f "$_err"
         return 0
     fi
 
+    # Label still on the issue: the DELETE really did fail.
     cat "$_err" >&2
     rm -f "$_err"
     return 1
@@ -319,9 +385,12 @@ _gh_pr_drop_label() {
 # regression, syntax error mid-file, future rename. Without these wrappers
 # label / body edits fall back to plain `gh pr edit`, which silently exits 1
 # on repos with classic Projects attached (the original #326 bug this helper
-# was written to absorb). rc stays 0 — best-effort contract preserved.
+# was written to absorb). `_gh_pr_drop_label` is covered too: undefined, every
+# head-advancing skill silently keeps a stale `review-passed` (#1563). rc stays
+# 0 — best-effort contract preserved.
 if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1 \
-    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1; then
-    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
+    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1 \
+    || ! command -v _gh_pr_drop_label >/dev/null 2>&1; then
+    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} / _gh_pr_drop_label undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
 fi
 :

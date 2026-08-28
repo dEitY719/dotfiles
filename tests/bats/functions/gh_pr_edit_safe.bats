@@ -32,10 +32,18 @@ teardown() {
 #                 deprecation marker → no fallback, error passed through)
 #   rest_fail   — deprecation warning, then REST POST also fails
 #   delete_ok      — `gh api -X DELETE .../labels/<name>` succeeds (#1563)
-#   delete_missing — same DELETE returns `gh: Not Found (HTTP 404)` + exit 1
-#                    (label already absent → idempotent success)
-#   delete_fail    — same DELETE fails for a real reason (5xx / network)
-# A scratch log records every call for assertion: $TEST_TEMP_HOME/gh.log
+#   delete_missing — same DELETE returns `gh: Not Found (HTTP 404)` + exit 1,
+#                    and the verification GET succeeds WITHOUT the label
+#                    (label genuinely absent → idempotent success)
+#   delete_fail    — same DELETE fails for a real reason (5xx), and the
+#                    verification GET still lists the label (real failure)
+#   delete_notfound_repo — DELETE returns the SAME generic 404, but the
+#                    verification GET also fails: bad repo / PR / GH_HOST, so
+#                    the state is unknown and the 404 must NOT be swallowed
+#                    (PR #1583 codex BLOCKER regression guard)
+# A scratch log records every call for assertion: $TEST_TEMP_HOME/gh.log.
+# Each line is prefixed `GH_HOST=<value>` so tests can prove the host pinning
+# actually reaches `gh`'s environment, not just its argv (PR #1583 codex).
 # ---------------------------------------------------------------------------
 _setup_fake_gh() {
     STUB_BIN="$TEST_TEMP_HOME/bin"
@@ -44,9 +52,10 @@ _setup_fake_gh() {
     : >"$GH_LOG"
     cat >"$STUB_BIN/gh" <<'GH'
 #!/usr/bin/env bash
-# Record the invocation for inspection.
-{ printf 'gh'; for a in "$@"; do printf ' %q' "$a"; done; printf '\n'; } \
-    >>"$GH_LOG"
+# Record the invocation for inspection, prefixed with the GH_HOST this
+# process actually inherited (empty when the caller pinned nothing).
+{ printf 'GH_HOST=%s gh' "${GH_HOST-}"; for a in "$@"; do printf ' %q' "$a"; done
+  printf '\n'; } >>"$GH_LOG"
 
 mode="${FAKE_GH_MODE:-ok}"
 
@@ -100,9 +109,34 @@ fi
 # `gh api -X DELETE .../issues/N/labels/<name>` — label drop (#1563)
 if [ "$1" = "api" ] && [ "$3" = "DELETE" ]; then
     case "$mode" in
-        delete_missing) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
-        delete_fail)    echo "gh: Internal Server Error (HTTP 500)" >&2; exit 1 ;;
-        *)              exit 0 ;;
+        delete_missing)       echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
+        delete_fail)          echo "gh: Internal Server Error (HTTP 500)" >&2; exit 1 ;;
+        delete_notfound_repo) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
+        *)                    exit 0 ;;
+    esac
+fi
+
+# `gh api repos/O/R/issues/N/labels --jq .[].name` — verification GET after a
+# failed DELETE (#1583). No `-X`, so $2 is the path. Emits post-`--jq` output
+# (newline-separated names), matching the `gh label list` shim above.
+if [ "$1" = "api" ] && [ "$2" != "-X" ]; then
+    case "$2" in
+        repos/*/issues/*/labels)
+            case "$mode" in
+                delete_missing)
+                    # Label genuinely gone → idempotent success.
+                    printf 'bug\nskill\n'; exit 0 ;;
+                delete_fail)
+                    # Label still there → the 500 was a real failure.
+                    printf 'bug\nreview-passed\n'; exit 0 ;;
+                delete_notfound_repo)
+                    # Bad repo / PR / host: verification cannot answer either.
+                    echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
+                *)
+                    # delete_ok never reaches here; keep it harmless.
+                    exit 0 ;;
+            esac
+            ;;
     esac
 fi
 
@@ -135,6 +169,9 @@ _run_helper() {
         export PATH='${STUB_BIN}:${PATH}'
         export FAKE_GH_MODE='${mode}'
         export GH_LOG='${GH_LOG}'
+        # The shim logs the GH_HOST it inherited; an ambient one from the
+        # developer's shell would make those assertions non-deterministic.
+        unset GH_HOST
         . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh'
         ${snippet}
         echo \"rc=\$?\"
@@ -342,20 +379,88 @@ _run_helper() {
     assert_output "1"
 }
 
-@test "drop: delete_missing mode — 404 is idempotent success, not a warning" {
+@test "drop: delete_missing mode — 404 verified absent is idempotent success, not a warning" {
     _run_helper delete_missing \
         '_gh_pr_drop_label 99 review-passed fake/repo github.com 2>&1'
     assert_output --partial "rc=0"
     # stderr must be swallowed — a missing label is the normal case.
     refute_output --partial "Not Found"
     refute_output --partial "HTTP 404"
+    # The 404 alone proved nothing: a verification GET of the real label list
+    # is what licensed the rc=0 (#1583).
+    run grep -c 'api repos/fake/repo/issues/99/labels ' "$GH_LOG"
+    assert_output "1"
 }
 
-@test "drop: delete_fail mode — real failure returns rc=1 with stderr passed through" {
+@test "drop: delete_fail mode — label still listed, rc=1 with stderr passed through" {
     _run_helper delete_fail \
         '_gh_pr_drop_label 99 review-passed fake/repo github.com 2>&1'
     assert_output --partial "rc=1"
     assert_output --partial "Internal Server Error"
+    # Verification ran and found the label still attached.
+    run grep -c 'api repos/fake/repo/issues/99/labels ' "$GH_LOG"
+    assert_output "1"
+}
+
+@test "drop: delete_notfound_repo mode — unverifiable 404 must NOT be swallowed (rc=1)" {
+    # PR #1583 codex BLOCKER: GitHub answers a bad repo slug, a bad PR number
+    # and a wrong GH_HOST with the very same generic `Not Found (HTTP 404)` as
+    # "label not on this issue". Reading the DELETE's stderr would report
+    # success to a caller that never reached the issue at all, leaving a stale
+    # `review-passed` alive on unreviewed code. When the verification GET also
+    # fails, the state is unknown → surface the original error, rc=1.
+    _run_helper delete_notfound_repo \
+        '_gh_pr_drop_label 99 review-passed typo/repo github.com 2>&1'
+    assert_output --partial "rc=1"
+    assert_output --partial "Not Found"
+    # Both calls were attempted: the DELETE, then the verification GET.
+    run grep -c 'api .*DELETE' "$GH_LOG"
+    assert_output "1"
+    run grep -c 'api repos/typo/repo/issues/99/labels ' "$GH_LOG"
+    assert_output "1"
+}
+
+@test "drop: host argument reaches gh as the GH_HOST env var, not just argv" {
+    # PR #1583 codex FOLLOW-UP: the pinning (#1403 / #1407) is an exported
+    # env var inside a subshell, invisible in argv — assert on the value the
+    # `gh` process actually inherited.
+    _run_helper delete_ok \
+        '_gh_pr_drop_label 99 review-passed fake/repo github.example.com 2>&1'
+    assert_output --partial "rc=0"
+    run grep -c '^GH_HOST=github.example.com gh api .*DELETE' "$GH_LOG"
+    assert_output "1"
+}
+
+@test "drop: no host argument leaves GH_HOST unset so gh's own default applies" {
+    _run_helper delete_ok '_gh_pr_drop_label 99 review-passed fake/repo 2>&1'
+    assert_output --partial "rc=0"
+    run grep -c '^GH_HOST= gh api .*DELETE' "$GH_LOG"
+    assert_output "1"
+}
+
+@test "drop: label is percent-encoded into the URL path segment" {
+    # PR #1583 agy FOLLOW-UP: the label is a path SEGMENT in the DELETE URL
+    # (unlike the POST above, where it rides in a `-f` body field). A raw `/`
+    # or space would forge a different path — and, post-#1583, a 404 from a
+    # malformed path is indistinguishable from "genuinely absent".
+    _run_helper delete_ok \
+        "_gh_pr_drop_label 99 'needs review/ci' fake/repo github.com 2>&1"
+    assert_output --partial "rc=0"
+    run grep -c 'repos/fake/repo/issues/99/labels/needs%20review%2Fci' "$GH_LOG"
+    assert_output "1"
+    # The raw, unencoded form must never appear in the path.
+    run grep -c 'labels/needs review/ci' "$GH_LOG"
+    assert_output "0"
+}
+
+@test "drop: unreserved characters survive encoding unescaped" {
+    # RFC 3986 unreserved set (A-Za-z0-9-._~) must pass through untouched, or
+    # every ordinary label name would arrive mangled.
+    _run_helper delete_ok \
+        '_gh_pr_drop_label 99 review-passed.v2_x~y fake/repo github.com 2>&1'
+    assert_output --partial "rc=0"
+    run grep -c 'labels/review-passed\.v2_x~y' "$GH_LOG"
+    assert_output "1"
 }
 
 # ---------------------------------------------------------------------------
@@ -364,7 +469,9 @@ _run_helper() {
 # multi-function self-check (verifies BOTH `_gh_pr_edit_safe_label` and
 # `_gh_pr_edit_safe_body`) but there were no Bats cases proving (a) the
 # warning stays silent on a healthy source and (b) it fires when either
-# wrapper is undefined post-source.
+# wrapper is undefined post-source. PR #1583 added a third clause for
+# `_gh_pr_drop_label` (#1563); the synthetic stubs below mirror the tail
+# verbatim, so they must be updated in lockstep with it.
 # ---------------------------------------------------------------------------
 
 @test "self-check (#724): healthy gh_pr_edit_safe source emits no BUG warning" {
@@ -389,8 +496,9 @@ _run_helper() {
 # Simulate: future regression — both wrappers never get defined.
 # Trailing self-check (copied verbatim from gh_pr_edit_safe.sh tail):
 if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1 \
-    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1; then
-    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
+    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1 \
+    || ! command -v _gh_pr_drop_label >/dev/null 2>&1; then
+    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} / _gh_pr_drop_label undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
 fi
 :
 STUB
@@ -399,7 +507,7 @@ STUB
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial \
-        "BUG: _gh_pr_edit_safe_{label,body} undefined after source"
+        "BUG: _gh_pr_edit_safe_{label,body} / _gh_pr_drop_label undefined after source"
 }
 
 @test "self-check (#724): partial wrappers (label only) still triggers warning" {
@@ -413,8 +521,9 @@ STUB
 _gh_pr_edit_safe_label() { return 0; }
 # Trailing self-check (copied verbatim from gh_pr_edit_safe.sh tail):
 if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1 \
-    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1; then
-    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
+    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1 \
+    || ! command -v _gh_pr_drop_label >/dev/null 2>&1; then
+    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} / _gh_pr_drop_label undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
 fi
 :
 STUB
@@ -423,7 +532,34 @@ STUB
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial \
-        "BUG: _gh_pr_edit_safe_{label,body} undefined after source"
+        "BUG: _gh_pr_edit_safe_{label,body} / _gh_pr_drop_label undefined after source"
+}
+
+@test "self-check (#724): both edit wrappers present but _gh_pr_drop_label missing still warns" {
+    # PR #1583 agy FOLLOW-UP: the self-check grew a third clause when
+    # `_gh_pr_drop_label` (#1563) joined the file. Undefined, every
+    # head-advancing skill silently keeps a stale `review-passed` — exactly
+    # the class of silent breakage #724 exists to shout about. Defines BOTH
+    # edit wrappers so only the new clause can fire.
+    cat >"$BATS_TEST_TMPDIR/no_drop_edit_safe.sh" <<'STUB'
+#!/bin/sh
+# Define both edit wrappers — only the drop helper is missing.
+_gh_pr_edit_safe_label() { return 0; }
+_gh_pr_edit_safe_body() { return 0; }
+# Trailing self-check (copied verbatim from gh_pr_edit_safe.sh tail):
+if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1 \
+    || ! command -v _gh_pr_edit_safe_body >/dev/null 2>&1 \
+    || ! command -v _gh_pr_drop_label >/dev/null 2>&1; then
+    printf '[gh_pr_edit_safe] BUG: _gh_pr_edit_safe_{label,body} / _gh_pr_drop_label undefined after source — PR edit safe-fallback will silently no-op. See dotfiles #724.\n' >&2
+fi
+:
+STUB
+    run bash --noprofile --norc -c \
+        ". \"$BATS_TEST_TMPDIR/no_drop_edit_safe.sh\" 2>&1; echo \"rc=\$?\""
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial \
+        "BUG: _gh_pr_edit_safe_{label,body} / _gh_pr_drop_label undefined after source"
 }
 
 # ---------------------------------------------------------------------------
