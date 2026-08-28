@@ -94,13 +94,6 @@ _PMT_PR_LIMIT="50"
 # 32-character budget; the rationale and its expiry condition live in
 # shell-common/functions/herdr_agent_name.sh.
 _PMT_AGENT_PREFIX="mt"
-# Workspace label prefix. issue-watcher labels its workspaces with the repo
-# directory's basename; the train must not land in those tabs, so it carries
-# its own prefix (issue #1470, Impact). Unlike the agent name this stays
-# host-qualified: herdr does not validate labels, the label is how an
-# already-open workspace is found, and shortening it would strand the existing
-# workspace for nothing.
-_PMT_WORKSPACE_PREFIX="mt-"
 
 # `herdr agent prompt --wait` 한 번의 상한 — 4분. train 자체는 수십 분을 돌 수
 # 있지만 `--wait` 는 프롬프트가 *접수* 될 때까지만 기다린다. tick 이 겹치지 않게
@@ -313,23 +306,16 @@ _pmt_acquire_lock() {
     fi
 }
 
-# Echo the tick's herdr *workspace label* — e.g. `mt-github.com-acme-dotfiles`.
-# Host and repo come from the one remote URL _pmt_bind_target read them out of;
-# the label is host-qualified because `owner/repo` is only unique per server
-# (#1403/#1407).
-#
-# This builds a label and nothing else since #1530. The agent name used to come
-# from the same generic `<prefix><slug>` helper, and that fold *keeps* uppercase
-# and dots (both are inside the `tr -c` set) — which herdr's
-# `^[a-z][a-z0-9_-]{0,31}$` rejects, so the train never started once. Labels are
-# not validated by herdr and carry no length budget, so they keep the wider,
-# host-qualified form; agent names go through `herdr_agent_name` over
-# `_PMT_REPO` alone, because 32 characters have no room for the host (see the
-# _PMT_AGENT_PREFIX comment). Taking no prefix argument is what keeps the two
-# apart: there is no longer a generic slug helper an agent tag can be fed to.
+# Echo the tick's herdr *workspace label* — the same string as the agent name
+# (#1549). Before #1549 this built its own host-qualified fold
+# (`mt-github.com-<owner>-<repo>`), so the same train answered to two names:
+# `herdr workspace list` showed one, `herdr agent get` the other, with no way
+# to cross-reference them. herdr does not validate labels, but "workspace ==
+# agent" is a user decision (#1549), not a validation requirement — dropping
+# host/owner here rides on the same one-repo-in-watched-repos.json guard
+# `herdr_agent_name.sh` documents, and expires together with it.
 _pmt_workspace_label() {
-    printf '%s%s' "${_PMT_WORKSPACE_PREFIX}" \
-        "$(printf '%s/%s' "${_PMT_HOST}" "${_PMT_REPO}" | tr -c 'A-Za-z0-9._-' '-')"
+    herdr_agent_name "${_PMT_AGENT_PREFIX}" "${_PMT_REPO}"
 }
 
 # Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
@@ -668,7 +654,10 @@ _pmt_prompt_train() {
 _pmt_launch_fresh() {
     local _agent="$1" _cwd="$2" _label _ws _msg _cause
 
-    _label=$(_pmt_workspace_label)
+    _label=$(_pmt_workspace_label) || {
+        ux_error "Cannot derive a herdr workspace label from ${_PMT_REPO} — ending this tick."
+        return 1
+    }
 
     # Only this path opens a pane, so this is the only path that needs an
     # account to open it with. Resolving it in main() would make every reuse
