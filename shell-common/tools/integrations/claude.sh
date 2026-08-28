@@ -576,6 +576,28 @@ _claude_resolve_account() {
     return 1
 }
 
+# _claude_account_logged_in <config-dir> — "이 계정 디렉터리가 로그인 상태인가".
+# 0 = logged in, 1 = not. 출력 없음, 네트워크 호출 없음.
+#
+# 디렉터리 존재는 로그인이 아니다 (issue #1561): `claude-accounts setup` 이
+# 디렉터리를 만들고, 채우는 것은 로그인이다. 로그아웃된 계정으로 열린 팬은
+# `Not logged in · Run /login` 화면에서 모든 키 입력을 흘리므로, 무인
+# 디스패처는 이를 `agent_prompt_stalled` 로 오인해 보고한다.
+#
+# 존재·비어있지 않음만 본다. 토큰을 파싱하면 이 코드가 Claude Code 의 비공개
+# credential 포맷에 묶이고, API 로 확인하면 매 cron tick 에 네트워크 왕복이
+# 생긴다 — #1561 에서 둘 다 기각됐다.
+#
+# 규칙이 여기 사는 이유: "무슨 파일이 로그인을 뜻하는가" 는 이 파일이 이미
+# 세 군데(claude_accounts_status, claude_accounts_rollback)에서 손으로 쓰고
+# 있던 계약이다. #1530 이 남긴 교훈대로, 복사된 규칙은 복사된 만큼 어긋난다.
+_claude_account_logged_in() {
+    [ -n "${1:-}" ] || return 1
+    [ -r "$1/.credentials.json" ] || return 1
+    [ -s "$1/.credentials.json" ] || return 1
+    return 0
+}
+
 # _claude_expected_email <account-name> — expected oauth email lookup.
 # Reads CLAUDE_ACCOUNT_EMAIL_<account> if defined, else echoes nothing.
 # Opt-in mapping convention from issue #300, items B and C — kept in a

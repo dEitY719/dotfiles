@@ -108,14 +108,8 @@ _set_prs() {
     printf '%s\n' "$1" >"${_WORK_DIR}/prs.json"
 }
 
-# A claude account directory that is *logged in* — the directory plus a
-# non-empty `.credentials.json` (issue #1561). Both halves are load-bearing:
-# since #1561 a directory without credentials fails the tick fast, so a fixture
-# that only ran `mkdir` would make every launch test red.
-_make_account() {
-    mkdir -p "$1"
-    printf '{"claudeAiOauth":{"accessToken":"test"}}\n' >"$1/.credentials.json"
-}
+# `_make_account` — a logged-in claude account directory. Lives in
+# ../test_helper.bash; issue_watcher_cron.bats fixtures the same rule.
 
 # ---------------------------------------------------------------------------
 # Stubs
@@ -232,20 +226,8 @@ EOF
     chmod +x "${_BIN_DIR}/herdr"
 }
 
-# sleep: logs the wait it was asked for and returns immediately. The settle
-# wait added in #1560 is *unconditional* and defaults to 13 real seconds, so a
-# suite without this stub would pay it on every fresh-launch test — and, worse,
-# would have no way to tell "the tick settled" from "the tick was slow". Every
-# other wait in the tick is already overridden to 0 by _run_tick, so a logged
-# `sleep` line is the settle wait and nothing else.
-_install_sleep_stub() {
-    cat >"${_BIN_DIR}/sleep" <<'EOF'
-#!/bin/sh
-printf 'sleep %s\n' "$*" >>"${CALL_LOG}"
-exit 0
-EOF
-    chmod +x "${_BIN_DIR}/sleep"
-}
+# `_install_sleep_stub` — the #1560 settle-wait stub. Lives in
+# ../test_helper.bash; issue_watcher_cron.bats installs the same one.
 
 _install_stubs() {
     _install_gh_stub

@@ -1319,7 +1319,7 @@ MENTION
 # The shipped manifest (issue #1561)
 # ---------------------------------------------------------------------------
 #
-# The only tests in this file that read the real
+# Like the "shipped manifest" section above, these read the real
 # shell-common/tools/custom/cron-jobs.json rather than a fixture. They are the
 # exception the header rule anticipates: what these two jobs are routed at is
 # not a property of aicron, it is a property of the file that ships, and #1561
