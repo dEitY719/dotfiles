@@ -38,8 +38,11 @@ _pg_service_lines() {
 _load_services() {
     services=()
     if [[ -f "$PG_SERVICES_FILE" ]]; then
-        # POSIX 호환 방식으로 배열에 데이터 할당 (mapfile 대신 while read 사용)
-        while IFS= read -r _line; do
+        # bash/zsh 호환 방식으로 배열에 데이터 할당 (mapfile 대신 while read 사용).
+        # `|| [[ -n "$_line" ]]` 은 파일이 trailing newline 없이 끝나도 마지막
+        # 줄을 잃지 않게 한다 (마지막 read 는 실패를 리턴하지만 변수는 채운다).
+        local _line
+        while IFS= read -r _line || [[ -n "$_line" ]]; do
             [[ -n "$_line" ]] && services+=("$_line")
         done < <(_pg_service_lines)
     fi
@@ -649,8 +652,10 @@ psql_sync() {
     # Get list of all DBs (excluding templates and postgres core)
     local all_dbs=()
     local _db_line
-    # POSIX 호환 방식으로 배열에 데이터 할당 (mapfile 대신 while read 사용)
-    while IFS= read -r _db_line; do
+    # bash/zsh 호환 방식으로 배열에 데이터 할당 (mapfile 대신 while read 사용).
+    # `|| [[ -n "$_db_line" ]]` 은 trailing newline 없는 출력에서도 마지막
+    # 행을 잃지 않게 한다.
+    while IFS= read -r _db_line || [[ -n "$_db_line" ]]; do
         [[ -n "$_db_line" ]] && all_dbs+=("$_db_line")
     done < <(_admin_sql "postgres" "SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';" -tA)
 
