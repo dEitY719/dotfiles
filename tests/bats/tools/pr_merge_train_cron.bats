@@ -157,7 +157,12 @@ EOF
 #                         lives in a `mktemp -d` made fresh by `setup()`.
 #   HERDR_TAB_CLOSE_FAIL=1  `tab close` errors — the cleanup of an orphaned tab
 #                         is best effort and must not become a second failure
-#   HERDR_PROMPT_FAIL=1   `agent prompt` errors
+#   HERDR_PROMPT_FAIL=1   `agent prompt` errors with `agent_not_found` on
+#                         stdout — a real failure, not a #1551 timeout
+#   HERDR_PROMPT_CODE=X   `agent prompt` errors with code X on **stderr** —
+#                         where herdr really answers a prompt failure
+#                         (#1551), same as `agent start`'s agent_pane_busy
+#                         below
 #
 # The `agent_pane_busy` document goes to **stderr**, which is not decoration:
 # that is where herdr really put it, and a dispatcher that redirects the stream
@@ -214,6 +219,11 @@ case "$1 $2" in
     printf '%s\n' '{"id":"cli:tab:close","result":{"ok":true}}'
     ;;
 "agent prompt")
+    if [ -n "${HERDR_PROMPT_CODE:-}" ]; then
+        printf '{"error":{"code":"%s","message":"%s"},"id":"cli:agent:prompt"}\n' \
+            "${HERDR_PROMPT_CODE}" "${HERDR_PROMPT_MESSAGE:-stub prompt error}" >&2
+        exit 1
+    fi
     if [ "${HERDR_PROMPT_FAIL:-0}" = "1" ]; then
         printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:prompt"}'
         exit 1
@@ -754,6 +764,49 @@ _hold_lock() {
     _run_tick HERDR_PROMPT_FAIL=1
     assert_failure
     assert_output --partial "prompt failed"
+}
+
+# #1551: `--wait` only bounds the *observation* of a state change after
+# submission — a `timeout` here means the prompt landed and only the wait
+# window expired, not that dispatch failed. Counting it as a failure is what
+# kept #1531's `Tick complete` acceptance criterion from ever firing on a
+# train that was actually running.
+@test "pr_merge_train_cron: a prompt timeout is treated as dispatched, not failed" {
+    _run_tick HERDR_PROMPT_CODE=timeout
+    assert_success
+    assert_output --partial "treating as dispatched"
+    assert_output --partial "Dispatched to"
+    refute_output --partial "prompt failed"
+}
+
+@test "pr_merge_train_cron: a stalled prompt is also treated as dispatched" {
+    _run_tick HERDR_PROMPT_CODE=agent_prompt_stalled
+    assert_success
+    assert_output --partial "treating as dispatched"
+}
+
+# The same defect this fixes also swallowed the error *cause* (#1551's other
+# half): `2>/dev/null` threw away herdr's error document, so every failure —
+# timeout included — logged as "(unknown)". This pins that the code now
+# reads from stderr, where herdr actually answers.
+@test "pr_merge_train_cron: a prompt timeout names the code, not 'unknown'" {
+    _run_tick HERDR_PROMPT_CODE=timeout
+    assert_success
+    assert_output --partial "(timeout)"
+    refute_output --partial "(unknown)"
+}
+
+@test "pr_merge_train_cron: a prompt timeout is not retried" {
+    _run_tick HERDR_PROMPT_CODE=timeout
+    assert_success
+    [ "$(_log_count 'herdr agent prompt')" -eq 1 ]
+}
+
+@test "pr_merge_train_cron: a non-timeout prompt error on stderr still fails the tick" {
+    _run_tick HERDR_PROMPT_CODE=agent_not_found
+    assert_failure
+    assert_output --partial "prompt failed"
+    assert_output --partial "(agent_not_found)"
 }
 
 # herdr refuses `agent start` unless the name matches
