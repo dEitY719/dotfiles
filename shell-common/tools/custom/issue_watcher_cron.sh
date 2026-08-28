@@ -145,9 +145,30 @@ _IW_AGENT_PREFIX="iw"
 # flock 이므로 이 값은 cron 주기와 무관하다. 무응답 pane 하나가 tick 을 무한정
 # 붙들지 않게 하는 것이 목적이다.
 _IW_TIMEOUT_MS="240000"
-# Gap between the post-start idle checks (see _iw_wait_for_idle). Overridable
-# so the bats suite does not pay ~5s of real sleep per cold-agent path.
+# Post-start idle checks (see _iw_wait_for_idle): at most 10 checks, this far
+# apart. The gap is overridable so the bats suite does not pay real sleep on
+# every cold-agent path. Neither value is the time a healthy launch waits —
+# `herdr agent start` already answers `"agent_status":"idle"`, so the loop
+# returns on its *first* poll and the elapsed time is ~0s. These two only bound
+# the unhealthy case, where the agent never reports idle at all.
+_IW_IDLE_POLL_MAX="10"
 _IW_IDLE_POLL_SLEEP="${IW_IDLE_POLL_SLEEP:-0.5}"
+
+# Unconditional settle wait between `agent start` and the first prompt
+# (issue #1560). Not a poll interval and not replaceable by one: `idle` means
+# "not working", not "accepting keystrokes", and a freshly drawn claude TUI is
+# idle while its key-input loop is still unattached. herdr exposes no signal
+# for "the input loop is up", and its own stall window (5000ms) is a fixed
+# internal — so the only knob the dispatcher owns is how long it lets the pane
+# sit before typing into it. Measured on herdr 0.7.5: prompting ~5s after start
+# returns `agent_prompt_stalled` every time, ~13s lands. Raising
+# _IW_IDLE_POLL_MAX instead is a no-op, for the reason above it.
+#
+# Applied on the fresh-launch path only — a warm session takes a prompt at
+# once and must not pay this. Overridable (to 0) for the same reason
+# _IW_IDLE_POLL_SLEEP is: the bats suite must not sleep 13 real seconds per
+# dispatch test.
+_IW_SETTLE_SECONDS="${IW_SETTLE_SECONDS:-13}"
 
 # Round-robin cursor (issue #1453 D-3). Its own file, so `rate-limit.json` and
 # every pre-#1453 state directory stay untouched; a missing file simply means
@@ -739,6 +760,27 @@ _iw_resolve_config_dir() {
         if [ ! -d "${_cfg_dir}" ]; then
             ux_error "Claude account directory missing: ${_cfg_dir} — cannot bootstrap the watcher pane."
             ux_info "Run: claude-accounts setup"
+            exit 1
+        fi
+
+        # A directory that exists is not an account that is logged in
+        # (issue #1561). `claude-accounts setup` creates the directory; only a
+        # completed login puts credentials in it, and a logged-out pane opens on
+        # `Not logged in · Run /login` and drops every keystroke — which the
+        # dispatcher then reports as `agent_prompt_stalled`, a symptom that
+        # names neither the account nor the cause. Fail here instead, where the
+        # account is still in hand.
+        #
+        # Presence and non-emptiness only. Parsing the token would couple this
+        # script to Claude Code's private credential format, and checking it
+        # against the API would put a network round trip in every cron tick —
+        # both rejected in #1561. The whole class of outage seen so far (an
+        # account that was never logged in, or whose file was cleared) is
+        # already caught here.
+        if [ ! -r "${_cfg_dir}/.credentials.json" ] ||
+            [ ! -s "${_cfg_dir}/.credentials.json" ]; then
+            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing or empty — the pane would open on 'Not logged in' and every prompt would stall."
+            ux_info "Run: claude-accounts status   (then log that account in)"
             exit 1
         fi
 
@@ -1369,31 +1411,48 @@ _iw_start_agent_retrying() {
 # Enter, so the command is typed but never submitted and herdr's fixed 5s stall
 # check fires `agent_prompt_stalled` (issue #1399). Pre-#1440 the resident
 # watcher pane got this grace; every dispatched pane needs it now, because each
-# one is cold (PR #1447 codex review). Capped at ~5s (10 checks, 0.5s apart):
-# far below the 5-minute tick interval, and hitting the cap still dispatches
-# because the stall recovery in _iw_prompt_issue is the second line of defence.
+# one is cold (PR #1447 codex review).
+#
+# This is a *health* check, not the settle wait. A live agent answers `idle` on
+# the first poll, so the normal path leaves here in ~0s — the poll budget only
+# bounds how long a missing agent or a closed pane can hold the tick, and
+# hitting that budget still dispatches because the stall recovery in
+# _iw_prompt_issue is the second line of defence. The wait that actually makes
+# the prompt land is _iw_settle, which runs after this (issue #1560).
 _iw_wait_for_idle() {
     local _agent="$1" _i=0 _status _get_failed=0
 
-    while [ "${_i}" -lt 10 ]; do
+    while [ "${_i}" -lt "${_IW_IDLE_POLL_MAX}" ]; do
         if _status=$(_iw_agent_status "${_agent}"); then
             [ "${_status}" != "idle" ] || return 0
         else
             _get_failed=$((_get_failed + 1))
         fi
         _i=$((_i + 1))
-        [ "${_i}" -lt 10 ] || break
+        [ "${_i}" -lt "${_IW_IDLE_POLL_MAX}" ] || break
         [ "${_IW_IDLE_POLL_SLEEP}" = "0" ] || sleep "${_IW_IDLE_POLL_SLEEP}"
     done
 
     # Health-check failures (agent missing / pane closed) and a merely slow
     # `starting` pane both land here — surface the failure count so a genuinely
     # gone agent does not read as "just slow" (PR #1400 codex review).
+    # Counted in checks, not seconds: the gap between them is overridable, so a
+    # wall-clock figure here would be wrong in exactly the runs that read it.
     if [ "${_get_failed}" -gt 0 ]; then
-        ux_warning "Agent ${_agent} did not report idle within ~5s (${_get_failed}/10 health-check failures) — dispatching anyway."
+        ux_warning "Agent ${_agent} never reported idle in ${_IW_IDLE_POLL_MAX} checks (${_get_failed}/${_IW_IDLE_POLL_MAX} health-check failures) — dispatching anyway."
     else
-        ux_warning "Agent ${_agent} did not report idle within ~5s — dispatching anyway."
+        ux_warning "Agent ${_agent} never reported idle in ${_IW_IDLE_POLL_MAX} checks — dispatching anyway."
     fi
+}
+
+# Let a freshly launched pane settle before typing into it (issue #1560).
+# Separate from _iw_wait_for_idle on purpose: that one asks herdr a question
+# and can answer "the agent is gone", this one asks nothing and can only wait.
+# Always succeeds — a settle that could fail would skip the prompt it exists to
+# protect, which is a worse outcome than a prompt sent slightly too early.
+_iw_settle() {
+    [ "${_IW_SETTLE_SECONDS}" = "0" ] || sleep "${_IW_SETTLE_SECONDS}" || :
+    return 0
 }
 
 # Echo herdr's JSON response on stdout; the exit code is herdr's own.
@@ -1573,7 +1632,8 @@ EOF
                 [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
                 ux_warning "${_msg}"
-            elif _iw_wait_for_idle "${_agent}" && _iw_prompt_issue "${_agent}" "${_number}"; then
+            elif _iw_wait_for_idle "${_agent}" && _iw_settle &&
+                _iw_prompt_issue "${_agent}" "${_number}"; then
                 ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
                 return 0
             fi
@@ -2124,6 +2184,7 @@ _iw_usage() {
     ux_bullet_sub "  (that account must be listed in \$CLAUDE_ENABLED_ACCOUNTS)"
     ux_bullet_sub "no \$CLAUDE_ENABLED_ACCOUNTS and no \$CLAUDE_DEFAULT_ACCOUNT → \$HOME/.claude if it exists"
     ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
+    ux_bullet_sub "it must also hold a non-empty .credentials.json — a logged-out account stalls every prompt"
     ux_bullet "crontab"
     ux_bullet_sub "*/5 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
 }

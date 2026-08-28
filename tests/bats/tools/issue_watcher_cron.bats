@@ -48,7 +48,7 @@ setup() {
     # steer the tests.
     export CLAUDE_ENABLED_ACCOUNTS="personal"
     unset CLAUDE_DEFAULT_ACCOUNT
-    mkdir -p "${HOME}/.claude-personal"
+    _make_account "${HOME}/.claude-personal"
 
     _make_repo
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
@@ -105,6 +105,15 @@ _add_worktree() {
 
 _write_watch_file() {
     printf '%s\n' "$1" >"${_WATCH_FILE}"
+}
+
+# A claude account directory that is *logged in* — the directory plus a
+# non-empty `.credentials.json` (issue #1561). Both halves are load-bearing:
+# since #1561 a directory without credentials fails the tick fast, so a fixture
+# that only ran `mkdir` would make every dispatch test red.
+_make_account() {
+    mkdir -p "$1"
+    printf '{"claudeAiOauth":{"accessToken":"test"}}\n' >"$1/.credentials.json"
 }
 
 # The `gh search issues` result set for this test.
@@ -583,10 +592,26 @@ EOF
     chmod +x "${_BIN_DIR}/mktemp"
 }
 
+# sleep: logs the wait it was asked for and returns immediately. The settle
+# wait added in #1560 is *unconditional* and defaults to 13 real seconds, so a
+# suite without this stub would pay it on every dispatch test — and, worse,
+# would have no way to tell "the tick settled" from "the tick was slow". Every
+# other wait in the tick is already overridden to 0 by _run_tick, so a logged
+# `sleep` line is the settle wait and nothing else.
+_install_sleep_stub() {
+    cat >"${_BIN_DIR}/sleep" <<'EOF'
+#!/bin/sh
+printf 'sleep %s\n' "$*" >>"${CALL_LOG}"
+exit 0
+EOF
+    chmod +x "${_BIN_DIR}/sleep"
+}
+
 _install_stubs() {
     _install_gh_stub
     _install_herdr_stub
     _install_gwt_stub
+    _install_sleep_stub
 }
 
 # ---------------------------------------------------------------------------
@@ -1272,6 +1297,54 @@ _assert_not_hung() {
     _agent_get_line=$(grep -n "agent get iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
     _prompt_line=$(grep -n "agent prompt iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
     [ "${_agent_get_line}" -lt "${_prompt_line}" ]
+}
+
+# ---------------------------------------------------------------------------
+# Settle wait after agent start (issue #1560)
+# ---------------------------------------------------------------------------
+#
+# The idle poll above is a health check, not a wait: `herdr agent start` already
+# answers `"agent_status":"idle"`, so _iw_wait_for_idle returns on its first
+# poll and ~0s pass before the prompt. That is exactly why raising the poll
+# budget fixes nothing — the pane is idle and still not listening. These pin
+# the unconditional wait that does the work.
+
+@test "issue_watcher_cron: a fresh pane settles 13s before it is prompted" {
+    _run_tick
+    assert_success
+    _assert_logged "sleep 13"
+}
+
+@test "issue_watcher_cron: the settle wait happens after the idle check, not before" {
+    _run_tick
+    assert_success
+    _idle_line=$(grep -n "agent get iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
+    _settle_line=$(grep -n "^sleep 13$" "${_LOG}" | head -1 | cut -d: -f1)
+    _prompt_line=$(grep -n "agent prompt iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
+    [ "${_idle_line}" -lt "${_settle_line}" ]
+    [ "${_settle_line}" -lt "${_prompt_line}" ]
+}
+
+@test "issue_watcher_cron: IW_SETTLE_SECONDS=0 removes the settle wait entirely" {
+    _run_tick "IW_SETTLE_SECONDS=0"
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    _refute_logged "sleep "
+}
+
+@test "issue_watcher_cron: IW_SETTLE_SECONDS overrides the default duration" {
+    _run_tick "IW_SETTLE_SECONDS=7"
+    assert_success
+    _assert_logged "sleep 7"
+    _refute_logged "sleep 13"
+}
+
+@test "issue_watcher_cron: a dispatch that fails before agent start never settles" {
+    # No pane was opened, so there is nothing to wait for — the 13s must not be
+    # spent on an attempt that cannot prompt anyway.
+    _run_tick "HERDR_TAB_FAIL=1"
+    assert_failure
+    _refute_logged "sleep 13"
 }
 
 @test "issue_watcher_cron: the pane opens on the newest worktree index" {
@@ -2150,7 +2223,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: CLAUDE_DEFAULT_ACCOUNT selects the account dir" {
-    mkdir -p "${HOME}/.claude-work"
+    _make_account "${HOME}/.claude-work"
     _run_tick "CLAUDE_ENABLED_ACCOUNTS=personal work" "CLAUDE_DEFAULT_ACCOUNT=work"
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-work"
@@ -2158,7 +2231,7 @@ _two_repo_fixture() {
 
 @test "issue_watcher_cron: internal setup mode uses ~/.claude without account resolution" {
     printf 'internal\n' >"${HOME}/.dotfiles-setup-mode"
-    mkdir -p "${HOME}/.claude"
+    _make_account "${HOME}/.claude"
     _run_tick "CLAUDE_ENABLED_ACCOUNTS="
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
@@ -2172,6 +2245,43 @@ _two_repo_fixture() {
     _refute_logged "tab create"
 }
 
+# Issue #1561. The directory check above is not enough: `claude-accounts setup`
+# creates the directory, only a completed login fills it. A logged-out pane
+# opens on `Not logged in`, drops every keystroke, and the tick reports
+# `agent_prompt_stalled` — a symptom that names neither the account nor the
+# cause. These pin the failure at the routing step, where the account is still
+# in hand.
+@test "issue_watcher_cron: an account with no credentials fails fast before opening a tab" {
+    rm -f "${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "not logged in"
+    _refute_logged "tab create"
+    _refute_logged "agent start"
+}
+
+@test "issue_watcher_cron: an empty credentials file fails fast the same way" {
+    : >"${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "not logged in"
+    _refute_logged "tab create"
+}
+
+@test "issue_watcher_cron: the credentials check names the file it looked at" {
+    rm -f "${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "${HOME}/.claude-personal/.credentials.json"
+}
+
+@test "issue_watcher_cron: a logged-in account passes the credentials check" {
+    # The mirror of the two above — the guard must not fire on the normal path.
+    _run_tick
+    assert_success
+    _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal"
+}
+
 @test "issue_watcher_cron: unknown account name fails fast with the available list" {
     _run_tick "CLAUDE_DEFAULT_ACCOUNT=ghost"
     assert_failure
@@ -2179,7 +2289,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: falls back to plain ~/.claude when no multi-account setup exists" {
-    mkdir -p "${HOME}/.claude"
+    _make_account "${HOME}/.claude"
     _run_tick -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"

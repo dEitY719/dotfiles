@@ -48,7 +48,7 @@ setup() {
     # developer's own shell env cannot steer the tests.
     export CLAUDE_ENABLED_ACCOUNTS="personal"
     unset CLAUDE_DEFAULT_ACCOUNT
-    mkdir -p "${HOME}/.claude-personal"
+    _make_account "${HOME}/.claude-personal"
 
     _make_repo
     # One target PR, comfortably outside the quiet period, is the default —
@@ -106,6 +106,15 @@ _pr_json_raw_stamp() {
 # The array `gh pr list` answers with.
 _set_prs() {
     printf '%s\n' "$1" >"${_WORK_DIR}/prs.json"
+}
+
+# A claude account directory that is *logged in* — the directory plus a
+# non-empty `.credentials.json` (issue #1561). Both halves are load-bearing:
+# since #1561 a directory without credentials fails the tick fast, so a fixture
+# that only ran `mkdir` would make every launch test red.
+_make_account() {
+    mkdir -p "$1"
+    printf '{"claudeAiOauth":{"accessToken":"test"}}\n' >"$1/.credentials.json"
 }
 
 # ---------------------------------------------------------------------------
@@ -223,9 +232,25 @@ EOF
     chmod +x "${_BIN_DIR}/herdr"
 }
 
+# sleep: logs the wait it was asked for and returns immediately. The settle
+# wait added in #1560 is *unconditional* and defaults to 13 real seconds, so a
+# suite without this stub would pay it on every fresh-launch test — and, worse,
+# would have no way to tell "the tick settled" from "the tick was slow". Every
+# other wait in the tick is already overridden to 0 by _run_tick, so a logged
+# `sleep` line is the settle wait and nothing else.
+_install_sleep_stub() {
+    cat >"${_BIN_DIR}/sleep" <<'EOF'
+#!/bin/sh
+printf 'sleep %s\n' "$*" >>"${CALL_LOG}"
+exit 0
+EOF
+    chmod +x "${_BIN_DIR}/sleep"
+}
+
 _install_stubs() {
     _install_gh_stub
     _install_herdr_stub
+    _install_sleep_stub
 }
 
 # ---------------------------------------------------------------------------
@@ -556,6 +581,78 @@ _hold_lock() {
     _assert_logged "--dangerously-skip-permissions"
 }
 
+# ---------------------------------------------------------------------------
+# Settle wait after agent start (issue #1560)
+# ---------------------------------------------------------------------------
+#
+# `herdr agent start` answers `"agent_status":"idle"` straight away, so
+# _pmt_wait_for_idle returns on its first poll and ~0s pass before the prompt —
+# which is why raising _PMT_IDLE_POLL_MAX fixes nothing. These pin the
+# unconditional wait that does, and pin that the reuse path does not pay it.
+
+@test "pr_merge_train_cron: a fresh pane settles 13s before it is prompted" {
+    _run_tick
+    assert_success
+    _assert_logged "sleep 13"
+}
+
+@test "pr_merge_train_cron: the settle wait happens after the idle check, not before" {
+    _run_tick
+    assert_success
+    _start_line=$(grep -n "herdr agent start" "${_LOG}" | head -1 | cut -d: -f1)
+    _settle_line=$(grep -n "^sleep 13$" "${_LOG}" | head -1 | cut -d: -f1)
+    _prompt_line=$(grep -n "herdr agent prompt" "${_LOG}" | head -1 | cut -d: -f1)
+    [ "${_start_line}" -lt "${_settle_line}" ]
+    [ "${_settle_line}" -lt "${_prompt_line}" ]
+}
+
+@test "pr_merge_train_cron: PMT_SETTLE_SECONDS=0 removes the settle wait entirely" {
+    _run_tick PMT_SETTLE_SECONDS=0
+    assert_success
+    _assert_logged "herdr agent prompt"
+    _refute_logged "sleep "
+}
+
+@test "pr_merge_train_cron: PMT_SETTLE_SECONDS overrides the default duration" {
+    _run_tick PMT_SETTLE_SECONDS=7
+    assert_success
+    _assert_logged "sleep 7"
+    _refute_logged "sleep 13"
+}
+
+# The reuse path is the common case once a train pane is open — one tick every
+# cron period, each prompting a session that has been warm for minutes. A settle
+# there would be 13 wasted seconds per PR, so it must not run (#1560 D-3).
+@test "pr_merge_train_cron: reusing a live session skips the settle wait" {
+    _run_tick PMT_AGENT_STATUS=idle
+    assert_success
+    _assert_logged "herdr agent prompt"
+    _refute_logged "herdr tab create"
+    _refute_logged "sleep "
+}
+
+@test "pr_merge_train_cron: a done session is also prompted without settling" {
+    _run_tick PMT_AGENT_STATUS=done
+    assert_success
+    _assert_logged "herdr agent prompt"
+    _refute_logged "sleep "
+}
+
+# The `agent_name_taken` fallback prompts a session someone else already
+# started — warm by definition, so it takes the reuse rule, not the fresh one.
+@test "pr_merge_train_cron: the agent_name_taken fallback does not settle" {
+    _run_tick HERDR_START_NAME_TAKEN=1
+    assert_success
+    _assert_logged "herdr agent prompt"
+    _refute_logged "sleep "
+}
+
+@test "pr_merge_train_cron: a tick that never starts an agent never settles" {
+    _run_tick HERDR_TAB_FAIL=1
+    assert_failure
+    _refute_logged "sleep "
+}
+
 @test "pr_merge_train_cron: a herdr tab failure ends the tick without a prompt" {
     _run_tick HERDR_TAB_FAIL=1
     assert_failure
@@ -750,6 +847,62 @@ _hold_lock() {
     _refute_logged "gh pr edit"
     _refute_logged "gh pr comment"
     _refute_logged "gh api"
+}
+
+# ---------------------------------------------------------------------------
+# CLAUDE_CONFIG_DIR routing (issue #1393, #1561)
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: the pane is routed at the default account" {
+    _run_tick
+    assert_success
+    _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal"
+}
+
+@test "pr_merge_train_cron: a missing account directory fails fast before the pane" {
+    rm -rf "${HOME}/.claude-personal"
+    _run_tick
+    assert_failure
+    assert_output --partial "Claude account directory missing"
+    _refute_train_started
+}
+
+# Issue #1561. The directory check above is not enough: `claude-accounts setup`
+# creates the directory, only a completed login fills it. A logged-out pane
+# opens on `Not logged in`, drops every keystroke, and the tick reports
+# `agent_prompt_stalled` — a symptom that names neither the account nor the
+# cause. These pin the failure at the routing step instead.
+@test "pr_merge_train_cron: an account with no credentials fails fast before the pane" {
+    rm -f "${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "not logged in"
+    _refute_train_started
+}
+
+@test "pr_merge_train_cron: an empty credentials file fails fast the same way" {
+    : >"${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "not logged in"
+    _refute_train_started
+}
+
+@test "pr_merge_train_cron: the credentials check names the file it looked at" {
+    rm -f "${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "${HOME}/.claude-personal/.credentials.json"
+}
+
+# The reuse path never resolves an account — the pane already carries the one
+# it was opened with — so a logged-out *default* account cannot end a tick that
+# was not going to open a pane anyway.
+@test "pr_merge_train_cron: the reuse path is not blocked by the credentials check" {
+    rm -f "${HOME}/.claude-personal/.credentials.json"
+    _run_tick PMT_AGENT_STATUS=idle
+    assert_success
+    _assert_logged "herdr agent prompt"
 }
 
 # ---------------------------------------------------------------------------
