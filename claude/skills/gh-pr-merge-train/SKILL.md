@@ -80,6 +80,10 @@ invalidated everything behind it), route through the D-1 table
 Gate off with an empty `reviewDecision` first runs one
 `Skill(gh:pr-approve, "<N> <remote> --self-record")` and reads the board back as
 its verdict — no approval, no merge.
+After a **successful** merge, close that PR's implementation tab when its herdr
+agent is `idle` — the block in `references/train-loop.md` → "Closing the merged
+PR's implementation tab". A merged PR whose tab stays open keeps counting toward
+issue-watcher's `_IW_MAX_PER_REPO` budget and starves the pipeline (#1565).
 The `BEHIND` / `DIRTY` rows rebase inside a **detached scratch worktree** the
 train creates and unconditionally removes per attempt (#1493). Attempts are
 capped at 3 per PR (F-5); a failure skips that PR and the train continues

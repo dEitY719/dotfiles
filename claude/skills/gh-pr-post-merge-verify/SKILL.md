@@ -96,7 +96,10 @@ Every decision above is mirrored executably in
 
 ## Related Skills
 
-`gh:pr-merge` invokes this at the end of its Step 5 · `devx:pr-verify-merged`
+`gh:pr-merge` reads `references/dispatch.sh.md` and runs it inline at the end of
+its Step 5 — never `Skill(gh:pr-post-merge-verify, ...)`, which vanished inside
+`gh:pr-merge-train`'s loop (#1565); this skill stays the standalone manual entry
+point and the SSOT for that block · `devx:pr-verify-merged`
 / `devx:pr-verify-live` are what the dispatched session actually runs (the
 registry picks which) · `gh:pr-merge-train` shares the herdr
 workspace→tab→agent→prompt sequence via `pr_merge_train_cron.sh`.
