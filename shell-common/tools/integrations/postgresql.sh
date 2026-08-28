@@ -29,12 +29,19 @@ if [[ ! -f "$PG_SERVICES_FILE" ]]; then
     chmod 0600 "$PG_SERVICES_FILE"
 fi
 
+# Filter out comments and empty lines from the services file
+_pg_service_lines() {
+    grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$'
+}
+
 # Load services from file (Skip comments and empty lines)
 _load_services() {
+    services=()
     if [[ -f "$PG_SERVICES_FILE" ]]; then
-        mapfile -t services < <(grep -v '^[[:space:]]*#' "$PG_SERVICES_FILE" | grep -v '^[[:space:]]*$')
-    else
-        services=()
+        # POSIX 호환 방식으로 배열에 데이터 할당 (mapfile 대신 while read 사용)
+        while IFS= read -r _line; do
+            [[ -n "$_line" ]] && services+=("$_line")
+        done < <(_pg_service_lines)
     fi
 }
 _load_services
@@ -640,8 +647,12 @@ psql_sync() {
     echo ""
 
     # Get list of all DBs (excluding templates and postgres core)
-    local all_dbs
-    mapfile -t all_dbs < <(_admin_sql "postgres" "SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';" -tA)
+    local all_dbs=()
+    local _db_line
+    # POSIX 호환 방식으로 배열에 데이터 할당 (mapfile 대신 while read 사용)
+    while IFS= read -r _db_line; do
+        [[ -n "$_db_line" ]] && all_dbs+=("$_db_line")
+    done < <(_admin_sql "postgres" "SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';" -tA)
 
     local found_new=false
 
