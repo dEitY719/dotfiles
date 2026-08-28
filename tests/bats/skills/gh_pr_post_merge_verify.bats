@@ -140,6 +140,22 @@ _pmv_log_count() { grep -c -- "$1" "$FAKE_HERDR_LOG" || true; }
     assert_output ""
 }
 
+@test "gate: the object-wrapped {repos:[...]} shape is read too (agy review, #1555)" {
+    # issue_watcher_cron.sh has always accepted a bare array OR an object
+    # with a top-level "repos" array; this skill's registry is the same file,
+    # so it must accept both shapes identically, not just the array form.
+    printf '{"repos":[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged"}]}\n' >"$WATCHED"
+    run pmv_gate "$WATCHED" acme/dotfiles
+    assert_success
+    assert_output "devx:pr-verify-merged"
+}
+
+@test "main root: the object-wrapped {repos:[...]} shape resolves path too (#1555)" {
+    printf '{"repos":[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"~/elsewhere"}]}\n' >"$WATCHED"
+    run pmv_main_root "$WATCHED" acme/dotfiles "${MAIN_ROOT}/.git"
+    assert_output "${HOME}/elsewhere"
+}
+
 # --- A-1 / A-5 / E-1 / E-2: the no-op paths -------------------------------
 
 @test "A-1: an unregistered repo makes no herdr call at all" {

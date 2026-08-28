@@ -12,7 +12,12 @@ array entry issue-watcher already reads.
 
 ## Shape
 
+Two top-level shapes, because the file is a personal SSOT this repo does not
+own and cannot migrate — `issue_watcher_cron.sh` has always accepted both, and
+this skill's lookups now match that:
+
 ```jsonc
+// A bare array (the common case) ...
 [
   {
     "repo": "<owner>/<repo>",      // required — the registry key
@@ -23,6 +28,17 @@ array entry issue-watcher already reads.
   }
 ]
 ```
+
+```jsonc
+// ... or an object with a top-level "repos" array. Entries have the same
+// shape either way.
+{ "repos": [ { "repo": "<owner>/<repo>", "path": "...", "verify_skill": "..." } ] }
+```
+
+Every jq lookup in this skill starts with
+`(if type == "array" then . else (.repos // []) end)` before matching on
+`.repo` — dropping that guard makes the object-wrapped shape parse as if
+empty (silent no-op), not an error.
 
 | Key | Required | Meaning |
 |---|---|---|
@@ -55,9 +71,11 @@ now carrying more of the weight.
 
 ## Registering a repo
 
-1. Add (or extend) the `"<owner>/<repo>"` entry in the untracked file with a
-   `verify_skill` field. `issue_watcher_cron.sh --help` prints the resolved
-   path; `IW_WATCHED_REPOS` overrides it for both dispatchers identically.
+1. Add a `verify_skill` field to the array entry whose `repo` is
+   `<owner>/<repo>` (or add the whole `{repo, path, verify_skill}` entry if
+   issue-watcher isn't already tracking that repo). `issue_watcher_cron.sh
+   --help` prints the resolved path; `IW_WATCHED_REPOS` overrides it for both
+   dispatchers identically.
 2. Pick the variant by what the repo can prove:
    - **`devx:pr-verify-merged`** — no long-running app. It makes its own fresh
      clone of the merge commit, so the rebase is hygiene (the human is left
