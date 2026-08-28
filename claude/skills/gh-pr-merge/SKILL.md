@@ -93,9 +93,13 @@ Print **only** the compact report (format in `references/strategy-selection.md` 
 post-merge verification gate **and** its dispatch, in one run:
 
 ```bash
-# Substitute the four values before running; every one of them is already in
-# hand from Steps 1-2, so nothing here re-queries GitHub.
+# Substitute the five values before running; every one of them is already in
+# hand from Steps 1-2, so nothing here re-queries GitHub. Bind them all, even
+# the ones an earlier step already set: each block runs in its own shell, and
+# an unbound TARGET_REPO makes the registry lookup below answer empty — the
+# silent no-dispatch #1565 is about.
 PR_NUMBER=<N>                 # the merged PR
+TARGET_REPO=<owner/repo>      # Step 1's single remote URL, the registry key
 HEAD_BRANCH=<headRefName>     # Step 2's `gh pr view` already read it
 BASE_BRANCH=<baseRefName>     # ditto — never a hardcoded `main`
 REMOTE=<remote>               # the `[remote]` positional, default `origin`
