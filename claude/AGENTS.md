@@ -131,7 +131,10 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
    hook event 를 노출하지 않아 이 SSOT-diff 방식을 택했다.
 
 두 경로 모두 `claude/plugin/{marketplaces,plugins}.json`(공용, scope:user +
-source:github만)에 병합 반영하고 로컬 커밋한다. 사내 전용
+source:github만)에 병합 반영하고 로컬 커밋한다. 커밋 제목의 변경 키 나열 규칙
+(`... sync manifest (+foo -bar 외 N개)`)은 `shell-common/functions/plugin_sync_title.sh`
+가 SSOT — `plugin-sync.sh` 의 벌크 재동기화 경로와 `claude/plugin/reconcile.sh
+--apply` 가 같은 파일을 source 한다(#1558). 사내 전용
 (non-github source) 항목은 `claude/plugin/company/`(dotfiles 트리 안이지만
 자체 `.git`을 가진 별도 private GHES 레포, `.gitignore`로 public 레포
 추적 제외)로 간다 — internal PC에서 최초 1회 `git clone <url>

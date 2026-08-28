@@ -796,10 +796,11 @@ STUB
 }
 
 @test "_cleanup_local_main_if_pure_sync recognizes reconcile.sh's multi-item truncated suffix as pure sync (#1430 codex follow-up)" {
-    # reconcile.sh --apply's _build_sync_title emits "+foo +bar 외 N개" style
-    # suffixes (multiple changed keys, truncated past 4) — distinct shape from
-    # plugin-sync.sh's single "(name)" suffix above. Purity detection must
-    # accept this one too, not just the single-target case.
+    # _build_sync_title emits "+foo +bar 외 N개" style suffixes (multiple
+    # changed keys, truncated past 4) — distinct shape from plugin-sync.sh's
+    # single "(name)" suffix above. Purity detection must accept this one
+    # too, not just the single-target case. Since #1558 both writers emit it:
+    # reconcile.sh --apply and plugin-sync.sh's bulk re-sync path.
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     BEFORE_ORIGIN=$(git -C "$REPO" rev-parse origin/main)
