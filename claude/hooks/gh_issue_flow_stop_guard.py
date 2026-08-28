@@ -90,8 +90,15 @@ _DEFAULT_ASYNC_WAIT_LIMIT: int = 2
 # exists for. Counting consecutive occurrences with no intervening progress
 # event is sufficient evidence of stagnation on its own, and needs nothing
 # from the model but the marker.
+#
+# Optional spaces around each `=` and optional double-quotes around each
+# value are tolerated (agy review, PR #1594 FOLLOW-UP) — an LLM asked to
+# reproduce a fixed-format line is prone to exactly this class of minor
+# formatting drift, and a rigid regex turns that drift into a spurious block
+# instead of the grace it was supposed to grant.
 _ASYNC_WAIT_RE: re.Pattern[str] = re.compile(
-    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=\S+\s+reason=background-worker-delegated\s*$"
+    r'(?m)^\[flow:async-wait\]\s+step\s*=\s*"?(?P<step>[^\s"]+)"?'
+    r'\s+agent\s*=\s*"?[^\s"]+"?\s+reason\s*=\s*"?background-worker-delegated"?\s*$'
 )
 
 
@@ -673,14 +680,29 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
 
 
 def _async_wait_streak(messages: list[dict[str, Any]], boundary: int) -> int:
-    """Count `[flow:async-wait]` markers since the last progress event (#1550).
+    """Count TRAILING consecutive `[flow:async-wait]`-bearing turns (#1550).
+
+    A streak of N means: the last N assistant messages since the last
+    progress event EACH carried the marker, with no gap. It is deliberately
+    NOT a flat total of every marker seen in that window — codex + agy
+    review (PR #1594) both flagged the original flat-total version: it let
+    ONE early marker grant grace forever after, because a later stop attempt
+    whose own latest turn carried no marker at all still inherited the old
+    count. The fix here is to walk backward and stop the count dead the
+    first time a message fails to renew the claim — so the model must
+    re-assert the wait on every turn it wants graced, not just once.
 
     "Progress event" for the OUTER chain is a sub-skill `Skill()` invocation:
-    the chain moved forward, so whatever the model was waiting on is done and
-    the streak restarts from zero. Walking BACKWARD from the end and stopping
-    at the first sub-skill call answers that in one partial pass — no need to
-    locate the progress index first and then re-walk from it. When no
-    sub-skill ran at all, the walk simply runs back to the boundary.
+    the chain moved forward, so whatever the model was waiting on is done —
+    walking BACKWARD from the end and stopping there answers that in one
+    partial pass. When no sub-skill ran at all, the walk runs back to the
+    boundary.
+
+    Each assistant message contributes AT MOST 1 to the streak (a boolean
+    "did this turn carry the marker", not a count of matches within it) —
+    agy also flagged that `sum(finditer)` let a turn with multiple marker
+    lines (e.g. one quoted inside explanatory prose) burn through the grace
+    limit in a single turn.
 
     Markers are read from `role=assistant` text blocks only, with
     `include_tool_results=False` — see `_ASYNC_WAIT_RE` for why that is
@@ -696,8 +718,10 @@ def _async_wait_streak(messages: list[dict[str, Any]], boundary: int) -> int:
             break
         if msg.get("role") != "assistant":
             continue
-        for text in _iter_text_blocks(msg, include_tool_results=False):
-            streak += sum(1 for _ in _ASYNC_WAIT_RE.finditer(text))
+        has_marker = any(_ASYNC_WAIT_RE.search(text) for text in _iter_text_blocks(msg, include_tool_results=False))
+        if not has_marker:
+            break
+        streak += 1
     return streak
 
 

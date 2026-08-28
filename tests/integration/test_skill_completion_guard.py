@@ -803,13 +803,21 @@ def test_async_wait_reprieves_only_its_own_step(tmp_path: Path) -> None:
 
 
 def test_async_wait_covering_every_outstanding_step_allows_stop(tmp_path: Path) -> None:
-    """When every still-missing step is reprieved, the turn may end."""
+    """When every still-missing step is reprieved ON THE LATEST TURN, the turn may end.
+
+    Both markers land in the SAME assistant message — the realistic shape of
+    a turn that is deferring two steps at once. Splitting them across two
+    separate turns (the pre-fix shape of this test) would mean the FIRST
+    step's claim was never renewed on the final turn, which the trailing-
+    streak fix correctly treats as unclaimed (PR #1594 review).
+    """
     transcript = _write_transcript(
         tmp_path,
         [
             *_partially_implemented(),
-            _async_wait_text("gh-issue-implement/implement"),
-            _async_wait_text("gh-issue-implement/report"),
+            _assistant_text(
+                f"{_async_wait_marker('gh-issue-implement/implement')}\n{_async_wait_marker('gh-issue-implement/report')}"
+            ),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -823,8 +831,9 @@ def test_colon_form_step_prefix_accepted(tmp_path: Path) -> None:
         tmp_path,
         [
             *_partially_implemented(),
-            _async_wait_text("gh:issue-implement/implement"),
-            _async_wait_text("gh:issue-implement/report"),
+            _assistant_text(
+                f"{_async_wait_marker('gh:issue-implement/implement')}\n{_async_wait_marker('gh:issue-implement/report')}"
+            ),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -851,15 +860,25 @@ def test_async_wait_marker_for_another_skill_does_not_reprieve(tmp_path: Path) -
 
 
 def test_three_async_wait_markers_return_the_step_to_the_blocked_list(tmp_path: Path) -> None:
-    """Repeating the marker with no `OK` in between is stagnation, not waiting."""
+    """Repeating the marker with no `OK` in between is stagnation, not waiting.
+
+    `implement` is reasserted on all 3 trailing turns (streak 3, past the
+    default limit 2) and must return to the blocked list. `report` is
+    reasserted only on the LAST of those turns (streak 1, within limit) and
+    must stay reprieved — each step's grace is judged by its OWN trailing
+    streak, independent of the other's.
+    """
     transcript = _write_transcript(
         tmp_path,
         [
             *_partially_implemented(),
-            _async_wait_text("gh-issue-implement/report"),
             _async_wait_text("gh-issue-implement/implement", agent="a1"),
             _async_wait_text("gh-issue-implement/implement", agent="a2"),
-            _async_wait_text("gh-issue-implement/implement", agent="a3"),
+            _assistant_text(
+                _async_wait_marker("gh-issue-implement/implement", agent="a3")
+                + "\n"
+                + _async_wait_marker("gh-issue-implement/report")
+            ),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -870,6 +889,78 @@ def test_three_async_wait_markers_return_the_step_to_the_blocked_list(tmp_path: 
     missing_list = decision["reason"].split("emit(s) [")[1].split("]")[0]
     assert "implement" in missing_list, f"stagnating step must return to the list. got {missing_list!r}"
     assert "report" not in missing_list, f"`report` is still within grace. got {missing_list!r}"
+
+
+def test_marker_in_history_but_absent_from_latest_turn_blocks(tmp_path: Path) -> None:
+    """A stale marker must not keep excusing a step on a turn that omits it.
+
+    Marker for `implement` → plain assistant text with no marker at all →
+    stop. The original flat-total count let that first marker grant grace
+    forever; codex and agy both flagged this as BLOCKING (PR #1594) and agy
+    specifically noted this exact scenario had no test coverage. The
+    trailing streak must be 0 here, so `implement` returns to `missing`.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _async_wait_text("gh-issue-implement/implement"),
+            _assistant_text("Checking on the background worker's status."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), "a stale marker not renewed on the latest turn must not grant grace"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    missing_list = decision["reason"].split("emit(s) [")[1].split("]")[0]
+    assert "implement" in missing_list, f"the un-renewed step must return to the list. got {missing_list!r}"
+
+
+def test_two_markers_for_same_step_in_one_turn_only_counts_once(tmp_path: Path) -> None:
+    """A turn with the marker repeated for one step still contributes 1 to that
+    step's streak, not 2 (agy review, `findall`-per-step regression).
+
+    `report` is satisfied with a real `OK` marker up front so it drops out
+    of `missing` entirely — isolating this test to `implement`'s streak.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _emit_marker("gh-issue-implement", "report"),
+            _assistant_text(
+                f"{_async_wait_marker('gh-issue-implement/implement')}\n{_async_wait_marker('gh-issue-implement/implement')}"
+            ),
+            _async_wait_text("gh-issue-implement/implement"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"two markers in one turn plus one more turn is streak 2, still within the default limit. "
+        f"stdout={result.stdout!r}"
+    )
+
+
+def test_async_wait_marker_tolerates_spacing_and_quotes(tmp_path: Path) -> None:
+    """A minor formatting variation (extra spaces, quoted values) still matches
+    (agy review FOLLOW-UP: the regex was too rigid for LLM-reproduced text)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_partially_implemented(),
+            _assistant_text(
+                '[flow:async-wait] step = "gh-issue-implement/implement" '
+                'agent="a1" reason="background-worker-delegated"\n'
+                '[flow:async-wait] step = "gh-issue-implement/report" '
+                'agent="a1" reason="background-worker-delegated"'
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"quoted/spaced variant must still match. stdout={result.stdout!r}"
 
 
 def test_real_ok_marker_after_async_wait_satisfies_normally(tmp_path: Path) -> None:
@@ -954,12 +1045,17 @@ def test_async_wait_limit_zero_disables_the_grace(tmp_path: Path) -> None:
     [(1, False), (2, True)],
 )
 def test_async_wait_limit_one_allows_exactly_one(tmp_path: Path, marker_count: int, should_block: bool) -> None:
-    """`GH_SKILL_GUARD_ASYNC_WAIT_LIMIT=1` → 1 occurrence allows, the 2nd blocks."""
+    """`GH_SKILL_GUARD_ASYNC_WAIT_LIMIT=1` → 1 trailing occurrence allows, the 2nd blocks.
+
+    `report` is satisfied with a real `OK` marker up front so it drops out
+    of `missing` entirely — isolating this parametrization to `implement`'s
+    own trailing streak, independent of any other step's grace state.
+    """
     transcript = _write_transcript(
         tmp_path,
         [
             *_partially_implemented(),
-            _async_wait_text("gh-issue-implement/report"),
+            _emit_marker("gh-issue-implement", "report"),
             *[_async_wait_text("gh-issue-implement/implement", agent=f"a{i}") for i in range(marker_count)],
         ],
     )
