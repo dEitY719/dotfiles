@@ -355,6 +355,13 @@ _capture_json() {
     assert_success
 }
 
+@test "aicron: help denotes --json as optional consistently for list and status (#1499)" {
+    _aicron help
+    assert_success
+    assert_output --partial "list [--json]"
+    assert_output --partial "status <job> [--json]"
+}
+
 @test "aicron: runs under /bin/sh with no bash-only syntax (NF-3)" {
     run env PATH="${_BIN_DIR}:${PATH}" \
         AICRON_MANIFEST="${_MANIFEST}" \
