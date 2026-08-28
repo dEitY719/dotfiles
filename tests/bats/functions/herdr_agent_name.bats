@@ -209,7 +209,7 @@ run_han() {
 #
 # Dropping the host and the owner costs uniqueness on both axes (PR #1532
 # review, codex). #1530's 확정 사항 accepted that trade-off to fit herdr's
-# 32-character budget, and `docs/.ssot/watched-repos.json` currently holds one
+# 32-character budget, and the watched-repos registry currently holds one
 # entry, so neither collision is reachable. This test asserts the collision
 # *exists* so it is a documented property with a name, not a surprise: the day
 # a second owner or host joins the watch list, whoever adds the digest suffix

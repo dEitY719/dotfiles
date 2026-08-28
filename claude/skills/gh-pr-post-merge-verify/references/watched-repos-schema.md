@@ -1,68 +1,81 @@
-# `docs/.ssot/watched-repos.json` — schema (F-1, issue #1511)
+# watched-repos registry — schema (F-1, issue #1511, unified #1555)
 
-JSON carries no comments, so the schema lives here and the file itself only
-carries data plus one `$`-prefixed metadata key.
+Location: `${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}`
+— the same untracked file `issue_watcher_cron.sh` already reads, and the same
+env-var override rule (`IW_WATCHED_REPOS`). This registry is **not** part of
+the git repo: it lives outside `$DOTFILES_ROOT` and is not reviewed by any PR.
+
+Before #1555 this schema described a second, tracked SSOT file under
+`docs/.ssot/` that only `gh:pr-post-merge-verify` read. That file is gone;
+every registered repo's `verify_skill` now lives as a field on the same
+array entry issue-watcher already reads.
 
 ## Shape
 
 ```jsonc
-{
-  "$doc": { "...": "reserved metadata — see below" },
-
-  "<owner>/<repo>": {
-    "verify_skill": "devx:pr-verify-merged",   // required
-    "main_checkout": "~/dotfiles",             // optional
-    "note": "why this variant"                 // optional, free text
+[
+  {
+    "repo": "<owner>/<repo>",      // required — the registry key
+    "path": "/home/you/dotfiles",  // required by issue-watcher; also this
+                                    // skill's rebase target when present
+    "host": "github.com",          // optional, defaults to github.com
+    "verify_skill": "devx:pr-verify-merged"  // optional — see below
   }
-}
+]
 ```
 
 | Key | Required | Meaning |
 |---|---|---|
-| `verify_skill` | yes | **Allowlisted**: `devx:pr-verify-merged` or `devx:pr-verify-live`, nothing else. Typed into the new session as its dash form (`/devx-pr-verify-merged <N>`). |
-| `main_checkout` | no | Absolute or `~`-relative path of the original checkout to rebase. Omitted → derived from `git rev-parse --path-format=absolute --git-common-dir` with the trailing `/.git` stripped, which resolves the main checkout even when the skill runs inside a linked worktree. |
-| `note` | no | Free text for humans. Never read by the skill. |
+| `repo` | yes | `owner/repo` slug. The lookup key both dispatchers match on. |
+| `path` | yes (for issue-watcher) | Absolute or `~`-relative path of the original checkout. `gh:pr-post-merge-verify` rebases this path when present; a `~`-prefix is expanded. A missing/empty `path` falls back to `git rev-parse --path-format=absolute --git-common-dir` (with `/.git` stripped), which still resolves the main checkout from inside a linked worktree. |
+| `host` | no | Defaults to `github.com`. Read by issue-watcher; not consulted by `gh:pr-post-merge-verify` (host comes from the PR's own remote resolution). |
+| `verify_skill` | no | **Allowlisted**: `devx:pr-verify-merged` or `devx:pr-verify-live`, nothing else. Typed into the new session as its dash form (`/devx-pr-verify-merged <N>`). An entry with no `verify_skill` (or one whose repo isn't in this file at all) means `gh:pr-post-merge-verify` no-ops for that repo — issue-watcher watches it just the same. |
 
 ## Why `verify_skill` is an allowlist, not free text
 
 The value does not label anything — it is interpolated into
 `herdr agent prompt` for a session started with
 `--dangerously-skip-permissions`, i.e. it is an input to an unattended agent's
-prompt. A registry file is editable by anyone who can edit the repo (or, in a
-worktree, anyone who can write `$DOTFILES_ROOT`), so the dispatch refuses any
-value outside the two known skills with one `[WARN]` and stops **before** the
-first herdr mutation — a bad registry never even closes a tab. Adding a third
-verification skill means adding it to that allowlist in all three places:
-`references/dispatch.sh.md`, `tests/bats/skills/_fixtures/gh_pr_post_merge_verify.sh`,
-and this table.
+prompt. Adding a third verification skill means adding it to the allowlist in
+all three places: `references/dispatch.sh.md`,
+`tests/bats/skills/_fixtures/gh_pr_post_merge_verify.sh`, and this table.
 
-## Reserved keys
+## Trust boundary changed by #1555
 
-Top-level keys beginning with `$` are metadata, never a repo slug — a GitHub
-slug is `owner/repo` and cannot start with `$`. The lookup the skill runs is
-
-```
-jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE"
-```
-
-so a metadata key is only ever reached by a literal `$…` repo argument, and
-because `$doc`'s value is an **object** even that answers empty rather than
-raising a jq type error. Keep any future metadata key an object for the same
-reason.
+Before this change, `verify_skill` lived in a **tracked** file — anyone
+setting it went through a PR review, which was a first line of defense
+against a malicious value reaching the `--dangerously-skip-permissions`
+prompt. Unifying onto the untracked registry removes that line: the file is
+now user-editable with no review and no lint holding its shape. **The
+allowlist in `dispatch.sh.md` is the only remaining defense**, and per issue
+#1555's explicit decision it must not be loosened as part of this or any
+adjacent change. A registry value outside the allowlist still gets exactly
+one `[WARN]` line and stops before any herdr mutation — unchanged behavior,
+now carrying more of the weight.
 
 ## Registering a repo
 
-1. Add an `"<owner>/<repo>"` entry with `verify_skill`.
+1. Add (or extend) the `"<owner>/<repo>"` entry in the untracked file with a
+   `verify_skill` field. `issue_watcher_cron.sh --help` prints the resolved
+   path; `IW_WATCHED_REPOS` overrides it for both dispatchers identically.
 2. Pick the variant by what the repo can prove:
    - **`devx:pr-verify-merged`** — no long-running app. It makes its own fresh
-     clone of the merge commit, so the rebase in step 3 is hygiene (the human
-     is left on an up-to-date `main`), not a hard precondition.
+     clone of the merge commit, so the rebase is hygiene (the human is left
+     on an up-to-date main), not a hard precondition.
    - **`devx:pr-verify-live`** — there is a running dev app, and the proof is
      that the *serving checkout* is the target commit. Here the rebase **is**
      the precondition: an un-rebased checkout would have the session verify
      the previous commit and call it proven.
-3. Add a row to `docs/.ssot/README.md` only if the index changes; the file is
-   already listed there.
 
-Removing an entry is the supported off switch — it restores exactly the
-pre-#1511 behavior for that repo, silently.
+Removing `verify_skill` from an entry (or the entry outright) is the
+supported off switch for `gh:pr-post-merge-verify` — it restores exactly the
+pre-#1511 behavior for that repo, silently, without affecting issue-watcher's
+own use of the same entry.
+
+## Operator action after #1555
+
+This unification does not migrate data — the untracked file is outside the
+repo and no code should write to a user's home directory on its behalf. Any
+repo that had a `verify_skill` in the old tracked file needs it added to the
+untracked file's matching entry by hand; until then `gh:pr-post-merge-verify`
+silently no-ops for that repo (unattended merges themselves are unaffected).
