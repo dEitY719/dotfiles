@@ -30,6 +30,9 @@ Safety rails (each critical — never accidentally trap the user):
   - Catalog file missing / unparseable YAML → exit 0 (fail-open + warn).
   - `GH_SKILL_GUARD_BYPASS=1` → exit 0 (manual escape hatch).
   - All required step IDs present after the most recent boundary → exit 0.
+  - Every still-missing step covered by a `[flow:async-wait]` marker
+    within the grace limit → exit 0 (#1550 — work delegated to a
+    background Agent, not abandoned).
   - Any unexpected exception → exit 0 (fail open).
 
 The hook only ever does two things: emit nothing (allow), or emit one
@@ -67,6 +70,39 @@ _DEFAULT_CATALOG: Path = Path(__file__).resolve().parent / "skill_step_catalog.y
 # and the hook source uses the regex form which doesn't satisfy the literal).
 _STEP_EMIT_RE: re.Pattern[str] = re.compile(
     r"\[step:(?P<skill>[A-Za-z0-9_:.-]+)/(?P<step>[A-Za-z0-9_.-]+)\]\s+OK\b",
+)
+
+# Issue #1550 — how many CONSECUTIVE `[flow:async-wait]` markers may stand in
+# for one still-unemitted required step before the guard resumes blocking it.
+_DEFAULT_ASYNC_WAIT_LIMIT: int = 2
+
+# Issue #1550 — the marker the model prints as plain assistant text right
+# before ending a turn whose remaining work it has handed to a
+# background/async `Agent` (the Advisor/Worker delegation the user's global
+# CLAUDE.md mandates for multi-file implementation work). Shape:
+#
+#   [flow:async-wait] step=<skill>/<step> agent=<agent-id> reason=background-worker-delegated
+#
+# Identical pattern to the one in `gh_issue_flow_stop_guard.py` — the two
+# hooks read the same marker, they just derive different things from it (that
+# one counts a streak per chain, this one per required step id).
+#
+# `agent` is captured for audit/logging only and is deliberately NOT used in
+# any matching logic: making the grace depend on the model reproducing one
+# exact literal id string turn after turn would be fragile in precisely the
+# situation the marker exists for. A repeated marker with no intervening step
+# emit is sufficient evidence of stagnation on its own.
+#
+# Scanned in `role=assistant` text blocks ONLY, with
+# `include_tool_results=False` — asymmetric with `_STEP_EMIT_RE` above, which
+# must read `tool_result` because the step markers come from a `printf` in a
+# Bash call. This marker is only ever the model's own turn-ending prose, and a
+# `tool_result` can carry arbitrary file content — including this file and
+# `claude/skills/gh-issue-flow/references/stop-guard.md`, both of which now
+# document the marker literally. Reading tool_results here would
+# false-positive on any `Read` of those files (the issue #608 precedent).
+_ASYNC_WAIT_RE: re.Pattern[str] = re.compile(
+    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=(?P<agent>\S+)\s+reason=background-worker-delegated\s*$"
 )
 
 
@@ -350,6 +386,89 @@ def _scan_steps_in_section(
     return seen
 
 
+def _async_wait_grace_limit() -> int:
+    """Read the async-wait grace limit from the environment (#1550).
+
+    Env var: `GH_SKILL_GUARD_ASYNC_WAIT_LIMIT`.
+      - a valid non-negative int  → use it,
+      - `0`                       → grace disabled (the very first marker
+                                    occurrence already blocks),
+      - unset / unparseable / negative → `_DEFAULT_ASYNC_WAIT_LIMIT`
+        (unset reaches the `ValueError` arm via the `""` default).
+    Never raises — a bad value silently degrades to the default.
+    """
+    try:
+        value = int(os.environ.get("GH_SKILL_GUARD_ASYNC_WAIT_LIMIT", ""))
+    except ValueError:
+        return _DEFAULT_ASYNC_WAIT_LIMIT
+    return value if value >= 0 else _DEFAULT_ASYNC_WAIT_LIMIT
+
+
+def _count_async_waits_in_section(
+    messages: list[dict[str, Any]],
+    start: int,
+    end: int,
+    skill: str,
+) -> dict[str, int]:
+    """Count `[flow:async-wait]` markers per step id in a section (#1550).
+
+    Only `role=assistant` text blocks are read, with
+    `include_tool_results=False` — see `_ASYNC_WAIT_RE` for why that is
+    asymmetric with the step-emit scan and must stay that way.
+
+    The captured `step=` value is `<skill>/<step-id>`; its skill half goes
+    through `_normalize_skill` before comparison, so
+    `step=gh:issue-implement/implement` and
+    `step=gh-issue-implement/implement` are both accepted. A value that does
+    not name this section's skill is ignored — grace never crosses skills.
+    """
+    counts: dict[str, int] = {}
+    for entry in messages[start + 1 : end]:
+        msg = _message_payload(entry)
+        if msg.get("role") != "assistant":
+            continue
+        for text in _iter_text_blocks(msg, include_tool_results=False):
+            for m in _ASYNC_WAIT_RE.finditer(text):
+                matched_skill, _, step_id = m.group("step").rpartition("/")
+                if not matched_skill or not step_id:
+                    continue
+                if _normalize_skill(matched_skill) != skill:
+                    continue
+                counts[step_id] = counts.get(step_id, 0) + 1
+    return counts
+
+
+def _async_wait_reprieved(
+    messages: list[dict[str, Any]],
+    start: int,
+    end: int,
+    skill: str,
+    missing: list[str],
+    limit: int,
+) -> tuple[list[str], dict[str, int]]:
+    """Partition `missing` by the async-wait grace (#1550).
+
+    Returns `(still_missing, reprieved_counts)`. A step id is *reprieved*
+    when its marker count is `> 0` and `<= limit`: the model said on the
+    record that the work is delegated and in flight. Zero markers means it
+    never said anything (no free pass), and a count past `limit` means it
+    kept saying it with no step emit in between — stagnation, so the step
+    returns to the blocked list.
+
+    The reprieved counts come back alongside the surviving subset purely so
+    the caller's trace line can name what was excused and why.
+
+    Applies uniformly to every catalog skill — there is deliberately no
+    special case for `gh-issue-implement`, and the catalog schema is
+    unchanged.
+    """
+    if limit <= 0 or not missing:
+        return list(missing), {}
+    counts = _count_async_waits_in_section(messages, start, end, skill)
+    reprieved = {step: counts[step] for step in missing if 0 < counts.get(step, 0) <= limit}
+    return [step for step in missing if step not in reprieved], reprieved
+
+
 def main() -> int:
     if _BYPASS_ENABLED:
         return _allow("GH_SKILL_GUARD_BYPASS=1")
@@ -398,21 +517,35 @@ def main() -> int:
     seen = _scan_steps_in_section(messages, boundary_idx, end_idx, skill)
     missing = [step for step in required if step not in seen]
 
+    # Issue #1550 — a step whose work was delegated to a background/async
+    # Agent cannot honestly emit its `OK` marker yet, but the turn ending is
+    # a legitimate wait, not abandonment. Steps that said so via
+    # `[flow:async-wait]` (within the grace limit) drop out of the blocking
+    # set; everything else stays outstanding and is what the model is told
+    # about.
+    async_wait_limit = _async_wait_grace_limit()
+    outstanding, reprieved = _async_wait_reprieved(messages, boundary_idx, end_idx, skill, missing, async_wait_limit)
+
     if _TRACE_ENABLED:
+        reprieved_desc = ", ".join(f"{step}={reprieved[step]}" for step in sorted(reprieved)) or "none"
         _trace(
             f"skill={skill} boundary={boundary_idx} section_end={end_idx} "
-            f"seen={sorted(seen) or 'none'} missing={missing or 'none'} enforce={enforce}",
+            f"seen={sorted(seen) or 'none'} missing={missing or 'none'} "
+            f"async_wait_limit={async_wait_limit} async_wait_reprieved={reprieved_desc} "
+            f"outstanding={outstanding or 'none'} enforce={enforce}",
             layer="L1.5",
         )
 
-    if not missing:
+    if not outstanding:
+        if reprieved:
+            return _allow(f"{skill}: all required steps emitted or async-wait-reprieved", layer="L1.5")
         return _allow(f"{skill}: all required steps emitted", layer="L1.5")
 
     if not enforce:
         return _allow(f"{skill}: missing steps but enforce=false", layer="L1.5")
 
     description = entry.get("description") or skill
-    missing_list = ", ".join(missing)
+    missing_list = ", ".join(outstanding)
     reason = (
         f"{skill} ({description}) incomplete: missing required step "
         f"emit(s) [{missing_list}]. The SKILL.md for this skill declares "

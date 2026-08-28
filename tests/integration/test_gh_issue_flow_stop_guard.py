@@ -2587,3 +2587,176 @@ def test_subagent_dispatch_prompt_is_boundary_not_a_fresh_prompt(tmp_path: Path)
         f"the boundary, expiring it immediately. stdout={result.stdout!r}"
     )
     assert json.loads(result.stdout)["decision"] == "block"
+
+
+# ---------------------------------------------------------------------------
+# Issue #1550 — the `[flow:async-wait]` grace. The guard could not tell
+# "the model abandoned the chain" from "the model delegated the outstanding
+# work to a background/async Agent and is waiting for it" — the Advisor/Worker
+# pattern the user's global CLAUDE.md mandates for multi-file implementation.
+# Following the policy therefore tripped the guard every time, and the only
+# escape was an unaudited `GH_SKILL_GUARD_BYPASS=1`.
+#
+# The marker is a single `(?m)^`-anchored line the model prints as plain
+# assistant text right before ending such a turn. Grace is COUNT-based (a
+# streak of markers with no intervening sub-skill invocation), never
+# agent-id-based: requiring the model to reproduce one exact literal id
+# string turn after turn would be fragile in exactly this situation.
+# ---------------------------------------------------------------------------
+
+_ASYNC_WAIT_LIMIT_ENV = "GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT"
+
+
+def _async_wait_marker(step: str = "gh-issue-implement/implement", agent: str = "a1") -> str:
+    """The literal marker line, built the way SKILL.md documents it."""
+    return f"[flow:async-wait] step={step} agent={agent} reason=background-worker-delegated"
+
+
+def _async_wait_text(step: str = "gh-issue-implement/implement", agent: str = "a1") -> dict[str, Any]:
+    """One assistant-text turn carrying nothing but the marker."""
+    return _assistant_text(_async_wait_marker(step, agent))
+
+
+def test_single_async_wait_marker_allows_stop(tmp_path: Path) -> None:
+    """1/6 sub-skills done + ONE async-wait marker → allow (streak 1 of 2)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _async_wait_text(),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"a single async-wait marker must buy one grace turn. stdout={result.stdout!r}"
+
+
+def test_two_consecutive_async_wait_markers_still_allow_stop(tmp_path: Path) -> None:
+    """Streak 2 sits exactly AT the default limit, so it is still allowed."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _async_wait_text(agent="a1"),
+            _async_wait_text(agent="a2"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", (
+        f"streak 2 is at the default limit and must still allow. stdout={result.stdout!r}"
+    )
+
+
+def test_three_consecutive_async_wait_markers_block(tmp_path: Path) -> None:
+    """Past the limit the marker stops buying anything — ordinary block resumes.
+
+    The block reason must be the NORMAL incomplete-chain one naming the next
+    sub-skill: the grace valve only ever decides allow-vs-block, it never
+    rewrites what the model is told to do.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _async_wait_text(agent="a1"),
+            _async_wait_text(agent="a2"),
+            _async_wait_text(agent="a3"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), "3 markers with no progress is stagnation and must block"
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-issue-flow incomplete" in decision["reason"]
+    assert "Step 2.2 — Skill(gh-commit)" in decision["reason"]
+
+
+def test_progress_resets_the_async_wait_streak(tmp_path: Path) -> None:
+    """A real sub-skill call after a marker restarts the count from zero.
+
+    Marker → `Skill(gh:commit)` (progress) → stop with no further marker.
+    The pre-progress marker must not carry over, so the ordinary 2/6 block
+    applies. This is what stops a streak accumulating across a whole flow.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _async_wait_text(),
+            _assistant_skill("gh:commit"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"the streak must reset on progress, leaving the normal block. stdout={result.stdout!r}"
+    )
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "2/6 sub-skills" in decision["reason"]
+
+
+def test_async_wait_marker_inside_tool_result_does_not_count(tmp_path: Path) -> None:
+    """A marker in a `tool_result` is file content, never a turn-ending signal.
+
+    The #608 regression class applied to the new marker: this hook's own
+    source and `references/stop-guard.md` both now contain the literal marker
+    line as documentation, so a `Read` of either lands it in a `tool_result`.
+    Counting that would hand every such read two free grace turns.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _user_tool_result(
+                "Excerpt from references/stop-guard.md:\n"
+                f"{_async_wait_marker()}\n"
+                "…the harness grants up to 2 consecutive grace turns.\n"
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), (
+        f"a tool_result marker must be ignored, leaving the normal block. stdout={result.stdout!r}"
+    )
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_async_wait_limit_zero_disables_the_grace(tmp_path: Path) -> None:
+    """`…_ASYNC_WAIT_LIMIT=0` → the very first marker already blocks."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            _async_wait_text(),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript), env={_ASYNC_WAIT_LIMIT_ENV: "0"})
+    assert result.returncode == 0
+    assert result.stdout.strip(), "limit 0 means zero grace"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+@pytest.mark.parametrize(
+    ("marker_count", "should_block"),
+    [(1, False), (2, True)],
+)
+def test_async_wait_limit_one_allows_exactly_one(tmp_path: Path, marker_count: int, should_block: bool) -> None:
+    """`…_ASYNC_WAIT_LIMIT=1` → 1 occurrence allows, the 2nd blocks."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            *_mid_flow_messages(),
+            *[_async_wait_text(agent=f"a{i}") for i in range(marker_count)],
+        ],
+    )
+    result = _run_hook(_hook_event(transcript), env={_ASYNC_WAIT_LIMIT_ENV: "1"})
+    assert result.returncode == 0
+    if should_block:
+        assert result.stdout.strip(), f"streak {marker_count} exceeds limit 1 and must block"
+        assert json.loads(result.stdout)["decision"] == "block"
+    else:
+        assert result.stdout.strip() == "", f"streak {marker_count} is within limit 1. stdout={result.stdout!r}"
