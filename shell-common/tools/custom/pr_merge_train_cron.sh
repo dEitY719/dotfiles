@@ -93,6 +93,12 @@ _PMT_PR_LIMIT="50"
 # once in 56 attempts. Dropping the host is the concession that buys the
 # 32-character budget; the rationale and its expiry condition live in
 # shell-common/functions/herdr_agent_name.sh.
+#
+# The prefix also keeps the *workspace label* — the same string since #1549 —
+# clear of issue_watcher_cron.sh, which labels its workspaces with the bare
+# checkout basename (`dotfiles`). Drop the `mt` and the train lands in
+# issue-watcher's tabs (#1470, Impact); that collision surfaces as panes opening
+# in the wrong workspace, not as a test failure.
 _PMT_AGENT_PREFIX="mt"
 
 # `herdr agent prompt --wait` 한 번의 상한 — 4분. train 자체는 수십 분을 돌 수
@@ -304,18 +310,6 @@ _pmt_acquire_lock() {
         ux_warning "another pr_merge_train_cron tick is already running — skip"
         return 1
     fi
-}
-
-# Echo the tick's herdr *workspace label* — the same string as the agent name
-# (#1549). Before #1549 this built its own host-qualified fold
-# (`mt-github.com-<owner>-<repo>`), so the same train answered to two names:
-# `herdr workspace list` showed one, `herdr agent get` the other, with no way
-# to cross-reference them. herdr does not validate labels, but "workspace ==
-# agent" is a user decision (#1549), not a validation requirement — dropping
-# host/owner here rides on the same one-repo-in-watched-repos.json guard
-# `herdr_agent_name.sh` documents, and expires together with it.
-_pmt_workspace_label() {
-    herdr_agent_name "${_PMT_AGENT_PREFIX}" "${_PMT_REPO}"
 }
 
 # Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
@@ -654,10 +648,11 @@ _pmt_prompt_train() {
 _pmt_launch_fresh() {
     local _agent="$1" _cwd="$2" _label _ws _msg _cause
 
-    _label=$(_pmt_workspace_label) || {
-        ux_error "Cannot derive a herdr workspace label from ${_PMT_REPO} — ending this tick."
-        return 1
-    }
+    # The workspace label *is* the agent name (#1549), so `herdr workspace list`
+    # and `herdr agent get` name the same train. Assigning it rather than
+    # re-deriving it is what keeps the two from drifting apart again; main()
+    # already validated this string when it built the agent name.
+    _label="${_agent}"
 
     # Only this path opens a pane, so this is the only path that needs an
     # account to open it with. Resolving it in main() would make every reuse
