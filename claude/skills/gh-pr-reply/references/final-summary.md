@@ -14,10 +14,15 @@ PR #123 review comments processed: 5 total
 
 - **Total** — count of comments identified in Step 2 (after dedup).
 - **Accepted** — count + the commit short-SHAs that landed the fixes.
-- **Declined** — count of comments classified DECLINE.
+  ACCEPT + ACCEPT-PARTIAL; held in `ACCEPTED_COUNT`.
+- **Declined** — count of comments classified DECLINE; held in
+  `DECLINED_COUNT`.
 - **Answered** — count of comments classified QUESTION.
 - **Closing line** — `-> All comments replied to.` confirms the
   politeness contract was met.
+- Step 6 reads `ACCEPTED_COUNT` / `DECLINED_COUNT` too, to decide whether
+  `review-blocked` may be dropped (`references/verdict-label-removal.sh.md`).
+  Both steps use the same counters — never re-derive them.
 - **No board-promotion row** — `Approved` is owned by `gh:pr-approve`
   (#1350). This skill's only board write is the Step 6 `In review`
   recovery, which the table does not report.
