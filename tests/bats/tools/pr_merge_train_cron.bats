@@ -809,6 +809,16 @@ _hold_lock() {
     assert_output --partial "(agent_not_found)"
 }
 
+# PR #1572 review (codex): the test above pins the *code* but not herdr's own
+# sentence about the failure — a regression that dropped the `원인:` message
+# while keeping the code intact would slip through unnoticed. This pins both.
+@test "pr_merge_train_cron: a non-timeout prompt error preserves herdr's own message" {
+    _run_tick HERDR_PROMPT_CODE=agent_not_found HERDR_PROMPT_MESSAGE="agent target not found for real"
+    assert_failure
+    assert_output --partial "원인:"
+    assert_output --partial "agent target not found for real"
+}
+
 # herdr refuses `agent start` unless the name matches
 # `^[a-z][a-z0-9_-]{0,31}$`. The pre-#1530 name (`pmt-github.com-acme-dotfiles`)
 # carried both a dot and, on a real owner like `dEitY719`, uppercase — so every
