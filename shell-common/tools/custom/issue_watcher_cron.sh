@@ -118,6 +118,13 @@ _iw_cap() {
 _IW_MAX_PER_REPO=$(_iw_cap "${IW_MAX_PER_REPO-}" 7 IW_MAX_PER_REPO)
 _IW_MAX_CONCURRENT=$(_iw_cap "${IW_MAX_CONCURRENT-}" 17 IW_MAX_CONCURRENT)
 _IW_DISPATCH_PER_TICK=$(_iw_cap "${IW_DISPATCH_PER_TICK-}" 1 IW_DISPATCH_PER_TICK)
+# How long a pane has to keep looking stopped before the tick believes it.
+# A single tick sees one snapshot, and in that snapshot a finished session and
+# one that merely delegated to a background subagent are indistinguishable —
+# both report `idle`/`done` (PR #1597 codex/agy review). Ten minutes covers a
+# couple of ticks (cron runs every ~3 minutes) plus a typical delegation, which
+# runs for minutes rather than the milliseconds between two tool calls.
+_IW_ZOMBIE_GRACE_SECONDS=$(_iw_cap "${IW_ZOMBIE_GRACE_SECONDS-}" 600 IW_ZOMBIE_GRACE_SECONDS)
 # Attempts per issue before giving up on it for this cycle. Every failed
 # attempt cleans its own worktree up first, so a retry starts from scratch.
 _IW_MAX_ATTEMPTS="3"
@@ -236,6 +243,12 @@ _IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-13}"
 #     guard in _iw_limit_gate_state, which both gate readers go through and
 #     which assumes this value is fixed-length.
 _IW_LIMIT_STATE_BASENAME="rate-limit.json"
+# The zombie grace clock's backing file, alongside the gate state above. TSV
+# rather than JSON because its records are per-item (<repo> <number> <epoch>)
+# and every tick mutates one row of many — the same shape _iw_issue_worktrees
+# and the awk joins already speak, and one this script can rewrite atomically
+# without a JSON primitive it does not have.
+_IW_ZOMBIE_CANDIDATES_BASENAME="zombie-candidates.tsv"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
 # How long a *confirmed* dispatch has to hold `working` before the tick accepts
@@ -497,8 +510,18 @@ _IW_LIVE_AGENTS_LOADED=0
 # stopped `agent_status`, and the issue it was opened on is closed on GitHub.
 # Either alone is a normal mid-flight state: an agent is `idle` between two
 # tool calls, and an issue is closed while its session still verifies the merge.
+#
+# Both together are still not enough on a single tick, though (PR #1597
+# codex/agy review). An agent that delegated to a background subagent — this
+# repo's own standard workflow — reports `idle` for the *minutes* it waits for
+# that subagent, and one snapshot cannot tell that pause apart from a finished
+# session. So the pair has to hold across two observations at least
+# _IW_ZOMBIE_GRACE_SECONDS apart before the pane is believed dead; the first
+# sighting only starts the clock. What the grace window buys is that the two
+# cases stop looking alike: a delegation ends and the pane goes back to
+# `working`, which clears the clock, while a real zombie never moves.
 _iw_live_agents() {
-    local _json _panes _repo _number _stopped
+    local _json _panes _repo _number _stopped _ts _now
 
     if [ "${_IW_LIVE_AGENTS_LOADED}" -eq 1 ]; then
         [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
@@ -567,8 +590,19 @@ _iw_live_agents() {
             # The GitHub round trip is paid only for a stopped pane: a working
             # one is live whatever its issue says, so asking would buy nothing.
             if [ "${_stopped}" = "1" ] && _iw_issue_closed "${_repo}" "${_number}"; then
+                _ts=$(_iw_zombie_candidate_ts "${_repo}" "${_number}")
+                _now=$(date +%s)
+                if [ -n "${_ts}" ] && [ $((_now - _ts)) -ge "${_IW_ZOMBIE_GRACE_SECONDS}" ]; then
+                    # Stopped on two observations a grace window apart — the
+                    # one shape a mid-delegation pause cannot take.
+                    _iw_zombie_candidate_clear "${_repo}" "${_number}"
+                    continue
+                fi
+                [ -n "${_ts}" ] || _iw_zombie_candidate_mark "${_repo}" "${_number}" "${_now}"
+                printf '%s\t%s\n' "${_repo}" "${_number}"
                 continue
             fi
+            _iw_zombie_candidate_clear "${_repo}" "${_number}"
             printf '%s\t%s\n' "${_repo}" "${_number}"
         done)
 
@@ -598,6 +632,92 @@ _iw_issue_closed() {
 
     _state=$(_iw_issue_state "$1" "$2" </dev/null 2>/dev/null) || return 1
     [ "${_state}" = "CLOSED" ]
+}
+
+# ------------------------------------------------------------
+# Zombie grace clock (PR #1597 codex/agy review)
+# ------------------------------------------------------------
+#
+# One `<repo>\t<number>\t<first-observed-stopped-epoch>` line per pane that has
+# been seen stopped-and-closed but not yet believed. Kept on disk for the same
+# reason the rate-limit gate is: the question spans ticks, and a tick is a
+# process that remembers nothing of the last one.
+#
+# Every warning below goes to stderr rather than through ux_warning's default
+# stdout, because these run inside the command substitution that builds
+# _IW_LIVE_AGENTS — a warning on stdout would be read back as a live agent.
+
+_iw_zombie_candidates_file() {
+    printf '%s/%s' "$(_iw_state_dir)" "${_IW_ZOMBIE_CANDIDATES_BASENAME}"
+}
+
+# Echo the epoch this repo+issue was first seen stopped, or nothing. A missing
+# file, an unreadable one and an absent row are all "nothing" (NF-1) — the
+# caller reads that as "first sighting" and starts the clock.
+_iw_zombie_candidate_ts() {
+    local _file
+    _file=$(_iw_zombie_candidates_file)
+    [ -f "${_file}" ] || return 0
+    awk -F "${_IW_TAB}" -v r="$1" -v n="$2" \
+        '$1 == r && $2 == n { print $3; exit }' "${_file}" 2>/dev/null
+}
+
+# Start the clock for <repo> <number> at <epoch> — but only if it is not
+# already running. Overwriting would reset the grace window on every tick and
+# no pane would ever age out, which is exactly the bug this file prevents.
+#
+# The rewrite also drops rows older than six grace windows: an issue collected
+# through some other path leaves a row nobody will ever look up again, and a
+# state file that only grows is a slow leak.
+_iw_zombie_candidate_mark() {
+    local _dir _file _tmp _cutoff
+
+    [ -z "$(_iw_zombie_candidate_ts "$1" "$2")" ] || return 0
+
+    _dir=$(_iw_state_dir)
+    _file=$(_iw_zombie_candidates_file)
+    if ! mkdir -p "${_dir}" 2>/dev/null; then
+        ux_warning "Cannot create state directory (${_dir}) — the zombie grace clock will not survive this tick." >&2
+        return 1
+    fi
+
+    # Same directory as the target on purpose: `mv` is only atomic within one
+    # filesystem, so a temp file under /tmp would trade the guarantee away.
+    _tmp="${_file}.$$"
+    _cutoff=$(($3 - 6 * _IW_ZOMBIE_GRACE_SECONDS))
+    if {
+        [ ! -f "${_file}" ] ||
+            awk -F "${_IW_TAB}" -v r="$1" -v n="$2" -v c="${_cutoff}" \
+                'NF == 3 && !($1 == r && $2 == n) && $3 + 0 >= c' "${_file}"
+        printf '%s\t%s\t%s\n' "$1" "$2" "$3"
+    } >"${_tmp}" 2>/dev/null && mv -f "${_tmp}" "${_file}" 2>/dev/null; then
+        return 0
+    fi
+
+    rm -f "${_tmp}" 2>/dev/null || true
+    ux_warning "Cannot write ${_file} — the zombie grace clock will not survive this tick." >&2
+    return 1
+}
+
+# Stop the clock for <repo> <number>. Called whenever the pane is observed
+# working, or its issue is not closed, so a session that resumed mid-grace
+# starts from zero the next time it goes quiet instead of being reclaimed the
+# instant it does. Silent about failure: a clock that could not be cleared only
+# ever costs a false zombie one grace window later, and never a wrong dispatch.
+_iw_zombie_candidate_clear() {
+    local _file _tmp
+
+    _file=$(_iw_zombie_candidates_file)
+    [ -f "${_file}" ] || return 0
+
+    _tmp="${_file}.$$"
+    if awk -F "${_IW_TAB}" -v r="$1" -v n="$2" \
+        '!($1 == r && $2 == n)' "${_file}" >"${_tmp}" 2>/dev/null; then
+        mv -f "${_tmp}" "${_file}" 2>/dev/null || rm -f "${_tmp}" 2>/dev/null || true
+    else
+        rm -f "${_tmp}" 2>/dev/null || true
+    fi
+    return 0
 }
 
 # Prime the memo with "nothing is running" after a failed lookup. Only
