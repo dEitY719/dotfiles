@@ -10,7 +10,7 @@
     {
       "name": "issue-watcher",
       "script": "shell-common/tools/custom/issue_watcher_cron.sh",
-      "schedule": "*/11 * * * *",
+      "schedule": "*/3 * * * *",
       "args": ["--cwd", "$HOME/dotfiles"],
       "env": {},
       "description": "할당 이슈 감시 후 gh:issue-flow 디스패치"
