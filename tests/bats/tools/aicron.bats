@@ -355,11 +355,27 @@ _capture_json() {
     assert_success
 }
 
-@test "aicron: help denotes --json as optional consistently for list and status (#1499)" {
+@test "aicron: help denotes --json as optional consistently for list and status, and the status row wraps aligned with the rest of the table (#1499, PR #1588 codex review BLOCKER)" {
+    # A plain --partial substring match only proves the label text appears
+    # somewhere in the output — it would still pass if ux_table_row's wrap
+    # column or line-count regressed. Pin the exact wrapped rendering
+    # instead, the same way tests/bats/tools/ux_lib_table_row.bats does for
+    # ux_table_row itself: `status <job> [--json]` is 21 chars, one over the
+    # 20-char threshold, so it must render on its own line with the
+    # description on the next line, colon-aligned with every other row.
     _aicron help
     assert_success
     assert_output --partial "list [--json]"
-    assert_output --partial "status <job> [--json]"
+
+    local idx=-1 i
+    for i in "${!lines[@]}"; do
+        if [ "${lines[$i]}" = "  status <job> [--json]" ]; then
+            idx="$i"
+            break
+        fi
+    done
+    [ "$idx" -ge 0 ]
+    [ "${lines[$((idx + 1))]}" = "$(printf '  %-20s : %s' '' 'running now, schedule, last run result')" ]
 }
 
 @test "aicron: runs under /bin/sh with no bash-only syntax (NF-3)" {
