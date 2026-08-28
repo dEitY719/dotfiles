@@ -669,10 +669,13 @@ _pmt_settle() {
 # `2>&1` for the same reason `_pmt_agent_start` uses one (line ~543) — stdout
 # stays on its own pipe because `.error.code` is read off it first.
 _pmt_prompt_train() {
-    local _agent="$1" _prompt _json _code _rc=0 _errf _cause
+    local _agent="$1" _prompt _json _rc=0 _errf _code="" _cause="" _msg
 
     _prompt="/gh-pr-merge-train ${_PMT_REPO}"
 
+    # A `local` capture file is enough here where _pmt_launch_fresh needs the
+    # _PMT_ERRF global (line ~149): the trap is disarmed at the single exit
+    # below, so it can never fire once _errf has gone out of scope.
     _errf=$(mktemp) || {
         ux_error "cannot open a capture file for herdr's stderr — ending this tick."
         return 1
@@ -680,14 +683,22 @@ _pmt_prompt_train() {
     trap 'rm -f "${_errf}"' EXIT INT TERM
     _json=$(herdr agent prompt "${_agent}" "${_prompt}" \
         --wait --timeout "${_PMT_TIMEOUT_MS}" 2>"${_errf}") || _rc=$?
+
+    # Read both halves of herdr's answer *before* the file goes away, so the
+    # branches below only decide what to print. One disarm and one `rm`, on the
+    # single path every outcome passes through: a classification added later
+    # cannot forget to clean up, which three copies of this pair invited.
+    if [ "${_rc}" -ne 0 ]; then
+        _code=$(_pmt_herdr_error_code "${_json}" "${_errf}")
+        _cause=$(_pmt_herdr_error_message "${_errf}")
+    fi
+    trap - EXIT INT TERM
+    rm -f "${_errf}"
+
     if [ "${_rc}" -eq 0 ]; then
-        trap - EXIT INT TERM
-        rm -f "${_errf}"
         ux_success "Dispatched to ${_agent}: ${_prompt}"
         return 0
     fi
-
-    _code=$(_pmt_herdr_error_code "${_json}" "${_errf}")
 
     # No retry, and deliberately none: a prompt that *did* land but looked
     # stalled would earn a second train on the same repo, which is precisely
@@ -698,17 +709,12 @@ _pmt_prompt_train() {
     # acceptance criterion never fires on a train that is actually running.
     case "${_code}" in
     timeout | agent_prompt_stalled)
-        trap - EXIT INT TERM
-        rm -f "${_errf}"
         ux_warning "Prompt submitted to ${_agent} but its state was not observed within the wait window (${_code}) — treating as dispatched."
         ux_success "Dispatched to ${_agent}: ${_prompt}"
         return 0
         ;;
     esac
 
-    _cause=$(_pmt_herdr_error_message "${_errf}")
-    trap - EXIT INT TERM
-    rm -f "${_errf}"
     _msg="herdr agent prompt failed for agent ${_agent} (${_code:-unknown})."
     [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
