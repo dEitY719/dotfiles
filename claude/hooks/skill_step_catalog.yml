@@ -36,6 +36,11 @@
 #     missing IDs.
 #   - Bypass any check globally with `GH_SKILL_GUARD_BYPASS=1`.
 #   - Trace what the hook is doing with `GH_SKILL_GUARD_TRACE=1` (stderr).
+#   - A step whose work was handed to a background Agent may stand in a
+#     `[flow:async-wait] step=<skill>/<step-id> agent=<id>
+#     reason=background-worker-delegated` line instead of its OK marker, for
+#     up to `GH_SKILL_GUARD_ASYNC_WAIT_LIMIT` turns (`0` disables). Default
+#     and mechanism: `claude/skills/gh-issue-flow/references/stop-guard.md`.
 #
 # Coexistence with gh_issue_flow_stop_guard.py:
 #   Stop hooks chain in `claude/settings.json` and run independently. Both
