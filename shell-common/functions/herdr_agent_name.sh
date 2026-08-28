@@ -34,14 +34,11 @@
 #   16 (max)      6
 #
 # A 16-char repo with a 7-digit issue number (33 chars) overruns this and
-# `herdr_agent_name` correctly returns 1 — see the length-limit check below.
-# That rejection is fail-closed and intentional (truncating instead would let
-# two different issues collide on one name and defeat the NF-1 lock a caller
-# builds on top of it); what is NOT yet true today is unreachable, since this
-# repo's own slug (`dotfiles`, 8 chars) leaves 14 digits of headroom. The day
-# a repo nearer the 16-char cap joins the watch list, this stops being
-# theoretical — `tests/bats/functions/herdr_agent_name.bats` pins the
-# rejection so it fails loudly rather than silently when that day comes.
+# `herdr_agent_name` returns 1 — fail-closed by design (truncating instead
+# would let two different issues collide on one name). Not reachable today,
+# since this repo's own slug (`dotfiles`, 8 chars) leaves 14 digits of
+# headroom — pinned by `tests/bats/functions/herdr_agent_name.bats` T18b so
+# it fails loudly, not silently, once a repo nearer the cap joins the list.
 #
 # The host and the owner are deliberately NOT part of the name. That is a
 # concession, not an oversight, and it costs uniqueness on BOTH axes (PR #1532
