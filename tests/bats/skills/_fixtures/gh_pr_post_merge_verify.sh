@@ -417,7 +417,7 @@ pmv_agent_prompt() {
 gh_pr_post_merge_verify() {
     local _pr="$1" _repo="$2" _host="$3" _main="$4" _branch="$5" _file="$6"
     local _remote="${7:-origin}" _base="${8-}"
-    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code _fresh
+    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code
 
     _skill=$(pmv_gate "$_file" "$_repo")
     _rc=$?
@@ -496,7 +496,6 @@ gh_pr_post_merge_verify() {
     # for here rather than right after the tab create so a repo whose name
     # cannot be derived skips out without paying 13s first.
     pmv_settle
-    _fresh=1
     if ! _out=$(pmv_agent_start "$_agent" "$_pane"); then
         # Race backstop, same as _pmt_launch_fresh: the name can be claimed
         # between the probe and the start, and its holder is by definition a
@@ -507,13 +506,14 @@ gh_pr_post_merge_verify() {
                 "$_agent" "$_pane" "${_code:-unknown}"
             return 0
         fi
+        # This session was already registered, so it has been up for a while
+        # and takes the prompt at once — no need to pay the settle wait below.
         printf '[WARN] gh:pr-post-merge-verify: agent %s already registered — prompting the existing session.\n' "$_agent"
-        _fresh=0
+    else
+        # A just-started claude is idle but not yet listening (#1571) — this
+        # settle wait is what lets it start listening before the prompt lands.
+        pmv_settle
     fi
-    # A just-started claude is idle but not yet listening; a session that was
-    # already registered has been up for a while, so the fallback path must not
-    # pay this (same rule as _pmt_launch_fresh).
-    [ "$_fresh" = "0" ] || pmv_settle
 
     # --- 6. hand the verification over ---
     if ! _out=$(pmv_agent_prompt "$_agent" "$(pmv_verify_prompt "$_skill" "$_pr")"); then
