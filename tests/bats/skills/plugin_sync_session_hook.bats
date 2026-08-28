@@ -90,8 +90,12 @@ _stop() {
     run jq -e '.plugins | (any(. == "plug-a@mp-a") and any(. == "plug-b@mp-b"))' \
         "$MAIN_ROOT/claude/plugin/plugins.json"
     assert_success
+    # End-to-end proof of #1558: this driver reaches plugin-sync.sh through the
+    # __slash_command_sync__ sentinel, which has no single target — so the
+    # title names every key the re-sync actually added instead of the bare
+    # subject that used to make an 11-plugin sync look like a no-op one.
     run git -C "$MAIN_ROOT" log -1 --format=%s
-    assert_output "chore(claude-plugin): sync manifest"
+    assert_output "chore(claude-plugin): sync manifest (+mp-a +mp-b +plug-a@mp-a +plug-b@mp-b)"
 }
 
 # --- (c) no baseline (first session) → Stop still syncs ----------------------

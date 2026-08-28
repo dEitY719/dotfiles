@@ -298,7 +298,11 @@ JSON
     assert_output "seed"
 }
 
-@test "install → internal reserved sentinel (session-hook bulk resync) commits without a parenthesized name (#1430)" {
+@test "install → internal reserved sentinel (session-hook bulk resync) names the keys it actually changed (#1430, #1558)" {
+    # The sentinel is a bulk SSOT re-sync, not a single install, so the
+    # placeholder name must never reach the title (#1430). Titling it bare
+    # left `git log --oneline` unable to tell one bulk sync from another
+    # (#1558) — now it lists the changed keys the way reconcile.sh does.
     _known_marketplaces
     _installed_plugins
     payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install __slash_command_sync__"}}'
@@ -306,7 +310,87 @@ JSON
     assert_success
 
     run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest (+claude-plugins-official +ralph-loop@claude-plugins-official)"
+}
+
+@test "install → bulk resync title lists only what this run changed, never the merge-preserved entries (#1558)" {
+    # The add path MERGES (union) — it never deletes. A title computed
+    # against the raw SSOT target would claim "-pre-existing" for an entry
+    # the commit deliberately keeps, so the keys are diffed against the
+    # merged value that is actually written.
+    _known_marketplaces
+    _installed_plugins
+    echo '{"pre-existing": "someone/else"}' > "$MAIN_ROOT/claude/plugin/marketplaces.json"
+    echo '{"plugins": ["pre-existing-plugin@pre-existing"]}' > "$MAIN_ROOT/claude/plugin/plugins.json"
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install __slash_command_sync__"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest (+claude-plugins-official +ralph-loop@claude-plugins-official)"
+    refute_output --partial "-pre-existing"
+}
+
+@test "install → bulk resync title truncates past 4 changed keys like reconcile.sh (#1558)" {
+    cat > "$SRC/known_marketplaces.json" <<'JSON'
+{
+  "claude-plugins-official": {"source": {"source": "github", "repo": "anthropics/claude-plugins-official"}}
+}
+JSON
+    cat > "$SRC/installed_plugins.json" <<'JSON'
+{
+  "plugins": {
+    "aa@claude-plugins-official": [{"scope": "user"}],
+    "bb@claude-plugins-official": [{"scope": "user"}],
+    "cc@claude-plugins-official": [{"scope": "user"}],
+    "dd@claude-plugins-official": [{"scope": "user"}],
+    "ee@claude-plugins-official": [{"scope": "user"}]
+  }
+}
+JSON
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install __slash_command_sync__"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    # 6 changed keys (1 marketplace + 5 plugins) → first 3 + "외 3개".
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest (+claude-plugins-official +aa@claude-plugins-official +bb@claude-plugins-official 외 3개)"
+}
+
+@test "install → bulk resync computes the company/ commit title from the private manifest, not the public one (#1558)" {
+    _known_marketplaces
+    _installed_plugins
+    mkdir -p "$MAIN_ROOT/claude/plugin/company"
+    git -C "$MAIN_ROOT/claude/plugin/company" init -q
+    git -C "$MAIN_ROOT/claude/plugin/company" config user.email "hook-test@example.com"
+    git -C "$MAIN_ROOT/claude/plugin/company" config user.name "hook-test"
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install __slash_command_sync__"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    run git -C "$MAIN_ROOT/claude/plugin/company" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest (+internal-tools +secret@internal-tools)"
+    run git -C "$MAIN_ROOT" log -1 --format=%s
+    assert_output "chore(claude-plugin): sync manifest (+claude-plugins-official +ralph-loop@claude-plugins-official)"
+}
+
+@test "install → bulk resync falls back to the bare subject when the title helper is unavailable (#1558)" {
+    # Stale install / missing shell-common: the hook is best-effort and must
+    # still commit under the bare subject rather than dying on an undefined
+    # _build_sync_title (which would leave the manifest uncommitted).
+    _known_marketplaces
+    _installed_plugins
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install __slash_command_sync__"}}'
+    run bash -c "printf '%s' '$payload' | SHELL_COMMON='$TEST_TEMP_HOME/no-such-dir' '$HOOK'"
+    assert_success
+
+    run git -C "$MAIN_ROOT" log -1 --format=%s
     assert_output "chore(claude-plugin): sync manifest"
+    run git -C "$MAIN_ROOT" status --porcelain
+    assert_output ""
 }
 
 @test "no-op re-run does not create an empty commit" {

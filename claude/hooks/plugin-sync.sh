@@ -70,8 +70,13 @@ fi
 # reserved dummy target (__slash_command_sync__) to trigger a full SSOT
 # re-sync that can add several plugins/marketplaces at once — not a single
 # real install. Naming that placeholder in the commit title would mislead
-# more than the plain title does, so it degrades to no name (#1430).
+# more than the plain title does, so it never reaches the title (#1430).
+# The bulk path instead names the keys it actually changed, computed just
+# before the write (#1558) — the bare subject it used to get made an
+# eleven-plugin re-sync indistinguishable from a no-op one in `git log`.
+BULK_RESYNC=0
 if [ "$target" = "__slash_command_sync__" ]; then
+	BULK_RESYNC=1
 	target=""
 fi
 
@@ -79,9 +84,16 @@ fi
 # `git log --oneline` distinguishes syncs instead of showing the same
 # subject for every plugin change (#1430). Falls back to the bare SYNC_MSG
 # when no target was parsed (unrecognized command shape, or the sentinel
-# above).
+# above — see _resolve_sync_title for what the sentinel path uses instead).
 SYNC_TITLE="$SYNC_MSG"
 [ -n "$target" ] && SYNC_TITLE="$SYNC_MSG ($target)"
+
+# Title helpers shared with claude/plugin/reconcile.sh --apply so both
+# writers of this commit emit one format (#1558). Best-effort like the rest
+# of the hook: a missing helper (stale install) just leaves
+# _resolve_sync_title falling back to $SYNC_TITLE.
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
 
 MAIN_ROOT="$HOME/dotfiles"
 [ -d "$MAIN_ROOT/.git" ] || exit 0
@@ -177,6 +189,43 @@ _extract_plugins_for_mp() {
     ' "$PL_SRC"
 }
 
+# Replace manifest $1 with content $2 atomically. An empty $2 means the jq
+# that produced it failed — leave the file alone rather than truncating it
+# (the older `jq ... >tmp && mv` form got that for free).
+_write_manifest() {
+	[ -n "$2" ] || return 0
+	printf '%s\n' "$2" >"$1.tmp" && mv "$1.tmp" "$1"
+}
+
+# Commit title for one manifest pair. A single install/uninstall keeps the
+# "(<target>)" title #1430 gave it; the SessionStart bulk re-sync has no
+# single target, so it names the keys this run actually changes (#1558),
+# in reconcile.sh --apply's format.
+#
+# $1/$3 are the manifest files as they still are on disk (call before the
+# write); $2/$4 are the MERGED values about to be written. Diffing against
+# the merged value rather than the raw SSOT target is what keeps the title
+# honest — this path unions and never deletes, so an entry the merge
+# preserves must never be reported as "-entry".
+#
+# Any failure (helper not sourced, jq error, malformed manifest) degrades to
+# the bare subject: this hook always exits 0.
+_resolve_sync_title() {
+	local changed
+	if [ "$BULK_RESYNC" != "1" ] || ! command -v _build_sync_title >/dev/null 2>&1; then
+		printf '%s' "$SYNC_TITLE"
+		return 0
+	fi
+	changed=$(
+		_changed_keys_marketplaces "$1" "$2" 2>/dev/null
+		_changed_keys_plugins "$3" "$4" 2>/dev/null
+	)
+	# Word splitting is intended: the helpers print one key per line and a
+	# marketplace/plugin key never contains whitespace.
+	# shellcheck disable=SC2086
+	_build_sync_title "$SYNC_MSG" $changed
+}
+
 if [ "$action" = "add" ]; then
 	[ -f "$MP_SRC" ] && [ -f "$PL_SRC" ] || exit 0
 
@@ -193,29 +242,35 @@ if [ "$action" = "add" ]; then
 	plugins_internal=$(_extract_plugins_for_mp "$mp_internal") || exit 0
 
 	mkdir -p "$PUB_DIR"
-	jq -n --argjson old "$(_read_json_or "$PUB_DIR/marketplaces.json" '{}')" \
-		--argjson new "$mp_common" '$old * $new' \
-		>"$PUB_DIR/marketplaces.json.tmp" &&
-		mv "$PUB_DIR/marketplaces.json.tmp" "$PUB_DIR/marketplaces.json"
-	jq -n --argjson old "$(_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')" \
+	# Merge into variables first, then write. The merged value is both what
+	# lands on disk and what _resolve_sync_title diffs the current manifest
+	# against (#1558) — computing it once is what stops the commit title and
+	# the commit content from ever disagreeing.
+	mp_pub=$(jq -n --argjson old "$(_read_json_or "$PUB_DIR/marketplaces.json" '{}')" \
+		--argjson new "$mp_common" '$old * $new')
+	pl_pub=$(jq -n --argjson old "$(_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')" \
 		--argjson new "$plugins_common" \
-		'{plugins: (($old.plugins? // []) + $new | unique | sort)}' \
-		>"$PUB_DIR/plugins.json.tmp" &&
-		mv "$PUB_DIR/plugins.json.tmp" "$PUB_DIR/plugins.json"
-	_commit_if_changed "$MAIN_ROOT" "$SYNC_TITLE" \
+		'(($old.plugins? // []) + $new | unique | sort)')
+	pub_title=$(_resolve_sync_title \
+		"$PUB_DIR/marketplaces.json" "$mp_pub" "$PUB_DIR/plugins.json" "$pl_pub")
+	_write_manifest "$PUB_DIR/marketplaces.json" "$mp_pub"
+	_write_manifest "$PUB_DIR/plugins.json" "$(jq -n --argjson p "$pl_pub" '{plugins: $p}')"
+	_commit_if_changed "$MAIN_ROOT" "$pub_title" \
 		claude/plugin/marketplaces.json claude/plugin/plugins.json
 
 	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
-		jq -n --argjson old "$(_read_json_or "$PRIV_DIR/marketplaces.json" '{}')" \
-			--argjson new "$mp_internal" '$old * $new' \
-			>"$PRIV_DIR/marketplaces.json.tmp" &&
-			mv "$PRIV_DIR/marketplaces.json.tmp" "$PRIV_DIR/marketplaces.json"
-		jq -n --argjson old "$(_read_json_or "$PRIV_DIR/plugins.json" '{"plugins":[]}')" \
+		# Its own commit over its own files, so its own title — reusing the
+		# public one would name public keys in a private-repo commit.
+		mp_priv=$(jq -n --argjson old "$(_read_json_or "$PRIV_DIR/marketplaces.json" '{}')" \
+			--argjson new "$mp_internal" '$old * $new')
+		pl_priv=$(jq -n --argjson old "$(_read_json_or "$PRIV_DIR/plugins.json" '{"plugins":[]}')" \
 			--argjson new "$plugins_internal" \
-			'{plugins: (($old.plugins? // []) + $new | unique | sort)}' \
-			>"$PRIV_DIR/plugins.json.tmp" &&
-			mv "$PRIV_DIR/plugins.json.tmp" "$PRIV_DIR/plugins.json"
-		_commit_if_changed "$PRIV_DIR" "$SYNC_TITLE" \
+			'(($old.plugins? // []) + $new | unique | sort)')
+		priv_title=$(_resolve_sync_title \
+			"$PRIV_DIR/marketplaces.json" "$mp_priv" "$PRIV_DIR/plugins.json" "$pl_priv")
+		_write_manifest "$PRIV_DIR/marketplaces.json" "$mp_priv"
+		_write_manifest "$PRIV_DIR/plugins.json" "$(jq -n --argjson p "$pl_priv" '{plugins: $p}')"
+		_commit_if_changed "$PRIV_DIR" "$priv_title" \
 			marketplaces.json plugins.json
 	elif [ "$mp_internal" != "{}" ] && [ ! -d "$PRIV_DIR/.git" ]; then
 		# 사내(non-github) 마켓플레이스가 감지됐지만 이 PC 에는 company/ 레포가

@@ -95,6 +95,16 @@ command -v jq >/dev/null 2>&1 || {
 	exit 1
 }
 
+# Commit-title helpers (_changed_keys_marketplaces / _changed_keys_plugins /
+# _build_sync_title) live in shell-common so claude/hooks/plugin-sync.sh can
+# reuse the identical format instead of growing a second copy (#1558).
+# Resolved via $SHELL_COMMON rather than $SCRIPT_DIR because this script is
+# also run from a copy that has no shell-common sibling (bats fixtures).
+# Only --apply needs them, so the missing-helper check lives in _run_apply —
+# --check must keep working on a half-installed tree.
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
+
 PUB_DIR="$SCRIPT_DIR"
 PRIV_DIR="$SCRIPT_DIR/company"
 
@@ -243,46 +253,10 @@ _run_check() {
 
 # --- --apply --------------------------------------------------------------
 
-# Bare "+key"/"-key"/"~key" tokens (no explanatory text, unlike
-# _diff_marketplaces/_diff_plugins above) for embedding in a commit title.
-_changed_keys_marketplaces() {
-	local current_file="$1" target="$2" current
-	current=$(_read_json_or "$current_file" '{}')
-	jq -rn --argjson c "$current" --argjson t "$target" '
-        [ ($t | to_entries[] | select($c[.key] == null) | "+\(.key)"),
-          ($c | to_entries[] | select($t[.key] == null) | "-\(.key)"),
-          ($t | to_entries[] | select($c[.key] != null and $c[.key] != .value) | "~\(.key)") ]
-        | .[]
-    '
-}
-
-_changed_keys_plugins() {
-	local current_file="$1" target="$2" current
-	current=$(_read_json_or "$current_file" '{"plugins":[]}')
-	jq -rn --argjson c "$current" --argjson t "$target" '
-        ($c.plugins // []) as $cur |
-        [ ($t[]   | select(. as $x | ($cur | index($x)) | not) | "+\(.)"),
-          ($cur[] | select(. as $x | ($t   | index($x)) | not) | "-\(.)") ]
-        | .[]
-    '
-}
-
-# Build a commit title naming the changed entries so `git log --oneline`
-# distinguishes syncs instead of showing the same subject every time
-# (#1430). No items → bare $1. More than 4 → first 3 + "외 N개" so the
-# title never grows unbounded on a large SSOT re-sync.
-_build_sync_title() {
-	local base="$1"
-	shift
-	local n="$#"
-	if [ "$n" -eq 0 ]; then
-		printf '%s' "$base"
-	elif [ "$n" -gt 4 ]; then
-		printf '%s (%s 외 %d개)' "$base" "${*:1:3}" "$((n - 3))"
-	else
-		printf '%s (%s)' "$base" "$*"
-	fi
-}
+# _changed_keys_marketplaces / _changed_keys_plugins / _build_sync_title are
+# sourced from shell-common/functions/plugin_sync_title.sh at the top of this
+# script — claude/hooks/plugin-sync.sh builds the same title from the same
+# SSOT (#1558).
 
 # Write pretty (2-space) JSON to $1 only when the content actually differs,
 # so an unchanged file keeps its mtime and never triggers a no-op commit.
@@ -326,6 +300,13 @@ _commit_if_changed() {
 _run_apply() {
 	if [ -z "$MAIN_ROOT" ]; then
 		echo "${UX_ERROR}git 저장소를 찾을 수 없습니다 ($SCRIPT_DIR). dotfiles 안에서 실행하세요.${UX_RESET}" >&2
+		exit 1
+	fi
+	# Commit titles come from the shell-common helper sourced at the top of
+	# this script; without it --apply would commit under an empty subject.
+	if ! command -v _build_sync_title >/dev/null 2>&1; then
+		echo "${UX_ERROR}shell-common/functions/plugin_sync_title.sh 를 불러오지 못했습니다.${UX_RESET}" >&2
+		echo "${UX_ERROR}  → dotfiles 설치를 확인하거나 SHELL_COMMON 을 설정하세요.${UX_RESET}" >&2
 		exit 1
 	fi
 
