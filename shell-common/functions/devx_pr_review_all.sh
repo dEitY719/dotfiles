@@ -149,9 +149,12 @@ devx_pr_review_all_parse() {
 #     -> blocking | concerns | lgtm | unknown
 #   devx_pr_review_all_aggregate                     # verdict tokens on stdin,
 #     -> label=review-blocked | label=review-passed | label=   (+ lanes=N)
+#   devx_pr_review_all_apply_label <pr> <repo> [host] # verdict tokens on stdin
+#     -> aggregates, then writes the label to the PR. One `[OK]`/`[WARN]` line.
 #
 # devx_pr_review_all_aggregate reads stdin, NOT positional args — load-bearing,
 # not stylistic; see the doc for the zsh bug that forces it.
+# devx_pr_review_all_apply_label takes the same stream for the same reason.
 #
 # Skipped lanes contribute NO line — "not checked" and "checked and passed"
 # must never collapse into the same state (#1527 확정 사항).
@@ -307,3 +310,120 @@ devx_pr_review_all_lane_block() {
         END { printf "%s", last }
     '
 }
+
+# Aggregate the verdict stream and WRITE the resulting label to the PR.
+# This is the producer half of the merge gate (#1564): without it the two
+# labels are never issued, `gh:pr-merge-train` reads "not verified" on every
+# PR, and the gate degrades into a permanent skip.
+#
+#   <verdict tokens, one per line> | devx_pr_review_all_apply_label <pr> <repo> [host]
+#
+# Stdin, not positional args, for the zsh word-splitting reason
+# devx_pr_review_all_aggregate's own header gives — a caller staging the
+# verdicts in a variable and re-expanding it unquoted loses every lane but
+# the first, which is #1527's original defect wearing a new hat.
+#
+# Contract (SSOT: claude/skills/devx-pr-review-all/references/review-verdict-label.md
+# -> "Applying the label"):
+#   - The OPPOSITE label is deleted first and unconditionally, so a re-review
+#     that flips blocked -> passed cannot leave a consumer seeing both.
+#   - The add goes through `_gh_pr_edit_safe_label`, never bare
+#     `gh pr edit --add-label`: that silently exits 1 on repos with classic
+#     Projects attached (#326). rc 3 means the label is missing in the repo
+#     and the helper refused to auto-create it — provision it with
+#     `gh:label-bootstrap`.
+#   - Soft-fail throughout: rc is 0 for every labelling outcome, because an
+#     unlabelled PR already reads as "not verified" downstream. Only a usage
+#     error (rc 2) is a caller bug worth failing on.
+#   - GH_HOST is pinned per call inside a subshell so a dual-host login cannot
+#     write the label to the wrong server (#1403 / #1407), and the caller's own
+#     GH_HOST is left untouched.
+devx_pr_review_all_apply_label() {
+    local _pr="$1" _repo="$2" _host="${3-}"
+    local _agg _label _lanes _opposite _rc
+
+    if [ -z "$_pr" ] || [ -z "$_repo" ]; then
+        printf '[devx-pr-review-all] usage: devx_pr_review_all_apply_label <pr> <repo> [host]\n' >&2
+        return 2
+    fi
+
+    _agg=$(devx_pr_review_all_aggregate)
+    # `sed`, not `eval`: the values are controlled, but a parser that cannot
+    # execute anything is the right default for something that gates a merge.
+    _label=$(printf '%s\n' "$_agg" | sed -n 's/^label=//p')
+    _lanes=$(printf '%s\n' "$_agg" | sed -n 's/^lanes=//p')
+
+    if [ -z "$_label" ]; then
+        printf '[WARN] no reviewer lane produced a verdict — PR #%s left unlabelled\n' "$_pr"
+        return 0
+    fi
+
+    case "$_label" in
+        review-blocked) _opposite=review-passed ;;
+        *) _opposite=review-blocked ;;
+    esac
+
+    # The add-side helper lives in a sibling library. Both files are
+    # auto-sourced into an interactive shell, but the skill's Bash tool calls
+    # run `bash --noprofile --norc`, so source it on demand rather than
+    # assuming the caller did.
+    if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh" 2>/dev/null || :
+    fi
+    if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
+        printf '[WARN] _gh_pr_edit_safe_label unavailable — PR #%s left unlabelled\n' "$_pr"
+        return 0
+    fi
+
+    (
+        if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+            export GH_HOST="$_host"
+        fi
+        gh api -X DELETE "repos/$_repo/issues/$_pr/labels/$_opposite"
+    ) >/dev/null 2>&1 || :
+
+    # `|| _rc=$?`, not a bare subshell followed by `_rc=$?`: this file is
+    # sourced into callers that may have `set -e` armed (bats test bodies do),
+    # and there errexit fires on the subshell's non-zero exit BEFORE the
+    # capture runs — the soft-fail contract would silently become a hard fail
+    # on exactly the rc 3 path the caller most needs to report.
+    _rc=0
+    (
+        if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+            export GH_HOST="$_host"
+        fi
+        _gh_pr_edit_safe_label "$_pr" "$_label" --repo "$_repo"
+    ) || _rc=$?
+
+    # The backticks below are markdown in the report line (the label name
+    # renders as code in a terminal-pasted comment), not command
+    # substitution — single-quoted printf formats never expand.
+    # shellcheck disable=SC2016
+    case "$_rc" in
+        0) printf '[OK] PR #%s labelled `%s` (%s lane(s))\n' "$_pr" "$_label" "$_lanes" ;;
+        3) printf '[WARN] label `%s` missing in %s — provision it first (gh:label-bootstrap)\n' \
+            "$_label" "$_repo" ;;
+        *) printf '[WARN] labelling PR #%s failed — treat the PR as unverified\n' "$_pr" ;;
+    esac
+    return 0
+}
+
+# Self-check (issue #724): this file is sourced by the devx:pr-review-all skill
+# in non-interactive bash. A syntax error mid-file or a future rename would
+# leave the verdict path silently undefined — which reads as "no lane produced
+# a verdict", i.e. every PR unlabelled and every merge skipped (#1564).
+for _dpra_selfcheck_fn in \
+    devx_pr_review_all_parse \
+    devx_pr_review_all_verdict \
+    devx_pr_review_all_aggregate \
+    devx_pr_review_all_lane_block \
+    devx_pr_review_all_apply_label; do
+    command -v "$_dpra_selfcheck_fn" >/dev/null 2>&1 && continue
+    printf '[devx_pr_review_all] BUG: %s undefined after source — the review verdict gate will not run. See dotfiles #724 / #1564.\n' \
+        "$_dpra_selfcheck_fn" >&2
+done
+unset _dpra_selfcheck_fn
+:

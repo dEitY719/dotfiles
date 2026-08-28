@@ -676,3 +676,161 @@ BODY
     assert_success
     assert_output --partial "RESULT label=[] lanes=0"
 }
+
+# ---------------------------------------------------------------------------
+# devx_pr_review_all_apply_label — the producer half of the merge gate (#1564)
+# ---------------------------------------------------------------------------
+#
+# Until #1564 nothing in the repo WROTE these labels: the parser and the
+# aggregator existed, `_gh_pr_drop_label` removed them, and the merge-train
+# gate had nothing to read. This section pins the write side. `gh` and
+# `_gh_pr_edit_safe_label` are stubbed as shell functions — no network, and
+# the add-side helper has its own suite (tests/bats/functions/gh_pr_edit_safe.bats).
+
+_apply_stub() {
+    APPLY_LOG="${BATS_TEST_TMPDIR}/apply.log"
+    : >"$APPLY_LOG"
+    # shellcheck disable=SC2317  # invoked indirectly by the function under test
+    gh() {
+        printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$APPLY_LOG"
+        return "${STUB_GH_RC:-0}"
+    }
+    # shellcheck disable=SC2317  # invoked indirectly by the function under test
+    _gh_pr_edit_safe_label() {
+        printf 'add %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$APPLY_LOG"
+        return "${STUB_ADD_RC:-0}"
+    }
+}
+
+@test "apply_label: a blocking lane labels review-blocked and clears the opposite" {
+    _apply_stub
+    printf '%s\n' lgtm blocking | devx_pr_review_all_apply_label 7 acme/widget github.com >"${BATS_TEST_TMPDIR}/out"
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial '[OK] PR #7 labelled `review-blocked` (2 lane(s))'
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/7/labels/review-passed'
+    assert_output --partial 'add 7 review-blocked --repo acme/widget'
+}
+
+@test "apply_label: all-passing lanes label review-passed and clear review-blocked" {
+    _apply_stub
+    printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial '[OK] PR #7 labelled `review-passed` (2 lane(s))'
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/7/labels/review-blocked'
+    assert_output --partial 'add 7 review-passed --repo acme/widget'
+}
+
+# Absence is the third state and it must stay reachable: an empty stream is
+# "nothing was checked", never a pass, and it must not write ANY label.
+@test "apply_label: an empty verdict stream writes no label at all" {
+    _apply_stub
+    printf '' | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'no reviewer lane produced a verdict — PR #7 left unlabelled'
+    run cat "$APPLY_LOG"
+    assert_output ""
+}
+
+# A lane that ran but whose verdict could not be parsed is fail-closed too:
+# `unknown` yields no label, so the train reads "not verified".
+@test "apply_label: an unknown lane leaves the PR unlabelled" {
+    _apply_stub
+    printf '%s\n' lgtm unknown | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'left unlabelled'
+    run cat "$APPLY_LOG"
+    assert_output ""
+}
+
+# rc 3 = the label does not exist in the repo and _gh_pr_edit_safe_label
+# refuses to auto-create it (#326). Name the fix, do not fail the run.
+@test "apply_label: rc 3 from the add helper warns to provision the label" {
+    _apply_stub
+    STUB_ADD_RC=3
+    printf '%s\n' blocking | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    unset STUB_ADD_RC
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'label `review-blocked` missing in acme/widget'
+    assert_output --partial 'gh:label-bootstrap'
+}
+
+@test "apply_label: any other add failure warns 'treat the PR as unverified'" {
+    _apply_stub
+    STUB_ADD_RC=1
+    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    unset STUB_ADD_RC
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'labelling PR #7 failed — treat the PR as unverified'
+}
+
+# Soft-fail: every labelling outcome is rc 0, because an unlabelled PR already
+# reads as "not verified" downstream. Only a usage error is a caller bug.
+@test "apply_label: a failing add still returns 0 (soft-fail)" {
+    _apply_stub
+    STUB_ADD_RC=1
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        _gh_pr_edit_safe_label() { return 1; }
+        gh() { return 0; }
+        printf 'lgtm\n' | devx_pr_review_all_apply_label 7 acme/widget
+    "
+    unset STUB_ADD_RC
+    assert_success
+}
+
+@test "apply_label: a missing repo arg is a usage error (rc 2)" {
+    _apply_stub
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        printf 'lgtm\n' | devx_pr_review_all_apply_label 7
+    "
+    assert_failure 2
+    assert_output --partial 'usage: devx_pr_review_all_apply_label'
+}
+
+# #1403 / #1407: with two hosts logged in, a bare `gh` writes the label to
+# whichever server `gh repo set-default` picked. The host is pinned per call.
+@test "apply_label: the host is pinned on both the DELETE and the add" {
+    _apply_stub
+    printf '%s\n' blocking | devx_pr_review_all_apply_label 7 acme/widget ghe.example.com >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output --partial 'labels/review-passed [GH_HOST=ghe.example.com]'
+    assert_output --partial 'add 7 review-blocked --repo acme/widget [GH_HOST=ghe.example.com]'
+}
+
+# ...and the caller's own GH_HOST survives, because the export is subshelled.
+@test "apply_label: the caller's GH_HOST is not clobbered" {
+    _apply_stub
+    GH_HOST=original.example.com
+    printf '%s\n' blocking | devx_pr_review_all_apply_label 7 acme/widget ghe.example.com >/dev/null
+    [ "$GH_HOST" = "original.example.com" ] || fail "GH_HOST leaked: $GH_HOST"
+    unset GH_HOST
+}
+
+# The whole point of a shared helper: the SKILL step must CALL it, not
+# paraphrase the delete-then-add dance into prose an LLM can skip (#1524's
+# lesson, applied to the producer side).
+@test "doc-guard: devx:pr-review-all Step 3.5 calls the shared apply helper" {
+    local _skill="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
+    run grep -qF -- 'devx_pr_review_all_apply_label' "$_skill"
+    assert_success
+    run grep -qF -- 'Step 3.5' "$_skill"
+    assert_success
+}
+
+# Ordering is load-bearing: read the head sha BEFORE Step 4 pushes, or every
+# lane misses on the post-simplify sha and the gate silently labels nothing.
+@test "doc-guard: Step 3.5 is documented as running before the push" {
+    run grep -q 'before Step 4' \
+        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
+    assert_success
+}
+
+# The producer must pass the sha — omitting it is the stale-verdict hole.
+@test "doc-guard: the SKILL passes head_sha to lane_block" {
+    run grep -qF -- 'devx_pr_review_all_lane_block "$ai" "$head_sha"' \
+        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
+    assert_success
+}

@@ -19,8 +19,11 @@ metadata:
 ## Role
 
 Orchestrate a single PR through all available reviewers at once — agy, codex, opencode, hermes, plus a `/simplify`
-auto-fix pass — commit any auto-fix changes, then reply to review comments inline or deferred. No
+auto-fix pass — record the aggregate verdict as a merge-gate label, commit any auto-fix changes, then reply to
+review comments inline or deferred. No
 approve/request-changes decision and no manual per-comment authoring. Every reviewer lane is soft-fail.
+This skill is the **only** writer of `review-blocked` / `review-passed`
+(`references/review-verdict-label.md`); `gh:pr-merge-train` is their only reader.
 Argument/flag table (`<PR#> [remote] [--defer-reply M] [--no-reply]`): `references/help.md`.
 
 ## Help
@@ -67,6 +70,32 @@ are comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
 
 Never add `/code-review --fix`; it is user-invocation-only (`references/constraints.md`).
 
+## Step 3.5: Aggregate review verdicts and apply the merge-gate label
+
+Runs **after every Step 3 lane has returned and before Step 4's push.** That
+order is load-bearing, not cosmetic: the lanes tagged their comments with the
+PR's current **remote** head, and `/simplify` has at most committed *locally*
+by now. Reading the head sha after Step 4 pushes would read the new sha, every
+lane would miss, and the gate would silently label nothing forever.
+
+Full runnable block, exit codes, and rationale: `references/review-verdict-label.md`.
+In short — bind `TARGET_HOST` from the same `<remote>` URL as `TARGET_REPO`
+(the block in `references/reply-pending-label.sh.md` step 0), then:
+
+1. `head_sha` — one `gh pr view "$pr" -R "$TARGET_REPO" --json headRefOid`.
+2. `BODIES` — one `gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"`.
+3. For **each lane that actually ran** in Step 3 (a `[SKIP]`/`[WARN]` lane
+   contributes nothing, and `/simplify` never contributes), pipe `BODIES`
+   through `devx_pr_review_all_lane_block "$ai" "$head_sha"` →
+   `devx_pr_review_all_verdict`, and pipe that stream straight into
+   `devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST"`.
+   Never stage the verdicts in a variable and re-expand it — zsh does not
+   word-split, and a two-lane PR would silently report one.
+
+The whole step is **soft-fail**: a labelling failure never blocks Steps 4-6,
+and an unlabelled PR reads downstream as "not verified", which
+`gh:pr-merge-train` `[SKIPPED]`s rather than merges.
+
 ## Step 4: Push the auto-fix commit (only if something changed)
 
 Await all lanes, then:
@@ -92,7 +121,9 @@ state to mark.
 ## Step 6: Report
 
 Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line, e.g.
-`[OK] PR #<pr> reviewed (agy:OK codex:SKIP opencode:OK hermes:SKIP simplify:committed) — reply: inline`.
+`[OK] PR #<pr> reviewed (agy:OK codex:SKIP opencode:OK hermes:SKIP simplify:committed) — reply: inline — verdict: review-passed`.
+The trailing clause is Step 3.5's outcome: `review-passed`, `review-blocked`,
+or `unlabelled`.
 
 ## Constraints (full rationale: `references/constraints.md`)
 
@@ -104,5 +135,6 @@ Print exactly one `[OK]`/`[SKIP]`/`[WARN]` line, e.g.
 ## Related Skills
 
 `gh:pr-review` (one reviewer at a time — this skill fans out over it) · `gh:pr-reply` / `devx:schedule` (the reply
-pass) · `gh:pr-approve` (the approve/request-changes decision). Reused by `gh:issue-flow` (Step 2.4) as its
-post-PR quality gate.
+pass) · `gh:pr-approve` (the approve/request-changes decision) · `gh:pr-merge-train` (consumes Step 3.5's
+verdict label as a hard merge gate) · `gh:label-bootstrap` (provisions the two labels). Reused by
+`gh:issue-flow` (Step 2.4) as its post-PR quality gate.

@@ -178,3 +178,89 @@ run_bootstrap() {
     assert_success
     assert_output --partial "[dry-run] PATCH label 'feat' (color=fbca04)"
 }
+
+# ── Pipeline feed (#1564) — provisioned like the base 10, never pruned ──
+#
+# `review-blocked` / `review-passed` are pipeline STATE, not issue
+# classification, so they stay out of the 10-label SSOT. But they still have
+# to exist in the repo: `_gh_pr_edit_safe_label` refuses to auto-create a
+# missing label (rc 3, #326), so without provisioning `devx:pr-review-all`
+# can never issue a verdict and `gh:pr-merge-train` reads every PR as
+# unverified — the whole pipeline stops.
+
+@test "pipeline: both verdict labels are POSTed when missing" {
+    set_existing "" # no labels exist
+    run_bootstrap
+    assert_success
+    grep -q 'labels -X POST -f name=review-blocked -f color=b60205' "$MOCK_LOG"
+    grep -q 'labels -X POST -f name=review-passed -f color=0e8a16' "$MOCK_LOG"
+}
+
+@test "pipeline: an existing verdict label is PATCHed to the SSOT color" {
+    set_existing review-blocked review-passed
+    run_bootstrap
+    assert_success
+    grep -q 'repos/acme/widget/labels/review-blocked -X PATCH -f new_name=review-blocked -f color=b60205' "$MOCK_LOG"
+    grep -q 'repos/acme/widget/labels/review-passed -X PATCH -f new_name=review-passed -f color=0e8a16' "$MOCK_LOG"
+}
+
+# The load-bearing half: pruning these would wedge the merge pipeline.
+@test "pipeline: --prune preserves both verdict labels" {
+    set_existing review-blocked review-passed zzz-custom
+    run_bootstrap --prune
+    assert_success
+    grep -q 'repos/acme/widget/labels/zzz-custom -X DELETE' "$MOCK_LOG"
+    for _l in review-blocked review-passed; do
+        if grep -q "labels/${_l} -X DELETE" "$MOCK_LOG"; then
+            echo "pipeline label '${_l}' must never be pruned (#1564)" && return 1
+        fi
+    done
+}
+
+# The `pipeline|` prefix is a namespace, not a comment: it must be stripped
+# before the label name reaches the API, or the repo grows a label literally
+# named "pipeline|review-blocked".
+@test "pipeline: the feed prefix never reaches the API" {
+    set_existing ""
+    run_bootstrap
+    assert_success
+    if grep -q 'name=pipeline' "$MOCK_LOG"; then
+        echo "the 'pipeline|' prefix leaked into a label name" && return 1
+    fi
+    if grep -q 'labels/pipeline' "$MOCK_LOG"; then
+        echo "the 'pipeline|' prefix leaked into a label path" && return 1
+    fi
+}
+
+# The three feeds must not overlap: a pipeline row matching the 10-label or
+# the alias regex would double-apply it or forge a rename.
+@test "pipeline: a verdict label is never treated as an alias rename" {
+    set_existing review-blocked
+    run_bootstrap
+    assert_success
+    if grep -q 'new_name=review-passed' "$MOCK_LOG"; then
+        echo "review-blocked must not be renamed to review-passed" && return 1
+    fi
+}
+
+@test "pipeline: --dry-run plans the verdict labels without mutating" {
+    set_existing ""
+    run_bootstrap --dry-run
+    assert_success
+    assert_output --partial "[dry-run] POST label 'review-blocked' (color=b60205)"
+    assert_output --partial "[dry-run] POST label 'review-passed' (color=0e8a16)"
+    for verb in PATCH POST DELETE; do
+        if grep -q -- "-X ${verb}" "$MOCK_LOG"; then
+            echo "dry-run must not emit -X ${verb}" && return 1
+        fi
+    done
+}
+
+# The base 10 must keep working unchanged alongside the new feed.
+@test "pipeline: the base 10 are still applied when the pipeline feed exists" {
+    set_existing ""
+    run_bootstrap
+    assert_success
+    grep -q 'labels -X POST -f name=feat -f color=fbca04' "$MOCK_LOG"
+    grep -q 'labels -X POST -f name=reference' "$MOCK_LOG"
+}

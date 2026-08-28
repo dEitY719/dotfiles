@@ -63,16 +63,24 @@ continue — a single label's failure never aborts the run.
   `documentation`->`docs`, `build`->`chore` are renamed via
   `PATCH new_name=`, never delete+recreate, so issues/PRs keep the label.
 - **`--prune` is opt-in**: without it, no label is ever deleted. With it,
-  only labels outside (SSOT ∪ alias-targets ∪ allowlist) are deleted,
-  computed AFTER renames (NF-1 in #1226).
+  only labels outside (SSOT ∪ pipeline ∪ alias-targets ∪ allowlist) are
+  deleted, computed AFTER renames (NF-1 in #1226).
+- **2 pipeline-state labels** (`review-blocked` / `review-passed`, #1564)
+  come from a separate `pipeline|name|color|description` feed in the same
+  SSOT file. They are provisioned like the base 10 and preserved by
+  `--prune`, but stay out of the 10-label set: they are pipeline state, not
+  issue classification, and have no aliases. Without them
+  `devx:pr-review-all` cannot issue a verdict and `gh:pr-merge-train` skips
+  every PR.
 
 ## Constraints
 
 - Never mutate the script's behavior — wrap, don't rewrite.
 - `--dry-run` must make zero POST/PATCH/DELETE API calls.
 - Never delete a label unless `--prune` was explicitly passed.
-- The 10-label + alias SSOT lives only in `references/gh-labels.md` — do
-  not hardcode a second copy here or in the script.
+- The 10-label + alias + pipeline SSOT lives only in
+  `references/gh-labels.md` — do not hardcode a second copy here or in the
+  script.
 - `lib/label-bootstrap.sh` is the sole entry point; invoke it directly
   from non-Claude contexts:
   `bash claude/skills/gh-label-bootstrap/lib/label-bootstrap.sh [...]`.
