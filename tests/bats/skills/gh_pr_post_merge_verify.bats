@@ -41,11 +41,10 @@ setup() {
 
     WATCHED="${TEST_TEMP_HOME}/watched-repos.json"
     cat >"$WATCHED" <<'JSON'
-{
-  "$doc": { "purpose": "metadata, never a repo slug" },
-  "acme/dotfiles": { "verify_skill": "devx:pr-verify-merged" },
-  "acme/webapp": { "verify_skill": "devx:pr-verify-live" }
-}
+[
+  { "repo": "acme/dotfiles", "verify_skill": "devx:pr-verify-merged" },
+  { "repo": "acme/webapp", "verify_skill": "devx:pr-verify-live" }
+]
 JSON
 
     MAIN_ROOT="${TEST_TEMP_HOME}/dotfiles"
@@ -132,19 +131,15 @@ _pmv_log_count() { grep -c -- "$1" "$FAKE_HERDR_LOG" || true; }
     [ "$status" -eq 2 ]
 }
 
-@test "gate: the shipped SSOT registers this repo for devx:pr-verify-merged" {
-    # No running app to point a browser at, so the proof must come from a
-    # fresh clone of the merge commit — -merged, not -live.
-    run pmv_gate "${_BATS_REAL_DOTFILES_ROOT}/docs/.ssot/watched-repos.json" dEitY719/dotfiles
-    assert_success
-    assert_output "devx:pr-verify-merged"
-}
-
-@test "gate: the SSOT's \$-prefixed metadata key is not mistaken for a repo" {
-    run pmv_gate "${_BATS_REAL_DOTFILES_ROOT}/docs/.ssot/watched-repos.json" '$doc'
+@test "gate: an entry present but with no verify_skill is a silent no-op (#1555)" {
+    # issue-watcher may track a repo gh:pr-post-merge-verify never verifies —
+    # a bare {repo, path} entry with no verify_skill field at all.
+    printf '[{"repo":"acme/dotfiles","path":"/x"}]\n' >"$WATCHED"
+    run pmv_gate "$WATCHED" acme/dotfiles
     [ "$status" -eq 1 ]
     assert_output ""
 }
+
 
 # --- A-1 / A-5 / E-1 / E-2: the no-op paths -------------------------------
 
@@ -428,16 +423,16 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
     assert_output "$MAIN_ROOT"
 }
 
-@test "main root: an explicit main_checkout wins and expands a leading ~" {
-    printf '{"acme/dotfiles":{"verify_skill":"devx:pr-verify-merged","main_checkout":"~/elsewhere"}}\n' >"$WATCHED"
+@test "main root: an explicit path wins and expands a leading ~ (#1555)" {
+    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"~/elsewhere"}]\n' >"$WATCHED"
     run pmv_main_root "$WATCHED" acme/dotfiles "${MAIN_ROOT}/.git"
     assert_output "${HOME}/elsewhere"
 }
 
-@test "main root: the shipped SSOT points this repo at its original checkout" {
-    run pmv_main_root "${_BATS_REAL_DOTFILES_ROOT}/docs/.ssot/watched-repos.json" \
-        dEitY719/dotfiles "${MAIN_ROOT}/.git"
-    assert_output "${HOME}/dotfiles"
+@test "main root: an entry with no path falls back to git's common dir (#1555)" {
+    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged"}]\n' >"$WATCHED"
+    run pmv_main_root "$WATCHED" acme/dotfiles "${MAIN_ROOT}/.git"
+    assert_output "$MAIN_ROOT"
 }
 
 @test "timeout: the prompt cap defaults to 900000ms when the env var is unset" {
@@ -555,7 +550,7 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
 @test "R-3: a registry value off the allowlist warns before any herdr call" {
     # It is typed into a --dangerously-skip-permissions agent's prompt, so a
     # bad registry must not even get as far as closing a tab.
-    printf '{"acme/dotfiles":{"verify_skill":"evil:do-something-else"}}\n' >"$WATCHED"
+    printf '[{"repo":"acme/dotfiles","verify_skill":"evil:do-something-else"}]\n' >"$WATCHED"
     run dispatch
     assert_success
     assert_output --partial "[WARN]"
@@ -786,12 +781,12 @@ _PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
     local _out="${TEST_TEMP_HOME}/extracted.sh"
     bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
         '$(_pmv_dispatch_doc)' > '${_out}'"
-    local _root="${TEST_TEMP_HOME}/fakeroot"
-    mkdir -p "${_root}/docs/.ssot"
-    cp "$WATCHED" "${_root}/docs/.ssot/watched-repos.json"
 
-    run env DOTFILES_ROOT="$_root" TARGET_REPO="acme/not-watched" \
-        TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
+    # #1555: the block reads IW_WATCHED_REPOS (or the issue-watcher default
+    # under HOME), never DOTFILES_ROOT/docs/.ssot — same registry, same
+    # override rule as issue_watcher_cron.sh.
+    run env IW_WATCHED_REPOS="$WATCHED" DOTFILES_ROOT="${TEST_TEMP_HOME}" \
+        TARGET_REPO="acme/not-watched" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
     assert_success
     [ -z "$output" ]
 }
@@ -801,7 +796,8 @@ _PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
     bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
         '$(_pmv_dispatch_doc)' > '${_out}'"
     local _root="${TEST_TEMP_HOME}/fakeroot"
-    mkdir -p "${_root}/docs/.ssot"
+    mkdir -p "${_root}"
+    local _reg="${TEST_TEMP_HOME}/warn-watched.json"
 
     # A herdr stub keeps the run off this machine's real herdr; the block only
     # needs `command -v herdr` to succeed before it reaches these stops.
@@ -811,11 +807,9 @@ _PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
     chmod +x "${_bin}/herdr"
 
     # 1. A verify_skill outside the allowlist: WARN, stop, status 0.
-    cat >"${_root}/docs/.ssot/watched-repos.json" <<'JSON'
-{ "acme/dotfiles": { "verify_skill": "evil:do-something-else" } }
-JSON
-    run env PATH="${_bin}:${PATH}" DOTFILES_ROOT="$_root" TARGET_REPO="acme/dotfiles" \
-        TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
+    printf '[{"repo":"acme/dotfiles","verify_skill":"evil:do-something-else"}]\n' >"$_reg"
+    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$_reg" DOTFILES_ROOT="$_root" \
+        TARGET_REPO="acme/dotfiles" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
     assert_success
     assert_output --partial 'is not one of devx:pr-verify-merged'
 
@@ -824,12 +818,10 @@ JSON
     mkdir -p "${_root}/shell-common/functions"
     cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_name.sh" \
         "${_root}/shell-common/functions/herdr_agent_name.sh"
-    cat >"${_root}/docs/.ssot/watched-repos.json" <<JSON
-{ "acme/dotfiles": { "verify_skill": "devx:pr-verify-merged",
-  "main_checkout": "${TEST_TEMP_HOME}/not-a-repo" } }
-JSON
-    run env PATH="${_bin}:${PATH}" DOTFILES_ROOT="$_root" TARGET_REPO="acme/dotfiles" \
-        TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
+    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
+        "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
+    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$_reg" DOTFILES_ROOT="$_root" \
+        TARGET_REPO="acme/dotfiles" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
     assert_success
     assert_output --partial 'is not a git worktree root'
 }
@@ -948,7 +940,7 @@ JSON
     # produce a herdr-legal name skips out, and paying 13s first would be pure
     # waste on a path that never touches the pane again.
     cat >"$WATCHED" <<'JSON'
-{ "acme/...": { "verify_skill": "devx:pr-verify-merged" } }
+[ { "repo": "acme/...", "verify_skill": "devx:pr-verify-merged" } ]
 JSON
     run dispatch 'acme/...'
     assert_success

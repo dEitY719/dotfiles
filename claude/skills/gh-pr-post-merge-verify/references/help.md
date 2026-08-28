@@ -19,8 +19,9 @@ dispatch soft-failed and you want to retry it.
 
 ## What it does
 
-1. Reads `docs/.ssot/watched-repos.json`. **A repo that is not registered there
-   gets nothing at all** — no output, no herdr call, no git call.
+1. Reads the untracked watched-repos registry (`${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}`,
+   the same file `issue_watcher_cron.sh` reads). **A repo that is not
+   registered there gets nothing at all** — no output, no herdr call, no git call.
 2. Checks `command -v jq` and `command -v herdr`. Either missing → silent
    no-op: the feature is unavailable, which is not an error worth a line.
 3. `git worktree list --porcelain` → the local worktree of the merged head branch.
@@ -43,7 +44,7 @@ dispatch soft-failed and you want to retry it.
 
 ## What it will NOT do
 
-- Act on a repo missing from `watched-repos.json` — that is the whole opt-in.
+- Act on a repo missing from the watched-repos registry — that is the whole opt-in.
 - Resolve a rebase conflict, or merge/commit/push anything. A conflict is
   `rebase --abort`-ed so the checkout stays usable, then the run stops.
 - Open a verification session on a stale or dirty main checkout, on one parked

@@ -38,7 +38,7 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
 5. Runs `GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch` **without confirmation**.
 6. Moves the PR project-board card to `Done` when a projectV2 board is attached.
 7. Fetches the merge SHA and prints a compact report.
-8. For repos registered in `docs/.ssot/watched-repos.json` only (#1511), hands off to
+8. For repos registered in the untracked watched-repos registry only (#1511, #1555), hands off to
    `gh:pr-post-merge-verify`: closes the implementation herdr tab, rebases the main
    checkout, and opens a herdr session running that repo's `verify_skill`. An
    unregistered repo gets nothing at all, and every failure there is a `[WARN]` that
@@ -50,7 +50,7 @@ _Availability depends on repo settings → General → Pull Requests. If a strat
 - Fall back to another strategy on failure.
 - Merge an un-approved PR — use `gh:pr-merge-emergency` for admin bypass with audit trail.
 - Keep the head branch — always `--delete-branch`.
-- Dispatch a verification session for a repo missing from `docs/.ssot/watched-repos.json`,
+- Dispatch a verification session for a repo missing from the watched-repos registry,
   or let a failed dispatch change the merge outcome or suppress this report.
 
 ## Solo / personal repo behavior

@@ -33,13 +33,13 @@ never *writes* to GitHub — `gh:pr-merge` has already merged and reported.
 report must print either way (F-6). The one exception is a stale main
 checkout: verifying stale code proves nothing, so that stops the run.
 
-## Step 1: Gate on `docs/.ssot/watched-repos.json` (F-1)
+## Step 1: Gate on the watched-repos registry (F-1)
 
 ```bash
-WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
+WATCHED_FILE="${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}"
 VERIFY_SKILL=""
 if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
-    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
+    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[] | select(.repo == $r) | .verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
 fi
 ```
 
@@ -92,7 +92,7 @@ Every decision above is mirrored executably in
 - Never open more than one session per PR — no batching, no retries.
 - Never *write* to GitHub — the head/base ref read is its only API call, and
   never touch the unattended `pr_merge_train_cron.sh` path (#1511 non-goal).
-- Never act on a repo missing from `watched-repos.json`.
+- Never act on a repo missing from the watched-repos registry.
 
 ## Related Skills
 

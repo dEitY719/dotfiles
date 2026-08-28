@@ -2,7 +2,8 @@
 
 Step 3 pastes this. It expects `PR_NUMBER`, `TARGET_REPO` and `TARGET_HOST`
 already bound (Step 2), and it is a no-op for any repo missing from
-`docs/.ssot/watched-repos.json`.
+`${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}`
+— the same untracked registry `issue_watcher_cron.sh` reads (issue #1555).
 
 `gh:pr-merge` Step 5 does not paste a copy: it extracts the **first** `bash`
 fence below and sources it, so this file stays the single source (#1565). Keep
@@ -14,14 +15,14 @@ Executable mirror + regression suite:
 
 ```bash
 # --- 0. F-1 gate. Unregistered repo => do nothing at all, no output. -------
-WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
+WATCHED_FILE="${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}" # untracked, array-schema, shared with issue_watcher_cron.sh (#1555)
 VERIFY_SKILL=""
 # No jq → the registry cannot be read, so the feature is simply unavailable.
 # Silent, never a WARN: an absent tool is not a broken SSOT, and gh:pr-merge's
 # gate (which carries the same condition) must print nothing either way.
 if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
     if ! VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" \
-        '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null); then
+        '.[] | select(.repo == $r) | .verify_skill // empty' "$WATCHED_FILE" 2>/dev/null); then
         # The file exists but is not JSON: a broken SSOT, not an opt-out.
         printf '[WARN] gh:pr-post-merge-verify: %s is not valid JSON — post-merge verification skipped.\n' \
             "$WATCHED_FILE"
@@ -124,9 +125,9 @@ pmv_tab_for_cwd() {
 }
 
 # --- the main checkout (never a worktree) ---------------------------------
-# `main_checkout` from the registry when set; otherwise git's common dir,
+# `path` from the registry when set; otherwise git's common dir,
 # which answers `<main-checkout>/.git` even from inside a linked worktree.
-MAIN_ROOT=$(jq -r --arg r "$TARGET_REPO" '.[$r].main_checkout // empty' "$WATCHED_FILE" 2>/dev/null)
+MAIN_ROOT=$(jq -r --arg r "$TARGET_REPO" '.[] | select(.repo == $r) | .path // empty' "$WATCHED_FILE" 2>/dev/null)
 case "$MAIN_ROOT" in
 '~'/*) MAIN_ROOT="${HOME}/${MAIN_ROOT#'~'/}" ;;
 '') MAIN_ROOT=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
