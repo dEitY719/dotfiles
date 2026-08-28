@@ -125,12 +125,20 @@ if [ -n "$VERIFY_SKILL" ]; then
     # fence is taken — the file's later snippets are documentation, not steps.
     PMV_FENCE=$(printf '\140\140\140')
     if [ -r "$PMV_BLOCK" ] && PMV_SH=$(mktemp 2>/dev/null); then
+        # The staged file must not outlive this block. The sourced dispatch
+        # returns early on most of its paths, and a caller running under
+        # `set -e` can leave the shell entirely between the two lines below —
+        # so cleanup is armed before anything can go wrong and cleared on the
+        # success path, the same shape as _PMT_ERRF in
+        # shell-common/tools/custom/pr_merge_train_cron.sh.
+        trap 'rm -f "$PMV_SH"' EXIT INT TERM
         awk -v f="$PMV_FENCE" \
             '$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b' \
             "$PMV_BLOCK" >"$PMV_SH"
         # shellcheck source=/dev/null
         . "$PMV_SH"
         rm -f "$PMV_SH"
+        trap - EXIT INT TERM
     else
         printf '[WARN] gh:pr-merge: could not stage %s — post-merge verification skipped.\n' "$PMV_BLOCK"
     fi
