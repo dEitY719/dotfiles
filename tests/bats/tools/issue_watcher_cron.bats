@@ -33,6 +33,7 @@ setup() {
     _STATE_HOME="${_WORK_DIR}/state"
     _STATE_DIR="${_STATE_HOME}/issue-watcher"
     _LIMIT_FILE="${_STATE_DIR}/rate-limit.json"
+    _ZOMBIE_FILE="${_STATE_DIR}/zombie-candidates.tsv"
     _LOCK_FILE="${_STATE_DIR}/.lock"
     _LOG="${_WORK_DIR}/calls.log"
     _REPO_DIR="${_WORK_DIR}/dotfiles"
@@ -198,6 +199,28 @@ _set_running_with_status() {
 _set_limit_state() {
     mkdir -p "${_STATE_DIR}"
     printf '{ "strikes": "%s", "backoff_until": "%s" }\n' "$1" "$2" >"${_LIMIT_FILE}"
+}
+
+# The zombie grace clock (#1596): one
+# <repo>\t<number>\t<first-observed-stopped-epoch> line per pane seen
+# stopped-on-a-closed-issue but not yet believed dead. The schema is spelled
+# out here once for the same reason _set_limit_state spells out the gate file's.
+# _seed_zombie_candidate <number> <epoch>
+_seed_zombie_candidate() {
+    mkdir -p "${_STATE_DIR}"
+    printf 'acme/dotfiles\t%s\t%s\n' "$1" "$2" >>"${_ZOMBIE_FILE}"
+}
+
+# Wind every clock already on disk back past the grace window — a deterministic
+# stand-in for the ten real minutes a second observation would otherwise need.
+# Kept well inside the file's own prune horizon (6x the window) so the aged rows
+# are still there for the next tick to read.
+_age_zombie_candidates() {
+    local _old
+    _old=$(($(date +%s) - 1200))
+    awk -F '\t' -v OFS='\t' -v t="${_old}" 'NF == 3 { $3 = t } 1' \
+        "${_ZOMBIE_FILE}" >"${_ZOMBIE_FILE}.aged"
+    mv "${_ZOMBIE_FILE}.aged" "${_ZOMBIE_FILE}"
 }
 
 # One issue with the given labels, e.g. _issues_with_labels 11 wontfix
@@ -1612,10 +1635,89 @@ _assert_not_hung() {
     # its worktree, so cwd alone reads it as running forever and the repo's
     # slots are never freed — the watcher then refuses every new issue,
     # silently.
+    #
+    # Since the grace period (PR #1597) it takes two observations to say that:
+    # the first tick only starts the clock, and the slot is freed on the tick
+    # that finds the pane still stopped a grace window later.
     _set_running_with_status idle 21 22 23 24 25 26 27
     _run_tick "GH_CLOSED_ISSUES=21 22 23 24 25 26 27"
     assert_success
+    _refute_logged "gwt spawn"
+
+    : >"${_LOG}"
+    _age_zombie_candidates
+    _run_tick "GH_CLOSED_ISSUES=21 22 23 24 25 26 27"
+    assert_success
     _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: a pane that has only just gone quiet keeps its slot" {
+    # The regression the grace period exists for (PR #1597 codex/agy review):
+    # an agent waiting on a background subagent reports `idle` for minutes, and
+    # one snapshot cannot tell that pause apart from a finished session. Freeing
+    # the slot on that single sighting would dispatch a second session onto an
+    # issue the first one is still working.
+    _set_running_with_status idle 21 22 23
+    _run_tick "GH_CLOSED_ISSUES=21 22 23"
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "gwt spawn"
+
+    # Nothing was reclaimed — the tick only wrote down when it first looked.
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+    run wc -l <"${_ZOMBIE_FILE}"
+    assert_output "3"
+}
+
+@test "issue_watcher_cron: a pane that resumes work resets its grace clock" {
+    # Self-healing: the delegation came back, so the clock the first tick
+    # started must be thrown away rather than aged into a reclaim. Otherwise a
+    # session that went quiet once would be reclaimed the instant it goes quiet
+    # again, however long it worked in between.
+    _set_running_with_status idle 21 22 23
+    _run_tick "GH_CLOSED_ISSUES=21 22 23"
+    assert_success
+    _refute_logged "gwt spawn"
+
+    : >"${_LOG}"
+    _set_agents_with_status working \
+        "$(_worktree_path 21)" "$(_worktree_path 22)" "$(_worktree_path 23)"
+    _run_tick "GH_CLOSED_ISSUES=21 22 23"
+    assert_success
+    assert_output --partial "already running"
+    run cat "${_ZOMBIE_FILE}"
+    assert_output ""
+
+    # Quiet again — and back at the start of the window, not past its end.
+    : >"${_LOG}"
+    _set_agents_with_status idle \
+        "$(_worktree_path 21)" "$(_worktree_path 22)" "$(_worktree_path 23)"
+    _run_tick "GH_CLOSED_ISSUES=21 22 23"
+    assert_success
+    _refute_logged "gwt spawn"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: two stopped panes age independently" {
+    # The clock is per repo+issue, so one pane crossing the window says nothing
+    # about its neighbour's.
+    _set_running_with_status idle 21 22
+    _seed_zombie_candidate 21 "$(($(date +%s) - 1200))"
+    _run_tick "GH_CLOSED_ISSUES=21 22"
+    assert_success
+    assert_output --partial "acme/dotfiles#21 is closed"
+    refute_output --partial "acme/dotfiles#22 is closed"
+
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-21/"
+    assert_output --partial "wt/issue-22/"
+
+    # 21 is settled, so its row is gone; 22 is still counting.
+    run cat "${_ZOMBIE_FILE}"
+    refute_output --partial "	21	"
+    assert_output --partial "	22	"
 }
 
 @test "issue_watcher_cron: an idle pane on a still-open issue still counts as live" {
@@ -1754,9 +1856,20 @@ _two_repo_fixture() {
 
 @test "issue_watcher_cron: a closed issue whose pane has gone idle is collected" {
     # The inverse of the test above (#1596): the pane is still there, but it
-    # stopped working and the issue is closed, so the worktree is reclaimable.
+    # stopped working and the issue is closed, so the worktree is reclaimable —
+    # once the grace period has confirmed it (PR #1597). The first tick must
+    # leave the directory alone: a background subagent between two commits is
+    # `idle` too, and `git worktree remove` would pull the ground out from
+    # under it.
     _add_worktree 21
     _set_agents_with_status idle "$(_worktree_path 21)"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    refute_output --partial "Collected worktree"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+
+    _age_zombie_candidates
     _run_tick "GH_CLOSED_ISSUES=21"
     assert_success
     assert_output --partial "Collected worktree"
@@ -1767,6 +1880,11 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a closed issue whose pane reports done is collected" {
     _add_worktree 21
     _set_agents_with_status done "$(_worktree_path 21)"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    refute_output --partial "Collected worktree"
+
+    _age_zombie_candidates
     _run_tick "GH_CLOSED_ISSUES=21"
     assert_success
     assert_output --partial "Collected worktree"
