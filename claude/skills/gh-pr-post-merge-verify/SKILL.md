@@ -39,7 +39,8 @@ checkout: verifying stale code proves nothing, so that stops the run.
 WATCHED_FILE="${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}"
 VERIFY_SKILL=""
 if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
-    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[] | select(.repo == $r) | .verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
+    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" \
+        '(if type == "array" then . else (.repos // []) end) | .[] | select(.repo == $r) | .verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
 fi
 ```
 

@@ -22,7 +22,7 @@ VERIFY_SKILL=""
 # gate (which carries the same condition) must print nothing either way.
 if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
     if ! VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" \
-        '.[] | select(.repo == $r) | .verify_skill // empty' "$WATCHED_FILE" 2>/dev/null); then
+        '(if type == "array" then . else (.repos // []) end) | .[] | select(.repo == $r) | .verify_skill // empty' "$WATCHED_FILE" 2>/dev/null); then
         # The file exists but is not JSON: a broken SSOT, not an opt-out.
         printf '[WARN] gh:pr-post-merge-verify: %s is not valid JSON — post-merge verification skipped.\n' \
             "$WATCHED_FILE"
@@ -127,7 +127,8 @@ pmv_tab_for_cwd() {
 # --- the main checkout (never a worktree) ---------------------------------
 # `path` from the registry when set; otherwise git's common dir,
 # which answers `<main-checkout>/.git` even from inside a linked worktree.
-MAIN_ROOT=$(jq -r --arg r "$TARGET_REPO" '.[] | select(.repo == $r) | .path // empty' "$WATCHED_FILE" 2>/dev/null)
+MAIN_ROOT=$(jq -r --arg r "$TARGET_REPO" \
+    '(if type == "array" then . else (.repos // []) end) | .[] | select(.repo == $r) | .path // empty' "$WATCHED_FILE" 2>/dev/null)
 case "$MAIN_ROOT" in
 '~'/*) MAIN_ROOT="${HOME}/${MAIN_ROOT#'~'/}" ;;
 '') MAIN_ROOT=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)

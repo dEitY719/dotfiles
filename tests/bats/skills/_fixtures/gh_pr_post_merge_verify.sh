@@ -129,7 +129,8 @@ pmv_gate() {
     _pmv_jq_present || return 1
     [ -r "$_file" ] || return 1
 
-    _val=$(jq -r --arg r "$_repo" '.[] | select(.repo == $r) | .verify_skill // empty' "$_file" 2>/dev/null)
+    _val=$(jq -r --arg r "$_repo" \
+        '(if type == "array" then . else (.repos // []) end) | .[] | select(.repo == $r) | .verify_skill // empty' "$_file" 2>/dev/null)
     _rc=$?
     [ "$_rc" -eq 0 ] || return 2
     [ -n "$_val" ] || return 1
@@ -162,7 +163,8 @@ pmv_verify_skill_allowed() {
 pmv_main_root() {
     local _file="$1" _repo="$2" _common="$3" _v
 
-    _v=$(jq -r --arg r "$_repo" '.[] | select(.repo == $r) | .path // empty' "$_file" 2>/dev/null) || _v=""
+    _v=$(jq -r --arg r "$_repo" \
+        '(if type == "array" then . else (.repos // []) end) | .[] | select(.repo == $r) | .path // empty' "$_file" 2>/dev/null) || _v=""
     if [ -n "$_v" ]; then
         case "$_v" in
         '~'/*) _v="${HOME}/${_v#'~'/}" ;;
