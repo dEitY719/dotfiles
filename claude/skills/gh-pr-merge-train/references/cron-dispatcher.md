@@ -60,15 +60,18 @@ base. It is built by `herdr_agent_name`
 (`shell-common/functions/herdr_agent_name.sh`), the SSOT shared with
 `issue_watcher_cron.sh` and `gh:pr-post-merge-verify`.
 
-The workspace label is still `mt-<host>-<owner>-<repo>` — host-qualified, for
-the #1403/#1407 reason that `owner/repo` is only unique per server. The agent
-name is not, and that asymmetry is deliberate (#1530): herdr validates agent
-names against `^[a-z][a-z0-9_-]{0,31}$` and refuses anything else, and the
-old host-qualified `pmt-<host>-<owner>-<repo>` was rejected on all 56 attempts
-— a dot, plus uppercase from a real owner. Labels carry no such rule and no
-length budget, so they keep the wider form; the agent name spends its 32
-characters on the repo. Two hosts sharing a repo name would now collide on one
-train agent; the trade-off and its expiry condition are recorded at the helper.
+The workspace label is the *same string* as the agent name (#1549) — no longer
+`mt-<host>-<owner>-<repo>`. Pre-#1549 the label kept its own host-qualified
+fold while the agent name had already moved to `herdr_agent_name` (#1530), so
+the same train answered to two different names: `herdr workspace list` showed
+one, `herdr agent get` the other, with no way to cross-reference them. Dropping
+host/owner from the label rides on the same one-repo-in-watched-repos.json
+guard the agent name already accepted (#1530): herdr validates agent names
+against `^[a-z][a-z0-9_-]{0,31}$`, which has no room for a host, so a second
+host or a second owner sharing a repo name collides on both names now, not
+just the agent name. The trade-off and its expiry condition (a short digest
+appended to both names together) are recorded at the helper
+(`shell-common/functions/herdr_agent_name.sh`).
 
 An agent that still **resolves** — `idle`, but also `done` or a status herdr
 does not name — means the previous train's pane is still open and still holds
