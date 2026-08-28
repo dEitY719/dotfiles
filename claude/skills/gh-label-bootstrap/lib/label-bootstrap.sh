@@ -11,10 +11,12 @@ set -euo pipefail
 #
 # Behavior (see references/gh-labels.md for the authoritative spec):
 #   1. Alias renames first  — PATCH old -> new_name (preserves issue/PR links).
-#   2. SSOT 10 apply         — PATCH if exists (force color/description sync),
-#                              POST if missing.
-#   3. Prune (only --prune)  — DELETE labels outside SSOT ∪ alias-targets ∪
-#                              allowlist, computed AFTER renames.
+#   2. SSOT 10 + pipeline    — PATCH if exists (force color/description sync),
+#      apply                   POST if missing. The `pipeline|`-prefixed feed
+#                              (#1564) joins this loop with its prefix stripped.
+#   3. Prune (only --prune)  — DELETE labels outside SSOT ∪ pipeline ∪
+#                              alias-targets ∪ allowlist, computed AFTER
+#                              renames.
 #
 # --dry-run makes ZERO mutating gh api calls (no POST/PATCH/DELETE).
 # --prune defaults OFF; without it no label is ever deleted.
@@ -143,13 +145,35 @@ main() {
     # --- Parse SSOT plain feeds -------------------------------------------
     # 10-label feed:  name|<6hex>|description
     # alias feed:     old|new     (two lowercase words)
+    # pipeline feed:  pipeline|name|<6hex>|description        (#1564)
     # tr -d '\r' + leading-whitespace tolerance guard against CRLF checkouts
     # and incidental fence indentation (gemini-code-assist review, PR #1229).
-    local feed alias_feed ssot_content
+    #
+    # The three regexes are mutually exclusive by construction: a pipeline row
+    # cannot match the 10-label pattern (what follows its first `|` is a label
+    # name, not 6 hex digits) and cannot match the alias pattern (it carries
+    # hyphens and three separators). So the prefix is a real namespace, not a
+    # convention the parser hopes holds.
+    local feed alias_feed pipeline_feed ssot_content
     ssot_content="$(tr -d '\r' <"$ssot_file")"
     feed="$(printf '%s\n' "$ssot_content" | grep -E '^[[:space:]]*[A-Za-z][A-Za-z0-9]*\|[0-9a-fA-F]{6}\|' || true)"
     alias_feed="$(printf '%s\n' "$ssot_content" | grep -E '^[[:space:]]*[a-z]+\|[a-z]+$' || true)"
     [ -n "$feed" ] || die "no label feed found in $ssot_file"
+
+    # Pipeline-state labels (review-blocked / review-passed): provisioned by
+    # this script but deliberately NOT part of the 10-label SSOT — they are
+    # not an issue-classification axis and have no aliases. The prefix is
+    # stripped here so they join the ordinary POST/PATCH loop below, and
+    # because they land in `feed` they are also in the `--prune` keep set.
+    # Deleting them would leave `devx:pr-review-all` unable to issue a verdict
+    # (`_gh_pr_edit_safe_label` rc 3, #326) and the merge train reading every
+    # PR as unverified — the whole pipeline stops (#1564).
+    pipeline_feed="$(printf '%s\n' "$ssot_content" \
+        | grep -E '^[[:space:]]*pipeline\|[A-Za-z][A-Za-z0-9_-]*\|[0-9a-fA-F]{6}\|' \
+        | sed -e 's/^[[:space:]]*//' -e 's/^pipeline|//' || true)"
+    if [ -n "$pipeline_feed" ]; then
+        feed="$(printf '%s\n%s' "$feed" "$pipeline_feed")"
+    fi
 
     # SSOT label names (for keep-set membership).
     local ssot_names
@@ -193,7 +217,7 @@ main() {
         fi
     done <<<"$alias_feed"
 
-    # --- 2. SSOT 10 apply --------------------------------------------------
+    # --- 2. SSOT 10 + pipeline apply ---------------------------------------
     local name
     while IFS='|' read -r name color desc; do
         [ -z "$name" ] && continue
@@ -218,7 +242,9 @@ main() {
         return 0
     fi
 
-    # keep = SSOT names ∪ alias new names ∪ allowlist
+    # keep = SSOT names (pipeline labels included — they were merged into
+    #        `feed` above, so `ssot_names` already carries them) ∪ alias new
+    #        names ∪ allowlist
     local keep alias_targets allow_nl
     alias_targets="$(printf '%s\n' "$alias_feed" | cut -d'|' -f2)"
     allow_nl="$ALLOWLIST"

@@ -391,3 +391,74 @@ _kept_numbers() {
         grep -qF -- "reply-pending" "${_f}" || fail "reply-pending not found in ${_f}"
     done
 }
+
+# ---------------------------------------------------------------------------
+# The two verdict-label predicates (#1564) — same single-PR shape as the
+# reply-pending sibling above. The gate that consumes them is a queue-level
+# step, NOT another clause in the array filter: see
+# claude/skills/gh-pr-merge-train/references/review-verdict-gate.md.
+# ---------------------------------------------------------------------------
+
+_has_blocked() {
+    run bash -c ". '${HELPER}'; printf '%s' '$1' | _gh_pr_merge_train_has_review_blocked_label"
+}
+
+_has_passed() {
+    run bash -c ". '${HELPER}'; printf '%s' '$1' | _gh_pr_merge_train_has_review_passed_label"
+}
+
+@test "gh_pr_merge_train: sourcing defines the two verdict-label predicates" {
+    run bash -c ". '${HELPER}' && command -v _gh_pr_merge_train_has_review_blocked_label && command -v _gh_pr_merge_train_has_review_passed_label"
+    assert_success
+}
+
+@test "gh_pr_merge_train: has_review_blocked_label succeeds when the label is present" {
+    _has_blocked "$(_pr 11 30 false '[{"name":"review-blocked"}]')"
+    assert_success
+}
+
+@test "gh_pr_merge_train: has_review_blocked_label fails when the label is absent" {
+    _has_blocked "$(_pr 11 30 false '[{"name":"review-passed"}]')"
+    assert_failure
+}
+
+@test "gh_pr_merge_train: has_review_passed_label succeeds when the label is present" {
+    _has_passed "$(_pr 11 30 false '[{"name":"review-passed"}]')"
+    assert_success
+}
+
+@test "gh_pr_merge_train: has_review_passed_label fails when the label is absent" {
+    _has_passed "$(_pr 11 30)"
+    assert_failure
+}
+
+@test "gh_pr_merge_train: both predicates fail when labels is missing entirely" {
+    _has_blocked '{"number":11}'
+    assert_failure
+    _has_passed '{"number":11}'
+    assert_failure
+}
+
+# The stale-both case: #1563's invalidation should make it unreachable, but a
+# gate on a merge must be deterministic about a state it does not expect.
+@test "gh_pr_merge_train: both labels present -> both predicates report present" {
+    local _both='[{"name":"review-passed"},{"name":"review-blocked"}]'
+    _has_blocked "$(_pr 11 30 false "$_both")"
+    assert_success
+    _has_passed "$(_pr 11 30 false "$_both")"
+    assert_success
+}
+
+# The verdict labels must NOT be folded into the array filter: it drops its
+# rejects silently, and #1564 requires a visible per-PR [SKIPPED] line.
+@test "gh_pr_merge_train: the array filter does NOT drop a review-blocked PR" {
+    run _kept_numbers "[$(_pr 11 30 false '[{"name":"review-blocked"}]')]"
+    assert_success
+    assert_output "11"
+}
+
+@test "gh_pr_merge_train: the array filter does NOT drop an unlabelled PR" {
+    run _kept_numbers "[$(_pr 11 30)]"
+    assert_success
+    assert_output "11"
+}

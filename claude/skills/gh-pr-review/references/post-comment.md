@@ -11,9 +11,9 @@ footer that matches the dotfiles SSOT (#317 / PR #320).
 <details>
 <summary>🤖 AI Review · <AI_NAME> · --review=<PRESET></summary>
 
-<!-- ai-review:<AI_NAME> -->
+<!-- ai-review:<AI_NAME>:<HEAD_SHA> -->
 <verbatim stdout from external CLI>
-<!-- /ai-review:<AI_NAME> -->
+<!-- /ai-review:<AI_NAME>:<HEAD_SHA> -->
 
 </details>
 
@@ -33,17 +33,37 @@ Substitutions:
 | Token | Source |
 |-------|--------|
 | `<AI_NAME>` | The `--ai` argument value (`codex` / `agy` / `claude`). |
+| `<HEAD_SHA>` | `headRefOid` from the one consolidated `gh pr view` (`_gh_pr_review_fetch_meta`). Empty → the marker falls back to the unsuffixed `<!-- ai-review:<AI_NAME> -->` form. |
 | `<PRESET>` | The normalized `--review` enum (after KR-alias mapping). |
 | `<TOKENS>` | Estimated prompt tokens, rounded to the nearest 500. Minimum 1 000. |
 | `<HUMAN_H>` | Baseline human-review hours. See "Human time baseline" below. |
 | `<ELAPSED>` | `(($(date +%s) - START_TS) / 60))`. |
 
+## Why the marker carries the head sha (#1564)
+
+The `ai-review` markers are not decoration — they are the **only**
+machine-readable record of a lane's verdict, and `devx:pr-review-all`
+harvests them to decide whether the merge train may touch this PR
+(`devx-pr-review-all/references/review-verdict-label.md`, the consumer
+SSOT). A verdict proves something about **one commit**, so the marker
+names that commit. Without the suffix, a review posted two pushes ago is
+indistinguishable from one posted against the head under review, and a
+stale `review-passed` can authorize a merge of code no reviewer saw.
+
+`devx_pr_review_all_lane_block <ai> <sha>` requires the open **and**
+close marker to carry the same `<ai>:<sha>` pair; a miss yields nothing,
+which reads downstream as `unknown` — no label, no merge. Comments
+posted before this change carry the unsuffixed form and therefore read
+as `unknown` under the sha-aware path. That is the documented
+fail-closed direction, not a regression: those PRs are re-reviewed, and
+the fresh comment carries the tag.
+
 ## Emoji exception scope
 
 CLAUDE.md restricts emoji to the `ai-metrics` footer block. This skill
-introduces a sibling marker `<!-- ai-review:<ai> -->` that mirrors the
-same `<details>` + glyph pattern. Treat the new marker as a **scoped
-extension** of the existing exception:
+introduces a sibling marker `<!-- ai-review:<ai>:<head-sha> -->` that
+mirrors the same `<details>` + glyph pattern. Treat the new marker as a
+**scoped extension** of the existing exception:
 
 - 🤖 in `<summary>` line — allowed per `claude/skills/skill-check/references/allowed-emoji-skills.txt` (gh-pr-review registered; ai-metrics/AI-review footer SSOT, CLAUDE.md #317 F-2).
 - All other emoji — still forbidden everywhere.
@@ -58,7 +78,7 @@ helpers in `shell-common/functions/gh_pr_review.sh`:
 
 - `_gh_pr_review_build_comment_body` — emits the SSOT body per this
   file's "Body template" (collapsed `<details>` AI-review block +
-  `<!-- ai-review:<ai> -->` markers + ai-metrics footer with
+  `<!-- ai-review:<ai>:<head-sha> -->` markers + ai-metrics footer with
   `<!-- ai-metrics:gh-pr-review -->` markers).
 - `_gh_pr_review_post_comment` — wraps `gh pr comment --body-file`
   and enforces three behaviors with a single decision tree:

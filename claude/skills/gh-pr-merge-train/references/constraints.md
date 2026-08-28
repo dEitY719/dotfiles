@@ -55,6 +55,15 @@ train only routes on the answer. The constraint it preserves is the real one —
 It also does not duplicate Step 2.4: a self-record review runs at most once per
 head (`#1519 F-8`), and only on PRs the platform leaves ungated.
 
+**Step 3.5's verdict gate is not an exception to this either (#1564).** It
+reads two labels — `review-blocked` / `review-passed` — and applies a fixed
+table. The judgement they encode was made by `devx:pr-review-all`, their only
+writer. The train must **never** parse a review comment body to reach the same
+conclusion: keeping the parse in the producer means a reviewer reformatting
+its verdict line yields no label and a skipped PR, whereas parsing here would
+let the same reformat silently *unlock* the gate
+(`review-verdict-gate.md` → "What this gate is not").
+
 ## Never write ai-metrics from the train
 
 Every atom the train calls (`gh:pr-merge`, `gh:pr-resolve-conflict`, …) posts

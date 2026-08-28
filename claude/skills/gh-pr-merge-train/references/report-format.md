@@ -12,9 +12,10 @@ queue: <n> PR(s)  ·  approval gate: <verdict>  ·  quiet period: 11m
 [MERGED]  #1466  refactor(issue-watcher): simplify   (BEHIND -> resolve-outdated -> merged)
 [MERGED]  #1467  fix(gh-pr-reply): ...               (CLEAN -> merged)
 [SKIPPED] #1462  test(issue-watcher): ...            checks still running (3 polls)
+[SKIPPED] #1470  fix(y): ...                         review-blocked — reviewer verdict is blocking
 [FAILED]  #1469  feat(x): ...                        conflict unresolved after 3 attempts
 
-merged 2 · skipped 1 · failed 1
+merged 2 · skipped 2 · failed 1
 ```
 
 Rules:
@@ -31,6 +32,10 @@ Rules:
 - A PR that entered the queue and *then* picked up `reply-pending` (the label
   can be added mid-run) is a normal `[SKIPPED]` line with
   `reply-pending — review reply not yet complete` as its reason.
+- PRs the **verdict gate** rejects (Step 3.5) *are* listed, one line each with
+  their reason. They differ from the pre-queue exclusions above: those were
+  never candidates, whereas a verdict-gated PR is a candidate a reviewer
+  stopped, and hiding that would hide the gate's whole output (#1564).
 
 ## The `approval gate:` field (#1519 NF-1)
 
@@ -57,7 +62,7 @@ is already the clause prefix there, so it drops out of the string itself:
 | Status | Meaning | Typical reason |
 |---|---|---|
 | `[MERGED]` | the PR is merged | — |
-| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required (reviewDecision=<value>)`, `gh:pr-merge refuses reviewDecision=<value>`, `policy unreadable — approval assumed required`, `BLOCKED: <rule>`, `draft`, plus the four delegated-review reasons tabled below |
+| `[SKIPPED]` | not merged, **and expected to be retriable** next tick | `checks still running`, `mergeability still UNKNOWN`, `approval required (reviewDecision=<value>)`, `gh:pr-merge refuses reviewDecision=<value>`, `policy unreadable — approval assumed required`, `BLOCKED: <rule>`, `draft`, plus the two verdict-gate reasons and the four delegated-review reasons tabled below |
 | `[FAILED]` | not merged, **and something actually went wrong** | `conflict unresolved after 3 attempts`, `gh:pr-merge failed: <message>`, `CI fix failed after 3 attempts` |
 
 Two of those reasons — `gh:pr-merge refuses reviewDecision=<value>` and
@@ -70,6 +75,22 @@ refused identically every time, so letting it reach `gh:pr-merge` would spend
 three F-5 attempts to produce a `[FAILED]` that NF-2 leaves no way to clear.
 Naming the `reviewDecision` value is what makes the line actionable: the reader
 knows which review to dismiss.
+
+Two come from the Step 3.5 verdict gate (`review-verdict-gate.md`), and they
+are the only place the report distinguishes "a reviewer said no" from "no
+reviewer has said anything":
+
+| Reason | What happened | Cleared by |
+|---|---|---|
+| `review-blocked — reviewer verdict is blocking` | a `devx:pr-review-all` lane returned a blocking verdict on this head | `gh:pr-reply` resolving every blocker (it drops the label on evidence), or a re-review |
+| `review not verified — no review-passed label` | no verdict label at all — the PR has not been shown to pass review | a `devx:pr-review-all` pass, or a human adding the label |
+
+Neither spends an F-5 attempt, and neither is ever `[FAILED]`. The second is
+the expected state of every PR that was already open when the gate landed, and
+of any PR whose head advanced since its last review (#1563 drops the stale
+`review-passed` on every push) — a `[SKIPPED]` here is the gate working, not a
+wedge. Unlike `reply-pending`, these reasons have **no staleness window**: see
+`review-verdict-gate.md` → "Why no time backstop".
 
 Four more come from the step-2b delegated review
 (`train-loop.md` → "Delegated review on the gate-off path"), and the wording

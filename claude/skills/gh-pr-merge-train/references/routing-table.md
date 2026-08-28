@@ -28,28 +28,44 @@ a round trip the state you already hold has covered.
 | `UNKNOWN` | `UNKNOWN` | poll, then re-evaluate; `[SKIPPED]` after 3 polls |
 | `DRAFT` | — | `[SKIPPED]` (a draft is not a merge candidate) |
 
-Two conditions **short-circuit the table** — check both before reading
+Four conditions **short-circuit the table** — check all four before reading
 `mergeStateStatus` at all:
 
 | Condition | Verdict |
 |---|---|
 | `isDraft == true` | `[SKIPPED] draft` |
 | `labels[].name` contains `reply-pending` | `[SKIPPED] reply-pending — review reply not yet complete` |
+| `labels[].name` contains `review-blocked` | `[SKIPPED] review-blocked — reviewer verdict is blocking` |
+| `labels[].name` contains neither verdict label | `[SKIPPED] review not verified — no review-passed label` |
 
 ```bash
 printf '%s' "$STATE" | _gh_pr_merge_train_has_reply_pending_label \
   && echo "[SKIPPED] reply-pending"
+
+# The verdict gate, re-asked (references/review-verdict-gate.md). Order
+# matters: review-blocked wins over a stale review-passed.
+if printf '%s' "$STATE" | _gh_pr_merge_train_has_review_blocked_label; then
+    echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
+elif ! printf '%s' "$STATE" | _gh_pr_merge_train_has_review_passed_label; then
+    echo "[SKIPPED] review not verified — no review-passed label"
+fi
 ```
 
-Both are defense-in-depth: Step 2 already dropped drafts and `reply-pending`
-PRs from the queue via `_gh_pr_merge_train_filter_targets`. The re-check earns
-its place because a label can be **added mid-run** — a deferred
-`devx:pr-review-all` reply pass can fire minutes after Step 2 built the queue,
-and F-3's re-query is the only thing that would see it (#1524).
-`_gh_pr_merge_train_has_reply_pending_label` is the single-PR sibling of
-`_gh_pr_merge_train_filter_targets` — same `gh_pr_merge_train.sh` sourced in
-Step 2, same predicate, so the two checks cannot drift apart the way the
-quiet-minutes number used to.
+All four are defense-in-depth: Step 2 already dropped drafts and
+`reply-pending` PRs from the queue via `_gh_pr_merge_train_filter_targets`, and
+Step 3.5 already applied the verdict gate to what survived. The re-check earns
+its place because a label can be **added or changed mid-run** — a deferred
+`devx:pr-review-all` pass can fire minutes after Step 2 built the queue,
+adding `reply-pending` (#1524) or flipping a verdict label (#1564) — and
+F-3's re-query is the only thing that would see it. A PR whose `review-passed`
+turned into `review-blocked` between the queue build and its turn must not
+merge on the strength of a snapshot.
+
+`_gh_pr_merge_train_has_reply_pending_label` and the two
+`_gh_pr_merge_train_has_review_*_label` predicates are the single-PR siblings
+of the array filter — same `gh_pr_merge_train.sh` sourced in Step 2, same
+predicates Step 3.5 ran, so the checks cannot drift apart the way the
+quiet-minutes number used to. Do not re-derive the `jq` here.
 
 The two rebase rows (`BEHIND`, `DIRTY`) never operate on the current checkout.
 The train builds a detached scratch worktree for `headRefName` first and passes

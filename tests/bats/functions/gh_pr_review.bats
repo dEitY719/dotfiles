@@ -988,6 +988,46 @@ EOF
     assert_output --partial "[BLOCKER] foo.sh:1"
 }
 
+# #1564: the marker is a claim about ONE commit. Both markers carry the sha,
+# because devx_pr_review_all_lane_block requires the open AND close tag to
+# match before it harvests a block.
+@test "build_comment_body: an 8th arg tags both markers with the head sha" {
+    _source_module
+    local out="$TEST_TEMP_HOME/body.md"
+    local ai_out="$TEST_TEMP_HOME/ai-out.txt"
+    printf 'Verdict: BLOCKING\n' >"$ai_out"
+    _gh_pr_review_build_comment_body "$out" codex thorough "$ai_out" 2500 2.5 7 \
+        0000111122223333
+    run cat "$out"
+    assert_success
+    assert_output --partial "<!-- ai-review:codex:0000111122223333 -->"
+    assert_output --partial "<!-- /ai-review:codex:0000111122223333 -->"
+}
+
+# An unreadable headRefOid must not produce a dangling `codex:` tag that
+# claims a freshness it cannot prove — fall back to the pre-#1564 form.
+@test "build_comment_body: an empty head sha falls back to the unsuffixed marker" {
+    _source_module
+    local out="$TEST_TEMP_HOME/body.md"
+    local ai_out="$TEST_TEMP_HOME/ai-out.txt"
+    printf 'Verdict: LGTM\n' >"$ai_out"
+    _gh_pr_review_build_comment_body "$out" codex thorough "$ai_out" 2500 2.5 7 ""
+    run cat "$out"
+    assert_success
+    assert_output --partial "<!-- ai-review:codex -->"
+    refute_output --partial "<!-- ai-review:codex: -->"
+}
+
+# The sha must actually reach the builder from the consolidated `gh pr view`
+# — a marker tagged from a field the fetch never asks for is the #1564 gap.
+@test "fetch_meta: the consolidated PR view asks for headRefOid" {
+    _source_module
+    gh() { printf '%s\n' "$*"; }
+    run _gh_pr_review_fetch_meta 42 acme/widget
+    assert_success
+    assert_output --partial "--json state,isDraft,baseRefName,headRefName,headRefOid"
+}
+
 @test "human_h baseline: each preset returns the documented value" {
     _source_module
     run _gh_pr_review_human_h quick;       assert_output "0.3"
