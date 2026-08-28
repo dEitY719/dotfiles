@@ -870,6 +870,27 @@ _hold_lock() {
     _refute_train_started
 }
 
+# PR #1566 codex review. Non-empty is not parseable: a login killed mid-write
+# leaves a truncated file that clears `-s` and still opens the pane on
+# `Not logged in` — the exact stall this check exists to name. `jq -e` is the
+# whole of the extra test; no key of the credential format is read.
+@test "pr_merge_train_cron: a truncated credentials file fails fast the same way" {
+    printf '%s' '{"claudeAiOauth":{"accessToken":"te' \
+        >"${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "not logged in"
+    _refute_train_started
+}
+
+@test "pr_merge_train_cron: a credentials file that is not JSON at all fails fast" {
+    printf 'not json\n' >"${HOME}/.claude-personal/.credentials.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "not logged in"
+    _refute_train_started
+}
+
 @test "pr_merge_train_cron: the credentials check names the file it looked at" {
     rm -f "${HOME}/.claude-personal/.credentials.json"
     _run_tick

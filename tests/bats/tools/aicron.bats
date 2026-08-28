@@ -1323,12 +1323,16 @@ MENTION
 # shell-common/tools/custom/cron-jobs.json rather than a fixture. They are the
 # exception the header rule anticipates: what these two jobs are routed at is
 # not a property of aicron, it is a property of the file that ships, and #1561
-# was an outage caused by that file — the unattended panes opened on an account
-# that was never logged in, so every prompt stalled.
+# turned on that routing — an unattended pane opened on the wrong account is an
+# account that was never logged in, so every prompt stalls.
 #
 # Asserted through aicron_manifest_env, not through a re-implemented jq
 # expression: that is the function aicron_run_exec feeds to `env`, so this pins
 # what the job would actually be started with, defaults ∪ job merge included.
+# The account itself lives in `defaults.env` and is deliberately *not* repeated
+# on each job — the manifest is version-controlled and the account name is
+# per-PC (aicron_manifest.sh, `docs/.ssot/pc-environment.md`), so one machine's
+# value is written once, in the one place that already carries machine values.
 
 # The KEY=VALUE lines aicron would hand `env` for job <1> of the shipped
 # manifest.
@@ -1352,15 +1356,4 @@ _shipped_env() {
     run _shipped_env merge-train
     assert_success
     assert_line "CLAUDE_DEFAULT_ACCOUNT=work1"
-}
-
-# Belt and braces: the account is pinned on each job, not only in defaults.env.
-# A later edit to the defaults — for an interactive job, say — must not be able
-# to move the two unattended dispatchers onto a logged-out account by accident.
-@test "aicron: both unattended jobs carry the account in their own env block" {
-    local _m="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/cron-jobs.json"
-    run jq -r '[.jobs[] | select(.name == "issue-watcher" or .name == "merge-train")
-               | .env.CLAUDE_DEFAULT_ACCOUNT] | join(",")' "${_m}"
-    assert_success
-    assert_output "work1,work1"
 }
