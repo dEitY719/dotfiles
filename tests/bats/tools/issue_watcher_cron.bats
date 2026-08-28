@@ -1293,6 +1293,16 @@ _assert_not_hung() {
     assert_output --partial "the composed name is invalid or exceeds herdr's 32-char limit"
     assert_output --partial "skipped on every tick"
     _refute_logged "agent start"
+
+    # The WARN claims this recurs on *every* tick, not just this one (PR #1589
+    # review, codex/agy) — a second tick against the same unchanged input must
+    # reproduce the identical rejection, since nothing about the run mutates
+    # the repo slug or the issue number between ticks.
+    : >"${_LOG}"
+    _run_tick
+    assert_failure
+    assert_output --partial "the composed name is invalid or exceeds herdr's 32-char limit"
+    _refute_logged "agent start"
 }
 
 # herdr refuses `agent start` unless the name matches
