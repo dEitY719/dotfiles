@@ -90,6 +90,36 @@ Unchanged legacy flow — always available, never degraded.
 3. If fail → **Test-failure loop** (below).
 4. Report.
 
+### Async delegation of Step 5 (#1550)
+
+Applies to **both** paths above — either one's implementation work may be
+delegated. Per the global `CLAUDE.md` Advisor/Worker policy, open-ended
+multi-file implementation SHOULD go to a background/async subagent
+(`Agent`, `model: "opus"`) rather than run inline in the current turn. The
+`Agent` tool returns immediately and notifies on completion, so the turn
+ends with the work genuinely still in flight.
+
+When that happens, print this single line as assistant text and end the
+turn:
+
+```
+[flow:async-wait] step=gh-issue-implement/implement agent=<id> reason=background-worker-delegated
+```
+
+Use `step=gh-issue-implement/report` instead when only the final report step
+is still pending. `claude/hooks/skill_completion_guard.py` then excuses that
+step for up to 2 consecutive turns (env: `GH_SKILL_GUARD_ASYNC_WAIT_LIMIT`,
+`0` disables) before blocking resumes — mechanism and rationale in
+`claude/skills/gh-issue-flow/references/stop-guard.md` → "Async-wait
+exception (#1550)". Grace is per step: a step with no marker of its own is
+still reported as outstanding and still blocks.
+
+The marker is a stop-gap for the wait, **never a substitute for the real
+completion marker**. Once the delegated work actually finishes, verify it
+(see the global policy — a Worker's self-report is not evidence), then emit
+the genuine `[step:gh-issue-implement/implement] OK` /
+`[step:gh-issue-implement/report] OK` lines and the final report as usual.
+
 ## Test-failure loop (max 3 iterations, fallback path only)
 
 Uses `pre_existing_failures` from common step 4 above.

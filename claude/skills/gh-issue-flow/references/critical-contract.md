@@ -35,6 +35,19 @@ with `--no-next-hint`).
    See `references/stop-guard.md` for the detection logic, safety rails,
    and how to disable it temporarily for debugging.
 
+**One narrow exception — async delegation (#1550).** When a sub-skill's own
+work is itself handed to a background/async `Agent` mid-chain (the
+Advisor/Worker delegation the global `CLAUDE.md` mandates for multi-file
+implementation), the outstanding step genuinely cannot finish inside this
+turn. Print the single line `[flow:async-wait] step=<skill>/<step>
+agent=<id> reason=background-worker-delegated` as assistant text and end the
+turn; the harness guard grants up to 2 consecutive grace turns before
+blocking resumes (mechanism: `references/stop-guard.md` → "Async-wait
+exception (#1550)"). This is **not** a license to stop mid-Step-2 for any
+other reason, and it does not relax guard #2 — the marker line is the only
+prose permitted, everything else in the zero-conversational-text rule
+stands.
+
 If you edit Step 2 in any way, re-verify all three guards are still in
 place. The harness guard is a backstop, not a license to weaken the
 prose rules — Claude can still emit verbose text BEFORE attempting to

@@ -30,6 +30,8 @@ Safety rails (each is critical — never accidentally trap the user):
   - No gh-issue-flow boundary in the transcript → exit 0 (not our flow).
   - Terminal Step 3 marker present → exit 0 (chain finished cleanly).
   - Boundary went stale (N fresh user prompts since it) → exit 0 (#1270).
+  - `[flow:async-wait]` marker streak within the grace limit → exit 0
+    (#1550 — work delegated to a background Agent, not abandoned).
   - Any unexpected exception → exit 0 (fail open).
 
 Terminal-marker channels: assistant **text** blocks (canonical), plus a
@@ -66,6 +68,30 @@ _TRACE_ENABLED: bool = os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_TRACE") == "1"
 # emitted a Step 3 marker would keep blocking every unrelated turn for the
 # rest of the session (cross-turn session hijacking).
 _DEFAULT_MAX_STALE_USER_TURNS: int = 3
+
+# Issue #1550 — how many CONSECUTIVE `[flow:async-wait]` markers may end a
+# turn, with no intervening progress, before the guard resumes blocking.
+# Rationale for a count instead of an agent-id comparison: see
+# `_ASYNC_WAIT_RE`.
+_DEFAULT_ASYNC_WAIT_LIMIT: int = 2
+
+# Issue #1550 — the marker the model prints as plain assistant text right
+# before ending a turn whose remaining work it has handed to a
+# background/async `Agent` (the Advisor/Worker delegation the user's global
+# CLAUDE.md mandates for multi-file implementation work). Shape:
+#
+#   [flow:async-wait] step=<skill>/<step> agent=<agent-id> reason=background-worker-delegated
+#
+# `agent` is captured for audit/logging only and is deliberately NOT used in
+# any matching or streak logic. The issue's own fix plan proposed comparing
+# the agent id across turns to detect "no progress", but that requires the
+# model to reproduce one exact literal string turn after turn — fragile in
+# exactly the situation the marker exists for. Counting consecutive
+# occurrences with no intervening progress event is sufficient evidence of
+# stagnation on its own, and needs nothing from the model but the marker.
+_ASYNC_WAIT_RE: re.Pattern[str] = re.compile(
+    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=(?P<agent>\S+)\s+reason=background-worker-delegated\s*$"
+)
 
 
 def _trace(message: str, *, layer: str | None = None) -> None:
@@ -645,6 +671,81 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     return terminal, seen
 
 
+def _last_sub_skill_index(messages: list[dict[str, Any]], start: int) -> int:
+    """Return the index of the LAST sub-skill `Skill()` call after `start` (#1550).
+
+    Falls back to `start` itself when no sub-skill ran after the boundary, so
+    the caller always gets a usable "last progress happened here" index.
+
+    A dedicated forward walk rather than an extra return value threaded out
+    of `_scan_after_boundary`: that function is already carrying two
+    orthogonal jobs, and this module's style is one small single-purpose
+    walker per question. Never raises — same isinstance discipline as every
+    other walker here (`_iter_skill_uses` is fully guarded).
+    """
+    last = start
+    for offset, entry in enumerate(messages[start + 1 :], start=start + 1):
+        msg = _message_payload(entry)
+        for skill in _iter_skill_uses(msg):
+            if skill in SUB_SKILL_NAMES:
+                last = offset
+                break
+    return last
+
+
+def _async_wait_streak(messages: list[dict[str, Any]], boundary: int, seen: list[str]) -> int:
+    """Count `[flow:async-wait]` markers since the last progress event (#1550).
+
+    "Progress event" for the OUTER chain is a sub-skill `Skill()` invocation:
+    the chain moved forward, so whatever the model was waiting on is done and
+    the streak restarts from zero. When no sub-skill has run yet (`seen`
+    empty) the boundary itself is the last progress point — which is also why
+    `seen` is taken as a parameter: it lets the common no-progress case skip
+    the extra walk entirely.
+
+    Markers are read from `role=assistant` text blocks only, with
+    `include_tool_results=False`. That is deliberate and asymmetric with the
+    sister hook's `[step:.../...] OK` scan (which does read `tool_result`,
+    because those markers come from a `printf` in a Bash call). The
+    async-wait marker is only ever the model's own turn-ending prose, while a
+    `tool_result` can carry arbitrary file content — including this very
+    file and `references/stop-guard.md`, both of which now document the
+    marker literally. Reading tool_results here would false-positive on any
+    `Read` of those files (the issue #608 precedent, applied to a new
+    marker).
+
+    Never raises; a malformed entry can only yield a smaller count.
+    """
+    progress_idx = _last_sub_skill_index(messages, boundary) if seen else boundary
+    streak = 0
+    for entry in messages[progress_idx + 1 :]:
+        msg = _message_payload(entry)
+        if msg.get("role") != "assistant":
+            continue
+        for text in _iter_text_blocks(msg, include_tool_results=False):
+            streak += len(_ASYNC_WAIT_RE.findall(text))
+    return streak
+
+
+def _async_wait_grace_limit() -> int:
+    """Read the async-wait grace limit from the environment (#1550).
+
+    Env var: `GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT`. Same shape as
+    `_max_stale_user_turns`:
+      - a valid non-negative int  → use it,
+      - `0`                       → grace disabled (the very first marker
+                                    occurrence already blocks),
+      - unset / unparseable / negative → `_DEFAULT_ASYNC_WAIT_LIMIT`
+        (unset reaches the `ValueError` arm via the `""` default).
+    Never raises — a bad value silently degrades to the default.
+    """
+    try:
+        value = int(os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT", ""))
+    except ValueError:
+        return _DEFAULT_ASYNC_WAIT_LIMIT
+    return value if value >= 0 else _DEFAULT_ASYNC_WAIT_LIMIT
+
+
 def _max_stale_user_turns() -> int:
     """Read the boundary-expiry threshold from the environment (#1270).
 
@@ -814,11 +915,20 @@ def main() -> int:
     fresh_prompts = (
         _count_fresh_user_prompts(messages, boundary) if _TRACE_ENABLED or (not terminal and limit > 0) else 0
     )
+    # Issue #1550 — same hot-path discipline as the fresh-prompt count above:
+    # the streak feeds nothing but the grace valve, so skip the walk whenever
+    # its result provably cannot be used. Trace mode forces it so the L1.5
+    # diagnostic line stays complete.
+    async_wait_limit = _async_wait_grace_limit()
+    async_wait_streak = (
+        _async_wait_streak(messages, boundary, seen) if _TRACE_ENABLED or (not terminal and async_wait_limit > 0) else 0
+    )
     if _TRACE_ENABLED:
         _trace(
             f"boundary={boundary} sub_skills_seen={len(seen)}/{len(EXPECTED_CHAIN)} "
             f"({','.join(seen) if seen else 'none'}) terminal={terminal} "
-            f"fresh_user_prompts={fresh_prompts}",
+            f"fresh_user_prompts={fresh_prompts} "
+            f"async_wait_streak={async_wait_streak} async_wait_limit={async_wait_limit}",
             layer="L1.5",
         )
     if terminal:
@@ -830,6 +940,20 @@ def main() -> int:
         return _allow(
             f"stale boundary expiry — {fresh_prompts} fresh user prompt(s) since the "
             f"gh-issue-flow boundary (limit {limit}); flow abandoned, failing open",
+            layer="L1.5",
+        )
+
+    # Issue #1550 — async-wait grace. Sits AFTER the terminal and
+    # stale-boundary checks on purpose: both of those still take priority,
+    # so this valve only ever changes the outcome on the path that would
+    # otherwise block. A streak inside the limit means the model told us,
+    # on the record, that it delegated the outstanding work to a background
+    # Agent and is waiting — not that it abandoned the flow. Past the limit
+    # the marker stops buying anything and the ordinary block resumes.
+    if async_wait_limit > 0 and 0 < async_wait_streak <= async_wait_limit:
+        return _allow(
+            f"async-wait grace ({async_wait_streak}/{async_wait_limit}) — background "
+            f"delegation in progress, not abandonment",
             layer="L1.5",
         )
 
