@@ -179,6 +179,16 @@ run_han() {
     assert_output ""
 }
 
+# The header's budget table assumed a 5-digit issue number (#1553) — an
+# assumption with no headroom check anywhere. A 16-char repo (the slug's own
+# cap) only has room for a 6-digit issue number; a 7th digit overruns 32 and
+# must still be refused, not silently truncated into a colliding name.
+@test "T18b: a 16-char repo plus a 7-digit issue number overruns the budget (#1553)" {
+    run_han 'herdr_agent_name iw acme/sixteen-char-rep issue-1234567'
+    assert_failure
+    assert_output ""
+}
+
 # ---------------------------------------------------------------------------
 # T19: the loader reaches this file
 #
