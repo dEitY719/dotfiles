@@ -12,7 +12,7 @@
       "script": "shell-common/tools/custom/issue_watcher_cron.sh",
       "schedule": "*/11 * * * *",
       "args": ["--cwd", "$HOME/dotfiles"],
-      "env": { "CLAUDE_DEFAULT_ACCOUNT": "work1" },
+      "env": {},
       "description": "할당 이슈 감시 후 gh:issue-flow 디스패치"
     },
     {
@@ -20,7 +20,7 @@
       "script": "shell-common/tools/custom/pr_merge_train_cron.sh",
       "schedule": "*/5 * * * *",
       "args": ["--cwd", "$HOME/dotfiles"],
-      "env": { "CLAUDE_DEFAULT_ACCOUNT": "work1" },
+      "env": {},
       "description": "열린 PR 을 순차 정리·머지"
     }
   ]

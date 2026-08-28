@@ -584,9 +584,17 @@ _claude_resolve_account() {
 # `Not logged in · Run /login` 화면에서 모든 키 입력을 흘리므로, 무인
 # 디스패처는 이를 `agent_prompt_stalled` 로 오인해 보고한다.
 #
-# 존재·비어있지 않음만 본다. 토큰을 파싱하면 이 코드가 Claude Code 의 비공개
-# credential 포맷에 묶이고, API 로 확인하면 매 cron tick 에 네트워크 왕복이
-# 생긴다 — #1561 에서 둘 다 기각됐다.
+# 존재·비어있지 않음·JSON 으로 파싱됨까지만 본다. 토큰을 파싱하면 이 코드가
+# Claude Code 의 비공개 credential 포맷에 묶이고, API 로 확인하면 매 cron tick
+# 에 네트워크 왕복이 생긴다 — #1561 에서 둘 다 기각됐다. 구문 검사는 그 둘 중
+# 어느 것도 아니다: 키 이름 하나 알지 못한 채, 잘리거나 깨진 파일만 걸러낸다.
+# 이 갈래는 실재한다 — 로그인 중 죽은 프로세스나 절반만 쓰인 파일은 `-s` 를
+# 통과하고, 팬은 다시 `Not logged in` 으로 열려 이 검사가 막으려던 바로 그
+# stall 로 돌아간다 (PR #1566 codex review).
+#
+# `jq` 는 이 규칙을 쓰는 두 디스패처 모두의 hard dependency 다 (aicron 의
+# ensure_jq). 그래도 없는 환경에서 계정 전체를 로그아웃으로 판정하지는 않는다
+# — 구문 검사는 보강이지 게이트가 아니므로, jq 가 없으면 그 갈래만 건너뛴다.
 #
 # 규칙이 여기 사는 이유: "무슨 파일이 로그인을 뜻하는가" 는 이 파일이 이미
 # 세 군데(claude_accounts_status, claude_accounts_rollback)에서 손으로 쓰고
@@ -595,6 +603,9 @@ _claude_account_logged_in() {
     [ -n "${1:-}" ] || return 1
     [ -r "$1/.credentials.json" ] || return 1
     [ -s "$1/.credentials.json" ] || return 1
+    if command -v jq >/dev/null 2>&1; then
+        jq -e . "$1/.credentials.json" >/dev/null 2>&1 || return 1
+    fi
     return 0
 }
 
