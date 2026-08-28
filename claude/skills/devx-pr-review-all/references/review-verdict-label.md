@@ -10,10 +10,15 @@ blocking verdicts and merged 32 minutes later, because the merge train's only
 real gate was CI.
 
 **Wiring status.** This document specifies the parser and the call convention
-only. The train-side hard gate is tracked in #1564 and the label-lifecycle
-invalidation rules in #1563; neither is implemented yet, so nothing consumes
-these labels today. Treat the call sites below as the contract those issues
-must build against, not as code already running.
+only. #1563's label-lifecycle invalidation rules **are** implemented: every
+skill that advances a PR's head (`gh:pr-reply`, `gh:pr-resolve-conflict`,
+`gh:pr-resolve-outdated`) now drops the stale verdict through the shared
+`_gh_pr_drop_label` helper, whose header comment in
+`shell-common/functions/gh_pr_edit_safe.sh` is the SSOT for the asymmetry rule
+(`review-passed` always, `review-blocked` only on evidence). The train-side
+hard gate is still tracked in #1564 and is **not** implemented, so no merge
+decision consumes these labels yet — treat the gate call sites below as the
+contract that issue must build against, not as code already running.
 
 ## The labels
 

@@ -18,6 +18,7 @@
 # Usage:
 #   _gh_pr_edit_safe_label  <pr-number> <label>     [--repo owner/name]
 #   _gh_pr_edit_safe_body   <pr-number> <body-file> [--repo owner/name]
+#   _gh_pr_drop_label       <pr-number> <label> <repo> [host]
 #
 # Repo resolution precedence:
 #   1. Explicit --repo flag
@@ -35,6 +36,48 @@
 #   hitting the REST endpoint. Without this guard, POST /labels would
 #   auto-create a missing label silently — see project memory
 #   `feedback_gh_label_no_autocreate.md`.
+#
+# ---------------------------------------------------------------------------
+# Verdict-label invalidation — SSOT for issue #1563
+# ---------------------------------------------------------------------------
+# `devx:pr-review-all` is the ONLY writer of the two verdict labels:
+#   review-blocked — at least one reviewer lane returned a blocking verdict
+#   review-passed  — every lane that ran passed, and at least one lane ran
+# Both prove a claim about **one specific head commit**, not about the PR in
+# general. So every skill that advances a PR's head (a push of any kind) must
+# invalidate them, or a stale `review-passed` survives onto code nobody read
+# (reproduced twice on PR #1529, via gh:pr-resolve-outdated and
+# gh:pr-resolve-conflict force-pushing over a reviewed commit).
+#
+# _gh_pr_drop_label is that single shared primitive. Consumers:
+#   gh:pr-reply             Step 6 — after `git push` of the fix commits
+#   gh:pr-resolve-conflict  Step 5 — after a successful --force-with-lease
+#   gh:pr-resolve-outdated  Step 5 — after a successful --force-with-lease
+#
+# The asymmetry rule (drop `review-passed` freely, `review-blocked` almost
+# never):
+#   - `review-passed` is dropped UNCONDITIONALLY by all three. Any new head
+#     invalidates "this head was reviewed"; dropping is always the safe
+#     direction because absence means "not verified", not "blocked".
+#   - `review-blocked` is dropped ONLY where the skill actually holds evidence
+#     that every blocker raised was addressed. Today that is exactly one place:
+#     `gh:pr-reply`, and only when ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0
+#     (its Step 3 classification: ACCEPT + ACCEPT-PARTIAL vs DECLINE). A rebase
+#     skill has no such evidence, so it must leave `review-blocked` in place —
+#     that is the safe direction, not a bug.
+#   - No skill may ever ADD either label. Only `devx:pr-review-all` issues them.
+# Consuming reference docs link here instead of restating this rule.
+#
+# _gh_pr_drop_label return codes:
+#   0  — label removed, OR it was already absent (HTTP 404 → idempotent)
+#   1  — DELETE failed for any other reason (stderr passed through so the
+#        caller can print its own `[WARN]`)
+#   2  — usage error (missing pr / label / repo)
+#
+# Unlike the two wrappers above, this helper has no `gh pr edit` primary
+# attempt: a REST DELETE never resolves `projectCards`, so the classic-Projects
+# GraphQL deprecation path (#326) cannot fire. One direct REST call is the
+# whole contract.
 #
 # NOTE: This file intentionally has NO interactive guard. It is a pure
 # function-defining library (no top-level side effects) consumed by the
@@ -222,6 +265,46 @@ _gh_pr_edit_safe_body() {
 
     if printf '%s' "$_payload" | gh api -X PATCH "repos/$_repo/pulls/$_pr" \
         --input - >/dev/null 2>"$_err"; then
+        rm -f "$_err"
+        return 0
+    fi
+
+    cat "$_err" >&2
+    rm -f "$_err"
+    return 1
+}
+
+_gh_pr_drop_label() {
+    local _pr="$1" _label="$2" _repo="$3" _host="${4-}"
+
+    if [ -z "$_pr" ] || [ -z "$_label" ] || [ -z "$_repo" ]; then
+        printf '[gh-pr-edit-safe] usage: _gh_pr_drop_label <pr> <label> <repo> [host]\n' >&2
+        return 2
+    fi
+
+    local _err
+    _err=$(mktemp) || return 2
+
+    # `gh api` takes no --repo flag, so the repo lives in the path (#658), and
+    # the host is pinned via GH_HOST so a dual-host login cannot delete the
+    # label off the wrong server (#1403 / #1407). The export happens inside a
+    # subshell to leave the caller's GH_HOST untouched, and is skipped when no
+    # host was passed so `gh`'s own default still applies.
+    if (
+        if [ -n "$_host" ]; then
+            export GH_HOST="$_host"
+        fi
+        gh api -X DELETE "repos/$_repo/issues/$_pr/labels/$_label"
+    ) >/dev/null 2>"$_err"; then
+        rm -f "$_err"
+        return 0
+    fi
+
+    # Idempotent: the label was already absent. `gh` collapses every failure
+    # into one non-zero exit, so the 404 has to be read out of stderr text
+    # (`gh: Not Found (HTTP 404)` matches either pattern). Not a warning —
+    # "already gone" is the normal, most common outcome.
+    if grep -Eq 'HTTP 404|Not Found' "$_err"; then
         rm -f "$_err"
         return 0
     fi
