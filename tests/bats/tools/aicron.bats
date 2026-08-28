@@ -923,6 +923,17 @@ EOF
     done < <(jq -r '.jobs[].script' "${_shipped}")
 }
 
+@test "aicron: the shipped issue-watcher job runs every 3 minutes (#1579)" {
+    # Manifest schedule changes are not self-installing (crontab keeps the
+    # schedule it was installed with) — a reinstall (`aicron remove
+    # issue-watcher && aicron add issue-watcher`) is required, tracked
+    # separately via the changelog fragment for #1579.
+    local _shipped="${DOTFILES_ROOT}/shell-common/tools/custom/cron-jobs.json"
+    run jq -r '.jobs[] | select(.name=="issue-watcher") | .schedule' "${_shipped}"
+    assert_success
+    assert_output "*/3 * * * *"
+}
+
 # ---------------------------------------------------------------------------
 # crontab dump failures (B1) — a table we could not read is never an empty one
 # ---------------------------------------------------------------------------
