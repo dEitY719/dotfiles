@@ -104,10 +104,10 @@ HEAD_BRANCH=<headRefName>     # Step 2's `gh pr view` already read it
 BASE_BRANCH=<baseRefName>     # ditto — never a hardcoded `main`
 REMOTE=<remote>               # the `[remote]` positional, default `origin`
 
-WATCHED_FILE="${DOTFILES_ROOT:-$HOME/dotfiles}/docs/.ssot/watched-repos.json"
+WATCHED_FILE="${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}"
 VERIFY_SKILL=""
 if command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
-    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[$r].verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
+    VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" '.[] | select(.repo == $r) | .verify_skill // empty' "$WATCHED_FILE" 2>/dev/null)
 fi
 # Empty VERIFY_SKILL — repo not registered, no registry, or no jq, so the
 # feature is simply unavailable — means do nothing at all: no output, no
@@ -161,5 +161,6 @@ its own so it stays usable standalone. Detail:
 `gh:pr-approve` produces the approval this skill gates on · `gh:pr-merge-emergency`
 is the admin-override path when approval cannot be obtained · `gh:pr-post-merge-verify`
 owns the dispatch block Step 5 runs inline for repos registered in
-`docs/.ssot/watched-repos.json`, and stays a standalone manual entry point
+`${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}`,
+and stays a standalone manual entry point
 (`/gh-pr-post-merge-verify <N>`).
