@@ -38,14 +38,29 @@
 # up at 37 and was refused on every merge. A name that identifies nothing
 # because herdr rejects it is worse than one that identifies a repo.
 #
-# Reachability today: `docs/.ssot/watched-repos.json` holds exactly one entry
-# (`dEitY719/dotfiles` on github.com), so neither collision can occur. The
-# guard is that fact, not the code — #1530's 확정 사항 fixed the 16-char
-# repo-only shape as a user decision and deferred the fix to a follow-up. When
-# a second host OR a second owner joins the watch list, append a short digest
-# of `<host>/<owner>` here (e.g. `iw-dotfiles-a3f-issue-1530`, 26 chars — it
-# fits). `tests/bats/functions/herdr_agent_name.bats` T20 pins the limitation
-# so it fails visibly rather than silently when that day comes.
+# Reachability today rests on two *different* watch lists, and only one of them
+# is anchored anywhere (issue #1552):
+#
+#   docs/.ssot/watched-repos.json
+#          tracked in git, and it gates gh:pr-post-merge-verify's target list
+#          only. One entry today (`dEitY719/dotfiles` on github.com).
+#   ${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}
+#          what issue_watcher_cron.sh actually reads — so it is this list, not
+#          the tracked one, that the owner collision above runs through. It is
+#          untracked and user-editable: no PR review, no lint, no test holds it
+#          to one entry, so it can grow a second same-basename repo without
+#          anyone noticing. One entry today as well.
+#
+# So neither collision can occur *while both lists stay at one entry each* —
+# and nothing in this file enforces either fact. #1530's 확정 사항 fixed the
+# 16-char repo-only shape as a user decision and deferred the fix to a
+# follow-up, so rather than trust that this comment gets read,
+# issue_watcher_cron.sh now carries its own runtime guard: at watch-list load
+# it warns when two watched repos share a basename. When a second host OR a
+# second owner joins either list, append a short digest of `<host>/<owner>`
+# here (e.g. `iw-dotfiles-a3f-issue-1530`, 26 chars — it fits).
+# `tests/bats/functions/herdr_agent_name.bats` T20 pins the limitation so it
+# fails visibly rather than silently when that day comes.
 #
 # No interactive guard, for the same reason gh_host.sh has none: the body is
 # pure definitions and produces no output at file scope, and every real caller

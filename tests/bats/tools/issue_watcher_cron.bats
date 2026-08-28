@@ -1114,6 +1114,27 @@ _assert_not_hung() {
     _refute_logged "gwt spawn"
 }
 
+# The collision herdr_agent_name.sh documents but cannot see: agent names drop
+# the owner, so two watched repos sharing a basename share `iw-dotfiles-issue-
+# <N>`. Nothing tracked gates this list, so the warning is the only signal.
+@test "issue_watcher_cron: watched repos sharing a basename raise a warning" {
+    _make_repo "${_WORK_DIR}/dotfiles2"
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"other/dotfiles","path":"'"${_WORK_DIR}"'/dotfiles2","host":"github.com"}]'
+    _run_tick
+    assert_success
+    assert_output --partial "sharing a basename"
+    assert_output --partial "dotfiles"
+}
+
+# Advisory guards earn their keep by staying quiet: the one-entry list `setup`
+# writes must not tax every tick with a warning about a collision it cannot have.
+@test "issue_watcher_cron: a watch list without a basename clash stays silent" {
+    _run_tick
+    assert_success
+    refute_output --partial "sharing a basename"
+}
+
 @test "issue_watcher_cron: a watch entry without a path is ignored" {
     _write_watch_file '[{"repo":"acme/dotfiles","host":"github.com"}]'
     _run_tick

@@ -2313,6 +2313,20 @@ main() {
     # read and the jq parse happen exactly once per tick, as intended.
     _iw_watch_list >/dev/null
 
+    # herdr agent names carry the repo basename and neither the host nor the
+    # owner (herdr_agent_name.sh), so two watched repos ending in the same
+    # segment — `acme/dotfiles` and `other/dotfiles` — share `iw-<repo>-issue-
+    # <N>` and the second dispatch's prompt lands in the first one's pane. This
+    # list is untracked and user-editable, so no review or lint stands between
+    # a second entry and that collision; advisory only, the tick continues
+    # either way (#1552).
+    local _iw_dup
+    _iw_dup=$(_iw_watch_list |
+        awk -F "${_IW_TAB}" '{ sub(/.*\//, "", $1); print $1 }' | sort | uniq -d)
+    if [ -n "${_iw_dup}" ]; then
+        ux_warning "watch list has repos sharing a basename (${_iw_dup}) — herdr agent names collide (see herdr_agent_name.sh)." >&2
+    fi
+
     # Same reasoning, one signal down: the worktree scan feeds both the
     # running-now join (inside a pipeline) and the collection loop (inside a
     # heredoc), so neither call site can warm the memo for the other. Priming
