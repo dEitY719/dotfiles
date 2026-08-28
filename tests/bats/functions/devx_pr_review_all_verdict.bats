@@ -173,6 +173,17 @@ EOF
     assert_output "blocking"
 }
 
+@test "verdict (PR #1573 review, agy FOLLOW-UP): bracketed detail after the pipe is not a template echo" {
+    # The template-detection glob used to match `[` and `|` anywhere in the
+    # value, so a real verdict with a *second* bracketed group after the pipe
+    # (e.g. a bracketed finding count) was misread as the unanswered preset
+    # template `[LGTM|우려있음|블로킹]`. Only a pipe INSIDE the first bracket
+    # group is the template's signature.
+    run devx_pr_review_all_verdict <<<"Verdict: [BLOCKING] | [5 findings]"
+    assert_success
+    assert_output "blocking"
+}
+
 # ── devx_pr_review_all_aggregate (stdin, newline-delimited) ──────────
 
 @test "aggregate: all lanes pass -> review-passed" {
@@ -337,6 +348,26 @@ EOF
 EOF
     assert_success
     assert_output ""
+}
+
+@test "lane block (PR #1573 review, agy+codex FOLLOW-UP): open and close markers on the same line are still harvested" {
+    # The open-tag rule used to `next` immediately on match, so a close tag
+    # trailing on that same line was never inspected and the block was lost
+    # entirely (degrading the lane to unknown downstream).
+    run devx_pr_review_all_lane_block agy <<'EOF'
+<!-- ai-review:agy -->Verdict: LGTM<!-- /ai-review:agy -->
+EOF
+    assert_success
+    assert_output "Verdict: LGTM"
+}
+
+@test "lane block (PR #1573 review, follow-up): a same-line block picks the right lane" {
+    run devx_pr_review_all_lane_block agy <<'EOF'
+<!-- ai-review:codex -->판정: 블로킹<!-- /ai-review:codex -->
+<!-- ai-review:agy -->Verdict: LGTM<!-- /ai-review:agy -->
+EOF
+    assert_success
+    assert_output "Verdict: LGTM"
 }
 
 @test "lane block: end-to-end -> verdict token" {
