@@ -26,7 +26,65 @@ For each PR `N` in the Step 2 queue order:
 5. **Re-query and re-route.** An atom returning success does not prove the PR
    is mergeable now.
 6. **Merge** — `Skill(gh:pr-merge, "<N>")`. No strategy argument (D-4).
-7. **Record** the outcome and continue.
+7. **Close the merged PR's implementation tab** — only on a successful merge,
+   only when that tab is `idle`. The block is below ("Closing the merged PR's
+   implementation tab").
+8. **Record** the outcome and continue.
+
+## Closing the merged PR's implementation tab (step 7, #1565)
+
+`gh:pr-merge` Step 5 already closes this tab as part of its post-merge
+verification dispatch. This is the belt-and-braces half: run it anyway, right
+after a successful merge, because a tab that stays open is not a cosmetic leak.
+`_iw_live_agents` in `shell-common/tools/custom/issue_watcher_cron.sh` counts a
+`wt/issue-*` worktree as running whenever a herdr agent sits on it, so three
+merged-but-open tabs exhaust `_IW_MAX_PER_REPO=3` and issue-watcher silently
+stops dispatching for that repo — the pipeline starves itself. On 2026-08-27 a
+train merged 10 PRs and left all 10 tabs open.
+
+`<head>` is the `headRefName` already in `$STATE` from step 1 — no extra API
+call. Run this **only after** `gh:pr-merge` reported success; a `[SKIPPED]` or
+`[FAILED]` PR still has work parked in its worktree.
+
+```bash
+# Idle-only, exactly the judgement gh:pr-merge's Step 4 herdr hint already
+# makes (../../gh-pr-merge/references/herdr-tab-notify.sh.md): a `working` or
+# `blocked` agent is a live session, and closing its tab kills work in flight.
+# Everything else here is a silent skip — this runs after the merge, so it can
+# never fail the PR it just merged.
+if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    PMT_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/<head>" \
+        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' | head -1)
+    if [ -n "$PMT_WT" ] && PMT_AGENTS=$(herdr agent list 2>/dev/null); then
+        # head -1: two agents on one cwd is abnormal — take the first, ignore
+        # the rest, warn about nothing (same rule as the Step 4 hint).
+        PMT_MATCH=$(printf '%s' "$PMT_AGENTS" | jq -r --arg cwd "$PMT_WT" \
+            '.result.agents[]? | select(.cwd == $cwd)
+             | "\(.tab_id)\t\(.agent_status)"' 2>/dev/null | head -1)
+        PMT_TAB=$(printf '%s' "$PMT_MATCH" | cut -f1)
+        PMT_STATUS=$(printf '%s' "$PMT_MATCH" | cut -f2)
+        if [ -n "$PMT_TAB" ] && [ "$PMT_STATUS" = "idle" ]; then
+            if herdr tab close "$PMT_TAB" >/dev/null 2>&1; then
+                printf '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).\n' \
+                    "$PMT_TAB" "$PMT_WT"
+            else
+                printf '[WARN] gh:pr-merge-train: herdr tab close %s failed — continuing.\n' \
+                    "$PMT_TAB"
+            fi
+        fi
+    fi
+fi
+```
+
+Closing a tab `gh:pr-merge` already closed is not a conflict: the second lookup
+simply finds no agent on that path and prints nothing. The two halves are
+deliberately redundant — if the Step 5 dispatch is skipped again, this one still
+keeps the live count flat across a whole train.
+
+`tests/bats/skills/gh_pr_merge_train_close_impl_tab.bats` pins both halves of
+the rule (idle closes, non-idle never does) against the executable mirror
+`tests/bats/skills/_fixtures/gh_pr_merge_train_close_impl_tab.sh`. Change the
+block above, change that fixture.
 
 ## Delegated review on the gate-off path (step 2b, #1519 F-6 … F-9)
 
