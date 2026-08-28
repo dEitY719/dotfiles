@@ -1893,6 +1893,45 @@ _two_repo_fixture() {
     assert_output --partial "retrying in 0s"
 }
 
+# The gap itself is 13s since #1571, not the 2s this shipped with: `tab create`
+# answering before the pane's shell is interactive is the *same* class of race
+# as the settle wait above, and 2s was shorter than the 5s already measured to
+# fail. Asserted through the message rather than a `sleep` line because the
+# settle wait logs `sleep 13` too — the sentence is what pins which wait this is.
+@test "issue_watcher_cron: the start retry gap defaults to 13s" {
+    # An empty assignment beats _run_tick's own `IW_START_RETRY_SLEEP=0` and
+    # still lets `${IW_START_RETRY_SLEEP:-13}` fall through to the default.
+    _run_tick "HERDR_START_PANE_BUSY=1" "IW_START_RETRY_SLEEP="
+    assert_success
+    assert_output --partial "retrying in 13s"
+}
+
+@test "issue_watcher_cron: the start retry gap stays env-overridable" {
+    _run_tick "HERDR_START_PANE_BUSY=1" "IW_START_RETRY_SLEEP=4"
+    assert_success
+    assert_output --partial "retrying in 4s"
+    refute_output --partial "retrying in 13s"
+}
+
+# The SSOT line itself, so a change that only moves the default out of the
+# ${VAR:-13} form (and with it the `0` escape the suite depends on) is caught
+# here rather than as a mysteriously slow suite.
+@test "issue_watcher_cron: both herdr wait constants are 13 and overridable" {
+    run grep -qF -- '_IW_SETTLE_SECONDS="${IW_SETTLE_SECONDS:-13}"' "${SCRIPT}"
+    assert_success
+    run grep -qF -- '_IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-13}"' "${SCRIPT}"
+    assert_success
+}
+
+# #1530/#1549 and #1560/#1571 were both "two of the three dispatchers were
+# fixed". The comment naming the other two is the guard against a third round.
+@test "issue_watcher_cron: the wait comments name the other two dispatchers" {
+    run grep -qF -- '_PMT_SETTLE_SECONDS' "${SCRIPT}"
+    assert_success
+    run grep -qF -- 'PMV_SETTLE_SECONDS' "${SCRIPT}"
+    assert_success
+}
+
 # The inner retrying is bounded, and the bound is the point: cron re-runs every
 # few minutes anyway. Three inner *attempts* per outer attempt, three outer
 # attempts — the two layers are independent and both still hold.

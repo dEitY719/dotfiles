@@ -38,6 +38,15 @@ _pmv_herdr() {
     return "${!_rc:-0}"
 }
 
+# Stand-in for `sleep`. Records the wait into the herdr log instead of paying
+# it, so the settle waits (#1571) can be asserted — and ordered against the
+# herdr calls they sit between — without the suite sleeping 26 real seconds per
+# dispatch test.
+_pmv_sleep() {
+    [ -z "${FAKE_HERDR_LOG-}" ] || printf 'sleep %s\n' "$1" >>"$FAKE_HERDR_LOG"
+    return 0
+}
+
 # Stand-in for `git -C <root> worktree list --porcelain`.
 _pmv_git_worktree_list() {
     printf '%s' "${FAKE_WORKTREE_PORCELAIN-}"
@@ -374,6 +383,18 @@ pmv_agent_start() {
     _pmv_herdr agent start "$1" --kind claude --pane "$2" -- --dangerously-skip-permissions
 }
 
+# Mirrors dispatch.sh.md's `pmv_settle`: one settle wait for both of this
+# repo's herdr races — `tab create` -> `agent start` (the pane's shell is not
+# interactive yet, `agent_pane_busy`) and `agent start` -> `agent prompt` (a
+# fresh claude TUI reports idle while its key-input loop is still unattached,
+# #1560). 13s is the repo standard; the twins are _IW_SETTLE_SECONDS /
+# _IW_START_RETRY_SLEEP and _PMT_SETTLE_SECONDS / _PMT_START_RETRY_SLEEP.
+# `0` disables it, the same escape _IW_IDLE_POLL_SLEEP has.
+pmv_settle() {
+    local _s="${PMV_SETTLE_SECONDS:-13}"
+    [ "$_s" = "0" ] || _pmv_sleep "$_s"
+}
+
 # pmv_agent_prompt <agent> <text>. Same contract as pmv_agent_start.
 pmv_agent_prompt() {
     _pmv_herdr agent prompt "$1" "$2" \
@@ -396,7 +417,7 @@ pmv_agent_prompt() {
 gh_pr_post_merge_verify() {
     local _pr="$1" _repo="$2" _host="$3" _main="$4" _branch="$5" _file="$6"
     local _remote="${7:-origin}" _base="${8-}"
-    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code
+    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code _fresh
 
     _skill=$(pmv_gate "$_file" "$_repo")
     _rc=$?
@@ -471,6 +492,11 @@ gh_pr_post_merge_verify() {
         printf '[WARN] gh:pr-post-merge-verify: cannot derive an agent name for %s — verification skipped.\n' "$_repo"
         return 0
     fi
+    # The pane is seconds old and its shell may not be interactive yet. Waited
+    # for here rather than right after the tab create so a repo whose name
+    # cannot be derived skips out without paying 13s first.
+    pmv_settle
+    _fresh=1
     if ! _out=$(pmv_agent_start "$_agent" "$_pane"); then
         # Race backstop, same as _pmt_launch_fresh: the name can be claimed
         # between the probe and the start, and its holder is by definition a
@@ -482,7 +508,12 @@ gh_pr_post_merge_verify() {
             return 0
         fi
         printf '[WARN] gh:pr-post-merge-verify: agent %s already registered — prompting the existing session.\n' "$_agent"
+        _fresh=0
     fi
+    # A just-started claude is idle but not yet listening; a session that was
+    # already registered has been up for a while, so the fallback path must not
+    # pay this (same rule as _pmt_launch_fresh).
+    [ "$_fresh" = "0" ] || pmv_settle
 
     # --- 6. hand the verification over ---
     if ! _out=$(pmv_agent_prompt "$_agent" "$(pmv_verify_prompt "$_skill" "$_pr")"); then

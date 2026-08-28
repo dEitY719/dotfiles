@@ -168,6 +168,14 @@ _IW_IDLE_POLL_SLEEP="${IW_IDLE_POLL_SLEEP:-0.5}"
 # once and must not pay this. Overridable (to 0) for the same reason
 # _IW_IDLE_POLL_SLEEP is: the bats suite must not sleep 13 real seconds per
 # dispatch test.
+#
+# 13 is the repo-wide constant for "herdr just brought something up, wait
+# before touching it" (#1571). Its four twins are _IW_START_RETRY_SLEEP below,
+# _PMT_SETTLE_SECONDS / _PMT_START_RETRY_SLEEP in pr_merge_train_cron.sh, and
+# PMV_SETTLE_SECONDS in
+# claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md. Change one,
+# change all five — #1530/#1549 and #1560/#1571 are both the same defect
+# recurring because only two of the three dispatchers were fixed.
 _IW_SETTLE_SECONDS="${IW_SETTLE_SECONDS:-13}"
 
 # Round-robin cursor (issue #1453 D-3). Its own file, so `rate-limit.json` and
@@ -199,8 +207,17 @@ _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 # Bounded in *attempts*, not retries, so the `start N/MAX` warning reads exactly
 # true. The gap is overridable for the same reason _IW_STALL_RECOVER_SLEEP is —
 # the bats suite must not pay a real wait per retry test.
+#
+# The gap is 13s, not the 2s it shipped with (#1571): this is the *same* class
+# of wait as _IW_SETTLE_SECONDS above — herdr answered before the thing it
+# brought up was usable — and 2s was shorter than the 5s already measured to
+# fail. Its twins are _IW_SETTLE_SECONDS above, _PMT_SETTLE_SECONDS /
+# _PMT_START_RETRY_SLEEP in pr_merge_train_cron.sh, and PMV_SETTLE_SECONDS in
+# claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md; all five
+# move together. The wait and this retry are complements, not substitutes — 13s
+# shrinks the race, the retry survives what is left of it.
 _IW_START_ATTEMPT_MAX="3"
-_IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-2}"
+_IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-13}"
 
 # Rate-limit gate (issue #1436; judgment input rebuilt in #1444). Rationale for
 # each value sits with the gate functions below; the values themselves live here
