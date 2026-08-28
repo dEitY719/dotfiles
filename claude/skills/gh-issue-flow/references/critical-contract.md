@@ -41,9 +41,9 @@ Advisor/Worker delegation the global `CLAUDE.md` mandates for multi-file
 implementation), the outstanding step genuinely cannot finish inside this
 turn. Print the single line `[flow:async-wait] step=<skill>/<step>
 agent=<id> reason=background-worker-delegated` as assistant text and end the
-turn; the harness guard grants up to 2 consecutive grace turns before
-blocking resumes (mechanism: `references/stop-guard.md` → "Async-wait
-exception (#1550)"). This is **not** a license to stop mid-Step-2 for any
+turn; the harness guard grants a small number of consecutive grace turns
+before blocking resumes (limit and mechanism: `references/stop-guard.md` →
+"Async-wait exception (#1550)"). This is **not** a license to stop mid-Step-2 for any
 other reason, and it does not relax guard #2 — the marker line is the only
 prose permitted, everything else in the zero-conversational-text rule
 stands.

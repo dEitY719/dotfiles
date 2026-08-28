@@ -108,11 +108,12 @@ turn:
 
 Use `step=gh-issue-implement/report` instead when only the final report step
 is still pending. `claude/hooks/skill_completion_guard.py` then excuses that
-step for up to 2 consecutive turns (env: `GH_SKILL_GUARD_ASYNC_WAIT_LIMIT`,
-`0` disables) before blocking resumes — mechanism and rationale in
+step for a limited number of consecutive turns before blocking resumes. Grace
+is per step: a step with no marker of its own is still reported as
+outstanding and still blocks. The limit, its env override, and the full
+rationale live in the SSOT —
 `claude/skills/gh-issue-flow/references/stop-guard.md` → "Async-wait
-exception (#1550)". Grace is per step: a step with no marker of its own is
-still reported as outstanding and still blocks.
+exception (#1550)".
 
 The marker is a stop-gap for the wait, **never a substitute for the real
 completion marker**. Once the delegated work actually finishes, verify it
