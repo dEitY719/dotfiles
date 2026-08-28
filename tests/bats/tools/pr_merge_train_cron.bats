@@ -704,12 +704,10 @@ _hold_lock() {
     _assert_logged "herdr agent get mt-dotfiles"
 }
 
-# The workspace label equals the agent name (#1549) — herdr does not validate
-# the label, but a train being findable under two different names (`mt-dotfiles`
-# for the agent, `mt-github.com-acme-dotfiles` for the workspace) is exactly the
-# observability gap #1549 fixes. Host/owner stay out of both, same as the agent
-# name (#1530): a second host or owner joining the watch list is the digest
-# case `herdr_agent_name.sh` documents, and it moves both names together.
+# The workspace label equals the agent name (#1549): a train findable as
+# `mt-dotfiles` under `herdr agent get` but `mt-github.com-acme-dotfiles` under
+# `herdr workspace list` is the observability gap #1549 closes. The second half
+# pins host-invariance — re-introducing a host-qualified fold must fail here.
 @test "pr_merge_train_cron: the workspace label matches the agent name" {
     _run_tick
     assert_success
@@ -728,9 +726,13 @@ _hold_lock() {
     _assert_logged "--label mt-dotfiles"
     _refute_logged "--label mt-github.samsungds.net-acme-dotfiles"
 
+    # `_assert_logged` is a substring match, so it would also pass on a label
+    # that merely starts with `mt-dotfiles`. Pin the whole field instead — the
+    # property under test is "label == agent name", not herdr's agent-name
+    # regex, which does not constrain labels at all.
     local _label
     _label=$(awk '{for (i = 1; i <= NF; i++) if ($i == "--label") { print $(i + 1); exit }}' "${_LOG}")
-    assert_valid_herdr_name "${_label}"
+    assert_equal "${_label}" "mt-dotfiles"
 }
 
 @test "pr_merge_train_cron: the dispatcher never writes to GitHub" {
