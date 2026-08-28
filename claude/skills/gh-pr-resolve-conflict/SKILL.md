@@ -83,6 +83,10 @@ Never plain `--force`. If `--force-with-lease` is rejected (someone
 pushed while you rebased), stop and surface the upstream per
 `references/rebase-flow.md` — do NOT silently re-pull-and-rebase.
 
+A successful push means the reviewed commit is no longer head, so Step 5 must
+invalidate the stale `review-passed` verdict
+(`references/verdict-label-removal.sh.md`). Record whether the push succeeded.
+
 ## Step 5: Verify Mergeable + Report
 
 Run `GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json mergeable,mergeStateStatus,url,labels`.
@@ -91,10 +95,16 @@ the warning is cleared. Print the final report from
 `references/rebase-flow.md` → "Final report format". Still `CONFLICTING`
 / `BEHIND` → print the PR URL, name which side diverged, do not loop.
 
-Helper policy (each soft-fail, applies only when `mergeable == MERGEABLE`):
+Helper policy (each soft-fail; the first three apply only when
+`mergeable == MERGEABLE`):
 - Remove the `conflict` label per `references/label-removal.sh.md`.
 - Return the board status to `In review` per `references/board-sync-in-review.sh.md`.
 - Post the ai-metrics PR comment per `references/ai-metrics-comment.sh.md` (soft-fail; skip when `GH_DISABLE_AI_METRICS=1`).
+- Drop the `review-passed` label per `references/verdict-label-removal.sh.md`.
+  **Different gate**: this one keys off Step 4's push, not `mergeable` — a
+  force-push replaced the reviewed commit, so the stale verdict must go even
+  if the PR still reads `CONFLICTING`. Skip it entirely when the push was
+  rejected or never ran. Never touch `review-blocked` here (#1563).
 
 ## Constraints
 
@@ -104,6 +114,9 @@ Helper policy (each soft-fail, applies only when `mergeable == MERGEABLE`):
 - Never auto-resolve ambiguous conflicts. Ask the user.
 - Never retry a rejected `--force-with-lease` by fetching and re-rebasing on the user's behalf. Surface divergence and stop.
 - Never skip Step 5. The whole point is clearing the PR warning.
+- Never add `review-passed` / `review-blocked`, and never remove
+  `review-blocked` — this skill has no evidence the blockers were addressed
+  (#1563). Removing `review-passed` after a successful push is mandatory.
 - Never create or remove the `--worktree` path. The caller owns its lifecycle.
 
 ## Related Skills

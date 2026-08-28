@@ -72,7 +72,7 @@ declined ones and bot comments.** Read `references/reply-templates.md` for
 POST command shapes, the four body templates, the long-body fallback, and
 the consolidated table reply. Reply in the reviewer's language.
 
-## Step 6: Push the Fix Commits + Sync Board + Clear `reply-pending`
+## Step 6: Push the Fix Commits + Sync Board + Clear Labels
 
 If any fixes were committed: `git push` (never force-push unless the user
 asked) and report new commit SHAs alongside the reply summary. Set
@@ -80,6 +80,13 @@ asked) and report new commit SHAs alongside the reply summary. Set
 skipped push → `PUSHED_FIXES=0`. If `PUSHED_FIXES > 0`, push the PR card
 back to `In review` per `references/board-sync-in-review.sh.md` (soft-fail;
 no-op when `PUSHED_FIXES == 0`).
+
+Still under `PUSHED_FIXES > 0`, invalidate the stale review verdict per
+`references/verdict-label-removal.sh.md` (soft-fail): drop `review-passed`
+unconditionally — the reviewed commit is no longer head — and drop
+`review-blocked` only when `ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0`
+(the Step 3 counts Step 7's table reports). Never *add* either label;
+`devx:pr-review-all` owns that.
 
 Then **unconditionally** run the same removal block Step 2.5 does —
 `references/reply-pending-label-removal.sh.md`. Between the two call sites the

@@ -14,6 +14,11 @@
 - Never `--amend`, `--no-verify`, or `--force-push`. If a history rewrite is
   needed, stop and ask.
 - To mutate PR labels or body, route through `_gh_pr_edit_safe_label` /
-  `_gh_pr_edit_safe_body` (`shell-common/functions/gh_pr_edit_safe.sh`) — bare
-  `gh pr edit --add-label` / `--body-file` silently exits 1 on classic-Projects
-  repos (issue #326 Bug B).
+  `_gh_pr_edit_safe_body` / `_gh_pr_drop_label`
+  (`shell-common/functions/gh_pr_edit_safe.sh`) — bare `gh pr edit --add-label`
+  / `--body-file` silently exits 1 on classic-Projects repos (issue #326 Bug B).
+  The Step 6 `review-passed` / `review-blocked` invalidation goes through
+  `_gh_pr_drop_label`, the one shared REST-DELETE primitive every
+  head-advancing skill uses (#1563) — never an inlined DELETE.
+- Never **add** `review-passed` or `review-blocked`. Only `devx:pr-review-all`
+  issues those; this skill only removes them (#1563).

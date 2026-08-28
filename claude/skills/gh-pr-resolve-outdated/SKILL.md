@@ -90,10 +90,18 @@ Never plain `--force`. Rejected (remote advanced while rebasing) →
 `[FAIL] remote advanced — re-fetch and retry` + exit 6. Never silently
 re-fetch — surface divergence so the user decides (lost-update risk).
 
+A successful push means the reviewed commit is no longer head, so Step 5 must
+invalidate the stale `review-passed` verdict. Record whether the push succeeded.
+
 ## Step 5: Verify + Report
 
 Re-read `--json mergeable,mergeStateStatus,url` and interpret per
 `references/mergeable-triage.md` → "Step 5 verification".
+
+Only if Step 4's push actually succeeded, drop the `review-passed` label per
+`references/verdict-label-removal.sh.md` (soft-fail). Never touch
+`review-blocked` — this skill holds no evidence the blockers were addressed —
+and never *add* either label; `devx:pr-review-all` owns that (#1563).
 
 ```
 [OK] PR #<N> out-of-date 해소됨 · <new-sha> push 됨.
@@ -110,6 +118,9 @@ ai-metrics footer follows the sister-skill pattern; skip when
 - Never run on the repo's default branch.
 - Never auto-resolve conflicts — delegate to `gh:pr-resolve-conflict` (exit 4).
 - Never retry a rejected `--force-with-lease`; never auto-stash (clean tree required).
+- Never add `review-passed` / `review-blocked`, and never remove
+  `review-blocked` (#1563). Removing `review-passed` after a successful push
+  is mandatory — a stale verdict on an unreviewed head is the bug this fixes.
 - Never create or remove the `--worktree` path. The caller owns its lifecycle.
 
 ## Related Skills

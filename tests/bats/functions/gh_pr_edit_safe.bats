@@ -31,6 +31,10 @@ teardown() {
 #   other_error — `gh pr edit` exits 1 with an unrelated error (no
 #                 deprecation marker → no fallback, error passed through)
 #   rest_fail   — deprecation warning, then REST POST also fails
+#   delete_ok      — `gh api -X DELETE .../labels/<name>` succeeds (#1563)
+#   delete_missing — same DELETE returns `gh: Not Found (HTTP 404)` + exit 1
+#                    (label already absent → idempotent success)
+#   delete_fail    — same DELETE fails for a real reason (5xx / network)
 # A scratch log records every call for assertion: $TEST_TEMP_HOME/gh.log
 # ---------------------------------------------------------------------------
 _setup_fake_gh() {
@@ -90,6 +94,15 @@ if [ "$1" = "api" ] && [ "$3" = "POST" ]; then
     case "$mode" in
         rest_fail) echo "REST POST failed" >&2; exit 1 ;;
         *)         exit 0 ;;
+    esac
+fi
+
+# `gh api -X DELETE .../issues/N/labels/<name>` — label drop (#1563)
+if [ "$1" = "api" ] && [ "$3" = "DELETE" ]; then
+    case "$mode" in
+        delete_missing) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
+        delete_fail)    echo "gh: Internal Server Error (HTTP 500)" >&2; exit 1 ;;
+        *)              exit 0 ;;
     esac
 fi
 
@@ -268,6 +281,81 @@ _run_helper() {
     _run_helper rest_fail '_gh_pr_edit_safe_label 99 feat --repo fake/repo 2>&1'
     assert_output --partial "rc=1"
     assert_output --partial "REST POST failed"
+}
+
+# ---------------------------------------------------------------------------
+# _gh_pr_drop_label (#1563) — shared REST DELETE with idempotent 404.
+#
+# Used by every skill that advances a PR's head (`gh:pr-reply`,
+# `gh:pr-resolve-conflict`, `gh:pr-resolve-outdated`) to invalidate a stale
+# `review-passed` verdict label. DELETE never touches the classic-Projects
+# GraphQL path, so there is no `gh pr edit` primary attempt to assert here —
+# a single REST call is the whole contract.
+# ---------------------------------------------------------------------------
+
+@test "bash: _gh_pr_drop_label exists" {
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_edit_safe.sh"; \
+                 declare -f _gh_pr_drop_label >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "zsh: _gh_pr_drop_label exists" {
+    run_in_zsh '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_edit_safe.sh"; \
+                typeset -f _gh_pr_drop_label >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "drop: missing args returns 2" {
+    _run_helper delete_ok '_gh_pr_drop_label 2>&1'
+    assert_output --partial "rc=2"
+    assert_output --partial "usage:"
+    run grep -c 'api .*DELETE' "$GH_LOG"
+    assert_output "0"
+}
+
+@test "drop: missing repo arg returns 2" {
+    _run_helper delete_ok '_gh_pr_drop_label 99 review-passed 2>&1'
+    assert_output --partial "rc=2"
+    assert_output --partial "usage:"
+    run grep -c 'api .*DELETE' "$GH_LOG"
+    assert_output "0"
+}
+
+@test "drop: delete_ok mode — one REST DELETE, rc=0, no gh pr edit" {
+    _run_helper delete_ok \
+        '_gh_pr_drop_label 99 review-passed fake/repo github.com 2>&1'
+    assert_output --partial "rc=0"
+    run grep -c 'api .*DELETE' "$GH_LOG"
+    assert_output "1"
+    # DELETE is GraphQL-free: no primary `gh pr edit` attempt at all.
+    run grep -c 'pr edit' "$GH_LOG"
+    assert_output "0"
+}
+
+@test "drop: delete_ok mode — repo and label land in the REST path" {
+    _run_helper delete_ok \
+        '_gh_pr_drop_label 99 review-passed fake/repo github.com 2>&1'
+    assert_output --partial "rc=0"
+    run grep -c 'repos/fake/repo/issues/99/labels/review-passed' "$GH_LOG"
+    assert_output "1"
+}
+
+@test "drop: delete_missing mode — 404 is idempotent success, not a warning" {
+    _run_helper delete_missing \
+        '_gh_pr_drop_label 99 review-passed fake/repo github.com 2>&1'
+    assert_output --partial "rc=0"
+    # stderr must be swallowed — a missing label is the normal case.
+    refute_output --partial "Not Found"
+    refute_output --partial "HTTP 404"
+}
+
+@test "drop: delete_fail mode — real failure returns rc=1 with stderr passed through" {
+    _run_helper delete_fail \
+        '_gh_pr_drop_label 99 review-passed fake/repo github.com 2>&1'
+    assert_output --partial "rc=1"
+    assert_output --partial "Internal Server Error"
 }
 
 # ---------------------------------------------------------------------------
