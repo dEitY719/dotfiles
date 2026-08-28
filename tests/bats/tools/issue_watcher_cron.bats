@@ -313,6 +313,12 @@ EOF
 #                               fail        every call a non-stall error
 #   HERDR_PROMPT_FAIL_TIMES   first N `agent prompt` calls stall, then ok
 #
+# Every one of those failures writes its error document to **stderr** and only
+# the success payload to stdout — the same split `agent start` already models
+# above, measured on a live herdr (issue #1559). A dispatcher that sends that
+# stream to /dev/null reads every failure as `(unknown)`, which is what made
+# both recovery branches below dead code in production.
+#
 # Stall recovery (issue #1443). A stall leaves the command typed but unsent, so
 # the tick presses Enter rather than retyping; `state_change_seq` is what proves
 # the keystroke landed.
@@ -479,7 +485,7 @@ case "$1 $2" in
     if [ -n "${HERDR_PROMPT_FAIL_TIMES:-}" ]; then
         _n=$(_bump "${CALL_LOG}.promptcount")
         if [ "${_n}" -le "${HERDR_PROMPT_FAIL_TIMES}" ]; then
-            printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}'
+            printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}' >&2
             exit 1
         fi
         printf '%s\n' '{"id":"cli:agent:prompt","result":{"ok":true}}'
@@ -487,11 +493,11 @@ case "$1 $2" in
     fi
     case "${HERDR_PROMPT_MODE:-ok}" in
     stall)
-        printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}'
+        printf '%s\n' '{"error":{"code":"agent_prompt_stalled","message":"no agent state change observed within 5000ms"},"id":"cli:agent:prompt"}' >&2
         exit 1
         ;;
     fail)
-        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:prompt"}'
+        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:prompt"}' >&2
         exit 1
         ;;
     esac
@@ -2137,6 +2143,95 @@ _two_repo_fixture() {
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
     refute_output --partial '"strikes": "2"'
+}
+
+# ---------------------------------------------------------------------------
+# The prompt error document arrives on stderr (issue #1559)
+# ---------------------------------------------------------------------------
+#
+# `_iw_prompt_once` used to send stderr to /dev/null, and herdr answers a failed
+# `agent prompt` on exactly that stream. So `.error.code` was empty on every
+# failure, every branch keyed on it was unreachable, and every cron line read
+# `(unknown)`. These pin the code back to the name herdr gave it — the whole
+# suite above only ever passed because the stub answered on stdout.
+
+@test "issue_watcher_cron: a stall herdr reported on stderr is still named agent_prompt_stalled" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
+    assert_failure
+    assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_prompt_stalled)"
+    refute_output --partial "(unknown)"
+}
+
+@test "issue_watcher_cron: a stall on stderr still reaches the already-working short-circuit" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=working"
+    assert_success
+    assert_output --partial "treating as delivered"
+    # The branch is reachable only when `.error.code` parses, so a silent
+    # regression to `2>/dev/null` would press Enter into a busy pane instead.
+    _refute_logged "agent send-keys"
+}
+
+@test "issue_watcher_cron: a stall on stderr still triggers the Enter recovery" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=ok"
+    assert_success
+    _assert_logged "agent send-keys iw-dotfiles-issue-11 Enter"
+    assert_output --partial "Dispatched to iw-dotfiles-issue-11"
+}
+
+@test "issue_watcher_cron: a failed send-keys outranks the stall code it recovered from" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
+    assert_failure
+    assert_output --partial "herdr_send_keys_failed"
+    refute_output --partial "(unknown)"
+}
+
+@test "issue_watcher_cron: a non-stall failure on stderr is named, not reported as unknown" {
+    _run_tick "HERDR_PROMPT_MODE=fail"
+    assert_failure
+    assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_not_found)"
+    refute_output --partial "(unknown)"
+}
+
+# ---------------------------------------------------------------------------
+# A working agent is never torn down (issue #1559 follow-up)
+# ---------------------------------------------------------------------------
+#
+# The incident: a session that was dispatched and doing real work was torn down
+# three times in one tick, because a failed attempt ran _iw_cleanup_attempt
+# unconditionally. Independent of the error-code fix above on purpose — that
+# parsing is what failed in production, so it is not trusted alone.
+
+@test "issue_watcher_cron: a working agent survives a prompt failure instead of being torn down" {
+    _run_tick "HERDR_PROMPT_MODE=fail" "HERDR_AGENT_STATUS=working"
+    assert_success
+    # One attempt, and no teardown of the pane the agent is working in.
+    [ "$(_log_count 'gwt spawn')" -eq 1 ]
+    _refute_logged "gwt remove"
+    _refute_logged "tab close"
+    refute_output --partial "Giving up"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-11/"
+}
+
+@test "issue_watcher_cron: an idle agent is still torn down and retried after a prompt failure" {
+    # The negative half: the guard above must not become a blanket skip.
+    _run_tick "HERDR_PROMPT_MODE=fail" "HERDR_AGENT_STATUS=idle"
+    assert_failure
+    [ "$(_log_count 'gwt spawn')" -eq 3 ]
+    [ "$(_log_count 'gwt remove')" -eq 3 ]
+    [ "$(_log_count 'tab close')" -eq 3 ]
+    assert_output --partial "Giving up on acme/dotfiles#11 after 3 attempts"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-11/"
+}
+
+@test "issue_watcher_cron: an unreachable agent is torn down rather than assumed working" {
+    # `agent get` errors once the agent has been prompted, so the guard has no
+    # status at all — an unanswered query is not evidence of work in progress.
+    _run_tick "HERDR_PROMPT_MODE=fail" "HERDR_GET_FAIL_AFTER_PROMPT=1"
+    assert_failure
+    [ "$(_log_count 'gwt remove')" -eq 3 ]
+    assert_output --partial "Giving up on acme/dotfiles#11 after 3 attempts"
 }
 
 # ---------------------------------------------------------------------------

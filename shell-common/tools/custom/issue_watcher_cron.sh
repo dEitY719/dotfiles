@@ -1463,8 +1463,16 @@ _iw_settle() {
 }
 
 # Echo herdr's JSON response on stdout; the exit code is herdr's own.
+#
+# herdr writes its error JSON to stderr and its success payload to stdout, so
+# the two must be merged here — dropping stderr leaves `.error.code` unreadable
+# and every recovery branch below unreachable (#1559, the same defect class as
+# #1445/#1458/#1525). Merged rather than split into a capture file the way
+# _iw_agent_start does: the only reader is `_iw_json_value '.error.code'`, which
+# already fails silently on non-JSON noise, and the success path never reaches
+# it — rc 0 short-circuits ahead of the parse.
 _iw_prompt_once() {
-    herdr agent prompt "$1" "$2" --wait --timeout "${_IW_TIMEOUT_MS}" 2>/dev/null
+    herdr agent prompt "$1" "$2" --wait --timeout "${_IW_TIMEOUT_MS}" 2>&1
 }
 
 # Recover a stalled prompt by *submitting* what is already typed (issue #1443).
@@ -1642,6 +1650,19 @@ EOF
             elif _iw_wait_for_idle "${_agent}" && _iw_settle &&
                 _iw_prompt_issue "${_agent}" "${_number}"; then
                 ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
+                return 0
+            elif [ "$(_iw_agent_status "${_agent}")" = "working" ]; then
+                # A `working` agent is never torn down, whatever the dispatch
+                # reported (#1559). One tick killed a session that was doing
+                # real work three times over, because a failed attempt ran
+                # _iw_cleanup_attempt unconditionally — the prompt call had
+                # failed, the agent had not. Deliberately independent of the
+                # `.error.code` fix in _iw_prompt_once: that parsing is what
+                # silently broke in production, so it is not the only thing
+                # standing between a live session and `gwt remove`.
+                # Only `working` counts — an empty answer is an unreachable
+                # agent, not evidence of work, and still cleans up below.
+                ux_warning "${_agent} reports working despite the failed prompt — keeping worktree ${_wt} and pane ${_pane}, not retrying."
                 return 0
             fi
         fi
