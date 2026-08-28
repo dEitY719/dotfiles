@@ -923,17 +923,6 @@ EOF
     done < <(jq -r '.jobs[].script' "${_shipped}")
 }
 
-@test "aicron: the shipped issue-watcher job runs every 3 minutes (#1579)" {
-    # Manifest schedule changes are not self-installing (crontab keeps the
-    # schedule it was installed with) — a reinstall (`aicron remove
-    # issue-watcher && aicron add issue-watcher`) is required, tracked
-    # separately via the changelog fragment for #1579.
-    local _shipped="${DOTFILES_ROOT}/shell-common/tools/custom/cron-jobs.json"
-    run jq -r '.jobs[] | select(.name=="issue-watcher") | .schedule' "${_shipped}"
-    assert_success
-    assert_output "*/3 * * * *"
-}
-
 # ---------------------------------------------------------------------------
 # crontab dump failures (B1) — a table we could not read is never an empty one
 # ---------------------------------------------------------------------------
@@ -1345,16 +1334,33 @@ MENTION
 # per-PC (aicron_manifest.sh, `docs/.ssot/pc-environment.md`), so one machine's
 # value is written once, in the one place that already carries machine values.
 
-# The KEY=VALUE lines aicron would hand `env` for job <1> of the shipped
-# manifest.
-_shipped_env() {
+# Run one aicron_manifest_* reader (<1>) against the *shipped* manifest, with
+# its remaining arguments. Keeps every shipped-manifest assertion on the same
+# read path aicron itself uses.
+_shipped_manifest_call() {
+    local _fn="$1"
+    shift
     (
         AICRON_MANIFEST="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/cron-jobs.json"
         export AICRON_MANIFEST
         # shellcheck source=/dev/null
         . "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/aicron_manifest.sh"
-        aicron_manifest_env "$1"
+        "${_fn}" "$@"
     )
+}
+
+# The KEY=VALUE lines aicron would hand `env` for job <1> of the shipped
+# manifest.
+_shipped_env() {
+    _shipped_manifest_call aicron_manifest_env "$1"
+}
+
+@test "aicron: the shipped issue-watcher job runs every 3 minutes (#1579)" {
+    # Installing this is a separate step — the crontab keeps whatever schedule
+    # it was added with, and `aicron doctor` is what reports the drift.
+    run _shipped_manifest_call aicron_manifest_schedule issue-watcher
+    assert_success
+    assert_output "*/3 * * * *"
 }
 
 @test "aicron: the shipped issue-watcher job is routed at the work1 account" {

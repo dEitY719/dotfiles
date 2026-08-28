@@ -398,7 +398,7 @@ branch refs/heads/wt/issue-1565/1
 #
 # The failure #1565 describes is not a missing [INFO] line: it is that
 # `_iw_live_agents` counts a `wt/issue-*` worktree as running whenever a herdr
-# agent sits on it, so merged-but-open tabs fill `_IW_MAX_PER_REPO=3` and
+# agent sits on it, so merged-but-open tabs fill `_IW_MAX_PER_REPO` and
 # issue-watcher stops dispatching. This drives N merges against a mutable
 # registry and asserts the live count never grows — the pre-fix train left it
 # pinned at N.

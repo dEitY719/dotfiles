@@ -640,6 +640,12 @@ _run_script() {
 # NAME=VALUE. The VAR=VALUE assignments are appended after the defaults, and
 # `env` applies assignments left to right, so a test can override any of them
 # (PATH included) without restating the whole sandbox.
+#
+# The concurrency caps are pinned here for the same reason as the sleeps: a tick
+# test asserts a *boundary*, not whichever numbers the script currently ships.
+# Pinning them once keeps the whole suite from moving every time the shipped
+# defaults are tuned (#1579 raised them). The defaults themselves are asserted
+# behaviorally, in exactly one place — the `--help` test.
 _run_tick() {
     local _unset=() _env=()
     while [ "$#" -gt 1 ] && [ "$1" = "-u" ]; do
@@ -665,6 +671,8 @@ _run_tick() {
         "IW_STALL_RECOVER_SLEEP=0" \
         "IW_START_RETRY_SLEEP=0" \
         "IW_LIMIT_OBSERVE_SLEEP=0" \
+        "IW_MAX_PER_REPO=3" \
+        "IW_MAX_CONCURRENT=7" \
         "${_env[@]}" \
         bash "${SCRIPT}" "$@"
 }
@@ -1463,10 +1471,8 @@ _assert_not_hung() {
 # ---------------------------------------------------------------------------
 
 @test "issue_watcher_cron: the tick holds once the global limit is reached" {
-    # Cap pinned explicitly (#1579 raised the default from 7 to 17) so this
-    # boundary holds regardless of the default.
     _set_running 21 22 23 24 25 26 27
-    _run_tick "IW_MAX_CONCURRENT=7"
+    _run_tick
     assert_success
     assert_output --partial "7 issue session(s) already running"
     _refute_logged "gwt spawn"
@@ -1474,16 +1480,14 @@ _assert_not_hung() {
 
 @test "issue_watcher_cron: one session short of the limit still dispatches" {
     _set_running 21 22 23 24 25 26
-    _run_tick "IW_MAX_PER_REPO=9" "IW_MAX_CONCURRENT=7"
+    _run_tick "IW_MAX_PER_REPO=9"
     assert_success
     _assert_logged "gwt spawn --wt-name issue-11"
 }
 
 @test "issue_watcher_cron: a repo at its own limit is skipped" {
-    # Cap pinned explicitly (#1579 raised the default from 3 to 7) so this
-    # boundary holds regardless of the default.
     _set_running 21 22 23
-    _run_tick "IW_MAX_PER_REPO=3"
+    _run_tick
     assert_success
     assert_output --partial "3 of its issues are already running"
     _refute_logged "gwt spawn"
@@ -1492,7 +1496,7 @@ _assert_not_hung() {
 @test "issue_watcher_cron: a repo at its limit does not stop another repo" {
     _two_repo_fixture
     _set_running 21 22 23
-    _run_tick "IW_MAX_PER_REPO=3"
+    _run_tick
     assert_success
     _assert_logged "gwt spawn --wt-name issue-41"
 }
@@ -1734,9 +1738,7 @@ _two_repo_fixture() {
 
 @test "issue_watcher_cron: a raised per-tick cap cannot exceed the per-repo cap" {
     # Two already running plus a per-tick allowance of three: only one slot is
-    # left in this repo, so only one issue may start. The per-repo cap is
-    # pinned explicitly so this boundary holds regardless of the default
-    # (#1579 raised the default from 3 to 7).
+    # left in this repo, so only one issue may start.
     local _paths=() _n
     for _n in 21 22; do
         _add_worktree "${_n}"
@@ -1748,7 +1750,7 @@ _two_repo_fixture() {
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
     ]'
-    _run_tick "IW_DISPATCH_PER_TICK=3" "IW_MAX_PER_REPO=3"
+    _run_tick "IW_DISPATCH_PER_TICK=3"
     assert_success
     [ "$(_log_count 'gwt spawn')" -eq 1 ]
 }
@@ -1767,9 +1769,7 @@ _two_repo_fixture() {
     ]'
     # Per-repo headroom is lifted so the global ceiling is the only thing left
     # to hold the line: six running, seven allowed, so exactly one may start.
-    # The global cap is pinned explicitly so this boundary holds regardless
-    # of the default (#1579 raised the default from 7 to 17).
-    _run_tick "IW_DISPATCH_PER_TICK=3" "IW_MAX_PER_REPO=9" "IW_MAX_CONCURRENT=7"
+    _run_tick "IW_DISPATCH_PER_TICK=3" "IW_MAX_PER_REPO=9"
     assert_success
     [ "$(_log_count 'gwt spawn')" -eq 1 ]
 }
@@ -1796,23 +1796,17 @@ _two_repo_fixture() {
     assert_output --partial "5 running in total"
 }
 
-# The SSOT lines themselves (#1579 measured intake was 3x slower than
-# merge-train drain, so the bottleneck sat upstream of these two caps).
-@test "issue_watcher_cron: the concurrency cap defaults are 7 per repo and 17 total" {
-    run grep -qF -- '_IW_MAX_PER_REPO=$(_iw_cap "${IW_MAX_PER_REPO-}" 7 IW_MAX_PER_REPO)' "${SCRIPT}"
-    assert_success
-    run grep -qF -- '_IW_MAX_CONCURRENT=$(_iw_cap "${IW_MAX_CONCURRENT-}" 17 IW_MAX_CONCURRENT)' "${SCRIPT}"
-    assert_success
-}
-
 @test "issue_watcher_cron: the global cap default stays above the per-repo cap default" {
-    # _IW_MAX_CONCURRENT never fires within a single watched repo unless it
-    # exceeds _IW_MAX_PER_REPO (see references/help.md discussion, #1579) —
-    # read both from the source so a future edit to either number can't
-    # silently reintroduce that dead-config state.
+    # A global cap at or below the per-repo cap can never fire while only one
+    # repo is watched — it would be dead config. Both numbers are read back
+    # from --help — the same readout that pins the literal defaults in
+    # "--help documents the concurrency limits and the cursor" — so this holds
+    # for whatever the shipped defaults become (#1579 raised them).
     local _per_repo _concurrent
-    _per_repo=$(grep -oE '_iw_cap "\$\{IW_MAX_PER_REPO-\}" [0-9]+' "${SCRIPT}" | grep -oE '[0-9]+$')
-    _concurrent=$(grep -oE '_iw_cap "\$\{IW_MAX_CONCURRENT-\}" [0-9]+' "${SCRIPT}" | grep -oE '[0-9]+$')
+    run bash "${SCRIPT}" --help
+    assert_success
+    _concurrent=$(printf '%s\n' "${output}" | sed -nE 's/.*[^0-9]([0-9]+) running in total.*/\1/p')
+    _per_repo=$(printf '%s\n' "${output}" | sed -nE 's/.*[^0-9]([0-9]+) in one repo.*/\1/p')
     [ -n "${_per_repo}" ]
     [ -n "${_concurrent}" ]
     [ "${_concurrent}" -gt "${_per_repo}" ]
