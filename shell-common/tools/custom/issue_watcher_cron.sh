@@ -764,23 +764,15 @@ _iw_resolve_config_dir() {
         fi
 
         # A directory that exists is not an account that is logged in
-        # (issue #1561). `claude-accounts setup` creates the directory; only a
-        # completed login puts credentials in it, and a logged-out pane opens on
-        # `Not logged in · Run /login` and drops every keystroke — which the
-        # dispatcher then reports as `agent_prompt_stalled`, a symptom that
-        # names neither the account nor the cause. Fail here instead, where the
-        # account is still in hand.
-        #
-        # Presence and non-emptiness only. Parsing the token would couple this
-        # script to Claude Code's private credential format, and checking it
-        # against the API would put a network round trip in every cron tick —
-        # both rejected in #1561. The whole class of outage seen so far (an
-        # account that was never logged in, or whose file was cleared) is
-        # already caught here.
-        if [ ! -r "${_cfg_dir}/.credentials.json" ] ||
-            [ ! -s "${_cfg_dir}/.credentials.json" ]; then
+        # (issue #1561) — a logged-out pane opens on `Not logged in · Run
+        # /login` and drops every keystroke, which the dispatcher then reports
+        # as `agent_prompt_stalled`, a symptom that names neither the account
+        # nor the cause. Fail here instead, where the account is still in hand.
+        # The rule for what counts as "logged in" lives in claude.sh, sourced
+        # above; only the wording of the failure is this script's business.
+        if ! _claude_account_logged_in "${_cfg_dir}"; then
             ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing or empty — the pane would open on 'Not logged in' and every prompt would stall."
-            ux_info "Run: claude-accounts status   (then log that account in)"
+            ux_info "Run: claude-accounts status   (then log that account in)" >&2
             exit 1
         fi
 
@@ -1420,7 +1412,7 @@ _iw_start_agent_retrying() {
 # _iw_prompt_issue is the second line of defence. The wait that actually makes
 # the prompt land is _iw_settle, which runs after this (issue #1560).
 _iw_wait_for_idle() {
-    local _agent="$1" _i=0 _status _get_failed=0
+    local _agent="$1" _i=0 _status _get_failed=0 _detail=""
 
     while [ "${_i}" -lt "${_IW_IDLE_POLL_MAX}" ]; do
         if _status=$(_iw_agent_status "${_agent}"); then
@@ -1438,11 +1430,9 @@ _iw_wait_for_idle() {
     # gone agent does not read as "just slow" (PR #1400 codex review).
     # Counted in checks, not seconds: the gap between them is overridable, so a
     # wall-clock figure here would be wrong in exactly the runs that read it.
-    if [ "${_get_failed}" -gt 0 ]; then
-        ux_warning "Agent ${_agent} never reported idle in ${_IW_IDLE_POLL_MAX} checks (${_get_failed}/${_IW_IDLE_POLL_MAX} health-check failures) — dispatching anyway."
-    else
-        ux_warning "Agent ${_agent} never reported idle in ${_IW_IDLE_POLL_MAX} checks — dispatching anyway."
-    fi
+    [ "${_get_failed}" -eq 0 ] ||
+        _detail=" (${_get_failed}/${_IW_IDLE_POLL_MAX} health-check failures)"
+    ux_warning "Agent ${_agent} never reported idle in ${_IW_IDLE_POLL_MAX} checks${_detail} — dispatching anyway."
 }
 
 # Let a freshly launched pane settle before typing into it (issue #1560).
@@ -1451,7 +1441,7 @@ _iw_wait_for_idle() {
 # Always succeeds — a settle that could fail would skip the prompt it exists to
 # protect, which is a worse outcome than a prompt sent slightly too early.
 _iw_settle() {
-    [ "${_IW_SETTLE_SECONDS}" = "0" ] || sleep "${_IW_SETTLE_SECONDS}" || :
+    [ "${_IW_SETTLE_SECONDS}" = "0" ] || sleep "${_IW_SETTLE_SECONDS}"
     return 0
 }
 
