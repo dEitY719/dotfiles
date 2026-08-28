@@ -1135,6 +1135,22 @@ _assert_not_hung() {
     refute_output --partial "sharing a basename"
 }
 
+# The herdr name herdr_agent_name uses is not the raw basename — it is
+# herdr_agent_repo_slug's output (case-folded, unsafe chars mapped to `-`).
+# `acme/My-Repo` and `other/my.repo` are different raw basenames but both
+# slug to `my-repo`, so herdr would route their dispatches into the same
+# pane even though a literal-basename comparison sees no collision (PR #1584
+# agy/codex review).
+@test "issue_watcher_cron: basenames that only collide after herdr's slug normalization also raise a warning" {
+    _make_repo "${_WORK_DIR}/dotfiles2"
+    _write_watch_file '[{"repo":"acme/My-Repo","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"other/my.repo","path":"'"${_WORK_DIR}"'/dotfiles2","host":"github.com"}]'
+    _run_tick
+    assert_success
+    assert_output --partial "sharing a basename"
+    assert_output --partial "my-repo"
+}
+
 @test "issue_watcher_cron: a watch entry without a path is ignored" {
     _write_watch_file '[{"repo":"acme/dotfiles","host":"github.com"}]'
     _run_tick
