@@ -255,6 +255,17 @@ if ! START_JSON=$(herdr agent start "$PMV_AGENT" --kind claude --pane "$NEW_PANE
     # failing the dispatch (same backstop as _pmt_launch_fresh).
     START_CODE=$(printf '%s' "$START_JSON" | pmv_error_code)
     if [ "$START_CODE" != "agent_name_taken" ]; then
+        # The tab from step 4 is agent-less at this point — nothing lost by
+        # closing it. Only this run's own tab, and only when its id is known
+        # (#1554): guessing which tab to close from a failed read would risk
+        # closing someone else's.
+        if [ -n "$NEW_TAB" ]; then
+            if herdr tab close "$NEW_TAB" >/dev/null 2>&1; then
+                printf '[INFO] gh:pr-post-merge-verify: closed the empty verification tab %s.\n' "$NEW_TAB"
+            else
+                printf '[WARN] gh:pr-post-merge-verify: could not close tab %s — close it by hand.\n' "$NEW_TAB"
+            fi
+        fi
         printf '[WARN] gh:pr-post-merge-verify: herdr agent start %s failed on pane %s (%s) — verification skipped.\n' \
             "$PMV_AGENT" "$NEW_PANE" "${START_CODE:-unknown}"
         return 0 2>/dev/null || exit 0

@@ -502,6 +502,18 @@ gh_pr_post_merge_verify() {
         # usable agent — prompt it rather than failing the dispatch.
         _code=$(printf '%s' "$_out" | pmv_error_code)
         if [ "$_code" != "agent_name_taken" ]; then
+            # The tab from step 4 is agent-less at this point — nothing lost
+            # by closing it. Only this run's own tab, and only when its id is
+            # known (#1554, "-" is pmv_tab_create's own placeholder for
+            # "unknown"): guessing which tab to close from a failed read
+            # would risk closing someone else's.
+            if [ -n "$_newtab" ] && [ "$_newtab" != "-" ]; then
+                if _pmv_herdr tab close "$_newtab" >/dev/null 2>&1; then
+                    printf '[INFO] gh:pr-post-merge-verify: closed the empty verification tab %s.\n' "$_newtab"
+                else
+                    printf '[WARN] gh:pr-post-merge-verify: could not close tab %s — close it by hand.\n' "$_newtab"
+                fi
+            fi
             printf '[WARN] gh:pr-post-merge-verify: herdr agent start %s failed on pane %s (%s) — verification skipped.\n' \
                 "$_agent" "$_pane" "${_code:-unknown}"
             return 0

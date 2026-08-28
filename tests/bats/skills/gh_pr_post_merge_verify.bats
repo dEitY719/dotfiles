@@ -1072,3 +1072,72 @@ _PMV_WAIT_ASSIGN='^(_IW_SETTLE_SECONDS|_PMT_SETTLE_SECONDS|PMV_SETTLE_SECONDS|_I
     run grep -qF -- '_PMT_SETTLE_SECONDS' "$_doc"
     assert_success
 }
+
+# --- #1554: don't leak the just-created verification tab on agent-start failure
+
+@test "1554: an agent start failure closes the just-created verification tab" {
+    FAKE_HERDR_RC_AGENT_START=1
+    FAKE_HERDR_OUT_AGENT_START='{"error":{"code":"pane_not_ready"}}'
+    run dispatch
+    assert_success
+    assert_output --partial "closed the empty verification tab wV:t99"
+    assert_output --partial "herdr agent start mv-dotfiles-pr-77 failed"
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "tab close wV:t99"
+}
+
+@test "1554: a failing tab close warns but does not stop the dispatch" {
+    FAKE_HERDR_RC_AGENT_START=1
+    FAKE_HERDR_OUT_AGENT_START='{"error":{"code":"pane_not_ready"}}'
+    FAKE_HERDR_RC_TAB_CLOSE=1
+    run dispatch
+    assert_success
+    assert_output --partial "could not close tab wV:t99 — close it by hand"
+    assert_output --partial "herdr agent start mv-dotfiles-pr-77 failed"
+}
+
+@test "1554: agent_name_taken reuses the tab instead of closing it" {
+    FAKE_HERDR_RC_AGENT_START=1
+    FAKE_HERDR_OUT_AGENT_START='{"error":{"code":"agent_name_taken"}}'
+    run dispatch
+    assert_success
+    refute_output --partial "closed the empty verification tab"
+    refute_output --partial "could not close tab"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab close wV:t99"
+}
+
+@test "1554: a failing agent prompt leaves the live verification tab alone" {
+    FAKE_HERDR_RC_AGENT_PROMPT=1
+    FAKE_HERDR_OUT_AGENT_PROMPT='{"error":{"code":"agent_prompt_stalled"}}'
+    run dispatch
+    assert_success
+    refute_output --partial "closed the empty verification tab"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab close wV:t99"
+}
+
+@test "1554: an unreadable tab id is never guessed at for cleanup" {
+    FAKE_HERDR_OUT_TAB_CREATE='{"result":{"pane":{"pane_id":"wV:p99"}}}'
+    FAKE_HERDR_RC_AGENT_START=1
+    FAKE_HERDR_OUT_AGENT_START='{"error":{"code":"pane_not_ready"}}'
+    run dispatch
+    assert_success
+    refute_output --partial "closed the empty verification tab"
+    refute_output --partial "could not close tab"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab close -"
+}
+
+@test "1554: dispatch.sh.md closes the verification tab on the same agent-start failure branch" {
+    local _doc _start _close
+    _doc="$(_pmv_dispatch_doc)"
+    _start=$(grep -n 'herdr agent start "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
+    _close=$(grep -n 'herdr tab close "\$NEW_TAB"' "$_doc" | head -1 | cut -d: -f1)
+    [ -n "$_start" ] && [ -n "$_close" ]
+    [ "$_start" -lt "$_close" ]
+    run grep -qF -- 'closed the empty verification tab' "$_doc"
+    assert_success
+    run grep -qF -- 'if [ -n "$NEW_TAB" ]; then' "$_doc"
+    assert_success
+}
