@@ -863,7 +863,7 @@ _pmt_usage() {
     ux_bullet_sub "that directory must exist and hold a parseable .credentials.json"
     ux_bullet_sub "  (a logged-out account stalls every prompt — the tick fails fast instead)"
     ux_bullet "crontab"
-    ux_bullet_sub "*/15 * * * * /path/to/pr_merge_train_cron.sh --cwd ~/dotfiles >> ~/.local/state/pr-merge-train/cron.log 2>&1"
+    ux_bullet_sub "*/2 * * * * /path/to/pr_merge_train_cron.sh --cwd ~/dotfiles >> ~/.local/state/pr-merge-train/cron.log 2>&1"
 }
 
 # ============================================================
