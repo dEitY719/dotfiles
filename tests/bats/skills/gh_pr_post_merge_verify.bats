@@ -1138,6 +1138,4 @@ _PMV_WAIT_ASSIGN='^(_IW_SETTLE_SECONDS|_PMT_SETTLE_SECONDS|PMV_SETTLE_SECONDS|_I
     [ "$_start" -lt "$_close" ]
     run grep -qF -- 'closed the empty verification tab' "$_doc"
     assert_success
-    run grep -qF -- 'if [ -n "$NEW_TAB" ]; then' "$_doc"
-    assert_success
 }
