@@ -82,15 +82,16 @@ _DEFAULT_ASYNC_WAIT_LIMIT: int = 2
 #
 #   [flow:async-wait] step=<skill>/<step> agent=<agent-id> reason=background-worker-delegated
 #
-# `agent` is captured for audit/logging only and is deliberately NOT used in
-# any matching or streak logic. The issue's own fix plan proposed comparing
-# the agent id across turns to detect "no progress", but that requires the
-# model to reproduce one exact literal string turn after turn — fragile in
-# exactly the situation the marker exists for. Counting consecutive
-# occurrences with no intervening progress event is sufficient evidence of
-# stagnation on its own, and needs nothing from the model but the marker.
+# `agent` is required in the line — the transcript itself is the audit trail —
+# but deliberately NOT captured and NOT used in any matching or streak logic.
+# The issue's own fix plan proposed comparing the agent id across turns to
+# detect "no progress", but that requires the model to reproduce one exact
+# literal string turn after turn — fragile in exactly the situation the marker
+# exists for. Counting consecutive occurrences with no intervening progress
+# event is sufficient evidence of stagnation on its own, and needs nothing
+# from the model but the marker.
 _ASYNC_WAIT_RE: re.Pattern[str] = re.compile(
-    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=(?P<agent>\S+)\s+reason=background-worker-delegated\s*$"
+    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=\S+\s+reason=background-worker-delegated\s*$"
 )
 
 
@@ -671,97 +672,68 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     return terminal, seen
 
 
-def _last_sub_skill_index(messages: list[dict[str, Any]], start: int) -> int:
-    """Return the index of the LAST sub-skill `Skill()` call after `start` (#1550).
-
-    Falls back to `start` itself when no sub-skill ran after the boundary, so
-    the caller always gets a usable "last progress happened here" index.
-
-    A dedicated forward walk rather than an extra return value threaded out
-    of `_scan_after_boundary`: that function is already carrying two
-    orthogonal jobs, and this module's style is one small single-purpose
-    walker per question. Never raises — same isinstance discipline as every
-    other walker here (`_iter_skill_uses` is fully guarded).
-    """
-    last = start
-    for offset, entry in enumerate(messages[start + 1 :], start=start + 1):
-        msg = _message_payload(entry)
-        for skill in _iter_skill_uses(msg):
-            if skill in SUB_SKILL_NAMES:
-                last = offset
-                break
-    return last
-
-
-def _async_wait_streak(messages: list[dict[str, Any]], boundary: int, seen: list[str]) -> int:
+def _async_wait_streak(messages: list[dict[str, Any]], boundary: int) -> int:
     """Count `[flow:async-wait]` markers since the last progress event (#1550).
 
     "Progress event" for the OUTER chain is a sub-skill `Skill()` invocation:
     the chain moved forward, so whatever the model was waiting on is done and
-    the streak restarts from zero. When no sub-skill has run yet (`seen`
-    empty) the boundary itself is the last progress point — which is also why
-    `seen` is taken as a parameter: it lets the common no-progress case skip
-    the extra walk entirely.
+    the streak restarts from zero. Walking BACKWARD from the end and stopping
+    at the first sub-skill call answers that in one partial pass — no need to
+    locate the progress index first and then re-walk from it. When no
+    sub-skill ran at all, the walk simply runs back to the boundary.
 
     Markers are read from `role=assistant` text blocks only, with
-    `include_tool_results=False`. That is deliberate and asymmetric with the
-    sister hook's `[step:.../...] OK` scan (which does read `tool_result`,
-    because those markers come from a `printf` in a Bash call). The
-    async-wait marker is only ever the model's own turn-ending prose, while a
-    `tool_result` can carry arbitrary file content — including this very
-    file and `references/stop-guard.md`, both of which now document the
-    marker literally. Reading tool_results here would false-positive on any
-    `Read` of those files (the issue #608 precedent, applied to a new
-    marker).
+    `include_tool_results=False` — see `_ASYNC_WAIT_RE` for why that is
+    deliberately asymmetric with the sister hook's `[step:.../...] OK` scan
+    and must stay that way.
 
     Never raises; a malformed entry can only yield a smaller count.
     """
-    progress_idx = _last_sub_skill_index(messages, boundary) if seen else boundary
     streak = 0
-    for entry in messages[progress_idx + 1 :]:
+    for entry in reversed(messages[boundary + 1 :]):
         msg = _message_payload(entry)
+        if any(skill in SUB_SKILL_NAMES for skill in _iter_skill_uses(msg)):
+            break
         if msg.get("role") != "assistant":
             continue
         for text in _iter_text_blocks(msg, include_tool_results=False):
-            streak += len(_ASYNC_WAIT_RE.findall(text))
+            streak += sum(1 for _ in _ASYNC_WAIT_RE.finditer(text))
     return streak
+
+
+def _env_int(name: str, default: int) -> int:
+    """Read a non-negative int knob from the environment, or `default`.
+
+    Shared by `_async_wait_grace_limit` (#1550) and `_max_stale_user_turns`
+    (#1270), which had identical bodies:
+      - a valid non-negative int → use it (`0` means "disabled"),
+      - unset / unparseable / negative → `default` (unset reaches the
+        `ValueError` arm via the `""` default).
+    Never raises — a bad value silently degrades to the default.
+    """
+    try:
+        value = int(os.environ.get(name, ""))
+    except ValueError:
+        return default
+    return value if value >= 0 else default
 
 
 def _async_wait_grace_limit() -> int:
     """Read the async-wait grace limit from the environment (#1550).
 
-    Env var: `GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT`. Same shape as
-    `_max_stale_user_turns`:
-      - a valid non-negative int  → use it,
-      - `0`                       → grace disabled (the very first marker
-                                    occurrence already blocks),
-      - unset / unparseable / negative → `_DEFAULT_ASYNC_WAIT_LIMIT`
-        (unset reaches the `ValueError` arm via the `""` default).
-    Never raises — a bad value silently degrades to the default.
+    Env var: `GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT`; `0` disables the
+    grace entirely (the very first marker occurrence already blocks).
     """
-    try:
-        value = int(os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT", ""))
-    except ValueError:
-        return _DEFAULT_ASYNC_WAIT_LIMIT
-    return value if value >= 0 else _DEFAULT_ASYNC_WAIT_LIMIT
+    return _env_int("GH_ISSUE_FLOW_STOP_GUARD_ASYNC_WAIT_LIMIT", _DEFAULT_ASYNC_WAIT_LIMIT)
 
 
 def _max_stale_user_turns() -> int:
     """Read the boundary-expiry threshold from the environment (#1270).
 
-    Env var: `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`.
-      - a valid non-negative int  → use it,
-      - `0`                       → expiry disabled (never fail open on
-                                    staleness alone),
-      - unset / unparseable / negative → `_DEFAULT_MAX_STALE_USER_TURNS`
-        (unset reaches the `ValueError` arm via the `""` default).
-    Never raises — a bad value silently degrades to the default.
+    Env var: `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`; `0` disables expiry
+    entirely (never fail open on staleness alone).
     """
-    try:
-        value = int(os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS", ""))
-    except ValueError:
-        return _DEFAULT_MAX_STALE_USER_TURNS
-    return value if value >= 0 else _DEFAULT_MAX_STALE_USER_TURNS
+    return _env_int("GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS", _DEFAULT_MAX_STALE_USER_TURNS)
 
 
 def _count_fresh_user_prompts(messages: list[dict[str, Any]], start: int) -> int:
@@ -921,7 +893,7 @@ def main() -> int:
     # diagnostic line stays complete.
     async_wait_limit = _async_wait_grace_limit()
     async_wait_streak = (
-        _async_wait_streak(messages, boundary, seen) if _TRACE_ENABLED or (not terminal and async_wait_limit > 0) else 0
+        _async_wait_streak(messages, boundary) if _TRACE_ENABLED or (not terminal and async_wait_limit > 0) else 0
     )
     if _TRACE_ENABLED:
         _trace(
@@ -950,7 +922,8 @@ def main() -> int:
     # on the record, that it delegated the outstanding work to a background
     # Agent and is waiting — not that it abandoned the flow. Past the limit
     # the marker stops buying anything and the ordinary block resumes.
-    if async_wait_limit > 0 and 0 < async_wait_streak <= async_wait_limit:
+    # (`limit <= 0` needs no separate guard: it makes the range unsatisfiable.)
+    if 0 < async_wait_streak <= async_wait_limit:
         return _allow(
             f"async-wait grace ({async_wait_streak}/{async_wait_limit}) — background "
             f"delegation in progress, not abandonment",

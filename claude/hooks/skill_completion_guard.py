@@ -87,11 +87,12 @@ _DEFAULT_ASYNC_WAIT_LIMIT: int = 2
 # hooks read the same marker, they just derive different things from it (that
 # one counts a streak per chain, this one per required step id).
 #
-# `agent` is captured for audit/logging only and is deliberately NOT used in
-# any matching logic: making the grace depend on the model reproducing one
-# exact literal id string turn after turn would be fragile in precisely the
-# situation the marker exists for. A repeated marker with no intervening step
-# emit is sufficient evidence of stagnation on its own.
+# `agent` is required in the line — the transcript itself is the audit trail —
+# but deliberately NOT captured and NOT used in any matching logic: making the
+# grace depend on the model reproducing one exact literal id string turn after
+# turn would be fragile in precisely the situation the marker exists for. A
+# repeated marker with no intervening step emit is sufficient evidence of
+# stagnation on its own.
 #
 # Scanned in `role=assistant` text blocks ONLY, with
 # `include_tool_results=False` — asymmetric with `_STEP_EMIT_RE` above, which
@@ -102,7 +103,7 @@ _DEFAULT_ASYNC_WAIT_LIMIT: int = 2
 # document the marker literally. Reading tool_results here would
 # false-positive on any `Read` of those files (the issue #608 precedent).
 _ASYNC_WAIT_RE: re.Pattern[str] = re.compile(
-    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=(?P<agent>\S+)\s+reason=background-worker-delegated\s*$"
+    r"(?m)^\[flow:async-wait\]\s+step=(?P<step>\S+)\s+agent=\S+\s+reason=background-worker-delegated\s*$"
 )
 
 
@@ -461,10 +462,12 @@ def _async_wait_reprieved(
     Applies uniformly to every catalog skill — there is deliberately no
     special case for `gh-issue-implement`, and the catalog schema is
     unchanged.
+
+    The `limit > 0 and missing` test is a pure walk-skip on the healthy path:
+    with either falsy the comprehension below is already unsatisfiable, so
+    the scan could not have changed the answer.
     """
-    if limit <= 0 or not missing:
-        return list(missing), {}
-    counts = _count_async_waits_in_section(messages, start, end, skill)
+    counts = _count_async_waits_in_section(messages, start, end, skill) if limit > 0 and missing else {}
     reprieved = {step: counts[step] for step in missing if 0 < counts.get(step, 0) <= limit}
     return [step for step in missing if step not in reprieved], reprieved
 
@@ -537,9 +540,8 @@ def main() -> int:
         )
 
     if not outstanding:
-        if reprieved:
-            return _allow(f"{skill}: all required steps emitted or async-wait-reprieved", layer="L1.5")
-        return _allow(f"{skill}: all required steps emitted", layer="L1.5")
+        qualifier = " or async-wait-reprieved" if reprieved else ""
+        return _allow(f"{skill}: all required steps emitted{qualifier}", layer="L1.5")
 
     if not enforce:
         return _allow(f"{skill}: missing steps but enforce=false", layer="L1.5")
