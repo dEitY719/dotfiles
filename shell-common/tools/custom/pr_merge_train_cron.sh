@@ -116,11 +116,11 @@ _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 
 # Unconditional settle wait between `agent start` and the first prompt
 # (issue #1560); the twin of _IW_SETTLE_SECONDS, whose comment carries the
-# measurement in full. In short: `idle` means "not working", not "accepting
-# keystrokes", so no amount of polling substitutes for it, and raising
-# _PMT_IDLE_POLL_MAX is a no-op. Applied by _pmt_launch_fresh only — the reuse
-# path prompts a session that has been up for a whole cron period and must not
-# pay 13s per PR. Overridable (to 0) so the bats suite does not sleep for real.
+# rationale and the measurement in full — including why raising
+# _PMT_IDLE_POLL_MAX instead is a no-op. Applied by _pmt_launch_fresh only —
+# the reuse path prompts a session that has been up for a whole cron period and
+# must not pay 13s per PR. Overridable (to 0) so the bats suite does not sleep
+# for real.
 _PMT_SETTLE_SECONDS="${PMT_SETTLE_SECONDS:-13}"
 
 # `herdr agent start` attempts on a freshly created pane (see _pmt_launch_fresh,
@@ -425,10 +425,9 @@ _pmt_resolve_config_dir() {
         fi
 
         # A directory that exists is not an account that is logged in
-        # (issue #1561) — `_iw_resolve_config_dir` carries the rationale in
-        # full. Presence and non-emptiness only: no token parsing, no network.
-        if [ ! -r "${_cfg_dir}/.credentials.json" ] ||
-            [ ! -s "${_cfg_dir}/.credentials.json" ]; then
+        # (issue #1561) — `_claude_account_logged_in` in claude.sh, sourced
+        # above, carries the rationale in full and owns the rule.
+        if ! _claude_account_logged_in "${_cfg_dir}"; then
             ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing or empty — the pane would open on 'Not logged in' and every prompt would stall."
             ux_info "Run: claude-accounts status   (then log that account in)" >&2
             exit 1
@@ -656,7 +655,7 @@ _pmt_wait_for_idle() {
 # Always succeeds — a settle that could fail would skip the prompt it exists to
 # protect, which is a worse outcome than a prompt sent slightly too early.
 _pmt_settle() {
-    [ "${_PMT_SETTLE_SECONDS}" = "0" ] || sleep "${_PMT_SETTLE_SECONDS}" || :
+    [ "${_PMT_SETTLE_SECONDS}" = "0" ] || sleep "${_PMT_SETTLE_SECONDS}"
     return 0
 }
 

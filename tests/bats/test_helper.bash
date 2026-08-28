@@ -245,3 +245,35 @@ _setup_foreign_home_1505() {
         commit --allow-empty -q -m init
     export HOME="$FOREIGN_HOME_1505"
 }
+
+# A claude account directory that is *logged in* — the directory plus a
+# non-empty `.credentials.json` (issue #1561). Both halves are load-bearing:
+# since #1561 a directory without credentials fails the tick fast, so a fixture
+# that only ran `mkdir` would make every dispatch/launch test red.
+#
+# Shared by `issue_watcher_cron.bats` and `pr_merge_train_cron.bats`, which
+# both fixture the same production rule (`_claude_account_logged_in` in
+# `shell-common/tools/integrations/claude.sh`) — so the fixture tracks that
+# rule from one place rather than two.
+_make_account() {
+    mkdir -p "$1"
+    printf '{"claudeAiOauth":{"accessToken":"test"}}\n' >"$1/.credentials.json"
+}
+
+# sleep: logs the wait it was asked for and returns immediately. The settle
+# wait added in #1560 is *unconditional* and defaults to 13 real seconds, so a
+# suite without this stub would pay it on every dispatch test — and, worse,
+# would have no way to tell "the tick settled" from "the tick was slow". Every
+# other wait in those ticks is already overridden to 0 by the suite's own
+# `_run_tick`, so a logged `sleep` line is the settle wait and nothing else.
+#
+# Requires the caller's `${_BIN_DIR}` (first on PATH) and `${CALL_LOG}`
+# conventions, which both cron suites already share.
+_install_sleep_stub() {
+    cat >"${_BIN_DIR}/sleep" <<'EOF'
+#!/bin/sh
+printf 'sleep %s\n' "$*" >>"${CALL_LOG}"
+exit 0
+EOF
+    chmod +x "${_BIN_DIR}/sleep"
+}
