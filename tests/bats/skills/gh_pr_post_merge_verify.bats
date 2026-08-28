@@ -671,3 +671,113 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
         "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md"
     assert_output "1"
 }
+
+# --- #1565: gh:pr-merge Step 5 runs the dispatch, it does not call a Skill --
+#
+# The dispatch used to be prose at the very tail of gh:pr-merge ("Otherwise
+# call `Skill(gh:pr-post-merge-verify, "<N> <remote>")`"), inside a skill
+# gh:pr-merge-train invokes in a loop. It executed 0/10 times in that loop and
+# 1/1 at top level, while every pasted shell block in the same skill's Step 4
+# ran 10/10. The form is the fix: a block that is there to run cannot be
+# forgotten the way an instruction to call something else can.
+
+_pmv_merge_skill() { printf '%s' "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/SKILL.md"; }
+_pmv_dispatch_doc() { printf '%s' "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md"; }
+
+# The exact awk program gh:pr-merge Step 5 uses to take the FIRST bash fence
+# out of dispatch.sh.md. Pinned here and then actually run below, so an edit to
+# either side turns this suite red instead of silently extracting nothing.
+_PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
+
+@test "1565: gh:pr-merge Step 5 no longer delegates through Skill()" {
+    # Comment lines are skipped — the rationale for NOT calling it is allowed
+    # to name it (same carve-out as R-6 above).
+    run bash -c "grep -vE '^[[:space:]]*#' '$(_pmv_merge_skill)' | grep -n 'Skill(gh:pr-post-merge-verify'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}
+
+@test "1565: gh:pr-merge Step 5 reads the dispatch SSOT instead of copying it" {
+    run grep -qF -- 'claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md' \
+        "$(_pmv_merge_skill)"
+    assert_success
+    # Sourced, not described.
+    run grep -qF -- '. "$PMV_SH"' "$(_pmv_merge_skill)"
+    assert_success
+}
+
+@test "1565: gh:pr-merge Step 5 carries the extraction program verbatim" {
+    run grep -qF -- "$_PMV_EXTRACT_AWK" "$(_pmv_merge_skill)"
+    assert_success
+}
+
+@test "1565: gh:pr-merge Step 5 binds the inputs the dispatch reads" {
+    local _v
+    for _v in PR_NUMBER HEAD_BRANCH BASE_BRANCH REMOTE; do
+        run grep -qE "^${_v}=" "$(_pmv_merge_skill)"
+        assert_success
+    done
+}
+
+@test "1565: the extraction yields the dispatch block, not a doc snippet" {
+    local _out
+    _out="${TEST_TEMP_HOME}/extracted.sh"
+    run bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    assert_success
+    run head -n 2 "$_out"
+    assert_output --partial 'WATCHED_FILE='
+    run tail -n 1 "$_out"
+    assert_output --partial 'attach: herdr agent attach'
+    # The file's later fences are documentation — the standalone head/base ref
+    # recovery must not be swept into the executed block.
+    run grep -c 'gh pr view' "$_out"
+    assert_output "0"
+}
+
+@test "1565: the extracted dispatch block is syntactically valid shell" {
+    local _out
+    _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    run bash -n "$_out"
+    assert_success
+}
+
+@test "1565: the extracted block returns rather than exiting when sourced" {
+    # Every early exit is `return 0 2>/dev/null || exit 0` so that sourcing it
+    # from Step 5 cannot kill the caller's shell mid-report.
+    local _out
+    _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    run bash -c "grep -n 'exit 0' '${_out}' | grep -v 'return 0 2>/dev/null || exit 0'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}
+
+@test "1565: gh:pr-post-merge-verify survives as a standalone entry point" {
+    # Removing the skill would take `/gh-pr-post-merge-verify <N>` — the manual
+    # re-run — with it. Step 5 borrows its block; it does not absorb it.
+    local _skill="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/SKILL.md"
+    [ -r "$_skill" ]
+    run grep -qF -- 'name: gh:pr-post-merge-verify' "$_skill"
+    assert_success
+    run grep -qF -- 'references/dispatch.sh.md' "$_skill"
+    assert_success
+    [ -r "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/help.md" ]
+}
+
+@test "1565: top-level gh:pr-merge behavior is otherwise untouched" {
+    # The merge itself, the report, and the unwatched-repo silence are what a
+    # top-level `/gh-pr-merge <N>` run is judged on — Step 5 gained a block,
+    # it did not gain a gate.
+    local _skill
+    _skill="$(_pmv_merge_skill)"
+    run grep -qF -- 'gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch' "$_skill"
+    assert_success
+    run grep -qF -- 'Print **only** the compact report' "$_skill"
+    assert_success
+    run grep -qF -- 'no output, no' "$_skill"
+    assert_success
+}

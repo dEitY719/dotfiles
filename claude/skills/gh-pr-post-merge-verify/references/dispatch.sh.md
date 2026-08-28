@@ -4,6 +4,10 @@ Step 3 pastes this. It expects `PR_NUMBER`, `TARGET_REPO` and `TARGET_HOST`
 already bound (Step 2), and it is a no-op for any repo missing from
 `docs/.ssot/watched-repos.json`.
 
+`gh:pr-merge` Step 5 does not paste a copy: it extracts the **first** `bash`
+fence below and sources it, so this file stays the single source (#1565). Keep
+the dispatch in that first fence — the later snippets are documentation.
+
 Executable mirror + regression suite:
 `tests/bats/skills/_fixtures/gh_pr_post_merge_verify.sh` and
 `tests/bats/skills/gh_pr_post_merge_verify.bats`. Change one, change both.
