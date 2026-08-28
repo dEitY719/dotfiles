@@ -130,9 +130,17 @@ _worktree_path() {
 # whole "is it running" signal: `herdr agent list` has no agent-name field, so
 # the tick recognises its own panes by the worktree they were opened on.
 _set_live_agents() {
-    local _json="" _sep="" _p
+    _set_agents_with_status working "$@"
+}
+
+# The same panes with an explicit `agent_status` (issue #1596). `idle`/`done`
+# is the zombie tab: the pane outlived its work and still sits in the worktree,
+# so cwd alone keeps reading as "running" long after it stopped.
+_set_agents_with_status() {
+    local _status="$1" _json="" _sep="" _p
+    shift
     for _p in "$@"; do
-        _json="${_json}${_sep}{\"agent\":\"claude\",\"agent_status\":\"working\",\"cwd\":\"${_p}\",\"foreground_cwd\":\"${_p}\",\"pane_id\":\"wV:p1\"}"
+        _json="${_json}${_sep}{\"agent\":\"claude\",\"agent_status\":\"${_status}\",\"cwd\":\"${_p}\",\"foreground_cwd\":\"${_p}\",\"pane_id\":\"wV:p1\"}"
         _sep=","
     done
     printf '{"id":"cli:agent:list","result":{"agents":[%s]}}\n' "${_json}" \
@@ -174,6 +182,18 @@ _set_running() {
         _paths+=("$(_worktree_path "${_n}")")
     done
     _set_live_agents "${_paths[@]}"
+}
+
+# _set_running's zombie twin (#1596): worktree plus a pane in the given
+# non-working `agent_status`.
+_set_running_with_status() {
+    local _status="$1" _paths=() _n
+    shift
+    for _n in "$@"; do
+        _add_worktree "${_n}"
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_agents_with_status "${_status}" "${_paths[@]}"
 }
 
 # The rate-limit gate state file: _set_limit_state <strikes> <backoff_until>.
@@ -1588,6 +1608,55 @@ _assert_not_hung() {
     _assert_logged "gwt spawn --wt-name issue-41"
 }
 
+# ---------------------------------------------------------------------------
+# Zombie tabs (issue #1596)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: zombie panes on closed issues do not fill the cap" {
+    # The bug: a tab gh:pr-post-merge-verify failed to close keeps sitting in
+    # its worktree, so cwd alone reads it as running forever and the repo's
+    # slots are never freed — the watcher then refuses every new issue,
+    # silently.
+    _set_running_with_status idle 21 22 23 24 25 26 27
+    _run_tick "GH_CLOSED_ISSUES=21 22 23 24 25 26 27"
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+}
+
+@test "issue_watcher_cron: an idle pane on a still-open issue still counts as live" {
+    # The guard that makes "AND the issue is closed" load-bearing: an agent
+    # between two tool calls reports `idle` for a moment, and reclaiming its
+    # slot then would dispatch the same issue twice.
+    _add_worktree 11
+    _set_agents_with_status idle "$(_worktree_path 11)"
+    _run_tick
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: an unreadable issue state keeps an idle pane live" {
+    # Same posture as the collection step: a failed state read must never be
+    # the reason a slot is reclaimed.
+    _add_worktree 11
+    _set_agents_with_status idle "$(_worktree_path 11)"
+    _run_tick "GH_ISSUE_VIEW_FAIL=1"
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: an unrecognised agent_status counts as live" {
+    # Only `idle` and `done` are known to mean "stopped"; anything else must
+    # fail toward "still running".
+    _add_worktree 11
+    _set_agents_with_status starting "$(_worktree_path 11)"
+    _run_tick "GH_CLOSED_ISSUES=11"
+    assert_success
+    assert_output --partial "already running"
+    _refute_logged "gwt spawn"
+}
+
 @test "issue_watcher_cron: an unreachable herdr holds the tick instead of dispatching" {
     # "How many are running" has no safe default: guessing "none" would lift the
     # cap exactly when herdr is unhealthy.
@@ -1686,6 +1755,28 @@ _two_repo_fixture() {
     assert_success
     run git -C "${_REPO_DIR}" worktree list --porcelain
     assert_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: a closed issue whose pane has gone idle is collected" {
+    # The inverse of the test above (#1596): the pane is still there, but it
+    # stopped working and the issue is closed, so the worktree is reclaimable.
+    _add_worktree 21
+    _set_agents_with_status idle "$(_worktree_path 21)"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    assert_output --partial "Collected worktree"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-21/"
+}
+
+@test "issue_watcher_cron: a closed issue whose pane reports done is collected" {
+    _add_worktree 21
+    _set_agents_with_status done "$(_worktree_path 21)"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    assert_output --partial "Collected worktree"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-21/"
 }
 
 @test "issue_watcher_cron: an unreadable issue state leaves the worktree in place" {

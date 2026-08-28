@@ -487,8 +487,18 @@ _IW_LIVE_AGENTS_LOADED=0
 # Volatility is fine here, unlike for "already handled": the question is what
 # is running *now*, and after a reboot nothing is. The signal and the truth go
 # stale together.
+#
+# A pane's cwd alone answers "a session was opened here", not "it is still
+# working" (issue #1596). When the tab that should have been closed after a
+# merge survives, its pane keeps standing in the worktree with nothing left to
+# do, and every later tick reads it as running: the repo loses a concurrency
+# slot permanently and the worktree is never collected. So a pane is dropped
+# from the live set once *both* of its stop conditions hold — it reports a
+# stopped `agent_status`, and the issue it was opened on is closed on GitHub.
+# Either alone is a normal mid-flight state: an agent is `idle` between two
+# tool calls, and an issue is closed while its session still verifies the merge.
 _iw_live_agents() {
-    local _json _cwds
+    local _json _panes _repo _number _stopped
 
     if [ "${_IW_LIVE_AGENTS_LOADED}" -eq 1 ]; then
         [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
@@ -505,10 +515,14 @@ _iw_live_agents() {
     # pane was opened (stable for the session's whole life) and `foreground_cwd`
     # is where its shell is standing now. Taking only one loses the session that
     # `cd`-ed away, and losing it means the collection step reads a live
-    # worktree as idle (PR #1456 agy/codex review).
-    _cwds=$(printf '%s' "${_json}" | jq -r '
+    # worktree as idle (PR #1456 agy/codex review). Each carries its own pane's
+    # `agent_status` so the join below still knows which pane it matched.
+    _panes=$(printf '%s' "${_json}" | jq -r '
         if (.result.agents | type) == "array"
-        then .result.agents[]? | (.cwd // empty), (.foreground_cwd // empty)
+        then .result.agents[]?
+             | (.agent_status // "") as $st
+             | ((.cwd // empty), (.foreground_cwd // empty))
+             | [ ., $st ] | @tsv
         else error("no agent list")
         end
     ' 2>/dev/null) || return 1
@@ -516,27 +530,66 @@ _iw_live_agents() {
     # Prefix match on the physical path, not string equality: an agent sitting in
     # a subdirectory of its worktree is still working that issue, and one side of
     # the comparison may have arrived through a symlink.
+    #
+    # The third column is the stopped flag: 1 only when every pane matching this
+    # worktree reports a status known to mean "not working". An unknown status
+    # is never a stop signal — the set of herdr statuses is not this script's to
+    # enumerate, so anything unrecognised must keep the session alive.
     _IW_LIVE_AGENTS=$(_iw_issue_worktrees |
         while IFS="${_IW_TAB}" read -r _wt _repo _number; do
             printf '%s\t%s\t%s\n' "$(_iw_physical_path "${_wt}")" "${_repo}" "${_number}"
         done |
-        awk -F "${_IW_TAB}" -v cwds="${_cwds}" '
+        awk -F "${_IW_TAB}" -v panes="${_panes}" '
             BEGIN {
-                n = split(cwds, a, "\n")
-                for (i = 1; i <= n; i++) if (a[i] != "") live[++m] = a[i]
-            }
-            {
-                for (i = 1; i <= m; i++) {
-                    if (live[i] == $1 || index(live[i], $1 "/") == 1) {
-                        print $2 "\t" $3
-                        break
-                    }
+                n = split(panes, a, "\n")
+                for (i = 1; i <= n; i++) {
+                    if (a[i] == "") continue
+                    split(a[i], f, "\t")
+                    if (f[1] == "") continue
+                    m++
+                    live[m] = f[1]
+                    state[m] = f[2]
                 }
             }
-        ')
+            {
+                matched = 0
+                working = 0
+                for (i = 1; i <= m; i++) {
+                    if (live[i] == $1 || index(live[i], $1 "/") == 1) {
+                        matched = 1
+                        if (state[i] != "idle" && state[i] != "done") working = 1
+                    }
+                }
+                if (matched) print $2 "\t" $3 "\t" (working ? 0 : 1)
+            }
+        ' |
+        while IFS="${_IW_TAB}" read -r _repo _number _stopped; do
+            # The GitHub round trip is paid only for a stopped pane: a working
+            # one is live whatever its issue says, so asking would buy nothing.
+            if [ "${_stopped}" = "1" ] && _iw_issue_closed "${_repo}" "${_number}"; then
+                continue
+            fi
+            printf '%s\t%s\n' "${_repo}" "${_number}"
+        done)
 
     _IW_LIVE_AGENTS_LOADED=1
     [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
+}
+
+# 0 only when GitHub says <owner/repo> issue <number> is CLOSED. A failed or
+# unparsable read answers "no" on purpose: every caller reclaims something on a
+# yes — a concurrency slot, a worktree — and an unanswered question must never
+# be the reason anything is reclaimed.
+#
+# stdin is closed for the same reason _iw_cleanup_worktrees reads its list on
+# fd 3: `gh` reads stdin, and this runs inside a `while read` loop fed by a
+# pipe, which it would otherwise swallow (PR #1447 agy review).
+_iw_issue_closed() {
+    local _state
+
+    _state=$(GH_HOST="$(_iw_repo_host "$1")" gh issue view "$2" --repo "$1" \
+        --json state -q .state </dev/null 2>/dev/null) || return 1
+    [ "${_state}" = "CLOSED" ]
 }
 
 # Prime the memo with "nothing is running" after a failed lookup. Only
