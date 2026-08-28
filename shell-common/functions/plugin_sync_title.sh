@@ -28,6 +28,42 @@
 #
 # Requires: jq.
 
+# Advisory only (issue #1454, propagated by #1505): warn once on stderr when
+# this file was sourced from a checkout that is a different git repo than
+# $HOME/dotfiles. Mandated by shell-common/AGENTS.md for every functions/*.sh
+# a non-interactive hook or script sources directly, which is exactly how both
+# writers reach this file. Never blocks, and deliberately NOT wrapped in an
+# interactive guard — see the header note above; the guard function is itself
+# a silent no-op outside the genuine foreign-checkout case. Without it a stale
+# sibling checkout would silently supply a different title format, which is
+# the one failure this SSOT exists to prevent.
+#
+# The self-path branch must stay here at file top level — zsh rebinds $0 to
+# the sourced file (FUNCTION_ARGZERO) only for this file's own statements,
+# and inside a function $0 is the function's own name. This file is real
+# POSIX sh, so the bash array form is reached only when $BASH_VERSION proves
+# bash: dash aborts with "Bad substitution" the moment it expands
+# ${BASH_SOURCE[0]}.
+if [ -n "${ZSH_VERSION-}" ]; then
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    # shellcheck disable=SC3028  # bash-only var, gated by $BASH_VERSION above
+    _drg_self="${BASH_SOURCE[0]-}"
+else
+    _drg_self=""
+fi
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
+fi
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "plugin_sync_title"
+else
+    printf '[plugin_sync_title] %s missing or did not define _dotfiles_root_guard_self — #1454 guard skipped (#724).\n' \
+        "$_drg_helper" >&2
+fi
+unset _drg_self _drg_helper
+
 # Emit the compact JSON in file $1, or the default $2 when that file is
 # missing, empty (a 0-byte file makes `jq .` exit 0 with NO output, so a
 # plain `jq . || echo` fallback would not fire), or invalid JSON.
@@ -90,21 +126,34 @@ _build_sync_title() {
         printf '%s (%s)' "$_bst_base" "$*"
         return 0
     fi
-    # First three, space-joined. Written as a loop rather than "${*:1:3}"
-    # because that slice syntax is a bashism and this file is sourced by
-    # POSIX shells too (see the header).
-    _bst_head=""
-    _bst_i=0
-    for _bst_k in "$@"; do
-        _bst_i=$((_bst_i + 1))
-        if [ "$_bst_i" -gt 3 ]; then
-            break
-        fi
-        if [ -z "$_bst_head" ]; then
-            _bst_head="$_bst_k"
-        else
-            _bst_head="$_bst_head $_bst_k"
-        fi
-    done
-    printf '%s (%s 외 %d개)' "$_bst_base" "$_bst_head" "$((_bst_n - 3))"
+    # $1..$3 always exist here — the "-le 4" branch above already returned, so
+    # this point is reachable only with 5 or more items. Spelled out positionally
+    # rather than as "${*:1:3}" because that slice syntax is a bashism and this
+    # file is sourced by POSIX shells too (see the header).
+    printf '%s (%s %s %s 외 %d개)' "$_bst_base" "$1" "$2" "$3" "$((_bst_n - 3))"
+}
+
+# _plugin_sync_title <base> <mp_file> <mp_target> <pl_file> <pl_target>
+#
+# The whole title in one call: collect the keys both manifests change, then
+# format them. This — not the three primitives above — is what both writers
+# actually want, so it is the SSOT boundary; keeping the composition here is
+# what stops reconcile.sh and plugin-sync.sh from assembling the same title
+# two different ways.
+#
+# <mp_file>/<pl_file> are the manifests as they still are on disk (call before
+# the write); <mp_target>/<pl_target> are the values about to be written.
+#
+# A jq failure or a malformed manifest yields no keys, which degrades to the
+# bare <base> rather than an empty subject.
+_plugin_sync_title() {
+    _pst_base="$1"
+    _pst_changed=$(
+        _changed_keys_marketplaces "$2" "$3" 2>/dev/null
+        _changed_keys_plugins "$4" "$5" 2>/dev/null
+    )
+    # Word splitting is intended: the helpers print one key per line and a
+    # marketplace/plugin key never contains whitespace.
+    # shellcheck disable=SC2086
+    _build_sync_title "$_pst_base" $_pst_changed
 }
