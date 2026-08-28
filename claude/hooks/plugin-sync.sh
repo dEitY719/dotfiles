@@ -88,15 +88,16 @@ fi
 SYNC_TITLE="$SYNC_MSG"
 [ -n "$target" ] && SYNC_TITLE="$SYNC_MSG ($target)"
 
-# Title helpers shared with claude/plugin/reconcile.sh --apply so both
-# writers of this commit emit one format (#1558). Best-effort like the rest
-# of the hook: a missing helper (stale install) just leaves
-# _resolve_sync_title falling back to $SYNC_TITLE.
-# shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
-
 MAIN_ROOT="$HOME/dotfiles"
 [ -d "$MAIN_ROOT/.git" ] || exit 0
+
+# Title helper shared with claude/plugin/reconcile.sh --apply so both writers
+# of this commit emit one format (#1558). Sourced below the repo check above
+# because a PC with no dotfiles checkout exits before the title can matter.
+# Best-effort like the rest of the hook: a missing helper (stale install) just
+# leaves _resolve_sync_title falling back to $SYNC_TITLE.
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
 
 SRC="$HOME/.claude-shared/plugins"
 MP_SRC="$SRC/known_marketplaces.json"
@@ -211,19 +212,11 @@ _write_manifest() {
 # Any failure (helper not sourced, jq error, malformed manifest) degrades to
 # the bare subject: this hook always exits 0.
 _resolve_sync_title() {
-	local changed
-	if [ "$BULK_RESYNC" != "1" ] || ! command -v _build_sync_title >/dev/null 2>&1; then
+	if [ "$BULK_RESYNC" != "1" ] || ! command -v _plugin_sync_title >/dev/null 2>&1; then
 		printf '%s' "$SYNC_TITLE"
 		return 0
 	fi
-	changed=$(
-		_changed_keys_marketplaces "$1" "$2" 2>/dev/null
-		_changed_keys_plugins "$3" "$4" 2>/dev/null
-	)
-	# Word splitting is intended: the helpers print one key per line and a
-	# marketplace/plugin key never contains whitespace.
-	# shellcheck disable=SC2086
-	_build_sync_title "$SYNC_MSG" $changed
+	_plugin_sync_title "$SYNC_MSG" "$1" "$2" "$3" "$4"
 }
 
 if [ "$action" = "add" ]; then

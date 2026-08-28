@@ -95,12 +95,12 @@ command -v jq >/dev/null 2>&1 || {
 	exit 1
 }
 
-# Commit-title helpers (_changed_keys_marketplaces / _changed_keys_plugins /
-# _build_sync_title) live in shell-common so claude/hooks/plugin-sync.sh can
-# reuse the identical format instead of growing a second copy (#1558).
+# The commit-title helper (_plugin_sync_title) lives in shell-common so
+# claude/hooks/plugin-sync.sh can reuse the identical format instead of
+# growing a second copy (#1558).
 # Resolved via $SHELL_COMMON rather than $SCRIPT_DIR because this script is
 # also run from a copy that has no shell-common sibling (bats fixtures).
-# Only --apply needs them, so the missing-helper check lives in _run_apply —
+# Only --apply needs it, so the missing-helper check lives in _run_apply —
 # --check must keep working on a half-installed tree.
 # shellcheck disable=SC1091
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
@@ -253,11 +253,6 @@ _run_check() {
 
 # --- --apply --------------------------------------------------------------
 
-# _changed_keys_marketplaces / _changed_keys_plugins / _build_sync_title are
-# sourced from shell-common/functions/plugin_sync_title.sh at the top of this
-# script — claude/hooks/plugin-sync.sh builds the same title from the same
-# SSOT (#1558).
-
 # Write pretty (2-space) JSON to $1 only when the content actually differs,
 # so an unchanged file keeps its mtime and never triggers a no-op commit.
 _write_if_changed() {
@@ -304,19 +299,16 @@ _run_apply() {
 	fi
 	# Commit titles come from the shell-common helper sourced at the top of
 	# this script; without it --apply would commit under an empty subject.
-	if ! command -v _build_sync_title >/dev/null 2>&1; then
+	if ! command -v _plugin_sync_title >/dev/null 2>&1; then
 		echo "${UX_ERROR}shell-common/functions/plugin_sync_title.sh 를 불러오지 못했습니다.${UX_RESET}" >&2
 		echo "${UX_ERROR}  → dotfiles 설치를 확인하거나 SHELL_COMMON 을 설정하세요.${UX_RESET}" >&2
 		exit 1
 	fi
 
 	local mp_pretty pl_pretty pub_title priv_title
-	local -a pub_changes priv_changes
-	mapfile -t pub_changes < <(
-		_changed_keys_marketplaces "$PUB_DIR/marketplaces.json" "$target_common"
-		_changed_keys_plugins "$PUB_DIR/plugins.json" "$plugins_common"
-	)
-	pub_title=$(_build_sync_title "$SYNC_MSG" "${pub_changes[@]}")
+	pub_title=$(_plugin_sync_title "$SYNC_MSG" \
+		"$PUB_DIR/marketplaces.json" "$target_common" \
+		"$PUB_DIR/plugins.json" "$plugins_common")
 
 	mp_pretty=$(jq -n --argjson x "$target_common" '$x')
 	pl_pretty=$(jq -n --argjson p "$plugins_common" '{plugins: $p}')
@@ -326,11 +318,9 @@ _run_apply() {
 		"$PUB_DIR/marketplaces.json" "$PUB_DIR/plugins.json"
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
-		mapfile -t priv_changes < <(
-			_changed_keys_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private"
-			_changed_keys_plugins "$PRIV_DIR/plugins.json" "$plugins_private"
-		)
-		priv_title=$(_build_sync_title "$SYNC_MSG" "${priv_changes[@]}")
+		priv_title=$(_plugin_sync_title "$SYNC_MSG" \
+			"$PRIV_DIR/marketplaces.json" "$target_private" \
+			"$PRIV_DIR/plugins.json" "$plugins_private")
 
 		mp_pretty=$(jq -n --argjson x "$target_private" '$x')
 		pl_pretty=$(jq -n --argjson p "$plugins_private" '{plugins: $p}')
