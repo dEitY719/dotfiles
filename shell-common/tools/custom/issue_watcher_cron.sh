@@ -1608,7 +1608,7 @@ _iw_process_issue() {
     # dispatch fails here rather than starting a session under a name no later
     # tick can look up (#1530).
     _agent=$(_iw_agent_name "${_repo}" "${_number}") || {
-        ux_warning "Cannot derive a herdr agent name for ${_repo}#${_number} — skipping."
+        ux_warning "Cannot derive a herdr agent name for ${_repo}#${_number} — the composed name is invalid or exceeds herdr's 32-char limit. This issue will be skipped on every tick until the naming scheme changes (see herdr_agent_name.sh, #1553)."
         return 1
     }
     _label=$(_iw_workspace_label "${_repo}" "${_path}")
