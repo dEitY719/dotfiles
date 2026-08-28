@@ -771,7 +771,7 @@ _iw_resolve_config_dir() {
         # The rule for what counts as "logged in" lives in claude.sh, sourced
         # above; only the wording of the failure is this script's business.
         if ! _claude_account_logged_in "${_cfg_dir}"; then
-            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing or empty — the pane would open on 'Not logged in' and every prompt would stall."
+            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing, empty, or not valid JSON — the pane would open on 'Not logged in' and every prompt would stall."
             ux_info "Run: claude-accounts status   (then log that account in)" >&2
             exit 1
         fi
@@ -2174,7 +2174,7 @@ _iw_usage() {
     ux_bullet_sub "  (that account must be listed in \$CLAUDE_ENABLED_ACCOUNTS)"
     ux_bullet_sub "no \$CLAUDE_ENABLED_ACCOUNTS and no \$CLAUDE_DEFAULT_ACCOUNT → \$HOME/.claude if it exists"
     ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
-    ux_bullet_sub "it must also hold a non-empty .credentials.json — a logged-out account stalls every prompt"
+    ux_bullet_sub "it must also hold a parseable .credentials.json — a logged-out account stalls every prompt"
     ux_bullet "crontab"
     ux_bullet_sub "*/5 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
 }

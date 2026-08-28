@@ -428,7 +428,7 @@ _pmt_resolve_config_dir() {
         # (issue #1561) — `_claude_account_logged_in` in claude.sh, sourced
         # above, carries the rationale in full and owns the rule.
         if ! _claude_account_logged_in "${_cfg_dir}"; then
-            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing or empty — the pane would open on 'Not logged in' and every prompt would stall."
+            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing, empty, or not valid JSON — the pane would open on 'Not logged in' and every prompt would stall."
             ux_info "Run: claude-accounts status   (then log that account in)" >&2
             exit 1
         fi
@@ -802,7 +802,7 @@ _pmt_usage() {
     ux_bullet_sub "approval gate are what bound it, not a permission prompt"
     ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
     ux_bullet_sub "otherwise            → CLAUDE_CONFIG_DIR=\$HOME/.claude-\${CLAUDE_DEFAULT_ACCOUNT:-personal}"
-    ux_bullet_sub "that directory must exist and hold a non-empty .credentials.json"
+    ux_bullet_sub "that directory must exist and hold a parseable .credentials.json"
     ux_bullet_sub "  (a logged-out account stalls every prompt — the tick fails fast instead)"
     ux_bullet "crontab"
     ux_bullet_sub "*/15 * * * * /path/to/pr_merge_train_cron.sh --cwd ~/dotfiles >> ~/.local/state/pr-merge-train/cron.log 2>&1"
