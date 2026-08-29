@@ -79,13 +79,14 @@ branch refs/heads/wt/issue-77/1
 
 teardown() {
     teardown_isolated_home
-    unset PMV_PROMPT_TIMEOUT_MS PMV_SETTLE_SECONDS
+    unset PMV_PROMPT_TIMEOUT_MS PMV_SETTLE_SECONDS PMV_PROMPT_ATTEMPT_MAX
     unset FAKE_HERDR_PRESENT FAKE_JQ_PRESENT FAKE_HERDR_LOG FAKE_GIT_LOG FAKE_WORKTREE_PORCELAIN \
         FAKE_WORKTREE_RC FAKE_MAIN_DIRTY FAKE_SYNC_RC FAKE_MAIN_BRANCH FAKE_MAIN_TOPLEVEL \
         FAKE_HERDR_OUT_AGENT_LIST FAKE_HERDR_OUT_WORKTREE_LIST \
         FAKE_HERDR_OUT_TAB_CREATE FAKE_HERDR_OUT_AGENT_START FAKE_HERDR_OUT_AGENT_PROMPT \
         FAKE_HERDR_RC_AGENT_LIST FAKE_HERDR_RC_TAB_CREATE FAKE_HERDR_RC_TAB_CLOSE \
-        FAKE_HERDR_RC_AGENT_START FAKE_HERDR_RC_AGENT_PROMPT
+        FAKE_HERDR_RC_AGENT_START FAKE_HERDR_RC_AGENT_PROMPT FAKE_HERDR_RC_TAB_RENAME \
+        FAKE_HERDR_RC_NOTIFICATION_SHOW
 }
 
 dispatch() {
@@ -365,7 +366,24 @@ branch refs/heads/main
     run dispatch
     assert_success
     assert_output --partial "herdr agent prompt mv-dotfiles-pr-77 failed (agent_prompt_stalled)"
+    assert_output --partial "renamed tab wV:t99 to pr-77-STUCK"
+    assert_output --partial "notification posted for pr-77 stall"
     assert_output --partial "post-merge verification dispatched"
+}
+
+@test "E-7: a retryable prompt failure retries twice before escalating" {
+    PMV_PROMPT_ATTEMPT_MAX=3
+    FAKE_HERDR_RC_AGENT_PROMPT=1
+    FAKE_HERDR_OUT_AGENT_PROMPT='{"error":{"code":"timeout"}}'
+    run dispatch
+    assert_success
+    [ "$(_pmv_log_count 'herdr agent prompt mv-dotfiles-pr-77')" -eq 3 ]
+    [ "$(_pmv_log_count 'sleep 13')" -eq 4 ]
+    assert_output --partial "retrying after 13s settle (1/3)"
+    assert_output --partial "retrying after 13s settle (2/3)"
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "herdr tab rename wV:t99 pr-77-STUCK"
+    assert_output --partial "herdr notification show post-merge verify stalled --body pr-77 verification prompt failed repeatedly — herdr agent attach mv-dotfiles-pr-77 --sound request"
 }
 
 # --- unit pins on the easy-to-break pieces --------------------------------

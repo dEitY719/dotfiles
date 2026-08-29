@@ -397,10 +397,39 @@ pmv_settle() {
     [ "$_s" = "0" ] || _pmv_sleep "$_s"
 }
 
+pmv_prompt_retryable() {
+    case "$1" in
+    timeout | agent_prompt_stalled) return 0 ;;
+    esac
+    return 1
+}
+
 # pmv_agent_prompt <agent> <text>. Same contract as pmv_agent_start.
 pmv_agent_prompt() {
     _pmv_herdr agent prompt "$1" "$2" \
         --wait --until idle --timeout "${PMV_PROMPT_TIMEOUT_MS:-900000}"
+}
+
+pmv_escalate_prompt_stall() {
+    local _tab="$1" _agent="$2" _pr="$3" _label="pr-${_pr}-STUCK"
+    local _body="pr-${_pr} verification prompt failed repeatedly — herdr agent attach ${_agent}"
+
+    if [ -n "$_tab" ]; then
+        if _pmv_herdr tab rename "$_tab" "$_label" >/dev/null 2>&1; then
+            printf '[WARN] gh:pr-post-merge-verify: renamed tab %s to %s after repeated prompt failure.\n' \
+                "$_tab" "$_label"
+        else
+            printf '[WARN] gh:pr-post-merge-verify: could not rename tab %s after repeated prompt failure.\n' \
+                "$_tab"
+        fi
+    fi
+
+    if _pmv_herdr notification show "post-merge verify stalled" \
+        --body "$_body" --sound request >/dev/null 2>&1; then
+        printf '[WARN] gh:pr-post-merge-verify: notification posted for pr-%s stall.\n' "${_pr}"
+    else
+        printf '[WARN] gh:pr-post-merge-verify: notification failed for pr-%s stall.\n' "${_pr}"
+    fi
 }
 
 # ============================================================
@@ -419,7 +448,7 @@ pmv_agent_prompt() {
 gh_pr_post_merge_verify() {
     local _pr="$1" _repo="$2" _host="$3" _main="$4" _branch="$5" _file="$6"
     local _remote="${7:-origin}" _base="${8-}"
-    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code
+    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code _try _prompt
 
     _skill=$(pmv_gate "$_file" "$_repo")
     _rc=$?
@@ -530,8 +559,29 @@ gh_pr_post_merge_verify() {
     fi
 
     # --- 6. hand the verification over ---
-    if ! _out=$(pmv_agent_prompt "$_agent" "$(pmv_verify_prompt "$_skill" "$_pr")"); then
+    _prompt=$(pmv_verify_prompt "$_skill" "$_pr")
+    _try=1
+    _code=""
+    while :; do
+        if _out=$(pmv_agent_prompt "$_agent" "$_prompt"); then
+            _code=""
+            break
+        fi
         _code=$(printf '%s' "$_out" | pmv_error_code)
+        if pmv_prompt_retryable "$_code" &&
+            [ "$_try" -lt "${PMV_PROMPT_ATTEMPT_MAX:-3}" ]; then
+            printf '[WARN] gh:pr-post-merge-verify: herdr agent prompt %s failed (%s) — retrying after %ss settle (%s/%s).\n' \
+                "$_agent" "${_code:-unknown}" "${PMV_SETTLE_SECONDS:-13}" "$_try" "${PMV_PROMPT_ATTEMPT_MAX:-3}"
+            _try=$((_try + 1))
+            pmv_settle
+            continue
+        fi
+        break
+    done
+    if [ -n "${_code}" ]; then
+        if pmv_prompt_retryable "$_code"; then
+            pmv_escalate_prompt_stall "$_newtab" "$_agent" "$_pr"
+        fi
         printf '[WARN] gh:pr-post-merge-verify: herdr agent prompt %s failed (%s) — attach and run it by hand.\n' \
             "$_agent" "${_code:-unknown}"
     fi
@@ -540,7 +590,7 @@ gh_pr_post_merge_verify() {
     printf 'post-merge verification dispatched\n'
     printf '  tab:    %s (label pr-%s)\n' "$_newtab" "$_pr"
     printf '  agent:  %s\n' "$_agent"
-    printf '  verify: %s\n' "$(pmv_verify_prompt "$_skill" "$_pr")"
+    printf '  verify: %s\n' "$_prompt"
     printf '  attach: herdr agent attach %s\n' "$_agent"
     return 0
 }
