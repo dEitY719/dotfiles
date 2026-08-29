@@ -1317,6 +1317,18 @@ _assert_not_hung() {
     _refute_logged "agent start"
 }
 
+@test "issue_watcher_cron: a mixed case with one skipped and one failed issue exits with failure" {
+    _write_watch_file '[{"repo":"acme/sixteen-char-rep","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
+    _set_issues '[
+      {"number":1234567,"repository":{"nameWithOwner":"acme/sixteen-char-rep"},"labels":[]},
+      {"number":11,"repository":{"nameWithOwner":"acme/sixteen-char-rep"},"labels":[]}
+    ]'
+    _run_tick "IW_DISPATCH_PER_TICK=2" "HERDR_START_FAIL=1"
+    assert_failure
+    assert_output --partial "the composed name is invalid or exceeds herdr's 32-char limit"
+    assert_output --partial "Tick complete — 0 dispatched, 1 skipped, 1 failed."
+}
+
 # herdr refuses `agent start` unless the name matches
 # `^[a-z][a-z0-9_-]{0,31}$`. The pre-#1530 name folded the owner in verbatim
 # (`iw-<owner>-<repo>-<N>`), so a real owner like `dEitY719` made every name
