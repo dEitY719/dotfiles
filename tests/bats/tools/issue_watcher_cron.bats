@@ -306,6 +306,8 @@ EOF
 #                             where herdr really put it — a dispatcher that
 #                             redirects that stream to /dev/null sees an
 #                             unexplained failure instead of a named race.
+#   HERDR_TAB_RENAME_FAIL=1   `tab rename` errors during final prompt escalation
+#   HERDR_NOTIFY_FAIL=1       `notification show` errors during final prompt escalation
 #   HERDR_AGENT_STATUS        status reported by `agent get` (default: idle)
 #   HERDR_AGENT_GET_FAIL=1    `agent get` returns agent_not_found and exits 1
 #   HERDR_PROMPT_MODE         `agent prompt` behaviour (default: always ok)
@@ -409,6 +411,14 @@ case "$1 $2" in
     ;;
 "tab close")
     printf '%s\n' '{"id":"cli:tab:close","result":{"ok":true}}'
+    ;;
+"tab rename")
+    [ "${HERDR_TAB_RENAME_FAIL:-0}" = "1" ] && exit 1
+    printf '%s\n' '{"id":"cli:tab:rename","result":{"ok":true}}'
+    ;;
+"notification show")
+    [ "${HERDR_NOTIFY_FAIL:-0}" = "1" ] && exit 1
+    printf '%s\n' '{"id":"cli:notification:show","result":{"ok":true}}'
     ;;
 "agent start")
     [ "${HERDR_START_FAIL:-0}" = "1" ] && exit 1
@@ -2177,6 +2187,15 @@ _two_repo_fixture() {
     # about the quota. Pre-#1444 this exact run booked a strike, and two of them
     # shut the gate for 30 minutes with the account untouched.
     [ ! -f "${_LIMIT_FILE}" ]
+}
+
+@test "issue_watcher_cron: a final unresolved stall is escalated visibly instead of cleaning up the last tab" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
+    assert_failure
+    _assert_logged "agent send-keys iw-dotfiles-issue-11 Enter"
+    _assert_logged "tab rename ws-test-1:t9 issue-11-STUCK"
+    _assert_logged "notification show issue watcher prompt stalled --body #11 dispatch stalled repeatedly — herdr agent attach iw-dotfiles-issue-11 --sound request"
+    refute_output --partial "(unknown)"
 }
 
 @test "issue_watcher_cron: agent_prompt_stalled recovery is skipped when the agent is already working" {

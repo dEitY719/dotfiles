@@ -130,6 +130,7 @@ _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 # change all five — #1530/#1549 and #1560/#1571 are both the same defect
 # recurring because only two of the three dispatchers were fixed.
 _PMT_SETTLE_SECONDS="${PMT_SETTLE_SECONDS:-13}"
+_PMT_PROMPT_ATTEMPT_MAX="3"
 
 # `herdr agent start` attempts on a freshly created pane (see _pmt_launch_fresh,
 # issue #1512). A pane's shell is not interactive the instant `tab create`
@@ -676,6 +677,34 @@ _pmt_settle() {
     return 0
 }
 
+_pmt_prompt_retryable() {
+    case "$1" in
+    timeout | agent_prompt_stalled) return 0 ;;
+    esac
+    return 1
+}
+
+_pmt_escalate_prompt_stall() {
+    local _agent="$1" _code="$2" _label _body
+
+    if [ -n "${_PMT_TAB_ID}" ]; then
+        _label="${_PMT_AGENT_PREFIX}-$(basename "${_PMT_REPO}")-STUCK"
+        if herdr tab rename "${_PMT_TAB_ID}" "${_label}" >/dev/null 2>&1; then
+            ux_warning "Renamed tab ${_PMT_TAB_ID} to ${_label} after repeated prompt failure (${_code:-unknown})."
+        else
+            ux_warning "Could not rename tab ${_PMT_TAB_ID} after repeated prompt failure (${_code:-unknown})."
+        fi
+    fi
+
+    _body="${_PMT_REPO} merge-train prompt failed repeatedly — herdr agent attach ${_agent}"
+    if herdr notification show "merge-train prompt stalled" \
+        --body "${_body}" --sound request >/dev/null 2>&1; then
+        ux_warning "Posted a herdr notification for ${_PMT_REPO} prompt failure."
+    else
+        ux_warning "Could not post a herdr notification for ${_PMT_REPO} prompt failure."
+    fi
+}
+
 # Hand the whole train over to the session. This is the one place where the
 # dispatcher's job ends and the skill's begins (D-8).
 #
@@ -686,7 +715,7 @@ _pmt_settle() {
 # `2>&1` for the same reason `_pmt_agent_start` uses one (line ~543) — stdout
 # stays on its own pipe because `.error.code` is read off it first.
 _pmt_prompt_train() {
-    local _agent="$1" _prompt _json _rc=0 _errf _code="" _cause="" _msg
+    local _agent="$1" _prompt _json _rc=0 _errf _code="" _cause="" _msg _attempt=1
 
     _prompt="/gh-pr-merge-train ${_PMT_REPO}"
 
@@ -698,39 +727,45 @@ _pmt_prompt_train() {
         return 1
     }
     trap 'rm -f "${_errf}"' EXIT INT TERM
-    _json=$(herdr agent prompt "${_agent}" "${_prompt}" \
-        --wait --timeout "${_PMT_TIMEOUT_MS}" 2>"${_errf}") || _rc=$?
+    while [ "${_attempt}" -le "${_PMT_PROMPT_ATTEMPT_MAX}" ]; do
+        _json=$(herdr agent prompt "${_agent}" "${_prompt}" \
+            --wait --timeout "${_PMT_TIMEOUT_MS}" 2>"${_errf}") || _rc=$?
 
-    # Read both halves of herdr's answer *before* the file goes away, so the
-    # branches below only decide what to print. One disarm and one `rm`, on the
-    # single path every outcome passes through: a classification added later
-    # cannot forget to clean up, which three copies of this pair invited.
-    if [ "${_rc}" -ne 0 ]; then
-        _code=$(_pmt_herdr_error_code "${_json}" "${_errf}")
-        _cause=$(_pmt_herdr_error_message "${_errf}")
-    fi
+        # Read both halves of herdr's answer before a retry truncates the
+        # capture file, so each attempt classifies only its own result.
+        if [ "${_rc}" -ne 0 ]; then
+            _code=$(_pmt_herdr_error_code "${_json}" "${_errf}")
+            _cause=$(_pmt_herdr_error_message "${_errf}")
+        else
+            _code=""
+            _cause=""
+        fi
+
+        if [ "${_rc}" -eq 0 ]; then
+            trap - EXIT INT TERM
+            rm -f "${_errf}"
+            ux_success "Dispatched to ${_agent}: ${_prompt}"
+            return 0
+        fi
+
+        if _pmt_prompt_retryable "${_code}" &&
+            [ "${_attempt}" -lt "${_PMT_PROMPT_ATTEMPT_MAX}" ]; then
+            ux_warning "herdr agent prompt ${_agent} failed (${_code}) — retrying after ${_PMT_SETTLE_SECONDS}s settle (${_attempt}/${_PMT_PROMPT_ATTEMPT_MAX})."
+            : >"${_errf}"
+            _attempt=$((_attempt + 1))
+            _rc=0
+            _pmt_settle
+            continue
+        fi
+        break
+    done
+
     trap - EXIT INT TERM
     rm -f "${_errf}"
 
-    if [ "${_rc}" -eq 0 ]; then
-        ux_success "Dispatched to ${_agent}: ${_prompt}"
-        return 0
+    if _pmt_prompt_retryable "${_code}"; then
+        _pmt_escalate_prompt_stall "${_agent}" "${_code}"
     fi
-
-    # No retry, and deliberately none: a prompt that *did* land but looked
-    # stalled would earn a second train on the same repo, which is precisely
-    # what NF-1 forbids. The next tick re-evaluates from scratch. `timeout`
-    # and `agent_prompt_stalled` are exactly that case — the submission
-    # succeeded and only the --wait observation window expired — so they
-    # count as dispatched rather than failed, or #1531's `Tick complete`
-    # acceptance criterion never fires on a train that is actually running.
-    case "${_code}" in
-    timeout | agent_prompt_stalled)
-        ux_warning "Prompt submitted to ${_agent} but its state was not observed within the wait window (${_code}) — treating as dispatched."
-        ux_success "Dispatched to ${_agent}: ${_prompt}"
-        return 0
-        ;;
-    esac
 
     _msg="herdr agent prompt failed for agent ${_agent} (${_code:-unknown})."
     [ -z "${_cause}" ] || _msg="${_msg}
