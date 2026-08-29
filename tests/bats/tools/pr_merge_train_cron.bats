@@ -157,6 +157,8 @@ EOF
 #                         lives in a `mktemp -d` made fresh by `setup()`.
 #   HERDR_TAB_CLOSE_FAIL=1  `tab close` errors — the cleanup of an orphaned tab
 #                         is best effort and must not become a second failure
+#   HERDR_TAB_RENAME_FAIL=1  `tab rename` errors during prompt-stall escalation
+#   HERDR_NOTIFY_FAIL=1      `notification show` errors during prompt-stall escalation
 #   HERDR_PROMPT_FAIL=1   `agent prompt` errors with `agent_not_found` on
 #                         stdout — a real failure, not a #1551 timeout
 #   HERDR_PROMPT_CODE=X   `agent prompt` errors with code X on **stderr** —
@@ -217,6 +219,14 @@ case "$1 $2" in
 "tab close")
     [ "${HERDR_TAB_CLOSE_FAIL:-0}" = "1" ] && exit 1
     printf '%s\n' '{"id":"cli:tab:close","result":{"ok":true}}'
+    ;;
+"tab rename")
+    [ "${HERDR_TAB_RENAME_FAIL:-0}" = "1" ] && exit 1
+    printf '%s\n' '{"id":"cli:tab:rename","result":{"ok":true}}'
+    ;;
+"notification show")
+    [ "${HERDR_NOTIFY_FAIL:-0}" = "1" ] && exit 1
+    printf '%s\n' '{"id":"cli:notification:show","result":{"ok":true}}'
     ;;
 "agent prompt")
     if [ -n "${HERDR_PROMPT_CODE:-}" ]; then
@@ -815,18 +825,20 @@ _hold_lock() {
 # window expired, not that dispatch failed. Counting it as a failure is what
 # kept #1531's `Tick complete` acceptance criterion from ever firing on a
 # train that was actually running.
-@test "pr_merge_train_cron: a prompt timeout is treated as dispatched, not failed" {
+@test "pr_merge_train_cron: a prompt timeout is retried and eventually fails the tick" {
     _run_tick HERDR_PROMPT_CODE=timeout
-    assert_success
-    assert_output --partial "treating as dispatched"
-    assert_output --partial "Dispatched to"
-    refute_output --partial "prompt failed"
+    assert_failure
+    [ "$(_log_count 'herdr agent prompt')" -eq 3 ]
+    assert_output --partial "retrying after 13s settle (1/3)"
+    assert_output --partial "retrying after 13s settle (2/3)"
+    assert_output --partial "prompt failed"
 }
 
-@test "pr_merge_train_cron: a stalled prompt is also treated as dispatched" {
+@test "pr_merge_train_cron: a stalled prompt is retried and also fails the tick" {
     _run_tick HERDR_PROMPT_CODE=agent_prompt_stalled
-    assert_success
-    assert_output --partial "treating as dispatched"
+    assert_failure
+    [ "$(_log_count 'herdr agent prompt')" -eq 3 ]
+    assert_output --partial "prompt failed"
 }
 
 # The same defect this fixes also swallowed the error *cause* (#1551's other
@@ -835,15 +847,16 @@ _hold_lock() {
 # reads from stderr, where herdr actually answers.
 @test "pr_merge_train_cron: a prompt timeout names the code, not 'unknown'" {
     _run_tick HERDR_PROMPT_CODE=timeout
-    assert_success
+    assert_failure
     assert_output --partial "(timeout)"
     refute_output --partial "(unknown)"
 }
 
-@test "pr_merge_train_cron: a prompt timeout is not retried" {
+@test "pr_merge_train_cron: a prompt timeout renames the tab and shows a notification" {
     _run_tick HERDR_PROMPT_CODE=timeout
-    assert_success
-    [ "$(_log_count 'herdr agent prompt')" -eq 1 ]
+    assert_failure
+    _assert_logged "herdr tab rename ws-test-1:t9 mt-dotfiles-STUCK"
+    _assert_logged "herdr notification show merge-train prompt stalled --body acme/dotfiles merge-train prompt failed repeatedly — herdr agent attach mt-dotfiles --sound request"
 }
 
 @test "pr_merge_train_cron: a non-timeout prompt error on stderr still fails the tick" {

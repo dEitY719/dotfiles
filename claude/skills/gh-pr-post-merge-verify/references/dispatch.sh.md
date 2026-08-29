@@ -86,6 +86,7 @@ pmv_physical_path() { (cd -P "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"; 
 # real (same convention as _IW_IDLE_POLL_SLEEP).
 PMV_SETTLE_SECONDS="${PMV_SETTLE_SECONDS:-13}"
 pmv_settle() { [ "$PMV_SETTLE_SECONDS" = "0" ] || sleep "$PMV_SETTLE_SECONDS"; }
+PMV_PROMPT_ATTEMPT_MAX="${PMV_PROMPT_ATTEMPT_MAX:-3}"
 # herdr agent names come from one SSOT, sourced — never re-implemented here.
 # Three call sites each carrying their own `tr -c 'A-Za-z0-9._-' '-'` copy is
 # what produced #1530: that set keeps uppercase and dots, both of which herdr's
@@ -99,6 +100,35 @@ if [ ! -r "$PMV_NAME_LIB" ]; then
 fi
 # shellcheck source=/dev/null
 . "$PMV_NAME_LIB"
+
+pmv_prompt_retryable() {
+    case "$1" in
+    timeout | agent_prompt_stalled) return 0 ;;
+    esac
+    return 1
+}
+
+pmv_escalate_prompt_stall() {
+    _pmv_tab="$1"
+    _pmv_agent="$2"
+    _pmv_label="pr-${PR_NUMBER}-STUCK"
+    _pmv_body="pr-${PR_NUMBER} verification prompt failed repeatedly — herdr agent attach ${_pmv_agent}"
+
+    if [ -n "$_pmv_tab" ] && herdr tab rename "$_pmv_tab" "$_pmv_label" >/dev/null 2>&1; then
+        printf '[WARN] gh:pr-post-merge-verify: renamed tab %s to %s after repeated prompt failure.\n' \
+            "$_pmv_tab" "$_pmv_label"
+    elif [ -n "$_pmv_tab" ]; then
+        printf '[WARN] gh:pr-post-merge-verify: could not rename tab %s after repeated prompt failure.\n' \
+            "$_pmv_tab"
+    fi
+
+    if herdr notification show "post-merge verify stalled" \
+        --body "$_pmv_body" --sound request >/dev/null 2>&1; then
+        printf '[WARN] gh:pr-post-merge-verify: notification posted for pr-%s stall.\n' "$PR_NUMBER"
+    else
+        printf '[WARN] gh:pr-post-merge-verify: notification failed for pr-%s stall.\n' "$PR_NUMBER"
+    fi
+}
 
 # tab_id of a live agent sitting on <physical path>: rc 0 = matched, rc 1 =
 # herdr could not be asked, rc 3 = herdr answered and nothing is on that path.
@@ -285,9 +315,28 @@ fi
 # The registry stores the skill id (`devx:pr-verify-merged`); a pane is typed
 # the dash form, which is what a Claude session accepts as a slash command.
 VERIFY_PROMPT="/$(printf '%s' "$VERIFY_SKILL" | tr ':' '-') ${PR_NUMBER}"
-if ! PROMPT_JSON=$(herdr agent prompt "$PMV_AGENT" "$VERIFY_PROMPT" \
-    --wait --until idle --timeout "${PMV_PROMPT_TIMEOUT_MS:-900000}" 2>/dev/null); then
+PROMPT_TRY=1
+while :; do
+    PROMPT_JSON=$(herdr agent prompt "$PMV_AGENT" "$VERIFY_PROMPT" \
+        --wait --until idle --timeout "${PMV_PROMPT_TIMEOUT_MS:-900000}" 2>&1)
+    PROMPT_RC=$?
+    [ "$PROMPT_RC" -eq 0 ] && break
     PROMPT_CODE=$(printf '%s' "$PROMPT_JSON" | pmv_error_code)
+    if pmv_prompt_retryable "$PROMPT_CODE" &&
+        [ "$PROMPT_TRY" -lt "$PMV_PROMPT_ATTEMPT_MAX" ]; then
+        printf '[WARN] gh:pr-post-merge-verify: herdr agent prompt %s failed (%s) — retrying after %ss settle (%s/%s).\n' \
+            "$PMV_AGENT" "${PROMPT_CODE:-unknown}" "$PMV_SETTLE_SECONDS" "$PROMPT_TRY" "$PMV_PROMPT_ATTEMPT_MAX"
+        PROMPT_TRY=$((PROMPT_TRY + 1))
+        pmv_settle
+        continue
+    fi
+    break
+done
+if [ "${PROMPT_RC:-0}" -ne 0 ]; then
+    PROMPT_CODE=$(printf '%s' "$PROMPT_JSON" | pmv_error_code)
+    if pmv_prompt_retryable "$PROMPT_CODE"; then
+        pmv_escalate_prompt_stall "$NEW_TAB" "$PMV_AGENT"
+    fi
     printf '[WARN] gh:pr-post-merge-verify: herdr agent prompt %s failed (%s) — attach and run it by hand.\n' \
         "$PMV_AGENT" "${PROMPT_CODE:-unknown}"
 fi
@@ -310,6 +359,7 @@ printf '  attach: herdr agent attach %s\n' "$PMV_AGENT"
 | `BASE_BRANCH` | caller | The merged PR's base branch (`baseRefName`). Empty → the main checkout's current branch, and a detached HEAD stops the run |
 | `REMOTE` | Step 1, optional | The `[remote]` positional; default `origin`. `fetch`/`rebase` use it, never a hardcoded `origin` |
 | `PMV_PROMPT_TIMEOUT_MS` | env, optional | `herdr agent prompt --wait` cap, default 900000 (15 min) |
+| `PMV_PROMPT_ATTEMPT_MAX` | env, optional | Retry budget for `agent_prompt_stalled` / `timeout`, default 3 |
 | `PMV_SETTLE_SECONDS` | env, optional | Wait after each herdr call that brings something up, default 13; `0` disables both waits (#1571) |
 
 `--wait --until idle` waits for the dispatched session to settle, so the

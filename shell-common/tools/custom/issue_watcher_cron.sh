@@ -262,6 +262,7 @@ _IW_LIMIT_EVIDENCE_LINES="40"
 # log input only — the gate no longer classifies error codes at all. Empty
 # otherwise.
 _IW_STALL_RECOVER_ERROR=""
+_IW_PROMPT_KEEP_ATTEMPT=0
 # Set by _iw_start_agent_retrying to the herdr error code and the human sentence
 # behind the start it gave up on — empty when herdr named neither on either
 # stream (issue #1525). Log inputs only; nothing branches on them.
@@ -1537,6 +1538,34 @@ _iw_stall_recover_via_enter() {
     return 1
 }
 
+_iw_prompt_retryable() {
+    case "$1" in
+    timeout | agent_prompt_stalled | herdr_send_keys_failed) return 0 ;;
+    esac
+    return 1
+}
+
+_iw_escalate_prompt_stall() {
+    local _tab="$1" _agent="$2" _number="$3" _code="$4"
+    local _label="issue-${_number}-STUCK"
+    local _body="#${_number} dispatch stalled repeatedly — herdr agent attach ${_agent}"
+
+    if [ -n "${_tab}" ]; then
+        if herdr tab rename "${_tab}" "${_label}" >/dev/null 2>&1; then
+            ux_warning "Renamed tab ${_tab} to ${_label} after repeated prompt failure (${_code:-unknown})."
+        else
+            ux_warning "Could not rename tab ${_tab} after repeated prompt failure (${_code:-unknown})."
+        fi
+    fi
+
+    if herdr notification show "issue watcher prompt stalled" \
+        --body "${_body}" --sound request >/dev/null 2>&1; then
+        ux_warning "Posted a herdr notification for issue #${_number} prompt failure."
+    else
+        ux_warning "Could not post a herdr notification for issue #${_number} prompt failure."
+    fi
+}
+
 # Send `/gh-issue-flow <N>` to the issue's agent.
 #
 # The prompt is a slash command, not prose: pre-#1440 this channel carried an
@@ -1545,10 +1574,11 @@ _iw_stall_recover_via_enter() {
 # the command runs top-level rather than inside a subagent, which is what took
 # this path out of the `SubagentStop` guard gap (#1434).
 _iw_prompt_issue() {
-    local _agent="$1" _number="$2" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code
+    local _agent="$1" _number="$2" _tab="${3-}" _attempt="${4-}" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code
 
     _prompt="/gh-issue-flow ${_number}"
     _IW_STALL_RECOVER_ERROR=""
+    _IW_PROMPT_KEEP_ATTEMPT=0
 
     # Baseline taken *before* the prompt is sent, not after a stall is detected:
     # by then the counter may already have moved for the very submission this
@@ -1592,6 +1622,11 @@ _iw_prompt_issue() {
     # succeeded, never why it failed. `_code` is already parsed above: reaching
     # here means the dispatch failed, which is exactly the branch that set it.
     _fail_code="${_IW_STALL_RECOVER_ERROR:-${_code}}"
+    if _iw_prompt_retryable "${_fail_code}" &&
+        [ -n "${_attempt}" ] && [ "${_attempt}" -ge "${_IW_MAX_ATTEMPTS}" ]; then
+        _iw_escalate_prompt_stall "${_tab}" "${_agent}" "${_number}" "${_fail_code}"
+        _IW_PROMPT_KEEP_ATTEMPT=1
+    fi
     ux_error "herdr agent prompt failed for agent ${_agent} (${_fail_code:-unknown})."
     return 1
 }
@@ -1648,7 +1683,7 @@ EOF
     원인: ${_cause}"
                 ux_warning "${_msg}"
             elif _iw_wait_for_idle "${_agent}" && _iw_settle; then
-                if _iw_prompt_issue "${_agent}" "${_number}"; then
+                if _iw_prompt_issue "${_agent}" "${_number}" "${_tab}" "${_attempt}"; then
                     ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
                     return 0
                 elif [ "$(_iw_agent_status "${_agent}")" = "working" ]; then
@@ -1673,6 +1708,9 @@ EOF
                     # issue was actually made.
                     ux_warning "${_agent} reports working despite the failed prompt — keeping worktree ${_wt} and pane ${_pane}, not retrying."
                     return 0
+                elif [ "${_IW_PROMPT_KEEP_ATTEMPT}" -eq 1 ]; then
+                    ux_error "Giving up on ${_repo}#${_number} after ${_IW_MAX_ATTEMPTS} attempts."
+                    return 1
                 fi
             fi
         fi
