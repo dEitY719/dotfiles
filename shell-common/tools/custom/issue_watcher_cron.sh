@@ -2500,7 +2500,11 @@ EOF
         exit 1
     fi
 
-    ux_success "Tick complete — ${_dispatched} issue(s) dispatched, ${_skipped} skipped, ${_failed} failed."
+    if [ "${_dispatched}" -eq 0 ] && [ "${_skipped}" -gt 0 ]; then
+        ux_warning "Tick complete — 0 issue(s) dispatched, ${_skipped} skipped, 0 failed."
+    else
+        ux_success "Tick complete — ${_dispatched} issue(s) dispatched, ${_skipped} skipped, ${_failed} failed."
+    fi
 }
 
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
