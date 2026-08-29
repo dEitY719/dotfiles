@@ -1644,7 +1644,7 @@ _iw_process_issue() {
     # tick can look up (#1530).
     _agent=$(_iw_agent_name "${_repo}" "${_number}") || {
         ux_warning "Cannot derive a herdr agent name for ${_repo}#${_number} — the composed name is invalid or exceeds herdr's 32-char limit. This issue will be skipped on every tick until the naming scheme changes (see herdr_agent_name.sh, #1553)."
-        return 1
+        return 2
     }
     _label=$(_iw_workspace_label "${_repo}" "${_path}")
 
@@ -2270,7 +2270,7 @@ _iw_usage() {
 # ============================================================
 
 main() {
-    local _cwd="" _repo _number _path _host _rc _dispatched=0 _failed=0 _candidates _live
+    local _cwd="" _repo _number _path _host _rc _dispatched=0 _skipped=0 _failed=0 _candidates _live
     local _confirmed=""
 
     while [ "$#" -gt 0 ]; do
@@ -2480,6 +2480,8 @@ EOF
             # quota — collected here, judged after the loop.
             _confirmed="${_confirmed}$(_iw_agent_name "${_repo}" "${_number}")
 "
+        elif [ "${_rc}" -eq 2 ]; then
+            _skipped=$((_skipped + 1))
         else
             _failed=$((_failed + 1))
         fi
@@ -2494,11 +2496,11 @@ EOF
     _iw_limit_record "${_confirmed}"
 
     if [ "${_dispatched}" -eq 0 ] && [ "${_failed}" -gt 0 ]; then
-        ux_error "Tick complete — 0 dispatched, ${_failed} failed."
+        ux_error "Tick complete — 0 dispatched, ${_skipped} skipped, ${_failed} failed."
         exit 1
     fi
 
-    ux_success "Tick complete — ${_dispatched} issue(s) dispatched, ${_failed} failed."
+    ux_success "Tick complete — ${_dispatched} issue(s) dispatched, ${_skipped} skipped, ${_failed} failed."
 }
 
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then

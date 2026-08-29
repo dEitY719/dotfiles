@@ -1299,9 +1299,10 @@ _assert_not_hung() {
     _write_watch_file '[{"repo":"acme/sixteen-char-rep","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
     _set_issues '[{"number":1234567,"repository":{"nameWithOwner":"acme/sixteen-char-rep"},"labels":[]}]'
     _run_tick
-    assert_failure
+    assert_success
     assert_output --partial "the composed name is invalid or exceeds herdr's 32-char limit"
     assert_output --partial "skipped on every tick"
+    assert_output --partial "Tick complete — 0 issue(s) dispatched, 1 skipped, 0 failed."
     _refute_logged "agent start"
 
     # The WARN claims this recurs on *every* tick, not just this one (PR #1589
@@ -1310,8 +1311,9 @@ _assert_not_hung() {
     # the repo slug or the issue number between ticks.
     : >"${_LOG}"
     _run_tick
-    assert_failure
+    assert_success
     assert_output --partial "the composed name is invalid or exceeds herdr's 32-char limit"
+    assert_output --partial "Tick complete — 0 issue(s) dispatched, 1 skipped, 0 failed."
     _refute_logged "agent start"
 }
 
