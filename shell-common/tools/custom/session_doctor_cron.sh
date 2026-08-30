@@ -7,9 +7,9 @@
 # 끊긴 채 `idle` 로 멈춰 있는 탭을 찾아 그 탭 자신에게 `/devx:restart` 를 한 턴으로
 # 넣어 준다. 다섯 단계뿐이다:
 #   1) 이번 tick 이 유일한 tick 인가 (flock, NF-1)
-#   2) herdr agent list — tab_id / agent_status / cwd (F-2)
-#   3) 각 탭의 cwd 에 대응하는 최신 Claude Code transcript 의 마지막
-#      assistant 이벤트 판정 (F-3/F-4, lib/session_doctor_detect.sh)
+#   2) herdr agent list — tab_id / agent_status / agent_session / cwd (F-2)
+#   3) 각 탭의 *자기* Claude Code 세션 transcript 의 마지막 assistant 이벤트
+#      판정 (F-3/F-4, lib/session_doctor_detect.sh)
 #   4) 후보마다 `herdr agent prompt <tab_id> "/devx:restart" --wait` (F-5)
 #   5) 탭별 상태 기록 — 감지 시각 / 누적 주입 횟수 / 마지막 주입 시각 (F-6)
 #
@@ -122,10 +122,10 @@ _sd_acquire_lock() {
 # F-2 — every herdr-managed pane
 # ============================================================
 
-# Emit `<tab_id><TAB><agent_status><TAB><cwd>` for every agent herdr knows
-# about. Non-zero when herdr could not be asked at all — the caller then ends
-# the tick silently and the next one retries (AC-6). A herdr that answers
-# nothing must not read as "no panes": that is indistinguishable from a
+# Emit `<tab_id><TAB><agent_status><TAB><session_id><TAB><cwd>` for every agent
+# herdr knows about. Non-zero when herdr could not be asked at all — the caller
+# then ends the tick silently and the next one retries (AC-6). A herdr that
+# answers nothing must not read as "no panes": that is indistinguishable from a
 # healthy machine with nothing running, and the difference matters only for
 # the log, which is why both end the tick the same quiet way.
 _sd_agent_rows() {
@@ -134,18 +134,37 @@ _sd_agent_rows() {
     _json=$(herdr agent list 2>/dev/null) || return 1
     [ -n "${_json}" ] || return 1
 
-    # Rows missing either identifying column are dropped here rather than in
-    # the loop, and an unreported status becomes the literal `unknown`, so no
-    # field the loop reads can ever be empty. That is not cosmetic: a tab is
-    # an IFS whitespace character, so `read` collapses two adjacent tabs into
-    # one, and a single empty middle field would shift `cwd` into `status`.
+    # Rows missing an identifying column are dropped here rather than in the
+    # loop, and an unreported status becomes the literal `unknown`, so no field
+    # the loop reads can ever be empty. That is not cosmetic: a tab is an IFS
+    # whitespace character, so `read` collapses two adjacent tabs into one, and
+    # a single empty middle field would shift `cwd` into `status`.
+    #
+    # `.cwd` falls back to `.foreground_cwd` rather than dropping the row,
+    # because the two answer at different moments: `cwd` is where the pane was
+    # opened and `foreground_cwd` is where its shell is standing now, and a
+    # herdr that reports only the second one would otherwise exclude that pane
+    # from every tick this job ever runs — permanently, not for one period.
+    # `_iw_live_agents` takes both columns for the same reason (PR #1456
+    # agy/codex review); here one value is wanted, not two, so it is a fallback
+    # rather than a union.
+    #
+    # `agent_session.value` is the pane's own Claude Code session id, and it is
+    # required: it is what makes the transcript lookup a pane's *own*
+    # transcript instead of the newest one in its directory (see
+    # lib/session_doctor_detect.sh). A pane herdr reports none for cannot be
+    # judged, and per this job's bias an unjudgeable pane is not a candidate.
     printf '%s' "${_json}" | jq -r '
         if (.result.agents | type) == "array"
         then .result.agents[]?
-             | select(((.tab_id // "") != "") and ((.cwd // "") != ""))
+             | (if ((.cwd // "") != "") then .cwd else (.foreground_cwd // "") end) as $cwd
+             | select(((.tab_id // "") != "")
+                      and ((.agent_session.value // "") != "")
+                      and ($cwd != ""))
              | [ .tab_id,
                  (if ((.agent_status // "") == "") then "unknown" else .agent_status end),
-                 .cwd ]
+                 .agent_session.value,
+                 $cwd ]
              | @tsv
         else error("no agent list")
         end
@@ -195,15 +214,16 @@ _SD_STUCK=0
 _SD_LAUNCHED=0
 _SD_CAPPED=0
 
-# Decide and act on one pane: <1> tab id, <2> agent_status, <3> cwd.
-# Always returns 0 — a pane this tick cannot classify is simply not a
-# candidate, and must not end the scan for the panes after it.
+# Decide and act on one pane: <1> tab id, <2> agent_status, <3> Claude Code
+# session id, <4> cwd. Always returns 0 — a pane this tick cannot classify is
+# simply not a candidate, and must not end the scan for the panes after it.
 _sd_visit_pane() {
-    local _tab _status _cwd _count _now
+    local _tab _status _session _cwd _count _now
 
     _tab="$1"
     _status="$2"
-    _cwd="$3"
+    _session="$3"
+    _cwd="$4"
 
     [ -n "${_tab}" ] || return 0
     _SD_SCANNED=$((_SD_SCANNED + 1))
@@ -220,8 +240,10 @@ _sd_visit_pane() {
     esac
 
     # F-4's second half, and the error case "no matching transcript → exclude
-    # from candidates": every unknown inside this call is non-zero.
-    session_doctor_cwd_is_stuck "${_cwd}" || return 0
+    # from candidates": every unknown inside this call is non-zero. Judged on
+    # the pane's own session id, so two panes sharing one directory are told
+    # apart instead of both being read off whichever transcript is newest.
+    session_doctor_session_is_stuck "${_session}" || return 0
 
     _SD_STUCK=$((_SD_STUCK + 1))
     _now=$(_sd_now)
@@ -267,14 +289,15 @@ _sd_usage() {
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "tick"
     ux_bullet_sub "1. flock — one tick at a time"
-    ux_bullet_sub "2. herdr agent list — every pane's tab_id / agent_status / cwd"
-    ux_bullet_sub "3. the pane's newest ~/.claude*/projects/<slug>/*.jsonl — last assistant event"
+    ux_bullet_sub "2. herdr agent list — every pane's tab_id / agent_status / agent_session / cwd"
+    ux_bullet_sub "3. that session's own ~/.claude*/projects/*/<session-id>.jsonl — last assistant event"
     ux_bullet_sub "4. herdr agent prompt <tab_id> \"${_SD_PROMPT}\" --wait"
     ux_bullet "candidate (all of these, or the tab is left alone)"
     ux_bullet_sub "agent_status is idle — a working or blocked pane is never typed into"
     ux_bullet_sub "the last assistant event is Claude Code's synthetic API-error turn"
     ux_bullet_sub "  (isApiErrorMessage, or model \"<synthetic>\" plus the error text)"
-    ux_bullet_sub "no transcript, no readable event, no herdr — not a candidate, never a guess"
+    ux_bullet_sub "no session id, no transcript, no readable event, no herdr — not a candidate,"
+    ux_bullet_sub "  never a guess (two panes in one directory are told apart by their session id)"
     ux_bullet "injection budget"
     ux_bullet_sub "${SESSION_DOCTOR_CAP} per tab (SESSION_DOCTOR_CAP), cumulative and never reset"
     ux_bullet_sub "a refused injection does not spend one — nothing was typed, so the next tick retries"
@@ -294,7 +317,7 @@ _sd_usage() {
 # ============================================================
 
 main() {
-    local _rows _tab _status _cwd _dir
+    local _rows _tab _status _session _cwd _dir
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -352,8 +375,8 @@ main() {
 
     # A here-doc, not a pipe: the loop's counters have to survive it, and the
     # right-hand side of a pipe runs in a subshell that would take them with it.
-    while IFS="${_SD_TAB}" read -r _tab _status _cwd; do
-        _sd_visit_pane "${_tab}" "${_status}" "${_cwd}"
+    while IFS="${_SD_TAB}" read -r _tab _status _session _cwd; do
+        _sd_visit_pane "${_tab}" "${_status}" "${_session}" "${_cwd}"
     done <<EOF
 ${_rows}
 EOF

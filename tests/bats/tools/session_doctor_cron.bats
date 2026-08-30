@@ -11,7 +11,8 @@
 #                so the "never flagged" tests outnumber the "flagged" ones on
 #                purpose: prose that quotes the error, a notification relaying
 #                a subagent's error, a session that already recovered, a
-#                working pane, a pane with no transcript at all.
+#                working pane, a pane with no transcript at all, and a pane
+#                whose neighbour in the same directory is the one that died.
 #   F-5/AC-4     one `/devx:restart` per detection, and nothing else typed
 #   F-6/F-7      the per-tab budget, and what a refused injection does to it
 #   NF-1         one tick at a time
@@ -68,32 +69,58 @@ teardown() {
 # Fixtures — panes
 # ---------------------------------------------------------------------------
 
-# Claude Code's project-directory name for a working directory. Deliberately a
-# second implementation of `session_doctor_cwd_slug`, not a call into it: the
-# rule ("every non-alphanumeric character becomes a dash") is what the feature
-# depends on, so a test that reused the function could not catch it changing.
+# Claude Code's project-directory name for a working directory: every character
+# that is not a letter or a digit becomes a dash. Only the fixtures need it —
+# the job itself no longer derives the directory from the cwd — but the
+# transcripts still have to be filed where a real Claude Code would file them,
+# or the tests would be exercising a layout that does not exist.
 _slug_of() {
     printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g'
 }
 
-# The `herdr agent list` answer, from `<tab_id>|<agent_status>|<cwd>` triples.
-# The response shape (`.result.agents[]`, and the field names on each) is the
-# one a live herdr server answers with.
+# The `herdr agent list` answer, from `<tab_id>|<agent_status>|<cwd>` triples,
+# each optionally followed by `|<session_id>`. The response shape
+# (`.result.agents[]`, and the field names on each) is the one a live herdr
+# server answers with, `agent_session` included — that is the field the job
+# resolves a pane's own transcript through, so omitting it from the fixtures
+# would leave the whole lookup untested.
+#
+# The session id defaults to the same UUID `_write_transcript` names its file
+# after, so the common case stays a triple; a test that needs two panes in one
+# directory tells them apart by naming both. The literal `-` means herdr
+# reported no `agent_session` at all.
 _set_panes() {
-    local _out _spec _tab _rest _status _cwd
+    local _out _spec _tab _status _cwd _sid
     _out='[]'
     for _spec in "$@"; do
-        _tab="${_spec%%|*}"
-        _rest="${_spec#*|}"
-        _status="${_rest%%|*}"
-        _cwd="${_rest#*|}"
+        IFS='|' read -r _tab _status _cwd _sid <<<"${_spec}"
+        _sid="${_sid:-11111111-2222-3333-4444-555555555555}"
         _out=$(printf '%s' "${_out}" | jq \
-            --arg t "${_tab}" --arg s "${_status}" --arg c "${_cwd}" \
+            --arg t "${_tab}" --arg s "${_status}" --arg c "${_cwd}" --arg id "${_sid}" \
             '. + [{agent:"claude", tab_id:$t, agent_status:$s, cwd:$c,
-                   foreground_cwd:$c, pane_id:"w1:p1", workspace_id:"w1"}]')
+                   foreground_cwd:$c, pane_id:"w1:p1", workspace_id:"w1"}
+                  | if $id == "-" then .
+                    else . + {agent_session:{agent:"claude", kind:"id",
+                                             source:"herdr:claude", value:$id}}
+                    end]')
     done
     printf '%s' "${_out}" |
         jq '{id:"cli:agent:list", result:{agents:., type:"agent_list"}}' >"${_AGENTS_FILE}"
+}
+
+# A single pane whose herdr row carries no `cwd` at all — the pane `cd`-ed away
+# and herdr only knows where its shell is standing now. Written out longhand
+# rather than through `_set_panes`, because the point of the fixture is the
+# field that is *missing*.
+_set_pane_foreground_only() {
+    jq -n --arg t "$1" --arg s "$2" --arg c "$3" \
+        --arg id "${4:-11111111-2222-3333-4444-555555555555}" \
+        '{id:"cli:agent:list", result:{type:"agent_list", agents:[
+            {agent:"claude", tab_id:$t, agent_status:$s, cwd:"",
+             foreground_cwd:$c, pane_id:"w1:p1", workspace_id:"w1",
+             agent_session:{agent:"claude", kind:"id",
+                            source:"herdr:claude", value:$id}}]}}' \
+        >"${_AGENTS_FILE}"
 }
 
 # ---------------------------------------------------------------------------
@@ -431,15 +458,99 @@ _one_stuck_pane() {
     [ ! -f "${_STATE_FILE}" ] || fail "--dry-run wrote state"
 }
 
-@test "session_doctor_cron: the newest transcript for the cwd is the one judged" {
+# ---------------------------------------------------------------------------
+# The pane's own transcript — two sessions in one directory (PR #1609 codex)
+# ---------------------------------------------------------------------------
+#
+# Two Claude Code sessions open in the same repo, with no worktree between
+# them, is an ordinary day here. Each has its own `<session-uuid>.jsonl` in the
+# one project directory, and "the newest of them" answers for the wrong pane
+# in both directions: it misses the stuck one, and — far worse — it types into
+# the healthy one. The pane's `agent_session.value` is what tells them apart.
+
+@test "session_doctor_cron: a pane is judged on its own transcript, not the newest one" {
     _CWD="${_WORK_DIR}/repo"
     mkdir -p "${_CWD}"
     _transcript_api_error "${_CWD}" "aaaaaaaa-0000-0000-0000-000000000000"
     sleep 1
     _transcript_clean "${_CWD}" "bbbbbbbb-0000-0000-0000-000000000000"
-    _set_panes "w1:t1|idle|${_CWD}"
+    _set_panes "w1:t1|idle|${_CWD}|aaaaaaaa-0000-0000-0000-000000000000"
     _run_tick
     assert_success
+    _assert_logged "herdr agent prompt w1:t1"
+}
+
+@test "session_doctor_cron: a healthy pane is not flagged for its neighbour's dead turn" {
+    # The false positive AC-3 forbids: the newest transcript in this directory
+    # belongs to the *other* session and ends on an API error, while the pane
+    # under test finished its own turn normally.
+    _CWD="${_WORK_DIR}/repo"
+    mkdir -p "${_CWD}"
+    _transcript_clean "${_CWD}" "aaaaaaaa-0000-0000-0000-000000000000"
+    sleep 1
+    _transcript_api_error "${_CWD}" "bbbbbbbb-0000-0000-0000-000000000000"
+    _set_panes "w1:t1|idle|${_CWD}|aaaaaaaa-0000-0000-0000-000000000000"
+    _run_tick
+    assert_success
+    assert_output ""
+    _refute_logged "herdr agent prompt"
+}
+
+@test "session_doctor_cron: two panes sharing one cwd are told apart by their session ids" {
+    _CWD="${_WORK_DIR}/repo"
+    mkdir -p "${_CWD}"
+    _transcript_api_error "${_CWD}" "aaaaaaaa-0000-0000-0000-000000000000"
+    _transcript_clean "${_CWD}" "bbbbbbbb-0000-0000-0000-000000000000"
+    _set_panes "w1:t1|idle|${_CWD}|aaaaaaaa-0000-0000-0000-000000000000" \
+        "w1:t2|idle|${_CWD}|bbbbbbbb-0000-0000-0000-000000000000"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt w1:t1"
+    _refute_logged "herdr agent prompt w1:t2"
+    [ "$(_log_count "herdr agent prompt")" -eq 1 ] ||
+        fail "expected exactly one injection, got $(_log_count "herdr agent prompt")"
+}
+
+@test "session_doctor_cron: a pane herdr reports no session for is excluded, not guessed at" {
+    # Without an id there is no way to say which transcript in the directory is
+    # this pane's, and guessing is the whole bug. Same silent exclusion a pane
+    # with no transcript already gets.
+    _CWD="${_WORK_DIR}/repo"
+    mkdir -p "${_CWD}"
+    _transcript_api_error "${_CWD}"
+    _set_panes "w1:t1|idle|${_CWD}|-"
+    _run_tick
+    assert_success
+    assert_output ""
+    _refute_logged "herdr agent prompt"
+}
+
+# ---------------------------------------------------------------------------
+# The pane's directory — cwd, or where its shell went (PR #1609 codex)
+# ---------------------------------------------------------------------------
+
+@test "session_doctor_cron: a pane with only a foreground_cwd is still scanned" {
+    # `cwd` is where the pane was opened and `foreground_cwd` is where its
+    # shell is standing now. Dropping the row when only the second one is
+    # reported would exclude that pane from every tick this job ever runs, not
+    # just this one.
+    _CWD="${_WORK_DIR}/repo"
+    mkdir -p "${_CWD}"
+    _transcript_api_error "${_CWD}"
+    _set_pane_foreground_only "w1:t1" "idle" "${_CWD}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt w1:t1"
+}
+
+@test "session_doctor_cron: a pane with neither cwd nor foreground_cwd is dropped" {
+    _CWD="${_WORK_DIR}/repo"
+    mkdir -p "${_CWD}"
+    _transcript_api_error "${_CWD}"
+    _set_pane_foreground_only "w1:t1" "idle" ""
+    _run_tick
+    assert_success
+    assert_output ""
     _refute_logged "herdr agent prompt"
 }
 
@@ -561,9 +672,10 @@ _one_stuck_pane() {
     _CWD="${_WORK_DIR}/repo-a"
     _CWD_B="${_WORK_DIR}/repo-b"
     mkdir -p "${_CWD}" "${_CWD_B}"
-    _transcript_api_error "${_CWD}"
-    _transcript_api_error "${_CWD_B}"
-    _set_panes "w1:t1|idle|${_CWD}" "w1:t2|idle|${_CWD_B}"
+    _transcript_api_error "${_CWD}" "aaaaaaaa-0000-0000-0000-000000000000"
+    _transcript_api_error "${_CWD_B}" "bbbbbbbb-0000-0000-0000-000000000000"
+    _set_panes "w1:t1|idle|${_CWD}|aaaaaaaa-0000-0000-0000-000000000000" \
+        "w1:t2|idle|${_CWD_B}|bbbbbbbb-0000-0000-0000-000000000000"
     _run_tick
     assert_success
     _assert_logged "herdr agent prompt w1:t1"
