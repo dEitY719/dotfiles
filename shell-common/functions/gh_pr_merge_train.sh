@@ -283,6 +283,67 @@ _gh_pr_merge_train_has_review_passed_label() {
     jq -e '[ .labels[]?.name? ] | index("review-passed")' >/dev/null 2>&1
 }
 
+# Sha-freshness check for `review-passed` (#1601).
+#
+# The label alone only proves "some head was reviewed", not "THIS head was
+# reviewed". Its only invalidation path is a handful of hand-wired call sites
+# (`gh:pr-reply`, `gh:pr-resolve-conflict`, `gh:pr-resolve-outdated`,
+# `devx:pr-review-all` Step 4) that drop the label after a push THEY made —
+# any other way the head advances (a manual `git push --force-with-lease`, a
+# GitHub web-UI commit, a future tool) leaves a stale `review-passed` on a
+# commit nobody reviewed, and this gate would trust it. Wiring more call
+# sites cannot close that gap in general: a human's local `git push` has no
+# hook this repo controls. So the fix lives on the READ side instead — verify
+# the label against the head it was actually issued for.
+#
+# `devx_pr_review_all_apply_label` (shell-common/functions/devx_pr_review_all.sh)
+# is the ONLY writer of the sha marker below, posted once as a plain issue
+# comment at the moment it applies `review-passed`:
+#   <!-- review-verdict:review-passed:<head-sha> -->
+# This is NOT the reviewer-verdict comment parsing `review-verdict-gate.md`
+# forbids ("Not a comment parser") — that rule is about never re-deriving a
+# LGTM/BLOCKING verdict from a reviewer CLI's free-form prose, where a
+# reformat could silently unlock the gate. This marker is a fixed, machine-only
+# stamp this same subsystem writes for exactly this read; nothing about a
+# reviewer's output format touches it.
+#
+# `_gh_pr_merge_train_review_passed_marker_sha <pr> <repo> [host]`
+#   Echo the sha carried by the LAST such marker among the PR's issue
+#   comments, or nothing if none exists / the lookup failed. One
+#   `gh api --paginate` call.
+_gh_pr_merge_train_review_passed_marker_sha() {
+    local _pr="$1" _repo="$2" _host="${3-}"
+
+    (
+        if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+            export GH_HOST="$_host"
+        fi
+        gh api --paginate "repos/$_repo/issues/$_pr/comments" --jq '.[].body'
+    ) 2>/dev/null |
+        grep -oE '<!-- review-verdict:review-passed:[0-9a-f]+ -->' |
+        tail -n 1 |
+        sed -E 's/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/'
+}
+
+# `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <head-oid>`
+#   0 (true) = the `review-passed` label is STALE for `<head-oid>` — no
+#   marker was found, or the last marker's sha does not match. 1 (false) =
+#   fresh, the last marker's sha matches `<head-oid>` exactly.
+#
+#   Fail-closed by construction: a lookup failure (network, auth, `gh` too
+#   old) yields an empty marker sha, which never equals a real `<head-oid>`,
+#   so an undetermined answer reads as STALE — the same direction #1519's
+#   approval gate takes for "policy unreadable". A skipped PR costs nothing;
+#   trusting a label this gate cannot verify is the failure #1601 exists to
+#   close.
+_gh_pr_merge_train_review_passed_stale() {
+    local _pr="$1" _repo="$2" _host="$3" _head_oid="$4" _marker_sha
+    _marker_sha=$(_gh_pr_merge_train_review_passed_marker_sha "$_pr" "$_repo" "$_host")
+    [ -n "$_marker_sha" ] && [ "$_marker_sha" = "$_head_oid" ] && return 1
+    return 0
+}
+
 # Self-check (issue #724): catch silent breakage where this file sources
 # cleanly but its public functions never get defined — an interactive-guard
 # regression, a syntax error mid-file, a future rename. Both call sites treat a
@@ -294,7 +355,9 @@ for _gh_pmt_selfcheck_fn in \
     _gh_pr_merge_train_filter_targets \
     _gh_pr_merge_train_has_reply_pending_label \
     _gh_pr_merge_train_has_review_blocked_label \
-    _gh_pr_merge_train_has_review_passed_label; do
+    _gh_pr_merge_train_has_review_passed_label \
+    _gh_pr_merge_train_review_passed_marker_sha \
+    _gh_pr_merge_train_review_passed_stale; do
     command -v "$_gh_pmt_selfcheck_fn" >/dev/null 2>&1 && continue
     printf '[gh_pr_merge_train] BUG: %s undefined after source — the merge-train target filter will not run. See dotfiles #724 / #1524.\n' \
         "$_gh_pmt_selfcheck_fn" >&2

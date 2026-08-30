@@ -88,7 +88,10 @@ In short — bind `TARGET_HOST` from the same `<remote>` URL as `TARGET_REPO`
    contributes nothing, and `/simplify` never contributes), pipe `BODIES`
    through `devx_pr_review_all_lane_block "$ai" "$head_sha"` →
    `devx_pr_review_all_verdict`, and pipe that stream straight into
-   `devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST"`.
+   `devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"`
+   — the trailing `$head_sha` stamps a freshness marker when the verdict is
+   `review-passed` (#1601), so `gh:pr-merge-train`'s gate can tell this exact
+   head from a stale one.
    Never stage the verdicts in a variable and re-expand it — zsh does not
    word-split, and a two-lane PR would silently report one.
 

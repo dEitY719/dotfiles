@@ -834,3 +834,74 @@ _apply_stub() {
         "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
     assert_success
 }
+
+# ---------------------------------------------------------------------------
+# apply_label's 4th argument — the #1601 freshness marker
+# ---------------------------------------------------------------------------
+#
+# A `review-passed` label alone only proves some head was reviewed. Given the
+# head sha it was decided for, apply_label stamps a
+# `<!-- review-verdict:review-passed:<sha> -->` marker comment so
+# `gh:pr-merge-train`'s gate can verify the label against the PR's CURRENT
+# head instead of trusting it blindly.
+
+@test "apply_label (#1601): a review-passed verdict with a sha posts the marker" {
+    _apply_stub
+    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X POST repos/acme/widget/issues/7/comments -f body=<!-- review-verdict:review-passed:deadbeef -->'
+}
+
+@test "apply_label (#1601): no sha given posts no marker" {
+    _apply_stub
+    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget >/dev/null
+    run cat "$APPLY_LOG"
+    refute_output --partial 'review-verdict:review-passed'
+}
+
+@test "apply_label (#1601): review-blocked never gets a freshness marker" {
+    # A stale review-blocked is the safe direction (over-skips, never
+    # over-merges) — it needs no freshness proof.
+    _apply_stub
+    printf '%s\n' blocking | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    run cat "$APPLY_LOG"
+    refute_output --partial 'review-verdict:review-passed'
+}
+
+@test "apply_label (#1601): no lane produced a verdict -> no marker either" {
+    _apply_stub
+    printf '' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output ""
+}
+
+@test "apply_label (#1601): a failed label add posts no marker" {
+    _apply_stub
+    STUB_ADD_RC=1
+    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    unset STUB_ADD_RC
+    run cat "$APPLY_LOG"
+    refute_output --partial 'review-verdict:review-passed'
+}
+
+@test "apply_label (#1601): the marker post is pinned to the given host" {
+    _apply_stub
+    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget ghe.example.com deadbeef >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output --partial 'review-verdict:review-passed:deadbeef --> [GH_HOST=ghe.example.com]'
+}
+
+@test "apply_label (#1601): a marker-post failure still reports exactly one line" {
+    _apply_stub
+    STUB_GH_RC=1
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { return 1; }
+        _gh_pr_edit_safe_label() { return 0; }
+        printf 'lgtm\n' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef
+    "
+    assert_success
+    [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ] ||
+        fail "expected exactly one line of output, got: $output"
+    assert_output --partial 'labelled `review-passed`'
+}
