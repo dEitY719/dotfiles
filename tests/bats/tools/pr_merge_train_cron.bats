@@ -228,6 +228,27 @@ case "$1 $2" in
     [ "${HERDR_NOTIFY_FAIL:-0}" = "1" ] && exit 1
     printf '%s\n' '{"id":"cli:notification:show","result":{"ok":true}}'
     ;;
+"agent read")
+    # The settle-readiness poll (#1570) — this dispatcher's only pane read.
+    # `--format text` gives plain lines; herdr answers its error document as
+    # JSON on stdout with exit 0 when the target is gone, which the caller has
+    # to recognise and skip.
+    #
+    # HERDR_SETTLE_READ_SEQUENCE=A|B answers A then B on successive calls and
+    # holds the last entry once the list runs out; `~` is an empty read.
+    if [ "${HERDR_READ_MODE:-ok}" = "missing" ]; then
+        printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:read"}'
+        exit 0
+    fi
+    _seq="${HERDR_SETTLE_READ_SEQUENCE:-> claude ready}"
+    _seen_file="${CALL_LOG}.settleread"
+    _seen=$(cat "${_seen_file}" 2>/dev/null) || _seen=0
+    _seen=$((_seen + 1))
+    printf '%s\n' "${_seen}" >"${_seen_file}"
+    _body=$(printf '%s' "${_seq}" | cut -d'|' -f"${_seen}")
+    [ -n "${_body}" ] || _body="${_seq##*|}"
+    [ "${_body}" = "~" ] || printf '%s\n' "${_body}"
+    ;;
 "agent prompt")
     if [ -n "${HERDR_PROMPT_CODE:-}" ]; then
         printf '{"error":{"code":"%s","message":"%s"},"id":"cli:agent:prompt"}\n' \
@@ -594,23 +615,57 @@ _hold_lock() {
 #
 # `herdr agent start` answers `"agent_status":"idle"` straight away, so
 # _pmt_wait_for_idle returns on its first poll and ~0s pass before the prompt —
-# which is why raising _PMT_IDLE_POLL_MAX fixes nothing. These pin the
-# unconditional wait that does, and pin that the reuse path does not pay it.
+# which is why raising _PMT_IDLE_POLL_MAX fixes nothing. These pin the wait that
+# does, and pin that the reuse path does not pay it.
+#
+# Since #1570 that wait polls the pane's own text instead of sleeping flat: 13
+# is the cap, a pane that reads stable leaves early, and a pane that never does
+# still warns and still prompts — the pre-#1570 behaviour, kept reachable.
 
-@test "pr_merge_train_cron: a fresh pane settles 13s before it is prompted" {
+@test "pr_merge_train_cron: a pane that reads stable is prompted before the cap" {
     _run_tick
     assert_success
-    _assert_logged "sleep 13"
+    _assert_logged "herdr agent prompt"
+    [ "$(_log_count '^sleep 1$')" -eq 1 ]
+    refute_output --partial "never settled"
 }
 
-@test "pr_merge_train_cron: the settle wait happens after the idle check, not before" {
+@test "pr_merge_train_cron: the settle poll reads the pane" {
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent read mt-dotfiles --lines 3 --format text"
+}
+
+@test "pr_merge_train_cron: the settle poll happens after the idle check, not before" {
     _run_tick
     assert_success
     _start_line=$(grep -n "herdr agent start" "${_LOG}" | head -1 | cut -d: -f1)
-    _settle_line=$(grep -n "^sleep 13$" "${_LOG}" | head -1 | cut -d: -f1)
+    _settle_line=$(grep -n "herdr agent read mt-dotfiles --lines 3" "${_LOG}" | head -1 | cut -d: -f1)
     _prompt_line=$(grep -n "herdr agent prompt" "${_LOG}" | head -1 | cut -d: -f1)
     [ "${_start_line}" -lt "${_settle_line}" ]
     [ "${_settle_line}" -lt "${_prompt_line}" ]
+}
+
+@test "pr_merge_train_cron: a pane that never settles still warns and prompts at the cap" {
+    _run_tick "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    assert_output --partial "never settled within 13s"
+    _assert_logged "herdr agent prompt"
+    [ "$(_log_count '^sleep 1$')" -eq 12 ]
+}
+
+@test "pr_merge_train_cron: a stable 'Not logged in' pane is not read as ready" {
+    _run_tick "HERDR_SETTLE_READ_SEQUENCE=Not logged in"
+    assert_success
+    assert_output --partial "never settled within 13s"
+    _assert_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: an unreadable pane degrades to not-ready, never aborts" {
+    _run_tick HERDR_READ_MODE=missing
+    assert_success
+    assert_output --partial "never settled within 13s"
+    _assert_logged "herdr agent prompt"
 }
 
 @test "pr_merge_train_cron: PMT_SETTLE_SECONDS=0 removes the settle wait entirely" {
@@ -618,13 +673,40 @@ _hold_lock() {
     assert_success
     _assert_logged "herdr agent prompt"
     _refute_logged "sleep "
+    _refute_logged "herdr agent read"
 }
 
-@test "pr_merge_train_cron: PMT_SETTLE_SECONDS overrides the default duration" {
-    _run_tick PMT_SETTLE_SECONDS=7
+@test "pr_merge_train_cron: PMT_SETTLE_SECONDS caps the poll, not one flat sleep" {
+    _run_tick PMT_SETTLE_SECONDS=7 "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
-    _assert_logged "sleep 7"
-    _refute_logged "sleep 13"
+    assert_output --partial "never settled within 7s"
+    [ "$(_log_count '^sleep 1$')" -eq 6 ]
+    _refute_logged "sleep 7"
+}
+
+# A fractional override predates the poll and cannot bound a poll count, so it
+# still means the flat wait it always meant.
+@test "pr_merge_train_cron: a fractional settle cap stays a flat wait" {
+    _run_tick PMT_SETTLE_SECONDS=0.5
+    assert_success
+    _assert_logged "sleep 0.5"
+    _assert_logged "herdr agent prompt"
+    _refute_logged "herdr agent read"
+}
+
+@test "pr_merge_train_cron: the settle poll interval is overridable" {
+    _run_tick PMT_SETTLE_POLL_SLEEP=4 "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 4$')" -eq 12 ]
+    [ "$(_log_count '^sleep 1$')" -eq 0 ]
+}
+
+@test "pr_merge_train_cron: PMT_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
+    _run_tick PMT_SETTLE_POLL_SLEEP=0 "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    _refute_logged "sleep "
+    assert_output --partial "never settled within 13s"
+    _assert_logged "herdr agent prompt"
 }
 
 # The reuse path is the common case once a train pane is open — one tick every
@@ -636,6 +718,8 @@ _hold_lock() {
     _assert_logged "herdr agent prompt"
     _refute_logged "herdr tab create"
     _refute_logged "sleep "
+    # Not one poll either — _pmt_settle is called from _pmt_launch_fresh only.
+    _refute_logged "herdr agent read"
 }
 
 @test "pr_merge_train_cron: a done session is also prompted without settling" {
@@ -643,6 +727,7 @@ _hold_lock() {
     assert_success
     _assert_logged "herdr agent prompt"
     _refute_logged "sleep "
+    _refute_logged "herdr agent read"
 }
 
 # The `agent_name_taken` fallback prompts a session someone else already
@@ -652,12 +737,14 @@ _hold_lock() {
     assert_success
     _assert_logged "herdr agent prompt"
     _refute_logged "sleep "
+    _refute_logged "herdr agent read"
 }
 
 @test "pr_merge_train_cron: a tick that never starts an agent never settles" {
     _run_tick HERDR_TAB_FAIL=1
     assert_failure
     _refute_logged "sleep "
+    _refute_logged "herdr agent read"
 }
 
 @test "pr_merge_train_cron: a herdr tab failure ends the tick without a prompt" {
@@ -695,8 +782,10 @@ _hold_lock() {
 # The gap itself is 13s since #1571, not the 2s this shipped with: `tab create`
 # answering before the pane's shell is interactive is the *same* class of race
 # as the settle wait above, and 2s was shorter than the 5s already measured to
-# fail. Asserted through the message rather than a `sleep` line because the
-# settle wait logs `sleep 13` too — the sentence is what pins which wait this is.
+# fail. Unlike the settle wait it is still a flat sleep — #1570 turned only the
+# settle into a poll, because only the settle has a pane to read. Asserted
+# through the message rather than a `sleep` line, which is what tells the two
+# waits apart in the call log.
 @test "pr_merge_train_cron: the start retry gap defaults to 13s" {
     # An empty assignment beats _run_tick's own `PMT_START_RETRY_SLEEP=0` and
     # still lets `${PMT_START_RETRY_SLEEP:-13}` fall through to the default.
@@ -729,6 +818,13 @@ _hold_lock() {
     assert_success
     run grep -qF -- 'PMV_SETTLE_SECONDS' "${SCRIPT}"
     assert_success
+}
+
+# The twin of the issue-watcher pin: the shared "no signal from herdr" excuse
+# for a flat sleep is gone from both dispatchers (#1570).
+@test "pr_merge_train_cron: the settle comment no longer claims herdr exposes no signal" {
+    run grep -qF -- 'herdr exposes no signal' "${SCRIPT}"
+    assert_failure
 }
 
 # The retrying is bounded, and the bound is the whole point: cron re-runs every
