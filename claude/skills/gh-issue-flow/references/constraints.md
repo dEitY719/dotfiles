@@ -30,6 +30,12 @@
 - Step 2.5.1 (gh:pr-resolve-outdated) does a clean rebase-sync when the
   base moved forward with no conflicts; it is a no-op when the PR is
   already up to date.
+- **CI-fail resolution is out of scope for this chain.** Step 2.5 and
+  2.5.1 call only `gh:pr-resolve-conflict` / `gh:pr-resolve-outdated` —
+  never `gh:pr-resolve-ci-fail`. CI checks haven't finished by the time
+  this flow reaches those steps, so a synchronous call would be
+  meaningless; Step 2.4.1's merge-train wake hands that off to
+  `gh:pr-merge-train`'s routing table once checks report.
 - **Never fall back to `_dotfiles_setup_mode` alone for the host (#1403).**
   Step 1 exports `GH_HOST`/`TARGET_REPO`/`TARGET_HOST` from the `[remote]`'s
   URL, and every GitHub-touching sub-skill receives `[remote]` as an explicit
