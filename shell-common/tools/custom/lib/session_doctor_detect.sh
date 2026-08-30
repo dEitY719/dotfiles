@@ -46,39 +46,57 @@
 # issue names stay in one place; `test` below applies it case-insensitively.
 : "${SESSION_DOCTOR_ERROR_ERE:=API Error|Connection lost|response may be incomplete}"
 
-# Claude Code's project-directory name for the working directory <1>: every
-# character that is not a letter or a digit becomes a dash. Verified against
-# live directories — `/home/u/dotfiles-issue-1581-1` becomes
-# `-home-u-dotfiles-issue-1581-1`, and `/home/u/.config/herdr` becomes
-# `-home-u--config-herdr` (the dot and the slash each produce their own dash,
-# which is why the doubled dash is correct and not a bug).
-session_doctor_cwd_slug() {
-    printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g'
-}
-
-# The most recently modified session transcript for working directory <1>,
-# across every Claude Code account directory (`~/.claude`, `~/.claude-work1`,
-# … — this repo runs multi-account, so one slug can exist under several).
-# Non-zero when there is none.
+# The transcript of Claude Code session <1>, across every Claude Code account
+# directory (`~/.claude`, `~/.claude-work1`, … — this repo runs multi-account,
+# so the session could be filed under any of them). Non-zero when there is none.
 #
-# Only `*.jsonl` directly under the slug directory is considered. A subagent's
+# Keyed on the session id, never on the pane's working directory, because the
+# working directory cannot answer the question the moment two panes share one —
+# two Claude Code sessions open in the same repo with no worktree between them
+# is an ordinary day here, not an exotic case. Claude Code mints one session
+# (and so one `<uuid>.jsonl`) per pane, so a same-cwd pair leaves two files in
+# one project directory and "the newest of them" attributes one pane's dead
+# turn to the other pane, which is the false positive AC-3 forbids (PR #1609
+# codex review).
+#
+# `herdr agent list` reports that id as `agent_session.value`, and it is the
+# transcript's own basename. Verified against a live server: every `claude`
+# pane's value named an existing `<uuid>.jsonl`, and the one `codex` pane's
+# value named none — so a non-Claude agent falls out here as "no transcript"
+# rather than being handed some Claude session that happened to share its cwd.
+#
+# The project directory is globbed rather than derived from the pane's cwd for
+# the same reason the cwd is not the key: the id is unique on its own, so
+# adding the cwd could only ever *lose* a session (a pane whose herdr `cwd` and
+# the directory Claude Code actually filed it under disagree), never sharpen
+# the match.
+#
+# Only `*.jsonl` directly under a project directory is considered. A subagent's
 # transcript lives one level deeper, under `<session-uuid>/subagents/`, and is
 # deliberately out of scope: a subagent dying on an API error is reported back
 # to its parent as a task notification, and the parent session is the one that
 # would have to be restarted.
 session_doctor_transcript() {
-    local _slug _newest
+    local _id _newest
     [ -n "${HOME:-}" ] || return 1
-    _slug=$(session_doctor_cwd_slug "$1")
-    [ -n "${_slug}" ] || return 1
+    _id="$1"
+
+    # A session id is a UUID, and this one is spliced straight into a glob.
+    # Anything carrying a slash or a glob metacharacter is not a session id and
+    # must not be allowed to widen the pattern.
+    case "${_id}" in
+    '' | *[!A-Za-z0-9-]*) return 1 ;;
+    esac
 
     # `ls -t` rather than `find -printf`/`stat`: the two platforms this repo
     # targets disagree about both of those, and these filenames are session
     # UUIDs — no spaces, no newlines, nothing for the usual `ls` parsing
     # objection to bite on. Same reasoning aicron_run_rollover uses for
-    # preferring `wc -c` over `stat`.
+    # preferring `wc -c` over `stat`. The newest wins only in the case that is
+    # left after the id has done its work: the same session id filed under two
+    # account directories.
     # shellcheck disable=SC2012
-    _newest=$(ls -1t "${HOME}"/.claude*/projects/"${_slug}"/*.jsonl 2>/dev/null | head -n 1)
+    _newest=$(ls -1t "${HOME}"/.claude*/projects/*/"${_id}".jsonl 2>/dev/null | head -n 1)
     [ -n "${_newest}" ] || return 1
     [ -f "${_newest}" ] || return 1
     printf '%s' "${_newest}"
@@ -115,10 +133,12 @@ session_doctor_event_is_api_error() {
     ' >/dev/null 2>&1
 }
 
-# The whole question, for working directory <1>: zero when its newest
+# The whole question, for Claude Code session <1>: zero when that session's
 # transcript ends on a turn that died mid-stream. Every unknown is non-zero
-# (see the header's bias note).
-session_doctor_cwd_is_stuck() {
+# (see the header's bias note) — a pane herdr reports no session id for lands
+# here as an empty argument and reads as "not stuck", which is the same answer
+# a pane with no transcript already gets.
+session_doctor_session_is_stuck() {
     local _transcript _event
     _transcript=$(session_doctor_transcript "$1") || return 1
     _event=$(session_doctor_last_assistant_event "${_transcript}") || return 1
