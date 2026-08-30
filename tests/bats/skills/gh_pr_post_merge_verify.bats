@@ -1220,3 +1220,152 @@ _PMV_WAIT_ASSIGN='^(_IW_SETTLE_SECONDS|_PMT_SETTLE_SECONDS|PMV_SETTLE_SECONDS|_I
     run grep -qF -- 'closed the empty verification tab' "$_doc"
     assert_success
 }
+
+# --- #1576: an empty binding in Step 5's gate is named, never silent -------
+#
+# The gate looks one registry key up and does nothing when the answer is empty.
+# An unwatched repo and a TARGET_REPO that was never substituted both produce
+# that same empty answer, so PR #1572's missing dispatch left no trace at all:
+# no pr-<N> tab, no rebase, and not one line to say which of the two happened.
+# The lookup only means "unwatched" once the five values are known to be bound,
+# so the binding check runs first and names the offenders. The unwatched-repo
+# silence (#1511 A-1) is what must NOT change, and is pinned here too.
+
+# Step 5's gate is the first bash fence under "## Step 5" — the one opened by
+# the `# Substitute the five values` comment, not Step 3's merge command or
+# Step 5's own `gh pr view`. Taken out of the shipped SKILL.md, never a copy.
+_PMV_GATE_AWK='$0 == f "bash" { inb = 1; p = 0; next }
+inb && $0 == f { if (p) exit; inb = 0; next }
+inb && !p && $0 ~ /^# Substitute the five values/ { p = 1 }
+p { print }'
+
+_pmv_gate_block() {
+    local _out="${TEST_TEMP_HOME}/gate-block.sh"
+    awk -v f="$(printf '\140\140\140')" "$_PMV_GATE_AWK" "$(_pmv_merge_skill)" >"$_out"
+    printf '%s' "$_out"
+}
+
+# Paste it the way Step 5 instructs: the five placeholders are replaced by the
+# caller's values — an empty one is exactly the mistake under test.
+_pmv_gate_bind() {
+    local _out="${TEST_TEMP_HOME}/gate-bound.sh"
+    sed -e "s|^PR_NUMBER=<N>.*|PR_NUMBER=${1-}|" \
+        -e "s|^TARGET_REPO=<owner/repo>.*|TARGET_REPO=${2-}|" \
+        -e "s|^HEAD_BRANCH=<headRefName>.*|HEAD_BRANCH=${3-}|" \
+        -e "s|^BASE_BRANCH=<baseRefName>.*|BASE_BRANCH=${4-}|" \
+        -e "s|^REMOTE=<remote>.*|REMOTE=${5-}|" "$(_pmv_gate_block)" >"$_out"
+    printf '%s' "$_out"
+}
+
+# A herdr that records instead of acting: an empty binding must never reach it.
+_pmv_gate_bin() {
+    local _bin="${TEST_TEMP_HOME}/gatebin"
+    mkdir -p "$_bin"
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexit 0\n' "$FAKE_HERDR_LOG" >"${_bin}/herdr"
+    chmod +x "${_bin}/herdr"
+    printf '%s' "$_bin"
+}
+
+@test "1576: Step 5's gate block extracts, binds, and is valid shell" {
+    local _bound
+    _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 main origin)"
+    run head -n 1 "$_bound"
+    assert_output --partial 'Substitute the five values'
+    run tail -n 1 "$_bound"
+    assert_output "fi"
+    # A renamed placeholder would leave the assignments unsubstituted and make
+    # every test below pass for the wrong reason.
+    run grep -cE '^(PR_NUMBER|TARGET_REPO|HEAD_BRANCH|BASE_BRANCH|REMOTE)=<' "$_bound"
+    assert_output "0"
+    run bash -n "$_bound"
+    assert_success
+}
+
+@test "1576: an empty TARGET_REPO is named instead of read as 'unwatched'" {
+    local _bound _bin
+    _bound="$(_pmv_gate_bind 77 "" wt/issue-77/1 main origin)"
+    _bin="$(_pmv_gate_bin)"
+    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$WATCHED" \
+        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    assert_success
+    assert_output --partial '[WARN] gh:pr-merge:'
+    assert_output --partial 'TARGET_REPO'
+    # Named, and stopped: nothing may be closed or rebased on a half-bound run.
+    refute_output --partial 'gh:pr-post-merge-verify'
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+}
+
+@test "1576: whichever of the five is empty is the one the WARN names" {
+    local _bound _bin _v
+    _bin="$(_pmv_gate_bin)"
+    for _v in PR_NUMBER TARGET_REPO HEAD_BRANCH BASE_BRANCH REMOTE; do
+        case "$_v" in
+        PR_NUMBER) _bound="$(_pmv_gate_bind "" acme/dotfiles wt/issue-77/1 main origin)" ;;
+        TARGET_REPO) _bound="$(_pmv_gate_bind 77 "" wt/issue-77/1 main origin)" ;;
+        HEAD_BRANCH) _bound="$(_pmv_gate_bind 77 acme/dotfiles "" main origin)" ;;
+        BASE_BRANCH) _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 "" origin)" ;;
+        REMOTE) _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 main "")" ;;
+        esac
+        run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$WATCHED" \
+            DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+        assert_success
+        assert_output --partial "$_v"
+        [ "${#lines[@]}" -eq 1 ]
+    done
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+}
+
+@test "1576: several empty bindings share one WARN line, not one each" {
+    local _bound
+    _bound="$(_pmv_gate_bind "" "" wt/issue-77/1 main "")"
+    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$WATCHED" \
+        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    assert_success
+    [ "${#lines[@]}" -eq 1 ]
+    assert_output --partial 'PR_NUMBER'
+    assert_output --partial 'TARGET_REPO'
+    assert_output --partial 'REMOTE'
+    refute_output --partial 'HEAD_BRANCH'
+    refute_output --partial 'BASE_BRANCH'
+}
+
+@test "1576: a fully bound but unwatched repo is still silent (#1511 A-1)" {
+    # The regression this fix must not cause: an unregistered repo stays
+    # byte-identical to its pre-#1511 behavior — no WARN, no output at all.
+    local _bound
+    _bound="$(_pmv_gate_bind 77 other/repo wt/issue-77/1 main origin)"
+    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$WATCHED" \
+        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    assert_success
+    assert_output ""
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+}
+
+@test "1576: a fully bound registered repo still reaches the dispatch" {
+    # The other half of the same guard: the binding check must gate nothing
+    # when all five are bound. The registry points the dispatch at a path that
+    # is not a git worktree root, so it stops with its own WARN before any
+    # side effect — proof the staged block ran.
+    local _bound _reg
+    _reg="${TEST_TEMP_HOME}/bound-watched.json"
+    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
+        "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
+    _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 main origin)"
+    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$_reg" \
+        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    assert_success
+    assert_output --partial '[WARN] gh:pr-post-merge-verify:'
+    assert_output --partial 'is not a git worktree root'
+}
+
+@test "1576: the binding check runs before the registry lookup" {
+    local _skill _check _lookup
+    _skill="$(_pmv_merge_skill)"
+    _check=$(grep -n 'PMV_MISSING=""' "$_skill" | head -1 | cut -d: -f1)
+    _lookup=$(grep -n 'VERIFY_SKILL=\$(jq -r --arg r' "$_skill" | head -1 | cut -d: -f1)
+    [ -n "$_check" ] && [ -n "$_lookup" ]
+    [ "$_check" -lt "$_lookup" ]
+}
