@@ -85,6 +85,39 @@ _pmv_git_rebase_abort() {
     return 0
 }
 
+# Stand-in for `git -C <root> rev-parse --path-format=absolute --git-common-dir`,
+# which answers `<main-checkout>/.git`. A test can empty it (FAKE_GIT_COMMON_DIR="")
+# to prove the block refuses to guess a scratch path rather than falling back to
+# the shared main checkout (#1577).
+_pmv_git_common_dir() {
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'common-dir %s\n' "$1" >>"$FAKE_GIT_LOG"
+    printf '%s' "${FAKE_GIT_COMMON_DIR-$1/.git}"
+}
+
+# Stand-in for `[ -d "$PMV_SCRATCH" ]` — the create-if-absent / reuse-if-present
+# knob. Default 0 (absent), so an ordinary dispatch creates the worktree.
+_pmv_dir_exists() {
+    [ "${FAKE_SCRATCH_EXISTS:-0}" = "1" ]
+}
+
+# Stand-in for `mkdir -p <dir>`.
+_pmv_mkdir_p() {
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'mkdir-p %s\n' "$1" >>"$FAKE_GIT_LOG"
+    return 0
+}
+
+# Stand-in for `git -C <root> worktree prune`.
+_pmv_git_worktree_prune() {
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'worktree-prune %s\n' "$1" >>"$FAKE_GIT_LOG"
+    return 0
+}
+
+# Stand-in for `git -C <root> worktree add --detach <path> <ref>`.
+_pmv_git_worktree_add() {
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'worktree-add %s %s %s\n' "$1" "$2" "$3" >>"$FAKE_GIT_LOG"
+    return "${FAKE_WORKTREE_ADD_RC:-0}"
+}
+
 # ============================================================
 # JSON helpers
 # ============================================================
@@ -341,6 +374,48 @@ pmv_workspace_for_root() {
     printf '%s' "$_ws"
 }
 
+# pmv_scratch_dir <main_root> <pr>  ->  the verification session's own worktree
+# path, one directory per PR. rc 1 with no output when git cannot say where the
+# common dir is: the block must never fall back to <main_root>, because living
+# in the shared main checkout is the defect #1577 removes.
+pmv_scratch_dir() {
+    local _common
+    _common=$(_pmv_git_common_dir "$1")
+    [ -n "$_common" ] || return 1
+    printf '%s/pr-post-merge-verify/pr-%s' "$_common" "$2"
+}
+
+# pmv_ensure_scratch <main_root> <scratch> <remote> <base>. rc 0 = usable.
+#
+# Create if absent, reuse if present — a second dispatch for the same PR (a
+# manual re-run over a still-open tab) is idempotent, never a duplicate and
+# never an error. There is deliberately NO teardown: the worktree's lifetime is
+# the tab's, and who removes it when is left to a later tab-close rule (#1577).
+#
+# No fetch: pmv_sync_main has just fetched `<remote>/<base>` and rebased the
+# main checkout onto it, so the ref is current by construction. `--detach`
+# holds a commit rather than the branch name, so the scratch worktree never
+# contests the base branch the main checkout has checked out.
+pmv_ensure_scratch() {
+    local _root="$1" _scratch="$2" _remote="${3:-origin}" _base="$4"
+
+    if _pmv_dir_exists "$_scratch"; then
+        printf '[INFO] gh:pr-post-merge-verify: reusing verification worktree %s.\n' "$_scratch"
+        return 0
+    fi
+
+    _pmv_mkdir_p "${_scratch%/*}"
+    # A registration whose directory someone removed by hand would make the add
+    # fail on every future dispatch; prune drops only entries git already
+    # considers gone, so it cannot touch a live worktree.
+    _pmv_git_worktree_prune "$_root"
+    if ! _pmv_git_worktree_add "$_root" "$_scratch" "${_remote}/${_base}"; then
+        printf '[WARN] gh:pr-post-merge-verify: could not create the verification worktree %s — verification skipped.\n' "$_scratch"
+        return 1
+    fi
+    return 0
+}
+
 # pmv_tab_create <workspace> <cwd> <label>  ->  "<tab_id> <pane_id>", rc 1 on failure.
 pmv_tab_create() {
     local _ws="$1" _cwd="$2" _label="$3" _json _tab _pane
@@ -438,7 +513,7 @@ pmv_escalate_prompt_stall() {
 gh_pr_post_merge_verify() {
     local _pr="$1" _repo="$2" _host="$3" _main="$4" _branch="$5" _file="$6"
     local _remote="${7:-origin}" _base="${8-}"
-    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code _try _prompt
+    local _skill _rc _wt _tab _tabrc _ws _pane _agent _newtab _out _code _try _prompt _scratch
 
     _skill=$(pmv_gate "$_file" "$_repo")
     _rc=$?
@@ -492,13 +567,32 @@ gh_pr_post_merge_verify() {
     pmv_sync_main "$_main" "$_remote" "$_base" || return 0
 
     # --- 4. the verification tab ---
+    # The workspace is still resolved from the main checkout even though the
+    # tab opens elsewhere: `herdr worktree list --cwd P` answers the workspace
+    # P's *repository* is open in, and the scratch worktree below has none of
+    # its own on a first dispatch. Grouping and working directory are separate.
     _ws=$(pmv_workspace_for_root "$_main")
     if [ -z "$_ws" ]; then
         printf '[WARN] gh:pr-post-merge-verify: no herdr workspace for %s — verification tab not created.\n' "$_main"
         return 0
     fi
 
-    if ! _out=$(pmv_tab_create "$_ws" "$_main" "pr-$_pr"); then
+    # dispatch.sh.md assigns step 3's fallback into $BASE_BRANCH itself, so the
+    # effective base survives into step 4. The mirror keeps pmv_sync_main free
+    # of out-parameters and recomputes it here instead — same value, one extra
+    # stand-in call, and never an `origin/` with an empty branch after it.
+    [ -n "$_base" ] || _base=$(_pmv_git_current_branch "$_main")
+
+    # The session lives in its own detached worktree, never in the shared main
+    # checkout that step 3 has just rebased and that humans check branches out
+    # in (#1577).
+    if ! _scratch=$(pmv_scratch_dir "$_main" "$_pr"); then
+        printf '[WARN] gh:pr-post-merge-verify: cannot resolve the git common dir of %s — verification skipped.\n' "$_main"
+        return 0
+    fi
+    pmv_ensure_scratch "$_main" "$_scratch" "$_remote" "$_base" || return 0
+
+    if ! _out=$(pmv_tab_create "$_ws" "$_scratch" "pr-$_pr"); then
         printf '[WARN] gh:pr-post-merge-verify: herdr tab create failed for label pr-%s — verification skipped.\n' "$_pr"
         return 0
     fi
@@ -579,6 +673,9 @@ gh_pr_post_merge_verify() {
     # --- 7. report ---
     printf 'post-merge verification dispatched\n'
     printf '  tab:    %s (label pr-%s)\n' "$_newtab" "$_pr"
+    # Reported because nothing removes it: the operator who closes the tab is
+    # the one who can also drop this directory (teardown is unautomated, #1577).
+    printf '  cwd:    %s\n' "$_scratch"
     printf '  agent:  %s\n' "$_agent"
     printf '  verify: %s\n' "$_prompt"
     printf '  attach: herdr agent attach %s\n' "$_agent"

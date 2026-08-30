@@ -33,14 +33,21 @@ dispatch soft-failed and you want to retry it.
    argument 2 and the base branch is the PR's `baseRefName` — neither is
    hardcoded, because a watched repo may default to `master`/`develop` or be
    reached through `upstream`.
-6. `herdr tab create --cwd <main checkout> --label pr-<N>`.
-7. `herdr agent start mv-<repo>-pr-<N> --kind claude --pane <pane>
+6. `git worktree add --detach <git-common-dir>/pr-post-merge-verify/pr-<N> <remote>/<base>`
+   — the verification session's own directory, created if absent and reused if
+   it is already there. It is **not** the main checkout: that one is shared
+   with humans and other sessions, and step 5 rebases it (#1577).
+7. `herdr tab create --cwd <that worktree> --label pr-<N>`. The herdr
+   *workspace* is still looked up from the main checkout — it only groups the
+   tab, and a worktree created a second ago has no workspace of its own.
+8. `herdr agent start mv-<repo>-pr-<N> --kind claude --pane <pane>
    -- --dangerously-skip-permissions`.
-8. `herdr agent prompt <agent> "/<verify-skill> <N>" --wait --until idle`,
+9. `herdr agent prompt <agent> "/<verify-skill> <N>" --wait --until idle`,
    where `<verify-skill>` is the registry's `verify_skill` for that repo —
    allowlisted to `devx:pr-verify-merged` or `devx:pr-verify-live`, because it
    reaches the prompt of a `--dangerously-skip-permissions` session.
-9. Prints the new tab id, the agent name, and a `herdr agent attach` hint.
+10. Prints the new tab id, the worktree it opened in, the agent name, and a
+    `herdr agent attach` hint.
 
 ## What it will NOT do
 
@@ -53,6 +60,9 @@ dispatch soft-failed and you want to retry it.
   hard stop in the skill.
 - Open more than one session per PR, batch several PRs into one session, or
   retry a failed dispatch.
+- Remove the verification worktree it created. Its lifetime is the tab's, and
+  the tab is closed by the operator once they have read the result — so a
+  teardown here would delete the directory a live session is standing in.
 - Make any *mutating* GitHub call — no PR, board, or label writes. Its only
   API call is reading the PR's `headRefName`/`baseRefName`, and only when the
   caller did not already pass them down.
