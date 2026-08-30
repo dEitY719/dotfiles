@@ -104,12 +104,21 @@ HEAD_BRANCH=<headRefName>     # Step 2's `gh pr view` already read it
 BASE_BRANCH=<baseRefName>     # ditto — never a hardcoded `main`
 REMOTE=<remote>               # the `[remote]` positional, default `origin`
 
-# An empty value is a *binding* mistake, not an opt-out, and the lookup below
-# cannot tell it from an unwatched repo (#1576: PR #1572 left no trace). Name
-# every empty one, and never look up a half-bound run — the dispatch closes
-# tabs and rebases the main checkout.
+# A binding mistake is not just an empty value — it is also an unsubstituted
+# placeholder (`<owner/repo>` left as-is) or a whitespace-only value, both of
+# which pass `[ -n ]` and would silently reproduce this same #1576 bug (PR
+# #1603 review, agy + codex: "non-empty" != "correctly substituted"). None of
+# the three can be told apart from an unwatched repo by the lookup below, so
+# name every offender and never look up a half-bound run — the dispatch
+# closes tabs and rebases the main checkout.
 PMV_MISSING=""
-_pmv_need() { [ -n "$2" ] || PMV_MISSING="${PMV_MISSING:+$PMV_MISSING, }$1"; }
+_pmv_need() {
+    case "$2" in
+    '' | '<'*'>') PMV_MISSING="${PMV_MISSING:+$PMV_MISSING, }$1" ;;
+    *[!" "]*) ;;
+    *) PMV_MISSING="${PMV_MISSING:+$PMV_MISSING, }$1" ;;
+    esac
+}
 _pmv_need PR_NUMBER "${PR_NUMBER-}"
 _pmv_need TARGET_REPO "${TARGET_REPO-}"
 _pmv_need HEAD_BRANCH "${HEAD_BRANCH-}"
@@ -119,7 +128,7 @@ _pmv_need REMOTE "${REMOTE-}"
 WATCHED_FILE="${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}"
 VERIFY_SKILL=""
 if [ -n "$PMV_MISSING" ]; then
-    printf '[WARN] gh:pr-merge: post-merge verification gate has empty bindings (%s) — substitute all five values and re-run this block.\n' \
+    printf '[WARN] gh:pr-merge: post-merge verification gate has unbound values (%s) — substitute all five values (no placeholders, no blanks) and re-run this block.\n' \
         "$PMV_MISSING"
 elif command -v jq >/dev/null 2>&1 && [ -r "$WATCHED_FILE" ]; then
     VERIFY_SKILL=$(jq -r --arg r "$TARGET_REPO" \
