@@ -695,10 +695,20 @@ _hold_lock() {
 }
 
 @test "pr_merge_train_cron: the settle poll interval is overridable" {
+    # 3, not 13/1=13 — see issue_watcher_cron.bats's twin test for the full
+    # rationale (agy/codex, PR #1611 review): the poll count now scales with
+    # the gap instead of assuming it is always 1s.
     _run_tick PMT_SETTLE_POLL_SLEEP=4 "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
-    [ "$(_log_count '^sleep 4$')" -eq 12 ]
+    [ "$(_log_count '^sleep 4$')" -eq 3 ]
     [ "$(_log_count '^sleep 1$')" -eq 0 ]
+}
+
+@test "pr_merge_train_cron: a sub-1s poll interval does not cut the wait short" {
+    _run_tick PMT_SETTLE_POLL_SLEEP=0.5 "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 0.5$')" -eq 25 ]
+    assert_output --partial "never settled within 13s"
 }
 
 @test "pr_merge_train_cron: PMT_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
