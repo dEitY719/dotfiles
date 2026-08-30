@@ -223,6 +223,13 @@ if ! (git -C "$MAIN_ROOT" fetch "$REMOTE" "$BASE_BRANCH" &&
 fi
 
 # --- 4. F-4: the verification tab -----------------------------------------
+# The workspace is still looked up from $MAIN_ROOT, deliberately, even though
+# the tab below opens somewhere else: `herdr worktree list --cwd P --json`
+# answers the workspace *P's repository* is open in, and WS_ID only says which
+# herdr workspace the new tab is grouped under. The scratch worktree created a
+# few lines down is seconds old and has no workspace of its own on a first
+# dispatch, so asking about it would answer nothing at all. Grouping is the
+# main checkout's; the tab's own directory is `--cwd`, and those are separate.
 WS_JSON=$(herdr worktree list --cwd "$MAIN_ROOT" --json 2>/dev/null) || WS_JSON=""
 WS_ID=$(printf '%s' "$WS_JSON" | jq -r --arg p "$MAIN_ROOT" '
     [ (.result.source.source_workspace_id? // empty),
@@ -235,16 +242,54 @@ if [ -z "$WS_ID" ]; then
     return 0 2>/dev/null || exit 0
 fi
 
+# The verification session gets its OWN detached worktree (#1577). It used to
+# open in $MAIN_ROOT, and that checkout is shared: humans and other AI sessions
+# check branches out in it, and step 3 right above *rebases* it — so on
+# back-to-back merges the N+1th dispatch moved the ground under the Nth
+# session. Tab `pr-1567` disappeared exactly that way. This is the isolation
+# `iw-*` tabs already have, in the shape gh:pr-merge-train's scratch worktree
+# uses (`references/train-loop.md` → "Detached scratch worktree").
+PMV_COMMON_DIR=$(git -C "$MAIN_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+if [ -z "$PMV_COMMON_DIR" ]; then
+    # Never fall back to $MAIN_ROOT: that fallback IS the defect being fixed.
+    printf '[WARN] gh:pr-post-merge-verify: cannot resolve the git common dir of %s — verification skipped.\n' "$MAIN_ROOT"
+    return 0 2>/dev/null || exit 0
+fi
+# One directory per PR, so two verifications running at once never share one.
+PMV_SCRATCH="${PMV_COMMON_DIR}/pr-post-merge-verify/pr-${PR_NUMBER}"
+if [ -d "$PMV_SCRATCH" ]; then
+    # Create if absent, reuse if present: a second dispatch for the same PR (a
+    # manual re-run over a tab that is still open) must be idempotent, not a
+    # duplicate and not an error. There is deliberately NO teardown here — the
+    # worktree's lifetime is the tab's, and who removes it when is left to a
+    # later tab-close rule rather than guessed at now (#1577).
+    printf '[INFO] gh:pr-post-merge-verify: reusing verification worktree %s.\n' "$PMV_SCRATCH"
+else
+    mkdir -p "$(dirname "$PMV_SCRATCH")"
+    # A registration whose directory someone removed by hand would make the
+    # add below fail on every future dispatch. Pruning drops only entries git
+    # already considers gone, so it cannot touch a live worktree.
+    git -C "$MAIN_ROOT" worktree prune >/dev/null 2>&1 || true
+    # `--detach` is what makes this collide-free: it holds a commit, not the
+    # branch *name*, so it never contests the base branch $MAIN_ROOT has
+    # checked out. No fetch here — step 3 just fetched "$REMOTE/$BASE_BRANCH"
+    # and rebased $MAIN_ROOT onto it, so that ref is current by construction.
+    if ! git -C "$MAIN_ROOT" worktree add --detach "$PMV_SCRATCH" "${REMOTE}/${BASE_BRANCH}" >/dev/null 2>&1; then
+        printf '[WARN] gh:pr-post-merge-verify: could not create the verification worktree %s — verification skipped.\n' "$PMV_SCRATCH"
+        return 0 2>/dev/null || exit 0
+    fi
+fi
+
 # Spelled out twice rather than accumulated with `set --`: this block is pasted
 # at the top level of the caller's shell, where `set --` would destroy the
 # caller's own "$1", "$2", … POSIX sh has no arrays, so an if/else over the
 # full command line is the only form that is both safe and portable.
 if [ -n "${CLAUDE_CONFIG_DIR-}" ]; then
-    TAB_JSON=$(herdr tab create --workspace "$WS_ID" --cwd "$MAIN_ROOT" \
+    TAB_JSON=$(herdr tab create --workspace "$WS_ID" --cwd "$PMV_SCRATCH" \
         --label "pr-${PR_NUMBER}" --no-focus \
         --env "CLAUDE_CONFIG_DIR=${CLAUDE_CONFIG_DIR}" 2>/dev/null) || TAB_JSON=""
 else
-    TAB_JSON=$(herdr tab create --workspace "$WS_ID" --cwd "$MAIN_ROOT" \
+    TAB_JSON=$(herdr tab create --workspace "$WS_ID" --cwd "$PMV_SCRATCH" \
         --label "pr-${PR_NUMBER}" --no-focus 2>/dev/null) || TAB_JSON=""
 fi
 NEW_PANE=$(printf '%s' "$TAB_JSON" | pmv_json_first pane_id)
@@ -336,6 +381,9 @@ fi
 # --- 7. report ------------------------------------------------------------
 printf 'post-merge verification dispatched\n'
 printf '  tab:    %s (label pr-%s)\n' "${NEW_TAB:--}" "$PR_NUMBER"
+# Reported because nothing removes it: the operator who closes the tab is the
+# one who can also drop this directory (#1577 leaves teardown unautomated).
+printf '  cwd:    %s\n' "$PMV_SCRATCH"
 printf '  agent:  %s\n' "$PMV_AGENT"
 printf '  verify: %s\n' "$VERIFY_PROMPT"
 printf '  attach: herdr agent attach %s\n' "$PMV_AGENT"

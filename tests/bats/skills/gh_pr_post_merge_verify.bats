@@ -86,7 +86,8 @@ teardown() {
         FAKE_HERDR_OUT_TAB_CREATE FAKE_HERDR_OUT_AGENT_START FAKE_HERDR_OUT_AGENT_PROMPT \
         FAKE_HERDR_RC_AGENT_LIST FAKE_HERDR_RC_TAB_CREATE FAKE_HERDR_RC_TAB_CLOSE \
         FAKE_HERDR_RC_AGENT_START FAKE_HERDR_RC_AGENT_PROMPT FAKE_HERDR_RC_TAB_RENAME \
-        FAKE_HERDR_RC_NOTIFICATION_SHOW
+        FAKE_HERDR_RC_NOTIFICATION_SHOW \
+        FAKE_GIT_COMMON_DIR FAKE_SCRATCH_EXISTS FAKE_WORKTREE_ADD_RC
 }
 
 dispatch() {
@@ -208,7 +209,9 @@ _pmv_log_count() { grep -c -- "$1" "$FAKE_HERDR_LOG" || true; }
 
     run cat "$FAKE_HERDR_LOG"
     assert_output --partial "herdr tab close wV:t42"
-    assert_output --partial "herdr tab create --workspace wV --cwd ${MAIN_ROOT} --label pr-77 --no-focus"
+    # `--cwd` is the PR's own detached worktree, never the shared main checkout
+    # (#1577); the 1577 block below is where that is pinned in detail.
+    assert_output --partial "herdr tab create --workspace wV --cwd ${MAIN_ROOT}/.git/pr-post-merge-verify/pr-77 --label pr-77 --no-focus"
     assert_output --partial "herdr agent start mv-dotfiles-pr-77 --kind claude --pane wV:p99 -- --dangerously-skip-permissions"
     assert_output --partial "herdr agent prompt mv-dotfiles-pr-77 /devx-pr-verify-merged 77 --wait --until idle"
 }
@@ -1394,4 +1397,173 @@ _pmv_gate_run() {
     _lookup=$(grep -n 'VERIFY_SKILL=\$(jq -r --arg r' "$_skill" | head -1 | cut -d: -f1)
     [ -n "$_check" ] && [ -n "$_lookup" ]
     [ "$_check" -lt "$_lookup" ]
+}
+
+# --- #1577: the verification session lives in its own detached worktree ----
+#
+# The tab used to open in $MAIN_ROOT — the shared main checkout that humans and
+# other AI sessions check branches out in, and that step 3 of THIS dispatch
+# rebases. On back-to-back merges the N+1th dispatch moved the ground under the
+# Nth session; tab `pr-1567` vanished that way (2026-08-28). Each PR now gets
+# `<git-common-dir>/pr-post-merge-verify/pr-<N>`, created detached off the ref
+# step 3 already fetched, reused when it is already there, and never torn down
+# here (its lifetime is the tab's — cleanup timing is a later decision).
+
+_pmv_scratch_for() { printf '%s/.git/pr-post-merge-verify/pr-%s' "$MAIN_ROOT" "$1"; }
+
+@test "1577: the verification tab opens in the PR's own worktree, not the main checkout" {
+    run dispatch
+    assert_success
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "herdr tab create --workspace wV --cwd $(_pmv_scratch_for 77) --label pr-77 --no-focus"
+    # The whole point: the shared checkout is no longer the session's home.
+    refute_output --partial "--cwd ${MAIN_ROOT} --label pr-77"
+}
+
+@test "1577: the report names the worktree the session lives in" {
+    run dispatch
+    assert_success
+    assert_output --partial "cwd:    $(_pmv_scratch_for 77)"
+}
+
+@test "1577: an absent worktree is created detached at the merged base" {
+    run dispatch
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "worktree-add ${MAIN_ROOT} $(_pmv_scratch_for 77) origin/main"
+    assert_output --partial "mkdir-p ${MAIN_ROOT}/.git/pr-post-merge-verify"
+}
+
+@test "1577: the remote and base branch reach the worktree, never a hardcoded origin/main" {
+    FAKE_MAIN_BRANCH=develop
+    run dispatch acme/dotfiles upstream develop
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "worktree-add ${MAIN_ROOT} $(_pmv_scratch_for 77) upstream/develop"
+}
+
+@test "1577: an empty base branch reaches the worktree as step 3's own fallback" {
+    # `origin/` with nothing after it would detach at whatever that resolves to.
+    FAKE_MAIN_BRANCH=master
+    run dispatch
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "worktree-add ${MAIN_ROOT} $(_pmv_scratch_for 77) origin/master"
+    refute_output --partial "origin/ "
+}
+
+@test "1577: an existing worktree is reused, never added a second time" {
+    FAKE_SCRATCH_EXISTS=1
+    run dispatch
+    assert_success
+    assert_output --partial "reusing verification worktree $(_pmv_scratch_for 77)"
+    assert_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "worktree-add"
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "--cwd $(_pmv_scratch_for 77) --label pr-77"
+}
+
+@test "1577: two PRs get two different worktrees" {
+    run gh_pr_post_merge_verify 77 acme/dotfiles github.com "$MAIN_ROOT" wt/issue-77/1 "$WATCHED"
+    assert_success
+    run gh_pr_post_merge_verify 88 acme/dotfiles github.com "$MAIN_ROOT" wt/issue-88/1 "$WATCHED"
+    assert_success
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "--cwd $(_pmv_scratch_for 77) --label pr-77"
+    assert_output --partial "--cwd $(_pmv_scratch_for 88) --label pr-88"
+    [ "$(_pmv_scratch_for 77)" != "$(_pmv_scratch_for 88)" ]
+}
+
+@test "1577: step 3 still rebases the main checkout, never the scratch worktree" {
+    run dispatch
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "sync ${MAIN_ROOT} origin main"
+    refute_output --partial "sync $(_pmv_scratch_for 77)"
+}
+
+@test "1577: the workspace lookup still asks about the main checkout" {
+    # WS_ID only groups the tab; a worktree created seconds ago has no herdr
+    # workspace of its own on a first dispatch, so asking about it answers
+    # nothing. Grouping is the main checkout's, the working directory is not.
+    run dispatch
+    assert_success
+    run cat "$FAKE_HERDR_LOG"
+    assert_output --partial "herdr worktree list --cwd ${MAIN_ROOT} --json"
+}
+
+@test "1577: a worktree that cannot be created stops before the tab" {
+    FAKE_WORKTREE_ADD_RC=1
+    run dispatch
+    assert_success
+    assert_output --partial "could not create the verification worktree $(_pmv_scratch_for 77)"
+    refute_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab create"
+}
+
+@test "1577: an unresolvable git common dir never falls back to the main checkout" {
+    FAKE_GIT_COMMON_DIR=""
+    run dispatch
+    assert_success
+    assert_output --partial "cannot resolve the git common dir of ${MAIN_ROOT}"
+    refute_output --partial "post-merge verification dispatched"
+    run cat "$FAKE_HERDR_LOG"
+    refute_output --partial "tab create"
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "worktree-add"
+}
+
+@test "1577: nothing here tears the worktree down" {
+    # Decided out of scope: the worktree's lifetime is the tab's, and the tab
+    # is closed by the operator after reading the result. A teardown here would
+    # delete a directory a live session is standing in.
+    run dispatch
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "worktree-remove"
+}
+
+@test "1577: dispatch.sh.md opens the tab on the scratch worktree, both argv forms" {
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    run grep -c -- 'herdr tab create --workspace "$WS_ID" --cwd "$PMV_SCRATCH"' "$_out"
+    assert_output "2"
+    run grep -c -- 'herdr tab create --workspace "$WS_ID" --cwd "$MAIN_ROOT"' "$_out"
+    assert_output "0"
+}
+
+@test "1577: dispatch.sh.md derives the path per PR under the git common dir" {
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    run grep -qF -- 'PMV_SCRATCH="${PMV_COMMON_DIR}/pr-post-merge-verify/pr-${PR_NUMBER}"' "$_out"
+    assert_success
+    # `--path-format=absolute` (git 2.31+): a bare --git-common-dir prints a
+    # path relative to the cwd, which would place the worktree anywhere.
+    run grep -qF -- 'rev-parse --path-format=absolute --git-common-dir' "$_out"
+    assert_success
+}
+
+@test "1577: dispatch.sh.md creates it detached, off the ref step 3 already fetched" {
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    run grep -qF -- 'worktree add --detach "$PMV_SCRATCH" "${REMOTE}/${BASE_BRANCH}"' "$_out"
+    assert_success
+    # A second fetch would be redundant: step 3's is the only one in the block.
+    run grep -c -- 'git -C "$MAIN_ROOT" fetch' "$_out"
+    assert_output "1"
+}
+
+@test "1577: dispatch.sh.md reuses an existing worktree and tears none down" {
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    run grep -qF -- 'if [ -d "$PMV_SCRATCH" ]; then' "$_out"
+    assert_success
+    run grep -c -- 'worktree remove' "$_out"
+    assert_output "0"
 }
