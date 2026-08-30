@@ -100,6 +100,24 @@ _pmv_dir_exists() {
     [ "${FAKE_SCRATCH_EXISTS:-0}" = "1" ]
 }
 
+# Stand-in for the `worktree list --porcelain` membership check that proves an
+# existing directory is actually a registered worktree, not merely a directory
+# git's own bookkeeping has forgotten (pruned) or a hand-made folder at the same
+# path (agy/codex, PR #1605 review). Defaults to FAKE_SCRATCH_EXISTS so every
+# pre-#1605-review test — which only ever meant "a real worktree is already
+# there" by setting that flag — keeps its original meaning; a test can set
+# FAKE_SCRATCH_REGISTERED=0 on its own to simulate a stale/unregistered one.
+_pmv_worktree_registered() {
+    [ "${FAKE_SCRATCH_REGISTERED:-${FAKE_SCRATCH_EXISTS:-0}}" = "1" ]
+}
+
+# Stand-in for `rm -rf <dir>` — reached only when a directory sits at the
+# scratch path but `_pmv_worktree_registered` says it isn't a real worktree.
+_pmv_rm_rf() {
+    [ -z "${FAKE_GIT_LOG-}" ] || printf 'rm-rf %s\n' "$1" >>"$FAKE_GIT_LOG"
+    return 0
+}
+
 # Stand-in for `mkdir -p <dir>`.
 _pmv_mkdir_p() {
     [ -z "${FAKE_GIT_LOG-}" ] || printf 'mkdir-p %s\n' "$1" >>"$FAKE_GIT_LOG"
@@ -399,11 +417,18 @@ pmv_scratch_dir() {
 pmv_ensure_scratch() {
     local _root="$1" _scratch="$2" _remote="${3:-origin}" _base="$4"
 
-    if _pmv_dir_exists "$_scratch"; then
+    if _pmv_dir_exists "$_scratch" && _pmv_worktree_registered "$_scratch"; then
         printf '[INFO] gh:pr-post-merge-verify: reusing verification worktree %s.\n' "$_scratch"
         return 0
     fi
 
+    # A directory at this path that isn't a registered worktree can't be
+    # reused (stale/unregistered) and can't be added over either (git refuses
+    # a non-empty target) — clear it first, mirroring gh:pr-merge-train's own
+    # stale-leftover guard for its scratch worktree.
+    if _pmv_dir_exists "$_scratch"; then
+        _pmv_rm_rf "$_scratch"
+    fi
     _pmv_mkdir_p "${_scratch%/*}"
     # A registration whose directory someone removed by hand would make the add
     # fail on every future dispatch; prune drops only entries git already
@@ -476,7 +501,8 @@ pmv_agent_prompt() {
 }
 
 pmv_escalate_prompt_stall() {
-    local _tab="$1" _agent="$2" _pr="$3" _label="pr-${_pr}-STUCK"
+    local _tab="$1" _agent="$2" _pr="$3"
+    local _label="pr-${_pr}-STUCK"
     local _body="pr-${_pr} verification prompt failed repeatedly — herdr agent attach ${_agent}"
 
     if [ -n "$_tab" ]; then
