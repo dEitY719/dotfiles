@@ -1660,18 +1660,19 @@ _iw_wait_for_idle() {
 }
 
 # Echo the tail of an agent's pane, or nothing when it cannot be read.
-#   $1 = agent name
+#   $1 = agent name, $2 = lines to read (default _IW_SETTLE_READ_LINES)
 #
 # `--format text` gives the pane as plain lines. herdr answers its error
 # document as JSON on *stdout* with exit 0 when the target is gone (#1444), so
 # an unreadable pane has to be recognised by parsing rather than by the exit
-# code — the same filter _iw_limit_evidence applies to the same call.
+# code. Shared by the settle poll and _iw_limit_evidence (#1444) — the two
+# callers differ only in how many lines they need.
 #
 # Always returns 0 and simply echoes nothing when there is no text: every
 # caller reads "no text" as "nothing to conclude", never as a failure.
 _iw_pane_text() {
     local _text
-    _text=$(herdr agent read "$1" --lines "${_IW_SETTLE_READ_LINES}" \
+    _text=$(herdr agent read "$1" --lines "${2:-${_IW_SETTLE_READ_LINES}}" \
         --format text 2>/dev/null) || return 0
     [ -z "$(printf '%s' "${_text}" | _iw_json_value '.error.code')" ] || return 0
     printf '%s' "${_text}"
@@ -2292,20 +2293,16 @@ EOF
 # Copy the tail of each dispatched pane into the cron log when a strike is
 # booked (issue #1444). Evidence for a human reading the log afterwards — the
 # gate has already decided by the time this runs, and nothing here can change
-# that decision. `--format text` gives the pane as plain lines; an error
-# response comes back as JSON on stdout, which is skipped rather than logged as
-# if it were pane content. That skip is decided by `_iw_json_value`, not by a
-# byte-prefix match on the envelope: pane text is not JSON, so the filter reads
-# as "no such field" for real output and names the code for a real error.
+# that decision. The read-and-filter itself is _iw_pane_text's (#1570) — this
+# just asks for 40 lines instead of the settle poll's 3.
 _iw_limit_evidence() {
     local _agents="$1" _agent _text _line
 
     # fd 3, not stdin: the loop body runs `herdr` (PR #1447 agy review).
     while IFS= read -r _agent <&3; do
         [ -n "${_agent}" ] || continue
-        _text=$(herdr agent read "${_agent}" --lines "${_IW_LIMIT_EVIDENCE_LINES}" \
-            --format text 2>/dev/null) || _text=""
-        if [ -z "${_text}" ] || [ -n "$(printf '%s' "${_text}" | _iw_json_value '.error.code')" ]; then
+        _text=$(_iw_pane_text "${_agent}" "${_IW_LIMIT_EVIDENCE_LINES}")
+        if [ -z "${_text}" ]; then
             ux_info "No pane output captured for ${_agent}."
             continue
         fi
