@@ -257,7 +257,16 @@ if [ -z "$PMV_COMMON_DIR" ]; then
 fi
 # One directory per PR, so two verifications running at once never share one.
 PMV_SCRATCH="${PMV_COMMON_DIR}/pr-post-merge-verify/pr-${PR_NUMBER}"
+# Existence alone is not proof of a live worktree (agy/codex, PR #1605 review):
+# a directory git's own bookkeeping has forgotten — pruned, or hand-removed and
+# recreated as a plain folder — passes `-d` but is not a checkout `herdr tab
+# create` can safely open. Cross-check it against `worktree list` instead.
+PMV_SCRATCH_REGISTERED=""
 if [ -d "$PMV_SCRATCH" ]; then
+    PMV_SCRATCH_REGISTERED=$(git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null |
+        awk -v p="$(pmv_physical_path "$PMV_SCRATCH")" '$0 == "worktree " p { print "1"; exit }')
+fi
+if [ -n "$PMV_SCRATCH_REGISTERED" ]; then
     # Create if absent, reuse if present: a second dispatch for the same PR (a
     # manual re-run over a tab that is still open) must be idempotent, not a
     # duplicate and not an error. There is deliberately NO teardown here — the
@@ -265,10 +274,15 @@ if [ -d "$PMV_SCRATCH" ]; then
     # later tab-close rule rather than guessed at now (#1577).
     printf '[INFO] gh:pr-post-merge-verify: reusing verification worktree %s.\n' "$PMV_SCRATCH"
 else
+    # An unregistered directory at this path cannot be reused (git refuses to
+    # `worktree add` over an existing, non-empty target) and cannot be trusted
+    # as a checkout either — clear it before recreating, same as the
+    # stale-leftover guard in gh:pr-merge-train's own scratch worktree
+    # (`references/train-loop.md` → "Detached scratch worktree").
+    [ -d "$PMV_SCRATCH" ] && rm -rf "$PMV_SCRATCH"
     mkdir -p "$(dirname "$PMV_SCRATCH")"
-    # A registration whose directory someone removed by hand would make the
-    # add below fail on every future dispatch. Pruning drops only entries git
-    # already considers gone, so it cannot touch a live worktree.
+    # Pruning drops only entries git already considers gone, so it cannot
+    # touch a live worktree — safe to run unconditionally before every add.
     git -C "$MAIN_ROOT" worktree prune >/dev/null 2>&1 || true
     # `--detach` is what makes this collide-free: it holds a commit, not the
     # branch *name*, so it never contests the base branch $MAIN_ROOT has

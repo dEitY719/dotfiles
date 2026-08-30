@@ -87,7 +87,7 @@ teardown() {
         FAKE_HERDR_RC_AGENT_LIST FAKE_HERDR_RC_TAB_CREATE FAKE_HERDR_RC_TAB_CLOSE \
         FAKE_HERDR_RC_AGENT_START FAKE_HERDR_RC_AGENT_PROMPT FAKE_HERDR_RC_TAB_RENAME \
         FAKE_HERDR_RC_NOTIFICATION_SHOW \
-        FAKE_GIT_COMMON_DIR FAKE_SCRATCH_EXISTS FAKE_WORKTREE_ADD_RC
+        FAKE_GIT_COMMON_DIR FAKE_SCRATCH_EXISTS FAKE_SCRATCH_REGISTERED FAKE_WORKTREE_ADD_RC
 }
 
 dispatch() {
@@ -1462,6 +1462,41 @@ _pmv_scratch_for() { printf '%s/.git/pr-post-merge-verify/pr-%s' "$MAIN_ROOT" "$
     refute_output --partial "worktree-add"
     run cat "$FAKE_HERDR_LOG"
     assert_output --partial "--cwd $(_pmv_scratch_for 77) --label pr-77"
+}
+
+@test "1605 review: a directory that exists but is not a registered worktree is wiped and recreated" {
+    FAKE_SCRATCH_EXISTS=1
+    FAKE_SCRATCH_REGISTERED=0
+    run dispatch
+    assert_success
+    refute_output --partial "reusing verification worktree"
+    run cat "$FAKE_GIT_LOG"
+    assert_output --partial "rm-rf $(_pmv_scratch_for 77)"
+    assert_output --partial "worktree-add ${MAIN_ROOT} $(_pmv_scratch_for 77) origin/main"
+}
+
+@test "1605 review: the stale directory is removed before worktree-add runs, not after" {
+    FAKE_SCRATCH_EXISTS=1
+    FAKE_SCRATCH_REGISTERED=0
+    run dispatch
+    assert_success
+    run cat "$FAKE_GIT_LOG"
+    _rm_line=$(printf '%s\n' "$output" | grep -n "^rm-rf " | head -1 | cut -d: -f1)
+    _add_line=$(printf '%s\n' "$output" | grep -n "^worktree-add " | head -1 | cut -d: -f1)
+    [ -n "$_rm_line" ]
+    [ -n "$_add_line" ]
+    [ "$_rm_line" -lt "$_add_line" ]
+}
+
+@test "1605 review: a registered worktree is reused without ever being removed" {
+    FAKE_SCRATCH_EXISTS=1
+    FAKE_SCRATCH_REGISTERED=1
+    run dispatch
+    assert_success
+    assert_output --partial "reusing verification worktree $(_pmv_scratch_for 77)"
+    run cat "$FAKE_GIT_LOG"
+    refute_output --partial "rm-rf"
+    refute_output --partial "worktree-add"
 }
 
 @test "1577: two PRs get two different worktrees" {
