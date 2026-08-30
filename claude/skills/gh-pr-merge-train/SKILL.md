@@ -88,6 +88,13 @@ verdict is decided by `devx:pr-review-all`, which is the labels' only writer.
 #1564). Neither outcome spends an F-5 attempt and neither is ever `[FAILED]`.
 There is deliberately no staleness window here, unlike `reply-pending`'s.
 
+This pass is label-presence only, on purpose — it costs no API call. It
+cannot yet tell a `review-passed` label issued for the current head apart
+from a stale one; that sha-freshness check (#1601) happens once per PR, right
+before it is actually acted on, at Step 4's F-3 re-query
+(`references/routing-table.md`) — the same point that already re-derives
+everything else Step 2/3.5 could not have seen coming.
+
 ## Step 4: Run the train — one PR at a time
 
 For each PR in queue order, run the loop in `references/train-loop.md`:

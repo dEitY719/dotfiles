@@ -9,8 +9,12 @@ Immediately before processing each PR (F-3):
 
 ```bash
 STATE=$(GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \
-  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,labels,url)
+  --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,headRefOid,labels,url)
 ```
+
+`headRefOid` (#1601) is what the verdict gate's freshness check compares a
+`review-passed` marker's sha against — free to add here since the call is
+already made; it would otherwise cost a second `gh pr view` just for this.
 
 Keep `$STATE`. Every question the rest of this file asks about the PR is
 answered by a `jq` over it — re-fetching the same PR to read one more field is
@@ -37,17 +41,25 @@ Four conditions **short-circuit the table** — check all four before reading
 | `labels[].name` contains `reply-pending` | `[SKIPPED] reply-pending — review reply not yet complete` |
 | `labels[].name` contains `review-blocked` | `[SKIPPED] review-blocked — reviewer verdict is blocking` |
 | `labels[].name` contains neither verdict label | `[SKIPPED] review not verified — no review-passed label` |
+| `review-passed` present but its sha marker is stale/missing (#1601) | `[SKIPPED] review-passed label stale — head advanced without invalidation` |
 
 ```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
+
 printf '%s' "$STATE" | _gh_pr_merge_train_has_reply_pending_label \
   && echo "[SKIPPED] reply-pending"
 
 # The verdict gate, re-asked (references/review-verdict-gate.md). Order
 # matters: review-blocked wins over a stale review-passed.
+HEAD_OID=$(printf '%s' "$STATE" | jq -r '.headRefOid')
 if printf '%s' "$STATE" | _gh_pr_merge_train_has_review_blocked_label; then
     echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
 elif ! printf '%s' "$STATE" | _gh_pr_merge_train_has_review_passed_label; then
     echo "[SKIPPED] review not verified — no review-passed label"
+elif _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID"; then
+    # #1601 — the label alone proves some head was reviewed, not this one.
+    echo "[SKIPPED] review-passed label stale — head advanced without invalidation"
+    _gh_pr_drop_label "$N" review-passed "$TARGET_REPO" "$TARGET_HOST" >/dev/null 2>&1 || :
 fi
 ```
 

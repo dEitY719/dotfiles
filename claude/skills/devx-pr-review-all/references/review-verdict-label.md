@@ -18,6 +18,7 @@ real gate was CI.
 | invalidation (drop a stale verdict) | `_gh_pr_drop_label`, called by every head-advancing skill | #1563 |
 | consumer (hard merge gate) | `gh:pr-merge-train` **Step 3.5**, `references/review-verdict-gate.md` | #1564 |
 | provisioning (the labels exist in the repo) | `gh:label-bootstrap` pipeline feed | #1564 |
+| freshness (sha marker for `review-passed`) | `devx_pr_review_all_apply_label`'s 4th arg; read by `_gh_pr_merge_train_review_passed_stale` | #1601 |
 
 #1563's label-lifecycle invalidation rules are the piece that makes the rest
 safe: every skill that advances a PR's head (`gh:pr-reply`,
@@ -219,8 +220,12 @@ for ai in agy codex opencode hermes; do
     printf '%s\n' "$BODIES" |
         devx_pr_review_all_lane_block "$ai" "$head_sha" |
         devx_pr_review_all_verdict
-done | devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST"
+done | devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"
 ```
+
+**Always pass `$head_sha` as the 4th argument** (#1601) — the same sha already
+read at the top of this section, before any push. See "Freshness marker for
+`review-passed`" below.
 
 What it does, and why each part is the way it is:
 
@@ -255,6 +260,41 @@ It prints exactly one line:
 hence the `gh:label-bootstrap` pointer in that line. Its `pipeline|` feed
 (`gh-label-bootstrap/references/gh-labels.md`) is where the two labels are
 provisioned, and `--prune` preserves them.
+
+## Freshness marker for `review-passed` (#1601)
+
+The label alone only proves "some head was reviewed" — its invalidation
+depends on every skill that advances a PR's head remembering to drop it
+(`gh_pr_edit_safe.sh` → "Verdict-label invalidation"). That list can never be
+complete: a manual `git push --force-with-lease`, a GitHub web-UI commit, or
+a future tool all advance the head with no hook this repo controls, leaving
+a stale `review-passed` that `gh:pr-merge-train`'s gate would trust.
+
+`devx_pr_review_all_apply_label`'s 4th argument closes that gap from the
+*read* side instead of chasing more write-side call sites. When the resolved
+verdict is `review-passed` and a head-sha is given, it posts one plain issue
+comment:
+
+```
+<!-- review-verdict:review-passed:<head-sha> -->
+```
+
+`gh:pr-merge-train`'s gate (`_gh_pr_merge_train_review_passed_stale` in
+`shell-common/functions/gh_pr_merge_train.sh`) reads the last such marker back
+and compares its sha against the PR's *current* `headRefOid` before trusting
+the label — full detail:
+`gh-pr-merge-train/references/review-verdict-gate.md` → "Freshness check".
+
+This is a different thing from the "not a comment parser" rule two sections
+up: that rule forbids re-deriving a reviewer's LGTM/BLOCKING verdict from
+free-form CLI output, where a reformat could silently unlock the gate. This
+marker is a fixed, machine-only stamp only this function ever writes, read by
+a fixed regex — no reviewer output touches it either way.
+
+Never posted for `review-blocked`: a stale block is already the safe
+direction (it over-skips, never over-merges), so it needs no freshness proof.
+The post is best-effort and never adds a second line to this function's
+`[OK]`/`[WARN]` report.
 
 ## Why this lives in the producer
 

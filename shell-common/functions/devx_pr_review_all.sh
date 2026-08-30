@@ -149,8 +149,10 @@ devx_pr_review_all_parse() {
 #     -> blocking | concerns | lgtm | unknown
 #   devx_pr_review_all_aggregate                     # verdict tokens on stdin,
 #     -> label=review-blocked | label=review-passed | label=   (+ lanes=N)
-#   devx_pr_review_all_apply_label <pr> <repo> [host] # verdict tokens on stdin
-#     -> aggregates, then writes the label to the PR. One `[OK]`/`[WARN]` line.
+#   devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha] # verdict
+#     tokens on stdin -> aggregates, then writes the label to the PR. One
+#     `[OK]`/`[WARN]` line. [head-sha], when given, stamps a freshness marker
+#     alongside a `review-passed` label (#1601) — see that function's header.
 #
 # devx_pr_review_all_aggregate reads stdin, NOT positional args — load-bearing,
 # not stylistic; see the doc for the zsh bug that forces it.
@@ -316,7 +318,7 @@ devx_pr_review_all_lane_block() {
 # labels are never issued, `gh:pr-merge-train` reads "not verified" on every
 # PR, and the gate degrades into a permanent skip.
 #
-#   <verdict tokens, one per line> | devx_pr_review_all_apply_label <pr> <repo> [host]
+#   <verdict tokens, one per line> | devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha]
 #
 # Stdin, not positional args, for the zsh word-splitting reason
 # devx_pr_review_all_aggregate's own header gives — a caller staging the
@@ -338,8 +340,19 @@ devx_pr_review_all_lane_block() {
 #   - GH_HOST is pinned per call inside a subshell so a dual-host login cannot
 #     write the label to the wrong server (#1403 / #1407), and the caller's own
 #     GH_HOST is left untouched.
+#
+# [head-sha] (#1601): when given AND the resolved label is `review-passed`,
+# post one plain issue comment carrying a freshness marker:
+#   <!-- review-verdict:review-passed:<head-sha> -->
+# `gh:pr-merge-train`'s gate (`_gh_pr_merge_train_review_passed_stale` in
+# gh_pr_merge_train.sh) reads this back and compares it against the PR's
+# CURRENT headRefOid before trusting the label — a label alone only proves
+# some head was reviewed, not that the current one was. Never posted for
+# `review-blocked`: a stale block is the safe direction and needs no
+# freshness proof. Best-effort — a failed post never changes this function's
+# one-line report contract; it is silent on stdout either way.
 devx_pr_review_all_apply_label() {
-    local _pr="$1" _repo="$2" _host="${3-}"
+    local _pr="$1" _repo="$2" _host="${3-}" _head_sha="${4-}"
     local _agg _label _lanes _opposite _rc
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
@@ -397,6 +410,20 @@ devx_pr_review_all_apply_label() {
         fi
         _gh_pr_edit_safe_label "$_pr" "$_label" --repo "$_repo"
     ) || _rc=$?
+
+    # #1601 freshness marker: only on a successfully applied `review-passed`,
+    # and only when the caller supplied the head sha it reviewed. Best-effort
+    # — a failed post is swallowed so it never adds a second stdout line.
+    if [ "$_rc" -eq 0 ] && [ "$_label" = "review-passed" ] && [ -n "$_head_sha" ]; then
+        (
+            if [ -n "$_host" ]; then
+                # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+                export GH_HOST="$_host"
+            fi
+            gh api -X POST "repos/$_repo/issues/$_pr/comments" \
+                -f "body=<!-- review-verdict:review-passed:$_head_sha -->"
+        ) >/dev/null 2>&1 || :
+    fi
 
     # The backticks below are markdown in the report line (the label name
     # renders as code in a terminal-pasted comment), not command
