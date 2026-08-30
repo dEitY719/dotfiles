@@ -114,13 +114,14 @@ _PMT_TIMEOUT_MS="240000"
 _PMT_IDLE_POLL_MAX="10"
 _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 
-# Unconditional settle wait between `agent start` and the first prompt
-# (issue #1560); the twin of _IW_SETTLE_SECONDS, whose comment carries the
-# rationale and the measurement in full — including why raising
-# _PMT_IDLE_POLL_MAX instead is a no-op. Applied by _pmt_launch_fresh only —
-# the reuse path prompts a session that has been up for a whole cron period and
-# must not pay 13s per PR. Overridable (to 0) so the bats suite does not sleep
-# for real.
+# Upper bound on the settle wait between `agent start` and the first prompt
+# (issue #1560; a poll rather than a flat sleep since #1570); the twin of
+# _IW_SETTLE_SECONDS, whose comment carries the rationale and the measurement
+# in full — including why raising _PMT_IDLE_POLL_MAX instead is a no-op and why
+# the pane's own text, not `agent_status`, is what ends the wait. Applied by
+# _pmt_launch_fresh only — the reuse path prompts a session that has been up
+# for a whole cron period and must not pay this per PR. Overridable (to 0) so
+# the bats suite does not sleep for real.
 #
 # 13 is the repo-wide constant for "herdr just brought something up, wait
 # before touching it" (#1571). Its four twins are _PMT_START_RETRY_SLEEP below,
@@ -128,8 +129,19 @@ _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 # PMV_SETTLE_SECONDS in
 # claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md. Change one,
 # change all five — #1530/#1549 and #1560/#1571 are both the same defect
-# recurring because only two of the three dispatchers were fixed.
+# recurring because only two of the three dispatchers were fixed. The *number*
+# is what those five share; since #1570 the two settle constants spend it as a
+# poll cap while the three start-retry gaps are still flat sleeps, because only
+# a settle has a pane to read.
 _PMT_SETTLE_SECONDS="${PMT_SETTLE_SECONDS:-13}"
+# Gap between settle polls, and how many pane lines each poll reads — the twins
+# of _IW_SETTLE_POLL_SLEEP / _IW_SETTLE_READ_LINES, overridable (to 0) for the
+# same reason _PMT_IDLE_POLL_SLEEP is.
+_PMT_SETTLE_POLL_SLEEP="${PMT_SETTLE_POLL_SLEEP:-1}"
+_PMT_SETTLE_READ_LINES="3"
+# The pane text herdr shows while claude is up but unusable (#1561). Stable
+# across reads, so the "two frames agree" test alone would take it for ready.
+_PMT_SETTLE_NOT_READY_MARK="Not logged in"
 _PMT_PROMPT_ATTEMPT_MAX="3"
 
 # `herdr agent start` attempts on a freshly created pane (see _pmt_launch_fresh,
@@ -667,13 +679,76 @@ _pmt_wait_for_idle() {
     ux_warning "Agent ${_agent} never reported idle in ${_PMT_IDLE_POLL_MAX} checks${_detail} — prompting anyway."
 }
 
-# Let a freshly launched pane settle before typing into it (issue #1560).
-# Separate from _pmt_wait_for_idle on purpose: that one asks herdr a question
-# and can answer "the agent is gone", this one asks nothing and can only wait.
-# Always succeeds — a settle that could fail would skip the prompt it exists to
-# protect, which is a worse outcome than a prompt sent slightly too early.
+# Echo the tail of an agent's pane, or nothing when it cannot be read.
+#   $1 = agent name
+#
+# `--format text` gives the pane as plain lines. herdr answers its error
+# document as JSON on *stdout* with exit 0 when the target is gone, so an
+# unreadable pane is recognised by parsing, not by the exit code. Always
+# returns 0: "no text" is "nothing to conclude", never a failure.
+_pmt_pane_text() {
+    local _text
+    _text=$(herdr agent read "$1" --lines "${_PMT_SETTLE_READ_LINES}" \
+        --format text 2>/dev/null) || return 0
+    [ -z "$(printf '%s' "${_text}" | _pmt_json_value '.error.code')" ] || return 0
+    printf '%s' "${_text}"
+}
+
+# True when two consecutive pane reads say the agent is listening.
+#   $1 = this read, $2 = the previous one
+#
+# The twin of _iw_pane_settled, whose comment carries the reasoning for all
+# three conditions — non-empty, identical, and not the login banner.
+_pmt_pane_settled() {
+    [ -n "$1" ] || return 1
+    [ "$1" = "$2" ] || return 1
+    case "$1" in
+    *"${_PMT_SETTLE_NOT_READY_MARK}"*) return 1 ;;
+    esac
+    return 0
+}
+
+# Wait for a freshly launched pane to look ready before typing into it
+# (issue #1560; polled since #1570). Separate from _pmt_wait_for_idle on
+# purpose: that one asks herdr for the agent's *status*, which reports "not
+# working" and says nothing about the key-input loop. This one reads the pane's
+# own text. The twin of _iw_settle — see it for the full rationale.
+#
+# Always succeeds and always ends in a prompt attempt: reaching the cap with no
+# ready signal warns and proceeds, exactly the pre-#1570 behaviour. The poll
+# can only make the wait shorter, never introduce a new failure mode.
 _pmt_settle() {
-    [ "${_PMT_SETTLE_SECONDS}" = "0" ] || sleep "${_PMT_SETTLE_SECONDS}"
+    local _agent="$1" _i=0 _prev="" _text _now _deadline=""
+
+    [ "${_PMT_SETTLE_SECONDS}" = "0" ] && return 0
+    # A fractional cap cannot bound a poll count; it still means the flat wait
+    # it meant before #1570.
+    case "${_PMT_SETTLE_SECONDS}" in
+    *[!0-9]*)
+        sleep "${_PMT_SETTLE_SECONDS}"
+        return 0
+        ;;
+    esac
+
+    _now=$(_pmt_now)
+    [ -z "${_now}" ] || _deadline=$((_now + _PMT_SETTLE_SECONDS))
+
+    while [ "${_i}" -lt "${_PMT_SETTLE_SECONDS}" ]; do
+        # Before the read, not after the sleep — see _iw_settle: a poll gap
+        # wider than 1s would otherwise let the last read land past the cap.
+        if [ -n "${_deadline}" ]; then
+            _now=$(_pmt_now)
+            [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
+        fi
+        _text=$(_pmt_pane_text "${_agent}")
+        ! _pmt_pane_settled "${_text}" "${_prev}" || return 0
+        _prev="${_text}"
+        _i=$((_i + 1))
+        [ "${_i}" -lt "${_PMT_SETTLE_SECONDS}" ] || break
+        [ "${_PMT_SETTLE_POLL_SLEEP}" = "0" ] || sleep "${_PMT_SETTLE_POLL_SLEEP}"
+    done
+
+    ux_warning "Agent ${_agent} pane never settled within ${_PMT_SETTLE_SECONDS}s — prompting anyway."
     return 0
 }
 
@@ -754,7 +829,7 @@ _pmt_prompt_train() {
             : >"${_errf}"
             _attempt=$((_attempt + 1))
             _rc=0
-            _pmt_settle
+            _pmt_settle "${_agent}"
             continue
         fi
         break
@@ -816,9 +891,10 @@ _pmt_launch_fresh() {
         _pmt_wait_for_idle "${_agent}"
         # Fresh launch only. The reuse branch in main() and the
         # `agent_name_taken` fallback below both talk to a session that has
-        # been up for at least a cron period — settling those would cost 13s
-        # per PR for nothing (issue #1560).
-        _pmt_settle
+        # been up for at least a cron period — settling those would spend a
+        # poll round per PR on a pane that has been ready for minutes
+        # (issue #1560).
+        _pmt_settle "${_agent}"
         _pmt_prompt_train "${_agent}"
         return
     fi

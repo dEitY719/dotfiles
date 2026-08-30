@@ -391,8 +391,15 @@ EOF
 #   HERDR_WORKING_AGENTS            space-separated agent names that report
 #                                   `working` once prompted, whatever the
 #                                   settings above say
-#   HERDR_READ_MODE=missing         `agent read` answers agent_not_found (the
-#                                   evidence capture has nothing to log)
+#   HERDR_READ_MODE=missing         every `agent read` answers agent_not_found
+#                                   (the evidence capture has nothing to log,
+#                                   and the settle poll never sees a frame)
+#   HERDR_SETTLE_READ_SEQUENCE=A|B  bodies the *settle* read (#1570, the short
+#                                   one) answers on successive calls per agent;
+#                                   the last entry is held once the list runs
+#                                   out, and `~` stands for an empty read. The
+#                                   40-line evidence read (#1444) is a separate
+#                                   call and is not scripted by this
 #   HERDR_GET_FAIL_AFTER_PROMPT=1   `agent get` errors once that agent has been
 #                                   prompted — herdr unreachable during the
 #                                   observation window only, leaving dispatch
@@ -519,14 +526,24 @@ case "$1 $2" in
     printf '%s\n' '{"id":"cli:agent:send-keys","result":{"ok":true}}'
     ;;
 "agent read")
-    # Evidence capture only (issue #1444). `--format text` gives plain pane
-    # lines; an error comes back as JSON on stdout with exit 0, which is what
-    # the caller has to recognise and skip.
+    # Two callers, told apart by the `--lines` count they ask for: the 40-line
+    # evidence capture (issue #1444) and the short settle-readiness poll
+    # (issue #1570). `--format text` gives plain pane lines; an error comes
+    # back as JSON on stdout with exit 0, which is what both callers have to
+    # recognise and skip.
     if [ "${HERDR_READ_MODE:-ok}" = "missing" ]; then
         printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:read"}'
         exit 0
     fi
-    printf '> /gh-issue-flow 11\n5-hour limit reached. Resets at 3pm.\n'
+    if [ "$5" = "40" ]; then
+        printf '> /gh-issue-flow 11\n5-hour limit reached. Resets at 3pm.\n'
+        exit 0
+    fi
+    _seq="${HERDR_SETTLE_READ_SEQUENCE:-> claude ready}"
+    _n=$(_bump "${CALL_LOG}.settleread.$3")
+    _body=$(printf '%s' "${_seq}" | cut -d'|' -f"${_n}")
+    [ -n "${_body}" ] || _body="${_seq##*|}"
+    [ "${_body}" = "~" ] || printf '%s\n' "${_body}"
     ;;
 "agent prompt")
     _bump "${CALL_LOG}.prompt.$3" >/dev/null
@@ -1421,29 +1438,82 @@ _assert_not_hung() {
 }
 
 # ---------------------------------------------------------------------------
-# Settle wait after agent start (issue #1560)
+# Settle wait after agent start (issue #1560, polled since #1570)
 # ---------------------------------------------------------------------------
 #
 # The idle poll above is a health check, not a wait: `herdr agent start` already
 # answers `"agent_status":"idle"`, so _iw_wait_for_idle returns on its first
 # poll and ~0s pass before the prompt. That is exactly why raising the poll
-# budget fixes nothing — the pane is idle and still not listening. These pin
-# the unconditional wait that does the work.
+# budget fixes nothing — the pane is idle and still not listening.
+#
+# The wait that does the work reads the pane's own text instead (#1570). 13
+# is still the number, but as the poll's *cap*: a pane that reads stable leaves
+# early, and only one that never does pays the whole budget — and it still
+# prompts when it does, which is the pre-#1570 behaviour kept reachable.
 
-@test "issue_watcher_cron: a fresh pane settles 13s before it is prompted" {
+@test "issue_watcher_cron: a pane that reads stable is prompted before the cap" {
     _run_tick
     assert_success
-    _assert_logged "sleep 13"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    # Two agreeing reads end the poll, so one gap is spent, not thirteen.
+    [ "$(_log_count '^sleep 1$')" -eq 1 ]
+    refute_output --partial "never settled"
 }
 
-@test "issue_watcher_cron: the settle wait happens after the idle check, not before" {
+@test "issue_watcher_cron: the settle poll reads the pane, not the sequence counter" {
+    _run_tick
+    assert_success
+    _assert_logged "agent read iw-dotfiles-issue-11 --lines 3 --format text"
+}
+
+@test "issue_watcher_cron: the settle poll happens after the idle check, not before" {
     _run_tick
     assert_success
     _idle_line=$(grep -n "agent get iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
-    _settle_line=$(grep -n "^sleep 13$" "${_LOG}" | head -1 | cut -d: -f1)
+    _settle_line=$(grep -n "agent read iw-dotfiles-issue-11 --lines 3" "${_LOG}" | head -1 | cut -d: -f1)
     _prompt_line=$(grep -n "agent prompt iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
     [ "${_idle_line}" -lt "${_settle_line}" ]
     [ "${_settle_line}" -lt "${_prompt_line}" ]
+}
+
+# The no-regression case: today's behaviour (wait the whole budget, then prompt
+# regardless) has to stay reachable, because a pane that never stabilises is
+# exactly the one the flat 13s was protecting.
+@test "issue_watcher_cron: a pane that never settles still warns and prompts at the cap" {
+    _run_tick "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    assert_output --partial "never settled within 13s"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    [ "$(_log_count '^sleep 1$')" -eq 12 ]
+}
+
+# `Not logged in` is perfectly stable and means the opposite of ready (#1561).
+# A bare state_change_seq comparison cannot tell it from a settled prompt,
+# which is why the pane text is the signal.
+@test "issue_watcher_cron: a stable 'Not logged in' pane is not read as ready" {
+    _run_tick "HERDR_SETTLE_READ_SEQUENCE=Not logged in"
+    assert_success
+    assert_output --partial "never settled within 13s"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+}
+
+# An empty frame twice over is not a settled pane either — it is a pane that
+# has not drawn anything yet.
+@test "issue_watcher_cron: two empty reads do not count as a stable pane" {
+    _run_tick "HERDR_SETTLE_READ_SEQUENCE=~|~|> claude ready"
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    # Reads 1-2 are empty, 3 and 4 agree — three gaps, still well inside 13.
+    [ "$(_log_count '^sleep 1$')" -eq 3 ]
+    refute_output --partial "never settled"
+}
+
+# A read that herdr refuses is "not ready yet", never a reason to end the tick.
+@test "issue_watcher_cron: an unreadable pane degrades to not-ready, never aborts" {
+    _run_tick "HERDR_READ_MODE=missing"
+    assert_success
+    assert_output --partial "never settled within 13s"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
 @test "issue_watcher_cron: IW_SETTLE_SECONDS=0 removes the settle wait entirely" {
@@ -1451,21 +1521,51 @@ _assert_not_hung() {
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11"
     _refute_logged "sleep "
+    _refute_logged "agent read iw-dotfiles-issue-11 --lines 3"
 }
 
-@test "issue_watcher_cron: IW_SETTLE_SECONDS overrides the default duration" {
-    _run_tick "IW_SETTLE_SECONDS=7"
+@test "issue_watcher_cron: IW_SETTLE_SECONDS caps the poll, not one flat sleep" {
+    _run_tick "IW_SETTLE_SECONDS=7" "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
-    _assert_logged "sleep 7"
-    _refute_logged "sleep 13"
+    assert_output --partial "never settled within 7s"
+    [ "$(_log_count '^sleep 1$')" -eq 6 ]
+    _refute_logged "sleep 7"
+}
+
+# A fractional override predates the poll and cannot bound a poll count, so it
+# still means the flat wait it always meant.
+@test "issue_watcher_cron: a fractional settle cap stays a flat wait" {
+    _run_tick "IW_SETTLE_SECONDS=0.5"
+    assert_success
+    _assert_logged "sleep 0.5"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    _refute_logged "agent read iw-dotfiles-issue-11 --lines 3"
+}
+
+@test "issue_watcher_cron: the settle poll interval is overridable" {
+    _run_tick "IW_SETTLE_POLL_SLEEP=4" "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 4$')" -eq 12 ]
+    [ "$(_log_count '^sleep 1$')" -eq 0 ]
+}
+
+# The same `0` escape _IW_IDLE_POLL_SLEEP has: the suite polls without paying
+# for it, and the poll still runs its full budget and still prompts.
+@test "issue_watcher_cron: IW_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
+    _run_tick "IW_SETTLE_POLL_SLEEP=0" "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    _refute_logged "sleep "
+    assert_output --partial "never settled within 13s"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
 @test "issue_watcher_cron: a dispatch that fails before agent start never settles" {
-    # No pane was opened, so there is nothing to wait for — the 13s must not be
-    # spent on an attempt that cannot prompt anyway.
+    # No pane was opened, so there is nothing to wait for — the budget must not
+    # be spent on an attempt that cannot prompt anyway.
     _run_tick "HERDR_TAB_FAIL=1"
     assert_failure
-    _refute_logged "sleep 13"
+    _refute_logged "sleep "
+    _refute_logged "agent read"
 }
 
 @test "issue_watcher_cron: the pane opens on the newest worktree index" {
@@ -2230,8 +2330,10 @@ _two_repo_fixture() {
 # The gap itself is 13s since #1571, not the 2s this shipped with: `tab create`
 # answering before the pane's shell is interactive is the *same* class of race
 # as the settle wait above, and 2s was shorter than the 5s already measured to
-# fail. Asserted through the message rather than a `sleep` line because the
-# settle wait logs `sleep 13` too — the sentence is what pins which wait this is.
+# fail. Unlike the settle wait it is still a flat sleep — #1570 turned only the
+# settle into a poll, because only the settle has a pane to read. Asserted
+# through the message rather than a `sleep` line, which is what tells the two
+# waits apart in the call log.
 @test "issue_watcher_cron: the start retry gap defaults to 13s" {
     # An empty assignment beats _run_tick's own `IW_START_RETRY_SLEEP=0` and
     # still lets `${IW_START_RETRY_SLEEP:-13}` fall through to the default.
@@ -2264,6 +2366,15 @@ _two_repo_fixture() {
     assert_success
     run grep -qF -- 'PMV_SETTLE_SECONDS' "${SCRIPT}"
     assert_success
+}
+
+# The comment used to justify the flat sleep with "herdr exposes no signal for
+# 'the input loop is up'" — false even when it was written, since the file was
+# already reading pane text a few hundred lines below (#1570). Pinned as an
+# absence rather than as a replacement sentence so the wording stays free.
+@test "issue_watcher_cron: the settle comment no longer claims herdr exposes no signal" {
+    run grep -qF -- 'herdr exposes no signal' "${SCRIPT}"
+    assert_failure
 }
 
 # The inner retrying is bounded, and the bound is the point: cron re-runs every
@@ -2951,9 +3062,11 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: a healthy tick captures no pane evidence" {
+    # The 40-line read is the evidence capture; the short one is the settle
+    # poll (#1570) and runs on every fresh dispatch, healthy or not.
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
-    _refute_logged "agent read"
+    _refute_logged "agent read iw-dotfiles-issue-11 --lines 40"
 }
 
 @test "issue_watcher_cron: an unreadable pane does not break the strike" {
