@@ -1266,6 +1266,15 @@ _pmv_gate_bin() {
     printf '%s' "$_bin"
 }
 
+# Bind and run the gate in one call, the way Step 5 pastes it: $1 is the
+# registry, then the five values. Leaves `run`'s $status/$output/$lines set.
+_pmv_gate_run() {
+    local _reg="$1"
+    shift
+    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$_reg" \
+        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$(_pmv_gate_bind "$@")"
+}
+
 @test "1576: Step 5's gate block extracts, binds, and is valid shell" {
     local _bound
     _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 main origin)"
@@ -1282,11 +1291,7 @@ _pmv_gate_bin() {
 }
 
 @test "1576: an empty TARGET_REPO is named instead of read as 'unwatched'" {
-    local _bound _bin
-    _bound="$(_pmv_gate_bind 77 "" wt/issue-77/1 main origin)"
-    _bin="$(_pmv_gate_bin)"
-    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$WATCHED" \
-        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    _pmv_gate_run "$WATCHED" 77 "" wt/issue-77/1 main origin
     assert_success
     assert_output --partial '[WARN] gh:pr-merge:'
     assert_output --partial 'TARGET_REPO'
@@ -1297,18 +1302,15 @@ _pmv_gate_bin() {
 }
 
 @test "1576: whichever of the five is empty is the one the WARN names" {
-    local _bound _bin _v
-    _bin="$(_pmv_gate_bin)"
+    local _v
     for _v in PR_NUMBER TARGET_REPO HEAD_BRANCH BASE_BRANCH REMOTE; do
         case "$_v" in
-        PR_NUMBER) _bound="$(_pmv_gate_bind "" acme/dotfiles wt/issue-77/1 main origin)" ;;
-        TARGET_REPO) _bound="$(_pmv_gate_bind 77 "" wt/issue-77/1 main origin)" ;;
-        HEAD_BRANCH) _bound="$(_pmv_gate_bind 77 acme/dotfiles "" main origin)" ;;
-        BASE_BRANCH) _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 "" origin)" ;;
-        REMOTE) _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 main "")" ;;
+        PR_NUMBER) _pmv_gate_run "$WATCHED" "" acme/dotfiles wt/issue-77/1 main origin ;;
+        TARGET_REPO) _pmv_gate_run "$WATCHED" 77 "" wt/issue-77/1 main origin ;;
+        HEAD_BRANCH) _pmv_gate_run "$WATCHED" 77 acme/dotfiles "" main origin ;;
+        BASE_BRANCH) _pmv_gate_run "$WATCHED" 77 acme/dotfiles wt/issue-77/1 "" origin ;;
+        REMOTE) _pmv_gate_run "$WATCHED" 77 acme/dotfiles wt/issue-77/1 main "" ;;
         esac
-        run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$WATCHED" \
-            DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
         assert_success
         assert_output --partial "$_v"
         [ "${#lines[@]}" -eq 1 ]
@@ -1318,10 +1320,7 @@ _pmv_gate_bin() {
 }
 
 @test "1576: several empty bindings share one WARN line, not one each" {
-    local _bound
-    _bound="$(_pmv_gate_bind "" "" wt/issue-77/1 main "")"
-    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$WATCHED" \
-        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    _pmv_gate_run "$WATCHED" "" "" wt/issue-77/1 main ""
     assert_success
     [ "${#lines[@]}" -eq 1 ]
     assert_output --partial 'PR_NUMBER'
@@ -1334,10 +1333,7 @@ _pmv_gate_bin() {
 @test "1576: a fully bound but unwatched repo is still silent (#1511 A-1)" {
     # The regression this fix must not cause: an unregistered repo stays
     # byte-identical to its pre-#1511 behavior — no WARN, no output at all.
-    local _bound
-    _bound="$(_pmv_gate_bind 77 other/repo wt/issue-77/1 main origin)"
-    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$WATCHED" \
-        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    _pmv_gate_run "$WATCHED" 77 other/repo wt/issue-77/1 main origin
     assert_success
     assert_output ""
     run cat "$FAKE_HERDR_LOG"
@@ -1349,13 +1345,10 @@ _pmv_gate_bin() {
     # when all five are bound. The registry points the dispatch at a path that
     # is not a git worktree root, so it stops with its own WARN before any
     # side effect — proof the staged block ran.
-    local _bound _reg
-    _reg="${TEST_TEMP_HOME}/bound-watched.json"
+    local _reg="${TEST_TEMP_HOME}/bound-watched.json"
     printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
         "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
-    _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 main origin)"
-    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$_reg" \
-        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$_bound"
+    _pmv_gate_run "$_reg" 77 acme/dotfiles wt/issue-77/1 main origin
     assert_success
     assert_output --partial '[WARN] gh:pr-post-merge-verify:'
     assert_output --partial 'is not a git worktree root'
