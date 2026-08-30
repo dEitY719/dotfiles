@@ -11,29 +11,76 @@ Producer SSOT — how the labels are decided and written:
 
 Applied to every PR that survived Step 2's `_gh_pr_merge_train_filter_targets`.
 Both labels come from the `labels` field that Step 2's `gh pr list --json` has
-already returned — **this step makes no API call of its own.**
+already returned — the label check itself makes no API call of its own. The
+freshness check below (#1601) is the one exception: it costs one
+`gh api --paginate` call, but only for a PR that already carries
+`review-passed` alone (the case that would otherwise proceed unverified).
 
 | Labels present | Queue verdict |
 |---|---|
 | `review-blocked` (regardless of `review-passed`) | `[SKIPPED] review-blocked — reviewer verdict is blocking` |
 | neither label | `[SKIPPED] review not verified — no review-passed label` |
-| `review-passed` only | stays in the queue |
+| `review-passed` only, marker sha matches current head | stays in the queue |
+| `review-passed` only, marker sha stale or missing (#1601) | `[SKIPPED] review-passed label stale — head advanced without invalidation` |
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh"
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
 
 if printf '%s' "$PR_JSON" | _gh_pr_merge_train_has_review_blocked_label; then
     echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
 elif ! printf '%s' "$PR_JSON" | _gh_pr_merge_train_has_review_passed_label; then
     echo "[SKIPPED] review not verified — no review-passed label"
+elif _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID"; then
+    echo "[SKIPPED] review-passed label stale — head advanced without invalidation"
+    # Self-heal: the reader just proved what the writers missed, so drop the
+    # stale label here too. Best-effort — a failed drop still leaves this
+    # tick's [SKIPPED] correct; it only means the next tick pays for the same
+    # sha check again.
+    _gh_pr_drop_label "$N" review-passed "$TARGET_REPO" "$TARGET_HOST" >/dev/null 2>&1 || :
 fi
 ```
+
+This full form — including the `HEAD_OID` freshness branch — is what Step 4's
+F-3 re-check runs (`routing-table.md`), right before a specific PR is acted
+on. `SKILL.md` Step 3.5's queue-build pass runs only the first two branches
+(the label-only prefix) over the whole Step-2 queue, on purpose: it has
+neither `$HEAD_OID` nor the budget to pay one `gh api` call per queued PR when
+most of them won't be reached this tick anyway. A `review-passed` PR that
+passes Step 3.5 is provisionally queued; F-3 is what actually proves the
+label is still trustworthy.
 
 `review-blocked` is tested **first**, so it wins over a stale `review-passed`
 if both are somehow present. #1563's invalidation should make that
 unreachable — every skill that advances a PR's head drops the stale verdict —
 but a gate on a merge has to be deterministic about a state it does not
 expect, not merely unlikely to meet it.
+
+## Freshness check (#1601)
+
+The label-presence check above answers "was this PR ever verified"; it
+cannot answer "was *this* head verified", because a label carries no data of
+its own. #1563 tried to keep the two in sync by having every head-advancing
+skill drop the label on push — but that list can never be complete: a manual
+`git push --force-with-lease` from a human's shell, a GitHub web-UI commit, or
+a future tool all advance the head with no hook this repo controls. Any of
+those leaves a stale `review-passed` that the presence-only check above would
+happily trust.
+
+`_gh_pr_merge_train_review_passed_stale` (`shell-common/functions/gh_pr_merge_train.sh`)
+closes that gap by verifying instead of trusting: it reads the last
+`<!-- review-verdict:review-passed:<sha> -->` marker
+`devx_pr_review_all_apply_label` posted when it applied the label
+(`devx-pr-review-all/references/review-verdict-label.md` → "Freshness marker
+for `review-passed`") and compares that sha against `$HEAD_OID` — the current
+`headRefOid`, already added to F-3's `$STATE` fetch (`routing-table.md`). No
+marker, or a marker whose sha does not match, is STALE — fail-closed, the
+same direction `approval-gate.md` takes for an unreadable policy: an
+undetermined answer costs one skip, and a skip is trivially retried.
+
+This still does not make the train a comment parser in the sense "What this
+gate is not" forbids below: it never reads a *reviewer's* verdict line, only
+a fixed machine stamp this same subsystem writes for exactly this check.
 
 Neither outcome is an F-5 attempt, and neither is ever `[FAILED]`: a withheld
 verdict is a working review, not a broken train (the same rule
@@ -82,11 +129,15 @@ Do not add one.
   require an approval, and does `gh:pr-merge` accept this `reviewDecision`".
   This answers "did the reviewers pass it". A PR must clear both; they are
   independent questions and each has its own `[SKIPPED]` reason.
-- **Not a comment parser.** The train never reads review comment bodies.
-  Parsing lives entirely in the producer, and that direction is deliberate: a
-  reviewer reformatting its verdict line yields `unknown` → no label → a
-  skipped PR. Move the parsing here and the same reformat would silently
-  *unlock* the gate.
+- **Not a comment parser.** The train never reads *review* comment bodies —
+  a reviewer's LGTM/BLOCKING prose. Parsing that lives entirely in the
+  producer, and that direction is deliberate: a reviewer reformatting its
+  verdict line yields `unknown` → no label → a skipped PR. Move the parsing
+  here and the same reformat would silently *unlock* the gate. The #1601
+  freshness check above reads a comment too, but a fixed machine-only marker
+  the producer stamps for exactly this purpose, never a reviewer's own
+  output — see "Freshness check" for why that line is not the one this rule
+  guards.
 - **Not part of `_gh_pr_merge_train_filter_targets`.** That filter drops its
   rejects silently before the queue exists, and `report-format.md` documents
   those PRs as never listed. #1564 requires a visible per-PR line, so this

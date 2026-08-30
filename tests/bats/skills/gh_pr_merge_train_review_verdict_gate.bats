@@ -241,3 +241,178 @@ teardown() {
     run grep -q 'gh:label-bootstrap' "${SKILL_DIR}/references/review-verdict-gate.md"
     assert_success
 }
+
+# ---------------------------------------------------------------------
+# Sha-freshness check for `review-passed` (#1601)
+# ---------------------------------------------------------------------
+#
+# The label alone only proves "some head was reviewed" — its only
+# invalidation path is a handful of hand-wired call sites, and a manual
+# `git push --force-with-lease` or a GitHub web-UI commit advances the head
+# with no hook any of them can see. `_gh_pr_merge_train_review_passed_stale`
+# closes that gap by verifying a `<!-- review-verdict:review-passed:<sha> -->`
+# marker (posted by `devx_pr_review_all_apply_label`) against the PR's actual
+# current head, instead of trusting label presence alone.
+
+_freshness_stub() {
+    STUB_LOG="${BATS_TEST_TMPDIR}/gh.log"
+    : >"$STUB_LOG"
+    # shellcheck disable=SC2317  # invoked indirectly by the function under test
+    gh() {
+        printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$STUB_LOG"
+        case "$*" in
+        *"/comments"*"--jq"*)
+            [ "${STUB_COMMENTS_RC:-0}" -eq 0 ] || return "$STUB_COMMENTS_RC"
+            printf '%s\n' "$STUB_COMMENTS"
+            return 0
+            ;;
+        *)
+            return "${STUB_GH_RC:-0}"
+            ;;
+        esac
+    }
+}
+
+@test "freshness: marker_sha reads the sha out of a matching marker" {
+    _freshness_stub
+    STUB_COMMENTS='some review text
+<!-- review-verdict:review-passed:abc1234 -->
+more text'
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+    assert_success
+    assert_output 'abc1234'
+}
+
+@test "freshness: marker_sha with no marker at all yields nothing" {
+    _freshness_stub
+    STUB_COMMENTS='just a plain review comment, no marker here'
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+    assert_success
+    assert_output ''
+}
+
+@test "freshness: marker_sha takes the LAST marker when re-reviewed" {
+    _freshness_stub
+    STUB_COMMENTS='<!-- review-verdict:review-passed:1111111 -->
+<!-- review-verdict:review-passed:2222222 -->'
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+    assert_success
+    assert_output '2222222'
+}
+
+@test "freshness: marker_sha pins GH_HOST on the lookup" {
+    _freshness_stub
+    STUB_COMMENTS='<!-- review-verdict:review-passed:abc1234 -->'
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget ghe.example.com
+    assert_success
+    run cat "$STUB_LOG"
+    assert_output --partial '[GH_HOST=ghe.example.com]'
+}
+
+@test "freshness: a lookup failure yields nothing, not a false match" {
+    _freshness_stub
+    STUB_COMMENTS_RC=1
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+    assert_success
+    assert_output ''
+}
+
+@test "freshness: stale returns TRUE (0) when the marker sha matches nothing" {
+    _freshness_stub
+    STUB_COMMENTS='no marker in sight'
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    assert_success
+}
+
+@test "freshness: stale returns TRUE (0) when the marker sha does not match head" {
+    _freshness_stub
+    STUB_COMMENTS='<!-- review-verdict:review-passed:0000000 -->'
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    assert_success
+}
+
+@test "freshness: stale returns FALSE (1) when the marker sha matches head" {
+    _freshness_stub
+    STUB_COMMENTS='<!-- review-verdict:review-passed:deadbeef -->'
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    assert_failure
+}
+
+@test "freshness: a lookup failure is fail-closed (treated as stale)" {
+    _freshness_stub
+    STUB_COMMENTS_RC=1
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    assert_success
+}
+
+# ---------------------------------------------------------------------
+# F-3 integration — the full per-PR form (routing-table.md)
+# ---------------------------------------------------------------------
+
+@test "F-3 freshness: review-blocked still wins over everything else" {
+    _freshness_stub
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-blocked"}]')" acme/widget '' deadbeef
+    assert_success
+    assert_output 'skip:review-blocked — reviewer verdict is blocking'
+}
+
+@test "F-3 freshness: no verdict label at all is still 'not verified'" {
+    _freshness_stub
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[]')" acme/widget '' deadbeef
+    assert_success
+    assert_output 'skip:review not verified — no review-passed label'
+}
+
+@test "F-3 freshness: a fresh review-passed marker proceeds" {
+    _freshness_stub
+    STUB_COMMENTS='<!-- review-verdict:review-passed:deadbeef -->'
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef
+    assert_success
+    assert_output 'proceed'
+}
+
+@test "F-3 freshness: a stale review-passed (head advanced) is skipped" {
+    _freshness_stub
+    STUB_COMMENTS='<!-- review-verdict:review-passed:0000000 -->'
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef
+    assert_success
+    assert_output 'skip:review-passed label stale — head advanced without invalidation'
+}
+
+@test "F-3 freshness: a review-passed label with NO marker at all is skipped" {
+    # A manual push, or a repo that never wired the writer, both look like
+    # this. #1601's whole point: absence of proof reads as stale, not fresh.
+    _freshness_stub
+    STUB_COMMENTS='plain comment, no marker'
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef
+    assert_success
+    assert_output 'skip:review-passed label stale — head advanced without invalidation'
+}
+
+@test "F-3 freshness: a stale PR self-heals by dropping the label" {
+    _freshness_stub
+    STUB_COMMENTS='<!-- review-verdict:review-passed:0000000 -->'
+    train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef >/dev/null
+    run cat "$STUB_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/11/labels/review-passed'
+}
+
+@test "doc-guard: routing-table.md fetches headRefOid for the freshness check" {
+    run grep -qF -- 'headRefOid' "${SKILL_DIR}/references/routing-table.md"
+    assert_success
+}
+
+@test "doc-guard: routing-table.md and review-verdict-gate.md name the freshness predicate" {
+    run grep -qF -- '_gh_pr_merge_train_review_passed_stale' "${SKILL_DIR}/references/routing-table.md"
+    assert_success
+    run grep -qF -- '_gh_pr_merge_train_review_passed_stale' "${SKILL_DIR}/references/review-verdict-gate.md"
+    assert_success
+}
+
+@test "doc-guard: the producer's freshness marker is documented as its only writer" {
+    local _producer="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
+    run grep -qF -- 'review-verdict:review-passed:' "$_producer"
+    assert_success
+    run grep -qF -- 'devx_pr_review_all_apply_label' "$_producer"
+    assert_success
+}
