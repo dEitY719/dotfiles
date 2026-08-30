@@ -53,30 +53,39 @@ call. Run this **only after** `gh:pr-merge` reported success; a `[SKIPPED]` or
 # Everything else here is a silent skip — this runs after the merge, so it can
 # never fail the PR it just merged.
 if command -v herdr >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-    PMT_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/<head>" \
-        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}')
-    if [ -n "$PMT_WT" ] && PMT_AGENTS=$(herdr agent list 2>/dev/null); then
-        # Resolve symlinks before comparing: `git worktree list` reports the
-        # path as it was created, herdr reports where the pane actually stands,
-        # and a single symlinked component makes those two strings differ.
-        PMT_PHYS=$( (cd -P "$PMT_WT" 2>/dev/null && pwd -P) || printf '%s\n' "$PMT_WT")
-        # Same predicate as pmv_tab_for_cwd
-        # (../../gh-pr-post-merge-verify/references/dispatch.sh.md) and as
-        # `_iw_live_agents` — the counter whose starvation this block exists to
-        # prevent: match BOTH `cwd` (where the pane was opened) and
-        # `foreground_cwd` (where its shell stands now), on a path BOUNDARY, so
-        # an agent that `cd`-ed one level inside the worktree is still found
-        # while `/work/repo-11` never matches `/work/repo-1`.
-        # `first`: two agents on one worktree is abnormal — take the first,
-        # ignore the rest, warn about nothing (same rule as the Step 4 hint).
-        # The idle gate stays inside jq, so a tab id exists only for a closable
-        # tab — nothing has to carry a status back out through a delimiter.
-        PMT_TAB=$(printf '%s' "$PMT_AGENTS" | jq -r --arg p "$PMT_PHYS" \
-            'def under($b): . == $b or startswith($b + "/");
-             [.result.agents[]?
-              | select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))] | first
-             | select(.agent_status == "idle") | .tab_id // empty' 2>/dev/null)
-        if [ -n "$PMT_TAB" ]; then
+    # "Which herdr agent is sitting on this worktree?" comes from one SSOT
+    # (#1569), sourced — never re-implemented here. This block, the Step 4 hint,
+    # gh:pr-post-merge-verify's dispatch and `_iw_live_agents` each carried
+    # their own copy of that predicate, and the copies had already drifted:
+    # the Step 4 hint matched `.cwd` by plain string equality, so it missed
+    # both a session that had `cd`-ed inside its worktree and a worktree
+    # reached through a symlink. A missing helper skips the close, silently,
+    # like every other gate here.
+    PMT_LOOKUP_LIB="${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/herdr_agent_lookup.sh"
+    # shellcheck source=/dev/null
+    if [ -r "$PMT_LOOKUP_LIB" ] && . "$PMT_LOOKUP_LIB"; then
+        PMT_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/<head>" \
+            '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}')
+        # `herdr_agent_physical_path` resolves symlinks before comparing: `git
+        # worktree list` reports the path as it was created, herdr reports where
+        # the pane actually stands, and a single symlinked component makes those
+        # two strings differ. `herdr_agent_tab_for_cwd` then matches BOTH `cwd`
+        # (where the pane was opened) and `foreground_cwd` (where its shell
+        # stands now), on a path BOUNDARY, so an agent that `cd`-ed one level
+        # inside the worktree is still found while `/work/repo-11` never matches
+        # `/work/repo-1`. Two agents on one worktree is abnormal — the helper
+        # takes the first, ignores the rest, and warns about nothing (same rule
+        # as the Step 4 hint).
+        #
+        # The `idle` argument keeps the status gate inside the lookup, so a tab
+        # id comes back only for a closable tab and nothing has to carry a
+        # status out through a delimiter. It judges that first match rather than
+        # hunting for an idle one among several: closing an idle pane while its
+        # sibling still works is the failure this whole step is careful about.
+        # A non-zero return is either "herdr could not be asked" or "nothing
+        # closable is there" — both are a silent skip here.
+        if [ -n "$PMT_WT" ] &&
+            PMT_TAB=$(herdr_agent_tab_for_cwd "$(herdr_agent_physical_path "$PMT_WT")" idle); then
             if herdr tab close "$PMT_TAB" >/dev/null 2>&1; then
                 printf '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).\n' \
                     "$PMT_TAB" "$PMT_WT"

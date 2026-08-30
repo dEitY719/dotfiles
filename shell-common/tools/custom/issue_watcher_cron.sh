@@ -52,6 +52,20 @@ fi
 # shellcheck source=/dev/null
 . "${_IW_SHELL_COMMON}/functions/herdr_agent_name.sh" || exit 1
 
+# The herdr agent-lookup SSOT (#1569) — "is an agent sitting on this path?".
+# Same reasoning as the name helper above, and the same failure history: four
+# call sites each carried their own copy of the cwd/foreground_cwd boundary
+# match, and the newest copy had already drifted to a plain `.cwd` equality.
+# The running-now signal below and the collection step both depend on it, so a
+# tick that discovered it missing halfway through would have already decided
+# what to dispatch on a predicate it no longer has.
+if [ ! -f "${_IW_SHELL_COMMON}/functions/herdr_agent_lookup.sh" ]; then
+    ux_error "herdr_agent_lookup.sh not found under ${_IW_SHELL_COMMON}/functions — cannot tell which worktrees are live."
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "${_IW_SHELL_COMMON}/functions/herdr_agent_lookup.sh" || exit 1
+
 # ============================================================
 # Constants (SSOT for the watch cycle)
 # ============================================================
@@ -439,13 +453,11 @@ _iw_watch_hosts() {
 _IW_ISSUE_WORKTREES=""
 _IW_ISSUE_WORKTREES_LOADED=0
 
-# Echo $1 with every symlink resolved, or $1 unchanged when it cannot be
-# entered. Path comparisons in this file are between two sources that need not
-# agree spelling-wise — herdr reports a pane's cwd, git reports a worktree root,
-# and either can have arrived through a symlink.
-_iw_physical_path() {
-    (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"
-}
+# Path comparisons in this file are between two sources that need not agree
+# spelling-wise — herdr reports a pane's cwd, git reports a worktree root, and
+# either can have arrived through a symlink. `herdr_agent_physical_path`
+# (shell-common/functions/herdr_agent_lookup.sh, #1569) is the SSOT for that
+# resolution; the local `_iw_physical_path` copy it replaced was one of four.
 
 # Emit `<worktree-path><TAB><owner/repo><TAB><number>` for every issue worktree
 # across every watched checkout.
@@ -492,10 +504,10 @@ _IW_LIVE_AGENTS_LOADED=0
 #
 # `herdr agent list` carries no agent-name field, so the `iw-<repo>-issue-<n>` names
 # this tick chooses cannot be matched back by name. What it does carry is each
-# pane's `cwd`, and every dispatched pane is opened on the issue's worktree
-# (`_iw_tab_create` passes it as --cwd) — so joining that column against
-# _iw_issue_worktrees recovers the issue number exactly, without depending on
-# how the worktree directory happens to be named.
+# pane's `cwd` and `foreground_cwd`, and every dispatched pane is opened on the
+# issue's worktree (`_iw_tab_create` passes it as --cwd) — so joining those
+# columns against _iw_issue_worktrees recovers the issue number exactly,
+# without depending on how the worktree directory happens to be named.
 #
 # Volatility is fine here, unlike for "already handled": the question is what
 # is running *now*, and after a reboot nothing is. The signal and the truth go
@@ -521,18 +533,20 @@ _IW_LIVE_AGENTS_LOADED=0
 # cases stop looking alike: a delegation ends and the pane goes back to
 # `working`, which clears the clock, while a real zombie never moves.
 _iw_live_agents() {
-    local _json _panes _repo _number _stopped _ts _now
+    local _json _panes _repo _number _stopped _ts _now _wt _wt_phys _matched _working _pane_cwd _pane_state
 
     if [ "${_IW_LIVE_AGENTS_LOADED}" -eq 1 ]; then
         [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
         return 0
     fi
 
-    _json=$(herdr agent list 2>/dev/null) || return 1
-    # A herdr that answers nothing at all must not read as "nothing running":
-    # that is the one mistake this signal cannot afford, since it would lift
-    # the concurrency cap exactly when herdr is unhealthy.
-    [ -n "${_json}" ] || return 1
+    # ONE herdr round trip for the whole watch list, via the shared SSOT
+    # fetcher (`herdr_agent_list_json`, #1569) — never a second hand-rolled
+    # `herdr agent list` call. Non-zero when herdr could not be asked at all,
+    # which must not read as "nothing running": that is the one mistake this
+    # signal cannot afford, since it would lift the concurrency cap exactly
+    # when herdr is unhealthy.
+    _json=$(herdr_agent_list_json) || return 1
 
     # Both columns, because they answer at different moments: `cwd` is where the
     # pane was opened (stable for the session's whole life) and `foreground_cwd`
@@ -550,42 +564,36 @@ _iw_live_agents() {
         end
     ' 2>/dev/null) || return 1
 
-    # Prefix match on the physical path, not string equality: an agent sitting in
-    # a subdirectory of its worktree is still working that issue, and one side of
-    # the comparison may have arrived through a symlink.
+    # The boundary predicate itself is the shared one (`herdr_agent_path_under`,
+    # #1569) — this join is a plain shell loop, not awk, precisely so it can
+    # call it: awk cannot invoke a shell function, and reimplementing the
+    # predicate in awk again is exactly the duplication #1569 exists to end.
     #
-    # The third column is the stopped flag: 1 only when every pane matching this
-    # worktree reports a status known to mean "not working". An unknown status
-    # is never a stop signal — the set of herdr statuses is not this script's to
-    # enumerate, so anything unrecognised must keep the session alive.
+    # The stopped flag is 1 only when every pane matching this worktree reports
+    # a status known to mean "not working". An unknown status is never a stop
+    # signal — the set of herdr statuses is not this script's to enumerate, so
+    # anything unrecognised must keep the session alive.
     _IW_LIVE_AGENTS=$(_iw_issue_worktrees |
         while IFS="${_IW_TAB}" read -r _wt _repo _number; do
-            printf '%s\t%s\t%s\n' "$(_iw_physical_path "${_wt}")" "${_repo}" "${_number}"
+            _wt_phys=$(herdr_agent_physical_path "${_wt}")
+            _matched=0
+            _working=0
+            while IFS="${_IW_TAB}" read -r _pane_cwd _pane_state; do
+                [ -n "${_pane_cwd}" ] || continue
+                herdr_agent_path_under "${_pane_cwd}" "${_wt_phys}" || continue
+                _matched=1
+                if [ "${_pane_state}" != "idle" ] && [ "${_pane_state}" != "done" ]; then
+                    _working=1
+                    break
+                fi
+            done <<EOF
+${_panes}
+EOF
+            [ "${_matched}" -eq 1 ] || continue
+            _stopped=1
+            [ "${_working}" -eq 0 ] || _stopped=0
+            printf '%s\t%s\t%s\n' "${_repo}" "${_number}" "${_stopped}"
         done |
-        awk -F "${_IW_TAB}" -v panes="${_panes}" '
-            BEGIN {
-                n = split(panes, a, "\n")
-                for (i = 1; i <= n; i++) {
-                    if (a[i] == "") continue
-                    split(a[i], f, "\t")
-                    if (f[1] == "") continue
-                    m++
-                    live[m] = f[1]
-                    state[m] = f[2]
-                }
-            }
-            {
-                matched = 0
-                working = 0
-                for (i = 1; i <= m; i++) {
-                    if (live[i] == $1 || index(live[i], $1 "/") == 1) {
-                        matched = 1
-                        if (state[i] != "idle" && state[i] != "done") { working = 1; break }
-                    }
-                }
-                if (matched) print $2 "\t" $3 "\t" !working
-            }
-        ' |
         while IFS="${_IW_TAB}" read -r _repo _number _stopped; do
             # The GitHub round trip is paid only for a stopped pane: a working
             # one is live whatever its issue says, so asking would buy nothing.
@@ -1292,9 +1300,8 @@ _iw_cleanup_worktrees() {
         # subdirectory cwd and a path that arrived through a symlink, either of
         # which let the tick pull the ground out from under itself
         # (PR #1456 agy/codex review).
-        _wt_real=$(_iw_physical_path "${_wt}")
-        [ "${_here}" = "${_wt_real}" ] && continue
-        case "${_here}/" in "${_wt_real}/"*) continue ;; esac
+        _wt_real=$(herdr_agent_physical_path "${_wt}")
+        ! herdr_agent_path_under "${_here}" "${_wt_real}" || continue
         ! _iw_live_has "${_repo}" "${_number}" || continue
 
         _state=$(_iw_issue_state "${_repo}" "${_number}" 2>/dev/null) || {

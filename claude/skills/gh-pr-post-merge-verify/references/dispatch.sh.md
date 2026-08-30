@@ -59,7 +59,6 @@ pmv_json_first() {
 # `.error.code` off a failed herdr answer, or empty. Fixed filter, so nothing
 # is ever interpolated into the jq program text.
 pmv_error_code() { jq -r '.error.code // empty' 2>/dev/null || return 0; }
-pmv_physical_path() { (cd -P "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"; }
 
 # Settle wait after a herdr call that brings something up (#1571). One value
 # for both of this repo's herdr races, because they are the same race seen
@@ -130,29 +129,22 @@ pmv_escalate_prompt_stall() {
     fi
 }
 
-# tab_id of a live agent sitting on <physical path>: rc 0 = matched, rc 1 =
-# herdr could not be asked, rc 3 = herdr answered and nothing is on that path.
-# An empty answer from herdr is "unknown", never "nothing running" — the one
-# mistake this signal cannot afford (issue_watcher_cron.sh's lesson). Match
-# BOTH cwd and foreground_cwd against the PHYSICAL path, on a path BOUNDARY
-# (the path itself or something under it) so `/work/repo-11` does not match
-# `/work/repo-1`, and never match on an empty prefix.
-pmv_tab_for_cwd() {
-    [ -n "$1" ] || return 3
-    _pmv_json=$(herdr agent list 2>/dev/null) || return 1
-    [ -n "$_pmv_json" ] || return 1
-    _pmv_tab=$(printf '%s' "$_pmv_json" | jq -r --arg p "$1" '
-        def under($b): . == $b or startswith($b + "/");
-        if (.result.agents | type) == "array" then
-          [ .result.agents[]?
-            | select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))
-            | .tab_id // empty ]
-          | map(select(type == "string" and . != "")) | first // empty
-        else error("no agent list") end
-    ' 2>/dev/null) || return 1
-    [ -n "$_pmv_tab" ] || return 3
-    printf '%s' "$_pmv_tab"
-}
+# "Is a herdr agent sitting on this path?" comes from one SSOT too (#1569), for
+# the same reason and with the same history: this block's `pmv_tab_for_cwd` and
+# `pmv_physical_path` were two of four hand-copied answers, and the fourth copy
+# had already drifted to a plain `.cwd` string equality that missed both a
+# session that `cd`-ed inside its worktree and a worktree reached through a
+# symlink. `herdr_agent_tab_for_cwd` keeps this block's own rc convention
+# verbatim — 0 matched, 1 herdr could not be asked, 3 herdr answered and
+# nothing is on that path — because an empty answer from herdr is "unknown",
+# never "nothing running", and the caller below branches on that difference.
+PMV_LOOKUP_LIB="${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/herdr_agent_lookup.sh"
+if [ ! -r "$PMV_LOOKUP_LIB" ]; then
+    printf '[WARN] gh:pr-post-merge-verify: %s not readable — verification skipped.\n' "$PMV_LOOKUP_LIB"
+    return 0 2>/dev/null || exit 0
+fi
+# shellcheck source=/dev/null
+. "$PMV_LOOKUP_LIB"
 
 # --- the main checkout (never a worktree) ---------------------------------
 # `path` from the registry when set; otherwise git's common dir,
@@ -172,7 +164,7 @@ esac
 MAIN_TOP=""
 [ -z "$MAIN_ROOT" ] || MAIN_TOP=$(git -C "$MAIN_ROOT" rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$MAIN_ROOT" ] || [ -z "$MAIN_TOP" ] ||
-    [ "$(pmv_physical_path "$MAIN_TOP")" != "$(pmv_physical_path "$MAIN_ROOT")" ]; then
+    [ "$(herdr_agent_physical_path "$MAIN_TOP")" != "$(herdr_agent_physical_path "$MAIN_ROOT")" ]; then
     printf '[WARN] gh:pr-post-merge-verify: main checkout "%s" is not a git worktree root — verification skipped.\n' \
         "$MAIN_ROOT"
     return 0 2>/dev/null || exit 0
@@ -187,7 +179,7 @@ IMPL_WT=$(git worktree list --porcelain 2>/dev/null |
 if [ -z "$IMPL_WT" ]; then
     printf '[INFO] gh:pr-post-merge-verify: no local worktree for %s — nothing to close.\n' "$HEAD_BRANCH"
 else
-    IMPL_TAB=$(pmv_tab_for_cwd "$(pmv_physical_path "$IMPL_WT")")
+    IMPL_TAB=$(herdr_agent_tab_for_cwd "$(herdr_agent_physical_path "$IMPL_WT")")
     IMPL_RC=$?
     if [ "$IMPL_RC" -eq 0 ]; then
         if herdr tab close "$IMPL_TAB" >/dev/null 2>&1; then

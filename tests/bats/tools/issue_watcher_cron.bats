@@ -1987,6 +1987,19 @@ _two_repo_fixture() {
     _refute_logged "gwt spawn"
 }
 
+@test "issue_watcher_cron: a sibling path sharing the prefix is not counted as running" {
+    # The boundary's negative half (#1569): the running-now match is
+    # `<wt>` or `<wt>/...`, never a bare prefix, so an agent parked on
+    # `dotfiles-issue-11-10` must not make issue 11 look busy. The shared
+    # predicate lives in shell-common/functions/herdr_agent_lookup.sh — this
+    # pins that _iw_live_agents really uses it rather than a wider compare.
+    _add_worktree 11
+    _set_live_agents "$(_worktree_path 11)0"
+    _run_tick
+    assert_success
+    refute_output --partial "already running"
+}
+
 @test "issue_watcher_cron: a worktree with uncommitted work is never collected" {
     # An issue can be closed by hand while its session still holds unsaved work.
     # Routine hygiene must not be a data-loss path.
