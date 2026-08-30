@@ -78,6 +78,43 @@ picking sides in a conflict stays the human's call, but leaving the user's
 main checkout parked mid-rebase would be a worse failure than the one being
 reported.
 
+## Why the verification session gets its own worktree (#1577)
+
+The tab used to open in `MAIN_ROOT`, and the reasoning was sound as far as it
+went: `devx:pr-verify-merged` makes its own fresh clone, and the merged PR's
+implementation worktree is being torn down, so the session needs no checkout of
+its own. What that missed is that the main checkout is **shared**. Humans
+`git pull` and check branches out in it, other AI sessions work in it, and
+step 3 of this very dispatch rebases it — so on back-to-back merges the N+1th
+dispatch moves the ground under the Nth session while it is still running. On
+2026-08-28 the `pr-1567` tab disappeared exactly that way, with `~/dotfiles`'s
+reflog showing an unrelated branch checkout and merge inside the verification
+window.
+
+So each PR gets `<git-common-dir>/pr-post-merge-verify/pr-<N>`, a detached
+scratch worktree in the shape `gh:pr-merge-train` already uses
+(`../gh-pr-merge-train/references/train-loop.md` → "Detached scratch
+worktree"). `--detach` is what makes it collide-free: it holds a commit, not a
+branch name, so it never contests the base branch `MAIN_ROOT` has checked out.
+No second `fetch` is issued for it — step 3 has just fetched
+`$REMOTE/$BASE_BRANCH` and rebased onto it, so the ref is current by
+construction. And `MAIN_ROOT` itself is unchanged: it is still the registry's
+`path`, still what step 3 rebases. Only the tab's `--cwd` moved.
+
+The herdr **workspace** is still looked up from `MAIN_ROOT`. That id only says
+which workspace the new tab is grouped under; a worktree created seconds ago
+has no workspace of its own on a first dispatch, so asking `herdr worktree
+list` about it would answer nothing. Grouping and working directory are two
+different questions here.
+
+Lifetime is the tab's: created if absent, **reused** if present, so a manual
+re-dispatch over a still-open tab is idempotent. There is deliberately no
+teardown in this block — the operating rule until the pipeline stabilises is
+that the human closes `pr-*` tabs after reading the result, and deleting the
+directory a live session stands in is the failure being fixed, not a cleanup.
+Who removes it, and when, belongs to a later tab-close hook or an
+`_iw_cleanup_worktrees`-style "closed issue + no fan" rule.
+
 ## Why `herdr agent list` emptiness is "unknown", not "nothing running"
 
 Lesson carried over from `_iw_live_agents` in

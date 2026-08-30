@@ -78,9 +78,13 @@ Paste `references/dispatch.sh.md` verbatim. It performs, in order:
    only once `MAIN_ROOT` is a git worktree root and its HEAD is on
    `BASE_BRANCH`. Dirty tree, wrong/detached branch, or conflict → `[WARN]`,
    `rebase --abort`, **stop** (F-3).
-4. `herdr tab create --workspace <ws> --cwd "$MAIN_ROOT" --label "pr-<N>"`, then
+4. `git worktree add --detach "$PMV_SCRATCH" "$REMOTE/$BASE_BRANCH"` where
+   `PMV_SCRATCH` is `<git-common-dir>/pr-post-merge-verify/pr-<N>` — created if
+   absent, reused if present, never torn down here. Then
+   `herdr tab create --workspace <ws> --cwd "$PMV_SCRATCH" --label "pr-<N>"` and
    `herdr agent start mv-<repo>-pr-<N> --kind claude --pane <pane>
-   -- --dangerously-skip-permissions` (F-4).
+   -- --dangerously-skip-permissions` (F-4). The session does **not** live in
+   `MAIN_ROOT`: that checkout is shared, and step 3 rebases it (#1577).
 5. `herdr agent prompt <agent> "/<verify-skill> <N>" --wait --until idle` (F-5),
    then report the new `tab_id`, the agent name, and the `attach` hint.
 
