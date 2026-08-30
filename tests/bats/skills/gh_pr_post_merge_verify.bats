@@ -803,8 +803,9 @@ _PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
     _out="${TEST_TEMP_HOME}/extracted.sh"
     bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
         '$(_pmv_dispatch_doc)' > '${_out}'"
-    # `return N` inside pmv_tab_for_cwd is a helper's answer to its caller, not
-    # a status the block ever leaves with — only `exit` ends the dispatch.
+    # `return N` inside the sourced lookup helper (#1569) is a helper's answer
+    # to its caller, not a status the block ever leaves with — only `exit` ends
+    # the dispatch.
     run bash -c "grep -nE 'exit[[:space:]]+[1-9]' '${_out}'"
     [ "$status" -ne 0 ]
     [ -z "$output" ]
@@ -851,14 +852,67 @@ _PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
     # 2. The deliberate stale-main-checkout stop: WARN, stop, status 0. Nothing
     #    has been closed or rebased at that point, and it must stay that way.
     mkdir -p "${_root}/shell-common/functions"
-    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_name.sh" \
-        "${_root}/shell-common/functions/herdr_agent_name.sh"
+    # Both SSOTs the block sources: the name helper (#1530) and the agent
+    # lookup (#1569). Either one missing is its own WARN-and-stop, which would
+    # pre-empt the stale-main-checkout stop this case is here to observe.
+    local _lib
+    for _lib in herdr_agent_name.sh herdr_agent_lookup.sh; do
+        cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/${_lib}" \
+            "${_root}/shell-common/functions/${_lib}"
+    done
     printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
         "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
     run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$_reg" DOTFILES_ROOT="$_root" \
         TARGET_REPO="acme/dotfiles" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
     assert_success
     assert_output --partial 'is not a git worktree root'
+}
+
+@test "1569: a missing agent-lookup SSOT warns and skips, it never guesses" {
+    # The counterpart to the name helper's guard: the block sources the lookup
+    # SSOT rather than carrying a copy of the predicate, so an unreadable
+    # helper must stop the dispatch the same way — one WARN, status 0, and
+    # nothing touched. Falling back to an inline match is what #1569 removed.
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+
+    local _root="${TEST_TEMP_HOME}/fakeroot-nolookup"
+    mkdir -p "${_root}/shell-common/functions"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_name.sh" \
+        "${_root}/shell-common/functions/herdr_agent_name.sh"
+
+    local _bin="${TEST_TEMP_HOME}/stubbin-nolookup"
+    mkdir -p "$_bin"
+    printf '#!/bin/sh\nexit 0\n' >"${_bin}/herdr"
+    chmod +x "${_bin}/herdr"
+
+    local _reg="${TEST_TEMP_HOME}/nolookup-watched.json"
+    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
+        "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
+
+    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$_reg" DOTFILES_ROOT="$_root" \
+        TARGET_REPO="acme/dotfiles" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
+    assert_success
+    assert_output --partial 'herdr_agent_lookup.sh not readable'
+    # Stopped there — the later stops never ran.
+    refute_output --partial 'is not a git worktree root'
+}
+
+@test "1569: the dispatch block carries no inline agent-match predicate" {
+    # The whole point of the unification: `under(` and the cwd/foreground_cwd
+    # select must exist in exactly one file, and it is not this one.
+    # The executed block only, not the prose fences below it — the herdr API
+    # table there names `.foreground_cwd` as documentation, which is fine.
+    local _out="${TEST_TEMP_HOME}/extracted.sh"
+    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
+        '$(_pmv_dispatch_doc)' > '${_out}'"
+    run bash -c "grep -n -e 'def under(' -e 'foreground_cwd' '$_out'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+    # …and it does source the file that has it.
+    run grep -qF -- 'shell-common/functions/herdr_agent_lookup.sh' "$_out"
+    assert_success
 }
 
 @test "1565: gh:pr-merge Step 5 cannot leak the staged temp file" {

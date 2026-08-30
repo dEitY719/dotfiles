@@ -11,8 +11,15 @@
 #   4. herdr not installed              → empty output, rc=0
 #   5. herdr agent list empty / no cwd match → empty output, rc=0
 #   6. two agents on the same cwd       → first wins, printed once, no error
-#   7. read-only (NF-2)                 → neither the doc nor the fixture
-#                                         contains a state-changing invocation
+#   7. read-only (NF-2)                 → neither the doc, the fixture, nor
+#                                         the shared lookup SSOT contains a
+#                                         state-changing invocation
+# Issue #1569 replaced this hint's own `.cwd == $wt` equality with the shared
+# predicate in shell-common/functions/herdr_agent_lookup.sh, WIDENING the
+# match to `.cwd` OR `.foreground_cwd`, on a path boundary, against the
+# physical path. The `#1569` cases below pin what that now catches (a subdir
+# cd, a foreground-only match, a symlinked worktree) and what it still must
+# not (a sibling sharing the prefix).
 
 load '../test_helper'
 
@@ -95,6 +102,21 @@ _agents_json() {
     printf '%s]}}' "$out"
 }
 
+# Same, but `cwd` and `foreground_cwd` are set independently:
+# `cwd|foreground_cwd|tab_id|status|ws_id`. `cwd` is where the pane was opened,
+# `foreground_cwd` where its shell stands now — they diverge the moment the
+# session `cd`s, which before #1569 made this hint lose the tab entirely.
+_agents_json_fg() {
+    local spec sep="" out='{"result":{"agents":['
+    local cwd fg tab st ws
+    for spec in "$@"; do
+        IFS='|' read -r cwd fg tab st ws <<<"$spec"
+        out+="${sep}{\"cwd\":\"${cwd}\",\"foreground_cwd\":\"${fg}\",\"tab_id\":\"${tab}\",\"agent_status\":\"${st}\",\"workspace_id\":\"${ws}\"}"
+        sep=","
+    done
+    printf '%s]}}' "$out"
+}
+
 @test "herdr-notify: idle agent on the merged branch's worktree → one [INFO] hint" {
     FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|idle|ws-1")"
     run gh_pr_merge_herdr_notify "wt/issue-1508/1"
@@ -125,6 +147,81 @@ _agents_json() {
     assert_success
     assert_output --partial '[INFO] herdr tab ws-3/tab-7 is idle'
     refute_output --partial 'null/tab-7'
+}
+
+# --- #1569: the widened match ---------------------------------------------
+#
+# This hint used to compare `.cwd` to the worktree path as a plain string, so
+# it lost exactly the sessions worth reclaiming: one that had `cd`-ed inside
+# its worktree, one whose pane was opened elsewhere and walked in, and one
+# whose worktree path arrived through a symlink. Adopting the shared predicate
+# (shell-common/functions/herdr_agent_lookup.sh) widens what is noticed, on
+# purpose — safe because the whole step is read-only and costs one INFO line.
+
+@test "herdr-notify (#1569): a session that cd'd into a subdir is still hinted" {
+    FAKE_AGENT_JSON="$(_agents_json_fg "${WT_DIR}|${WT_DIR}/docs/.ssot|tab-7|idle|ws-1")"
+    run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    assert_output --partial 'herdr tab dotfiles/tab-7 is idle'
+    [ "${#lines[@]}" -eq 1 ]
+}
+
+@test "herdr-notify (#1569): foreground_cwd alone is enough to match" {
+    # The pane was opened on the main checkout and its shell walked into the
+    # worktree — `.cwd` never matches, and the old equality printed nothing.
+    FAKE_AGENT_JSON="$(_agents_json_fg "/home/dev/dotfiles|${WT_DIR}/tests|tab-7|idle|ws-1")"
+    run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    assert_output --partial 'herdr tab dotfiles/tab-7 is idle'
+}
+
+@test "herdr-notify (#1569): a pane opened inside the worktree matches on the boundary" {
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}/claude/skills|tab-7|idle|ws-1")"
+    run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    assert_output --partial 'herdr tab dotfiles/tab-7 is idle'
+}
+
+@test "herdr-notify (#1569): a symlinked worktree path still resolves to the agent" {
+    # `git worktree list` answers the path as it was created; herdr answers
+    # where the pane really stands. One symlinked component made the old
+    # string compare miss it entirely.
+    local real="${TEST_TEMP_HOME}/real/wt-issue-1508"
+    local link="${TEST_TEMP_HOME}/link-wt"
+    mkdir -p "$real"
+    ln -sfn "$real" "$link"
+
+    FAKE_WORKTREE_LIST="worktree ${link}
+HEAD cccc
+branch refs/heads/wt/issue-1508/1
+"
+    FAKE_AGENT_JSON="$(_agents_json "$(cd -P "$real" && pwd -P)|tab-7|idle|ws-1")"
+    [ "$link" != "$real" ]
+
+    run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    assert_output --partial 'herdr tab dotfiles/tab-7 is idle'
+    # The path in the hint is the one the human will recognise — the spelling
+    # `git worktree list` reported, not its resolved twin.
+    assert_output --partial "(${link})"
+}
+
+@test "herdr-notify (#1569): a sibling sharing the prefix is still not a match" {
+    # The widening must not become a substring match: `…/issue-1508` may never
+    # swallow `…/issue-15080`.
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}0|tab-other|idle|ws-1")"
+    run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    [ -z "$output" ]
+}
+
+@test "herdr-notify (#1569): an unreadable lookup SSOT is a silent skip" {
+    # NF-1: the hint degrades to silence, never to a hand-rolled copy of the
+    # predicate — the duplication #1569 removed.
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|idle|ws-1")"
+    DOTFILES_ROOT="${TEST_TEMP_HOME}/empty-root" run gh_pr_merge_herdr_notify "wt/issue-1508/1"
+    assert_success
+    [ -z "$output" ]
 }
 
 @test "herdr-notify: agent_status=working → no hint at all (F-4)" {
@@ -242,12 +339,28 @@ _agents_json() {
     [ -z "$output" ]
 }
 
+@test "herdr-notify (NF-2): the shared lookup SSOT is read-only too (#1569)" {
+    # The hint no longer owns its own agent enumeration, so the guarantee is
+    # only as strong as the file it now sources.
+    local lib="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_lookup.sh"
+    [ -r "$lib" ]
+    run bash -c "grep -n -e 'tab close' -e 'worktree remove' -e 'agent start' -e 'tab create' '$lib'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}
+
 @test "herdr-notify (NF-2): every herdr/git call in the fixture is a read-only list" {
     local fixture="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_herdr_notify.sh"
-    # Every `herdr <noun> <verb>` occurrence — code and comments alike, minus
-    # the F-3 printf's advisory text ("herdr tab close ...", never executed) —
-    # must be one of the two read-only enumerations.
-    run bash -c "grep -v printf '$fixture' | grep -oE 'herdr [a-z]+ [a-z]+' | sort -u"
+    # Since #1569 the agent enumeration lives in the shared lookup SSOT, which
+    # this fixture sources — so the read-only guarantee depends on that file
+    # too and the grep follows it there.
+    local lib="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_lookup.sh"
+    # Every `herdr <noun> <verb>` occurrence in CODE — comment lines are
+    # dropped, because the shared SSOT's rationale legitimately says things
+    # like "herdr could not be asked", and so does this fixture — minus the
+    # F-3 printf's advisory text ("herdr tab close ...", never executed).
+    # What is left must be one of the two read-only enumerations.
+    run bash -c "cat '$fixture' '$lib' | grep -v '^[[:space:]]*#' | grep -v printf | grep -oE 'herdr [a-z]+ [a-z]+' | sort -u"
     assert_output 'herdr agent list
 herdr workspace list'
     # git is used exactly once, for the porcelain worktree enumeration.
@@ -279,9 +392,10 @@ herdr workspace list'
     for pat in \
         "[INFO] herdr tab %s/%s is idle for the merged branch's worktree (%s)" \
         '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' \
-        '.result.agents[]? | select(.cwd == $cwd)' \
-        '.result.workspaces[]? | select(.workspace_id == $id) | .label // empty' \
-        '= "idle" ]'; do
+        'shell-common/functions/herdr_agent_lookup.sh' \
+        'herdr_agent_match_for_cwd "$(herdr_agent_physical_path ' \
+        '")" idle)' \
+        '.result.workspaces[]? | select(.workspace_id == $id) | .label // empty'; do
         for f in "$doc" "$fixture"; do
             run grep -F -- "$pat" "$f"
             assert_success

@@ -211,6 +211,14 @@ pmv_validate_main_root() {
 # shellcheck source=/dev/null
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/herdr_agent_name.sh"
 
+# The herdr agent-lookup SSOT, likewise sourced rather than mirrored (#1569).
+# It invokes `herdr` by name, so the stand-in above is bound to that name here:
+# that is the seam the whole suite drives the lookup through, and it keeps
+# every call this fixture makes visible in $FAKE_HERDR_LOG.
+# shellcheck source=/dev/null
+. "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/herdr_agent_lookup.sh"
+herdr() { _pmv_herdr "$@"; }
+
 # pmv_agent_name <host> <owner/repo> <pr>  ->  mv-<repo>-pr-<N>
 #
 # dispatch.sh.md calls `herdr_agent_name` inline; this wrapper exists so the
@@ -235,10 +243,13 @@ pmv_verify_prompt() {
 # F-2 — find and close the implementation tab
 # ============================================================
 
-# Resolve symlinks so both sides of a prefix comparison are physical. Falls
-# back to the input when the path does not exist (already-removed worktree).
+# Resolve symlinks so both sides of a boundary comparison are physical, falling
+# back to the input when the path does not exist (an already-removed worktree).
+# A thin alias over the SSOT sourced above (#1569) — the name is kept because
+# the dispatch's own vocabulary is `pmv_*`, but the behavior is no longer a
+# second copy of it.
 pmv_physical_path() {
-    (cd -P "$1" 2>/dev/null && pwd -P) || printf '%s\n' "$1"
+    herdr_agent_physical_path "$1"
 }
 
 # pmv_worktree_for_branch <branch>  ->  local worktree path, or empty.
@@ -254,33 +265,12 @@ pmv_worktree_for_branch() {
 #   1 — herdr could not be asked (missing/empty answer). Unknown, NOT "nothing
 #       running" — the mistake issue_watcher_cron.sh's _iw_live_agents calls out.
 #   3 — herdr answered and no agent is on that path.
+#
+# The predicate itself — both columns, on a path boundary, against the physical
+# path — now lives in shell-common/functions/herdr_agent_lookup.sh (#1569), and
+# so does this rc convention. What is left here is the dispatch's name for it.
 pmv_tab_for_cwd() {
-    local _path="$1" _json _tab
-
-    # An empty path would make every startswith() true and close a random tab.
-    [ -n "$_path" ] || return 3
-
-    _json=$(_pmv_herdr agent list) || return 1
-    [ -n "$_json" ] || return 1
-
-    # Both columns, because they answer at different moments: `cwd` is where the
-    # pane was opened and `foreground_cwd` is where its shell stands now. The
-    # match is the path itself or a directory BELOW it — a bare startswith()
-    # would let `/work/repo-11` match the prefix `/work/repo-1` and close a
-    # sibling checkout's tab (PR #1518 review). Subdirectories still count: an
-    # agent inside the worktree is still that session (PR #1456 review).
-    _tab=$(printf '%s' "$_json" | jq -r --arg p "$_path" '
-        def under($b): . == $b or startswith($b + "/");
-        if (.result.agents | type) == "array" then
-          [ .result.agents[]?
-            | select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))
-            | .tab_id // empty ]
-          | map(select(type == "string" and . != "")) | first // empty
-        else error("no agent list") end
-    ' 2>/dev/null) || return 1
-
-    [ -n "$_tab" ] || return 3
-    printf '%s' "$_tab"
+    herdr_agent_tab_for_cwd "$1"
 }
 
 # ============================================================
