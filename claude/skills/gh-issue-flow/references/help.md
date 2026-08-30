@@ -54,8 +54,6 @@ on a feature branch with a clean working tree.
 - Roll back partial progress — if step 2 (commit) succeeded but step
   3 (PR) failed, the commit stays.
 - Create a worktree or branch — user must be on a feature branch already.
-- Resolve CI failures synchronously — checks haven't completed by the
-  time this flow finishes; gh:pr-merge-train routes CI-red PRs to
-  gh:pr-resolve-ci-fail whenever it next processes the PR, via Step
-  2.4.1's best-effort wake or its own cron backstop — not a guarantee
-  of the wake itself.
+- Resolve CI failures — a fresh PR's checks have not reported yet.
+  `gh:pr-merge-train` routes CI-red PRs to `gh:pr-resolve-ci-fail`
+  whenever it next processes the PR.
