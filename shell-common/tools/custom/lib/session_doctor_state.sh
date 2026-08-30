@@ -167,24 +167,33 @@ session_doctor_tab_injections() {
     printf '%s' "${_v}"
 }
 
+# Shared body of the three tab-scoped writers below: apply jq fragment <3> to
+# the (possibly absent) entry for tab <1>, stamped by <2>. `printf` rather than
+# a double-quoted jq program: it substitutes <3> as inert text, so the
+# fragment can keep writing jq's own `$s` without a shell variable named `s`
+# swallowing it first.
+session_doctor_state_update_tab() {
+    local _prog
+    # shellcheck disable=SC2016  # jq program text — $t is jq's variable
+    _prog=$(printf '.tabs = ((.tabs // {}) | .[$t] = ((.[$t] // {}) | %s))' "$3")
+    session_doctor_state_apply --arg t "$1" --arg s "$2" "${_prog}"
+}
+
 # Record that tab <1> was seen stuck at <2>. Creates the entry, so every later
 # write can assume the tab is present.
 session_doctor_mark_detected() {
-    # shellcheck disable=SC2016  # jq program text — $t/$s are jq's variables
-    session_doctor_state_apply --arg t "$1" --arg s "$2" '
-        .tabs = ((.tabs // {}) | .[$t] = ((.[$t] // {}) | .last_detected = $s))
-    '
+    # shellcheck disable=SC2016  # jq program text — $s is jq's variable
+    session_doctor_state_update_tab "$1" "$2" '.last_detected = $s'
 }
 
 # Record that a `/devx:restart` prompt landed on tab <1> at <2>. This is the
 # only place `injections` moves — an injection that herdr refused never
 # reaches here, which is what leaves the retry budget intact for the next tick.
 session_doctor_record_injection() {
-    # shellcheck disable=SC2016  # jq program text — $t/$s are jq's variables
-    session_doctor_state_apply --arg t "$1" --arg s "$2" '
-        .tabs = ((.tabs // {}) | .[$t] = ((.[$t] // {})
-            | .injections = ((.injections // 0) + 1)
-            | .last_injection = $s))
+    # shellcheck disable=SC2016  # jq program text — $s is jq's variable
+    session_doctor_state_update_tab "$1" "$2" '
+        .injections = ((.injections // 0) + 1)
+        | .last_injection = $s
     '
 }
 
@@ -193,10 +202,9 @@ session_doctor_record_injection() {
 # `last_detected`) is what tells a human reading the file whether the tab is
 # still stuck now or was stuck once, days ago.
 session_doctor_mark_capped() {
-    # shellcheck disable=SC2016  # jq program text — $t/$s are jq's variables
-    session_doctor_state_apply --arg t "$1" --arg s "$2" '
-        .tabs = ((.tabs // {}) | .[$t] = ((.[$t] // {})
-            | .capped = true
-            | .capped_at = $s))
+    # shellcheck disable=SC2016  # jq program text — $s is jq's variable
+    session_doctor_state_update_tab "$1" "$2" '
+        .capped = true
+        | .capped_at = $s
     '
 }
