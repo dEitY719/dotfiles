@@ -708,6 +708,18 @@ _pmt_pane_settled() {
     return 0
 }
 
+# Echo how many settle polls fit in _PMT_SETTLE_SECONDS at _PMT_SETTLE_POLL_SLEEP
+# apart — the twin of _iw_settle_max_polls; see it for the full rationale
+# (agy + codex, PR #1611 review).
+_pmt_settle_max_polls() {
+    local _seconds="$1" _gap="$2"
+    case "${_gap}" in
+    0 | 0.0 | 0.00) printf '%s' "${_seconds}"; return 0 ;;
+    esac
+    awk -v s="${_seconds}" -v g="${_gap}" \
+        'BEGIN { n = s / g; i = int(n); if (i < n) i++; if (i < 1) i = 1; print i }'
+}
+
 # Wait for a freshly launched pane to look ready before typing into it
 # (issue #1560; polled since #1570). Separate from _pmt_wait_for_idle on
 # purpose: that one asks herdr for the agent's *status*, which reports "not
@@ -718,7 +730,7 @@ _pmt_pane_settled() {
 # ready signal warns and proceeds, exactly the pre-#1570 behaviour. The poll
 # can only make the wait shorter, never introduce a new failure mode.
 _pmt_settle() {
-    local _agent="$1" _i=0 _prev="" _text _now _deadline=""
+    local _agent="$1" _i=0 _prev="" _text _now _deadline="" _max_polls
 
     [ "${_PMT_SETTLE_SECONDS}" = "0" ] && return 0
     # A fractional cap cannot bound a poll count; it still means the flat wait
@@ -730,12 +742,15 @@ _pmt_settle() {
         ;;
     esac
 
+    _max_polls=$(_pmt_settle_max_polls "${_PMT_SETTLE_SECONDS}" "${_PMT_SETTLE_POLL_SLEEP}")
+
     _now=$(_pmt_now)
     [ -z "${_now}" ] || _deadline=$((_now + _PMT_SETTLE_SECONDS))
 
-    while [ "${_i}" -lt "${_PMT_SETTLE_SECONDS}" ]; do
+    while [ "${_i}" -lt "${_max_polls}" ]; do
         # Before the read, not after the sleep — see _iw_settle: a poll gap
-        # wider than 1s would otherwise let the last read land past the cap.
+        # wider than expected would otherwise let the last read land past the
+        # cap.
         if [ -n "${_deadline}" ]; then
             _now=$(_pmt_now)
             [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
@@ -744,7 +759,7 @@ _pmt_settle() {
         ! _pmt_pane_settled "${_text}" "${_prev}" || return 0
         _prev="${_text}"
         _i=$((_i + 1))
-        [ "${_i}" -lt "${_PMT_SETTLE_SECONDS}" ] || break
+        [ "${_i}" -lt "${_max_polls}" ] || break
         [ "${_PMT_SETTLE_POLL_SLEEP}" = "0" ] || sleep "${_PMT_SETTLE_POLL_SLEEP}"
     done
 

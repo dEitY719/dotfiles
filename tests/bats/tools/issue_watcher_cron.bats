@@ -1543,10 +1543,25 @@ _assert_not_hung() {
 }
 
 @test "issue_watcher_cron: the settle poll interval is overridable" {
+    # 3, not 13/1=13: the poll count scales with the gap
+    # (ceil(13/4)=4 polls, 3 sleeps) so a wide gap no longer multiplies the
+    # cap instead of dividing it — a gap of 4 pre-fix meant 13 polls of 4s
+    # each, a 52s wait against a documented 13s cap (agy/codex, PR #1611
+    # review).
     _run_tick "IW_SETTLE_POLL_SLEEP=4" "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
-    [ "$(_log_count '^sleep 4$')" -eq 12 ]
+    [ "$(_log_count '^sleep 4$')" -eq 3 ]
     [ "$(_log_count '^sleep 1$')" -eq 0 ]
+}
+
+@test "issue_watcher_cron: a sub-1s poll interval does not cut the wait short" {
+    # The inverse of the case above: ceil(13/0.5)=26 polls, 25 sleeps —
+    # without the scaling fix the old fixed 13-poll count hit its bound at
+    # 6.5s of real sleeping, half the documented cap (agy, PR #1611 review).
+    _run_tick "IW_SETTLE_POLL_SLEEP=0.5" "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 0.5$')" -eq 25 ]
+    assert_output --partial "never settled within 13s"
 }
 
 # The same `0` escape _IW_IDLE_POLL_SLEEP has: the suite polls without paying

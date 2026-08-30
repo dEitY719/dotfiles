@@ -74,7 +74,14 @@ pmv_error_code() { jq -r '.error.code // empty' 2>/dev/null || return 0; }
 # shell-common/tools/custom/issue_watcher_cron.sh and _PMT_SETTLE_SECONDS /
 # _PMT_START_RETRY_SLEEP in shell-common/tools/custom/pr_merge_train_cron.sh.
 # Change one, change all five: #1530/#1549 and #1560/#1571 are both the same
-# defect recurring because two of three dispatchers were fixed.
+# defect recurring because two of three dispatchers were fixed. The *number*
+# is what those five still share — since #1570 the two `_IW/_PMT_SETTLE_SECONDS`
+# spend it as a poll cap (each reads its pane's text via `herdr agent read` and
+# can leave early once it looks ready) while `pmv_settle` here stays a flat
+# sleep: this dispatcher opens a pane too ($NEW_PANE below), but nothing here
+# reads it back yet (codex, PR #1611 review). Whoever adds that read should
+# convert `pmv_settle` the same way; until then it is deliberately the odd one
+# out, not a missed follow-up.
 #
 # The other two dispatchers also *retry* `agent start` on `agent_pane_busy`;
 # this one deliberately does not (#1571 D-3). A wait shrinks the race, a retry
