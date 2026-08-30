@@ -34,8 +34,11 @@
   2.5.1 call only `gh:pr-resolve-conflict` / `gh:pr-resolve-outdated` —
   never `gh:pr-resolve-ci-fail`. CI checks haven't finished by the time
   this flow reaches those steps, so a synchronous call would be
-  meaningless; Step 2.4.1's merge-train wake hands that off to
-  `gh:pr-merge-train`'s routing table once checks report. Detail:
+  meaningless; `gh:pr-merge-train` routes a CI-red PR to
+  `gh:pr-resolve-ci-fail` whenever it next processes that PR — via Step
+  2.4.1's best-effort wake (which can silently skip on a non-matching
+  remote or warn on a missing `aicron.sh`) or its own cron backstop, not
+  a guarantee tied to the wake alone. Detail:
   `gh-pr-merge-train/references/routing-table.md`.
 - **Never fall back to `_dotfiles_setup_mode` alone for the host (#1403).**
   Step 1 exports `GH_HOST`/`TARGET_REPO`/`TARGET_HOST` from the `[remote]`'s
