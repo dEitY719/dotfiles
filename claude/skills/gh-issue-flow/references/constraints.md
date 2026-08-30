@@ -35,7 +35,8 @@
   never `gh:pr-resolve-ci-fail`. CI checks haven't finished by the time
   this flow reaches those steps, so a synchronous call would be
   meaningless; Step 2.4.1's merge-train wake hands that off to
-  `gh:pr-merge-train`'s routing table once checks report.
+  `gh:pr-merge-train`'s routing table once checks report. Detail:
+  `gh-pr-merge-train/references/routing-table.md`.
 - **Never fall back to `_dotfiles_setup_mode` alone for the host (#1403).**
   Step 1 exports `GH_HOST`/`TARGET_REPO`/`TARGET_HOST` from the `[remote]`'s
   URL, and every GitHub-touching sub-skill receives `[remote]` as an explicit

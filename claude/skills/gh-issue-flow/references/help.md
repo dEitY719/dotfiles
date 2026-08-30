@@ -55,6 +55,5 @@ on a feature branch with a clean working tree.
   3 (PR) failed, the commit stays.
 - Create a worktree or branch — user must be on a feature branch already.
 - Resolve CI failures synchronously — checks haven't completed by the
-  time this flow finishes. Step 2.4.1 wakes the merge-train dispatcher,
-  which routes CI-red PRs through gh:pr-resolve-ci-fail once checks
-  report (gh-pr-merge-train's routing table).
+  time this flow finishes; Step 2.4.1's merge-train wake routes CI-red
+  PRs to gh:pr-resolve-ci-fail once checks report.
