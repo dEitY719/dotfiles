@@ -104,19 +104,17 @@ HEAD_BRANCH=<headRefName>     # Step 2's `gh pr view` already read it
 BASE_BRANCH=<baseRefName>     # ditto — never a hardcoded `main`
 REMOTE=<remote>               # the `[remote]` positional, default `origin`
 
-# A value left empty here is a *binding* mistake, not an opt-out — and the
-# registry lookup below answers empty for an empty TARGET_REPO exactly as it
-# does for an unwatched repo, so the two are indistinguishable from the
-# outside. That ambiguity is #1576: PR #1572 dispatched nothing and left no
-# trace of why. Name the offenders on one line, and never look up a half-bound
-# run: the dispatch closes tabs and rebases the main checkout.
+# An empty value is a *binding* mistake, not an opt-out, and the lookup below
+# cannot tell it from an unwatched repo (#1576: PR #1572 left no trace). Name
+# every empty one, and never look up a half-bound run — the dispatch closes
+# tabs and rebases the main checkout.
 PMV_MISSING=""
-for _pmv_v in "PR_NUMBER=${PR_NUMBER-}" "TARGET_REPO=${TARGET_REPO-}" \
-    "HEAD_BRANCH=${HEAD_BRANCH-}" "BASE_BRANCH=${BASE_BRANCH-}" "REMOTE=${REMOTE-}"; do
-    case "$_pmv_v" in
-    *=) PMV_MISSING="${PMV_MISSING:+$PMV_MISSING, }${_pmv_v%=}" ;;
-    esac
-done
+_pmv_need() { [ -n "$2" ] || PMV_MISSING="${PMV_MISSING:+$PMV_MISSING, }$1"; }
+_pmv_need PR_NUMBER "${PR_NUMBER-}"
+_pmv_need TARGET_REPO "${TARGET_REPO-}"
+_pmv_need HEAD_BRANCH "${HEAD_BRANCH-}"
+_pmv_need BASE_BRANCH "${BASE_BRANCH-}"
+_pmv_need REMOTE "${REMOTE-}"
 
 WATCHED_FILE="${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}"
 VERIFY_SKILL=""
@@ -130,8 +128,7 @@ fi
 # Empty VERIFY_SKILL with all five values bound — repo not registered, no
 # registry, or no jq, so the feature is simply unavailable — means do nothing
 # at all: no output, no dispatch, and no [WARN] either. An unwatched repo
-# stays byte-identical to its pre-#1511 behavior. Only an empty *binding*
-# speaks up, above.
+# stays byte-identical to its pre-#1511 behavior.
 if [ -n "$VERIFY_SKILL" ]; then
     # gh:pr-post-merge-verify's dispatch block is READ from its SSOT and run
     # here, rather than reached through `Skill(gh:pr-post-merge-verify, ...)`.
