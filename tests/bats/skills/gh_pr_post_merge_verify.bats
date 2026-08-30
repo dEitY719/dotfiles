@@ -1246,14 +1246,17 @@ _pmv_gate_block() {
 }
 
 # Paste it the way Step 5 instructs: the five placeholders are replaced by the
-# caller's values — an empty one is exactly the mistake under test.
+# caller's values — an empty one is exactly the mistake under test. Quoted so
+# a whitespace-only value survives the substitution instead of collapsing to
+# an unquoted no-op (an unquoted `TARGET_REPO=   ` assigns empty anyway,
+# which would silently retest the plain-empty case).
 _pmv_gate_bind() {
     local _out="${TEST_TEMP_HOME}/gate-bound.sh"
-    sed -e "s|^PR_NUMBER=<N>.*|PR_NUMBER=${1-}|" \
-        -e "s|^TARGET_REPO=<owner/repo>.*|TARGET_REPO=${2-}|" \
-        -e "s|^HEAD_BRANCH=<headRefName>.*|HEAD_BRANCH=${3-}|" \
-        -e "s|^BASE_BRANCH=<baseRefName>.*|BASE_BRANCH=${4-}|" \
-        -e "s|^REMOTE=<remote>.*|REMOTE=${5-}|" "$(_pmv_gate_block)" >"$_out"
+    sed -e "s|^PR_NUMBER=<N>.*|PR_NUMBER=\"${1-}\"|" \
+        -e "s|^TARGET_REPO=<owner/repo>.*|TARGET_REPO=\"${2-}\"|" \
+        -e "s|^HEAD_BRANCH=<headRefName>.*|HEAD_BRANCH=\"${3-}\"|" \
+        -e "s|^BASE_BRANCH=<baseRefName>.*|BASE_BRANCH=\"${4-}\"|" \
+        -e "s|^REMOTE=<remote>.*|REMOTE=\"${5-}\"|" "$(_pmv_gate_block)" >"$_out"
     printf '%s' "$_out"
 }
 
@@ -1296,6 +1299,31 @@ _pmv_gate_run() {
     assert_output --partial '[WARN] gh:pr-merge:'
     assert_output --partial 'TARGET_REPO'
     # Named, and stopped: nothing may be closed or rebased on a half-bound run.
+    refute_output --partial 'gh:pr-post-merge-verify'
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+}
+
+# PR #1603 review (agy + codex): "non-empty" is not "correctly substituted" —
+# a forgotten placeholder or a whitespace-only paste both pass a bare
+# `[ -n ]` check and would silently reproduce the exact #1576 bug this gate
+# exists to surface.
+
+@test "1576: an unsubstituted placeholder is named, not read as a real value" {
+    _pmv_gate_run "$WATCHED" 77 '<owner/repo>' wt/issue-77/1 main origin
+    assert_success
+    assert_output --partial '[WARN] gh:pr-merge:'
+    assert_output --partial 'TARGET_REPO'
+    refute_output --partial 'gh:pr-post-merge-verify'
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+}
+
+@test "1576: a whitespace-only value is named, not read as bound" {
+    _pmv_gate_run "$WATCHED" 77 '   ' wt/issue-77/1 main origin
+    assert_success
+    assert_output --partial '[WARN] gh:pr-merge:'
+    assert_output --partial 'TARGET_REPO'
     refute_output --partial 'gh:pr-post-merge-verify'
     run cat "$FAKE_HERDR_LOG"
     assert_output ""
@@ -1352,6 +1380,11 @@ _pmv_gate_run() {
     assert_success
     assert_output --partial '[WARN] gh:pr-post-merge-verify:'
     assert_output --partial 'is not a git worktree root'
+    # codex review (PR #1603): the warning text alone doesn't prove the
+    # dispatch actually ran rather than being skipped — pin that no herdr
+    # call happened either, which is what this stop point guarantees.
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
 }
 
 @test "1576: the binding check runs before the registry lookup" {
