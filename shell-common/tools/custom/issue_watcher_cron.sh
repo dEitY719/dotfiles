@@ -1688,6 +1688,15 @@ _iw_pane_text() {
 # claude is up and unusable (#1561) — the case a state_change_seq comparison
 # cannot see at all, which is why the pane text is the signal here and the
 # counter stays with _iw_stall_recover_via_enter.
+#
+# Known gap (PR #1611 review, codex): "any stable, non-empty, non-`Not logged
+# in` text" is not proven ready — only proven not to be that one banner. A
+# different steady pre-ready or error frame could still false-positive. Not
+# fixed here: the only evidence available is what herdr 0.7.5 has actually
+# been observed to show (#1560's measurement), and this repo has no fixture
+# for a second stable-but-unready frame to design against. The cap (13s) is
+# the backstop either way — a false-positive settle is not a new failure mode,
+# just a prompt sent slightly earlier than warranted.
 _iw_pane_settled() {
     [ -n "$1" ] || return 1
     [ "$1" = "$2" ] || return 1
@@ -1695,6 +1704,27 @@ _iw_pane_settled() {
     *"${_IW_SETTLE_NOT_READY_MARK}"*) return 1 ;;
     esac
     return 0
+}
+
+# Echo how many settle polls fit in _IW_SETTLE_SECONDS at _IW_SETTLE_POLL_SLEEP
+# apart — ceil(seconds / gap). The pre-#1611-review shape hardcoded this to
+# `_IW_SETTLE_SECONDS` itself, silently assuming a 1s gap: IW_SETTLE_POLL_SLEEP=0.5
+# then hit the count bound at 6.5s of real sleeping, cutting the wait short of
+# the cap it was supposed to honour, while a gap *above* 1s (e.g. 4) overshot
+# it several times over — agy and codex both flagged the same root cause from
+# opposite sides in the PR #1611 review. `0` keeps the pre-scaling answer
+# (the seconds themselves): division by zero has no answer, and a `0` gap
+# already means "no real delay", so "poll up to N times" is the only sense
+# left to give the cap — and it is also the shape the bats suite's stubbed
+# `sleep` relies on to stay fast (a wall-clock-only bound would make a
+# "never settles" fixture actually wait out real seconds, timeout stub or not).
+_iw_settle_max_polls() {
+    local _seconds="$1" _gap="$2"
+    case "${_gap}" in
+    0 | 0.0 | 0.00) printf '%s' "${_seconds}"; return 0 ;;
+    esac
+    awk -v s="${_seconds}" -v g="${_gap}" \
+        'BEGIN { n = s / g; i = int(n); if (i < n) i++; if (i < 1) i = 1; print i }'
 }
 
 # Wait for a freshly launched pane to look ready before typing into it
@@ -1710,17 +1740,18 @@ _iw_pane_settled() {
 # therefore warns and proceeds, which is exactly the pre-#1570 behaviour: this
 # poll can only make the wait *shorter*, never turn it into a new failure mode.
 #
-# Bounded twice over, both against _IW_SETTLE_SECONDS: by wall clock, which is
-# what makes the cap true in seconds whatever the poll gap is, and by a poll
-# count, which is what keeps an unreadable clock (_iw_now echoes nothing) from
-# spinning here forever. With the default 1s gap the two coincide.
+# Bounded twice over, both against _IW_SETTLE_SECONDS: by a poll count scaled
+# to the poll gap (_iw_settle_max_polls, above — the primary bound in
+# practice), and by wall clock, which is what keeps a poll gap that runs
+# slower than expected (a loaded herdr, a slow read) from overrunning the cap
+# even when the count has not yet been exhausted.
 #
 # Like any poll, the cap holds to within one gap — no *read* happens past the
 # deadline, but a sleep already under way can carry the return up to one gap
-# beyond it. At the default 1s that is 13s becoming at most ~14s, still bounded
-# and still no worse than the unconditional 13s this replaced.
+# beyond it. At the default 1s gap that is 13s becoming at most ~14s, still
+# bounded and still no worse than the unconditional 13s this replaced.
 _iw_settle() {
-    local _agent="$1" _i=0 _prev="" _text _now _deadline=""
+    local _agent="$1" _i=0 _prev="" _text _now _deadline="" _max_polls
 
     [ "${_IW_SETTLE_SECONDS}" = "0" ] && return 0
     # A fractional cap cannot bound a poll count. It predates #1570 and still
@@ -1732,14 +1763,17 @@ _iw_settle() {
         ;;
     esac
 
+    _max_polls=$(_iw_settle_max_polls "${_IW_SETTLE_SECONDS}" "${_IW_SETTLE_POLL_SLEEP}")
+
     _now=$(_iw_now)
     [ -z "${_now}" ] || _deadline=$((_now + _IW_SETTLE_SECONDS))
 
-    while [ "${_i}" -lt "${_IW_SETTLE_SECONDS}" ]; do
+    while [ "${_i}" -lt "${_max_polls}" ]; do
         # Checked before the read, not after the sleep: a poll gap wider than
-        # 1s would otherwise let the last read land past the cap it is capped
-        # by. A clock that stopped being readable mid-wait leaves the count as
-        # the only bound, which is what it is there for.
+        # the cap would otherwise let the last read land past the cap it is
+        # capped by. A clock that stopped being readable mid-wait leaves the
+        # (now correctly-scaled) count as the only bound, which is what it is
+        # there for.
         if [ -n "${_deadline}" ]; then
             _now=$(_iw_now)
             [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
@@ -1748,7 +1782,7 @@ _iw_settle() {
         ! _iw_pane_settled "${_text}" "${_prev}" || return 0
         _prev="${_text}"
         _i=$((_i + 1))
-        [ "${_i}" -lt "${_IW_SETTLE_SECONDS}" ] || break
+        [ "${_i}" -lt "${_max_polls}" ] || break
         [ "${_IW_SETTLE_POLL_SLEEP}" = "0" ] || sleep "${_IW_SETTLE_POLL_SLEEP}"
     done
 
