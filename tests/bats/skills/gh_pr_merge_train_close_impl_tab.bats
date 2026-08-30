@@ -23,6 +23,9 @@
 #      path boundary, against the PHYSICAL path — a shell that `cd`'d inside
 #      the worktree and a symlinked worktree path both still resolve, while a
 #      sibling sharing the prefix still does not.
+#   9. #1569: that predicate now comes from
+#      shell-common/functions/herdr_agent_lookup.sh, sourced — this block
+#      carries no copy of it, and an unreadable helper is a silent skip.
 
 load '../test_helper'
 
@@ -156,8 +159,10 @@ branch refs/heads/wt/issue-1565/1
 
 # --- 1b. the moved shell and the symlinked path (PR #1567 review) ---------
 #
-# `_iw_live_agents` matches `.cwd` OR `.foreground_cwd`, and pmv_tab_for_cwd
-# matches both on a path boundary against the PHYSICAL path. A lookup that
+# `herdr_agent_tab_for_cwd` (shell-common/functions/herdr_agent_lookup.sh, the
+# SSOT since #1569, shared with `_iw_live_agents` and gh:pr-post-merge-verify)
+# matches `.cwd` OR `.foreground_cwd`, on a path boundary, against the PHYSICAL
+# path. A lookup that
 # compared only `.cwd`, as a string, left exactly the sessions this step exists
 # to reclaim: the count stayed pinned while the backstop reported nothing to do.
 
@@ -487,11 +492,9 @@ branch refs/heads/wt/issue-2/1
     local f pat
     for pat in \
         '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}' \
-        '" 2>/dev/null && pwd -P)' \
-        'def under($b): . == $b or startswith($b + "/");' \
-        'select(((.cwd // "") | under($p)) or ((.foreground_cwd // "") | under($p)))] | first' \
-        'select(.agent_status == "idle")' \
-        '.tab_id // empty' \
+        'shell-common/functions/herdr_agent_lookup.sh' \
+        'herdr_agent_tab_for_cwd "$(herdr_agent_physical_path ' \
+        ')" idle); then' \
         '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).' \
         '[WARN] gh:pr-merge-train: herdr tab close %s failed'; do
         for f in "$doc" "$fixture"; do
@@ -499,6 +502,30 @@ branch refs/heads/wt/issue-2/1
             assert_success
         done
     done
+}
+
+@test "close-impl-tab: neither the doc nor the fixture carries an inline match predicate (#1569)" {
+    # The unification's acceptance criterion: the cwd/foreground_cwd boundary
+    # match exists in exactly one file, and it is neither of these two.
+    local f
+    for f in "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/train-loop.md" \
+        "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_train_close_impl_tab.sh"; do
+        run bash -c "grep -n -e 'def under(' -e 'startswith(' -e 'result.agents' '$f'"
+        [ "$status" -ne 0 ]
+        [ -z "$output" ]
+    done
+}
+
+@test "close-impl-tab: an unreadable lookup SSOT is a silent skip, not a fallback" {
+    # NF-1: this runs after the merge, so a missing helper must cost nothing —
+    # and it must NOT degrade to a hand-rolled match, which is what #1569
+    # removed. Pointing DOTFILES_ROOT at an empty tree is the whole test.
+    FAKE_AGENT_JSON="$(_agents_json "${WT_DIR}|tab-7|idle")"
+    DOTFILES_ROOT="${TEST_TEMP_HOME}/empty-root" run gh_pr_merge_train_close_impl_tab "wt/issue-1565/1"
+    assert_success
+    [ -z "$output" ]
+    run cat "$FAKE_CLOSED_LOG"
+    assert_output ""
 }
 
 @test "close-impl-tab: the train-loop close block is gated on idle, never unconditional" {
