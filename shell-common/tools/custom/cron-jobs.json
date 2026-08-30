@@ -22,6 +22,14 @@
       "args": ["--cwd", "$HOME/dotfiles"],
       "env": {},
       "description": "열린 PR 을 순차 정리·머지"
+    },
+    {
+      "name": "session-doctor",
+      "script": "shell-common/tools/custom/session_doctor_cron.sh",
+      "schedule": "*/1 * * * *",
+      "args": [],
+      "env": {},
+      "description": "API 에러로 끊긴 채 idle 인 herdr 탭에 /devx:restart 주입"
     }
   ]
 }
