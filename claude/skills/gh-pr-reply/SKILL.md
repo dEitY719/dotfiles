@@ -95,7 +95,12 @@ Then, **after Step 5 has replied to every comment and regardless of
 `references/review-passed-gate.md` (soft-fail): read `HEAD_SHA` (`gh pr view`
 `--json headRefOid`, *after* any push). First recover the PR's origin history
 and its external-review evidence from the Step 2 comment fetch (no extra API
-call) with `_gh_pr_reply_history_origins` / `_gh_pr_reply_history_has_review`,
+call — pass the **raw `/issues/<N>/comments` JSON**, not `--jq '.[].body'`
+output, so `.user.login` survives) with
+`_gh_pr_reply_history_origins "$ME"` / `_gh_pr_reply_history_has_review "$ME"`,
+where `ME` is the login this pipeline authenticates as
+(`ME="${GH_PR_REPLY_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"`)
+— a marker from any other commenter is forged and ignored (#1639);
 merge `ORIGINS` over that history (`_gh_pr_reply_origins_merge`) and post the
 merged stream back as the ledger comment (`_gh_pr_reply_post_origins_ledger`,
 before the gate and whatever it decides); a PR with no external-review

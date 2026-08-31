@@ -24,9 +24,13 @@
 #
 #   1. `review-passed` is dropped when (and only when) a push advanced head.
 #      Before the gate, or it would delete the label the gate just applied.
-#   2. the PR's comment bodies (already fetched in Step 2 — no extra API call)
-#      yield the ORIGIN HISTORY of earlier passes and the external-review
-#      EVIDENCE probe. Before the merge, which consumes the history.
+#   2. the PR's comments (already fetched in Step 2 — no extra API call) yield
+#      the ORIGIN HISTORY of earlier passes and the external-review EVIDENCE
+#      probe. Before the merge, which consumes the history. Since #1639 both
+#      readers take the RAW comments JSON (`.user.login` intact) and a
+#      required <expected-login>, and only trust that login's markers — a
+#      forged ledger or `ai-review` marker from any commenter used to unlock
+#      the gate outright.
 #   3. this pass's ORIGINS are merged over that history, per-reviewer
 #      supersede. Before the ledger AND the gate, because both read the merged
 #      stream — the gate must see an earlier pass's DECLINEd BLOCKER that
@@ -41,9 +45,11 @@
 #
 # Usage: <this pass's origin lines> | pr_reply_step6 <pr> <repo> <host> <head-sha>
 #            [<pushed-fixes>]          # default 1
-#            [<comment-bodies-file>]   # default: no bodies -> no evidence
+#            [<comments-json-file>]    # default: no comments -> no evidence
+#            [<expected-login>]        # default: pipeline-bot
 pr_reply_step6() {
-    local _pr="$1" _repo="$2" _host="$3" _sha="$4" _pushed="${5-1}" _bodies="${6-}"
+    local _pr="$1" _repo="$2" _host="$3" _sha="$4" _pushed="${5-1}" _bodies="${6-}" \
+        _login="${7-pipeline-bot}"
     local _origins _history _evidence _merged
 
     _origins=$(cat)
@@ -53,8 +59,8 @@ pr_reply_step6() {
     fi
 
     if [ -n "$_bodies" ] && [ -r "$_bodies" ]; then
-        _history=$(_gh_pr_reply_history_origins <"$_bodies")
-        if _gh_pr_reply_history_has_review <"$_bodies"; then
+        _history=$(_gh_pr_reply_history_origins "$_login" <"$_bodies")
+        if _gh_pr_reply_history_has_review "$_login" <"$_bodies"; then
             _evidence=yes
         else
             _evidence=no
