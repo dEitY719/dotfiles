@@ -48,11 +48,14 @@ Four conditions **short-circuit the table** — check all four before reading
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
 
-printf '%s' "$STATE" | _gh_pr_merge_train_has_reply_pending_label \
-  && echo "[SKIPPED] reply-pending"
-
-# The verdict gate, re-asked (references/review-verdict-gate.md). Order
-# matters: review-blocked wins over a stale review-passed.
+# One if/elif chain, not a leading `... && echo` followed by a separate
+# if-block — the two used to be independent statements with no exit between
+# them, so a reply-pending PR printed its skip line and then fell straight
+# into the verdict-gate check below, which could print a SECOND line (or
+# worse, let the PR reach the D-1 table) for a PR that should have stopped
+# at reply-pending (agy, PR #1608 round-4 FOLLOW-UP). Folding reply-pending
+# into this same chain makes every branch here mutually exclusive by
+# construction, not by convention.
 HEAD_OID=$(printf '%s' "$STATE" | jq -r '.headRefOid')
 # ME: the one login a marker may be trusted from (#1601, "Marker authorship"
 # in review-verdict-gate.md). Reuse the same hoisted binding train-loop.md's
@@ -61,7 +64,9 @@ HEAD_OID=$(printf '%s' "$STATE" | jq -r '.headRefOid')
 # identity for setups where the review pipeline and the merge-train dispatcher
 # authenticate as different accounts (PR #1608 review, agy round-2 BLOCKER).
 ME="${GH_PR_MERGE_TRAIN_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"
-if printf '%s' "$STATE" | _gh_pr_merge_train_has_review_blocked_label; then
+if printf '%s' "$STATE" | _gh_pr_merge_train_has_reply_pending_label; then
+    echo "[SKIPPED] reply-pending"
+elif printf '%s' "$STATE" | _gh_pr_merge_train_has_review_blocked_label; then
     echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
 elif ! printf '%s' "$STATE" | _gh_pr_merge_train_has_review_passed_label; then
     echo "[SKIPPED] review not verified — no review-passed label"

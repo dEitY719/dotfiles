@@ -417,8 +417,20 @@ _gh_pr_merge_train_review_passed_marker_sha() {
 #   rc 3 both route the PR as unverified without touching it — the
 #   difference between them is diagnostic only (did the check run at all),
 #   not behavioral.
+#
+#   An empty `<head-oid>` is a CALLER error (the caller failed to resolve
+#   `headRefOid` upstream), not evidence about the marker — it fails closed
+#   to rc 3 (UNDETERMINED) immediately, before even attempting the lookup.
+#   Without this guard, a marker that legitimately exists would otherwise
+#   compare against an empty string, never match, and fall through to rc 1
+#   (MISMATCH) — reporting positive proof of staleness the caller never
+#   actually established, and self-healing (deleting the label) on what was
+#   really its own unresolved state (agy, PR #1608 round-4 FOLLOW-UP).
 _gh_pr_merge_train_review_passed_stale() {
     local _pr="$1" _repo="$2" _host="$3" _head_oid="$4" _login="$5" _marker_sha _lookup_rc
+
+    [ -n "$_head_oid" ] || return 3
+
     _marker_sha=$(_gh_pr_merge_train_review_passed_marker_sha "$_pr" "$_repo" "$_host" "$_login")
     _lookup_rc=$?
     if [ "$_lookup_rc" -ne 0 ]; then
