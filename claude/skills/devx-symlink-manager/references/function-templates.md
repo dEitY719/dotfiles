@@ -79,4 +79,4 @@ ux_bullet "<app>_edit_<config> : <filename> 파일 편집"
 - `ux_lib`은 인터랙티브 셸에서 자동 로드됨 (`shell-common/tools/ux_lib/ux_lib.sh`).
 - `<app>_init` / `<app>_edit_*` 함수가 비인터랙티브 호출(예: 스크립트)에서도
   실행될 수 있다면 함수 진입부에 `command -v ux_info >/dev/null 2>&1 ||
-  source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"` 가드를 권장.
+  source "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"` 가드를 권장.
