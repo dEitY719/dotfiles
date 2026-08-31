@@ -264,7 +264,7 @@ PMV_SCRATCH="${PMV_COMMON_DIR}/pr-post-merge-verify/pr-${PR_NUMBER}"
 PMV_SCRATCH_REGISTERED=""
 if [ -d "$PMV_SCRATCH" ]; then
     PMV_SCRATCH_REGISTERED=$(git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null |
-        awk -v p="$(pmv_physical_path "$PMV_SCRATCH")" '$0 == "worktree " p { print "1"; exit }')
+        awk -v p="$(herdr_agent_physical_path "$PMV_SCRATCH")" '$0 == "worktree " p { print "1"; exit }')
 fi
 if [ -n "$PMV_SCRATCH_REGISTERED" ]; then
     # Create if absent, reuse if present: a second dispatch for the same PR (a
