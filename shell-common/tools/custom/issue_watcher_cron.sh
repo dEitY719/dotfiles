@@ -2339,10 +2339,11 @@ EOF
         # The one moment the casualty list is acted on. Flagged rather than
         # retried here: this function is the gate's decision and runs before the
         # tick has primed `herdr agent list` or resolved an account dir, and the
-        # retry needs both. main() reads the flag once, ahead of
-        # _iw_select_candidates, so the issues the outage killed are offered
-        # their pane back before a fresh issue is allowed to take a slot
-        # (issue #1604).
+        # retry needs both. main() reads the flag once, ahead of both the
+        # concurrency ceiling and _iw_select_candidates, so the issues the
+        # outage killed are offered their pane back before a fresh issue is
+        # allowed to take a slot — and before a slot count they may themselves
+        # be occupying can turn the tick away (issue #1604, PR #1622 review).
         _IW_LIMIT_GATE_REOPENED=1
         return 0
         ;;
@@ -2636,10 +2637,14 @@ _iw_limit_retry_casualties() {
             continue
         fi
 
-        _agent=$(_iw_agent_name "${_repo}" "${_number}") || {
+        # Emptiness is checked alongside the exit status because everything
+        # below addresses herdr *by* this name: an empty one would silently ask
+        # about agent "" — a lookup that answers "gone" — and send the retry
+        # down the redispatch path for a pane that is in fact alive.
+        if ! _agent=$(_iw_agent_name "${_repo}" "${_number}") || [ -z "${_agent}" ]; then
             _iw_limit_casualty_drop "${_repo}" "${_number}" "no valid herdr agent name (see #1530)."
             continue
-        }
+        fi
 
         if [ -n "$(_iw_agent_status "${_agent}")" ]; then
             ux_info "Re-prompting ${_repo}#${_number} in its surviving pane (${_agent})."
@@ -3137,18 +3142,55 @@ EOF
     # the tick that most needs it done (D-4).
     _iw_cleanup_worktrees
 
+    # Before the concurrency ceiling, not just before _iw_select_candidates
+    # (PR #1622 codex review), and only on the tick that reopened the gate
+    # (issue #1604).
+    #
+    # A casualty's own pane is routinely what fills the last slot: its session
+    # died with the quota but its issue is still OPEN, and the zombie reclaim
+    # above only collects panes whose issue is CLOSED — so that slot is never
+    # given back. Leaving the retry behind the ceiling therefore starves
+    # precisely the issue the ceiling is full *because of*, on every tick,
+    # forever. And the cheap path the retry takes in that very case is a
+    # re-prompt into the surviving pane, which opens no session and consumes no
+    # slot at all, so the ceiling has no claim on it to begin with.
+    #
+    # It still has to run before the selector, which round-robins: asking that
+    # first would hand this tick's slot to whichever issue is next in the queue
+    # and leave the one the outage killed waiting for a turn that never comes.
+    if [ "${_IW_LIMIT_GATE_REOPENED}" -eq 1 ]; then
+        _iw_limit_retry_casualties
+
+        # The retry's missing-pane fallback goes through _iw_process_issue,
+        # which spawns a real worktree and a real pane — neither of which the
+        # memos primed above can know about. Both have to be dropped, not just
+        # the agent one: _iw_live_agents rebuilds its answer by joining herdr's
+        # panes against _iw_issue_worktrees, so clearing only the live memo
+        # would recount against a worktree list that still predates the
+        # redispatch and miss the new session again. Everything downstream that
+        # spends a slot — the ceiling check below, _iw_dispatch_budget inside
+        # the selector — would otherwise admit fresh work against a count taken
+        # before the retry and overshoot _IW_MAX_CONCURRENT.
+        _IW_LIVE_AGENTS=""
+        _IW_LIVE_AGENTS_LOADED=0
+        _IW_ISSUE_WORKTREES=""
+        _IW_ISSUE_WORKTREES_LOADED=0
+
+        # Re-primed here in the tick's own shell for both reasons the first
+        # priming gives: the subshells below must inherit a warm cache instead
+        # of paying a herdr round trip apiece, and a lookup that fails now is
+        # as terminal as one that failed then — an unknown count must never be
+        # read as "nothing running".
+        if ! _iw_live_agents >/dev/null; then
+            ux_warning "Cannot list herdr agents after the casualty retry — holding this tick rather than dispatching blind."
+            exit 0
+        fi
+    fi
+
     _live=$(_iw_live_count)
     if [ "${_live}" -ge "${_IW_MAX_CONCURRENT}" ]; then
         ux_info "Holding this tick — ${_live} issue session(s) already running (max ${_IW_MAX_CONCURRENT})."
         exit 0
-    fi
-
-    # Before _iw_select_candidates, and only on the tick that reopened the gate
-    # (issue #1604). The selector round-robins, so asking it first would hand
-    # this tick's slot to whichever issue is next in the queue and leave the one
-    # the outage actually killed waiting for a turn that never comes.
-    if [ "${_IW_LIMIT_GATE_REOPENED}" -eq 1 ]; then
-        _iw_limit_retry_casualties
     fi
 
     _candidates=$(_iw_select_candidates "$(_iw_collect_candidates)")

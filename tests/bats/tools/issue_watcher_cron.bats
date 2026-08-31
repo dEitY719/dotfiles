@@ -3486,6 +3486,61 @@ _two_repo_fixture() {
     assert_output --partial "acme/dotfiles"
 }
 
+@test "issue_watcher_cron: a reopened gate retries its casualty even at the concurrency ceiling" {
+    # The deadlock (PR #1622 codex review). The casualty's own pane is what
+    # fills the last slot: its session died with the quota, but its issue is
+    # still OPEN, so the zombie reclaim — which only collects panes on CLOSED
+    # issues — never gives that slot back. A retry gated behind the ceiling
+    # would therefore starve exactly the issue the ceiling is full *because
+    # of*, on every tick, forever. Re-prompting that surviving pane opens no
+    # session at all, so the ceiling has nothing to protect here.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_running 11
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
+
+    _run_tick "IW_MAX_CONCURRENT=1" "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "Re-prompting acme/dotfiles#11 in its surviving pane"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    assert_output --partial "acme/dotfiles#11 is working again"
+    [ ! -s "${_CASUALTY_FILE}" ]
+
+    # Exempt, not lifted: fresh work still waits for a real slot.
+    assert_output --partial "1 issue session(s) already running"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a redispatched casualty is counted before fresh work is admitted" {
+    # The stale-memo half of the same review. _iw_live_agents and
+    # _iw_issue_worktrees are both memoized once per tick, and the retry's
+    # missing-pane fallback spawns a real worktree and pane that neither memo
+    # can know about — so an uninvalidated tick would size the rest of its
+    # dispatching against a count taken before the redispatch and run one over
+    # _IW_MAX_CONCURRENT.
+    #
+    # The pane is in `agent list` from the start while its worktree is not:
+    # that pairing is the running-now signal, so the pane only becomes visible
+    # once the redispatch below creates the worktree it is sitting in — which
+    # is precisely the mid-tick change the memos would otherwise miss.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_live_agents "$(_worktree_path 11)"
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
+
+    _run_tick "IW_MAX_CONCURRENT=1" \
+        "HERDR_AGENT_MISSING=iw-dotfiles-issue-11" \
+        "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "Pane for acme/dotfiles#11 is gone — redispatching from scratch"
+    _assert_logged "gwt spawn --wt-name issue-11"
+
+    # The slot the redispatch just took is visible to the ceiling check, so #12
+    # waits for the next tick instead of making two sessions out of one slot.
+    assert_output --partial "1 issue session(s) already running"
+    _refute_logged "gwt spawn --wt-name issue-12"
+}
+
 # ---------------------------------------------------------------------------
 # --status (issue #1441, AC 11)
 # ---------------------------------------------------------------------------
