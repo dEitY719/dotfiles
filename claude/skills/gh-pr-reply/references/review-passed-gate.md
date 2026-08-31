@@ -48,8 +48,21 @@ ORIGINS=$(
 )
 ```
 
-- `<reviewer>` — 코멘트 작성자에 대응하는 `gh:pr-review` 의 `--ai` 값
-  (`agy` / `codex` / `claude` / `opencode` / `hermes`). 그 외는 exit 2.
+- `<reviewer>` — 코멘트 작성자. 두 집합 중 하나여야 하고, 그 외는 exit 2.
+  - **AI CLI** — `gh:pr-review` 의 `--ai` 값 그대로:
+    `agy` / `codex` / `claude` / `opencode` / `hermes`.
+  - **봇 로그인** (PR #1637 리뷰, codex BLOCKER) — `gemini-code-assist` /
+    `sourcery-ai` / `copilot`. Step 3 의 분류 규칙은 봇 코멘트를 AI CLI
+    코멘트와 **똑같이** 다루는데 리뷰어 필드가 `--ai` enum 하나로 닫혀 있어서,
+    봇이 올린 BLOCKER 는 exit 2 로 튕겨 나가 `ORIGINS` 에 아예 못 들어갔다 —
+    게이트에게 보이지 않는 BLOCKER 였다.
+  - **왜 두 집합을 따로 두나.** 봇은 오직 코멘트 *작성자*다. `--ai` 로 다시
+    호출되는 일이 없다(GitHub App 이라 CLI 디스패처 자체가 없다). 한 집합으로
+    합치면 `--ai` enum 이 실행 불가능한 이름까지 받아들이게 되고, 오타 난
+    `--ai` 값이 이 목록으로 검증하는 모든 호출자에게 유효해 보인다.
+    판별은 `_gh_pr_reply_reviewer_is_bot <name>` (rc 0 = 봇).
+  - 봇 로그인에는 `-` 는 있어도 `:` 는 없다. `reviewer:severity:verdict`
+    구분자와 `_gh_pr_reply_origin_tally` 의 awk `-F:` 그룹핑은 그대로 동작한다.
 - `<severity>` — 리뷰어가 본문에 단 태그(`[BLOCKER]` / `[FOLLOW-UP]` /
   `[Suggestion]` …). 대괄호는 렌더링이라 헬퍼가 벗겨낸다.
 - `<verdict>` — `ACCEPT` / `ACCEPT-PARTIAL` / `DECLINE` / `QUESTION`.
@@ -59,13 +72,101 @@ Step 7 의 리뷰어별 표는 이 스트림을 `_gh_pr_reply_origin_tally` 로 
 
 ## Step 6 — 게이트와 적용 (F-2 / F-3 / F-4)
 
-**Step 5 가 모든 코멘트에 답변을 마친 뒤에** 실행한다. 게이트는 "이 pass 가
-BLOCKER 를 남겼나"를 묻는 것이므로, 아직 답하지 않은 코멘트가 있으면 물을
-수 없다.
+**Step 5 가 모든 코멘트에 답변을 마친 뒤에** 실행한다. 게이트는 "이 PR 에
+BLOCKER 가 미해결로 남았나"를 묻는 것이므로, 아직 답하지 않은 코멘트가 있으면
+물을 수 없다.
+
+### 실행 순서 (PR #1637 리뷰 이후)
+
+순서가 전부 load-bearing 이다. 그대로 지킨다:
+
+1. **drop** — `PUSHED_FIXES > 0` 이면 `review-passed` 를 먼저 뗀다
+   (`references/verdict-label-removal.sh.md`). 게이트보다 **앞**이어야 한다 —
+   뒤로 가면 방금 붙인 라벨을 지운다.
+2. **history + evidence** — Step 2 에서 이미 받아 둔 PR 코멘트 본문을 재사용해
+   (API 추가 호출 없음) 과거 pass 들의 origin 이력과 외부 리뷰 근거를 구한다.
+3. **merge** — 이 pass 의 `ORIGINS` 를 그 이력 위에 리뷰어 단위로 덮어쓴다.
+4. **ledger** — 병합 결과를 원장 코멘트로 **먼저** 기록한다. 게이트 결과와
+   **무관하게** 기록한다 — hold 인 경우가 바로 다음 pass 가 알아야 하는 경우다.
+5. **gate + apply** — 병합 결과와 근거 플래그를 게이트에 넘긴다.
 
 ```bash
-DECISION=$(printf '%s\n' "$ORIGINS" | _gh_pr_reply_review_passed_gate)
+HISTORY=$(_gh_pr_reply_history_origins <"$COMMENT_BODIES")
+if _gh_pr_reply_history_has_review <"$COMMENT_BODIES"; then
+    EVIDENCE=yes
+else
+    EVIDENCE=no
+fi
+
+MERGED=$(printf '%s\n' "$ORIGINS" | _gh_pr_reply_origins_merge "$HISTORY")
+
+printf '%s\n' "$MERGED" |
+    _gh_pr_reply_post_origins_ledger "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_SHA"
+
+DECISION=$(printf '%s\n' "$MERGED" | _gh_pr_reply_review_passed_gate "$EVIDENCE")
 ```
+
+### origin 원장 — pass 사이의 기억 (PR #1637 리뷰, codex BLOCKER)
+
+게이트는 원래 **이번 pass 의 `ORIGINS` 만** 봤다. 그런데 Step 2 의 "이미
+답변함" 중복 제거가 앞선 pass 의 스레드를 이후 모든 pass 에서 걸러낸다. 그래서
+1차 pass 가 BLOCKER 를 DECLINE 하면 2차 pass 의 `ORIGINS` 에는 그 흔적이 전혀
+남지 않고, 게이트는 `pass=no-blocker` 를 읽어 **고쳐지지 않은 BLOCKER 를 품은
+PR 에 `review-passed` 를 붙였다**.
+
+이 저장소는 "게시된 코멘트가 곧 지속되는 기계 판독 상태"라는 관례를 이미
+쓴다(`<!-- ai-review:<ai>:<sha> -->`, `devx_pr_review_all_write_label` 이 남기는
+`<!-- review-verdict:review-passed:<sha> -->` 마커 코멘트). 원장도 같은 모양이다:
+
+```
+<!-- pr-reply-origins:<head-sha> -->
+codex:BLOCKER:DECLINE
+agy:FOLLOW-UP:ACCEPT
+<!-- /pr-reply-origins:<head-sha> -->
+```
+
+- `_gh_pr_reply_origins_block <head-sha>` — origin 스트림을 위 블록으로 감싼다.
+  빈 스트림이면 아무것도 출력하지 않는다(기억할 게 없다). `<head-sha>` 가
+  비면 접미사 없는 `<!-- pr-reply-origins -->` 형태로 떨어진다.
+- `_gh_pr_reply_history_origins` — 코멘트 본문 더미에서 **마지막 완전한** 블록의
+  origin 줄들을 뽑는다(`devx_pr_review_all_lane_block` 과 같은 계약: 나중 pass 가
+  앞선 pass 를 대체하고, 닫히지 않은 블록은 절대 수확하지 않는다). sha 접미사
+  유무 둘 다 매치한다 — 옛 head 에서 거절된 BLOCKER 는 오늘도 거절된 상태이므로
+  여기서 신선도를 따지면 이 구멍이 도로 열린다. 블록 안의 산문 줄은 조용히
+  버린다(사람이 코멘트 안에 답글을 달 수 있다).
+- `_gh_pr_reply_origins_merge "<history>"` — 이 pass 의 스트림을 stdin 으로 받아,
+  **이 pass 에 등장하지 않은 리뷰어**의 이력 줄들 + 이 pass 의 줄들(원래 순서)을
+  출력한다.
+- `_gh_pr_reply_post_origins_ledger <pr> <repo> [host] [head-sha]` — 병합 결과를
+  PR 코멘트로 게시한다. soft-fail(항상 rc 0), host 는 서브셸 안에서 핀 고정
+  (#1403 / #1407).
+
+**리뷰어 단위 supersede 와 탈출구.** 덮어쓰기는 줄 단위가 아니라 **리뷰어**
+단위다. supersede 가 없으면 한 번 DECLINE 된 BLOCKER 가 `review-passed` 를
+영원히 막고 풀 방법이 없다. 리뷰어 단위로 두면 탈출구가 정확히 옳은 하나만
+남는다 — 리뷰어가 다음 라운드에서 그 항목을 다시 제기하고, `gh:pr-reply` 가
+재분류하면 새 판정이 낡은 판정을 대체한다. 이번 pass 에 아무 말도 하지 않은
+리뷰어는 이력을 그대로 유지하므로, **침묵이 BLOCKER 를 지우지는 못한다.**
+
+### 외부 리뷰 근거 (PR #1637 리뷰, agy BLOCKER)
+
+`ORIGINS` 가 비어 있으면(외부 리뷰가 아예 돈 적 없음 — CLI 미설치,
+`devx:pr-review-all` 미실행) 게이트는 `pass=no-blocker` 를 읽고 스스로
+`review-passed` 를 붙였다. #1636 이 NF-2 를 완화한 근거는 분업 — **발견은
+외부 AI, 해소 확인은 `gh:pr-reply`** — 인데, 발견자가 없으면 확인할 대상도
+없다.
+
+`_gh_pr_reply_history_has_review` 가 PR 코멘트 본문에 `<!-- ai-review:` 마커가
+하나라도 있는지 본다(rc 0 = 있음). 게이트의 5번째 인자는 **fail-closed 기본값**
+이다: 생략/빈 값/그 외 어떤 값이든 "근거 없음"으로 읽고 `hold` 한다. 근거를
+조회하지 않은 호출자가 인증을 얻어 가서는 안 되기 때문이다.
+
+알려진 한계(의도적 수용): `gh:pr-review` 의 large-diff 위임 경로는 마커를 찍지
+않고(별건 버그, #1636 범위 밖), 봇 전용 리뷰도 `ai-review` 마커를 남기지 않는다.
+두 경우 모두 "근거 없음"으로 읽혀 PR 은 **무라벨**로 남는다 — 무라벨은 하류에서
+"미검증"이므로 fail-closed 방향이다.
+
+### 토큰 표
 
 `DECISION` 은 정확히 한 토큰이다:
 
@@ -74,6 +175,11 @@ DECISION=$(printf '%s\n' "$ORIGINS" | _gh_pr_reply_review_passed_gate)
 | `pass=no-blocker` | BLOCKER 심각도 항목이 애초에 없었음 | `review-passed` 적용 |
 | `pass=blockers-resolved:<n>` | BLOCKER `<n>` 건이 전부 ACCEPT / ACCEPT-PARTIAL | `review-passed` 적용 |
 | `hold=unresolved-blocker:<r>` | `<r>` 의 BLOCKER 가 DECLINE/QUESTION 으로 남음 | 미적용, `review-blocked` 유지, **쓰기 0회** |
+| `hold=no-external-review` | 이 PR 을 본 외부 리뷰어가 없음 (`ai-review` 마커 부재) | 미적용, 무라벨(=미검증), **쓰기 0회** |
+
+평가 순서: **BLOCKER 루프가 먼저**다. 미해결 BLOCKER 와 근거 부재가 동시에
+성립하면 BLOCKER 토큰이 이긴다 — 둘 다 hold 라 라벨 결과는 같지만, BLOCKER
+토큰은 리뷰어 이름과 조치할 항목을 알려 준다.
 
 BLOCKER 판정은 `_gh_pr_reply_severity_is_blocking` 을 쓰므로 `BLOCKER` /
 `BLOCKING` / `블로커` 가 모두 블로킹으로 센다. `ACCEPT-PARTIAL` 은 해소로
@@ -86,9 +192,15 @@ FOLLOW-UP 으로 다시 제기되는 것이 이 저장소의 흐름이다.
 ### 적용 (F-3 / F-4)
 
 ```bash
-printf '%s\n' "$ORIGINS" |
-    _gh_pr_reply_apply_review_passed "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_SHA"
+printf '%s\n' "$MERGED" |
+    _gh_pr_reply_apply_review_passed "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
+        "$HEAD_SHA" "$EVIDENCE"
 ```
+
+입력은 **병합된** 스트림이다 — 이 pass 의 `ORIGINS` 만 먹이면 cross-pass 구멍이
+도로 열린다. 5번째 인자는 그대로 게이트로 넘어가고, 생략하면 fail-closed 기본값
+(`hold=no-external-review`)이라 아무것도 쓰지 않는다. `hold=*` 는 **전부** 같은
+경로다: 보고하고, 쓰지 않고, rc 0.
 
 이 함수가 게이트를 직접 돌리고, `pass=` 일 때만 쓴다. 쓰기는 공유 프리미티브
 `devx_pr_review_all_write_label` 로 간다 — `devx:pr-review-all` 이 쓰는 것과
@@ -119,8 +231,29 @@ printf '%s\n' "$ORIGINS" |
 | BLOCKER 없음 | `[OK] 미해결 BLOCKER 없음(BLOCKER 항목 자체가 없음) — review-passed 적용 (외부 재검토 없음, #1636)` |
 | BLOCKER 전부 해소 | `[OK] BLOCKER <n>건 전부 해소 — review-blocked 해제, review-passed 적용 (외부 재검토 없음, #1636)` |
 | BLOCKER 미해결 | `[BLOCKED] <r> 의 블로커가 미해결 — review-passed 미부여, review-blocked 유지` |
+| 외부 리뷰 근거 없음 | `[BLOCKED] 외부 리뷰 근거(ai-review 마커) 없음 — review-passed 미부여 (#1636 의 분업 전제 미충족)` |
+| 원장 기록됨 | `[OK] origin 원장 기록됨 — 다음 pass 가 이 pass 의 판정을 본다` |
+| 원장 기록 실패 | `[WARN] origin 원장 기록 실패 — 다음 pass 가 이번 판정을 못 본다(BLOCKER 재분류 필요)` |
 | 라벨 미프로비저닝 | `[WARN] label \`review-passed\` missing in <repo> — provision it first (gh:label-bootstrap)` |
 | 그 외 쓰기 실패 | `[WARN] PR #<n> review-passed 적용 실패 — 미검증으로 취급` |
+
+## #1637 리뷰가 막은 구멍
+
+#1636 의 완화는 두 군데가 새고 있었고, 둘 다 "분업이 실제로 성립한 PR" 이
+아닌데도 인증이 나가는 경로였다.
+
+- **codex BLOCKER — pass 사이의 기억이 없었다.** Step 2 의 중복 제거가 앞선
+  pass 의 스레드를 가려서, BLOCKER 를 DECLINE 한 이력이 이후 pass 에는 보이지
+  않았다. 그 pass 는 `pass=no-blocker` 를 읽고 미해결 BLOCKER 를 품은 PR 을
+  통과시켰다. → `pr-reply-origins` 원장.
+- **agy BLOCKER — 발견자가 없어도 인증이 나갔다.** `ORIGINS` 가 비면(외부 리뷰
+  자체가 없던 PR) 역시 `pass=no-blocker` 였다. 확인할 발견이 없는데 "해소
+  확인"이 나가는 셈이다. → `ai-review` 마커 근거 요구, fail-closed 기본값.
+
+`devx:pr-review-all` 쪽 반대 라벨 삭제도 같은 리뷰에서 조용한 실패를 고쳤다
+(codex FOLLOW-UP): `_devx_pr_review_all_delete_label` 이 이제
+`drop=ok|absent|failed` 를 내고, 진짜 실패일 때만 WARN 한다 — 404("애초에 없음")
+는 정상 다수 경로라 조용히 지나간다.
 
 ## 제거된 것 (#1636)
 

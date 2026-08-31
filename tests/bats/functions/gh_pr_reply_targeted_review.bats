@@ -48,6 +48,71 @@ teardown() {
     assert_failure 2
 }
 
+# ── Bot reviewer logins (PR #1637 review, codex BLOCKER) ─────────────
+#
+# The skill's Step 3 rubric classifies bot comments (gemini-code-assist,
+# sourcery-ai, copilot) exactly like an AI-CLI comment, but the reviewer field
+# was a closed `--ai` enum — so a bot-authored BLOCKER exited 2 and could never
+# enter ORIGINS at all, leaving it invisible to the gate.
+
+@test "F-1 (PR #1637 review, codex BLOCKER): origin_line accepts every bot login" {
+    run _gh_pr_reply_origin_line gemini-code-assist '[BLOCKER]' ACCEPT
+    assert_success
+    assert_output 'gemini-code-assist:BLOCKER:ACCEPT'
+    run _gh_pr_reply_origin_line sourcery-ai '[FOLLOW-UP]' decline
+    assert_success
+    assert_output 'sourcery-ai:FOLLOW-UP:DECLINE'
+    run _gh_pr_reply_origin_line Copilot BLOCKER accept-partial
+    assert_success
+    assert_output 'copilot:BLOCKER:ACCEPT-PARTIAL'
+}
+
+@test "F-1 (PR #1637 review): reviewer_is_bot separates the two sets" {
+    for _bot in gemini-code-assist sourcery-ai copilot; do
+        run _gh_pr_reply_reviewer_is_bot "$_bot"
+        assert_success
+    done
+    for _cli in codex agy claude opencode hermes; do
+        run _gh_pr_reply_reviewer_is_bot "$_cli"
+        assert_failure
+    done
+}
+
+@test "F-1 (PR #1637 review): the --ai enum did not absorb the bots" {
+    # The two sets stay separate on purpose: nothing re-invokes a bot, and
+    # folding them together would make a typo'd `--ai` value look valid to
+    # every caller that validates against one list. The library's `--ai` case
+    # arm must therefore still list exactly the five CLIs.
+    run grep -qE '^\s*codex \| agy \| claude \| opencode \| hermes\) ;;' \
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    assert_success
+    run grep -qE '^\s*codex \| agy \| claude \| opencode \| hermes \| gemini' \
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    assert_failure
+}
+
+@test "F-1 (PR #1637 review): a bare 'gemini' is still not a reviewer (exit 2)" {
+    # Only the full bot LOGIN counts — the guard against a typo'd name is the
+    # whole reason both sets are closed enums.
+    run _gh_pr_reply_origin_line gemini BLOCKER ACCEPT
+    assert_failure 2
+    assert_output --partial 'gemini-code-assist'
+    assert_output --partial 'codex'
+}
+
+@test "F-1 (PR #1637 review): a hyphenated bot login keeps the token delimiter intact" {
+    # Bot logins contain `-` but never `:`, so the reviewer:severity:verdict
+    # split and the tally's awk `-F:` grouping keep working unchanged.
+    run bash -c "printf '%s\n' \
+        gemini-code-assist:BLOCKER:ACCEPT \
+        gemini-code-assist:FOLLOW-UP:DECLINE \
+        codex:BLOCKER:ACCEPT \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
+    assert_success
+    assert_line 'reviewer=codex blocking_total=1 blocking_accepted=1 nonblocking_total=0 nonblocking_declined=0'
+    assert_line 'reviewer=gemini-code-assist blocking_total=1 blocking_accepted=1 nonblocking_total=1 nonblocking_declined=1'
+}
+
 @test "F-1: origin_line rejects an unknown verdict (exit 2)" {
     run _gh_pr_reply_origin_line codex BLOCKER MAYBE
     assert_failure 2
@@ -124,8 +189,12 @@ teardown() {
 # (cost + a repeatedly jammed gh:pr-merge-train). What is NOT relaxed — one
 # unresolved BLOCKER means no label — has its own tests below.
 
+# PR #1637's review added the external-review evidence argument, fail-closed
+# by default. These cases all describe a PR an external reviewer DID look at —
+# that review is what produced the origin lines — so the helper defaults to
+# `yes` and the no-evidence cases pass their own second argument.
 _gate() {
-    printf '%s\n' "$1" | _gh_pr_reply_review_passed_gate
+    printf '%s\n' "$1" | _gh_pr_reply_review_passed_gate "${2-yes}"
 }
 
 @test "F-2 (#1636): every BLOCKER accepted -> pass, with the count" {
@@ -205,6 +274,235 @@ agy:BLOCKER:DECLINE'
 }
 
 # ---------------------------------------------------------------------
+# The origin ledger — cross-pass memory (PR #1637 review)
+# ---------------------------------------------------------------------
+
+@test "ledger: origins_block wraps the stream in a sha-suffixed marker pair" {
+    run bash -c "printf '%s\n' codex:BLOCKER:DECLINE agy:FOLLOW-UP:ACCEPT \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+            _gh_pr_reply_origins_block deadbeef; }"
+    assert_success
+    assert_line --index 0 '<!-- pr-reply-origins:deadbeef -->'
+    assert_line --index 1 'codex:BLOCKER:DECLINE'
+    assert_line --index 2 'agy:FOLLOW-UP:ACCEPT'
+    assert_line --index 3 '<!-- /pr-reply-origins:deadbeef -->'
+}
+
+@test "ledger: origins_block falls back to the unsuffixed marker with no sha" {
+    # Same fallback `_gh_pr_review_build_comment_body`'s 8th argument makes.
+    run bash -c "printf '%s\n' codex:BLOCKER:DECLINE \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+            _gh_pr_reply_origins_block; }"
+    assert_success
+    assert_line --index 0 '<!-- pr-reply-origins -->'
+    assert_line --index 2 '<!-- /pr-reply-origins -->'
+}
+
+@test "ledger: origins_block round-trips through history_origins" {
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '%s\n' codex:BLOCKER:DECLINE agy:FOLLOW-UP:ACCEPT \
+            | _gh_pr_reply_origins_block deadbeef \
+            | _gh_pr_reply_history_origins; }"
+    assert_success
+    assert_line --index 0 'codex:BLOCKER:DECLINE'
+    assert_line --index 1 'agy:FOLLOW-UP:ACCEPT'
+}
+
+@test "ledger: origins_block prints nothing for an empty stream" {
+    # Nothing to remember — an empty block would be noise the reader has to
+    # skip on every later pass.
+    run bash -c "printf '' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        _gh_pr_reply_origins_block deadbeef; }"
+    assert_success
+    assert_output ''
+}
+
+@test "ledger: origins_block refuses to write a malformed line (exit 2)" {
+    run bash -c "printf '%s\n' 'just some prose' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        _gh_pr_reply_origins_block deadbeef; }"
+    assert_failure 2
+    assert_output --partial 'malformed origin line'
+}
+
+_history() {
+    printf '%s\n' "$1" | _gh_pr_reply_history_origins
+}
+
+@test "ledger: history_origins recovers a block from a comment dump" {
+    run _history 'some reviewer prose
+<!-- pr-reply-origins:deadbeef -->
+codex:BLOCKER:DECLINE
+<!-- /pr-reply-origins:deadbeef -->
+more prose'
+    assert_success
+    assert_output 'codex:BLOCKER:DECLINE'
+}
+
+@test "ledger: history_origins takes the LAST complete block (a later pass supersedes)" {
+    run _history '<!-- pr-reply-origins:sha1 -->
+codex:BLOCKER:DECLINE
+<!-- /pr-reply-origins:sha1 -->
+<!-- pr-reply-origins:sha2 -->
+codex:BLOCKER:ACCEPT
+<!-- /pr-reply-origins:sha2 -->'
+    assert_success
+    assert_output 'codex:BLOCKER:ACCEPT'
+}
+
+@test "ledger: history_origins never harvests an unterminated block" {
+    # A truncated comment must not hand back half a history — the same
+    # contract devx_pr_review_all_lane_block keeps.
+    run _history '<!-- pr-reply-origins:sha1 -->
+codex:BLOCKER:DECLINE'
+    assert_success
+    assert_output ''
+}
+
+@test "ledger: history_origins yields nothing when the PR has no ledger yet" {
+    run _history 'a perfectly ordinary PR comment'
+    assert_success
+    assert_output ''
+}
+
+@test "ledger: history_origins drops prose a human pasted inside the block" {
+    run _history '<!-- pr-reply-origins -->
+codex:BLOCKER:DECLINE
+this line is a human reply, not an origin
+agy:FOLLOW-UP:ACCEPT
+<!-- /pr-reply-origins -->'
+    assert_success
+    assert_line --index 0 'codex:BLOCKER:DECLINE'
+    assert_line --index 1 'agy:FOLLOW-UP:ACCEPT'
+    refute_output --partial 'human reply'
+}
+
+@test "ledger: history_origins ignores ai-review blocks" {
+    run _history '<!-- ai-review:codex:deadbeef -->
+codex:BLOCKER:DECLINE
+<!-- /ai-review:codex:deadbeef -->'
+    assert_success
+    assert_output ''
+}
+
+@test "evidence: history_has_review sees a sha-suffixed ai-review marker" {
+    run bash -c "printf '%s\n' '<!-- ai-review:codex:deadbeef -->' 'Verdict: LGTM' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+            _gh_pr_reply_history_has_review; }"
+    assert_success
+}
+
+@test "evidence: history_has_review sees the unsuffixed ai-review marker" {
+    run bash -c "printf '%s\n' '<!-- ai-review:agy -->' 'Verdict: LGTM' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+            _gh_pr_reply_history_has_review; }"
+    assert_success
+}
+
+@test "evidence: history_has_review is rc 1 when no reviewer ever posted" {
+    run bash -c "printf '%s\n' 'an ordinary comment' '<!-- pr-reply-origins -->' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+            _gh_pr_reply_history_has_review; }"
+    assert_failure
+}
+
+_merge() {
+    printf '%s\n' "$2" | _gh_pr_reply_origins_merge "$1"
+}
+
+@test "ledger: merge keeps a history reviewer this pass never mentions" {
+    # Silence must never clear a blocker: codex said nothing this round, so
+    # its DECLINEd BLOCKER survives.
+    run _merge 'codex:BLOCKER:DECLINE' 'agy:FOLLOW-UP:ACCEPT'
+    assert_success
+    assert_line --index 0 'codex:BLOCKER:DECLINE'
+    assert_line --index 1 'agy:FOLLOW-UP:ACCEPT'
+}
+
+@test "ledger: merge supersedes a reviewer this pass re-classified" {
+    # The escape hatch: the reviewer re-raises the item, gh:pr-reply
+    # re-classifies it, and the fresh verdict replaces the stale one. Without
+    # this, a DECLINEd BLOCKER would pin review-passed off the PR forever.
+    run _merge 'codex:BLOCKER:DECLINE
+agy:FOLLOW-UP:DECLINE' 'codex:BLOCKER:ACCEPT'
+    assert_success
+    assert_line --index 0 'agy:FOLLOW-UP:DECLINE'
+    assert_line --index 1 'codex:BLOCKER:ACCEPT'
+    refute_output --partial 'codex:BLOCKER:DECLINE'
+}
+
+@test "ledger: merge with an empty history is a no-op" {
+    run _merge '' 'agy:FOLLOW-UP:ACCEPT'
+    assert_success
+    assert_output 'agy:FOLLOW-UP:ACCEPT'
+}
+
+@test "ledger: merge rejects a malformed line in either input (exit 2)" {
+    run _merge 'not an origin line' 'agy:FOLLOW-UP:ACCEPT'
+    assert_failure 2
+    run _merge 'codex:BLOCKER:DECLINE' 'not an origin line'
+    assert_failure 2
+}
+
+# ---------------------------------------------------------------------
+# The gate's external-review evidence argument (PR #1637 review, agy BLOCKER)
+# ---------------------------------------------------------------------
+
+@test "F-2 (PR #1637 review, agy BLOCKER): no evidence argument -> hold, never a pass" {
+    # Fail-closed by default: a caller that forgot to probe the PR must not be
+    # handed a certification it did not earn.
+    run _gate 'agy:FOLLOW-UP:DECLINE' ''
+    assert_success
+    assert_output 'hold=no-external-review'
+}
+
+@test "F-2 (PR #1637 review): an empty ORIGINS with no evidence is a hold" {
+    # The exact shape agy named: no external review ever ran, so the "external
+    # AI FINDS / gh:pr-reply CONFIRMS" division of labour has no finder half.
+    run _gate '' ''
+    assert_success
+    assert_output 'hold=no-external-review'
+}
+
+@test "F-2 (PR #1637 review): anything but a literal yes reads as no evidence" {
+    run _gate 'agy:FOLLOW-UP:DECLINE' maybe
+    assert_success
+    assert_output 'hold=no-external-review'
+}
+
+@test "F-2 (PR #1637 review): an unresolved blocker outranks the evidence token" {
+    # Both are holds, so the label outcome is identical — but the blocker
+    # token names a reviewer and an actionable item, which is more useful than
+    # "run a review".
+    run _gate 'codex:BLOCKER:DECLINE' ''
+    assert_success
+    assert_output 'hold=unresolved-blocker:codex'
+}
+
+@test "F-2 (PR #1637 review, codex BLOCKER): a bot-authored BLOCKER reaches the gate" {
+    # The actual consequence of the closed reviewer enum: a DECLINEd
+    # gemini-code-assist BLOCKER could not be represented, so the gate never
+    # saw it and certified the PR anyway.
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        _gh_pr_reply_origin_line gemini-code-assist '[BLOCKER]' DECLINE \
+            | _gh_pr_reply_review_passed_gate yes; }"
+    assert_success
+    assert_output 'hold=unresolved-blocker:gemini-code-assist'
+}
+
+# THE cross-pass regression (PR #1637 review, codex BLOCKER). Step 2's
+# "already replied" dedup hides the codex thread from pass 2 entirely, so
+# without the ledger pass 2's ORIGINS carry no BLOCKER and the gate reads
+# `pass=no-blocker` — certifying a PR whose blocker was never fixed.
+@test "F-2 (PR #1637 review, codex BLOCKER): a DECLINEd BLOCKER from an earlier pass still holds" {
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '%s\n' agy:FOLLOW-UP:ACCEPT \
+            | _gh_pr_reply_origins_merge 'codex:BLOCKER:DECLINE' \
+            | _gh_pr_reply_review_passed_gate yes; }"
+    assert_success
+    assert_output 'hold=unresolved-blocker:codex'
+}
+
+# ---------------------------------------------------------------------
 # Reporting the outcome (Step 7)
 # ---------------------------------------------------------------------
 
@@ -231,6 +529,15 @@ agy:BLOCKER:DECLINE'
     assert_output --partial 'codex'
     assert_output --partial 'review-blocked 유지'
     assert_output --partial 'review-passed 미부여'
+}
+
+@test "report (PR #1637 review, agy BLOCKER): the no-evidence hold names the missing premise" {
+    run _gh_pr_reply_review_passed_report hold=no-external-review
+    assert_success
+    assert_output --partial '외부 리뷰 근거'
+    assert_output --partial 'ai-review'
+    assert_output --partial 'review-passed 미부여'
+    assert_output --partial '#1636'
 }
 
 @test "report rejects a token it does not understand (exit 2)" {
@@ -262,7 +569,7 @@ _apply_stub() {
 @test "apply (#1636): a clean pass applies review-passed with no CLI re-call" {
     _apply_stub
     printf '%s\n' codex:BLOCKER:ACCEPT |
-        _gh_pr_reply_apply_review_passed 1609 acme/widget ghe.example.com newsha \
+        _gh_pr_reply_apply_review_passed 1609 acme/widget ghe.example.com newsha yes \
             >"${BATS_TEST_TMPDIR}/out"
     run cat "$APPLY_LOG"
     assert_output --partial 'add 1609 review-passed --repo acme/widget'
@@ -275,7 +582,7 @@ _apply_stub() {
 @test "apply (#1636): applying review-passed deletes review-blocked first" {
     _apply_stub
     printf '%s\n' codex:BLOCKER:ACCEPT |
-        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha >/dev/null
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes >/dev/null
     run cat "$APPLY_LOG"
     assert_output --partial 'api -X DELETE repos/acme/widget/issues/1609/labels/review-blocked'
 }
@@ -283,7 +590,7 @@ _apply_stub() {
 @test "apply (#1636, NF-1): the label carries the post-push head sha as its marker" {
     _apply_stub
     printf '%s\n' codex:BLOCKER:ACCEPT |
-        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha >/dev/null
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes >/dev/null
     run cat "$APPLY_LOG"
     assert_output --partial 'review-verdict:review-passed:newsha'
 }
@@ -291,7 +598,7 @@ _apply_stub() {
 @test "apply: every gh call pins the target host (#1403 / #1407)" {
     _apply_stub
     printf '%s\n' codex:BLOCKER:ACCEPT |
-        _gh_pr_reply_apply_review_passed 1609 acme/widget ghe.example.com newsha >/dev/null
+        _gh_pr_reply_apply_review_passed 1609 acme/widget ghe.example.com newsha yes >/dev/null
     run grep -c 'GH_HOST=ghe.example.com' "$APPLY_LOG"
     assert_success
     refute_output '0'
@@ -300,7 +607,7 @@ _apply_stub() {
 @test "apply (#1636): a PR with no BLOCKER at all still earns the label" {
     _apply_stub
     printf '%s\n' agy:FOLLOW-UP:DECLINE |
-        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha \
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes \
             >"${BATS_TEST_TMPDIR}/out"
     run cat "$APPLY_LOG"
     assert_output --partial 'add 1609 review-passed'
@@ -311,7 +618,7 @@ _apply_stub() {
 @test "apply (fail-closed): an unresolved BLOCKER writes nothing at all" {
     _apply_stub
     printf '%s\n' codex:BLOCKER:DECLINE |
-        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha \
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes \
             >"${BATS_TEST_TMPDIR}/out"
     run cat "$APPLY_LOG"
     assert_output ''
@@ -325,7 +632,7 @@ _apply_stub() {
     # only happens on the write path, which this input never reaches.
     _apply_stub
     printf '%s\n' codex:BLOCKER:QUESTION |
-        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha >/dev/null
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes >/dev/null
     run cat "$APPLY_LOG"
     refute_output --partial 'labels/review-blocked'
 }
@@ -338,7 +645,7 @@ _apply_stub() {
         . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
         gh() { return 0; }
         _gh_pr_edit_safe_label() { return 3; }
-        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget
+        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' '' yes
     "
     unset STUB_ADD_RC
     assert_success
@@ -352,7 +659,7 @@ _apply_stub() {
         . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
         gh() { return 0; }
         _gh_pr_edit_safe_label() { return 1; }
-        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget
+        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' '' yes
     "
     assert_success
     assert_output --partial '미검증으로 취급'
@@ -364,10 +671,90 @@ _apply_stub() {
         . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
         gh() { return 1; }
         _gh_pr_edit_safe_label() { return 0; }
-        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha
+        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes
     "
     assert_success
     assert_line --index 1 --partial 'freshness marker failed to post'
+}
+
+@test "apply (PR #1637 review, agy BLOCKER): with no evidence argument nothing is written" {
+    _apply_stub
+    printf '%s\n' agy:FOLLOW-UP:DECLINE |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha \
+            >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output ''
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial '외부 리뷰 근거'
+}
+
+@test "apply (PR #1637 review, codex BLOCKER): a merged history blocker writes nothing" {
+    _apply_stub
+    printf '%s\n' agy:FOLLOW-UP:ACCEPT |
+        _gh_pr_reply_origins_merge 'codex:BLOCKER:DECLINE' |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes \
+            >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output ''
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'codex'
+    assert_output --partial 'review-passed 미부여'
+}
+
+# ---------------------------------------------------------------------
+# _gh_pr_reply_post_origins_ledger — writing the cross-pass memory back
+# ---------------------------------------------------------------------
+
+@test "ledger: post writes the block as a PR comment" {
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:DECLINE |
+        _gh_pr_reply_post_origins_ledger 1609 acme/widget '' newsha \
+            >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X POST repos/acme/widget/issues/1609/comments'
+    assert_output --partial '<!-- pr-reply-origins:newsha -->'
+    assert_output --partial 'codex:BLOCKER:DECLINE'
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial '원장 기록됨'
+}
+
+@test "ledger: the post pins the target host (#1403 / #1407)" {
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:DECLINE |
+        _gh_pr_reply_post_origins_ledger 1609 acme/widget ghe.example.com newsha >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output --partial 'GH_HOST=ghe.example.com'
+}
+
+@test "ledger: an empty stream posts nothing at all" {
+    _apply_stub
+    printf '' | _gh_pr_reply_post_origins_ledger 1609 acme/widget '' newsha \
+        >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output ''
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial '원장 생략'
+}
+
+@test "ledger: a failing post WARNs about the lost memory and still returns 0" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        gh() { return 1; }
+        printf 'codex:BLOCKER:DECLINE\n' | _gh_pr_reply_post_origins_ledger 1609 acme/widget '' newsha
+    "
+    assert_success
+    assert_output --partial '[WARN]'
+    assert_output --partial '원장 기록 실패'
+    assert_output --partial 'BLOCKER 재분류'
+}
+
+@test "ledger: a missing repo arg is a usage error (rc 2)" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf 'codex:BLOCKER:DECLINE\n' | _gh_pr_reply_post_origins_ledger 1609
+    "
+    assert_failure 2
+    assert_output --partial 'usage: _gh_pr_reply_post_origins_ledger'
 }
 
 @test "apply: a missing repo arg is a usage error (rc 2)" {
@@ -431,8 +818,11 @@ _lib_code_file() {
 # ---------------------------------------------------------------------
 
 @test "the library defines every function the skill delegates to" {
-    for _fn in _gh_pr_reply_origin_line _gh_pr_reply_severity_is_blocking \
-        _gh_pr_reply_origin_tally _gh_pr_reply_review_passed_gate \
+    for _fn in _gh_pr_reply_origin_line _gh_pr_reply_reviewer_is_bot \
+        _gh_pr_reply_severity_is_blocking _gh_pr_reply_origin_tally \
+        _gh_pr_reply_origins_block _gh_pr_reply_history_origins \
+        _gh_pr_reply_history_has_review _gh_pr_reply_origins_merge \
+        _gh_pr_reply_post_origins_ledger _gh_pr_reply_review_passed_gate \
         _gh_pr_reply_review_passed_report _gh_pr_reply_apply_review_passed; do
         run command -v "$_fn"
         assert_success
