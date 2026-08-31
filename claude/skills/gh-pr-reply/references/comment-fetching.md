@@ -35,6 +35,13 @@ decide whose `pr-reply-origins` / `ai-review` markers to trust by matching
 the author away and makes every marker forgeable by any commenter — see
 `references/review-passed-gate.md` → "마커 작성자 (#1639)".
 
+Bind it to `$COMMENT_JSON` — the exact name `references/review-passed-gate.md`
+Step 6 reads it back under (PR #1641 review, agy FOLLOW-UP: the name was used
+there with no definition in either this file or `SKILL.md`). It is the
+unfiltered JSON array `gh api "repos/$TARGET_REPO/issues/<N>/comments"
+--paginate` returns — the same fetch this section already asked for above,
+saved rather than discarded once Step 2's dedup pass over it is done.
+
 ## Deduplication rule
 
 Skip a thread only if the **latest** comment in the thread is authored by
