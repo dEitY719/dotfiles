@@ -711,6 +711,32 @@ _hold_lock() {
     assert_output --partial "never settled within 13s"
 }
 
+@test "pr_merge_train_cron: a leading-zero PMT_SETTLE_SECONDS does not abort the tick" {
+    # See issue_watcher_cron.bats's twin test — codex, PR #1611 review,
+    # second pass.
+    _run_tick PMT_SETTLE_SECONDS=08 "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    _assert_logged "herdr agent prompt"
+    assert_output --partial "never settled within 08s"
+}
+
+@test "pr_merge_train_cron: a non-standard zero poll interval does not crash awk" {
+    # See issue_watcher_cron.bats's twin test — agy, PR #1611 review, second
+    # pass.
+    _run_tick PMT_SETTLE_POLL_SLEEP=.0 "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep .0$')" -eq 12 ]
+    assert_output --partial "never settled within 13s"
+    _assert_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a poll gap at or above the cap still sleeps once" {
+    _run_tick PMT_SETTLE_POLL_SLEEP=13 "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 13$')" -eq 1 ]
+    assert_output --partial "never settled within 13s"
+}
+
 @test "pr_merge_train_cron: PMT_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
     _run_tick PMT_SETTLE_POLL_SLEEP=0 "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
