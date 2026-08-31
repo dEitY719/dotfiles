@@ -82,7 +82,7 @@ a durable machine-readable record rather than a summary. Fetch the comments
 **once**, then per lane:
 
 ```sh
-. "${SHELL_COMMON}/functions/devx_pr_review_all.sh"
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/devx_pr_review_all.sh"
 
 head_sha=$(GH_HOST="$TARGET_HOST" gh pr view "$pr" --repo "$TARGET_REPO" \
     --json headRefOid --jq .headRefOid)

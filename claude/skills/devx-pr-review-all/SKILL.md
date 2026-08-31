@@ -34,7 +34,7 @@ it verbatim, then stop. No API calls.
 ## Step 1: Parse Args
 
 Source and delegate to `devx_pr_review_all_parse`:
-`source "${SHELL_COMMON}/functions/devx_pr_review_all.sh"` then
+`source "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/devx_pr_review_all.sh"` then
 `devx_pr_review_all_parse "$@"`. On help, follow Help; on exit 2, print stderr
 and stop. Capture `pr`, `remote`, `reply_mode`, `reply_delay`, and `START_TS`.
 
