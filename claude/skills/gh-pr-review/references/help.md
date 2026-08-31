@@ -20,6 +20,7 @@ request-changes) is submitted** — see `gh-pr-approve` for that.
 | `--review <preset>` | no | Review depth/lens enum. Default `default`. See below. |
 | `--user <name>` | no | `--ai claude` only. Multi-account routing via `_claude_resolve_account` (e.g. `personal`, `work`, `work1`). |
 | `--no-post-comment` | no | Skip the automatic PR comment; only print to stdout. |
+| `--paths <path>` | no | Repeatable. Review only these files — the diff is filtered by path, so the run stays on the inline path however large the PR is. A scope matching no file exits 1. Added for `gh:pr-reply`'s targeted re-review lane (#1616). |
 
 ## `--review` enum
 
@@ -85,6 +86,7 @@ verification on an internal PC — see
 - `/gh-pr-review --ai claude --user work 99` — claude as `work` account
 - `/gh-pr-review --ai claude --user work1 --review 보안 99` — work1 + security
 - `/gh-pr-review --ai codex --no-post-comment 99` — stdout only, no PR comment
+- `/gh-pr-review --ai codex --paths a.sh --paths b.sh 99` — review only those two files
 - `/gh-pr-review --ai codex 99 upstream` — PR #99 on `upstream`'s repo
 - `/gh-pr-review --ai agy` — auto-detect PR from current branch
 - `/gh-pr-review -h` / `--help` / `help` — print this help
@@ -128,8 +130,8 @@ verification on an internal PC — see
 |------|-------|
 | 0 | Review completed and (optionally) commented on the PR. |
 | 0 | PR comment post failed but stdout still has the AI output (soft fail with `[WARN]`). |
-| 1 | External CLI missing on `$PATH`, external CLI returned non-zero, PR auto-detect failed, unknown `--user` account, or `gh` not authenticated. |
-| 2 | Argument error: missing `--ai`, unknown `--ai` value, unknown `--review` value, `--user` with non-claude `--ai`. |
+| 1 | External CLI missing on `$PATH`, external CLI returned non-zero, PR auto-detect failed, unknown `--user` account, `--paths` matched no file in the diff, or `gh` not authenticated. |
+| 2 | Argument error: missing `--ai`, unknown `--ai` value, unknown `--review` value, `--user` with non-claude `--ai`, `--paths` with no value. |
 
 ## Good vs. bad invocation
 

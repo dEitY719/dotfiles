@@ -19,13 +19,16 @@ real gate was CI.
 | consumer (hard merge gate) | `gh:pr-merge-train` **Step 3.5**, `references/review-verdict-gate.md` | #1564 |
 | provisioning (the labels exist in the repo) | `gh:label-bootstrap` pipeline feed | #1564 |
 | freshness (sha marker for `review-passed`) | `devx_pr_review_all_apply_label`'s 4th arg; read by `_gh_pr_merge_train_review_passed_stale` | #1601 |
+| second producer (one reviewer, scoped re-review) | `gh:pr-reply` Step 6's targeted lane, `claude/skills/gh-pr-reply/references/targeted-rereview.md` — same `devx_pr_review_all_apply_label` write path, gated per reviewer/severity | #1616 |
 
 #1563's label-lifecycle invalidation rules are the piece that makes the rest
 safe: every skill that advances a PR's head (`gh:pr-reply`,
 `gh:pr-resolve-conflict`, `gh:pr-resolve-outdated`) drops the stale verdict
 through the shared `_gh_pr_drop_label` helper, whose header comment in
 `shell-common/functions/gh_pr_edit_safe.sh` is the SSOT for the asymmetry rule
-(`review-passed` always, `review-blocked` only on evidence).
+(`review-passed` always; `review-blocked` never by drop — since #1616 it is
+cleared only as the side effect of a new non-blocking verdict written through
+`devx_pr_review_all_apply_label`).
 
 ## The labels
 

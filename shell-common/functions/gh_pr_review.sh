@@ -70,9 +70,26 @@ gh_pr_review_parse() {
     local post_comment=1
     local pr=""
     local remote="origin"
+    local paths=""
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
+        --paths)
+            if [ "$#" -lt 2 ] || [ -z "$2" ]; then
+                echo "missing value for --paths" >&2
+                return 2
+            fi
+            paths="${paths:+$paths }$2"
+            shift 2
+            ;;
+        --paths=*)
+            if [ -z "${1#--paths=}" ]; then
+                echo "missing value for --paths" >&2
+                return 2
+            fi
+            paths="${paths:+$paths }${1#--paths=}"
+            shift
+            ;;
         --ai)
             if [ "$#" -lt 2 ]; then
                 echo "missing value for --ai" >&2
@@ -179,7 +196,8 @@ EOF
         "user=$user" \
         "post_comment=$post_comment" \
         "pr=$pr" \
-        "remote=$remote"
+        "remote=$remote" \
+        "paths=$paths"
     return 0
 }
 
@@ -707,11 +725,59 @@ EOF
     esac
 }
 
+# _gh_pr_review_filter_diff_paths — unified diff on stdin, one or more
+# repo-relative paths as args; emits only the `diff --git` sections whose
+# old OR new path is one of them (a rename is therefore reachable from
+# either side). Exit 2 with nothing on stdout when no path was given —
+# a silent pass-through would hand the caller a full-PR diff it believed
+# was scoped (issue #1616).
+#
+# `gh pr diff` has no pathspec of its own, so scoping happens here rather
+# than at the API. The `a/X b/Y` split takes the FIRST ` b/`, which is
+# unambiguous for every path that does not itself contain " b/".
+_gh_pr_review_filter_diff_paths() {
+    if [ "$#" -eq 0 ]; then
+        echo 'usage: _gh_pr_review_filter_diff_paths <path>...' >&2
+        return 2
+    fi
+    local _wanted=""
+    local _p
+    for _p in "$@"; do
+        _wanted="${_wanted}${_p}
+"
+    done
+    awk -v wanted="$_wanted" '
+        BEGIN {
+            n = split(wanted, w, "\n")
+            for (i = 1; i <= n; i++) if (w[i] != "") want[w[i]] = 1
+        }
+        /^diff --git / {
+            keep = 0
+            line = substr($0, 12)
+            sp = index(line, " b/")
+            if (sp > 0) { ap = substr(line, 1, sp - 1); bp = substr(line, sp + 3) }
+            else { ap = line; bp = "" }
+            sub(/^a\//, "", ap)
+            if ((ap in want) || (bp in want)) keep = 1
+            if (keep) print
+            next
+        }
+        keep { print }
+    '
+}
+
 # _gh_pr_review_build_prompt — writes `<prefix>\n\n<preset>\n\n<diff>`
 # to the given file. Args: $1 = preset, $2 = output file, $3 = pr_number,
-# $4 = target_repo, $5 = base_ref, $6 = head_ref. The diff is fetched
-# with `gh pr diff`; the function does not enforce a size gate (the
-# SKILL still controls the large-diff delegation path in Step 4).
+# $4 = target_repo, $5 = base_ref, $6 = head_ref, $7 = optional
+# space-separated path scope. The diff is fetched with `gh pr diff`; the
+# function does not enforce a size gate (the SKILL still controls the
+# large-diff delegation path in Step 4).
+#
+# $7 (issue #1616) is what keeps gh:pr-reply's targeted re-review lane on
+# the small-diff inline path no matter how large the whole PR is. Exit 3
+# when the scope matches nothing: an empty diff would make the reviewer
+# opine on nothing and answer LGTM, and that answer is exactly what the
+# lane would read as "the blocker is cleared".
 _gh_pr_review_build_prompt() {
     local preset="$1"
     local out="$2"
@@ -719,15 +785,34 @@ _gh_pr_review_build_prompt() {
     local repo="$4"
     local base="${5:-?}"
     local head="${6:-?}"
+    local paths="${7-}"
+    local _scoped_diff="" _scope_note=""
+
+    if [ -n "$paths" ]; then
+        # Word-splitting `$paths` is the contract: it is a space-separated
+        # path list, mirroring the `paths=` line gh_pr_review_parse emits.
+        # shellcheck disable=SC2086
+        _scoped_diff=$(gh pr diff "$pr" --repo "$repo" 2>/dev/null |
+            _gh_pr_review_filter_diff_paths $paths)
+        if [ -z "$_scoped_diff" ]; then
+            echo "--paths matched no file in PR #$pr's diff: $paths" >&2
+            return 3
+        fi
+        _scope_note=", scoped to: $paths"
+    fi
 
     {
         _gh_pr_review_common_prefix
         echo ""
         _gh_pr_review_preset_body "$preset" || return $?
         echo ""
-        printf -- '--- PR DIFF (PR #%s, repo %s, base %s → head %s) ---\n' \
-            "$pr" "$repo" "$base" "$head"
-        gh pr diff "$pr" --repo "$repo" 2>/dev/null || true
+        printf -- '--- PR DIFF (PR #%s, repo %s, base %s → head %s%s) ---\n' \
+            "$pr" "$repo" "$base" "$head" "$_scope_note"
+        if [ -n "$paths" ]; then
+            printf '%s\n' "$_scoped_diff"
+        else
+            gh pr diff "$pr" --repo "$repo" 2>/dev/null || true
+        fi
         printf -- '--- END PR DIFF ---\n'
     } >"$out"
 }
@@ -1027,6 +1112,10 @@ Flags:
   --user <name>                claude only; multi-account routing via
                                _claude_resolve_account
   --no-post-comment            skip the PR comment; stdout only
+  --paths <path>               repeatable; review only these files. The
+                               diff is filtered by path, so a scoped run
+                               stays on the inline path however large the
+                               whole PR is. No match -> exit 1 (#1616)
 
 OpenCode:
   --ai opencode                internal-PC only; fixed model
@@ -1108,7 +1197,7 @@ gh_pr_review() {
         return 0
     fi
 
-    local ai="" review="" user="" post_comment="" pr="" remote=""
+    local ai="" review="" user="" post_comment="" pr="" remote="" paths=""
     # Read each `key=value` line into the matching local. The keys are
     # a fixed allow-list (ai/review/user/post_comment/pr/remote); any
     # other key is silently ignored. `eval "$_parsed"` would be shorter
@@ -1124,6 +1213,7 @@ gh_pr_review() {
         post_comment) post_comment="$_v" ;;
         pr) pr="$_v" ;;
         remote) remote="$_v" ;;
+        paths) paths="$_v" ;;
         esac
     done <<EOF
 $_parsed
@@ -1272,7 +1362,7 @@ EOF
     }
 
     _gh_pr_review_build_prompt "$review" "$PROMPT_FILE" \
-        "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}" || {
+        "$PR_NUMBER" "$TARGET_REPO" "${base:-?}" "${head:-?}" "$paths" || {
         _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return 1
