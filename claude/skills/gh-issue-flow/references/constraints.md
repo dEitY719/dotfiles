@@ -39,9 +39,13 @@
   2.4.1's best-effort wake (see above) or, failing that, its own cron
   backstop. Detail: `gh-pr-merge-train/references/routing-table.md`.
   **Neither path exists for any other `<remote>`** (#1610): the wake
-  silently skips every `<remote>` but `$HOME/dotfiles`'s own `origin`
-  (#1498), and this machine's crontab only runs the backstop with
-  `--cwd ~/dotfiles`. A PR opened via `/gh-issue-flow <N> <other-remote>`
+  silently skips every `<remote>` whose resolved URL isn't `$HOME/dotfiles`'s
+  own `origin` (#1498 — URL comparison, not a remote-name match: a
+  differently-named remote pointing at that same URL still fires), and this
+  machine's `merge-train` cron entry — `shell-common/tools/custom/cron-jobs.json`,
+  installed via `aicron add merge-train`, never a hand-edited crontab line
+  (`gh-pr-merge-train/references/cron-dispatcher.md`) — only targets
+  `--cwd $HOME/dotfiles`. A PR opened via `/gh-issue-flow <N> <other-remote>`
   that lands CI-red has no automated remediation trigger at all — the human
   must call `/gh-pr-merge-train <other-remote>` manually.
 - **Never fall back to `_dotfiles_setup_mode` alone for the host (#1403).**
