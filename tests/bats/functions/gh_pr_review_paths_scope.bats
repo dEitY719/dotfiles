@@ -102,6 +102,32 @@ EOF
     assert_line 'remote=upstream'
 }
 
+@test "parse (PR #1629 review, codex BLOCKER): repeated --paths for a multi-file fix keeps PR#/remote intact" {
+    # This is the call shape targeted-rereview.md's F-3 now mandates — one
+    # --paths flag per fixed file — precisely because the alternative
+    # (--paths "a.sh b.sh" as one joined string) misparses below.
+    run gh_pr_review_parse --ai codex --paths a.sh --paths b.sh 1629 origin
+    assert_success
+    assert_line 'paths=a.sh b.sh'
+    assert_line 'pr=1629'
+    assert_line 'remote=origin'
+}
+
+@test "parse (PR #1629 review, codex BLOCKER): the single-joined-string call this replaces fails outright" {
+    # Documents the exact failure targeted-rereview.md used to hand the AI
+    # executor: a Skill() argument string like "--paths a.sh b.sh 1629
+    # origin" is word-split (no quoting survives the round trip through the
+    # tool's argument string), so --paths eats only the first file, the
+    # second file becomes the PR# positional, "1629" gets read as the
+    # [remote] positional (still "origin" at that point), and the real
+    # "origin" trailing token has nowhere left to go — exit 2, not a silent
+    # misparse. Deliberately unquoted to reproduce that word-split.
+    # shellcheck disable=SC2086
+    run gh_pr_review_parse --ai codex --paths a.sh b.sh 1629 origin
+    assert_failure 2
+    assert_output --partial 'Unexpected positional arg'
+}
+
 # ---------------------------------------------------------------------
 # The diff filter
 # ---------------------------------------------------------------------
