@@ -482,6 +482,46 @@ devx_pr_review_all_write_label() {
     return 0
 }
 
+# Render `devx_pr_review_all_write_label`'s two-line `add=`/`marker=` output
+# into the caller's report lines. Both of `write_label`'s callers
+# (`devx_pr_review_all_apply_label` below and `_gh_pr_reply_apply_review_passed`
+# in gh_pr_reply_targeted_review.sh) used to re-derive this same
+# parse-then-switch by hand — three of the four `add=` branches and the
+# marker-failed line are worded identically in both, so the copies could only
+# drift apart, never usefully differ (/simplify, PR #1637 review). Only the
+# `add=ok` and generic-failure lines are caller-specific, since those are the
+# two places the wording legitimately differs (English vs Korean, "labelled"
+# vs "적용").
+#
+#   devx_pr_review_all_report_write_result <write-output> <pr> <repo> <label> <ok-line> <fail-line>
+#
+# `<write-output>` is exactly the two lines `write_label` printed — parsed
+# with builtin parameter expansion, not `sed`: the string is always known to
+# be `add=...` then `marker=...`, so spawning a process per field to re-scan
+# it twice bought nothing (/simplify finding, same review).
+devx_pr_review_all_report_write_result() {
+    local _write="${1-}" _pr="${2-}" _repo="${3-}" _label="${4-}" _ok_line="${5-}" _fail_line="${6-}"
+    local _add _marker
+
+    _add="${_write%%$'\n'*}"
+    _add="${_add#add=}"
+    _marker="${_write#*$'\n'}"
+    _marker="${_marker#marker=}"
+
+    # shellcheck disable=SC2016  # backticks are markdown, not substitution
+    case "$_add" in
+        ok) printf '%s\n' "$_ok_line" ;;
+        rc3) printf '[WARN] label `%s` missing in %s — provision it first (gh:label-bootstrap)\n' \
+            "$_label" "$_repo" ;;
+        no-helper) printf '[WARN] _gh_pr_edit_safe_label unavailable — PR #%s left unlabelled\n' "$_pr" ;;
+        *) printf '%s\n' "$_fail_line" ;;
+    esac
+    if [ "$_marker" = "failed" ]; then
+        printf '[WARN] review-passed freshness marker failed to post for PR #%s — a later merge-train check may see it as stale\n' "$_pr"
+    fi
+    return 0
+}
+
 # Aggregate the verdict stream and WRITE the resulting label to the PR.
 # This is the producer half of the merge gate (#1564): without it the two
 # labels are never issued, `gh:pr-merge-train` reads "not verified" on every
@@ -526,7 +566,7 @@ devx_pr_review_all_write_label() {
 # merge-train's reader contract need no churn.
 devx_pr_review_all_apply_label() {
     local _pr="$1" _repo="$2" _host="${3-}" _head_sha="${4-}"
-    local _agg _label _lanes _write _add _marker
+    local _agg _label _lanes _write
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
         printf '[devx-pr-review-all] usage: devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha]\n' >&2
@@ -557,23 +597,13 @@ devx_pr_review_all_apply_label() {
     fi
 
     _write=$(devx_pr_review_all_write_label "$_label" "$_pr" "$_repo" "$_host" "$_head_sha")
-    _add=$(printf '%s\n' "$_write" | sed -n 's/^add=//p')
-    _marker=$(printf '%s\n' "$_write" | sed -n 's/^marker=//p')
-
-    # The backticks below are markdown in the report line (the label name
-    # renders as code in a terminal-pasted comment), not command
-    # substitution — single-quoted printf formats never expand.
+    # The backticks below are markdown in the OK line (the label name renders
+    # as code in a terminal-pasted comment), not command substitution —
+    # single-quoted printf formats never expand.
     # shellcheck disable=SC2016
-    case "$_add" in
-        ok) printf '[OK] PR #%s labelled `%s` (%s lane(s))\n' "$_pr" "$_label" "$_lanes" ;;
-        rc3) printf '[WARN] label `%s` missing in %s — provision it first (gh:label-bootstrap)\n' \
-            "$_label" "$_repo" ;;
-        no-helper) printf '[WARN] _gh_pr_edit_safe_label unavailable — PR #%s left unlabelled\n' "$_pr" ;;
-        *) printf '[WARN] labelling PR #%s failed — treat the PR as unverified\n' "$_pr" ;;
-    esac
-    if [ "$_marker" = "failed" ]; then
-        printf '[WARN] review-passed freshness marker failed to post for PR #%s — a later merge-train check may see it as stale\n' "$_pr"
-    fi
+    devx_pr_review_all_report_write_result "$_write" "$_pr" "$_repo" "$_label" \
+        "$(printf '[OK] PR #%s labelled `%s` (%s lane(s))' "$_pr" "$_label" "$_lanes")" \
+        "$(printf '[WARN] labelling PR #%s failed — treat the PR as unverified' "$_pr")"
     return 0
 }
 
@@ -588,6 +618,7 @@ for _dpra_selfcheck_fn in \
     devx_pr_review_all_lane_block \
     devx_pr_review_all_already_reviewed \
     devx_pr_review_all_write_label \
+    devx_pr_review_all_report_write_result \
     devx_pr_review_all_apply_label; do
     command -v "$_dpra_selfcheck_fn" >/dev/null 2>&1 && continue
     printf '[devx_pr_review_all] BUG: %s undefined after source — the review verdict gate will not run. See dotfiles #724 / #1564.\n' \
