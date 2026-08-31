@@ -284,7 +284,6 @@ _freshness_stub() {
         printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$STUB_LOG"
         case "$*" in
         *"/comments"*"--jq"*)
-            [ "${STUB_COMMENTS_RC:-0}" -eq 0 ] || return "$STUB_COMMENTS_RC"
             # Scan positionally — never a fixed index. The real call's flag
             # order has already shifted twice (per_page=100, then `-i -X GET`
             # plus an explicit page), so hardcoding "the 5th arg" silently
@@ -306,6 +305,19 @@ _freshness_stub() {
                 page=*) _fs_page="${_fs_arg#page=}" ;;
                 esac
             done
+
+            # STUB_COMMENTS_RC fails EVERY /comments call (page 1 included) —
+            # use it to test call-1 failure. STUB_PAGE_N_RC fails ONLY a
+            # non-page-1 call, so page 1 can succeed and the last-page call
+            # can fail on its own — the two must stay independent, or a test
+            # named "last-page call fails" would actually fail at call 1 and
+            # never reach the code path it claims to cover (PR #1630 review,
+            # codex BLOCKER).
+            if [ "$_fs_page" = "1" ]; then
+                [ "${STUB_COMMENTS_RC:-0}" -eq 0 ] || return "$STUB_COMMENTS_RC"
+            else
+                [ "${STUB_PAGE_N_RC:-0}" -eq 0 ] || return "$STUB_PAGE_N_RC"
+            fi
 
             if [ "$_fs_include_headers" -eq 1 ]; then
                 # Mirror what real `gh api -i` emits (verified against gh
@@ -513,15 +525,28 @@ more text')" '[$c]')
 }
 
 @test "freshness (#1615): a failure on the LAST-page call is UNDETERMINED (rc 1), not a confirmed absence" {
+    # Page 1 SUCCEEDS (with an old marker) and reports a 4-page PR; only the
+    # page=4 call fails. STUB_COMMENTS_RC would fail page 1 too, which never
+    # reaches the page-N call this test exists to cover (PR #1630 review,
+    # codex BLOCKER: the prior version used STUB_COMMENTS_RC and so always
+    # failed at call 1, never actually exercising this path).
     _freshness_stub
     STUB_LAST_PAGE=4
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" '[$c]')
-    # Fail every /comments call; the function must not fall back to page 1's
-    # stale marker, and must not report "no marker" either.
-    STUB_COMMENTS_RC=1
+    STUB_PAGE_N_RC=1
     run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    # The function must not fall back to page 1's stale marker (1111111),
+    # and must not report "no marker" either — it must fail closed.
     assert_failure
     assert_output ''
+
+    # Prove call 1 (page 1) actually ran and succeeded before call 2 failed —
+    # otherwise this test would pass vacuously even if the function bailed
+    # out at call 1 for an unrelated reason.
+    run wc -l <"$STUB_LOG"
+    assert_output '2'
+    run sed -n '2p' "$STUB_LOG"
+    assert_output --partial 'page=4'
 }
 
 # ── _gh_pr_merge_train_review_passed_stale: 3-way exit code ──
