@@ -93,8 +93,9 @@ human can add or remove it at any time.
 ## The five helpers
 
 ```
-devx_pr_review_all_lane_block <ai> [<head-sha>]   # comment bodies on stdin
-  -> that lane's raw block, or nothing
+devx_pr_review_all_lane_block <ai> [<head-sha>] <expected-login>
+                                                  # RAW comments JSON on stdin
+  -> that lane's raw block as written BY <expected-login>, or nothing
 devx_pr_review_all_verdict                        # one lane's raw text on stdin
   -> blocking | concerns | lgtm | unknown
 devx_pr_review_all_aggregate                      # verdict tokens on stdin,
@@ -146,11 +147,20 @@ a durable machine-readable record rather than a summary. Fetch the comments
 head_sha=$(GH_HOST="$TARGET_HOST" gh pr view "$pr" --repo "$TARGET_REPO" \
     --json headRefOid --jq .headRefOid)
 
+# RAW JSON — no `--jq '.[].body'`. `.user.login` is what the author check
+# below reads, and pre-extracting `.body` throws it away (#1639).
 BODIES=$(GH_HOST="$TARGET_HOST" gh api --paginate \
-    "repos/$TARGET_REPO/issues/$pr/comments" --jq '.[].body')
+    "repos/$TARGET_REPO/issues/$pr/comments")
+
+# The one identity this pipeline authenticates as — the same login whose
+# `gh:pr-review` Step 6 run posted the marker. Resolved once per run.
+# DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN overrides it for setups where the reviewer
+# and this aggregator authenticate as different accounts (see "Marker
+# authorship" below).
+ME="${DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"
 
 verdict=$(printf '%s\n' "$BODIES" |
-    devx_pr_review_all_lane_block "$ai" "$head_sha" |
+    devx_pr_review_all_lane_block "$ai" "$head_sha" "$ME" |
     devx_pr_review_all_verdict)
 # -> blocking | concerns | lgtm | unknown
 ```
@@ -158,6 +168,50 @@ verdict=$(printf '%s\n' "$BODIES" |
 `devx_pr_review_all_lane_block` takes the **last complete** block for that lane,
 so a re-review supersedes an earlier verdict, and it ignores an unterminated
 block — half a review is not a verdict.
+
+### Marker authorship (#1639)
+
+A `<!-- ai-review:<ai>:<sha> -->` block is plain text in an ordinary PR
+comment, and on most repos anyone who can see the PR can post one. Until
+#1639 this harvester was handed pre-extracted body text (`--jq '.[].body'`)
+with the author already discarded, so a hand-forged block from **any**
+commenter decided a lane's verdict — and through the aggregator, the
+`review-blocked` merge gate. Commenting is a far lower bar than the
+label-write access needed to attach that label directly.
+
+`devx_pr_review_all_lane_block` therefore takes a required `<expected-login>`
+and counts a block only from that exact GitHub login. Forging a lane verdict
+now costs the same access as forging the label directly — the pre-existing,
+already-accepted trust boundary this gate has always rested on. A
+missing/invalid login harvests **nothing** (→ `unknown` → no label,
+fail-closed), never a fallback to trusting every author.
+
+This is the same fix, validator, and reasoning PR #1608 applied to
+`_gh_pr_merge_train_review_passed_marker_sha`; see
+`claude/skills/gh-pr-merge-train/references/review-verdict-gate.md` →
+"Marker authorship" for the full argument. The two follow-on points carry
+over unchanged:
+
+- **Bot logins.** GitHub gives an App identity a login shaped `<name>[bot]`
+  (`github-actions[bot]`, `dependabot[bot]`). The validator strips one literal
+  trailing `[bot]` and then applies `[A-Za-z0-9-]+` to what is left, so a
+  bot-authenticated pipeline can validate its own markers while an injection
+  attempt (which will not end in exactly `[bot]`) still cannot.
+- **Single-identity assumption + escape hatch.** The scheme assumes one
+  account runs both `gh:pr-review` (which posts the marker) and this skill
+  (which reads it) — true for this repo's single-account pipeline, but not
+  every deployment. `DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN` overrides the
+  auto-detected identity when the producer login differs from
+  `gh api user -q .login`'s answer here. It is deliberately **separate** from
+  `GH_PR_MERGE_TRAIN_TRUSTED_LOGIN` and `GH_PR_REPLY_TRUSTED_LOGIN`: in
+  practice one account runs all three, but a deployment that splits the
+  review, reply, and merge roles across accounts must be able to set each
+  independently.
+
+Note the filter is a local `jq` pass over the comment dump the caller already
+fetched — **not** a `gh api` call of its own. This function is invoked once per
+reviewer lane against the same `$BODIES`, so a network-aware author check would
+multiply that single fetch by the lane count on every run.
 
 ### Freshness: the head-sha argument
 
@@ -230,7 +284,7 @@ AGG=$(
     for ai in agy codex opencode hermes; do
         lane_ran "$ai" || continue          # a skipped lane contributes NOTHING
         v=$(printf '%s\n' "$BODIES" |
-            devx_pr_review_all_lane_block "$ai" "$head_sha" |
+            devx_pr_review_all_lane_block "$ai" "$head_sha" "$ME" |
             devx_pr_review_all_verdict)
         printf '%s\n' "$v"
     done | devx_pr_review_all_aggregate
@@ -276,7 +330,7 @@ verdicts in a variable and re-expand it (same zsh rule as the section above):
 for ai in agy codex opencode hermes; do
     lane_ran "$ai" || continue          # a skipped lane contributes NOTHING
     printf '%s\n' "$BODIES" |
-        devx_pr_review_all_lane_block "$ai" "$head_sha" |
+        devx_pr_review_all_lane_block "$ai" "$head_sha" "$ME" |
         devx_pr_review_all_verdict
 done | devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"
 ```

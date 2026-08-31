@@ -55,9 +55,12 @@ and `START_TS`.
 **Duplicate-review guard first (#1613).** Before dispatching anything, read
 `head_sha` once (`gh pr view "$pr" -R "$TARGET_REPO" --json headRefOid --jq
 .headRefOid`) and `BODIES` once
-(`gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"`). Then, unless
-`force_review=1`, skip any reviewer lane for which
-`devx_pr_review_all_already_reviewed "$ai" "$head_sha"` (fed `$BODIES` on
+(`gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"` — **raw JSON, no
+`--jq '.[].body'`**: `.user.login` must survive, #1639) and the trusted login
+once
+(`ME="${DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"`).
+Then, unless `force_review=1`, skip any reviewer lane for which
+`devx_pr_review_all_already_reviewed "$ai" "$head_sha" "$ME"` (fed `$BODIES` on
 stdin) returns 0 — print
 `[SKIP] <ai> already reviewed head <head_sha> — pass --force-review to re-run`
 and do **not** dispatch that lane's Agent. Two sessions reviewing the same head
@@ -106,12 +109,18 @@ In short — bind `TARGET_HOST` from the same `<remote>` URL as `TARGET_REPO`
 
 1. `head_sha` — one `gh pr view "$pr" -R "$TARGET_REPO" --json headRefOid --jq
    .headRefOid`.
-2. `BODIES` — one `gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"`.
-3. For **each lane that either ran fresh in Step 3 OR was skipped by the
+2. `BODIES` — one `gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"`,
+   **raw JSON with no `--jq '.[].body'`** (#1639): the harvester filters on
+   `.user.login`, and pre-extracting `.body` throws the author away.
+3. `ME` — the login this pipeline authenticates as:
+   `ME="${DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"`.
+   Only markers written by this login count as a lane's verdict (#1639) — see
+   `references/review-verdict-label.md` → "Marker authorship".
+4. For **each lane that either ran fresh in Step 3 OR was skipped by the
    duplicate-review guard** (i.e. every lane except one skipped for a
    **missing CLI / non-internal PC** — `/simplify` never contributes either),
-   pipe `BODIES` through `devx_pr_review_all_lane_block "$ai" "$head_sha"` →
-   `devx_pr_review_all_verdict`, and pipe that stream straight into
+   pipe `BODIES` through `devx_pr_review_all_lane_block "$ai" "$head_sha" "$ME"`
+   → `devx_pr_review_all_verdict`, and pipe that stream straight into
    `devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"`.
    **Since #1636 that call only ever writes `review-blocked`.** An
    all-non-blocking round clears any stale `review-blocked` and stops there —
@@ -132,7 +141,8 @@ In short — bind `TARGET_HOST` from the same `<remote>` URL as `TARGET_REPO`
    Never stage the verdicts in a variable and re-expand it — zsh does not
    word-split, and a two-lane PR would silently report one.
 
-Fetch both again here rather than reusing Step 3's duplicate-guard values: no
+Fetch `head_sha` and `BODIES` again here rather than reusing Step 3's
+duplicate-guard values (`ME` is stable and may be reused): no
 push has happened in between so `head_sha` is unchanged, but the lanes just
 posted new comments, and this step needs the **fresh** `BODIES`.
 

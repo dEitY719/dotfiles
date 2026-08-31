@@ -21,22 +21,31 @@ Once, before any lane is dispatched:
 head_sha=$(GH_HOST="$TARGET_HOST" gh pr view "$pr" --repo "$TARGET_REPO" \
     --json headRefOid --jq .headRefOid)
 
+# RAW JSON — deliberately no `--jq` body extraction. Since #1639 the guard
+# filters comments by `.user.login`, and pre-extracting the body would throw
+# the author away before the guard ever sees it.
 BODIES=$(GH_HOST="$TARGET_HOST" gh api --paginate \
-    "repos/$TARGET_REPO/issues/$pr/comments" --jq '.[].body')
+    "repos/$TARGET_REPO/issues/$pr/comments")
+
+# The one identity this pipeline authenticates as — the login whose
+# `gh:pr-review` run posted the marker. DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN is the
+# escape hatch when the reviewer and this skill authenticate as different
+# accounts (see "Marker authorship" in references/review-verdict-label.md).
+ME="${DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"
 ```
 
 Then per lane, before dispatching its Agent:
 
 ```sh
 if [ "$force_review" != "1" ] &&
-    printf '%s\n' "$BODIES" | devx_pr_review_all_already_reviewed "$ai" "$head_sha"; then
+    printf '%s\n' "$BODIES" | devx_pr_review_all_already_reviewed "$ai" "$head_sha" "$ME"; then
     echo "[SKIP] $ai already reviewed head $head_sha — pass --force-review to re-run"
     continue
 fi
 ```
 
 `devx_pr_review_all_already_reviewed` is a thin wrapper over
-`devx_pr_review_all_lane_block "$ai" "$head_sha"`: rc 0 when that lane has a
+`devx_pr_review_all_lane_block "$ai" "$head_sha" "$ME"`: rc 0 when that lane has a
 complete `<!-- ai-review:<ai>:<head-sha> -->` block, rc 1 otherwise. One parser
 for the marker grammar, so the guard and Step 3.5's verdict harvester can never
 disagree about what "already reviewed" means. The `<head-sha>` is mandatory
@@ -51,8 +60,9 @@ a guard-skipped lane from the aggregation stream would let a partial re-run —
 say, only one lane force-re-reviewed while the rest sit guard-skipped — silently
 overwrite an existing `review-blocked` verdict with `review-passed`, because
 the aggregator only ever sees the lanes actually fed to it. Since
-`devx_pr_review_all_lane_block "$ai" "$head_sha"` reads whatever marker already
-exists in `$BODIES`, regardless of which run posted it, feeding a guard-skipped
+`devx_pr_review_all_lane_block "$ai" "$head_sha" "$ME"` reads whatever marker
+already exists in `$BODIES` from that login, regardless of which run posted it,
+feeding a guard-skipped
 lane through the same harvester the fresh lanes use costs nothing extra — the
 guard already proved the marker exists by skipping it. See `SKILL.md` → Step
 3.5 for the corrected aggregation loop.

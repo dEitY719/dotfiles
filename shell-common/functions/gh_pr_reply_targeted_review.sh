@@ -243,8 +243,73 @@ EOF
     return 0
 }
 
-# PR comment bodies on stdin -> the origin lines of the LAST COMPLETE ledger
-# block found, one per line.
+# Author filter for the two history readers below (#1639).
+#
+#   <raw comments JSON on stdin> | _gh_pr_reply_login_bodies <login>
+#     stdout: the `.body` of every comment whose `.user.login` is exactly
+#     <login>. Empty (rc 0) when nothing matches, when <login> fails
+#     validation, or when stdin is not the expected JSON.
+#
+# Deliberately a local `jq` pass and NOT a `gh api` call of its own (unlike
+# `_gh_pr_merge_train_review_passed_marker_sha`, which is invoked standalone):
+# `gh:pr-reply` fetches the PR's comments ONCE and feeds the same dump to both
+# readers below, and turning these into network callers would re-fetch it per
+# probe for no new information.
+#
+# `--arg` keeps the login a jq DATA value, so it can never close the filter's
+# quoting and inject a filter of its own. Validation on top of that mirrors
+# `_gh_pr_merge_train_review_passed_marker_sha` exactly: a plain username
+# (`[A-Za-z0-9-]+`), or that shape with one literal trailing `[bot]` — the
+# form GitHub gives App identities in `.user.login` (`github-actions[bot]`),
+# which a bracket-rejecting validator would lock out of trusting its own
+# markers. An empty or invalid login yields EMPTY output — never a fallback
+# to "match every author", which is the vulnerability being closed.
+#
+# stdin is drained before any early return so a piped producer never takes an
+# EPIPE on the reject path.
+_gh_pr_reply_login_bodies() {
+    local _login="${1-}" _base _json
+
+    _json=$(cat)
+
+    _base="$_login"
+    case "$_base" in
+    *'[bot]') _base="${_base%\[bot\]}" ;;
+    esac
+    case "$_base" in
+    '' | *[!A-Za-z0-9-]*) return 0 ;;
+    esac
+
+    printf '%s' "$_json" |
+        jq -r --arg login "$_login" \
+            '.[] | select(.user.login == $login) | .body' 2>/dev/null
+    return 0
+}
+
+# Raw PR comments JSON on stdin (the array
+# `gh api repos/<repo>/issues/<pr>/comments` answers with, each element
+# carrying `.user.login` and `.body`) -> the origin lines of the LAST COMPLETE
+# ledger block POSTED BY <expected-login>, one per line.
+#
+#   _gh_pr_reply_history_origins <expected-login>
+#
+# <expected-login> is REQUIRED and load-bearing (#1639). This ledger is
+# `gh:pr-reply`'s cross-pass memory of which BLOCKERs were ACCEPTed and which
+# were DECLINEd, and it gates whether the pass self-applies `review-passed`.
+# Until this parameter existed the function was handed pre-extracted body
+# text with the author already discarded, so a `<!-- pr-reply-origins -->`
+# block from ANY commenter counted — and commenting is a far lower bar than
+# the label-write access `review-passed` itself needs. An outsider could
+# forge a ledger claiming every BLOCKER was ACCEPTed and unlock the gate, or
+# forge a DECLINE and pin the label off forever. Only this pipeline's own
+# login writes the ledger (`_gh_pr_reply_origins_block` -> the pass's own
+# comment), so scoping the read to it costs nothing and restores the trust
+# boundary. A missing/invalid login yields NO origins — which downstream
+# reads as "no history", the fail-closed direction — never a fallback to
+# trusting every author. Same validator and rationale as
+# `_gh_pr_merge_train_review_passed_marker_sha` (PR #1608); see
+# claude/skills/gh-pr-merge-train/references/review-verdict-gate.md
+# § "Marker authorship".
 #
 # The contract deliberately mirrors `devx_pr_review_all_lane_block`: the last
 # complete block wins (a later pass supersedes an earlier one) and an
@@ -260,6 +325,7 @@ EOF
 # able to turn the next pass's gate into a hard error.
 _gh_pr_reply_history_origins() {
     local _line
+    _gh_pr_reply_login_bodies "${1-}" |
     awk '
         # "\001" is the "marker absent on this line" sentinel: unlike
         # lane_block, an EMPTY tag is a legitimate match here (the unsuffixed
@@ -318,8 +384,22 @@ _gh_pr_reply_history_origins() {
     done
 }
 
-# PR comment bodies on stdin. rc 0 = some external reviewer's `ai-review`
-# block is present on this PR; rc 1 = none is.
+# Raw PR comments JSON on stdin (same shape `_gh_pr_reply_history_origins`
+# takes). rc 0 = an `ai-review` block posted by <expected-login> is present on
+# this PR; rc 1 = none is.
+#
+#   _gh_pr_reply_history_has_review <expected-login>
+#
+# <expected-login> is REQUIRED (#1639) for the same reason as its sibling
+# above, and matters MORE here, not less: this probe is the only thing
+# standing between "no external review ever ran" and a self-applied
+# `review-passed`. Matching `<!-- ai-review:` from any commenter meant a
+# single hand-posted comment carrying that string manufactured the evidence
+# the gate is asking for. The marker is written by `gh:pr-review` Step 6
+# running under this pipeline's own login, so scoping the probe to that login
+# is exactly the claim the gate wants to make. A missing/invalid login finds
+# nothing -> rc 1 -> the PR is left UNLABELLED, the fail-closed direction the
+# note below already relies on.
 #
 # This is the evidence probe for the second hole PR #1637's review found (agy
 # BLOCKER): with an EMPTY ORIGINS stream the gate read `pass=no-blocker` and
@@ -339,7 +419,9 @@ _gh_pr_reply_history_has_review() {
     local _bodies
     # Read whole rather than `grep -q`: an early exit would hand EPIPE to a
     # piped producer, and this reads a comment dump that is already in memory.
-    _bodies=$(cat)
+    # The author filter runs FIRST — checking for the marker before scoping to
+    # the trusted login would be the bug this parameter exists to fix.
+    _bodies=$(_gh_pr_reply_login_bodies "${1-}")
     case "$_bodies" in
     *'<!-- ai-review:'*) return 0 ;;
     esac
