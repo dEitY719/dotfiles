@@ -3687,19 +3687,20 @@ _two_repo_fixture() {
     [ "$(_log_count 'notification show')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: an empty backlog leaves a running episode's counter untouched" {
-    # The third answer, and the one that is neither: no candidates *at all*
-    # says nothing about the slots. Counting it would inflate an episode with
-    # quiet ticks; clearing it would let one issue-free tick reset a saturation
-    # that has been going for hours. So it does neither.
+@test "issue_watcher_cron: an empty backlog with no repo capped clears a running episode" {
+    # PR #1624 review (agy FOLLOW-UP + codex Assumption): clearing keys off
+    # "did a per-repo cap block anything this tick" (_select_rc == 2), not off
+    # whether a candidate happened to exist. No candidates at all and no cap
+    # hit is exactly the same "nothing is currently blocked" signal a real
+    # dispatch gives — so it clears rather than leaving a resolved episode to
+    # linger in `--status` for as long as the backlog stays empty.
     _set_saturation_state 5 0
     _set_issues '[]'
     _run_tick "IW_SATURATION_ALERT_TICKS=6"
     assert_success
     assert_output --partial "No dispatchable issue this tick."
     _refute_logged "notification show"
-    run cat "${_SATURATION_FILE}"
-    assert_output --partial '"ticks": "5"'
+    [ ! -f "${_SATURATION_FILE}" ]
 }
 
 # ---------------------------------------------------------------------------
@@ -3771,6 +3772,25 @@ _two_repo_fixture() {
     assert_output --partial "saturation.json"
     assert_output --partial "4/20"
     assert_output --partial "no alert sent yet"
+}
+
+@test "issue_watcher_cron: --status reports the actual remaining cooldown, not the cooldown's fixed length" {
+    # PR #1624 review (codex BLOCKER + agy FOLLOW-UP): the line used to print
+    # IW_SATURATION_COOLDOWN_SECONDS verbatim regardless of elapsed time, so a
+    # cooldown 1h into its 3h window still read as "next after 180m" — never
+    # counting down. 3600s elapsed of a 10800s cooldown leaves 7200s = 120m.
+    _set_saturation_state 20 "$(($(date +%s) - 3600))"
+    _run_tick "IW_SATURATION_ALERT_TICKS=20" "IW_SATURATION_COOLDOWN_SECONDS=10800" -- --status
+    assert_success
+    assert_output --partial "120m"
+    refute_output --partial "180m"
+}
+
+@test "issue_watcher_cron: --status reports the cooldown as elapsed once it has passed" {
+    _set_saturation_state 20 "$(($(date +%s) - 20000))"
+    _run_tick "IW_SATURATION_ALERT_TICKS=20" "IW_SATURATION_COOLDOWN_SECONDS=10800" -- --status
+    assert_success
+    assert_output --partial "cooldown elapsed"
 }
 
 @test "issue_watcher_cron: --status reports no saturation episode when there is no counter file" {

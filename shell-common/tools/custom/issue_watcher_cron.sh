@@ -2893,15 +2893,16 @@ _iw_limit_record() {
 # saturation, and the thing being measured is how long the watcher has been
 # unable to start anything.
 #
-# Exactly one of three call sites answers it per tick:
+# Two call sites answer it per tick:
 #   - main()'s total-concurrency hold — always saturated;
-#   - after candidate selection, "candidates exist" — not saturated, the slots
-#     had room and a dispatch is about to be attempted;
-#   - after candidate selection, "no candidates, but every repo that had
-#     something to offer sat at its per-repo cap" — saturated.
-# A tick with genuinely nothing to dispatch answers none of the three: an empty
-# backlog is not evidence of saturation, and it is not evidence the slots freed
-# up either, so it must leave the counter exactly as it found it.
+#   - after candidate selection — saturated only when `_select_rc == 2`
+#     (some repo that had something to offer sat at its own per-repo cap),
+#     never saturated otherwise. A tick with candidates but no cap hit clears
+#     the same as one with nothing queued at all: "did a cap block anything"
+#     is the fact that matters, not whether a candidate happened to exist —
+#     keying the clear on candidate-emptiness instead let a resolved episode
+#     linger in `--status` for as long as the backlog stayed empty (PR #1624
+#     review, agy FOLLOW-UP + codex Assumption).
 #
 # The zombie-grace reclaim deliberately has no call site of its own: the live
 # count is recomputed from scratch every tick, so a tick that reclaimed a pane
@@ -3052,7 +3053,7 @@ _iw_saturation_tick() {
 # like _iw_limit_gate_state — reporting an episode must never advance or clear
 # one, the same reason --dry-run stays off the gate's write path.
 _iw_saturation_status_report() {
-    local _file _ticks _last _now _since
+    local _file _ticks _last _now _since _remaining
 
     _file=$(_iw_saturation_state_file)
     ux_bullet "saturation state file"
@@ -3097,7 +3098,16 @@ _iw_saturation_status_report() {
         return 0
     fi
 
-    ux_warning "Slots saturated — last alert ~$(((_since + 59) / 60))m ago, the next after $((_IW_SATURATION_COOLDOWN_SECONDS / 60))m."
+    # The claim (`--help`, the changelog) is a *remaining* cooldown, not the
+    # cooldown's own fixed length — printing `_IW_SATURATION_COOLDOWN_SECONDS`
+    # verbatim here repeated that length forever regardless of how much of it
+    # had already elapsed (PR #1624 review, codex BLOCKER + agy FOLLOW-UP).
+    _remaining=$((_IW_SATURATION_COOLDOWN_SECONDS - _since))
+    if [ "${_remaining}" -le 0 ]; then
+        ux_warning "Slots saturated — last alert ~$(((_since + 59) / 60))m ago, cooldown elapsed — the next saturated tick alerts again."
+    else
+        ux_warning "Slots saturated — last alert ~$(((_since + 59) / 60))m ago, next alert possible in ~$(((_remaining + 59) / 60))m."
+    fi
 }
 
 # A read-only window on the rate-limit gate (issue #1441, AC 11): it answers
@@ -3514,22 +3524,24 @@ EOF
     _candidates=$(_iw_select_candidates "$(_iw_collect_candidates)")
     _select_rc=$?
 
-    if [ -z "${_candidates}" ]; then
-        ux_info "No dispatchable issue this tick."
-        # "Nothing to dispatch" and "nowhere to put it" are different facts, and
-        # only the second is saturation (F-1). An empty backlog is left
-        # deliberately unanswered: it is no evidence the slots are full, and no
-        # evidence they freed up either, so the counter must survive it
-        # untouched — a busy watcher that runs out of issues for one tick has
-        # not ended the episode it was in.
-        [ "${_select_rc}" -ne 2 ] || _iw_saturation_tick 1
-        exit 0
+    # Saturated only when some repo that had work sat at its own per-repo cap
+    # (F-1) — that is the one fact `_select_rc == 2` certifies. A tick with
+    # nothing queued and no cap hit is *also* evidence dispatch isn't blocked
+    # by full slots right now, so it clears an in-progress episode the same
+    # as an actual dispatch does (F-4): keying the clear on "did a cap block
+    # anything" rather than "did a candidate happen to exist" is what stops a
+    # resolved episode from lingering in `--status` for as long as the
+    # backlog stays empty (PR #1624 review, agy FOLLOW-UP + codex Assumption).
+    if [ "${_select_rc}" -eq 2 ]; then
+        _iw_saturation_tick 1
+    else
+        _iw_saturation_tick 0
     fi
 
-    # Slots had room and a dispatch is about to be attempted, so whatever
-    # becomes of it this tick is not a saturated one — and any episode that was
-    # running ends here, cooldown included (F-4).
-    _iw_saturation_tick 0
+    if [ -z "${_candidates}" ]; then
+        ux_info "No dispatchable issue this tick."
+        exit 0
+    fi
 
     # Resolved once for the whole tick (memoized — see _iw_ensure_config_dir):
     # every pane it opens shares one account, which is also what lets the
