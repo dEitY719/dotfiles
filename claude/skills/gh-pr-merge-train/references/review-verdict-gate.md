@@ -12,9 +12,13 @@ Producer SSOT — how the labels are decided and written:
 Applied to every PR that survived Step 2's `_gh_pr_merge_train_filter_targets`.
 Both labels come from the `labels` field that Step 2's `gh pr list --json` has
 already returned — the label check itself makes no API call of its own. The
-freshness check below (#1601) is the one exception: it costs one
-`gh api --paginate` call, but only for a PR that already carries
-`review-passed` alone (the case that would otherwise proceed unverified).
+freshness check below (#1601) is the one exception: it costs at most two
+`gh api` calls, and only for a PR that already carries `review-passed` alone
+(the case that would otherwise proceed unverified). Since #1615 that cost is
+bounded regardless of comment count — it reads page 1's `Link: ...;
+rel="last"` header and, only if the PR spans more than one page, jumps
+straight to the last page, instead of `--paginate` walking every page on
+every tick.
 
 | Labels present | Queue verdict |
 |---|---|
