@@ -488,6 +488,19 @@ more text')" '[$c]')
     assert_output ''
 }
 
+@test "freshness (BLOCKER fix): a literal 'null' head-oid (jq's missing-field answer) also fails closed to rc 3" {
+    # agy round-5: jq -r '.headRefOid' on a missing/null field emits the
+    # 4-character string "null", not empty — a plain [ -n ] check does not
+    # catch it, so a genuinely fresh marker would compare against "null",
+    # never match, and fall through to a false MISMATCH self-heal.
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' null bot
+    [ "$status" -eq 3 ]
+    run cat "$STUB_LOG"
+    assert_output ''
+}
+
 # ---------------------------------------------------------------------
 # F-3 integration — the full per-PR form (routing-table.md)
 # ---------------------------------------------------------------------
