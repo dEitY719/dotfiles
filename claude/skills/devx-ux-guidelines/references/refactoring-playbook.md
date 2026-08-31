@@ -17,7 +17,7 @@ Prefer approved path handling and conditional loading:
 
 ```bash
 if ! declare -f ux_header >/dev/null 2>&1; then
-    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
+    source "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh" 2>/dev/null || true
 fi
 ```
 
