@@ -748,25 +748,33 @@ _iw_zombie_candidate_mark() {
     return 1
 }
 
-# Stop the clock for <repo> <number>. Called whenever the pane is observed
-# working, or its issue is not closed, so a session that resumed mid-grace
-# starts from zero the next time it goes quiet instead of being reclaimed the
-# instant it does. Silent about failure: a clock that could not be cleared only
-# ever costs a false zombie one grace window later, and never a wrong dispatch.
-_iw_zombie_candidate_clear() {
-    local _file _tmp
+# Drop the row keyed by <repo> <number> from a TSV <file> whose first two
+# columns are that pair — shared by every "this issue is no longer tracked"
+# clear across the zombie clock and the rate-limit casualty list, which both
+# key their rows the same way. Silent about failure everywhere it is used: a
+# row that could not be removed only ever costs one redundant re-check later,
+# never a wrong dispatch.
+_iw_tsv_drop_row() {
+    local _file="$1" _tmp
 
-    _file=$(_iw_zombie_candidates_file)
     [ -f "${_file}" ] || return 0
 
     _tmp="${_file}.$$"
-    if awk -F "${_IW_TAB}" -v r="$1" -v n="$2" \
+    if awk -F "${_IW_TAB}" -v r="$2" -v n="$3" \
         '!($1 == r && $2 == n)' "${_file}" >"${_tmp}" 2>/dev/null; then
         mv -f "${_tmp}" "${_file}" 2>/dev/null || rm -f "${_tmp}" 2>/dev/null || true
     else
         rm -f "${_tmp}" 2>/dev/null || true
     fi
     return 0
+}
+
+# Stop the clock for <repo> <number>. Called whenever the pane is observed
+# working, or its issue is not closed, so a session that resumed mid-grace
+# starts from zero the next time it goes quiet instead of being reclaimed the
+# instant it does.
+_iw_zombie_candidate_clear() {
+    _iw_tsv_drop_row "$(_iw_zombie_candidates_file)" "$1" "$2"
 }
 
 # Prime the memo with "nothing is running" after a failed lookup. Only
@@ -2536,23 +2544,11 @@ _iw_limit_casualty_mark() {
 }
 
 # Drop <repo> <number> from the file — the issue was retried successfully, or
-# its budget ran out. Silent about failure for the same reason
-# _iw_zombie_candidate_clear is: a row that could not be removed costs one
-# redundant re-prompt on the next reopen, never a lost issue.
+# its budget ran out. Uses _iw_tsv_drop_row, so failure is silent for the same
+# reason _iw_zombie_candidate_clear's is: a row that could not be removed
+# costs one redundant re-prompt on the next reopen, never a lost issue.
 _iw_limit_casualty_clear() {
-    local _file _tmp
-
-    _file=$(_iw_limit_casualties_file)
-    [ -f "${_file}" ] || return 0
-
-    _tmp="${_file}.$$"
-    if awk -F "${_IW_TAB}" -v r="$1" -v n="$2" \
-        '!($1 == r && $2 == n)' "${_file}" >"${_tmp}" 2>/dev/null; then
-        mv -f "${_tmp}" "${_file}" 2>/dev/null || rm -f "${_tmp}" 2>/dev/null || true
-    else
-        rm -f "${_tmp}" 2>/dev/null || true
-    fi
-    return 0
+    _iw_tsv_drop_row "$(_iw_limit_casualties_file)" "$1" "$2"
 }
 
 # Book every dispatch in <file> (`<repo><TAB><number>` rows, as written by
@@ -2578,6 +2574,14 @@ _iw_limit_casualty_book() {
     done <"${_file}"
 }
 
+# Warn and drop <repo> <number> from the casualty file for <reason> — shared
+# by _iw_limit_retry_casualties's two guard clauses that find a casualty they
+# cannot act on at all (repo gone, agent name invalid).
+_iw_limit_casualty_drop() {
+    ux_warning "Dropping rate-limit casualty $1#$2 — $3"
+    _iw_limit_casualty_clear "$1" "$2"
+}
+
 # Re-offer every casualty its pane, once, at gate-reopen time.
 #
 # Two ways back in, and the cheap one is tried first. If herdr still knows the
@@ -2592,7 +2596,11 @@ _iw_limit_casualty_book() {
 # it is the same question: _iw_limit_observe over _IW_LIMIT_OBSERVE_SEC. Per
 # casualty rather than as one batch — the batch call names a single alive agent
 # and would leave the other rows' verdicts unknown, and here every row needs its
-# own answer.
+# own answer. Run right after that row's own dispatch rather than in a
+# separate pass over every row: nothing about *watching* one casualty depends
+# on every other casualty having been dispatched first, only judging them
+# does — see the apply pass below, which is what actually needs every verdict
+# in hand before it acts on any of them.
 #
 # The retry budget only pays for failures the quota cannot explain. If nothing
 # retried this pass held `working`, the account is still spent: the rows keep
@@ -2601,7 +2609,7 @@ _iw_limit_casualty_book() {
 # quota came back and this issue still will not run — the "reason other than
 # quota" _IW_MAX_ATTEMPTS is meant to bound.
 _iw_limit_retry_casualties() {
-    local _file _rows="" _verdicts="" _quota_ok=0
+    local _file _casualties="" _rows="" _quota_ok=0
     local _repo _number _epoch _attempts _agent _path _rc _line
 
     _file=$(_iw_limit_casualties_file)
@@ -2612,9 +2620,10 @@ _iw_limit_retry_casualties() {
     # Read the whole file up front: the loop below rewrites it row by row, and
     # a `while read` on a file being rewritten under it reads whatever the
     # rewrite left behind.
-    _rows=$(cat "${_file}" 2>/dev/null) || return 0
+    _casualties=$(cat "${_file}" 2>/dev/null) || return 0
 
-    # Pass 1 — hand each casualty its prompt back.
+    # Pass 1 — hand each casualty its prompt back, then watch it for the
+    # window right away, collecting an rc-tagged verdict row per casualty.
     while IFS="${_IW_TAB}" read -r _repo _number _epoch _attempts <&3; do
         [ -n "${_repo}" ] || continue
         [ -n "${_number}" ] || continue
@@ -2623,14 +2632,12 @@ _iw_limit_retry_casualties() {
         if [ -z "${_path}" ]; then
             # The repo left the watch list while the gate was shut. Nothing
             # here can act on it, and keeping the row would retry it forever.
-            ux_warning "Dropping rate-limit casualty ${_repo}#${_number} — the repo is no longer watched."
-            _iw_limit_casualty_clear "${_repo}" "${_number}"
+            _iw_limit_casualty_drop "${_repo}" "${_number}" "the repo is no longer watched."
             continue
         fi
 
         _agent=$(_iw_agent_name "${_repo}" "${_number}") || {
-            ux_warning "Dropping rate-limit casualty ${_repo}#${_number} — no valid herdr agent name (see #1530)."
-            _iw_limit_casualty_clear "${_repo}" "${_number}"
+            _iw_limit_casualty_drop "${_repo}" "${_number}" "no valid herdr agent name (see #1530)."
             continue
         }
 
@@ -2652,29 +2659,20 @@ _iw_limit_retry_casualties() {
             fi
         fi
 
-        _verdicts="${_verdicts}${_repo}${_IW_TAB}${_number}${_IW_TAB}${_attempts:-0}${_IW_TAB}${_agent}
-"
-    done 3<<EOF
-${_rows}
-EOF
-
-    [ -n "${_verdicts}" ] || return 0
-
-    # Pass 2 — watch each of them for the window, then judge them together.
-    _rows=""
-    while IFS="${_IW_TAB}" read -r _repo _number _attempts _agent <&3; do
-        [ -n "${_agent}" ] || continue
         _rc=0
         _iw_limit_observe "${_agent}${_IW_TAB}${_repo}${_IW_TAB}${_number}" >/dev/null || _rc=$?
         [ "${_rc}" -ne 0 ] || _quota_ok=1
-        _rows="${_rows}${_rc}${_IW_TAB}${_repo}${_IW_TAB}${_number}${_IW_TAB}${_attempts}
+        _rows="${_rows}${_rc}${_IW_TAB}${_repo}${_IW_TAB}${_number}${_IW_TAB}${_attempts:-0}
 "
     done 3<<EOF
-${_verdicts}
+${_casualties}
 EOF
 
-    # Pass 3 — apply. Split from pass 2 so a casualty that recovers late in the
-    # list still counts as the proof that clears its earlier siblings' budget.
+    [ -n "${_rows}" ] || return 0
+
+    # Pass 2 — apply. Kept separate from the dispatch-and-observe pass above
+    # so a casualty that recovers late in the list still counts as the proof
+    # that clears its earlier siblings' budget.
     while IFS="${_IW_TAB}" read -r _rc _repo _number _attempts; do
         [ -n "${_repo}" ] || continue
         [ -n "${_number}" ] || continue
