@@ -1602,6 +1602,18 @@ _assert_not_hung() {
     assert_output --partial "never settled within 13s"
 }
 
+@test "issue_watcher_cron: a pathologically small poll interval is still bounded" {
+    # ceil(13/0.001)=13000 would otherwise spawn thousands of herdr round
+    # trips for one dispatch — a fat-fingered override, not attacker input,
+    # but a real self-inflicted resource risk (agy, PR #1611 review, 4th
+    # pass). The poll count now ceilings at 1000 regardless of how small the
+    # gap gets.
+    _run_tick "IW_SETTLE_POLL_SLEEP=0.001" "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 0.001$')" -eq 999 ]
+    assert_output --partial "never settled within 13s"
+}
+
 # The same `0` escape _IW_IDLE_POLL_SLEEP has: the suite polls without paying
 # for it, and the poll still runs its full budget and still prompts.
 @test "issue_watcher_cron: IW_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {

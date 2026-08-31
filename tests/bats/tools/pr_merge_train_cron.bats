@@ -737,6 +737,15 @@ _hold_lock() {
     assert_output --partial "never settled within 13s"
 }
 
+@test "pr_merge_train_cron: a pathologically small poll interval is still bounded" {
+    # See issue_watcher_cron.bats's twin test — agy, PR #1611 review, 4th
+    # pass.
+    _run_tick PMT_SETTLE_POLL_SLEEP=0.001 "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 0.001$')" -eq 999 ]
+    assert_output --partial "never settled within 13s"
+}
+
 @test "pr_merge_train_cron: PMT_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
     _run_tick PMT_SETTLE_POLL_SLEEP=0 "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success

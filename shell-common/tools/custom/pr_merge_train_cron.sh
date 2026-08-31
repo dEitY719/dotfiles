@@ -718,6 +718,8 @@ _pmt_settle_max_polls() {
             if (g <= 0) { print s; exit }
             n = s / g; i = int(n); if (i < n) i++
             if (i < 2) i = 2
+            # See _iw_settle_max_polls — agy, PR #1611 review, 4th pass.
+            if (i > 1000) i = 1000
             print i
         }'
 }
