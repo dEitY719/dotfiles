@@ -58,6 +58,24 @@ teardown() {
     assert_failure 2
 }
 
+@test "F-1 (PR #1629 review, agy FOLLOW-UP): origin_line accepts the Korean 블로커 tag" {
+    run _gh_pr_reply_origin_line codex '블로커' ACCEPT
+    assert_success
+    assert_output 'codex:블로커:ACCEPT'
+}
+
+@test "F-1 (PR #1629 review, agy FOLLOW-UP): severity_is_blocking recognizes the accepted 블로커 token round-trip" {
+    run _gh_pr_reply_origin_line codex '블로커' ACCEPT
+    assert_success
+    run _gh_pr_reply_severity_is_blocking 블로커
+    assert_success
+}
+
+@test "F-1: origin_line rejects a severity containing ':' (breaks the delimiter)" {
+    run _gh_pr_reply_origin_line codex 'BLOCK:ER' ACCEPT
+    assert_failure 2
+}
+
 @test "F-1: BLOCKER is the blocking severity" {
     run _gh_pr_reply_severity_is_blocking BLOCKER
     assert_success

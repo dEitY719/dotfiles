@@ -68,8 +68,13 @@ _gh_pr_reply_origin_line() {
         ;;
     esac
     case "$_severity" in
-    "" | *[!A-Z-]*)
-        printf '[gh-pr-reply] severity must be a non-empty tag (e.g. BLOCKER, FOLLOW-UP): %s\n' \
+    "")
+        printf '[gh-pr-reply] severity must be a non-empty tag (e.g. BLOCKER, FOLLOW-UP, 블로커): %s\n' \
+            "${2-}" >&2
+        return 2
+        ;;
+    *:*)
+        printf '[gh-pr-reply] severity must not contain ":" (breaks the reviewer:severity:verdict delimiter): %s\n' \
             "${2-}" >&2
         return 2
         ;;

@@ -73,10 +73,30 @@ DECISION=$(printf '%s\n' "$ORIGINS" | \
 ### F-3 — 재호출은 수정 파일로만 스코프
 
 ```bash
-FIXED_PATHS=$(git diff --name-only "$BASE_SHA..HEAD" | tr '\n' ' ')
+FIXED_PATHS=$(git diff --name-only "$BASE_SHA..HEAD")
+# 파일마다 `--paths <path>` 를 반복한다 — 공백으로 이어붙인 문자열 하나를
+# `--paths` 뒤에 통째로 넘기면(예: `--paths a.sh b.sh`) gh_pr_review_parse 가
+# 첫 파일만 소비하고 다음 토큰을 PR 번호로 오인한다(PR #1629 review, codex
+# BLOCKER). `--paths` 는 반복 호출마다 누적되도록 이미 구현돼 있으므로
+# (gh_pr_review_paths_scope.bats "parse: --paths repeats and accumulates in
+# order"), 파일 개수만큼 플래그를 반복하는 쪽이 유일하게 안전한 호출 형태다.
+PATHS_ARGS=""
+while IFS= read -r _p; do
+    [ -n "$_p" ] && PATHS_ARGS="$PATHS_ARGS --paths $_p"
+done <<EOF
+$FIXED_PATHS
+EOF
 # 각 lane 리뷰어에 대해 (push 완료 후에):
-Skill(gh:pr-review, "--ai <r> --paths $FIXED_PATHS $PR_NUMBER $REMOTE")
+Skill(gh:pr-review, "--ai <r>$PATHS_ARGS $PR_NUMBER $REMOTE")
 ```
+
+파일명에 공백이 들어 있으면 이 반복 호출도, `--paths` 값 자체의 내부 저장
+방식(공백-이어붙이기 문자열, `gh_pr_review.sh` 의 `paths=` 계약)도 이를
+구분하지 못한다 — 알려진 한계다(PR #1629 review, agy FOLLOW-UP + codex
+BLOCKER). 이 저장소의 네이밍 컨벤션(`snake_case`, 공백 금지, 최상위
+`CLAUDE.md`)상 실제 파일명에 공백이 나타날 일이 없어 낮은 리스크로 판단해
+현재는 손대지 않는다 — 컨벤션을 벗어난 파일이 실제로 나타나면 별도 이슈로
+`paths` 의 내부 표현을 배열/개행-구분으로 바꾸는 작업이 필요하다.
 
 - `--paths` 는 이슈 #1616 이 `gh:pr-review` 에 추가한 최소 옵션이다. `gh pr diff`
   결과를 파일 단위로 걸러 주므로 PR 전체가 아무리 커도 **small-diff inline
