@@ -24,8 +24,8 @@ comment by default. **Never** submits `--approve` / `--request-changes` (that is
 `gh:pr-approve`) and **never** replies to individual review comments (that is
 `gh:pr-reply`). Every preset requires a critical stance
 (`references/review-presets.md`). Flags — `--ai <codex|agy|claude|opencode|hermes>`,
-`--review <preset>`, `--user <name>` (claude only), `--no-post-comment`, and
-`<PR#> [remote]` — are tabled in `references/help.md`.
+`--review <preset>`, `--user <name>` (claude only), `--no-post-comment`,
+`--paths <path>`, and `<PR#> [remote]` — are tabled in `references/help.md`.
 
 ## Help
 
@@ -63,6 +63,12 @@ Normalized enum: `default` / `quick` / `thorough` / `security` /
 Decide path by diff size (`gh pr view --json additions,deletions`): `≥ 800` lines → follow
 `claude/skills/gh-pr-approve/references/large-diff-delegation.md`; else inline `gh pr diff`. Append the diff per
 `references/ai-cli-invocation.md` and write `(prompt + diff)` to `PROMPT_FILE`.
+
+`--paths <path>` (repeatable) narrows the review to those files: the diff is
+filtered by path in `_gh_pr_review_build_prompt`, so a scoped run stays on the
+**inline** path regardless of the whole PR's size — never route a `--paths` run
+through the large-diff delegation branch. A scope matching no file exits 1
+rather than reviewing an empty diff (#1616).
 
 Never hardcode or reuse a `PROMPT_FILE`; derive it from
 `_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"` and do the write plus Step 5

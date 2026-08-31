@@ -59,6 +59,11 @@ and classify as **ACCEPT** / **ACCEPT-PARTIAL** / **DECLINE** / **QUESTION**.
 Bot comments (gemini-code-assist, sourcery-ai, copilot) follow the same
 rules; see `references/reply-templates.md` for the full rubric.
 
+Record each item's origin as `<reviewer>:<severity>:<verdict>` into `ORIGINS`
+via `_gh_pr_reply_origin_line` (`references/targeted-rereview.md` § Step 3) —
+Steps 6 and 7 both read that stream, because a flat accepted/declined count
+cannot tell an unresolved BLOCKER from a declined suggestion (#1616).
+
 ## Step 4: Apply Fixes (ACCEPT / ACCEPT-PARTIAL only)
 
 Keep each fix minimal and scoped — no drive-by refactors. Group related
@@ -83,10 +88,13 @@ no-op when `PUSHED_FIXES == 0`).
 
 Still under `PUSHED_FIXES > 0`, invalidate the stale review verdict per
 `references/verdict-label-removal.sh.md` (soft-fail): drop `review-passed`
-unconditionally — the reviewed commit is no longer head — and drop
-`review-blocked` only when `ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0`
-(the Step 3 counts Step 7's table reports). Never *add* either label;
-`devx:pr-review-all` owns that.
+unconditionally — the reviewed commit is no longer head. `review-blocked` is
+decided by the targeted re-review lane in `references/targeted-rereview.md`
+instead (#1616): when every blocking-severity item of an originally-blocking
+reviewer is ACCEPT/ACCEPT-PARTIAL, re-invoke `Skill(gh:pr-review, "--ai <r>
+--paths <fixed files> <PR> <remote>")` and let its verdict flow through
+`devx_pr_review_all_apply_label`. Never *add* either label by hand, and never
+assume a pass the re-verification did not actually return (NF-2).
 
 Then **unconditionally** run the same removal block Step 2.5 does —
 `references/reply-pending-label-removal.sh.md`. Between the two call sites the
@@ -97,7 +105,8 @@ PR carrying it, so a label left on wedges the PR out of the train (#1524).
 ## Step 7: Report
 
 Print the summary table per `references/final-summary.md` (Accepted / Declined /
-Answered counts, commit SHAs, skipped comments, and the lingering
+Answered counts, the per-reviewer/severity breakdown, the targeted re-review
+outcome line, commit SHAs, skipped comments, and the lingering
 `CHANGES_REQUESTED` nudge). Then post the ai-metrics PR comment per
 `references/ai-metrics-comment.sh.md` (soft-fail; skip when `GH_DISABLE_AI_METRICS=1`).
 

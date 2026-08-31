@@ -20,5 +20,10 @@
   The Step 6 `review-passed` / `review-blocked` invalidation goes through
   `_gh_pr_drop_label`, the one shared REST-DELETE primitive every
   head-advancing skill uses (#1563) — never an inlined DELETE.
-- Never **add** `review-passed` or `review-blocked`. Only `devx:pr-review-all`
-  issues those; this skill only removes them (#1563).
+- Never **add** `review-passed` or `review-blocked` by hand. Since #1616 the
+  Step 6 targeted lane may reach `review-passed`, but only through
+  `devx_pr_review_all_apply_label` and only on a verdict an **independent**
+  `gh:pr-review` re-call actually returned. **NF-2 — never self-certify**:
+  there is no branch that skips the re-verification and assumes a pass, and
+  an unreadable verdict leaves the PR unlabelled rather than passed
+  (#1563 / #1616).
