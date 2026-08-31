@@ -81,20 +81,48 @@ setup() {
     assert_failure 2
 }
 
+@test "no --force-review -> force_review=0 (guard armed by default)" {
+    run devx_pr_review_all_parse 123
+    assert_success
+    assert_line "force_review=0"
+}
+
+@test "--force-review -> force_review=1" {
+    run devx_pr_review_all_parse 123 --force-review
+    assert_success
+    assert_line "force_review=1"
+}
+
+@test "--force-review combines with --defer-reply" {
+    run devx_pr_review_all_parse 123 --defer-reply 8 --force-review
+    assert_success
+    assert_line "force_review=1"
+    assert_output --partial "reply_mode=defer"
+    assert_output --partial "reply_delay=8"
+}
+
+@test "--force-review combines with a remote positional" {
+    run devx_pr_review_all_parse 123 upstream --force-review
+    assert_success
+    assert_line "force_review=1"
+    assert_output --partial "remote=upstream"
+}
+
 @test "help flag -> help_requested" {
     run devx_pr_review_all_parse --help
     assert_success
     assert_output --partial "help_requested=1"
 }
 
-@test "parse does not leak pr/remote/reply_mode/reply_delay/_no_reply/_remote_set into the caller's shell" {
+@test "parse does not leak pr/remote/reply_mode/reply_delay/_no_reply/_remote_set/_force_review into the caller's shell" {
     pr="SENTINEL_PR"
     remote="SENTINEL_REMOTE"
     reply_mode="SENTINEL_REPLY_MODE"
     reply_delay="SENTINEL_REPLY_DELAY"
     _no_reply="SENTINEL_NO_REPLY"
     _remote_set="SENTINEL_REMOTE_SET"
-    devx_pr_review_all_parse 123 upstream --defer-reply 8 >/dev/null
+    _force_review="SENTINEL_FORCE_REVIEW"
+    devx_pr_review_all_parse 123 upstream --defer-reply 8 --force-review >/dev/null
     _rc=$?
     [ "$_rc" -eq 0 ]
     [ "$pr" = "SENTINEL_PR" ]
@@ -103,6 +131,7 @@ setup() {
     [ "$reply_delay" = "SENTINEL_REPLY_DELAY" ]
     [ "$_no_reply" = "SENTINEL_NO_REPLY" ]
     [ "$_remote_set" = "SENTINEL_REMOTE_SET" ]
+    [ "$_force_review" = "SENTINEL_FORCE_REVIEW" ]
 }
 
 # ---------------------------------------------------------------------------
