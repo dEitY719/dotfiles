@@ -129,7 +129,7 @@ _iw_cap() {
     printf '%s' "$2"
 }
 
-_IW_MAX_PER_REPO=$(_iw_cap "${IW_MAX_PER_REPO-}" 7 IW_MAX_PER_REPO)
+_IW_MAX_PER_REPO=$(_iw_cap "${IW_MAX_PER_REPO-}" 3 IW_MAX_PER_REPO)
 _IW_MAX_CONCURRENT=$(_iw_cap "${IW_MAX_CONCURRENT-}" 17 IW_MAX_CONCURRENT)
 _IW_DISPATCH_PER_TICK=$(_iw_cap "${IW_DISPATCH_PER_TICK-}" 1 IW_DISPATCH_PER_TICK)
 # How long a pane has to keep looking stopped before the tick believes it.
