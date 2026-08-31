@@ -409,13 +409,26 @@ _capture_json() {
 # list
 # ---------------------------------------------------------------------------
 
-@test "aicron: list prints every manifest job with installed / paused / last run" {
+@test "aicron: list prints every manifest job with status and last run" {
     _aicron list
     assert_success
     assert_output --partial "hello"
     assert_output --partial "boom"
     assert_output --partial "ghost"
-    assert_output --partial "installed"
+    assert_output --partial "STATUS"
+    assert_output --partial "not installed"
+    assert_output --partial "aicron add <job>"
+
+    _aicron add hello
+    assert_success
+    _aicron list
+    assert_success
+    assert_output --partial "running"
+
+    _aicron pause hello
+    assert_success
+    _aicron list
+    assert_success
     assert_output --partial "paused"
 }
 
@@ -978,11 +991,11 @@ EOF
     assert_success
 }
 
-@test "aicron: list reports installed as unknown, not no, when the crontab cannot be read" {
+@test "aicron: list reports status as unknown, not not-installed, when the crontab cannot be read" {
     _break_crontab_dump
     _aicron list
     assert_success
-    assert_output --partial "installed=unknown"
+    assert_output --partial "unknown"
     assert_output --partial "could not read the crontab"
 
     # The warning goes to stderr so --json stays parseable, and the unknown
