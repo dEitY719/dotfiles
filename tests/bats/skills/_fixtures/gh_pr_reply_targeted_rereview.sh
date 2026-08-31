@@ -4,9 +4,9 @@
 #   claude/skills/gh-pr-reply/references/targeted-rereview.md
 #   claude/skills/gh-pr-reply/references/verdict-label-removal.sh.md
 #
-# Issue #1616. Like the merge-train verdict-gate fixture beside it, this does
-# NOT re-implement the gate — it sources the shipped functions, so a mirror
-# cannot pass while production drifts (#1524).
+# Issues #1616 + #1634. Like the merge-train verdict-gate fixture beside it,
+# this does NOT re-implement the gate — it sources the shipped functions, so a
+# mirror cannot pass while production drifts (#1524).
 #
 # Keep the ORDER and the report strings in sync with the doc.
 
@@ -36,19 +36,39 @@ pr_reply_targeted_rereview() {
 }
 
 # Mirrors verdict-label-removal.sh.md + targeted-rereview.md, in order:
-#   1. `review-passed` is dropped unconditionally (the head advanced).
-#   2. the per-reviewer gate decides whether the targeted lane may run.
-#   3. only an independent re-review verdict may write a label, and it does
-#      so through `devx_pr_review_all_apply_label` — never inline (NF-2).
+#   1. `review-blocked` is dropped UNCONDITIONALLY. Step 5's "reply to every
+#      comment" contract is the only precondition (#1634) — not the push, not
+#      the ACCEPT/DECLINE ratio, not the per-reviewer gate.
+#   2. Everything below is the `review-passed` lane and runs only when the
+#      fixes were actually pushed (`PUSHED_FIXES > 0`):
+#      a. `review-passed` is dropped too — the head advanced, so the previous
+#         verdict expired.
+#      b. the per-reviewer gate decides whether the targeted lane may run. It
+#         is now purely an opportunistic UPGRADE path to `review-passed`; it
+#         is no longer how `review-blocked` gets removed.
+#      c. only an independent re-review verdict may write a label, and it does
+#         so through `devx_pr_review_all_apply_label` — never inline (NF-2).
+#         A verdict that comes back BLOCKING therefore RE-APPLIES
+#         `review-blocked` on that fresh evidence; that is not a reversal of
+#         step 1's unconditional drop.
 #
 # Usage: <origin lines> | pr_reply_step6 <pr> <repo> <host> <head-sha>
-#            <space-separated fixed paths> <blocking-reviewer>...
+#            <space-separated fixed paths> <pushed-fixes> <blocking-reviewer>...
+#
+# `<pushed-fixes>` stands in for the doc's `PUSHED_FIXES`: 0 when this pass
+# pushed nothing (e.g. every suggestion was validly DECLINEd).
 pr_reply_step6() {
-    local _pr="$1" _repo="$2" _host="$3" _sha="$4" _paths="$5"
-    shift 5
+    local _pr="$1" _repo="$2" _host="$3" _sha="$4" _paths="$5" _pushed="${6-0}"
+    shift 6
     local _origins _decision _lanes _r _verdicts="" _label _report
 
     _origins=$(cat)
+
+    # 1. Unconditional — whatever was pushed, whatever the verdict mix (#1634).
+    _gh_pr_drop_label "$_pr" review-blocked "$_repo" "$_host" >/dev/null 2>&1 || :
+
+    # 2. The `review-passed` lane needs a real new head to talk about.
+    [ "${_pushed:-0}" -gt 0 ] || return 0
 
     _gh_pr_drop_label "$_pr" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :
 
