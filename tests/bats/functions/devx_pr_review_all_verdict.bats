@@ -1062,11 +1062,147 @@ _apply_stub() {
     refute_output --partial 'review-verdict:review-passed'
 }
 
-@test "write_label: reports exactly the two contract lines, always" {
+@test "write_label: reports exactly the three contract lines, always" {
     _apply_stub
     run devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
-    [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ] ||
-        fail "expected exactly two token lines, got: $output"
+    [ "$(printf '%s\n' "$output" | grep -c .)" -eq 3 ] ||
+        fail "expected exactly three token lines, got: $output"
+}
+
+# ---------------------------------------------------------------------------
+# The opposite-label DELETE stopped being silent (PR #1637 review, codex
+# FOLLOW-UP)
+# ---------------------------------------------------------------------------
+#
+# `_devx_pr_review_all_delete_label` swallowed every outcome with
+# `>/dev/null 2>&1 || :`, so a REAL delete failure left BOTH verdict labels on
+# the PR while the caller printed "`review-blocked` cleared". The 404 "it was
+# not there" case is the normal, overwhelmingly common outcome and must stay
+# quiet, or the reader learns to ignore the warning.
+
+@test "delete_label (PR #1637 review): a successful delete reports drop=ok" {
+    _apply_stub
+    run _devx_pr_review_all_delete_label review-blocked 7 acme/widget
+    assert_success
+    assert_output 'drop=ok'
+}
+
+@test "delete_label (PR #1637 review): a 404 is drop=absent, not a failure" {
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { printf 'gh: Not Found (HTTP 404)\n' >&2; return 1; }
+        _devx_pr_review_all_delete_label review-blocked 7 acme/widget
+    "
+    assert_success
+    assert_output 'drop=absent'
+}
+
+@test "delete_label (PR #1637 review): a real failure is drop=failed, still rc 0" {
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { printf 'gh: connection reset by peer\n' >&2; return 1; }
+        _devx_pr_review_all_delete_label review-blocked 7 acme/widget
+    "
+    assert_success
+    assert_output 'drop=failed'
+}
+
+@test "write_label (PR #1637 review): the three lines come out in a fixed order" {
+    _apply_stub
+    run devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
+    assert_success
+    assert_line --index 0 'drop=ok'
+    assert_line --index 1 'add=ok'
+    assert_line --index 2 'marker=posted'
+}
+
+@test "write_label (PR #1637 review): the no-helper early return reports drop=skipped" {
+    # Nothing was mutated on that path, so claiming drop=ok would be a lie
+    # about a delete that never ran.
+    run bash -c "
+        SHELL_COMMON=/nonexistent
+        export SHELL_COMMON
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        unset -f _gh_pr_edit_safe_label 2>/dev/null || :
+        gh() { return 0; }
+        devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
+    "
+    assert_success
+    # Not indexed: the #1454 root guard prints its own line on this path
+    # (SHELL_COMMON is deliberately bogus here), the same reason the sibling
+    # `add=no-helper` test above matches by content.
+    assert_line 'drop=skipped'
+    assert_line 'add=no-helper'
+    assert_line 'marker=none'
+}
+
+@test "report_write_result (PR #1637 review): drop=failed WARNs and names the opposite label" {
+    run devx_pr_review_all_report_write_result \
+        "$(printf 'drop=failed\nadd=ok\nmarker=none')" 7 acme/widget review-passed 'OK-LINE' 'FAIL-LINE'
+    assert_success
+    assert_output --partial 'OK-LINE'
+    assert_output --partial '반대 라벨 review-blocked 삭제 실패'
+    assert_output --partial '두 판정 라벨이 공존할 수 있다'
+}
+
+@test "report_write_result (PR #1637 review): the opposite label is derived from <label>" {
+    run devx_pr_review_all_report_write_result \
+        "$(printf 'drop=failed\nadd=ok\nmarker=none')" 7 acme/widget review-blocked 'OK-LINE' 'FAIL-LINE'
+    assert_success
+    assert_output --partial '반대 라벨 review-passed 삭제 실패'
+}
+
+@test "report_write_result (PR #1637 review): drop=ok and drop=absent never WARN" {
+    run devx_pr_review_all_report_write_result \
+        "$(printf 'drop=ok\nadd=ok\nmarker=none')" 7 acme/widget review-passed 'OK-LINE' 'FAIL-LINE'
+    assert_success
+    refute_output --partial '반대 라벨'
+    run devx_pr_review_all_report_write_result \
+        "$(printf 'drop=absent\nadd=ok\nmarker=none')" 7 acme/widget review-passed 'OK-LINE' 'FAIL-LINE'
+    assert_success
+    refute_output --partial '반대 라벨'
+}
+
+# THE parse regression: the old two-expansion parse read field 1 as everything
+# before the first newline and field 2 as everything after it, so a third line
+# put `drop=…` into `_add` and the whole rest into `_marker` — the marker WARN
+# silently stopped firing.
+@test "report_write_result (PR #1637 review): the marker WARN still fires with three lines" {
+    run devx_pr_review_all_report_write_result \
+        "$(printf 'drop=ok\nadd=ok\nmarker=failed')" 7 acme/widget review-passed 'OK-LINE' 'FAIL-LINE'
+    assert_success
+    assert_output --partial 'OK-LINE'
+    assert_output --partial 'freshness marker failed to post for PR #7'
+}
+
+@test "apply_label (PR #1637 review): a failed clear WARNs instead of claiming 'cleared'" {
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { printf 'gh: connection reset by peer\n' >&2; return 1; }
+        _gh_pr_edit_safe_label() { return 0; }
+        printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget
+    "
+    assert_success
+    assert_output --partial '[WARN]'
+    assert_output --partial '해제 실패'
+    # The ownership half of the message survives in both branches.
+    assert_output --partial "gh:pr-reply's to apply (#1636)"
+    refute_output --partial 'cleared'
+}
+
+@test "apply_label (PR #1637 review): an absent opposite label still reads as cleared" {
+    # The overwhelmingly common outcome: nothing to delete, nothing to warn
+    # about. The [OK] wording is unchanged byte for byte.
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { printf 'gh: Not Found (HTTP 404)\n' >&2; return 1; }
+        _gh_pr_edit_safe_label() { return 0; }
+        printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget
+    "
+    assert_success
+    assert_output --partial '[OK] PR #7: every lane non-blocking (2 lane(s))'
+    assert_output --partial 'cleared'
+    refute_output --partial '[WARN]'
 }
 
 # ---------------------------------------------------------------------------
