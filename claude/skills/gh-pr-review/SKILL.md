@@ -60,15 +60,15 @@ Normalized enum: `default` / `quick` / `thorough` / `security` /
 
 ## Step 4: Fetch Review Material
 
-Decide path by diff size (`gh pr view --json additions,deletions`): `≥ 800` lines → follow
-`claude/skills/gh-pr-approve/references/large-diff-delegation.md`; else inline `gh pr diff`. Append the diff per
-`references/ai-cli-invocation.md` and write `(prompt + diff)` to `PROMPT_FILE`.
-
-`--paths <path>` (repeatable) narrows the review to those files: the diff is
-filtered by path in `_gh_pr_review_build_prompt`, so a scoped run stays on the
-**inline** path regardless of the whole PR's size — never route a `--paths` run
-through the large-diff delegation branch. A scope matching no file exits 1
-rather than reviewing an empty diff (#1616).
+Decide path: if `--paths <path>` (repeatable) was given, always take the
+**inline** `gh pr diff` path regardless of PR size — the diff is filtered by
+path in `_gh_pr_review_build_prompt`, so a scoped run never routes through
+large-diff delegation, and a scope matching no file exits 1 rather than
+reviewing an empty diff (#1616). Otherwise decide by diff size
+(`gh pr view --json additions,deletions`): `≥ 800` lines → follow
+`claude/skills/gh-pr-approve/references/large-diff-delegation.md`; else inline
+`gh pr diff`. Append the diff per `references/ai-cli-invocation.md` and write
+`(prompt + diff)` to `PROMPT_FILE`.
 
 Never hardcode or reuse a `PROMPT_FILE`; derive it from
 `_gh_pr_review_mktemp_prompt "$ai" "$PR_NUMBER"` and do the write plus Step 5

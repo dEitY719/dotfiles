@@ -101,32 +101,28 @@ _gh_pr_reply_severity_is_blocking() {
 # ACCEPTED_COUNT / DECLINED_COUNT pair it replaces could not distinguish
 # "a blocker is unresolved" from "a suggestion was declined".
 _gh_pr_reply_origin_tally() {
+    # `sort` on the whole `reviewer:severity:verdict` line already groups
+    # every reviewer's lines into one contiguous block (no two reviewer
+    # names in the enum share a prefix), so a flush-on-change over sorted
+    # input reports them in order without a second names[]/bubble-sort pass.
     sort | awk -F: '
         NF < 3 { next }
-        {
-            r = $1; sev = $2; v = $3
-            seen[r] = 1
-            blocking = (sev == "BLOCKER" || sev == "BLOCKING")
-            if (blocking) {
-                bt[r]++
-                if (v == "ACCEPT" || v == "ACCEPT-PARTIAL") ba[r]++
-            } else {
-                nt[r]++
-                if (v == "DECLINE") nd[r]++
-            }
-        }
-        END {
-            n = 0
-            for (r in seen) names[++n] = r
-            for (i = 1; i <= n; i++)
-                for (j = i + 1; j <= n; j++)
-                    if (names[j] < names[i]) { t = names[i]; names[i] = names[j]; names[j] = t }
-            for (i = 1; i <= n; i++) {
-                r = names[i]
+        function flush() {
+            if (cur != "")
                 printf "reviewer=%s blocking_total=%d blocking_accepted=%d nonblocking_total=%d nonblocking_declined=%d\n", \
-                    r, bt[r] + 0, ba[r] + 0, nt[r] + 0, nd[r] + 0
+                    cur, bt + 0, ba + 0, nt + 0, nd + 0
+        }
+        {
+            if ($1 != cur) { flush(); cur = $1; bt = ba = nt = nd = 0 }
+            if ($2 == "BLOCKER" || $2 == "BLOCKING") {
+                bt++
+                if ($3 == "ACCEPT" || $3 == "ACCEPT-PARTIAL") ba++
+            } else {
+                nt++
+                if ($3 == "DECLINE") nd++
             }
         }
+        END { flush() }
     '
 }
 
