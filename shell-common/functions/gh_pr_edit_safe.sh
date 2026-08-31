@@ -57,23 +57,33 @@
 #   gh:pr-resolve-conflict  Step 5 — after a successful --force-with-lease
 #   gh:pr-resolve-outdated  Step 5 — after a successful --force-with-lease
 #
-# The asymmetry rule (drop `review-passed` freely, `review-blocked` almost
-# never):
-#   - `review-passed` is dropped UNCONDITIONALLY by all three. Any new head
+# The asymmetry rule:
+#   - `review-passed` is dropped UNCONDITIONALLY by all three (gh:pr-reply,
+#     gh:pr-resolve-conflict, gh:pr-resolve-outdated). Any new head
 #     invalidates "this head was reviewed"; dropping is always the safe
 #     direction because absence means "not verified", not "blocked".
-#   - `review-blocked` is never dropped by this primitive. Since #1616 it is
-#     cleared only as the side effect of a NEW verdict: `gh:pr-reply`'s
-#     targeted re-review lane gates on `_gh_pr_reply_targeted_lane_decide`
-#     (per reviewer, per severity — see
-#     claude/skills/gh-pr-reply/references/targeted-rereview.md), and when an
-#     independent `gh:pr-review` re-call comes back non-blocking,
-#     `devx_pr_review_all_apply_label` deletes the opposite label on its way
-#     to writing `review-passed`. The rule this replaced —
-#     `gh:pr-reply` dropping it on a global accepted/declined count — pinned
-#     the label whenever any OTHER reviewer's non-blocking suggestion was
-#     declined (PR #1609). A rebase skill holds no verdict at all, so it must
-#     leave `review-blocked` in place — the safe direction, not a bug.
+#   - `review-blocked` is dropped by exactly one of the three, `gh:pr-reply`
+#     — UNCONDITIONALLY as well, once Step 5's "reply to every comment"
+#     contract is satisfied (#1634). That completion is the only
+#     precondition: it holds regardless of PUSHED_FIXES and regardless of
+#     the ACCEPT/DECLINE ratio, symmetric with `review-passed` above. The
+#     rule this replaced — a global accepted/declined count — pinned the
+#     label whenever any OTHER reviewer's non-blocking suggestion was
+#     declined (PR #1609). #1616's targeted re-review lane (per reviewer,
+#     per severity — see
+#     claude/skills/gh-pr-reply/references/targeted-rereview.md) narrowed
+#     that, but still withheld removal when a reviewer's own BLOCKER item
+#     was declined with justification rather than fixed (PR #1630); #1634
+#     removes that remaining gate. The lane still runs when
+#     `PUSHED_FIXES > 0`, now purely as an opportunistic `review-passed`
+#     upgrade: an independent `gh:pr-review` re-call that comes back
+#     non-blocking lets `devx_pr_review_all_apply_label` write
+#     `review-passed`, and one that comes back BLOCKING re-applies
+#     `review-blocked` — on that fresh, independent evidence, not as a
+#     reversal of the unconditional drop.
+#   - `gh:pr-resolve-conflict` / `gh:pr-resolve-outdated` never drop
+#     `review-blocked` — a rebase holds no verdict at all, so it must leave
+#     the label in place — the safe direction, not a bug.
 #   - No skill may ADD either label by hand, and none may certify its own
 #     work: only a reviewer verdict, through
 #     `devx_pr_review_all_apply_label`, issues them (#1616 NF-2).

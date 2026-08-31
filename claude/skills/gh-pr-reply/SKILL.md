@@ -86,15 +86,22 @@ skipped push → `PUSHED_FIXES=0`. If `PUSHED_FIXES > 0`, push the PR card
 back to `In review` per `references/board-sync-in-review.sh.md` (soft-fail;
 no-op when `PUSHED_FIXES == 0`).
 
-Still under `PUSHED_FIXES > 0`, invalidate the stale review verdict per
-`references/verdict-label-removal.sh.md` (soft-fail): drop `review-passed`
-unconditionally — the reviewed commit is no longer head. `review-blocked` is
-decided by the targeted re-review lane in `references/targeted-rereview.md`
-instead (#1616): when every blocking-severity item of an originally-blocking
-reviewer is ACCEPT/ACCEPT-PARTIAL, re-invoke `Skill(gh:pr-review, "--ai <r>
+Invalidate stale review verdicts per `references/verdict-label-removal.sh.md`
+(soft-fail, two independent blocks). Drop `review-blocked`
+**unconditionally** — completing Step 5's reply-all contract is the only
+precondition, regardless of `PUSHED_FIXES` or the ACCEPT/DECLINE ratio
+(#1634; symmetric with `review-passed`'s own unconditional drop below).
+Then, under `PUSHED_FIXES > 0` only, drop `review-passed` unconditionally
+— the reviewed commit is no longer head — and run the targeted re-review
+lane in `references/targeted-rereview.md` as an opportunistic upgrade path:
+when every blocking-severity item of an originally-blocking reviewer is
+ACCEPT/ACCEPT-PARTIAL, re-invoke `Skill(gh:pr-review, "--ai <r>
 --paths <fixed files> <PR> <remote>")` and let its verdict flow through
-`devx_pr_review_all_apply_label`. Never *add* either label by hand, and never
-assume a pass the re-verification did not actually return (NF-2).
+`devx_pr_review_all_apply_label` — a BLOCKING verdict there re-applies
+`review-blocked` on the strength of that fresh, independent evidence
+(NF-2 still holds: never self-certify). Never *add* either label by hand
+otherwise, and never assume a pass the re-verification did not actually
+return.
 
 Then **unconditionally** run the same removal block Step 2.5 does —
 `references/reply-pending-label-removal.sh.md`. Between the two call sites the

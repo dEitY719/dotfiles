@@ -34,9 +34,11 @@ PR #123 review comments processed: 5 total
   `PUSHED_FIXES > 0`; omitted otherwise (no push, no invalidation).
 - **Closing line** — `-> All comments replied to.` confirms the
   politeness contract was met.
-- Step 6 reads the same `ORIGINS` stream this table renders, to decide
-  whether the targeted re-review lane may run
-  (`references/verdict-label-removal.sh.md` →
+- `review-blocked` itself drops unconditionally in Step 6 once every
+  comment has been replied to (#1634) — it does not depend on this stream.
+  Step 6 still reads the same `ORIGINS` stream this table renders, but only
+  to decide whether the targeted re-review lane may attempt a
+  `review-passed` upgrade (`references/verdict-label-removal.sh.md` →
   `references/targeted-rereview.md`). Both steps use one stream — never
   re-derive it.
 - **No board-promotion row** — `Approved` is owned by `gh:pr-approve`
