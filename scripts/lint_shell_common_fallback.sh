@@ -33,19 +33,22 @@ fail() {
     errors=$((errors + 1))
 }
 
-# `${SHELL_COMMON}/` 를 그대로 찾는다 — functions/ 뿐 아니라 tools/ 등 모든
-# 하위 경로를 잡는다. `${SHELL_COMMON:-...}` 는 여는 중괄호 바로 뒤가 `:` 이므로
-# 이 리터럴 패턴과 매치되지 않는다.
-matches=$(grep -rn '${SHELL_COMMON}/' "$SKILLS_DIR" --include='*.md' || true)
-
-if [ -n "$matches" ]; then
+# `${SHELL_COMMON}/` 를 하위 경로 무관하게 그대로 찾는다 — `${SHELL_COMMON:-...}`
+# 는 여는 중괄호 바로 뒤가 `:` 이므로 이 리터럴 패턴과 매치되지 않는다.
+# `find` + 파일별 grep — 형제 린터 lint_docs_filenames.sh 와 동일한 이식 가능
+# 패턴이다. GNU 전용 `grep -r --include=` 는 BSD/macOS grep 에서 지원이
+# 불확실해 지원 대상 플랫폼(WSL·Linux·macOS, 루트 AGENTS.md) 에서
+# `mise run lint-docs` 자체가 깨질 수 있다 (PR #1614 codex 리뷰).
+for file in $(find "$SKILLS_DIR" -type f -name '*.md' | sort); do
+    matches=$(grep -n '${SHELL_COMMON}/' "$file" || true)
+    [ -n "$matches" ] || continue
     while IFS= read -r line; do
         [ -n "$line" ] || continue
-        fail "$line — \${SHELL_COMMON:-\$HOME/dotfiles/shell-common}/ 로 고치세요."
+        fail "$file:$line — \${SHELL_COMMON:-\$HOME/dotfiles/shell-common}/ 로 고치세요."
     done <<EOF
 $matches
 EOF
-fi
+done
 
 echo "lint-shell-common-fallback: errors=${errors} (dir: ${SKILLS_DIR})"
 
