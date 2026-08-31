@@ -339,10 +339,26 @@ _gh_pr_merge_train_has_review_passed_label() {
 #   boundary (label-write access already gates who can attach `review-passed`
 #   at all). A missing/invalid login is treated as "lookup not attempted"
 #   (rc 1) rather than falling back to trusting everyone.
+#
+#   The login validator accepts a plain GitHub username (`[A-Za-z0-9-]+`) or
+#   that same shape with a literal `[bot]` suffix (`github-actions[bot]`,
+#   `dependabot[bot]`) — the form GitHub gives App-associated identities in
+#   `.user.login` (PR #1608 review, agy round-2 BLOCKER: the earlier
+#   character class rejected every bracket, so a pipeline authenticating as
+#   any bot account could never validate a single marker and this check
+#   would fail closed on every PR, permanently). Both accepted shapes are
+#   still restricted to letters, digits and hyphens underneath — a login
+#   containing `"`, a backslash, or anything else that could break out of the
+#   double-quoted jq filter string below is rejected either way, same as
+#   before.
 _gh_pr_merge_train_review_passed_marker_sha() {
-    local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}" _raw _rc
+    local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}" _raw _rc _login_base
 
-    case "$_login" in
+    _login_base="$_login"
+    case "$_login_base" in
+        *'[bot]') _login_base="${_login_base%\[bot\]}" ;;
+    esac
+    case "$_login_base" in
         '' | *[!A-Za-z0-9-]*) return 1 ;;
     esac
 
@@ -351,7 +367,11 @@ _gh_pr_merge_train_review_passed_marker_sha() {
             # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
             export GH_HOST="$_host"
         fi
-        gh api --paginate "repos/$_repo/issues/$_pr/comments" \
+        # per_page=100 (the API max) caps the round trips a busy PR costs —
+        # same comments fetched, fewer HTTP calls than the 30-per-page
+        # default. It does not change which marker wins: filtering and
+        # picking the last match still happens below, over the full history.
+        gh api --paginate -f per_page=100 "repos/$_repo/issues/$_pr/comments" \
             --jq ".[] | select(.user.login == \"$_login\") | .body"
     ) 2>/dev/null )
     _rc=$?

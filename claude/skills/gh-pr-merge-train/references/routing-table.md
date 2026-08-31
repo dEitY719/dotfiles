@@ -53,11 +53,13 @@ printf '%s' "$STATE" | _gh_pr_merge_train_has_reply_pending_label \
 # The verdict gate, re-asked (references/review-verdict-gate.md). Order
 # matters: review-blocked wins over a stale review-passed.
 HEAD_OID=$(printf '%s' "$STATE" | jq -r '.headRefOid')
-# ME: the one login this pipeline authenticates as — a marker's ONLY trusted
-# author (#1601, "Marker authorship" in review-verdict-gate.md). Reuse the
-# same hoisted binding train-loop.md's delegated-review step already makes;
-# recomputed here only when this block runs standalone.
-ME="${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}"
+# ME: the one login a marker may be trusted from (#1601, "Marker authorship"
+# in review-verdict-gate.md). Reuse the same hoisted binding train-loop.md's
+# delegated-review step already makes; recomputed here only when this block
+# runs standalone. GH_PR_MERGE_TRAIN_TRUSTED_LOGIN overrides the auto-detected
+# identity for setups where the review pipeline and the merge-train dispatcher
+# authenticate as different accounts (PR #1608 review, agy round-2 BLOCKER).
+ME="${GH_PR_MERGE_TRAIN_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"
 if printf '%s' "$STATE" | _gh_pr_merge_train_has_review_blocked_label; then
     echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
 elif ! printf '%s' "$STATE" | _gh_pr_merge_train_has_review_passed_label; then

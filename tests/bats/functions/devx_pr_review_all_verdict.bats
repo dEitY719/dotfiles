@@ -891,7 +891,7 @@ _apply_stub() {
     assert_output --partial 'review-verdict:review-passed:deadbeef --> [GH_HOST=ghe.example.com]'
 }
 
-@test "apply_label (#1601): a marker-post failure still reports exactly one line" {
+@test "apply_label (#1601, PR #1608 review): a marker-post failure never changes the primary line" {
     _apply_stub
     STUB_GH_RC=1
     run bash -c "
@@ -901,7 +901,29 @@ _apply_stub() {
         printf 'lgtm\n' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef
     "
     assert_success
+    assert_line --index 0 --partial 'labelled `review-passed`'
+}
+
+@test "apply_label (BLOCKER fix): a marker-post failure adds a second WARN line, not silence" {
+    # agy + codex, PR #1608 review: swallowing this failure left no trace of
+    # why a "successfully labelled" PR later reads as stale on the merge train.
+    _apply_stub
+    run bash -c "
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { return 1; }
+        _gh_pr_edit_safe_label() { return 0; }
+        printf 'lgtm\n' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef
+    "
+    assert_success
+    assert_line --index 1 --partial 'freshness marker failed to post'
+    [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ] ||
+        fail "expected exactly two lines of output, got: $output"
+}
+
+@test "apply_label (BLOCKER fix): a marker-post success adds no second line" {
+    _apply_stub
+    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >"${BATS_TEST_TMPDIR}/out"
+    run cat "${BATS_TEST_TMPDIR}/out"
     [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ] ||
         fail "expected exactly one line of output, got: $output"
-    assert_output --partial 'labelled `review-passed`'
 }
