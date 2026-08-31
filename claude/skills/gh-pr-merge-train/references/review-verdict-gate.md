@@ -27,11 +27,18 @@ freshness check below (#1601) is the one exception: it costs one
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh"
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
 
+# The one identity this whole pipeline authenticates as — the same login
+# that ran devx_pr_review_all_apply_label when it posted the marker. Hoisted
+# once per run in real code (train-loop.md already binds ME this way for the
+# delegated-review step); `${ME:-...}` here just makes this snippet runnable
+# standalone.
+ME="${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}"
+
 if printf '%s' "$PR_JSON" | _gh_pr_merge_train_has_review_blocked_label; then
     echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
 elif ! printf '%s' "$PR_JSON" | _gh_pr_merge_train_has_review_passed_label; then
     echo "[SKIPPED] review not verified — no review-passed label"
-elif _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID"; then
+elif _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID" "$ME"; then
     echo "[SKIPPED] review-passed label stale — head advanced without invalidation"
     # Self-heal: the reader just proved what the writers missed, so drop the
     # stale label here too. Best-effort — a failed drop still leaves this
@@ -69,18 +76,36 @@ happily trust.
 
 `_gh_pr_merge_train_review_passed_stale` (`shell-common/functions/gh_pr_merge_train.sh`)
 closes that gap by verifying instead of trusting: it reads the last
-`<!-- review-verdict:review-passed:<sha> -->` marker
+`<!-- review-verdict:review-passed:<sha> -->` marker POSTED BY THE PIPELINE'S
+OWN LOGIN — see "Marker authorship" below — that
 `devx_pr_review_all_apply_label` posted when it applied the label
 (`devx-pr-review-all/references/review-verdict-label.md` → "Freshness marker
 for `review-passed`") and compares that sha against `$HEAD_OID` — the current
 `headRefOid`, already added to F-3's `$STATE` fetch (`routing-table.md`). No
-marker, or a marker whose sha does not match, is STALE — fail-closed, the
+matching marker, or one whose sha does not match, is STALE — fail-closed, the
 same direction `approval-gate.md` takes for an unreadable policy: an
 undetermined answer costs one skip, and a skip is trivially retried.
 
 This still does not make the train a comment parser in the sense "What this
 gate is not" forbids below: it never reads a *reviewer's* verdict line, only
 a fixed machine stamp this same subsystem writes for exactly this check.
+
+### Marker authorship (PR #1608 review, agy + codex BLOCKER)
+
+A plain comment has no write-permission floor the way a label does — on most
+repos anyone who can see the PR can comment on it. An earlier version of this
+check matched the marker text from *any* commenter, which let anyone re-arm a
+stale `review-passed` by hand-posting
+`<!-- review-verdict:review-passed:<current-head> -->`, no label-write access
+required. `_gh_pr_merge_train_review_passed_marker_sha` now takes a required
+`<expected-login>` and only counts a marker from that exact GitHub login — the
+one account this whole pipeline authenticates as (the same login
+`train-loop.md`'s delegated-review step already resolves via
+`gh api user -q .login`). Forging a trusted marker now requires the same
+access as forging the label directly (label-write access, already the
+accepted trust boundary this whole gate rests on — the label has no stronger
+guarantee than "someone with write access said so"). A missing/invalid login
+is fail-closed to "no marker" — never a fallback to trusting every commenter.
 
 Neither outcome is an F-5 attempt, and neither is ever `[FAILED]`: a withheld
 verdict is a working review, not a broken train (the same rule

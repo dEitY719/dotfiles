@@ -257,13 +257,23 @@ teardown() {
 _freshness_stub() {
     STUB_LOG="${BATS_TEST_TMPDIR}/gh.log"
     : >"$STUB_LOG"
+    # STUB_COMMENTS_JSON: a JSON array of `{"user":{"login":...},"body":...}`
+    # objects — the real shape `gh api .../comments` answers. Tests set this
+    # instead of a flat text blob so author filtering can be exercised
+    # faithfully: the stub replays the REAL `--jq` expression the function
+    # under test built (with its `select(.user.login == "...")` clause)
+    # against this JSON via a real `jq`, rather than re-deriving the filter
+    # logic in bash by hand.
+    : "${STUB_COMMENTS_JSON:=[]}"
     # shellcheck disable=SC2317  # invoked indirectly by the function under test
     gh() {
         printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$STUB_LOG"
         case "$*" in
         *"/comments"*"--jq"*)
             [ "${STUB_COMMENTS_RC:-0}" -eq 0 ] || return "$STUB_COMMENTS_RC"
-            printf '%s\n' "$STUB_COMMENTS"
+            # $5 is the `--jq` expression argument in the real call:
+            # api(1) --paginate(2) <path>(3) --jq(4) <expr>(5).
+            printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$5"
             return 0
             ;;
         *)
@@ -273,37 +283,44 @@ _freshness_stub() {
     }
 }
 
-@test "freshness: marker_sha reads the sha out of a matching marker" {
+# One comment object for STUB_COMMENTS_JSON. $1=login, $2=body.
+_comment() {
+    jq -nc --arg login "$1" --arg body "$2" '{user:{login:$login},body:$body}'
+}
+
+@test "freshness: marker_sha reads the sha out of a matching marker from the expected login" {
     _freshness_stub
-    STUB_COMMENTS='some review text
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot 'some review text
 <!-- review-verdict:review-passed:abc1234 -->
-more text'
-    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+more text')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
     assert_success
     assert_output 'abc1234'
 }
 
 @test "freshness: marker_sha with no marker at all yields nothing" {
     _freshness_stub
-    STUB_COMMENTS='just a plain review comment, no marker here'
-    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot 'just a plain review comment, no marker here')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
     assert_success
     assert_output ''
 }
 
 @test "freshness: marker_sha takes the LAST marker when re-reviewed" {
     _freshness_stub
-    STUB_COMMENTS='<!-- review-verdict:review-passed:1111111 -->
-<!-- review-verdict:review-passed:2222222 -->'
-    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson c1 "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" \
+        --argjson c2 "$(_comment bot '<!-- review-verdict:review-passed:2222222 -->')" \
+        '[$c1, $c2]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
     assert_success
     assert_output '2222222'
 }
 
 @test "freshness: marker_sha pins GH_HOST on the lookup" {
     _freshness_stub
-    STUB_COMMENTS='<!-- review-verdict:review-passed:abc1234 -->'
-    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget ghe.example.com
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:abc1234 -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget ghe.example.com bot
     assert_success
     run cat "$STUB_LOG"
     assert_output --partial '[GH_HOST=ghe.example.com]'
@@ -312,36 +329,93 @@ more text'
 @test "freshness: a lookup failure yields nothing, not a false match" {
     _freshness_stub
     STUB_COMMENTS_RC=1
-    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
     assert_success
+    assert_output ''
+}
+
+# ── #1601 / PR #1608 review (agy + codex BLOCKER): marker authorship ──
+# A marker string alone proves nothing — anyone who can comment on the PR
+# could type it by hand. Only a marker from the expected (pipeline) login
+# may be trusted.
+
+@test "freshness (BLOCKER fix): a marker from ANY OTHER commenter is ignored" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment some-random-contributor '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output ''
+}
+
+@test "freshness (BLOCKER fix): the expected login's marker still wins over a forged one" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson forged "$(_comment attacker '<!-- review-verdict:review-passed:deadbeef -->')" \
+        --argjson real "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" \
+        '[$forged, $real]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output '0000000'
+}
+
+@test "freshness (BLOCKER fix): an empty expected login is fail-closed to no marker" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget ''
+    assert_success
+    assert_output ''
+}
+
+@test "freshness (BLOCKER fix): an empty expected login never calls gh at all" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' >/dev/null
+    run cat "$STUB_LOG"
+    assert_output ''
+}
+
+@test "freshness (BLOCKER fix): an invalid login (injection attempt) is fail-closed, no gh call" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' 'bot" | .'
+    assert_success
+    assert_output ''
+    run cat "$STUB_LOG"
     assert_output ''
 }
 
 @test "freshness: stale returns TRUE (0) when the marker sha matches nothing" {
     _freshness_stub
-    STUB_COMMENTS='no marker in sight'
-    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot 'no marker in sight')" '[$c]')
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
     assert_success
 }
 
 @test "freshness: stale returns TRUE (0) when the marker sha does not match head" {
     _freshness_stub
-    STUB_COMMENTS='<!-- review-verdict:review-passed:0000000 -->'
-    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
     assert_success
 }
 
 @test "freshness: stale returns FALSE (1) when the marker sha matches head" {
     _freshness_stub
-    STUB_COMMENTS='<!-- review-verdict:review-passed:deadbeef -->'
-    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
     assert_failure
 }
 
 @test "freshness: a lookup failure is fail-closed (treated as stale)" {
     _freshness_stub
     STUB_COMMENTS_RC=1
-    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
+    assert_success
+}
+
+@test "freshness (BLOCKER fix): stale stays TRUE when the only matching marker is forged" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment attacker '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
     assert_success
 }
 
@@ -351,30 +425,30 @@ more text'
 
 @test "F-3 freshness: review-blocked still wins over everything else" {
     _freshness_stub
-    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-blocked"}]')" acme/widget '' deadbeef
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-blocked"}]')" acme/widget '' deadbeef bot
     assert_success
     assert_output 'skip:review-blocked — reviewer verdict is blocking'
 }
 
 @test "F-3 freshness: no verdict label at all is still 'not verified'" {
     _freshness_stub
-    run train_verdict_gate_f3 "$(verdict_pr 11 '[]')" acme/widget '' deadbeef
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[]')" acme/widget '' deadbeef bot
     assert_success
     assert_output 'skip:review not verified — no review-passed label'
 }
 
-@test "F-3 freshness: a fresh review-passed marker proceeds" {
+@test "F-3 freshness: a fresh review-passed marker from the expected login proceeds" {
     _freshness_stub
-    STUB_COMMENTS='<!-- review-verdict:review-passed:deadbeef -->'
-    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
     assert_success
     assert_output 'proceed'
 }
 
 @test "F-3 freshness: a stale review-passed (head advanced) is skipped" {
     _freshness_stub
-    STUB_COMMENTS='<!-- review-verdict:review-passed:0000000 -->'
-    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" '[$c]')
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
     assert_success
     assert_output 'skip:review-passed label stale — head advanced without invalidation'
 }
@@ -383,16 +457,26 @@ more text'
     # A manual push, or a repo that never wired the writer, both look like
     # this. #1601's whole point: absence of proof reads as stale, not fresh.
     _freshness_stub
-    STUB_COMMENTS='plain comment, no marker'
-    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot 'plain comment, no marker')" '[$c]')
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
+    assert_success
+    assert_output 'skip:review-passed label stale — head advanced without invalidation'
+}
+
+@test "F-3 freshness (BLOCKER fix): a review-passed label with only a FORGED marker is skipped" {
+    # The exact PR #1608 review finding: a non-pipeline commenter's marker
+    # must never re-arm a label the gate would otherwise (correctly) skip.
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment attacker '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
     assert_success
     assert_output 'skip:review-passed label stale — head advanced without invalidation'
 }
 
 @test "F-3 freshness: a stale PR self-heals by dropping the label" {
     _freshness_stub
-    STUB_COMMENTS='<!-- review-verdict:review-passed:0000000 -->'
-    train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef >/dev/null
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" '[$c]')
+    train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot >/dev/null
     run cat "$STUB_LOG"
     assert_output --partial 'api -X DELETE repos/acme/widget/issues/11/labels/review-passed'
 }
@@ -414,5 +498,19 @@ more text'
     run grep -qF -- 'review-verdict:review-passed:' "$_producer"
     assert_success
     run grep -qF -- 'devx_pr_review_all_apply_label' "$_producer"
+    assert_success
+}
+
+# PR #1608 review (agy + codex BLOCKER): the marker must be author-checked,
+# not trusted by text alone.
+@test "doc-guard: the gate doc explains marker authorship (anti-forgery)" {
+    run grep -q 'Marker authorship' "${SKILL_DIR}/references/review-verdict-gate.md"
+    assert_success
+    run grep -qF -- 'expected-login' "${SKILL_DIR}/references/review-verdict-gate.md"
+    assert_success
+}
+
+@test "doc-guard: routing-table.md resolves and passes the expected login" {
+    run grep -qF -- 'gh api user -q .login' "${SKILL_DIR}/references/routing-table.md"
     assert_success
 }

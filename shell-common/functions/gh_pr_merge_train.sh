@@ -307,39 +307,62 @@ _gh_pr_merge_train_has_review_passed_label() {
 # stamp this same subsystem writes for exactly this read; nothing about a
 # reviewer's output format touches it.
 #
-# `_gh_pr_merge_train_review_passed_marker_sha <pr> <repo> [host]`
-#   Echo the sha carried by the LAST such marker among the PR's issue
-#   comments, or nothing if none exists / the lookup failed. One
-#   `gh api --paginate` call.
+# `_gh_pr_merge_train_review_passed_marker_sha <pr> <repo> [host] <expected-login>`
+#   Echo the sha carried by the LAST such marker POSTED BY `<expected-login>`
+#   among the PR's issue comments, or nothing if none exists / the lookup
+#   failed. One `gh api --paginate` call.
+#
+#   `<expected-login>` is REQUIRED and load-bearing (PR #1608 review, agy
+#   BLOCKER + codex BLOCKER, independently): without an author check, this
+#   function originally trusted a marker string from ANY commenter, not just
+#   `devx_pr_review_all_apply_label`. Any PR participant able to leave a
+#   comment — a much lower bar than the label-write access needed to attach
+#   `review-passed` itself — could then post
+#   `<!-- review-verdict:review-passed:<current-head> -->` by hand and defeat
+#   the whole freshness check this file exists to add. Filtering to the one
+#   login that actually runs this automation pipeline (the same account both
+#   `devx:pr-review-all` and `gh:pr-merge-train` authenticate as) closes that:
+#   forging a trusted marker now requires the same access as forging the
+#   label directly, which is the pre-existing, already-accepted trust
+#   boundary (`review-verdict-gate.md` → "label-presence trust model").
+#   A missing/invalid login is fail-closed to "no marker" (empty stdout, read
+#   as stale by the caller) rather than falling back to trusting everyone.
 _gh_pr_merge_train_review_passed_marker_sha() {
-    local _pr="$1" _repo="$2" _host="${3-}"
+    local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}"
+
+    case "$_login" in
+        '' | *[!A-Za-z0-9-]*) return 0 ;;
+    esac
 
     (
         if [ -n "$_host" ]; then
             # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
             export GH_HOST="$_host"
         fi
-        gh api --paginate "repos/$_repo/issues/$_pr/comments" --jq '.[].body'
+        gh api --paginate "repos/$_repo/issues/$_pr/comments" \
+            --jq ".[] | select(.user.login == \"$_login\") | .body"
     ) 2>/dev/null |
         grep -oE '<!-- review-verdict:review-passed:[0-9a-f]+ -->' |
         tail -n 1 |
         sed -E 's/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/'
 }
 
-# `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <head-oid>`
+# `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <head-oid> <expected-login>`
 #   0 (true) = the `review-passed` label is STALE for `<head-oid>` — no
-#   marker was found, or the last marker's sha does not match. 1 (false) =
-#   fresh, the last marker's sha matches `<head-oid>` exactly.
+#   marker POSTED BY `<expected-login>` was found, or the last one's sha does
+#   not match. 1 (false) = fresh, the last matching marker's sha matches
+#   `<head-oid>` exactly.
 #
 #   Fail-closed by construction: a lookup failure (network, auth, `gh` too
-#   old) yields an empty marker sha, which never equals a real `<head-oid>`,
-#   so an undetermined answer reads as STALE — the same direction #1519's
-#   approval gate takes for "policy unreadable". A skipped PR costs nothing;
-#   trusting a label this gate cannot verify is the failure #1601 exists to
-#   close.
+#   old), a missing/invalid `<expected-login>`, or a marker from anyone else
+#   all yield an empty marker sha, which never equals a real `<head-oid>`, so
+#   an undetermined or untrusted answer reads as STALE — the same direction
+#   #1519's approval gate takes for "policy unreadable". A skipped PR costs
+#   nothing; trusting a label (or a marker) this gate cannot verify is the
+#   failure #1601 exists to close.
 _gh_pr_merge_train_review_passed_stale() {
-    local _pr="$1" _repo="$2" _host="$3" _head_oid="$4" _marker_sha
-    _marker_sha=$(_gh_pr_merge_train_review_passed_marker_sha "$_pr" "$_repo" "$_host")
+    local _pr="$1" _repo="$2" _host="$3" _head_oid="$4" _login="$5" _marker_sha
+    _marker_sha=$(_gh_pr_merge_train_review_passed_marker_sha "$_pr" "$_repo" "$_host" "$_login")
     [ -n "$_marker_sha" ] && [ "$_marker_sha" = "$_head_oid" ] && return 1
     return 0
 }
