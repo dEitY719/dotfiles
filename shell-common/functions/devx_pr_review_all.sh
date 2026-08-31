@@ -292,23 +292,26 @@ devx_pr_review_all_aggregate() {
 # to "match every author", which is the whole vulnerability being closed.
 #
 # stdin is drained in full before any early return, so a producer piping into
-# this never takes an EPIPE on the reject path.
+# this never takes an EPIPE on the reject path. Validation never touches
+# stdin, so it runs first; only the reject branch needs an explicit drain —
+# on the accept branch `jq` reads stdin straight through to EOF itself, so
+# buffering it into a shell variable first would just be a wasted copy.
 _devx_pr_review_all_login_bodies() {
-    local _login="${1-}" _base _json
-
-    _json=$(cat)
+    local _login="${1-}" _base
 
     _base="$_login"
     case "$_base" in
         *'[bot]') _base="${_base%\[bot\]}" ;;
     esac
     case "$_base" in
-        '' | *[!A-Za-z0-9-]*) return 0 ;;
+        '' | *[!A-Za-z0-9-]*)
+            cat >/dev/null
+            return 0
+            ;;
     esac
 
-    printf '%s' "$_json" |
-        jq -r --arg login "$_login" \
-            '.[] | select(.user.login == $login) | .body' 2>/dev/null
+    jq -r --arg login "$_login" \
+        '.[] | select(.user.login == $login) | .body' 2>/dev/null
     return 0
 }
 
@@ -346,10 +349,12 @@ _devx_pr_review_all_login_bodies() {
 #
 #   devx_pr_review_all_lane_block <ai> [<head-sha>] <expected-login>
 devx_pr_review_all_lane_block() {
-    # Drain rather than bail early: stdin is a comment dump a caller is often
-    # piping in, and returning without reading it hands that producer an
-    # EPIPE. Same reason `_devx_pr_review_all_login_bodies` reads whole.
-    if [ -z "${1-}" ] || [ -z "${3-}" ]; then
+    # Only <ai> ($1) needs an upfront check. An empty/invalid <expected-login>
+    # ($3) is already fail-closed inside `_devx_pr_review_all_login_bodies`
+    # itself — it drains stdin and yields nothing, so awk below sees an empty
+    # stream and harvests nothing. Re-checking $3 here would just be a second
+    # copy of that same rule.
+    if [ -z "${1-}" ]; then
         cat >/dev/null
         return 0
     fi
