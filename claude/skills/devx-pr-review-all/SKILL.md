@@ -52,21 +52,27 @@ and `START_TS`.
 ## Step 3: Review + auto-fix gate (dispatch all lanes in ONE turn)
 
 **Duplicate-review guard first (#1613).** Before dispatching anything, read
-`head_sha` once (`gh pr view "$pr" -R "$TARGET_REPO" --json headRefOid`) and
-`BODIES` once (`gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"`).
-Then, unless `force_review=1`, skip any reviewer lane for which
+`head_sha` once (`gh pr view "$pr" -R "$TARGET_REPO" --json headRefOid --jq
+.headRefOid`) and `BODIES` once
+(`gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"`). Then, unless
+`force_review=1`, skip any reviewer lane for which
 `devx_pr_review_all_already_reviewed "$ai" "$head_sha"` (fed `$BODIES` on
 stdin) returns 0 — print
 `[SKIP] <ai> already reviewed head <head_sha> — pass --force-review to re-run`
 and do **not** dispatch that lane's Agent. Two sessions reviewing the same head
 concurrently is what posted duplicate agy/codex comments on PR #1608. Fail
 open: if either fetch errors, treat every lane as not-yet-reviewed and dispatch
-normally. Full rationale: `references/duplicate-review-guard.md`.
+normally. This is a read-before-write check, not a lock — two sessions can
+still both read "not yet reviewed" and both fan out; see
+`references/duplicate-review-guard.md` → "Known limitation" for why that race
+is accepted rather than closed with a lock file.
 
 The five lanes dispatch together in a single turn. agy/codex/opencode/hermes
 are comment-only; `/simplify` may mutate and commit. Each lane is soft-fail.
-A lane skipped by the guard counts as `[SKIP]` for Steps 3.5 and 6, exactly
-like a missing CLI — it contributes no verdict line.
+A lane skipped by the guard because it was **already reviewed** is not the
+same as a lane skipped for a **missing CLI** — the former still has a valid
+verdict for this exact head and Step 3.5 must harvest it (see Step 3.5's
+"guard-skipped lanes" note below); only the latter contributes no verdict line.
 
 - **agy** — if `command -v agy`, an Agent runs
   `Skill(gh:pr-review, "--ai agy <pr> <remote>")`; absent or non-zero exit → SKIP/WARN.
@@ -97,16 +103,27 @@ Full runnable block, exit codes, and rationale: `references/review-verdict-label
 In short — bind `TARGET_HOST` from the same `<remote>` URL as `TARGET_REPO`
 (the block in `references/reply-pending-label.sh.md` step 0), then:
 
-1. `head_sha` — one `gh pr view "$pr" -R "$TARGET_REPO" --json headRefOid`.
+1. `head_sha` — one `gh pr view "$pr" -R "$TARGET_REPO" --json headRefOid --jq
+   .headRefOid`.
 2. `BODIES` — one `gh api --paginate "repos/$TARGET_REPO/issues/$pr/comments"`.
-3. For **each lane that actually ran** in Step 3 (a `[SKIP]`/`[WARN]` lane
-   contributes nothing, and `/simplify` never contributes), pipe `BODIES`
-   through `devx_pr_review_all_lane_block "$ai" "$head_sha"` →
+3. For **each lane that either ran fresh in Step 3 OR was skipped by the
+   duplicate-review guard** (i.e. every lane except one skipped for a
+   **missing CLI / non-internal PC** — `/simplify` never contributes either),
+   pipe `BODIES` through `devx_pr_review_all_lane_block "$ai" "$head_sha"` →
    `devx_pr_review_all_verdict`, and pipe that stream straight into
    `devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"`
    — the trailing `$head_sha` stamps a freshness marker when the verdict is
    `review-passed` (#1601), so `gh:pr-merge-train`'s gate can tell this exact
    head from a stale one.
+   **Why a guard-skipped lane must still be included (#1613, agy+codex PR
+   #1623 BLOCKER):** the guard skipped it precisely because it already has a
+   verdict for `$head_sha` — dropping that lane from the stream would let a
+   partial re-run (e.g. only one lane force-re-reviewed) silently overwrite an
+   existing `review-blocked` verdict with `review-passed`, because the
+   aggregator only sees the lanes fed to it. Since `devx_pr_review_all_lane_block`
+   reads whatever marker already exists in `$BODIES` regardless of which
+   session or run posted it, including a guard-skipped lane costs nothing extra
+   — the same call that decided to skip it already proved the marker exists.
    Never stage the verdicts in a variable and re-expand it — zsh does not
    word-split, and a two-lane PR would silently report one.
 
