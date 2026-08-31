@@ -80,13 +80,15 @@ bullets** (see CRITICAL CONTRACT). After each call, proceed to the next.
    literal `<remote>` (substituted fresh into this Bash call, never read
    from `$REMOTE`) resolves to the same repo URL as `$HOME/dotfiles`'s own
    `origin` (silently skipped otherwise, #1498 — the dispatcher only tracks
-   that one remote), fires `aicron run merge-train` **in the background, not
+   that one URL), fires `aicron run merge-train` **in the background, not
    awaited** (a real train launch can block ~4 min on its own `--wait`
    confirmation, which the rebase steps below don't need) so the dispatcher
-   checks immediately instead of waiting up to the cron backstop period.
-   Only a missing `aicron.sh` prints a `[WARN]` line; the dispatcher's own
-   NF-1 locking already prevents a duplicate train. Detail:
-   `references/merge-train-wake.md`.
+   checks immediately instead of waiting up to the cron backstop period. A
+   non-matching `<remote>` gets neither this wake nor the cron backstop —
+   no automated CI-fail remediation trigger at all (#1610, detail:
+   `references/constraints.md`). Only a missing `aicron.sh` prints a
+   `[WARN]` line; the dispatcher's own NF-1 locking already prevents a
+   duplicate train. Detail: `references/merge-train-wake.md`.
 6. **Step 2.5 — gh:pr-resolve-conflict** (only if 2.4 succeeded) —
    rebase-resolve; a fresh PR usually prints "이미 충돌 없음 — skip".
    `Skill(gh:pr-resolve-conflict, "<PR_NUM>")`
