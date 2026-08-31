@@ -15,6 +15,25 @@ load '../test_helper'
 
 FUNCS="devx_pr_review_all_parse devx_pr_review_all_verdict devx_pr_review_all_aggregate devx_pr_review_all_lane_block devx_pr_review_all_apply_label"
 
+# Isolated $HOME whose "dotfiles" child is a symlink to the checkout actually
+# under test (not the developer's real ~/dotfiles). Two independent reviewers
+# (agy, codex — PR #1614) flagged the un-isolated version: the
+# `${SHELL_COMMON:-$HOME/dotfiles/...}` fallback test silently sourced the
+# developer's own ~/dotfiles checkout instead of this worktree (false-positive
+# risk if the two diverge) and hard-failed in any environment where
+# $HOME/dotfiles does not happen to exist (CI, a fresh clone). Pointing the
+# symlink at $_BATS_REAL_DOTFILES_ROOT fixes both: the fallback now always
+# resolves to the code under review, and the test no longer depends on a
+# pre-existing checkout at that path.
+setup() {
+    setup_isolated_home
+    ln -s "$_BATS_REAL_DOTFILES_ROOT" "$HOME/dotfiles"
+}
+
+teardown() {
+    teardown_isolated_home
+}
+
 # A truly clean, non-interactive shell: no inherited $SHELL_COMMON/$DOTFILES_ROOT,
 # no rc files — matching the environment #1612 traces the failure to.
 run_clean_source() {
