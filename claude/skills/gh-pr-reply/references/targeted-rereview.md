@@ -72,6 +72,15 @@ DECISION=$(printf '%s\n' "$ORIGINS" | \
 
 ### F-3 — 재호출은 수정 파일로만 스코프
 
+`BASE_SHA` 는 **이번 `gh:pr-reply` pass 가 시작될 때의 PR head**(Step 1 이
+읽은 `headRefOid`)다 — PR 의 base 브랜치(`main` 등)와의 merge-base가
+**아니다**(PR #1629 review, codex Assumption). merge-base를 쓰면
+`FIXED_PATHS` 가 이번 pass 이전에 이미 존재하던 PR 전체 변경분까지 포함해,
+"수정 파일만" 이라는 F-3 의 전제와 "저비용" 이라는 이슈 목표가 함께
+무너진다. `git push` 가 있었다면(`PUSHED_FIXES > 0`) `HEAD` 는 이미 그 커밋
+이후이므로, `BASE_SHA..HEAD` 는 정확히 "이번 pass 가 만든 fix 커밋(들)" 로
+좁혀진다.
+
 ```bash
 FIXED_PATHS=$(git diff --name-only "$BASE_SHA..HEAD")
 # 파일마다 `--paths <path>` 를 반복한다 — 공백으로 이어붙인 문자열 하나를
