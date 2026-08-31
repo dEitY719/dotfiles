@@ -10,6 +10,7 @@
     "hookify@claude-plugins-official",
     "last30days@last30days-skill",
     "obsidian@obsidian-skills",
+    "packaging@packaging-skills",
     "playwright@claude-plugins-official",
     "plugin-dev@claude-plugins-official",
     "ponytail@ponytail",
