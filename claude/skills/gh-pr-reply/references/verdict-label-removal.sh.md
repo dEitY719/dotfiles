@@ -6,29 +6,29 @@
 규칙의 SSOT 는 `shell-common/functions/gh_pr_edit_safe.sh` 헤더의
 "Verdict-label invalidation — SSOT for issue #1563" 절이다. 여기서는 되풀이하지
 않는다. 요약만: 두 라벨은 **특정 head 커밋 하나**에 대한 주장이므로 head 를
-전진시킨 스킬이 스스로 무효화해야 하고, 붙이는 쪽은 `devx:pr-review-all`
-하나뿐이다 — 이 스킬은 **제거만** 한다.
+전진시킨 스킬이 스스로 무효화해야 한다.
 
 Caller contract: `PR_NUMBER`, `TARGET_REPO`, `TARGET_HOST` 는 Step 1 이
 `references/target-resolution.md` 대로 이미 export 한 상태여야 한다 (#1403).
-`ACCEPTED_COUNT` / `DECLINED_COUNT` 는 Step 3 분류 결과의 집계로, Step 7 의
-최종 요약 표(`references/final-summary.md`)가 쓰는 것과 **같은 카운터**다:
+`ORIGINS` 는 Step 3 이 `references/targeted-rereview.md` 대로 기록한
+`<reviewer>:<severity>:<verdict>` 스트림이다.
 
-| 변수 | 정의 |
-|---|---|
-| `ACCEPTED_COUNT` | Step 3 에서 ACCEPT + ACCEPT-PARTIAL 로 분류된 코멘트 수 |
-| `DECLINED_COUNT` | Step 3 에서 DECLINE 으로 분류된 코멘트 수 |
-
-## 비대칭: `review-passed` 는 무조건, `review-blocked` 는 조건부
+## 비대칭: `review-passed` 는 무조건, `review-blocked` 는 재검토가 결정
 
 - **`review-passed`** — push 가 있었다는 사실만으로 무조건 제거한다. 리뷰된
   커밋이 더 이상 head 가 아니므로 "이 head 는 리뷰됨"이 거짓이 된다.
-- **`review-blocked`** — `ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0` 일 때만
-  제거한다. 즉 최소 한 건을 실제로 반영했고 거절한 건이 하나도 없을 때 —
-  제기된 블로커가 전부 처리됐다는 증거가 이 스킬 안에 있는 유일한 경우다.
-  하나라도 DECLINE 이 있으면 블로커가 남았을 수 있으므로 라벨을 **남긴다**.
-  남기는 쪽이 안전한 방향이다: 라벨 부재는 "차단 해제"가 아니라 "미검증"이라
-  머지 게이트가 어차피 다시 리뷰를 요구한다.
+- **`review-blocked`** — 이 스킬이 직접 떼지 않는다. 이슈 #1616 이후, 뗄지
+  말지는 `references/targeted-rereview.md` 의 타겟 재검토 lane 이 결정하고,
+  실제 쓰기는 `devx_pr_review_all_apply_label` 이 한다(비블로킹 판정이 오면
+  그 함수가 반대 라벨인 `review-blocked` 를 먼저 지운다).
+
+  #1616 이전에는 여기서 전역 카운터(`ACCEPTED_COUNT` / `DECLINED_COUNT`)로
+  판단했다. 그 규칙은 *다른* 리뷰어의 비블로킹 제안을 정당하게 거절한 것만으로
+  라벨을 붙잡아 뒀다 — PR #1609 가 그 사례다. 리뷰어별·심각도별 게이트가
+  그 자리를 대신한다.
+
+  남기는 쪽이 여전히 안전한 방향이다: 라벨 부재는 "차단 해제"가 아니라
+  "미검증"이라 머지 게이트가 어차피 다시 리뷰를 요구한다.
 
 ## 명령
 
@@ -39,6 +39,7 @@ stderr 로 넘어온다.
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_reply_targeted_review.sh"
 
 if [ "$PUSHED_FIXES" -gt 0 ]; then
     if _vl_err=$(_gh_pr_drop_label "$PR_NUMBER" review-passed \
@@ -48,19 +49,21 @@ if [ "$PUSHED_FIXES" -gt 0 ]; then
         echo "[WARN] \`review-passed\` 제거 실패 — 리뷰되지 않은 커밋에 판정이 남아 있다: ${_vl_err}"
     fi
 
-    if [ "$ACCEPTED_COUNT" -gt 0 ] && [ "$DECLINED_COUNT" -eq 0 ]; then
-        if _vl_err=$(_gh_pr_drop_label "$PR_NUMBER" review-blocked \
-                "$TARGET_REPO" "$TARGET_HOST" 2>&1); then
-            echo "[OK] \`review-blocked\` 제거됨 — 제기된 블로커를 전부 반영함"
-        else
-            echo "[WARN] \`review-blocked\` 제거 실패: ${_vl_err}"
-        fi
-    fi
+    # `review-blocked` 는 여기서 떼지 않는다 — targeted-rereview.md 로 넘긴다.
+    DECISION=$(printf '%s\n' "$ORIGINS" |
+        _gh_pr_reply_targeted_lane_decide $BLOCKING_REVIEWERS)
 fi
 ```
 
 `2>&1` 로 잡는 것은 헬퍼가 rc 1 에서 흘려보내는 `gh` 원문 에러다 — 성공/404
-경로에서는 비어 있다.
+경로에서는 비어 있다. `$DECISION` 처리(재검토 호출 / 유지 / 전체 재실행 안내)는
+`references/targeted-rereview.md` § "Step 6 — 게이트와 lane" 이 SSOT 다.
+
+## 절대 금지
+
+이 스킬은 두 라벨 중 어느 것도 **직접 add 하지 않는다**. 비블로킹 재검토
+판정이 실제로 돌아왔을 때 `devx_pr_review_all_apply_label` 이 쓰는 것이
+유일한 경로이고, 재검토를 건너뛴 채 통과로 간주하는 분기는 없다(NF-2).
 
 ## 호스트 고정
 

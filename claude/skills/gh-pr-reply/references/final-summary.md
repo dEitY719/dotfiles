@@ -7,6 +7,10 @@ PR #123 review comments processed: 5 total
   Accepted: 3 (commits abc1234, def5678)
   Declined: 1
   Answered: 1
+  By reviewer:
+    codex  blocking 2/2 accepted · non-blocking 0 (0 declined)
+    agy    blocking 0/0 accepted · non-blocking 3 (3 declined)
+  [OK] 타겟 재검토 통과 — review-blocked 해제, review-passed 적용
   -> All comments replied to.
 ```
 
@@ -18,11 +22,23 @@ PR #123 review comments processed: 5 total
 - **Declined** — count of comments classified DECLINE; held in
   `DECLINED_COUNT`.
 - **Answered** — count of comments classified QUESTION.
+- **By reviewer** — one row per reviewer, rendered from
+  `printf '%s\n' "$ORIGINS" | _gh_pr_reply_origin_tally`
+  (`shell-common/functions/gh_pr_reply_targeted_review.sh`). This is the row
+  that makes "codex's 2 BLOCKERs are fixed, agy's 3 suggestions were
+  declined" readable at a glance — the flat pair above cannot express it,
+  which is exactly how PR #1609 got a stuck `review-blocked` (#1616).
+- **타겟 재검토 line** — the Step 6 lane's outcome, printed verbatim by
+  `_gh_pr_reply_targeted_lane_report`. One of the five rows tabled in
+  `references/targeted-rereview.md` § "Step 7 문구". Always present when
+  `PUSHED_FIXES > 0`; omitted otherwise (no push, no invalidation).
 - **Closing line** — `-> All comments replied to.` confirms the
   politeness contract was met.
-- Step 6 reads `ACCEPTED_COUNT` / `DECLINED_COUNT` too, to decide whether
-  `review-blocked` may be dropped (`references/verdict-label-removal.sh.md`).
-  Both steps use the same counters — never re-derive them.
+- Step 6 reads the same `ORIGINS` stream this table renders, to decide
+  whether the targeted re-review lane may run
+  (`references/verdict-label-removal.sh.md` →
+  `references/targeted-rereview.md`). Both steps use one stream — never
+  re-derive it.
 - **No board-promotion row** — `Approved` is owned by `gh:pr-approve`
   (#1350). This skill's only board write is the Step 6 `In review`
   recovery, which the table does not report.

@@ -40,7 +40,10 @@
 # ---------------------------------------------------------------------------
 # Verdict-label invalidation — SSOT for issue #1563
 # ---------------------------------------------------------------------------
-# `devx:pr-review-all` is the ONLY writer of the two verdict labels:
+# `devx_pr_review_all_apply_label` is the ONLY writer of the two verdict
+# labels — since #1616 it has two callers (`devx:pr-review-all`'s full fan-out
+# and `gh:pr-reply`'s single-reviewer targeted re-review), but still exactly
+# one write path:
 #   review-blocked — at least one reviewer lane returned a blocking verdict
 #   review-passed  — every lane that ran passed, and at least one lane ran
 # Both prove a claim about **one specific head commit**, not about the PR in
@@ -59,13 +62,21 @@
 #   - `review-passed` is dropped UNCONDITIONALLY by all three. Any new head
 #     invalidates "this head was reviewed"; dropping is always the safe
 #     direction because absence means "not verified", not "blocked".
-#   - `review-blocked` is dropped ONLY where the skill actually holds evidence
-#     that every blocker raised was addressed. Today that is exactly one place:
-#     `gh:pr-reply`, and only when ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0
-#     (its Step 3 classification: ACCEPT + ACCEPT-PARTIAL vs DECLINE). A rebase
-#     skill has no such evidence, so it must leave `review-blocked` in place —
-#     that is the safe direction, not a bug.
-#   - No skill may ever ADD either label. Only `devx:pr-review-all` issues them.
+#   - `review-blocked` is never dropped by this primitive. Since #1616 it is
+#     cleared only as the side effect of a NEW verdict: `gh:pr-reply`'s
+#     targeted re-review lane gates on `_gh_pr_reply_targeted_lane_decide`
+#     (per reviewer, per severity — see
+#     claude/skills/gh-pr-reply/references/targeted-rereview.md), and when an
+#     independent `gh:pr-review` re-call comes back non-blocking,
+#     `devx_pr_review_all_apply_label` deletes the opposite label on its way
+#     to writing `review-passed`. The rule this replaced —
+#     `gh:pr-reply` dropping it on a global accepted/declined count — pinned
+#     the label whenever any OTHER reviewer's non-blocking suggestion was
+#     declined (PR #1609). A rebase skill holds no verdict at all, so it must
+#     leave `review-blocked` in place — the safe direction, not a bug.
+#   - No skill may ADD either label by hand, and none may certify its own
+#     work: only a reviewer verdict, through
+#     `devx_pr_review_all_apply_label`, issues them (#1616 NF-2).
 # Consuming reference docs link here instead of restating this rule.
 #
 # _gh_pr_drop_label return codes:
