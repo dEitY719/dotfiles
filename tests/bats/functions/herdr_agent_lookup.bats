@@ -16,8 +16,6 @@
 #         boundary match and the 3-way rc split (0 found / 1 herdr unreachable
 #         / 3 herdr answered but nothing matched).
 # L18-L21 the [status-filter] argument, including `first`-then-filter.
-# L22-L25 herdr_agent_live_cwds + herdr_agent_cwds_match — the batch pair
-#         issue_watcher_cron.sh uses to keep ONE herdr call per tick.
 # L26     the loader reaches this file.
 
 load '../test_helper'
@@ -263,65 +261,11 @@ WT="/w/wt-issue-1569"
 }
 
 # ---------------------------------------------------------------------------
-# L22-L25: the batch pair — one herdr call, many paths
-# ---------------------------------------------------------------------------
-
-@test "L22: live_cwds emits both columns of every agent, one per line" {
-    run_hal "AGENT_JSON='$(_agents_json "/w/a|/w/a/sub|t1|idle|ws-1" "/w/b|/w/b|t2|working|ws-2")'
-             herdr_agent_live_cwds"
-    assert_success
-    assert_output "/w/a
-/w/a/sub
-/w/b
-/w/b"
-}
-
-@test "L23: live_cwds asks herdr exactly once, however many paths follow" {
-    # The constraint that keeps issue-watcher's tick at one round trip: the
-    # batch caller matches locally instead of looping over the lookup.
-    local log="${TEST_TEMP_HOME}/herdr.log"
-    : >"$log"
-    run_hal "HERDR_LOG='$log' AGENT_JSON='$(_agents_json "/w/a|/w/a|t1|idle|ws-1")'
-             _c=\$(herdr_agent_live_cwds)
-             herdr_agent_cwds_match \"\$_c\" /w/a && herdr_agent_cwds_match \"\$_c\" /w/b
-             echo done"
-    assert_success
-    run bash -c "grep -c 'herdr agent list' '$log'"
-    assert_output "1"
-}
-
-@test "L24: cwds_match honours the same boundary as the single-path lookup" {
-    run_hal "_c='/w/a
-/w/wt-1/deep/inside'
-             herdr_agent_cwds_match \"\$_c\" /w/wt-1 && echo under
-             herdr_agent_cwds_match \"\$_c\" /w/wt-11 || echo sibling-no
-             herdr_agent_cwds_match \"\$_c\" '' || echo empty-no"
-    assert_success
-    assert_output "under
-sibling-no
-empty-no"
-}
-
-@test "L25: live_cwds is rc 1 when herdr cannot be asked, rc 0 when it is empty" {
-    run_hal "AGENT_RC=1 herdr_agent_live_cwds; echo \"rc=\$?\""
-    assert_success
-    assert_output "rc=1"
-
-    run_hal "AGENT_JSON='not json' herdr_agent_live_cwds; echo \"rc=\$?\""
-    assert_success
-    assert_output "rc=1"
-
-    run_hal "AGENT_JSON='{\"result\":{\"agents\":[]}}' herdr_agent_live_cwds; echo \"rc=\$?\""
-    assert_success
-    assert_output "rc=0"
-}
-
-# ---------------------------------------------------------------------------
 # L26: the loader reaches this file
 # ---------------------------------------------------------------------------
 
 @test "L26: bash/main.bash auto-sources the helper" {
-    run_in_bash 'command -v herdr_agent_tab_for_cwd >/dev/null && command -v herdr_agent_live_cwds >/dev/null && echo sourced'
+    run_in_bash 'command -v herdr_agent_tab_for_cwd >/dev/null && command -v herdr_agent_path_under >/dev/null && echo sourced'
     assert_success
     assert_output --partial "sourced"
 }
