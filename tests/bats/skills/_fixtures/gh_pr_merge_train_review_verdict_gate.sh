@@ -91,6 +91,9 @@ train_verdict_gate_f3() {
             _gh_pr_drop_label "$_n" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :
             ;;
         2)
+            printf 'skip:review-passed not confirmed for this head — no freshness marker found\n'
+            ;;
+        3)
             printf 'skip:review-passed freshness unknown — marker lookup failed, treating as unverified\n'
             ;;
         *)

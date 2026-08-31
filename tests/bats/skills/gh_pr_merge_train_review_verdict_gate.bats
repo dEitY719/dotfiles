@@ -436,14 +436,14 @@ more text')" '[$c]')
 # round-2 BLOCKER: a transient lookup failure must never destroy a valid
 # review-passed).
 
-@test "freshness: stale is CONFIRMED (rc 1) when the marker sha matches nothing" {
+@test "freshness: ABSENT (rc 2) when the trusted login posted no marker at all" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot 'no marker in sight')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 2 ]
 }
 
-@test "freshness: stale is CONFIRMED (rc 1) when the marker sha does not match head" {
+@test "freshness: MISMATCH (rc 1) when a marker exists but its sha does not match head" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
@@ -457,18 +457,21 @@ more text')" '[$c]')
     assert_success
 }
 
-@test "freshness (BLOCKER fix): a lookup failure is UNDETERMINED (rc 2), not confirmed-stale" {
+@test "freshness (BLOCKER fix): a lookup failure is UNDETERMINED (rc 3), not MISMATCH or ABSENT" {
     _freshness_stub
     STUB_COMMENTS_RC=1
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    [ "$status" -eq 2 ]
+    [ "$status" -eq 3 ]
 }
 
-@test "freshness (BLOCKER fix): stale stays CONFIRMED (rc 1) when the only matching marker is forged" {
+@test "freshness (BLOCKER fix): a forged-only marker (wrong login) reads as ABSENT (rc 2), not MISMATCH" {
+    # The trusted login posted nothing; "attacker" posting a marker (even a
+    # correct-looking one) must never count as evidence either way — it is
+    # simply invisible to the check, same as if no comment existed at all.
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment attacker '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 2 ]
 }
 
 # ---------------------------------------------------------------------
@@ -505,27 +508,36 @@ more text')" '[$c]')
     assert_output 'skip:review-passed label stale — head advanced without invalidation'
 }
 
-@test "F-3 freshness: a review-passed label with NO marker at all is skipped" {
-    # A manual push, or a repo that never wired the writer, both look like
-    # this. #1601's whole point: absence of proof reads as stale, not fresh.
+@test "F-3 freshness: a review-passed label with NO marker at all is skipped WITHOUT dropping it" {
+    # A pre-#1601 label, a manual push, or a repo that never wired the
+    # writer all look like this. Absence alone is not proof the label is
+    # wrong for this head (agy, PR #1608 review, both rounds) — route as
+    # unverified, but never delete on a guess.
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot 'plain comment, no marker')" '[$c]')
     run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
     assert_success
-    assert_output 'skip:review-passed label stale — head advanced without invalidation'
+    assert_output 'skip:review-passed not confirmed for this head — no freshness marker found'
+    run cat "$STUB_LOG"
+    refute_output --partial 'DELETE'
 }
 
-@test "F-3 freshness (BLOCKER fix): a review-passed label with only a FORGED marker is skipped" {
+@test "F-3 freshness (BLOCKER fix): a review-passed label with only a FORGED marker is skipped WITHOUT dropping it" {
     # The exact PR #1608 review finding: a non-pipeline commenter's marker
-    # must never re-arm a label the gate would otherwise (correctly) skip.
+    # must never re-arm a label the gate would otherwise (correctly) skip —
+    # and it must not count as evidence of staleness either. To the trusted
+    # login's check this looks exactly like ABSENT, not MISMATCH, so it must
+    # not trigger the self-heal delete.
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment attacker '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
     assert_success
-    assert_output 'skip:review-passed label stale — head advanced without invalidation'
+    assert_output 'skip:review-passed not confirmed for this head — no freshness marker found'
+    run cat "$STUB_LOG"
+    refute_output --partial 'DELETE'
 }
 
-@test "F-3 freshness: a CONFIRMED-stale PR self-heals by dropping the label" {
+@test "F-3 freshness: a MISMATCH PR self-heals by dropping the label" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" '[$c]')
     run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot

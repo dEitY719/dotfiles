@@ -21,7 +21,8 @@ freshness check below (#1601) is the one exception: it costs one
 | `review-blocked` (regardless of `review-passed`) | `[SKIPPED] review-blocked — reviewer verdict is blocking` |
 | neither label | `[SKIPPED] review not verified — no review-passed label` |
 | `review-passed` only, marker sha matches current head | stays in the queue |
-| `review-passed` only, marker sha CONFIRMED stale/missing (#1601) | `[SKIPPED] review-passed label stale — head advanced without invalidation` (self-heals: drops the label) |
+| `review-passed` only, marker exists but sha MISMATCHES current head (#1601) | `[SKIPPED] review-passed label stale — head advanced without invalidation` (self-heals: drops the label) |
+| `review-passed` only, no marker at all from the trusted login (#1601) | `[SKIPPED] review-passed not confirmed for this head — no freshness marker found` (label left untouched) |
 | `review-passed` only, freshness lookup itself failed (#1601) | `[SKIPPED] review-passed freshness unknown — marker lookup failed, treating as unverified` (label left untouched) |
 
 ```bash
@@ -46,19 +47,30 @@ else
     _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID" "$ME"
     case $? in
     1)
-        echo "[SKIPPED] review-passed label stale — head advanced without invalidation"
-        # Self-heal: the lookup CONFIRMED the marker is missing/stale, so
+        # MISMATCH — a marker exists but names a different head. Positive
+        # proof the label is wrong for this commit, so self-heal is safe:
         # drop it here too. Best-effort — a failed drop still leaves this
         # tick's [SKIPPED] correct; it only means the next tick pays for the
         # same sha check again.
+        echo "[SKIPPED] review-passed label stale — head advanced without invalidation"
         _gh_pr_drop_label "$N" review-passed "$TARGET_REPO" "$TARGET_HOST" >/dev/null 2>&1 || :
         ;;
     2)
-        # UNDETERMINED, not confirmed — the lookup itself failed. Skip this
-        # tick (fail-closed, same as any other unreadable state) but never
-        # delete the label on the strength of a check that never completed:
-        # a network blip must not destroy an otherwise-valid review-passed
-        # (PR #1608 review, agy round-2 BLOCKER).
+        # ABSENT — no marker at all, but the lookup succeeded. Route as
+        # unverified (never merge on it) but do NOT delete: absence alone
+        # doesn't prove the label is wrong for THIS head, only that it
+        # cannot be proven right — e.g. a pre-#1601 label, or a marker post
+        # that itself failed. Deleting every such label the moment this
+        # feature ships was flagged as an unacceptable operational cliff
+        # across two independent PR #1608 review rounds (agy).
+        echo "[SKIPPED] review-passed not confirmed for this head — no freshness marker found"
+        ;;
+    3)
+        # UNDETERMINED — the lookup itself failed. Skip this tick (fail-
+        # closed, same as any other unreadable state) but never delete the
+        # label on the strength of a check that never completed: a network
+        # blip must not destroy an otherwise-valid review-passed (PR #1608
+        # review, agy round-2 BLOCKER).
         echo "[SKIPPED] review-passed freshness unknown — marker lookup failed, treating as unverified"
         ;;
     esac
@@ -150,34 +162,49 @@ as trusted:
   is the escape hatch — set it to the actual producer identity when it
   differs from `gh api user -q .login`'s answer in the consuming context.
 
-### Confirmed vs. undetermined staleness (PR #1608 review, agy round-2 BLOCKER)
+### Mismatch, absence, and undetermined are three different facts (PR #1608 review, agy rounds 2 and 3)
 
-"No marker found" and "couldn't check for a marker" are different facts, and
-the ROUTING decision (`[SKIPPED]` this tick) is the same for both — but the
-SELF-HEAL decision (delete the label) is not. An earlier version of this fix
-collapsed the two: any failure inside
-`_gh_pr_merge_train_review_passed_marker_sha` — including a plain `gh api`
-network blip, an expired token, or a rate limit — produced the same empty
-stdout as a genuinely absent marker, so the caller could not tell "the head
-really was never re-reviewed" from "I have no idea, the request itself
-failed." Treating both as CONFIRMED-stale meant a transient lookup failure
-would trigger `_gh_pr_drop_label`, permanently destroying a `review-passed`
-label that may have been perfectly valid — turning a cheap, retriable skip
-into un-recoverable damage the next successful lookup cannot undo.
+Only ONE of the three ways a marker check can come back short of FRESH is
+positive proof the label is wrong for this head. Collapsing any pair of them
+into the same self-heal decision either destroys data on a guess or accepts
+a real gap:
 
-`_gh_pr_merge_train_review_passed_marker_sha`'s own exit code now separates
-the two: `0` means the lookup completed (the marker may still be absent —
-that is a confirmed fact), non-zero means the lookup itself did not
-complete. `_gh_pr_merge_train_review_passed_stale` folds that into its own
-three-way exit code (`0` fresh / `1` stale-confirmed / `2`
-stale-undetermined), and the caller above only calls `_gh_pr_drop_label` on
-`1`. `2` still `[SKIPPED]`s the PR this tick — a network blip must not
-authorize a merge either — it just leaves the label alone for the next tick
-to re-check.
+- **MISMATCH (rc 1)** — a marker from the trusted login exists, but its sha
+  names a different commit. This is direct evidence: the reviewed head is
+  provably not the current one (a force-push moved past it, the original
+  #1601 scenario). Self-heal (drop the label) is safe here — the caller
+  isn't guessing, it's acting on proof.
+- **ABSENT (rc 2)** — the lookup succeeded and found no marker at all from
+  the trusted login. This looks identical whether the label was applied
+  before this freshness check existed, by a future skill that legitimately
+  never posts the marker, or genuinely forged — there is no way to tell
+  those apart from absence alone. An earlier version of this fix treated
+  ABSENT the same as MISMATCH and self-healed on it too, which meant every
+  `review-passed` PR open at rollout — having no marker for the simple
+  reason the mechanism didn't exist when it was labeled — would have its
+  label destructively stripped the moment this feature shipped. agy flagged
+  exactly this as a BLOCKER independently in **both** review rounds (2 and
+  3) before the distinction existed. The fix routes ABSENT PRs as unverified
+  (never merges on the strength of an unconfirmed label) without touching
+  the label — a plain re-review clears it exactly as cheaply as a delete-
+  and-relabel cycle would have, so there is nothing to gain by deleting.
+- **UNDETERMINED (rc 3)** — the lookup itself failed (network, auth, rate
+  limit) or the login was invalid, so nothing was confirmed either way.
+  Same treatment as ABSENT — route as unverified, never touch the label —
+  for the same reason: a transient blip is not evidence, and destroying a
+  possibly-valid label on a guess turns a cheap, retriable skip into
+  un-recoverable damage the next successful lookup cannot undo (agy
+  round-2 BLOCKER, the original motivation for splitting this rc out at
+  all before ABSENT was split from it too).
 
-Neither outcome is an F-5 attempt, and neither is ever `[FAILED]`: a withheld
-verdict is a working review, not a broken train (the same rule
-`report-format.md` states for the delegated-review reasons).
+`_gh_pr_merge_train_review_passed_marker_sha`'s own exit code carries the
+first half of this split (`0` lookup completed / non-zero lookup failed);
+`_gh_pr_merge_train_review_passed_stale` folds it into the full four-way
+code above, and the caller only calls `_gh_pr_drop_label` on `1`.
+
+Neither ABSENT nor UNDETERMINED is an F-5 attempt, and neither is ever
+`[FAILED]`: a withheld verdict is a working review, not a broken train (the
+same rule `report-format.md` states for the delegated-review reasons).
 
 ## Why absence is blocking
 
