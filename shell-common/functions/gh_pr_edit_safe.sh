@@ -53,25 +53,26 @@
 # gh:pr-resolve-conflict force-pushing over a reviewed commit).
 #
 # _gh_pr_drop_label is that single shared primitive. Consumers:
-#   gh:pr-reply             Step 6 — after `git push` of the fix commits
+#   gh:pr-reply             Step 6 — `review-blocked` once Step 5 completes,
+#                           `review-passed` after `git push` of the fixes
 #   gh:pr-resolve-conflict  Step 5 — after a successful --force-with-lease
 #   gh:pr-resolve-outdated  Step 5 — after a successful --force-with-lease
 #
-# The asymmetry rule:
-#   - `review-passed` is dropped UNCONDITIONALLY by all three (gh:pr-reply,
-#     gh:pr-resolve-conflict, gh:pr-resolve-outdated). Any new head
+# The asymmetry rule (both labels drop unconditionally; what differs is which
+# skill may drop which, and on what precondition):
+#   - `review-passed` is dropped UNCONDITIONALLY by all three. Any new head
 #     invalidates "this head was reviewed"; dropping is always the safe
 #     direction because absence means "not verified", not "blocked".
 #   - `review-blocked` is dropped by exactly one of the three, `gh:pr-reply`
 #     — UNCONDITIONALLY as well, once Step 5's "reply to every comment"
 #     contract is satisfied (#1634). That completion is the only
 #     precondition: it holds regardless of PUSHED_FIXES and regardless of
-#     the ACCEPT/DECLINE ratio, symmetric with `review-passed` above. The
-#     rule this replaced — a global accepted/declined count — pinned the
-#     label whenever any OTHER reviewer's non-blocking suggestion was
-#     declined (PR #1609). #1616's targeted re-review lane (per reviewer,
-#     per severity — see
-#     claude/skills/gh-pr-reply/references/targeted-rereview.md) narrowed
+#     the ACCEPT/DECLINE ratio. The rule this replaced — a global
+#     accepted/declined count — pinned the label whenever any OTHER
+#     reviewer's non-blocking suggestion was declined (PR #1609). #1616's
+#     targeted re-review lane, gated on `_gh_pr_reply_targeted_lane_decide`
+#     (per reviewer, per severity — see
+#     claude/skills/gh-pr-reply/references/targeted-rereview.md), narrowed
 #     that, but still withheld removal when a reviewer's own BLOCKER item
 #     was declined with justification rather than fixed (PR #1630); #1634
 #     removes that remaining gate. The lane still runs when
