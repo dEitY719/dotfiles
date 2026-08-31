@@ -136,11 +136,13 @@ _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 _PMT_SETTLE_SECONDS="${PMT_SETTLE_SECONDS:-13}"
 # Gap between settle polls, and how many pane lines each poll reads — the twins
 # of _IW_SETTLE_POLL_SLEEP / _IW_SETTLE_READ_LINES, overridable (to 0) for the
-# same reason _PMT_IDLE_POLL_SLEEP is.
+# same reason _PMT_IDLE_POLL_SLEEP is. 15, not 3 — see _IW_SETTLE_READ_LINES
+# for the live herdr 0.7.5 test that found a 3-line window never reaches the
+# banner/input row at all (PR #1611 review).
 _PMT_SETTLE_POLL_SLEEP="${PMT_SETTLE_POLL_SLEEP:-1}"
-_PMT_SETTLE_READ_LINES="3"
+_PMT_SETTLE_READ_LINES="15"
 # The pane text herdr shows while claude is up but unusable (#1561). Stable
-# across reads, so the "two frames agree" test alone would take it for ready.
+# across reads, so the "frames agree" test alone would take it for ready.
 _PMT_SETTLE_NOT_READY_MARK="Not logged in"
 _PMT_PROMPT_ATTEMPT_MAX="3"
 
@@ -694,14 +696,15 @@ _pmt_pane_text() {
     printf '%s' "${_text}"
 }
 
-# True when two consecutive pane reads say the agent is listening.
-#   $1 = this read, $2 = the previous one
+# True when three consecutive pane reads say the agent is listening.
+#   $1 = this read, $2 = the previous one, $3 = the one before that
 #
 # The twin of _iw_pane_settled, whose comment carries the reasoning for all
-# three conditions — non-empty, identical, and not the login banner.
+# four conditions — non-empty, identical across all three, not the login
+# banner, and why three-in-a-row (not two) since PR #1611's 5th review pass.
 _pmt_pane_settled() {
     [ -n "$1" ] || return 1
-    [ "$1" = "$2" ] || return 1
+    [ "$1" = "$2" ] && [ "$2" = "$3" ] || return 1
     case "$1" in
     *"${_PMT_SETTLE_NOT_READY_MARK}"*) return 1 ;;
     esac
@@ -734,7 +737,7 @@ _pmt_settle_max_polls() {
 # ready signal warns and proceeds, exactly the pre-#1570 behaviour. The poll
 # can only make the wait shorter, never introduce a new failure mode.
 _pmt_settle() {
-    local _agent="$1" _i=0 _prev="" _text _now _deadline="" _max_polls
+    local _agent="$1" _i=0 _prev="" _prev2="" _text _now _deadline="" _max_polls
 
     [ "${_PMT_SETTLE_SECONDS}" = "0" ] && return 0
     # A fractional cap cannot bound a poll count; it still means the flat wait
@@ -762,7 +765,8 @@ _pmt_settle() {
             [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
         fi
         _text=$(_pmt_pane_text "${_agent}")
-        ! _pmt_pane_settled "${_text}" "${_prev}" || return 0
+        ! _pmt_pane_settled "${_text}" "${_prev}" "${_prev2}" || return 0
+        _prev2="${_prev}"
         _prev="${_text}"
         _i=$((_i + 1))
         [ "${_i}" -lt "${_max_polls}" ] || break

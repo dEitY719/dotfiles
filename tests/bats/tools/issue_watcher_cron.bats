@@ -1483,22 +1483,26 @@ _assert_not_hung() {
     _run_tick
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11"
-    # Two agreeing reads end the poll, so one gap is spent, not thirteen.
-    [ "$(_log_count '^sleep 1$')" -eq 1 ]
+    # Three agreeing reads end the poll (PR #1611 review, 5th pass — two was
+    # not enough evidence the input loop, not just the render, had settled),
+    # so two gaps are spent, not thirteen.
+    [ "$(_log_count '^sleep 1$')" -eq 2 ]
     refute_output --partial "never settled"
 }
 
 @test "issue_watcher_cron: the settle poll reads the pane, not the sequence counter" {
     _run_tick
     assert_success
-    _assert_logged "agent read iw-dotfiles-issue-11 --lines 3 --format text"
+    # 15 lines, not 3 (PR #1611 review, 5th pass) — a real pane's banner and
+    # input row sit above what a 3-line tail window ever reaches.
+    _assert_logged "agent read iw-dotfiles-issue-11 --lines 15 --format text"
 }
 
 @test "issue_watcher_cron: the settle poll happens after the idle check, not before" {
     _run_tick
     assert_success
     _idle_line=$(grep -n "agent get iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
-    _settle_line=$(grep -n "agent read iw-dotfiles-issue-11 --lines 3" "${_LOG}" | head -1 | cut -d: -f1)
+    _settle_line=$(grep -n "agent read iw-dotfiles-issue-11 --lines 15" "${_LOG}" | head -1 | cut -d: -f1)
     _prompt_line=$(grep -n "agent prompt iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
     [ "${_idle_line}" -lt "${_settle_line}" ]
     [ "${_settle_line}" -lt "${_prompt_line}" ]
@@ -1531,8 +1535,9 @@ _assert_not_hung() {
     _run_tick "HERDR_SETTLE_READ_SEQUENCE=~|~|> claude ready"
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11"
-    # Reads 1-2 are empty, 3 and 4 agree — three gaps, still well inside 13.
-    [ "$(_log_count '^sleep 1$')" -eq 3 ]
+    # Reads 1-2 are empty, 3-5 agree (three-in-a-row, PR #1611 review 5th
+    # pass) — four gaps, still well inside 13.
+    [ "$(_log_count '^sleep 1$')" -eq 4 ]
     refute_output --partial "never settled"
 }
 
@@ -1549,7 +1554,7 @@ _assert_not_hung() {
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11"
     _refute_logged "sleep "
-    _refute_logged "agent read iw-dotfiles-issue-11 --lines 3"
+    _refute_logged "agent read iw-dotfiles-issue-11 --lines 15"
 }
 
 @test "issue_watcher_cron: IW_SETTLE_SECONDS caps the poll, not one flat sleep" {
@@ -1567,7 +1572,7 @@ _assert_not_hung() {
     assert_success
     _assert_logged "sleep 0.5"
     _assert_logged "agent prompt iw-dotfiles-issue-11"
-    _refute_logged "agent read iw-dotfiles-issue-11 --lines 3"
+    _refute_logged "agent read iw-dotfiles-issue-11 --lines 15"
 }
 
 @test "issue_watcher_cron: the settle poll interval is overridable" {
