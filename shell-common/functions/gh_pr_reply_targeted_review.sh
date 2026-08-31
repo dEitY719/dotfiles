@@ -260,7 +260,7 @@ _gh_pr_reply_review_passed_report() {
 # as before. Only a usage error is rc 2.
 _gh_pr_reply_apply_review_passed() {
     local _pr="${1-}" _repo="${2-}" _host="${3-}" _head_sha="${4-}"
-    local _token _write _add _marker
+    local _token _write _ok_line _fail_line
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
         cat >/dev/null
@@ -287,19 +287,14 @@ _gh_pr_reply_apply_review_passed() {
     fi
 
     _write=$(devx_pr_review_all_write_label review-passed "$_pr" "$_repo" "$_host" "$_head_sha")
-    _add=$(printf '%s\n' "$_write" | sed -n 's/^add=//p')
-    _marker=$(printf '%s\n' "$_write" | sed -n 's/^marker=//p')
-
-    # shellcheck disable=SC2016  # backticks are markdown, not substitution
-    case "$_add" in
-    ok) _gh_pr_reply_review_passed_report "$_token" ;;
-    rc3) printf '[WARN] label `review-passed` missing in %s — provision it first (gh:label-bootstrap)\n' "$_repo" ;;
-    no-helper) printf '[WARN] _gh_pr_edit_safe_label unavailable — PR #%s left unlabelled\n' "$_pr" ;;
-    *) printf '[WARN] PR #%s review-passed 적용 실패 — 미검증으로 취급\n' "$_pr" ;;
-    esac
-    if [ "$_marker" = "failed" ]; then
-        printf '[WARN] review-passed freshness marker failed to post for PR #%s — a later merge-train check may see it as stale\n' "$_pr"
-    fi
+    # Reporting is shared with `devx_pr_review_all_apply_label`'s write path
+    # (`devx_pr_review_all_report_write_result`, devx_pr_review_all.sh) — only
+    # the `ok`/generic-failure lines differ between the two callers, which is
+    # what the two trailing arguments supply.
+    _ok_line=$(_gh_pr_reply_review_passed_report "$_token")
+    _fail_line=$(printf '[WARN] PR #%s review-passed 적용 실패 — 미검증으로 취급' "$_pr")
+    devx_pr_review_all_report_write_result "$_write" "$_pr" "$_repo" review-passed \
+        "$_ok_line" "$_fail_line"
     return 0
 }
 
