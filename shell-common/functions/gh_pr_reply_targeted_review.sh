@@ -250,40 +250,29 @@ EOF
 #     <login>. Empty (rc 0) when nothing matches, when <login> fails
 #     validation, or when stdin is not the expected JSON.
 #
-# Deliberately a local `jq` pass and NOT a `gh api` call of its own (unlike
-# `_gh_pr_merge_train_review_passed_marker_sha`, which is invoked standalone):
-# `gh:pr-reply` fetches the PR's comments ONCE and feeds the same dump to both
-# readers below, and turning these into network callers would re-fetch it per
-# probe for no new information.
-#
-# `--arg` keeps the login a jq DATA value, so it can never close the filter's
-# quoting and inject a filter of its own. Validation on top of that mirrors
-# `_gh_pr_merge_train_review_passed_marker_sha` exactly: a plain username
-# (`[A-Za-z0-9-]+`), or that shape with one literal trailing `[bot]` — the
-# form GitHub gives App identities in `.user.login` (`github-actions[bot]`),
-# which a bracket-rejecting validator would lock out of trusting its own
-# markers. An empty or invalid login yields EMPTY output — never a fallback
-# to "match every author", which is the vulnerability being closed.
-#
-# stdin is drained before any early return so a piped producer never takes an
-# EPIPE on the reject path.
+# A thin delegator to the canonical implementation,
+# `_devx_pr_review_all_login_bodies` (devx_pr_review_all.sh) — same
+# validation (plain username, or that shape with one literal trailing
+# `[bot]`, mirroring `_gh_pr_merge_train_review_passed_marker_sha`), same
+# `--arg`-guarded `jq` filter, same fail-closed-on-empty-or-invalid-login
+# contract. Full rationale lives on that function's header; do not
+# re-duplicate it here — this file used to carry its own byte-identical copy
+# and the two had already drifted in indentation (#1639 cleanup). On-demand
+# sources devx_pr_review_all.sh the same way `_gh_pr_reply_apply_review_passed`
+# already does for `devx_pr_review_all_write_label` below, so this still works
+# when `gh_pr_reply_targeted_review.sh` is sourced standalone (bats). A source
+# failure fails closed — empty output, never "match every author" — exactly
+# like an invalid login would.
 _gh_pr_reply_login_bodies() {
-    local _login="${1-}" _base _json
-
-    _json=$(cat)
-
-    _base="$_login"
-    case "$_base" in
-    *'[bot]') _base="${_base%\[bot\]}" ;;
-    esac
-    case "$_base" in
-    '' | *[!A-Za-z0-9-]*) return 0 ;;
-    esac
-
-    printf '%s' "$_json" |
-        jq -r --arg login "$_login" \
-            '.[] | select(.user.login == $login) | .body' 2>/dev/null
-    return 0
+    if ! command -v _devx_pr_review_all_login_bodies >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/devx_pr_review_all.sh" 2>/dev/null || :
+    fi
+    if ! command -v _devx_pr_review_all_login_bodies >/dev/null 2>&1; then
+        cat >/dev/null
+        return 0
+    fi
+    _devx_pr_review_all_login_bodies "${1-}"
 }
 
 # Raw PR comments JSON on stdin (the array
