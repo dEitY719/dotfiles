@@ -253,6 +253,13 @@ teardown() {
 # closes that gap by verifying a `<!-- review-verdict:review-passed:<sha> -->`
 # marker (posted by `devx_pr_review_all_apply_label`) against the PR's actual
 # current head, instead of trusting label presence alone.
+#
+# Since #1615 the lookup is bounded to AT MOST TWO `gh api` calls no matter
+# how long the PR's comment history is: call 1 fetches page 1 with `-i` (so
+# the response headers arrive on stdout ahead of the body) and reads the
+# `Link: ...; rel="last"` header; if that says there is more than one page it
+# jumps STRAIGHT to the last one (call 2), never walking the pages between.
+# The stub below therefore has to answer BOTH call shapes.
 
 _freshness_stub() {
     STUB_LOG="${BATS_TEST_TMPDIR}/gh.log"
@@ -263,29 +270,65 @@ _freshness_stub() {
     # faithfully: the stub replays the REAL `--jq` expression the function
     # under test built (with its `select(.user.login == "...")` clause)
     # against this JSON via a real `jq`, rather than re-deriving the filter
-    # logic in bash by hand.
+    # logic in bash by hand. It is the body of PAGE 1.
     : "${STUB_COMMENTS_JSON:=[]}"
+    # STUB_LAST_PAGE: unset or 1 = single-page PR, so the page-1 response
+    # carries NO `Link` header at all (the default, which is what every
+    # pre-#1615 test here exercises). Set it to N>1 to simulate an N-page PR:
+    # the page-1 response then grows a `rel="last"` Link header pointing at
+    # page N, and STUB_PAGE_N_COMMENTS_JSON becomes the body served for the
+    # page=N call.
+    : "${STUB_PAGE_N_COMMENTS_JSON:=[]}"
     # shellcheck disable=SC2317  # invoked indirectly by the function under test
     gh() {
         printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$STUB_LOG"
         case "$*" in
         *"/comments"*"--jq"*)
             [ "${STUB_COMMENTS_RC:-0}" -eq 0 ] || return "$STUB_COMMENTS_RC"
-            # Find the argument that FOLLOWS a literal `--jq`, positionally —
-            # never a fixed index. The real call's flag order has already
-            # shifted once (per_page=100 inserted a `-f`/value pair before the
-            # path), so hardcoding "the 5th arg" silently reads the wrong
-            # token the next time flags move.
+            # Scan positionally — never a fixed index. The real call's flag
+            # order has already shifted twice (per_page=100, then `-i -X GET`
+            # plus an explicit page), so hardcoding "the 5th arg" silently
+            # reads the wrong token the next time flags move.
             _fs_jq_expr=""
             _fs_want_next=0
+            _fs_page=1
+            _fs_include_headers=0
             for _fs_arg in "$@"; do
                 if [ "$_fs_want_next" -eq 1 ]; then
                     _fs_jq_expr="$_fs_arg"
-                    break
+                    _fs_want_next=0
+                    continue
                 fi
-                [ "$_fs_arg" = "--jq" ] && _fs_want_next=1
+                case "$_fs_arg" in
+                --jq) _fs_want_next=1 ;;
+                -i) _fs_include_headers=1 ;;
+                # `page=N`, not `per_page=N` — the latter starts with `per_`.
+                page=*) _fs_page="${_fs_arg#page=}" ;;
+                esac
             done
-            printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$_fs_jq_expr"
+
+            if [ "$_fs_include_headers" -eq 1 ]; then
+                # Mirror what real `gh api -i` emits (verified against gh
+                # 2.45.0): an LF-terminated status line, CRLF-terminated
+                # headers, then a lone-CR blank line before the body.
+                printf 'HTTP/1.1 200 OK\n'
+                printf 'Content-Type: application/json; charset=utf-8\r\n'
+                # Decoy: this header's VALUE contains the word "Link", so a
+                # parser that greps for `Link` unanchored reads garbage.
+                printf 'Access-Control-Expose-Headers: ETag, Link, Location\r\n'
+                if [ "${STUB_LAST_PAGE:-1}" -gt 1 ]; then
+                    printf 'Link: <https://api.github.com/repositories/1/issues/11/comments?page=2&per_page=100>; rel="next", '
+                    printf '<https://api.github.com/repositories/1/issues/11/comments?page=%s&per_page=100>; rel="last"\r\n' \
+                        "$STUB_LAST_PAGE"
+                fi
+                printf '\r\n'
+            fi
+
+            if [ "$_fs_page" = "1" ]; then
+                printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$_fs_jq_expr"
+            else
+                printf '%s' "$STUB_PAGE_N_COMMENTS_JSON" | jq -r "$_fs_jq_expr"
+            fi
             return 0
             ;;
         *)
@@ -425,6 +468,59 @@ more text')" '[$c]')
     assert_failure
     assert_output ''
     run cat "$STUB_LOG"
+    assert_output ''
+}
+
+# ── #1615: the lookup must cost a BOUNDED number of gh calls ──
+# The first cut used `gh api --paginate`, which walks every comment page on
+# every merge-train tick — one HTTP round trip per 100 comments, forever.
+# These two tests are the regression bound: 1 call for a single-page PR
+# (no cost regression on the common case), 2 calls for ANY multi-page PR.
+
+@test "freshness (#1615): a single-page PR still costs exactly ONE gh call" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:abc1234 -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output 'abc1234'
+    # No `Link` header came back, so page 1 WAS the whole PR — the body from
+    # call 1 must be reused, never re-fetched.
+    run wc -l <"$STUB_LOG"
+    assert_output '1'
+}
+
+@test "freshness (#1615): a 37-page PR costs exactly TWO gh calls and jumps straight to page 37" {
+    _freshness_stub
+    STUB_LAST_PAGE=37
+    # An OLD marker sits on page 1; the CURRENT one is on the last page.
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" '[$c]')
+    STUB_PAGE_N_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:9999999 -->')" '[$c]')
+
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output '9999999'
+
+    # (b) two calls — NOT 37. This is the whole point of #1615.
+    run wc -l <"$STUB_LOG"
+    assert_output '2'
+
+    # (c) the second call asks for page 37 directly, not page 2 or any
+    # intermediate page.
+    run sed -n '2p' "$STUB_LOG"
+    assert_output --partial 'page=37'
+    run cat "$STUB_LOG"
+    refute_output --partial 'page=2 '
+}
+
+@test "freshness (#1615): a failure on the LAST-page call is UNDETERMINED (rc 1), not a confirmed absence" {
+    _freshness_stub
+    STUB_LAST_PAGE=4
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" '[$c]')
+    # Fail every /comments call; the function must not fall back to page 1's
+    # stale marker, and must not report "no marker" either.
+    STUB_COMMENTS_RC=1
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_failure
     assert_output ''
 }
 
