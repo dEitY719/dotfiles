@@ -271,9 +271,21 @@ _freshness_stub() {
         case "$*" in
         *"/comments"*"--jq"*)
             [ "${STUB_COMMENTS_RC:-0}" -eq 0 ] || return "$STUB_COMMENTS_RC"
-            # $5 is the `--jq` expression argument in the real call:
-            # api(1) --paginate(2) <path>(3) --jq(4) <expr>(5).
-            printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$5"
+            # Find the argument that FOLLOWS a literal `--jq`, positionally —
+            # never a fixed index. The real call's flag order has already
+            # shifted once (per_page=100 inserted a `-f`/value pair before the
+            # path), so hardcoding "the 5th arg" silently reads the wrong
+            # token the next time flags move.
+            _fs_jq_expr=""
+            _fs_want_next=0
+            for _fs_arg in "$@"; do
+                if [ "$_fs_want_next" -eq 1 ]; then
+                    _fs_jq_expr="$_fs_arg"
+                    break
+                fi
+                [ "$_fs_arg" = "--jq" ] && _fs_want_next=1
+            done
+            printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$_fs_jq_expr"
             return 0
             ;;
         *)
@@ -378,6 +390,38 @@ more text')" '[$c]')
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' 'bot" | .'
+    assert_failure
+    assert_output ''
+    run cat "$STUB_LOG"
+    assert_output ''
+}
+
+# ── PR #1608 round-2 review (agy BLOCKER): bot logins ──
+# GitHub App identities carry a literal `[bot]` suffix in `.user.login`
+# (`github-actions[bot]`, `dependabot[bot]`). The first cut of the validator
+# rejected every bracket, so a pipeline authenticating as any bot account
+# could never validate a single marker.
+
+@test "freshness (BLOCKER fix): a bot login (name[bot]) is accepted" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment 'github-actions[bot]' '<!-- review-verdict:review-passed:abc1234 -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' 'github-actions[bot]'
+    assert_success
+    assert_output 'abc1234'
+}
+
+@test "freshness (BLOCKER fix): a bot login only matches its own marker, not another login's" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment attacker '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' 'dependabot[bot]'
+    assert_success
+    assert_output ''
+}
+
+@test "freshness (BLOCKER fix): a login that merely CONTAINS brackets (not a bot suffix) is still rejected" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment 'bot[x]y' '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' 'bot[x]y'
     assert_failure
     assert_output ''
     run cat "$STUB_LOG"
