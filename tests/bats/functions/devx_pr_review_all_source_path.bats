@@ -2,7 +2,7 @@
 # tests/bats/functions/devx_pr_review_all_source_path.bats
 # Issue #1612 — sourcing devx_pr_review_all.sh from a clean, non-interactive
 # shell (no dotfiles rc, no $SHELL_COMMON — the exact shape of Claude Code's
-# own Bash tool) must define all five public functions, whether the caller
+# own Bash tool) must define every public function, whether the caller
 # sources the file by a relative or an absolute path. #1612 found several
 # skill docs telling agents to source it via a bare `${SHELL_COMMON}/...`
 # with no `$HOME` fallback; when that expands empty, an agent can fall back
@@ -13,7 +13,7 @@
 
 load '../test_helper'
 
-FUNCS="devx_pr_review_all_parse devx_pr_review_all_verdict devx_pr_review_all_aggregate devx_pr_review_all_lane_block devx_pr_review_all_apply_label"
+FUNCS="devx_pr_review_all_parse devx_pr_review_all_verdict devx_pr_review_all_aggregate devx_pr_review_all_lane_block devx_pr_review_all_already_reviewed devx_pr_review_all_apply_label"
 
 setup() {
     setup_isolated_home
@@ -38,19 +38,19 @@ run_clean_source() {
     "
 }
 
-@test "relative-path source defines all five functions in a clean shell" {
+@test "relative-path source defines every public function in a clean shell" {
     run run_clean_source "shell-common/functions/devx_pr_review_all.sh"
     assert_success
     assert_output --partial "ALL_DEFINED"
 }
 
-@test "absolute-path source defines all five functions in a clean shell (positive control)" {
+@test "absolute-path source defines every public function in a clean shell (positive control)" {
     run run_clean_source "\"${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh\""
     assert_success
     assert_output --partial "ALL_DEFINED"
 }
 
-@test "\${SHELL_COMMON:-\$HOME/dotfiles/shell-common} fallback idiom defines all five functions when SHELL_COMMON is unset" {
+@test "\${SHELL_COMMON:-\$HOME/dotfiles/shell-common} fallback idiom defines every public function when SHELL_COMMON is unset" {
     run run_clean_source '"${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/devx_pr_review_all.sh"'
     assert_success
     assert_output --partial "ALL_DEFINED"
