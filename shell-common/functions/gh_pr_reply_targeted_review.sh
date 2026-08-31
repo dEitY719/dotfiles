@@ -1,9 +1,8 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/functions/gh_pr_reply_targeted_review.sh
-# Per-reviewer / per-severity gate for gh:pr-reply's `review-blocked`
-# invalidation, plus the cheap targeted re-review lane it authorizes
-# (issue #1616).
+# gh:pr-reply's severity gate: the per-item origin tokens (#1616) and the
+# `review-passed` decision they now feed (#1636).
 #
 # Before #1616 the rule was one global counter pair —
 # `ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0`. A legitimately DECLINEd
@@ -12,14 +11,25 @@
 # BLOCKERs, both fixed; agy raised 3 FOLLOW-UPs, all validly declined), and
 # the only way out was a full 5-lane devx:pr-review-all re-run.
 #
-# The replacement asks a narrower question, per reviewer: "did THIS
-# reviewer's blocking-severity items all get accepted?" Only when every
-# originally-blocking reviewer answers yes is the targeted lane authorized;
-# gh:pr-reply still never certifies itself (NF-2) — the label flip is
-# decided by an independent gh:pr-review re-call whose verdict flows through
-# `devx_pr_review_all_apply_label` unchanged.
+# #1616 replaced that with a per-reviewer / per-severity question and a cheap
+# targeted `gh:pr-review --paths` re-call that had to come back non-blocking
+# before `review-passed` could be applied. #1636 removes that re-call: it was
+# the remaining cost and failure point, and a jammed `gh:pr-merge-train` was
+# the recurring symptom.
 #
-# SSOT for the procedure: claude/skills/gh-pr-reply/references/targeted-rereview.md
+# NF-2, as redefined by #1636: "never self-certify" is DELIBERATELY RELAXED on
+# this one path. gh:pr-reply now applies `review-passed` from its own
+# judgment — every BLOCKER-severity item ACCEPT/ACCEPT-PARTIAL, or none
+# raised — with no external AI CLI in the loop. The verification link that
+# remains is the division of labour: the BLOCKERs were FOUND by an external
+# reviewer (devx:pr-review-all, which still fans out on every PR and still
+# owns `review-blocked`); gh:pr-reply only confirms they were resolved. The
+# fail-closed direction is untouched: one unresolved BLOCKER means no
+# `review-passed`, ever. Full rationale and the user's explicit trade-off:
+# claude/skills/gh-pr-reply/references/constraints.md and
+# claude/skills/devx-pr-review-all/references/review-verdict-label.md.
+#
+# SSOT for the procedure: claude/skills/gh-pr-reply/references/review-passed-gate.md
 #
 # Deliberately NOT wrapped in an interactive guard: like
 # devx_pr_review_all.sh, this is a pure function-defining library whose
@@ -48,8 +58,10 @@ unset _drg_self _drg_helper
 # ── F-1: origin tokens ──────────────────────────────────────────────────
 #
 # One Step 3 classification becomes one `<reviewer>:<severity>:<verdict>`
-# line. The reviewer set matches gh:pr-review's `--ai` enum, because the
-# targeted lane can only re-invoke a reviewer that skill knows how to run.
+# line. The reviewer set stays pinned to gh:pr-review's `--ai` enum even now
+# that nothing re-invokes those CLIs (#1636): a closed enum is what keeps a
+# typo'd reviewer name from silently becoming its own tally row, and it keeps
+# the token comparable with the `ai-review` blocks on the PR.
 
 _gh_pr_reply_origin_line() {
     local _reviewer _severity _verdict
@@ -131,132 +143,163 @@ _gh_pr_reply_origin_tally() {
     '
 }
 
-# ── F-7: can this reviewer's lane run here at all? ──────────────────────
+# ── F-2: the `review-passed` gate (issue #1636) ─────────────────────────
 #
-# Delegates to gh:pr-review's own precondition
-# (`_gh_pr_review_require_ai_cli`) rather than re-deriving it: that helper
-# already covers both `command -v <ai-bin>` and the
-# `_dotfiles_setup_mode == internal` gate opencode/hermes need. The fallback
-# source runs in a subshell so DOTFILES_FORCE_INIT (load-bearing past that
-# file's interactive guard) never leaks into the caller's environment.
-_gh_pr_reply_lane_available() {
-    local _ai="${1-}"
-    [ -n "$_ai" ] || return 1
-    if command -v _gh_pr_review_require_ai_cli >/dev/null 2>&1; then
-        _gh_pr_review_require_ai_cli "$_ai" >/dev/null 2>&1
-        return $?
-    fi
-    (
-        DOTFILES_FORCE_INIT=1
-        export DOTFILES_FORCE_INIT
-        # shellcheck source=/dev/null
-        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_review.sh" 2>/dev/null || exit 1
-        _gh_pr_review_require_ai_cli "$_ai" >/dev/null 2>&1
-    )
-}
-
-# ── F-2 / F-6 / F-7: the decision ───────────────────────────────────────
-#
-#   <origin lines> | _gh_pr_reply_targeted_lane_decide <blocking-reviewer>...
+#   <origin lines> | _gh_pr_reply_review_passed_gate
 #
 # Prints exactly one token:
-#   lane=<r1>[ <r2>…]        every originally-blocking reviewer is fully
-#                            resolved and runnable -> re-review them
-#   skip=unresolved-blocker:<r>   F-6 — keep review-blocked, spend nothing
-#   skip=cli-unavailable:<r>      F-7 — fall back to the full re-run
-#   skip=no-blocking-reviewer     nothing blocked; there is nothing to clear
+#   pass=no-blocker              no BLOCKER-severity item was raised at all
+#   pass=blockers-resolved:<n>   all <n> BLOCKER items are ACCEPT/ACCEPT-PARTIAL
+#   hold=unresolved-blocker:<r>  <r> has a BLOCKER that is not resolved
 #
-# `<blocking-reviewer>...` is the set that posted a BLOCKING verdict in the
-# round that applied `review-blocked` — read off the PR's `ai-review` blocks,
-# not off this pass's items.
+# This replaces #1616's `_gh_pr_reply_targeted_lane_decide`, which answered a
+# narrower question ("may we spend one scoped gh:pr-review re-call?") and
+# needed the caller to supply `BLOCKING_REVIEWERS` off the PR's `ai-review`
+# blocks. #1636 removed the re-call, so the gate no longer needs that set:
+# the question is simply "did this pass leave an unresolved BLOCKER?".
 #
-# One unresolved reviewer suppresses the lane for ALL of them: re-reviewing
-# a resolved reviewer cannot lift a label another one is still holding, so
-# the extra call would buy nothing.
-_gh_pr_reply_targeted_lane_decide() {
-    local _origins _r _blocking_total _blocking_open _lanes=""
+# Two consequences of dropping the reviewer set, both deliberate:
+#   - A pass with NO blocking items is `pass=no-blocker`, not "unresolved".
+#     Under #1616 the same input read as unresolved because the caller had
+#     already asserted that some reviewer blocked; with no such assertion,
+#     "nobody raised a BLOCKER" is the ordinary clean-PR case and treating it
+#     as a hold would leave every clean PR unlabelled forever.
+#   - The FIRST unresolved BLOCKER decides, and its reviewer is named. One
+#     unresolved item is enough — this is the fail-closed half of NF-2 and it
+#     is untouched by the relaxation.
+#
+# Blocking severity comes from `_gh_pr_reply_severity_is_blocking`, so the
+# Korean `블로커` tag counts here even though `_gh_pr_reply_origin_tally`'s
+# awk only groups the ASCII spellings — counting MORE items as blocking is
+# the safe direction for a gate that authorizes `review-passed`.
+_gh_pr_reply_review_passed_gate() {
+    local _origins _line _rev _rest _sev _verd _blocking=0
 
-    [ "$#" -gt 0 ] || {
-        # Drain stdin so a piped caller never sees EPIPE on the fast path.
-        cat >/dev/null
-        printf 'skip=no-blocking-reviewer\n'
-        return 0
-    }
-
+    # Read stdin whole before deciding: an early `return` mid-loop would leave
+    # a piped producer facing EPIPE.
     _origins=$(cat)
 
-    for _r in "$@"; do
-        case "$_r" in
-        codex | agy | claude | opencode | hermes) ;;
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        [ -n "$_line" ] || continue
+        case "$_line" in
+        *:*:*) ;;
         *)
-            printf '[gh-pr-reply] unknown blocking reviewer: %s\n' "$_r" >&2
+            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>): %s\n' \
+                "$_line" >&2
             return 2
             ;;
         esac
-    done
+        _rev="${_line%%:*}"
+        _rest="${_line#*:}"
+        _sev="${_rest%%:*}"
+        _verd=$(printf '%s' "${_rest#*:}" | tr '[:lower:]' '[:upper:]')
 
-    for _r in "$@"; do
-        _blocking_total=$(printf '%s\n' "$_origins" |
-            grep -c "^${_r}:\(BLOCKER\|BLOCKING\):" || :)
-        _blocking_open=$(printf '%s\n' "$_origins" |
-            grep -c "^${_r}:\(BLOCKER\|BLOCKING\):\(DECLINE\|QUESTION\)$" || :)
-        # Zero blocking items this pass is NOT a clean bill of health: this
-        # reviewer blocked, and nothing here shows the blocker was addressed.
-        # "No evidence" must read as unresolved (NF-2's direction).
-        if [ "$_blocking_total" -eq 0 ] || [ "$_blocking_open" -ne 0 ]; then
-            printf 'skip=unresolved-blocker:%s\n' "$_r"
+        _gh_pr_reply_severity_is_blocking "$_sev" || continue
+        _blocking=$((_blocking + 1))
+        case "$_verd" in
+        ACCEPT | ACCEPT-PARTIAL) ;;
+        *)
+            printf 'hold=unresolved-blocker:%s\n' "$_rev"
             return 0
-        fi
-    done
+            ;;
+        esac
+    done <<EOF
+$_origins
+EOF
 
-    for _r in "$@"; do
-        if ! _gh_pr_reply_lane_available "$_r"; then
-            printf 'skip=cli-unavailable:%s\n' "$_r"
-            return 0
-        fi
-        _lanes="${_lanes:+$_lanes }$_r"
-    done
-
-    printf 'lane=%s\n' "$_lanes"
+    if [ "$_blocking" -eq 0 ]; then
+        printf 'pass=no-blocker\n'
+    else
+        printf 'pass=blockers-resolved:%s\n' "$_blocking"
+    fi
     return 0
 }
 
-# ── F-4 / F-5: the Step 7 line ──────────────────────────────────────────
+# ── The Step 7 line ─────────────────────────────────────────────────────
 #
-# Takes either the decide token or the targeted lane's own verdict as
-# `verdict=<blocking|concerns|lgtm|unknown>` (the tokens
-# `devx_pr_review_all_verdict` emits). Reporting is the ONLY thing this
-# function does — the label itself is written by
-# `devx_pr_review_all_apply_label`, so a report line can never become a
-# self-certification.
-_gh_pr_reply_targeted_lane_report() {
+# Renders one gate token. Reporting is the ONLY thing this function does; the
+# label is written by `_gh_pr_reply_apply_review_passed` below, which prints
+# this line only once the write actually succeeded.
+_gh_pr_reply_review_passed_report() {
     local _token="${1-}" _who
     case "$_token" in
-    verdict=blocking)
-        printf '[BLOCKED] 타겟 재검토도 여전히 BLOCKING — 재수정 필요\n'
+    pass=no-blocker)
+        printf '[OK] 미해결 BLOCKER 없음(BLOCKER 항목 자체가 없음) — review-passed 적용 (외부 재검토 없음, #1636)\n'
         ;;
-    verdict=lgtm | verdict=concerns)
-        printf '[OK] 타겟 재검토 통과 — review-blocked 해제, review-passed 적용\n'
+    pass=blockers-resolved:*)
+        printf '[OK] BLOCKER %s건 전부 해소 — review-blocked 해제, review-passed 적용 (외부 재검토 없음, #1636)\n' \
+            "${_token#pass=blockers-resolved:}"
         ;;
-    verdict=*)
-        printf '[WARN] 타겟 재검토 판정 불명 — 라벨 승격 없음, 전체 devx:pr-review-all 재실행 필요\n'
-        ;;
-    skip=unresolved-blocker:*)
-        _who="${_token#skip=unresolved-blocker:}"
-        printf '[BLOCKED] %s 의 블로커가 미해결 — 라벨 승격 시도 안 함, 타겟 재검토 미실행\n' "$_who"
-        ;;
-    skip=cli-unavailable:*)
-        _who="${_token#skip=cli-unavailable:}"
-        printf '[WARN] %s 리뷰어 CLI 를 이 환경에서 실행할 수 없음 — 전체 devx:pr-review-all 재실행 필요\n' "$_who"
-        ;;
-    skip=no-blocking-reviewer)
-        printf '[OK] 원래 블로킹한 리뷰어 없음 — 타겟 재검토 불필요\n'
+    hold=unresolved-blocker:*)
+        _who="${_token#hold=unresolved-blocker:}"
+        printf '[BLOCKED] %s 의 블로커가 미해결 — review-passed 미부여, review-blocked 유지\n' "$_who"
         ;;
     *)
         printf '[gh-pr-reply] unknown report token: %s\n' "$_token" >&2
         return 2
         ;;
     esac
+    return 0
+}
+
+# ── Applying `review-passed` from gh:pr-reply's own judgment (#1636) ─────
+#
+#   <origin lines> | _gh_pr_reply_apply_review_passed <pr> <repo> [host] [head-sha]
+#
+# Runs the gate, and on `pass=` writes `review-passed` through the shared
+# `devx_pr_review_all_write_label` primitive — the same drop-opposite / safe-add
+# / #1601-freshness-marker path `devx:pr-review-all` has always used. NOT
+# through `devx_pr_review_all_apply_label`: that one takes a stream of reviewer
+# verdict tokens, and synthesizing a fake `lgtm` line to feed it would dress
+# gh:pr-reply's own judgment up as a reviewer CLI's opinion. The relaxation is
+# meant to be visible in the code, not disguised (#1636).
+#
+# Prints one `[OK]`/`[BLOCKED]`/`[WARN]` line (plus the marker WARN on the one
+# path that can produce it). Soft-fail: rc 0 for every labelling outcome — an
+# unlabelled PR reads downstream as "not verified", which is the same contract
+# as before. Only a usage error is rc 2.
+_gh_pr_reply_apply_review_passed() {
+    local _pr="${1-}" _repo="${2-}" _host="${3-}" _head_sha="${4-}"
+    local _token _write _add _marker
+
+    if [ -z "$_pr" ] || [ -z "$_repo" ]; then
+        cat >/dev/null
+        printf '[gh-pr-reply] usage: _gh_pr_reply_apply_review_passed <pr> <repo> [host] [head-sha]\n' >&2
+        return 2
+    fi
+
+    _token=$(_gh_pr_reply_review_passed_gate) || return $?
+
+    case "$_token" in
+    hold=*)
+        _gh_pr_reply_review_passed_report "$_token"
+        return 0
+        ;;
+    esac
+
+    if ! command -v devx_pr_review_all_write_label >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/devx_pr_review_all.sh" 2>/dev/null || :
+    fi
+    if ! command -v devx_pr_review_all_write_label >/dev/null 2>&1; then
+        printf '[WARN] devx_pr_review_all_write_label 사용 불가 — PR #%s 무라벨 유지\n' "$_pr"
+        return 0
+    fi
+
+    _write=$(devx_pr_review_all_write_label review-passed "$_pr" "$_repo" "$_host" "$_head_sha")
+    _add=$(printf '%s\n' "$_write" | sed -n 's/^add=//p')
+    _marker=$(printf '%s\n' "$_write" | sed -n 's/^marker=//p')
+
+    # shellcheck disable=SC2016  # backticks are markdown, not substitution
+    case "$_add" in
+    ok) _gh_pr_reply_review_passed_report "$_token" ;;
+    rc3) printf '[WARN] label `review-passed` missing in %s — provision it first (gh:label-bootstrap)\n' "$_repo" ;;
+    no-helper) printf '[WARN] _gh_pr_edit_safe_label unavailable — PR #%s left unlabelled\n' "$_pr" ;;
+    *) printf '[WARN] PR #%s review-passed 적용 실패 — 미검증으로 취급\n' "$_pr" ;;
+    esac
+    if [ "$_marker" = "failed" ]; then
+        printf '[WARN] review-passed freshness marker failed to post for PR #%s — a later merge-train check may see it as stale\n' "$_pr"
+    fi
     return 0
 }
 
@@ -268,11 +311,11 @@ for _gprtr_selfcheck_fn in \
     _gh_pr_reply_origin_line \
     _gh_pr_reply_severity_is_blocking \
     _gh_pr_reply_origin_tally \
-    _gh_pr_reply_lane_available \
-    _gh_pr_reply_targeted_lane_decide \
-    _gh_pr_reply_targeted_lane_report; do
+    _gh_pr_reply_review_passed_gate \
+    _gh_pr_reply_review_passed_report \
+    _gh_pr_reply_apply_review_passed; do
     command -v "$_gprtr_selfcheck_fn" >/dev/null 2>&1 && continue
-    printf '[gh_pr_reply_targeted_review] BUG: %s undefined after source — the #1616 targeted re-review gate will not run.\n' \
+    printf '[gh_pr_reply_targeted_review] BUG: %s undefined after source — the #1636 review-passed gate will not run.\n' \
         "$_gprtr_selfcheck_fn" >&2
 done
 unset _gprtr_selfcheck_fn

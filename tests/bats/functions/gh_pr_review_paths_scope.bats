@@ -103,9 +103,11 @@ EOF
 }
 
 @test "parse (PR #1629 review, codex BLOCKER): repeated --paths for a multi-file fix keeps PR#/remote intact" {
-    # This is the call shape targeted-rereview.md's F-3 now mandates — one
-    # --paths flag per fixed file — precisely because the alternative
-    # (--paths "a.sh b.sh" as one joined string) misparses below.
+    # This is the call shape any multi-file scoped review must use — one
+    # --paths flag per file — precisely because the alternative
+    # (--paths "a.sh b.sh" as one joined string) misparses below. It was
+    # #1616's targeted re-review lane that first needed it; #1636 removed
+    # that lane, but --paths itself stays a supported gh:pr-review flag.
     run gh_pr_review_parse --ai codex --paths a.sh --paths b.sh 1629 origin
     assert_success
     assert_line 'paths=a.sh b.sh'
@@ -114,7 +116,7 @@ EOF
 }
 
 @test "parse (PR #1629 review, codex BLOCKER): the single-joined-string call this replaces fails outright" {
-    # Documents the exact failure targeted-rereview.md used to hand the AI
+    # Documents the exact failure #1616's re-review doc used to hand the AI
     # executor: a Skill() argument string like "--paths a.sh b.sh 1629
     # origin" is word-split (no quoting survives the round trip through the
     # tool's argument string), so --paths eats only the first file, the

@@ -712,14 +712,47 @@ _apply_stub() {
     assert_output --partial 'add 7 review-blocked --repo acme/widget'
 }
 
-@test "apply_label: all-passing lanes label review-passed and clear review-blocked" {
+# ── #1636: this producer no longer certifies ─────────────────────────────
+#
+# Label ownership split: `devx:pr-review-all` writes `review-blocked` and
+# nothing else. An all-non-blocking round still clears the stale block (mutual
+# exclusion is unchanged) but leaves the PR UNLABELLED, which downstream has
+# always read as "not verified". `review-passed` is applied by `gh:pr-reply`
+# Step 6 from its own BLOCKER-resolution judgment — see
+# `_gh_pr_reply_apply_review_passed` and this file's write_label section.
+#
+# These three tests replace "all-passing lanes label review-passed": that
+# assertion pinned the OLD ownership, so it is rewritten rather than deleted.
+
+@test "apply_label (#1636): all-passing lanes never add review-passed" {
+    _apply_stub
+    printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    refute_output --partial 'add 7 review-passed'
+    refute_output --partial 'review-passed --repo'
+}
+
+@test "apply_label (#1636): all-passing lanes still clear review-blocked" {
+    _apply_stub
+    printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/7/labels/review-blocked'
+}
+
+@test "apply_label (#1636): the non-blocking report names gh:pr-reply as the owner" {
     _apply_stub
     printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
     run cat "${BATS_TEST_TMPDIR}/out"
-    assert_output --partial '[OK] PR #7 labelled `review-passed` (2 lane(s))'
+    assert_output --partial '[OK] PR #7: every lane non-blocking (2 lane(s))'
+    assert_output --partial 'gh:pr-reply'
+    assert_output --partial '#1636'
+}
+
+@test "apply_label (#1636): the non-blocking path is host-pinned too" {
+    _apply_stub
+    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget ghe.example.com >/dev/null
     run cat "$APPLY_LOG"
-    assert_output --partial 'api -X DELETE repos/acme/widget/issues/7/labels/review-blocked'
-    assert_output --partial 'add 7 review-passed --repo acme/widget'
+    assert_output --partial 'labels/review-blocked [GH_HOST=ghe.example.com]'
 }
 
 # Absence is the third state and it must stay reachable: an empty stream is
@@ -759,10 +792,27 @@ _apply_stub() {
 @test "apply_label: any other add failure warns 'treat the PR as unverified'" {
     _apply_stub
     STUB_ADD_RC=1
-    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
+    printf '%s\n' blocking | devx_pr_review_all_apply_label 7 acme/widget >"${BATS_TEST_TMPDIR}/out"
     unset STUB_ADD_RC
     run cat "${BATS_TEST_TMPDIR}/out"
     assert_output --partial 'labelling PR #7 failed — treat the PR as unverified'
+}
+
+@test "apply_label: an unavailable add helper leaves the PR unlabelled" {
+    run bash -c "
+        SHELL_COMMON=/nonexistent
+        export SHELL_COMMON
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        unset -f _gh_pr_edit_safe_label 2>/dev/null || :
+        gh() { printf 'gh %s\n' \"\$*\" >>'${BATS_TEST_TMPDIR}/nohelper.log'; return 0; }
+        printf 'blocking\n' | devx_pr_review_all_apply_label 7 acme/widget
+    "
+    assert_success
+    assert_output --partial '_gh_pr_edit_safe_label unavailable — PR #7 left unlabelled'
+    # Nothing was mutated: deleting the opposite label with no way to add the
+    # new one would strip a valid verdict and put nothing in its place.
+    [ ! -s "${BATS_TEST_TMPDIR}/nohelper.log" ] ||
+        fail "expected no gh calls, got: $(cat "${BATS_TEST_TMPDIR}/nohelper.log")"
 }
 
 # Soft-fail: every labelling outcome is rc 0, because an unlabelled PR already
@@ -774,7 +824,7 @@ _apply_stub() {
         . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
         _gh_pr_edit_safe_label() { return 1; }
         gh() { return 0; }
-        printf 'lgtm\n' | devx_pr_review_all_apply_label 7 acme/widget
+        printf 'blocking\n' | devx_pr_review_all_apply_label 7 acme/widget
     "
     unset STUB_ADD_RC
     assert_success
@@ -836,94 +886,218 @@ _apply_stub() {
 }
 
 # ---------------------------------------------------------------------------
-# apply_label's 4th argument — the #1601 freshness marker
+# devx_pr_review_all_write_label — the shared, verdict-free write (#1636)
+# ---------------------------------------------------------------------------
+#
+# #1636 split the "decide" half from the "write" half so `gh:pr-reply` could
+# apply `review-passed` from its own judgment WITHOUT fabricating a fake
+# reviewer verdict token to push through the aggregator. This function takes a
+# label, never a verdict; both producers route their writes through it, so the
+# drop-opposite / safe-add / #1601-marker behaviour has exactly one
+# implementation.
+
+@test "write_label: review-blocked adds the label and clears review-passed" {
+    _apply_stub
+    run devx_pr_review_all_write_label review-blocked 7 acme/widget github.com
+    assert_success
+    assert_line 'add=ok'
+    assert_line 'marker=none'
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/7/labels/review-passed'
+    assert_output --partial 'add 7 review-blocked --repo acme/widget'
+}
+
+@test "write_label: review-passed adds the label and clears review-blocked" {
+    _apply_stub
+    run devx_pr_review_all_write_label review-passed 7 acme/widget
+    assert_success
+    assert_line 'add=ok'
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/7/labels/review-blocked'
+    assert_output --partial 'add 7 review-passed --repo acme/widget'
+}
+
+@test "write_label: a label outside the two verdict labels is a usage error (rc 2)" {
+    _apply_stub
+    run devx_pr_review_all_write_label review-pending 7 acme/widget
+    assert_failure 2
+    assert_output --partial 'usage: devx_pr_review_all_write_label'
+    run cat "$APPLY_LOG"
+    assert_output ''
+}
+
+@test "write_label: a missing repo arg is a usage error (rc 2)" {
+    _apply_stub
+    run devx_pr_review_all_write_label review-passed 7
+    assert_failure 2
+    assert_output --partial 'usage: devx_pr_review_all_write_label'
+}
+
+@test "write_label: rc 3 from the add helper is reported as add=rc3" {
+    _apply_stub
+    STUB_ADD_RC=3
+    run devx_pr_review_all_write_label review-blocked 7 acme/widget
+    unset STUB_ADD_RC
+    assert_success
+    assert_line 'add=rc3'
+}
+
+@test "write_label: any other add failure is add=failed, still rc 0 (soft-fail)" {
+    _apply_stub
+    STUB_ADD_RC=1
+    run devx_pr_review_all_write_label review-blocked 7 acme/widget
+    unset STUB_ADD_RC
+    assert_success
+    assert_line 'add=failed'
+}
+
+@test "write_label: an unavailable add helper reports add=no-helper and mutates nothing" {
+    run bash -c "
+        SHELL_COMMON=/nonexistent
+        export SHELL_COMMON
+        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        unset -f _gh_pr_edit_safe_label 2>/dev/null || :
+        gh() { printf 'gh %s\n' \"\$*\" >>'${BATS_TEST_TMPDIR}/wl_nohelper.log'; return 0; }
+        devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
+    "
+    assert_success
+    assert_line 'add=no-helper'
+    assert_line 'marker=none'
+    [ ! -s "${BATS_TEST_TMPDIR}/wl_nohelper.log" ] ||
+        fail "expected no gh calls, got: $(cat "${BATS_TEST_TMPDIR}/wl_nohelper.log")"
+}
+
+@test "write_label: the host is pinned on both the DELETE and the add" {
+    _apply_stub
+    devx_pr_review_all_write_label review-blocked 7 acme/widget ghe.example.com >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output --partial 'labels/review-passed [GH_HOST=ghe.example.com]'
+    assert_output --partial 'add 7 review-blocked --repo acme/widget [GH_HOST=ghe.example.com]'
+}
+
+@test "write_label: the caller's GH_HOST is not clobbered" {
+    _apply_stub
+    GH_HOST=original.example.com
+    devx_pr_review_all_write_label review-blocked 7 acme/widget ghe.example.com >/dev/null
+    [ "$GH_HOST" = "original.example.com" ] || fail "GH_HOST leaked: $GH_HOST"
+    unset GH_HOST
+}
+
+# ---------------------------------------------------------------------------
+# write_label's 5th argument — the #1601 freshness marker
 # ---------------------------------------------------------------------------
 #
 # A `review-passed` label alone only proves some head was reviewed. Given the
-# head sha it was decided for, apply_label stamps a
+# head sha it was decided for, write_label stamps a
 # `<!-- review-verdict:review-passed:<sha> -->` marker comment so
 # `gh:pr-merge-train`'s gate can verify the label against the PR's CURRENT
-# head instead of trusting it blindly.
+# head instead of trusting it blindly. #1636 moved this from apply_label to
+# write_label — same behaviour, one caller further down.
 
-@test "apply_label (#1601): a review-passed verdict with a sha posts the marker" {
+@test "write_label (#1601): review-passed with a sha posts the marker" {
     _apply_stub
-    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    run devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
+    assert_success
+    assert_line 'marker=posted'
     run cat "$APPLY_LOG"
     assert_output --partial 'api -X POST repos/acme/widget/issues/7/comments -f body=<!-- review-verdict:review-passed:deadbeef -->'
 }
 
-@test "apply_label (#1601): no sha given posts no marker" {
+@test "write_label (#1601): no sha given posts no marker" {
     _apply_stub
-    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget >/dev/null
+    run devx_pr_review_all_write_label review-passed 7 acme/widget
+    assert_line 'marker=none'
     run cat "$APPLY_LOG"
     refute_output --partial 'review-verdict:review-passed'
 }
 
-@test "apply_label (#1601): review-blocked never gets a freshness marker" {
+@test "write_label (#1601): review-blocked never gets a freshness marker" {
     # A stale review-blocked is the safe direction (over-skips, never
     # over-merges) — it needs no freshness proof.
     _apply_stub
-    printf '%s\n' blocking | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    run devx_pr_review_all_write_label review-blocked 7 acme/widget '' deadbeef
+    assert_line 'marker=none'
     run cat "$APPLY_LOG"
     refute_output --partial 'review-verdict:review-passed'
 }
 
-@test "apply_label (#1601): no lane produced a verdict -> no marker either" {
-    _apply_stub
-    printf '' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
-    run cat "$APPLY_LOG"
-    assert_output ""
-}
-
-@test "apply_label (#1601): a failed label add posts no marker" {
+@test "write_label (#1601): a failed label add posts no marker" {
     _apply_stub
     STUB_ADD_RC=1
-    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    run devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
     unset STUB_ADD_RC
+    assert_line 'marker=none'
     run cat "$APPLY_LOG"
     refute_output --partial 'review-verdict:review-passed'
 }
 
-@test "apply_label (#1601): the marker post is pinned to the given host" {
+@test "write_label (#1601): the marker post is pinned to the given host" {
     _apply_stub
-    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget ghe.example.com deadbeef >/dev/null
+    devx_pr_review_all_write_label review-passed 7 acme/widget ghe.example.com deadbeef >/dev/null
     run cat "$APPLY_LOG"
     assert_output --partial 'review-verdict:review-passed:deadbeef --> [GH_HOST=ghe.example.com]'
 }
 
-@test "apply_label (#1601, PR #1608 review): a marker-post failure never changes the primary line" {
-    _apply_stub
-    STUB_GH_RC=1
+@test "write_label (#1601, PR #1608 review): a marker-post failure never changes add=" {
     run bash -c "
         . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
         gh() { return 1; }
         _gh_pr_edit_safe_label() { return 0; }
-        printf 'lgtm\n' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef
+        devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
     "
     assert_success
-    assert_line --index 0 --partial 'labelled `review-passed`'
+    assert_line 'add=ok'
+    assert_line 'marker=failed'
 }
 
-@test "apply_label (BLOCKER fix): a marker-post failure adds a second WARN line, not silence" {
-    # agy + codex, PR #1608 review: swallowing this failure left no trace of
-    # why a "successfully labelled" PR later reads as stale on the merge train.
+@test "write_label (#1636): the #1601 marker is what apply_label no longer reaches" {
+    # apply_label can only resolve `review-blocked` now, and review-blocked
+    # never carried a marker — so the producer side posts none at all, on any
+    # input. The marker lives on gh:pr-reply's write path.
     _apply_stub
-    run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
-        gh() { return 1; }
-        _gh_pr_edit_safe_label() { return 0; }
-        printf 'lgtm\n' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef
-    "
-    assert_success
-    assert_line --index 1 --partial 'freshness marker failed to post'
+    printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    printf '%s\n' blocking | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    printf '' | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >/dev/null
+    run cat "$APPLY_LOG"
+    refute_output --partial 'review-verdict:review-passed'
+}
+
+@test "write_label: reports exactly the two contract lines, always" {
+    _apply_stub
+    run devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
     [ "$(printf '%s\n' "$output" | grep -c .)" -eq 2 ] ||
-        fail "expected exactly two lines of output, got: $output"
+        fail "expected exactly two token lines, got: $output"
 }
 
-@test "apply_label (BLOCKER fix): a marker-post success adds no second line" {
-    _apply_stub
-    printf '%s\n' lgtm | devx_pr_review_all_apply_label 7 acme/widget '' deadbeef >"${BATS_TEST_TMPDIR}/out"
-    run cat "${BATS_TEST_TMPDIR}/out"
-    [ "$(printf '%s\n' "$output" | grep -c .)" -eq 1 ] ||
-        fail "expected exactly one line of output, got: $output"
+# ---------------------------------------------------------------------------
+# #1636 doc guards — the label-ownership split must be written down
+# ---------------------------------------------------------------------------
+
+@test "doc-guard (#1636): the SSOT names gh:pr-reply as the review-passed producer" {
+    local _producer="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
+    run grep -qF -- '#1636' "$_producer"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_apply_review_passed' "$_producer"
+    assert_success
+    run grep -qF -- 'devx_pr_review_all_write_label' "$_producer"
+    assert_success
+}
+
+# A safety-principle change gets documented loudly, not buried (#1636).
+@test "doc-guard (#1636): the SSOT spells out the NF-2 relaxation and its rationale" {
+    local _producer="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
+    run grep -qF -- 'NF-2' "$_producer"
+    assert_success
+    run grep -q 'relaxation' "$_producer"
+    assert_success
+    run grep -qF -- 'never writes' "$_producer"
+    assert_success
+}
+
+@test "doc-guard (#1636): devx:pr-review-all's SKILL.md disclaims review-passed" {
+    local _skill="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
+    run grep -qF -- 'never writes' "$_skill"
+    assert_success
+    run grep -qF -- 'gh:pr-reply' "$_skill"
+    assert_success
 }

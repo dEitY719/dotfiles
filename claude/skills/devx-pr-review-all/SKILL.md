@@ -22,7 +22,8 @@ Orchestrate a single PR through all available reviewers at once — agy, codex, 
 auto-fix pass — record the aggregate verdict as a merge-gate label, commit any auto-fix changes, then reply to
 review comments inline or deferred. No
 approve/request-changes decision and no manual per-comment authoring. Every reviewer lane is soft-fail.
-This skill is the **only** writer of `review-blocked` / `review-passed`
+This skill is the **only** writer of `review-blocked`; since #1636 it never writes
+`review-passed` — that label belongs to `gh:pr-reply` Step 6
 (`references/review-verdict-label.md`); `gh:pr-merge-train` is their only reader.
 Argument/flag table (`<PR#> [remote] [--defer-reply M] [--no-reply] [--force-review]`): `references/help.md`.
 
@@ -111,10 +112,14 @@ In short — bind `TARGET_HOST` from the same `<remote>` URL as `TARGET_REPO`
    **missing CLI / non-internal PC** — `/simplify` never contributes either),
    pipe `BODIES` through `devx_pr_review_all_lane_block "$ai" "$head_sha"` →
    `devx_pr_review_all_verdict`, and pipe that stream straight into
-   `devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"`
-   — the trailing `$head_sha` stamps a freshness marker when the verdict is
-   `review-passed` (#1601), so `gh:pr-merge-train`'s gate can tell this exact
-   head from a stale one.
+   `devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"`.
+   **Since #1636 that call only ever writes `review-blocked`.** An
+   all-non-blocking round clears any stale `review-blocked` and stops there —
+   `review-passed` is applied by `gh:pr-reply` Step 6 once every review comment
+   has been answered and no BLOCKER is left unresolved, so a PR this step
+   leaves unlabelled is "not verified yet", exactly as before. The trailing
+   `$head_sha` stays in the call (it is what stamps the #1601 freshness marker
+   on the write path `gh:pr-reply` shares) and is inert on this skill's paths.
    **Why a guard-skipped lane must still be included (#1613, agy+codex PR
    #1623 BLOCKER):** the guard skipped it precisely because it already has a
    verdict for `$head_sha` — dropping that lane from the stream would let a

@@ -108,206 +108,322 @@ teardown() {
     assert_output ''
 }
 
+
 # ---------------------------------------------------------------------
-# F-2 / F-6 — the per-reviewer gate
+# F-2 — the `review-passed` gate (#1636)
 # ---------------------------------------------------------------------
+#
+# #1616 asked "may we spend one scoped gh:pr-review re-call?" and needed the
+# caller to name the reviewers that had blocked. #1636 removed the re-call, so
+# the question collapsed to "did this pass leave an unresolved BLOCKER?" —
+# answerable from ORIGINS alone.
+#
+# The relaxation is deliberate and is pinned here on purpose: these tests
+# replace the old "no self-certification path exists" assertions, which
+# described a rule the repo has since decided to trade away on this one path
+# (cost + a repeatedly jammed gh:pr-merge-train). What is NOT relaxed — one
+# unresolved BLOCKER means no label — has its own tests below.
 
-# Every decide test runs the origin stream through stdin, exactly as the
-# skill does, and stubs the CLI-availability probe so the decision under test
-# is the gate and not the machine this suite happens to run on.
-_decide() {
-    local _origins="$1"
-    shift
-    printf '%s\n' "$_origins" | _gh_pr_reply_targeted_lane_decide "$@"
+_gate() {
+    printf '%s\n' "$1" | _gh_pr_reply_review_passed_gate
 }
 
-_stub_lane_available() {
-    # shellcheck disable=SC2317  # called indirectly by the function under test
-    _gh_pr_reply_lane_available() { return 0; }
-}
-
-_stub_lane_unavailable() {
-    # shellcheck disable=SC2317  # called indirectly by the function under test
-    _gh_pr_reply_lane_available() { return 1; }
-}
-
-@test "F-2 (AC-1): blocking reviewer fully ACCEPTed + another reviewer's DECLINE -> lane runs" {
-    _stub_lane_available
-    run _decide 'codex:BLOCKER:ACCEPT
+@test "F-2 (#1636): every BLOCKER accepted -> pass, with the count" {
+    run _gate 'codex:BLOCKER:ACCEPT
 codex:BLOCKER:ACCEPT
-agy:FOLLOW-UP:DECLINE
-agy:FOLLOW-UP:DECLINE
-agy:FOLLOW-UP:DECLINE' codex
+agy:FOLLOW-UP:DECLINE'
     assert_success
-    assert_output 'lane=codex'
+    assert_output 'pass=blockers-resolved:2'
 }
 
-@test "F-2: ACCEPT-PARTIAL counts as resolved for the blocking gate" {
-    _stub_lane_available
-    run _decide 'codex:BLOCKER:ACCEPT-PARTIAL' codex
+@test "F-2 (#1636): no BLOCKER item at all -> pass" {
+    # The ordinary clean-PR shape. Under #1616 this read as unresolved,
+    # because the caller had already asserted somebody blocked; with no such
+    # assertion, holding here would leave every clean PR unlabelled forever.
+    run _gate 'agy:FOLLOW-UP:DECLINE
+agy:Suggestion:ACCEPT'
     assert_success
-    assert_output 'lane=codex'
+    assert_output 'pass=no-blocker'
 }
 
-@test "F-2: a QUESTION on a blocking item is not a resolution" {
-    _stub_lane_available
-    run _decide 'codex:BLOCKER:ACCEPT
-codex:BLOCKER:QUESTION' codex
+@test "F-2 (#1636): an empty stream is a pass, not an error" {
+    run _gate ''
     assert_success
-    assert_output 'skip=unresolved-blocker:codex'
+    assert_output 'pass=no-blocker'
 }
 
-@test "F-6 (AC-4): a DECLINEd blocking item keeps the label and never calls the lane" {
-    _stub_lane_available
-    run _decide 'codex:BLOCKER:ACCEPT
+@test "F-2 (#1636): ACCEPT-PARTIAL counts as resolved" {
+    run _gate 'codex:BLOCKER:ACCEPT-PARTIAL'
+    assert_success
+    assert_output 'pass=blockers-resolved:1'
+}
+
+# ---------------------------------------------------------------------
+# The fail-closed half — NOT relaxed by #1636
+# ---------------------------------------------------------------------
+
+@test "F-2 (fail-closed): a DECLINEd BLOCKER holds the label" {
+    run _gate 'codex:BLOCKER:ACCEPT
 codex:BLOCKER:DECLINE
-agy:FOLLOW-UP:ACCEPT' codex
+agy:FOLLOW-UP:ACCEPT'
     assert_success
-    assert_output 'skip=unresolved-blocker:codex'
+    assert_output 'hold=unresolved-blocker:codex'
 }
 
-@test "F-6: one unresolved blocking reviewer suppresses the lane for the resolved one too" {
-    # Re-reviewing codex cannot clear a label agy is still holding down, so
-    # the cheapest correct answer is no API call at all.
-    _stub_lane_available
-    run _decide 'codex:BLOCKER:ACCEPT
-agy:BLOCKER:DECLINE' codex agy
+@test "F-2 (fail-closed): a QUESTION on a BLOCKER is not a resolution" {
+    run _gate 'codex:BLOCKER:ACCEPT
+codex:BLOCKER:QUESTION'
     assert_success
-    assert_output 'skip=unresolved-blocker:agy'
+    assert_output 'hold=unresolved-blocker:codex'
 }
 
-@test "F-2: two blocking reviewers both fully resolved -> both lanes run" {
-    _stub_lane_available
-    run _decide 'codex:BLOCKER:ACCEPT
-agy:BLOCKER:ACCEPT-PARTIAL' codex agy
+@test "F-2 (fail-closed): one unresolved BLOCKER outranks every resolved one" {
+    run _gate 'codex:BLOCKER:ACCEPT
+agy:BLOCKER:DECLINE'
     assert_success
-    assert_output 'lane=codex agy'
+    assert_output 'hold=unresolved-blocker:agy'
 }
 
-@test "F-2: a blocking reviewer with no item in this pass is unresolved, not vacuously clear" {
-    # Nothing in this pass proves that reviewer's blocker was addressed, and
-    # "no evidence" must never read as "resolved" (NF-2's direction).
-    _stub_lane_available
-    run _decide 'agy:FOLLOW-UP:ACCEPT' codex
+@test "F-2 (fail-closed): the Korean 블로커 tag blocks too" {
+    # `_gh_pr_reply_severity_is_blocking` recognizes it even though the
+    # tally's awk only groups the ASCII spellings — counting MORE items as
+    # blocking is the safe direction for a gate that authorizes review-passed.
+    run _gate 'codex:블로커:DECLINE'
     assert_success
-    assert_output 'skip=unresolved-blocker:codex'
+    assert_output 'hold=unresolved-blocker:codex'
 }
 
-@test "F-2: no originally-blocking reviewer -> nothing to re-verify" {
-    _stub_lane_available
-    run _decide 'agy:FOLLOW-UP:DECLINE'
+@test "F-2 (fail-closed): a BLOCKING-spelled severity blocks too" {
+    run _gate 'agy:BLOCKING:QUESTION'
     assert_success
-    assert_output 'skip=no-blocking-reviewer'
+    assert_output 'hold=unresolved-blocker:agy'
 }
 
-@test "F-2: an unknown reviewer name is rejected (exit 2), never silently dropped" {
-    _stub_lane_available
-    run _decide 'codex:BLOCKER:ACCEPT' gemini
+@test "F-2: a malformed origin line is rejected (exit 2), never silently dropped" {
+    run _gate 'codex:BLOCKER'
     assert_failure 2
 }
 
 # ---------------------------------------------------------------------
-# F-7 — CLI gone / wrong environment falls back to the pre-#1616 behavior
+# Reporting the outcome (Step 7)
 # ---------------------------------------------------------------------
 
-@test "F-7 (AC-5): a blocking reviewer whose CLI is unavailable skips the lane" {
-    _stub_lane_unavailable
-    run _decide 'codex:BLOCKER:ACCEPT' codex
+@test "report (#1636): a resolved-BLOCKER pass names the count and the label flip" {
+    run _gh_pr_reply_review_passed_report pass=blockers-resolved:2
     assert_success
-    assert_output 'skip=cli-unavailable:codex'
-}
-
-@test "F-7: an unresolved blocker outranks CLI availability (no probe needed)" {
-    _stub_lane_unavailable
-    run _decide 'codex:BLOCKER:DECLINE' codex
-    assert_success
-    assert_output 'skip=unresolved-blocker:codex'
-}
-
-@test "F-7: lane_available delegates to gh:pr-review's own CLI gate" {
-    # shellcheck disable=SC2317  # called indirectly by the function under test
-    _gh_pr_review_require_ai_cli() {
-        printf '%s\n' "$1" >"${BATS_TEST_TMPDIR}/probed"
-        return 0
-    }
-    run _gh_pr_reply_lane_available codex
-    assert_success
-    run cat "${BATS_TEST_TMPDIR}/probed"
-    assert_output 'codex'
-}
-
-@test "F-7: lane_available reports unavailable when the shared gate refuses" {
-    # shellcheck disable=SC2317  # called indirectly by the function under test
-    _gh_pr_review_require_ai_cli() { return 1; }
-    run _gh_pr_reply_lane_available hermes
-    assert_failure
-}
-
-@test "F-7: lane_available never leaks the CLI gate's stderr into the report" {
-    # shellcheck disable=SC2317  # called indirectly by the function under test
-    _gh_pr_review_require_ai_cli() {
-        printf 'Required CLI %s not found in PATH\n' "$1" >&2
-        return 1
-    }
-    run _gh_pr_reply_lane_available opencode
-    assert_failure
-    assert_output ''
-}
-
-# ---------------------------------------------------------------------
-# F-4 / F-5 — reporting the outcome (Step 7)
-# ---------------------------------------------------------------------
-
-@test "F-5 (AC-3): a still-blocking re-review says so explicitly" {
-    run _gh_pr_reply_targeted_lane_report verdict=blocking
-    assert_success
-    assert_output --partial '타겟 재검토도 여전히 BLOCKING — 재수정 필요'
-}
-
-@test "F-4 (AC-2): an LGTM re-review reports the label flip" {
-    run _gh_pr_reply_targeted_lane_report verdict=lgtm
-    assert_success
+    assert_output --partial 'BLOCKER 2건 전부 해소'
     assert_output --partial 'review-blocked 해제'
     assert_output --partial 'review-passed'
 }
 
-@test "F-4: CONCERNS is non-blocking and reports the same flip" {
-    run _gh_pr_reply_targeted_lane_report verdict=concerns
+@test "report (#1636): the pass line says no external re-review was involved" {
+    # The relaxation must be visible in the run's own output, not only in the
+    # docs — a reader of the summary should see how the label was earned.
+    run _gh_pr_reply_review_passed_report pass=no-blocker
     assert_success
-    assert_output --partial 'review-blocked 해제'
+    assert_output --partial '외부 재검토 없음'
+    assert_output --partial '#1636'
 }
 
-@test "F-4 (NF-2): an unknown verdict never claims a pass" {
-    run _gh_pr_reply_targeted_lane_report verdict=unknown
-    assert_success
-    refute_output --partial 'review-passed'
-    assert_output --partial '전체 devx:pr-review-all 재실행 필요'
-}
-
-@test "F-6: the unresolved-blocker skip reports the reviewer by name" {
-    run _gh_pr_reply_targeted_lane_report skip=unresolved-blocker:codex
+@test "report: the hold line names the reviewer and never claims a pass" {
+    run _gh_pr_reply_review_passed_report hold=unresolved-blocker:codex
     assert_success
     assert_output --partial 'codex'
-    assert_output --partial '라벨 승격 시도 안 함'
-    refute_output --partial 'review-passed'
-}
-
-@test "F-7 (AC-5): the cli-unavailable skip asks for the full re-run" {
-    run _gh_pr_reply_targeted_lane_report skip=cli-unavailable:hermes
-    assert_success
-    assert_output --partial 'hermes'
-    assert_output --partial '전체 devx:pr-review-all 재실행 필요'
-}
-
-@test "F-2: the no-blocking-reviewer skip is not an error" {
-    run _gh_pr_reply_targeted_lane_report skip=no-blocking-reviewer
-    assert_success
-    refute_output --partial 'review-passed'
+    assert_output --partial 'review-blocked 유지'
+    assert_output --partial 'review-passed 미부여'
 }
 
 @test "report rejects a token it does not understand (exit 2)" {
-    run _gh_pr_reply_targeted_lane_report lane=codex
+    run _gh_pr_reply_review_passed_report lane=codex
     assert_failure 2
+}
+
+# ---------------------------------------------------------------------
+# _gh_pr_reply_apply_review_passed — the gate wired to the shared writer
+# ---------------------------------------------------------------------
+
+_apply_stub() {
+    APPLY_LOG="${BATS_TEST_TMPDIR}/apply.log"
+    : >"$APPLY_LOG"
+    # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh"
+    # shellcheck disable=SC2317  # invoked indirectly by the function under test
+    gh() {
+        printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$APPLY_LOG"
+        return "${STUB_GH_RC:-0}"
+    }
+    # shellcheck disable=SC2317  # invoked indirectly by the function under test
+    _gh_pr_edit_safe_label() {
+        printf 'add %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$APPLY_LOG"
+        return "${STUB_ADD_RC:-0}"
+    }
+}
+
+@test "apply (#1636): a clean pass applies review-passed with no CLI re-call" {
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:ACCEPT |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget ghe.example.com newsha \
+            >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output --partial 'add 1609 review-passed --repo acme/widget'
+    # Not one reviewer CLI, and not gh:pr-review, is invoked anywhere.
+    refute_output --partial '--ai '
+    refute_output --partial '--paths'
+    refute_output --partial 'pr-review'
+}
+
+@test "apply (#1636): applying review-passed deletes review-blocked first" {
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:ACCEPT |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1609/labels/review-blocked'
+}
+
+@test "apply (#1636, NF-1): the label carries the post-push head sha as its marker" {
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:ACCEPT |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha >/dev/null
+    run cat "$APPLY_LOG"
+    assert_output --partial 'review-verdict:review-passed:newsha'
+}
+
+@test "apply: every gh call pins the target host (#1403 / #1407)" {
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:ACCEPT |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget ghe.example.com newsha >/dev/null
+    run grep -c 'GH_HOST=ghe.example.com' "$APPLY_LOG"
+    assert_success
+    refute_output '0'
+}
+
+@test "apply (#1636): a PR with no BLOCKER at all still earns the label" {
+    _apply_stub
+    printf '%s\n' agy:FOLLOW-UP:DECLINE |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha \
+            >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output --partial 'add 1609 review-passed'
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'BLOCKER 항목 자체가 없음'
+}
+
+@test "apply (fail-closed): an unresolved BLOCKER writes nothing at all" {
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:DECLINE |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha \
+            >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output ''
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'review-passed 미부여'
+    assert_output --partial 'review-blocked 유지'
+}
+
+@test "apply (fail-closed): an unresolved BLOCKER never touches review-blocked" {
+    # The hold path must not delete the opposite label either — that delete
+    # only happens on the write path, which this input never reaches.
+    _apply_stub
+    printf '%s\n' codex:BLOCKER:QUESTION |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha >/dev/null
+    run cat "$APPLY_LOG"
+    refute_output --partial 'labels/review-blocked'
+}
+
+@test "apply: a label the repo lacks warns and leaves the PR unlabelled (soft-fail)" {
+    _apply_stub
+    STUB_ADD_RC=3
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { return 0; }
+        _gh_pr_edit_safe_label() { return 3; }
+        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget
+    "
+    unset STUB_ADD_RC
+    assert_success
+    assert_output --partial 'gh:label-bootstrap'
+    refute_output --partial '[OK]'
+}
+
+@test "apply: any other write failure warns instead of claiming the label" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { return 0; }
+        _gh_pr_edit_safe_label() { return 1; }
+        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget
+    "
+    assert_success
+    assert_output --partial '미검증으로 취급'
+}
+
+@test "apply: a marker-post failure adds a second WARN, not silence (#1608 rule)" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        gh() { return 1; }
+        _gh_pr_edit_safe_label() { return 0; }
+        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha
+    "
+    assert_success
+    assert_line --index 1 --partial 'freshness marker failed to post'
+}
+
+@test "apply: a missing repo arg is a usage error (rc 2)" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609
+    "
+    assert_failure 2
+    assert_output --partial 'usage: _gh_pr_reply_apply_review_passed'
+}
+
+# ---------------------------------------------------------------------
+# The #1616 re-review lane is gone (#1636 F-3)
+# ---------------------------------------------------------------------
+
+@test "#1636: the targeted re-review lane's functions no longer exist" {
+    # Leaving them defined would be a maintenance trap: nothing consumes a
+    # `lane=` token any more, and a future caller finding one would rebuild
+    # the very CLI round-trip this issue removed.
+    for _fn in _gh_pr_reply_targeted_lane_decide _gh_pr_reply_lane_available \
+        _gh_pr_reply_targeted_lane_report; do
+        run command -v "$_fn"
+        assert_failure
+    done
+}
+
+# The library's prose still *describes* the removed lane (that history is why
+# the relaxation is legible), so these guards read CODE only — comment lines
+# stripped — or they would pin the documentation instead of the behaviour.
+_lib_code_file() {
+    local _lib="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    LIB_CODE="${BATS_TEST_TMPDIR}/lib_code.sh"
+    grep -v '^[[:space:]]*#' "$_lib" >"$LIB_CODE"
+}
+
+@test "#1636: the library's code no longer re-invokes any reviewer CLI" {
+    _lib_code_file
+    run grep -qF -- '_gh_pr_review_require_ai_cli' "$LIB_CODE"
+    assert_failure
+    run grep -qF -- '--paths' "$LIB_CODE"
+    assert_failure
+    run grep -qF -- 'gh_pr_review.sh' "$LIB_CODE"
+    assert_failure
+}
+
+@test "#1636: the library never fabricates a reviewer verdict token" {
+    # The one banned shortcut: synthesizing an `lgtm`/`concerns` line and
+    # feeding it to devx_pr_review_all_apply_label would record gh:pr-reply's
+    # own judgment as a reviewer CLI's opinion. It writes a LABEL directly.
+    _lib_code_file
+    run grep -qF -- 'devx_pr_review_all_apply_label' "$LIB_CODE"
+    assert_failure
+    run grep -qE "printf.*'(lgtm|concerns)" "$LIB_CODE"
+    assert_failure
+    run grep -qF -- 'devx_pr_review_all_write_label' "$LIB_CODE"
+    assert_success
 }
 
 # ---------------------------------------------------------------------
@@ -316,8 +432,8 @@ agy:BLOCKER:ACCEPT-PARTIAL' codex agy
 
 @test "the library defines every function the skill delegates to" {
     for _fn in _gh_pr_reply_origin_line _gh_pr_reply_severity_is_blocking \
-        _gh_pr_reply_origin_tally _gh_pr_reply_targeted_lane_decide \
-        _gh_pr_reply_lane_available _gh_pr_reply_targeted_lane_report; do
+        _gh_pr_reply_origin_tally _gh_pr_reply_review_passed_gate \
+        _gh_pr_reply_review_passed_report _gh_pr_reply_apply_review_passed; do
         run command -v "$_fn"
         assert_success
     done
@@ -328,6 +444,6 @@ agy:BLOCKER:ACCEPT-PARTIAL' codex agy
     # interactive guard here would silently define nothing and the gate
     # would never run (#724's failure shape).
     run bash --noprofile --norc -c \
-        ". '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh' && command -v _gh_pr_reply_targeted_lane_decide"
+        ". '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh' && command -v _gh_pr_reply_review_passed_gate"
     assert_success
 }

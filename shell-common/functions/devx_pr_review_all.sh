@@ -157,8 +157,14 @@ devx_pr_review_all_parse() {
 #     -> label=review-blocked | label=review-passed | label=   (+ lanes=N)
 #   devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha] # verdict
 #     tokens on stdin -> aggregates, then writes the label to the PR. One
-#     `[OK]`/`[WARN]` line. [head-sha], when given, stamps a freshness marker
-#     alongside a `review-passed` label (#1601) — see that function's header.
+#     `[OK]`/`[WARN]` line. Since #1636 it only ever WRITES `review-blocked`;
+#     a non-blocking aggregate clears `review-blocked` and hands the
+#     `review-passed` decision to `gh:pr-reply` — see that function's header.
+#   devx_pr_review_all_write_label <label> <pr> <repo> [host] [head-sha]
+#     -> the shared, verdict-free write primitive both producers use:
+#     drop-opposite, add via `_gh_pr_edit_safe_label`, and (for
+#     `review-passed` with a sha) the #1601 freshness marker. Machine-readable
+#     `add=`/`marker=` tokens on stdout — see that function's header.
 #   devx_pr_review_all_already_reviewed <ai> <head-sha>  # bodies on stdin
 #     -> rc 0 when that lane already posted a block for this exact head
 #     (#1613 duplicate-review guard) — see that function's header.
@@ -347,6 +353,135 @@ devx_pr_review_all_already_reviewed() {
     [ -n "$_block" ]
 }
 
+# Delete one label from a PR, host-pinned and soft-fail. Internal: the two
+# writers below both need "clear the opposite label first", and a second copy
+# of the subshell/GH_HOST dance is exactly the drift `_gh_pr_drop_label`'s
+# header warns about. Kept as a raw REST DELETE (not `_gh_pr_drop_label`)
+# because this call site wants *silence* on every outcome — the caller's one
+# `[OK]`/`[WARN]` line is the whole report — where the shared primitive
+# deliberately re-verifies and forwards `gh`'s stderr.
+_devx_pr_review_all_delete_label() {
+    (
+        if [ -n "${4-}" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+            export GH_HOST="$4"
+        fi
+        gh api -X DELETE "repos/$3/issues/$2/labels/$1"
+    ) >/dev/null 2>&1 || :
+    return 0
+}
+
+# WRITE one verdict label to a PR. The verdict-free half of the old
+# `devx_pr_review_all_apply_label`, split out by #1636 so both producers share
+# one write path:
+#
+#   devx_pr_review_all_write_label <label> <pr> <repo> [host] [head-sha]
+#
+#   <label> — `review-passed` or `review-blocked`. Anything else is rc 2.
+#
+# It does, in order: delete the OPPOSITE label unconditionally (so a consumer
+# can never see both), add <label> through `_gh_pr_edit_safe_label`, and — for
+# `review-passed` with a [head-sha] — post the #1601 freshness marker comment.
+# GH_HOST is pinned per call inside a subshell (#1403 / #1407).
+#
+# Reports two machine-readable lines on stdout instead of prose, because the
+# two producers word their report lines differently and neither should have to
+# re-derive what happened:
+#
+#   add=ok | add=rc3 | add=failed | add=no-helper
+#   marker=posted | marker=failed | marker=none
+#
+# Soft-fail: rc 0 for every labelling outcome (an unlabelled PR already reads
+# as "not verified" downstream); only a usage error is rc 2.
+#
+# WHY THIS IS NOT A SELF-CERTIFICATION HOLE: this function takes a label, not
+# a verdict, and it has always been the code that writes one. What decides the
+# label lives in its callers — `devx_pr_review_all_apply_label` (an external
+# reviewer's parsed verdict) and `_gh_pr_reply_apply_review_passed`
+# (gh:pr-reply's own BLOCKER-resolution judgment, #1636). Splitting the two
+# apart is what lets the second caller exist WITHOUT fabricating a fake
+# verdict token to feed through the aggregator — a fake token would have
+# misrepresented gh:pr-reply's judgment as a reviewer CLI's opinion in the
+# label-application code, which is the one thing #1636 rules out.
+devx_pr_review_all_write_label() {
+    local _label="${1-}" _pr="${2-}" _repo="${3-}" _host="${4-}" _head_sha="${5-}"
+    local _opposite _rc _marker
+
+    case "$_label" in
+        review-passed) _opposite=review-blocked ;;
+        review-blocked) _opposite=review-passed ;;
+        *)
+            printf '[devx-pr-review-all] usage: devx_pr_review_all_write_label <review-passed|review-blocked> <pr> <repo> [host] [head-sha]\n' >&2
+            return 2
+            ;;
+    esac
+    if [ -z "$_pr" ] || [ -z "$_repo" ]; then
+        printf '[devx-pr-review-all] usage: devx_pr_review_all_write_label <review-passed|review-blocked> <pr> <repo> [host] [head-sha]\n' >&2
+        return 2
+    fi
+
+    # The add-side helper lives in a sibling library. Both files are
+    # auto-sourced into an interactive shell, but the skill's Bash tool calls
+    # run `bash --noprofile --norc`, so source it on demand rather than
+    # assuming the caller did.
+    if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh" 2>/dev/null || :
+    fi
+    if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
+        # Reported BEFORE any mutation: with no way to add the new label,
+        # deleting the opposite one would strip a valid verdict and put
+        # nothing in its place.
+        printf 'add=no-helper\n'
+        printf 'marker=none\n'
+        return 0
+    fi
+
+    _devx_pr_review_all_delete_label "$_opposite" "$_pr" "$_repo" "$_host"
+
+    # `|| _rc=$?`, not a bare subshell followed by `_rc=$?`: this file is
+    # sourced into callers that may have `set -e` armed (bats test bodies do),
+    # and there errexit fires on the subshell's non-zero exit BEFORE the
+    # capture runs — the soft-fail contract would silently become a hard fail
+    # on exactly the rc 3 path the caller most needs to report.
+    _rc=0
+    (
+        if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+            export GH_HOST="$_host"
+        fi
+        _gh_pr_edit_safe_label "$_pr" "$_label" --repo "$_repo"
+    ) || _rc=$?
+
+    # #1601 freshness marker: only on a successfully applied `review-passed`,
+    # and only when the caller supplied the head sha it decided for. Soft-fail
+    # — a failed post never changes the `add=` token — but never silent
+    # either (PR #1608 review, agy + codex BLOCKER): a lost marker leaves the
+    # label applied while `gh:pr-merge-train`'s freshness check will treat it
+    # as CONFIRMED stale and self-heal it away on the very next tick, which
+    # used to happen with no trace of why.
+    _marker=none
+    if [ "$_rc" -eq 0 ] && [ "$_label" = "review-passed" ] && [ -n "$_head_sha" ]; then
+        _marker=posted
+        (
+            if [ -n "$_host" ]; then
+                # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+                export GH_HOST="$_host"
+            fi
+            gh api -X POST "repos/$_repo/issues/$_pr/comments" \
+                -f "body=<!-- review-verdict:review-passed:$_head_sha -->"
+        ) >/dev/null 2>&1 || _marker=failed
+    fi
+
+    case "$_rc" in
+        0) printf 'add=ok\n' ;;
+        3) printf 'add=rc3\n' ;;
+        *) printf 'add=failed\n' ;;
+    esac
+    printf 'marker=%s\n' "$_marker"
+    return 0
+}
+
 # Aggregate the verdict stream and WRITE the resulting label to the PR.
 # This is the producer half of the merge gate (#1564): without it the two
 # labels are never issued, `gh:pr-merge-train` reads "not verified" on every
@@ -361,6 +496,12 @@ devx_pr_review_all_already_reviewed() {
 #
 # Contract (SSOT: claude/skills/devx-pr-review-all/references/review-verdict-label.md
 # -> "Applying the label"):
+#   - Since #1636 this function NEVER writes `review-passed`. A non-blocking
+#     aggregate only clears an existing `review-blocked` and says so; the
+#     `review-passed` decision moved to `gh:pr-reply` Step 6, which reaches it
+#     from its own BLOCKER-resolution judgment without an external CLI re-call.
+#     A PR left with neither label reads downstream exactly as it always has:
+#     "not verified". See the reference doc's "Who applies `review-passed`".
 #   - The OPPOSITE label is deleted first and unconditionally, so a re-review
 #     that flips blocked -> passed cannot leave a consumer seeing both.
 #   - The add goes through `_gh_pr_edit_safe_label`, never bare
@@ -375,22 +516,17 @@ devx_pr_review_all_already_reviewed() {
 #     write the label to the wrong server (#1403 / #1407), and the caller's own
 #     GH_HOST is left untouched.
 #
-# [head-sha] (#1601): when given AND the resolved label is `review-passed`,
-# post one plain issue comment carrying a freshness marker:
-#   <!-- review-verdict:review-passed:<head-sha> -->
-# `gh:pr-merge-train`'s gate (`_gh_pr_merge_train_review_passed_stale` in
-# gh_pr_merge_train.sh) reads this back and compares it against the PR's
-# CURRENT headRefOid before trusting the label — a label alone only proves
-# some head was reviewed, not that the current one was. Never posted for
-# `review-blocked`: a stale block is the safe direction and needs no
-# freshness proof. The post is soft-fail — it never changes the primary
-# `[OK]`/`[WARN]` line's content or this function's rc 0 — but a failed post
-# now adds a second `[WARN]` line (PR #1608 review, agy + codex BLOCKER:
-# silently losing the marker meant the label stayed applied while the next
-# merge-train check would treat it as confirmed stale with no trace of why).
+# [head-sha] (#1601) is still accepted, and is still what stamps the
+# `<!-- review-verdict:review-passed:<head-sha> -->` freshness marker — but
+# only via `devx_pr_review_all_write_label`, i.e. only for the caller that
+# actually applies `review-passed`. On this function's own paths it is now
+# inert: `review-blocked` never carried a marker (a stale block is the safe
+# direction), and the non-blocking path writes no label to stamp. The
+# argument stays in the signature so the Step 3.5 call site, the docs and the
+# merge-train's reader contract need no churn.
 devx_pr_review_all_apply_label() {
     local _pr="$1" _repo="$2" _host="${3-}" _head_sha="${4-}"
-    local _agg _label _lanes _opposite _rc _marker_posted
+    local _agg _label _lanes _write _add _marker
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
         printf '[devx-pr-review-all] usage: devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha]\n' >&2
@@ -408,78 +544,34 @@ devx_pr_review_all_apply_label() {
         return 0
     fi
 
-    case "$_label" in
-        review-blocked) _opposite=review-passed ;;
-        *) _opposite=review-blocked ;;
-    esac
-
-    # The add-side helper lives in a sibling library. Both files are
-    # auto-sourced into an interactive shell, but the skill's Bash tool calls
-    # run `bash --noprofile --norc`, so source it on demand rather than
-    # assuming the caller did.
-    if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
-        # shellcheck source=/dev/null
-        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh" 2>/dev/null || :
-    fi
-    if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
-        printf '[WARN] _gh_pr_edit_safe_label unavailable — PR #%s left unlabelled\n' "$_pr"
+    # #1636 — the label-ownership split. Every lane passed, but this producer
+    # no longer certifies: it clears the stale block (mutual exclusion is
+    # unchanged) and stops. `gh:pr-reply` applies `review-passed` after it has
+    # replied to every comment and found no unresolved BLOCKER.
+    if [ "$_label" = "review-passed" ]; then
+        _devx_pr_review_all_delete_label review-blocked "$_pr" "$_repo" "$_host"
+        # shellcheck disable=SC2016  # backticks are markdown, not substitution
+        printf '[OK] PR #%s: every lane non-blocking (%s lane(s)) — `review-blocked` cleared; `review-passed` is gh:pr-reply'"'"'s to apply (#1636)\n' \
+            "$_pr" "$_lanes"
         return 0
     fi
 
-    (
-        if [ -n "$_host" ]; then
-            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
-            export GH_HOST="$_host"
-        fi
-        gh api -X DELETE "repos/$_repo/issues/$_pr/labels/$_opposite"
-    ) >/dev/null 2>&1 || :
-
-    # `|| _rc=$?`, not a bare subshell followed by `_rc=$?`: this file is
-    # sourced into callers that may have `set -e` armed (bats test bodies do),
-    # and there errexit fires on the subshell's non-zero exit BEFORE the
-    # capture runs — the soft-fail contract would silently become a hard fail
-    # on exactly the rc 3 path the caller most needs to report.
-    _rc=0
-    (
-        if [ -n "$_host" ]; then
-            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
-            export GH_HOST="$_host"
-        fi
-        _gh_pr_edit_safe_label "$_pr" "$_label" --repo "$_repo"
-    ) || _rc=$?
-
-    # #1601 freshness marker: only on a successfully applied `review-passed`,
-    # and only when the caller supplied the head sha it reviewed. Soft-fail —
-    # a failed post never changes `$_rc` or the primary report line above —
-    # but is no longer silent (PR #1608 review, agy + codex BLOCKER): a lost
-    # marker leaves the label applied while `gh:pr-merge-train`'s freshness
-    # check will treat it as CONFIRMED stale and self-heal it away on the very
-    # next tick, which used to happen with no trace of why. `_marker_posted`
-    # stays unset (never reported) unless this branch actually runs, so the
-    # `review-blocked` / non-`review-passed` paths never print the new line.
-    if [ "$_rc" -eq 0 ] && [ "$_label" = "review-passed" ] && [ -n "$_head_sha" ]; then
-        _marker_posted=1
-        (
-            if [ -n "$_host" ]; then
-                # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
-                export GH_HOST="$_host"
-            fi
-            gh api -X POST "repos/$_repo/issues/$_pr/comments" \
-                -f "body=<!-- review-verdict:review-passed:$_head_sha -->"
-        ) >/dev/null 2>&1 || _marker_posted=0
-    fi
+    _write=$(devx_pr_review_all_write_label "$_label" "$_pr" "$_repo" "$_host" "$_head_sha")
+    _add=$(printf '%s\n' "$_write" | sed -n 's/^add=//p')
+    _marker=$(printf '%s\n' "$_write" | sed -n 's/^marker=//p')
 
     # The backticks below are markdown in the report line (the label name
     # renders as code in a terminal-pasted comment), not command
     # substitution — single-quoted printf formats never expand.
     # shellcheck disable=SC2016
-    case "$_rc" in
-        0) printf '[OK] PR #%s labelled `%s` (%s lane(s))\n' "$_pr" "$_label" "$_lanes" ;;
-        3) printf '[WARN] label `%s` missing in %s — provision it first (gh:label-bootstrap)\n' \
+    case "$_add" in
+        ok) printf '[OK] PR #%s labelled `%s` (%s lane(s))\n' "$_pr" "$_label" "$_lanes" ;;
+        rc3) printf '[WARN] label `%s` missing in %s — provision it first (gh:label-bootstrap)\n' \
             "$_label" "$_repo" ;;
+        no-helper) printf '[WARN] _gh_pr_edit_safe_label unavailable — PR #%s left unlabelled\n' "$_pr" ;;
         *) printf '[WARN] labelling PR #%s failed — treat the PR as unverified\n' "$_pr" ;;
     esac
-    if [ "${_marker_posted:-1}" -eq 0 ]; then
+    if [ "$_marker" = "failed" ]; then
         printf '[WARN] review-passed freshness marker failed to post for PR #%s — a later merge-train check may see it as stale\n' "$_pr"
     fi
     return 0
@@ -495,6 +587,7 @@ for _dpra_selfcheck_fn in \
     devx_pr_review_all_aggregate \
     devx_pr_review_all_lane_block \
     devx_pr_review_all_already_reviewed \
+    devx_pr_review_all_write_label \
     devx_pr_review_all_apply_label; do
     command -v "$_dpra_selfcheck_fn" >/dev/null 2>&1 && continue
     printf '[devx_pr_review_all] BUG: %s undefined after source — the review verdict gate will not run. See dotfiles #724 / #1564.\n' \
