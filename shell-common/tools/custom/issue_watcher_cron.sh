@@ -1741,6 +1741,13 @@ _iw_settle_max_polls() {
             if (g <= 0) { print s; exit }
             n = s / g; i = int(n); if (i < n) i++
             if (i < 2) i = 2
+            # A gap far below 1s (a fat-fingered override, e.g. 0.001) would
+            # otherwise scale into thousands of herdr round trips for one
+            # dispatch — a self-inflicted but real resource-exhaustion risk
+            # (agy, PR #1611 review, 4th pass). 1000 is far above any gap this
+            # repo ships or documents (default 1, the widest override tested
+            # is 13) and still bounds the worst case to a fixed, small budget.
+            if (i > 1000) i = 1000
             print i
         }'
 }
