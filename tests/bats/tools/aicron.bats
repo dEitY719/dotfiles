@@ -1378,12 +1378,12 @@ _shipped_env() {
     _shipped_manifest_call aicron_manifest_env "$1"
 }
 
-@test "aicron: the shipped issue-watcher job runs every 3 minutes (#1579)" {
+@test "aicron: the shipped issue-watcher job runs every 4 minutes (#1627)" {
     # Installing this is a separate step — the crontab keeps whatever schedule
     # it was added with, and `aicron doctor` is what reports the drift.
     run _shipped_manifest_call aicron_manifest_schedule issue-watcher
     assert_success
-    assert_output "*/3 * * * *"
+    assert_output "*/4 * * * *"
 }
 
 @test "aicron: the shipped issue-watcher job is routed at the work1 account" {
@@ -1398,10 +1398,10 @@ _shipped_env() {
     assert_line "CLAUDE_DEFAULT_ACCOUNT=work1"
 }
 
-@test "aicron: the shipped merge-train job runs every 2 minutes (#1586)" {
+@test "aicron: the shipped merge-train job runs every 3 minutes (#1627)" {
     # Installing this is a separate step — the crontab keeps whatever schedule
     # it was added with, and `aicron doctor` is what reports the drift.
     run _shipped_manifest_call aicron_manifest_schedule merge-train
     assert_success
-    assert_output "*/2 * * * *"
+    assert_output "*/3 * * * *"
 }
