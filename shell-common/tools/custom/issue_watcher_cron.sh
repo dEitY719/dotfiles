@@ -130,7 +130,7 @@ _iw_cap() {
 }
 
 _IW_MAX_PER_REPO=$(_iw_cap "${IW_MAX_PER_REPO-}" 3 IW_MAX_PER_REPO)
-_IW_MAX_CONCURRENT=$(_iw_cap "${IW_MAX_CONCURRENT-}" 17 IW_MAX_CONCURRENT)
+_IW_MAX_CONCURRENT=$(_iw_cap "${IW_MAX_CONCURRENT-}" 5 IW_MAX_CONCURRENT)
 _IW_DISPATCH_PER_TICK=$(_iw_cap "${IW_DISPATCH_PER_TICK-}" 1 IW_DISPATCH_PER_TICK)
 # How long a pane has to keep looking stopped before the tick believes it.
 # A single tick sees one snapshot, and in that snapshot a finished session and
@@ -3292,7 +3292,7 @@ _iw_usage() {
     ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
     ux_bullet_sub "it must also hold a parseable .credentials.json — a logged-out account stalls every prompt"
     ux_bullet "crontab"
-    ux_bullet_sub "*/3 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
+    ux_bullet_sub "*/4 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
 }
 
 # ============================================================
