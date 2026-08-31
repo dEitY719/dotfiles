@@ -1328,12 +1328,11 @@ _iw_select_candidates() {
     local _repo _number _numbers _path _host _live _rc _selected=""
     local _budget _repo_budget _capped=0
 
-    # No global headroom is the same answer as a capped repo — nothing selected,
-    # and a full cap is the only reason. Unreachable from a real tick (main()
-    # holds on the total cap before this runs) but the dry run reaches it, and a
-    # truthful status costs nothing.
+    # Unreachable from a real tick (main() holds on the total cap before this
+    # runs). The dry run can still reach it, but that caller never reads $? —
+    # so this stays a plain empty return rather than a status nobody consumes.
     _budget=$(_iw_dispatch_budget)
-    [ "${_budget}" -gt 0 ] || return 2
+    [ "${_budget}" -gt 0 ] || return 0
 
     for _repo in $(_iw_repo_order "$(_iw_last_repo)"); do
         _numbers=$(printf '%s\n' "${_candidates}" |
@@ -3012,39 +3011,37 @@ _iw_saturation_tick() {
     '' | *[!0-9]*) _last=0 ;;
     esac
 
-    if [ "${_ticks}" -lt "${_IW_SATURATION_ALERT_TICKS}" ]; then
-        _iw_saturation_write "${_ticks}" "${_last}" || true
-        return 0
-    fi
-
-    _now=$(_iw_now)
-    if [ -z "${_now}" ]; then
-        # No clock, no cooldown arithmetic — and an alert that cannot record
-        # when it fired would re-fire every tick from here on. The count still
-        # goes to disk, so the episode is not lost, only unannounced.
-        ux_warning "Cannot read the clock — saturation alert skipped (${_ticks} consecutive full ticks)."
-        _iw_saturation_write "${_ticks}" "${_last}" || true
-        return 0
-    fi
-
-    # Past the threshold only the clock decides (F-3). The counter keeps
-    # climbing rather than resetting: re-arming on "ticks grew again" would fire
-    # every tick forever, and zeroing it would throw away how long this episode
-    # has actually run — which is the one number a human waking up to this wants.
-    #
-    # A negative gap means `last_notified` sits in the future: a clock jump or a
-    # hand edit, never something this script wrote. Alerting beats staying quiet
-    # until the clock catches up, the same call _iw_limit_gate_state makes for an
-    # out-of-range deadline.
-    _since=$((_now - _last))
-    if [ "${_last}" -eq 0 ] || [ "${_since}" -ge "${_IW_SATURATION_COOLDOWN_SECONDS}" ] ||
-        [ "${_since}" -lt 0 ]; then
-        ux_warning "Concurrency slots have been full for ${_ticks} consecutive tick(s) — nothing dispatched."
-        # Only a delivered alert starts the clock. Stamping a refused one would
-        # trade the warning line _iw_herdr_notify just logged for three silent
-        # hours — exactly the outcome this alert exists to prevent — so a
-        # refusal simply leaves the next tick to try again.
-        _iw_saturation_notify && _last="${_now}"
+    if [ "${_ticks}" -ge "${_IW_SATURATION_ALERT_TICKS}" ]; then
+        _now=$(_iw_now)
+        if [ -z "${_now}" ]; then
+            # No clock, no cooldown arithmetic — and an alert that cannot record
+            # when it fired would re-fire every tick from here on. The count
+            # still goes to disk below, so the episode is not lost, only
+            # unannounced.
+            ux_warning "Cannot read the clock — saturation alert skipped (${_ticks} consecutive full ticks)."
+        else
+            # Past the threshold only the clock decides (F-3). The counter keeps
+            # climbing rather than resetting: re-arming on "ticks grew again"
+            # would fire every tick forever, and zeroing it would throw away how
+            # long this episode has actually run — which is the one number a
+            # human waking up to this wants.
+            #
+            # A negative gap means `last_notified` sits in the future: a clock
+            # jump or a hand edit, never something this script wrote. Alerting
+            # beats staying quiet until the clock catches up, the same call
+            # _iw_limit_gate_state makes for an out-of-range deadline.
+            _since=$((_now - _last))
+            if [ "${_last}" -eq 0 ] || [ "${_since}" -ge "${_IW_SATURATION_COOLDOWN_SECONDS}" ] ||
+                [ "${_since}" -lt 0 ]; then
+                ux_warning "Concurrency slots have been full for ${_ticks} consecutive tick(s) — nothing dispatched."
+                # Only a delivered alert starts the clock. Stamping a refused
+                # one would trade the warning line _iw_herdr_notify just logged
+                # for three silent hours — exactly the outcome this alert
+                # exists to prevent — so a refusal simply leaves the next tick
+                # to try again.
+                _iw_saturation_notify && _last="${_now}"
+            fi
+        fi
     fi
 
     _iw_saturation_write "${_ticks}" "${_last}" || true
