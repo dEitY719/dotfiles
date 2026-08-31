@@ -139,6 +139,25 @@ _IW_DISPATCH_PER_TICK=$(_iw_cap "${IW_DISPATCH_PER_TICK-}" 1 IW_DISPATCH_PER_TIC
 # couple of ticks (cron runs every ~3 minutes) plus a typical delegation, which
 # runs for minutes rather than the milliseconds between two tool calls.
 _IW_ZOMBIE_GRACE_SECONDS=$(_iw_cap "${IW_ZOMBIE_GRACE_SECONDS-}" 600 IW_ZOMBIE_GRACE_SECONDS)
+# Saturation alert (issue #1606). How many consecutive ticks may skip dispatch
+# purely because the caps above are full before the watcher says so out loud,
+# and how long it then stays quiet about a state that has not changed.
+#
+# The slots have stood full overnight twice, for two unrelated reasons
+# (#1596/#1597 zombie tabs nobody closed, #1604 a quota backoff nobody resumed),
+# and both times the only alarm was a human asking the next morning. So the
+# alert is deliberately cause-blind: it counts ticks and nothing else. Working
+# out *why* would need the pane-text matching #1444 rejected for the rate-limit
+# gate, and a cause the watcher has not been taught is exactly the one that will
+# cost the next night.
+#
+# 20 ticks is roughly an hour at the shipped */3 cron period — long enough that
+# a healthy burst (every slot busy, dispatches landing again a few ticks later)
+# never trips it, short enough that a night is not lost. The 3h cooldown is the
+# same trade one level up: a saturation nobody has cleared is worth repeating,
+# but not once an hour.
+_IW_SATURATION_ALERT_TICKS=$(_iw_cap "${IW_SATURATION_ALERT_TICKS-}" 20 IW_SATURATION_ALERT_TICKS)
+_IW_SATURATION_COOLDOWN_SECONDS=$(_iw_cap "${IW_SATURATION_COOLDOWN_SECONDS-}" 10800 IW_SATURATION_COOLDOWN_SECONDS)
 # Attempts per issue before giving up on it for this cycle. Every failed
 # attempt cleans its own worktree up first, so a retry starts from scratch.
 _IW_MAX_ATTEMPTS="3"
@@ -304,6 +323,11 @@ _IW_ZOMBIE_CANDIDATES_BASENAME="zombie-candidates.tsv"
 # awk column is the cheaper half of that trade. A row missing the field reads as
 # zero attempts, so a state directory written before it existed still parses.
 _IW_LIMIT_CASUALTIES_BASENAME="rate-limit-casualties.tsv"
+# The saturation counter's backing file (issue #1606). JSON like the gate's, not
+# TSV like the zombie clock's: it holds two scalars for the watcher as a whole,
+# not one row per item, and a human resetting an episode by hand reads it the
+# same way they already read rate-limit.json.
+_IW_SATURATION_STATE_BASENAME="saturation.json"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
 # How long a *confirmed* dispatch has to hold `working` before the tick accepts
@@ -1287,13 +1311,29 @@ _iw_dispatch_budget() {
     fi
 }
 
+# Echoes the `<repo>\t<number>\t<path>\t<host>` lines this tick may dispatch.
+#
+# The exit status carries a second answer the stdout cannot (issue #1606): 2
+# means at least one repo that had work was skipped *because it sat at its
+# per-repo cap*, 0 that no cap was in the way. main() pairs that with "did
+# anything come back" to decide whether this tick counts as saturated, and the
+# two cases it has to keep apart — capped versus an empty backlog — are
+# indistinguishable from the candidate list alone.
+#
+# An exit status rather than a global, because every caller runs this inside a
+# `$( )`: a variable assigned in that subshell dies with it, and the flag would
+# always read as 0 back in main().
 _iw_select_candidates() {
     local _candidates="$1"
     local _repo _number _numbers _path _host _live _rc _selected=""
-    local _budget _repo_budget
+    local _budget _repo_budget _capped=0
 
+    # No global headroom is the same answer as a capped repo — nothing selected,
+    # and a full cap is the only reason. Unreachable from a real tick (main()
+    # holds on the total cap before this runs) but the dry run reaches it, and a
+    # truthful status costs nothing.
     _budget=$(_iw_dispatch_budget)
-    [ "${_budget}" -gt 0 ] || return 0
+    [ "${_budget}" -gt 0 ] || return 2
 
     for _repo in $(_iw_repo_order "$(_iw_last_repo)"); do
         _numbers=$(printf '%s\n' "${_candidates}" |
@@ -1306,6 +1346,9 @@ _iw_select_candidates() {
         _repo_budget=$(( _IW_MAX_PER_REPO - _live ))
         if [ "${_repo_budget}" -le 0 ]; then
             ux_info "Skipping ${_repo} — ${_live} of its issues are already running (max ${_IW_MAX_PER_REPO})." >&2
+            # This repo had work and its cap is the only thing that stopped it —
+            # the tick-level saturation signal this function reports on exit.
+            _capped=1
             continue
         fi
         # The repo's own headroom, never more than what is left for this tick.
@@ -1360,6 +1403,11 @@ _iw_select_candidates() {
     # Advance the cursor only when this tick actually served a repo. A tick
     # that found nothing has not taken anyone's turn.
     [ -z "${_selected}" ] || _iw_write_last_repo "${_selected}"
+
+    # Explicit, because the cursor write above must not become this function's
+    # answer: a failed `_iw_write_last_repo` would otherwise read as "capped".
+    [ "${_capped}" -eq 0 ] || return 2
+    return 0
 }
 
 # Remove the worktrees of issues that are finished with: the issue is closed
@@ -1982,6 +2030,22 @@ _iw_prompt_retryable() {
     return 1
 }
 
+# The one place a desktop alert is raised: `<title>`, `<body>`, and `<subject>`
+# — the phrase both log lines end in. Two callers now (a stalled prompt and, in
+# #1606, saturated slots), one CLI shape and one success/failure log pair, so a
+# change to how the tick shouts lands in both instead of in whichever copy was
+# remembered. `--sound request` because both are things a human has to act on.
+# Returns non-zero when herdr refused; no caller has anything to do about that
+# beyond the line already logged here.
+_iw_herdr_notify() {
+    if herdr notification show "$1" --body "$2" --sound request >/dev/null 2>&1; then
+        ux_warning "Posted a herdr notification for $3."
+        return 0
+    fi
+    ux_warning "Could not post a herdr notification for $3."
+    return 1
+}
+
 _iw_escalate_prompt_stall() {
     local _tab="$1" _agent="$2" _number="$3" _code="$4"
     local _label="issue-${_number}-STUCK"
@@ -1995,12 +2059,8 @@ _iw_escalate_prompt_stall() {
         fi
     fi
 
-    if herdr notification show "issue watcher prompt stalled" \
-        --body "${_body}" --sound request >/dev/null 2>&1; then
-        ux_warning "Posted a herdr notification for issue #${_number} prompt failure."
-    else
-        ux_warning "Could not post a herdr notification for issue #${_number} prompt failure."
-    fi
+    _iw_herdr_notify "issue watcher prompt stalled" "${_body}" \
+        "issue #${_number} prompt failure" || true
 }
 
 # Send `/gh-issue-flow <N>` to the issue's agent.
@@ -2824,6 +2884,225 @@ _iw_limit_record() {
 # Status report (--status)
 # ============================================================
 
+# ============================================================
+# Saturation alert (issue #1606)
+# ============================================================
+#
+# One question, asked once per tick: did this tick dispatch nothing *purely*
+# because the concurrency caps were full? The answer is a boolean, not a count
+# of capped repos — two capped repos in one tick are still one tick of
+# saturation, and the thing being measured is how long the watcher has been
+# unable to start anything.
+#
+# Exactly one of three call sites answers it per tick:
+#   - main()'s total-concurrency hold — always saturated;
+#   - after candidate selection, "candidates exist" — not saturated, the slots
+#     had room and a dispatch is about to be attempted;
+#   - after candidate selection, "no candidates, but every repo that had
+#     something to offer sat at its per-repo cap" — saturated.
+# A tick with genuinely nothing to dispatch answers none of the three: an empty
+# backlog is not evidence of saturation, and it is not evidence the slots freed
+# up either, so it must leave the counter exactly as it found it.
+#
+# The zombie-grace reclaim deliberately has no call site of its own: the live
+# count is recomputed from scratch every tick, so a tick that reclaimed a pane
+# already shows the extra headroom and routes itself through one of the branches
+# above (PR #1608 design note).
+#
+# Nothing here inspects *why* the slots are full — same posture as the
+# rate-limit gate since #1444, where pane text decides nothing.
+
+_iw_saturation_state_file() {
+    printf '%s/%s' "$(_iw_state_dir)" "${_IW_SATURATION_STATE_BASENAME}"
+}
+
+# Echo one field of the saturation state file, or nothing. A missing file, an
+# unreadable one and an absent field are all "nothing" on purpose — every caller
+# reads that as "no episode on record" and starts a fresh one (NF-1).
+_iw_saturation_read() {
+    local _file
+    _file=$(_iw_saturation_state_file)
+    [ -f "${_file}" ] || return 0
+    _iw_json_value ".$1" <"${_file}" 2>/dev/null
+}
+
+# Persist the consecutive-tick count plus the epoch of the last alert. Both are
+# written as JSON *strings* for the same reason _iw_limit_write writes its two
+# that way: the readers coerce either encoding, and a file left by an earlier
+# tick has to keep parsing across the upgrade.
+_iw_saturation_write() {
+    local _dir _file
+    _dir=$(_iw_state_dir)
+    _file=$(_iw_saturation_state_file)
+
+    if ! mkdir -p "${_dir}" 2>/dev/null; then
+        ux_warning "Cannot create state directory (${_dir}) — the saturation counter will not survive this tick."
+        return 1
+    fi
+
+    if ! printf '{ "ticks": "%s", "last_notified": "%s" }\n' "$1" "$2" >"${_file}" 2>/dev/null; then
+        ux_warning "Cannot write ${_file} — the saturation counter will not survive this tick."
+        return 1
+    fi
+}
+
+_iw_saturation_clear() {
+    rm -f "$(_iw_saturation_state_file)" 2>/dev/null || true
+}
+
+# The alert body: one `<repo>#<number>: <status>` line per occupied slot (F-2).
+#
+# The status is asked per pane rather than reused from the `agent list` snapshot
+# the live count was built on, because that snapshot is exactly what a human
+# reading this alert has to second-guess: it is what makes the slot count as
+# occupied, and a `done`/`idle` line beside an issue number is the difference
+# between "everything is genuinely busy" and "a tab nobody closed". Without it
+# the answer costs seven `herdr agent attach` calls by hand.
+_iw_saturation_notify() {
+    local _repo _number _agent _status _body=""
+
+    # fd 3, not stdin: `_iw_agent_status` shells out to herdr, which reads stdin
+    # and would otherwise swallow the rest of the occupied list — the same
+    # hazard main()'s dispatch loop documents.
+    while IFS="${_IW_TAB}" read -r _repo _number <&3; do
+        [ -n "${_repo}" ] || continue
+        _status=""
+        if _agent=$(_iw_agent_name "${_repo}" "${_number}") && [ -n "${_agent}" ]; then
+            _status=$(_iw_agent_status "${_agent}") || _status=""
+        fi
+        _body="${_body}${_repo}#${_number}: ${_status:-unknown}
+"
+    done 3<<EOF
+$(_iw_live_agents)
+EOF
+
+    # The status is relayed, not swallowed: the caller starts the cooldown only
+    # once an alert actually went out.
+    _iw_herdr_notify "issue watcher slots saturated" \
+        "No dispatch for ${_IW_SATURATION_ALERT_TICKS}+ consecutive ticks — every slot occupied:
+${_body}" \
+        "saturated concurrency slots"
+}
+
+# The single per-tick hook. $1 is 1 when this tick dispatched nothing purely
+# because the caps were full, 0 when the slots had room.
+#
+# Fail-open throughout (NF-1): a field that reads back unusable is treated as
+# "no episode on record", and a write that fails warns once and returns. An
+# alert this script cannot persist must never be the reason a tick stops.
+_iw_saturation_tick() {
+    local _ticks _last _now _since
+
+    if [ "$1" -eq 0 ]; then
+        # F-4. The episode is over, so the cooldown goes with it: the next
+        # saturation is a new incident and must not be silenced by the alert
+        # that closed the last one.
+        _iw_saturation_clear
+        return 0
+    fi
+
+    _ticks=$(_iw_saturation_read ticks)
+    case "${_ticks}" in
+    '' | *[!0-9]*) _ticks=0 ;;
+    esac
+    _ticks=$((_ticks + 1))
+
+    _last=$(_iw_saturation_read last_notified)
+    case "${_last}" in
+    '' | *[!0-9]*) _last=0 ;;
+    esac
+
+    if [ "${_ticks}" -lt "${_IW_SATURATION_ALERT_TICKS}" ]; then
+        _iw_saturation_write "${_ticks}" "${_last}" || true
+        return 0
+    fi
+
+    _now=$(_iw_now)
+    if [ -z "${_now}" ]; then
+        # No clock, no cooldown arithmetic — and an alert that cannot record
+        # when it fired would re-fire every tick from here on. The count still
+        # goes to disk, so the episode is not lost, only unannounced.
+        ux_warning "Cannot read the clock — saturation alert skipped (${_ticks} consecutive full ticks)."
+        _iw_saturation_write "${_ticks}" "${_last}" || true
+        return 0
+    fi
+
+    # Past the threshold only the clock decides (F-3). The counter keeps
+    # climbing rather than resetting: re-arming on "ticks grew again" would fire
+    # every tick forever, and zeroing it would throw away how long this episode
+    # has actually run — which is the one number a human waking up to this wants.
+    #
+    # A negative gap means `last_notified` sits in the future: a clock jump or a
+    # hand edit, never something this script wrote. Alerting beats staying quiet
+    # until the clock catches up, the same call _iw_limit_gate_state makes for an
+    # out-of-range deadline.
+    _since=$((_now - _last))
+    if [ "${_last}" -eq 0 ] || [ "${_since}" -ge "${_IW_SATURATION_COOLDOWN_SECONDS}" ] ||
+        [ "${_since}" -lt 0 ]; then
+        ux_warning "Concurrency slots have been full for ${_ticks} consecutive tick(s) — nothing dispatched."
+        # Only a delivered alert starts the clock. Stamping a refused one would
+        # trade the warning line _iw_herdr_notify just logged for three silent
+        # hours — exactly the outcome this alert exists to prevent — so a
+        # refusal simply leaves the next tick to try again.
+        _iw_saturation_notify && _last="${_now}"
+    fi
+
+    _iw_saturation_write "${_ticks}" "${_last}" || true
+}
+
+# The read-only half of the alert, for the human it just woke up: how many ticks
+# this episode has run, and whether the alert has already fired for it. Pure,
+# like _iw_limit_gate_state — reporting an episode must never advance or clear
+# one, the same reason --dry-run stays off the gate's write path.
+_iw_saturation_status_report() {
+    local _file _ticks _last _now _since
+
+    _file=$(_iw_saturation_state_file)
+    ux_bullet "saturation state file"
+    ux_bullet_sub "${_file}"
+
+    if [ ! -f "${_file}" ]; then
+        ux_success "No saturation episode on record — the last tick that looked had room."
+        return 0
+    fi
+
+    # A hand-edited or truncated field reads as "?" rather than as an invented
+    # 0, the same call the strike line makes above.
+    _ticks=$(_iw_saturation_read ticks)
+    case "${_ticks}" in
+    '' | *[!0-9]*) _ticks="?" ;;
+    esac
+    _last=$(_iw_saturation_read last_notified)
+    case "${_last}" in
+    '' | *[!0-9]*) _last=0 ;;
+    esac
+
+    ux_bullet "saturation"
+    ux_bullet_sub "${_ticks}/${_IW_SATURATION_ALERT_TICKS} consecutive ticks that dispatched nothing with the slots full"
+
+    if [ "${_last}" -eq 0 ]; then
+        ux_warning "Slots saturated — no alert sent yet for this episode."
+        return 0
+    fi
+
+    _now=$(_iw_now)
+    if [ -z "${_now}" ]; then
+        ux_warning "Slots saturated — an alert was sent for this episode; cannot read the clock to say when."
+        return 0
+    fi
+
+    _since=$((_now - _last))
+    if [ "${_since}" -lt 0 ]; then
+        # Only a clock jump or a hand edit writes a future timestamp; the tick
+        # alerts through it rather than waiting for the clock to catch up, so
+        # the report says the same thing.
+        ux_warning "Slots saturated — the last alert is stamped in the future; the next tick alerts anyway."
+        return 0
+    fi
+
+    ux_warning "Slots saturated — last alert ~$(((_since + 59) / 60))m ago, the next after $((_IW_SATURATION_COOLDOWN_SECONDS / 60))m."
+}
+
 # A read-only window on the rate-limit gate (issue #1441, AC 11): it answers
 # "is the watcher holding, and for how long" without running a tick.
 #
@@ -2838,12 +3117,21 @@ _iw_limit_record() {
 # operating state, not an error, and `set -e` cron wrappers that call this to
 # log the gate must not die on it; the state is carried by the text, which is
 # what a human reading cron.log reads anyway.
+# Split from _iw_status_report when the saturation counter earned a section of
+# its own (#1606): every branch below answers with `return 0`, so a second topic
+# appended after them would be unreachable on all but one path. Two reporters,
+# one caller, and neither can silence the other.
 _iw_status_report() {
+    ux_header "issue-watcher status"
+    _iw_limit_status_report
+    _iw_saturation_status_report
+}
+
+_iw_limit_status_report() {
     local _file _state _left _strikes
 
     _file=$(_iw_limit_state_file)
 
-    ux_header "issue-watcher status"
     ux_bullet "state file"
     ux_bullet_sub "${_file}"
 
@@ -2973,6 +3261,7 @@ _iw_usage() {
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_LIMIT_STATE_BASENAME}   (rate-limit gate)"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_SELECT_STATE_BASENAME}       (round-robin cursor; absent = start at the first repo)"
+    ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_SATURATION_STATE_BASENAME}   (saturation counter; absent = no episode)"
     ux_bullet "rate-limit gate"
     ux_bullet_sub "a dispatch is judged only once its prompt is confirmed submitted"
     ux_bullet_sub "healthy means its agent still holds 'working' ${_IW_LIMIT_OBSERVE_SEC}s later"
@@ -2981,6 +3270,12 @@ _iw_usage() {
     ux_bullet_sub "a strike logs the pane tail as evidence — pane text never opens or closes the gate"
     ux_bullet_sub "while closed the tick holds: no prompt, no worktree, exit 0"
     ux_bullet_sub "it reopens by itself after $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — delete ${_IW_LIMIT_STATE_BASENAME} to reopen it now"
+    ux_bullet "saturation alert"
+    ux_bullet_sub "${_IW_SATURATION_ALERT_TICKS} consecutive ticks that dispatch nothing because the caps are full raise one herdr notification"
+    ux_bullet_sub "the body lists every occupied issue and its agent status — read it before reaching for a cause"
+    ux_bullet_sub "it stays quiet for $((_IW_SATURATION_COOLDOWN_SECONDS / 3600))h afterwards while the state persists"
+    ux_bullet_sub "a tick that dispatches clears the counter; a tick with no candidates leaves it alone"
+    ux_bullet_sub "cause-blind by design — it fires on the symptom, whatever caused it"
     ux_bullet "claude session (claude-yolo parity)"
     ux_bullet_sub "each pane runs claude --dangerously-skip-permissions (unattended cron)"
     ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
@@ -2998,7 +3293,7 @@ _iw_usage() {
 # ============================================================
 
 main() {
-    local _cwd="" _repo _number _path _host _rc _dispatched=0 _skipped=0 _failed=0 _candidates _live
+    local _cwd="" _repo _number _path _host _rc _dispatched=0 _skipped=0 _failed=0 _candidates _live _select_rc
     local _confirmed=""
 
     while [ "$#" -gt 0 ]; do
@@ -3213,16 +3508,36 @@ EOF
     _live=$(_iw_live_count)
     if [ "${_live}" -ge "${_IW_MAX_CONCURRENT}" ]; then
         ux_info "Holding this tick — ${_live} issue session(s) already running (max ${_IW_MAX_CONCURRENT})."
+        # Unconditionally a saturated tick: nothing was dispatched and the total
+        # cap is the only reason.
+        _iw_saturation_tick 1
         exit 0
     fi
 
     _candidates=$(_iw_select_candidates "$(_iw_collect_candidates)")
+    _select_rc=$?
 
     if [ -z "${_candidates}" ]; then
         ux_info "No dispatchable issue this tick."
+        # "Nothing to dispatch" and "nowhere to put it" are different facts, and
+        # only the second is saturation (F-1). An empty backlog is left
+        # deliberately unanswered: it is no evidence the slots are full, and no
+        # evidence they freed up either, so the counter must survive it
+        # untouched — a busy watcher that runs out of issues for one tick has
+        # not ended the episode it was in.
+        [ "${_select_rc}" -ne 2 ] || _iw_saturation_tick 1
         exit 0
     fi
 
+    # Slots had room and a dispatch is about to be attempted, so whatever
+    # becomes of it this tick is not a saturated one — and any episode that was
+    # running ends here, cooldown included (F-4).
+    _iw_saturation_tick 0
+
+    # Resolved once for the whole tick (memoized — see _iw_ensure_config_dir):
+    # every pane it opens shares one account, which is also what lets the
+    # rate-limit gate read one pane's stall as evidence about the quota
+    # behind all of them.
     _iw_ensure_config_dir
 
     # fd 3, not stdin: the loop body runs `gh`, `herdr` and `gwt`, any of which

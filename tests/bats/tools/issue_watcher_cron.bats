@@ -34,6 +34,7 @@ setup() {
     _STATE_DIR="${_STATE_HOME}/issue-watcher"
     _LIMIT_FILE="${_STATE_DIR}/rate-limit.json"
     _CASUALTY_FILE="${_STATE_DIR}/rate-limit-casualties.tsv"
+    _SATURATION_FILE="${_STATE_DIR}/saturation.json"
     _ZOMBIE_FILE="${_STATE_DIR}/zombie-candidates.tsv"
     _LOCK_FILE="${_STATE_DIR}/.lock"
     _LOG="${_WORK_DIR}/calls.log"
@@ -193,6 +194,18 @@ _set_running_with_status() {
     _set_agents_with_status "${_status}" "${_paths[@]}"
 }
 
+# _set_running's pane half only, for issues whose worktrees an earlier tick
+# already created. This is how a slot is freed (or refilled) mid-test: the
+# running-now signal is the pane, so dropping one from the list frees exactly
+# one slot without disturbing the worktrees the run so far has left behind.
+_set_panes_for() {
+    local _paths=() _n
+    for _n in "$@"; do
+        _paths+=("$(_worktree_path "${_n}")")
+    done
+    _set_agents_with_status working "${_paths[@]}"
+}
+
 # The rate-limit gate state file: _set_limit_state <strikes> <backoff_until>.
 # Both fields are written as JSON *strings* because _iw_limit_write does, and
 # the quoting is a back-compat guarantee rather than an accident — so the
@@ -200,6 +213,15 @@ _set_running_with_status() {
 _set_limit_state() {
     mkdir -p "${_STATE_DIR}"
     printf '{ "strikes": "%s", "backoff_until": "%s" }\n' "$1" "$2" >"${_LIMIT_FILE}"
+}
+
+# The saturation counter (#1606): _set_saturation_state <ticks> <last_notified>.
+# Quoted strings for the same reason _set_limit_state quotes its two — the
+# on-disk schema is a back-compat guarantee, so it is spelled out here once
+# rather than restated at every test that seeds an episode already in progress.
+_set_saturation_state() {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "ticks": "%s", "last_notified": "%s" }\n' "$1" "$2" >"${_SATURATION_FILE}"
 }
 
 # The zombie grace clock (#1596): one
@@ -1020,6 +1042,15 @@ _assert_not_hung() {
     assert_output --partial "rate-limit gate"
     assert_output --partial "rate-limit.json"
     assert_output --partial "30m"
+}
+
+@test "issue_watcher_cron: --help documents the saturation alert and its state file" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "saturation alert"
+    assert_output --partial "saturation.json"
+    assert_output --partial "20 consecutive ticks"
+    assert_output --partial "3h"
 }
 
 @test "issue_watcher_cron: --help documents --status" {
@@ -3547,6 +3578,131 @@ _two_repo_fixture() {
 }
 
 # ---------------------------------------------------------------------------
+# Saturation alert (issue #1606)
+# ---------------------------------------------------------------------------
+#
+# The alert is deliberately cause-blind: it fires on "every slot has been full
+# for N ticks in a row", whatever emptied the watcher's queue. Both outages it
+# exists for (#1596/#1597 stale tabs, #1604 quota retries that never resumed)
+# looked identical from here, and both were found by a human asking the next
+# morning rather than by the watcher saying anything.
+
+@test "issue_watcher_cron: consecutive saturated ticks notify exactly once at the threshold" {
+    _set_running 21 22 23 24 25 26 27
+
+    _run_tick "IW_SATURATION_ALERT_TICKS=2"
+    assert_success
+    # One short of the threshold: counted, not announced.
+    _refute_logged "notification show"
+    run cat "${_SATURATION_FILE}"
+    assert_output --partial '"ticks": "1"'
+
+    : >"${_LOG}"
+    _run_tick "IW_SATURATION_ALERT_TICKS=2"
+    assert_success
+    [ "$(_log_count 'notification show')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: a saturated tick inside the cooldown window sends no second notification" {
+    _set_running 21 22 23 24 25 26 27
+
+    _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_SATURATION_COOLDOWN_SECONDS=10800"
+    assert_success
+    [ "$(_log_count 'notification show')" -eq 1 ]
+
+    # Still saturated, still past the threshold — and still the same incident,
+    # so the cooldown holds. The counter keeps climbing underneath it: the
+    # cooldown gates the alert, never the record of how long this has run.
+    : >"${_LOG}"
+    _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_SATURATION_COOLDOWN_SECONDS=10800"
+    assert_success
+    _refute_logged "notification show"
+    run cat "${_SATURATION_FILE}"
+    assert_output --partial '"ticks": "2"'
+}
+
+@test "issue_watcher_cron: a freed slot clears the counter and a fresh episode alerts again" {
+    # The regression that matters most: without the clear, the 3h cooldown from
+    # the first episode would swallow the alert for a *second, unrelated* outage
+    # that started ten minutes later.
+    _set_running 21 22 23 24 25 26 27
+    _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_MAX_PER_REPO=9"
+    assert_success
+    [ "$(_log_count 'notification show')" -eq 1 ]
+
+    # One pane gone: the tick dispatches again, so the episode is over.
+    : >"${_LOG}"
+    _set_panes_for 21 22 23 24 25 26
+    _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_MAX_PER_REPO=9"
+    assert_success
+    _assert_logged "gwt spawn --wt-name issue-11"
+    [ ! -f "${_SATURATION_FILE}" ]
+
+    # Full again, well inside the old cooldown — a new incident, and it says so.
+    : >"${_LOG}"
+    _set_panes_for 21 22 23 24 25 26 27
+    _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_MAX_PER_REPO=9"
+    assert_success
+    [ "$(_log_count 'notification show')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: the saturation alert names every occupied issue and its agent status" {
+    # F-2. The numbers alone would only restate the count the alert already
+    # carries; the per-pane status is what separates "genuinely busy" from the
+    # zombie tabs of #1596 without attaching to seven panes by hand.
+    _set_running 21 22 23 24 25 26 27
+    _run_tick "IW_SATURATION_ALERT_TICKS=1" "HERDR_AGENT_STATUS=done"
+    assert_success
+    _assert_logged "acme/dotfiles#21: done"
+    _assert_logged "acme/dotfiles#24: done"
+    _assert_logged "acme/dotfiles#27: done"
+}
+
+@test "issue_watcher_cron: a tick where every offering repo sits at its own cap counts as saturated" {
+    # The second way the slots fill up, and the one the total-concurrency hold
+    # never sees: three of seven global slots used, but the only repo with
+    # anything to dispatch is at its per-repo cap, so the tick starts nothing.
+    _set_running 21 22 23
+    _run_tick "IW_SATURATION_ALERT_TICKS=1"
+    assert_success
+    assert_output --partial "3 of its issues are already running"
+    refute_output --partial "already running (max 7)"
+    [ "$(_log_count 'notification show')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: an alert herdr refused does not start the cooldown" {
+    # The cooldown exists to stop a *delivered* alert repeating. Stamping it on
+    # a refused one would trade one noisy warning line for three silent hours,
+    # which is the outcome this whole alert exists to prevent.
+    _set_running 21 22 23 24 25 26 27
+    _run_tick "IW_SATURATION_ALERT_TICKS=1" "HERDR_NOTIFY_FAIL=1"
+    assert_success
+    assert_output --partial "Could not post a herdr notification"
+    run cat "${_SATURATION_FILE}"
+    assert_output --partial '"last_notified": "0"'
+
+    : >"${_LOG}"
+    _run_tick "IW_SATURATION_ALERT_TICKS=1"
+    assert_success
+    [ "$(_log_count 'notification show')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: an empty backlog leaves a running episode's counter untouched" {
+    # The third answer, and the one that is neither: no candidates *at all*
+    # says nothing about the slots. Counting it would inflate an episode with
+    # quiet ticks; clearing it would let one issue-free tick reset a saturation
+    # that has been going for hours. So it does neither.
+    _set_saturation_state 5 0
+    _set_issues '[]'
+    _run_tick "IW_SATURATION_ALERT_TICKS=6"
+    assert_success
+    assert_output --partial "No dispatchable issue this tick."
+    _refute_logged "notification show"
+    run cat "${_SATURATION_FILE}"
+    assert_output --partial '"ticks": "5"'
+}
+
+# ---------------------------------------------------------------------------
 # --status (issue #1441, AC 11)
 # ---------------------------------------------------------------------------
 
@@ -3604,6 +3760,23 @@ _two_repo_fixture() {
     _run_tick -- --status
     assert_success
     assert_output --partial "unreadable"
+}
+
+@test "issue_watcher_cron: --status reports a saturation episode already in progress" {
+    # The command a human runs after the alert wakes them: how long have the
+    # slots been full, and has the alert already fired for this episode.
+    _set_saturation_state 4 0
+    _run_tick "IW_SATURATION_ALERT_TICKS=20" -- --status
+    assert_success
+    assert_output --partial "saturation.json"
+    assert_output --partial "4/20"
+    assert_output --partial "no alert sent yet"
+}
+
+@test "issue_watcher_cron: --status reports no saturation episode when there is no counter file" {
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "No saturation episode"
 }
 
 @test "issue_watcher_cron: --status does not take the tick lock" {
