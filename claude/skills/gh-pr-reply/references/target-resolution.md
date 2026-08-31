@@ -30,7 +30,7 @@ URL (network-free):
 # never defined. `remote` is the [remote] positional; ${remote:-origin}
 # keeps the block self-contained whether or not it was set.
 export DOTFILES_FORCE_INIT=1
-. "${SHELL_COMMON}/functions/gh_pr_review.sh"
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_review.sh"
 . "${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common/functions/gh_host.sh"
 REMOTE_URL=$(git remote get-url "${remote:-origin}") || {
   echo "Cannot resolve remote '${remote:-origin}' to a repo" >&2; exit 1; }
