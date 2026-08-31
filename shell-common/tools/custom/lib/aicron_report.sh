@@ -30,8 +30,13 @@
 # One line summarising the last run, or "never". The three keys are written
 # together by aicron_state_record, so they are read together too — one jq over
 # the state file instead of one per key, on a path `list` walks per job.
+#
+# The exit code renders as a literal (ok / failed(N)) rather than the bare
+# number — there is no standard name table for shell exit codes the way HTTP
+# has status text, so 0-vs-nonzero plus the code is the honest amount of
+# literal-ness; anything fancier would be guessing at what the code means.
 aicron_report_last() {
-    local _f _v _run
+    local _f _v _run _exit _dur _lit
     _f=$(aicron_state_file "$1")
     _v=""
     [ -f "${_f}" ] && _v=$(jq -r '
@@ -43,7 +48,14 @@ aicron_report_last() {
         return 0
     fi
     _v="${_v#*|}"
-    printf '%s (exit %s, %ss)' "${_run}" "${_v%%|*}" "${_v#*|}"
+    _exit="${_v%%|*}"
+    _dur="${_v#*|}"
+    case "${_exit}" in
+    0) _lit=ok ;;
+    '?') _lit='exit ?' ;;
+    *) _lit="failed(${_exit})" ;;
+    esac
+    printf '%s (%s, %ss)' "${_run}" "${_lit}" "${_dur}"
 }
 
 # Said once per view, on stderr, when the crontab could not be read.
@@ -116,7 +128,7 @@ aicron_report_job_json() {
 
 # <1> is "json" or "text".
 aicron_report_list() {
-    local _tmp _table _ok _n _inst _paused _last _mf _sd
+    local _tmp _table _ok _n _inst _paused _status _any_missing _last _mf _sd
     _tmp=$(aicron_mktemp aicron-list) || {
         ux_error "could not create a temp file for the job list"
         return 1
@@ -147,20 +159,33 @@ aicron_report_list() {
     fi
 
     ux_header "aicron jobs"
-    ux_table_header "JOB" "INSTALLED / PAUSED" "LAST RUN"
+    ux_table_header "JOB" "STATUS" "LAST RUN"
+    _any_missing=0
     while IFS= read -r _n; do
         [ -n "${_n}" ] || continue
         _inst=$(aicron_report_installed_text "${_table}" "${_ok}" "${_n}")
         _paused=no
         aicron_state_paused "${_n}" && _paused=yes
+        case "${_inst}" in
+        unknown) _status=unknown ;;
+        no)
+            _status="not installed"
+            _any_missing=1
+            ;;
+        yes)
+            _status=running
+            [ "${_paused}" = yes ] && _status=paused
+            ;;
+        esac
         _last=$(aicron_report_last "${_n}")
-        ux_table_row "${_n}" "installed=${_inst}  paused=${_paused}" "${_last}"
+        ux_table_row "${_n}" "${_status}" "${_last}"
     done <"${_tmp}"
     rm -f "${_tmp}" "${_table}"
 
     _mf=$(aicron_manifest_file)
     _sd=$(aicron_state_dir)
     ux_info ""
+    [ "${_any_missing}" = "1" ] && ux_bullet_sub "not installed → aicron add <job>"
     ux_bullet_sub "manifest: ${_mf}"
     ux_bullet_sub "state:    ${_sd}"
     return 0

@@ -94,7 +94,7 @@ aicron_usage() {
     ux_info "Usage: aicron <command> [arguments]"
     ux_info ""
     ux_section "Commands"
-    ux_table_row "list [--json]" "every manifest job: installed, paused, last run"
+    ux_table_row "list [--json]" "every manifest job: status (running/paused/not installed), last run"
     ux_table_row "add <job>" "install the job's crontab block (--schedule <expr> to override)"
     ux_table_row "remove <job>" "drop the job's crontab block (also cleans a doctor orphan); the state file is kept"
     ux_table_row "pause <job>" "stop running the job; the crontab entry stays"
