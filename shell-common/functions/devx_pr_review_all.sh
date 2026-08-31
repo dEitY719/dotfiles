@@ -356,7 +356,7 @@ devx_pr_review_all_apply_label() {
     local _agg _label _lanes _opposite _rc
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
-        printf '[devx-pr-review-all] usage: devx_pr_review_all_apply_label <pr> <repo> [host]\n' >&2
+        printf '[devx-pr-review-all] usage: devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha]\n' >&2
         return 2
     fi
 
