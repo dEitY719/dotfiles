@@ -10,7 +10,7 @@ PR #123 review comments processed: 5 total
   By reviewer:
     codex  blocking 2/2 accepted · non-blocking 0 (0 declined)
     agy    blocking 0/0 accepted · non-blocking 3 (3 declined)
-  [OK] 타겟 재검토 통과 — review-blocked 해제, review-passed 적용
+  [OK] BLOCKER 2건 전부 해소 — review-blocked 해제, review-passed 적용 (외부 재검토 없음, #1636)
   -> All comments replied to.
 ```
 
@@ -28,17 +28,19 @@ PR #123 review comments processed: 5 total
   that makes "codex's 2 BLOCKERs are fixed, agy's 3 suggestions were
   declined" readable at a glance — the flat pair above cannot express it,
   which is exactly how PR #1609 got a stuck `review-blocked` (#1616).
-- **타겟 재검토 line** — the Step 6 lane's outcome, printed verbatim by
-  `_gh_pr_reply_targeted_lane_report`. One of the five rows tabled in
-  `references/targeted-rereview.md` § "Step 7 문구". Always present when
-  `PUSHED_FIXES > 0`; omitted otherwise (no push, no re-review lane).
+- **`review-passed` gate line** — the Step 6 gate's outcome, printed verbatim
+  by `_gh_pr_reply_apply_review_passed` (which renders it through
+  `_gh_pr_reply_review_passed_report`). One of the rows tabled in
+  `references/review-passed-gate.md` § "Step 7 문구". **Always present** —
+  unlike the #1616 lane line it replaced, this one does not depend on
+  `PUSHED_FIXES`: a pass whose every BLOCKER was already resolved still
+  earns the label even when no new commit was pushed.
 - **Closing line** — `-> All comments replied to.` confirms the
   politeness contract was met.
-- Step 6 reads the same `ORIGINS` stream this table renders, but only to
-  decide whether the targeted re-review lane may attempt a `review-passed`
-  upgrade — `review-blocked` no longer depends on this stream (#1634;
-  `references/verdict-label-removal.sh.md` →
-  `references/targeted-rereview.md`). Both steps use one stream — never
+- Step 6 reads the same `ORIGINS` stream this table renders, to decide
+  whether `review-passed` may be applied
+  (`references/verdict-label-removal.sh.md` →
+  `references/review-passed-gate.md`). Both steps use one stream — never
   re-derive it.
 - **No board-promotion row** — `Approved` is owned by `gh:pr-approve`
   (#1350). This skill's only board write is the Step 6 `In review`

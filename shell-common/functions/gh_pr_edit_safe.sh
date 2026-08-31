@@ -40,12 +40,15 @@
 # ---------------------------------------------------------------------------
 # Verdict-label invalidation — SSOT for issue #1563
 # ---------------------------------------------------------------------------
-# `devx_pr_review_all_apply_label` is the ONLY writer of the two verdict
-# labels — since #1616 it has two callers (`devx:pr-review-all`'s full fan-out
-# and `gh:pr-reply`'s single-reviewer targeted re-review), but still exactly
-# one write path:
-#   review-blocked — at least one reviewer lane returned a blocking verdict
-#   review-passed  — every lane that ran passed, and at least one lane ran
+# `devx_pr_review_all_write_label` is the ONLY writer of the two verdict
+# labels. Since #1636 the two labels have one producer each, both routed
+# through that single write primitive:
+#   review-blocked — `devx:pr-review-all` Step 3.5, via
+#                    `devx_pr_review_all_apply_label`: at least one reviewer
+#                    lane returned a blocking verdict
+#   review-passed  — `gh:pr-reply` Step 6, via
+#                    `_gh_pr_reply_apply_review_passed`: every comment was
+#                    replied to and no BLOCKER-severity item is unresolved
 # Both prove a claim about **one specific head commit**, not about the PR in
 # general. So every skill that advances a PR's head (a push of any kind) must
 # invalidate them, or a stale `review-passed` survives onto code nobody read
@@ -53,41 +56,51 @@
 # gh:pr-resolve-conflict force-pushing over a reviewed commit).
 #
 # _gh_pr_drop_label is that single shared primitive. Consumers:
-#   gh:pr-reply             Step 6 — `review-blocked` once Step 5 completes,
-#                           `review-passed` after `git push` of the fixes
+#   gh:pr-reply             Step 6 — `review-passed` after `git push` of the
+#                           fixes (#1636's own gate handles `review-blocked`
+#                           indirectly, via `devx_pr_review_all_write_label`
+#                           below — never through this primitive directly)
 #   gh:pr-resolve-conflict  Step 5 — after a successful --force-with-lease
 #   gh:pr-resolve-outdated  Step 5 — after a successful --force-with-lease
+#   gh:pr-merge             Step 4 — after a successful merge (#1636). Not an
+#                           invalidation but a cleanup: the PR is closed and
+#                           the label has no reader left, so leaving it on
+#                           only makes a reopened PR look pre-verified.
 #
-# The asymmetry rule (both labels drop unconditionally; what differs is which
-# skill may drop which, and on what precondition):
+# The asymmetry rule (`review-passed` drops unconditionally; `review-blocked`
+# never drops through this primitive at all):
 #   - `review-passed` is dropped UNCONDITIONALLY by all three. Any new head
 #     invalidates "this head was reviewed"; dropping is always the safe
 #     direction because absence means "not verified", not "blocked".
-#   - `review-blocked` is dropped by exactly one of the three, `gh:pr-reply`
-#     — UNCONDITIONALLY as well, once Step 5's "reply to every comment"
-#     contract is satisfied (#1634). That completion is the only
-#     precondition: it holds regardless of PUSHED_FIXES and regardless of
-#     the ACCEPT/DECLINE ratio. The rule this replaced — a global
-#     accepted/declined count — pinned the label whenever any OTHER
-#     reviewer's non-blocking suggestion was declined (PR #1609). #1616's
-#     targeted re-review lane, gated on `_gh_pr_reply_targeted_lane_decide`
-#     (per reviewer, per severity — see
-#     claude/skills/gh-pr-reply/references/targeted-rereview.md), narrowed
-#     that, but still withheld removal when a reviewer's own BLOCKER item
-#     was declined with justification rather than fixed (PR #1630); #1634
-#     removes that remaining gate. The lane still runs when
-#     `PUSHED_FIXES > 0`, now purely as an opportunistic `review-passed`
-#     upgrade: an independent `gh:pr-review` re-call that comes back
-#     non-blocking lets `devx_pr_review_all_apply_label` write
-#     `review-passed`, and one that comes back BLOCKING re-applies
-#     `review-blocked` — on that fresh, independent evidence, not as a
-#     reversal of the unconditional drop.
-#   - `gh:pr-resolve-conflict` / `gh:pr-resolve-outdated` never drop
-#     `review-blocked` — a rebase holds no verdict at all, so it must leave
-#     the label in place — the safe direction, not a bug.
-#   - No skill may ADD either label by hand, and none may certify its own
-#     work: only a reviewer verdict, through
-#     `devx_pr_review_all_apply_label`, issues them (#1616 NF-2).
+#   - `review-blocked` is never dropped by this primitive. It is cleared only
+#     as the side effect of a NEW decision, both of which delete the opposite
+#     label on their way through `devx_pr_review_all_write_label`:
+#     `devx:pr-review-all` aggregating an all-non-blocking round, or
+#     `gh:pr-reply` gating on `_gh_pr_reply_review_passed_gate` (see
+#     claude/skills/gh-pr-reply/references/review-passed-gate.md) and applying
+#     `review-passed`. The rule this replaced — `gh:pr-reply` dropping it on a
+#     global accepted/declined count — pinned the label whenever any OTHER
+#     reviewer's non-blocking suggestion was declined (PR #1609). A rebase
+#     skill holds no verdict at all, so it must leave `review-blocked` in
+#     place — the safe direction, not a bug.
+#   - No skill may ADD either label by hand: both go through
+#     `devx_pr_review_all_write_label`. "Never self-certify" (#1563 / #1616
+#     NF-2) still holds for `review-blocked`, which only an external reviewer
+#     verdict can issue. #1636 DELIBERATELY RELAXED it for `review-passed`:
+#     `gh:pr-reply` now applies that label from its own BLOCKER-resolution
+#     judgment with no external AI CLI re-call, because that re-call was the
+#     cost and failure point jamming `gh:pr-merge-train`. The findings are
+#     still external — an outside reviewer raised the BLOCKERs; gh:pr-reply
+#     only confirms they were resolved, and one unresolved BLOCKER still
+#     means no label.
+#
+#     Historical note (#1634, superseded): an earlier fix made `gh:pr-reply`
+#     drop `review-blocked` unconditionally once Step 5's "reply to every
+#     comment" contract was satisfied — regardless of whether the reviewer's
+#     own BLOCKER item was fixed or merely declined with justification. #1636
+#     replaces that with the stricter rule above: an unresolved BLOCKER
+#     (declined or not) always withholds `review-passed`, and `review-blocked`
+#     is only ever cleared as the side effect of actually earning it.
 # Consuming reference docs link here instead of restating this rule.
 #
 # _gh_pr_drop_label return codes:

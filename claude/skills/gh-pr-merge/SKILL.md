@@ -78,6 +78,12 @@ Then run the herdr idle-tab hint per `references/herdr-tab-notify.sh.md` — one
 tab (soft-fail and read-only; skip entirely when there is no local worktree, no
 `herdr`, or the agent is not idle — never close a tab or delete a worktree).
 
+Then drop the now-readerless `review-passed` label per
+`references/review-passed-cleanup.sh.md` — `_gh_pr_drop_label "$PR_NUMBER"
+review-passed "$TARGET_REPO" "$TARGET_HOST"` (#1636, soft-fail: the merge
+already succeeded, so a failed delete is one `[WARN]` line and never touches
+the Step 5 report or the exit status).
+
 After the board sync completes, post the ai-metrics PR comment per
 `references/ai-metrics-comment.sh.md` (soft-fail; skip entirely when `GH_DISABLE_AI_METRICS=1`).
 
