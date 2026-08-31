@@ -1707,24 +1707,42 @@ _iw_pane_settled() {
 }
 
 # Echo how many settle polls fit in _IW_SETTLE_SECONDS at _IW_SETTLE_POLL_SLEEP
-# apart — ceil(seconds / gap). The pre-#1611-review shape hardcoded this to
-# `_IW_SETTLE_SECONDS` itself, silently assuming a 1s gap: IW_SETTLE_POLL_SLEEP=0.5
-# then hit the count bound at 6.5s of real sleeping, cutting the wait short of
-# the cap it was supposed to honour, while a gap *above* 1s (e.g. 4) overshot
-# it several times over — agy and codex both flagged the same root cause from
-# opposite sides in the PR #1611 review. `0` keeps the pre-scaling answer
-# (the seconds themselves): division by zero has no answer, and a `0` gap
-# already means "no real delay", so "poll up to N times" is the only sense
-# left to give the cap — and it is also the shape the bats suite's stubbed
-# `sleep` relies on to stay fast (a wall-clock-only bound would make a
-# "never settles" fixture actually wait out real seconds, timeout stub or not).
+# apart — ceil(seconds / gap), floored at 2 whenever the gap is real. The
+# pre-#1611-review shape hardcoded this to `_IW_SETTLE_SECONDS` itself,
+# silently assuming a 1s gap: IW_SETTLE_POLL_SLEEP=0.5 then hit the count
+# bound at 6.5s of real sleeping, cutting the wait short of the cap it was
+# supposed to honour, while a gap *above* 1s (e.g. 4) overshot it several
+# times over — agy and codex both flagged the same root cause from opposite
+# sides in the PR #1611 review.
+#
+# The zero/negative check lives inside awk, not a shell `case`, so it catches
+# every numeral spelling of "no delay" (`0`, `00`, `.0`, `0.000`, a stray
+# `-1`) — a `case 0 | 0.0 | 0.00)` pattern missed `.0`/`0.000` and fell
+# through to a fatal awk division-by-zero, leaving `_max_polls` empty and the
+# caller's `[ -lt ]` broken (agy, PR #1611 review, second pass). `LC_ALL=C`
+# pins `.` as the decimal point regardless of the caller's locale — a
+# comma-decimal locale would otherwise mis-parse a fractional gap.
+# `0` itself keeps the pre-scaling answer (the seconds themselves): division
+# by zero has no answer, and a `0` gap already means "no real delay", so
+# "poll up to N times" is the only sense left to give the cap — and it is
+# also the shape the bats suite's stubbed `sleep` relies on to stay fast (a
+# wall-clock-only bound would make a "never settles" fixture actually wait
+# out real seconds, timeout stub or not).
+#
+# The floor at 2 (once the gap is real) is what keeps a gap at or above the
+# cap itself (IW_SETTLE_POLL_SLEEP=13, say) from producing exactly one read
+# and zero sleeps — ceil(13/13)=1 alone would give up instantly instead of
+# waiting the one real gap the override asked for (agy, PR #1611 review,
+# second pass).
 _iw_settle_max_polls() {
     local _seconds="$1" _gap="$2"
-    case "${_gap}" in
-    0 | 0.0 | 0.00) printf '%s' "${_seconds}"; return 0 ;;
-    esac
-    awk -v s="${_seconds}" -v g="${_gap}" \
-        'BEGIN { n = s / g; i = int(n); if (i < n) i++; if (i < 1) i = 1; print i }'
+    LC_ALL=C awk -v s="${_seconds}" -v g="${_gap}" \
+        'BEGIN {
+            if (g <= 0) { print s; exit }
+            n = s / g; i = int(n); if (i < n) i++
+            if (i < 2) i = 2
+            print i
+        }'
 }
 
 # Wait for a freshly launched pane to look ready before typing into it
@@ -1766,7 +1784,14 @@ _iw_settle() {
     _max_polls=$(_iw_settle_max_polls "${_IW_SETTLE_SECONDS}" "${_IW_SETTLE_POLL_SLEEP}")
 
     _now=$(_iw_now)
-    [ -z "${_now}" ] || _deadline=$((_now + _IW_SETTLE_SECONDS))
+    # `10#` forces base 10: bash arithmetic otherwise reads a leading-zero
+    # numeral as octal, so IW_SETTLE_SECONDS=08/09 aborted the whole tick with
+    # "value too great for base" and 01-07 silently computed the (here
+    # harmless, but wrong) octal value instead of the decimal one someone
+    # typed (codex, PR #1611 review, second pass — a genuine regression: the
+    # pre-#1611-review code only ever passed this value to `sleep`, which has
+    # no such reading).
+    [ -z "${_now}" ] || _deadline=$((_now + 10#${_IW_SETTLE_SECONDS}))
 
     while [ "${_i}" -lt "${_max_polls}" ]; do
         # Checked before the read, not after the sleep: a poll gap wider than
