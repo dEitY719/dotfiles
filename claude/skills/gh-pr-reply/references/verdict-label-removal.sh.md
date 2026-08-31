@@ -15,7 +15,7 @@ Caller contract: `PR_NUMBER`, `TARGET_REPO`, `TARGET_HOST` 는 Step 1 이
 `ORIGINS` 는 Step 3 이 `references/targeted-rereview.md` 대로 기록한
 `<reviewer>:<severity>:<verdict>` 스트림이다.
 
-## 비대칭: 둘 다 무조건 해제, 단 재차단 경로만 다르다
+## 비대칭: 둘 다 무조건 해제, 단 트리거가 다르다 (`review-passed` 는 push, `review-blocked` 는 Step 5 완주)
 
 - **`review-passed`** — push 가 있었다는 사실만으로 무조건 제거한다. 리뷰된
   커밋이 더 이상 head 가 아니므로 "이 head 는 리뷰됨"이 거짓이 된다.
@@ -24,12 +24,9 @@ Caller contract: `PR_NUMBER`, `TARGET_REPO`, `TARGET_HOST` 는 Step 1 이
   ACCEPT/DECLINE 비율과 무관하다. 전부 DECLINE 이라 push 가 없었던 경우(수정
   자체가 불필요하다고 판단한 경우)도 포함된다.
 
-  #1616 이전에는 여기서 전역 카운터(`ACCEPTED_COUNT` / `DECLINED_COUNT`)로
-  판단했다. 그 규칙은 *다른* 리뷰어의 비블로킹 제안을 정당하게 거절한 것만으로
-  라벨을 붙잡아 뒀다 — PR #1609 가 그 사례다. #1616 은 리뷰어별·심각도별
-  게이트(`references/targeted-rereview.md`)로 좁혔지만, 그 게이트조차 리뷰어
-  자신의 BLOCKER 항목을 근거를 갖춰 정당하게 DECLINE 한 경우엔 여전히 라벨을
-  붙잡아 뒀다 — PR #1630 이 그 사례다. #1634 는 그 잔여 게이트마저 제거한다.
+  이 무조건 해제가 어떤 게이트들을 차례로 대체했는지(#1616 이전의 전역 카운터
+  → #1616 의 리뷰어별·심각도별 게이트), 각 게이트가 어디서 라벨을 잘못 붙잡아
+  뒀는지(PR #1609, PR #1630)는 위에서 가리킨 SSOT 헤더가 SSOT 다.
 
   `PUSHED_FIXES > 0` 일 때는 그 뒤로도 타겟 재검토 lane 을 계속 돌린다 — 이제
   이 라벨을 "떼기 위해서"가 아니라, 독립 재검토가 비블로킹으로 돌아오면
@@ -53,7 +50,7 @@ stderr 로 넘어온다.
 # review-blocked — 무조건, push 여부와 무관 (#1634).
 if _vl_err=$(_gh_pr_drop_label "$PR_NUMBER" review-blocked \
         "$TARGET_REPO" "$TARGET_HOST" 2>&1); then
-    echo "[OK] \`review-blocked\` 해제됨 — 코멘트 전원 답변 완료"
+    echo "[OK] \`review-blocked\` 해제됨 (없었으면 no-op) — 코멘트 전원 답변 완료"
 else
     echo "[WARN] \`review-blocked\` 제거 실패: ${_vl_err}"
 fi
