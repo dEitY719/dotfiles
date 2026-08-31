@@ -2,18 +2,13 @@
 # tests/bats/functions/devx_pr_review_all_dedupe.bats
 # Issue #1613 — the pre-dispatch duplicate-review guard.
 #
-# Background: devx:pr-review-all had no concurrency guard, so two sessions
-# reviewing the same PR at the same head sha both fanned out and agy/codex each
-# posted a duplicate review comment (reproduced on PR #1608, head 2d7bbdca,
-# reviewed twice 36 minutes apart). Step 3 now asks
-# `devx_pr_review_all_already_reviewed <ai> <head-sha>` before dispatching each
-# lane, and `--force-review` bypasses it.
-#
-# Fail-OPEN is the whole point here, the opposite of the verdict gate's
-# fail-closed rule: anything short of a complete block for that exact ai+sha
-# pair means "not yet reviewed", so the lane runs. A missed skip costs a
-# duplicate comment; a false skip would silently lose a lane's verdict.
-# SSOT: claude/skills/devx-pr-review-all/references/duplicate-review-guard.md
+# Step 3 now asks `devx_pr_review_all_already_reviewed <ai> <head-sha>` before
+# dispatching each lane, and `--force-review` bypasses it. Fail-OPEN is the
+# whole point here, the opposite of the verdict gate's fail-closed rule:
+# anything short of a complete block for that exact ai+sha pair means "not yet
+# reviewed", so the lane runs.
+# Background + full rationale (SSOT):
+# claude/skills/devx-pr-review-all/references/duplicate-review-guard.md
 load '../test_helper'
 
 setup() {
