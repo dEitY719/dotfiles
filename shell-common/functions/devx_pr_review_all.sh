@@ -349,11 +349,14 @@ devx_pr_review_all_lane_block() {
 # CURRENT headRefOid before trusting the label — a label alone only proves
 # some head was reviewed, not that the current one was. Never posted for
 # `review-blocked`: a stale block is the safe direction and needs no
-# freshness proof. Best-effort — a failed post never changes this function's
-# one-line report contract; it is silent on stdout either way.
+# freshness proof. The post is soft-fail — it never changes the primary
+# `[OK]`/`[WARN]` line's content or this function's rc 0 — but a failed post
+# now adds a second `[WARN]` line (PR #1608 review, agy + codex BLOCKER:
+# silently losing the marker meant the label stayed applied while the next
+# merge-train check would treat it as confirmed stale with no trace of why).
 devx_pr_review_all_apply_label() {
     local _pr="$1" _repo="$2" _host="${3-}" _head_sha="${4-}"
-    local _agg _label _lanes _opposite _rc
+    local _agg _label _lanes _opposite _rc _marker_posted
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
         printf '[devx-pr-review-all] usage: devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha]\n' >&2
@@ -412,9 +415,16 @@ devx_pr_review_all_apply_label() {
     ) || _rc=$?
 
     # #1601 freshness marker: only on a successfully applied `review-passed`,
-    # and only when the caller supplied the head sha it reviewed. Best-effort
-    # — a failed post is swallowed so it never adds a second stdout line.
+    # and only when the caller supplied the head sha it reviewed. Soft-fail —
+    # a failed post never changes `$_rc` or the primary report line above —
+    # but is no longer silent (PR #1608 review, agy + codex BLOCKER): a lost
+    # marker leaves the label applied while `gh:pr-merge-train`'s freshness
+    # check will treat it as CONFIRMED stale and self-heal it away on the very
+    # next tick, which used to happen with no trace of why. `_marker_posted`
+    # stays unset (never reported) unless this branch actually runs, so the
+    # `review-blocked` / non-`review-passed` paths never print the new line.
     if [ "$_rc" -eq 0 ] && [ "$_label" = "review-passed" ] && [ -n "$_head_sha" ]; then
+        _marker_posted=1
         (
             if [ -n "$_host" ]; then
                 # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
@@ -422,7 +432,7 @@ devx_pr_review_all_apply_label() {
             fi
             gh api -X POST "repos/$_repo/issues/$_pr/comments" \
                 -f "body=<!-- review-verdict:review-passed:$_head_sha -->"
-        ) >/dev/null 2>&1 || :
+        ) >/dev/null 2>&1 || _marker_posted=0
     fi
 
     # The backticks below are markdown in the report line (the label name
@@ -435,6 +445,9 @@ devx_pr_review_all_apply_label() {
             "$_label" "$_repo" ;;
         *) printf '[WARN] labelling PR #%s failed — treat the PR as unverified\n' "$_pr" ;;
     esac
+    if [ "${_marker_posted:-1}" -eq 0 ]; then
+        printf '[WARN] review-passed freshness marker failed to post for PR #%s — a later merge-train check may see it as stale\n' "$_pr"
+    fi
     return 0
 }
 

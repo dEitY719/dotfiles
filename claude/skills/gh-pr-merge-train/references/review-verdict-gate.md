@@ -32,8 +32,11 @@ freshness check below (#1601) is the one exception: it costs one
 # that ran devx_pr_review_all_apply_label when it posted the marker. Hoisted
 # once per run in real code (train-loop.md already binds ME this way for the
 # delegated-review step); `${ME:-...}` here just makes this snippet runnable
-# standalone.
-ME="${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}"
+# standalone. GH_PR_MERGE_TRAIN_TRUSTED_LOGIN overrides the auto-detected
+# identity for setups where the review pipeline and the merge-train dispatcher
+# authenticate as different accounts (PR #1608 review, agy round-2 BLOCKER —
+# see "Marker authorship" below).
+ME="${GH_PR_MERGE_TRAIN_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"
 
 if printf '%s' "$PR_JSON" | _gh_pr_merge_train_has_review_blocked_label; then
     echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
@@ -125,6 +128,27 @@ access as forging the label directly (label-write access, already the
 accepted trust boundary this whole gate rests on — the label has no stronger
 guarantee than "someone with write access said so"). A missing/invalid login
 is fail-closed to "no marker" — never a fallback to trusting every commenter.
+
+Two follow-on fixes from the round-2 review, both about *which* login counts
+as trusted:
+
+- **Bot logins.** GitHub gives an App-associated identity a login shaped
+  `<name>[bot]` (`github-actions[bot]`, `dependabot[bot]`). The first cut of
+  the validator rejected every bracket outright, so a pipeline that
+  authenticates as any bot account could never validate a single marker —
+  every `review-passed` PR would read as permanently stale (agy round-2
+  BLOCKER). The validator now strips a literal trailing `[bot]` before
+  applying the same `[A-Za-z0-9-]+` character check to what's left, so
+  `github-actions[bot]` passes while an injection attempt (which won't end in
+  exactly `[bot]`) still does not.
+- **Single-identity assumption.** The whole scheme assumes one account runs
+  both `devx:pr-review-all` (which posts the marker) and `gh:pr-merge-train`
+  (which checks it) — true for this repo's own single-account pipeline, but
+  not guaranteed for every deployment: a human running a manual review under
+  their own login, or a setup with a different bot per role, would see every
+  marker as untrusted forever (agy round-2 BLOCKER). `GH_PR_MERGE_TRAIN_TRUSTED_LOGIN`
+  is the escape hatch — set it to the actual producer identity when it
+  differs from `gh api user -q .login`'s answer in the consuming context.
 
 ### Confirmed vs. undetermined staleness (PR #1608 review, agy round-2 BLOCKER)
 
