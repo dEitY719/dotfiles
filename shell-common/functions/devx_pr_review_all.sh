@@ -51,6 +51,7 @@ devx_pr_review_all_parse() {
     local reply_delay="8"
     local _no_reply=0
     local _remote_set=0
+    local _force_review=0
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -70,6 +71,10 @@ devx_pr_review_all_parse() {
             ;;
         --no-reply)
             _no_reply=1
+            shift
+            ;;
+        --force-review)
+            _force_review=1
             shift
             ;;
         -h | --help | help)
@@ -131,6 +136,7 @@ devx_pr_review_all_parse() {
     printf '%s\n' "remote=$remote"
     printf '%s\n' "reply_mode=$reply_mode"
     printf '%s\n' "reply_delay=$reply_delay"
+    printf '%s\n' "force_review=$_force_review"
     return 0
 }
 
@@ -153,6 +159,9 @@ devx_pr_review_all_parse() {
 #     tokens on stdin -> aggregates, then writes the label to the PR. One
 #     `[OK]`/`[WARN]` line. [head-sha], when given, stamps a freshness marker
 #     alongside a `review-passed` label (#1601) — see that function's header.
+#   devx_pr_review_all_already_reviewed <ai> <head-sha>  # bodies on stdin
+#     -> rc 0 when that lane already posted a block for this exact head
+#     (#1613 duplicate-review guard) — see that function's header.
 #
 # devx_pr_review_all_aggregate reads stdin, NOT positional args — load-bearing,
 # not stylistic; see the doc for the zsh bug that forces it.
@@ -313,6 +322,31 @@ devx_pr_review_all_lane_block() {
     '
 }
 
+# Duplicate-review guard (issue #1613): has <ai> ALREADY reviewed this exact
+# head? Reads the PR's comment bodies on stdin; rc 0 = yes (skip the lane),
+# rc 1 = no (dispatch it). SSOT for the policy around it:
+# claude/skills/devx-pr-review-all/references/duplicate-review-guard.md.
+#
+# Deliberately a thin wrapper over devx_pr_review_all_lane_block — the marker
+# grammar has exactly one parser, so a future change to the `<!-- ai-review:
+# <ai>:<sha> -->` shape cannot make the guard and the verdict harvester
+# disagree. A non-empty block for that ai+sha pair is the evidence; anything
+# else (no block, another sha, another lane, empty stdin) is "not yet
+# reviewed", which fails OPEN — a missed skip only costs a duplicate review,
+# while a false skip would silently lose a lane's verdict.
+#
+# <head-sha> is REQUIRED here, unlike in lane_block: without it an untagged or
+# older block would match and every re-review would be skipped forever.
+devx_pr_review_all_already_reviewed() {
+    local _ai="${1-}" _sha="${2-}" _block
+
+    [ -n "$_ai" ] || return 1
+    [ -n "$_sha" ] || return 1
+
+    _block=$(devx_pr_review_all_lane_block "$_ai" "$_sha")
+    [ -n "$_block" ]
+}
+
 # Aggregate the verdict stream and WRITE the resulting label to the PR.
 # This is the producer half of the merge gate (#1564): without it the two
 # labels are never issued, `gh:pr-merge-train` reads "not verified" on every
@@ -460,6 +494,7 @@ for _dpra_selfcheck_fn in \
     devx_pr_review_all_verdict \
     devx_pr_review_all_aggregate \
     devx_pr_review_all_lane_block \
+    devx_pr_review_all_already_reviewed \
     devx_pr_review_all_apply_label; do
     command -v "$_dpra_selfcheck_fn" >/dev/null 2>&1 && continue
     printf '[devx_pr_review_all] BUG: %s undefined after source — the review verdict gate will not run. See dotfiles #724 / #1564.\n' \

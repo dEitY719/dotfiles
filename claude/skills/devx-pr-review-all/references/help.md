@@ -21,6 +21,7 @@ request-changes) — that is `gh:pr-approve`.
 |------|---------|-------------|
 | `--defer-reply M` / `--defer-reply=M` | off (inline) | Schedule `/gh-pr-reply` M **minutes** later via `devx:schedule` instead of replying inline. |
 | `--no-reply` | off | Skip the reply step entirely. |
+| `--force-review` | off | Bypass the duplicate-review guard and re-run every lane even if the current head sha was already reviewed. |
 | `-h` / `--help` / `help` | — | Print this help and stop. |
 
 `--defer-reply` and `--no-reply` together → `--no-reply` wins (reply skipped).
@@ -31,6 +32,7 @@ request-changes) — that is `gh:pr-approve`.
 - `/devx-pr-review-all 99 upstream` — same, targeting the `upstream` repo
 - `/devx-pr-review-all 99 --defer-reply 8` — review now, schedule the reply 8 min later
 - `/devx-pr-review-all 99 --no-reply` — review only; skip the reply pass
+- `/devx-pr-review-all 99 --force-review` — force every lane to re-run even if this head was already reviewed
 - `/devx-pr-review-all -h` / `--help` / `help` — print this help
 
 ## What the skill does
@@ -39,7 +41,9 @@ request-changes) — that is `gh:pr-approve`.
 2. Pre-flight: PR must be `OPEN` and non-draft, `gh auth` must be live, and
    check out the PR head branch if not already on it (so `/simplify` acts on
    the right tree).
-3. Review + auto-fix gate — dispatch agy, codex, opencode, hermes, and the
+3. Review + auto-fix gate — first skip any reviewer lane that already posted a
+   review for the PR's current head sha (the duplicate-review guard, #1613;
+   `--force-review` bypasses it), then dispatch the remaining lanes plus the
    auto-fix pass as
    Agent subagents **in one turn**. agy/codex/opencode/hermes delegate to
    `gh:pr-review --ai <name>` (streams findings + posts a PR comment) and run
