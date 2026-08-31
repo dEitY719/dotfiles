@@ -710,14 +710,16 @@ _pmt_pane_settled() {
 
 # Echo how many settle polls fit in _PMT_SETTLE_SECONDS at _PMT_SETTLE_POLL_SLEEP
 # apart — the twin of _iw_settle_max_polls; see it for the full rationale
-# (agy + codex, PR #1611 review).
+# (agy + codex, PR #1611 review, both passes).
 _pmt_settle_max_polls() {
     local _seconds="$1" _gap="$2"
-    case "${_gap}" in
-    0 | 0.0 | 0.00) printf '%s' "${_seconds}"; return 0 ;;
-    esac
-    awk -v s="${_seconds}" -v g="${_gap}" \
-        'BEGIN { n = s / g; i = int(n); if (i < n) i++; if (i < 1) i = 1; print i }'
+    LC_ALL=C awk -v s="${_seconds}" -v g="${_gap}" \
+        'BEGIN {
+            if (g <= 0) { print s; exit }
+            n = s / g; i = int(n); if (i < n) i++
+            if (i < 2) i = 2
+            print i
+        }'
 }
 
 # Wait for a freshly launched pane to look ready before typing into it
@@ -745,7 +747,9 @@ _pmt_settle() {
     _max_polls=$(_pmt_settle_max_polls "${_PMT_SETTLE_SECONDS}" "${_PMT_SETTLE_POLL_SLEEP}")
 
     _now=$(_pmt_now)
-    [ -z "${_now}" ] || _deadline=$((_now + _PMT_SETTLE_SECONDS))
+    # `10#` forces base 10 — see _iw_settle for the full rationale (codex,
+    # PR #1611 review, second pass).
+    [ -z "${_now}" ] || _deadline=$((_now + 10#${_PMT_SETTLE_SECONDS}))
 
     while [ "${_i}" -lt "${_max_polls}" ]; do
         # Before the read, not after the sleep — see _iw_settle: a poll gap

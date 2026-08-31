@@ -1564,6 +1564,44 @@ _assert_not_hung() {
     assert_output --partial "never settled within 13s"
 }
 
+@test "issue_watcher_cron: a leading-zero IW_SETTLE_SECONDS does not abort the tick" {
+    # $(( )) reads a leading-zero numeral as octal; 08/09 is not valid octal
+    # and used to abort the whole tick with "value too great for base"
+    # (codex, PR #1611 review, second pass). 10# forces base 10.
+    _run_tick "IW_SETTLE_SECONDS=08" "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    assert_output --partial "never settled within 08s"
+}
+
+@test "issue_watcher_cron: a non-standard zero poll interval does not crash awk" {
+    # 'case ... in 0 | 0.0 | 0.00)' missed .0/0.000 and fell through to a
+    # fatal awk division-by-zero, leaving _max_polls empty and the loop's
+    # `[ -lt ]` erroring on an empty operand (agy, PR #1611 review, second
+    # pass). The zero check now lives inside awk itself, so the poll count
+    # falls back to the unscaled seconds (13, same as the literal "0" case)
+    # instead of crashing. `sleep .0` is still called between polls — the
+    # shell-side `= "0"` skip guard only recognises that one literal
+    # spelling, same as every sibling *_SLEEP override in this file — but a
+    # real `sleep .0` returns immediately, so this is a cosmetic 12 extra
+    # no-op forks, not the crash this test pins the absence of.
+    _run_tick "IW_SETTLE_POLL_SLEEP=.0" "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep .0$')" -eq 12 ]
+    assert_output --partial "never settled within 13s"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+}
+
+@test "issue_watcher_cron: a poll gap at or above the cap still sleeps once" {
+    # ceil(13/13)=1 alone gives one read and zero sleeps — an override asking
+    # to check every 13s should still wait that one real gap before giving up
+    # (agy, PR #1611 review, second pass).
+    _run_tick "IW_SETTLE_POLL_SLEEP=13" "HERDR_SETTLE_READ_SEQUENCE=~"
+    assert_success
+    [ "$(_log_count '^sleep 13$')" -eq 1 ]
+    assert_output --partial "never settled within 13s"
+}
+
 # The same `0` escape _IW_IDLE_POLL_SLEEP has: the suite polls without paying
 # for it, and the poll still runs its full budget and still prompts.
 @test "issue_watcher_cron: IW_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
