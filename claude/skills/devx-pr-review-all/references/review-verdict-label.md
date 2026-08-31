@@ -25,10 +25,14 @@ real gate was CI.
 safe: every skill that advances a PR's head (`gh:pr-reply`,
 `gh:pr-resolve-conflict`, `gh:pr-resolve-outdated`) drops the stale verdict
 through the shared `_gh_pr_drop_label` helper, whose header comment in
-`shell-common/functions/gh_pr_edit_safe.sh` is the SSOT for the asymmetry rule
-(`review-passed` always; `review-blocked` never by drop — since #1616 it is
-cleared only as the side effect of a new non-blocking verdict written through
-`devx_pr_review_all_apply_label`).
+`shell-common/functions/gh_pr_edit_safe.sh` is the SSOT for the asymmetry rule:
+`review-passed` is dropped unconditionally by all three; `review-blocked` is
+dropped unconditionally too, but by exactly one of them — `gh:pr-reply`, once
+its Step 5 reply-all contract completes (#1634). The two rebase skills never
+drop `review-blocked` — they hold no evidence any blocker was addressed. A
+BLOCKING verdict from `gh:pr-reply`'s own targeted re-review lane can still
+re-apply `review-blocked` afterward, through `devx_pr_review_all_apply_label`
+on fresh evidence — not a reversal of the unconditional drop.
 
 ## The labels
 

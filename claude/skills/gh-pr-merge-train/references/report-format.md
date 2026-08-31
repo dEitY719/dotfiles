@@ -82,7 +82,7 @@ reviewer has said anything":
 
 | Reason | What happened | Cleared by |
 |---|---|---|
-| `review-blocked — reviewer verdict is blocking` | a `devx:pr-review-all` lane returned a blocking verdict on this head | `gh:pr-reply` resolving every blocker (it drops the label on evidence), or a re-review |
+| `review-blocked — reviewer verdict is blocking` | a `devx:pr-review-all` lane returned a blocking verdict on this head | `gh:pr-reply` completing its reply-all pass (drops the label unconditionally, #1634), or a re-review |
 | `review not verified — no review-passed label` | no verdict label at all — the PR has not been shown to pass review | a `devx:pr-review-all` pass, or a human adding the label |
 
 Neither spends an F-5 attempt, and neither is ever `[FAILED]`. The second is

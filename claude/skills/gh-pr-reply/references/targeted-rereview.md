@@ -1,16 +1,23 @@
-# 타겟 재검토 lane — `review-blocked` 저비용 해제 (Step 6, 이슈 #1616)
+# 타겟 재검토 lane — 저비용 `review-passed` 승격 (Step 6, 이슈 #1616 → #1634)
 
-`gh:pr-reply` 는 BLOCKER 를 실제로 고친다. 그런데 #1616 이전의 해제 규칙은
-`ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0` 이라는 **전역 카운터 한 쌍**이었다.
-같은 pass 안에서 *다른* 리뷰어의 비블로킹 제안을 정당하게 DECLINE 하기만 해도
-`review-blocked` 가 그대로 눌러앉았다.
+`review-blocked` 해제는 더 이상 이 lane 의 몫이 아니다 — #1634 이후 Step 6 은
+Step 5 완주 시 그 라벨을 무조건 뗀다(`references/verdict-label-removal.sh.md`).
+이 lane 이 남아서 하는 일은 그보다 좁다: push 가 있었을 때(`PUSHED_FIXES > 0`)
+독립 재검토로 `review-passed` 를 저비용에 얻을 수 있는지 확인하는 것뿐이다 —
+전부 통과하면 라벨을 얻고, 여전히 BLOCKING 이면 새 근거로 `review-blocked` 를
+재적용한다.
 
-실제 사례 PR #1609 — codex 가 BLOCKER 2건(둘 다 수정), agy 가 별도로 비블로킹
-FOLLOW-UP 3건(전부 타당하게 거절). 제기된 블로커는 전부 처리됐는데도 라벨이
-남았고, 라벨 하나 떼려고 5-lane `devx:pr-review-all` 전체 재실행이 필요했다.
+역사적 맥락(#1616 이전): 당시 해제 규칙은 `ACCEPTED_COUNT > 0 && DECLINED_COUNT
+== 0` 이라는 **전역 카운터 한 쌍**이었다. 같은 pass 안에서 *다른* 리뷰어의
+비블로킹 제안을 정당하게 DECLINE 하기만 해도 `review-blocked` 가 그대로
+눌러앉았다 — 실제 사례 PR #1609: codex 가 BLOCKER 2건(둘 다 수정), agy 가
+별도로 비블로킹 FOLLOW-UP 3건(전부 타당하게 거절)을 냈는데도 라벨이 남아
+5-lane `devx:pr-review-all` 전체 재실행이 필요했다. #1616 은 이를 리뷰어별·
+심각도별 게이트로 좁혔지만, 리뷰어 자신의 BLOCKER 항목을 정당하게 DECLINE 한
+경우(PR #1630)엔 여전히 라벨을 붙잡아 뒀다 — #1634 가 그 잔여 게이트를 없앤
+이유다.
 
-이 문서가 그 전역 게이트를 대체하는 절차의 SSOT 다. 구현체는
-`shell-common/functions/gh_pr_reply_targeted_review.sh`.
+구현체는 `shell-common/functions/gh_pr_reply_targeted_review.sh`.
 
 ## 원칙 두 개
 
@@ -61,7 +68,7 @@ DECISION=$(printf '%s\n' "$ORIGINS" | \
 | 토큰 | 의미 | 후속 |
 |---|---|---|
 | `lane=<r1>[ <r2>]` | 모든 블로킹 리뷰어가 전부 해소됐고 CLI 도 실행 가능 | 아래 F-3 재호출 |
-| `skip=unresolved-blocker:<r>` | F-6 — 블로킹 항목이 미해결/거절 | `review-blocked` 유지, **API 호출 0** |
+| `skip=unresolved-blocker:<r>` | F-6 — 블로킹 항목이 미해결/거절 | 라벨 승격 시도 안 함, **API 호출 0** |
 | `skip=cli-unavailable:<r>` | F-7 — CLI 부재 또는 non-internal 환경 | 전체 재실행 안내 |
 | `skip=no-blocking-reviewer` | 원래 블로킹한 리뷰어가 없음 | 할 일 없음 |
 
@@ -134,7 +141,9 @@ printf '%s\n' "$VERDICTS" | \
 - 비블로킹(LGTM/CONCERNS) → `review-passed` 적용. 반대 라벨인
   `review-blocked` 는 그 함수가 **먼저 무조건 삭제**하므로 F-4 의 "해제"가
   여기서 함께 일어난다.
-- 블로킹 → `review-blocked` 유지(재적용). Step 7 에 F-5 문구를 남긴다.
+- 블로킹 → `review-blocked` 재적용 — Step 6 초반에 무조건 뗐던 것을 되돌리는
+  게 아니라(#1634), 이 독립 재검토가 실제로 찾아낸 새 근거로 다시 붙이는
+  것이다(NF-2). Step 7 에 F-5 문구를 남긴다.
 - 판정을 못 읽으면 label 이 비어 PR 은 **무라벨**로 남는다 — 통과로 승격되는
   경로가 없다는 뜻이다(NF-2).
 - `HEAD_SHA` 4번째 인자는 `review-passed` 에 신선도 마커를 함께 남긴다(#1601).
@@ -154,7 +163,7 @@ _gh_pr_reply_targeted_lane_report "$TOKEN"
 | 재검토 비블로킹 | `[OK] 타겟 재검토 통과 — review-blocked 해제, review-passed 적용` |
 | 재검토 블로킹 (F-5) | `[BLOCKED] 타겟 재검토도 여전히 BLOCKING — 재수정 필요` |
 | 판정 불명 | `[WARN] … 전체 devx:pr-review-all 재실행 필요` |
-| 블로커 미해결 (F-6) | `[BLOCKED] <r> 의 블로커가 미해결 — review-blocked 유지, 타겟 재검토 미실행` |
+| 블로커 미해결 (F-6) | `[BLOCKED] <r> 의 블로커가 미해결 — 라벨 승격 시도 안 함, 타겟 재검토 미실행` |
 | CLI 불가 (F-7) | `[WARN] <r> 리뷰어 CLI 를 이 환경에서 실행할 수 없음 — 전체 devx:pr-review-all 재실행 필요` |
 
 ## 회귀 테스트
