@@ -288,7 +288,7 @@ agy:BLOCKER:ACCEPT-PARTIAL' codex agy
     run _gh_pr_reply_targeted_lane_report skip=unresolved-blocker:codex
     assert_success
     assert_output --partial 'codex'
-    assert_output --partial 'review-blocked 유지'
+    assert_output --partial '라벨 승격 시도 안 함'
     refute_output --partial 'review-passed'
 }
 

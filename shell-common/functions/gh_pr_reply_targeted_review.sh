@@ -239,11 +239,11 @@ _gh_pr_reply_targeted_lane_report() {
         printf '[OK] 타겟 재검토 통과 — review-blocked 해제, review-passed 적용\n'
         ;;
     verdict=*)
-        printf '[WARN] 타겟 재검토 판정 불명 — review-blocked 유지, 전체 devx:pr-review-all 재실행 필요\n'
+        printf '[WARN] 타겟 재검토 판정 불명 — 라벨 승격 없음, 전체 devx:pr-review-all 재실행 필요\n'
         ;;
     skip=unresolved-blocker:*)
         _who="${_token#skip=unresolved-blocker:}"
-        printf '[BLOCKED] %s 의 블로커가 미해결 — review-blocked 유지, 타겟 재검토 미실행\n' "$_who"
+        printf '[BLOCKED] %s 의 블로커가 미해결 — 라벨 승격 시도 안 함, 타겟 재검토 미실행\n' "$_who"
         ;;
     skip=cli-unavailable:*)
         _who="${_token#skip=cli-unavailable:}"
