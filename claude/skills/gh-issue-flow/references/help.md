@@ -55,10 +55,9 @@ on a feature branch with a clean working tree.
   3 (PR) failed, the commit stays.
 - Create a worktree or branch — user must be on a feature branch already.
 - Resolve CI failures — a fresh PR's checks have not reported yet.
-  `gh:pr-merge-train` routes CI-red PRs to `gh:pr-resolve-ci-fail`, but only
-  when something actually triggers it to process the PR again: Step 2.4.1's
-  wake fires solely for `<remote>`s that resolve to `$HOME/dotfiles`'s own
-  `origin` (#1498), and this machine's cron backstop is likewise configured
-  for `~/dotfiles` only. A PR opened on any other `<remote>` gets **no**
-  automated CI-fail remediation trigger — run `/gh-pr-merge-train <remote>`
-  by hand (#1610).
+  `gh:pr-merge-train` routes CI-red PRs to `gh:pr-resolve-ci-fail` once
+  something triggers it to reprocess the PR, but (see step 4 above) only
+  `origin`'s own `$HOME/dotfiles` remote has a trigger at all. Any other
+  `<remote>` gets **no** automated CI-fail remediation — run
+  `/gh-pr-merge-train <remote>` by hand (#1610). Detail:
+  `references/constraints.md`.
