@@ -43,9 +43,19 @@ disagree about what "already reviewed" means. The `<head-sha>` is mandatory
 here — without it an older, untagged block would match and every re-review
 would be skipped forever.
 
-A guard-skipped lane reports `[SKIP]` and contributes **no** verdict line to
-Step 3.5, exactly like a missing CLI. Its earlier verdict is still on the PR
-under the same head sha, so the label that run wrote still stands.
+A guard-skipped lane reports `[SKIP]`, but — unlike a lane skipped for a
+missing CLI — it still **must** contribute a verdict line to Step 3.5 (agy +
+codex, PR #1623 BLOCKER): its earlier verdict is still on the PR under the
+same head sha, and Step 3.5's aggregator has no other way to see it. Dropping
+a guard-skipped lane from the aggregation stream would let a partial re-run —
+say, only one lane force-re-reviewed while the rest sit guard-skipped — silently
+overwrite an existing `review-blocked` verdict with `review-passed`, because
+the aggregator only ever sees the lanes actually fed to it. Since
+`devx_pr_review_all_lane_block "$ai" "$head_sha"` reads whatever marker already
+exists in `$BODIES`, regardless of which run posted it, feeding a guard-skipped
+lane through the same harvester the fresh lanes use costs nothing extra — the
+guard already proved the marker exists by skipping it. See `SKILL.md` → Step
+3.5 for the corrected aggregation loop.
 
 ## Why here, not inside `gh:pr-review`
 
@@ -66,3 +76,24 @@ real review and leave the PR unverified. Same NF-1 soft-fail posture as the
 and the opposite of Step 3.5's fail-**closed** freshness rule
 (`review-verdict-label.md`), correctly so: that gate authorizes a merge, this
 one only decides whether to spend a reviewer.
+
+## Known limitation: this is a check, not a lock (codex, PR #1623 BLOCKER)
+
+The guard is a **read-before-write (TOCTOU) check**: it reads `BODIES`, decides
+"not yet reviewed", and only then dispatches. Two sessions can both read the
+same pre-review `BODIES` snapshot within the same race window and both
+conclude "not yet reviewed" — the guard does not serialize concurrent runs, so
+the exact scenario it targets (PR #1608's two overlapping sessions) can still
+slip through if both sessions start close enough together.
+
+This is accepted, not overlooked. Issue #1613 weighed two designs — this
+pre-dispatch check (Option 1) versus a file-based lock mirroring
+`gh:pr-merge-train`'s NF-1 flock (Option 2) — and chose Option 1 as the
+priority: a lock file is awkward to place consistently across the multiple
+worktrees/accounts this repo's sessions run from, while the check reuses
+`devx_pr_review_all_lane_block`, a helper that already existed for Step 3.5.
+The check does not need to close the race to be worth shipping — it converts
+"two sessions racing 36 minutes apart" (PR #1608's actual reproduction) from a
+certainty into a narrow same-instant coincidence, at zero added infrastructure.
+A lock-based Option 2 remains available as a follow-up if the residual race
+proves to matter in practice.
