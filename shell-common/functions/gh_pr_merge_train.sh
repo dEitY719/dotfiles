@@ -310,7 +310,26 @@ _gh_pr_merge_train_has_review_passed_label() {
 # `_gh_pr_merge_train_review_passed_marker_sha <pr> <repo> [host] <expected-login>`
 #   stdout: the sha carried by the LAST such marker POSTED BY
 #   `<expected-login>` among the PR's issue comments, or empty if none
-#   exists. One `gh api --paginate` call.
+#   exists. AT MOST TWO `gh api` calls, regardless of how many comment
+#   pages the PR has (#1615).
+#
+#   Why not `--paginate` (#1615): the first cut walked EVERY comment page to
+#   find the last marker, so a long-running PR cost one HTTP round trip per
+#   100 comments on EVERY merge-train tick — flagged independently by three
+#   reviewers on PR #1608. The endpoint is oldest-first with no "last N"
+#   parameter, so instead of walking, this asks page 1 with `-i` (response
+#   HEADERS on stdout ahead of the body) and reads the `Link:` header:
+#     * no `Link` header at all — there is only one page, and call 1 already
+#       returned its whole body. Nothing more to fetch: the common
+#       small-PR case still costs exactly ONE call, same as before.
+#     * `Link: ...; rel="last"` carrying `page=N` (N>1) — jump STRAIGHT to
+#       page N (call 2 of 2). Pages 2..N-1 are never fetched. The marker is
+#       posted by `devx_pr_review_all_apply_label` at the moment the label
+#       goes on, so it is by construction among the most recent comments.
+#
+#   `-X GET` is REQUIRED on both calls, not cosmetic: `gh api` switches to
+#   POST as soon as any `-f` parameter is present, so `-f per_page=...`
+#   without it POSTs to the create-comment endpoint and dies with HTTP 422.
 #
 #   Return code distinguishes "confirmed absent" from "could not check" —
 #   load-bearing for the caller (PR #1608 review, agy round-2 BLOCKER: see
@@ -352,7 +371,8 @@ _gh_pr_merge_train_has_review_passed_label() {
 #   double-quoted jq filter string below is rejected either way, same as
 #   before.
 _gh_pr_merge_train_review_passed_marker_sha() {
-    local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}" _raw _rc _login_base
+    local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}" \
+        _jq _raw _rc _login_base _headers _bodies _link _last
 
     _login_base="$_login"
     case "$_login_base" in
@@ -362,26 +382,66 @@ _gh_pr_merge_train_review_passed_marker_sha() {
         '' | *[!A-Za-z0-9-]*) return 1 ;;
     esac
 
+    _jq=".[] | select(.user.login == \"$_login\") | .body"
+
+    # Call 1 of at most 2. per_page=100 is the API max, so this is also the
+    # cheapest way to learn the page count.
     _raw=$( (
         if [ -n "$_host" ]; then
             # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
             export GH_HOST="$_host"
         fi
-        # per_page=100 (the API max) caps the round trips a busy PR costs —
-        # same comments fetched, fewer HTTP calls than the 30-per-page
-        # default. It does not change which marker wins: filtering and
-        # picking the last match still happens below, over the full history.
-        gh api --paginate -f per_page=100 "repos/$_repo/issues/$_pr/comments" \
-            --jq ".[] | select(.user.login == \"$_login\") | .body"
+        gh api -i -X GET -f per_page=100 -f page=1 \
+            "repos/$_repo/issues/$_pr/comments" --jq "$_jq"
     ) 2>/dev/null )
     _rc=$?
+    [ "$_rc" -eq 0 ] || return 1
 
-    printf '%s\n' "$_raw" |
+    # `-i` puts the status line + headers ahead of the body, separated by one
+    # blank line. gh emits the status line LF-terminated but the headers
+    # CRLF-terminated, so the separator is a lone CR — strip it before
+    # comparing. Split at the FIRST blank line only: a comment body may well
+    # contain blank lines of its own.
+    _headers=$(printf '%s\n' "$_raw" |
+        awk '{ sub(/\r$/, ""); if ($0 == "") exit; print }')
+    _bodies=$(printf '%s\n' "$_raw" |
+        awk 'p { print; next }
+             { l = $0; sub(/\r$/, "", l); if (l == "") p = 1 }')
+
+    # Anchor on the header NAME: `Access-Control-Expose-Headers` lists the
+    # word "Link" in its value and must not be mistaken for the real thing.
+    _link=$(printf '%s\n' "$_headers" | grep -iE '^Link:' | head -n 1)
+    # One Link entry per line, then keep only rel="last" and read its page.
+    # `[?&]page=` deliberately does not match `per_page=` (preceded by `_`).
+    _last=$(printf '%s\n' "$_link" |
+        tr ',' '\n' |
+        grep 'rel="last"' |
+        grep -oE '[?&]page=[0-9]+' |
+        head -n 1 |
+        grep -oE '[0-9]+')
+
+    if [ -n "$_last" ] && [ "$_last" -gt 1 ]; then
+        # Call 2 of 2 — the LAST page directly. Pages 2..N-1 are skipped on
+        # purpose (#1615); no `-i` needed, the body is all we want now.
+        _bodies=$( (
+            if [ -n "$_host" ]; then
+                # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+                export GH_HOST="$_host"
+            fi
+            gh api -X GET -f per_page=100 -f "page=$_last" \
+                "repos/$_repo/issues/$_pr/comments" --jq "$_jq"
+        ) 2>/dev/null )
+        _rc=$?
+        # Same contract as a call-1 failure: UNDETERMINED, not "absent".
+        [ "$_rc" -eq 0 ] || return 1
+    fi
+
+    printf '%s\n' "$_bodies" |
         grep -oE '<!-- review-verdict:review-passed:[0-9a-f]+ -->' |
         tail -n 1 |
         sed -E 's/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/'
 
-    return "$_rc"
+    return 0
 }
 
 # `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <head-oid> <expected-login>`
