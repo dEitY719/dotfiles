@@ -310,6 +310,19 @@ _devx_pr_review_all_login_bodies() {
             ;;
     esac
 
+    # A missing `jq` binary silently fails the whole verdict/review-passed
+    # gate closed on every PR, forever, with nothing on stderr to explain why
+    # (PR #1641 review, codex FOLLOW-UP). Check it explicitly so that specific
+    # cause gets one diagnostic line; a jq that IS present but errors on
+    # malformed JSON still falls through to the `2>/dev/null` below and stays
+    # silent — the caller already treats no-output as "no marker", and this
+    # only distinguishes "not installed" from "found nothing".
+    if ! command -v jq >/dev/null 2>&1; then
+        printf '[devx_pr_review_all] jq not found — every ai-review/pr-reply-origins marker reads as absent (fail-closed, #1639/#1641).\n' >&2
+        cat >/dev/null
+        return 0
+    fi
+
     jq -r --arg login "$_login" \
         '.[] | select(.user.login == $login) | .body' 2>/dev/null
     return 0
