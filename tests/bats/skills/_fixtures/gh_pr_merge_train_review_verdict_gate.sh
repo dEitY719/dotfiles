@@ -75,15 +75,15 @@ verdict_pr() {
 # the sha marker `devx_pr_review_all_apply_label` posts.
 #
 # $1 = PR object (as verdict_pr builds), $2 = repo, $3 = host,
-# $4 = current headRefOid.
+# $4 = current headRefOid, $5 = expected marker-author login (#1601).
 train_verdict_gate_f3() {
-    local _pr_json="$1" _repo="$2" _host="$3" _head_oid="$4" _n
+    local _pr_json="$1" _repo="$2" _host="$3" _head_oid="$4" _login="$5" _n
     _n=$(printf '%s' "$_pr_json" | jq -r '.number')
     if printf '%s' "$_pr_json" | _gh_pr_merge_train_has_review_blocked_label; then
         printf 'skip:review-blocked — reviewer verdict is blocking\n'
     elif ! printf '%s' "$_pr_json" | _gh_pr_merge_train_has_review_passed_label; then
         printf 'skip:review not verified — no review-passed label\n'
-    elif _gh_pr_merge_train_review_passed_stale "$_n" "$_repo" "$_host" "$_head_oid"; then
+    elif _gh_pr_merge_train_review_passed_stale "$_n" "$_repo" "$_host" "$_head_oid" "$_login"; then
         printf 'skip:review-passed label stale — head advanced without invalidation\n'
         _gh_pr_drop_label "$_n" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :
     else
