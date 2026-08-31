@@ -357,17 +357,50 @@ devx_pr_review_all_already_reviewed() {
 # writers below both need "clear the opposite label first", and a second copy
 # of the subshell/GH_HOST dance is exactly the drift `_gh_pr_drop_label`'s
 # header warns about. Kept as a raw REST DELETE (not `_gh_pr_drop_label`)
-# because this call site wants *silence* on every outcome — the caller's one
-# `[OK]`/`[WARN]` line is the whole report — where the shared primitive
-# deliberately re-verifies and forwards `gh`'s stderr.
+# because this call site owns its own reporting: the caller turns the token
+# below into one line, where the shared primitive prints its own.
+#
+# Prints exactly one token on stdout, never prose, and is rc 0 always:
+#
+#   drop=ok      the label was there and is gone
+#   drop=absent  it was not there to begin with (HTTP 404) — the normal case
+#   drop=failed  a REAL failure: auth, network, a wrong repo, GHES hiccup
+#
+# `drop=absent` exists because the overwhelmingly common outcome is that the
+# opposite label was never on the PR, and warning on that would train the
+# reader to ignore the warning. What must NOT stay silent is `drop=failed`:
+# until PR #1637's review this function swallowed every outcome with
+# `>/dev/null 2>&1 || :`, so a failed delete left BOTH verdict labels on the
+# PR while the caller cheerfully printed "`review-blocked` cleared" (codex
+# FOLLOW-UP).
+#
+# `2>&1 >/dev/null` — the ORDER is load-bearing: stderr is pointed at what is
+# still the original stdout (the capture) BEFORE stdout is discarded. Written
+# the other way round, stderr follows stdout into /dev/null and the 404
+# discrimination has nothing to read. Same note, same reason, in
+# claude/skills/gh-pr-reply/references/reply-pending-label-removal.sh.md.
 _devx_pr_review_all_delete_label() {
-    (
+    local _err _rc=0
+
+    # `|| _rc=$?` rather than a bare capture: this file is sourced into
+    # callers that may have `set -e` armed, where errexit would fire on the
+    # non-zero substitution before the soft-fail branch below ran.
+    _err=$(
         if [ -n "${4-}" ]; then
             # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
             export GH_HOST="$4"
         fi
-        gh api -X DELETE "repos/$3/issues/$2/labels/$1"
-    ) >/dev/null 2>&1 || :
+        gh api -X DELETE "repos/$3/issues/$2/labels/$1" 2>&1 >/dev/null
+    ) || _rc=$?
+
+    if [ "$_rc" -eq 0 ]; then
+        printf 'drop=ok\n'
+        return 0
+    fi
+    case "$_err" in
+        *"HTTP 404"* | *"Not Found"*) printf 'drop=absent\n' ;;
+        *) printf 'drop=failed\n' ;;
+    esac
     return 0
 }
 
@@ -384,12 +417,18 @@ _devx_pr_review_all_delete_label() {
 # `review-passed` with a [head-sha] — post the #1601 freshness marker comment.
 # GH_HOST is pinned per call inside a subshell (#1403 / #1407).
 #
-# Reports two machine-readable lines on stdout instead of prose, because the
-# two producers word their report lines differently and neither should have to
-# re-derive what happened:
+# Reports three machine-readable lines on stdout instead of prose, in this
+# FIXED order, because the two producers word their report lines differently
+# and neither should have to re-derive what happened:
 #
+#   drop=ok | drop=absent | drop=failed | drop=skipped
 #   add=ok | add=rc3 | add=failed | add=no-helper
 #   marker=posted | marker=failed | marker=none
+#
+# `drop=` was added by PR #1637's review (codex FOLLOW-UP): a swallowed delete
+# failure leaves both verdict labels on the PR, and the caller was reporting a
+# clean flip. `drop=skipped` is the no-helper early return, which deliberately
+# mutates nothing at all.
 #
 # Soft-fail: rc 0 for every labelling outcome (an unlabelled PR already reads
 # as "not verified" downstream); only a usage error is rc 2.
@@ -405,7 +444,7 @@ _devx_pr_review_all_delete_label() {
 # label-application code, which is the one thing #1636 rules out.
 devx_pr_review_all_write_label() {
     local _label="${1-}" _pr="${2-}" _repo="${3-}" _host="${4-}" _head_sha="${5-}"
-    local _opposite _rc _marker
+    local _opposite _rc _marker _drop
 
     case "$_label" in
         review-passed) _opposite=review-blocked ;;
@@ -431,13 +470,15 @@ devx_pr_review_all_write_label() {
     if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
         # Reported BEFORE any mutation: with no way to add the new label,
         # deleting the opposite one would strip a valid verdict and put
-        # nothing in its place.
+        # nothing in its place. `drop=skipped` says exactly that — not
+        # `drop=ok`, which would claim a delete that never ran.
+        printf 'drop=skipped\n'
         printf 'add=no-helper\n'
         printf 'marker=none\n'
         return 0
     fi
 
-    _devx_pr_review_all_delete_label "$_opposite" "$_pr" "$_repo" "$_host"
+    _drop=$(_devx_pr_review_all_delete_label "$_opposite" "$_pr" "$_repo" "$_host")
 
     # `|| _rc=$?`, not a bare subshell followed by `_rc=$?`: this file is
     # sourced into callers that may have `set -e` armed (bats test bodies do),
@@ -473,6 +514,7 @@ devx_pr_review_all_write_label() {
         ) >/dev/null 2>&1 || _marker=failed
     fi
 
+    printf '%s\n' "$_drop"
     case "$_rc" in
         0) printf 'add=ok\n' ;;
         3) printf 'add=rc3\n' ;;
@@ -482,7 +524,7 @@ devx_pr_review_all_write_label() {
     return 0
 }
 
-# Render `devx_pr_review_all_write_label`'s two-line `add=`/`marker=` output
+# Render `devx_pr_review_all_write_label`'s `drop=`/`add=`/`marker=` output
 # into the caller's report lines. Both of `write_label`'s callers
 # (`devx_pr_review_all_apply_label` below and `_gh_pr_reply_apply_review_passed`
 # in gh_pr_reply_targeted_review.sh) used to re-derive this same
@@ -495,18 +537,28 @@ devx_pr_review_all_write_label() {
 #
 #   devx_pr_review_all_report_write_result <write-output> <pr> <repo> <label> <ok-line> <fail-line>
 #
-# `<write-output>` is exactly the two lines `write_label` printed — parsed
-# with builtin parameter expansion, not `sed`: the string is always known to
-# be `add=...` then `marker=...`, so spawning a process per field to re-scan
-# it twice bought nothing (/simplify finding, same review).
+# `<write-output>` is exactly the lines `write_label` printed, matched by their
+# `<key>=` prefix ONE LINE AT A TIME. The previous parse took two parameter
+# expansions off the first newline — field 1 = everything before it, field 2 =
+# everything after — which silently broke the moment a THIRD line existed: the
+# `drop=` line PR #1637's review added landed first, so `_add` became `drop=…`
+# (reported as a generic failure) and `_marker` became the remaining two lines
+# (so the marker WARN stopped firing entirely). A key-prefixed scan cannot
+# break that way again, and it does not care about line order.
 devx_pr_review_all_report_write_result() {
     local _write="${1-}" _pr="${2-}" _repo="${3-}" _label="${4-}" _ok_line="${5-}" _fail_line="${6-}"
-    local _add _marker
+    local _add="" _marker="" _drop="" _line _opposite
 
-    _add="${_write%%$'\n'*}"
-    _add="${_add#add=}"
-    _marker="${_write#*$'\n'}"
-    _marker="${_marker#marker=}"
+    # `|| [ -n "$_line" ]` so a final line with no trailing newline still counts.
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        case "$_line" in
+            add=*) _add="${_line#add=}" ;;
+            marker=*) _marker="${_line#marker=}" ;;
+            drop=*) _drop="${_line#drop=}" ;;
+        esac
+    done <<EOF
+$_write
+EOF
 
     # shellcheck disable=SC2016  # backticks are markdown, not substitution
     case "$_add" in
@@ -518,6 +570,20 @@ devx_pr_review_all_report_write_result() {
     esac
     if [ "$_marker" = "failed" ]; then
         printf '[WARN] review-passed freshness marker failed to post for PR #%s — a later merge-train check may see it as stale\n' "$_pr"
+    fi
+    # A failed opposite-label delete is the one outcome that leaves the PR in a
+    # state no consumer expects: BOTH verdict labels present, with the caller's
+    # own line claiming a clean flip (PR #1637 review, codex FOLLOW-UP). The
+    # opposite is derived from <label>, so the WARN names the label that is
+    # actually still there.
+    if [ "$_drop" = "failed" ]; then
+        case "$_label" in
+            review-passed) _opposite=review-blocked ;;
+            review-blocked) _opposite=review-passed ;;
+            *) _opposite="$_label 의 반대 라벨" ;;
+        esac
+        printf '[WARN] 반대 라벨 %s 삭제 실패 — 두 판정 라벨이 공존할 수 있다 (PR #1637 review, codex FOLLOW-UP)\n' \
+            "$_opposite"
     fi
     return 0
 }
@@ -566,7 +632,7 @@ devx_pr_review_all_report_write_result() {
 # merge-train's reader contract need no churn.
 devx_pr_review_all_apply_label() {
     local _pr="$1" _repo="$2" _host="${3-}" _head_sha="${4-}"
-    local _agg _label _lanes _write
+    local _agg _label _lanes _write _drop
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
         printf '[devx-pr-review-all] usage: devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha]\n' >&2
@@ -589,7 +655,19 @@ devx_pr_review_all_apply_label() {
     # unchanged) and stops. `gh:pr-reply` applies `review-passed` after it has
     # replied to every comment and found no unresolved BLOCKER.
     if [ "$_label" = "review-passed" ]; then
-        _devx_pr_review_all_delete_label review-blocked "$_pr" "$_repo" "$_host"
+        # This branch does not go through `devx_pr_review_all_write_label`, so
+        # it reads the `drop=` token itself: claiming "`review-blocked` cleared"
+        # after a failed DELETE is exactly the mis-report PR #1637's review
+        # named (codex FOLLOW-UP). The `[OK]` wording is unchanged byte for
+        # byte on the ok/absent paths — a delete that found nothing to delete
+        # left the PR in precisely the intended state.
+        _drop=$(_devx_pr_review_all_delete_label review-blocked "$_pr" "$_repo" "$_host")
+        if [ "$_drop" = "drop=failed" ]; then
+            # shellcheck disable=SC2016  # backticks are markdown, not substitution
+            printf '[WARN] PR #%s: every lane non-blocking (%s lane(s)) — `review-blocked` 해제 실패, 라벨이 남아 있을 수 있다; `review-passed` is gh:pr-reply'"'"'s to apply (#1636)\n' \
+                "$_pr" "$_lanes"
+            return 0
+        fi
         # shellcheck disable=SC2016  # backticks are markdown, not substitution
         printf '[OK] PR #%s: every lane non-blocking (%s lane(s)) — `review-blocked` cleared; `review-passed` is gh:pr-reply'"'"'s to apply (#1636)\n' \
             "$_pr" "$_lanes"
