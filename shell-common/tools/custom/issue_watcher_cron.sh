@@ -207,15 +207,23 @@ _IW_IDLE_POLL_SLEEP="${IW_IDLE_POLL_SLEEP:-0.5}"
 # a settle has a pane to read.
 _IW_SETTLE_SECONDS="${IW_SETTLE_SECONDS:-13}"
 # Gap between settle polls, and how many pane lines each poll reads. The gap is
-# overridable (to 0) for the same reason _IW_IDLE_POLL_SLEEP is. Three lines is
-# enough to see the prompt line and whatever banner sits above it — the
-# 40-line read is _iw_limit_evidence's, a different call for a different job,
-# and reading 40 lines here would only make two frames differ over a scrolling
-# tail that has nothing to do with readiness.
+# overridable (to 0) for the same reason _IW_IDLE_POLL_SLEEP is.
+#
+# 15, not 3 (PR #1611 review, live herdr 0.7.5 test): a real claude TUI's
+# bottom `--lines N` window is `[status/banner line] [divider] [input line]
+# [divider] [footer status bar]` — 3 lines captures only the footer, which
+# renders and stabilises immediately and never contains the banner or input
+# row at all. `_IW_SETTLE_NOT_READY_MARK` below could never actually match a
+# real "Not logged in" pane with a 3-line window; it was checking a footer
+# that looks the same whether the pane is broken or fine. 15 comfortably
+# covers that whole block plus a wrapped multi-line status bar. The 40-line
+# read is still _iw_limit_evidence's own, larger, different-purpose call —
+# reading that wide here would make two frames differ over scrolling
+# conversation history that has nothing to do with readiness.
 _IW_SETTLE_POLL_SLEEP="${IW_SETTLE_POLL_SLEEP:-1}"
-_IW_SETTLE_READ_LINES="3"
+_IW_SETTLE_READ_LINES="15"
 # The pane text herdr shows while claude is up but unusable (#1561). Stable
-# across reads, so the "two frames agree" test alone would take it for ready —
+# across reads, so the "frames agree" test alone would take it for ready —
 # and a bare state_change_seq comparison could not tell it apart at all.
 _IW_SETTLE_NOT_READY_MARK="Not logged in"
 
@@ -1733,28 +1741,42 @@ _iw_pane_text() {
     printf '%s' "${_text}"
 }
 
-# True when two consecutive pane reads say the agent is listening.
-#   $1 = this read, $2 = the previous one
+# True when three consecutive pane reads say the agent is listening.
+#   $1 = this read, $2 = the previous one, $3 = the one before that
 #
-# Three conditions, each earning its place. Non-empty: a pane that has drawn
+# Three-in-a-row, not two (PR #1611 review, codex, 5th pass): two identical
+# reads only proves the *render* stopped changing between one poll gap, and
+# the render settling is not evidence the key-input loop has too — that gap
+# is exactly what #1560 exists to describe, and an active probe to prove
+# input-readiness directly turned out not to be viable (state_change_seq did
+# not move for typed-but-unsubmitted keystrokes in a live herdr 0.7.5 test —
+# it tracks submission-level events, not raw terminal content, so there is no
+# cheap corroborating signal available pre-prompt). A third agreeing frame
+# does not *prove* input-readiness either, but it does raise the bar past a
+# single lucky poll gap, cutting the odds of firing into a merely-rendered,
+# not-yet-listening pane without adding an unverified new mechanism.
+#
+# Four conditions, each earning its place. Non-empty: a pane that has drawn
 # nothing yet reads empty, and so does one herdr refused to read, so "empty
-# twice" is the opposite of evidence. Identical: a TUI still painting changes
-# between reads. Not the login banner: that frame is perfectly stable and means
-# claude is up and unusable (#1561) — the case a state_change_seq comparison
-# cannot see at all, which is why the pane text is the signal here and the
-# counter stays with _iw_stall_recover_via_enter.
+# three times" is the opposite of evidence. Identical across all three: a TUI
+# still painting changes somewhere in that window. Not the login banner: that
+# frame is perfectly stable and means claude is up and unusable (#1561) — the
+# case a state_change_seq comparison cannot see at all, which is why the pane
+# text is the signal here and the counter stays with _iw_stall_recover_via_enter.
 #
-# Known gap (PR #1611 review, codex): "any stable, non-empty, non-`Not logged
-# in` text" is not proven ready — only proven not to be that one banner. A
-# different steady pre-ready or error frame could still false-positive. Not
-# fixed here: the only evidence available is what herdr 0.7.5 has actually
-# been observed to show (#1560's measurement), and this repo has no fixture
-# for a second stable-but-unready frame to design against. The cap (13s) is
-# the backstop either way — a false-positive settle is not a new failure mode,
-# just a prompt sent slightly earlier than warranted.
+# Known gap (PR #1611 review, codex, 2nd/3rd pass): "any stable, non-empty,
+# non-`Not logged in` text" is still not *proven* ready — only proven not to
+# be that one banner, and not proven to be the input loop rather than the
+# render loop. A different steady pre-ready or error frame could still
+# false-positive. Not fixed here: the only evidence available is what herdr
+# 0.7.5 has actually been observed to show (#1560's measurement, and this
+# PR's own live probing), and this repo has no fixture for a second
+# stable-but-unready frame to design against. The cap (13s) is the backstop
+# either way — a false-positive settle is not a new failure mode, just a
+# prompt sent slightly earlier than warranted.
 _iw_pane_settled() {
     [ -n "$1" ] || return 1
-    [ "$1" = "$2" ] || return 1
+    [ "$1" = "$2" ] && [ "$2" = "$3" ] || return 1
     case "$1" in
     *"${_IW_SETTLE_NOT_READY_MARK}"*) return 1 ;;
     esac
@@ -1831,7 +1853,7 @@ _iw_settle_max_polls() {
 # beyond it. At the default 1s gap that is 13s becoming at most ~14s, still
 # bounded and still no worse than the unconditional 13s this replaced.
 _iw_settle() {
-    local _agent="$1" _i=0 _prev="" _text _now _deadline="" _max_polls
+    local _agent="$1" _i=0 _prev="" _prev2="" _text _now _deadline="" _max_polls
 
     [ "${_IW_SETTLE_SECONDS}" = "0" ] && return 0
     # A fractional cap cannot bound a poll count. It predates #1570 and still
@@ -1866,7 +1888,8 @@ _iw_settle() {
             [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
         fi
         _text=$(_iw_pane_text "${_agent}")
-        ! _iw_pane_settled "${_text}" "${_prev}" || return 0
+        ! _iw_pane_settled "${_text}" "${_prev}" "${_prev2}" || return 0
+        _prev2="${_prev}"
         _prev="${_text}"
         _i=$((_i + 1))
         [ "${_i}" -lt "${_max_polls}" ] || break

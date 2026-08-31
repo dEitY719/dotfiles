@@ -626,21 +626,25 @@ _hold_lock() {
     _run_tick
     assert_success
     _assert_logged "herdr agent prompt"
-    [ "$(_log_count '^sleep 1$')" -eq 1 ]
+    # Three agreeing reads, not two — see issue_watcher_cron.bats's twin test
+    # (PR #1611 review, 5th pass).
+    [ "$(_log_count '^sleep 1$')" -eq 2 ]
     refute_output --partial "never settled"
 }
 
 @test "pr_merge_train_cron: the settle poll reads the pane" {
     _run_tick
     assert_success
-    _assert_logged "herdr agent read mt-dotfiles --lines 3 --format text"
+    # 15 lines, not 3 — see issue_watcher_cron.bats's twin test (PR #1611
+    # review, 5th pass).
+    _assert_logged "herdr agent read mt-dotfiles --lines 15 --format text"
 }
 
 @test "pr_merge_train_cron: the settle poll happens after the idle check, not before" {
     _run_tick
     assert_success
     _start_line=$(grep -n "herdr agent start" "${_LOG}" | head -1 | cut -d: -f1)
-    _settle_line=$(grep -n "herdr agent read mt-dotfiles --lines 3" "${_LOG}" | head -1 | cut -d: -f1)
+    _settle_line=$(grep -n "herdr agent read mt-dotfiles --lines 15" "${_LOG}" | head -1 | cut -d: -f1)
     _prompt_line=$(grep -n "herdr agent prompt" "${_LOG}" | head -1 | cut -d: -f1)
     [ "${_start_line}" -lt "${_settle_line}" ]
     [ "${_settle_line}" -lt "${_prompt_line}" ]
