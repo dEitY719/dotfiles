@@ -9,37 +9,75 @@ until #1527 nothing in the repo read it. PR #1518 collected two independent
 blocking verdicts and merged 32 minutes later, because the merge train's only
 real gate was CI.
 
-**Wiring status — fully wired as of #1564.** All three sides now exist:
+**Wiring status — fully wired as of #1564; label ownership split in #1636.**
 
 | side | where | since |
 |---|---|---|
 | marker (`<!-- ai-review:<ai>:<sha> -->`) | `_gh_pr_review_build_comment_body` in `gh_pr_review.sh` | #1564 |
-| producer (parse → aggregate → label) | `devx:pr-review-all` **Step 3.5**, via `devx_pr_review_all_apply_label` | #1564 |
+| producer of `review-blocked` (parse → aggregate → label) | `devx:pr-review-all` **Step 3.5**, via `devx_pr_review_all_apply_label` | #1564 |
+| producer of `review-passed` (own judgment, no re-review) | `gh:pr-reply` **Step 6**, via `_gh_pr_reply_apply_review_passed`, `claude/skills/gh-pr-reply/references/review-passed-gate.md` | #1636 |
+| shared write primitive (drop-opposite → safe-add → marker) | `devx_pr_review_all_write_label` | #1636 |
 | invalidation (drop a stale verdict) | `_gh_pr_drop_label`, called by every head-advancing skill | #1563 |
+| cleanup after merge (drop `review-passed`) | `gh:pr-merge` **Step 4**, `claude/skills/gh-pr-merge/references/review-passed-cleanup.sh.md` | #1636 |
 | consumer (hard merge gate) | `gh:pr-merge-train` **Step 3.5**, `references/review-verdict-gate.md` | #1564 |
 | provisioning (the labels exist in the repo) | `gh:label-bootstrap` pipeline feed | #1564 |
-| freshness (sha marker for `review-passed`) | `devx_pr_review_all_apply_label`'s 4th arg; read by `_gh_pr_merge_train_review_passed_stale` | #1601 |
-| second producer (one reviewer, scoped re-review) | `gh:pr-reply` Step 6's targeted lane, `claude/skills/gh-pr-reply/references/targeted-rereview.md` — same `devx_pr_review_all_apply_label` write path, gated per reviewer/severity | #1616 |
+| freshness (sha marker for `review-passed`) | `devx_pr_review_all_write_label`'s 5th arg; read by `_gh_pr_merge_train_review_passed_stale` | #1601 |
+
+The consumer side is untouched by the #1636 split: `gh:pr-merge-train` reads
+whichever labels exist and does not care who wrote them. What changed is
+authorship, not meaning — `review-passed` still means "safe to merge this
+head".
 
 #1563's label-lifecycle invalidation rules are the piece that makes the rest
 safe: every skill that advances a PR's head (`gh:pr-reply`,
 `gh:pr-resolve-conflict`, `gh:pr-resolve-outdated`) drops the stale verdict
 through the shared `_gh_pr_drop_label` helper, whose header comment in
-`shell-common/functions/gh_pr_edit_safe.sh` is the SSOT for the asymmetry rule:
-`review-passed` is dropped unconditionally by all three; `review-blocked` is
-dropped unconditionally too, but by exactly one of them — `gh:pr-reply`, once
-its Step 5 reply-all contract completes (#1634). The two rebase skills never
-drop `review-blocked` — they hold no evidence any blocker was addressed. A
-BLOCKING verdict from `gh:pr-reply`'s own targeted re-review lane can still
-re-apply `review-blocked` afterward, through `devx_pr_review_all_apply_label`
-on fresh evidence — not a reversal of the unconditional drop.
+`shell-common/functions/gh_pr_edit_safe.sh` is the SSOT for the asymmetry rule
+(`review-passed` always; `review-blocked` never by drop — it is cleared only
+as the side effect of a new non-blocking decision written through
+`devx_pr_review_all_write_label`).
+
+## Who applies `review-passed` (#1636), and the NF-2 relaxation
+
+Until #1636 this skill applied both labels, and `gh:pr-reply` could only reach
+`review-passed` by paying for an independent `gh:pr-review` re-call (#1616's
+targeted lane). That re-call was the **only** way to re-earn the label after a
+fix, and its cost, latency and failure rate is what repeatedly jammed
+`gh:pr-merge-train` (#1627).
+
+So the responsibility moved:
+
+- **`devx:pr-review-all` never writes `review-passed`.** An all-non-blocking
+  aggregate now clears any stale `review-blocked` (mutual exclusion is
+  unchanged) and leaves the PR **unlabelled** — which has always read
+  downstream as "not verified", never as a pass.
+- **`gh:pr-reply` writes it**, after replying to every review comment, when no
+  BLOCKER-severity item is left unresolved — **from its own judgment, with no
+  external AI CLI in the loop**.
+
+That is a deliberate relaxation of NF-2 ("never self-certify", established in
+#1527 / #1563 and re-affirmed by #1616), scoped to this one path, and it is
+documented loudly here and in `gh-pr-reply/references/constraints.md` rather
+than buried, because it is a safety-principle change:
+
+- **Why** — the user weighed one extra verification hop against pipeline
+  reliability and cost, and chose reliability. Explicit decision, recorded in
+  #1636's "확정 사항", not a drift.
+- **What still verifies** — the findings remain external. This skill still
+  fans out every reviewer on every PR, still posts their findings, and still
+  owns `review-blocked`. The division of labour is "an outside AI **finds**;
+  `gh:pr-reply` confirms it **fixed** what was found".
+- **What did not change** — the fail-closed half. One unresolved
+  BLOCKER-severity item (DECLINE or QUESTION) means no `review-passed`, ever.
+  A failed write leaves the PR unlabelled. `review-blocked` is still issued
+  only by an external reviewer's verdict, and `gh:pr-reply` can never write it.
 
 ## The labels
 
-| label | meaning |
-|---|---|
-| `review-blocked` | at least one reviewer lane returned a blocking verdict |
-| `review-passed` | every lane that ran returned a non-blocking verdict, and at least one lane ran |
+| label | meaning | written by |
+|---|---|---|
+| `review-blocked` | at least one reviewer lane returned a blocking verdict | `devx:pr-review-all` Step 3.5 |
+| `review-passed` | every review comment was answered and no BLOCKER-severity item is unresolved | `gh:pr-reply` Step 6 (#1636) |
 
 Neither belongs to the 10-label SSOT (`gh-label-bootstrap/references/gh-labels.md`).
 Like `CI fail` and `conflict` they are **pipeline-state** labels, not
@@ -52,7 +90,7 @@ neither label has not been shown to pass review. That is what makes a time
 backstop unnecessary here: a stuck PR is one label away from moving, and a
 human can add or remove it at any time.
 
-## The four helpers
+## The five helpers
 
 ```
 devx_pr_review_all_lane_block <ai> [<head-sha>]   # comment bodies on stdin
@@ -62,13 +100,26 @@ devx_pr_review_all_verdict                        # one lane's raw text on stdin
 devx_pr_review_all_aggregate                      # verdict tokens on stdin,
                                                   #   one per line, one per lane
   -> label=review-blocked | label=review-passed | label=    (+ lanes=N)
-devx_pr_review_all_apply_label <pr> <repo> [host] # verdict tokens on stdin
-  -> aggregates, removes the opposite label, adds the label. One report line.
+devx_pr_review_all_apply_label <pr> <repo> [host] [head-sha]  # tokens on stdin
+  -> aggregates; writes `review-blocked`, or clears it on a non-blocking
+     round. Never writes `review-passed` (#1636). One report line.
+devx_pr_review_all_write_label <label> <pr> <repo> [host] [head-sha]
+  -> the verdict-free write: removes the opposite label, adds <label> via
+     `_gh_pr_edit_safe_label`, stamps the #1601 marker for `review-passed`.
+     Machine tokens on stdout: `add=ok|rc3|failed|no-helper`,
+     `marker=posted|failed|none`.
 ```
 
 The first three are pure: stdin in, stdout out, no network, no shell state.
-`devx_pr_review_all_apply_label` is the one that touches GitHub, and it is
-soft-fail by construction — see "Applying the label" below.
+The last two touch GitHub, and both are soft-fail by construction — see
+"Applying the label" below.
+
+`devx_pr_review_all_write_label` is the split #1636 made so the second
+producer could exist honestly. It takes a **label**, not a verdict, so
+`gh:pr-reply` can write `review-passed` from its own judgment without
+synthesizing a fake `lgtm` token to push through the aggregator — a fake
+token would have recorded that skill's judgment as a reviewer CLI's opinion
+in the label-application code, which is the one thing #1636 rules out.
 
 ## Reading a lane's verdict
 
@@ -230,18 +281,24 @@ for ai in agy codex opencode hermes; do
 done | devx_pr_review_all_apply_label "$pr" "$TARGET_REPO" "$TARGET_HOST" "$head_sha"
 ```
 
-**Always pass `$head_sha` as the 4th argument** (#1601) — the same sha already
-read at the top of this section, before any push. See "Freshness marker for
-`review-passed`" below.
+**Keep passing `$head_sha` as the 4th argument** (#1601) — the same sha
+already read at the top of this section, before any push. On this skill's own
+paths it is now inert (nothing here stamps a marker any more), but the
+argument is what carries the sha on the shared write path and dropping it from
+the call site would silently break the day another producer routes through
+here. See "Freshness marker for `review-passed`" below.
 
 What it does, and why each part is the way it is:
 
+- **A non-blocking aggregate writes no label (#1636).** It removes any stale
+  `review-blocked` — mutual exclusion is unchanged — and reports the handoff.
+  `review-passed` is `gh:pr-reply`'s to apply.
 - Adds through `_gh_pr_edit_safe_label` (`shell-common/functions/gh_pr_edit_safe.sh`),
   never bare `gh pr edit --add-label` — that silently exits 1 on repos with
   classic Projects attached (#326). The opposite label is removed through the
   REST endpoint, for the same reason.
 - **The opposite label is removed first, and unconditionally.** A re-review
-  that flips `review-blocked` to `review-passed` has to clear the old one, or a
+  that flips `review-blocked` to non-blocking has to clear the old one, or a
   consumer sees both. (`gh:pr-merge-train`'s gate resolves that case
   deterministically — `review-blocked` wins — but a consumer should never have
   to.)
@@ -257,17 +314,16 @@ It prints one primary line:
 | stream | line |
 |---|---|
 | a `blocking` lane | `[OK] PR #<n> labelled \`review-blocked\` (<k> lane(s))` |
-| ≥1 lane, all non-blocking | `[OK] PR #<n> labelled \`review-passed\` (<k> lane(s))` |
+| ≥1 lane, all non-blocking | `[OK] PR #<n>: every lane non-blocking (<k> lane(s)) — \`review-blocked\` cleared; \`review-passed\` is gh:pr-reply's to apply (#1636)` |
 | empty `label` (no lane, or an `unknown`) | `[WARN] no reviewer lane produced a verdict — PR #<n> left unlabelled` |
 | `_gh_pr_edit_safe_label` rc 3 | `[WARN] label \`<l>\` missing in <repo> — provision it first (gh:label-bootstrap)` |
+| the add helper is unavailable | `[WARN] _gh_pr_edit_safe_label unavailable — PR #<n> left unlabelled` |
 | any other non-zero rc | `[WARN] labelling PR #<n> failed — treat the PR as unverified` |
 
-A second `[WARN]` line follows, but only on the one path in "Freshness marker
-for `review-passed`" below (the marker POST itself failing after a
-successful `review-passed` label) — every other outcome above stays exactly
-one line (PR #1608 review, codex round-3 FOLLOW-UP: this table used to
-promise "exactly one line" unconditionally, which stopped being true once
-that second warning was added).
+A second `[WARN]` line is possible only on the marker path in "Freshness
+marker for `review-passed`" below, which since #1636 this function can no
+longer reach — `gh:pr-reply`'s writer prints it instead. Every outcome above
+is exactly one line.
 
 `_gh_pr_edit_safe_label` returns 3 when the label does not exist in the repo and
 **refuses to auto-create it** (`feedback_gh_label_no_autocreate.md`, #326) —
@@ -284,10 +340,10 @@ complete: a manual `git push --force-with-lease`, a GitHub web-UI commit, or
 a future tool all advance the head with no hook this repo controls, leaving
 a stale `review-passed` that `gh:pr-merge-train`'s gate would trust.
 
-`devx_pr_review_all_apply_label`'s 4th argument closes that gap from the
-*read* side instead of chasing more write-side call sites. When the resolved
-verdict is `review-passed` and a head-sha is given, it posts one plain issue
-comment:
+`devx_pr_review_all_write_label`'s 5th argument closes that gap from the
+*read* side instead of chasing more write-side call sites. When the label
+being written is `review-passed` and a head-sha is given, it posts one plain
+issue comment:
 
 ```
 <!-- review-verdict:review-passed:<head-sha> -->
@@ -307,11 +363,13 @@ a fixed regex — no reviewer output touches it either way.
 
 Never posted for `review-blocked`: a stale block is already the safe
 direction (it over-skips, never over-merges), so it needs no freshness proof.
-The post is soft-fail — it never changes the primary line's content or the
-function's rc 0 — but a failed post adds a second `[WARN]` line naming the
+The post is soft-fail — it never changes the writer's `add=` token or its
+rc 0 — but a failed post is reported as `marker=failed`, and the producer
+that asked for the write turns that into a second `[WARN]` line naming the
 PR (PR #1608 review, agy + codex BLOCKER: silently losing the marker meant a
 "successfully labelled" PR could later read as stale on the merge train with
-no trace of why).
+no trace of why). Since #1636 that producer is `gh:pr-reply`
+(`_gh_pr_reply_apply_review_passed`), which prints the same wording.
 
 ## Why this lives in the producer
 

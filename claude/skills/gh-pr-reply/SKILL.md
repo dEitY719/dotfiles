@@ -60,7 +60,7 @@ Bot comments (gemini-code-assist, sourcery-ai, copilot) follow the same
 rules; see `references/reply-templates.md` for the full rubric.
 
 Record each item's origin as `<reviewer>:<severity>:<verdict>` into `ORIGINS`
-via `_gh_pr_reply_origin_line` (`references/targeted-rereview.md` § Step 3) —
+via `_gh_pr_reply_origin_line` (`references/review-passed-gate.md` § Step 3) —
 Steps 6 and 7 both read that stream, because a flat accepted/declined count
 cannot tell an unresolved BLOCKER from a declined suggestion (#1616).
 
@@ -77,7 +77,7 @@ declined ones and bot comments.** Read `references/reply-templates.md` for
 POST command shapes, the four body templates, the long-body fallback, and
 the consolidated table reply. Reply in the reviewer's language.
 
-## Step 6: Push the Fix Commits + Sync Board + Clear Labels
+## Step 6: Push the Fix Commits + Sync Board + Set Verdict Labels
 
 If any fixes were committed: `git push` (never force-push unless the user
 asked) and report new commit SHAs alongside the reply summary. Set
@@ -86,19 +86,22 @@ skipped push → `PUSHED_FIXES=0`. If `PUSHED_FIXES > 0`, push the PR card
 back to `In review` per `references/board-sync-in-review.sh.md` (soft-fail;
 no-op when `PUSHED_FIXES == 0`).
 
-Invalidate stale review verdicts per `references/verdict-label-removal.sh.md`
-(soft-fail, two independent blocks). Drop `review-blocked`
-**unconditionally** — Step 5's reply-all contract is the only precondition,
-regardless of `PUSHED_FIXES` or the ACCEPT/DECLINE ratio (#1634). Then,
-under `PUSHED_FIXES > 0` only, drop `review-passed` — the reviewed commit is
-no longer head — and run the targeted re-review lane in
-`references/targeted-rereview.md` as a `review-passed` upgrade path: when
-every blocking-severity item of an originally-blocking reviewer is
-ACCEPT/ACCEPT-PARTIAL, re-invoke `Skill(gh:pr-review, "--ai <r> --paths
-<fixed files> <PR> <remote>")` and let its verdict flow through
-`devx_pr_review_all_apply_label`, which re-applies `review-blocked` on a
-BLOCKING verdict. Never *add* either label by hand, and never assume a pass
-the re-verification did not actually return (NF-2).
+Still under `PUSHED_FIXES > 0`, invalidate the stale review verdict per
+`references/verdict-label-removal.sh.md` (soft-fail): drop `review-passed`
+unconditionally — the reviewed commit is no longer head.
+
+Then, **after Step 5 has replied to every comment and regardless of
+`PUSHED_FIXES`**, run the `review-passed` gate of
+`references/review-passed-gate.md` (soft-fail): read `HEAD_SHA` (`gh pr view`
+`--json headRefOid`, *after* any push) and pipe `ORIGINS` into
+`_gh_pr_reply_apply_review_passed "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST"
+"$HEAD_SHA"`. It applies `review-passed` — freshness marker included — when
+no BLOCKER-severity item is left unresolved, and applies nothing when one is.
+Since #1636 this skill decides that **on its own judgment, with no external AI
+CLI re-call**; `devx:pr-review-all` owns `review-blocked` and never writes
+`review-passed`. Never hand-write either label: the gate helper is the only
+path (see `references/constraints.md` for the NF-2 relaxation and its
+rationale).
 
 Then **unconditionally** run the same removal block Step 2.5 does —
 `references/reply-pending-label-removal.sh.md`. Between the two call sites the
@@ -109,8 +112,8 @@ PR carrying it, so a label left on wedges the PR out of the train (#1524).
 ## Step 7: Report
 
 Print the summary table per `references/final-summary.md` (Accepted / Declined /
-Answered counts, the per-reviewer/severity breakdown, the targeted re-review
-outcome line, commit SHAs, skipped comments, and the lingering
+Answered counts, the per-reviewer/severity breakdown, the `review-passed`
+gate outcome line, commit SHAs, skipped comments, and the lingering
 `CHANGES_REQUESTED` nudge). Then post the ai-metrics PR comment per
 `references/ai-metrics-comment.sh.md` (soft-fail; skip when `GH_DISABLE_AI_METRICS=1`).
 

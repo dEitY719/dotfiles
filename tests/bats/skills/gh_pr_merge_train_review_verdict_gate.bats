@@ -251,8 +251,9 @@ teardown() {
 # `git push --force-with-lease` or a GitHub web-UI commit advances the head
 # with no hook any of them can see. `_gh_pr_merge_train_review_passed_stale`
 # closes that gap by verifying a `<!-- review-verdict:review-passed:<sha> -->`
-# marker (posted by `devx_pr_review_all_apply_label`) against the PR's actual
-# current head, instead of trusting label presence alone.
+# marker (posted by `devx_pr_review_all_write_label`, since #1636 on
+# gh:pr-reply's write path) against the PR's actual current head, instead of
+# trusting label presence alone.
 #
 # Since #1615 the lookup is bounded to AT MOST TWO `gh api` calls no matter
 # how long the PR's comment history is: call 1 fetches page 1 with `-i` (so
@@ -717,11 +718,14 @@ more text')" '[$c]')
     assert_success
 }
 
+# #1636 moved the marker POST from `devx_pr_review_all_apply_label` down into
+# the shared `devx_pr_review_all_write_label` primitive, so the doc guard
+# follows it. Nothing about how the TRAIN reads the marker changed.
 @test "doc-guard: the producer's freshness marker is documented as its only writer" {
     local _producer="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
     run grep -qF -- 'review-verdict:review-passed:' "$_producer"
     assert_success
-    run grep -qF -- 'devx_pr_review_all_apply_label' "$_producer"
+    run grep -qF -- 'devx_pr_review_all_write_label' "$_producer"
     assert_success
 }
 
