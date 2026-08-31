@@ -38,9 +38,9 @@
   `gh:pr-resolve-ci-fail` whenever it next processes that PR — via Step
   2.4.1's best-effort wake (see above) or, failing that, its own cron
   backstop. Detail: `gh-pr-merge-train/references/routing-table.md`.
-  **Neither path exists for a non-`origin`, non-dotfiles remote** (#1610):
-  the wake silently skips any `<remote>` that isn't `$HOME/dotfiles`'s own
-  `origin` (#1498), and this machine's crontab only runs the backstop with
+  **Neither path exists for any other `<remote>`** (#1610): the wake
+  silently skips every `<remote>` but `$HOME/dotfiles`'s own `origin`
+  (#1498), and this machine's crontab only runs the backstop with
   `--cwd ~/dotfiles`. A PR opened via `/gh-issue-flow <N> <other-remote>`
   that lands CI-red has no automated remediation trigger at all — the human
   must call `/gh-pr-merge-train <other-remote>` manually.
