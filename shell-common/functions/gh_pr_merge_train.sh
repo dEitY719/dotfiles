@@ -308,9 +308,21 @@ _gh_pr_merge_train_has_review_passed_label() {
 # reviewer's output format touches it.
 #
 # `_gh_pr_merge_train_review_passed_marker_sha <pr> <repo> [host] <expected-login>`
-#   Echo the sha carried by the LAST such marker POSTED BY `<expected-login>`
-#   among the PR's issue comments, or nothing if none exists / the lookup
-#   failed. One `gh api --paginate` call.
+#   stdout: the sha carried by the LAST such marker POSTED BY
+#   `<expected-login>` among the PR's issue comments, or empty if none
+#   exists. One `gh api --paginate` call.
+#
+#   Return code distinguishes "confirmed absent" from "could not check" —
+#   load-bearing for the caller (PR #1608 review, agy round-2 BLOCKER: see
+#   `_gh_pr_merge_train_review_passed_stale` below for why the distinction
+#   matters):
+#     0 — the lookup itself succeeded. stdout may still be empty (no
+#         matching marker exists) — that is a CONFIRMED absence.
+#     1 — the lookup itself failed (network, auth, rate limit, `gh` too
+#         old), or `<expected-login>` was missing/invalid so no lookup was
+#         even attempted. stdout is always empty here too, but this is an
+#         UNDETERMINED answer, not a confirmed absence — the caller must
+#         not treat rc 0 and rc 1 the same way.
 #
 #   `<expected-login>` is REQUIRED and load-bearing (PR #1608 review, agy
 #   BLOCKER + codex BLOCKER, independently): without an author check, this
@@ -324,47 +336,60 @@ _gh_pr_merge_train_has_review_passed_label() {
 #   `devx:pr-review-all` and `gh:pr-merge-train` authenticate as) closes that:
 #   forging a trusted marker now requires the same access as forging the
 #   label directly, which is the pre-existing, already-accepted trust
-#   boundary (`review-verdict-gate.md` → "label-presence trust model").
-#   A missing/invalid login is fail-closed to "no marker" (empty stdout, read
-#   as stale by the caller) rather than falling back to trusting everyone.
+#   boundary (label-write access already gates who can attach `review-passed`
+#   at all). A missing/invalid login is treated as "lookup not attempted"
+#   (rc 1) rather than falling back to trusting everyone.
 _gh_pr_merge_train_review_passed_marker_sha() {
-    local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}"
+    local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}" _raw _rc
 
     case "$_login" in
-        '' | *[!A-Za-z0-9-]*) return 0 ;;
+        '' | *[!A-Za-z0-9-]*) return 1 ;;
     esac
 
-    (
+    _raw=$( (
         if [ -n "$_host" ]; then
             # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
             export GH_HOST="$_host"
         fi
         gh api --paginate "repos/$_repo/issues/$_pr/comments" \
             --jq ".[] | select(.user.login == \"$_login\") | .body"
-    ) 2>/dev/null |
+    ) 2>/dev/null )
+    _rc=$?
+
+    printf '%s\n' "$_raw" |
         grep -oE '<!-- review-verdict:review-passed:[0-9a-f]+ -->' |
         tail -n 1 |
         sed -E 's/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/'
+
+    return "$_rc"
 }
 
 # `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <head-oid> <expected-login>`
-#   0 (true) = the `review-passed` label is STALE for `<head-oid>` — no
-#   marker POSTED BY `<expected-login>` was found, or the last one's sha does
-#   not match. 1 (false) = fresh, the last matching marker's sha matches
-#   `<head-oid>` exactly.
-#
-#   Fail-closed by construction: a lookup failure (network, auth, `gh` too
-#   old), a missing/invalid `<expected-login>`, or a marker from anyone else
-#   all yield an empty marker sha, which never equals a real `<head-oid>`, so
-#   an undetermined or untrusted answer reads as STALE — the same direction
-#   #1519's approval gate takes for "policy unreadable". A skipped PR costs
-#   nothing; trusting a label (or a marker) this gate cannot verify is the
-#   failure #1601 exists to close.
+#   rc 0 — FRESH: the last marker posted by `<expected-login>` matches
+#          `<head-oid>` exactly. Proceed normally.
+#   rc 1 — STALE, CONFIRMED: the comment lookup succeeded and no marker
+#          matching both the login and the current head was found. Safe for
+#          the caller to also drop the label (self-heal) — the absence is
+#          verified, not guessed.
+#   rc 2 — STALE, UNDETERMINED: the underlying lookup itself failed (network,
+#          auth, rate limit) or `<expected-login>` was invalid, so "no
+#          marker" was never actually confirmed. The caller must still treat
+#          the PR as unverified THIS TICK (fail-closed on the routing
+#          decision, same direction #1519's approval gate takes for
+#          "policy unreadable") — but must NOT delete the label on the
+#          strength of a lookup it could not complete. Conflating this with
+#          rc 1 would let one transient `gh api` blip destructively drop an
+#          otherwise-valid `review-passed`, turning a retriable skip into
+#          permanent damage (PR #1608 review, agy round-2 BLOCKER).
 _gh_pr_merge_train_review_passed_stale() {
-    local _pr="$1" _repo="$2" _host="$3" _head_oid="$4" _login="$5" _marker_sha
+    local _pr="$1" _repo="$2" _host="$3" _head_oid="$4" _login="$5" _marker_sha _lookup_rc
     _marker_sha=$(_gh_pr_merge_train_review_passed_marker_sha "$_pr" "$_repo" "$_host" "$_login")
-    [ -n "$_marker_sha" ] && [ "$_marker_sha" = "$_head_oid" ] && return 1
-    return 0
+    _lookup_rc=$?
+    if [ "$_lookup_rc" -ne 0 ]; then
+        return 2
+    fi
+    [ -n "$_marker_sha" ] && [ "$_marker_sha" = "$_head_oid" ] && return 0
+    return 1
 }
 
 # Self-check (issue #724): catch silent breakage where this file sources

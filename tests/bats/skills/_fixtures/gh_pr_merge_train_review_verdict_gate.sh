@@ -83,10 +83,19 @@ train_verdict_gate_f3() {
         printf 'skip:review-blocked — reviewer verdict is blocking\n'
     elif ! printf '%s' "$_pr_json" | _gh_pr_merge_train_has_review_passed_label; then
         printf 'skip:review not verified — no review-passed label\n'
-    elif _gh_pr_merge_train_review_passed_stale "$_n" "$_repo" "$_host" "$_head_oid" "$_login"; then
-        printf 'skip:review-passed label stale — head advanced without invalidation\n'
-        _gh_pr_drop_label "$_n" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :
     else
-        printf 'proceed\n'
+        _gh_pr_merge_train_review_passed_stale "$_n" "$_repo" "$_host" "$_head_oid" "$_login"
+        case $? in
+        1)
+            printf 'skip:review-passed label stale — head advanced without invalidation\n'
+            _gh_pr_drop_label "$_n" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :
+            ;;
+        2)
+            printf 'skip:review-passed freshness unknown — marker lookup failed, treating as unverified\n'
+            ;;
+        *)
+            printf 'proceed\n'
+            ;;
+        esac
     fi
 }

@@ -326,11 +326,11 @@ more text')" '[$c]')
     assert_output --partial '[GH_HOST=ghe.example.com]'
 }
 
-@test "freshness: a lookup failure yields nothing, not a false match" {
+@test "freshness: a lookup failure yields nothing AND a nonzero rc (undetermined, not confirmed)" {
     _freshness_stub
     STUB_COMMENTS_RC=1
     run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
-    assert_success
+    assert_failure
     assert_output ''
 }
 
@@ -358,18 +358,18 @@ more text')" '[$c]')
     assert_output '0000000'
 }
 
-@test "freshness (BLOCKER fix): an empty expected login is fail-closed to no marker" {
+@test "freshness (BLOCKER fix): an empty expected login is fail-closed (rc 1, no marker)" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget ''
-    assert_success
+    assert_failure
     assert_output ''
 }
 
 @test "freshness (BLOCKER fix): an empty expected login never calls gh at all" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
-    _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' >/dev/null
+    _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' >/dev/null || true
     run cat "$STUB_LOG"
     assert_output ''
 }
@@ -378,45 +378,53 @@ more text')" '[$c]')
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' 'bot" | .'
-    assert_success
+    assert_failure
     assert_output ''
     run cat "$STUB_LOG"
     assert_output ''
 }
 
-@test "freshness: stale returns TRUE (0) when the marker sha matches nothing" {
+# ── _gh_pr_merge_train_review_passed_stale: 3-way exit code ──
+# 0 = fresh, 1 = stale CONFIRMED (lookup succeeded, no matching-head marker),
+# 2 = stale UNDETERMINED (the lookup itself failed). The two "stale" codes
+# are deliberately different rc values — see routing-table.md / #1601 for why
+# the caller must not delete the label on a rc-2 (PR #1608 review, agy
+# round-2 BLOCKER: a transient lookup failure must never destroy a valid
+# review-passed).
+
+@test "freshness: stale is CONFIRMED (rc 1) when the marker sha matches nothing" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot 'no marker in sight')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    assert_success
+    [ "$status" -eq 1 ]
 }
 
-@test "freshness: stale returns TRUE (0) when the marker sha does not match head" {
+@test "freshness: stale is CONFIRMED (rc 1) when the marker sha does not match head" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    assert_success
+    [ "$status" -eq 1 ]
 }
 
-@test "freshness: stale returns FALSE (1) when the marker sha matches head" {
+@test "freshness: FRESH (rc 0) when the marker sha matches head" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    assert_failure
+    assert_success
 }
 
-@test "freshness: a lookup failure is fail-closed (treated as stale)" {
+@test "freshness (BLOCKER fix): a lookup failure is UNDETERMINED (rc 2), not confirmed-stale" {
     _freshness_stub
     STUB_COMMENTS_RC=1
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    assert_success
+    [ "$status" -eq 2 ]
 }
 
-@test "freshness (BLOCKER fix): stale stays TRUE when the only matching marker is forged" {
+@test "freshness (BLOCKER fix): stale stays CONFIRMED (rc 1) when the only matching marker is forged" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment attacker '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
-    assert_success
+    [ "$status" -eq 1 ]
 }
 
 # ---------------------------------------------------------------------
@@ -473,12 +481,24 @@ more text')" '[$c]')
     assert_output 'skip:review-passed label stale — head advanced without invalidation'
 }
 
-@test "F-3 freshness: a stale PR self-heals by dropping the label" {
+@test "F-3 freshness: a CONFIRMED-stale PR self-heals by dropping the label" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:0000000 -->')" '[$c]')
-    train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot >/dev/null
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
     run cat "$STUB_LOG"
     assert_output --partial 'api -X DELETE repos/acme/widget/issues/11/labels/review-passed'
+}
+
+@test "F-3 freshness (BLOCKER fix): an UNDETERMINED lookup failure is skipped WITHOUT dropping the label" {
+    # The exact PR #1608 review finding: a transient gh api failure must
+    # never destroy an otherwise-valid review-passed label.
+    _freshness_stub
+    STUB_COMMENTS_RC=1
+    run train_verdict_gate_f3 "$(verdict_pr 11 '[{"name":"review-passed"}]')" acme/widget '' deadbeef bot
+    assert_success
+    assert_output 'skip:review-passed freshness unknown — marker lookup failed, treating as unverified'
+    run cat "$STUB_LOG"
+    refute_output --partial 'DELETE'
 }
 
 @test "doc-guard: routing-table.md fetches headRefOid for the freshness check" {
