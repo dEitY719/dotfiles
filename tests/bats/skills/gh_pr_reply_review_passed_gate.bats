@@ -37,6 +37,18 @@ setup() {
     GH_LOG="${BATS_TEST_TMPDIR}/gh.log"
     : >"$GH_LOG"
     export GH_LOG
+    # PR #1637 review, agy BLOCKER: the gate now refuses to certify a PR no
+    # external reviewer ever looked at, and the evidence default is
+    # fail-closed. Every pre-existing test in this file describes a PR that HAS
+    # been reviewed — that review is what produced the origin lines — so they
+    # hand the fixture a comment dump carrying an `ai-review` marker. The
+    # no-evidence case has tests of its own below.
+    REVIEWED_BODIES="${BATS_TEST_TMPDIR}/bodies_reviewed.md"
+    printf '%s\n' \
+        '<!-- ai-review:codex:newsha -->' \
+        'Verdict: BLOCKING' \
+        '<!-- /ai-review:codex:newsha -->' >"$REVIEWED_BODIES"
+    export REVIEWED_BODIES
     # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
     # shellcheck disable=SC2317  # called indirectly by the helpers under test
@@ -71,13 +83,13 @@ _origins_1609() {
 # ---------------------------------------------------------------------
 
 @test "AC-1: a non-blocking reviewer's DECLINE no longer pins review-blocked" {
-    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha
+    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha 1 "$REVIEWED_BODIES"
     run cat "$GH_LOG"
     assert_output --partial 'api -X DELETE repos/acme/widget/issues/1609/labels/review-blocked'
 }
 
 @test "AC-1: every BLOCKER resolved -> review-passed is applied" {
-    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha
+    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha 1 "$REVIEWED_BODIES"
     run cat "$GH_LOG"
     assert_output --partial 'add 1609 review-passed --repo acme/widget'
 }
@@ -85,7 +97,7 @@ _origins_1609() {
 # The whole point of #1636: the label is re-earned without paying for an
 # external reviewer round-trip. Nothing in this path may shell out to a CLI.
 @test "AC-1 (#1636): no reviewer CLI and no gh:pr-review call is made" {
-    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha
+    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha 1 "$REVIEWED_BODIES"
     run cat "$GH_LOG"
     refute_output --partial '--ai '
     refute_output --partial '--paths'
@@ -94,13 +106,13 @@ _origins_1609() {
 }
 
 @test "AC-1 (NF-1): the label carries the POST-push head sha as its freshness marker" {
-    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha
+    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha 1 "$REVIEWED_BODIES"
     run cat "$GH_LOG"
     assert_output --partial 'review-verdict:review-passed:newsha'
 }
 
 @test "AC-1: every gh call pins the target host (#1403 / #1407)" {
-    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha
+    _origins_1609 | pr_reply_step6 1609 acme/widget ghe.example.com newsha 1 "$REVIEWED_BODIES"
     run grep -c 'GH_HOST=ghe.example.com' "$GH_LOG"
     assert_success
     refute_output '0'
@@ -111,7 +123,7 @@ _origins_1609() {
         . '${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}'
         gh() { return 0; }
         _gh_pr_edit_safe_label() { return 0; }
-        printf '%s\n' codex:BLOCKER:ACCEPT | pr_reply_step6 1609 acme/widget '' newsha"
+        printf '%s\n' codex:BLOCKER:ACCEPT | pr_reply_step6 1609 acme/widget '' newsha 1 '$REVIEWED_BODIES'"
     assert_success
     assert_output --partial 'review-passed 적용'
     assert_output --partial '외부 재검토 없음'
@@ -123,14 +135,14 @@ _origins_1609() {
 
 @test "AC-2: a PR whose comments were all non-blocking earns review-passed" {
     printf '%s\n' agy:FOLLOW-UP:DECLINE agy:Suggestion:ACCEPT |
-        pr_reply_step6 1609 acme/widget '' newsha
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES"
     run cat "$GH_LOG"
     assert_output --partial 'add 1609 review-passed'
 }
 
 @test "AC-2: ACCEPT-PARTIAL on a BLOCKER counts as resolved" {
     printf '%s\n' codex:BLOCKER:ACCEPT-PARTIAL |
-        pr_reply_step6 1609 acme/widget '' newsha
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES"
     run cat "$GH_LOG"
     assert_output --partial 'add 1609 review-passed'
 }
@@ -193,7 +205,7 @@ _origins_1609() {
 # Order matters: the invalidation drop runs BEFORE the gate re-applies, or the
 # skill would delete the label it just earned.
 @test "AC-4: the invalidation drop precedes the re-apply" {
-    _origins_1609 | pr_reply_step6 1609 acme/widget '' newsha
+    _origins_1609 | pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES"
     run bash -c "grep -n 'labels/review-passed\|add 1609 review-passed' '$GH_LOG' | head -2 | tr '\n' '|'"
     assert_output --partial 'DELETE'
     run bash -c "grep -n 'review-passed' '$GH_LOG' | head -1"
@@ -201,7 +213,7 @@ _origins_1609() {
 }
 
 @test "AC-4: with no push there is no invalidation, and the gate still runs" {
-    _origins_1609 | pr_reply_step6 1609 acme/widget '' newsha 0
+    _origins_1609 | pr_reply_step6 1609 acme/widget '' newsha 0 "$REVIEWED_BODIES"
     run cat "$GH_LOG"
     refute_output --partial 'DELETE repos/acme/widget/issues/1609/labels/review-passed'
     assert_output --partial 'add 1609 review-passed'
@@ -216,7 +228,7 @@ _origins_1609() {
         . '${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}'
         gh() { return 0; }
         _gh_pr_edit_safe_label() { return 1; }
-        printf '%s\n' codex:BLOCKER:ACCEPT | pr_reply_step6 1609 acme/widget '' newsha"
+        printf '%s\n' codex:BLOCKER:ACCEPT | pr_reply_step6 1609 acme/widget '' newsha 1 '$REVIEWED_BODIES'"
     assert_success
     assert_output --partial '미검증으로 취급'
 }
@@ -226,9 +238,62 @@ _origins_1609() {
         . '${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}'
         gh() { return 0; }
         _gh_pr_edit_safe_label() { return 3; }
-        printf '%s\n' codex:BLOCKER:ACCEPT | pr_reply_step6 1609 acme/widget '' newsha"
+        printf '%s\n' codex:BLOCKER:ACCEPT | pr_reply_step6 1609 acme/widget '' newsha 1 '$REVIEWED_BODIES'"
     assert_success
     assert_output --partial 'gh:label-bootstrap'
+}
+
+# ---------------------------------------------------------------------
+# PR #1637 review — the two holes in #1636's relaxation
+# ---------------------------------------------------------------------
+
+# codex BLOCKER: Step 2's "already replied" dedup filters an earlier pass's
+# thread out of every LATER pass, so a pass that declined a BLOCKER left no
+# trace in the next pass's ORIGINS — which then read `pass=no-blocker` and
+# certified a PR whose blocker was never fixed. The ledger comment is the
+# cross-pass memory that closes it.
+@test "cross-pass (PR #1637 review, codex BLOCKER): pass 1's DECLINEd BLOCKER still holds pass 2" {
+    # Pass 1: codex raises a BLOCKER, it is DECLINEd, the gate holds.
+    printf '%s\n' codex:BLOCKER:DECLINE agy:FOLLOW-UP:ACCEPT |
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES" >/dev/null
+
+    # Pass 1's ledger comment is now one of the PR's comment bodies.
+    local _bodies="${BATS_TEST_TMPDIR}/bodies_pass2.md"
+    cat "$REVIEWED_BODIES" "$GH_LOG" >"$_bodies"
+    : >"$GH_LOG"
+
+    # Pass 2 sees only the agy FOLLOW-UP — the codex thread was deduped away.
+    printf '%s\n' agy:FOLLOW-UP:ACCEPT |
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$_bodies" >"${BATS_TEST_TMPDIR}/out2"
+    run cat "$GH_LOG"
+    refute_output --partial 'add 1609 review-passed'
+    run cat "${BATS_TEST_TMPDIR}/out2"
+    assert_output --partial 'codex'
+    assert_output --partial 'review-passed 미부여'
+}
+
+# agy BLOCKER: with an EMPTY external-review record, the "external AI FINDS,
+# gh:pr-reply CONFIRMS" division of labour has no finder half at all.
+@test "evidence (PR #1637 review, agy BLOCKER): a PR no reviewer ever looked at earns nothing" {
+    printf '%s\n' agy:FOLLOW-UP:DECLINE |
+        pr_reply_step6 1609 acme/widget '' newsha 0 >"${BATS_TEST_TMPDIR}/out"
+    run cat "$GH_LOG"
+    refute_output --partial 'add 1609 review-passed'
+    refute_output --partial 'review-verdict:review-passed'
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial '외부 리뷰 근거'
+    assert_output --partial 'review-passed 미부여'
+}
+
+# The ledger is written BEFORE the gate and regardless of its outcome: the
+# hold case is exactly when the next pass needs to be told.
+@test "ledger (PR #1637 review): the origin ledger is posted on the hold path too" {
+    printf '%s\n' codex:BLOCKER:DECLINE |
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES" >/dev/null
+    run cat "$GH_LOG"
+    assert_output --partial 'pr-reply-origins:newsha'
+    assert_output --partial 'codex:BLOCKER:DECLINE'
+    refute_output --partial 'add 1609 review-passed'
 }
 
 # ---------------------------------------------------------------------
@@ -244,6 +309,33 @@ _origins_1609() {
     assert_success
     run grep -qF -- '_gh_pr_reply_apply_review_passed' \
         "${SKILL_DIR}/references/review-passed-gate.md"
+    assert_success
+}
+
+@test "doc-guard (PR #1637 review): the gate doc documents the origin ledger" {
+    local _d="${SKILL_DIR}/references/review-passed-gate.md"
+    run grep -qF -- 'pr-reply-origins' "$_d"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_history_origins' "$_d"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_origins_merge' "$_d"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_post_origins_ledger' "$_d"
+    assert_success
+}
+
+@test "doc-guard (PR #1637 review): the gate doc documents the external-review evidence" {
+    local _d="${SKILL_DIR}/references/review-passed-gate.md"
+    run grep -qF -- '_gh_pr_reply_history_has_review' "$_d"
+    assert_success
+    run grep -qF -- 'hold=no-external-review' "$_d"
+    assert_success
+}
+
+@test "doc-guard (PR #1637 review): SKILL.md Step 6 recovers the origin history" {
+    run grep -qF -- '_gh_pr_reply_history_origins' "${SKILL_DIR}/SKILL.md"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_post_origins_ledger' "${SKILL_DIR}/SKILL.md"
     assert_success
 }
 

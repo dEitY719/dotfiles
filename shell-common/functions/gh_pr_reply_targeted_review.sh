@@ -29,6 +29,19 @@
 # claude/skills/gh-pr-reply/references/constraints.md and
 # claude/skills/devx-pr-review-all/references/review-verdict-label.md.
 #
+# PR #1637's review closed two holes in that relaxation, both of which let a
+# pass certify a PR the division of labour had never actually covered:
+#   - The gate now reads the PR's FULL origin history, not just this pass.
+#     Step 2's "already replied" dedup hides an earlier pass's DECLINEd
+#     BLOCKER from every later pass, so a later pass saw an empty BLOCKER set
+#     and granted `review-passed` while the blocker still stood (codex
+#     BLOCKER). The history lives in the `pr-reply-origins` ledger comment
+#     this file posts on every pass.
+#   - The gate now refuses to certify a PR NO external reviewer ever looked
+#     at. With no `ai-review` marker on the PR, the "external AI FINDS,
+#     gh:pr-reply CONFIRMS" link has no finder half at all, so there is
+#     nothing for this skill's judgment to confirm (agy BLOCKER).
+#
 # SSOT for the procedure: claude/skills/gh-pr-reply/references/review-passed-gate.md
 #
 # Deliberately NOT wrapped in an interactive guard: like
@@ -63,6 +76,29 @@ unset _drg_self _drg_helper
 # typo'd reviewer name from silently becoming its own tally row, and it keeps
 # the token comparable with the `ai-review` blocks on the PR.
 
+# The BOT reviewers, tracked as a set of their own (PR #1637 review, codex
+# BLOCKER). The skill's Step 3 rubric classifies `gemini-code-assist`,
+# `sourcery-ai` and `copilot` comments exactly like an AI-CLI comment, so a
+# bot-authored BLOCKER has to be able to enter ORIGINS — before this, it could
+# not, and the gate never saw it.
+#
+# Deliberately NOT folded into the `--ai` enum above. These logins are only
+# ever comment AUTHORS: nothing re-invokes them, because `gh:pr-review --ai`
+# has no such value and never will (they are GitHub Apps that review on their
+# own schedule). Conflating the two sets would make the `--ai` enum accept
+# names its CLI dispatcher cannot run, i.e. a typo'd `--ai` value would look
+# valid to every caller that validates against one list.
+#
+# Bot logins contain `-` but never `:`, so a bot reviewer field leaves the
+# `reviewer:severity:verdict` delimiter and `_gh_pr_reply_origin_tally`'s awk
+# `-F:` grouping working unchanged.
+_gh_pr_reply_reviewer_is_bot() {
+    case "$(printf '%s' "${1-}" | tr '[:upper:]' '[:lower:]')" in
+    gemini-code-assist | sourcery-ai | copilot) return 0 ;;
+    esac
+    return 1
+}
+
 _gh_pr_reply_origin_line() {
     local _reviewer _severity _verdict
     _reviewer=$(printf '%s' "${1-}" | tr '[:upper:]' '[:lower:]')
@@ -71,12 +107,16 @@ _gh_pr_reply_origin_line() {
     _severity=$(printf '%s' "${2-}" | tr -d '[]' | tr '[:lower:]' '[:upper:]')
     _verdict=$(printf '%s' "${3-}" | tr '[:lower:]' '[:upper:]')
 
+    # Either set is accepted; anything in neither is still exit 2, and the
+    # message names both so a caller can tell which list it missed.
     case "$_reviewer" in
     codex | agy | claude | opencode | hermes) ;;
     *)
-        printf '[gh-pr-reply] unknown reviewer: %s (allowed: codex, agy, claude, opencode, hermes)\n' \
-            "${1-}" >&2
-        return 2
+        if ! _gh_pr_reply_reviewer_is_bot "$_reviewer"; then
+            printf '[gh-pr-reply] unknown reviewer: %s (allowed AI CLIs: codex, agy, claude, opencode, hermes; allowed bots: gemini-code-assist, sourcery-ai, copilot)\n' \
+                "${1-}" >&2
+            return 2
+        fi
         ;;
     esac
     case "$_severity" in
@@ -143,14 +183,315 @@ _gh_pr_reply_origin_tally() {
     '
 }
 
+# ── The origin ledger: cross-pass memory (PR #1637 review) ──────────────
+#
+# The gate below only ever saw the CURRENT pass's ORIGINS, and that is not
+# enough to answer its own question. Step 2's "already replied" dedup filters
+# a thread out of every LATER pass, so an earlier pass that DECLINEd a BLOCKER
+# leaves no trace in the next pass's stream — which then reads `pass=no-blocker`
+# and certifies a PR whose blocker was never fixed (codex BLOCKER).
+#
+# The fix follows this repo's existing convention that a posted comment IS
+# durable machine-readable state: `<!-- ai-review:<ai>:<sha> -->` in
+# gh_pr_review.sh, and the bare `<!-- review-verdict:review-passed:<sha> -->`
+# marker comment `devx_pr_review_all_write_label` posts (the precedent for a
+# comment body that is nothing but an HTML comment). Every pass writes its
+# merged verdicts back as:
+#
+#   <!-- pr-reply-origins:<head-sha> -->
+#   codex:BLOCKER:DECLINE
+#   agy:FOLLOW-UP:ACCEPT
+#   <!-- /pr-reply-origins:<head-sha> -->
+
+# Origin lines on stdin -> the wrapped ledger block on stdout.
+#
+#   <origin lines> | _gh_pr_reply_origins_block [head-sha]
+#
+# Empty input prints NOTHING and returns 0 — there is nothing to remember, and
+# an empty block on the PR would be noise a later pass has to skip anyway. A
+# line that is not `<reviewer>:<severity>:<verdict>` is rc 2: the ledger is
+# read back by machine, so garbage must never be written in the first place.
+# <head-sha> may be empty, in which case the unsuffixed marker form is emitted
+# — the same fallback `_gh_pr_review_build_comment_body`'s 8th argument makes.
+_gh_pr_reply_origins_block() {
+    local _sha="${1-}" _marker _origins _line _out=""
+
+    _origins=$(cat)
+    _marker="pr-reply-origins"
+    [ -n "$_sha" ] && _marker="pr-reply-origins:$_sha"
+
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        [ -n "$_line" ] || continue
+        case "$_line" in
+        *:*:*) ;;
+        *)
+            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>): %s\n' \
+                "$_line" >&2
+            return 2
+            ;;
+        esac
+        _out="${_out}${_line}
+"
+    done <<EOF
+$_origins
+EOF
+
+    [ -n "$_out" ] || return 0
+    printf '<!-- %s -->\n' "$_marker"
+    printf '%s' "$_out"
+    printf '<!-- /%s -->\n' "$_marker"
+    return 0
+}
+
+# PR comment bodies on stdin -> the origin lines of the LAST COMPLETE ledger
+# block found, one per line.
+#
+# The contract deliberately mirrors `devx_pr_review_all_lane_block`: the last
+# complete block wins (a later pass supersedes an earlier one) and an
+# unterminated block is never harvested (a truncated comment must not hand
+# back half a history). Both marker forms match — sha-suffixed and unsuffixed
+# — because freshness is NOT what this reader wants: a BLOCKER declined
+# against an older head is still declined today, and gating the history on the
+# current sha would re-open exactly the hole the ledger closes.
+#
+# Lines inside the block that do not look like `<reviewer>:<severity>:<verdict>`
+# are dropped silently rather than failing: the ledger lives in an ordinary PR
+# comment, and a human replying inside it (or GitHub reflowing it) must not be
+# able to turn the next pass's gate into a hard error.
+_gh_pr_reply_history_origins() {
+    local _line
+    awk '
+        # "\001" is the "marker absent on this line" sentinel: unlike
+        # lane_block, an EMPTY tag is a legitimate match here (the unsuffixed
+        # marker form), so absence cannot be signalled by returning "".
+        function tagof(line, pre, plen,   p, rest, e) {
+            p = index(line, pre)
+            if (p == 0) return "\001"
+            rest = substr(line, p + plen)
+            e = index(rest, " -->")
+            if (e == 0) return "\001"
+            return substr(rest, 1, e - 1)
+        }
+        function wanted(t) {
+            if (t == "\001") return 0
+            return (t == "" || substr(t, 1, 1) == ":")
+        }
+        BEGIN {
+            # `beg`/`fin`, not `open`/`close`: `close` is an awk built-in and
+            # using it as a variable is a syntax error in POSIX awk.
+            beg = "<!-- pr-reply-origins"
+            fin = "<!-- /pr-reply-origins"
+            blen = length(beg)
+            flen = length(fin)
+        }
+        {
+            # A collapsed block — open and close on the same line — has to be
+            # handled before the open-tag rule `next`s past it, the same
+            # ordering bug PR #1573 found in lane_block.
+            bp = index($0, beg)
+            if (bp > 0) {
+                bt = tagof($0, beg, blen)
+                if (wanted(bt)) {
+                    rest = substr($0, bp + blen + length(bt) + 4)
+                    fp = index(rest, fin)
+                    if (fp > 0 && wanted(tagof(rest, fin, flen))) {
+                        last = substr(rest, 1, fp - 1)
+                        next
+                    }
+                    collecting = 1
+                    buf = ""
+                    next
+                }
+            }
+            if (collecting && wanted(tagof($0, fin, flen))) {
+                collecting = 0
+                last = buf
+                next
+            }
+            if (collecting) { buf = buf $0 "\n" }
+        }
+        END { printf "%s", last }
+    ' | while IFS= read -r _line || [ -n "$_line" ]; do
+        case "$_line" in
+        *:*:*) printf '%s\n' "$_line" ;;
+        esac
+    done
+}
+
+# PR comment bodies on stdin. rc 0 = some external reviewer's `ai-review`
+# block is present on this PR; rc 1 = none is.
+#
+# This is the evidence probe for the second hole PR #1637's review found (agy
+# BLOCKER): with an EMPTY ORIGINS stream the gate read `pass=no-blocker` and
+# self-applied `review-passed` even when no external review had ever run (no
+# CLI installed, `devx:pr-review-all` never invoked). #1636 relaxed NF-2 on the
+# strength of a division of labour — external AI FINDS the blockers,
+# gh:pr-reply confirms they were RESOLVED — and with no finder there is no
+# division of labour left to lean on.
+#
+# Known limitation, accepted deliberately: `gh:pr-review`'s large-diff
+# delegation path does not stamp the marker (a known bug, out of #1636's
+# scope), and a bot-only review (gemini-code-assist et al.) posts no
+# `ai-review` marker either. Both therefore read as "no evidence" and leave
+# the PR UNLABELLED — the fail-closed direction, since downstream has always
+# read "no label" as "not verified".
+_gh_pr_reply_history_has_review() {
+    local _bodies
+    # Read whole rather than `grep -q`: an early exit would hand EPIPE to a
+    # piped producer, and this reads a comment dump that is already in memory.
+    _bodies=$(cat)
+    case "$_bodies" in
+    *'<!-- ai-review:'*) return 0 ;;
+    esac
+    return 1
+}
+
+# Merge the ledger's history with this pass's classifications.
+#
+#   <this pass's origin lines> | _gh_pr_reply_origins_merge "<history origins>"
+#
+# Prints every history line whose REVIEWER does not appear in this pass,
+# followed by this pass's lines verbatim and in order.
+#
+# The supersede rule is per-REVIEWER, not per-line, and that is the whole
+# design. Without any supersede, a DECLINEd BLOCKER would pin `review-passed`
+# off the PR forever with no way to ever clear it — the reviewer could concede
+# the point in the next round and the label would still be stuck. With a
+# per-reviewer supersede the escape hatch is exactly the right one: the
+# reviewer re-raises the item in a later round, gh:pr-reply re-classifies it,
+# and that fresh classification replaces the stale one. A reviewer who says
+# nothing this pass keeps its history entries, so silence never clears a
+# blocker.
+#
+# A malformed line in EITHER input is rc 2 — the same reason
+# `_gh_pr_reply_origins_block` refuses to write one.
+_gh_pr_reply_origins_merge() {
+    local _history="${1-}" _this _line _rev _revs=" " _keep="" _out=""
+
+    _this=$(cat)
+
+    # This pass first: its reviewer set is what filters the history below.
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        [ -n "$_line" ] || continue
+        case "$_line" in
+        *:*:*) ;;
+        *)
+            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>): %s\n' \
+                "$_line" >&2
+            return 2
+            ;;
+        esac
+        _rev="${_line%%:*}"
+        case "$_revs" in
+        *" $_rev "*) ;;
+        *) _revs="${_revs}${_rev} " ;;
+        esac
+        _out="${_out}${_line}
+"
+    done <<EOF
+$_this
+EOF
+
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        [ -n "$_line" ] || continue
+        case "$_line" in
+        *:*:*) ;;
+        *)
+            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>): %s\n' \
+                "$_line" >&2
+            return 2
+            ;;
+        esac
+        _rev="${_line%%:*}"
+        case "$_revs" in
+        *" $_rev "*) continue ;;
+        esac
+        _keep="${_keep}${_line}
+"
+    done <<EOF
+$_history
+EOF
+
+    printf '%s%s' "$_keep" "$_out"
+    return 0
+}
+
+# Post the merged origin lines back to the PR as the ledger comment.
+#
+#   <merged origin lines> | _gh_pr_reply_post_origins_ledger <pr> <repo> [host] [head-sha]
+#
+# Called on EVERY pass, including a pass that holds — the hold case is exactly
+# when the next pass needs to be told, and a ledger written only on the pass
+# path would remember nothing but the outcomes that need no memory.
+#
+# GH_HOST is pinned inside the subshell the same way
+# `devx_pr_review_all_write_label` does it (#1403 / #1407). Soft-fail: rc 0 on
+# every outcome, because a missing ledger degrades the NEXT pass (it re-reads
+# a shorter history) rather than this one — but never silently, since that
+# next pass then needs the reviewer to re-raise the item.
+_gh_pr_reply_post_origins_ledger() {
+    local _pr="${1-}" _repo="${2-}" _host="${3-}" _sha="${4-}"
+    local _block _brc=0 _rc=0
+
+    if [ -z "$_pr" ] || [ -z "$_repo" ]; then
+        cat >/dev/null
+        printf '[gh-pr-reply] usage: _gh_pr_reply_post_origins_ledger <pr> <repo> [host] [head-sha]\n' >&2
+        return 2
+    fi
+
+    # `|| _brc=$?`, not a bare assignment: this file is sourced into callers
+    # that may have `set -e` armed, where a rc 2 from the builder would abort
+    # the caller instead of reaching the WARN below.
+    _block=$(_gh_pr_reply_origins_block "$_sha") || _brc=$?
+    if [ "$_brc" -ne 0 ]; then
+        printf '[WARN] origin 원장 기록 실패 — 다음 pass 가 이번 판정을 못 본다(BLOCKER 재분류 필요)\n'
+        return 0
+    fi
+    if [ -z "$_block" ]; then
+        printf '[OK] 기록할 origin 없음 — 원장 생략\n'
+        return 0
+    fi
+
+    (
+        if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+            export GH_HOST="$_host"
+        fi
+        gh api -X POST "repos/$_repo/issues/$_pr/comments" -f "body=$_block"
+    ) >/dev/null 2>&1 || _rc=$?
+
+    if [ "$_rc" -eq 0 ]; then
+        printf '[OK] origin 원장 기록됨 — 다음 pass 가 이 pass 의 판정을 본다\n'
+    else
+        printf '[WARN] origin 원장 기록 실패 — 다음 pass 가 이번 판정을 못 본다(BLOCKER 재분류 필요)\n'
+    fi
+    return 0
+}
+
 # ── F-2: the `review-passed` gate (issue #1636) ─────────────────────────
 #
-#   <origin lines> | _gh_pr_reply_review_passed_gate
+#   <origin lines> | _gh_pr_reply_review_passed_gate [<external-review-evidence>]
 #
 # Prints exactly one token:
 #   pass=no-blocker              no BLOCKER-severity item was raised at all
 #   pass=blockers-resolved:<n>   all <n> BLOCKER items are ACCEPT/ACCEPT-PARTIAL
 #   hold=unresolved-blocker:<r>  <r> has a BLOCKER that is not resolved
+#   hold=no-external-review      no external reviewer ever looked at this PR
+#
+# The origin stream is expected to be the MERGED one (this pass's lines plus
+# the ledger history `_gh_pr_reply_origins_merge` kept) — feeding it only this
+# pass's lines re-opens the cross-pass hole (PR #1637 review, codex BLOCKER).
+#
+# `<external-review-evidence>` is `yes` when the PR carries an `ai-review`
+# block (`_gh_pr_reply_history_has_review`). It is FAIL-CLOSED by default:
+# omitted, empty, or any other value means "no evidence", because a caller
+# that forgot to probe must not be handed a certification it did not earn
+# (PR #1637 review, agy BLOCKER).
+#
+# Evaluation order matters: the per-line BLOCKER loop runs FIRST, so a PR with
+# both an unresolved blocker and no evidence reports the blocker — it names a
+# reviewer and an actionable item, where the evidence token only says "run a
+# review". Both are holds, so the label outcome is identical either way.
 #
 # This replaces #1616's `_gh_pr_reply_targeted_lane_decide`, which answered a
 # narrower question ("may we spend one scoped gh:pr-review re-call?") and
@@ -173,6 +514,7 @@ _gh_pr_reply_origin_tally() {
 # awk only groups the ASCII spellings — counting MORE items as blocking is
 # the safe direction for a gate that authorizes `review-passed`.
 _gh_pr_reply_review_passed_gate() {
+    local _evidence="${1-}"
     local _origins _line _rev _rest _sev _verd _blocking=0
 
     # Read stdin whole before deciding: an early `return` mid-loop would leave
@@ -207,6 +549,16 @@ _gh_pr_reply_review_passed_gate() {
 $_origins
 EOF
 
+    # Only now, with no unresolved blocker to name, does the evidence question
+    # decide. Anything other than a literal `yes` is "no evidence".
+    case "$_evidence" in
+    yes) ;;
+    *)
+        printf 'hold=no-external-review\n'
+        return 0
+        ;;
+    esac
+
     if [ "$_blocking" -eq 0 ]; then
         printf 'pass=no-blocker\n'
     else
@@ -234,6 +586,9 @@ _gh_pr_reply_review_passed_report() {
         _who="${_token#hold=unresolved-blocker:}"
         printf '[BLOCKED] %s 의 블로커가 미해결 — review-passed 미부여, review-blocked 유지\n' "$_who"
         ;;
+    hold=no-external-review)
+        printf '[BLOCKED] 외부 리뷰 근거(ai-review 마커) 없음 — review-passed 미부여 (#1636 의 분업 전제 미충족)\n'
+        ;;
     *)
         printf '[gh-pr-reply] unknown report token: %s\n' "$_token" >&2
         return 2
@@ -244,7 +599,12 @@ _gh_pr_reply_review_passed_report() {
 
 # ── Applying `review-passed` from gh:pr-reply's own judgment (#1636) ─────
 #
-#   <origin lines> | _gh_pr_reply_apply_review_passed <pr> <repo> [host] [head-sha]
+#   <merged origin lines> | _gh_pr_reply_apply_review_passed <pr> <repo> [host] [head-sha] [external-review-evidence]
+#
+# The 5th positional is forwarded verbatim to the gate, evidence default and
+# all — a caller that omits it gets `hold=no-external-review` and writes
+# nothing, which is the fail-closed direction (PR #1637 review, agy BLOCKER).
+# EVERY `hold=*` token takes the same path: report, write nothing, rc 0.
 #
 # Runs the gate, and on `pass=` writes `review-passed` through the shared
 # `devx_pr_review_all_write_label` primitive — the same drop-opposite / safe-add
@@ -259,16 +619,16 @@ _gh_pr_reply_review_passed_report() {
 # unlabelled PR reads downstream as "not verified", which is the same contract
 # as before. Only a usage error is rc 2.
 _gh_pr_reply_apply_review_passed() {
-    local _pr="${1-}" _repo="${2-}" _host="${3-}" _head_sha="${4-}"
+    local _pr="${1-}" _repo="${2-}" _host="${3-}" _head_sha="${4-}" _evidence="${5-}"
     local _token _write _ok_line _fail_line
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
         cat >/dev/null
-        printf '[gh-pr-reply] usage: _gh_pr_reply_apply_review_passed <pr> <repo> [host] [head-sha]\n' >&2
+        printf '[gh-pr-reply] usage: _gh_pr_reply_apply_review_passed <pr> <repo> [host] [head-sha] [external-review-evidence]\n' >&2
         return 2
     fi
 
-    _token=$(_gh_pr_reply_review_passed_gate) || return $?
+    _token=$(_gh_pr_reply_review_passed_gate "$_evidence") || return $?
 
     case "$_token" in
     hold=*)
@@ -304,8 +664,14 @@ _gh_pr_reply_apply_review_passed() {
 # fall back to the old global rule.
 for _gprtr_selfcheck_fn in \
     _gh_pr_reply_origin_line \
+    _gh_pr_reply_reviewer_is_bot \
     _gh_pr_reply_severity_is_blocking \
     _gh_pr_reply_origin_tally \
+    _gh_pr_reply_origins_block \
+    _gh_pr_reply_history_origins \
+    _gh_pr_reply_history_has_review \
+    _gh_pr_reply_origins_merge \
+    _gh_pr_reply_post_origins_ledger \
     _gh_pr_reply_review_passed_gate \
     _gh_pr_reply_review_passed_report \
     _gh_pr_reply_apply_review_passed; do

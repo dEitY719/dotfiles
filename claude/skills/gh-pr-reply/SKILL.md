@@ -93,10 +93,17 @@ unconditionally — the reviewed commit is no longer head.
 Then, **after Step 5 has replied to every comment and regardless of
 `PUSHED_FIXES`**, run the `review-passed` gate of
 `references/review-passed-gate.md` (soft-fail): read `HEAD_SHA` (`gh pr view`
-`--json headRefOid`, *after* any push) and pipe `ORIGINS` into
+`--json headRefOid`, *after* any push). First recover the PR's origin history
+and its external-review evidence from the Step 2 comment fetch (no extra API
+call) with `_gh_pr_reply_history_origins` / `_gh_pr_reply_history_has_review`,
+merge `ORIGINS` over that history (`_gh_pr_reply_origins_merge`) and post the
+merged stream back as the ledger comment (`_gh_pr_reply_post_origins_ledger`,
+before the gate and whatever it decides); a PR with no external-review
+evidence is left unlabelled. Then pipe the merged stream into
 `_gh_pr_reply_apply_review_passed "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST"
-"$HEAD_SHA"`. It applies `review-passed` — freshness marker included — when
-no BLOCKER-severity item is left unresolved, and applies nothing when one is.
+"$HEAD_SHA" "$EVIDENCE"`. It applies `review-passed` — freshness marker
+included — when no BLOCKER-severity item is left unresolved, and applies
+nothing when one is.
 Since #1636 this skill decides that **on its own judgment, with no external AI
 CLI re-call**; `devx:pr-review-all` owns `review-blocked` and never writes
 `review-passed`. Never hand-write either label: the gate helper is the only
