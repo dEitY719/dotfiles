@@ -404,9 +404,6 @@ _gh_pr_merge_train_review_passed_marker_sha() {
     # contain blank lines of its own.
     _headers=$(printf '%s\n' "$_raw" |
         awk '{ sub(/\r$/, ""); if ($0 == "") exit; print }')
-    _bodies=$(printf '%s\n' "$_raw" |
-        awk 'p { print; next }
-             { l = $0; sub(/\r$/, "", l); if (l == "") p = 1 }')
 
     # Anchor on the header NAME: `Access-Control-Expose-Headers` lists the
     # word "Link" in its value and must not be mistaken for the real thing.
@@ -434,6 +431,13 @@ _gh_pr_merge_train_review_passed_marker_sha() {
         _rc=$?
         # Same contract as a call-1 failure: UNDETERMINED, not "absent".
         [ "$_rc" -eq 0 ] || return 1
+    else
+        # Single-page PR: page 1's response (already fetched above) is the
+        # whole PR, so reuse its body instead of a second call. Same
+        # blank-line split as `_headers` above, done with the one-line `sed`
+        # idiom this codebase already uses for it — see
+        # claude/skills/gh-pr-merge-train/references/approval-gate.md.
+        _bodies=$(printf '%s\n' "$_raw" | sed '1,/^\r\{0,1\}$/d')
     fi
 
     printf '%s\n' "$_bodies" |
