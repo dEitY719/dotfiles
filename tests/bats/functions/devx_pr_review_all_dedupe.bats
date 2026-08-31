@@ -129,6 +129,32 @@ Verdict: LGTM
     assert_line "RUN codex"
 }
 
+# ── accepted TOCTOU race (codex, PR #1623 BLOCKER) ──────────────────
+# The guard is a read-before-write check, not a lock: two sessions reading the
+# SAME pre-review BODIES snapshot before either one posts will both conclude
+# "not yet reviewed" and both dispatch — exactly PR #1608's original failure,
+# just with a narrower window. This test pins that as documented, accepted
+# behavior (references/duplicate-review-guard.md -> "Known limitation"), not
+# as a bug to fix here — a lock file was explicitly deprioritized in #1613.
+
+@test "already_reviewed: two sessions racing on the same pre-review snapshot both see 'not reviewed'" {
+    # Neither session has posted yet, so both read the identical empty-of-agy
+    # BODIES. A lock would serialize this; the check does not.
+    local shared_snapshot='Unrelated conversation comment.'
+
+    run bash -c '
+        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        SNAPSHOT="'"$shared_snapshot"'"
+        printf "%s\n" "$SNAPSHOT" | devx_pr_review_all_already_reviewed agy deadbeef
+        session_a=$?
+        printf "%s\n" "$SNAPSHOT" | devx_pr_review_all_already_reviewed agy deadbeef
+        session_b=$?
+        printf "session_a=%s session_b=%s\n" "$session_a" "$session_b"
+    '
+    assert_success
+    assert_output --partial "session_a=1 session_b=1"
+}
+
 # ── doc guards ───────────────────────────────────────────────────────
 # Same rule as the verdict suite's doc-guards: the SKILL step must CALL the
 # shared helper by its literal call shape, not paraphrase the guard into prose
@@ -143,5 +169,21 @@ Verdict: LGTM
 @test "doc-guard: the SKILL documents the --force-review bypass" {
     run grep -qF -- '--force-review' \
         "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
+    assert_success
+}
+
+@test "doc-guard (#1623 agy BLOCKER): a guard-skipped lane must still be aggregated in Step 3.5" {
+    run grep -qF -- 'each lane that actually ran' \
+        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
+    assert_failure
+
+    run grep -qF -- 'either ran fresh in Step 3 OR was skipped by the' \
+        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
+    assert_success
+}
+
+@test "doc-guard (#1623 codex BLOCKER): the TOCTOU limitation is documented" {
+    run grep -qF -- 'Known limitation: this is a check, not a lock' \
+        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/duplicate-review-guard.md"
     assert_success
 }
