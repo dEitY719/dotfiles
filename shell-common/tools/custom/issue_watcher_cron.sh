@@ -283,6 +283,19 @@ _IW_LIMIT_STATE_BASENAME="rate-limit.json"
 # and the awk joins already speak, and one this script can rewrite atomically
 # without a JSON primitive it does not have.
 _IW_ZOMBIE_CANDIDATES_BASENAME="zombie-candidates.tsv"
+# The issues a rate-limit strike killed, alongside the gate state above
+# (issue #1604). Same TSV-and-atomic-rewrite discipline as the zombie clock, for
+# the same reasons — per-item records, one row mutated per tick, and no JSON
+# primitive this script owns.
+#
+# One column wider than its neighbour: `<repo> <number> <booked-epoch>
+# <attempts>`. The retry budget is an attribute of the casualty, not a record of
+# its own, so a second file keyed by the same pair would buy nothing and cost
+# two rewrites per retry plus a whole new class of "row here, missing there"
+# states — in a mechanism whose entire job is to stop losing issues. A fourth
+# awk column is the cheaper half of that trade. A row missing the field reads as
+# zero attempts, so a state directory written before it existed still parses.
+_IW_LIMIT_CASUALTIES_BASENAME="rate-limit-casualties.tsv"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
 # How long a *confirmed* dispatch has to hold `working` before the tick accepts
@@ -324,6 +337,14 @@ _IW_ERRF=""
 _IW_CONFIG_DIR=""
 # Set by --dry-run: collect and report candidates, mutate nothing.
 _IW_DRY_RUN=0
+# Set by _iw_limit_gate_check when it clears an expired backoff, and read once
+# by main() (issue #1604). The casualty retry is a gate-reopen event, not a
+# per-tick one: a tick that finds the gate simply `open` has already done its
+# retrying on the reopen that preceded it.
+_IW_LIMIT_GATE_REOPENED=0
+# 1 once _iw_ensure_config_dir has run. Distinct from _IW_CONFIG_DIR being
+# non-empty, because "HOME is unset" resolves to a legitimately empty value.
+_IW_CONFIG_DIR_RESOLVED=0
 
 # ============================================================
 # Helpers — state paths and JSON
@@ -1005,6 +1026,32 @@ _iw_resolve_config_dir() {
 
         printf '%s' "${_cfg_dir}"
     )
+}
+
+# Resolve _IW_CONFIG_DIR once per tick, wherever the tick first needs it.
+#
+# Two callers since #1604 — the candidate dispatch loop and the casualty retry
+# that runs ahead of it — and both must see the same account, because "one
+# account, one quota" is what makes the rate-limit gate's whole verdict sound.
+# Memoized on its own flag rather than on the value: `HOME` unset resolves to a
+# legitimately empty CLAUDE_CONFIG_DIR, so emptiness cannot mean "not yet asked".
+# An unresolvable account is still terminal for the tick, exactly as it was when
+# this lived inline in main().
+_iw_ensure_config_dir() {
+    [ "${_IW_CONFIG_DIR_RESOLVED}" -eq 0 ] || return 0
+    _IW_CONFIG_DIR_RESOLVED=1
+
+    _IW_CONFIG_DIR=$(_iw_resolve_config_dir)
+    case "$?" in
+    0) ;;
+    2)
+        _IW_CONFIG_DIR=""
+        ux_warning "HOME is unset — starting claude without CLAUDE_CONFIG_DIR account routing."
+        ;;
+    *)
+        exit 1
+        ;;
+    esac
 }
 
 # ============================================================
@@ -2281,6 +2328,14 @@ EOF
     expired)
         ux_info "Rate-limit gate reopened — backoff expired, resuming dispatch."
         _iw_limit_clear
+        # The one moment the casualty list is acted on. Flagged rather than
+        # retried here: this function is the gate's decision and runs before the
+        # tick has primed `herdr agent list` or resolved an account dir, and the
+        # retry needs both. main() reads the flag once, ahead of
+        # _iw_select_candidates, so the issues the outage killed are offered
+        # their pane back before a fresh issue is allowed to take a slot
+        # (issue #1604).
+        _IW_LIMIT_GATE_REOPENED=1
         return 0
         ;;
     esac
@@ -2290,6 +2345,18 @@ EOF
 }
 
 # Poll the tick's confirmed dispatches for `_IW_LIMIT_OBSERVE_SEC`.
+#
+# $1 is the dispatch list: one `<agent>[<TAB><repo><TAB><number>]` row each. The
+# trailing pair is what lets a strike name the issues it killed (issue #1604);
+# a bare agent name still parses, and simply books no casualty.
+#
+# $2 is optional — a file the deciding poll's *readably failed* dispatches are
+# written to, as `<repo><TAB><number>` rows. "Readably" is the whole point:
+# `_iw_agent_status` reports both of its failure modes as an empty string, so a
+# dispatch herdr would not talk about has no evidence against it and must not be
+# booked as a casualty, even on a tick that earns a strike for its neighbours.
+# The file is rewritten from scratch every poll and only ever read after this
+# returns, so what survives is the verdict of the poll that decided.
 #
 # Three verdicts, because "the agent is idle" and "herdr would not tell us what
 # the agent is" are different facts and collapsing them is exactly the bug this
@@ -2313,7 +2380,8 @@ EOF
 # touched. The earlier polls exist only to tell those two failures apart in the
 # log.
 _iw_limit_observe() {
-    local _agents="$1" _i=0 _agent _status _alive="" _seen="" _readable=0
+    local _agents="$1" _failed_file="${2-}" _i=0 _agent _repo _number _status
+    local _alive="" _seen="" _readable=0
 
     while [ "${_i}" -lt "${_IW_LIMIT_OBSERVE_POLLS}" ]; do
         [ "${_IW_LIMIT_OBSERVE_SLEEP}" = "0" ] || sleep "${_IW_LIMIT_OBSERVE_SLEEP}"
@@ -2322,11 +2390,14 @@ _iw_limit_observe() {
         # Per-poll, like `_alive`: only the deciding poll's readability counts.
         # A pane readable 50 seconds ago says nothing about now.
         _readable=0
+        # Same per-poll rule for the casualty list, and the reason it is
+        # truncated here rather than appended to across the window.
+        [ -z "${_failed_file}" ] || : >"${_failed_file}" 2>/dev/null || true
 
         # fd 3, not stdin: the loop body runs `herdr`, which would otherwise
         # swallow the rest of the agent list and silently shorten the
         # observation to its first entry (PR #1447 agy review).
-        while IFS= read -r _agent <&3; do
+        while IFS="${_IW_TAB}" read -r _agent _repo _number <&3; do
             [ -n "${_agent}" ] || continue
             _status=$(_iw_agent_status "${_agent}") || _status=""
             [ -z "${_status}" ] || _readable=1
@@ -2336,6 +2407,14 @@ _iw_limit_observe() {
                 break
                 ;;
             esac
+            # Read, and not alive: this dispatch failed to hold `working`. Rows
+            # without the issue pair are the bare-agent-name callers, which have
+            # nothing to book.
+            if [ -n "${_status}" ] && [ -n "${_failed_file}" ] &&
+                [ -n "${_repo}" ] && [ -n "${_number}" ]; then
+                printf '%s\t%s\n' "${_repo}" "${_number}" \
+                    >>"${_failed_file}" 2>/dev/null || true
+            fi
         done 3<<EOF
 ${_agents}
 EOF
@@ -2362,10 +2441,12 @@ EOF
 # that decision. The read-and-filter itself is _iw_pane_text's (#1570) — this
 # just asks for 40 lines instead of the settle poll's 3.
 _iw_limit_evidence() {
-    local _agents="$1" _agent _text _line
+    local _agents="$1" _agent _rest _text _line
 
-    # fd 3, not stdin: the loop body runs `herdr` (PR #1447 agy review).
-    while IFS= read -r _agent <&3; do
+    # fd 3, not stdin: the loop body runs `herdr` (PR #1447 agy review). The
+    # dispatch rows carry `<repo> <number>` after the agent name since #1604;
+    # only the name addresses a pane, so the rest is read off and dropped.
+    while IFS="${_IW_TAB}" read -r _agent _rest <&3; do
         [ -n "${_agent}" ] || continue
         _text=$(_iw_pane_text "${_agent}" "${_IW_LIMIT_EVIDENCE_LINES}")
         if [ -z "${_text}" ]; then
@@ -2381,16 +2462,264 @@ ${_agents}
 EOF
 }
 
-# Record this tick's outcome. $1 is the newline-separated list of agents whose
-# prompt was confirmed submitted — every other dispatch is excluded upstream
-# because an unsubmitted prompt says nothing about the quota (issue #1444).
+# ------------------------------------------------------------
+# Strike casualties (issue #1604)
+# ------------------------------------------------------------
+#
+# A strike closes the gate for _IW_LIMIT_BACKOFF_SECONDS, but until #1604 it
+# forgot *which* issues the outage killed. On reopen the tick simply asked
+# `_iw_select_candidates` again, which round-robins on to the next issue — so an
+# outage lasting longer than one backoff window sacrificed a fresh issue every
+# 30 minutes, each one holding a worktree and a concurrency slot forever and
+# none of them ever retried. A human had to re-prompt every dead pane by hand.
+#
+# The rows below are that missing memory. They are written where the strike is
+# booked and read exactly once, when the gate reopens.
+
+_iw_limit_casualties_file() {
+    printf '%s/%s' "$(_iw_state_dir)" "${_IW_LIMIT_CASUALTIES_BASENAME}"
+}
+
+# Echo the attempts already spent on <repo> <number>, or nothing when the pair
+# is not on file. Same NF-1 posture as _iw_zombie_candidate_ts: a missing file,
+# an unreadable one and an absent row are one answer, and the caller reads it as
+# "not a casualty".
+_iw_limit_casualty_attempts() {
+    local _file
+    _file=$(_iw_limit_casualties_file)
+    [ -f "${_file}" ] || return 0
+    awk -F "${_IW_TAB}" -v r="$1" -v n="$2" \
+        '$1 == r && $2 == n { print ($4 == "" ? 0 : $4 + 0); exit }' \
+        "${_file}" 2>/dev/null
+}
+
+# Book <repo> <number> at <epoch> with <attempts> spent, replacing any row the
+# pair already has.
+#
+# Overwriting on purpose — the one place this parts company with
+# _iw_zombie_candidate_mark, which must never reset its clock. Here the row
+# carries a retry budget that has to be able to move, and the epoch is read by
+# nothing but the prune below.
+#
+# That prune drops rows older than a full day rather than the zombie file's six
+# grace windows. Rows normally leave through the retry path, which is bounded by
+# _IW_MAX_ATTEMPTS; this horizon only catches the ones orphaned another way — a
+# repo dropped from the watch list, an issue closed by hand — and it has to sit
+# well clear of a real quota outage, which runs for hours and during which a
+# casualty must survive untouched.
+_iw_limit_casualty_mark() {
+    local _dir _file _tmp _cutoff
+
+    _dir=$(_iw_state_dir)
+    _file=$(_iw_limit_casualties_file)
+    if ! mkdir -p "${_dir}" 2>/dev/null; then
+        ux_warning "Cannot create state directory (${_dir}) — rate-limit casualties will not survive this tick."
+        return 1
+    fi
+
+    # Same directory as the target on purpose: `mv` is only atomic within one
+    # filesystem, so a temp file under /tmp would trade the guarantee away.
+    _tmp="${_file}.$$"
+    _cutoff=$(($3 - 86400))
+    if {
+        [ ! -f "${_file}" ] ||
+            awk -F "${_IW_TAB}" -v r="$1" -v n="$2" -v c="${_cutoff}" \
+                'NF >= 3 && !($1 == r && $2 == n) && $3 + 0 >= c' "${_file}"
+        printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4"
+    } >"${_tmp}" 2>/dev/null && mv -f "${_tmp}" "${_file}" 2>/dev/null; then
+        return 0
+    fi
+
+    rm -f "${_tmp}" 2>/dev/null || true
+    ux_warning "Cannot write ${_file} — rate-limit casualties will not survive this tick."
+    return 1
+}
+
+# Drop <repo> <number> from the file — the issue was retried successfully, or
+# its budget ran out. Silent about failure for the same reason
+# _iw_zombie_candidate_clear is: a row that could not be removed costs one
+# redundant re-prompt on the next reopen, never a lost issue.
+_iw_limit_casualty_clear() {
+    local _file _tmp
+
+    _file=$(_iw_limit_casualties_file)
+    [ -f "${_file}" ] || return 0
+
+    _tmp="${_file}.$$"
+    if awk -F "${_IW_TAB}" -v r="$1" -v n="$2" \
+        '!($1 == r && $2 == n)' "${_file}" >"${_tmp}" 2>/dev/null; then
+        mv -f "${_tmp}" "${_file}" 2>/dev/null || rm -f "${_tmp}" 2>/dev/null || true
+    else
+        rm -f "${_tmp}" 2>/dev/null || true
+    fi
+    return 0
+}
+
+# Book every dispatch in <file> (`<repo><TAB><number>` rows, as written by
+# _iw_limit_observe) as a casualty of the strike just recorded. A pair already
+# on file keeps the attempts it has spent — a second outage must not hand it a
+# fresh budget, or a genuinely broken issue would be retried forever.
+_iw_limit_casualty_book() {
+    local _file="$1" _now _repo _number _attempts
+
+    [ -s "${_file}" ] || return 0
+    _now=$(_iw_now)
+    [ -n "${_now}" ] || return 0
+
+    while IFS="${_IW_TAB}" read -r _repo _number; do
+        [ -n "${_repo}" ] || continue
+        [ -n "${_number}" ] || continue
+        _attempts=$(_iw_limit_casualty_attempts "${_repo}" "${_number}")
+        case "${_attempts}" in
+        '' | *[!0-9]*) _attempts=0 ;;
+        esac
+        _iw_limit_casualty_mark "${_repo}" "${_number}" "${_now}" "${_attempts}" || return 0
+        ux_info "Booked ${_repo}#${_number} as a rate-limit casualty — it will be retried when the gate reopens."
+    done <"${_file}"
+}
+
+# Re-offer every casualty its pane, once, at gate-reopen time.
+#
+# Two ways back in, and the cheap one is tried first. If herdr still knows the
+# issue's agent the pane and its worktree survived the outage, so all the issue
+# needs is the prompt it never got to run — the same `herdr agent prompt`
+# _iw_prompt_issue sends on a first dispatch. Only when the agent is gone does
+# this fall back to the full _iw_process_issue path, which rebuilds worktree,
+# workspace, tab and agent from scratch; rebuilding it unconditionally would
+# throw away a perfectly good session and its branch.
+#
+# Success is verified exactly the way the gate verifies quota recovery, because
+# it is the same question: _iw_limit_observe over _IW_LIMIT_OBSERVE_SEC. Per
+# casualty rather than as one batch — the batch call names a single alive agent
+# and would leave the other rows' verdicts unknown, and here every row needs its
+# own answer.
+#
+# The retry budget only pays for failures the quota cannot explain. If nothing
+# retried this pass held `working`, the account is still spent: the rows keep
+# their attempts and wait for the next reopen, which is the whole point of
+# remembering them. Attempts are burned only once some sibling has proved the
+# quota came back and this issue still will not run — the "reason other than
+# quota" _IW_MAX_ATTEMPTS is meant to bound.
+_iw_limit_retry_casualties() {
+    local _file _rows="" _verdicts="" _quota_ok=0
+    local _repo _number _epoch _attempts _agent _path _rc _line
+
+    _file=$(_iw_limit_casualties_file)
+    [ -s "${_file}" ] || return 0
+
+    ux_info "Rate-limit casualties on file — retrying them before any new issue."
+
+    # Read the whole file up front: the loop below rewrites it row by row, and
+    # a `while read` on a file being rewritten under it reads whatever the
+    # rewrite left behind.
+    _rows=$(cat "${_file}" 2>/dev/null) || return 0
+
+    # Pass 1 — hand each casualty its prompt back.
+    while IFS="${_IW_TAB}" read -r _repo _number _epoch _attempts <&3; do
+        [ -n "${_repo}" ] || continue
+        [ -n "${_number}" ] || continue
+
+        _path=$(_iw_repo_path "${_repo}")
+        if [ -z "${_path}" ]; then
+            # The repo left the watch list while the gate was shut. Nothing
+            # here can act on it, and keeping the row would retry it forever.
+            ux_warning "Dropping rate-limit casualty ${_repo}#${_number} — the repo is no longer watched."
+            _iw_limit_casualty_clear "${_repo}" "${_number}"
+            continue
+        fi
+
+        _agent=$(_iw_agent_name "${_repo}" "${_number}") || {
+            ux_warning "Dropping rate-limit casualty ${_repo}#${_number} — no valid herdr agent name (see #1530)."
+            _iw_limit_casualty_clear "${_repo}" "${_number}"
+            continue
+        }
+
+        if [ -n "$(_iw_agent_status "${_agent}")" ]; then
+            ux_info "Re-prompting ${_repo}#${_number} in its surviving pane (${_agent})."
+            if ! _iw_prompt_issue "${_agent}" "${_number}"; then
+                # A prompt that never landed is a transport or input-loop
+                # failure, not evidence about anything this function judges —
+                # the same reading _iw_limit_record gives it. The row waits.
+                ux_warning "Retry prompt for ${_repo}#${_number} did not land — keeping it on file."
+                continue
+            fi
+        else
+            ux_info "Pane for ${_repo}#${_number} is gone — redispatching from scratch."
+            _iw_ensure_config_dir
+            if ! _iw_process_issue "${_repo}" "${_number}" "${_path}"; then
+                ux_warning "Redispatch of ${_repo}#${_number} failed — keeping it on file."
+                continue
+            fi
+        fi
+
+        _verdicts="${_verdicts}${_repo}${_IW_TAB}${_number}${_IW_TAB}${_attempts:-0}${_IW_TAB}${_agent}
+"
+    done 3<<EOF
+${_rows}
+EOF
+
+    [ -n "${_verdicts}" ] || return 0
+
+    # Pass 2 — watch each of them for the window, then judge them together.
+    _rows=""
+    while IFS="${_IW_TAB}" read -r _repo _number _attempts _agent <&3; do
+        [ -n "${_agent}" ] || continue
+        _rc=0
+        _iw_limit_observe "${_agent}${_IW_TAB}${_repo}${_IW_TAB}${_number}" >/dev/null || _rc=$?
+        [ "${_rc}" -ne 0 ] || _quota_ok=1
+        _rows="${_rows}${_rc}${_IW_TAB}${_repo}${_IW_TAB}${_number}${_IW_TAB}${_attempts}
+"
+    done 3<<EOF
+${_verdicts}
+EOF
+
+    # Pass 3 — apply. Split from pass 2 so a casualty that recovers late in the
+    # list still counts as the proof that clears its earlier siblings' budget.
+    while IFS="${_IW_TAB}" read -r _rc _repo _number _attempts; do
+        [ -n "${_repo}" ] || continue
+        [ -n "${_number}" ] || continue
+        case "${_attempts}" in
+        '' | *[!0-9]*) _attempts=0 ;;
+        esac
+
+        if [ "${_rc}" = "0" ]; then
+            ux_success "Rate-limit casualty ${_repo}#${_number} is working again — dropping it from the retry list."
+            _iw_limit_casualty_clear "${_repo}" "${_number}"
+            continue
+        fi
+
+        if [ "${_quota_ok}" -eq 0 ]; then
+            ux_warning "${_repo}#${_number} still did not hold 'working' and no sibling did either — the quota looks spent, so its retry budget is untouched."
+            continue
+        fi
+
+        _attempts=$((_attempts + 1))
+        if [ "${_attempts}" -ge "${_IW_MAX_ATTEMPTS}" ]; then
+            _iw_limit_casualty_clear "${_repo}" "${_number}"
+            ux_error "Giving up on ${_repo}#${_number} after ${_IW_MAX_ATTEMPTS} attempts."
+            continue
+        fi
+
+        ux_warning "${_repo}#${_number} failed to hold 'working' with the quota recovered (${_attempts}/${_IW_MAX_ATTEMPTS}) — retrying on the next reopen."
+        _line=$(_iw_now)
+        [ -z "${_line}" ] ||
+            _iw_limit_casualty_mark "${_repo}" "${_number}" "${_line}" "${_attempts}" || true
+    done <<EOF
+${_rows}
+EOF
+}
+
+# Record this tick's outcome. $1 is the newline-separated list of dispatches
+# whose prompt was confirmed submitted, one `<agent><TAB><repo><TAB><number>`
+# row each — every other dispatch is excluded upstream because an unsubmitted
+# prompt says nothing about the quota (issue #1444).
 #
 # Two consecutive unproductive ticks shut the gate; one productive tick wipes
 # the slate, so `_IW_LIMIT_STRIKES` really does count consecutive failures. 1
 # would hold the watcher over a single transient herdr blip; 2 buys that
 # evidence for one extra tick (~5 min).
 _iw_limit_record() {
-    local _agents="$1" _alive="" _strikes _now _rc=0
+    local _agents="$1" _alive="" _strikes _now _rc=0 _failed_file
 
     # Nothing reached a pane this tick: no evidence either way, so the strike
     # count stays exactly where it was. Said out loud rather than returned
@@ -2402,19 +2731,37 @@ _iw_limit_record() {
         return 0
     fi
 
+    # Scratch beside the state file rather than under /tmp, and named by pid the
+    # way the atomic rewrites are: the tick has exactly one `mktemp` call and
+    # this must not become its second, since a state dir that cannot be written
+    # is a documented degradation (no casualties booked) while a missing mktemp
+    # would be an error.
+    _failed_file="$(_iw_limit_casualties_file).failed.$$"
+    mkdir -p "$(_iw_state_dir)" 2>/dev/null || true
+
     # Three-way, not a boolean: `rc 2` is "herdr never answered", which must not
     # be booked as idleness. On `rc 1` `_alive` carries the agent that reached
     # `working` earlier in the window, if any — see _iw_limit_observe.
-    _alive=$(_iw_limit_observe "${_agents}") || _rc=$?
+    _alive=$(_iw_limit_observe "${_agents}" "${_failed_file}") || _rc=$?
     if [ "${_rc}" -eq 0 ]; then
+        rm -f "${_failed_file}" 2>/dev/null || true
         ux_info "Agent ${_alive} held 'working' for ${_IW_LIMIT_OBSERVE_SEC}s — quota is not exhausted, gate cleared."
         _iw_limit_clear
         return 0
     fi
     if [ "${_rc}" -eq 2 ]; then
+        rm -f "${_failed_file}" 2>/dev/null || true
         ux_warning "No dispatched agent's status could be read after ${_IW_LIMIT_OBSERVE_SEC}s — herdr unreachable, gate untouched."
         return 0
     fi
+
+    # The strike is the tick's verdict; the casualties are which issues paid for
+    # it. Booked before the strike arithmetic below because a reopen has to find
+    # them whether this strike merely accumulates or actually shuts the gate —
+    # the first of two unproductive ticks killed an issue just as thoroughly as
+    # the second (issue #1604).
+    _iw_limit_casualty_book "${_failed_file}"
+    rm -f "${_failed_file}" 2>/dev/null || true
 
     _strikes=$(_iw_limit_read strikes)
     case "${_strikes}" in
@@ -2798,6 +3145,14 @@ EOF
         exit 0
     fi
 
+    # Before _iw_select_candidates, and only on the tick that reopened the gate
+    # (issue #1604). The selector round-robins, so asking it first would hand
+    # this tick's slot to whichever issue is next in the queue and leave the one
+    # the outage actually killed waiting for a turn that never comes.
+    if [ "${_IW_LIMIT_GATE_REOPENED}" -eq 1 ]; then
+        _iw_limit_retry_casualties
+    fi
+
     _candidates=$(_iw_select_candidates "$(_iw_collect_candidates)")
 
     if [ -z "${_candidates}" ]; then
@@ -2805,20 +3160,7 @@ EOF
         exit 0
     fi
 
-    # Resolved once for the whole tick: every pane it opens shares one account,
-    # which is also what lets the rate-limit gate read one pane's stall as
-    # evidence about the quota behind all of them.
-    _IW_CONFIG_DIR=$(_iw_resolve_config_dir)
-    case "$?" in
-    0) ;;
-    2)
-        _IW_CONFIG_DIR=""
-        ux_warning "HOME is unset — starting claude without CLAUDE_CONFIG_DIR account routing."
-        ;;
-    *)
-        exit 1
-        ;;
-    esac
+    _iw_ensure_config_dir
 
     # fd 3, not stdin: the loop body runs `gh`, `herdr` and `gwt`, any of which
     # may read stdin and would otherwise swallow the rest of the candidate list,
@@ -2832,8 +3174,11 @@ EOF
         if [ "${_rc}" -eq 0 ]; then
             _dispatched=$((_dispatched + 1))
             # Confirmed submitted, so this pane is a valid witness for the
-            # quota — collected here, judged after the loop.
-            _confirmed="${_confirmed}$(_iw_agent_name "${_repo}" "${_number}")
+            # quota — collected here, judged after the loop. The issue travels
+            # with the agent name (#1604): when the judgment comes back a
+            # strike, the gate has to be able to name what it killed, and this
+            # is the only point where both halves are in scope.
+            _confirmed="${_confirmed}$(_iw_agent_name "${_repo}" "${_number}")${_IW_TAB}${_repo}${_IW_TAB}${_number}
 "
         elif [ "${_rc}" -eq 2 ]; then
             _skipped=$((_skipped + 1))

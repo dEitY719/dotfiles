@@ -33,6 +33,7 @@ setup() {
     _STATE_HOME="${_WORK_DIR}/state"
     _STATE_DIR="${_STATE_HOME}/issue-watcher"
     _LIMIT_FILE="${_STATE_DIR}/rate-limit.json"
+    _CASUALTY_FILE="${_STATE_DIR}/rate-limit-casualties.tsv"
     _ZOMBIE_FILE="${_STATE_DIR}/zombie-candidates.tsv"
     _LOCK_FILE="${_STATE_DIR}/.lock"
     _LOG="${_WORK_DIR}/calls.log"
@@ -223,6 +224,18 @@ _age_zombie_candidates() {
     mv "${_ZOMBIE_FILE}.aged" "${_ZOMBIE_FILE}"
 }
 
+# The rate-limit casualty list (#1604): one
+# <repo>\t<number>\t<booked-epoch>\t<attempts> line per issue a strike killed.
+# One column wider than the zombie clock's row — the fourth is the retry budget
+# _IW_MAX_ATTEMPTS bounds. Spelled out here once, for the same reason
+# _set_limit_state and _seed_zombie_candidate spell theirs out.
+# _seed_casualty <number> <attempts>
+_seed_casualty() {
+    mkdir -p "${_STATE_DIR}"
+    printf 'acme/dotfiles\t%s\t%s\t%s\n' "$1" "$(date +%s)" "${2:-0}" \
+        >>"${_CASUALTY_FILE}"
+}
+
 # One issue with the given labels, e.g. _issues_with_labels 11 wontfix
 _issues_with_labels() {
     local _n="$1" _labels="" _sep=""
@@ -348,6 +361,14 @@ EOF
 #   HERDR_NOTIFY_FAIL=1       `notification show` errors during final prompt escalation
 #   HERDR_AGENT_STATUS        status reported by `agent get` (default: idle)
 #   HERDR_AGENT_GET_FAIL=1    `agent get` returns agent_not_found and exits 1
+#   HERDR_AGENT_MISSING       one agent name whose `agent get` answers
+#                             agent_not_found for its first
+#                             HERDR_AGENT_MISSING_TIMES (default 1) calls and
+#                             normally thereafter — the pane that died during an
+#                             outage and is findable again once redispatched
+#                             (#1604). Unlike HERDR_AGENT_GET_FAIL this is
+#                             scoped to one agent, so the rest of the tick still
+#                             sees a healthy herdr.
 #   HERDR_PROMPT_MODE         `agent prompt` behaviour (default: always ok)
 #                               stall       every call stalled
 #                               fail        every call a non-stall error
@@ -484,6 +505,13 @@ case "$1 $2" in
     if [ "${HERDR_AGENT_GET_FAIL:-0}" = "1" ]; then
         printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:get"}'
         exit 1
+    fi
+    if [ "${HERDR_AGENT_MISSING:-}" = "$3" ]; then
+        _n=$(_bump "${CALL_LOG}.missing.$3")
+        if [ "${_n}" -le "${HERDR_AGENT_MISSING_TIMES:-1}" ]; then
+            printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:get"}'
+            exit 1
+        fi
     fi
     _status="${HERDR_AGENT_STATUS:-idle}"
     if [ -f "${CALL_LOG}.prompt.$3" ]; then
@@ -3308,6 +3336,154 @@ _two_repo_fixture() {
     assert_success
     assert_output --partial "rate-limit gate will not survive this tick"
     chmod 700 "${_STATE_DIR}"
+}
+
+# ---------------------------------------------------------------------------
+# Strike casualties and their retry (issue #1604)
+# ---------------------------------------------------------------------------
+#
+# The gate knew a strike had happened but not *which* issue paid for it, so
+# every reopen round-robined on to the next issue in the queue and the one the
+# outage actually killed was never retried — an outage outliving one backoff
+# window quietly ate a worktree slot per 30 minutes. These cover the three
+# halves of the fix: booking the casualty, retrying it ahead of fresh work, and
+# bounding those retries.
+
+@test "issue_watcher_cron: a strike books the issue it killed as a casualty" {
+    _run_tick
+    assert_success
+    assert_output --partial "No dispatched agent reached 'working' within 60s (1/2)"
+    assert_output --partial "Booked acme/dotfiles#11 as a rate-limit casualty"
+    run cat "${_CASUALTY_FILE}"
+    assert_output --partial "acme/dotfiles"
+    assert_output --partial "11"
+}
+
+@test "issue_watcher_cron: a dispatch that holds working is never booked as a casualty" {
+    # The mirror of the test above, and the invariant that keeps the retry list
+    # from filling up with issues that are perfectly healthy.
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    [ ! -s "${_CASUALTY_FILE}" ]
+}
+
+@test "issue_watcher_cron: a reopened gate retries the casualty before a fresh issue" {
+    # #11 was killed by the outage; #12 is what the round-robin would reach for
+    # next. The casualty has to get the tick's attention first — that ordering
+    # is the whole fix, since the selector never comes back to a skipped issue.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
+
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "Rate-limit gate reopened"
+    assert_output --partial "Re-prompting acme/dotfiles#11 in its surviving pane"
+    assert_output --partial "acme/dotfiles#11 is working again"
+
+    local _first _second
+    _first=$(grep -n -m1 -F 'agent prompt iw-dotfiles-issue-11' "${_LOG}" | cut -d: -f1)
+    _second=$(grep -n -m1 -F 'agent prompt iw-dotfiles-issue-12' "${_LOG}" | cut -d: -f1)
+    [ -n "${_first}" ] || fail "casualty #11 was never re-prompted"
+    [ -n "${_second}" ] || fail "fresh candidate #12 was never dispatched"
+    [ "${_first}" -lt "${_second}" ] ||
+        fail "casualty #11 was re-prompted only after fresh candidate #12"
+
+    # Recovered, so it stops being a casualty.
+    [ ! -s "${_CASUALTY_FILE}" ]
+}
+
+@test "issue_watcher_cron: an outage outliving the backoff does not burn the retry budget" {
+    # The regression this whole mechanism exists for. The gate reopens, the
+    # quota is still spent, and nothing retried holds `working` — so the row
+    # keeps every attempt it had and waits for the next reopen. Burning an
+    # attempt here would drop the issue after three windows of an outage that
+    # routinely runs for five hours.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick
+    assert_success
+    assert_output --partial "the quota looks spent, so its retry budget is untouched"
+    refute_output --partial "Giving up on acme/dotfiles#11"
+    run cat "${_CASUALTY_FILE}"
+    assert_output --partial "acme/dotfiles"
+    # Still zero attempts spent — the fourth column never moved.
+    assert_output --regexp 'acme/dotfiles	11	[0-9]+	0'
+}
+
+@test "issue_watcher_cron: a casualty is given up on after _IW_MAX_ATTEMPTS with the quota recovered" {
+    # #12 recovers, which is what proves the account has quota again; #11 still
+    # will not run, so its failure is now something other than the outage and
+    # the attempt budget is allowed to pay for it. Seeded at 2, so this pass is
+    # the third and last.
+    #
+    # #12 sitting *after* #11 in the file is deliberate: the proof that clears
+    # the budget arrives only once every casualty has been observed, so a build
+    # that judged each row as it went would still read the quota as spent when
+    # it reached #11.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 2
+    _seed_casualty 12 0
+    _set_issues '[]'
+
+    _run_tick "HERDR_WORKING_AGENTS=iw-dotfiles-issue-12"
+    assert_success
+    assert_output --partial "acme/dotfiles#12 is working again"
+    assert_output --partial "Giving up on acme/dotfiles#11 after 3 attempts."
+    # Both rows are gone: one recovered, one was given up on.
+    [ ! -s "${_CASUALTY_FILE}" ]
+}
+
+@test "issue_watcher_cron: a casualty whose pane is gone is redispatched from scratch" {
+    # The outage took the tab with it, so there is no pane left to re-prompt.
+    # Falling back to the ordinary dispatch path rebuilds worktree, workspace,
+    # tab and agent — and reaching it also proves the account dir resolves this
+    # early in the tick, ahead of the candidate loop that used to own it.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick "HERDR_AGENT_MISSING=iw-dotfiles-issue-11" \
+        "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "Pane for acme/dotfiles#11 is gone — redispatching from scratch"
+    _assert_logged "gwt spawn"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+    assert_output --partial "acme/dotfiles#11 is working again"
+    [ ! -s "${_CASUALTY_FILE}" ]
+}
+
+@test "issue_watcher_cron: a casualty whose repo left the watch list is dropped" {
+    # Nothing here can act on a repo with no local checkout, and a row that can
+    # never be retried would sit in the file forever.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    mkdir -p "${_STATE_DIR}"
+    printf 'ghost/repo\t99\t%s\t0\n' "$(date +%s)" >"${_CASUALTY_FILE}"
+    _set_issues '[]'
+
+    _run_tick
+    assert_success
+    assert_output --partial "Dropping rate-limit casualty ghost/repo#99"
+    [ ! -s "${_CASUALTY_FILE}" ]
+}
+
+@test "issue_watcher_cron: an open gate does not retry casualties every tick" {
+    # The retry is a gate-*reopen* event. A tick that finds the gate merely open
+    # — strikes on record, no backoff running — has already had its reopen, and
+    # re-prompting the same panes every three minutes would be its own outage.
+    _set_limit_state "1" "0"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick
+    assert_success
+    refute_output --partial "Re-prompting acme/dotfiles#11"
+    _refute_logged "agent prompt iw-dotfiles-issue-11"
+    # Untouched, still waiting for the reopen that will act on it.
+    run cat "${_CASUALTY_FILE}"
+    assert_output --partial "acme/dotfiles"
 }
 
 # ---------------------------------------------------------------------------
