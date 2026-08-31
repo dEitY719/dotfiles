@@ -85,7 +85,11 @@ herdr_agent_physical_path() {
 }
 
 # herdr_agent_path_under <candidate> <base> — the boundary predicate, as a
-# shell test rather than a jq one, for the batch caller below.
+# shell test rather than a jq one, so a pure-shell caller that already holds a
+# `cwd`/`foreground_cwd` pair (e.g. issue_watcher_cron.sh's per-pane join,
+# which also needs each pane's `agent_status` and so cannot use the jq-side
+# lookups below) can call it directly instead of re-deriving the boundary
+# rule in awk or jq.
 #
 # rc 0 when <candidate> IS <base> or lives under it. An empty <base> matches
 # nothing: that is the guard that keeps a failed path lookup from matching
@@ -113,57 +117,6 @@ herdr_agent_list_json() {
     fi
     printf '%s' "${_hal_json}"
     unset _hal_json
-}
-
-# herdr_agent_live_cwds — every live agent's `cwd` and `foreground_cwd`, one
-# per line, from ONE `herdr agent list` call.
-#
-# The batch half of this file. issue_watcher_cron.sh matches one herdr answer
-# against its whole worktree list on every tick, so it must not pay a herdr
-# round trip per worktree — it takes this list once and then asks
-# herdr_agent_cwds_match about each worktree locally.
-#
-# rc 1 when herdr could not be asked or its answer is not an agent list. An
-# answer holding zero agents is rc 0 with no output: herdr spoke, and what it
-# said was "nothing".
-herdr_agent_live_cwds() {
-    _hal_json=$(herdr_agent_list_json) || {
-        unset _hal_json
-        return 1
-    }
-    _hal_cwds=$(printf '%s' "${_hal_json}" | jq -r '
-        if (.result.agents | type) == "array"
-        then .result.agents[]? | (.cwd // empty), (.foreground_cwd // empty)
-        else error("no agent list")
-        end
-    ' 2>/dev/null) || {
-        unset _hal_json _hal_cwds
-        return 1
-    }
-    [ -z "${_hal_cwds}" ] || printf '%s\n' "${_hal_cwds}"
-    unset _hal_json _hal_cwds
-}
-
-# herdr_agent_cwds_match <cwd-list> <physical-path> — rc 0 when any line of
-# <cwd-list> (as produced by herdr_agent_live_cwds) sits on <physical-path>.
-#
-# The local half of the batch join: no herdr call, so a caller may run it once
-# per worktree without turning one round trip into N.
-herdr_agent_cwds_match() {
-    [ -n "${2-}" ] || return 1
-
-    while IFS= read -r _hal_cwd; do
-        [ -n "${_hal_cwd}" ] || continue
-        if herdr_agent_path_under "${_hal_cwd}" "$2"; then
-            unset _hal_cwd
-            return 0
-        fi
-    done <<EOF
-${1-}
-EOF
-
-    unset _hal_cwd
-    return 1
 }
 
 # herdr_agent_match_for_cwd <physical-path> [status-filter] — the agent sitting
