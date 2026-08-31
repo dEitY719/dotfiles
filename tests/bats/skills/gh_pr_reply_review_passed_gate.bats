@@ -43,11 +43,20 @@ setup() {
     # been reviewed — that review is what produced the origin lines — so they
     # hand the fixture a comment dump carrying an `ai-review` marker. The
     # no-evidence case has tests of its own below.
-    REVIEWED_BODIES="${BATS_TEST_TMPDIR}/bodies_reviewed.md"
+    #
+    # Since #1639 that dump is the RAW comments JSON (`.user.login` intact),
+    # not body text, and the readers only trust the pipeline's own login —
+    # so the fixture attributes the reviewer comment to `pipeline-bot`, the
+    # login `pr_reply_step6` asks as by default.
+    REVIEWED_TXT="${BATS_TEST_TMPDIR}/bodies_reviewed.md"
     printf '%s\n' \
         '<!-- ai-review:codex:newsha -->' \
         'Verdict: BLOCKING' \
-        '<!-- /ai-review:codex:newsha -->' >"$REVIEWED_BODIES"
+        '<!-- /ai-review:codex:newsha -->' >"$REVIEWED_TXT"
+    export REVIEWED_TXT
+    REVIEWED_BODIES="${BATS_TEST_TMPDIR}/comments_reviewed.json"
+    jq -Rs '[{user: {login: "pipeline-bot"}, body: .}]' \
+        <"$REVIEWED_TXT" >"$REVIEWED_BODIES"
     export REVIEWED_BODIES
     # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
@@ -257,9 +266,11 @@ _origins_1609() {
     printf '%s\n' codex:BLOCKER:DECLINE agy:FOLLOW-UP:ACCEPT |
         pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES" >/dev/null
 
-    # Pass 1's ledger comment is now one of the PR's comment bodies.
-    local _bodies="${BATS_TEST_TMPDIR}/bodies_pass2.md"
-    cat "$REVIEWED_BODIES" "$GH_LOG" >"$_bodies"
+    # Pass 1's ledger comment is now one of the PR's comments — posted, like
+    # the reviewer's, by the pipeline's own login (#1639).
+    local _bodies="${BATS_TEST_TMPDIR}/comments_pass2.json"
+    cat "$REVIEWED_TXT" "$GH_LOG" |
+        jq -Rs '[{user: {login: "pipeline-bot"}, body: .}]' >"$_bodies"
     : >"$GH_LOG"
 
     # Pass 2 sees only the agy FOLLOW-UP — the codex thread was deduped away.
@@ -294,6 +305,65 @@ _origins_1609() {
     assert_output --partial 'pr-reply-origins:newsha'
     assert_output --partial 'codex:BLOCKER:DECLINE'
     refute_output --partial 'add 1609 review-passed'
+}
+
+# ---------------------------------------------------------------------
+# #1639 — marker authorship, end to end through Step 6
+# ---------------------------------------------------------------------
+#
+# Both inputs the gate reads out of the comment dump are plain comment text
+# anyone who can see the PR can post. These prove the whole Step 6 path, not
+# just the parsers, refuses a forged one.
+
+@test "authorship (#1639): a forged ai-review marker does not manufacture evidence" {
+    # The cheapest possible unlock: one outsider comment containing the
+    # literal marker string used to satisfy the external-review probe.
+    local _bodies="${BATS_TEST_TMPDIR}/comments_forged_evidence.json"
+    jq -Rs '[{user: {login: "attacker"}, body: .}]' \
+        <"$REVIEWED_TXT" >"$_bodies"
+
+    printf '%s\n' agy:FOLLOW-UP:ACCEPT |
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$_bodies" >"${BATS_TEST_TMPDIR}/out"
+    run cat "$GH_LOG"
+    refute_output --partial 'add 1609 review-passed'
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial '외부 리뷰 근거'
+    assert_output --partial 'review-passed 미부여'
+}
+
+@test "authorship (#1639): the identical marker from the trusted login still certifies" {
+    # Positive control for the test above — the ONLY difference is the author.
+    printf '%s\n' agy:FOLLOW-UP:ACCEPT |
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES" >/dev/null
+    run cat "$GH_LOG"
+    assert_output --partial 'add 1609 review-passed'
+}
+
+@test "authorship (#1639): a forged ledger cannot clear a trusted DECLINE" {
+    # Pass 1 legitimately DECLINEs a BLOCKER, so the ledger holds the gate.
+    printf '%s\n' codex:BLOCKER:DECLINE |
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$REVIEWED_BODIES" >/dev/null
+
+    # An outsider then posts a ledger of their own claiming it was ACCEPTed.
+    # Last-block-wins would take it if authorship were not checked.
+    local _bodies="${BATS_TEST_TMPDIR}/comments_forged_ledger.json"
+    jq -nc \
+        --argjson reviewed "$(jq -Rs '{user: {login: "pipeline-bot"}, body: .}' <"$REVIEWED_TXT")" \
+        --argjson ledger "$(jq -Rs '{user: {login: "pipeline-bot"}, body: .}' <"$GH_LOG")" \
+        --arg forged '<!-- pr-reply-origins:newsha -->
+codex:BLOCKER:ACCEPT
+<!-- /pr-reply-origins:newsha -->' \
+        '[$reviewed, $ledger, {user: {login: "attacker"}, body: $forged}]' >"$_bodies"
+    : >"$GH_LOG"
+
+    # Pass 2 says nothing about codex — only the ledger can speak for it.
+    printf '%s\n' agy:FOLLOW-UP:ACCEPT |
+        pr_reply_step6 1609 acme/widget '' newsha 1 "$_bodies" >"${BATS_TEST_TMPDIR}/out2"
+    run cat "$GH_LOG"
+    refute_output --partial 'add 1609 review-passed'
+    run cat "${BATS_TEST_TMPDIR}/out2"
+    assert_output --partial 'codex'
+    assert_output --partial 'review-passed 미부여'
 }
 
 # ---------------------------------------------------------------------
@@ -336,6 +406,28 @@ _origins_1609() {
     run grep -qF -- '_gh_pr_reply_history_origins' "${SKILL_DIR}/SKILL.md"
     assert_success
     run grep -qF -- '_gh_pr_reply_post_origins_ledger' "${SKILL_DIR}/SKILL.md"
+    assert_success
+}
+
+# #1639: both readers must be documented as login-scoped, and the escape
+# hatch for a split-identity deployment has to be named somewhere runnable.
+@test "doc-guard (#1639): the gate doc and SKILL.md pass a trusted login" {
+    local _d="${SKILL_DIR}/references/review-passed-gate.md"
+    run grep -qF -- 'GH_PR_REPLY_TRUSTED_LOGIN' "$_d"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_history_origins "$ME"' "$_d"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_history_has_review "$ME"' "$_d"
+    assert_success
+
+    run grep -qF -- 'GH_PR_REPLY_TRUSTED_LOGIN' "${SKILL_DIR}/SKILL.md"
+    assert_success
+}
+
+@test "doc-guard (#1639): comment-fetching.md warns the raw array must survive" {
+    run grep -qF -- '#1639' "${SKILL_DIR}/references/comment-fetching.md"
+    assert_success
+    run grep -qF -- 'user.login' "${SKILL_DIR}/references/comment-fetching.md"
     assert_success
 }
 

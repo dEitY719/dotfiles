@@ -149,8 +149,8 @@ devx_pr_review_all_parse() {
 # lives in claude/skills/devx-pr-review-all/references/review-verdict-label.md,
 # which is the SSOT; this is the implementation.
 #
-#   devx_pr_review_all_lane_block <ai> [<head-sha>]  # comment bodies on stdin
-#     -> that lane's raw block, or nothing
+#   devx_pr_review_all_lane_block <ai> [<head-sha>] <expected-login>  # raw
+#     comments JSON on stdin (#1639) -> that lane's raw block, or nothing
 #   devx_pr_review_all_verdict                       # lane output on stdin
 #     -> blocking | concerns | lgtm | unknown
 #   devx_pr_review_all_aggregate                     # verdict tokens on stdin,
@@ -165,9 +165,10 @@ devx_pr_review_all_parse() {
 #     drop-opposite, add via `_gh_pr_edit_safe_label`, and (for
 #     `review-passed` with a sha) the #1601 freshness marker. Machine-readable
 #     `add=`/`marker=` tokens on stdout — see that function's header.
-#   devx_pr_review_all_already_reviewed <ai> <head-sha>  # bodies on stdin
-#     -> rc 0 when that lane already posted a block for this exact head
-#     (#1613 duplicate-review guard) — see that function's header.
+#   devx_pr_review_all_already_reviewed <ai> <head-sha> <expected-login>
+#     # raw comments JSON on stdin (#1639) -> rc 0 when that lane already
+#     posted a block for this exact head (#1613 duplicate-review guard) —
+#     see that function's header.
 #
 # devx_pr_review_all_aggregate reads stdin, NOT positional args — load-bearing,
 # not stylistic; see the doc for the zsh bug that forces it.
@@ -263,20 +264,96 @@ devx_pr_review_all_aggregate() {
     return 0
 }
 
-# Harvest one reviewer lane's raw output from the PR comment bodies on stdin.
+# Author filter for the marker readers below (#1639).
+#
+#   <raw comments JSON on stdin> | _devx_pr_review_all_login_bodies <login>
+#     stdout: the `.body` of every comment whose `.user.login` is exactly
+#     <login>, one body after another. Empty (rc 0) when nothing matches,
+#     when <login> fails validation, or when stdin is not the expected JSON.
+#
+# Why a jq prefilter rather than each reader doing its own `gh api` lookup the
+# way `_gh_pr_merge_train_review_passed_marker_sha` does: these readers are
+# called once PER REVIEWER LANE against the SAME comment dump, which the
+# caller fetches exactly once (see SKILL.md Step 3 / 3.5). Making them
+# network-aware would multiply that one fetch by the lane count on every run —
+# the fan-out cost #1636 was filed to contain. So the JSON arrives on stdin,
+# already paid for, and the author check is a local `jq` pass over it.
+#
+# `--arg` (not a string-built filter): the login lands in jq as a DATA value,
+# so a hostile login cannot close the filter's quoting and inject jq of its
+# own. The validation below is belt-and-braces on top of that.
+#
+# Validation mirrors `_gh_pr_merge_train_review_passed_marker_sha` exactly —
+# a plain GitHub username (`[A-Za-z0-9-]+`) or that same shape carrying a
+# literal `[bot]` suffix, the form GitHub gives App identities in
+# `.user.login` (`github-actions[bot]`). Rejecting brackets outright would
+# make any bot-authenticated pipeline unable to trust a single one of its own
+# markers. An empty or invalid login yields EMPTY output — never a fallback
+# to "match every author", which is the whole vulnerability being closed.
+#
+# stdin is drained in full before any early return, so a producer piping into
+# this never takes an EPIPE on the reject path.
+_devx_pr_review_all_login_bodies() {
+    local _login="${1-}" _base _json
+
+    _json=$(cat)
+
+    _base="$_login"
+    case "$_base" in
+        *'[bot]') _base="${_base%\[bot\]}" ;;
+    esac
+    case "$_base" in
+        '' | *[!A-Za-z0-9-]*) return 0 ;;
+    esac
+
+    printf '%s' "$_json" |
+        jq -r --arg login "$_login" \
+            '.[] | select(.user.login == $login) | .body' 2>/dev/null
+    return 0
+}
+
+# Harvest one reviewer lane's raw output from the PR's RAW COMMENTS JSON on
+# stdin — the array `gh api repos/<repo>/issues/<pr>/comments` answers with,
+# each element carrying `.user.login` and `.body`.
 # Reads it back from the `<!-- ai-review:<ai> -->` … `<!-- /ai-review:<ai> -->`
 # markers `gh:pr-review` Step 6 posts (gh_pr_review.sh) — not from a lane's
 # subagent return value, which never carries the verdict. Full rationale:
 # claude/skills/devx-pr-review-all/references/review-verdict-label.md.
+#
+# `<expected-login>` is REQUIRED and load-bearing (#1639). Until it existed
+# this function was handed pre-extracted body text (`--jq '.[].body'`) with
+# the author already thrown away, so it harvested a well-formed marker from
+# ANY commenter. On most repos anyone who can see the PR can comment on it —
+# a far lower bar than the label-write access needed to attach
+# `review-blocked` — so a hand-posted `<!-- ai-review:agy:<head> -->` block
+# could dictate a lane's verdict and, through it, the merge gate. Filtering
+# to the single login this pipeline authenticates as makes forging a lane
+# verdict cost the same access as forging the label directly, which is the
+# pre-existing, already-accepted trust boundary. A missing/invalid login
+# harvests NOTHING (-> `unknown` downstream, fail-closed) rather than
+# reverting to trusting every author. Same reasoning, same validator, as
+# `_gh_pr_merge_train_review_passed_marker_sha` (PR #1608) — see
+# claude/skills/gh-pr-merge-train/references/review-verdict-gate.md
+# § "Marker authorship".
 #
 # Contract: the LAST complete block wins (a re-review supersedes); an
 # unterminated block is never harvested. The optional <head-sha> is a
 # freshness gate — given a sha, only `<!-- ai-review:<ai>:<sha> -->` blocks
 # match, and a miss yields nothing (-> `unknown` downstream, fail-closed).
 # Without it, sha-tagged and plain blocks both match and no freshness claim
-# is made.
+# is made. The awk parser below is unchanged by the author check: it just
+# sees a login-scoped body stream instead of an everyone stream.
+#
+#   devx_pr_review_all_lane_block <ai> [<head-sha>] <expected-login>
 devx_pr_review_all_lane_block() {
-    [ -n "${1-}" ] || return 0
+    # Drain rather than bail early: stdin is a comment dump a caller is often
+    # piping in, and returning without reading it hands that producer an
+    # EPIPE. Same reason `_devx_pr_review_all_login_bodies` reads whole.
+    if [ -z "${1-}" ] || [ -z "${3-}" ]; then
+        cat >/dev/null
+        return 0
+    fi
+    _devx_pr_review_all_login_bodies "$3" |
     awk -v ai="$1" -v sha="${2-}" '
         function tagof(line, pre, plen,   p, rest, e) {
             p = index(line, pre)
@@ -329,8 +406,9 @@ devx_pr_review_all_lane_block() {
 }
 
 # Duplicate-review guard (issue #1613): has <ai> ALREADY reviewed this exact
-# head? Reads the PR's comment bodies on stdin; rc 0 = yes (skip the lane),
-# rc 1 = no (dispatch it). SSOT for the policy around it:
+# head? Reads the PR's RAW COMMENTS JSON on stdin (same shape
+# `devx_pr_review_all_lane_block` takes since #1639); rc 0 = yes (skip the
+# lane), rc 1 = no (dispatch it). SSOT for the policy around it:
 # claude/skills/devx-pr-review-all/references/duplicate-review-guard.md.
 #
 # Deliberately a thin wrapper over devx_pr_review_all_lane_block — the marker
@@ -343,13 +421,26 @@ devx_pr_review_all_lane_block() {
 #
 # <head-sha> is REQUIRED here, unlike in lane_block: without it an untagged or
 # older block would match and every re-review would be skipped forever.
+#
+# <expected-login> is REQUIRED for the same reason (#1639), and is threaded
+# straight through rather than defaulted: a marker from an untrusted author
+# must not be able to SUPPRESS a lane either. Left unauthenticated, an
+# outsider could post `<!-- ai-review:agy:<head> -->` and permanently silence
+# that reviewer — the guard would read "already reviewed" and skip it every
+# run. A missing login degrades to rc 1 here (fail OPEN, "not yet reviewed"),
+# which is the same direction every other miss takes in this guard: a
+# needless duplicate review costs budget, a wrongly skipped lane costs a
+# verdict.
+#
+#   devx_pr_review_all_already_reviewed <ai> <head-sha> <expected-login>
 devx_pr_review_all_already_reviewed() {
-    local _ai="${1-}" _sha="${2-}" _block
+    local _ai="${1-}" _sha="${2-}" _login="${3-}" _block
 
     [ -n "$_ai" ] || return 1
     [ -n "$_sha" ] || return 1
+    [ -n "$_login" ] || return 1
 
-    _block=$(devx_pr_review_all_lane_block "$_ai" "$_sha")
+    _block=$(devx_pr_review_all_lane_block "$_ai" "$_sha" "$_login")
     [ -n "$_block" ]
 }
 

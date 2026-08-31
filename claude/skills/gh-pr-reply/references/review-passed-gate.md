@@ -83,16 +83,29 @@ BLOCKER 가 미해결로 남았나"를 묻는 것이므로, 아직 답하지 않
 1. **drop** — `PUSHED_FIXES > 0` 이면 `review-passed` 를 먼저 뗀다
    (`references/verdict-label-removal.sh.md`). 게이트보다 **앞**이어야 한다 —
    뒤로 가면 방금 붙인 라벨을 지운다.
-2. **history + evidence** — Step 2 에서 이미 받아 둔 PR 코멘트 본문을 재사용해
+2. **history + evidence** — Step 2 에서 이미 받아 둔 PR 코멘트를 재사용해
    (API 추가 호출 없음) 과거 pass 들의 origin 이력과 외부 리뷰 근거를 구한다.
+   #1639 이후 두 리더는 **본문 텍스트가 아니라 원본 코멘트 JSON 배열**
+   (`gh api repos/<repo>/issues/<pr>/comments` 응답 그대로, `.user.login` 보존)
+   을 stdin 으로 받고, `<expected-login>` 인자를 **필수**로 요구한다.
+   `--jq '.[].body'` 로 미리 본문만 뽑아 두면 작성자가 사라져 위조 마커가
+   그대로 통과한다.
 3. **merge** — 이 pass 의 `ORIGINS` 를 그 이력 위에 리뷰어 단위로 덮어쓴다.
 4. **ledger** — 병합 결과를 원장 코멘트로 **먼저** 기록한다. 게이트 결과와
    **무관하게** 기록한다 — hold 인 경우가 바로 다음 pass 가 알아야 하는 경우다.
 5. **gate + apply** — 병합 결과와 근거 플래그를 게이트에 넘긴다.
 
 ```bash
-HISTORY=$(_gh_pr_reply_history_origins <"$COMMENT_BODIES")
-if _gh_pr_reply_history_has_review <"$COMMENT_BODIES"; then
+# 이 파이프라인이 인증하는 단 하나의 신원. Step 2 의 중복 제거가 이미 "현재
+# 사용자" 를 알아야 하므로 보통 그때 한 번 구해 둔 값을 재사용한다.
+# GH_PR_REPLY_TRUSTED_LOGIN 은 리뷰/답변 파이프라인이 서로 다른 계정으로
+# 도는 배포를 위한 탈출구다 (아래 "마커 작성자" 절).
+ME="${GH_PR_REPLY_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"
+
+# $COMMENT_JSON 은 Step 2 가 받아 둔 /issues/<N>/comments 응답 **원본 배열**
+# 이다 (본문만 뽑아 둔 텍스트가 아니다 — #1639).
+HISTORY=$(_gh_pr_reply_history_origins "$ME" <"$COMMENT_JSON")
+if _gh_pr_reply_history_has_review "$ME" <"$COMMENT_JSON"; then
     EVIDENCE=yes
 else
     EVIDENCE=no
@@ -128,7 +141,9 @@ agy:FOLLOW-UP:ACCEPT
 - `_gh_pr_reply_origins_block <head-sha>` — origin 스트림을 위 블록으로 감싼다.
   빈 스트림이면 아무것도 출력하지 않는다(기억할 게 없다). `<head-sha>` 가
   비면 접미사 없는 `<!-- pr-reply-origins -->` 형태로 떨어진다.
-- `_gh_pr_reply_history_origins` — 코멘트 본문 더미에서 **마지막 완전한** 블록의
+- `_gh_pr_reply_history_origins <expected-login>` — 원본 코멘트 JSON 배열에서
+  **`<expected-login>` 이 작성한** 코멘트만 골라, 그 안의 **마지막 완전한**
+  블록의
   origin 줄들을 뽑는다(`devx_pr_review_all_lane_block` 과 같은 계약: 나중 pass 가
   앞선 pass 를 대체하고, 닫히지 않은 블록은 절대 수확하지 않는다). sha 접미사
   유무 둘 다 매치한다 — 옛 head 에서 거절된 BLOCKER 는 오늘도 거절된 상태이므로
@@ -156,7 +171,8 @@ agy:FOLLOW-UP:ACCEPT
 외부 AI, 해소 확인은 `gh:pr-reply`** — 인데, 발견자가 없으면 확인할 대상도
 없다.
 
-`_gh_pr_reply_history_has_review` 가 PR 코멘트 본문에 `<!-- ai-review:` 마커가
+`_gh_pr_reply_history_has_review <expected-login>` 가 **`<expected-login>` 이
+작성한** PR 코멘트에 `<!-- ai-review:` 마커가
 하나라도 있는지 본다(rc 0 = 있음). 게이트의 5번째 인자는 **fail-closed 기본값**
 이다: 생략/빈 값/그 외 어떤 값이든 "근거 없음"으로 읽고 `hold` 한다. 근거를
 조회하지 않은 호출자가 인증을 얻어 가서는 안 되기 때문이다.
@@ -165,6 +181,49 @@ agy:FOLLOW-UP:ACCEPT
 않고(별건 버그, #1636 범위 밖), 봇 전용 리뷰도 `ai-review` 마커를 남기지 않는다.
 두 경우 모두 "근거 없음"으로 읽혀 PR 은 **무라벨**로 남는다 — 무라벨은 하류에서
 "미검증"이므로 fail-closed 방향이다.
+
+### 마커 작성자 (#1639)
+
+원장 블록도 `ai-review` 마커도 **평범한 PR 코멘트 안의 그냥 텍스트**다. 대부분의
+저장소에서 PR 을 볼 수 있는 사람은 코멘트를 달 수 있고, 이는 `review-passed`
+라벨을 직접 붙이는 데 필요한 label-write 권한보다 훨씬 낮은 문턱이다. #1639
+이전에는 두 리더 모두 작성자가 이미 버려진 본문 텍스트만 받았으므로, **아무나**
+다음 둘 중 하나로 게이트를 열 수 있었다:
+
+- `<!-- pr-reply-origins -->` 원장을 위조해 모든 BLOCKER 가 ACCEPT 된 것으로
+  기록한다 → `pass=no-blocker`. (반대로 DECLINE 을 위조해 라벨을 영구히 막을
+  수도 있다.)
+- `<!-- ai-review:` 문자열이 든 코멘트 하나로 "외부 리뷰가 실제로 돌았다" 는
+  근거를 날조한다 → `EVIDENCE=yes`.
+
+그래서 두 리더 모두 `<expected-login>` 을 **필수 인자**로 받고, 정확히 그 로그인이
+작성한 코멘트만 센다. 위조 비용이 라벨을 직접 위조하는 비용(= label-write 권한,
+이 게이트가 처음부터 의존해 온 이미 수용된 신뢰 경계)과 같아진다. 로그인이
+없거나 유효하지 않으면 **아무것도 찾지 못한 것**으로 처리한다 — "모두를 신뢰"
+로의 폴백은 없다.
+
+PR #1608 이 `_gh_pr_merge_train_review_passed_marker_sha` 에 적용한 것과 같은
+수정·검증기·논거다. 전체 논증은
+`claude/skills/gh-pr-merge-train/references/review-verdict-gate.md` →
+"Marker authorship" 에 있고, 두 후속 논점은 그대로 적용된다:
+
+- **봇 로그인.** GitHub 은 App 신원에 `<name>[bot]` 형태의 로그인을 준다
+  (`github-actions[bot]`, `dependabot[bot]`). 검증기는 뒤에 붙은 리터럴
+  `[bot]` 하나를 떼어 낸 뒤 남은 부분에 `[A-Za-z0-9-]+` 를 적용한다. 봇 계정으로
+  인증하는 파이프라인이 자기 마커를 신뢰할 수 있으면서, `[bot]` 으로 정확히
+  끝나지 않는 주입 시도는 여전히 막힌다.
+- **단일 신원 가정과 탈출구.** 이 방식은 마커를 **쓰는** 쪽과 **읽는** 쪽이 같은
+  계정이라고 가정한다 — 이 저장소의 단일 계정 파이프라인에서는 참이지만 모든
+  배포에서 그렇지는 않다. `GH_PR_REPLY_TRUSTED_LOGIN` 이 그 탈출구로,
+  `gh api user -q .login` 이 이 컨텍스트에서 답하는 값과 실제 생산자 신원이
+  다를 때 설정한다. `DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN` /
+  `GH_PR_MERGE_TRAIN_TRUSTED_LOGIN` 과 **일부러 분리**했다 — 실무에서는 한
+  계정이 셋 다 돌리지만, 리뷰·답변·머지 역할을 계정별로 쪼갠 배포는 각각을
+  독립적으로 지정할 수 있어야 한다.
+
+두 리더는 작성자 필터를 **로컬 `jq` 패스**로 수행한다 — 자체 `gh api` 호출이
+아니다. Step 2 가 코멘트를 **한 번** 받아 두 리더에 같은 덤프를 먹이는 구조이므로,
+작성자 확인을 네트워크 호출로 만들면 그 한 번의 fetch 가 프로브 수만큼 늘어난다.
 
 ### 토큰 표
 

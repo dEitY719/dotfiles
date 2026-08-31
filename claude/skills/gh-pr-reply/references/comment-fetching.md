@@ -27,6 +27,14 @@ GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/pulls/<N>/reviews" --paginate
 - `in_reply_to_id` — parent comment id, for threading
 - `html_url` — link back to the comment on GitHub
 
+**Keep the raw `/issues/<N>/comments` array around, not just the bodies**
+(#1639). Step 6's `review-passed` gate feeds that array straight into
+`_gh_pr_reply_history_origins` / `_gh_pr_reply_history_has_review`, which
+decide whose `pr-reply-origins` / `ai-review` markers to trust by matching
+`.user.login`. Collapsing the response to body text (`--jq '.[].body'`) throws
+the author away and makes every marker forgeable by any commenter — see
+`references/review-passed-gate.md` → "마커 작성자 (#1639)".
+
 ## Deduplication rule
 
 Skip a thread only if the **latest** comment in the thread is authored by

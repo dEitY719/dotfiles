@@ -50,8 +50,11 @@ names that commit. Without the suffix, a review posted two pushes ago is
 indistinguishable from one posted against the head under review, and a
 stale `review-passed` can authorize a merge of code no reviewer saw.
 
-`devx_pr_review_all_lane_block <ai> <sha>` requires the open **and**
-close marker to carry the same `<ai>:<sha>` pair; a miss yields nothing,
+`devx_pr_review_all_lane_block <ai> <sha> <expected-login>` requires the
+open **and**
+close marker to carry the same `<ai>:<sha>` pair **and** the comment to
+have been posted by `<expected-login>` (#1639 — a marker from any other
+commenter is forged and ignored); a miss yields nothing,
 which reads downstream as `unknown` — no label, no merge. Comments
 posted before this change carry the unsuffixed form and therefore read
 as `unknown` under the sha-aware path. That is the documented
