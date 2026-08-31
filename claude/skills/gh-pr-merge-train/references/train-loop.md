@@ -122,6 +122,8 @@ review a human explicitly blocked is never handed to a self-record run.
 
 ```bash
 # Hoisted out of the loop — bind once per run, next to TARGET_REPO / TARGET_HOST.
+# Shared with F-3's freshness check (#1601, routing-table.md) — same login,
+# same reason: it is the one identity a marker/self-record can be trusted from.
 ME=$(GH_HOST="$TARGET_HOST" gh api user -q .login)
 
 HEAD_OID=$(GH_HOST="$TARGET_HOST" gh pr view "$N" --repo "$TARGET_REPO" \

@@ -52,11 +52,16 @@ printf '%s' "$STATE" | _gh_pr_merge_train_has_reply_pending_label \
 # The verdict gate, re-asked (references/review-verdict-gate.md). Order
 # matters: review-blocked wins over a stale review-passed.
 HEAD_OID=$(printf '%s' "$STATE" | jq -r '.headRefOid')
+# ME: the one login this pipeline authenticates as — a marker's ONLY trusted
+# author (#1601, "Marker authorship" in review-verdict-gate.md). Reuse the
+# same hoisted binding train-loop.md's delegated-review step already makes;
+# recomputed here only when this block runs standalone.
+ME="${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}"
 if printf '%s' "$STATE" | _gh_pr_merge_train_has_review_blocked_label; then
     echo "[SKIPPED] review-blocked — reviewer verdict is blocking"
 elif ! printf '%s' "$STATE" | _gh_pr_merge_train_has_review_passed_label; then
     echo "[SKIPPED] review not verified — no review-passed label"
-elif _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID"; then
+elif _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID" "$ME"; then
     # #1601 — the label alone proves some head was reviewed, not this one.
     echo "[SKIPPED] review-passed label stale — head advanced without invalidation"
     _gh_pr_drop_label "$N" review-passed "$TARGET_REPO" "$TARGET_HOST" >/dev/null 2>&1 || :
