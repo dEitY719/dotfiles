@@ -31,14 +31,13 @@ PR #123 review comments processed: 5 total
 - **타겟 재검토 line** — the Step 6 lane's outcome, printed verbatim by
   `_gh_pr_reply_targeted_lane_report`. One of the five rows tabled in
   `references/targeted-rereview.md` § "Step 7 문구". Always present when
-  `PUSHED_FIXES > 0`; omitted otherwise (no push, no invalidation).
+  `PUSHED_FIXES > 0`; omitted otherwise (no push, no re-review lane).
 - **Closing line** — `-> All comments replied to.` confirms the
   politeness contract was met.
-- `review-blocked` itself drops unconditionally in Step 6 once every
-  comment has been replied to (#1634) — it does not depend on this stream.
-  Step 6 still reads the same `ORIGINS` stream this table renders, but only
-  to decide whether the targeted re-review lane may attempt a
-  `review-passed` upgrade (`references/verdict-label-removal.sh.md` →
+- Step 6 reads the same `ORIGINS` stream this table renders, but only to
+  decide whether the targeted re-review lane may attempt a `review-passed`
+  upgrade — `review-blocked` no longer depends on this stream (#1634;
+  `references/verdict-label-removal.sh.md` →
   `references/targeted-rereview.md`). Both steps use one stream — never
   re-derive it.
 - **No board-promotion row** — `Approved` is owned by `gh:pr-approve`
