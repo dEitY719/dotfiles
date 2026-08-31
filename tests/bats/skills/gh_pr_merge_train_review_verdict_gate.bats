@@ -474,6 +474,20 @@ more text')" '[$c]')
     [ "$status" -eq 2 ]
 }
 
+@test "freshness (FOLLOW-UP fix): an empty head-oid fails closed to UNDETERMINED (rc 3), never MISMATCH" {
+    # agy round-4: a caller that failed to resolve headRefOid upstream must
+    # never have that show up as "positive proof of staleness" — an empty
+    # head-oid can never equal a real marker sha, so without this guard a
+    # genuinely fresh marker would fall through to rc 1 (MISMATCH) and get
+    # self-healed away on the strength of the CALLER's own unresolved state.
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' '' bot
+    [ "$status" -eq 3 ]
+    run cat "$STUB_LOG"
+    assert_output ''
+}
+
 # ---------------------------------------------------------------------
 # F-3 integration — the full per-PR form (routing-table.md)
 # ---------------------------------------------------------------------
@@ -589,4 +603,18 @@ more text')" '[$c]')
 @test "doc-guard: routing-table.md resolves and passes the expected login" {
     run grep -qF -- 'gh api user -q .login' "${SKILL_DIR}/references/routing-table.md"
     assert_success
+}
+
+# agy round-4 FOLLOW-UP: the F-3 snippet used to be `... && echo "[SKIPPED]
+# reply-pending"` as its own statement, with no exit before the verdict-gate
+# if-chain below it — a reply-pending PR would print that line and then fall
+# straight into the next check too. Pin that reply-pending is now a branch
+# of the SAME if/elif chain, not a separate leading statement.
+@test "doc-guard: routing-table.md folds reply-pending into the same if/elif chain (no fall-through)" {
+    run grep -qF -- 'if printf '"'"'%s'"'"' "$STATE" | _gh_pr_merge_train_has_reply_pending_label; then' \
+        "${SKILL_DIR}/references/routing-table.md"
+    assert_success
+    run grep -qE -- '_gh_pr_merge_train_has_reply_pending_label \&\&' \
+        "${SKILL_DIR}/references/routing-table.md"
+    assert_failure
 }
