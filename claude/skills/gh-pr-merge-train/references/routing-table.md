@@ -41,7 +41,8 @@ Four conditions **short-circuit the table** — check all four before reading
 | `labels[].name` contains `reply-pending` | `[SKIPPED] reply-pending — review reply not yet complete` |
 | `labels[].name` contains `review-blocked` | `[SKIPPED] review-blocked — reviewer verdict is blocking` |
 | `labels[].name` contains neither verdict label | `[SKIPPED] review not verified — no review-passed label` |
-| `review-passed` present, sha marker CONFIRMED stale/missing (#1601) | `[SKIPPED] review-passed label stale — head advanced without invalidation` (drops the label) |
+| `review-passed` present, marker exists but sha MISMATCHES current head (#1601) | `[SKIPPED] review-passed label stale — head advanced without invalidation` (drops the label) |
+| `review-passed` present, no marker at all from the trusted login (#1601) | `[SKIPPED] review-passed not confirmed for this head — no freshness marker found` (label untouched) |
 | `review-passed` present, freshness lookup itself failed (#1601) | `[SKIPPED] review-passed freshness unknown — marker lookup failed, treating as unverified` (label untouched) |
 
 ```bash
@@ -66,10 +67,14 @@ elif ! printf '%s' "$STATE" | _gh_pr_merge_train_has_review_passed_label; then
     echo "[SKIPPED] review not verified — no review-passed label"
 else
     # #1601 — the label alone proves some head was reviewed, not this one.
-    # Three-way exit code, not a boolean: 1 = CONFIRMED stale (safe to also
-    # drop the label), 2 = UNDETERMINED (the lookup itself failed — skip
-    # this tick, but never delete on the strength of a check that never
-    # completed; a network blip must not destroy a valid review-passed).
+    # Four-way exit code, not a boolean: only 1 (MISMATCH) is positive proof
+    # the label is wrong for this head, so only 1 self-heals (drops the
+    # label). 2 (ABSENT — no marker at all) and 3 (UNDETERMINED — the lookup
+    # itself failed) both route as unverified without touching the label:
+    # deleting on absence alone would strip every pre-#1601 review-passed PR
+    # the moment this feature ships (agy, PR #1608 review, both rounds), and
+    # deleting on a lookup failure would let one network blip destroy an
+    # otherwise-valid label (agy round-2 BLOCKER).
     _gh_pr_merge_train_review_passed_stale "$N" "$TARGET_REPO" "$TARGET_HOST" "$HEAD_OID" "$ME"
     case $? in
     1)
@@ -77,6 +82,9 @@ else
         _gh_pr_drop_label "$N" review-passed "$TARGET_REPO" "$TARGET_HOST" >/dev/null 2>&1 || :
         ;;
     2)
+        echo "[SKIPPED] review-passed not confirmed for this head — no freshness marker found"
+        ;;
+    3)
         echo "[SKIPPED] review-passed freshness unknown — marker lookup failed, treating as unverified"
         ;;
     esac

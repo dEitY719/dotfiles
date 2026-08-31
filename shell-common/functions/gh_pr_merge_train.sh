@@ -387,29 +387,46 @@ _gh_pr_merge_train_review_passed_marker_sha() {
 # `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <head-oid> <expected-login>`
 #   rc 0 — FRESH: the last marker posted by `<expected-login>` matches
 #          `<head-oid>` exactly. Proceed normally.
-#   rc 1 — STALE, CONFIRMED: the comment lookup succeeded and no marker
-#          matching both the login and the current head was found. Safe for
-#          the caller to also drop the label (self-heal) — the absence is
-#          verified, not guessed.
-#   rc 2 — STALE, UNDETERMINED: the underlying lookup itself failed (network,
-#          auth, rate limit) or `<expected-login>` was invalid, so "no
-#          marker" was never actually confirmed. The caller must still treat
-#          the PR as unverified THIS TICK (fail-closed on the routing
-#          decision, same direction #1519's approval gate takes for
-#          "policy unreadable") — but must NOT delete the label on the
-#          strength of a lookup it could not complete. Conflating this with
-#          rc 1 would let one transient `gh api` blip destructively drop an
-#          otherwise-valid `review-passed`, turning a retriable skip into
-#          permanent damage (PR #1608 review, agy round-2 BLOCKER).
+#   rc 1 — STALE, MISMATCH: a marker from `<expected-login>` exists, but its
+#          sha does not match `<head-oid>` — positive proof the head moved
+#          past the reviewed commit (the original #1601 scenario: a
+#          force-push over a reviewed head). Safe for the caller to also drop
+#          the label (self-heal): the mismatch is direct evidence, not a
+#          guess.
+#   rc 2 — STALE, ABSENT: the lookup succeeded but `<expected-login>` never
+#          posted a marker at all. Route this PR as unverified THIS TICK —
+#          but do NOT self-heal (drop the label). Absence alone does not
+#          prove the label is wrong for this head: a PR labeled
+#          `review-passed` before this freshness check existed (or by any
+#          future skill that legitimately doesn't post the marker) looks
+#          identical to a forged one, and destructively stripping every such
+#          PR's label the moment this feature ships was flagged
+#          independently by agy across two review rounds (PR #1608) as an
+#          unacceptable operational cliff — a re-review clears it exactly as
+#          cheaply either way, so there is nothing to gain by deleting rather
+#          than merely not trusting it.
+#   rc 3 — STALE, UNDETERMINED: the underlying lookup itself failed (network,
+#          auth, rate limit) or `<expected-login>` was invalid, so nothing
+#          was confirmed either way. Route as unverified this tick (fail-
+#          closed, same direction #1519's approval gate takes for "policy
+#          unreadable") — never self-heal on a check that never completed
+#          (PR #1608 review, agy round-2 BLOCKER: a transient blip must not
+#          destroy an otherwise-valid label).
+#
+#   Only rc 1 carries enough evidence to justify deleting the label. rc 2 and
+#   rc 3 both route the PR as unverified without touching it — the
+#   difference between them is diagnostic only (did the check run at all),
+#   not behavioral.
 _gh_pr_merge_train_review_passed_stale() {
     local _pr="$1" _repo="$2" _host="$3" _head_oid="$4" _login="$5" _marker_sha _lookup_rc
     _marker_sha=$(_gh_pr_merge_train_review_passed_marker_sha "$_pr" "$_repo" "$_host" "$_login")
     _lookup_rc=$?
     if [ "$_lookup_rc" -ne 0 ]; then
-        return 2
+        return 3
     fi
     [ -n "$_marker_sha" ] && [ "$_marker_sha" = "$_head_oid" ] && return 0
-    return 1
+    [ -n "$_marker_sha" ] && return 1
+    return 2
 }
 
 # Self-check (issue #724): catch silent breakage where this file sources

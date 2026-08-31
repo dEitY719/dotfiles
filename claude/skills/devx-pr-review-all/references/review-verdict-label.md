@@ -245,7 +245,7 @@ What it does, and why each part is the way it is:
   unlabelled PR already reads as "not verified" downstream. Only a usage error
   (missing `<pr>`/`<repo>`) returns 2.
 
-It prints exactly one line:
+It prints one primary line:
 
 | stream | line |
 |---|---|
@@ -254,6 +254,13 @@ It prints exactly one line:
 | empty `label` (no lane, or an `unknown`) | `[WARN] no reviewer lane produced a verdict — PR #<n> left unlabelled` |
 | `_gh_pr_edit_safe_label` rc 3 | `[WARN] label \`<l>\` missing in <repo> — provision it first (gh:label-bootstrap)` |
 | any other non-zero rc | `[WARN] labelling PR #<n> failed — treat the PR as unverified` |
+
+A second `[WARN]` line follows, but only on the one path in "Freshness marker
+for `review-passed`" below (the marker POST itself failing after a
+successful `review-passed` label) — every other outcome above stays exactly
+one line (PR #1608 review, codex round-3 FOLLOW-UP: this table used to
+promise "exactly one line" unconditionally, which stopped being true once
+that second warning was added).
 
 `_gh_pr_edit_safe_label` returns 3 when the label does not exist in the repo and
 **refuses to auto-create it** (`feedback_gh_label_no_autocreate.md`, #326) —
@@ -293,8 +300,11 @@ a fixed regex — no reviewer output touches it either way.
 
 Never posted for `review-blocked`: a stale block is already the safe
 direction (it over-skips, never over-merges), so it needs no freshness proof.
-The post is best-effort and never adds a second line to this function's
-`[OK]`/`[WARN]` report.
+The post is soft-fail — it never changes the primary line's content or the
+function's rc 0 — but a failed post adds a second `[WARN]` line naming the
+PR (PR #1608 review, agy + codex BLOCKER: silently losing the marker meant a
+"successfully labelled" PR could later read as stale on the merge train with
+no trace of why).
 
 ## Why this lives in the producer
 
