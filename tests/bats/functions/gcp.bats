@@ -1978,3 +1978,46 @@ FIXTURE
     # not just the deferred ones — closing the exact gap this test pins.
     assert_output --partial "Also review the commits that DID apply"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1663 — alias immunity of the config snapshot/restore in
+# `_gcp_scan_preflight_is_noop` (#1149 3차 재발).
+#
+# zsh expands aliases at PARSE time, so sourcing gcp_scan.sh while
+# `alias cp='cp -i'` is active (shell-common/aliases/core.sh:68, loaded in
+# zsh/main.zsh Phase 4 — BEFORE Phase 5 functions) permanently imprints
+# `cp -i` into the function body. The restore `cp` then blocks on an
+# overwrite confirmation it can never receive on a non-TTY stdin, silently
+# fails, and the conflict markers `cherry-pick -n` injected into the tracked
+# git/.gitconfig survive — killing every subsequent git command through the
+# [include] topology. `emulate -L sh` is run-time and cannot undo a
+# parse-time expansion; only putting the word in an ARGUMENT position via
+# `command` is structurally immune.
+# ---------------------------------------------------------------------------
+
+@test "alias-immunity #1663: gcp_scan.sh has no bare cp/rm/mv command words" {
+    # Static guard. Matches a cp/rm/mv in COMMAND-word position (line start or
+    # right after a shell separator) — `command cp` puts the word in argument
+    # position and is correctly not matched. This also catches a future
+    # file-wide cleanup that drops the `command` prefix again.
+    run bash -c "grep -nE '(^[[:space:]]*|[;&|{()}][[:space:]]*)(cp|rm|mv)[[:space:]]' '${SHELL_COMMON}/functions/gcp_scan.sh' || true"
+    assert_success
+    assert_output ""
+}
+
+@test "alias-immunity #1663: preflight body carries no imprinted 'cp -i' under interactive zsh" {
+    # Behavioral guard, via the REAL production load order (main.zsh Phase 4
+    # aliases -> Phase 5 functions). The `aliascp=` assertion is load-bearing:
+    # without it this test would pass vacuously on any day the alias stops
+    # being defined, which is exactly the signal it exists to detect.
+    run_in_zsh "
+        printf 'aliascp=%s\n' \"\${aliases[cp]}\"
+        printf 'aliasrm=%s\n' \"\${aliases[rm]}\"
+        print -r -- \$functions[_gcp_scan_preflight_is_noop] | grep -c 'cp -i' | sed 's/^/cp_imprint=/'
+        print -r -- \$functions[_gcp_scan_preflight_is_noop] | grep -c 'rm -i' | sed 's/^/rm_imprint=/'
+    "
+    assert_output --partial "aliascp=cp -i"
+    assert_output --partial "aliasrm=rm -i"
+    assert_output --partial "cp_imprint=0"
+    assert_output --partial "rm_imprint=0"
+}
