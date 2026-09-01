@@ -253,8 +253,7 @@ Checklist:
 
 ```bash
 gh issue view <N> --repo "$TARGET_REPO" --json \
-  number,title,body,author,labels,state,stateReason,\
-  comments,assignees,createdAt,updatedAt,url
+  number,title,body,author,labels,state,comments,assignees,createdAt,updatedAt,url
 ```
 
 `comments` items: `{author, body, createdAt}`.
@@ -309,8 +308,7 @@ Substeps and error templates in `references/repo-resolution.md`.
 
 ```bash
 gh issue view <N> --repo "$TARGET_REPO" --json \
-  number,title,body,author,labels,state,stateReason,\
-  comments,assignees,createdAt,updatedAt,url
+  number,title,body,author,labels,state,comments,assignees,createdAt,updatedAt,url
 ```
 
 On error (issue not found, auth failure), print `gh` stderr verbatim
@@ -473,8 +471,7 @@ Do NOT silently switch strategies.
 
 ```bash
 gh pr view <N> --repo "$TARGET_REPO" --json \
-  number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,\
-  baseRefName,headRefName,author
+  number,state,isDraft,mergeable,mergeStateStatus,reviewDecision,baseRefName,headRefName,author
 ```
 
 ## Hard-stop decisions
