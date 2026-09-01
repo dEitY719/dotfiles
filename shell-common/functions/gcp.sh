@@ -187,6 +187,8 @@ _gcp_help_rows_scan() {
     ux_table_row "skip list" "registered SHAs skipped silently" "ignored under --author=all"
     ux_table_row "--show-skip-paths" "print path-excluded paths" "git/config/gcp-scan-skip-paths.conf"
     ux_table_row "skip paths" "commits touching only listed paths skipped" "ignored under --author=all"
+    ux_table_row "behavior" "unpredicted conflict -> rolled back, batch continues" "reported under Needs manual resolution (issue #1647)"
+    ux_table_row "--stop-on-conflict" "abort whole remaining batch on first conflict" "legacy all-or-nothing behavior"
 }
 
 _gcp_help_rows_theirs() {
