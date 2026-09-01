@@ -26,32 +26,23 @@ load '../test_helper'
     assert_success
 }
 
-@test "packaging-skills marketplace and packaging plugin are registered (#1638)" {
-    run jq -e '."packaging-skills" == "dEitY719/packaging-skills"' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
-    assert_success
+# #1410 스킬 마켓플레이스 분리 — 분리 레포 등록 검증.
+# 상위 테스트(참조 무결성)는 dangling 참조만 잡고 "빠짐"은 못 잡으므로,
+# 레포/플러그인 이름을 여기서 명시적으로 고정한다.
+# 새 phase 가 나면 아래 테이블에 한 줄만 추가한다.
+@test "split-out skill marketplaces and plugins are registered (#1410)" {
+    while IFS='|' read -r mp_key repo plugin; do
+        run jq -er --arg k "$mp_key" '"\($k)=\(.[$k])"' \
+            "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+        assert_output "${mp_key}=${repo}"
 
-    run jq -e '.plugins | index("packaging@packaging-skills") != null' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
-    assert_success
-}
-
-@test "harness-skills marketplace and harness plugin are registered (#1645)" {
-    run jq -e '."harness-skills" == "dEitY719/harness-skills"' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
-    assert_success
-
-    run jq -e '.plugins | index("harness@harness-skills") != null' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
-    assert_success
-}
-
-@test "devenv-skills marketplace and devenv plugin are registered (#1642)" {
-    run jq -e '."devenv-skills" == "dEitY719/devenv-skills"' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
-    assert_success
-
-    run jq -e '.plugins | index("devenv@devenv-skills") != null' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
-    assert_success
+        run jq -er --arg p "${plugin}@${mp_key}" \
+            '.plugins | if index($p) then "\($p) registered" else "\($p) MISSING" end' \
+            "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+        assert_output "${plugin}@${mp_key} registered"
+    done <<'TABLE'
+packaging-skills|dEitY719/packaging-skills|packaging
+harness-skills|dEitY719/harness-skills|harness
+devenv-skills|dEitY719/devenv-skills|devenv
+TABLE
 }
