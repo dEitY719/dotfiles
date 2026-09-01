@@ -61,3 +61,13 @@ TABLE
         "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
     assert_success
 }
+
+@test "notes-skills marketplace and notes plugin are registered (#1643)" {
+    run jq -e '."notes-skills" == "dEitY719/notes-skills"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+    assert_success
+
+    run jq -e '.plugins | index("notes@notes-skills") != null' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+    assert_success
+}
