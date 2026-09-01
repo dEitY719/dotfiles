@@ -97,11 +97,15 @@ fi
 
 echo -e "${BLUE}[Global Hook] Delegating to project hook: $RUN_HOOK${NC}"
 
-if "$RUN_HOOK" "$@"; then
-    [ "$DEBUG" = "1" ] && echo -e "${GREEN}✓ Project hook completed successfully${NC}"
-    exit 0
-else
-    PROJECT_EXIT=$?
-    echo -e "${RED}✗ Project hook failed with exit code $PROJECT_EXIT${NC}"
-    exit $PROJECT_EXIT
-fi
+# `exec` replaces this wrapper's own process image with the project hook
+# instead of running it as a waited-on child (agy review, PR #1674) — one
+# fewer process, and git sees $RUN_HOOK's own exit code directly rather than
+# this wrapper relaying it. Nothing below this line runs on the success
+# path.
+exec "$RUN_HOOK" "$@"
+
+# Reached only if exec itself could not launch $RUN_HOOK (e.g. a
+# binary-format mismatch) — the earlier `[ -x ]` check already ruled out
+# "missing" or "not executable".
+echo -e "${RED}✗ Failed to exec project hook: $RUN_HOOK${NC}" >&2
+exit 126
