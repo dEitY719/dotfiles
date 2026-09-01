@@ -78,11 +78,10 @@ TABLE
     done
 }
 
-# #1410 NF-1, Phase 2 판(#1660). notes-skills 위 테스트와 같은 이유로 존재한다:
-# gh-resolve-skills 는 세 스킬을 복사해 갔을 뿐 dotfiles 원본을 옮기지 않았다.
-# 원본이 살아 있어야 플러그인을 설치하지 않은 환경에서도 /gh:pr-resolve-conflict
-# 계열 호출이 계속 동작한다. Phase 4 가 실제로 지울 때, 이 테스트를 같은 커밋에서
-# 지우는 것이 "누가 결정해서 지웠다"는 흔적이 된다.
+# #1410 NF-1 의 Phase 2 판(#1660). 존재 이유와 Phase 4 삭제 규약은 바로 위
+# #1643 주석과 동일하다 — 여기서 다른 것은 대상뿐이다: gh-resolve-skills 가
+# 복사해 간 세 스킬의 원본이 남아 있어야 플러그인 미설치 환경에서도
+# /gh:pr-resolve-* 계열 호출이 계속 동작한다.
 @test "gh-resolve-skills split left the claude/skills/gh-pr-resolve-* originals in place (#1660)" {
     for skill in ci-fail conflict outdated; do
         [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-resolve-${skill}/SKILL.md" ] \
