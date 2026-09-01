@@ -252,3 +252,19 @@ JSON
     refute_output --partial 'remove: internal-tools'
     refute_output --partial 'uninstall: secret@internal-tools'
 }
+
+# --- real-SSOT integration (#1643, codex FOLLOW-UP on PR #1654) ------------
+#
+# Every test above feeds restore.sh a synthetic manifest pair, which proves
+# the parser but never the shipped `claude/plugin/{marketplaces,plugins}.json`.
+# A marketplace registered in the SSOT with a slug restore.sh cannot resolve
+# would pass all of them. This one runs the real script against the real
+# manifests so a registration is only "done" once restore.sh actually emits
+# the add + install lines for it.
+
+@test "restore.sh --dry-run installs notes@notes-skills from its marketplace (#1643)" {
+    run "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/restore.sh" --dry-run
+    assert_success
+    assert_output --partial 'add: notes-skills (dEitY719/notes-skills)'
+    assert_output --partial 'install: notes@notes-skills'
+}
