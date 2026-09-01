@@ -315,33 +315,24 @@ if [ "$action" = "add" ]; then
 	fi
 fi
 
-# Drop $target from ONE manifest pair — $1 marketplaces file, $2 plugins file.
-# Split out of the old `for dir in ...` loop because the two scopes no longer
-# share a filename: public prunes the .local.json overlay, company/ its own
-# tracked pair (#1685).
-_prune_manifest_pair() {
-	local mp_file="$1" pl_file="$2"
-	[ -f "$mp_file" ] || [ -f "$pl_file" ] || return 0
+# Rewrite manifest $1 through jq filter $2 (with `$t` bound to $target). A jq
+# failure yields empty content, which _write_manifest refuses to write — so a
+# malformed manifest is left alone rather than truncated.
+_prune_one() {
+	[ -f "$1" ] || return 0
+	_write_manifest "$1" "$(jq --arg t "$target" "$2" "$1" 2>/dev/null)"
+}
 
+# Drop $target from ONE manifest pair — $1 marketplaces file, $2 plugins file.
+# Takes the pair as arguments rather than a directory because the two scopes no
+# longer share a filename: public prunes the .local.json overlay, company/ its
+# own tracked pair (#1685).
+_prune_manifest_pair() {
 	if [ "$action" = "marketplace_remove" ]; then
-		if [ -f "$mp_file" ]; then
-			jq --arg t "$target" 'del(.[$t])' "$mp_file" \
-				>"$mp_file.tmp" 2>/dev/null &&
-				mv "$mp_file.tmp" "$mp_file"
-		fi
-		if [ -f "$pl_file" ]; then
-			jq --arg t "$target" \
-				'{plugins: [(.plugins // [])[] | select((. | split("@") | last) != $t)]}' \
-				"$pl_file" >"$pl_file.tmp" 2>/dev/null &&
-				mv "$pl_file.tmp" "$pl_file"
-		fi
+		_prune_one "$1" 'del(.[$t])'
+		_prune_one "$2" '{plugins: [(.plugins // [])[] | select((. | split("@") | last) != $t)]}'
 	else
-		if [ -f "$pl_file" ]; then
-			jq --arg t "$target" \
-				'{plugins: [(.plugins // [])[] | select(. != $t and (startswith($t + "@") | not))]}' \
-				"$pl_file" >"$pl_file.tmp" 2>/dev/null &&
-				mv "$pl_file.tmp" "$pl_file"
-		fi
+		_prune_one "$2" '{plugins: [(.plugins // [])[] | select(. != $t and (startswith($t + "@") | not))]}'
 	fi
 }
 
@@ -353,12 +344,12 @@ _warn_if_contract_entry() {
 	local hit file
 	if [ "$action" = "marketplace_remove" ]; then
 		file="marketplaces.json"
-		hit=$(jq -r --arg t "$target" 'if has($t) then $t else empty end' \
+		hit=$(jq -r --arg t "$target" 'select(has($t)) | $t' \
 			"$PUB_DIR/marketplaces.json" 2>/dev/null)
 	else
 		file="plugins.json"
 		hit=$(jq -r --arg t "$target" \
-			'[(.plugins // [])[] | select(. == $t or startswith($t + "@"))] | .[0] // empty' \
+			'first((.plugins // [])[] | select(. == $t or startswith($t + "@"))) // empty' \
 			"$PUB_DIR/plugins.json" 2>/dev/null)
 	fi
 	[ -n "$hit" ] || return 0

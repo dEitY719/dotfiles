@@ -212,30 +212,35 @@ _target_config_dirs() {
 }
 
 # --- tracked 등록 계약 + 머신 로컬 오버레이 (#1685) ------------------------
-# claude/plugin/{marketplaces,plugins}.json 은 upstream 이 소유하는 **등록 계약**
-# 이고, 이 PC 가 실제로 설치한 항목은 gitignored
-# {marketplaces,plugins}.local.json 오버레이에 쌓인다 (claude/hooks/plugin-sync.sh
-# 가 쓰는 쪽은 오버레이뿐이다). 복원 대상은 언제나 둘의 union — 계약에만 있는
-# 항목도, 이 PC 에만 있는 항목도 모두 설치한다. 오버레이가 없는 PC 와, 애초에
-# 오버레이를 두지 않는 company/ 스코프에서는 병합 결과가 tracked 파일과 정확히
-# 같으므로 기존 동작이 그대로 유지된다.
+# 복원 대상은 언제나 tracked 등록 계약(`*.json`) 과 gitignored 머신 로컬
+# 오버레이(`*.local.json`) 의 union 이다 — 훅이 쓰는 쪽은 오버레이뿐이므로 둘 중
+# 하나만 봐서는 복원이 반쪽이 된다. 분리 이유는 claude/AGENTS.md 참고.
 
 # Merged {name: repo} map of tracked $1 + overlay $2. Prints NOTHING when
 # neither file exists, which is what lets the caller still emit the
 # "manifest 없음 — 건너뜀" skip line for an absent scope.
 _merged_marketplaces() {
-	[ -f "$1" ] || { [ -n "${2:-}" ] && [ -f "$2" ]; } || return 0
+	[ -f "$1" ] || [ -f "$2" ] || return 0
 	jq -n --argjson a "$(_claude_plugin_read_json_or "$1" '{}')" \
-		--argjson b "$(_claude_plugin_read_json_or "${2:-}" '{}')" '$a * $b'
+		--argjson b "$(_claude_plugin_read_json_or "$2" '{}')" '$a * $b'
 }
 
 # Same for the plugins array: set union, de-duplicated. Empty on both-absent.
 _merged_plugins() {
-	[ -f "$1" ] || { [ -n "${2:-}" ] && [ -f "$2" ]; } || return 0
+	[ -f "$1" ] || [ -f "$2" ] || return 0
 	jq -n --argjson a "$(_claude_plugin_read_json_or "$1" '{"plugins":[]}')" \
-		--argjson b "$(_claude_plugin_read_json_or "${2:-}" '{"plugins":[]}')" \
+		--argjson b "$(_claude_plugin_read_json_or "$2" '{"plugins":[]}')" \
 		'{plugins: ((($a.plugins // []) + ($b.plugins // [])) | unique)}'
 }
+
+# Merge once, not once per account: the inputs are repo-relative paths only,
+# so `--all-accounts` would otherwise recompute an identical result N times.
+# company/ has no overlay today — passing its (absent) overlay path anyway
+# keeps every scope on the same code path instead of a "no overlay" sentinel.
+PUB_MP_JSON=$(_merged_marketplaces "$SCRIPT_DIR/marketplaces.json" "$SCRIPT_DIR/marketplaces.local.json")
+PUB_PL_JSON=$(_merged_plugins "$SCRIPT_DIR/plugins.json" "$SCRIPT_DIR/plugins.local.json")
+PRIV_MP_JSON=$(_merged_marketplaces "$PRIV/marketplaces.json" "$PRIV/marketplaces.local.json")
+PRIV_PL_JSON=$(_merged_plugins "$PRIV/plugins.json" "$PRIV/plugins.local.json")
 
 # $1/$2 are merged manifest CONTENT (from _merged_*), not file paths — an
 # empty string means "this scope has no manifest at all".
@@ -270,21 +275,20 @@ _restore_from() {
 # manifest plus the local whitelist. Using the union (not per-manifest
 # ownership) is what stops the public pass from mistaking a company-only entry
 # for surplus — the design's chosen resolution.
+#
+# Read the keep-set off the SAME merged manifests the restore pass installs
+# from (#1685). Enumerating the files a second time here is what would let the
+# two lists drift, and a keep-set that lags the restore-set makes --sync prune
+# exactly what the add pass just installed — a self-oscillating sync.
 _keep_marketplaces() {
-	jq -r 'keys[]' "$SCRIPT_DIR/marketplaces.json" 2>/dev/null
-	# 오버레이(#1685)도 SSOT 다 — 이 PC 가 설치한 항목이 잉여로 오인돼 prune
-	# 되면 --sync 가 매번 로컬 설치를 되돌린다.
-	jq -r 'keys[]' "$SCRIPT_DIR/marketplaces.local.json" 2>/dev/null
-	[ "$COMPANY_ACTIVE" -eq 1 ] && [ -f "$PRIV/marketplaces.json" ] &&
-		jq -r 'keys[]' "$PRIV/marketplaces.json" 2>/dev/null
+	printf '%s' "$PUB_MP_JSON" | jq -r 'keys[]' 2>/dev/null
+	[ "$COMPANY_ACTIVE" -eq 1 ] && printf '%s' "$PRIV_MP_JSON" | jq -r 'keys[]' 2>/dev/null
 	[ -f "$WHITELIST" ] && jq -r '(.marketplaces // [])[]' "$WHITELIST" 2>/dev/null
 	return 0
 }
 _keep_plugins() {
-	jq -r '(.plugins // [])[]' "$SCRIPT_DIR/plugins.json" 2>/dev/null
-	jq -r '(.plugins // [])[]' "$SCRIPT_DIR/plugins.local.json" 2>/dev/null
-	[ "$COMPANY_ACTIVE" -eq 1 ] && [ -f "$PRIV/plugins.json" ] &&
-		jq -r '(.plugins // [])[]' "$PRIV/plugins.json" 2>/dev/null
+	printf '%s' "$PUB_PL_JSON" | jq -r '(.plugins // [])[]' 2>/dev/null
+	[ "$COMPANY_ACTIVE" -eq 1 ] && printf '%s' "$PRIV_PL_JSON" | jq -r '(.plugins // [])[]' 2>/dev/null
 	[ -f "$WHITELIST" ] && jq -r '(.plugins // [])[]' "$WHITELIST" 2>/dev/null
 	return 0
 }
@@ -362,18 +366,11 @@ _run_for_config_dir() {
 		echo "${UX_MUTED}  (참고: 대상 dir 없음 — claude CLI 가 첫 실행 시 생성)${UX_RESET}"
 	fi
 
-	_restore_from \
-		"$(_merged_marketplaces "$SCRIPT_DIR/marketplaces.json" "$SCRIPT_DIR/marketplaces.local.json")" \
-		"$(_merged_plugins "$SCRIPT_DIR/plugins.json" "$SCRIPT_DIR/plugins.local.json")" \
-		"공용"
+	_restore_from "$PUB_MP_JSON" "$PUB_PL_JSON" "공용"
 
 	if [ "$MODE" = "internal" ]; then
 		if [ "$COMPANY_ACTIVE" -eq 1 ]; then
-			# company/ 는 별도 private 레포라 fork 충돌 대상이 아니다 — 오버레이 없음.
-			_restore_from \
-				"$(_merged_marketplaces "$PRIV/marketplaces.json" "")" \
-				"$(_merged_plugins "$PRIV/plugins.json" "")" \
-				"사내 전용"
+			_restore_from "$PRIV_MP_JSON" "$PRIV_PL_JSON" "사내 전용"
 		else
 			echo "${UX_MUTED}(사내 전용 레포 미설정 — 먼저 실행: git clone <GHES private repo url> $PRIV)${UX_RESET}"
 		fi
