@@ -99,6 +99,33 @@
 #       <new-base-sha> <new-head-sha> [worktree-path]
 #   (the freshness marker, when reposted, is stamped with <new-head-sha>)
 
+# Advisory only (issue #1454, propagated by #1505; PR #1699 review, codex
+# round-4 FOLLOW-UP): warn once on stderr when this file was sourced from a
+# checkout that is a different git repo than $HOME/dotfiles — a wrong-checkout
+# `SHELL_COMMON` would otherwise silently run stale logic with no diagnostic.
+# Never blocks; the guard function itself is a silent no-op outside the
+# genuine foreign-checkout case. Mirrors the identical block in
+# `gh_pr_edit_safe.sh` / `devx_pr_review_all.sh` verbatim — see that file for
+# the $0-vs-$BASH_SOURCE rationale.
+if [ -n "${ZSH_VERSION-}" ]; then
+    _drg_self="$0"
+elif [ -n "${BASH_VERSION-}" ]; then
+    _drg_self="${BASH_SOURCE[0]-}"
+else
+    _drg_self=""
+fi
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
+fi
+if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
+    _dotfiles_root_guard_self "$_drg_self" "gh_pr_resolve_outdated"
+else
+    printf '[gh_pr_resolve_outdated] %s missing or did not define _dotfiles_root_guard_self — #1454 guard skipped (#724).\n' \
+        "$_drg_helper" >&2
+fi
+unset _drg_self _drg_helper
+
 # One patch-id hash for a whole diff range (not per-commit): `git patch-id
 # --stable` accepts a multi-commit diff on stdin and folds it into one hash,
 # which is exactly the whole-PR-range comparison this needs. Empty output
