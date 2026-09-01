@@ -186,6 +186,23 @@ run_compose() {
     [ -L "$TGT/marketplace-skill" ]
 }
 
+@test "both claude/setup.sh compose sites layer the workspace (#1652)" {
+    # agy BLOCKER on PR #1670: the internal/single-account branch composes
+    # skills directly instead of going through _claude_account_setup_one, so
+    # the workspace call has to appear at BOTH sites or single-account PCs
+    # (the company setup) silently get dotfiles skills only.
+    local setup="${_BATS_REAL_DOTFILES_ROOT}/claude/setup.sh"
+    local integ="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
+
+    # Every _claude_compose_skills_dir call must be followed by a workspace call.
+    local compose_sites workspace_sites
+    compose_sites=$(grep -c '^[[:space:]]*_claude_compose_skills_dir ' "$setup" "$integ"         | awk -F: '{s+=$2} END {print s}')
+    workspace_sites=$(grep -c '^[[:space:]]*_claude_compose_workspace_skills ' "$setup" "$integ"         | awk -F: '{s+=$2} END {print s}')
+
+    [ "$compose_sites" -gt 0 ]
+    [ "$workspace_sites" -eq "$compose_sites" ]
+}
+
 @test "missing skill_sources.sh warns instead of silently no-opping (#1652 / #724)" {
     seed_ws_repo "packaging-skills" "create"
 
