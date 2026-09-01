@@ -2121,11 +2121,38 @@ FIXTURE
     assert_output --partial "patch-id"
 }
 
-@test "scan #1666: \$range_str is display-only — no execution path picks a range" {
-    # The static half of the contract. Every surviving mention of range_str
-    # must be its own assignment or an output call; anything else means a
-    # range-form cherry-pick came back and the help row above went stale.
+# The static half of the contract, in the two forms PR #1687's reviewers asked
+# for. Neither claims to PROVE a range pick can never return — a range can be
+# assembled anywhere, so no grep can (agy + codex both flagged exactly that
+# assumption). What actually enforces the safety property is #913's per-commit
+# no-op pre-flight; these guards catch the two shapes a reintroduction would
+# most plausibly take, so the now-honest help row cannot go stale unnoticed.
+#
+# `assert_failure 1` (not a bare `assert_failure`) is load-bearing in both:
+# grep answers 1 for a clean no-match but >= 2 for an error, and a bare
+# assert_failure would read a broken guard as a pass (agy FOLLOW-UP). The
+# explicit `[ -f ]` covers the one error `assert_failure 1` cannot see — in a
+# pipeline the rightmost non-zero status wins, so a missing file still surfaces
+# as the second grep's 1, not the first grep's 2.
+
+@test "scan #1666: no executed cherry-pick carries git range syntax (any variable name)" {
+    # Keyed on git's own spelling of a range — `A..B`, whatever holds it —
+    # rather than on one variable name, which a reimplementation could rename
+    # past (codex FOLLOW-UP). Only lines that actually RUN cherry-pick count:
+    # the ux_info/echo lines legitimately PRINT a range as a manual hint.
     local src="${DOTFILES_ROOT}/shell-common/functions/gcp_scan.sh"
+    [ -f "$src" ] || fail "guard cannot run — source not found: $src"
+    local exec_cp='(^|[;&|]|[[:space:]](then|do|if)[[:space:]]|![[:space:]]*)[[:space:]]*git cherry-pick'
+    run bash -c "grep -nE '${exec_cp}' '${src}' | grep -F '..'"
+    assert_failure 1
+}
+
+@test "scan #1666: \$range_str is display-only — it never reaches an execution path" {
+    # The narrower, name-keyed companion: every surviving mention of the
+    # variable the tool actually uses must be its own assignment or an output
+    # call.
+    local src="${DOTFILES_ROOT}/shell-common/functions/gcp_scan.sh"
+    [ -f "$src" ] || fail "guard cannot run — source not found: $src"
     run bash -c "grep 'range_str' '${src}' | grep -vE 'local range_str=|ux_bullet|ux_info|echo '"
-    assert_failure
+    assert_failure 1
 }
