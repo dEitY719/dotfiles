@@ -931,9 +931,19 @@ FIXTURE
 # lacks" and the already-absorbed commit was reported as real work forever.
 #
 # `_gcp_scan_conflict_adds_new_content` now normalizes each line (trailing
-# whitespace + one trailing comma stripped) on BOTH the add branch and the
-# delete branch before the membership test. Leading indentation is deliberately
-# preserved — it is semantic in YAML.
+# whitespace + one trailing comma stripped) before the membership test, under
+# two guards added by the PR #1690 review (agy + codex, both BLOCKER — each
+# reproduced against a fixture before being accepted):
+#
+#  1. SCOPE — normalization runs only on the JSON family (.json/.jsonc/.json5).
+#     On every other path norm() is the identity, so `gcp scan` keeps byte-exact
+#     comparison for Python tuples, CSV empty fields and Markdown hard breaks,
+#     where a trailing comma or trailing space is semantic.
+#  2. EXACT-vs-NORMALIZED SPLIT — normalizing `base` too erased the commit's OWN
+#     delta whenever that delta was itself the noise, so a commit whose only
+#     work was deleting a stray JSON trailing comma was silently dropped. A
+#     theirs line present in base under normalization but not byte-identical to
+#     it is a noise-only modification and now demands a byte-exact match in HEAD.
 #
 # The #1177 contract is unchanged: a commit carrying genuinely new content still
 # returns 0 (real), and a commit that really deletes a line HEAD still has is
@@ -971,19 +981,110 @@ FIXTURE
     assert_output --partial "rc=1"
 }
 
-@test "drift #1688: trailing-whitespace-only difference is drift, not new content (1)" {
+@test "drift #1688: trailing-whitespace-only difference is drift inside JSON (1)" {
     run_in_bash "
         $(_gcp903_make_repo)
-        printf 'alpha\n' > w.txt && git add w.txt && git commit -qm 'add w'
+        printf '{\n  \"a\": \"1\"\n}\n' > w.json && git add w.json && git commit -qm 'add w'
         git checkout -q -b source
-        printf 'alpha\nbeta   \n' > w.txt && git add w.txt && git commit -qm 'add beta with trailing ws'
+        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\"   \n}\n' > w.json && git add w.json && git commit -qm 'add b with trailing ws'
         src=\$(git rev-parse HEAD)
         git checkout -q main
-        printf 'alpha\nbeta\ngamma\n' > w.txt && git add w.txt && git commit -qm 'add beta and gamma'
-        _gcp_scan_conflict_adds_new_content \"\$src\" w.txt; echo \"rc=\$?\"
+        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\",\n  \"c\": \"3\"\n}\n' > w.json && git add w.json && git commit -qm 'add b and c'
+        _gcp_scan_conflict_adds_new_content \"\$src\" w.json; echo \"rc=\$?\"
     "
     assert_success
     assert_output --partial "rc=1"
+}
+
+# --- Scope guard (#1690 review: codex BLOCKER) -------------------------------
+# Outside the JSON family norm() is the identity, so trailing whitespace and a
+# trailing comma stay significant. Each case below is a commit whose ENTIRE
+# work is that character; before the scope guard every one read as drift and
+# was silently dropped by Stage-2.
+
+@test "drift #1688: trailing whitespace is significant outside JSON (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf 'alpha   \nkeep\n' > w.txt && git add w.txt && git commit -qm 'add w'
+        git checkout -q -b source
+        printf 'alpha\nkeep\n' > w.txt && git add w.txt && git commit -qm 'strip trailing ws'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf 'beta\nkeep\n' > w.txt && git add w.txt && git commit -qm 'HEAD rewrote the line'
+        _gcp_scan_conflict_adds_new_content \"\$src\" w.txt; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=0"
+}
+
+@test "drift #1688: a Python trailing comma is significant, not noise (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf 'x = 1,\nkeep\n' > t.py && git add t.py && git commit -qm 'add t'
+        git checkout -q -b source
+        printf 'x = 1\nkeep\n' > t.py && git add t.py && git commit -qm 'tuple -> scalar'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf 'x = 1,\nother\n' > t.py && git add t.py && git commit -qm 'HEAD keeps the tuple'
+        _gcp_scan_conflict_adds_new_content \"\$src\" t.py; echo \"rc=\$?\"
+    "
+    assert_success
+    # \`x = 1,\` (tuple) and \`x = 1\` (scalar) are different values -> real.
+    assert_output --partial "rc=0"
+}
+
+@test "drift #1688: a CSV empty trailing field is significant, not noise (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf 'a,b,\nkeep\n' > d.csv && git add d.csv && git commit -qm 'add d'
+        git checkout -q -b source
+        printf 'a,b\nkeep\n' > d.csv && git add d.csv && git commit -qm 'drop empty field'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf 'a,b,\nother\n' > d.csv && git add d.csv && git commit -qm 'HEAD keeps the field'
+        _gcp_scan_conflict_adds_new_content \"\$src\" d.csv; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=0"
+}
+
+# --- Exact-vs-normalized split (#1690 review: agy + codex BLOCKER) -----------
+# Inside a JSON file, normalizing `base` as well as `ours` erased the commit's
+# own delta when that delta WAS the noise. Measured before the fix: rc flipped
+# 0 -> 1 and _gcp_scan_preflight_is_noop 1 -> 0, i.e. silently dropped.
+
+@test "drift #1688: a JSON commit whose only work is deleting a stray comma is NOT dropped (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '{\n  \"a\": \"1\",\n}\n' > s.json && git add s.json && git commit -qm 'add s with stray comma'
+        git checkout -q -b source
+        printf '{\n  \"a\": \"1\"\n}\n' > s.json && git add s.json && git commit -qm 'drop the stray trailing comma'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\",\n}\n' > s.json && git add s.json && git commit -qm 'HEAD never applied the fix'
+        _gcp_scan_conflict_adds_new_content \"\$src\" s.json; echo \"adds=\$?\"
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"noop=\$?\"
+    "
+    assert_success
+    # The commit's whole delta IS the comma, and HEAD still carries it -> real.
+    assert_output --partial "adds=0"
+    assert_output --partial "noop=1"
+}
+
+@test "drift #1688: a lone comma line never normalizes to empty (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '[\n\n]\n' > l.json && git add l.json && git commit -qm 'add l'
+        git checkout -q -b source
+        printf '[\n,\n]\n' > l.json && git add l.json && git commit -qm 'blank line -> lone comma'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '[\n\n\"x\"\n]\n' > l.json && git add l.json && git commit -qm 'HEAD keeps the blank line'
+        _gcp_scan_conflict_adds_new_content \"\$src\" l.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # norm(\",\") must stay \",\" — collapsing it to \"\" would false-match the blank.
+    assert_output --partial "rc=0"
 }
 
 @test "drift #1688: genuinely new entry still counts as real content (0)" {
