@@ -57,6 +57,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 import re
 import subprocess
 import sys
@@ -79,7 +80,12 @@ class Target:
 
     marketplace: str
     repo: str
-    plugin: str | None
+    # Every `<plugin>@<marketplace>` entry `plugins.json` registers for this
+    # marketplace, sorted. A tuple, not a single name: a marketplace may ship
+    # several plugins, and the pre-#1691-review code keyed them into a dict by
+    # marketplace, so all but the last were silently never contract-checked
+    # (codex + agy found this independently). Empty when nothing installs it.
+    plugins: tuple[str, ...]
 
 
 def split_repo_targets(
@@ -94,21 +100,21 @@ def split_repo_targets(
     owner, so it is not one of ours; `dEitY719/dotfiles` is ours but is not a
     split-out repo.
 
-    `plugin` is None when nothing in `plugins.json` installs the marketplace —
+    `plugins` is empty when nothing in `plugins.json` installs the marketplace —
     a registration gap worth reporting rather than skipping.
     """
-    by_marketplace = {}
+    by_marketplace: dict[str, set[str]] = {}
     for entry in plugins:
         plugin, _, marketplace = entry.partition("@")
         if marketplace:
-            by_marketplace[marketplace] = plugin
+            by_marketplace.setdefault(marketplace, set()).add(plugin)
 
     targets = []
     for marketplace, repo in sorted(marketplaces.items()):
         repo_owner, _, repo_name = repo.partition("/")
         if repo_owner != owner or not repo_name.endswith("-skills"):
             continue
-        targets.append(Target(marketplace, repo, by_marketplace.get(marketplace)))
+        targets.append(Target(marketplace, repo, tuple(sorted(by_marketplace.get(marketplace, ())))))
     return targets
 
 
@@ -121,8 +127,10 @@ def check_manifest_contract(target: Target, manifest: dict[str, Any] | None) -> 
 
     Any entry in the manifest's `plugins` array counts: a marketplace is allowed
     to ship several, and which one sits at index 0 is not part of the install id.
+    Every registered plugin is checked, not just one — a sibling that matches
+    must never vouch for one that does not.
     """
-    if target.plugin is None:
+    if not target.plugins:
         return [
             f"{target.marketplace}: registered in marketplaces.json but no "
             f"`<plugin>@{target.marketplace}` entry in plugins.json — nothing installs it"
@@ -131,7 +139,8 @@ def check_manifest_contract(target: Target, manifest: dict[str, Any] | None) -> 
     if manifest is None:
         return [
             f"{target.marketplace}: {target.repo} unreachable, or it has no "
-            f".claude-plugin/marketplace.json — `{target.plugin}@{target.marketplace}` "
+            f".claude-plugin/marketplace.json — "
+            f"{', '.join(f'`{p}@{target.marketplace}`' for p in target.plugins)} "
             f"cannot be installed"
         ]
 
@@ -146,12 +155,13 @@ def check_manifest_contract(target: Target, manifest: dict[str, Any] | None) -> 
         )
 
     remote_plugins = [p.get("name") for p in manifest.get("plugins", []) if isinstance(p, dict)]
-    if target.plugin not in remote_plugins:
-        violations.append(
-            f"{target.marketplace}: plugins.json installs "
-            f"'{target.plugin}@{target.marketplace}' but {target.repo} ships "
-            f"{remote_plugins or 'no plugins'}"
-        )
+    for plugin in target.plugins:
+        if plugin not in remote_plugins:
+            violations.append(
+                f"{target.marketplace}: plugins.json installs "
+                f"'{plugin}@{target.marketplace}' but {target.repo} ships "
+                f"{remote_plugins or 'no plugins'}"
+            )
 
     return violations
 
@@ -472,13 +482,25 @@ class GitCloneRemoteSource:
     def _clone(self, repo: str) -> Path | None:
         if repo not in self._clones:
             dest = self._workdir / repo.replace("/", "__")
-            completed = subprocess.run(
-                ["git", "clone", "--depth", "1", "--quiet", f"{self._host}/{repo}.git", str(dest)],
-                capture_output=True,
-                text=True,
-                timeout=180,
-            )
-            self._clones[repo] = dest if completed.returncode == 0 else None
+            try:
+                completed = subprocess.run(
+                    ["git", "clone", "--depth", "1", "--quiet", f"{self._host}/{repo}.git", str(dest)],
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                    # A renamed or newly-private repo makes `git` prompt for
+                    # credentials and hang until the timeout; refusing the
+                    # prompt turns that into a prompt failure instead
+                    # (PR #1691 review, agy FOLLOW-UP).
+                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+                )
+            except subprocess.TimeoutExpired:
+                # One slow clone must not abort the other twelve — it is this
+                # repo's own "unreachable" F-1 finding (PR #1691 review, both
+                # reviewers).
+                self._clones[repo] = None
+            else:
+                self._clones[repo] = dest if completed.returncode == 0 else None
         return self._clones[repo]
 
     def marketplace_manifest(self, repo: str) -> dict[str, Any] | None:
@@ -511,9 +533,17 @@ class RemoteSource(Protocol):
 class AuditResult:
     findings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # How many of `findings` came from the F-1 contract half. Tracked
+    # separately so `--fail-on contract` can gate on those alone (PR #1691
+    # review, agy BLOCKER): a broken install id is always actionable, while
+    # drift is expected until #1410 Phase 4 retires the dotfiles originals.
+    contract_findings: int = 0
+    fail_on: str = "any"
 
     @property
     def exit_code(self) -> int:
+        if self.fail_on == "contract":
+            return 1 if self.contract_findings else 0
         return 1 if self.findings else 0
 
 
@@ -522,13 +552,17 @@ def run_audit(
     local_skills: dict[str, dict[str, str]],
     source: RemoteSource,
     checks: str = "all",
+    fail_on: str = "any",
 ) -> AuditResult:
     """Run F-1 and/or F-2 over every derived target.
 
     `source` is anything with `marketplace_manifest(repo)` and `skill_tree(repo)`
     — the seam that keeps the network out of the offline suite (NF-1).
+
+    `fail_on` selects what the exit code gates on; findings are reported either
+    way. See `AuditResult.contract_findings`.
     """
-    result = AuditResult()
+    result = AuditResult(fail_on=fail_on)
     do_contract = checks in ("all", "contract")
     do_drift = checks in ("all", "drift")
 
@@ -536,7 +570,9 @@ def run_audit(
         manifest = source.marketplace_manifest(target.repo)
 
         if do_contract:
-            result.findings.extend(check_manifest_contract(target, manifest))
+            contract_violations = check_manifest_contract(target, manifest)
+            result.findings.extend(contract_violations)
+            result.contract_findings += len(contract_violations)
 
         if not do_drift:
             continue
@@ -549,11 +585,27 @@ def run_audit(
                 result.notes.append(f"{target.marketplace}: no skills/ directory in {target.repo}")
             continue
 
-        for pairing in pair_skills(remote_skills, local_skills):
+        pairings = pair_skills(remote_skills, local_skills)
+        # An unpaired skill is a finding only while a sibling in the same repo
+        # still pairs (PR #1691 review, codex BLOCKER). Routing every unpaired
+        # skill to a note made the *worst* drift the quiet kind: a skill falls
+        # out of similarity range precisely because it diverged badly, and the
+        # audit then exited 0 on the very thing it exists to catch. The sibling
+        # test is what keeps Phase 4 quiet without a flag to remember — once
+        # the originals are deleted nothing in the repo pairs, and "all
+        # unpaired" reads as "the originals are gone", not as drift.
+        any_paired = any(p.local_name is not None for p in pairings)
+
+        for pairing in pairings:
             if pairing.local_name is None:
-                # Not a finding: #1410 Phase 4 deletes the originals, after
-                # which every skill is legitimately unpaired.
-                result.notes.append(f"{target.marketplace}: '{pairing.remote_name}' unpaired — {pairing.note}")
+                line = f"{target.marketplace}: '{pairing.remote_name}' unpaired — {pairing.note}"
+                if any_paired:
+                    result.findings.append(
+                        f"{line}; siblings in this repo still pair, so the dotfiles "
+                        f"original should exist — treat as drift severe enough to break pairing"
+                    )
+                else:
+                    result.notes.append(line)
                 continue
 
             report = pairing.report
@@ -593,6 +645,14 @@ def main(argv: list[str] | None = None) -> int:
         description="Verify #1410 split-out skill repos against their registration (#1671).",
     )
     parser.add_argument("--check", choices=("all", "contract", "drift"), default="all")
+    parser.add_argument(
+        "--fail-on",
+        choices=("any", "contract"),
+        default="any",
+        help="what the exit code gates on; findings are printed either way "
+        "(contract: only F-1 install-id breakage fails — for the scheduled "
+        "workflow while #1410 Phase 2-3 drift is expected)",
+    )
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--owner", default="dEitY719")
     parser.add_argument("--quiet", action="store_true")
@@ -612,7 +672,13 @@ def main(argv: list[str] | None = None) -> int:
     local_skills = read_skill_tree(args.repo_root / "claude" / "skills")
 
     with tempfile.TemporaryDirectory(prefix="split-skill-audit-") as workdir:
-        result = run_audit(targets, local_skills, GitCloneRemoteSource(Path(workdir)), checks=args.check)
+        result = run_audit(
+            targets,
+            local_skills,
+            GitCloneRemoteSource(Path(workdir)),
+            checks=args.check,
+            fail_on=args.fail_on,
+        )
 
     if not args.quiet:
         for note in result.notes:

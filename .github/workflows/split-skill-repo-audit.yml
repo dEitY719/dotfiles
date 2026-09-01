@@ -20,10 +20,11 @@ name: split-skill-repo-audit
 #   offline, in tests/integration/test_split_skill_repos.py — only the
 #   fetching happens here.
 #
-# Expect findings while Phase 2-3 is in flight: the audit is a report on a
-# gap that already exists, not a gate that was ever green. Phase 4 drains it
-# by deleting the originals, after which every skill is legitimately unpaired
-# and the drift half goes quiet on its own.
+# Expect drift findings while Phase 2-3 is in flight: they report a gap that
+# already exists, and the run is gated with `--fail-on contract` so they do
+# not turn the workflow permanently red. F-1 breakage still fails the job the
+# moment it appears. Phase 4 drains the drift half by deleting the originals,
+# after which every skill is legitimately unpaired and `--fail-on` can go.
 
 on:
   schedule:
@@ -42,11 +43,18 @@ on:
   # Only on main: a registration is not real until it is merged, and every
   # other workflow here pins its branches the same way (ci.yml, test.yml).
   push:
+    # main only: a topic branch editing a skill would otherwise fire a
+    # 13-repo clone audit on every push (agy FOLLOW-UP). Drift becomes real
+    # when it lands on main, which is exactly what this filter watches.
     branches: [main]
     paths:
       - "claude/plugin/marketplaces.json"
       - "claude/plugin/plugins.json"
       - "scripts/maintenance/check_split_skill_repos.py"
+      # Source-side drift: editing an original here is one of the two ways
+      # the two copies diverge, and waiting a week to hear about it is the
+      # gap this closes (codex FOLLOW-UP).
+      - "claude/skills/**"
 
 permissions:
   contents: read
@@ -69,15 +77,24 @@ jobs:
       # default is needed while every `dEitY719/*-skills` repo is public. A
       # repo turning private surfaces as an "unreachable" F-1 finding rather
       # than a silent skip, which is the intended failure mode.
-      # `| tee` is deliberate: it makes the step's status tee's, not the
-      # checker's, so findings are reported without failing the run. Phase 2-3
-      # is expected to have them (see the header) — this is a report, not a
-      # gate. Dropping the pipe, or adding `shell: bash` for pipefail, turns
-      # every open finding red.
+      # The exit code is gated with `--fail-on contract`, never by swallowing
+      # it. `| tee` under the runner's default `bash -e` (no pipefail) returns
+      # tee's status, so a failing audit reported success — the whole gate was
+      # inert (PR #1691 review, agy BLOCKER). `shell: bash` restores pipefail,
+      # and the checker itself decides what is worth failing on: an install id
+      # the remote no longer honors always is; Phase 2-3 drift is expected and
+      # is reported to the job summary instead. Phase 4 can drop `--fail-on`.
+      #
+      # The input goes through `env:` rather than being interpolated into the
+      # script (agy FOLLOW-UP) — `type: choice` makes it safe today, but the
+      # env indirection is the pattern that stays safe if the type changes.
       - name: Run the audit
+        shell: bash
+        env:
+          CHECK: ${{ inputs.check || 'all' }}
         run: |
           python3 scripts/maintenance/check_split_skill_repos.py \
-            --check "${{ inputs.check || 'all' }}" | tee audit.log
+            --check "$CHECK" --fail-on contract | tee audit.log
 
       - name: Publish findings to the job summary
         if: always()
