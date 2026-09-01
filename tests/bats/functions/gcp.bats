@@ -1973,4 +1973,8 @@ FIXTURE
     # The MITIGATION: the report still names the true deferred commit so a
     # human reviewing it can catch the dependency manually.
     assert_output --partial "conf: bottom edit"
+    # The MITIGATION, strengthened (codex review, PR #1649 follow-up): the
+    # report now explicitly warns to also check the commits that DID apply,
+    # not just the deferred ones — closing the exact gap this test pins.
+    assert_output --partial "Also review the commits that DID apply"
 }
