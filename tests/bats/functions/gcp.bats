@@ -2081,3 +2081,57 @@ FIXTURE
     assert_output --partial "cp_imprint=0"
     assert_output --partial "rm_imprint=0"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1666 — 'gcp help scan' advertised two behaviors the code no longer has.
+#
+#   1. "contiguous range -> bulk cherry-pick" was added by b69c9bf6 and made
+#      false by f0c8eff8 (#913), which removed the range shortcut precisely so
+#      the no-op merge-probe pre-flight could never be bypassed. Advertising it
+#      teaches users the OPPOSITE of the tool's actual safety property.
+#   2. "detects duplicates (same subject in base)" describes the pre-#1136
+#      behavior. Since #1136 a subject match is only a CANDIDATE filter; a skip
+#      is confirmed by `git patch-id --stable`, because skipping on subject
+#      alone loses data when a repo reuses commit subjects.
+#
+# These tests pin the help rows to the real execution path in BOTH directions:
+# the output tests catch a stale help row, and the static test catches a
+# reintroduced range pick that would make the (now honest) help row stale again.
+# ---------------------------------------------------------------------------
+
+@test "help #1666: 'gcp help scan' never advertises the bulk range pick #913 removed" {
+    run_in_bash 'gcp help scan'
+    assert_success
+    refute_output --partial "contiguous range"
+    refute_output --partial "bulk cherry-pick"
+}
+
+@test "help #1666: 'gcp help scan' states picks are always individual" {
+    run_in_bash 'gcp help scan'
+    assert_success
+    assert_output --partial "always individual cherry-pick"
+}
+
+@test "help #1666: 'gcp help scan' marks Suggested Range as a manual-use hint" {
+    # The range is still PRINTED — as "cancel and do it yourself" guidance.
+    # The help must say so, or a reader assumes the tool consumes it.
+    run_in_bash 'gcp help scan'
+    assert_success
+    assert_output --partial "manual hint"
+}
+
+@test "help #1666: 'gcp help scan' does not claim a subject match alone confirms a skip" {
+    run_in_bash 'gcp help scan'
+    assert_success
+    refute_output --partial "same subject in base"
+    assert_output --partial "patch-id"
+}
+
+@test "scan #1666: \$range_str is display-only — no execution path picks a range" {
+    # The static half of the contract. Every surviving mention of range_str
+    # must be its own assignment or an output call; anything else means a
+    # range-form cherry-pick came back and the help row above went stale.
+    local src="${DOTFILES_ROOT}/shell-common/functions/gcp_scan.sh"
+    run bash -c "grep -n 'range_str' '${src}' | grep -vE 'local range_str=|ux_bullet|ux_info|echo '"
+    assert_failure
+}
