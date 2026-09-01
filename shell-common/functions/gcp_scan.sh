@@ -162,7 +162,16 @@ _gcp_scan_preflight_is_noop() {
                     real_content_conflict=1
                     break
                 fi
-                git checkout HEAD -- "$f"
+                # `$f` may not exist in HEAD at all (e.g. both sides added it
+                # independently) -> checkout fails with a stray "pathspec …
+                # did not match" that used to leak into scan output (issue
+                # #1647, defect E). Silence it explicitly: a file that can't
+                # be restored to a HEAD state can't be called a no-op, so it
+                # is deliberately left unresolved — the resulting unmerged
+                # index already fails the staged-diff check below, which is
+                # the SAME "real work" verdict this produced before. Judgment
+                # unchanged, only the noise is gone.
+                git checkout HEAD -- "$f" 2>/dev/null || :
             done <<EOF
 $conflicted
 EOF
@@ -210,9 +219,31 @@ _gcp_scan_check_file_deps() {
     #
     # For every missing dependency it prints one "F<TAB>short_creator_sha" line
     # to stdout so the caller can name the offending file + precedent commit.
+    #
+    # pick_list ORDER matters (issue #1647, defect A): the execution loop
+    # applies pick_list in order, so a creator commit AFTER $sha in that order
+    # cannot have run yet — it is not a precedent. Only count commits BEFORE
+    # $sha. This prefix is itself an over-approximation (an earlier entry may
+    # still get skipped as a dup/no-op/path-excluded and never actually
+    # apply), but that bias is deliberately toward DEFERRING judgment rather
+    # than wrongly skipping a real dependency — the execution loop's own
+    # rollback-and-continue handling absorbs any false negative that slips
+    # through.
     local sha="$1" base="$2" source="$3" pick_list="$4"
-    local changes st f up_add rc=0 tab
+    local changes st f up_add rc=0 tab prior_prefix="" _p
     tab=$(printf '\t')
+    while IFS= read -r _p; do
+        [ -z "$_p" ] && continue
+        [ "$_p" = "$sha" ] && break
+        if [ -z "$prior_prefix" ]; then
+            prior_prefix="$_p"
+        else
+            prior_prefix="${prior_prefix}
+${_p}"
+        fi
+    done <<EOF
+$pick_list
+EOF
     # name-status of the candidate (single-parent diff -> one status letter).
     changes=$(git diff-tree --no-commit-id -r --name-status "$sha" 2>/dev/null)
     while IFS="$tab" read -r st f; do
@@ -235,11 +266,11 @@ _gcp_scan_check_file_deps() {
         # No known creator in source -> not a recognizable dependency; leave it
         # for Stage-2 / the real cherry-pick rather than guess.
         [ -z "$up_add" ] && continue
-        # Creator is among the commits we will pick first -> not missing
+        # Creator is among the commits we will pick BEFORE $sha -> not missing
         # (the --author=all path). Newline-wrapped match avoids prefix
         # collisions, mirroring the Stage-2 noop_list membership test.
         case "
-$pick_list
+$prior_prefix
 " in
             *"
 $up_add
@@ -385,12 +416,18 @@ _gcp_scan_predict_content_conflict() {
     # lines would be misread as conflicting file paths.
     conflicted=$(printf '%s\n' "$merge_out" | awk 'NR>1 { if ($0=="") exit; print }')
     [ -z "$conflicted" ] && return 0
-    # Build the set of paths touched by every OTHER pick_list commit, for the
-    # --author=all false-positive guard.
+    # Build the set of paths touched by every pick_list commit BEFORE $sha, for
+    # the --author=all false-positive guard. pick_list ORDER matters (issue
+    # #1647, defect A): the execution loop applies picks in order, so nothing
+    # AFTER $sha can have changed HEAD's copy by the time $sha is picked — it
+    # is not a precedent. `break` (not `continue`) on the self-match stops
+    # accumulating once $sha is reached, so only genuinely-prior candidates
+    # count. If $sha is absent from pick_list, the loop reads the whole list
+    # as a fallback (unchanged from before).
     other_files=""
     while IFS= read -r p; do
         [ -z "$p" ] && continue
-        [ "$p" = "$sha" ] && continue
+        [ "$p" = "$sha" ] && break
         other_files="${other_files}$(git diff-tree --no-commit-id -r --name-only "$p" 2>/dev/null)
 "
     done <<EOF
@@ -649,6 +686,7 @@ _gcp_scan() {
     local arg1="" arg2=""
     local show_skip_list=0
     local show_skip_paths=0
+    local stop_on_conflict=0
 
     # Check for incomplete cherry-pick
     if git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1; then
@@ -690,6 +728,9 @@ _gcp_scan() {
             ;;
         --show-skip-paths)
             show_skip_paths=1
+            ;;
+        --stop-on-conflict)
+            stop_on_conflict=1
             ;;
         *)
             # Store positional arguments without array syntax
@@ -1232,6 +1273,27 @@ EOF
 $final_selected_list
 EOF
 
+    # Clean-worktree precondition (issue #1647, defect C): the execution
+    # loop's rollback path (below) recovers from an unpredicted conflict with
+    # `git cherry-pick --abort` / `git reset --hard`, either of which would
+    # also wipe unrelated uncommitted work. Refuse to even prompt on a dirty
+    # tree. The read-only Analysis phase above (including Stage-2's
+    # stash/pop'd probes) is unaffected — only the confirm+execute phase gates
+    # here.
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        if type ux_error >/dev/null 2>&1; then
+            ux_error "Working tree is dirty — cherry-pick execution refuses to start."
+            ux_error "Run 'git stash push -u' first, then re-run this scan."
+        else
+            echo "Error: Working tree is dirty — cherry-pick execution refuses to start." >&2
+            echo "Run 'git stash push -u' first, then re-run this scan." >&2
+        fi
+        if [ $_xtrace_set -eq 1 ]; then
+            set -x
+        fi
+        return 1
+    fi
+
     # Interactive Confirmation
     if ! type ux_confirm >/dev/null 2>&1; then
         return 0
@@ -1260,6 +1322,7 @@ EOF
     local conflict_skipped=0
     local kr_skipped=0
     local pe_skipped=0
+    local deferred_list="" deferred_count=0
     # Cache the .git dir BEFORE any cherry-pick runs, while config is still
     # readable (issue #1213). A real conflict in a tracked-and-[include]-d
     # git/.gitconfig poisons config, so the later CHERRY_PICK_HEAD check must
@@ -1387,21 +1450,62 @@ $sha
             if [ ! -f "${_gcp_git_dir}/CHERRY_PICK_HEAD" ]; then
                 continue
             fi
-            # Genuine conflict (the pre-flight already excluded redundant ones):
-            # leave it in place with git's own conflict output for the user.
-            if type ux_error >/dev/null 2>&1; then
-                ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+            # Genuine conflict (the pre-flight already excluded redundant
+            # ones — Stage-1.5/1.6 are static approximations that WILL miss
+            # some at scale, issue #1647). `--stop-on-conflict` restores the
+            # legacy behavior: abort the whole remaining batch here, exactly
+            # as before.
+            if [ "$stop_on_conflict" -eq 1 ]; then
+                if type ux_error >/dev/null 2>&1; then
+                    ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+                fi
+                return 1
             fi
-            return 1
+
+            # Default (issue #1647, defect B): roll back this ONE commit and
+            # keep going, instead of losing the whole remaining batch to a
+            # single unpredicted conflict. Read the conflicted files first —
+            # the rollback below erases that information.
+            local _conflict_files _short_sha
+            _conflict_files=$(git diff --name-only --diff-filter=U 2>/dev/null | tr '\n' ' ')
+            _short_sha=$(git rev-parse --short "$sha" 2>/dev/null)
+            git cherry-pick --abort >/dev/null 2>&1 || {
+                git cherry-pick --quit >/dev/null 2>&1
+                git reset --hard HEAD >/dev/null 2>&1
+            }
+            # Verify the rollback actually cleared the sequencer with a plain
+            # file test, not `git rev-parse` (issue #1213: the conflict itself
+            # can poison a tracked, [include]-d git config, and every git
+            # invocation dies from that instant on). If it's still there,
+            # never continue the batch on top of a live sequencer — fall
+            # through to the legacy error path instead.
+            if [ -f "${_gcp_git_dir}/CHERRY_PICK_HEAD" ]; then
+                if type ux_error >/dev/null 2>&1; then
+                    ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+                fi
+                return 1
+            fi
+            deferred_list="${deferred_list}${sha}
+"
+            deferred_count=$((deferred_count + 1))
+            if type ux_warning >/dev/null 2>&1; then
+                ux_warning "Deferred ${_short_sha} — unpredicted conflict in ${_conflict_files}; rolled back, continuing with the rest."
+            else
+                echo "⚠ Deferred ${_short_sha} — unpredicted conflict in ${_conflict_files}; rolled back, continuing with the rest." >&2
+            fi
+            continue
         fi
     done <<EOF
 $selected_list
 EOF
 
-    # Reaching here means no unresolved conflict (a real conflict returns 1
-    # above), so report 0 conflicts.
+    # Reaching here means no UNRESOLVED sequencer state is left behind (a
+    # rollback failure returns 1 above) — deferred_count carries how many
+    # commits hit a real, unpredicted conflict and were rolled back rather
+    # than applied (issue #1647, defect D; was hardcoded "0 conflicts"
+    # regardless of outcome).
     if type ux_success >/dev/null 2>&1; then
-        ux_success "$picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        ux_success "$picked applied, $dup_skipped skipped (dup), $deferred_count deferred (conflict)"
         if [ "$kr_skipped" -gt 0 ]; then
             ux_info "($kr_skipped commit(s) skipped — known-resolved)"
         fi
@@ -1421,7 +1525,7 @@ EOF
             ux_info "($empty_skipped empty commit(s) also skipped)"
         fi
     else
-        echo "✓ $picked applied, $dup_skipped skipped (dup), 0 conflicts"
+        echo "✓ $picked applied, $dup_skipped skipped (dup), $deferred_count deferred (conflict)"
         if [ "$kr_skipped" -gt 0 ]; then
             echo "  ($kr_skipped commit(s) skipped — known-resolved)"
         fi
@@ -1442,10 +1546,48 @@ EOF
         fi
     fi
 
+    # "Needs manual resolution" (issue #1647, defect D): name every deferred
+    # commit with a copy-pasteable retry line, plus how to permanently silence
+    # a false positive (the known-resolved skip list).
+    if [ "$deferred_count" -gt 0 ]; then
+        if type ux_section >/dev/null 2>&1; then
+            ux_section "Needs manual resolution"
+        else
+            echo "=== Needs manual resolution ==="
+        fi
+        while IFS= read -r _def_sha; do
+            [ -z "$_def_sha" ] && continue
+            local _def_title _def_short
+            _def_title=$(git log --no-walk --format='%s' "$_def_sha" 2>/dev/null)
+            _def_short=$(git rev-parse --short "$_def_sha" 2>/dev/null)
+            if type ux_bullet >/dev/null 2>&1; then
+                ux_bullet "${_def_short} ${_def_title}"
+                ux_bullet "  git cherry-pick ${_def_sha}"
+            else
+                echo "  ${_def_short} ${_def_title}"
+                echo "  git cherry-pick ${_def_sha}"
+            fi
+        done <<EOF
+$deferred_list
+EOF
+        if type ux_info >/dev/null 2>&1; then
+            ux_info "Resolve each manually, or — if HEAD is already a superset of the change — register it in git/config/gcp-scan-skip.conf."
+        else
+            echo "ℹ Resolve each manually, or — if HEAD is already a superset of the change — register it in git/config/gcp-scan-skip.conf." >&2
+        fi
+    fi
+
     # Restore tracing if it was enabled
     if [ $_xtrace_set -eq 1 ]; then
         set -x
     fi
+
+    # Unfinished work (>=1 deferred commit) must not read as success to a
+    # caller/script (issue #1647, defect D).
+    if [ "$deferred_count" -gt 0 ]; then
+        return 1
+    fi
+    return 0
 }
 
 # Note: 'gcp_scan' / 'gcp-scan' aliases live in gcp.sh and route through
