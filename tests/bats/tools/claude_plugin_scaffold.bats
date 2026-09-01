@@ -4,13 +4,18 @@
 
 load '../test_helper'
 
-@test "claude/plugin/marketplaces.json exists and is valid empty JSON object" {
-    run jq -e 'type == "object" and length == 0' "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+# 스캐폴드 시절 두 테스트는 두 파일이 *비어 있음*을 단언했다. #1638 이 첫
+# 마켓플레이스를 등록한 순간부터 자기모순이 되어 계속 red 였다 — 검사하려던
+# 것은 "비었다"가 아니라 "스캐폴드 모양이 맞다"이므로 형태만 고정한다.
+@test "claude/plugin/marketplaces.json exists and maps names to owner/repo slugs" {
+    run jq -e 'type == "object" and (to_entries | all(.value | test("^[^/]+/[^/]+$")))' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
     assert_success
 }
 
-@test "claude/plugin/plugins.json exists with empty plugins array" {
-    run jq -e '.plugins == []' "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+@test "claude/plugin/plugins.json exists with a plugins array of plugin@marketplace ids" {
+    run jq -e '(.plugins | type == "array") and (.plugins | all(test("^[^@]+@[^@]+$")))' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
     assert_success
 }
 
