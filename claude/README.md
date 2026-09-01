@@ -52,8 +52,8 @@ Edit `claude/settings.json` to change behavior across all PCs:
 - **Status line** — `statusLine.command` points at the dotfiles SSOT script
   (`${HOME}/dotfiles/claude/statusline-command.sh`); works across multi-account
   `CLAUDE_CONFIG_DIR` targets without per-account symlinks (issue #296).
-- **Hooks** — `Stop` / `PostToolUse` entries already wired for `gh:issue-flow`
-  and `gh:pr` flows.
+- **Hooks** — `Stop` / `PostToolUse` entries already wired for `gh-flow:issue`
+  and `gh-pr:create` flows.
 - **Plugins** — `enabledPlugins` controls which Claude plugins load.
 - **Sandboxing / permissions** — add Claude Code permission rules here if you
   want them shipped across all your PCs; per-PC overrides go in the local

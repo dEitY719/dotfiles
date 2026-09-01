@@ -15,8 +15,16 @@ SSOT이다.
   (정책 SSOT: [`discussions-policy.md`](./discussions-policy.md)). `Auto-add to project` 워크플로우 필터는 `is:issue,pr` 만
   매칭하므로 Discussion 은 자동 추가되지 않는다.
 - 자동화 수단: GitHub Projects v2 빌트인 워크플로우 + dotfiles 스킬 보정
-- 관련 스킬: `gh:issue-create`, `gh:pr`, `gh:pr-merge`,
-  `gh:pr-merge-emergency`, `gh:issue-flow`
+- 관련 스킬: `gh-issue:create`, `gh-pr:create`, `gh-pr:merge`,
+  `gh-pr:merge-emergency`, `gh-flow:issue`
+
+> **스킬 이름 표기 (#1410 Phase 3, #1678)** — 이 문서는 스킬을 분리 후
+> 플러그인 네임스페이스(`gh-issue:create`, `gh-pr:create`, `gh-flow:issue` …)로
+> 적는다. dotfiles 의 `claude/skills/` 원본은 Phase 4 까지 그대로 남아 있고
+> **옛 이름(`/gh-issue-create`, `/gh-pr`, `/gh-issue-flow` …)으로도 계속
+> 호출된다** — `gh_flow.sh` · `issue_watcher_cron.sh` 같은 운영 자동화가
+> 아직 옛 슬래시 명령을 dispatch 하기 때문이다 (#1410 NF-1, D-12). 본문의
+> `claude/skills/<dir>/` 경로는 그 원본을 가리키므로 옛 이름 그대로다.
 
 차용 원본: `agent-toolbox`의 `.claude/workflow.md`와 `.claude/github-integration.md`.
 dotfiles는 동일 원칙을 따르되 범위(단일 repo)와 자동화 수준(별도
@@ -43,8 +51,8 @@ Status 필드는 아래 6개 옵션을 이 순서로 가진다:
   후 `In review`로 수동 복귀시킨 뒤 이어서 `Approved → Done`
   으로 진행한다.
   단 `dEitY719/dotfiles` 에서는 `Approved` 가 **머지 전제조건이
-  아니다** (#1513). 컬럼 자체는 남아 있고 `/gh-pr-approve` 로
-  수동 기록할 수 있지만, `/gh-pr-merge` 는 보드 Status 를 읽지
+  아니다** (#1513). 컬럼 자체는 남아 있고 `/gh-pr:approve` 로
+  수동 기록할 수 있지만, `/gh-pr:merge` 는 보드 Status 를 읽지
   않으므로 카드가 `In review` 에 있어도 머지된다 — `Approved` 는
   이 저장소에서 강제성 없는 참고 표시다.
 
@@ -96,7 +104,7 @@ Project 보드와 일관된 운영 방식 확보가 목적.
 1. **PR 템플릿** (`.github/pull_request_template.md`)에
    `Closes #` 자리표시자를 포함한다. 사람이 웹/CLI로 직접 PR을
    만들어도 템플릿이 채워진다.
-2. **`gh:pr` 스킬의 PR 본문 템플릿**
+2. **`gh-pr:create` 스킬의 PR 본문 템플릿**
    (`claude/skills/gh-pr/references/pr-body-template.md`)은 이슈
    번호가 해결된 경우 `## Related` 섹션에 `Closes #<N>` 줄을
    **반드시** 포함한다. 누락되면 Done 자동 전환이 끊긴다.
@@ -151,26 +159,26 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
 없다.
 
 - **Issue 카드 `Backlog → In progress`** (두 경로):
-  1. `/gh-flow` 워커 또는 `/gh-commit` 단독 실행이 커밋 메시지에서
+  1. `/gh-flow:issue` 워커 또는 `/gh-pr:commit` 단독 실행이 커밋 메시지에서
      `Closes|Fixes|Refs #N` 을 찾으면 자동 전환한다. `--only-from Backlog`
      가드가 적용되어 follow-up 커밋이 들어와도 상태를 되돌리지 않는다.
      raw `git commit` 경로에선 수동 이동.
-  2. `/gh-pr` 또는 `project-board-sync.yml` (PR opened 이벤트) 가 PR 생성
+  2. `/gh-pr:create` 또는 `project-board-sync.yml` (PR opened 이벤트) 가 PR 생성
      직후 `_gh_project_status_sync issue … "In progress" --only-from "Backlog,Ready,In review"` 를
      호출한다. 이는 GitHub 빌트인 `Pull request linked to issue` (#3) 가
      Issue 카드를 `In review` 로 잘못 이동시키는 것을 즉시 교정한다 (#289). 가드에
      `In review` 가 포함되어 있어 빌트인이 먼저 발화한 뒤에도 보정이 동작하며,
      `Done` 만은 가드에서 제외해 닫힌 Issue 가 재오픈된 PR 로 인해 역행하지 않는다
      (#309).
-- **PR 카드 `Backlog → In review`**: `/gh-flow` 워커 또는 `/gh-pr`
+- **PR 카드 `Backlog → In review`**: `/gh-flow:issue` 워커 또는 `/gh-pr:create`
   단독 실행이 PR 생성 직후 자동 전환한다. raw `gh pr create` 로
   PR 을 만든 경우엔 수동 이동이 필요하다. `project-board-sync.yml` 의
   `pull_request.opened` 핸들러도 동일 동작을 수행하므로 어느 경로든
   수렴한다.
 - **PR 카드 `In review → Approved`**: 사람이 명시적으로 승인 행위를
   했을 때만 전환된다 (#1350). 쓰기 주체는 아래 둘뿐이며, 스킬 중에서는
-  `/gh-pr-approve` 가 유일한 소유자다.
-  1. `/gh-pr-approve` 가 4a/4b (실제 `--approve`) 또는 self-PR
+  `/gh-pr:approve` 가 유일한 소유자다.
+  1. `/gh-pr:approve` 가 4a/4b (실제 `--approve`) 또는 self-PR
      `--self-record` 경로에서 전환한다. 1인 repo 에서는 GitHub 정책상
      PR 작성자가 자기 PR 을 Approve 할 수 없어 빌트인
      `Code review approved` 가 영원히 트리거되지 않는데,
@@ -187,20 +195,20 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
   거부한다. `Backlog`/`In progress` 를 포함하는 이유: 외부 Approve 는
   카드가 `In review` 로 옮겨지기 전에 도착할 수 있고, `Changes
   requested` 빌트인이 카드를 `In progress` 로 떨어뜨린 뒤 복귀가
-  자동이 아닌 경로(수동 push, `/gh-pr-resolve-ci-fail`, 전건 Declined
-  인 reply 라운드)가 존재하기 때문이다. 그대로 두면 `/gh-pr-approve`
+  자동이 아닌 경로(수동 push, `/gh-resolve:ci-fail`, 전건 Declined
+  인 reply 라운드)가 존재하기 때문이다. 그대로 두면 `/gh-pr:approve`
   가 승격을 거부해 정상 리뷰를 거친 PR 의 카드가 장부상 `In progress`
-  에 잔류한다 (#1513 이전에는 여기에 더해 `gh:pr-merge` Step 2-B 가
+  에 잔류한다 (#1513 이전에는 여기에 더해 `gh-pr:merge` Step 2-B 가
   `Status != Approved` 로 fail-close 해 emergency 머지 경로로 밀려났다
   — 그 머지 게이트는 폐지됐다).
   어느 쪽이든 `Done` 은 `--only-from` 목록에 없으므로, 이미 머지된 PR
   에 잘못 호출되어도 카드가 역행하지 않는다 — `Done` 배제가 이 필터의
   실질적 방어 지점이다.
-  `/gh-pr-reply` 는 이 전환을 하지 않는다. reply 답변과 `agy`/`codex`
+  `/gh-pr:reply` 는 이 전환을 하지 않는다. reply 답변과 `agy`/`codex`
   리뷰는 모두 `COMMENTED` 라 `reviewDecision` 을 바꾸지 않으므로,
   자동 전환은 BLOCKING 판정 PR 까지 `Approved` 로 올려보냈다 (PR #1349).
 - **PR 카드 `Approved → Done`**: 두 갈래로 보정한다.
-  - `/gh-pr-merge` / `/gh-pr-merge-emergency` 경유 머지: 스킬이 머지
+  - `/gh-pr:merge` / `/gh-pr:merge-emergency` 경유 머지: 스킬이 머지
     성공 직후 in-skill Step 4(a) 에서 직접 전환한다.
   - 웹 UI / 모바일 / raw `gh pr merge` 경유 머지 (#266): `project-board-sync.yml`
     이 `pull_request.closed && merged == true` 에 자동 fire 하여 동일
@@ -221,17 +229,17 @@ dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
 - **PR 카드 `In progress → In review` (재리뷰 요청 시)**:
   `Changes requested` 루프에서 수정·재푸시 후 리뷰가 다시 달리기를
   기대할 때 복귀시킨다. Projects v2 빌트인에는 이 전환이 없고, 스킬
-  중에서는 두 곳만 자동화한다 — `/gh-pr-reply` Step 6.5 와
-  `/gh-pr-resolve-conflict` Step 5 이며, 둘 다
+  중에서는 두 곳만 자동화한다 — `/gh-pr:reply` Step 6.5 와
+  `/gh-resolve:conflict` Step 5 이며, 둘 다
   `--only-from "In progress,Changes requested"` 로 호출하고
   **실제로 커밋을 push 했을 때만** 동작한다 (#591). 따라서 수동 push,
-  `/gh-pr-resolve-ci-fail`, 전건 Declined 인 reply 라운드에서는 카드가
+  `/gh-resolve:ci-fail`, 전건 Declined 인 reply 라운드에서는 카드가
   `In progress` 에 남으므로 **수동** 복귀가 필요하다. 이 갭 때문에
   `In review → Approved` 승격 가드가 `Backlog,In progress,In review`
   로 넓게 잡혀 있다 (위 항목 참조). 이 외의 PR 전환 (`→ Done`) 은
   빌트인 `Pull request merged` / `Item closed` 가 자동 처리한다.
 - **Issue 카드 `In progress → Done` (PR-Closes 경로 보강)**:
-  `/gh-pr-merge` 와 `project-board-sync.yml` 둘 다 머지 직후 PR 의
+  `/gh-pr:merge` 와 `project-board-sync.yml` 둘 다 머지 직후 PR 의
   `closingIssuesReferences` 를 순회하며 각 Issue 카드를 `Done` 으로
   강제 이동한다. 빌트인 `Item closed` 워크플로우는 best-effort delivery
   이므로 드물게 Status 업데이트 이벤트가 누락되어 Issue 카드가
@@ -260,9 +268,9 @@ repo 의 보드를 건드릴지 다음 순서로 정한다 (먼저 맞는 것이
 갱신될 수 있다. 명시로 넘긴 값이 형식에 안 맞으면 자동 감지로 흘러가지
 않고 실패한다 — 오타가 다른 repo 재획득으로 가려지면 안 되기 때문이다.
 
-`[remote]` 를 받는 스킬(`gh:pr-merge`, `gh:pr-reply`, `gh:pr-approve`,
-`gh:pr-resolve-conflict`, `gh:issue-implement`, `gh:issue-proceed`,
-`gh:discussion-convert`, `devx:pr-verify-live` 등)은 Step 1 에서 해소한
+`[remote]` 를 받는 스킬(`gh-pr:merge`, `gh-pr:reply`, `gh-pr:approve`,
+`gh-resolve:conflict`, `gh-issue:implement`, `gh-issue:proceed`,
+`gh-issue:discussion-convert`, `gh-verify:live` 등)은 Step 1 에서 해소한
 `$TARGET_REPO` 를 `--repo` 로 명시해 넘긴다. `project-board-sync.yml` 과
 `claude/hooks/post-gh-pr-create.sh` 는 `GH_REPO` 를 export 하므로 2번
 규칙으로 이미 올바르다.
@@ -332,32 +340,32 @@ gh auth refresh -s project
 
 - PR 본문에 `Closes #N`이 빠지면 머지 후에도 Issue가 열려 있고
   Issue 카드가 `Done`으로 가지 않는다 (PR 카드는 `Pull request
-  merged`로 Done 이동). PR 템플릿과 `gh:pr` 스킬이 이를 방지하지만,
+  merged`로 Done 이동). PR 템플릿과 `gh-pr:create` 스킬이 이를 방지하지만,
   사람이 수동으로 본문을 지울 경우를 대비해 머지 전에 한 번 더
   확인한다.
 - Issue 카드의 `Backlog → In progress` 는 두 경로로 자동화된다:
-  (1) `/gh-flow` 워커 또는 `/gh-commit` 이 커밋 메시지에서 `Closes|Fixes|Refs #N`
-  을 감지할 때; (2) `/gh-pr` 또는 `project-board-sync.yml` 이 PR 생성 직후
+  (1) `/gh-flow:issue` 워커 또는 `/gh-pr:commit` 이 커밋 메시지에서 `Closes|Fixes|Refs #N`
+  을 감지할 때; (2) `/gh-pr:create` 또는 `project-board-sync.yml` 이 PR 생성 직후
   linked Issue 를 `In progress` 로 이동할 때 (#289). raw `git commit` 또는
   raw `gh pr create` 경로에선 수동 이동이 필요하다.
-- PR 카드 `Backlog → In review` 는 dotfiles 스킬 (`/gh-flow`,
-  `/gh-pr`) 사용 시 자동, raw `gh pr create` 사용 시에만 수동이다.
-  `In review → Approved` 는 사람이 `/gh-pr-approve` 를 명시적으로
+- PR 카드 `Backlog → In review` 는 dotfiles 스킬 (`/gh-flow:issue`,
+  `/gh-pr:create`) 사용 시 자동, raw `gh pr create` 사용 시에만 수동이다.
+  `In review → Approved` 는 사람이 `/gh-pr:approve` 를 명시적으로
   호출할 때만 일어난다 (#1350). 1인 repo 에서 self-approve 불가로
   빌트인 `Code review approved` 가 영원히 트리거되지 않는 갭은
-  `/gh-pr-approve <N> --self-record` 가 메운다. `In progress → In
+  `/gh-pr:approve <N> --self-record` 가 메운다. `In progress → In
   review` (`Changes requested` 루프 탈출 시) 는 fix 커밋을 push 한
-  `/gh-pr-reply` · `/gh-pr-resolve-conflict` 에서만 자동이고, 그 밖의
+  `/gh-pr:reply` · `/gh-resolve:conflict` 에서만 자동이고, 그 밖의
   경로에서는 수동이다 — 그래서 `Approved` 승격 가드는 `In progress`
   도 시작 컬럼으로 받는다.
-- 보드가 없는 repo 에서 `/gh-pr`, `/gh-commit`, `/gh-pr-reply`,
-  `/gh-pr-approve`, `/gh-pr-merge`, 또는 `/gh-pr-merge-emergency` 를
+- 보드가 없는 repo 에서 `/gh-pr:create`, `/gh-pr:commit`, `/gh-pr:reply`,
+  `/gh-pr:approve`, `/gh-pr:merge`, 또는 `/gh-pr:merge-emergency` 를
   실행하면 공용 헬퍼
   `_gh_project_status_sync` 가 `projectItems` 가 0건임을 자동
   감지하고 조용히 no-op 한다 (별도 분기 불필요).
 - Projects v2 빌트인 워크플로우는 best-effort delivery 라 드물게
   Status 업데이트 이벤트가 누락된다. PR-Closes 경로 (PR 머지로 Issue
-  가 auto-close 되는 경로) 는 `/gh-pr-merge` 의 Step 4 post-merge
+  가 auto-close 되는 경로) 는 `/gh-pr:merge` 의 Step 4 post-merge
   reconciliation 이 자동 보강한다. 그 외 경로 (수동 close, 다른 도구로
   close) 에서 Issue 카드가 `In review` 등에 잔류하면 카드를 수동으로
   `Done` 으로 옮긴다.
@@ -389,7 +397,7 @@ gh auth refresh -s project
   - `claude/skills/gh-pr-merge/SKILL.md`
   - `claude/skills/gh-issue-flow/SKILL.md`
 - 관련 헬퍼: `shell-common/functions/gh_project_status.sh` (공용
-  `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`, `/gh-commit`,
-  `/gh-pr-reply`, `/gh-pr-merge` 가 모두 호출). 대상 repo 해석 순서는
+  `_gh_project_status_sync` — `/gh-flow:issue`, `/gh-pr:create`, `/gh-pr:commit`,
+  `/gh-pr:reply`, `/gh-pr:merge` 가 모두 호출). 대상 repo 해석 순서는
   위 "헬퍼의 대상 repo 해석 순서 (#1405)" 참고.
 - 관련 템플릿: `.github/pull_request_template.md`.
