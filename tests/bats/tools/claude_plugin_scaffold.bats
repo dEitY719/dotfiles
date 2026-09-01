@@ -66,41 +66,28 @@ TABLE
     assert_success
 }
 
-# #1410 NF-1: a Phase-1 split copies its skills out, it does not move them.
+# #1410 NF-1: a phase split copies its skills out, it does not move them.
 # The dotfiles originals must survive until Phase 4 retires them deliberately,
-# so `/write:rca` keeps working for anyone who has not installed the plugin.
-# When Phase 4 does delete them, this test is the thing that must be removed
-# in the same commit — that is the point: the removal becomes a decision
-# someone makes, not a side effect nobody notices.
-@test "notes-skills split left the claude/skills/write-* originals in place (#1643)" {
-    for skill in rca insight release-note task-history blog-dev-learnings; do
-        [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/write-${skill}/SKILL.md" ] \
-            || fail "claude/skills/write-${skill}/SKILL.md is missing — #1410 NF-1 says Phase 1 copies, never moves"
-    done
-}
-
-# #1410 NF-1 의 Phase 2 판(#1660). 존재 이유와 Phase 4 삭제 규약은 바로 위
-# #1643 주석과 동일하다 — 여기서 다른 것은 대상뿐이다: gh-resolve-skills 가
-# 복사해 간 세 스킬의 원본이 남아 있어야 플러그인 미설치 환경에서도
-# /gh:pr-resolve-* 계열 호출이 계속 동작한다.
-@test "gh-resolve-skills split left the claude/skills/gh-pr-resolve-* originals in place (#1660)" {
-    for skill in ci-fail conflict outdated; do
-        [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-resolve-${skill}/SKILL.md" ] \
-            || fail "claude/skills/gh-pr-resolve-${skill}/SKILL.md is missing — #1410 NF-1 says Phase 2 copies, never moves"
-    done
-}
-
-# Same NF-1 guarantee for the Phase 2 session-skills split (#1661). The eight
-# skills moved out under new, prefix-stripped names (`devx-session-close` ->
-# `/session:close`), so the dotfiles originals are the only thing still
-# answering `/devx:session-close`. They stay until Phase 4 retires them.
-@test "session-skills split left the claude/skills originals in place (#1661)" {
-    for skill in devx-restart devx-session-close devx-session-handoff \
-                 devx-rate-limit-guard devx-resume-after-limit devx-schedule \
-                 ai-worktree-spawn ai-worktree-teardown; do
-        [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}/SKILL.md" ] \
-            || fail "claude/skills/${skill}/SKILL.md is missing — #1410 NF-1 says a phase split copies, never moves"
-    done
+# so `/write:rca`, `/gh:pr-resolve-conflict` and `/devx:session-close` keep
+# working for anyone who has not installed the plugin.
+#
+# One row per phase — the same convention the registration table above uses,
+# because this check grows the same way (#1643 was the first; #1660 and #1661
+# followed). The row, not a whole hand-copied @test block, is what a new phase
+# adds. When Phase 4 deletes a phase's originals, its row goes in the same
+# commit: the removal stays a decision someone makes, not a side effect nobody
+# notices, and the failure message names which phase broke.
+@test "split-out phases left their claude/skills originals in place (#1410 NF-1)" {
+    while IFS='|' read -r issue skills; do
+        for skill in ${skills}; do
+            [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}/SKILL.md" ] \
+                || fail "claude/skills/${skill}/SKILL.md is missing (${issue}) — #1410 NF-1 says a phase split copies, never moves"
+        done
+    done <<'TABLE'
+#1643|write-rca write-insight write-release-note write-task-history write-blog-dev-learnings
+#1660|gh-pr-resolve-ci-fail gh-pr-resolve-conflict gh-pr-resolve-outdated
+#1661|devx-restart devx-session-close devx-session-handoff devx-rate-limit-guard devx-resume-after-limit devx-schedule ai-worktree-spawn ai-worktree-teardown
+TABLE
 }
 
 # claude-plugin-visuals 는 #1646 에서 visuals-skills 로 rename 됐다. GitHub 이
