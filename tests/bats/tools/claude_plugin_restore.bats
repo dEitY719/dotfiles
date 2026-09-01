@@ -273,5 +273,6 @@ JSON
 notes-skills|dEitY719/notes-skills|notes
 authoring-skills|dEitY719/authoring-skills|authoring
 gh-setup-skills|dEitY719/gh-setup-skills|gh-setup
+gh-issue-skills|dEitY719/gh-issue-skills|gh-issue
 TABLE
 }
