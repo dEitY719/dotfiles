@@ -9,6 +9,28 @@
 # This file is sourced by:
 # - git/global-hooks/pre-commit (user-level hook wrapper)
 # - git/hooks/pre-commit (project-level hook runner)
+# - git/setup.sh (global hook installation)
+# - shell-common/tools/custom/hook_check.sh (diagnostic)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Global hook installation set (issue #1664)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# `git config --global core.hooksPath` REPLACES .git/hooks for every
+# repository on this machine — git does not merge or fall back. So every hook
+# type the dotfiles rely on needs a wrapper installed into the global hooks
+# directory; a hook that is missing there is dead code, not a fallback.
+#
+# Each name must exist as an executable file in git/global-hooks/.
+# Consumers: git/setup.sh (symlink loop), hook_check.sh (diagnostic),
+# tests/bats/git/test_global_hooks.bats (regression).
+GIT_GLOBAL_HOOKS=(
+  pre-commit
+  pre-push
+  commit-msg
+  prepare-commit-msg
+  post-commit
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Global hook (git/global-hooks/pre-commit)

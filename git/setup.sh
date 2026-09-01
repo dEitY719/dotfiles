@@ -316,22 +316,72 @@ fi
 
 
 # --- Global Git Hooks Setup ---
+#
+# core.hooksPath REPLACES .git/hooks for every repository on this machine —
+# git does not merge the two and does not fall back. Linking only pre-commit
+# therefore silently disabled pre-push / commit-msg / prepare-commit-msg /
+# post-commit on every PC that ran setup.sh (issue #1664). Every hook listed
+# in GIT_GLOBAL_HOOKS must be linked, or it is dead code.
 GLOBAL_HOOKS_DIR="${HOME}/.config/git/hooks"
-GLOBAL_HOOK_SOURCE="${DOTFILES_GIT_DIR}/global-hooks/pre-commit"
-GLOBAL_HOOK_TARGET="${GLOBAL_HOOKS_DIR}/pre-commit"
+GLOBAL_HOOKS_SOURCE_DIR="${DOTFILES_GIT_DIR}/global-hooks"
+HOOK_CONFIG_FILE="${DOTFILES_GIT_DIR}/config/hook-config.sh"
 
 ux_info "Global Git Hooks 설정 시작"
 
-if [ -f "$GLOBAL_HOOK_SOURCE" ]; then
-    mkdir -p "$GLOBAL_HOOKS_DIR"
-    create_symlink "$GLOBAL_HOOK_SOURCE" "$GLOBAL_HOOK_TARGET"
-    chmod +x "$GLOBAL_HOOK_SOURCE"
-    
-    # Configure git to use global hooks path (use ~ for portability across machines)
-    git config --global core.hooksPath "~/.config/git/hooks"
-    ux_success "Global core.hooksPath가 ~/.config/git/hooks로 설정되었습니다."
+# SSOT for the hook set: GIT_GLOBAL_HOOKS in git/config/hook-config.sh.
+if [ -f "$HOOK_CONFIG_FILE" ]; then
+    # shellcheck source=./config/hook-config.sh
+    source "$HOOK_CONFIG_FILE"
+fi
+
+# Fallback (config missing): derive the set from the directory itself so a
+# broken checkout still installs whatever wrappers are present.
+if ! declare -p GIT_GLOBAL_HOOKS >/dev/null 2>&1 || [ ${#GIT_GLOBAL_HOOKS[@]} -eq 0 ]; then
+    ux_warning "경고: GIT_GLOBAL_HOOKS SSOT를 찾지 못해 '${GLOBAL_HOOKS_SOURCE_DIR}' 디렉터리에서 유추합니다."
+    GIT_GLOBAL_HOOKS=()
+    for global_hook_file in "${GLOBAL_HOOKS_SOURCE_DIR}"/*; do
+        [ -f "$global_hook_file" ] || continue
+        GIT_GLOBAL_HOOKS+=("$(basename "$global_hook_file")")
+    done
+fi
+
+if [ ${#GIT_GLOBAL_HOOKS[@]} -eq 0 ]; then
+    ux_warning "경고: 연결할 Global hook 이 없습니다 ('${GLOBAL_HOOKS_SOURCE_DIR}')."
 else
-    ux_warning "경고: Global pre-commit hook 파일이 '${GLOBAL_HOOK_SOURCE}' 경로에 없습니다."
+    mkdir -p "$GLOBAL_HOOKS_DIR"
+
+    linked_global_hooks=0
+    for global_hook_name in "${GIT_GLOBAL_HOOKS[@]}"; do
+        global_hook_source="${GLOBAL_HOOKS_SOURCE_DIR}/${global_hook_name}"
+        global_hook_target="${GLOBAL_HOOKS_DIR}/${global_hook_name}"
+
+        if [ -f "$global_hook_source" ]; then
+            # A pre-existing REAL file here belongs to another installer
+            # (git-lfs writes pre-push / post-commit / post-checkout /
+            # post-merge). create_symlink backs it up as <name>.original, but
+            # the tool that owns it stops working until it is re-installed.
+            if [ -f "$global_hook_target" ] && [ ! -L "$global_hook_target" ]; then
+                ux_warning "경고: 기존 ${global_hook_name} hook(타 도구 설치본)을 '${global_hook_target}.original' 로 백업하고 교체합니다."
+                ux_warning "      git-lfs 등 해당 도구가 설치한 hook 이면 재설치가 필요합니다 (예: git lfs install --force)."
+            fi
+
+            create_symlink "$global_hook_source" "$global_hook_target"
+            chmod +x "$global_hook_source"
+            ux_info "Global ${global_hook_name} hook 설정 완료: ${global_hook_target}"
+            linked_global_hooks=$((linked_global_hooks + 1))
+        else
+            ux_warning "경고: Global ${global_hook_name} hook 파일이 '${global_hook_source}' 경로에 없습니다."
+        fi
+    done
+
+    if [ "$linked_global_hooks" -gt 0 ]; then
+        # Configure git to use global hooks path (use ~ for portability across machines)
+        # shellcheck disable=SC2088  # literal ~ is intentional: git expands it itself
+        git config --global core.hooksPath "~/.config/git/hooks"
+        ux_success "Global core.hooksPath가 ~/.config/git/hooks로 설정되었습니다 (hook ${linked_global_hooks}개)."
+    else
+        ux_warning "경고: Global hook 을 하나도 연결하지 못해 core.hooksPath 설정을 건너뜁니다."
+    fi
 fi
 
 

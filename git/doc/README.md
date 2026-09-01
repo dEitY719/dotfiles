@@ -177,15 +177,24 @@ git commit --no-verify -m "message"
 ### 구현 파일
 
 ```
-git/global-hooks/pre-commit      # User-level Hook 구현
+git/global-hooks/pre-commit      # User-level Hook 구현 (안전 검사 + 위임)
+git/global-hooks/pre-push        # User-level 위임 wrapper (#1664)
+git/global-hooks/commit-msg      # User-level 위임 wrapper (#1664)
+git/global-hooks/prepare-commit-msg  # User-level 위임 wrapper (#1664)
+git/global-hooks/post-commit     # User-level 위임 wrapper (#1664)
 git/hooks/pre-commit             # Project-level Hook 구현
 git/setup.sh                      # Hook 설치 스크립트
 ```
 
+`core.hooksPath` 는 `.git/hooks` 를 **대체**한다(병합·폴백 없음). 따라서
+`GIT_GLOBAL_HOOKS`(`git/config/hook-config.sh`) 에 없는 hook 은 실행 자체가
+되지 않는다. pre-commit 외 wrapper 는 위임만 하며, 현재 레포에 해당
+`git/hooks/<name>` 이 없으면 조용히 no-op 한다.
+
 ### 설정 파일
 
 ```
-~/.config/git/hooks/pre-commit   # User-level Hook (설치 후)
+~/.config/git/hooks/<hook>       # User-level Hook (설치 후, 5종 symlink)
 .git/config                      # Git 설정
 ```
 

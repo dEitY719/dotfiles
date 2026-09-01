@@ -50,13 +50,13 @@
 
 ### types
 
-- **User-level** — ~/.config/git/hooks/pre-commit — 모든 git 프로젝트에 적용 (전역)
-- **Project-level** — dotfiles/.git/hooks/pre-commit — 이 dotfiles 프로젝트에만 적용
+- **User-level** — ~/.config/git/hooks/<hook> — hook 5종 symlink, 모든 git 프로젝트에 적용 (전역)
+- **Project-level** — dotfiles/git/hooks/<hook> — 전역 wrapper 가 위임할 때만 실행 (해당 레포)
 
 ### more
 
 - 자세한 가이드: git/doc/HOOK_WORKFLOW.md
-- Hook 구현: git/global-hooks/pre-commit
+- Hook 구현: git/global-hooks/ (pre-commit 검사+위임, 나머지 위임 전용)
 - Hook 설정값: git/config/hook-config.sh
 - Setup 스크립트: git/setup.sh
 

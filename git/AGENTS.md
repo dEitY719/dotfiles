@@ -23,6 +23,33 @@
 - Prefer `bash git/tests/test_hooks.sh` for integration-level verification of the 2-tier hook system.
 - If a change targets repository-wide policy (naming, shebang, UX rules), also run `mise run lint-sh`.
 
+# Global Hook Wrappers (issue #1664)
+
+`git config --global core.hooksPath ~/.config/git/hooks` **replaces**
+`.git/hooks` for every repo on the machine — git never merges the two and
+never falls back. So a project hook only ever runs when a wrapper of the same
+name exists in the global dir. `git/setup.sh` links every name in
+`GIT_GLOBAL_HOOKS` (SSOT: `config/hook-config.sh`); anything missing there is
+dead code, not a fallback.
+
+`global-hooks/pre-commit` carries universal safety checks **and** delegates.
+The other wrappers (`pre-push`, `commit-msg`, `prepare-commit-msg`,
+`post-commit`) are delegation-only: they forward to the first of
+`.githooks/<name>` → `git/hooks/<name>` → `.git/hooks/<name>` **relative to
+the repo being operated on**, passing argv, stdin and the exit code through,
+and are a silent no-op anywhere that path does not exist. That repo-relative
+search is what keeps this repo's `mise run test` / protected-branch / leak
+guard from firing in unrelated repos — never link `git/hooks/*` into the
+global dir directly.
+
+Third-party installers also write here (git-lfs owns `pre-push`,
+`post-commit`, `post-checkout`, `post-merge`). setup.sh backs up a colliding
+real file as `<name>.original` and warns; re-install that tool afterwards
+(e.g. `git lfs install --force`).
+
+Regression: `git/tests/test_hooks.sh` (delegation + no-op) and
+`tests/bats/git/test_global_hooks.bats` (SSOT, setup.sh linking, hook_check).
+
 # Local Pytest (issue #754)
 
 `hooks/pre-push` runs `mise run test` once per push (Layer 0, before the
@@ -62,7 +89,7 @@ layer only — protected-branch check still runs). SSOT lives in
 # Context Map
 
 - **[Hook Setup Script](./setup.sh)** — Symlinks and hook installation logic (called by root `./setup.sh`)
-- **[Global Hook](./global-hooks/pre-commit)** — User-level hook wrapper (`core.hooksPath`)
+- **[Global Hooks](./global-hooks)** — User-level wrappers installed at `core.hooksPath`; `pre-commit` also runs universal checks, the rest delegate only
 - **[Project Hook](./hooks/pre-commit)** — Project-level runner that delegates to checks
 - **[Pre-push Hook](./hooks/pre-push)** — Protected-branch + upstream leak-guard layers
 - **[Hook Checks](./hooks/checks)** — Modular checks executed by the project hook
