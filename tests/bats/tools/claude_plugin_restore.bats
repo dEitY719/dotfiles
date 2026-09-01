@@ -88,6 +88,63 @@ JSON
     assert_output --partial '알 수 없는 인자: --bogus'
 }
 
+# --- 머신 로컬 오버레이 union (#1685) ---------------------------------------
+# tracked {marketplaces,plugins}.json 은 upstream 등록 계약, *.local.json 은 이
+# PC 가 설치한 것. 복원은 둘의 union 이어야 하고, --sync 는 오버레이 항목을
+# 잉여로 오인해 지우면 안 된다.
+
+@test "restore.sh --dry-run unions the machine-local overlay with the tracked contract (#1685)" {
+    cat > "$PLUGDIR/marketplaces.local.json" <<'JSON'
+{"caveman": "JuliusBrussee/caveman"}
+JSON
+    cat > "$PLUGDIR/plugins.local.json" <<'JSON'
+{"plugins": ["caveman@caveman"]}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    # tracked 계약 항목
+    assert_output --partial 'add: understand-anything (Egonex-AI/Understand-Anything)'
+    assert_output --partial 'install: understand-anything@understand-anything'
+    # 오버레이에만 있는 항목
+    assert_output --partial 'add: caveman (JuliusBrussee/caveman)'
+    assert_output --partial 'install: caveman@caveman'
+}
+
+@test "restore.sh --dry-run restores a contract entry this PC never installed (#1685)" {
+    # 오버레이가 있어도 tracked 계약 항목이 밀려나면 안 된다 — union 이지 교체가 아니다.
+    cat > "$PLUGDIR/marketplaces.local.json" <<'JSON'
+{"caveman": "JuliusBrussee/caveman"}
+JSON
+    cat > "$PLUGDIR/plugins.local.json" <<'JSON'
+{"plugins": ["caveman@caveman"]}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial 'install: understand-anything@understand-anything'
+}
+
+@test "restore.sh --dry-run skips 공용 when neither tracked nor overlay manifest exists (#1685)" {
+    rm -f "$PLUGDIR/marketplaces.json" "$PLUGDIR/plugins.json"
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial '(공용 manifest 없음 — 건너뜀)'
+}
+
+@test "restore.sh --dry-run runs off the overlay alone when the tracked contract is absent (#1685)" {
+    rm -f "$PLUGDIR/marketplaces.json" "$PLUGDIR/plugins.json"
+    cat > "$PLUGDIR/marketplaces.local.json" <<'JSON'
+{"caveman": "JuliusBrussee/caveman"}
+JSON
+    cat > "$PLUGDIR/plugins.local.json" <<'JSON'
+{"plugins": ["caveman@caveman"]}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial 'add: caveman (JuliusBrussee/caveman)'
+    assert_output --partial 'install: caveman@caveman'
+    refute_output --partial '(공용 manifest 없음'
+}
+
 # --- --sync prune pass -----------------------------------------------------
 
 # Seed a local ground-truth fixture (mirrors ~/.claude-shared/plugins) and
@@ -123,6 +180,22 @@ JSON
     # SSOT-present items must NOT be pruned.
     refute_output --partial 'remove: understand-anything'
     refute_output --partial 'uninstall: understand-anything@understand-anything'
+}
+
+@test "restore.sh --sync keeps entries that live only in the local overlay (#1685)" {
+    _seed_local_state
+    # 'surplus-mp' 는 tracked 계약엔 없지만 이 PC 의 오버레이에는 있다 →
+    # keep-set 에 들어가야 하므로 prune 되면 안 된다.
+    cat > "$PLUGDIR/marketplaces.local.json" <<'JSON'
+{"surplus-mp": "foo/surplus"}
+JSON
+    cat > "$PLUGDIR/plugins.local.json" <<'JSON'
+{"plugins": ["surplus@surplus-mp"]}
+JSON
+    run "$PLUGDIR/restore.sh" --sync --dry-run
+    assert_success
+    refute_output --partial 'remove: surplus-mp'
+    refute_output --partial 'uninstall: surplus@surplus-mp'
 }
 
 @test "restore.sh --sync leaves source:directory marketplaces alone" {

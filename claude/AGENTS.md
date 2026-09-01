@@ -148,8 +148,18 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
    무관 (add + remove 대칭 처리, #1082). Claude Code 2.1.x 는 slash command 전용
    hook event 를 노출하지 않아 이 SSOT-diff 방식을 택했다.
 
-두 경로 모두 `claude/plugin/{marketplaces,plugins}.json`(공용, scope:user +
-source:github만)에 병합 반영하고 로컬 커밋한다. 커밋 제목의 변경 키 나열 규칙
+두 경로 모두 공용(scope:user + source:github만) 항목을
+`claude/plugin/{marketplaces,plugins}.local.json` **오버레이**에 병합 반영한다.
+
+**계약 / 로컬 상태 분리 (#1685)** — 공용 매니페스트는 두 겹이다: tracked
+`{marketplaces,plugins}.json` 은 upstream 이 소유하는 **등록 계약**(사람이 PR 로
+변경, 훅은 읽기만 함)이고, gitignored `*.local.json` 은 **이 PC 의 설치 상태**
+(`plugin-sync.sh` / `reconcile.sh --apply` 가 쓰는 유일한 대상)다. 한 파일이 두
+소유자를 가지던 탓에 fork/mirror 가 upstream 의 등록 커밋마다 충돌했다. 소비자
+(`restore.sh`, `reconcile.sh --check`)는 둘의 **union** 을 본다. 공용 스코프는
+더 이상 커밋하지 않는다 — `sync manifest` 자동 커밋은 `company/` 에만 남는다.
+
+커밋 제목의 변경 키 나열 규칙
 (`... sync manifest (+foo -bar 외 N개)`)은 `shell-common/functions/plugin_sync_title.sh`
 가 SSOT — `plugin-sync.sh` 의 벌크 재동기화 경로와 `claude/plugin/reconcile.sh
 --apply` 가 같은 파일을 source 한다(#1558). 사내 전용
@@ -167,7 +177,7 @@ config dir 은 setup-mode 로 라우팅된다 (#1103) — internal → `~/.claud
 그 외 → `~/.claude-<account>` (기본 `$CLAUDE_DEFAULT_ACCOUNT`). 특정 계정은
 `--user <account>`, 전체 계정은 `--all-accounts`.
 
-두 레포 모두 "PR을 통해서만 변경 가능" 규칙이 걸려 있어 hook의 로컬 커밋이
+두 레포 모두 "PR을 통해서만 변경 가능" 규칙이 걸려 있어 로컬 커밋이
 origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
 (`--dry-run` 지원)를 수동 실행하면 쌓인 변경분을 브랜치+PR+admin-merge로
 게시한다. internal PC는 github.com이 pull-only라 public 단계를 자동으로

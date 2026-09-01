@@ -2,11 +2,22 @@
 # claude/hooks/plugin-sync.sh
 #
 # Claude Code PostToolUse hook for `claude plugin ...` commands. Keeps
-# claude/plugin/{marketplaces,plugins}.json (public, github-sourced,
+# claude/plugin/{marketplaces,plugins}.local.json (public, github-sourced,
 # scope:user) and claude/plugin/company/{marketplaces,plugins}.json
 # (private nested repo, non-github sourced) merged with the ground truth
 # in ~/.claude-shared/plugins/ so claude/plugin/restore.sh can rebuild a
 # fresh PC's plugin set.
+#
+# #1685 — the public pair this hook writes is the gitignored `.local.json`
+# OVERLAY, never the tracked claude/plugin/{marketplaces,plugins}.json. Those
+# tracked files are the upstream-owned REGISTRATION CONTRACT (changed by PRs,
+# pinned by claude_plugin_{restore,scaffold}.bats); this hook only reads them,
+# to subtract their entries from the overlay. Before the split, both writers
+# appended to the same tracked array, so every fork/mirror conflicted with
+# every upstream registration commit — and the public
+# "chore(claude-plugin): sync manifest" auto-commit this hook used to make is
+# gone with it (an untracked overlay has nothing to commit). company/ is a
+# separate private repo with no fork to diverge from, so it still commits.
 #
 # See docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md
 #
@@ -261,21 +272,21 @@ if [ "$action" = "add" ]; then
 	plugins_internal=$(_extract_plugins_for_mp "$mp_internal") || exit 0
 
 	mkdir -p "$PUB_DIR"
-	# Merge into variables first, then write. The merged value is both what
-	# lands on disk and what _resolve_sync_title diffs the current manifest
-	# against (#1558) — computing it once is what stops the commit title and
-	# the commit content from ever disagreeing.
-	mp_pub=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_DIR/marketplaces.json" '{}')" \
-		--argjson new "$mp_common" '$old * $new')
-	pl_pub=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')" \
-		--argjson new "$plugins_common" \
-		'(($old.plugins? // []) + $new | unique | sort)')
-	pub_title=$(_resolve_sync_title \
-		"$PUB_DIR/marketplaces.json" "$mp_pub" "$PUB_DIR/plugins.json" "$pl_pub")
-	_write_manifest "$PUB_DIR/marketplaces.json" "$mp_pub"
-	_write_manifest "$PUB_DIR/plugins.json" "$(jq -n --argjson p "$pl_pub" '{plugins: $p}')"
-	_commit_if_changed "$MAIN_ROOT" "$pub_title" \
-		claude/plugin/marketplaces.json claude/plugin/plugins.json
+	# Public scope writes the gitignored overlay only (#1685). The tracked
+	# contract is read to SUBTRACT its entries from the overlay target: an
+	# entry upstream already registers must not be duplicated here, or a later
+	# contract change would be silently re-added by this machine's overlay.
+	# Nothing tracked changes, so there is no commit and no fork conflict.
+	mp_tracked=$(_claude_plugin_read_json_or "$PUB_DIR/marketplaces.json" '{}')
+	pl_tracked=$(_claude_plugin_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')
+	mp_pub=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_DIR/marketplaces.local.json" '{}')" \
+		--argjson new "$mp_common" --argjson tracked "$mp_tracked" \
+		'($old * $new) | with_entries(select($tracked[.key] == null))')
+	pl_pub=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_DIR/plugins.local.json" '{"plugins":[]}')" \
+		--argjson new "$plugins_common" --argjson tracked "$pl_tracked" \
+		'((($old.plugins? // []) + $new) - ($tracked.plugins? // []) | unique | sort)')
+	_write_manifest "$PUB_DIR/marketplaces.local.json" "$mp_pub"
+	_write_manifest "$PUB_DIR/plugins.local.json" "$(jq -n --argjson p "$pl_pub" '{plugins: $p}')"
 
 	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
 		# Its own commit over its own files, so its own title — reusing the
@@ -304,35 +315,67 @@ if [ "$action" = "add" ]; then
 	fi
 fi
 
+# Drop $target from ONE manifest pair — $1 marketplaces file, $2 plugins file.
+# Split out of the old `for dir in ...` loop because the two scopes no longer
+# share a filename: public prunes the .local.json overlay, company/ its own
+# tracked pair (#1685).
+_prune_manifest_pair() {
+	local mp_file="$1" pl_file="$2"
+	[ -f "$mp_file" ] || [ -f "$pl_file" ] || return 0
+
+	if [ "$action" = "marketplace_remove" ]; then
+		if [ -f "$mp_file" ]; then
+			jq --arg t "$target" 'del(.[$t])' "$mp_file" \
+				>"$mp_file.tmp" 2>/dev/null &&
+				mv "$mp_file.tmp" "$mp_file"
+		fi
+		if [ -f "$pl_file" ]; then
+			jq --arg t "$target" \
+				'{plugins: [(.plugins // [])[] | select((. | split("@") | last) != $t)]}' \
+				"$pl_file" >"$pl_file.tmp" 2>/dev/null &&
+				mv "$pl_file.tmp" "$pl_file"
+		fi
+	else
+		if [ -f "$pl_file" ]; then
+			jq --arg t "$target" \
+				'{plugins: [(.plugins // [])[] | select(. != $t and (startswith($t + "@") | not))]}' \
+				"$pl_file" >"$pl_file.tmp" 2>/dev/null &&
+				mv "$pl_file.tmp" "$pl_file"
+		fi
+	fi
+}
+
+# One stderr line when the uninstalled entry ALSO sits in the tracked
+# registration contract (#1685). This hook deliberately never edits that file,
+# so without the hint the user would see restore.sh reinstall the plugin on the
+# next run with no explanation. Advisory only — never blocks, never writes.
+_warn_if_contract_entry() {
+	local hit file
+	if [ "$action" = "marketplace_remove" ]; then
+		file="marketplaces.json"
+		hit=$(jq -r --arg t "$target" 'if has($t) then $t else empty end' \
+			"$PUB_DIR/marketplaces.json" 2>/dev/null)
+	else
+		file="plugins.json"
+		hit=$(jq -r --arg t "$target" \
+			'[(.plugins // [])[] | select(. == $t or startswith($t + "@"))] | .[0] // empty' \
+			"$PUB_DIR/plugins.json" 2>/dev/null)
+	fi
+	[ -n "$hit" ] || return 0
+	printf 'plugin-sync: %s 는 claude/plugin/%s (upstream 등록 계약) 에도 있습니다 — 이 훅은 계약 파일을 쓰지 않습니다 (#1685)\n' \
+		"$hit" "$file" >&2
+	printf 'plugin-sync:   → 계약에서 빼려면 별도 PR 로 그 파일을 편집하세요. 그러지 않으면 restore.sh 가 다시 설치합니다.\n' >&2
+}
+
 if [ "$action" = "uninstall" ] || [ "$action" = "marketplace_remove" ]; then
 	[ -n "$target" ] || exit 0
-	for dir in "$PUB_DIR" "$PRIV_DIR"; do
-		[ -f "$dir/marketplaces.json" ] || [ -f "$dir/plugins.json" ] || continue
 
-		if [ "$action" = "marketplace_remove" ]; then
-			if [ -f "$dir/marketplaces.json" ]; then
-				jq --arg t "$target" 'del(.[$t])' "$dir/marketplaces.json" \
-					>"$dir/marketplaces.json.tmp" 2>/dev/null &&
-					mv "$dir/marketplaces.json.tmp" "$dir/marketplaces.json"
-			fi
-			if [ -f "$dir/plugins.json" ]; then
-				jq --arg t "$target" \
-					'{plugins: [.plugins[] | select((. | split("@") | last) != $t)]}' \
-					"$dir/plugins.json" >"$dir/plugins.json.tmp" 2>/dev/null &&
-					mv "$dir/plugins.json.tmp" "$dir/plugins.json"
-			fi
-		else
-			if [ -f "$dir/plugins.json" ]; then
-				jq --arg t "$target" \
-					'{plugins: [.plugins[] | select(. != $t and (startswith($t + "@") | not))]}' \
-					"$dir/plugins.json" >"$dir/plugins.json.tmp" 2>/dev/null &&
-					mv "$dir/plugins.json.tmp" "$dir/plugins.json"
-			fi
-		fi
-	done
+	# 공용: gitignored 오버레이에서만 지운다 — 커밋 없음, tracked 변경 없음.
+	_prune_manifest_pair "$PUB_DIR/marketplaces.local.json" "$PUB_DIR/plugins.local.json"
+	_warn_if_contract_entry
 
-	_commit_if_changed "$MAIN_ROOT" "$SYNC_TITLE" \
-		claude/plugin/marketplaces.json claude/plugin/plugins.json
+	# company/ 는 별도 private 레포라 fork 가 없다 — tracked pair + 커밋 유지.
+	_prune_manifest_pair "$PRIV_DIR/marketplaces.json" "$PRIV_DIR/plugins.json"
 	if [ -d "$PRIV_DIR/.git" ]; then
 		_commit_if_changed "$PRIV_DIR" "$SYNC_TITLE" \
 			marketplaces.json plugins.json

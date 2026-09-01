@@ -24,6 +24,22 @@ load '../test_helper'
     assert_success
 }
 
+@test ".gitignore ignores the machine-local manifest overlay (#1685)" {
+    # 오버레이가 추적되면 #1685 이 고친 fork 충돌이 그대로 돌아온다.
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" check-ignore -q claude/plugin/plugins.local.json
+    assert_success
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" check-ignore -q claude/plugin/marketplaces.local.json
+    assert_success
+}
+
+@test "the tracked registration contract is NOT ignored (#1685)" {
+    # 반대 방향의 회귀 방지 — 계약 파일까지 무시해 버리면 등록 자체가 사라진다.
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" check-ignore -q claude/plugin/plugins.json
+    assert_failure
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" check-ignore -q claude/plugin/marketplaces.json
+    assert_failure
+}
+
 @test "every plugins.json entry's marketplace key exists in marketplaces.json" {
     run jq -e --slurpfile mp "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json" \
         '[.plugins[] | split("@")[1]] - ($mp[0] | keys) == []' \
