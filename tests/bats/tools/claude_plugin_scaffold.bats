@@ -50,6 +50,7 @@ packaging-skills|dEitY719/packaging-skills|packaging
 harness-skills|dEitY719/harness-skills|harness
 devenv-skills|dEitY719/devenv-skills|devenv
 notes-skills|dEitY719/notes-skills|notes
+visuals-skills|dEitY719/visuals-skills|visuals
 TABLE
 }
 
@@ -74,4 +75,13 @@ TABLE
         [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/write-${skill}/SKILL.md" ] \
             || fail "claude/skills/write-${skill}/SKILL.md is missing — #1410 NF-1 says Phase 1 copies, never moves"
     done
+}
+
+# claude-plugin-visuals 는 #1646 에서 visuals-skills 로 rename 됐다. GitHub 이
+# 구 URL 을 리다이렉트해 주기 때문에 stale 참조는 조용히 살아남는다 — 그래서
+# 사람이 알아채기 전에 여기서 잡는다.
+@test "no tracked file still points at the pre-rename claude-plugin-visuals repo (#1646)" {
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" grep -l "github.com/dEitY719/claude-plugin-visuals" -- \
+        'claude/plugin/*.json' 'shell-common/**' 'bash/**' 'zsh/**'
+    assert_failure
 }
