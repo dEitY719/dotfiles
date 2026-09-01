@@ -67,11 +67,33 @@ unset _drg_self _drg_helper
 # The manifest reader this file's two _changed_keys_* helpers need is shared
 # with claude/plugin/{reconcile,restore}.sh and claude/hooks/plugin-sync.sh,
 # so it lives in its own file rather than here (issue #1696). Sourced the same
-# best-effort way as dotfiles_root.sh above: both files ship together in
-# shell-common/functions/, so a checkout that can reach this one can reach that
-# one too.
+# best-effort way as dotfiles_root.sh above: both files normally ship together
+# in shell-common/functions/, but "normally" is not "always" — a stale/partial
+# checkout can carry this file without its newer sibling (agy + codex PR #1697
+# review, independently). Without a fallback, _changed_keys_marketplaces /
+# _changed_keys_plugins would call an undefined function the moment that
+# happens, exactly the "command not found" failure the other three #1696
+# call sites already guard against.
 # shellcheck disable=SC1091
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+
+# Bootstrap fallback, NOT a second implementation to maintain in parallel.
+# Behavior changes belong in shell-common/functions/claude_plugin_manifest.sh;
+# this copy follows it. POSIX only (no `local`) — this file is sourced by
+# both bash and zsh loaders.
+if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
+    _claude_plugin_read_json_or() {
+        _cprjo_fb_out=""
+        if [ -f "$1" ]; then
+            _cprjo_fb_out=$(jq -c '.' "$1" 2>/dev/null)
+        fi
+        if [ -n "$_cprjo_fb_out" ]; then
+            printf '%s' "$_cprjo_fb_out"
+        else
+            printf '%s' "$2"
+        fi
+    }
+fi
 
 # Back-compat alias for the pre-#1696 name. Kept because it is part of this
 # file's published surface (tests/bats/tools/plugin_sync_title_smoke.bats
