@@ -924,6 +924,124 @@ FIXTURE
     assert_output --partial "PICK_CLEAR"
 }
 
+# ---------------------------------------------------------------------------
+# Issue #1688 — the context-drift discriminator compared WHOLE LINES as set
+# keys, so a line whose only difference is syntactic noise (a JSON trailing
+# comma gained when a later entry was appended after it) read as "content HEAD
+# lacks" and the already-absorbed commit was reported as real work forever.
+#
+# `_gcp_scan_conflict_adds_new_content` now normalizes each line (trailing
+# whitespace + one trailing comma stripped) on BOTH the add branch and the
+# delete branch before the membership test. Leading indentation is deliberately
+# preserved — it is semantic in YAML.
+#
+# The #1177 contract is unchanged: a commit carrying genuinely new content still
+# returns 0 (real), and a commit that really deletes a line HEAD still has is
+# still caught by the delete branch.
+# ---------------------------------------------------------------------------
+
+_gcp1688_make_json_repo() {
+    # Emits shell building the marketplaces.json-shaped fixture: `main` gains
+    # entry "b" AND "c", `source` gains only "b". The source commit's payload is
+    # therefore fully absorbed by HEAD, but its last line reads `  "b": "2"`
+    # while HEAD's reads `  "b": "2",` — the trailing comma "c" forced onto it.
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1688.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        printf '{\n  "a": "1"\n}\n' > m.json && git add m.json && git commit -qm "init registry"
+        git checkout -q -b source
+        printf '{\n  "a": "1",\n  "b": "2"\n}\n' > m.json && git add m.json && git commit -qm "register b"
+        src=$(git rev-parse HEAD)
+        git checkout -q main
+        printf '{\n  "a": "1",\n  "b": "2",\n  "c": "3"\n}\n' > m.json && git add m.json && git commit -qm "register b and c"
+FIXTURE
+}
+
+@test "drift #1688: trailing-comma-only difference is drift, not new content (1)" {
+    run_in_bash "
+        $(_gcp1688_make_json_repo)
+        _gcp_scan_conflict_adds_new_content \"\$src\" m.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # theirs' \`  \"b\": \"2\"\` == HEAD's \`  \"b\": \"2\",\` modulo the comma -> drift.
+    assert_output --partial "rc=1"
+}
+
+@test "drift #1688: trailing-whitespace-only difference is drift, not new content (1)" {
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1688ws.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Test\" GIT_AUTHOR_EMAIL=\"t@t\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf 'alpha\n' > w.txt && git add w.txt && git commit -qm 'init'
+        git checkout -q -b source
+        printf 'alpha\nbeta   \n' > w.txt && git add w.txt && git commit -qm 'add beta with trailing ws'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf 'alpha\nbeta\ngamma\n' > w.txt && git add w.txt && git commit -qm 'add beta and gamma'
+        _gcp_scan_conflict_adds_new_content \"\$src\" w.txt; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "drift #1688: genuinely new entry still counts as real content (0)" {
+    run_in_bash "
+        $(_gcp1688_make_json_repo)
+        git checkout -q source
+        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\",\n  \"z\": \"9\"\n}\n' > m.json
+        git add m.json && git commit -qm 'register z'
+        zsrc=\$(git rev-parse HEAD)
+        git checkout -q main
+        _gcp_scan_conflict_adds_new_content \"\$zsrc\" m.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # \`  \"z\": \"9\"\` is absent from HEAD in any normalized form -> real.
+    assert_output --partial "rc=0"
+}
+
+@test "drift #1688: normalization is symmetric — a real deletion is still detected (0)" {
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1688del.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Test\" GIT_AUTHOR_EMAIL=\"t@t\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf '{\n  \"a\": \"1\",\n  \"drop\": \"0\"\n}\n' > d.json && git add d.json && git commit -qm 'init'
+        git checkout -q -b source
+        printf '{\n  \"a\": \"1\"\n}\n' > d.json && git add d.json && git commit -qm 'remove drop'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '{\n  \"a\": \"1\",\n  \"drop\": \"0\",\n  \"c\": \"3\"\n}\n' > d.json && git add d.json && git commit -qm 'add c, keep drop'
+        _gcp_scan_conflict_adds_new_content \"\$src\" d.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # base's \`  \"drop\": \"0\"\` is gone from theirs but still in HEAD -> real.
+    assert_output --partial "rc=0"
+}
+
+@test "preflight #1688: comma-drift commit is absorbed as a no-op (0), non-destructive" {
+    run_in_bash "
+        $(_gcp1688_make_json_repo)
+        orig=\$(git rev-parse HEAD)
+        echo localedit > untracked_note.txt
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+        [ \"\$(git rev-parse HEAD)\" = \"\$orig\" ] && echo HEAD_SAME || echo HEAD_MOVED
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "HEAD_SAME"
+    assert_output --partial "PICK_CLEAR"
+}
+
 @test "scan #913: context-drift commit auto-skipped by pre-flight (no conflict surfaced)" {
     run_in_bash "
         $(_gcp907_make_partial_repo)

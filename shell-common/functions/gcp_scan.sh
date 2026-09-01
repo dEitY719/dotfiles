@@ -343,7 +343,7 @@ EOF
 }
 
 _gcp_scan_conflict_adds_new_content() {
-    # Context-drift discriminator (issue #913 regression, #1151). Returns 0
+    # Context-drift discriminator (issue #913 regression, #1151, #1688). Returns 0
     # (true) when cherry-picking commit $1 introduces content to file $2 that
     # HEAD does NOT already contain — a GENUINE content conflict. Returns 1
     # (false) when every line the commit adds (relative to its parent, the
@@ -382,15 +382,33 @@ _gcp_scan_conflict_adds_new_content() {
     #     still present in ours (HEAD has not removed it).
     # Checking adds alone would misclassify a delete-only commit as drift and
     # let Stage-2 silently skip it — silent data loss (gemini PR #1157 review).
-    # Set membership over whole lines; no sort needed (order-independent).
+    # Set membership over NORMALIZED lines; no sort needed (order-independent).
+    # Normalization (issue #1688): raw `$0` keys promote syntactic noise to a
+    # semantic difference. The commonest shape is a JSON/JS object or array —
+    # appending an entry puts a trailing comma on the line before it, so a line
+    # the commit added verbatim (`  "x": "y"`, last entry at the time) no longer
+    # matches HEAD's copy (`  "x": "y",`, no longer last) and the fully absorbed
+    # commit reads as real work forever. `norm()` strips trailing whitespace and
+    # one trailing comma before the membership test, on BOTH the add branch and
+    # the delete branch so the two stay symmetric. Leading indentation is
+    # deliberately KEPT — it is semantic in YAML, where stripping it would make
+    # genuinely different lines compare equal and reopen the #1177 data-loss
+    # direction. Lines that differ in meaning still differ after norm().
     # NOTE: a bare `exit` (not `exit 0`) is required on a hit — `exit 0` would
     # still run END, whose `exit 1` would override it back to "drift".
     if awk '
-        FILENAME == B { base[$0] = 1; next }
-        FILENAME == O { ours[$0] = 1; next }
+        function norm(s) {
+            sub(/[[:space:]]+$/, "", s)
+            sub(/,$/, "", s)
+            sub(/[[:space:]]+$/, "", s)
+            return s
+        }
+        FILENAME == B { base[norm($0)] = 1; next }
+        FILENAME == O { ours[norm($0)] = 1; next }
         {
-            theirs[$0] = 1
-            if (!($0 in base) && !($0 in ours)) { found = 1; exit }
+            n = norm($0)
+            theirs[n] = 1
+            if (!(n in base) && !(n in ours)) { found = 1; exit }
         }
         END {
             if (!found) {
