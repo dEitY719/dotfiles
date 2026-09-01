@@ -56,6 +56,7 @@ session-skills|dEitY719/session-skills|session
 gh-verify-skills|dEitY719/gh-verify-skills|gh-verify
 spec-flow-skills|dEitY719/spec-flow-skills|spec-flow
 authoring-skills|dEitY719/authoring-skills|authoring
+gh-setup-skills|dEitY719/gh-setup-skills|gh-setup
 TABLE
 }
 
@@ -93,6 +94,7 @@ TABLE
 #1659|devx-pr-review-all devx-pr-verify-live devx-pr-verify-merged devx-exception-merge-checklist gh-pr-post-merge-verify
 #1657|devx-prd-to-trd devx-trd-to-issues devx-pr-to-ssot-issue devx-reverse-engineering-analysis devx-claude-to-codex
 #1662|skill-create skill-check skill-refactor sh-check devx-ux-guidelines devx-command-rename
+#1658|gh-label-bootstrap gh-kanban-bootstrap gh-add-ai-metrics devx-docs-bootstrap
 TABLE
 }
 
