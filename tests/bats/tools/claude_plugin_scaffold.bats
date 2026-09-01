@@ -53,6 +53,7 @@ notes-skills|dEitY719/notes-skills|notes
 visuals-skills|dEitY719/visuals-skills|visuals
 gh-resolve-skills|dEitY719/gh-resolve-skills|gh-resolve
 session-skills|dEitY719/session-skills|session
+gh-verify-skills|dEitY719/gh-verify-skills|gh-verify
 TABLE
 }
 
@@ -87,6 +88,7 @@ TABLE
 #1643|write-rca write-insight write-release-note write-task-history write-blog-dev-learnings
 #1660|gh-pr-resolve-ci-fail gh-pr-resolve-conflict gh-pr-resolve-outdated
 #1661|devx-restart devx-session-close devx-session-handoff devx-rate-limit-guard devx-resume-after-limit devx-schedule ai-worktree-spawn ai-worktree-teardown
+#1659|devx-pr-review-all devx-pr-verify-live devx-pr-verify-merged devx-exception-merge-checklist gh-pr-post-merge-verify
 TABLE
 }
 
