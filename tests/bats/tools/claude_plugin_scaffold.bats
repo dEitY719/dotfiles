@@ -59,6 +59,7 @@ authoring-skills|dEitY719/authoring-skills|authoring
 gh-setup-skills|dEitY719/gh-setup-skills|gh-setup
 gh-issue-skills|dEitY719/gh-issue-skills|gh-issue
 gh-pr-skills|dEitY719/gh-pr-skills|gh-pr
+gh-flow-skills|dEitY719/gh-flow-skills|gh-flow
 TABLE
 }
 
@@ -99,6 +100,7 @@ TABLE
 #1658|gh-label-bootstrap gh-kanban-bootstrap gh-add-ai-metrics devx-docs-bootstrap
 #1676|gh-issue-read gh-issue-create gh-issue-implement gh-issue-proceed gh-discussion-create gh-discussion-convert
 #1677|gh-commit gh-pr gh-pr-review gh-pr-reply gh-pr-approve gh-pr-merge gh-pr-merge-emergency gh-pr-merge-train
+#1678|gh-issue-flow devx-autopilot gh-issue-relay-flow gh-relay-merge
 TABLE
 }
 

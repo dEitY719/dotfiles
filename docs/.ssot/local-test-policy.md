@@ -104,7 +104,7 @@ Before/After 측정:
 |--------|------|
 | 외부 기여자 mise 미설치 → 회귀 누락 | reviewer 수동 `mise run test` (PR 머지 전 checklist) |
 | 로컬 환경 차이 (Python/OS) 로 인한 위양성 | mise toolchain pinned in `mise.toml` |
-| `pre-push` 통과 후 머지 직전 회귀 | `gh:pr-merge` skill 의 pre-merge 검증 옵션 (별도 이슈) |
+| `pre-push` 통과 후 머지 직전 회귀 | `gh-pr:merge` skill 의 pre-merge 검증 옵션 (별도 이슈) |
 | `--no-verify` 남용 | `git/hooks/install-hooks.sh` 출력에 경고 추가, 코드 리뷰에서 차단 |
 
 ### 롤백 트리거 (이 정책을 뒤집을 신호)

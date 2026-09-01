@@ -1100,3 +1100,159 @@ def test_hook_callable_two_ways(tmp_path: Path, exec_form: list[str]) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# D-12 dual-form namespace recognition (#1678)
+#
+# Phase 3 of #1410 migrates this skill into the `gh-flow-skills` repo as
+# `gh-flow:autopilot`, while NF-1 keeps the dotfiles original (emitting the
+# old `[step:devx-autopilot/...]` markers) alive until Phase 4. The guard
+# must recognize BOTH marker namespaces at once. Every case below is an
+# ADDITION — no existing assertion above is modified (issue #1678, NF-4).
+# ---------------------------------------------------------------------------
+
+
+def _step_markers_result_new(*step_ids: str) -> dict[str, Any]:
+    """`_step_markers_result`'s post-migration twin (`gh-flow-autopilot`)."""
+    body = "\n".join(f"[step:gh-flow-autopilot/{sid}] OK" for sid in step_ids)
+    return _user_tool_result(body)
+
+
+@pytest.mark.parametrize(
+    ("label", "boundary"),
+    [
+        ("colon-form", "/gh-flow:autopilot"),
+        ("hyphen-form", "/gh-flow-autopilot"),
+        ("command-name-wrapper", "<command-name>/gh-flow:autopilot</command-name>"),
+        (
+            "skill-base-dir-marketplace",
+            "Base directory for this skill: /home/u/.claude/plugins/marketplaces/gh-flow-skills/skills/autopilot",
+        ),
+        (
+            "skill-base-dir-cache",
+            "Base directory for this skill: "
+            "/home/u/.claude/plugins/cache/gh-flow-skills/gh-flow/0.1.0/skills/autopilot",
+        ),
+        ("skill-base-dir-flat", "Base directory for this skill: /home/u/.claude/skills/gh-flow/skills/autopilot"),
+        ("skill-h1", "# gh-flow:autopilot — spec → PR"),
+    ],
+)
+def test_new_namespace_boundary_surfaces(tmp_path: Path, label: str, boundary: str) -> None:
+    """The post-migration name opens a Stage-B flow on every boundary surface.
+
+    Without this the F-9 marker widening would be unreachable: the guard
+    never arms, so it never looks for a marker in either namespace.
+    """
+    transcript = _write_transcript(tmp_path, [_user_text(boundary), _assistant_text("done!")])
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"{label}: expected a block, got empty stdout"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_new_namespace_step_markers_are_counted(tmp_path: Path) -> None:
+    """`[step:gh-flow-autopilot/<id>] OK` satisfies the same required steps."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:autopilot"),
+            _step_markers_result_new("plan", "issue"),
+            _assistant_text("continuing..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "2/7" in decision["reason"], decision["reason"]
+    assert "mode" in decision["reason"], decision["reason"]
+
+
+def test_old_namespace_step_markers_still_counted_after_widening(tmp_path: Path) -> None:
+    """Regression twin of the case above: the old marker keeps working."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:autopilot"),
+            _step_markers_result("plan", "issue"),
+            _assistant_text("continuing..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "2/7" in decision["reason"], decision["reason"]
+
+
+def test_mixed_namespace_step_markers_reach_all_seven(tmp_path: Path) -> None:
+    """A run that switches namespace mid-flow still completes its step set."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan", "issue", "mode"),
+            _step_markers_result_new("implement", "pr", "simplify", "pr-reply"),
+            _assistant_text("continuing..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "all 7 Stage-B step" in decision["reason"], decision["reason"]
+
+
+@pytest.mark.parametrize(
+    ("label", "terminal"),
+    [
+        ("report-marker", "[step:gh-flow-autopilot/report] OK"),
+        ("ok-report", "[OK] gh-flow:autopilot #1678 — PR https://github.com/o/r/pull/1"),
+        ("fail-report", "[FAIL] gh-flow:autopilot #1678 — stopped at Step 3"),
+    ],
+)
+def test_new_namespace_terminal_markers_allow_stop(tmp_path: Path, label: str, terminal: str) -> None:
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:autopilot"),
+            _step_markers_result_new("plan", "issue", "mode", "implement", "pr", "simplify", "pr-reply"),
+            _assistant_text(terminal),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"{label}: expected allow, got {result.stdout!r}"
+
+
+def test_partial_new_marker_without_ok_does_not_count(tmp_path: Path) -> None:
+    """The strictness of the marker regex survives the widening."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:autopilot"),
+            _user_tool_result("[step:gh-flow-autopilot/plan]"),
+            _assistant_text("continuing..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "0/7" in decision["reason"], decision["reason"]
+
+
+def test_step_labels_name_the_post_migration_sub_skills(tmp_path: Path) -> None:
+    """F-9: the human-facing `issue` / `pr` labels quote the new skill names."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/devx-autopilot"),
+            _step_markers_result("plan"),
+            _assistant_text("continuing..."),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert "gh-issue:create" in json.loads(result.stdout)["reason"]

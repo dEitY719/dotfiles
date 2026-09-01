@@ -4,7 +4,15 @@ Cross-skill / cross-tool env vars that change runtime behaviour. New
 toggles MUST land here so operators can grep one file before adopting
 a new repo or workspace.
 
-## `gh:*` skills
+> **스킬 이름 표기 (#1410 Phase 3, #1678)** — 이 문서는 스킬을 분리 후
+> 플러그인 네임스페이스(`gh-issue:create`, `gh-pr:create`, `gh-flow:issue` …)로
+> 적는다. dotfiles 의 `claude/skills/` 원본은 Phase 4 까지 그대로 남아 있고
+> **옛 이름(`/gh-issue-create`, `/gh-pr`, `/gh-issue-flow` …)으로도 계속
+> 호출된다** — `gh_flow.sh` · `issue_watcher_cron.sh` 같은 운영 자동화가
+> 아직 옛 슬래시 명령을 dispatch 하기 때문이다 (#1410 NF-1, D-12). 본문의
+> `claude/skills/<dir>/` 경로는 그 원본을 가리키므로 옛 이름 그대로다.
+
+## `gh-*` skills
 
 ### `GH_DISABLE_AI_METRICS`
 
@@ -19,17 +27,17 @@ a new repo or workspace.
 When the variable is `1`, the following skills skip ai-metrics
 attachment and produce identical artifacts otherwise:
 
-- `gh:issue-create` — issue body footer
-- `gh:pr` — PR body footer
-- `gh:commit` — linked-issue comment
-- `gh:pr-reply`, `gh:pr-approve`, `gh:pr-merge`, `gh:pr-resolve-conflict` — PR comment
-- `gh:pr-merge-emergency` — incident issue body footer
-- `gh:issue-flow` — flow-aggregate issue comment (Step 2.6)
+- `gh-issue:create` — issue body footer
+- `gh-pr:create` — PR body footer
+- `gh-pr:commit` — linked-issue comment
+- `gh-pr:reply`, `gh-pr:approve`, `gh-pr:merge`, `gh-resolve:conflict` — PR comment
+- `gh-pr:merge-emergency` — incident issue body footer
+- `gh-flow:issue` — flow-aggregate issue comment (Step 2.6)
 
-`gh:issue-implement` and `gh:issue-read` print metrics to stdout only,
+`gh-issue:implement` and `gh-issue:read` print metrics to stdout only,
 so the env var has no effect there.
 
-`gh:add-ai-metrics` is the **deliberate retrofit** path and **ignores**
+`gh-setup:add-ai-metrics` is the **deliberate retrofit** path and **ignores**
 this var — that is its entire purpose.
 
 Use cases:
@@ -41,8 +49,8 @@ Use cases:
 Per-call examples:
 
 ```bash
-GH_DISABLE_AI_METRICS=1 /gh-pr 399
-GH_DISABLE_AI_METRICS=1 /gh-commit
+GH_DISABLE_AI_METRICS=1 /gh-pr:create 399
+GH_DISABLE_AI_METRICS=1 /gh-pr:commit
 ```
 
 Persist for a session:
@@ -53,7 +61,7 @@ export GH_DISABLE_AI_METRICS=1
 
 ### `GH_PR_MERGE_SKIP_BOARD_CHECK` (retired, #1513)
 
-Removed together with `gh:pr-merge` Step 2-B — there is no longer a
+Removed together with `gh-pr:merge` Step 2-B — there is no longer a
 board approval gate to bypass. Setting it has no effect. Rationale:
 `claude/skills/gh-pr-merge/references/board-policy.md`.
 
@@ -109,7 +117,7 @@ typo could sync a different repo's board.
 |---|---|
 | Default | `900000` (15 min) |
 | Active when | set to a millisecond count |
-| Scope | `gh:pr-post-merge-verify` — the `herdr agent prompt --wait --until idle` cap |
+| Scope | `gh-verify:post-merge-verify` — the `herdr agent prompt --wait --until idle` cap |
 | Source SSOT | `claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md` |
 | Issue | [#1511](https://github.com/dEitY719/dotfiles/issues/1511) |
 
