@@ -425,3 +425,263 @@ EOF
     [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/alpha" ]
     [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/gamma" ]
 }
+
+# ---------------------------------------------------------------------
+# issue #1652 — 다중 워크스페이스 루트 스캔 (#1410 F-6 조기 도입)
+# dotfiles claude/skills/ 스캔은 그대로 두고(F-2/NF-1), 로컬에 clone 된
+# marketplace repo 들(${WORKSPACE_ROOT}/<repo>/skills/<skill>/SKILL.md)을
+# 소스 목록에 **추가로** 합류시킨다. fan-out 로직은 손대지 않는다(F-4).
+# ---------------------------------------------------------------------
+
+# Seed a workspace repo under the given root.
+# Usage: seed_workspace_skill <workspace_root> <repo> <skill> [<skill>...]
+seed_workspace_skill() {
+    local root="$1" repo="$2"
+    shift 2
+    local skill
+    for skill in "$@"; do
+        mkdir -p "${root}/${repo}/skills/${skill}"
+        cat > "${root}/${repo}/skills/${skill}/SKILL.md" <<EOF
+---
+name: ${skill}
+description: workspace stub for ${repo}/${skill}
+---
+EOF
+    done
+}
+
+# The default workspace root the script derives from \$HOME (F-1).
+default_workspace_root() {
+    printf '%s\n' "${FIXTURE_HOME}/para/project/skills"
+}
+
+run_setup_with_workspace() {
+    WORKSPACE_ROOT="$1" HOME="$FIXTURE_HOME" \
+        run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
+}
+
+@test "workspace: default root ~/para/project/skills is scanned (#1652 F-1)" {
+    seed_opencode_home
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta" "epsilon"
+
+    run_setup
+    assert_success
+
+    local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
+    for s in delta epsilon; do
+        [ -L "${oc_dir}/${s}" ]
+        [ "$(readlink -f "${oc_dir}/${s}")" \
+            = "$(readlink -f "$(default_workspace_root)/packaging-skills/skills/${s}")" ]
+    done
+}
+
+@test "workspace: dotfiles SSOT keeps being scanned in parallel (#1652 F-2/NF-1)" {
+    seed_opencode_home
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
+
+    run_setup
+    assert_success
+
+    local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
+    # Both sources are represented at once.
+    for s in alpha beta gamma; do
+        [ -L "${oc_dir}/${s}" ]
+        [ "$(readlink -f "${oc_dir}/${s}")" \
+            = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+    done
+    [ -L "${oc_dir}/delta" ]
+}
+
+@test "workspace: skills reach every harness including codex (#1652 F-4)" {
+    seed_opencode_home
+    seed_gemini_home
+    seed_hermes_home
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
+
+    run_setup
+    assert_success
+
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
+    [ -L "${FIXTURE_HOME}/.gemini/skills/delta" ]
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/delta" ]
+    [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
+}
+
+@test "workspace: WORKSPACE_ROOT env var overrides the default path (#1652 F-3)" {
+    seed_opencode_home
+    local custom="${TEST_TEMP_HOME}/custom-workspace"
+    seed_workspace_skill "$custom" "other-skills" "zeta"
+    # The default location holds a different skill — it must NOT be used.
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
+
+    run_setup_with_workspace "$custom"
+    assert_success
+
+    local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
+    [ -L "${oc_dir}/zeta" ]
+    [ ! -e "${oc_dir}/delta" ]
+}
+
+@test "workspace: absent root is a silent no-op, dotfiles still linked (#1652 Error Case 1)" {
+    seed_opencode_home
+    [ ! -d "$(default_workspace_root)" ]
+
+    run_setup
+    assert_success
+    refute_output --partial "No such file"
+
+    for s in alpha beta gamma; do
+        [ -L "${FIXTURE_HOME}/.config/opencode/skills/${s}" ]
+    done
+}
+
+@test "workspace: repo without a skills/ dir is skipped silently (#1652 Error Case 2)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    mkdir -p "${ws}/not-a-skill-repo/docs"
+    printf 'readme\n' > "${ws}/not-a-skill-repo/README.md"
+    seed_workspace_skill "$ws" "packaging-skills" "delta"
+
+    run_setup
+    assert_success
+
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
+    [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/not-a-skill-repo" ]
+    [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/docs" ]
+}
+
+@test "workspace: skills/ entry without SKILL.md is not a source (#1652 F-1)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "packaging-skills" "delta"
+    # A stray directory under skills/ that is not a skill.
+    mkdir -p "${ws}/packaging-skills/skills/_shared"
+    printf 'notes\n' > "${ws}/packaging-skills/skills/_shared/NOTES.md"
+
+    run_setup
+    assert_success
+
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
+    [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/_shared" ]
+}
+
+@test "workspace: name collision keeps the dotfiles SSOT source (#1652 NF-1)" {
+    seed_opencode_home
+    # `alpha` already exists in the dotfiles SSOT.
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "alpha"
+
+    run_setup
+    assert_success
+
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/alpha")" \
+        = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/alpha")" ]
+}
+
+@test "workspace: two repos exposing the same skill — first wins, deterministically (#1652)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    # Mirrors the real `packaging-skills` + `packaging-skills-feat-1`
+    # (a git worktree of the same repo) sitting side by side.
+    seed_workspace_skill "$ws" "aaa-skills" "delta"
+    seed_workspace_skill "$ws" "zzz-skills" "delta"
+
+    run_setup
+    assert_success
+
+    # Glob order is sorted, so the alphabetically first repo wins — and
+    # the choice must not flip between runs.
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/delta")" \
+        = "$(readlink -f "${ws}/aaa-skills/skills/delta")" ]
+
+    run_setup
+    assert_success
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/delta")" \
+        = "$(readlink -f "${ws}/aaa-skills/skills/delta")" ]
+}
+
+@test "workspace: stale entry is pruned when the repo disappears (#1652 NF-3)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "packaging-skills" "delta"
+
+    run_setup
+    assert_success
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
+
+    rm -rf "${ws}/packaging-skills"
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
+    # dotfiles-sourced entries are untouched.
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/alpha" ]
+}
+
+@test "workspace: codex prunes a workspace skill once its repo is gone (#1652 NF-3)" {
+    local ws
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "packaging-skills" "delta"
+
+    run_setup
+    assert_success
+    [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
+
+    rm -rf "${ws}/packaging-skills"
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.codex/skills/delta" ]
+    [ -L "${FIXTURE_HOME}/.codex/skills/alpha" ]
+}
+
+@test "workspace: SKILL.md edits are live through the composed link (#1652 NF-2)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "packaging-skills" "delta"
+
+    run_setup
+    assert_success
+
+    # Edit the source in place — no re-install, no re-run.
+    printf 'EDITED-IN-WORKSPACE\n' \
+        >> "${ws}/packaging-skills/skills/delta/SKILL.md"
+
+    run grep -q 'EDITED-IN-WORKSPACE' \
+        "${FIXTURE_HOME}/.config/opencode/skills/delta/SKILL.md"
+    assert_success
+}
+
+@test "workspace: synthesis stays idempotent with a workspace present (#1652)" {
+    seed_opencode_home
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
+
+    run_setup
+    assert_success
+    local before
+    before="$(ls -la "${FIXTURE_HOME}/.config/opencode/skills")"
+
+    run_setup
+    assert_success
+    local after
+    after="$(ls -la "${FIXTURE_HOME}/.config/opencode/skills")"
+
+    [ "$before" = "$after" ]
+}
+
+@test "workspace: allowlist still gates codex for workspace skills (#1652 F-4)" {
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
+    printf 'alpha\ndelta\n' \
+        > "${FIXTURE_DOTFILES}/claude/skills/.codex-allowlist"
+
+    run_setup
+    assert_success
+
+    [ -L "${FIXTURE_HOME}/.codex/skills/alpha" ]
+    [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
+    [ ! -e "${FIXTURE_HOME}/.codex/skills/beta" ]
+}
