@@ -223,15 +223,28 @@ _gcp_scan_pick_list_prior() {
     # _gcp_scan_predict_content_conflict, which used to each hand-roll this
     # walk separately.
     local target="$1" pick_list="$2"
-    local _p prior=""
+    local _p prior="" found=0
     while IFS= read -r _p; do
         [ -z "$_p" ] && continue
-        [ "$_p" = "$target" ] && break
+        if [ "$_p" = "$target" ]; then
+            found=1
+            break
+        fi
         prior="${prior}${_p}
 "
     done <<EOF
 $pick_list
 EOF
+    # $target absent from pick_list entirely -> the whole list was just
+    # accumulated as `prior` above (unchanged pre-#1647 fallback behavior).
+    # stderr-only (agy review, PR #1649): callers read this function's stdout
+    # as data, so a warning on stdout would corrupt it. Not expected to fire
+    # in practice — every call site draws $target from the same list it
+    # passes as pick_list — so this is a silent-drift detector, not a normal
+    # code path.
+    if [ "$found" -eq 0 ]; then
+        printf '[gcp-scan] %s not found in its own pick_list — using the full list as precedent (unexpected).\n' "$target" >&2
+    fi
     printf '%s' "$prior"
 }
 
@@ -1300,7 +1313,14 @@ EOF
     # tree. The read-only Analysis phase above (including Stage-2's
     # stash/pop'd probes) is unaffected — only the confirm+execute phase gates
     # here.
-    if ! git diff --quiet || ! git diff --cached --quiet; then
+    #
+    # `git status --porcelain` (not `git diff` / `git diff --cached`) is
+    # deliberate: it also catches UNTRACKED files, which neither `diff`
+    # variant reports (agy review, PR #1649). That coverage is what makes the
+    # execution loop's own untracked cleanup below safe — it can only assume
+    # "any untracked file present after a rollback came from the failed
+    # cherry-pick" because this gate already proved none pre-existed.
+    if [ -n "$(git status --porcelain)" ]; then
         if type ux_error >/dev/null 2>&1; then
             ux_error "Working tree is dirty — cherry-pick execution refuses to start."
             ux_error "Run 'git stash push -u' first, then re-run this scan."
@@ -1501,6 +1521,14 @@ $sha
                 _gcp_scan_report_conflict_stop "$sha"
                 return 1
             fi
+            # `--abort` / `reset --hard` only restore TRACKED content — a
+            # failed cherry-pick can also leave behind untracked files (e.g.
+            # a conflict side that added a new file) that neither command
+            # touches (agy review, PR #1649). Safe to sweep unconditionally
+            # here: the defect-C precondition above already refused to start
+            # on a tree with ANY pre-existing untracked file, so anything
+            # untracked now present was created by this failed attempt.
+            git clean -fd >/dev/null 2>&1
             deferred_list="${deferred_list}${sha}
 "
             deferred_count=$((deferred_count + 1))
