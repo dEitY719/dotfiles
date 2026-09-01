@@ -104,8 +104,16 @@ _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
 
 ```bash
 case "$_vl_result" in
-    *"label=kept"*)
+    *"label=kept"*"marker=reposted"*)
         echo "[OK] \`review-passed\` 유지됨 — rebase 는 diff 내용 변경 없음(patch-id 동일), 새 SHA 로 재확인"
+        ;;
+    *"label=kept"*"marker=failed"*)
+        # 라벨 추가는 성공했지만 새 SHA 로의 marker 재게시가 실패한 경우 —
+        # `devx_pr_review_all_write_label` 의 marker=failed 와 동일한 의미:
+        # 다음 #1601 freshness 재검증에서 자연히 stale 로 self-heal 되지만,
+        # 지금 이 tick 에서는 눈에 보이는 WARN 을 남긴다(soft-fail, 실패해도
+        # Step 5 의 검증/보고는 그대로 진행).
+        echo "[WARN] \`review-passed\` 유지는 됐으나 새 SHA marker 재게시 실패 — 다음 tick 에 stale 로 self-heal 됨"
         ;;
     *)
         echo "[OK] \`review-passed\` 무효화됨(또는 애초에 없었음) — 최신 판정 없음"
