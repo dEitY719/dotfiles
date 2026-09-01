@@ -18,7 +18,7 @@ ghes_mirror() {
     echo ""
 
     # --- Collect inputs ---
-    local _default_upstream="https://github.com/dEitY719/claude-plugin-visuals"
+    local _default_upstream="https://github.com/dEitY719/visuals-skills"
     printf "%s1. Upstream URL%s [%s]: " "${UX_PRIMARY}" "${UX_RESET}" "${_default_upstream}"
     read -r _upstream
     _upstream="${_upstream:-${_default_upstream}}"

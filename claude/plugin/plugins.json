@@ -21,6 +21,7 @@
     "ralph-loop@claude-plugins-official",
     "session-report@claude-plugins-official",
     "superpowers@claude-plugins-official",
-    "understand-anything@understand-anything"
+    "understand-anything@understand-anything",
+    "visuals@visuals-skills"
   ]
 }
