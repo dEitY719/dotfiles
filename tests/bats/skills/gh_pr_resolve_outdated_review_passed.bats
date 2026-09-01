@@ -26,11 +26,15 @@
 #      BLOCKER).
 #   7. Same, but no marker at all (label present with no #1601 evidence) ->
 #      same drop path.
+#   8. Keep path whose marker repost itself fails -> reported as
+#      `marker=failed`, not silently claimed as `reposted` (PR #1699 review,
+#      codex round-3 BLOCKER).
 #
 # `STUB_CURRENT_LABELS` (comma-separated, default "review-passed") controls
 # what `_gh_pr_resolve_outdated_has_label`'s `gh api .../labels` GET returns.
 # `STUB_COMMENTS_JSON` / `STUB_ME_LOGIN` control the #1601 freshness lookup —
 # `_marker_comment <login> <sha>` builds one matching comment object.
+# `STUB_MARKER_POST_RC` fails the keep-path's marker repost.
 
 load '../test_helper'
 
@@ -93,6 +97,13 @@ setup() {
                     done
                     printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$_fs_jq_expr"
                     return 0
+                    ;;
+                *"-X POST"*"/comments"*)
+                    # The keep-path marker repost — distinct from the
+                    # freshness GET above (no `--jq`). STUB_MARKER_POST_RC
+                    # simulates the POST itself failing (PR #1699 review,
+                    # codex round-3 BLOCKER: this path was untested).
+                    return "${STUB_MARKER_POST_RC:-0}"
                     ;;
             esac
         fi
@@ -208,6 +219,22 @@ _1698_make_repo() {
     refute_output --partial 'review-blocked'
     assert_output --partial "add 1695 review-passed --repo acme/widget"
     assert_output --partial "review-verdict:review-passed:${NEW_HEAD_SAME}"
+}
+
+@test "reconcile: keep path reports marker=failed when the repost itself fails (not swallowed)" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    STUB_MARKER_POST_RC=1
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    assert_success
+    assert_output --partial 'patch-id=unchanged label=kept marker=failed'
+    run cat "$GH_LOG"
+    # The label add still ran (labelling is not reverted on a marker-only
+    # failure) — only the report string must be honest that the marker
+    # itself did not land.
+    assert_output --partial "add 1695 review-passed --repo acme/widget"
 }
 
 @test "reconcile: label present but its marker is for a DIFFERENT sha (stale) -> drops" {
