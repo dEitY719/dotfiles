@@ -73,3 +73,35 @@ gh-commit:
     - stage-commit
     - metrics-board-sync
     - report
+
+# --- #1410 Phase 3 migration (#1677) -----------------------------------------
+# The eight commit-to-merge skills moved to the `gh-pr-skills` repo, where the
+# plugin namespace `gh-pr` plus the de-prefixed directory names `create` /
+# `commit` spell markers the old keys above do not match. The migrated copies
+# therefore emit `[step:gh-pr-create/<id>]` and `[step:gh-pr-commit/<id>]`.
+#
+# The two keys below are ADDED, not renamed (#1677 D-12): the dotfiles
+# originals in `claude/skills/{gh-pr,gh-commit}/` are kept until Phase 4
+# (#1410 NF-1) and still emit the old markers, so deleting `gh-pr` / `gh-commit`
+# would strip their guard. Both paths are protected until Phase 4 removes the
+# originals and the old keys together.
+#
+# NF-4: each `required` list must stay identical to the key it mirrors —
+# migrating a skill does not change its steps.
+
+gh-pr-create:
+  enforce: true
+  description: "Create Pull Request from current branch (gh-pr-skills)"
+  required:
+    - push-and-create
+    - labels
+    - board-sync
+    - report
+
+gh-pr-commit:
+  enforce: true
+  description: "Git commit with issue linking (gh-pr-skills)"
+  required:
+    - stage-commit
+    - metrics-board-sync
+    - report
