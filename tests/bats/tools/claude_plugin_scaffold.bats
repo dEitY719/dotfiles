@@ -51,3 +51,13 @@ harness-skills|dEitY719/harness-skills|harness
 devenv-skills|dEitY719/devenv-skills|devenv
 TABLE
 }
+
+@test "pkm-skills marketplace and pkm plugin are registered (#1644)" {
+    run jq -e '."pkm-skills" == "dEitY719/pkm-skills"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+    assert_success
+
+    run jq -e '.plugins | index("pkm@pkm-skills") != null' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+    assert_success
+}
