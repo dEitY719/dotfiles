@@ -163,6 +163,42 @@ SUB_SKILL_NAMES: set[str] = {n for forms in EXPECTED_CHAIN for n in forms}
 # slot would count as two distinct steps.
 _SUB_SKILL_CANONICAL: dict[str, str] = {n: forms[0] for forms in EXPECTED_CHAIN for n in forms}
 
+# The one alias `_next_step_label` quotes alongside the canonical name, so a
+# session running only the migrated plugin is told a skill it actually has.
+# Spelled out per slot rather than taken positionally out of EXPECTED_CHAIN
+# (`forms[-1]`): those tuples are alias *sets* whose order carries no meaning
+# past element 0, so adding a form later would silently change which name the
+# model is told to invoke (agy review, PR #1693). `_assert_hint_aliases_known`
+# below turns any drift between the two into an import-time failure rather
+# than a wrong hint at block time.
+_SUB_SKILL_HINT_ALIAS: dict[str, str] = {
+    "gh-issue-implement": "gh-issue:implement",
+    "gh-commit": "gh-pr:commit",
+    "gh-pr": "gh-pr:create",
+    "devx-pr-review-all": "gh-verify:review-all",
+    "gh-pr-resolve-conflict": "gh-resolve:conflict",
+    "gh-pr-resolve-outdated": "gh-resolve:outdated",
+}
+
+
+def _assert_hint_aliases_known() -> None:
+    """Every slot has exactly one hint alias, and it addresses that same slot.
+
+    Runs at import. A hook that fails open on a malformed transcript must
+    still refuse to ship an internally inconsistent chain table — a hint
+    naming the wrong slot's skill would route the model to the wrong step.
+    """
+    for forms in EXPECTED_CHAIN:
+        canonical = forms[0]
+        alias = _SUB_SKILL_HINT_ALIAS.get(canonical)
+        if alias is None:
+            raise AssertionError(f"_SUB_SKILL_HINT_ALIAS is missing a hint for slot {canonical!r}")
+        if alias not in forms:
+            raise AssertionError(f"hint alias {alias!r} does not address slot {canonical!r} ({forms!r})")
+
+
+_assert_hint_aliases_known()
+
 # Human-facing SKILL.md step labels, parallel to EXPECTED_CHAIN. These are
 # NOT derived arithmetically because gh-pr-resolve-outdated is labeled
 # "Step 2.5.1" in SKILL.md (it runs after the "Step 2.5" resolve-conflict
@@ -889,6 +925,9 @@ def _next_step_label(seen: list[str]) -> str:
     a skill that does not exist there. The canonical name stays first and
     unparenthesised, which is also what keeps the existing
     `"Step 2.2 — Skill(gh-commit)"` substring assertions matching.
+
+    The alias comes from `_SUB_SKILL_HINT_ALIAS`, keyed by slot — never from
+    a position inside the slot's alias tuple.
     """
     canonical = [forms[0] for forms in EXPECTED_CHAIN]
     next_idx = 0
@@ -897,7 +936,7 @@ def _next_step_label(seen: list[str]) -> str:
             next_idx = i + 1
     if next_idx >= len(canonical):
         return "Step 3 — emit the final 'gh:issue-flow complete (#N)' / 'gh-flow:issue complete (#N)' report"
-    alias = EXPECTED_CHAIN[next_idx][-1]
+    alias = _SUB_SKILL_HINT_ALIAS[canonical[next_idx]]
     return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]}) (or Skill({alias}))"
 
 
