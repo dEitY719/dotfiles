@@ -10,12 +10,18 @@
 # while production drifts (#1524's rule).
 #
 # Cases:
-#   1. Clean rebase, patch-id identical -> label kept, new marker posted, no
-#      DELETE call.
+#   1. Clean rebase, patch-id identical, review-passed currently present ->
+#      label kept, new marker posted, no DELETE, no review-blocked touched.
 #   2. Rebase whose content actually changed (different patch-id) -> label
 #      dropped, exactly today's pre-#1698 behavior.
 #   3. Unreadable patch-id (bogus shas) -> fail-closed, same as case 2.
 #   4. Works against a `--worktree <path>`-style checkout, not just CWD.
+#   5. Patch-id identical but review-passed was NEVER on the PR -> falls to
+#      the drop path, never manufactures a verdict nobody granted (PR #1699
+#      review, codex BLOCKER).
+#
+# `STUB_CURRENT_LABELS` (comma-separated, default "review-passed") controls
+# what `_gh_pr_resolve_outdated_has_label`'s `gh api .../labels` GET returns.
 
 load '../test_helper'
 
@@ -26,11 +32,21 @@ setup() {
     GH_LOG="${BATS_TEST_TMPDIR}/gh.log"
     : >"$GH_LOG"
     export GH_LOG
+    STUB_CURRENT_LABELS="${STUB_CURRENT_LABELS:-review-passed}"
+    export STUB_CURRENT_LABELS
     # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
     # shellcheck disable=SC2317  # called indirectly by the helpers under test
     gh() {
         printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$GH_LOG"
+        if [ "$1" = "api" ]; then
+            case "$2" in
+                */labels)
+                    printf '%s\n' "$STUB_CURRENT_LABELS" | tr ',' '\n'
+                    return 0
+                    ;;
+            esac
+        fi
         return 0
     }
     # shellcheck disable=SC2317  # called indirectly by the helpers under test
@@ -137,8 +153,22 @@ _1698_make_repo() {
         "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
     run cat "$GH_LOG"
     refute_output --partial 'labels/review-passed'
+    # BLOCKER (codex, PR #1699 review): must never touch review-blocked —
+    # only the caller-owned devx:pr-review-all/gh:pr-reply may.
+    refute_output --partial 'review-blocked'
     assert_output --partial "add 1695 review-passed --repo acme/widget"
     assert_output --partial "review-verdict:review-passed:${NEW_HEAD_SAME}"
+}
+
+@test "reconcile: unchanged patch-id but review-passed was never granted -> drops (never self-certifies)" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    STUB_CURRENT_LABELS="test,fix"
+    resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
 }
 
 @test "reconcile: changed patch-id drops the label exactly as before, no add" {
