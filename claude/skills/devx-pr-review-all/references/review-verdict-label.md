@@ -17,6 +17,7 @@ real gate was CI.
 | producer of `review-blocked` (parse → aggregate → label) | `devx:pr-review-all` **Step 3.5**, via `devx_pr_review_all_apply_label` | #1564 |
 | producer of `review-passed` (own judgment, no re-review) | `gh:pr-reply` **Step 6**, via `_gh_pr_reply_apply_review_passed`, `claude/skills/gh-pr-reply/references/review-passed-gate.md` | #1636 |
 | shared write primitive (drop-opposite → safe-add → marker) | `devx_pr_review_all_write_label` | #1636 |
+| re-confirmer of `review-passed` (no NEW judgment — re-stamps an EXISTING grant onto a patch-id-identical rebased head) | `gh:pr-resolve-outdated` **Step 5**, via `_gh_pr_resolve_outdated_reconcile_review_passed`, `claude/skills/gh-pr-resolve-outdated/references/verdict-label-removal.sh.md` — direct `_gh_pr_edit_safe_label` + marker POST, NOT through `devx_pr_review_all_write_label` (that helper also drops `review-blocked`, which this path must never touch) | #1698 |
 | invalidation (drop a stale verdict) | `_gh_pr_drop_label`, called by every head-advancing skill | #1563 |
 | cleanup after merge (drop `review-passed`) | `gh:pr-merge` **Step 4**, `claude/skills/gh-pr-merge/references/review-passed-cleanup.sh.md` | #1636 |
 | consumer (hard merge gate) | `gh:pr-merge-train` **Step 3.5**, `references/review-verdict-gate.md` | #1564 |

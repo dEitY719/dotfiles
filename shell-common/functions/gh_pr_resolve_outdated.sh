@@ -91,6 +91,24 @@
 # review-verdict-label.md` → "Marker authorship"). In the common single-
 # account case all three auto-resolve to the same login anyway.
 #
+# That override is READ-side only, and must stay that way (PR #1699 review,
+# codex round-5 BLOCKER): the repost below always lands under whatever
+# account `gh` is actually authenticated as — there is no way to author a
+# GitHub comment as a different login than the live token, override or not.
+# So if `GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN` is ever pointed at an account
+# OTHER than the authenticated one (validating an old marker against a login
+# this run cannot write as), the freshly reposted marker is authored by the
+# WRONG identity for that override to trust on its next read — self-
+# defeating in exactly that split-write configuration. This is not unique to
+# this file: every marker writer in the codebase
+# (`devx_pr_review_all_write_label`'s own repost included) shares the same
+# "the authenticated account IS the trusted login" assumption; the override
+# exists for a reader validating history from an account that used to run
+# this pipeline, not for an ongoing split between who is trusted and who is
+# currently authenticated. Setting the override to anything but the live
+# `gh` identity is a misconfiguration, not a case this file can compensate
+# for.
+#
 # Usage:
 #   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path]
 #   _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>
