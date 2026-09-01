@@ -121,6 +121,22 @@ if ! declare -f _is_mounted >/dev/null 2>&1; then
     log_error_and_exit "Mount library did not define _is_mounted: $MOUNT_LIB"
 fi
 
+# Load workspace skill-source helpers (issue #1652), used by
+# _claude_compose_workspace_skills to layer locally cloned marketplace repos
+# on top of the dotfiles entries. Same interactive-guard reasoning as
+# mount.sh above. The declare-f assertion is the #724 lesson: without it a
+# missing definition makes the workspace lane silently no-op rather than fail.
+SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+if [ -f "$SKILL_SOURCES_LIB" ]; then
+    DOTFILES_FORCE_INIT=1 . "$SKILL_SOURCES_LIB"
+else
+    log_error_and_exit "Skill sources library not found at $SKILL_SOURCES_LIB"
+fi
+
+if ! declare -f _skill_workspace_root >/dev/null 2>&1; then
+    log_error_and_exit "Skill sources library did not define _skill_workspace_root: $SKILL_SOURCES_LIB"
+fi
+
 # --- Functions ---
 
 # Auto-migrate legacy statusLine.command (issue #300, item A).

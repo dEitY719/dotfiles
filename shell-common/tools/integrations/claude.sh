@@ -955,6 +955,15 @@ _claude_compose_workspace_skills() {
     [ -n "$_ccws_tgt" ] || return 0
     [ -d "$_ccws_tgt" ] || return 0
 
+    # Defense-in-depth (#724 lesson): a caller that sources this file but not
+    # functions/skill_sources.sh would hit `command not found` (rc 127), the
+    # `|| return 0` below would absorb it, and the whole workspace lane would
+    # silently no-op. Say so instead.
+    if ! command -v _skill_workspace_root >/dev/null 2>&1; then
+        ux_warning "  workspace skill sources unavailable — shell-common/functions/skill_sources.sh not sourced (#1652)"
+        return 0
+    fi
+
     _ccws_root="$(_skill_workspace_root)" || return 0
 
     # Prune first: a workspace link whose source vanished has to free its
