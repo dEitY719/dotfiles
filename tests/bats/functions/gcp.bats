@@ -2095,34 +2095,28 @@ FIXTURE
 #      alone loses data when a repo reuses commit subjects.
 #
 # These tests pin the help rows to the real execution path in BOTH directions:
-# the output tests catch a stale help row, and the static test catches a
+# the output test catches a stale help row, and the static test catches a
 # reintroduced range pick that would make the (now honest) help row stale again.
 # ---------------------------------------------------------------------------
 
-@test "help #1666: 'gcp help scan' never advertises the bulk range pick #913 removed" {
+@test "help #1666: 'gcp help scan' rows match the real scan behavior" {
+    # One render, every property pinned against it — the file's convention for
+    # "one output, several things to check" (see 'gcp help --list' above).
+    # Each refute/assert names its own substring on failure, so a break still
+    # points at the exact stale row.
     run_in_bash 'gcp help scan'
     assert_success
+
+    # #913 removed the range shortcut, so the help must not advertise it.
     refute_output --partial "contiguous range"
     refute_output --partial "bulk cherry-pick"
-}
-
-@test "help #1666: 'gcp help scan' states picks are always individual" {
-    run_in_bash 'gcp help scan'
-    assert_success
     assert_output --partial "always individual cherry-pick"
-}
 
-@test "help #1666: 'gcp help scan' marks Suggested Range as a manual-use hint" {
     # The range is still PRINTED — as "cancel and do it yourself" guidance.
     # The help must say so, or a reader assumes the tool consumes it.
-    run_in_bash 'gcp help scan'
-    assert_success
     assert_output --partial "manual hint"
-}
 
-@test "help #1666: 'gcp help scan' does not claim a subject match alone confirms a skip" {
-    run_in_bash 'gcp help scan'
-    assert_success
+    # Since #1136 a subject match is only a CANDIDATE filter; patch-id confirms.
     refute_output --partial "same subject in base"
     assert_output --partial "patch-id"
 }
@@ -2132,6 +2126,6 @@ FIXTURE
     # must be its own assignment or an output call; anything else means a
     # range-form cherry-pick came back and the help row above went stale.
     local src="${DOTFILES_ROOT}/shell-common/functions/gcp_scan.sh"
-    run bash -c "grep -n 'range_str' '${src}' | grep -vE 'local range_str=|ux_bullet|ux_info|echo '"
+    run bash -c "grep 'range_str' '${src}' | grep -vE 'local range_str=|ux_bullet|ux_info|echo '"
     assert_failure
 }
