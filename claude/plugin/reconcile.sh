@@ -104,6 +104,32 @@ command -v jq >/dev/null 2>&1 || {
 # --check must keep working on a half-installed tree.
 # shellcheck disable=SC1091
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
+# The manifest reader (_claude_plugin_read_json_or) is the same helper the
+# hook and restore.sh need, so it has a single home in shell-common (#1696).
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+
+# Bootstrap fallback, NOT a second implementation to maintain in parallel.
+# Unlike the commit title, the reader is on --check's path, and --check is
+# required to work on a half-installed tree (the invariant stated above, pinned
+# by tests/bats/tools/claude_plugin_reconcile.bats "--check still works when
+# the ... helper cannot be sourced"). Degrading here would not fail loudly: an
+# unread manifest looks exactly like an empty one, so drift would be reported
+# backwards instead of being reported as an error. Behavior changes belong in
+# shell-common/functions/claude_plugin_manifest.sh; this copy follows it.
+if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
+	_claude_plugin_read_json_or() {
+		local out=""
+		if [ -f "$1" ]; then
+			out=$(jq -c '.' "$1" 2>/dev/null)
+		fi
+		if [ -n "$out" ]; then
+			printf '%s' "$out"
+		else
+			printf '%s' "$2"
+		fi
+	}
+fi
 
 PUB_DIR="$SCRIPT_DIR"
 PRIV_DIR="$SCRIPT_DIR/company"
@@ -165,25 +191,12 @@ _target_plugins_for_mp() {
 plugins_common=$(_target_plugins_for_mp "$target_common") || exit 1
 plugins_private=$(_target_plugins_for_mp "$target_private") || exit 1
 
-# Compact JSON of file $1, or default $2 when missing/empty/invalid.
-_read_json_or() {
-	local out=""
-	if [ -f "$1" ]; then
-		out=$(jq -c '.' "$1" 2>/dev/null)
-	fi
-	if [ -n "$out" ]; then
-		printf '%s' "$out"
-	else
-		printf '%s' "$2"
-	fi
-}
-
 # --- diff helpers ---------------------------------------------------------
 # Each prints drift lines to stdout and returns 1 when it found any.
 
 _diff_marketplaces() {
 	local current_file="$1" target="$2" current lines
-	current=$(_read_json_or "$current_file" '{}')
+	current=$(_claude_plugin_read_json_or "$current_file" '{}')
 	lines=$(jq -rn --argjson c "$current" --argjson t "$target" '
         [ ($t | to_entries[] | select($c[.key] == null) | "  + \(.key) (\(.value))"),
           ($c | to_entries[] | select($t[.key] == null) | "  - \(.key) (유령 — SSOT 에 없음)"),
@@ -198,7 +211,7 @@ _diff_marketplaces() {
 
 _diff_plugins() {
 	local current_file="$1" target="$2" current lines
-	current=$(_read_json_or "$current_file" '{"plugins":[]}')
+	current=$(_claude_plugin_read_json_or "$current_file" '{"plugins":[]}')
 	lines=$(jq -rn --argjson c "$current" --argjson t "$target" '
         ($c.plugins // []) as $cur |
         [ ($t[]   | select(. as $x | ($cur | index($x)) | not) | "  + \(.)"),

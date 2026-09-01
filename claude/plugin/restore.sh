@@ -38,6 +38,35 @@ else
 	UX_SUCCESS="" UX_ERROR="" UX_WARNING="" UX_MUTED="" UX_RESET=""
 fi
 
+# The manifest reader (_claude_plugin_read_json_or) is shared with
+# claude/plugin/reconcile.sh and claude/hooks/plugin-sync.sh, so it has a
+# single home in shell-common (#1696). Resolved via $SHELL_COMMON rather than
+# $SCRIPT_DIR because this script is also run from a copy that has no
+# shell-common sibling (bats fixtures).
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+
+# Bootstrap fallback, NOT a second implementation to maintain in parallel.
+# Until #1696 this script sourced nothing at all, precisely so that a
+# half-installed tree (fresh PC mid-bootstrap — the situation restore.sh exists
+# for) could still run it. Sourcing the shared helper must not weaken that, so
+# an unreachable shell-common leaves the behavior exactly as it was. Behavior
+# changes belong in shell-common/functions/claude_plugin_manifest.sh; this copy
+# follows it.
+if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
+	_claude_plugin_read_json_or() {
+		local out=""
+		if [ -f "$1" ]; then
+			out=$(jq -c '.' "$1" 2>/dev/null)
+		fi
+		if [ -n "$out" ]; then
+			printf '%s' "$out"
+		else
+			printf '%s' "$2"
+		fi
+	}
+fi
+
 DRY_RUN=0
 SYNC=0
 ALL_ACCOUNTS=0
@@ -238,8 +267,7 @@ _local_marketplaces() {
 _local_plugins() {
 	[ -f "$PL_LOCAL" ] || return 0
 	local mp_src
-	mp_src=$(jq -c '.' "$MP_LOCAL" 2>/dev/null)
-	[ -n "$mp_src" ] || mp_src='{}'
+	mp_src=$(_claude_plugin_read_json_or "$MP_LOCAL" '{}')
 	jq -r --argjson m "$mp_src" '
         (.plugins // {}) | to_entries[]
         | select(any(.value[]?; .scope == "user"))
