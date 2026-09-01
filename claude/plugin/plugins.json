@@ -9,6 +9,7 @@
     "devenv@devenv-skills",
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
+    "gh-flow@gh-flow-skills",
     "gh-issue@gh-issue-skills",
     "gh-pr@gh-pr-skills",
     "gh-resolve@gh-resolve-skills",

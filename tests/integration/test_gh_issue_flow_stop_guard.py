@@ -2823,3 +2823,280 @@ def test_async_wait_limit_one_allows_exactly_one(tmp_path: Path, marker_count: i
         assert json.loads(result.stdout)["decision"] == "block"
     else:
         assert result.stdout.strip() == "", f"streak {marker_count} is within limit 1. stdout={result.stdout!r}"
+
+
+# ---------------------------------------------------------------------------
+# D-12 dual-form namespace recognition (#1678)
+#
+# Phase 3 of #1410 migrates this composition into the `gh-flow-skills` repo
+# as `gh-flow:issue`, while NF-1 keeps the dotfiles original alive (and the
+# automation in `gh_flow.sh` / `issue_watcher_cron.sh` still dispatches the
+# old `/gh-issue-flow`) until Phase 4. The guard must therefore recognize
+# BOTH namespaces at once. Every case below is an ADDITION — no existing
+# assertion above is modified (issue #1678, NF-4).
+# ---------------------------------------------------------------------------
+
+# The same six chain slots as `_ALL_SIX_SUB_SKILLS`, addressed by their
+# post-migration names. Restated as literals for the same reason: the tests
+# drive the hook as a black box, so a silent drift in EXPECTED_CHAIN must
+# break them loudly.
+_ALL_SIX_SUB_SKILLS_NEW = [
+    "gh-issue:implement",
+    "gh-pr:commit",
+    "gh-pr:create",
+    "gh-verify:review-all",
+    "gh-resolve:conflict",
+    "gh-resolve:outdated",
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "boundary"),
+    [
+        ("colon-form", "/gh-flow:issue 1678"),
+        ("hyphen-form", "/gh-flow-issue 1678"),
+    ],
+)
+def test_new_namespace_slash_command_is_a_boundary(tmp_path: Path, label: str, boundary: str) -> None:
+    """`/gh-flow:issue` and `/gh-flow-issue` open a chain just like the old names."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(boundary),
+            _assistant_text("done!"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"{label}: expected a block, got empty stdout"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+@pytest.mark.parametrize(
+    ("label", "boundary"),
+    [
+        ("command-name-wrapper", "<command-name>/gh-flow:issue</command-name>"),
+        ("command-name-wrapper-hyphen", "<command-name>/gh-flow-issue</command-name>"),
+        # The two real Claude Code install layouts, plus a flat dev checkout.
+        (
+            "skill-base-dir-marketplace",
+            "Base directory for this skill: /home/u/.claude/plugins/marketplaces/gh-flow-skills/skills/issue",
+        ),
+        (
+            "skill-base-dir-cache",
+            "Base directory for this skill: /home/u/.claude/plugins/cache/gh-flow-skills/gh-flow/0.1.0/skills/issue",
+        ),
+        ("skill-base-dir-flat", "Base directory for this skill: /home/u/.claude/skills/gh-flow/skills/issue"),
+        ("skill-h1", "# gh-flow:issue — Issue → PR composition"),
+    ],
+)
+def test_new_namespace_boundary_surfaces(tmp_path: Path, label: str, boundary: str) -> None:
+    """All four boundary surfaces have a new-namespace twin."""
+    transcript = _write_transcript(tmp_path, [_user_text(boundary), _assistant_text("done!")])
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"{label}: expected a block, got empty stdout"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_new_namespace_sibling_relay_skill_is_not_a_boundary(tmp_path: Path) -> None:
+    """`/gh-flow:issue-relay` shares a prefix with `/gh-flow:issue` but is a different skill.
+
+    A `\\b`-terminated boundary pattern would match it (the word break sits
+    between `issue` and `-relay`), silently arming the six-step chain guard
+    on the relay flow, which has no such chain.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue-relay 1678"),
+            _assistant_text("relay done"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"relay flow must not arm the guard. stdout={result.stdout!r}"
+
+
+def test_new_namespace_sub_skills_are_all_recognized(tmp_path: Path) -> None:
+    """All six chain slots count when invoked under their post-migration names."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 1678"),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS_NEW),
+            _assistant_text("all done"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    reason = json.loads(result.stdout)["reason"]
+    assert "6/6 sub-skills" in reason, reason
+
+
+def test_old_and_new_alias_of_one_slot_count_once(tmp_path: Path) -> None:
+    """`gh-commit` and `gh-pr:commit` are the same chain slot, not two."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-issue-flow 1678"),
+            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr:commit"),
+            _assistant_text("committed"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    reason = json.loads(result.stdout)["reason"]
+    assert "1/6 sub-skills" in reason, reason
+
+
+def test_mixed_old_and_new_names_complete_the_chain(tmp_path: Path) -> None:
+    """A chain half-invoked under each namespace still reaches 6/6.
+
+    This is the transition-period shape D-12 exists for: the dotfiles copy
+    and the `gh-flow-skills` copy can both be installed at once.
+    """
+    mixed = [
+        "gh:issue-implement",
+        "gh-pr:commit",
+        "gh-pr",
+        "gh-verify:review-all",
+        "gh-pr-resolve-conflict",
+        "gh-resolve:outdated",
+    ]
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow-issue 1678"),
+            *(_assistant_skill(n) for n in mixed),
+            _assistant_text("all done"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    reason = json.loads(result.stdout)["reason"]
+    assert "6/6 sub-skills" in reason, reason
+    assert "Step 3" in reason, reason
+
+
+@pytest.mark.parametrize(
+    ("label", "marker"),
+    [
+        ("colon-complete", "gh-flow:issue complete (#1678)"),
+        ("colon-stopped", "gh-flow:issue stopped at step 2/6"),
+        ("hyphen-complete", "gh-flow-issue complete (#1678)"),
+        ("hyphen-stopped", "gh-flow-issue stopped at step 2/6"),
+    ],
+)
+def test_new_namespace_terminal_marker_allows_stop(tmp_path: Path, label: str, marker: str) -> None:
+    """The Step 3 report emitted under the new name still ends the chain."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 1678"),
+            _assistant_text(f"[OK] {marker}\n  PR URL: https://github.com/o/r/pull/1"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"{label}: expected allow, got {result.stdout!r}"
+
+
+def test_new_namespace_terminal_marker_via_bash_channel(tmp_path: Path) -> None:
+    """The #1270 Bash fallback channel accepts the new-name marker too."""
+    command = "printf 'gh-flow:issue complete (#1678)\\n'"
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 1678"),
+            _assistant_bash(command, block_id="toolu_report"),
+            _user_tool_result(
+                "gh-flow:issue complete (#1678)\n  PR URL: https://github.com/o/r/pull/1",
+                tool_use_id="toolu_report",
+            ),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"expected allow, got {result.stdout!r}"
+
+
+def test_new_namespace_relay_report_does_not_terminate_a_flow(tmp_path: Path) -> None:
+    """`gh-flow:issue-relay complete (#N)` must not satisfy `gh-flow:issue`'s terminal.
+
+    The two markers differ only by the `-relay` suffix, so a terminal
+    pattern that stopped at `issue` would let the sibling skill's own
+    report close this chain (issue #1678 Error Cases).
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 1678"),
+            _assistant_text("[OK] gh-flow:issue-relay complete (#1678)"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), "the relay report must not terminate the issue flow"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+def test_next_step_hint_names_both_namespaces(tmp_path: Path) -> None:
+    """A block's "next action" must be invocable under either namespace (#1678).
+
+    A session running only the migrated `gh-flow-skills` plugin has no
+    `gh-commit` skill, so a hint naming that alone answers the block with an
+    instruction it cannot follow.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 1678"),
+            _assistant_skill("gh-issue:implement"),
+            _assistant_text("implemented"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    reason = json.loads(result.stdout)["reason"]
+    assert "Skill(gh-commit)" in reason, reason
+    assert "Skill(gh-pr:commit)" in reason, reason
+
+
+def test_terminal_hint_after_full_chain_names_both_report_forms(tmp_path: Path) -> None:
+    """The Step 3 nudge quotes the old and new terminal marker (#1678)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 1678"),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS_NEW),
+            _assistant_text("all done"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    reason = json.loads(result.stdout)["reason"]
+    assert "gh:issue-flow complete (#N)" in reason, reason
+    assert "gh-flow:issue complete (#N)" in reason, reason
+
+
+@pytest.mark.parametrize(
+    ("label", "base_dir"),
+    [
+        ("relay-sibling", "/home/u/.claude/plugins/marketplaces/gh-flow-skills/skills/issue-relay"),
+        ("relay-merge-sibling", "/home/u/.claude/plugins/marketplaces/gh-flow-skills/skills/relay-merge"),
+    ],
+)
+def test_new_namespace_sibling_base_dirs_are_not_boundaries(tmp_path: Path, label: str, base_dir: str) -> None:
+    """The base-dir surface must not arm on a sibling skill in the same plugin."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(f"Base directory for this skill: {base_dir}"),
+            _assistant_text("done"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"{label}: must not arm the guard. stdout={result.stdout!r}"

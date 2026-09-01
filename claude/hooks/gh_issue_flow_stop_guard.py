@@ -125,17 +125,43 @@ def _trace(message: str, *, layer: str | None = None) -> None:
             pass
 
 
-# Sub-skill names accepted in either hyphen or colon namespace form.
-# Order matters — it's the canonical 6-step gh-issue-flow chain.
-EXPECTED_CHAIN: list[tuple[str, str]] = [
-    ("gh-issue-implement", "gh:issue-implement"),
-    ("gh-commit", "gh:commit"),
-    ("gh-pr", "gh:pr"),
-    ("devx-pr-review-all", "devx:pr-review-all"),
-    ("gh-pr-resolve-conflict", "gh:pr-resolve-conflict"),
-    ("gh-pr-resolve-outdated", "gh:pr-resolve-outdated"),
+# One entry per slot of the canonical 6-step gh-issue-flow chain; order
+# matters. Each entry lists EVERY name that addresses that slot — the
+# dotfiles-native pair (hyphen, colon) plus, since #1410 Phase 3, the
+# post-migration pair the skill answers to once installed from its own
+# plugin repo (D-12, issue #1678).
+#
+# Why both, and not a swap: NF-1 keeps the dotfiles originals in place until
+# Phase 4, and the live automation in `shell-common/functions/gh_flow.sh` +
+# `shell-common/tools/custom/issue_watcher_cron.sh` still dispatches the old
+# slash commands. Narrowing this list to the new names would drop the
+# harness guard off that operational path the moment it landed; ignoring the
+# new names would leave anyone running the migrated plugin unguarded. Phase 4
+# removes the old forms, here and there, together.
+#
+# Element 0 is the CANONICAL name of the slot: it is what `seen` records and
+# what `_next_step_label` quotes back to the model. It stays the old hyphen
+# form on purpose — the copy actually installed in this repo is still the one
+# the model is being told to invoke.
+EXPECTED_CHAIN: list[tuple[str, ...]] = [
+    # `gh-issue-implement`'s hyphen form is unchanged by the migration; only
+    # its colon form moves namespace (`gh:issue-implement` → `gh-issue:implement`).
+    ("gh-issue-implement", "gh:issue-implement", "gh-issue:implement"),
+    ("gh-commit", "gh:commit", "gh-pr-commit", "gh-pr:commit"),
+    ("gh-pr", "gh:pr", "gh-pr-create", "gh-pr:create"),
+    ("devx-pr-review-all", "devx:pr-review-all", "gh-verify-review-all", "gh-verify:review-all"),
+    ("gh-pr-resolve-conflict", "gh:pr-resolve-conflict", "gh-resolve-conflict", "gh-resolve:conflict"),
+    ("gh-pr-resolve-outdated", "gh:pr-resolve-outdated", "gh-resolve-outdated", "gh-resolve:outdated"),
 ]
-SUB_SKILL_NAMES: set[str] = {n for pair in EXPECTED_CHAIN for n in pair}
+SUB_SKILL_NAMES: set[str] = {n for forms in EXPECTED_CHAIN for n in forms}
+
+# Alias → canonical slot name. This replaces the old `skill.replace(":", "-")`
+# normalization, which only ever worked because a slot's colon and hyphen
+# forms were the same string modulo the separator. That stops being true
+# under the migration — `gh-pr:commit` normalizes to `gh-pr-commit`, which is
+# NOT `gh-commit` — so the mapping has to be explicit or two aliases of one
+# slot would count as two distinct steps.
+_SUB_SKILL_CANONICAL: dict[str, str] = {n: forms[0] for forms in EXPECTED_CHAIN for n in forms}
 
 # Human-facing SKILL.md step labels, parallel to EXPECTED_CHAIN. These are
 # NOT derived arithmetically because gh-pr-resolve-outdated is labeled
@@ -152,11 +178,19 @@ STEP_LABELS: list[str] = [
 
 # Terminal Step 3 markers — presence in any assistant text after the
 # gh-issue-flow boundary means the flow has finished and the model may stop.
+# The `gh-flow:issue` / `gh-flow-issue` half is the post-migration name
+# (#1678, D-12). Each pattern keeps the trailing space or `(#` that follows
+# the skill name, which is also what keeps the sibling `gh-flow:issue-relay`
+# out: its name continues with `-relay` exactly where these demand a space.
 TERMINAL_PATTERNS: tuple[str, ...] = (
     "gh:issue-flow complete (#",
     "gh:issue-flow stopped at step",
     "gh-issue-flow complete (#",
     "gh-issue-flow stopped at step",
+    "gh-flow:issue complete (#",
+    "gh-flow:issue stopped at step",
+    "gh-flow-issue complete (#",
+    "gh-flow-issue stopped at step",
 )
 
 # Issue #1270 — terminal marker as it appears in the `Bash` fallback
@@ -169,8 +203,15 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 # 'gh:issue-flow stopped at step'` — therefore cannot match, while a real
 # report (`gh:issue-flow complete (#1270)`, `gh:issue-flow stopped at step
 # 2/6`) does.
+#
+# The two namespaces are kept as SEPARATE alternatives rather than folded
+# into one character class (#1678 Error Cases): `gh[-:]issue-flow` and
+# `gh-flow[-:]issue` share no safe common shape, and a naive merge would
+# widen the match in ways neither name intends. The shared report shape is
+# factored out instead, so the two branches can never drift apart.
+_TERMINAL_REPORT_SHAPE: str = r"(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)"
 _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
-    r"gh[-:]issue-flow\s+(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)",
+    rf"(?:gh[-:]issue-flow|gh-flow[-:]issue)\s+{_TERMINAL_REPORT_SHAPE}",
 )
 
 # Issue #1274 — report-SHAPE requirement, applied to the paired
@@ -288,6 +329,19 @@ _HARNESS_INJECTION_RE: re.Pattern[str] = _line_anchored_alternation(_HARNESS_INJ
 #       (issue #608 — second wrapper-independent anchor, useful if the
 #       `<command-name>` / `Base directory` lines ever stop being emitted).
 #
+# Each of the four has a primed twin (a')–(d') for the post-migration
+# `gh-flow:issue` / `gh-flow-issue` namespace (#1678, D-12). Those twins end
+# on `(?![\w-])` rather than `\b`: a word boundary sits between `issue` and
+# the `-relay` of the sibling `gh-flow:issue-relay`, so `\b` would arm this
+# six-step chain guard on a skill that has no such chain.
+#
+# (c') allows arbitrary path segments between `gh-flow` and `/issue` because
+# an installed plugin's base directory is not `<plugin>/skills/<skill>` —
+# measured, the two real Claude Code layouts are
+# `plugins/marketplaces/gh-flow-skills/skills/issue` and
+# `plugins/cache/gh-flow-skills/gh-flow/<version>/skills/issue`. A pattern
+# pinned to one nesting depth silently matches neither.
+#
 # The `(?m)` prefix anchors `^` to per-line starts so a mid-sentence
 # mention like "I was reading about /gh-issue-flow..." stays out.
 # False-positive guards for `tool_result` payloads (e.g. SKILL.md being
@@ -304,11 +358,25 @@ _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
         ^Base\s+directory\s+for\s+this\s+skill:\s+.*gh-issue-flow\b  # (c) skill base dir
         |
         ^\#\s+gh:issue-flow\s+—\s+Issue\s+→\s+PR\s+composition\s*$  # (d) SKILL.md H1
+        |
+        ^\s*/gh-flow[-:]issue(?![\w-])                       # (a') new namespace
+        |
+        <command-name>\s*/gh-flow[-:]issue\s*</command-name>  # (b') new namespace
+        |
+        ^Base\s+directory\s+for\s+this\s+skill:\s+
+            .*gh-flow(?:-issue(?![\w-])|[\w./-]*/issue(?![\w-]))  # (c') new namespace
+        |
+        ^\#\s+gh-flow:issue\s+—\s+Issue\s+→\s+PR\s+composition\s*$  # (d') new namespace
     )
     """,
     re.VERBOSE,
 )
-FLOW_SKILL_NAMES: set[str] = {"gh-issue-flow", "gh:issue-flow"}
+FLOW_SKILL_NAMES: set[str] = {
+    "gh-issue-flow",
+    "gh:issue-flow",
+    "gh-flow-issue",
+    "gh-flow:issue",
+}
 
 
 def _allow(trace_reason: str = "", *, layer: str | None = None) -> int:
@@ -560,7 +628,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     """Walk forward from the boundary.
 
     Returns (terminal_seen, ordered_distinct_sub_skill_invocations).
-    Sub-skill names are normalized to the hyphen form for comparison.
+    Sub-skill names are normalized to their slot's canonical name.
 
     Issue #608 (layer L1.5) — terminal-marker scan is restricted to
     `role=assistant` text blocks, with `include_tool_results=False`,
@@ -673,7 +741,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
         for skill in _iter_skill_uses(msg):
             if skill not in SUB_SKILL_NAMES:
                 continue
-            normalized = skill.replace(":", "-")
+            normalized = _SUB_SKILL_CANONICAL[skill]
             if normalized not in seen:
                 seen.append(normalized)
     return terminal, seen
@@ -812,15 +880,25 @@ def _count_fresh_user_prompts(messages: list[dict[str, Any]], start: int) -> int
 
 
 def _next_step_label(seen: list[str]) -> str:
-    """Map the highest-index sub-skill seen to a human label for the *next* one."""
-    canonical = [hyphen for hyphen, _ in EXPECTED_CHAIN]
+    """Map the highest-index sub-skill seen to a human label for the *next* one.
+
+    Both names of the slot are quoted (#1678): the canonical dotfiles one the
+    model is most likely to have installed, and the post-migration alias. A
+    session running the `gh-flow-skills` plugin has only the latter, so naming
+    the canonical form alone would answer a block with an instruction to invoke
+    a skill that does not exist there. The canonical name stays first and
+    unparenthesised, which is also what keeps the existing
+    `"Step 2.2 — Skill(gh-commit)"` substring assertions matching.
+    """
+    canonical = [forms[0] for forms in EXPECTED_CHAIN]
     next_idx = 0
     for i, name in enumerate(canonical):
         if name in seen:
             next_idx = i + 1
     if next_idx >= len(canonical):
-        return "Step 3 — emit the final 'gh:issue-flow complete (#N)' report"
-    return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]})"
+        return "Step 3 — emit the final 'gh:issue-flow complete (#N)' / 'gh-flow:issue complete (#N)' report"
+    alias = EXPECTED_CHAIN[next_idx][-1]
+    return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]}) (or Skill({alias}))"
 
 
 def _resolve_transcript_path(event: dict[str, Any]) -> tuple[str | None, str]:

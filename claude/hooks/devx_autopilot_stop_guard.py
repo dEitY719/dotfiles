@@ -99,17 +99,26 @@ REQUIRED_STEPS: list[str] = [
 # Human-facing label for each step, surfaced in the block reason.
 _STEP_LABELS: dict[str, str] = {
     "plan": "Step 0a — Skill(superpowers:writing-plans)",
-    "issue": "Step 0b — Skill(gh:issue-create)",
+    "issue": "Step 0b — Skill(gh-issue:create)",
     "mode": "Step 1 — mode selection (log mode=<sdd|inline> reason=...)",
     "implement": "Step 2 — SDD skill OR inline TDD + Advisor 검증",
-    "pr": "Step 3 — Skill(gh:pr, <ISSUE_NUM>)",
+    "pr": "Step 3 — Skill(gh-pr:create, <ISSUE_NUM>)",
     "simplify": "Step 4 — Skill(simplify, <PR_NUM>)",
-    "pr-reply": "Step 5 — Skill(gh-pr-reply, <PR_NUM>) (emit the marker even with no comments / [SKIP])",
+    "pr-reply": "Step 5 — Skill(gh-pr:reply, <PR_NUM>) (emit the marker even with no comments / [SKIP])",
 }
 
-# Strict step-marker regex. Requires the literal `[step:devx-autopilot/<id>] OK`
+# Skill names whose `[step:<name>/<id>] OK` markers this guard honours: the
+# dotfiles-native `devx-autopilot` and, since #1410 Phase 3, the migrated
+# `gh-flow-autopilot` (D-12, issue #1678). Both are accepted for the whole
+# transition — NF-1 keeps the dotfiles original emitting the old marker until
+# Phase 4, while anyone running the `gh-flow-skills` plugin emits the new one.
+_MARKER_SKILL_NAMES: tuple[str, ...] = ("devx-autopilot", "gh-flow-autopilot")
+
+# Strict step-marker regex. Requires the literal `[step:<skill>/<id>] OK`
 # so a partial `[step:devx-autopilot/plan]` without ` OK` does NOT match.
-_STEP_MARKER_RE: re.Pattern[str] = re.compile(r"\[step:devx-autopilot/([a-z-]+)\]\s+OK\b")
+_STEP_MARKER_RE: re.Pattern[str] = re.compile(
+    r"\[step:(?:" + "|".join(re.escape(n) for n in _MARKER_SKILL_NAMES) + r")/([a-z-]+)\]\s+OK\b"
+)
 
 # Terminal markers — presence in any *assistant text* block after the boundary
 # means the flow has finished (or hard-failed) and the model may stop.
@@ -117,6 +126,10 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
     "[step:devx-autopilot/report] OK",
     "[OK] devx:autopilot",
     "[FAIL] devx:autopilot",
+    # Post-migration twins (#1678, D-12).
+    "[step:gh-flow-autopilot/report] OK",
+    "[OK] gh-flow:autopilot",
+    "[FAIL] gh-flow:autopilot",
 )
 
 # Issue #1275 — spans Claude Code injects into user-role messages that are
@@ -209,6 +222,14 @@ _HARNESS_INJECTION_RE: re.Pattern[str] = _line_anchored_alternation(_HARNESS_INJ
 #       emits when a user invokes the slash command interactively
 #   (c) the `Base directory for this skill: …/devx-autopilot` expansion marker
 #   (d) the SKILL.md H1 line `# devx:autopilot — …`
+# Each has a primed twin (a')–(d') for the post-migration `gh-flow:autopilot`
+# namespace (#1678, D-12). Without them the widened markers above would be
+# unreachable for anyone running the migrated plugin: the guard would never
+# arm, so it would never look for a marker in either namespace. (c') allows
+# arbitrary path segments between `gh-flow` and `/autopilot`: an installed
+# plugin's base dir is `plugins/marketplaces/gh-flow-skills/skills/autopilot`
+# or `plugins/cache/gh-flow-skills/gh-flow/<version>/skills/autopilot`, not
+# `<plugin>/skills/<skill>` (measured).
 # `(?m)` anchors `^` to per-line starts. tool_result payloads are excluded by
 # `_iter_text_blocks(..., include_tool_results=False)` at the call site.
 _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
@@ -222,11 +243,25 @@ _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
         ^Base\s+directory\s+for\s+this\s+skill:\s+.*devx-autopilot\b  # (c) skill base dir
         |
         ^\#\s+devx:autopilot\s+—                                  # (d) SKILL.md H1
+        |
+        ^\s*/gh-flow[-:]autopilot(?![\w-])                        # (a') new namespace
+        |
+        <command-name>\s*/gh-flow[-:]autopilot\s*</command-name>  # (b') new namespace
+        |
+        ^Base\s+directory\s+for\s+this\s+skill:\s+
+            .*gh-flow(?:-autopilot(?![\w-])|[\w./-]*/autopilot(?![\w-]))  # (c') new namespace
+        |
+        ^\#\s+gh-flow:autopilot\s+—                               # (d') new namespace
     )
     """,
     re.VERBOSE,
 )
-FLOW_SKILL_NAMES: set[str] = {"devx-autopilot", "devx:autopilot"}
+FLOW_SKILL_NAMES: set[str] = {
+    "devx-autopilot",
+    "devx:autopilot",
+    "gh-flow-autopilot",
+    "gh-flow:autopilot",
+}
 
 
 def _allow(trace_reason: str = "", *, layer: str | None = None) -> int:
