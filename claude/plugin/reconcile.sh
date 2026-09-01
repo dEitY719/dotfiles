@@ -20,6 +20,15 @@
 #
 #   --check (default)  print SSOT-vs-manifest diff; non-zero exit if drift
 #   --apply            rewrite the manifest to match SSOT, commit if changed
+#                      (public scope writes the untracked overlay and does not
+#                      commit — see #1685 below)
+#
+# #1685: the public manifest used to be BOTH the upstream registration contract
+# and this machine's install state, so every fork/mirror conflicted with every
+# upstream registration commit. The two are now separate files —
+# claude/plugin/{marketplaces,plugins}.json is the tracked, upstream-owned
+# contract this script only READS, and *.local.json is the gitignored overlay it
+# writes. Consumers (restore.sh) read the union.
 #
 # Public (github) marketplaces route to claude/plugin/*.json; private
 # (non-github) ones to claude/plugin/company/*.json — identical to the hook.
@@ -69,7 +78,12 @@ Usage: reconcile.sh [--check|--apply] [-h|--help]
 
 SSOT: ~/.claude-shared/plugins/{known_marketplaces,installed_plugins}.json
       (CLAUDE_SHARED_PLUGINS_DIR 로 재정의 가능)
-공용(github) → claude/plugin/*.json, 사내(non-github) → claude/plugin/company/*.json
+공용(github) → claude/plugin/*.local.json (gitignored 머신 로컬 오버레이, #1685).
+      tracked claude/plugin/{marketplaces,plugins}.json 은 upstream 등록 계약이며
+      이 스크립트가 절대 쓰지 않는다 — 계약에 있는 항목은 오버레이 목표에서 빠지고,
+      이 PC 에 설치되지 않은 계약 항목도 유령으로 보고하지 않는다.
+      계약에 새 플러그인을 등록하는 것은 upstream 의 명시적 PR 작업이다.
+사내(non-github) → claude/plugin/company/*.json (별도 private 레포, 커밋 유지)
 company/ 는 ~/.dotfiles-setup-mode == internal 이고 company/.git 이 있을 때만 처리.
 EOF
 }
@@ -134,6 +148,12 @@ fi
 PUB_DIR="$SCRIPT_DIR"
 PRIV_DIR="$SCRIPT_DIR/company"
 
+# 공용 스코프의 쓰기 대상은 tracked 계약이 아니라 머신 로컬 오버레이다 (#1685).
+# claude/plugin/{marketplaces,plugins}.json 은 upstream 이 소유하는 등록 계약이라
+# 이 스크립트는 절대 쓰지 않고, 읽어서 오버레이 목표에서 빼기만 한다.
+PUB_LOCAL_MP="$PUB_DIR/marketplaces.local.json"
+PUB_LOCAL_PL="$PUB_DIR/plugins.local.json"
+
 # The repo that owns the public manifest — resolved from SCRIPT_DIR so this
 # works from any checkout/worktree (and from a test copy). Required for
 # --apply's commit; --check never needs it.
@@ -191,6 +211,20 @@ _target_plugins_for_mp() {
 plugins_common=$(_target_plugins_for_mp "$target_common") || exit 1
 plugins_private=$(_target_plugins_for_mp "$target_private") || exit 1
 
+# --- 공용 오버레이 목표 = SSOT − tracked 등록 계약 (#1685) ------------------
+# 계약에 이미 있는 항목을 목표에서 빼면 두 오판이 한꺼번에 사라진다:
+#   1. 계약 항목이 오버레이에 중복 기록되는 것 (그러면 계약이 바뀔 때 로컬이 밀린다)
+#   2. 이 PC 에 설치되지 않은 계약 항목이 "유령" 으로 보고되는 것 — fork 에서
+#      upstream 이 등록만 해 둔 플러그인이 정확히 이 모양이다.
+# 오버레이가 없고 계약이 곧 로컬 상태였던 기존 PC 에서는 목표가 비어 있으므로
+# --apply 가 빈 오버레이를 쓸 뿐, 계약은 손대지 않는다.
+tracked_mp=$(_claude_plugin_read_json_or "$PUB_DIR/marketplaces.json" '{}')
+tracked_pl=$(_claude_plugin_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')
+overlay_common=$(jq -n --argjson t "$target_common" --argjson k "$tracked_mp" \
+	'$t | with_entries(select($k[.key] == null))') || exit 1
+overlay_plugins_common=$(jq -n --argjson t "$plugins_common" --argjson k "$tracked_pl" \
+	'$t - ($k.plugins // [])') || exit 1
+
 # --- diff helpers ---------------------------------------------------------
 # Each prints drift lines to stdout and returns 1 when it found any.
 
@@ -228,15 +262,15 @@ _diff_plugins() {
 _run_check() {
 	local drift=0 out
 
-	echo "${UX_MUTED}== 공용(github) 매니페스트 ==${UX_RESET}"
-	if ! out=$(_diff_marketplaces "$PUB_DIR/marketplaces.json" "$target_common"); then
+	echo "${UX_MUTED}== 공용(github) 매니페스트 — 로컬 오버레이 ==${UX_RESET}"
+	if ! out=$(_diff_marketplaces "$PUB_LOCAL_MP" "$overlay_common"); then
 		drift=1
-		echo "${UX_MUTED}marketplaces.json:${UX_RESET}"
+		echo "${UX_MUTED}marketplaces.local.json:${UX_RESET}"
 		while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 	fi
-	if ! out=$(_diff_plugins "$PUB_DIR/plugins.json" "$plugins_common"); then
+	if ! out=$(_diff_plugins "$PUB_LOCAL_PL" "$overlay_plugins_common"); then
 		drift=1
-		echo "${UX_MUTED}plugins.json:${UX_RESET}"
+		echo "${UX_MUTED}plugins.local.json:${UX_RESET}"
 		while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 	fi
 
@@ -312,23 +346,22 @@ _run_apply() {
 	fi
 	# Commit titles come from the shell-common helper sourced at the top of
 	# this script; without it --apply would commit under an empty subject.
-	if ! command -v _plugin_sync_title >/dev/null 2>&1; then
+	# Only the company/ scope still commits (#1685) — the public scope writes
+	# an untracked overlay — so the guard is scoped to that branch.
+	if [ "$COMPANY_ACTIVE" -eq 1 ] && ! command -v _plugin_sync_title >/dev/null 2>&1; then
 		echo "${UX_ERROR}shell-common/functions/plugin_sync_title.sh 를 불러오지 못했습니다.${UX_RESET}" >&2
 		echo "${UX_ERROR}  → dotfiles 설치를 확인하거나 SHELL_COMMON 을 설정하세요.${UX_RESET}" >&2
 		exit 1
 	fi
 
-	local mp_pretty pl_pretty pub_title priv_title
-	pub_title=$(_plugin_sync_title "$SYNC_MSG" \
-		"$PUB_DIR/marketplaces.json" "$target_common" \
-		"$PUB_DIR/plugins.json" "$plugins_common")
-
-	mp_pretty=$(jq -n --argjson x "$target_common" '$x')
-	pl_pretty=$(jq -n --argjson p "$plugins_common" '{plugins: $p}')
-	_write_if_changed "$PUB_DIR/marketplaces.json" "$mp_pretty"
-	_write_if_changed "$PUB_DIR/plugins.json" "$pl_pretty"
-	_commit_if_changed "$MAIN_ROOT" "$pub_title" \
-		"$PUB_DIR/marketplaces.json" "$PUB_DIR/plugins.json"
+	local mp_pretty pl_pretty priv_title
+	# 공용: gitignored 오버레이만 쓴다. tracked 등록 계약은 읽기 전용이고, 오버레이는
+	# 추적되지 않으므로 커밋할 것 자체가 없다 — #1685 이전의
+	# "chore(claude-plugin): sync manifest" 자동 커밋이 사라진 자리다.
+	mp_pretty=$(jq -n --argjson x "$overlay_common" '$x')
+	pl_pretty=$(jq -n --argjson p "$overlay_plugins_common" '{plugins: $p}')
+	_write_if_changed "$PUB_LOCAL_MP" "$mp_pretty"
+	_write_if_changed "$PUB_LOCAL_PL" "$pl_pretty"
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
 		priv_title=$(_plugin_sync_title "$SYNC_MSG" \

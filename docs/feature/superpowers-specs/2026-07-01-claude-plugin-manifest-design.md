@@ -72,14 +72,62 @@ Claude Code 세션 (Bash 도구로 claude plugin ... 실행, 어느 프로젝트
   플러그인 재설치 완료 (external: 공용만 / internal: 공용+사내전용)
 ```
 
+## 개정: 등록 계약 / 머신 로컬 상태 분리 (#1685, 2026-09-01)
+
+원 설계는 공용 매니페스트 한 쌍(`claude/plugin/{marketplaces,plugins}.json`)에
+**성질이 다른 두 데이터**를 겹쳐 담았다:
+
+- **(A) 등록 계약** — upstream 이 소유하고 `claude_plugin_{restore,scaffold}.bats`
+  가 고정하는, "이 dotfiles 를 쓰면 이 플러그인들이 깔린다" 는 선언.
+- **(B) 머신 로컬 설치 상태** — 이 PC 가 실제로 설치한 것. `plugin-sync.sh` 훅이
+  `~/.claude-shared/plugins/` 를 보고 자동 append/커밋.
+
+두 쓰기 주체가 같은 배열에 append 하므로 fork/mirror 에서는 필연적으로 갈렸고,
+upstream 이 플러그인을 하나 등록할 때마다 sync 가 충돌했다 — 게다가 부분 적용이
+"등록 계약 테스트는 적용됐는데 등록은 deferred" 라는 반쪽 상태를 남겨 신규 회귀를
+만들었다. `git/config/gcp-scan-skip-paths.conf` (#1215) 는 이 문제의 **우회책**
+이었을 뿐, 등록과 스킬 파일을 함께 담은 커밋은 그대로 통과시켰다.
+
+**해결**: 두 데이터를 파일로 분리한다 — 이 저장소가 `settings.local.json`(#924),
+`*.local.sh`, watched-repos 레지스트리(`43f82308`) 에서 이미 세 번 쓴 패턴이다.
+
+| 파일 | 추적 | 담는 것 | 쓰는 주체 |
+|---|---|---|---|
+| `claude/plugin/{marketplaces,plugins}.json` | tracked | (A) 등록 계약 | 사람 (PR) |
+| `claude/plugin/{marketplaces,plugins}.local.json` | gitignored | (B) 이 PC 설치 상태 | `plugin-sync.sh`, `reconcile.sh --apply` |
+
+규칙:
+
+1. **훅은 tracked 파일을 절대 쓰지 않는다.** 읽기는 하되, 오직 오버레이 목표에서
+   계약 항목을 **빼기** 위해서다. 계약 항목을 오버레이에 중복 기록하면 나중에
+   계약이 바뀔 때 로컬이 옛 값을 되살린다.
+2. **소비자는 union 을 읽는다.** `restore.sh` 의 복원 대상과 `--sync` keep-set,
+   `reconcile.sh --check` 의 유령 판정이 모두 `tracked ∪ local` 기준이다.
+3. **이 PC 에 설치되지 않은 계약 항목은 유령이 아니다.** fork 에서 upstream 이
+   등록만 해 둔 플러그인이 정확히 이 모양이라, 이것을 유령으로 지우면 계약이
+   깨진다.
+4. **공용 스코프는 커밋하지 않는다.** 오버레이는 untracked 이므로 커밋할 것이
+   없다 — `chore(claude-plugin): sync manifest` 자동 커밋은 별도 private 레포인
+   `company/` 에만 남는다. `company/` 는 fork 가 없으므로 원 설계 그대로다.
+5. **계약 등록은 upstream 의 명시적 PR 작업이다.** 훅이 대신 해 주지 않는다.
+   계약에 있는 항목을 uninstall 하면 훅이 stderr 힌트를 남긴다.
+
+효과: upstream 등록 커밋이 fork 와 충돌하지 않고, `plugin-sync.sh` 실행 후
+`git status` 가 깨끗하며, `gcp-scan-skip-paths.conf` 의 매니페스트 항목이
+불필요해진다(#1685 에서 은퇴).
+
+아래 원 설계의 "공용 → `*.json` 에 커밋" 서술은 이 절이 대체한다.
+
 ## 파일 포맷 & 저장 위치
 
-**공용 (public, `dotfiles/claude/plugin/`, git 커밋됨):**
+**공용 (public, `dotfiles/claude/plugin/`):**
 
 ```
 claude/plugin/
-├── marketplaces.json   # { "<marketplace-name>": "<owner>/<repo>", ... }  (source:github만)
-├── plugins.json         # { "plugins": ["<plugin>@<marketplace>", ...] }   (scope:user + source:github만)
+├── marketplaces.json         # tracked  — 등록 계약 { "<marketplace-name>": "<owner>/<repo>" }
+├── plugins.json              # tracked  — 등록 계약 { "plugins": ["<plugin>@<marketplace>"] }
+├── marketplaces.local.json   # gitignored — 이 PC 설치 상태 (#1685)
+├── plugins.local.json        # gitignored — 이 PC 설치 상태 (#1685)
 └── restore.sh
 ```
 
