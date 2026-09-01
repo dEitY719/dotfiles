@@ -13,17 +13,30 @@
 # observed 2026-09-01: 4 PRs stuck on this after a `gh:pr-merge-train` run.
 #
 # Fix: compare `git patch-id --stable` of the PR's diff before vs. after the
-# rebase. Identical -> the label is still true for the new head, so instead
-# of dropping it, re-post the SAME freshness marker format
-# (`devx_pr_review_all_write_label`, #1601) for the new SHA — the existing
+# rebase. Identical, AND `review-passed` is CURRENTLY on the PR -> the label
+# is still true for the new head, so instead of dropping it, re-post the SAME
+# freshness marker format (#1601) for the new SHA — the existing
 # `_gh_pr_merge_train_review_passed_stale()` reader then sees it as fresh on
 # the very next tick, with no changes to that reader or to the marker format.
-# Different (or unreadable) -> drop as before; conflict resolution
+# Anything else (patch-id differs, unreadable, or the label was never there to
+# begin with) -> drop as before (a no-op when absent). Conflict resolution
 # (`gh:pr-resolve-conflict`) is untouched by this file and keeps its own
 # unconditional drop, since resolving a conflict by definition changes content.
 #
+# The label add + marker post below are done directly (`_gh_pr_edit_safe_label`
+# + one `gh api` POST in the exact format `devx_pr_review_all_write_label`
+# already uses), NOT by calling `devx_pr_review_all_write_label` itself — that
+# helper's first action is deleting the OPPOSITE label (`review-blocked`,
+# because it services both directions), which would violate this skill's
+# absolute "never touch review-blocked" constraint (PR #1699 review, codex
+# BLOCKER). Checking current-label presence first also closes a second gap
+# from the same review: without it, a PR that was NEVER reviewed could earn
+# `review-passed` from a coincidentally-matching patch-id — a self-certifying
+# grant this file must never manufacture.
+#
 # Usage:
 #   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path]
+#   _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>
 #   _gh_pr_resolve_outdated_reconcile_review_passed \
 #       <pr> <repo> <host> <old-base-sha> <old-head-sha> \
 #       <new-base-sha> <new-head-sha> [worktree-path]
@@ -53,6 +66,26 @@ _gh_pr_resolve_outdated_patch_id() {
     printf '%s\n' "$_out" | awk '{print $1; exit}'
 }
 
+# Returns 0 when <label> is currently on the PR, 1 when it is not (including
+# every lookup failure — fail closed, same as the freshness check this file
+# feeds: an unreadable label list must never be read as "present").
+_gh_pr_resolve_outdated_has_label() {
+    local _pr="$1" _repo="$2" _host="${3-}" _label="$4"
+    if [ -z "$_pr" ] || [ -z "$_repo" ] || [ -z "$_label" ]; then
+        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>\n' >&2
+        return 1
+    fi
+    local _labels
+    _labels=$(
+        if [ -n "$_host" ]; then
+            # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+            export GH_HOST="$_host"
+        fi
+        gh api "repos/$_repo/issues/$_pr/labels" --jq '.[].name' 2>/dev/null
+    ) || return 1
+    printf '%s\n' "$_labels" | grep -Fxq -- "$_label"
+}
+
 # Soft-fail throughout (same contract as the unconditional drop it replaces):
 # a failed reconciliation costs one stderr line, never the caller's exit
 # status — Step 4's push already succeeded, so this step must never turn that
@@ -76,17 +109,22 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
     _old_pid=$(_gh_pr_resolve_outdated_patch_id "$_old_base" "$_old_head" "$_worktree")
     _new_pid=$(_gh_pr_resolve_outdated_patch_id "$_new_base" "$_new_head" "$_worktree")
 
-    if [ -n "$_old_pid" ] && [ -n "$_new_pid" ] && [ "$_old_pid" = "$_new_pid" ]; then
-        if ! command -v devx_pr_review_all_write_label >/dev/null 2>&1; then
-            # shellcheck source=/dev/null
-            . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/devx_pr_review_all.sh" 2>/dev/null || :
-        fi
-        if command -v devx_pr_review_all_write_label >/dev/null 2>&1; then
-            devx_pr_review_all_write_label review-passed "$_pr" "$_repo" "$_host" "$_new_head" >/dev/null || :
-            printf 'patch-id=unchanged label=kept marker=reposted\n'
-            return 0
-        fi
-        printf '[gh-pr-resolve-outdated] devx_pr_review_all_write_label unavailable — falling back to drop\n' >&2
+    if [ -n "$_old_pid" ] && [ -n "$_new_pid" ] && [ "$_old_pid" = "$_new_pid" ] &&
+        _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-passed; then
+        # Direct add + marker post — NOT `devx_pr_review_all_write_label`,
+        # which also deletes the opposite `review-blocked` label as its first
+        # action. This file must never touch that label (see the header note).
+        (
+            if [ -n "$_host" ]; then
+                # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+                export GH_HOST="$_host"
+            fi
+            _gh_pr_edit_safe_label "$_pr" review-passed --repo "$_repo" >/dev/null 2>&1 &&
+                gh api -X POST "repos/$_repo/issues/$_pr/comments" \
+                    -f "body=<!-- review-verdict:review-passed:$_new_head -->" >/dev/null 2>&1
+        ) || :
+        printf 'patch-id=unchanged label=kept marker=reposted\n'
+        return 0
     fi
 
     _gh_pr_drop_label "$_pr" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :

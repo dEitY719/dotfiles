@@ -44,32 +44,52 @@ Caller contract: `PR_NUMBER`, `TARGET_REPO`, `TARGET_HOST` 는 Step 1 이
 패치-id 비교와 라벨 재조정은 `shell-common/functions/gh_pr_resolve_outdated.sh`
 의 `_gh_pr_resolve_outdated_reconcile_review_passed` 가 담당한다 — 이 문서는
 로직을 다시 구현하지 않고 그 함수를 호출한다(#1524 규칙: 문서와 구현이 갈라질 수
-없다). 내부적으로 patch-id 가 동일하면 `devx_pr_review_all_write_label` 을 호출해
-기존 freshness marker 포맷 그대로 새 SHA 로 재발급하고, 다르면 공유 헬퍼
-`_gh_pr_drop_label` 로 삭제한다(REST DELETE 관용구 — `gh pr edit --remove-label`
-이 classic Projects 보드 repo 에서 GraphQL deprecation 으로 **조용히 실패**하는
-문제(#326 Bug B)를 피한다).
+없다). 내부적으로 다음 **두 조건이 모두** 참일 때만 유지+재발급한다 — patch-id
+가 동일**하고**, `review-passed` 가 **지금** 그 PR 에 실제로 붙어 있을 때
+(`_gh_pr_resolve_outdated_has_label`) — 그 외에는 전부 공유 헬퍼
+`_gh_pr_drop_label` 로 삭제한다(REST DELETE 관용구 — `gh pr edit
+--remove-label` 이 classic Projects 보드 repo 에서 GraphQL deprecation 으로
+**조용히 실패**하는 문제(#326 Bug B)를 피한다). 두 번째 조건이 없으면 한
+번도 리뷰된 적 없는 PR 이 우연히 patch-id 가 일치한다는 이유만으로
+`review-passed` 를 새로 얻는 자가인증이 된다(PR #1699 review, codex
+BLOCKER) — 유지+재발급 경로는 라벨을 **새로 발급**하지 않고, 이미 있는
+라벨을 새 SHA 로 **재확인**할 뿐이다. 라벨 추가와 marker 게시는
+`devx_pr_review_all_write_label` 을 거치지 않고 직접 한다 — 그 헬퍼는
+반대쪽 `review-blocked` 를 첫 동작으로 삭제하므로, 아래 "`review-blocked`
+는 절대 건드리지 않는다" 규칙을 어기게 된다(PR #1699 review, codex
+BLOCKER).
+
+`OLD_BASE_SHA` / `OLD_HEAD_SHA` 는 Step 3(rebase 전)이 캡처해 둔 값,
+`NEW_BASE_SHA` / `NEW_HEAD_SHA` 는 이 Step 이 push 성공 직후 새로 읽는다.
+Step 3/4 어디에서도 이 네 변수를 실제로 할당하는 코드가 없다면 아래 호출은
+매번 patch-id 를 읽지 못해 무조건 삭제 경로만 타게 된다(PR #1699 review,
+codex BLOCKER) — 그래서 호출 직전에 항상 명시적으로 할당한다:
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_resolve_outdated.sh"
 
-# --worktree 모드가 아니면 마지막 인자(worktree path)는 생략한다:
-_vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
-    "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
-    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA")
-
-# --worktree <path> 모드에서는 그 경로를 8번째 인자로 넘긴다 — 함수 내부의
-# patch-id 비교가 `git -C "<path>" diff ...` 로 실행된다:
-_vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
-    "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
-    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "$WORKTREE_PATH")
+if [ -n "${WORKTREE_PATH-}" ]; then
+    OLD_HEAD_SHA="$BACKUP_SHA"
+    NEW_BASE_SHA=$(git -C "$WORKTREE_PATH" rev-parse "$REMOTE/$BASE")
+    NEW_HEAD_SHA=$(git -C "$WORKTREE_PATH" rev-parse HEAD)
+    _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
+        "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
+        "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "$WORKTREE_PATH")
+else
+    OLD_HEAD_SHA="$BACKUP_SHA"
+    NEW_BASE_SHA=$(git rev-parse "$REMOTE/$BASE")
+    NEW_HEAD_SHA=$(git rev-parse HEAD)
+    _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
+        "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
+        "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA")
+fi
 
 case "$_vl_result" in
     *"label=kept"*)
         echo "[OK] \`review-passed\` 유지됨 — rebase 는 diff 내용 변경 없음(patch-id 동일), 새 SHA 로 재확인"
         ;;
     *)
-        echo "[OK] \`review-passed\` 무효화됨 — rebase 로 diff 내용이 바뀌어 이전 판정은 만료"
+        echo "[OK] \`review-passed\` 무효화됨(또는 애초에 없었음) — 최신 판정 없음"
         ;;
 esac
 ```
