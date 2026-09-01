@@ -53,12 +53,12 @@ Substeps and error templates in `references/repo-resolution.md`.
 
 ```bash
 GH_HOST="$TARGET_HOST" gh issue view <N> --repo "$TARGET_REPO" --json \
-  number,title,body,author,labels,state,stateReason,\
-  comments,assignees,createdAt,updatedAt,url
+  number,title,body,author,labels,state,comments,assignees,createdAt,updatedAt,url
 ```
 
-On error (issue not found, auth failure), print `gh` stderr verbatim
-and stop — do not attempt fallback.
+On error (issue not found, auth failure), print `gh` stderr verbatim and stop —
+do not attempt fallback. A CLOSED issue needs one extra REST read for the Header
+close reason: `references/output-format.md` → "Close reason".
 
 ## Step 3: Format Output
 

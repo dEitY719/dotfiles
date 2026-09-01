@@ -12,7 +12,8 @@ The skill prints sections in this exact order. Empty sections are omitted except
 ```
 
 `state` is one of `OPEN`, `CLOSED`. If the issue is closed as `not_planned` or `completed`, include that in parens:
-`(CLOSED — completed)`.
+`(CLOSED — completed)`. That reason comes from the extra read below, not from
+`gh issue view` — see "Close reason".
 
 ### 2. Summary (2-4 lines)
 
@@ -69,8 +70,7 @@ Checklist:
 
 ```bash
 GH_HOST="$TARGET_HOST" gh issue view <N> --repo "$TARGET_REPO" --json \
-  number,title,body,author,labels,state,stateReason,\
-  comments,assignees,createdAt,updatedAt,url
+  number,title,body,author,labels,state,comments,assignees,createdAt,updatedAt,url
 ```
 
 `GH_HOST` + `--repo` are both mandatory — see `references/repo-resolution.md`
@@ -78,4 +78,25 @@ GH_HOST="$TARGET_HOST" gh issue view <N> --repo "$TARGET_REPO" --json \
 
 `comments` items: `{author, body, createdAt}`.
 `labels` items: `{name}`.
+
+## Close reason
+
+`gh issue view --json` grew a `stateReason` field only in later `gh` releases;
+asking for it on an older one aborts the whole fetch before anything is printed:
+
+```
+Unknown JSON field: "stateReason"
+```
+
+So the Header's `(CLOSED — <reason>)` parenthetical reads the REST field instead,
+which every `gh` version exposes. Run it only when `state` is `CLOSED`:
+
+```bash
+GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/issues/<N>" --jq '.state_reason'
+```
+
+`completed` / `not_planned` / `null`. This is a second **read** — it mutates
+nothing, so the skill's read-only contract holds. It is also non-fatal: if the
+call fails or yields `null`, print the Header without the parenthetical rather
+than aborting a fetch that already succeeded.
 `author`, `assignees` items: `{login}`.
