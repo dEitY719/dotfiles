@@ -105,6 +105,34 @@ MAIN_ROOT="$HOME/dotfiles"
 # leaves _resolve_sync_title falling back to $SYNC_TITLE.
 # shellcheck disable=SC1091
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
+# The manifest reader (_claude_plugin_read_json_or) is the same helper
+# reconcile.sh and restore.sh need, so it has a single home in shell-common
+# (#1696).
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+
+# Bootstrap fallback, NOT a second implementation to maintain in parallel.
+# The title helper may go missing and the hook simply commits under the bare
+# subject, but the reader feeds `jq --argjson` for the merge itself: without it
+# the merged value comes out empty, _write_manifest refuses to write, and the
+# manifest update is lost silently. A stale install must still sync (pinned by
+# tests/bats/skills/plugin_sync_hook.bats "falls back to the bare subject when
+# the title helper is unavailable", which asserts the commit still lands).
+# Behavior changes belong in shell-common/functions/claude_plugin_manifest.sh;
+# this copy follows it.
+if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
+	_claude_plugin_read_json_or() {
+		local out=""
+		if [ -f "$1" ]; then
+			out=$(jq -c '.' "$1" 2>/dev/null)
+		fi
+		if [ -n "$out" ]; then
+			printf '%s' "$out"
+		else
+			printf '%s' "$2"
+		fi
+	}
+fi
 
 SRC="$HOME/.claude-shared/plugins"
 MP_SRC="$SRC/known_marketplaces.json"
@@ -175,15 +203,6 @@ _push_if_protected() {
 	fi
 }
 
-# Emit the compact JSON in file $1, or the default $2 when the file is
-# missing, empty (0-byte — `jq .` exits 0 with no output there, so a plain
-# `jq . || echo` fallback would not fire), or invalid JSON.
-_read_json_or() {
-	local out
-	out=$(jq -c '.' "$1" 2>/dev/null)
-	[ -n "$out" ] && printf '%s' "$out" || printf '%s' "$2"
-}
-
 # scope:user plugins from $PL_SRC whose marketplace (the part after `@`) is a
 # key of the marketplace map passed as $1 (mp_common → public, mp_internal →
 # private). Same filter for both sides; only the map differs.
@@ -246,9 +265,9 @@ if [ "$action" = "add" ]; then
 	# lands on disk and what _resolve_sync_title diffs the current manifest
 	# against (#1558) — computing it once is what stops the commit title and
 	# the commit content from ever disagreeing.
-	mp_pub=$(jq -n --argjson old "$(_read_json_or "$PUB_DIR/marketplaces.json" '{}')" \
+	mp_pub=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_DIR/marketplaces.json" '{}')" \
 		--argjson new "$mp_common" '$old * $new')
-	pl_pub=$(jq -n --argjson old "$(_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')" \
+	pl_pub=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')" \
 		--argjson new "$plugins_common" \
 		'(($old.plugins? // []) + $new | unique | sort)')
 	pub_title=$(_resolve_sync_title \
@@ -261,9 +280,9 @@ if [ "$action" = "add" ]; then
 	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
 		# Its own commit over its own files, so its own title — reusing the
 		# public one would name public keys in a private-repo commit.
-		mp_priv=$(jq -n --argjson old "$(_read_json_or "$PRIV_DIR/marketplaces.json" '{}')" \
+		mp_priv=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PRIV_DIR/marketplaces.json" '{}')" \
 			--argjson new "$mp_internal" '$old * $new')
-		pl_priv=$(jq -n --argjson old "$(_read_json_or "$PRIV_DIR/plugins.json" '{"plugins":[]}')" \
+		pl_priv=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PRIV_DIR/plugins.json" '{"plugins":[]}')" \
 			--argjson new "$plugins_internal" \
 			'(($old.plugins? // []) + $new | unique | sort)')
 		priv_title=$(_resolve_sync_title \
