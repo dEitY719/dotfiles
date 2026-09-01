@@ -45,3 +45,13 @@ load '../test_helper'
         "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
     assert_success
 }
+
+@test "devenv-skills marketplace and devenv plugin are registered (#1642)" {
+    run jq -e '."devenv-skills" == "dEitY719/devenv-skills"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+    assert_success
+
+    run jq -e '.plugins | index("devenv@devenv-skills") != null' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+    assert_success
+}
