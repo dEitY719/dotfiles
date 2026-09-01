@@ -262,16 +262,15 @@ JSON
 # manifests so a registration is only "done" once restore.sh actually emits
 # the add + install lines for it.
 
-@test "restore.sh --dry-run installs notes@notes-skills from its marketplace (#1643)" {
+# 새 phase 가 나면 아래 테이블에 한 줄만 추가한다 — 테스트를 더 늘리지 않는다.
+@test "restore.sh --dry-run installs each split-out plugin from the real SSOT (#1410)" {
     run "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/restore.sh" --dry-run
     assert_success
-    assert_output --partial 'add: notes-skills (dEitY719/notes-skills)'
-    assert_output --partial 'install: notes@notes-skills'
-}
-
-@test "restore.sh --dry-run installs authoring@authoring-skills from its marketplace (#1662)" {
-    run "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/restore.sh" --dry-run
-    assert_success
-    assert_output --partial 'add: authoring-skills (dEitY719/authoring-skills)'
-    assert_output --partial 'install: authoring@authoring-skills'
+    while IFS='|' read -r mp_key repo plugin; do
+        assert_output --partial "add: ${mp_key} (${repo})"
+        assert_output --partial "install: ${plugin}@${mp_key}"
+    done <<'TABLE'
+notes-skills|dEitY719/notes-skills|notes
+authoring-skills|dEitY719/authoring-skills|authoring
+TABLE
 }
