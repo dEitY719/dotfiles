@@ -54,6 +54,7 @@ visuals-skills|dEitY719/visuals-skills|visuals
 gh-resolve-skills|dEitY719/gh-resolve-skills|gh-resolve
 session-skills|dEitY719/session-skills|session
 gh-verify-skills|dEitY719/gh-verify-skills|gh-verify
+spec-flow-skills|dEitY719/spec-flow-skills|spec-flow
 TABLE
 }
 
@@ -89,6 +90,7 @@ TABLE
 #1660|gh-pr-resolve-ci-fail gh-pr-resolve-conflict gh-pr-resolve-outdated
 #1661|devx-restart devx-session-close devx-session-handoff devx-rate-limit-guard devx-resume-after-limit devx-schedule ai-worktree-spawn ai-worktree-teardown
 #1659|devx-pr-review-all devx-pr-verify-live devx-pr-verify-merged devx-exception-merge-checklist gh-pr-post-merge-verify
+#1657|devx-prd-to-trd devx-trd-to-issues devx-pr-to-ssot-issue devx-reverse-engineering-analysis devx-claude-to-codex
 TABLE
 }
 
