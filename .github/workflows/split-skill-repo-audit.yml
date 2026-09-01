@@ -1,0 +1,84 @@
+name: split-skill-repo-audit
+
+# Audits the #1410 split-out skill repos against this repo's registration
+# (issue #1671). Two questions nothing else asks:
+#
+#   F-1  Is `<plugin>@<marketplace>` from claude/plugin/plugins.json actually
+#        installable? tests/bats/tools/claude_plugin_scaffold.bats only checks
+#        the two JSON files against a table in its own source, so a remote
+#        rename or a deleted repo leaves the suite green and every
+#        `/plugin install` broken.
+#
+#   F-2  Have the split copies drifted from the claude/skills/ originals that
+#        #1410 NF-1 keeps alive until Phase 4? Two live copies of every skill,
+#        with nothing watching them, is the whole reason this exists.
+#
+# Why it is a workflow and not a test (#1671 NF-1):
+#   Both checks need the network. `mise run test` is offline and runs in
+#   parallel worktrees, so a slow or blocked github.com would turn into
+#   unrelated red in everyone's pre-push hook. The pure logic IS tested,
+#   offline, in tests/integration/test_split_skill_repos.py — only the
+#   fetching happens here.
+#
+# Expect findings while Phase 2-3 is in flight: the audit is a report on a
+# gap that already exists, not a gate that was ever green. Phase 4 drains it
+# by deleting the originals, after which every skill is legitimately unpaired
+# and the drift half goes quiet on its own.
+
+on:
+  schedule:
+    # 03:17 UTC Mondays. Off the hour because GitHub queues scheduled runs at
+    # :00 across every repo on the platform, which delays them by 10+ minutes.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      check:
+        description: "Which half to run"
+        type: choice
+        default: all
+        options: [all, contract, drift]
+  # A change to the registration SSOT is the one push worth auditing
+  # immediately — it is exactly when a name can stop matching its remote.
+  push:
+    paths:
+      - "claude/plugin/marketplaces.json"
+      - "claude/plugin/plugins.json"
+      - "scripts/maintenance/check_split_skill_repos.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: split-skill-repo-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Contract + drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout dotfiles
+        uses: actions/checkout@v4
+
+      # The checker shallow-clones each split repo itself; no token beyond the
+      # default is needed while every `dEitY719/*-skills` repo is public. A
+      # repo turning private surfaces as an "unreachable" F-1 finding rather
+      # than a silent skip, which is the intended failure mode.
+      - name: Run the audit
+        id: audit
+        run: |
+          python3 scripts/maintenance/check_split_skill_repos.py \
+            --check "${{ inputs.check || 'all' }}" | tee audit.log
+
+      - name: Publish findings to the job summary
+        if: always()
+        run: |
+          {
+            echo "## Split-skill-repo audit (#1671)"
+            echo
+            echo '```'
+            sed 's/\x1b\[[0-9;]*m//g' audit.log || echo "(no output captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
