@@ -18,3 +18,20 @@ load '../test_helper'
     run git -C "${_BATS_REAL_DOTFILES_ROOT}" check-ignore -q claude/plugin/company/dummy.json
     assert_success
 }
+
+@test "every plugins.json entry's marketplace key exists in marketplaces.json" {
+    run jq -e --slurpfile mp "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json" \
+        '[.plugins[] | split("@")[1]] - ($mp[0] | keys) == []' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+    assert_success
+}
+
+@test "packaging-skills marketplace and packaging plugin are registered (#1638)" {
+    run jq -e '."packaging-skills" == "dEitY719/packaging-skills"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+    assert_success
+
+    run jq -e '.plugins | index("packaging@packaging-skills") != null' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+    assert_success
+}
