@@ -34,6 +34,22 @@
 # `review-passed` from a coincidentally-matching patch-id — a self-certifying
 # grant this file must never manufacture.
 #
+# Label presence alone is not enough either (PR #1699 review, codex round-2
+# BLOCKER): a label can outlive its own freshness marker (e.g. some other bug
+# already left the PR in a stale-but-labelled state before this skill ever
+# ran) — reusing it would launder that staleness onto the new head. So the
+# "keep" path also calls the existing #1601 freshness check,
+# `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <old-head-sha>
+# <trusted-login>` (`shell-common/functions/gh_pr_merge_train.sh`) — only its
+# rc 0 (FRESH: last marker from the trusted login equals `OLD_HEAD_SHA`
+# exactly) proceeds; any other rc (stale, absent, undetermined) falls through
+# to the ordinary drop. Reused as-is, not reimplemented — the marker format,
+# pagination and bot-login handling stay defined in exactly one place.
+# `GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN` overrides the auto-resolved identity
+# (same override shape as `GH_PR_MERGE_TRAIN_TRUSTED_LOGIN` /
+# `DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN`) for a pipeline that authenticates the
+# reviewer and this skill as different accounts.
+#
 # Usage:
 #   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path]
 #   _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>
@@ -104,13 +120,38 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         # shellcheck source=/dev/null
         . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh" 2>/dev/null || :
     fi
+    if ! command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1; then
+        # shellcheck source=/dev/null
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh" 2>/dev/null || :
+    fi
 
-    local _old_pid _new_pid
+    local _old_pid _new_pid _me _fresh_rc
     _old_pid=$(_gh_pr_resolve_outdated_patch_id "$_old_base" "$_old_head" "$_worktree")
     _new_pid=$(_gh_pr_resolve_outdated_patch_id "$_new_base" "$_new_head" "$_worktree")
 
+    _fresh_rc=1
     if [ -n "$_old_pid" ] && [ -n "$_new_pid" ] && [ "$_old_pid" = "$_new_pid" ] &&
-        _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-passed; then
+        _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-passed &&
+        command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1; then
+        _me="${GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN:-$(
+            if [ -n "$_host" ]; then
+                # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+                export GH_HOST="$_host"
+            fi
+            gh api user -q .login 2>/dev/null
+        )}"
+        # `|| _fresh_rc=$?`, not a bare call: this file is sourced into
+        # callers that may have `set -e` armed (bats test bodies do), and
+        # errexit fires on the non-zero rc BEFORE a trailing `_fresh_rc=$?`
+        # would ever run (same caveat `devx_pr_review_all.sh` documents).
+        # Pre-set to 0 (fresh) so a genuine rc-0 success needs no assignment
+        # of its own — only the `||` branch overwrites it, on failure.
+        _fresh_rc=0
+        _gh_pr_merge_train_review_passed_stale "$_pr" "$_repo" "$_host" "$_old_head" "$_me" ||
+            _fresh_rc=$?
+    fi
+
+    if [ "$_fresh_rc" -eq 0 ]; then
         # Direct add + marker post — NOT `devx_pr_review_all_write_label`,
         # which also deletes the opposite `review-blocked` label as its first
         # action. This file must never touch that label (see the header note).

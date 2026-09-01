@@ -10,8 +10,9 @@
 # while production drifts (#1524's rule).
 #
 # Cases:
-#   1. Clean rebase, patch-id identical, review-passed currently present ->
-#      label kept, new marker posted, no DELETE, no review-blocked touched.
+#   1. Clean rebase, patch-id identical, review-passed currently present AND
+#      its #1601 marker is fresh for OLD_HEAD -> label kept, new marker
+#      posted, no DELETE, no review-blocked touched.
 #   2. Rebase whose content actually changed (different patch-id) -> label
 #      dropped, exactly today's pre-#1698 behavior.
 #   3. Unreadable patch-id (bogus shas) -> fail-closed, same as case 2.
@@ -19,13 +20,29 @@
 #   5. Patch-id identical but review-passed was NEVER on the PR -> falls to
 #      the drop path, never manufactures a verdict nobody granted (PR #1699
 #      review, codex BLOCKER).
+#   6. Patch-id identical, label present, but its marker is for a DIFFERENT
+#      sha (stale) -> falls to the drop path; a present-but-stale label must
+#      never be laundered onto the new head (PR #1699 review, codex round-2
+#      BLOCKER).
+#   7. Same, but no marker at all (label present with no #1601 evidence) ->
+#      same drop path.
 #
 # `STUB_CURRENT_LABELS` (comma-separated, default "review-passed") controls
 # what `_gh_pr_resolve_outdated_has_label`'s `gh api .../labels` GET returns.
+# `STUB_COMMENTS_JSON` / `STUB_ME_LOGIN` control the #1601 freshness lookup —
+# `_marker_comment <login> <sha>` builds one matching comment object.
 
 load '../test_helper'
 
 FIXTURE='tests/bats/skills/_fixtures/gh_pr_resolve_outdated_review_passed.sh'
+
+# One PR-comment object carrying a fresh `review-verdict:review-passed`
+# marker for <sha>, authored by <login> — mirrors what
+# `devx_pr_review_all_write_label` actually posts.
+_marker_comment() {
+    jq -nc --arg login "$1" --arg sha "$2" \
+        '{user: {login: $login}, body: ("<!-- review-verdict:review-passed:" + $sha + " -->")}'
+}
 
 setup() {
     setup_isolated_home
@@ -33,7 +50,9 @@ setup() {
     : >"$GH_LOG"
     export GH_LOG
     STUB_CURRENT_LABELS="${STUB_CURRENT_LABELS:-review-passed}"
-    export STUB_CURRENT_LABELS
+    STUB_ME_LOGIN="${STUB_ME_LOGIN:-pipeline-bot}"
+    : "${STUB_COMMENTS_JSON:=[]}"
+    export STUB_CURRENT_LABELS STUB_ME_LOGIN STUB_COMMENTS_JSON
     # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
     # shellcheck disable=SC2317  # called indirectly by the helpers under test
@@ -43,6 +62,36 @@ setup() {
             case "$2" in
                 */labels)
                     printf '%s\n' "$STUB_CURRENT_LABELS" | tr ',' '\n'
+                    return 0
+                    ;;
+                user)
+                    printf '%s\n' "$STUB_ME_LOGIN"
+                    return 0
+                    ;;
+            esac
+            case "$*" in
+                *"/comments"*"--jq"*)
+                    # Single-page only (no Link header) — enough to exercise
+                    # the freshness check without re-deriving pagination,
+                    # already pinned elsewhere (gh_pr_merge_train_review_verdict_gate.bats).
+                    _fs_jq_expr=""
+                    _fs_want_next=0
+                    for _fs_arg in "$@"; do
+                        if [ "$_fs_want_next" -eq 1 ]; then
+                            _fs_jq_expr="$_fs_arg"
+                            _fs_want_next=0
+                            continue
+                        fi
+                        case "$_fs_arg" in
+                            --jq) _fs_want_next=1 ;;
+                            -i)
+                                printf 'HTTP/1.1 200 OK\n'
+                                printf 'Content-Type: application/json; charset=utf-8\r\n'
+                                printf '\r\n'
+                                ;;
+                        esac
+                    done
+                    printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$_fs_jq_expr"
                     return 0
                     ;;
             esac
@@ -149,6 +198,7 @@ _1698_make_repo() {
 @test "reconcile: unchanged patch-id keeps the label and reposts the freshness marker, no DELETE" {
     eval "$(_1698_make_repo)"
     cd "$REPO_DIR" || fail "cd failed"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
     resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
         "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
     run cat "$GH_LOG"
@@ -158,6 +208,28 @@ _1698_make_repo() {
     refute_output --partial 'review-blocked'
     assert_output --partial "add 1695 review-passed --repo acme/widget"
     assert_output --partial "review-verdict:review-passed:${NEW_HEAD_SAME}"
+}
+
+@test "reconcile: label present but its marker is for a DIFFERENT sha (stale) -> drops" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "some-earlier-sha")" '[$c]')
+    resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
+}
+
+@test "reconcile: label present but no freshness marker at all -> drops" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    STUB_COMMENTS_JSON='[]'
+    resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
 }
 
 @test "reconcile: unchanged patch-id but review-passed was never granted -> drops (never self-certifies)" {
@@ -194,6 +266,7 @@ _1698_make_repo() {
 @test "reconcile: works from outside the repo via the worktree-path argument" {
     eval "$(_1698_make_repo)"
     cd "${BATS_TEST_TMPDIR}" || fail "cd failed"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
     resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
         "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME" "$REPO_DIR"
     run cat "$GH_LOG"
