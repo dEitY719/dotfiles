@@ -55,6 +55,7 @@ gh-resolve-skills|dEitY719/gh-resolve-skills|gh-resolve
 session-skills|dEitY719/session-skills|session
 gh-verify-skills|dEitY719/gh-verify-skills|gh-verify
 spec-flow-skills|dEitY719/spec-flow-skills|spec-flow
+authoring-skills|dEitY719/authoring-skills|authoring
 TABLE
 }
 
@@ -92,6 +93,20 @@ TABLE
 #1659|devx-pr-review-all devx-pr-verify-live devx-pr-verify-merged devx-exception-merge-checklist gh-pr-post-merge-verify
 #1657|devx-prd-to-trd devx-trd-to-issues devx-pr-to-ssot-issue devx-reverse-engineering-analysis devx-claude-to-codex
 TABLE
+}
+
+# Same NF-1 contract for the Phase-2 authoring split. These six do not share a
+# prefix (skill-*, sh-check, devx-*), so the list is spelled out rather than
+# globbed. The originals must survive until Phase 4 retires them deliberately,
+# so `/skill:create` and friends keep working for anyone who has not installed
+# the plugin. When Phase 4 does delete them, this test is the thing that must
+# be removed in the same commit — the removal stays a decision someone makes,
+# not a side effect nobody notices.
+@test "authoring-skills split left the six claude/skills originals in place (#1662)" {
+    for skill in skill-create skill-check skill-refactor sh-check devx-ux-guidelines devx-command-rename; do
+        [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}/SKILL.md" ] \
+            || fail "claude/skills/${skill}/SKILL.md is missing — #1410 NF-1 says Phase 2 copies, never moves"
+    done
 }
 
 # claude-plugin-visuals 는 #1646 에서 visuals-skills 로 rename 됐다. GitHub 이
