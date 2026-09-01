@@ -23,6 +23,7 @@
     "ralph-loop@claude-plugins-official",
     "session-report@claude-plugins-official",
     "session@session-skills",
+    "spec-flow@spec-flow-skills",
     "superpowers@claude-plugins-official",
     "understand-anything@understand-anything",
     "visuals@visuals-skills"
