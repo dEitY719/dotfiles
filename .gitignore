@@ -53,6 +53,13 @@ claude/settings.local.json
 /claude/plugin/company/
 # restore.sh --sync 화이트리스트 (PC별 로컬 수동 추가 마켓플레이스/플러그인 보호).
 /claude/plugin/.local-marketplaces.json
+# 이 PC 가 실제로 설치한 플러그인/마켓플레이스 오버레이 (#1685). tracked
+# claude/plugin/{marketplaces,plugins}.json 은 upstream 이 소유하는 **등록 계약**만
+# 담고, 머신 로컬 설치 상태는 여기에 쌓인다 — 두 성질을 한 파일에 겹쳐 담던 탓에
+# fork/mirror 가 upstream 의 플러그인 등록 커밋을 받을 때마다 충돌했다.
+# 소비자(restore.sh / reconcile.sh)는 tracked + local 의 union 을 읽는다.
+/claude/plugin/marketplaces.local.json
+/claude/plugin/plugins.local.json
 
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json

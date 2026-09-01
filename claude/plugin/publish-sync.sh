@@ -622,6 +622,9 @@ if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 		fi
 	fi
 
+	# 공용 pair 는 #1685 이후 upstream 등록 계약 전용이다 — plugin-sync.sh 는
+	# gitignored *.local.json 오버레이만 쓰므로 여기서 게시할 diff 는 사람이
+	# 계약 파일을 직접 편집했을 때만 생긴다 (그 외에는 조용한 no-op).
 	if _public_publish_allowed; then
 		_publish_manifest_diff "$MAIN_ROOT" "public" \
 			claude/plugin/marketplaces.json claude/plugin/plugins.json || RC=1
