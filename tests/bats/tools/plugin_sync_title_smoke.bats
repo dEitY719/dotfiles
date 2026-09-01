@@ -42,6 +42,26 @@ FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/plugin_sync_title.sh"
     assert_output --partial 'all-defined'
 }
 
+@test "_plugin_sync_read_json_or still works when claude_plugin_manifest.sh cannot be sourced (#1696 agy+codex PR #1697 review)" {
+    # A stale/partial shell-common checkout: this file is reachable (sourced
+    # directly by absolute path below, as every real caller does) but its
+    # sibling claude_plugin_manifest.sh is not (SHELL_COMMON points elsewhere).
+    # Without its own bootstrap fallback, _changed_keys_marketplaces /
+    # _changed_keys_plugins would hit "command not found" the moment that
+    # happens — this is what both reviewers flagged as a BLOCKER.
+    run bash --noprofile --norc -c "
+        SHELL_COMMON='$TEST_TEMP_HOME/no-such-shell-common'
+        source '${FILE}'
+        command -v _claude_plugin_read_json_or >/dev/null 2>&1 || { echo missing; exit 1; }
+        _claude_plugin_read_json_or '$TEST_TEMP_HOME/does-not-exist.json' '{}'
+    "
+    assert_success
+    # --partial, not exact: the #1454 dotfiles_root.sh guard also can't be
+    # sourced from the bogus SHELL_COMMON and prints its own advisory WARN to
+    # stderr, which `run` merges into $output — unrelated to this test's point.
+    assert_output --partial '{}'
+}
+
 @test "_plugin_sync_title composes an end-to-end title under bash" {
     cat > "$TEST_TEMP_HOME/current-mp.json" <<'JSON'
 {"kept": "org/kept"}
