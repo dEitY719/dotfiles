@@ -1083,3 +1083,80 @@ def test_trace_reports_async_wait_reprieve(tmp_path: Path) -> None:
     assert "async_wait_reprieved=implement=1" in result.stderr
     assert "async_wait_limit=2" in result.stderr
     assert "outstanding=['report']" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# Plugin-namespace command forms (#1677 / PR #1689, codex BLOCKER)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "/gh-pr:create",
+        "/gh-pr:create 1677 origin",
+        "/gh-pr:commit",
+        "/gh-pr:commit 1677 origin",
+    ],
+)
+def test_plugin_namespace_command_is_a_boundary(tmp_path: Path, cmd: str) -> None:
+    """`/gh-pr:create` — hyphen inside the namespace, colon before the skill.
+
+    The `gh-pr-skills` migration (#1677) made this the live invocation form of
+    the `gh-pr-create` / `gh-pr-commit` catalog keys. The boundary regex used
+    to offer only two whole-string spellings per key — fully hyphenated
+    (`gh-pr-create`) or fully colonized (`gh:pr:create`) — so this mixture
+    matched nothing, no boundary was detected, and the guard failed open for
+    every migrated skill. Separators are now independently `-` or `:`.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(cmd),
+            _assistant_text("running"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip(), f"{cmd!r} must be detected as a boundary"
+    assert json.loads(result.stdout)["decision"] == "block"
+
+
+@pytest.mark.parametrize(
+    ("cmd", "skill", "steps"),
+    [
+        ("/gh-pr:create", "gh-pr-create", ["push-and-create", "labels", "board-sync", "report"]),
+        ("/gh-pr:commit", "gh-pr-commit", ["stage-commit", "metrics-board-sync", "report"]),
+    ],
+)
+def test_plugin_namespace_required_steps_satisfy(
+    tmp_path: Path, cmd: str, skill: str, steps: list[str]
+) -> None:
+    """The migrated skills' own markers clear their new catalog keys."""
+    transcript = _write_transcript(
+        tmp_path,
+        [_user_text(cmd), *(_emit_marker(skill, s) for s in steps)],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
+
+
+@pytest.mark.parametrize(
+    "sibling",
+    ["/gh-pr:review 99", "/gh-pr:approve 99", "/gh-pr:merge 51", "/gh-pr:merge-train"],
+)
+def test_plugin_namespace_sibling_not_matched_as_gh_pr(tmp_path: Path, sibling: str) -> None:
+    """Loosening the separator must not resurrect the #1164 false-match class.
+
+    `/gh-pr:review` is a real skill with no catalog entry; it must not be read
+    as the `gh-pr` entry. Surface (a)'s `(?![\\w:-])` lookahead is what keeps
+    that true, and it has to keep holding for the colon spelling too.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [_user_text(sibling), _assistant_text("running")],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"{sibling} must not be a boundary"
