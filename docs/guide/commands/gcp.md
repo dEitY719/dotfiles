@@ -27,12 +27,14 @@
 - **syntax** — gcp scan [base] [src] [--author=<name|all>] — Compare & pick missing commits
 - **default** — main <- upstream/main, author=dEitY719 — Filter by author by default
 - **--author=all** — show all authors — Bypass filter
-- **behavior** — detects duplicates (same subject in base) — Skips already-applied commits
-- **behavior** — contiguous range -> bulk cherry-pick — Non-contiguous -> individual
+- **behavior** — same subject -> patch-id compared — Skip confirmed only on an identical patch (issue #1136)
+- **behavior** — always individual cherry-pick — range shortcut removed in #913; Suggested Range is a manual hint
 - **--show-skip-list** — print known-resolved SHAs — git/config/gcp-scan-skip.conf (issue #1039)
 - **skip list** — registered SHAs skipped silently — ignored under --author=all
 - **--show-skip-paths** — print path-excluded paths — git/config/gcp-scan-skip-paths.conf
 - **skip paths** — commits touching only listed paths skipped — ignored under --author=all
+- **behavior** — unpredicted conflict -> rolled back, batch continues — reported under Needs manual resolution (issue #1647)
+- **--stop-on-conflict** — abort whole remaining batch on first conflict — legacy all-or-nothing behavior
 
 ### theirs
 
