@@ -55,6 +55,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 import subprocess
@@ -194,6 +195,8 @@ _PLACEHOLDER_WIKILINK = re.compile(r"\[\[<skill>\]\]")
 # short lead-in ("detail", "see", "full procedure"). This is exactly what a
 # 100-line-cap extraction leaves behind in SKILL.md, so it is structural.
 _PURE_POINTER = re.compile(r"^(?:[a-z ]{0,24}[:\-]?\s*)?<ref>[.:]?$")
+# Re-wrapping is not a content change, so runs of whitespace collapse last.
+_WHITESPACE = re.compile(r"\s+")
 
 # Frontmatter keys that a split re-authors by design: the skill's own name and
 # the trigger surface that names it. Everything else in the frontmatter
@@ -243,6 +246,24 @@ def name_vocabulary(*trees: dict[str, dict[str, str]]) -> frozenset[str]:
     return frozenset(name for tree in trees for name in tree if "-" in name)
 
 
+@functools.cache
+def _vocabulary_pattern(vocabulary: frozenset[str]) -> re.Pattern[str] | None:
+    """One alternation matching any vocabulary name, or None when there are none.
+
+    Longest-first ordering reproduces what a per-name pass did: at a given
+    position Python tries alternatives left to right, so `gh-issue-read` is
+    offered before `gh-issue`. The same `(?<![\\w-])`/`(?![\\w-])` guards apply
+    to the whole group, and the `<skill>` they insert can never form a new
+    match (no vocabulary name contains `<` or `>`), so one pass over the line
+    is equivalent to N sequential ones — and is the only form that does not
+    rebuild N patterns for every line of every skill.
+    """
+    if not vocabulary:
+        return None
+    alternatives = "|".join(re.escape(name) for name in sorted(vocabulary, key=len, reverse=True))
+    return re.compile(rf"(?<![\w-])(?:{alternatives})(?![\w-])")
+
+
 def normalize_line(line: str, vocabulary: frozenset[str] = frozenset()) -> str:
     """Reduce one line to the instruction it carries, or "" if it carries none."""
     line = _SUMMARY.sub(" ", line)
@@ -251,13 +272,14 @@ def normalize_line(line: str, vocabulary: frozenset[str] = frozenset()) -> str:
     line = _LEADING_MARKUP.sub("", line)
     line = _REF_PATH.sub("<ref>", line)
     line = _NAMESPACED.sub("<skill>", line)
-    for name in sorted(vocabulary, key=len, reverse=True):
-        line = re.sub(rf"(?<![\w-]){re.escape(name)}(?![\w-])", "<skill>", line)
+    names = _vocabulary_pattern(vocabulary)
+    if names is not None:
+        line = names.sub("<skill>", line)
     line = _SLASH_DASH.sub("<skill>", line)
     line = _PLACEHOLDER_SLASH.sub("<skill>", line)
     line = _PLACEHOLDER_WIKILINK.sub("<skill>", line)
     line = _PLACEHOLDER_RUN.sub("<skill>", line)
-    return re.sub(r"\s+", " ", line).strip().lower()
+    return _WHITESPACE.sub(" ", line).strip().lower()
 
 
 def is_structural(line: str) -> bool:
@@ -291,21 +313,37 @@ class DriftReport:
         return self.only_local + self.only_remote
 
 
+def _similarity(local: set[str], remote: set[str], empty: float) -> float:
+    """Jaccard overlap of two fingerprints, in one place so the two callers agree.
+
+    `empty` is what two empty skills score: 1.0 when reporting drift (nothing
+    differs) but 0.0 when ranking pairing candidates (nothing matched). The
+    union is sized arithmetically rather than built, since only its cardinality
+    is ever wanted.
+    """
+    shared = len(local & remote)
+    union = len(local) + len(remote) - shared
+    return shared / union if union else empty
+
+
+def _drift_report(local: set[str], remote: set[str]) -> DriftReport:
+    """Build a DriftReport from two fingerprints already in hand."""
+    return DriftReport(
+        only_local=sorted(local - remote),
+        only_remote=sorted(remote - local),
+        similarity=_similarity(local, remote, empty=1.0),
+    )
+
+
 def compare_skills(
     local_files: dict[str, str],
     remote_files: dict[str, str],
     vocabulary: frozenset[str] = frozenset(),
 ) -> DriftReport:
     """Compare two copies of one skill as procedures, not as file trees."""
-    local = skill_fingerprint(local_files, vocabulary)
-    remote = skill_fingerprint(remote_files, vocabulary)
-
-    union = local | remote
-    similarity = len(local & remote) / len(union) if union else 1.0
-    return DriftReport(
-        only_local=sorted(local - remote),
-        only_remote=sorted(remote - local),
-        similarity=similarity,
+    return _drift_report(
+        skill_fingerprint(local_files, vocabulary),
+        skill_fingerprint(remote_files, vocabulary),
     )
 
 
@@ -346,48 +384,51 @@ def pair_skills(
     vocabulary = name_vocabulary(local_skills, remote_skills)
     local_prints = {name: skill_fingerprint(files, vocabulary) for name, files in local_skills.items()}
 
-    scored = []
-    for remote_name, remote_files in remote_skills.items():
-        remote_print = skill_fingerprint(remote_files, vocabulary)
-        ranked = sorted(
-            (
-                (
-                    len(remote_print & lp) / len(remote_print | lp) if (remote_print | lp) else 0.0,
-                    local_name,
-                )
-                for local_name, lp in local_prints.items()
-            ),
+    # Fingerprint each remote once and keep it: the winning pair's drift report
+    # is built from these same sets rather than re-read from the raw files.
+    remote_prints = {name: skill_fingerprint(files, vocabulary) for name, files in remote_skills.items()}
+    ranked_by_remote: dict[str, list[tuple[float, str | None]]] = {
+        remote_name: sorted(
+            ((_similarity(remote_print, lp, empty=0.0), local_name) for local_name, lp in local_prints.items()),
             reverse=True,
         )
-        scored.append((remote_name, remote_files, ranked))
-
-    scored.sort(key=lambda item: item[2][0][0] if item[2] else 0.0, reverse=True)
+        # A repo with no dotfiles originals left to pair against ranks nothing;
+        # the sentinel keeps `best_name is None` the single empty-case path.
+        or [(0.0, None)]
+        for remote_name, remote_print in remote_prints.items()
+    }
 
     claimed: set[str] = set()
     pairings = []
-    for remote_name, remote_files, ranked in scored:
-        best_score, best_name = ranked[0] if ranked else (0.0, None)
+    # Most confident first, so a contested original goes to its best claimant.
+    for remote_name in sorted(ranked_by_remote, key=lambda name: ranked_by_remote[name][0][0], reverse=True):
+        ranked = ranked_by_remote[remote_name]
+        best_score, best_name = ranked[0]
         runner_up = next((s for s, n in ranked[1:] if n not in claimed), 0.0)
 
+        note = ""
         if best_name is None or best_score < min_similarity:
             note = f"no dotfiles original above {min_similarity:.0%} similarity"
         elif best_name in claimed:
             note = f"'{best_name}' is already paired with another skill in this repo"
         elif best_score - runner_up < min_margin:
             note = f"ambiguous — '{best_name}' and the runner-up score within {min_margin:.0%}"
-        else:
-            claimed.add(best_name)
-            pairings.append(
-                Pairing(
-                    remote_name=remote_name,
-                    local_name=best_name,
-                    similarity=best_score,
-                    report=compare_skills(local_skills[best_name], remote_files, vocabulary),
-                )
-            )
+
+        # `best_name is None` already produced a note above; restating it here
+        # is what lets a type checker see that the paired path below has a name.
+        if note or best_name is None:
+            pairings.append(Pairing(remote_name=remote_name, local_name=None, similarity=best_score, note=note))
             continue
 
-        pairings.append(Pairing(remote_name=remote_name, local_name=None, similarity=best_score, note=note))
+        claimed.add(best_name)
+        pairings.append(
+            Pairing(
+                remote_name=remote_name,
+                local_name=best_name,
+                similarity=best_score,
+                report=_drift_report(local_prints[best_name], remote_prints[remote_name]),
+            )
+        )
 
     return sorted(pairings, key=lambda p: p.remote_name)
 
@@ -488,14 +529,16 @@ def run_audit(
     — the seam that keeps the network out of the offline suite (NF-1).
     """
     result = AuditResult()
+    do_contract = checks in ("all", "contract")
+    do_drift = checks in ("all", "drift")
 
     for target in targets:
         manifest = source.marketplace_manifest(target.repo)
 
-        if checks in ("all", "contract"):
+        if do_contract:
             result.findings.extend(check_manifest_contract(target, manifest))
 
-        if checks not in ("all", "drift"):
+        if not do_drift:
             continue
 
         remote_skills = source.skill_tree(target.repo)
@@ -532,6 +575,19 @@ def run_audit(
     return result
 
 
+def load_registration(repo_root: Path) -> tuple[dict[str, str], list[str]]:
+    """Read the registration SSOT: `claude/plugin/{marketplaces,plugins}.json`.
+
+    One reader so the audit and its offline guard in
+    `tests/integration/test_split_skill_repos.py` cannot end up looking at
+    different files if `claude/plugin/` ever moves.
+    """
+    plugin_dir = repo_root / "claude" / "plugin"
+    marketplaces: dict[str, str] = json.loads((plugin_dir / "marketplaces.json").read_text(encoding="utf-8"))
+    plugins: list[str] = json.loads((plugin_dir / "plugins.json").read_text(encoding="utf-8"))["plugins"]
+    return marketplaces, plugins
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Verify #1410 split-out skill repos against their registration (#1671).",
@@ -542,11 +598,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
-    plugin_dir = args.repo_root / "claude" / "plugin"
     try:
-        marketplaces = json.loads((plugin_dir / "marketplaces.json").read_text(encoding="utf-8"))
-        plugins = json.loads((plugin_dir / "plugins.json").read_text(encoding="utf-8"))["plugins"]
+        marketplaces, plugins = load_registration(args.repo_root)
     except (OSError, json.JSONDecodeError, KeyError) as exc:
+        plugin_dir = args.repo_root / "claude" / "plugin"
         print(f"{Colors.RED}[FAIL]{Colors.RESET} cannot read the registration SSOT in {plugin_dir}: {exc}")
         return 2
 
@@ -564,7 +619,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{Colors.YELLOW}[NOTE]{Colors.RESET} {note}")
 
     for finding in result.findings:
-        print(f"{Colors.RED}[FAIL]{Colors.RESET} {finding}" if not finding.startswith("    ") else finding)
+        print(finding if finding.startswith("    ") else f"{Colors.RED}[FAIL]{Colors.RESET} {finding}")
 
     if not result.findings and not args.quiet:
         print(f"{Colors.GREEN}[OK]{Colors.RESET} every registered split repo matches its manifest and shows no drift")

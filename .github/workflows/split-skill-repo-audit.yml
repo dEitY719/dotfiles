@@ -39,7 +39,10 @@ on:
         options: [all, contract, drift]
   # A change to the registration SSOT is the one push worth auditing
   # immediately — it is exactly when a name can stop matching its remote.
+  # Only on main: a registration is not real until it is merged, and every
+  # other workflow here pins its branches the same way (ci.yml, test.yml).
   push:
+    branches: [main]
     paths:
       - "claude/plugin/marketplaces.json"
       - "claude/plugin/plugins.json"
@@ -66,8 +69,12 @@ jobs:
       # default is needed while every `dEitY719/*-skills` repo is public. A
       # repo turning private surfaces as an "unreachable" F-1 finding rather
       # than a silent skip, which is the intended failure mode.
+      # `| tee` is deliberate: it makes the step's status tee's, not the
+      # checker's, so findings are reported without failing the run. Phase 2-3
+      # is expected to have them (see the header) — this is a report, not a
+      # gate. Dropping the pipe, or adding `shell: bash` for pipefail, turns
+      # every open finding red.
       - name: Run the audit
-        id: audit
         run: |
           python3 scripts/maintenance/check_split_skill_repos.py \
             --check "${{ inputs.check || 'all' }}" | tee audit.log
