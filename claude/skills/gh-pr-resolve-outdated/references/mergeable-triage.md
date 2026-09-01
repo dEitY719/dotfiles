@@ -44,3 +44,9 @@ After the push, re-read `--json mergeable,mergeStateStatus,url`:
 - `mergeStateStatus ∈ {CLEAN, UNSTABLE, BLOCKED}` → banner cleared
   (`BLOCKED` here = CI/approval pending, normal).
 - Still `BEHIND` → push didn't land; print PR URL, do not loop.
+
+Then reconcile `review-passed` per `references/verdict-label-removal.sh.md` —
+`OLD_BASE_SHA` (Step 3, before fetch) / `OLD_HEAD_SHA` (`BACKUP_SHA` from
+Step 1) vs. `NEW_BASE_SHA=$(git rev-parse "$REMOTE/$BASE")` (post-fetch) /
+`NEW_HEAD_SHA=$(git rev-parse HEAD)` (post-rebase), both `git -C "<path>"` in
+`--worktree` mode.
