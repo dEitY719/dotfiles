@@ -80,8 +80,14 @@ TABLE
 # claude-plugin-visuals 는 #1646 에서 visuals-skills 로 rename 됐다. GitHub 이
 # 구 URL 을 리다이렉트해 주기 때문에 stale 참조는 조용히 살아남는다 — 그래서
 # 사람이 알아채기 전에 여기서 잡는다.
-@test "no tracked file still points at the pre-rename claude-plugin-visuals repo (#1646)" {
-    run git -C "${_BATS_REAL_DOTFILES_ROOT}" grep -l "github.com/dEitY719/claude-plugin-visuals" -- \
-        'claude/plugin/*.json' 'shell-common/**' 'bash/**' 'zsh/**'
+#
+# 범위는 "런타임에 실제로 쓰이는 것"이다: 설정 JSON, 셸 코드, 테스트 픽스처.
+# 산문은 일부러 뺐다 — docs/ 의 설계 이력과 claude-plugin-* 스킬들의 예시 문자열은
+# rename 전 이름을 쓰는 게 맞고, 넓은 스캔은 그것들을 전부 오탐한다.
+# 이 파일 자신도 패턴을 리터럴로 들고 있어 자기 매칭을 제외한다.
+@test "no live config, shell code, or test fixture points at the pre-rename claude-plugin-visuals repo (#1646)" {
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" grep -l "dEitY719/claude-plugin-visuals" -- \
+        'claude/plugin/*.json' 'shell-common/**' 'bash/**' 'zsh/**' 'tests/**' \
+        ':!tests/bats/tools/claude_plugin_scaffold.bats'
     assert_failure
 }
