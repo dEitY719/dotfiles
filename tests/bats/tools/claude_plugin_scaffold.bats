@@ -52,6 +52,7 @@ devenv-skills|dEitY719/devenv-skills|devenv
 notes-skills|dEitY719/notes-skills|notes
 visuals-skills|dEitY719/visuals-skills|visuals
 gh-resolve-skills|dEitY719/gh-resolve-skills|gh-resolve
+session-skills|dEitY719/session-skills|session
 TABLE
 }
 
@@ -86,6 +87,19 @@ TABLE
     for skill in ci-fail conflict outdated; do
         [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-resolve-${skill}/SKILL.md" ] \
             || fail "claude/skills/gh-pr-resolve-${skill}/SKILL.md is missing — #1410 NF-1 says Phase 2 copies, never moves"
+    done
+}
+
+# Same NF-1 guarantee for the Phase 2 session-skills split (#1661). The eight
+# skills moved out under new, prefix-stripped names (`devx-session-close` ->
+# `/session:close`), so the dotfiles originals are the only thing still
+# answering `/devx:session-close`. They stay until Phase 4 retires them.
+@test "session-skills split left the claude/skills originals in place (#1661)" {
+    for skill in devx-restart devx-session-close devx-session-handoff \
+                 devx-rate-limit-guard devx-resume-after-limit devx-schedule \
+                 ai-worktree-spawn ai-worktree-teardown; do
+        [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}/SKILL.md" ] \
+            || fail "claude/skills/${skill}/SKILL.md is missing — #1410 NF-1 says a phase split copies, never moves"
     done
 }
 
