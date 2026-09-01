@@ -670,6 +670,10 @@ if [ "$_setup_mode" = "internal" ]; then
     # touching the dotfiles git tree. See _claude_compose_skills_dir in
     # shell-common/tools/integrations/claude.sh.
     _claude_compose_skills_dir "$CLAUDE_SKILLS_SOURCE"                  "$HOME_SKILLS"
+    # Then layer locally cloned marketplace repos on top (issue #1652). This
+    # branch does not go through _claude_account_setup_one, so the call has to
+    # be repeated here — internal PCs are single-account by design.
+    _claude_compose_workspace_skills "$HOME_SKILLS"
     _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
     _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"
     _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"

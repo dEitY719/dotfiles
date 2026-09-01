@@ -971,9 +971,15 @@ _claude_compose_workspace_skills() {
     _ccws_links="$(find "$_ccws_tgt" -mindepth 1 -maxdepth 1 -type l 2>/dev/null)"
     while IFS= read -r _ccws_existing; do
         [ -n "$_ccws_existing" ] || continue
+        # `readlink` gives the raw target; a relative or non-normalized link
+        # would not match the resolved root, and the entry would silently
+        # escape the prune. Fall back to the raw value when resolution fails
+        # (a dangling link is exactly what this loop is looking for).
         _ccws_target_path=$(readlink "$_ccws_existing")
-        case "$_ccws_target_path" in
+        _ccws_target_real=$(readlink -f "$_ccws_existing" 2>/dev/null || printf '%s' "$_ccws_target_path")
+        case "$_ccws_target_path$_ccws_target_real" in
             "$_ccws_root"/*) ;;
+            *"$_ccws_root"/*) ;;
             *) continue ;;
         esac
         [ -d "$_ccws_target_path" ] && continue
@@ -1000,8 +1006,11 @@ CCWS_LINKS
         fi
 
         ln -s "$_ccws_want" "$_ccws_link" || {
+            # One bad entry must not cost the remaining workspace skills —
+            # _claude_compose_skills_dir's own `return 1` predates this lane
+            # and is not a precedent worth copying here.
             ux_error "  workspace symlink failed: $_ccws_link -> $_ccws_want"
-            return 1
+            continue
         }
         _ccws_added=$((_ccws_added + 1))
         ux_info "  new workspace skill: $_ccws_name"

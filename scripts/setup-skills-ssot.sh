@@ -542,8 +542,15 @@ fi
 SKILL_SOURCE_LIST="$(collect_skill_sources)"
 
 if [ -n "$WORKSPACE_ROOT_RESOLVED" ]; then
-    workspace_skill_count="$(printf '%s\n' "$SKILL_SOURCE_LIST" \
-        | grep -c "^${WORKSPACE_ROOT_RESOLVED}/" || true)"
+    # -F, not a regex: a workspace root containing regex metacharacters
+    # (`+`, `[`, `.`) would otherwise mis-count. Anchoring is done by the
+    # case-glob below rather than by `^`, which -F does not honour.
+    workspace_skill_count=0
+    while IFS= read -r _src; do
+        case "$_src" in
+            "${WORKSPACE_ROOT_RESOLVED}"/*) workspace_skill_count=$((workspace_skill_count + 1)) ;;
+        esac
+    done <<< "$SKILL_SOURCE_LIST"
     log_info "[workspace] ${workspace_skill_count}개 skill 합류 (루트: $WORKSPACE_ROOT_RESOLVED)"
 fi
 
