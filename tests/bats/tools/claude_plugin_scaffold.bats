@@ -63,6 +63,31 @@ gh-flow-skills|dEitY719/gh-flow-skills|gh-flow
 TABLE
 }
 
+# A composition plugin is only runnable if the plugins owning the steps it
+# delegates to are registered too. PR #1693 shipped `gh-flow` while `gh-pr`
+# was still unregistered on that branch, so a plugin-only restore could load
+# `/gh-flow:issue` and then fail at Step 2.2 with no `gh-pr:commit` to call
+# (codex BLOCKER). A marketplace-mapping row cannot catch that — it only ever
+# asserts one plugin at a time — so the dependency edges get their own table.
+@test "composition plugins have every plugin they delegate to registered (#1693)" {
+    while IFS='|' read -r plugin deps; do
+        run jq -er --arg p "${plugin}" \
+            '.plugins | map(split("@")[0]) | if index($p) then "present" else "absent" end' \
+            "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+        assert_output "present"
+
+        for dep in ${deps}; do
+            run jq -er --arg d "${dep}" \
+                '.plugins | map(split("@")[0]) | if index($d) then "present" else "absent" end' \
+                "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+            [ "$output" = "present" ] \
+                || fail "plugin '${plugin}' delegates to '${dep}', which is not in claude/plugin/plugins.json — a plugin-only restore cannot run it"
+        done
+    done <<'TABLE'
+gh-flow|gh-issue gh-pr gh-verify gh-resolve session
+TABLE
+}
+
 @test "pkm-skills marketplace and pkm plugin are registered (#1644)" {
     run jq -e '."pkm-skills" == "dEitY719/pkm-skills"' \
         "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"

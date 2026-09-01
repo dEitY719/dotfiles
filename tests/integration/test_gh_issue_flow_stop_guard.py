@@ -3100,3 +3100,34 @@ def test_new_namespace_sibling_base_dirs_are_not_boundaries(tmp_path: Path, labe
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", f"{label}: must not arm the guard. stdout={result.stdout!r}"
+
+
+def test_hint_alias_table_is_consistent_with_the_chain(tmp_path: Path) -> None:
+    """The per-slot hint alias must address the slot it is keyed under (PR #1693).
+
+    `_SUB_SKILL_HINT_ALIAS` used to be read positionally out of the chain
+    (`forms[-1]`), which silently picks a different name the moment a slot
+    gains another alias. The hook asserts the table at import, so a drifted
+    table makes the hook fail to start rather than emit a hint naming the
+    wrong step's skill — this test pins that the module still imports and
+    that each slot's hint reaches the model.
+    """
+    checks = [
+        ("gh-issue-implement", "Skill(gh-issue:implement)", []),
+        ("gh-commit", "Skill(gh-pr:commit)", ["gh-issue-implement"]),
+        ("gh-pr", "Skill(gh-pr:create)", ["gh-issue-implement", "gh-commit"]),
+    ]
+    for canonical, expected_hint, prefix in checks:
+        transcript = _write_transcript(
+            tmp_path,
+            [
+                _user_text("/gh-flow:issue 1693"),
+                *(_assistant_skill(n) for n in prefix),
+                _assistant_text("continuing"),
+            ],
+            name=f"transcript-{canonical}.jsonl",
+        )
+        result = _run_hook(_hook_event(transcript))
+        assert result.returncode == 0
+        reason = json.loads(result.stdout)["reason"]
+        assert expected_hint in reason, f"{canonical}: {reason}"
