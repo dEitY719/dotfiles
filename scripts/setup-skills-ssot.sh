@@ -45,6 +45,13 @@ _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
 SKILLS_SOURCE="${DOTFILES_ROOT}/claude/skills"
 
+# 워크스페이스 루트 (issue #1652 / #1410 F-6): 로컬에 나란히 clone 된
+# marketplace repo 들이 사는 디렉토리. `<root>/<repo>/skills/<skill>/SKILL.md`
+# 형태만 소스로 인정한다. PC 마다 clone 위치가 다를 수 있어 환경변수로
+# 오버라이드 가능 (F-3). 존재하지 않으면 조용히 무시된다 — dotfiles SSOT
+# 단독으로 정상 동작한다.
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$HOME/para/project/skills}"
+
 # Load UX library
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "$UX_LIB" ]; then
@@ -64,6 +71,111 @@ CODEX_MANAGED_MARKER=".dotfiles-skill-source"
 CODEX_ALLOWLIST_FILE="${SKILLS_SOURCE}/.codex-allowlist"
 
 # --- Helper Functions ---
+
+# 소스 루트의 정규화 경로. symlink 판별은 raw target 과 resolved target
+# 양쪽에서 이뤄지므로(compose 는 `readlink`, codex 는 `readlink -f`) 두 형태를
+# 모두 준비해 둔다. 존재하지 않는 경로에서도 실패하지 않도록 원본으로 폴백.
+_realpath_or_self() {
+    readlink -f "$1" 2>/dev/null || printf "%s" "$1"
+}
+
+SKILLS_SOURCE_REAL="$(_realpath_or_self "$SKILLS_SOURCE")"
+WORKSPACE_ROOT_REAL="$(_realpath_or_self "$WORKSPACE_ROOT")"
+
+# 안전장치: WORKSPACE_ROOT 가 $HOME 이나 / 로 설정되면 stale-prune 이
+# 사용자 심볼릭 전부를 "우리 것" 으로 오인해 지울 수 있다. 그 경우 워크스페이스
+# 스캔을 비활성화한다 (dotfiles SSOT 단독 동작 = 종전 동작).
+case "$WORKSPACE_ROOT_REAL" in
+    "" | "/" | "$(_realpath_or_self "$HOME")")
+        WORKSPACE_ROOT=""
+        WORKSPACE_ROOT_REAL=""
+        ;;
+esac
+
+# 모든 skill 소스 디렉토리를 한 줄에 하나씩(끝에 `/` 포함) 표준출력으로 낸다.
+#
+# 소스는 두 곳 (issue #1652 / #1410 F-6):
+#   1. dotfiles SSOT     ${SKILLS_SOURCE}/<skill>/
+#   2. 워크스페이스 clone ${WORKSPACE_ROOT}/<repo>/skills/<skill>/   (SKILL.md 필수)
+#
+# dotfiles 를 먼저 내보내 이름 충돌 시 dotfiles 가 이긴다 — 이 이슈는 소스를
+# **추가**만 하므로(NF-1) 기존 링크가 다른 곳으로 재조준돼선 안 된다. 워크스페이스
+# repo 끼리 충돌하면 glob 정렬 순서상 앞선 repo 가 이긴다(재현 가능한 결정).
+# 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
+collect_skill_sources() {
+    local seen="|"
+    local skill_path skill_name repo_path
+
+    for skill_path in "$SKILLS_SOURCE"/*/; do
+        [ -d "$skill_path" ] || continue
+        skill_name="$(basename "$skill_path")"
+        seen="${seen}${skill_name}|"
+        printf "%s\n" "$skill_path"
+    done
+
+    [ -n "$WORKSPACE_ROOT" ] || return 0
+    [ -d "$WORKSPACE_ROOT" ] || return 0
+
+    for repo_path in "$WORKSPACE_ROOT"/*/; do
+        # skills/ 가 없는 비정형 repo 는 조용히 스킵 (Error Case 2).
+        [ -d "${repo_path}skills" ] || continue
+
+        for skill_path in "${repo_path}skills"/*/; do
+            # SKILL.md 가 있어야 skill 로 인정 — skills/ 밑의 잡다한
+            # 디렉토리(_shared 등)를 소스로 오인하지 않는다.
+            [ -f "${skill_path}SKILL.md" ] || continue
+
+            skill_name="$(basename "$skill_path")"
+            case "$seen" in
+                *"|${skill_name}|"*)
+                    log_dim "[skills] 이름 충돌 — 먼저 발견된 소스 유지, 건너뜀: ${skill_path}" >&2
+                    continue
+                    ;;
+            esac
+
+            seen="${seen}${skill_name}|"
+            printf "%s\n" "$skill_path"
+        done
+    done
+}
+
+# symlink target 이 우리가 관리하는 소스 루트 아래인지 판별.
+# 관리 대상이면 갱신/정리해도 되고, 아니면 사용자 데이터로 보고 보존한다.
+# raw / resolved 두 형태를 모두 대조한다 — 호출부마다 비교 대상이 다르다.
+skill_source_is_managed() {
+    local path="$1"
+    local root
+
+    [ -n "$path" ] || return 1
+
+    for root in "$SKILLS_SOURCE" "$SKILLS_SOURCE_REAL" \
+                "$WORKSPACE_ROOT" "$WORKSPACE_ROOT_REAL"; do
+        [ -n "$root" ] || continue
+        case "$path" in
+            "$root"/*) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+# skill 이름으로 소스 경로를 되찾는다. 없으면 비어 있는 출력 + rc 1.
+# codex 의 stale prune 이 "이 이름이 아직 유효한 소스인가" 를 물을 때 쓴다.
+skill_source_path_for() {
+    local name="$1"
+    local candidate
+
+    [ -n "$name" ] || return 1
+
+    while IFS= read -r candidate; do
+        [ -n "$candidate" ] || continue
+        if [ "$(basename "$candidate")" = "$name" ]; then
+            printf "%s\n" "$candidate"
+            return 0
+        fi
+    done <<< "$SKILL_SOURCE_LIST"
+
+    return 1
+}
 
 # Read codex allowlist file and emit one skill name per line.
 # Strips comments (#...) and blank lines. Stdout is empty if no entries
@@ -172,8 +284,8 @@ link_skills_compose() {
     local linked=0 refreshed=0 skipped=0 pruned=0
     local skill_path skill_name link_target source_realpath current_link existing_target_path
 
-    for skill_path in "$SKILLS_SOURCE"/*/; do
-        [ -d "$skill_path" ] || continue
+    while IFS= read -r skill_path; do
+        [ -n "$skill_path" ] || continue
         skill_name="$(basename "$skill_path")"
         link_target="${target}/${skill_name}"
         source_realpath="$(readlink -f "$skill_path")"
@@ -184,17 +296,14 @@ link_skills_compose() {
                 || [ "$(readlink -f "$link_target" 2>/dev/null)" = "$source_realpath" ]; then
                 continue
             fi
-            case "$current_link" in
-                "$SKILLS_SOURCE"/*)
-                    rm -f "$link_target"
-                    refreshed=$((refreshed + 1))
-                    ;;
-                *)
-                    log_dim "[$tool] 사용자 symlink 보존: $link_target"
-                    skipped=$((skipped + 1))
-                    continue
-                    ;;
-            esac
+            if skill_source_is_managed "$current_link"; then
+                rm -f "$link_target"
+                refreshed=$((refreshed + 1))
+            else
+                log_dim "[$tool] 사용자 symlink 보존: $link_target"
+                skipped=$((skipped + 1))
+                continue
+            fi
         elif [ -e "$link_target" ]; then
             log_dim "[$tool] 비-symlink 엔트리 보존: $link_target"
             skipped=$((skipped + 1))
@@ -207,7 +316,7 @@ link_skills_compose() {
             log_error "[$tool] skill symlink 생성 실패: $link_target"
             continue
         }
-    done
+    done <<< "$SKILL_SOURCE_LIST"
 
     # Stale cleanup: SSOT 로 향하던 symlink 의 원본이 사라진 경우만 정리.
     # SSOT 밖을 가리키는 entry (private overlay 등) 는 보존.
@@ -215,15 +324,12 @@ link_skills_compose() {
     for existing in "$target"/*; do
         [ -L "$existing" ] || continue
         existing_target_path="$(readlink "$existing")"
-        case "$existing_target_path" in
-            "$SKILLS_SOURCE"/*)
-                if [ ! -d "$existing_target_path" ]; then
-                    log_info "[$tool] stale entry 정리: $existing"
-                    rm -f "$existing"
-                    pruned=$((pruned + 1))
-                fi
-                ;;
-        esac
+        skill_source_is_managed "$existing_target_path" || continue
+        if [ ! -d "$existing_target_path" ]; then
+            log_info "[$tool] stale entry 정리: $existing"
+            rm -f "$existing"
+            pruned=$((pruned + 1))
+        fi
     done
 
     log_info "[$tool] skill 합성 완료: ${linked}개 신규, ${refreshed}개 갱신, ${skipped}개 보존, ${pruned}개 정리"
@@ -237,8 +343,8 @@ link_skills_individual() {
     local linked=0
     local skipped=0
 
-    for skill_path in "$SKILLS_SOURCE"/*/; do
-        [ -d "$skill_path" ] || continue
+    while IFS= read -r skill_path; do
+        [ -n "$skill_path" ] || continue
         local skill_name
         skill_name="$(basename "$skill_path")"
         local link_target="${target_dir}/${skill_name}"
@@ -263,7 +369,7 @@ link_skills_individual() {
             continue
         }
         linked=$((linked + 1))
-    done
+    done <<< "$SKILL_SOURCE_LIST"
 
     log_info "[$tool] 개별 skill 연결 완료: ${linked}개 신규, ${skipped}개 기존 유지"
 }
@@ -284,13 +390,11 @@ link_skills_individual_codex() {
     local pruned=0
     local prune_skipped=0
     local excluded=0
-    local source_root
-    source_root="$(readlink -f "$SKILLS_SOURCE")"
 
     mkdir -p "$target_dir"
 
-    for skill_path in "$SKILLS_SOURCE"/*/; do
-        [ -d "$skill_path" ] || continue
+    while IFS= read -r skill_path; do
+        [ -n "$skill_path" ] || continue
 
         local skill_name
         skill_name="$(basename "$skill_path")"
@@ -380,7 +484,7 @@ link_skills_individual_codex() {
             continue
         }
         linked=$((linked + 1))
-    done
+    done <<< "$SKILL_SOURCE_LIST"
 
     local existing_skill_entry
     for existing_skill_entry in "$target_dir"/*; do
@@ -392,7 +496,7 @@ link_skills_individual_codex() {
             continue
         fi
 
-        if [ -d "${SKILLS_SOURCE}/${existing_name}" ] && \
+        if skill_source_path_for "$existing_name" >/dev/null && \
            codex_skill_is_allowed "$existing_name" "$allowlist"; then
             continue
         fi
@@ -400,16 +504,14 @@ link_skills_individual_codex() {
         if [ -L "$existing_skill_entry" ]; then
             local stale_target
             stale_target="$(readlink -f "$existing_skill_entry" 2>/dev/null || true)"
-            case "$stale_target" in
-                "$source_root"/*)
-                    rm -f "$existing_skill_entry" || {
-                        log_error "[codex] stale skill 제거 실패: $existing_skill_entry"
-                        continue
-                    }
-                    pruned=$((pruned + 1))
+            if skill_source_is_managed "$stale_target"; then
+                rm -f "$existing_skill_entry" || {
+                    log_error "[codex] stale skill 제거 실패: $existing_skill_entry"
                     continue
-                    ;;
-            esac
+                }
+                pruned=$((pruned + 1))
+                continue
+            fi
 
             log_warning "[codex] stale skill symlink 보존(사용자 데이터 감지): $existing_skill_entry"
             prune_skipped=$((prune_skipped + 1))
@@ -443,6 +545,16 @@ ux_section "Skills SSOT 연결"
 # SSOT 존재 확인
 if [ ! -d "$SKILLS_SOURCE" ]; then
     log_critical "SSOT 디렉토리가 없습니다: $SKILLS_SOURCE"
+fi
+
+# 소스 목록을 한 번만 만들어 4개 CLI fan-out 이 공유한다 (issue #1652).
+# fan-out 로직 자체는 그대로다 — 달라진 건 enumeration 뿐 (F-4).
+SKILL_SOURCE_LIST="$(collect_skill_sources)"
+
+if [ -n "$WORKSPACE_ROOT" ] && [ -d "$WORKSPACE_ROOT" ]; then
+    workspace_skill_count="$(printf '%s\n' "$SKILL_SOURCE_LIST" \
+        | grep -c "^${WORKSPACE_ROOT}/" || true)"
+    log_info "[workspace] ${workspace_skill_count}개 skill 합류 (루트: $WORKSPACE_ROOT)"
 fi
 
 # 1. OpenCode: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
