@@ -9,6 +9,7 @@
     "devenv@devenv-skills",
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
+    "gh-issue@gh-issue-skills",
     "gh-resolve@gh-resolve-skills",
     "gh-setup@gh-setup-skills",
     "gh-verify@gh-verify-skills",
