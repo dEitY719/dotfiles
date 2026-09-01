@@ -1349,7 +1349,7 @@ FIXTURE
         export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
                GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
         git init -q -b main
-        skipf="$repo/skip.conf"
+        skipf=$(mktemp "${TMPDIR:-/tmp}/gcp_skip.XXXXXX")
         printf "deadbeef  # inline reason\n# whole-line comment\n\ncafebabe\n" > "$skipf"
         export GCP_SCAN_SKIP_FILE="$skipf"
         _gcp_scan main upstream/main --show-skip-list
@@ -1381,7 +1381,7 @@ FIXTURE
     run_in_bash "
         $(_gcp1037_make_repo)
         conflict_sha=\$(git rev-parse source~1)
-        skipf=\"\$repo/skip.conf\"
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s  # manually resolved, already in HEAD\n' \"\$conflict_sha\" > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
         printf 'y\n' | _gcp_scan main source --author=Me
@@ -1402,7 +1402,7 @@ FIXTURE
     run_in_bash "
         $(_gcp1037_make_repo)
         conflict_sha=\$(git rev-parse source~1)
-        skipf=\"\$repo/skip.conf\"
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s\n' \"\$conflict_sha\" > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
         printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
@@ -1422,7 +1422,7 @@ FIXTURE
     run_in_bash "
         $(_gcp1037_make_repo)
         conflict_sha=\$(git rev-parse source~1)
-        skipf=\"\$repo/skip.conf\"
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s\n' \"\$conflict_sha\" > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
         printf 'y\n' | _gcp_scan main source --author=all
@@ -1437,7 +1437,7 @@ FIXTURE
     run_in_bash "
         $(_gcp1037_make_repo)
         conflict_short=\$(git rev-parse --short=8 source~1)
-        skipf=\"\$repo/skip.conf\"
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s  # short form\n' \"\$conflict_short\" > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
         printf 'y\n' | _gcp_scan main source --author=Me
@@ -1454,7 +1454,7 @@ FIXTURE
     # be detected by Stage-1.6 (i.e. the wildcard did NOT silence it).
     run_in_bash "
         $(_gcp1037_make_repo)
-        skipf=\"\$repo/skip.conf\"
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s\n' '*' '?' '0' 'zz12' '012' > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
         printf 'y\n' | _gcp_scan main source --author=Me
@@ -1472,7 +1472,7 @@ FIXTURE
         trap "rm -rf $repo" EXIT
         cd "$repo" || exit 1
         git init -q -b main
-        skipf="$repo/skip.conf"
+        skipf=$(mktemp "${TMPDIR:-/tmp}/gcp_skip.XXXXXX")
         printf "%s\n" "*" "0" "deadbeef" "ab12  # ok" > "$skipf"
         export GCP_SCAN_SKIP_FILE="$skipf"
         _gcp_scan main upstream/main --show-skip-list
@@ -1526,7 +1526,7 @@ _gcp_pathskip_make_repo() {
         git add unrelated.txt claude/plugin/marketplaces.json \
             && git commit -qm "feat: real change"
         git checkout -q main
-        skipf="$repo/skip-paths.conf"
+        skipf=$(mktemp "${TMPDIR:-/tmp}/gcp_skip_paths.XXXXXX")
         printf 'claude/plugin/plugins.json\nclaude/plugin/marketplaces.json\n' > "$skipf"
         export GCP_SCAN_SKIP_PATHS_FILE="$skipf"
 FIXTURE
@@ -1590,7 +1590,7 @@ FIXTURE
         trap "rm -rf $repo" EXIT
         cd "$repo" || exit 1
         git init -q -b main
-        skipf="$repo/skip-paths.conf"
+        skipf=$(mktemp "${TMPDIR:-/tmp}/gcp_skip_paths.XXXXXX")
         printf "claude/plugin/plugins.json  # inline reason\n# whole-line comment\n\nclaude/plugin/marketplaces.json\n" > "$skipf"
         export GCP_SCAN_SKIP_PATHS_FILE="$skipf"
         _gcp_scan main upstream/main --show-skip-paths
@@ -1867,4 +1867,110 @@ FIXTURE
     # Nothing was cherry-picked and the local edit is untouched.
     assert_output --partial "EDIT_KEPT"
     assert_output --partial "NO_CLEAN"
+}
+
+@test "scan #1649: an untracked file (not just a tracked edit) also blocks execution" {
+    # Defect C follow-up (agy review, PR #1649): `git diff` / `git diff
+    # --cached` never report untracked files, so the original precondition
+    # missed this case entirely — an untracked file could survive into the
+    # rollback path's `git clean -fd` and be deleted as if it were debris
+    # from a failed pick. `git status --porcelain` covers it.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        echo scratch > untracked.txt
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+        [ -f untracked.txt ] && echo UNTRACKED_KEPT || echo UNTRACKED_LOST
+        git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
+    "
+    refute_output --partial "Do you want to cherry-pick"
+    assert_output --partial "git stash push -u"
+    assert_output --partial "scan_rc=1"
+    assert_output --partial "UNTRACKED_KEPT"
+    assert_output --partial "NO_CLEAN"
+}
+
+@test "scan #1649: untracked debris from a rolled-back conflict is cleaned up" {
+    # Defect B follow-up (agy review, PR #1649 — "Assumption" flag): `--abort`
+    # / `reset --hard` only restore TRACKED content. A failed cherry-pick that
+    # brought a genuinely new file alongside its conflicting edit would
+    # otherwise leave that file behind as untracked debris even after the
+    # commit is correctly reported as deferred. Safe to `git clean -fd`
+    # unconditionally here because defect C's precondition (previous two
+    # tests) already refused to start on a tree with ANY pre-existing
+    # untracked file.
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1649.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Test\" GIT_AUTHOR_EMAIL=\"t@t\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > conf.txt
+        echo init > a.txt
+        git add conf.txt a.txt && git commit -qm 'init'
+        git checkout -q -b source
+        printf 'A1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > conf.txt
+        git add conf.txt && git commit -qm 'conf: top edit'
+        # The conflicting commit ALSO brings a brand-new untracked-once-reverted file.
+        printf 'A1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nB10\n' > conf.txt
+        echo debris > debris.txt
+        git add conf.txt debris.txt && git commit -qm 'conf: bottom edit + debris.txt'
+        echo clean > clean.txt && git add clean.txt && git commit -qm 'add clean.txt'
+        git checkout -q main
+        printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nM10\n' > conf.txt
+        git add conf.txt && git commit -qm 'main: bottom edit'
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+        [ -e debris.txt ] && echo DEBRIS_PRESENT || echo DEBRIS_GONE
+        git status --porcelain
+    "
+    assert_output --partial "Deferred"
+    assert_output --partial "1 deferred (conflict)"
+    assert_output --partial "scan_rc=1"
+    # debris.txt travelled with the deferred commit — it must not survive
+    # the rollback as orphaned untracked cruft.
+    assert_output --partial "DEBRIS_GONE"
+}
+
+@test "scan #1649: a later commit depending on a deferred one applies silently — known limitation, surfaced only via Needs manual resolution" {
+    # codex review, PR #1649 BLOCKER: static prediction cannot see semantic
+    # dependencies across files, so a later commit that logically depends on
+    # a deferred commit's content can still apply cleanly (git sees no
+    # textual conflict) — the series is left semantically incomplete with no
+    # error from git itself. This is an INHERENT limit of any
+    # approximate-prediction + partial-automation design (the issue body
+    # itself: "Stage-1.5/1.6 은 정적 근사이므로 이 규모에서 예측 실패는
+    # 필연이다"), not a regression this PR introduces — a fully general fix
+    # would require a real dependency-graph solver, out of scope here. This
+    # test pins the CURRENT, documented behavior instead of leaving it an
+    # undocumented gap: the dependent commit applies without complaint, but
+    # the true culprit (the deferred commit carrying the missing prerequisite)
+    # is still named correctly in "Needs manual resolution" — the mitigation
+    # a human review of that section is expected to catch.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        # D3 (a NEW commit after clean.txt) depends on helper content that
+        # only D2 ('conf: bottom edit') would have introduced, but touches a
+        # DIFFERENT file so git sees no conflict of its own.
+        git checkout -q source
+        echo 'source helper.sh' > caller.sh && git add caller.sh \
+            && git commit -qm 'add caller.sh (depends on conf.txt content D2 would add)'
+        git checkout -q main
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+        # D2 ('conf: bottom edit') is the one that actually conflicted+deferred.
+        git cat-file -e HEAD:caller.sh 2>/dev/null && echo HAS_CALLER || echo NO_CALLER
+        git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
+    "
+    assert_output --partial "scan_rc=1"
+    assert_output --partial "Needs manual resolution"
+    # The KNOWN LIMITATION: caller.sh (semantically dependent on the deferred
+    # commit) still applies — no error surfaces from that commit itself.
+    assert_output --partial "HAS_CALLER"
+    # The independent clean.txt candidate still applies too (batch continued).
+    assert_output --partial "HAS_CLEAN"
+    # The MITIGATION: the report still names the true deferred commit so a
+    # human reviewing it can catch the dependency manually.
+    assert_output --partial "conf: bottom edit"
 }
