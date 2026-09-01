@@ -10,6 +10,7 @@
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
     "gh-resolve@gh-resolve-skills",
+    "gh-setup@gh-setup-skills",
     "gh-verify@gh-verify-skills",
     "harness@harness-skills",
     "hookify@claude-plugins-official",
