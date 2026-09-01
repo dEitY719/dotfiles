@@ -123,8 +123,7 @@ check_hook_files() {
 
     local hooks_path
     hooks_path=$(git config --global core.hooksPath 2>/dev/null)
-    local expanded_hooks_path
-    expanded_hooks_path=$(_global_hooks_dir)
+    local expanded_hooks_path="${hooks_path/#\~/$HOME}"
 
     if [ -z "$expanded_hooks_path" ]; then
         ux_warning "core.hooksPath is not set, skipping hook file check"
