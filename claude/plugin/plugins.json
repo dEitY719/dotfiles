@@ -7,6 +7,7 @@
     "codex@openai-codex",
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
+    "harness@harness-skills",
     "hookify@claude-plugins-official",
     "last30days@last30days-skill",
     "obsidian@obsidian-skills",
