@@ -110,7 +110,18 @@ upstream 이 플러그인을 하나 등록할 때마다 sync 가 충돌했다 �
    없다 — `chore(claude-plugin): sync manifest` 자동 커밋은 별도 private 레포인
    `company/` 에만 남는다. `company/` 는 fork 가 없으므로 원 설계 그대로다.
 5. **계약 등록은 upstream 의 명시적 PR 작업이다.** 훅이 대신 해 주지 않는다.
-   계약에 있는 항목을 uninstall 하면 훅이 stderr 힌트를 남긴다.
+6. **키가 충돌하면 계약이 이긴다** (PR #1695 codex BLOCKER). 훅이 새로 쓰는
+   오버레이에는 계약 키가 들어가지 않지만, 그 키가 계약에 **등록되기 전에**
+   쓰인 오버레이에는 남아 있다. 오버레이가 이기면 upstream 의 마켓플레이스 URL
+   정정이 조용히 무시된다 — 계약이 authority 다.
+7. **계약 항목의 uninstall 은 묘비로 기록한다** (PR #1695 agy BLOCKER). 훅은
+   계약을 쓸 수 없으므로 오버레이에서만 지우는데, 그러면 `restore.sh` 가 계약을
+   보고 그대로 다시 설치한다 — #1685 이전 대비 동작 퇴행이다. gitignored
+   `claude/plugin/removed.local.json`
+   (`{"marketplaces":[…],"plugins":[…]}`) 이 "이 PC 에서는 지웠다" 를 머신
+   로컬로 기록하고, `restore.sh` 의 union 이 이것을 뺀다. 재설치하면 훅의 add
+   분기(그리고 `reconcile.sh --apply`)가 해당 묘비를 취소한다. 계약 자체는
+   여전히 손대지 않는다 — 모든 PC 에서 빼는 것은 PR 의 일이다.
 
 효과: upstream 등록 커밋이 fork 와 충돌하지 않고, `plugin-sync.sh` 실행 후
 `git status` 가 깨끗하며, `gcp-scan-skip-paths.conf` 의 매니페스트 항목이

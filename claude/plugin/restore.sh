@@ -216,21 +216,34 @@ _target_config_dirs() {
 # 오버레이(`*.local.json`) 의 union 이다 — 훅이 쓰는 쪽은 오버레이뿐이므로 둘 중
 # 하나만 봐서는 복원이 반쪽이 된다. 분리 이유는 claude/AGENTS.md 참고.
 
+# 이 PC 가 계약 항목을 uninstall 했다는 묘비 목록 (gitignored, #1685 리뷰).
+# 훅은 계약 파일을 쓸 수 없으므로, 이것 없이는 uninstall 한 계약 항목을
+# restore.sh 가 계약만 보고 다시 설치해 버린다 — PR #1695 agy BLOCKER.
+TOMBSTONE="$SCRIPT_DIR/removed.local.json"
+
 # Merged {name: repo} map of tracked $1 + overlay $2. Prints NOTHING when
 # neither file exists, which is what lets the caller still emit the
 # "manifest 없음 — 건너뜀" skip line for an absent scope.
+#
+# 키 충돌 시 **tracked 계약이 이긴다** (`$b * $a`, PR #1695 codex BLOCKER).
+# 오버레이가 오른쪽이면 upstream 이 마켓플레이스 URL 을 고쳐도 낡은 로컬 값이
+# 조용히 덮어써 버린다 — 훅이 새로 쓰는 오버레이에는 계약 키가 없지만, 계약에
+# 등록되기 *전에* 쓰인 오버레이에는 남아 있다. 계약이 authority 다.
 _merged_marketplaces() {
 	[ -f "$1" ] || [ -f "$2" ] || return 0
 	jq -n --argjson a "$(_claude_plugin_read_json_or "$1" '{}')" \
-		--argjson b "$(_claude_plugin_read_json_or "$2" '{}')" '$a * $b'
+		--argjson b "$(_claude_plugin_read_json_or "$2" '{}')" \
+		--argjson gone "$(_claude_plugin_read_json_or "$TOMBSTONE" '{}')" \
+		'($b * $a) | with_entries(select(([.key] | inside($gone.marketplaces // [])) | not))'
 }
 
-# Same for the plugins array: set union, de-duplicated. Empty on both-absent.
+# Same for the plugins array: set union, de-duplicated, minus the tombstones.
 _merged_plugins() {
 	[ -f "$1" ] || [ -f "$2" ] || return 0
 	jq -n --argjson a "$(_claude_plugin_read_json_or "$1" '{"plugins":[]}')" \
 		--argjson b "$(_claude_plugin_read_json_or "$2" '{"plugins":[]}')" \
-		'{plugins: ((($a.plugins // []) + ($b.plugins // [])) | unique)}'
+		--argjson gone "$(_claude_plugin_read_json_or "$TOMBSTONE" '{}')" \
+		'{plugins: ((($a.plugins // []) + ($b.plugins // []) | unique) - ($gone.plugins // []))}'
 }
 
 # Merge once, not once per account: the inputs are repo-relative paths only,

@@ -145,7 +145,7 @@ JSON
     assert_output ""
 }
 
-@test "uninstall of a contract entry prints a stderr hint instead of editing it (#1685)" {
+@test "uninstall of a contract entry records a tombstone instead of editing it (#1695 agy BLOCKER)" {
     cat > "$MAIN_ROOT/claude/plugin/plugins.json" <<'JSON'
 {"plugins": ["ralph-loop@claude-plugins-official"]}
 JSON
@@ -153,7 +153,35 @@ JSON
     run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
     assert_output --partial "upstream 등록 계약"
-    assert_output --partial "restore.sh 가 다시 설치합니다"
+    assert_output --partial "묘비"
+
+    # 계약은 그대로, 묘비에 기록 → restore.sh 가 더 이상 설치하지 않는다.
+    run jq -e '.plugins == ["ralph-loop@claude-plugins-official"]' \
+        "$MAIN_ROOT/claude/plugin/plugins.json"
+    assert_success
+    run jq -e '.plugins == ["ralph-loop@claude-plugins-official"]' \
+        "$MAIN_ROOT/claude/plugin/removed.local.json"
+    assert_success
+}
+
+@test "marketplace remove of a contract marketplace tombstones the marketplace (#1695)" {
+    cat > "$MAIN_ROOT/claude/plugin/marketplaces.json" <<'JSON'
+{"claude-plugins-official": "anthropics/claude-plugins-official"}
+JSON
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin marketplace remove claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    run jq -e '.marketplaces == ["claude-plugins-official"]' \
+        "$MAIN_ROOT/claude/plugin/removed.local.json"
+    assert_success
+}
+
+@test "uninstall of a plugin absent from the contract writes no tombstone (#1695)" {
+    # 계약에 없으면 오버레이에서 빠지는 것으로 충분하다 — 묘비는 계약 항목 전용이다.
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin uninstall ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+    [ ! -f "$MAIN_ROOT/claude/plugin/removed.local.json" ]
 }
 
 @test "uninstall of a plugin absent from the contract stays silent (#1685)" {
