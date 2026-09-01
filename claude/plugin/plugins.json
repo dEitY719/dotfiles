@@ -5,6 +5,7 @@
     "caveman@caveman",
     "claude-md-management@claude-plugins-official",
     "codex@openai-codex",
+    "devenv@devenv-skills",
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
     "harness@harness-skills",
