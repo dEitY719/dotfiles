@@ -1996,11 +1996,24 @@ FIXTURE
 # ---------------------------------------------------------------------------
 
 @test "alias-immunity #1663: gcp_scan.sh has no bare cp/rm/mv command words" {
-    # Static guard. Matches a cp/rm/mv in COMMAND-word position (line start or
-    # right after a shell separator) — `command cp` puts the word in argument
-    # position and is correctly not matched. This also catches a future
-    # file-wide cleanup that drops the `command` prefix again.
-    run bash -c "grep -nE '(^[[:space:]]*|[;&|{()}][[:space:]]*)(cp|rm|mv)[[:space:]]' '${SHELL_COMMON}/functions/gcp_scan.sh' || true"
+    # Static guard, so a future file-wide cleanup cannot drop the `command`
+    # prefix again unnoticed.
+    #
+    # Rather than enumerate the shell separators a command word may follow —
+    # an earlier attempt did, and missed `if cp`, `! rm`, `FOO=bar cp`, and
+    # anything after `then`/`else`/`do` (agy + codex, PR #1686) — this inverts
+    # the test: strip the call sites that ARE prefixed, then any surviving
+    # cp/rm/mv word is by definition unprefixed, whatever precedes it.
+    #
+    # Full-line comments are dropped first so prose about `rm -rf` does not
+    # trip the guard. A trailing comment still can, which is the deliberate
+    # direction: a false positive is loud and fixed by rewording, while a
+    # false negative is the silent hole this guard exists to close.
+    run bash -c '
+        sed "s/^[[:space:]]*#.*//" "$1" |
+            sed "s/\\bcommand[[:space:]][[:space:]]*\\(cp\\|rm\\|mv\\)\\b/command_OK/g" |
+            grep -nE "(^|[^[:alnum:]_./-])(cp|rm|mv)[[:space:]]" || true
+    ' _ "${SHELL_COMMON}/functions/gcp_scan.sh"
     assert_success
     assert_output ""
 }
