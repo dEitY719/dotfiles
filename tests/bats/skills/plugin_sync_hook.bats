@@ -58,7 +58,7 @@ _installed_plugins() {
     "ralph-loop@claude-plugins-official": [{"scope": "user"}],
     "gitkraken-hooks@gitkraken": [{"scope": "user"}],
     "secret@internal-tools": [{"scope": "user"}],
-    "visuals@claude-plugin-visuals": [{"scope": "local"}]
+    "visuals@visuals-skills": [{"scope": "local"}]
   }
 }
 JSON
@@ -116,7 +116,7 @@ JSON
     assert_failure
     run jq -e '.plugins | any(. == "gitkraken-hooks@gitkraken")' "$MAIN_ROOT/claude/plugin/plugins.json"
     assert_failure
-    run jq -e '.plugins | any(. == "visuals@claude-plugin-visuals")' "$MAIN_ROOT/claude/plugin/plugins.json"
+    run jq -e '.plugins | any(. == "visuals@visuals-skills")' "$MAIN_ROOT/claude/plugin/plugins.json"
     assert_failure
 }
 
