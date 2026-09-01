@@ -63,27 +63,46 @@ BLOCKER).
 `NEW_BASE_SHA` / `NEW_HEAD_SHA` 는 이 Step 이 push 성공 직후 새로 읽는다.
 Step 3/4 어디에서도 이 네 변수를 실제로 할당하는 코드가 없다면 아래 호출은
 매번 patch-id 를 읽지 못해 무조건 삭제 경로만 타게 된다(PR #1699 review,
-codex BLOCKER) — 그래서 호출 직전에 항상 명시적으로 할당한다:
+codex BLOCKER) — 그래서 호출 직전에 항상 명시적으로 할당한다. `OLD_BASE_SHA`
+가 이미 존재하는 로컬 ref(`git merge-base` 결과)에서만 나오므로 obj store 에
+없을 걱정은 없다 — Step 3 의 `git fetch` 이전에 캡처하지만, merge-base 자체가
+이미 로컬에 있는 두 커밋만 비교하기 때문이다.
+
+이 저장소의 다른 모든 `--worktree` 스니펫과 마찬가지로, `<path>` 는 실행
+세션이 그 자리에 실제 경로 문자열을 대입하는 **자리표시자**이지 셸 변수가
+아니다(agy 가 이전 리뷰에서 `$WORKTREE_PATH` 라는 정의된 적 없는 변수를
+지적함 — PR #1699 review) — 그래서 Step 3/4 처럼 두 형태를 나란히 보여주고,
+`--worktree` 로 호출됐는지는 실행 세션이 이미 알고 있으므로 그중 맞는 하나를
+그대로 실행한다:
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_resolve_outdated.sh"
 
-if [ -n "${WORKTREE_PATH-}" ]; then
-    OLD_HEAD_SHA="$BACKUP_SHA"
-    NEW_BASE_SHA=$(git -C "$WORKTREE_PATH" rev-parse "$REMOTE/$BASE")
-    NEW_HEAD_SHA=$(git -C "$WORKTREE_PATH" rev-parse HEAD)
-    _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
-        "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
-        "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "$WORKTREE_PATH")
-else
-    OLD_HEAD_SHA="$BACKUP_SHA"
-    NEW_BASE_SHA=$(git rev-parse "$REMOTE/$BASE")
-    NEW_HEAD_SHA=$(git rev-parse HEAD)
-    _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
-        "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
-        "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA")
-fi
+OLD_HEAD_SHA="$BACKUP_SHA"
+NEW_BASE_SHA=$(git rev-parse "$REMOTE/$BASE")
+NEW_HEAD_SHA=$(git rev-parse HEAD)
+_vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
+    "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
+    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA")
+```
 
+`--worktree <path>` 모드에서는 세 `git` 호출 모두 `git -C "<path>" ...` 로,
+마지막 인자로 `"<path>"` 를 추가한다:
+
+```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_resolve_outdated.sh"
+
+OLD_HEAD_SHA="$BACKUP_SHA"
+NEW_BASE_SHA=$(git -C "<path>" rev-parse "$REMOTE/$BASE")
+NEW_HEAD_SHA=$(git -C "<path>" rev-parse HEAD)
+_vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
+    "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
+    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "<path>")
+```
+
+두 형태 모두 결과는 같은 방식으로 읽는다:
+
+```bash
 case "$_vl_result" in
     *"label=kept"*)
         echo "[OK] \`review-passed\` 유지됨 — rebase 는 diff 내용 변경 없음(patch-id 동일), 새 SHA 로 재확인"
