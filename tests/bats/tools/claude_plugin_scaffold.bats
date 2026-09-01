@@ -35,3 +35,13 @@ load '../test_helper'
         "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
     assert_success
 }
+
+@test "harness-skills marketplace and harness plugin are registered (#1645)" {
+    run jq -e '."harness-skills" == "dEitY719/harness-skills"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+    assert_success
+
+    run jq -e '.plugins | index("harness@harness-skills") != null' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+    assert_success
+}
