@@ -57,12 +57,24 @@ already-clean is a no-op (exit 0 — idempotent, safe to re-run).
 
 ## Step 3: Fetch + Clean Rebase
 
+Before fetching, capture the PR's pre-rebase diff range for Step 5's
+patch-id comparison (#1698) — `git merge-base` rather than the tracking
+ref itself, so a locally stale `$REMOTE/$BASE` still yields the PR's real
+diff start:
+
+```bash
+OLD_BASE_SHA=$(git merge-base HEAD "$REMOTE/$BASE")
+```
+
+Then:
+
 ```bash
 git fetch "$REMOTE" "$BASE"
 git rebase "$REMOTE/$BASE"
 ```
 
-In `--worktree` mode both become `git -C "<path>" ...`.
+In `--worktree` mode all three become `git -C "<path>" ...`. `BACKUP_SHA`
+from Step 1 is the pre-rebase head — Step 5 reuses it as `OLD_HEAD_SHA`.
 
 Rebase exits non-zero with conflicts → `git rebase --abort` immediately,
 print `[FAIL] rebase produced conflicts — use /gh-pr-resolve-conflict
@@ -98,10 +110,13 @@ invalidate the stale `review-passed` verdict. Record whether the push succeeded.
 Re-read `--json mergeable,mergeStateStatus,url` and interpret per
 `references/mergeable-triage.md` → "Step 5 verification".
 
-Only if Step 4's push actually succeeded, drop the `review-passed` label per
-`references/verdict-label-removal.sh.md` (soft-fail). Never touch
+Only if Step 4's push actually succeeded, reconcile the `review-passed`
+label per `references/verdict-label-removal.sh.md` (soft-fail) — a clean
+rebase that reproduced the exact same diff (patch-id unchanged) keeps the
+label and re-stamps its freshness marker for the new head; a rebase whose
+content actually changed drops it as before (#1698). Never touch
 `review-blocked` — this skill holds no evidence the blockers were addressed —
-and never *add* either label; `devx:pr-review-all` owns that (#1563).
+and never *add* `review-blocked`; `devx:pr-review-all` owns that (#1563).
 
 ```
 [OK] PR #<N> out-of-date 해소됨 · <new-sha> push 됨.
@@ -118,9 +133,12 @@ ai-metrics footer follows the sister-skill pattern; skip when
 - Never run on the repo's default branch.
 - Never auto-resolve conflicts — delegate to `gh:pr-resolve-conflict` (exit 4).
 - Never retry a rejected `--force-with-lease`; never auto-stash (clean tree required).
-- Never add `review-passed` / `review-blocked`, and never remove
-  `review-blocked` (#1563). Removing `review-passed` after a successful push
-  is mandatory — a stale verdict on an unreviewed head is the bug this fixes.
+- Never remove `review-blocked`, and never independently *decide* to add
+  either label — `devx:pr-review-all` owns that. Reconciling `review-passed`
+  after a successful push is mandatory (drop on real content change, keep +
+  re-stamp on patch-id-identical rebase, #1698) — a stale verdict on an
+  unreviewed head is the bug this fixes, and so is an unnecessary re-review
+  of content nothing changed.
 - Never create or remove the `--worktree` path. The caller owns its lifecycle.
 
 ## Related Skills
