@@ -64,19 +64,20 @@ else
 fi
 unset _drg_self _drg_helper
 
-# Emit the compact JSON in file $1, or the default $2 when that file is
-# missing, empty (a 0-byte file makes `jq .` exit 0 with NO output, so a
-# plain `jq . || echo` fallback would not fire), or invalid JSON.
+# The manifest reader this file's two _changed_keys_* helpers need is shared
+# with claude/plugin/{reconcile,restore}.sh and claude/hooks/plugin-sync.sh,
+# so it lives in its own file rather than here (issue #1696). Sourced the same
+# best-effort way as dotfiles_root.sh above: both files ship together in
+# shell-common/functions/, so a checkout that can reach this one can reach that
+# one too.
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+
+# Back-compat alias for the pre-#1696 name. Kept because it is part of this
+# file's published surface (tests/bats/tools/plugin_sync_title_smoke.bats
+# asserts it is defined) — new code should call _claude_plugin_read_json_or.
 _plugin_sync_read_json_or() {
-    _psrjo_out=""
-    if [ -f "$1" ]; then
-        _psrjo_out=$(jq -c '.' "$1" 2>/dev/null)
-    fi
-    if [ -n "$_psrjo_out" ]; then
-        printf '%s' "$_psrjo_out"
-    else
-        printf '%s' "$2"
-    fi
+    _claude_plugin_read_json_or "$@"
 }
 
 # _changed_keys_marketplaces <current_file> <target_json>
@@ -85,7 +86,7 @@ _plugin_sync_read_json_or() {
 # no explanatory text, unlike reconcile.sh's _diff_marketplaces — for
 # embedding in a commit title. <target_json> is a {name: repo} map.
 _changed_keys_marketplaces() {
-    _ckm_current=$(_plugin_sync_read_json_or "$1" '{}')
+    _ckm_current=$(_claude_plugin_read_json_or "$1" '{}')
     jq -rn --argjson c "$_ckm_current" --argjson t "$2" '
         [ ($t | to_entries[] | select($c[.key] == null) | "+\(.key)"),
           ($c | to_entries[] | select($t[.key] == null) | "-\(.key)"),
@@ -99,7 +100,7 @@ _changed_keys_marketplaces() {
 # Same idea for the plugins manifest. <target_json> is a flat array of
 # plugin names, so only "+"/"-" are possible (no value to change).
 _changed_keys_plugins() {
-    _ckp_current=$(_plugin_sync_read_json_or "$1" '{"plugins":[]}')
+    _ckp_current=$(_claude_plugin_read_json_or "$1" '{"plugins":[]}')
     jq -rn --argjson c "$_ckp_current" --argjson t "$2" '
         ($c.plugins // []) as $cur |
         [ ($t[]   | select(. as $x | ($cur | index($x)) | not) | "+\(.)"),
