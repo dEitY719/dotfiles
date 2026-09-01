@@ -16,15 +16,21 @@
 #                                   _plugin_sync_read_json_or
 #
 # They agreed by accident, not by construction. This file is the one copy the
-# rule is now maintained in; the three scripts above source it and keep only a
+# rule is now maintained in; all four files above source it and keep only a
 # clearly-labelled bootstrap fallback for the half-installed tree they are each
-# documented (and, for two of them, tested) to survive — see the comment at
+# documented (and, for three of them, tested) to survive — see the comment at
 # each fallback.
 #
+# The list above is the set of copies this file replaced, not every manifest
+# read in the tree: claude/hooks/plugin-sync-session.sh reads the same two
+# files through filtered jq programs (`keys`, `.mp_keys // []`), which do not
+# fit this helper's fixed `jq -c '.'`, and keeps its own reads.
+#
 # Like shell-common/functions/plugin_sync_title.sh, this file deliberately has
-# NO interactive guard: it only defines a function and produces no output at
-# file scope, so the guard would hide the function from the very callers that
-# need it (hooks and one-shot scripts sourcing it non-interactively).
+# NO interactive guard: apart from the advisory diagnostics below it defines a
+# function and produces no output at file scope, so the guard would hide the
+# function from the very callers that need it (hooks and one-shot scripts
+# sourcing it non-interactively).
 #
 # POSIX only — shell-common/functions/*.sh is auto-sourced by both the bash
 # and the zsh loader, so no bashisms (no arrays, no `local`, no `[[ ]]`) may
@@ -32,15 +38,36 @@
 #
 # Requires: jq.
 
+# Include-once sentinel (issue #1505, same rationale as dotfiles_root.sh): this
+# file is reached twice per interactive shell — once by the functions/ auto-
+# loader's own pass over shell-common/functions/*.sh, then again when that pass
+# reaches plugin_sync_title.sh, which sources this file itself. Repeats re-parse
+# the file, redefine the function and re-run the guard below (a `dirname` fork
+# plus an un-memoized `git rev-parse` subshell each time — dotfiles_root.sh
+# memoizes only the canonical side) for no benefit. `return` (not `exit`) since
+# this only ever runs as a sourced dot-script; the `|| exit 0` fallback covers
+# the (unsupported) case of running it directly.
+if [ -n "${_CLAUDE_PLUGIN_MANIFEST_SH_SOURCED-}" ]; then
+    # shellcheck disable=SC2317  # exit fallback only runs if this file is
+    # executed directly (not sourced), so `return` succeeding makes it look
+    # unreachable to static analysis.
+    return 0 2>/dev/null || exit 0
+fi
+_CLAUDE_PLUGIN_MANIFEST_SH_SOURCED=1
+
 # Advisory only (issue #1454, propagated by #1505): warn once on stderr when
 # this file was sourced from a checkout that is a different git repo than
-# $HOME/dotfiles. Mandated by shell-common/AGENTS.md for every functions/*.sh
-# a non-interactive hook or script sources directly, which is exactly how all
-# three callers reach this file. Never blocks, and deliberately NOT wrapped in
-# an interactive guard — see the header note above; the guard function is
-# itself a silent no-op outside the genuine foreign-checkout case. Without it a
-# stale sibling checkout could silently supply different manifest-read
-# semantics than the manifest writers assume.
+# $HOME/dotfiles. This is the standard guard that
+# docs/guide/playbooks/shell-common-cheatsheet.md → "Foreign-Checkout Guard
+# Snippet" requires be copied character-for-character (only the LABEL differs)
+# into each guarded shell-common/functions/*.sh. It speaks on the loader
+# auto-source path (shell-common/util/safe_source.sh treats */functions/* as
+# "important" and does not redirect its stderr); the four explicit callers all
+# source with `2>/dev/null`, so it is deliberately silent there. Never blocks,
+# and deliberately NOT wrapped in an interactive guard — see the header note
+# above; the guard function is itself a silent no-op outside the genuine
+# foreign-checkout case. Without it a stale sibling checkout could silently
+# supply different manifest-read semantics than the manifest writers assume.
 #
 # The self-path branch must stay here at file top level — zsh rebinds $0 to
 # the sourced file (FUNCTION_ARGZERO) only for this file's own statements,
@@ -49,24 +76,24 @@
 # bash: dash aborts with "Bad substitution" the moment it expands
 # ${BASH_SOURCE[0]}.
 if [ -n "${ZSH_VERSION-}" ]; then
-    _cpm_self="$0"
+    _drg_self="$0"
 elif [ -n "${BASH_VERSION-}" ]; then
     # shellcheck disable=SC3028  # bash-only var, gated by $BASH_VERSION above
-    _cpm_self="${BASH_SOURCE[0]-}"
+    _drg_self="${BASH_SOURCE[0]-}"
 else
-    _cpm_self=""
+    _drg_self=""
 fi
-_cpm_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
-if [ -r "$_cpm_helper" ]; then
-    . "$_cpm_helper" || true
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+if [ -r "$_drg_helper" ]; then
+    . "$_drg_helper" || true
 fi
 if command -v _dotfiles_root_guard_self >/dev/null 2>&1; then
-    _dotfiles_root_guard_self "$_cpm_self" "claude_plugin_manifest"
+    _dotfiles_root_guard_self "$_drg_self" "claude_plugin_manifest"
 else
     printf '[claude_plugin_manifest] %s missing or did not define _dotfiles_root_guard_self — #1454 guard skipped (#724).\n' \
-        "$_cpm_helper" >&2
+        "$_drg_helper" >&2
 fi
-unset _cpm_self _cpm_helper
+unset _drg_self _drg_helper
 
 # _claude_plugin_read_json_or <file> <default>
 #
