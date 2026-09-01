@@ -361,7 +361,7 @@ _gcp_scan_conflict_adds_new_content() {
     # below is what distinguishes the two, letting Stage-1.6 defer the drift
     # case to Stage-2 (no-op) while still flagging the real one. Non-destructive:
     # reads blobs only (no checkout / cherry-pick).
-    local sha="$1" f="$2" parent td
+    local sha="$1" f="$2" parent td _gcp_norm
     parent=$(git rev-parse -q --verify "${sha}^1" 2>/dev/null) || return 0
     td=$(mktemp -d "${TMPDIR:-/tmp}/gcp_drift.XXXXXX" 2>/dev/null) || return 0
     # base = the file in the commit's parent (the cherry-pick merge base);
@@ -382,37 +382,79 @@ _gcp_scan_conflict_adds_new_content() {
     #     still present in ours (HEAD has not removed it).
     # Checking adds alone would misclassify a delete-only commit as drift and
     # let Stage-2 silently skip it — silent data loss (gemini PR #1157 review).
-    # Set membership over NORMALIZED lines; no sort needed (order-independent).
+    # Set membership over lines; no sort needed (order-independent).
+    #
     # Normalization (issue #1688): raw `$0` keys promote syntactic noise to a
-    # semantic difference. The commonest shape is a JSON/JS object or array —
-    # appending an entry puts a trailing comma on the line before it, so a line
-    # the commit added verbatim (`  "x": "y"`, last entry at the time) no longer
-    # matches HEAD's copy (`  "x": "y",`, no longer last) and the fully absorbed
-    # commit reads as real work forever. `norm()` strips trailing whitespace and
-    # one trailing comma before the membership test, on BOTH the add branch and
-    # the delete branch so the two stay symmetric. Leading indentation is
-    # deliberately KEPT — it is semantic in YAML, where stripping it would make
-    # genuinely different lines compare equal and reopen the #1177 data-loss
-    # direction. Lines that differ in meaning still differ after norm().
+    # semantic difference. The reported shape is a JSON object — appending an
+    # entry puts a trailing comma on the line before it, so a line the commit
+    # added verbatim (`  "x": "y"`, last entry at the time) no longer matches
+    # HEAD's copy (`  "x": "y",`, no longer last) and the fully absorbed commit
+    # reads as real work forever.
+    #
+    # Two guards keep that normalization from reopening the #1177 data-loss
+    # direction (PR #1690 review: agy + codex, both BLOCKER — each verified
+    # here against a reproducing fixture before being accepted):
+    #
+    #  1. SCOPE — normalization runs only on files whose syntax makes a
+    #     trailing comma and trailing whitespace insignificant, i.e. the JSON
+    #     family ($_gcp_norm below). Everywhere else `norm()` is the identity
+    #     and this function behaves EXACTLY as it did before #1688. `gcp scan`
+    #     handles arbitrary files, where both characters carry meaning: a
+    #     Python tuple (`x = 1,` vs `x = 1`), a CSV empty trailing field, a
+    #     Markdown hard break (two trailing spaces).
+    #  2. EXACT-vs-NORMALIZED SPLIT — normalizing `base` as well as `ours`
+    #     erases the commit's OWN delta whenever that delta lies entirely
+    #     inside the normalization equivalence class, making a real change
+    #     indistinguishable from a no-op. Measured: a commit whose only work is
+    #     deleting a stray JSON trailing comma flipped from real to drift, i.e.
+    #     silently dropped. So a theirs line already present in base under
+    #     normalization but NOT byte-identical to it is a noise-only
+    #     modification — the commit's entire work on that line IS the noise —
+    #     and only a byte-exact match in HEAD proves HEAD already applied it.
+    #     Genuinely new lines (absent from base even after norm) keep the
+    #     lenient normalized comparison, which is what absorbs the #1688 drift.
+    #
+    # `norm()` never returns the empty string: a lone `,` line would otherwise
+    # collapse to `""` and false-match a blank line (agy). Leading indentation
+    # is deliberately KEPT — it is semantic in YAML.
+    #
+    # Residual, deliberately accepted: inside a JSON-family file, a commit that
+    # ADDS a line HEAD already holds modulo the trailing comma is still read as
+    # drift. That is precisely the #1688 target case and is textually
+    # indistinguishable from it; the scope guard confines it to files where the
+    # comma is not semantic.
+    #
     # Rule for extending norm(): strip only a suffix a LATER append can force
     # onto an already-correct line. A trailing `\` fails that test — a
     # continuation marker changes when the commit itself reflows the block, so
     # stripping it would hide the commit's own work; keep it significant.
     # NOTE: a bare `exit` (not `exit 0`) is required on a hit — `exit 0` would
     # still run END, whose `exit 1` would override it back to "drift".
-    if awk '
-        function norm(s) { sub(/[[:space:]]*,?[[:space:]]*$/, "", s); return s }
-        FILENAME == B { base[norm($0)] = 1; next }
-        FILENAME == O { ours[norm($0)] = 1; next }
+    case "$f" in
+        *.json | *.jsonc | *.json5) _gcp_norm=1 ;;
+        *) _gcp_norm=0 ;;
+    esac
+    if awk -v NORMALIZE="$_gcp_norm" '
+        function norm(s, r) {
+            if (!NORMALIZE) return s
+            r = s
+            sub(/[[:space:]]*,?[[:space:]]*$/, "", r)
+            return (r == "" ? s : r)
+        }
+        FILENAME == B { base_x[$0] = 1; base_n[norm($0)] = 1; next }
+        FILENAME == O { ours_x[$0] = 1; ours_n[norm($0)] = 1; next }
         {
             n = norm($0)
-            theirs[n] = 1
-            if (!(n in base) && !(n in ours)) { found = 1; exit }
+            theirs_n[n] = 1
+            if ($0 in base_x) next
+            if (n in base_n) {
+                if (!($0 in ours_x)) { found = 1; exit }
+            } else if (!(n in ours_n)) { found = 1; exit }
         }
         END {
             if (!found) {
-                for (l in base) {
-                    if (!(l in theirs) && (l in ours)) { found = 1; break }
+                for (l in base_n) {
+                    if (!(l in theirs_n) && (l in ours_n)) { found = 1; break }
                 }
             }
             exit(found ? 0 : 1)
