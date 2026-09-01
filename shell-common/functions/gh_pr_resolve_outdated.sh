@@ -23,6 +23,27 @@
 # (`gh:pr-resolve-conflict`) is untouched by this file and keeps its own
 # unconditional drop, since resolving a conflict by definition changes content.
 #
+# Residual, deliberately accepted (PR #1699 review, codex round-4): identical
+# patch-id proves the PR's OWN diff is byte-for-byte unchanged, not that the
+# new base's unrelated changes cannot alter runtime behavior when combined
+# with it (e.g. a helper the PR calls was renamed on main in a way that
+# doesn't collide textually with the PR's own hunks, so the rebase stays
+# conflict-free). This mirrors the accepted risk in
+# `shell-common/functions/gcp_scan.sh`'s own patch-id-based drift discriminator
+# (issue #1136/#1688) — a textual-identity check is not a semantic-identity
+# proof, in either use. Two things bound it here: (1) a genuine base/PR
+# interaction is exactly the shape `git rebase` is most likely to surface as a
+# real conflict, which routes to `gh:pr-resolve-conflict` and a fresh review
+# instead of this file entirely; (2) CI still runs against the new head after
+# push and gates `gh:pr-merge`/`gh:pr-merge-train` regardless of this label, so
+# a base-interaction bug that breaks the build or a test is still caught
+# before merge — only a bug that passes CI yet is behaviorally wrong slips
+# through, which is a residual risk of any code-review process, not one this
+# file introduces. The alternative (unconditional drop, this file's pre-#1698
+# behavior) trades that narrow, CI-backstopped residual for a 100%-of-the-time
+# cost this issue exists to remove — an explicit, user-approved trade-off
+# (issue #1698 "확정 사항"), not an oversight.
+#
 # The label add + marker post below are done directly (`_gh_pr_edit_safe_label`
 # + one `gh api` POST in the exact format `devx_pr_review_all_write_label`
 # already uses), NOT by calling `devx_pr_review_all_write_label` itself — that
@@ -45,6 +66,19 @@
 # exactly) proceeds; any other rc (stale, absent, undetermined) falls through
 # to the ordinary drop. Reused as-is, not reimplemented — the marker format,
 # pagination and bot-login handling stay defined in exactly one place.
+#
+# Unlike `gh:pr-merge-train`'s own routing table — which leaves a label
+# UNTOUCHED on rc 2 (absent marker) / rc 3 (lookup undetermined), because
+# there the label is already sitting on the PR regardless of what this file
+# does — every non-zero rc here (1, 2, AND 3 alike) falls through to the
+# SAME drop this file has always performed on every rebase before #1698 ever
+# existed (PR #1699 review, codex round-4: flagged rc 2/3 folding into the
+# drop path as destroying a "valid" label on a transient API failure). It
+# is not a regression: this function only ever runs after a successful
+# rebase, whose pre-#1698 baseline was drop unconditionally, always,
+# glitch or not. A rc-2/3 API hiccup here returns to that exact baseline
+# rather than reaching the newly-added keep path — never worse than before
+# this file existed, only sometimes better (on the rc 0 path).
 # `GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN` overrides the auto-resolved identity
 # (same override shape as `GH_PR_MERGE_TRAIN_TRUSTED_LOGIN` /
 # `DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN`) for a pipeline that authenticates the
