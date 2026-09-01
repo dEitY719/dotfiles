@@ -397,7 +397,7 @@ FIXTURE
     # so it is a real commit, never reported as a "duplicate subject".
     refute_output --partial "(duplicate subject)"
     # All three source commits are applied; nothing skipped as a dup.
-    assert_output --partial "3 applied, 0 skipped (dup), 0 conflicts"
+    assert_output --partial "3 applied, 0 skipped (dup), 0 deferred (conflict)"
     refute_output --partial "CONFLICT"
 }
 
@@ -445,7 +445,7 @@ FIXTURE
     '
     assert_success
     refute_output --partial "(duplicate subject)"
-    assert_output --partial "2 applied, 0 skipped (dup), 0 conflicts"
+    assert_output --partial "2 applied, 0 skipped (dup), 0 deferred (conflict)"
     assert_output --partial "HAS_FA"
     assert_output --partial "HAS_FB"
 }
@@ -469,7 +469,7 @@ FIXTURE
         git cat-file -e HEAD:f2.txt && echo HAS_F2
     '
     assert_success
-    assert_output --partial "2 applied, 0 skipped (dup), 0 conflicts"
+    assert_output --partial "2 applied, 0 skipped (dup), 0 deferred (conflict)"
     assert_output --partial "HAS_F1"
     assert_output --partial "HAS_F2"
     refute_output --partial "no-op pre-flight"
@@ -724,7 +724,12 @@ FIXTURE
         # will corrupt.
         rm -f "$HOME/.gitconfig"
         printf "[include]\n\tpath = %s/git/.gitconfig\n" "$repo" > "$HOME/.gitconfig"
-        printf "y\n" | _gcp_scan main source --author=all
+        # --stop-on-conflict (issue #1647): pins the legacy immediate-stop
+        # behavior this test exercises. The DEFAULT behavior since #1647 is to
+        # roll the commit back and continue the batch instead (covered by the
+        # "scan #1647" tests below) — orthogonal to what this test actually
+        # guards: that the CHERRY_PICK_HEAD check survives config poisoning.
+        printf "y\n" | _gcp_scan main source --author=all --stop-on-conflict
         echo "scan_rc=$?"
         # PR #1228 review (codex): assert the sequencer state itself, not just
         # the message text — guards against a future regression that clears
@@ -928,7 +933,7 @@ FIXTURE
     # Stage-2 pre-flight catches the context-drift commit in Analysis phase;
     # shown as "Already in HEAD (no-op)" there, no conflict ever surfaced.
     assert_output --partial "Already in HEAD (no-op):"
-    assert_output --partial "0 conflicts"
+    assert_output --partial "0 deferred (conflict)"
     refute_output --partial "CONFLICT"
     refute_output --partial "Resolve and run"
 }
@@ -1064,7 +1069,7 @@ FIXTURE
     # Analysis Result counter.
     assert_output --partial "Dep-missing (skipped): 1"
     # The independent commit still applied; no conflict ever surfaced.
-    assert_output --partial "0 conflicts"
+    assert_output --partial "0 deferred (conflict)"
     refute_output --partial "CONFLICT"
     refute_output --partial "Resolve and run"
 }
@@ -1177,7 +1182,7 @@ FIXTURE
     # Analysis Result counter.
     assert_output --partial "Content-conflict (skipped): 1"
     # The independent commit still applied; no real conflict ever surfaced.
-    assert_output --partial "0 conflicts"
+    assert_output --partial "0 deferred (conflict)"
     refute_output --partial "CONFLICT"
     refute_output --partial "Resolve and run"
 }
@@ -1669,7 +1674,7 @@ FIXTURE
     assert_success
     # The twin carries distinct content -> applied, never skipped as a dup.
     refute_output --partial "(duplicate subject)"
-    assert_output --partial "1 applied, 0 skipped (dup), 0 conflicts"
+    assert_output --partial "1 applied, 0 skipped (dup), 0 deferred (conflict)"
     # Its payload must reach main — dropping it would be the #1136 data loss.
     assert_output --partial "HAS_F2"
 }
@@ -1700,4 +1705,166 @@ FIXTURE
     assert_success
     assert_output --partial "Already in HEAD (no-op): 2"
     assert_output --partial "Nothing to do"
+}
+
+# ---------------------------------------------------------------------------
+# Issue #1647 — scan at scale: 300+ candidates applied 0 commits and left a
+# conflicted worktree. Two compounding defects:
+#
+#   A. The Stage-1.5/1.6 "precedent" guards built their pick_list membership set
+#      from the ENTIRE list instead of the commits BEFORE the candidate in pick
+#      order. With hundreds of candidates almost every conflicting file collided
+#      with SOME later commit, so the guards were effectively disabled.
+#   B. The execution loop aborted the whole remaining batch on the first
+#      unpredicted conflict. Static prediction is an approximation, so at scale
+#      one always slips through — and it took the other 356 picks down with it.
+#      The default is now: roll the single commit back, defer it, keep going.
+#      `--stop-on-conflict` restores the legacy all-or-nothing behavior.
+#   C. Because the rollback runs --abort / reset --hard, the execution phase now
+#      refuses to start on a dirty worktree (the Analysis phase is unaffected).
+#   D. The summary reports the real deferred count and lists the deferred
+#      commits under "Needs manual resolution"; a non-empty list exits 1.
+# ---------------------------------------------------------------------------
+
+_gcp1647_make_repo() {
+    # Emits shell that builds the #1647 deferred-conflict fixture and cds in.
+    #
+    #   A "conf: top edit"    — touches conf.txt far from main's edit -> merges
+    #                           cleanly, and acts as the pick_list PRECEDENT that
+    #                           makes Stage-1.6 defer B's verdict.
+    #   B "conf: bottom edit" — same line main changed -> a REAL conflict that
+    #                           only surfaces at the actual cherry-pick.
+    #   C "add clean.txt"     — an independent, conflict-free candidate AFTER B.
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1647.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > conf.txt
+        echo init > a.txt
+        git add conf.txt a.txt && git commit -qm "init"
+        git checkout -q -b source
+        printf 'A1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > conf.txt
+        git add conf.txt && git commit -qm "conf: top edit"
+        printf 'A1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nB10\n' > conf.txt
+        git add conf.txt && git commit -qm "conf: bottom edit"
+        echo clean > clean.txt && git add clean.txt && git commit -qm "add clean.txt"
+        git checkout -q main
+        printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nM10\n' > conf.txt
+        git add conf.txt && git commit -qm "main: bottom edit"
+FIXTURE
+}
+
+@test "scan #1647: a LATER pick_list commit is no precedent — verdict stays flagged (unit)" {
+    # Defect A. The precedent guard must only count commits BEFORE the candidate
+    # in pick order: the loop applies picks in order, so nothing after the
+    # candidate can have changed HEAD's copy by the time the candidate is picked.
+    # Pre-fix the whole list was scanned, so c2 (later) wrongly "covered"
+    # conf.txt and c1's guaranteed conflict was deferred (rc=0, silent).
+    run_in_bash "
+        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1647u.XXXXXX\")\"
+        trap \"rm -rf \$repo\" EXIT
+        cd \"\$repo\" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Me\" GIT_AUTHOR_EMAIL=\"me@me\" \
+               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
+        git init -q -b main
+        printf 'A\nB\nC\n' > foo.txt && git add foo.txt && git commit -qm 'init'
+        git checkout -q -b source
+        printf 'A\nB2\nC\n' > foo.txt && git add foo.txt && git commit -qm 'B->B2'
+        c1=\$(git rev-parse HEAD)
+        # A LATER commit that also touches foo.txt — must NOT count as precedent.
+        printf 'A\nB3\nC\n' > foo.txt && git add foo.txt && git commit -qm 'B2->B3'
+        c2=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf 'A\nBmain\nC\n' > foo.txt && git add foo.txt && git commit -qm 'main diverges'
+        out=\$(_gcp_scan_predict_content_conflict \"\$c1\" \"\$c1
+\$c2\"); rc=\$?
+        echo \"rc=\$rc out=\$out\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "foo.txt"
+    refute_output --partial "rc=0"
+}
+
+@test "scan #1647: unpredicted conflict is deferred, batch continues, report lists it" {
+    # Defect B + D. B's conflict is invisible to Stage-1.6 (precedent A covers
+    # conf.txt) and to Stage-2 (it brings genuinely new content), so it only
+    # surfaces at the real cherry-pick. The single commit is rolled back and the
+    # batch keeps going: A and C still land, the sequencer is clean, and the
+    # report names B under "Needs manual resolution" with a copy-pasteable line.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+        git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
+        # Plain-file test, not rev-parse (issue #1213 precedent).
+        [ -f \"\$repo/.git/CHERRY_PICK_HEAD\" ] && echo CPH_PRESENT || echo CPH_MISSING
+        git show HEAD:conf.txt
+    "
+    assert_output --partial "Deferred"
+    assert_output --partial "conf.txt"
+    assert_output --partial "rolled back, continuing with the rest"
+    assert_output --partial "Needs manual resolution"
+    assert_output --partial "git cherry-pick "
+    assert_output --partial "gcp-scan-skip.conf"
+    # 1 deferred is reported instead of the old hardcoded "0 conflicts".
+    assert_output --partial "1 deferred (conflict)"
+    refute_output --partial "0 conflicts"
+    # The batch continued: the later clean candidate still landed.
+    assert_output --partial "HAS_CLEAN"
+    # Rollback verified — no sequencer state left behind.
+    assert_output --partial "CPH_MISSING"
+    # Unfinished work -> non-zero exit.
+    assert_output --partial "scan_rc=1"
+    # The precedent applied; the conflicting edit did not.
+    assert_output --partial "A1"
+    assert_output --partial "M10"
+    refute_output --partial "B10"
+}
+
+@test "scan #1647: --stop-on-conflict restores the legacy all-or-nothing abort" {
+    # Defect B opt-out. With the flag the first unpredicted conflict aborts the
+    # whole remaining batch exactly as before: the sequencer stays ACTIVE for the
+    # user to resolve, and later candidates are never attempted.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        printf 'y\n' | _gcp_scan main source --author=all --stop-on-conflict
+        echo \"scan_rc=\$?\"
+        git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
+        [ -f \"\$repo/.git/CHERRY_PICK_HEAD\" ] && echo CPH_PRESENT || echo CPH_MISSING
+    "
+    assert_output --partial "Resolve and run"
+    assert_output --partial "scan_rc=1"
+    assert_output --partial "CPH_PRESENT"
+    # Legacy behavior: the batch stopped, so the later candidate never applied.
+    assert_output --partial "NO_CLEAN"
+    refute_output --partial "rolled back, continuing with the rest"
+}
+
+@test "scan #1647: dirty worktree blocks execution BEFORE the confirmation prompt" {
+    # Defect C. The rollback path runs --abort / reset --hard, so uncommitted
+    # work must never be in the tree when the execution phase starts. The
+    # read-only Analysis phase still runs to completion on a dirty tree (Stage-2
+    # stashes/pops internally) — only the prompt + cherry-pick are refused.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        echo localedit >> a.txt
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+        grep -q localedit a.txt && echo EDIT_KEPT || echo EDIT_LOST
+        git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
+    "
+    # Analysis phase still ran on the dirty tree.
+    assert_output --partial "Analysis Result"
+    assert_output --partial "Commit List"
+    # Blocked before the y/N prompt, with stash guidance.
+    refute_output --partial "Do you want to cherry-pick"
+    assert_output --partial "git stash push -u"
+    assert_output --partial "scan_rc=1"
+    # Nothing was cherry-picked and the local edit is untouched.
+    assert_output --partial "EDIT_KEPT"
+    assert_output --partial "NO_CLEAN"
 }
