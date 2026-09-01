@@ -30,8 +30,17 @@
 _skill_workspace_root() {
     _sws_root="${WORKSPACE_ROOT:-$HOME/para/project/skills}"
 
+    # Compare resolved paths, not raw strings: with a symlinked $HOME the two
+    # spellings of the same directory would otherwise slip past the guard.
+    # Mirrors scripts/setup-skills-ssot.sh's _realpath_or_self handling.
+    _sws_real=$(readlink -f "$_sws_root" 2>/dev/null || printf '%s' "$_sws_root")
+    _sws_home=$(readlink -f "$HOME" 2>/dev/null || printf '%s' "$HOME")
+
     case "$_sws_root" in
         "" | "/" | "$HOME" | "$HOME/") return 1 ;;
+    esac
+    case "$_sws_real" in
+        "" | "/" | "$_sws_home") return 1 ;;
     esac
 
     [ -d "$_sws_root" ] || return 1
