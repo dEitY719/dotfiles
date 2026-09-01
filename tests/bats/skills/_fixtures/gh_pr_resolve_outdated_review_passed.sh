@@ -13,6 +13,8 @@
 . "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_resolve_outdated.sh"
 # shellcheck source=/dev/null
 . "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_edit_safe.sh"
+# shellcheck source=/dev/null
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_merge_train.sh"
 
 # Mirrors Step 5's doc-documented variable names 1:1 — the doc itself pastes
 # a call shaped exactly like this one.
