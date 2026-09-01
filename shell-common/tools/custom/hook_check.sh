@@ -40,6 +40,40 @@ _run_setup_hooks() {
     return $?
 }
 
+# Expected global hook set (issue #1664).
+#
+# core.hooksPath REPLACES .git/hooks, so EVERY hook the dotfiles rely on must
+# be present here — checking pre-commit alone hid four dead hooks.
+# SSOT: GIT_GLOBAL_HOOKS in git/config/hook-config.sh; the directory listing
+# is only a fallback for a checkout without that config.
+_load_global_hook_names() {
+    local config="${DOTFILES_ROOT}/git/config/hook-config.sh"
+    local hook_file
+
+    if [ -f "$config" ]; then
+        # shellcheck source=/dev/null
+        source "$config"
+    fi
+
+    if declare -p GIT_GLOBAL_HOOKS >/dev/null 2>&1 && [ ${#GIT_GLOBAL_HOOKS[@]} -gt 0 ]; then
+        GLOBAL_HOOK_NAMES=("${GIT_GLOBAL_HOOKS[@]}")
+        return 0
+    fi
+
+    GLOBAL_HOOK_NAMES=()
+    for hook_file in "${DOTFILES_ROOT}/git/global-hooks"/*; do
+        [ -f "$hook_file" ] || continue
+        GLOBAL_HOOK_NAMES+=("$(basename "$hook_file")")
+    done
+}
+
+# Configured global hooks directory with a leading ~ expanded.
+_global_hooks_dir() {
+    local hooks_path
+    hooks_path=$(git config --global core.hooksPath 2>/dev/null)
+    printf '%s' "${hooks_path/#\~/$HOME}"
+}
+
 # ============================================================
 # Check 1: core.hooksPath Configuration
 # ============================================================
@@ -89,27 +123,42 @@ check_hook_files() {
 
     local hooks_path
     hooks_path=$(git config --global core.hooksPath 2>/dev/null)
-    local expanded_hooks_path="${hooks_path/#\~/$HOME}"
+    local expanded_hooks_path
+    expanded_hooks_path=$(_global_hooks_dir)
+
+    if [ -z "$expanded_hooks_path" ]; then
+        ux_warning "core.hooksPath is not set, skipping hook file check"
+        echo ""
+        return 1
+    fi
 
     local has_error=0
+    local hook_name hook_file hook_label target
 
-    # Check pre-commit hook
-    local pre_commit_hook="$expanded_hooks_path/pre-commit"
-    # shellcheck disable=SC2088  # display label in messages, not a path
-    local pre_commit_label="~/.config/git/hooks/pre-commit"
-    if [ -f "$pre_commit_hook" ]; then
-        _format_check "$pre_commit_label" "✓" "Exists"
-    else
-        _format_check "$pre_commit_label" "✗" "Missing"
-        has_error=1
-    fi
+    for hook_name in "${GLOBAL_HOOK_NAMES[@]}"; do
+        hook_file="${expanded_hooks_path}/${hook_name}"
+        hook_label="${hooks_path}/${hook_name}"
 
-    # Check if it's a symlink
-    if [ -L "$pre_commit_hook" ]; then
-        local target
-        target=$(readlink -f "$pre_commit_hook" 2>/dev/null || readlink "$pre_commit_hook")
-        ux_bullet "Symlink target: $target"
-    fi
+        if [ -L "$hook_file" ] && [ ! -e "$hook_file" ]; then
+            # Dangling symlink: the dotfiles checkout moved or was removed.
+            _format_check "$hook_label" "✗" "Broken symlink"
+            has_error=1
+            continue
+        fi
+
+        if [ -f "$hook_file" ]; then
+            _format_check "$hook_label" "✓" "Exists"
+
+            # Check if it's a symlink
+            if [ -L "$hook_file" ]; then
+                target=$(readlink -f "$hook_file" 2>/dev/null || readlink "$hook_file")
+                ux_bullet "Symlink target: $target"
+            fi
+        else
+            _format_check "$hook_label" "✗" "Missing"
+            has_error=1
+        fi
+    done
 
     echo ""
 
@@ -132,32 +181,47 @@ check_hook_files() {
 check_permissions() {
     ux_header "CHECK 3: Hook File Permissions"
 
-    local hooks_path
-    hooks_path=$(git config --global core.hooksPath 2>/dev/null)
-    local expanded_hooks_path="${hooks_path/#\~/$HOME}"
+    local expanded_hooks_path
+    expanded_hooks_path=$(_global_hooks_dir)
 
-    local pre_commit_hook="$expanded_hooks_path/pre-commit"
-
-    if [ ! -f "$pre_commit_hook" ]; then
-        ux_warning "Hook file not found, skipping permission check"
+    if [ -z "$expanded_hooks_path" ]; then
+        ux_warning "core.hooksPath is not set, skipping permission check"
         echo ""
         return 0
     fi
 
-    # Check if executable
-    if [ -x "$pre_commit_hook" ]; then
-        _format_check "Executable Permission" "✓" "Yes ($(stat -c '%A' "$pre_commit_hook" 2>/dev/null || stat -f '%A' "$pre_commit_hook" 2>/dev/null))"
-        echo ""
-        return 0
-    else
-        _format_check "Executable Permission" "✗" "No ($(stat -c '%A' "$pre_commit_hook" 2>/dev/null || stat -f '%A' "$pre_commit_hook" 2>/dev/null))"
-        echo ""
-        ux_error "Hook file is not executable"
+    local has_error=0
+    local hook_name hook_file mode
+
+    for hook_name in "${GLOBAL_HOOK_NAMES[@]}"; do
+        hook_file="${expanded_hooks_path}/${hook_name}"
+
+        if [ ! -f "$hook_file" ]; then
+            _format_check "$hook_name" "⚠" "Not found, skipping"
+            continue
+        fi
+
+        mode=$(stat -c '%A' "$hook_file" 2>/dev/null || stat -f '%A' "$hook_file" 2>/dev/null)
+
+        if [ -x "$hook_file" ]; then
+            _format_check "$hook_name" "✓" "Executable ($mode)"
+        else
+            _format_check "$hook_name" "✗" "Not executable ($mode)"
+            has_error=1
+        fi
+    done
+
+    echo ""
+
+    if [ $has_error -eq 1 ]; then
+        ux_error "Some hook files are not executable"
         ux_section "Solution:"
-        ux_bullet "Run: chmod +x $pre_commit_hook"
+        ux_bullet "Run: chmod +x ${expanded_hooks_path}/*"
         echo ""
         return 1
     fi
+
+    return 0
 }
 
 # ============================================================
@@ -220,34 +284,48 @@ check_project_hooks() {
 test_hook_execution() {
     ux_header "CHECK 5: Hook Execution Test (Optional)"
 
-    local hooks_path
-    hooks_path=$(git config --global core.hooksPath 2>/dev/null)
-    local expanded_hooks_path="${hooks_path/#\~/$HOME}"
-    local pre_commit_hook="$expanded_hooks_path/pre-commit"
+    local expanded_hooks_path
+    expanded_hooks_path=$(_global_hooks_dir)
 
-    if [ ! -f "$pre_commit_hook" ]; then
-        ux_warning "Hook file not found, skipping execution test"
+    if [ -z "$expanded_hooks_path" ]; then
+        ux_warning "core.hooksPath is not set, skipping execution test"
         echo ""
         return 0
     fi
 
-    ux_info "Running hook in dry-run mode (no changes to git index)..."
+    ux_info "Running hooks in dry-run mode (no changes to git index)..."
     echo ""
 
-    # Try to source the hook to check for syntax errors
-    if bash -n "$pre_commit_hook" 2>/dev/null; then
-        ux_success "Hook syntax is valid"
-        echo ""
-    else
-        ux_error "Hook has syntax errors"
-        echo ""
-        ux_section "Debug Info:"
-        bash -n "$pre_commit_hook" 2>&1 | head -20 | sed 's/^/    /'
+    local has_error=0
+    local hook_name hook_file
+
+    for hook_name in "${GLOBAL_HOOK_NAMES[@]}"; do
+        hook_file="${expanded_hooks_path}/${hook_name}"
+
+        if [ ! -f "$hook_file" ]; then
+            _format_check "$hook_name" "⚠" "Not found, skipping"
+            continue
+        fi
+
+        # Parse-only check for syntax errors
+        if bash -n "$hook_file" 2>/dev/null; then
+            _format_check "$hook_name" "✓" "Syntax valid"
+        else
+            _format_check "$hook_name" "✗" "Syntax error"
+            ux_section "Debug Info:"
+            bash -n "$hook_file" 2>&1 | head -20 | sed 's/^/    /'
+            has_error=1
+        fi
+    done
+
+    echo ""
+
+    if [ $has_error -eq 1 ]; then
+        ux_error "Some hooks have syntax errors"
         echo ""
         return 1
     fi
 
-    echo ""
     return 0
 }
 
@@ -260,6 +338,9 @@ run_all_checks() {
 
     local all_passed=0
     local should_run_setup=0
+
+    # Load the expected global hook set before any check consumes it.
+    _load_global_hook_names
 
     echo ""
 
@@ -277,7 +358,13 @@ run_all_checks() {
         ux_success "✅ All hook configurations are valid!"
         echo ""
         ux_section "Your git hooks are ready to use:"
-        ux_bullet "Global hook: ~/.config/git/hooks/pre-commit"
+
+        local summary_hooks_path
+        summary_hooks_path=$(git config --global core.hooksPath 2>/dev/null)
+        local hook_name
+        for hook_name in "${GLOBAL_HOOK_NAMES[@]}"; do
+            ux_bullet "Global hook: ${summary_hooks_path}/${hook_name}"
+        done
 
         # Show current project hook if in git repo
         local current_git_dir

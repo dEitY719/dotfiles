@@ -54,6 +54,10 @@ make_repo() {
 
   mkdir -p "$repo_dir"
   git -C "$repo_dir" init -q
+  # Fixture commits must not land on main/master: git/hooks/checks/main_branch_guard.sh
+  # blocks those, which would fail every case here for the wrong reason
+  # (git init picks main or master depending on init.defaultBranch).
+  git -C "$repo_dir" symbolic-ref HEAD refs/heads/hook-fixture
   git -C "$repo_dir" config user.email "hook-test@example.com"
   git -C "$repo_dir" config user.name "hook-test"
 
@@ -288,6 +292,229 @@ EOF
   rm -rf "$repo_dir"
 }
 
+# ---------------------------------------------------------------------------
+# Issue #1664 — global wrappers for the non-pre-commit hooks.
+#
+# core.hooksPath REPLACES .git/hooks for every repo on the machine, so
+# git/hooks/pre-push & friends only ever run when a global wrapper forwards
+# to them. Two properties matter and are asserted below:
+#   1. In a repo that carries its own git/hooks/<name>, the wrapper delegates
+#      (args, stdin and exit code passed through).
+#   2. In any other repo the wrapper is a silent no-op — dotfiles-specific
+#      logic (`mise run test`, protected branches, leak guard) must never
+#      fire in an unrelated repository.
+#
+# The wrappers are invoked directly with synthetic argv/stdin (the technique
+# git/test/test-pre-push.sh already uses) instead of driving a real push.
+# ---------------------------------------------------------------------------
+
+ZERO_SHA="0000000000000000000000000000000000000000"
+GLOBAL_HOOKS_DIR="${DOTFILES_ROOT}/git/global-hooks"
+
+# Throwaway repo with one commit and no project-level hooks at all.
+make_plain_repo() {
+  local repo_dir="$1"
+
+  mkdir -p "$repo_dir"
+  git -C "$repo_dir" init -q
+  git -C "$repo_dir" config user.email "hook-test@example.com"
+  git -C "$repo_dir" config user.name "hook-test"
+  git -C "$repo_dir" config commit.gpgsign false
+
+  echo "seed" >"$repo_dir/seed.txt"
+  git -C "$repo_dir" add seed.txt
+  git -C "$repo_dir" -c core.hooksPath=/dev/null commit -q -m "seed"
+}
+
+# Copy the real project-level pre-push (plus the rules file it sources) into
+# a throwaway repo, mirroring this repo's layout.
+install_project_pre_push() {
+  local repo_dir="$1"
+
+  mkdir -p "$repo_dir/git/hooks" "$repo_dir/git/config"
+  cp "${DOTFILES_ROOT}/git/hooks/pre-push" "$repo_dir/git/hooks/pre-push"
+  chmod +x "$repo_dir/git/hooks/pre-push"
+  cp "${DOTFILES_ROOT}/git/config/pre-push-rules.sh" "$repo_dir/git/config/pre-push-rules.sh"
+}
+
+# Stub project hook that records the argv it was handed and exits with $3.
+install_recording_project_hook() {
+  local repo_dir="$1"
+  local hook_name="$2"
+  local exit_code="${3:-0}"
+
+  mkdir -p "$repo_dir/git/hooks"
+  cat >"$repo_dir/git/hooks/${hook_name}" <<EOF
+#!/bin/bash
+printf 'DELEGATED:%s\n' "\$*" >"${repo_dir}/.delegated"
+exit ${exit_code}
+EOF
+  chmod +x "$repo_dir/git/hooks/${hook_name}"
+}
+
+# Run a global wrapper with $repo_dir as cwd. stdout+stderr land in
+# $WRAPPER_OUT; the wrapper's exit code is returned. stdin is inherited so
+# callers can feed the pre-push ref list.
+run_global_hook() {
+  local repo_dir="$1"
+  local hook_name="$2"
+  shift 2
+
+  # `&& rc=0 || rc=$?` keeps the wrapper inside a tested context so the
+  # suite's errexit does not abort on an intentionally failing hook.
+  local out rc
+  out=$(cd "$repo_dir" && "${GLOBAL_HOOKS_DIR}/${hook_name}" "$@" 2>&1) && rc=0 || rc=$?
+  WRAPPER_OUT="$out"
+  return "$rc"
+}
+
+# Every hook named by the SSOT must exist as an executable wrapper.
+test_global_hook_set_matches_ssot() {
+  # shellcheck source=../config/hook-config.sh
+  . "${DOTFILES_ROOT}/git/config/hook-config.sh"
+
+  if [ "${#GIT_GLOBAL_HOOKS[@]}" -eq 0 ]; then
+    die "GIT_GLOBAL_HOOKS is empty — the global hook SSOT must not be empty"
+  fi
+
+  local hook_name
+  for hook_name in "${GIT_GLOBAL_HOOKS[@]}"; do
+    [ -f "${GLOBAL_HOOKS_DIR}/${hook_name}" ] ||
+      die "Missing global hook wrapper: git/global-hooks/${hook_name}"
+    [ -x "${GLOBAL_HOOKS_DIR}/${hook_name}" ] ||
+      die "Global hook wrapper is not executable: git/global-hooks/${hook_name}"
+  done
+}
+
+# Delegation: the real project pre-push runs and blocks a protected branch.
+# The branch name arrives on stdin, so this also proves stdin passthrough.
+test_global_pre_push_delegates_to_project_hook() {
+  local repo_dir sha
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_plain_repo "$repo_dir"
+  install_project_pre_push "$repo_dir"
+  sha="$(git -C "$repo_dir" rev-parse HEAD)"
+
+  if SKIP_LOCAL_PYTEST=1 run_global_hook "$repo_dir" pre-push \
+    origin "https://github.com/owner/repo.git" \
+    < <(printf 'refs/heads/main %s refs/heads/main %s\n' "$sha" "$ZERO_SHA"); then
+    die "Expected the delegated pre-push to block a protected branch: $WRAPPER_OUT"
+  fi
+
+  echo "$WRAPPER_OUT" | grep -q "Delegating to project hook" ||
+    die "Expected delegation notice but got: $WRAPPER_OUT"
+  echo "$WRAPPER_OUT" | grep -q "Cannot push directly to protected branch" ||
+    die "Expected protected-branch block but got: $WRAPPER_OUT"
+
+  rm -rf "$repo_dir"
+}
+
+# THE regression that matters: a repo with no git/hooks/pre-push must get a
+# silent no-op — no output, exit 0, and `mise run test` never invoked.
+test_global_pre_push_is_noop_in_unrelated_repo() {
+  local repo_dir sha stub_dir sentinel
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_plain_repo "$repo_dir"
+  sha="$(git -C "$repo_dir" rev-parse HEAD)"
+
+  # A mise stub that records any invocation. Nothing should ever call it.
+  stub_dir="$repo_dir/.stub"
+  sentinel="$repo_dir/.mise-invoked"
+  mkdir -p "$stub_dir"
+  cat >"$stub_dir/mise" <<EOF
+#!/bin/sh
+printf 'MISE_CALLED:%s\n' "\$*" >>"${sentinel}"
+exit 0
+EOF
+  chmod +x "$stub_dir/mise"
+
+  # "main" is a PROTECTED_BRANCH for this repo — in an unrelated repo that
+  # rule must not apply either.
+  if ! PATH="${stub_dir}:${PATH}" run_global_hook "$repo_dir" pre-push \
+    origin "https://github.com/owner/repo.git" \
+    < <(printf 'refs/heads/main %s refs/heads/main %s\n' "$sha" "$ZERO_SHA"); then
+    die "Global pre-push wrapper must be a no-op without a project hook: $WRAPPER_OUT"
+  fi
+
+  [ -z "$WRAPPER_OUT" ] ||
+    die "Expected silent no-op but wrapper printed: $WRAPPER_OUT"
+  [ ! -f "$sentinel" ] ||
+    die "mise was invoked in an unrelated repo: $(cat "$sentinel")"
+
+  rm -rf "$repo_dir"
+}
+
+# Every wrapper forwards argv to the project hook of the current repo.
+test_global_wrappers_delegate_argv() {
+  local hook_name repo_dir
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$repo_dir"
+    install_recording_project_hook "$repo_dir" "$hook_name" 0
+
+    run_global_hook "$repo_dir" "$hook_name" alpha beta </dev/null ||
+      die "Expected ${hook_name} delegation to succeed: $WRAPPER_OUT"
+
+    grep -q "^DELEGATED:alpha beta$" "$repo_dir/.delegated" ||
+      die "Expected ${hook_name} to receive argv, got: $(cat "$repo_dir/.delegated" 2>/dev/null)"
+
+    rm -rf "$repo_dir"
+  done
+}
+
+# Every wrapper propagates the project hook's exit code verbatim.
+test_global_wrappers_propagate_exit_code() {
+  local hook_name repo_dir rc
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$repo_dir"
+    install_recording_project_hook "$repo_dir" "$hook_name" 42
+
+    rc=0
+    run_global_hook "$repo_dir" "$hook_name" </dev/null || rc=$?
+
+    [ "$rc" -eq 42 ] ||
+      die "Expected ${hook_name} wrapper to exit 42, got ${rc}: $WRAPPER_OUT"
+
+    rm -rf "$repo_dir"
+  done
+}
+
+# No project hook of that type -> silent no-op for every wrapper.
+test_global_wrappers_are_noop_without_project_hook() {
+  local hook_name repo_dir
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$repo_dir"
+
+    run_global_hook "$repo_dir" "$hook_name" </dev/null ||
+      die "Expected ${hook_name} wrapper to exit 0 without a project hook: $WRAPPER_OUT"
+
+    [ -z "$WRAPPER_OUT" ] ||
+      die "Expected ${hook_name} wrapper to stay silent but got: $WRAPPER_OUT"
+
+    rm -rf "$repo_dir"
+  done
+}
+
+# Outside any git repository the wrappers must exit 0 without noise.
+test_global_wrappers_are_noop_outside_git_repo() {
+  local hook_name work_dir
+  work_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  # Detach from any enclosing repository (mktemp dirs live under /tmp).
+  export GIT_CEILING_DIRECTORIES="$work_dir"
+
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+    run_global_hook "$work_dir" "$hook_name" </dev/null ||
+      die "Expected ${hook_name} wrapper to exit 0 outside a repo: $WRAPPER_OUT"
+    [ -z "$WRAPPER_OUT" ] ||
+      die "Expected ${hook_name} wrapper to stay silent outside a repo: $WRAPPER_OUT"
+  done
+
+  unset GIT_CEILING_DIRECTORIES
+  rm -rf "$work_dir"
+}
+
 main() {
   ux_header "Hook integration tests"
   test_allows_spaces_in_filename
@@ -302,6 +529,16 @@ main() {
   test_allows_hardcoded_home_path_with_marker
   test_allows_home_var_reference
   test_allows_preexisting_abs_home_on_unrelated_edit
+
+  # Issue #1664 — global wrapper delegation for pre-push & friends
+  test_global_hook_set_matches_ssot
+  test_global_pre_push_delegates_to_project_hook
+  test_global_pre_push_is_noop_in_unrelated_repo
+  test_global_wrappers_delegate_argv
+  test_global_wrappers_propagate_exit_code
+  test_global_wrappers_are_noop_without_project_hook
+  test_global_wrappers_are_noop_outside_git_repo
+
   ux_success "All hook tests passed"
 }
 
