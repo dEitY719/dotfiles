@@ -973,13 +973,8 @@ FIXTURE
 
 @test "drift #1688: trailing-whitespace-only difference is drift, not new content (1)" {
     run_in_bash "
-        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1688ws.XXXXXX\")\"
-        trap \"rm -rf \$repo\" EXIT
-        cd \"\$repo\" || exit 1
-        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Test\" GIT_AUTHOR_EMAIL=\"t@t\" \
-               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
-        git init -q -b main
-        printf 'alpha\n' > w.txt && git add w.txt && git commit -qm 'init'
+        $(_gcp903_make_repo)
+        printf 'alpha\n' > w.txt && git add w.txt && git commit -qm 'add w'
         git checkout -q -b source
         printf 'alpha\nbeta   \n' > w.txt && git add w.txt && git commit -qm 'add beta with trailing ws'
         src=\$(git rev-parse HEAD)
@@ -1008,13 +1003,8 @@ FIXTURE
 
 @test "drift #1688: normalization is symmetric — a real deletion is still detected (0)" {
     run_in_bash "
-        repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1688del.XXXXXX\")\"
-        trap \"rm -rf \$repo\" EXIT
-        cd \"\$repo\" || exit 1
-        export GIT_EDITOR=true GIT_AUTHOR_NAME=\"Test\" GIT_AUTHOR_EMAIL=\"t@t\" \
-               GIT_COMMITTER_NAME=\"Test\" GIT_COMMITTER_EMAIL=\"t@t\"
-        git init -q -b main
-        printf '{\n  \"a\": \"1\",\n  \"drop\": \"0\"\n}\n' > d.json && git add d.json && git commit -qm 'init'
+        $(_gcp903_make_repo)
+        printf '{\n  \"a\": \"1\",\n  \"drop\": \"0\"\n}\n' > d.json && git add d.json && git commit -qm 'add d'
         git checkout -q -b source
         printf '{\n  \"a\": \"1\"\n}\n' > d.json && git add d.json && git commit -qm 'remove drop'
         src=\$(git rev-parse HEAD)
@@ -1033,11 +1023,15 @@ FIXTURE
         orig=\$(git rev-parse HEAD)
         echo localedit > untracked_note.txt
         _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+        grep -q localedit untracked_note.txt 2>/dev/null && echo EDIT_KEPT || echo EDIT_LOST
         [ \"\$(git rev-parse HEAD)\" = \"\$orig\" ] && echo HEAD_SAME || echo HEAD_MOVED
         git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
     "
     assert_success
     assert_output --partial "rc=0"
+    # The pre-existing untracked file must survive the probe — without this the
+    # setup line above was unread and the title's non-destructive claim unproven.
+    assert_output --partial "EDIT_KEPT"
     assert_output --partial "HEAD_SAME"
     assert_output --partial "PICK_CLEAR"
 }

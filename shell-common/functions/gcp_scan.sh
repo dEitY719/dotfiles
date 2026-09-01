@@ -394,15 +394,14 @@ _gcp_scan_conflict_adds_new_content() {
     # deliberately KEPT — it is semantic in YAML, where stripping it would make
     # genuinely different lines compare equal and reopen the #1177 data-loss
     # direction. Lines that differ in meaning still differ after norm().
+    # Rule for extending norm(): strip only a suffix a LATER append can force
+    # onto an already-correct line. A trailing `\` fails that test — a
+    # continuation marker changes when the commit itself reflows the block, so
+    # stripping it would hide the commit's own work; keep it significant.
     # NOTE: a bare `exit` (not `exit 0`) is required on a hit — `exit 0` would
     # still run END, whose `exit 1` would override it back to "drift".
     if awk '
-        function norm(s) {
-            sub(/[[:space:]]+$/, "", s)
-            sub(/,$/, "", s)
-            sub(/[[:space:]]+$/, "", s)
-            return s
-        }
+        function norm(s) { sub(/[[:space:]]*,?[[:space:]]*$/, "", s); return s }
         FILENAME == B { base[norm($0)] = 1; next }
         FILENAME == O { ours[norm($0)] = 1; next }
         {
