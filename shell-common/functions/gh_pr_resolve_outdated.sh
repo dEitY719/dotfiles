@@ -26,7 +26,8 @@
 #   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path]
 #   _gh_pr_resolve_outdated_reconcile_review_passed \
 #       <pr> <repo> <host> <old-base-sha> <old-head-sha> \
-#       <new-base-sha> <new-head-sha> <new-head-sha-for-marker> [worktree-path]
+#       <new-base-sha> <new-head-sha> [worktree-path]
+#   (the freshness marker, when reposted, is stamped with <new-head-sha>)
 
 # One patch-id hash for a whole diff range (not per-commit): `git patch-id
 # --stable` accepts a multi-commit diff on stdin and folds it into one hash,

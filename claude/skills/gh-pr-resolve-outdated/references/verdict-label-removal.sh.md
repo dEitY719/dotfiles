@@ -53,10 +53,16 @@ Caller contract: `PR_NUMBER`, `TARGET_REPO`, `TARGET_HOST` 는 Step 1 이
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_resolve_outdated.sh"
 
-# --worktree 모드가 아니면 마지막 인자(worktree path)는 생략한다.
+# --worktree 모드가 아니면 마지막 인자(worktree path)는 생략한다:
 _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
     "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
     "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA")
+
+# --worktree <path> 모드에서는 그 경로를 8번째 인자로 넘긴다 — 함수 내부의
+# patch-id 비교가 `git -C "<path>" diff ...` 로 실행된다:
+_vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
+    "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
+    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "$WORKTREE_PATH")
 
 case "$_vl_result" in
     *"label=kept"*)
