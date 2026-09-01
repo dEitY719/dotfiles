@@ -107,18 +107,18 @@ _STEP_LABELS: dict[str, str] = {
     "pr-reply": "Step 5 — Skill(gh-pr:reply, <PR_NUM>) (emit the marker even with no comments / [SKIP])",
 }
 
-# Skill names whose `[step:<name>/<id>] OK` markers this guard honours: the
-# dotfiles-native `devx-autopilot` and, since #1410 Phase 3, the migrated
-# `gh-flow-autopilot` (D-12, issue #1678). Both are accepted for the whole
-# transition — NF-1 keeps the dotfiles original emitting the old marker until
-# Phase 4, while anyone running the `gh-flow-skills` plugin emits the new one.
-_MARKER_SKILL_NAMES: tuple[str, ...] = ("devx-autopilot", "gh-flow-autopilot")
-
 # Strict step-marker regex. Requires the literal `[step:<skill>/<id>] OK`
 # so a partial `[step:devx-autopilot/plan]` without ` OK` does NOT match.
-_STEP_MARKER_RE: re.Pattern[str] = re.compile(
-    r"\[step:(?:" + "|".join(re.escape(n) for n in _MARKER_SKILL_NAMES) + r")/([a-z-]+)\]\s+OK\b"
-)
+#
+# Two skill names are honoured: the dotfiles-native `devx-autopilot` and,
+# since #1410 Phase 3, the migrated `gh-flow-autopilot` (D-12, issue #1678).
+# Both are accepted for the whole transition — NF-1 keeps the dotfiles
+# original emitting the old marker until Phase 4, while anyone running the
+# `gh-flow-skills` plugin emits the new one. Both are spelled out literally
+# here, like the `TERMINAL_PATTERNS` twins just below and the (a')-(d')
+# boundary twins further down, so that a `grep gh-flow-autopilot` surfaces
+# every namespace-sensitive site including the pattern actually compiled.
+_STEP_MARKER_RE: re.Pattern[str] = re.compile(r"\[step:(?:devx-autopilot|gh-flow-autopilot)/([a-z-]+)\]\s+OK\b")
 
 # Terminal markers — presence in any *assistant text* block after the boundary
 # means the flow has finished (or hard-failed) and the model may stop.
