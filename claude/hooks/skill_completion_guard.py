@@ -193,18 +193,17 @@ def _build_boundary_regex(catalog: dict[str, dict[str, Any]]) -> re.Pattern[str]
     if not catalog:
         return re.compile(r"(?!x)x")  # match nothing
     names = sorted(catalog.keys())
-    # Each name may appear in hyphen form (e.g. gh-pr) or colon namespace
-    # form (gh:pr) — accept both at match time. The hyphen→colon mapping
-    # is reversible because skill names don't contain colons in storage.
-    name_alts: list[str] = []
-    for n in names:
-        hyphenated = re.escape(n)
-        colonized = re.escape(n.replace("-", ":"))
-        if hyphenated == colonized:
-            name_alts.append(hyphenated)
-        else:
-            name_alts.append(f"(?:{hyphenated}|{colonized})")
-    union = "|".join(name_alts)
+    # Every separator in a name may independently appear as `-` or `:` at
+    # match time. A catalog key is always stored hyphenated (`gh-pr-create`),
+    # but the live command form puts a colon only at the plugin-namespace
+    # boundary: `/gh-pr:create` (#1677). The pre-#1689 pair — the whole name
+    # hyphenated OR the whole name colonized (`gh:pr:create`) — covered
+    # neither that spelling nor any other mixture, so no boundary surface
+    # matched a migrated skill and the guard silently failed open for it.
+    # A per-separator class accepts all 2**k spellings in one alternative.
+    # Sibling exclusion is unaffected: surface (a)'s `(?![\w:-])` lookahead
+    # is what rejects `/gh-pr-review` and `/gh-pr:review` as `gh-pr` (#1164).
+    union = "|".join("[-:]".join(re.escape(part) for part in n.split("-")) for n in names)
     return re.compile(
         rf"""
         (?m)                                                    # multiline: ^ matches each line start
