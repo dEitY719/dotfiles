@@ -444,6 +444,58 @@ EOF
   rm -rf "$repo_dir"
 }
 
+# In a linked worktree `.git` is a FILE, not a directory (agy + codex review,
+# PR #1674). A hook that ships only at the standard `.git/hooks/<name>`
+# location (Husky-style — no `git/hooks/` or `.githooks/` candidate) must
+# still be found and run when the wrapper is invoked from the worktree, not
+# just from the main checkout.
+test_global_pre_push_delegates_from_linked_worktree() {
+  local main_dir wt_dir hook_target sha
+  main_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_plain_repo "$main_dir"
+
+  # $main_dir is a normal (non-worktree) repo, so its .git is a real
+  # directory — a plain path join is fine here. The wrapper-under-test is
+  # what must resolve this via --git-common-dir instead of a path join
+  # (see delegate.sh / pre-commit); using --git-path here to build the
+  # fixture would itself resolve against this machine's real
+  # core.hooksPath when one is configured, planting the honeypot hook at
+  # a real global location instead of inside the throwaway test repo.
+  hook_target="$main_dir/.git/hooks/pre-push"
+  mkdir -p "$(dirname "$hook_target")"
+  cat >"$hook_target" <<EOF
+#!/bin/bash
+printf 'DELEGATED:%s\n' "\$*" >"${main_dir}/.delegated"
+exit 0
+EOF
+  chmod +x "$hook_target"
+
+  wt_dir="$(mktemp -u /tmp/dotfiles-hook-test.XXXXXX)"
+  git -C "$main_dir" worktree add -q "$wt_dir" -b hook-fixture-wt >/dev/null 2>&1 ||
+    die "Failed to create a linked worktree for the delegation test"
+
+  [ -f "$wt_dir/.git" ] ||
+    die "Expected the linked worktree's .git to be a file (test precondition)"
+
+  sha="$(git -C "$wt_dir" rev-parse HEAD)"
+
+  if SKIP_LOCAL_PYTEST=1 run_global_hook "$wt_dir" pre-push \
+    origin "https://github.com/owner/repo.git" \
+    < <(printf 'refs/heads/hook-fixture-wt %s refs/heads/hook-fixture-wt %s\n' "$sha" "$ZERO_SHA"); then
+    :
+  else
+    die "Expected the pre-push wrapper to succeed from a linked worktree: $WRAPPER_OUT"
+  fi
+
+  echo "$WRAPPER_OUT" | grep -q "Delegating to project hook" ||
+    die "Expected delegation notice from the linked worktree but got: $WRAPPER_OUT"
+  [ -f "$main_dir/.delegated" ] ||
+    die "Expected the shared .git/hooks/pre-push to run from the linked worktree: $WRAPPER_OUT"
+
+  git -C "$main_dir" worktree remove -f "$wt_dir" >/dev/null 2>&1
+  rm -rf "$main_dir" "$wt_dir"
+}
+
 # Every wrapper forwards argv to the project hook of the current repo.
 test_global_wrappers_delegate_argv() {
   local hook_name repo_dir
@@ -534,6 +586,7 @@ main() {
   test_global_hook_set_matches_ssot
   test_global_pre_push_delegates_to_project_hook
   test_global_pre_push_is_noop_in_unrelated_repo
+  test_global_pre_push_delegates_from_linked_worktree
   test_global_wrappers_delegate_argv
   test_global_wrappers_propagate_exit_code
   test_global_wrappers_are_noop_without_project_hook

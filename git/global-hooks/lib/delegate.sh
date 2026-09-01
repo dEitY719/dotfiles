@@ -37,7 +37,6 @@ fi
 CANDIDATE_HOOKS=(
   ".githooks/${HOOK_NAME}"       # Team shared hook (highest priority)
   "git/hooks/${HOOK_NAME}"       # Dotfiles/Custom structure
-  ".git/hooks/${HOOK_NAME}"      # Standard/Local hook (e.g. Husky)
 )
 
 RUN_HOOK=""
@@ -60,6 +59,36 @@ for hook in "${CANDIDATE_HOOKS[@]}"; do
         break
     fi
 done
+
+# Standard/Local hook (e.g. Husky). Resolved via `git rev-parse
+# --git-common-dir`, not `$REPO_ROOT/.git/hooks/<name>`: in a linked
+# worktree `.git` is a file, not a directory, so a plain path join can never
+# find anything there and this candidate silently disappears (agy + codex
+# review, PR #1674). `--git-common-dir` resolves the actual (shared)
+# .git directory correctly both for a normal repo and for every worktree of
+# it — unlike `git rev-parse --git-path hooks/<name>`, which was tried
+# first and rejected: it honors `core.hooksPath` when set, so on a machine
+# that already ran this repo's own setup.sh it resolves to the *global*
+# hooks directory instead of the repo-local one — the exact wrapper we are
+# inside, for every repo on the machine, defeating both the worktree fix and
+# the pre-existing "no-op in an unrelated repo" guarantee.
+if [ -z "$RUN_HOOK" ]; then
+    GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
+    case "$GIT_COMMON_DIR" in
+        /*) : ;;
+        ?*) GIT_COMMON_DIR="$REPO_ROOT/$GIT_COMMON_DIR" ;;
+    esac
+    HOOK_PATH="${GIT_COMMON_DIR:+$GIT_COMMON_DIR/hooks/${HOOK_NAME}}"
+
+    [ "$DEBUG" = "1" ] && echo "[Debug] Checking: $HOOK_PATH"
+
+    if [ -n "$HOOK_PATH" ] && [ -x "$HOOK_PATH" ] && ! [ "$HOOK_PATH" -ef "$0" ]; then
+        RUN_HOOK="$HOOK_PATH"
+        [ "$DEBUG" = "1" ] && echo "[Debug] Found executable hook: $RUN_HOOK"
+    elif [ "$DEBUG" = "1" ] && [ -n "$HOOK_PATH" ] && [ -x "$HOOK_PATH" ]; then
+        echo "[Debug] Skipping self: $HOOK_PATH"
+    fi
+fi
 
 if [ -z "$RUN_HOOK" ]; then
     [ "$DEBUG" = "1" ] && echo "[Debug] No project-level ${HOOK_NAME} hook found"
