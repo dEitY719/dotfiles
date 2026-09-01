@@ -3,12 +3,11 @@
 #
 # Full-recompute drift detector/repair for the dotfiles plugin manifests.
 #
-# claude/hooks/plugin-sync.sh keeps claude/plugin/{marketplaces,plugins}.json
-# (and, on internal PCs, claude/plugin/company/*) up to date INCREMENTALLY —
-# it only patches the manifest when it observes a `claude plugin ...` command.
-# Any event it misses (crash, sync from another PC, a manual edit) leaves a
-# ghost entry the hook can never remove, because there is no local event to
-# key the delete off of.
+# claude/hooks/plugin-sync.sh keeps the manifests up to date INCREMENTALLY —
+# it only patches them when it observes a `claude plugin ...` command. Any
+# event it misses (crash, sync from another PC, a manual edit) leaves a ghost
+# entry the hook can never remove, because there is no local event to key the
+# delete off of.
 #
 # reconcile.sh closes that gap: it treats ~/.claude-shared/plugins/
 # {known_marketplaces,installed_plugins}.json as the SSOT and rebuilds the
@@ -19,20 +18,16 @@
 # one entry.
 #
 #   --check (default)  print SSOT-vs-manifest diff; non-zero exit if drift
-#   --apply            rewrite the manifest to match SSOT, commit if changed
-#                      (public scope writes the untracked overlay and does not
-#                      commit — see #1685 below)
+#   --apply            rewrite the manifest to match SSOT
 #
-# #1685: the public manifest used to be BOTH the upstream registration contract
-# and this machine's install state, so every fork/mirror conflicted with every
-# upstream registration commit. The two are now separate files —
-# claude/plugin/{marketplaces,plugins}.json is the tracked, upstream-owned
-# contract this script only READS, and *.local.json is the gitignored overlay it
-# writes. Consumers (restore.sh) read the union.
-#
-# Public (github) marketplaces route to claude/plugin/*.json; private
-# (non-github) ones to claude/plugin/company/*.json — identical to the hook.
-# company/ is processed only on an `internal` PC with the nested repo cloned.
+# Public (github) marketplaces route to claude/plugin/*.local.json — the
+# gitignored machine-local overlay. The tracked claude/plugin/*.json pair is
+# the upstream-owned registration contract this script only READS, to subtract
+# its entries from the overlay target (#1685); writing an untracked overlay is
+# also why the public scope makes no commit. Private (non-github) marketplaces
+# route to claude/plugin/company/*.json, which is a separate private repo with
+# no fork to diverge from and so still commits. company/ is processed only on
+# an `internal` PC with the nested repo cloned.
 #
 # See docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md
 set -uo pipefail
@@ -71,9 +66,9 @@ Usage: reconcile.sh [--check|--apply] [-h|--help]
 
   --check   (기본) SSOT(~/.claude-shared/plugins) 와 dotfiles 매니페스트의
             drift 를 표로 출력한다. drift 가 있으면 non-zero 로 종료한다.
-  --apply   dotfiles 매니페스트를 SSOT 기준으로 재빌드하고 (유령 엔트리 제거
-            포함), 변경이 있으면 "chore(claude-plugin): sync manifest" 커밋을
-            하나 남긴다.
+  --apply   dotfiles 매니페스트를 SSOT 기준으로 재빌드한다 (유령 엔트리 제거
+            포함). 커밋은 company/ 스코프에만 남는다 —
+            "chore(claude-plugin): sync manifest".
   -h, --help  이 도움말 출력 후 종료.
 
 SSOT: ~/.claude-shared/plugins/{known_marketplaces,installed_plugins}.json
@@ -154,11 +149,6 @@ PRIV_DIR="$SCRIPT_DIR/company"
 PUB_LOCAL_MP="$PUB_DIR/marketplaces.local.json"
 PUB_LOCAL_PL="$PUB_DIR/plugins.local.json"
 
-# The repo that owns the public manifest — resolved from SCRIPT_DIR so this
-# works from any checkout/worktree (and from a test copy). Required for
-# --apply's commit; --check never needs it.
-MAIN_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
-
 SHARED_DIR="${CLAUDE_SHARED_PLUGINS_DIR:-$HOME/.claude-shared/plugins}"
 MP_SRC="$SHARED_DIR/known_marketplaces.json"
 PL_SRC="$SHARED_DIR/installed_plugins.json"
@@ -218,11 +208,11 @@ plugins_private=$(_target_plugins_for_mp "$target_private") || exit 1
 #      upstream 이 등록만 해 둔 플러그인이 정확히 이 모양이다.
 # 오버레이가 없고 계약이 곧 로컬 상태였던 기존 PC 에서는 목표가 비어 있으므로
 # --apply 가 빈 오버레이를 쓸 뿐, 계약은 손대지 않는다.
-tracked_mp=$(_claude_plugin_read_json_or "$PUB_DIR/marketplaces.json" '{}')
-tracked_pl=$(_claude_plugin_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')
-overlay_common=$(jq -n --argjson t "$target_common" --argjson k "$tracked_mp" \
+overlay_common=$(jq -cn --argjson t "$target_common" \
+	--argjson k "$(_claude_plugin_read_json_or "$PUB_DIR/marketplaces.json" '{}')" \
 	'$t | with_entries(select($k[.key] == null))') || exit 1
-overlay_plugins_common=$(jq -n --argjson t "$plugins_common" --argjson k "$tracked_pl" \
+overlay_plugins_common=$(jq -cn --argjson t "$plugins_common" \
+	--argjson k "$(_claude_plugin_read_json_or "$PUB_DIR/plugins.json" '{"plugins":[]}')" \
 	'$t - ($k.plugins // [])') || exit 1
 
 # --- diff helpers ---------------------------------------------------------
@@ -340,10 +330,6 @@ _commit_if_changed() {
 }
 
 _run_apply() {
-	if [ -z "$MAIN_ROOT" ]; then
-		echo "${UX_ERROR}git 저장소를 찾을 수 없습니다 ($SCRIPT_DIR). dotfiles 안에서 실행하세요.${UX_RESET}" >&2
-		exit 1
-	fi
 	# Commit titles come from the shell-common helper sourced at the top of
 	# this script; without it --apply would commit under an empty subject.
 	# Only the company/ scope still commits (#1685) — the public scope writes
