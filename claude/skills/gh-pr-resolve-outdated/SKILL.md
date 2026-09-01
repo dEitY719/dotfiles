@@ -76,6 +76,13 @@ git rebase "$REMOTE/$BASE"
 In `--worktree` mode all three become `git -C "<path>" ...`. `BACKUP_SHA`
 from Step 1 is the pre-rebase head — Step 5 reuses it as `OLD_HEAD_SHA`.
 
+A locally stale `$REMOTE/$BASE` (behind the PR's true base) only widens
+`OLD_BASE_SHA`'s diff range with content the PR never touched — that pulls
+`OLD_PID` and `NEW_PID` apart, never together, so the failure direction is
+the same fail-safe one patch-id mismatch already takes: an extra
+`devx:pr-review-all` re-run, never a wrongly-preserved `review-passed`
+(PR #1699 review, codex round-3).
+
 Rebase exits non-zero with conflicts → `git rebase --abort` immediately,
 print `[FAIL] rebase produced conflicts — use /gh-pr-resolve-conflict
 <PR_NUMBER>` + exit 4. Never auto-guess — hand off to the sister skill.

@@ -48,7 +48,14 @@
 # `GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN` overrides the auto-resolved identity
 # (same override shape as `GH_PR_MERGE_TRAIN_TRUSTED_LOGIN` /
 # `DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN`) for a pipeline that authenticates the
-# reviewer and this skill as different accounts.
+# reviewer and this skill as different accounts. Deliberately its OWN
+# variable, not a fallback chain through the other two (PR #1699 review,
+# codex round-3 FOLLOW-UP raised chaining them; skipped — the SSOT already
+# states the opposite intentionally: "deliberately separate... a deployment
+# that splits the review, reply, and merge roles across accounts must be
+# able to set each independently", `devx-pr-review-all/references/
+# review-verdict-label.md` → "Marker authorship"). In the common single-
+# account case all three auto-resolve to the same login anyway.
 #
 # Usage:
 #   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path]
@@ -155,6 +162,16 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         # Direct add + marker post — NOT `devx_pr_review_all_write_label`,
         # which also deletes the opposite `review-blocked` label as its first
         # action. This file must never touch that label (see the header note).
+        #
+        # A failed marker POST is reported, not swallowed (PR #1699 review,
+        # codex round-3 BLOCKER): silently claiming `marker=reposted` while
+        # the repost actually failed would leave `review-passed` labelled
+        # with no marker proving it for `NEW_HEAD_SHA` — the exact
+        # `marker=failed` distinction `devx_pr_review_all_write_label`
+        # already makes (`review-verdict-label.md` → "Freshness marker").
+        # Soft-fail is unchanged: this is a report string, never a non-zero
+        # return — the next tick's #1601 check self-heals either way.
+        local _marker=reposted
         (
             if [ -n "$_host" ]; then
                 # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
@@ -163,8 +180,8 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
             _gh_pr_edit_safe_label "$_pr" review-passed --repo "$_repo" >/dev/null 2>&1 &&
                 gh api -X POST "repos/$_repo/issues/$_pr/comments" \
                     -f "body=<!-- review-verdict:review-passed:$_new_head -->" >/dev/null 2>&1
-        ) || :
-        printf 'patch-id=unchanged label=kept marker=reposted\n'
+        ) || _marker=failed
+        printf 'patch-id=unchanged label=kept marker=%s\n' "$_marker"
         return 0
     fi
 
