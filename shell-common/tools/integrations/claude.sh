@@ -927,6 +927,82 @@ _claude_compose_skills_dir() {
     ux_success "  composed skills dir: $_ccsd_tgt (added=$_ccsd_added refreshed=$_ccsd_refreshed)"
 }
 
+# _claude_compose_workspace_skills <target_skills_dir>
+#
+# issue #1652 (#1410 F-6, non-destructive half): layer the skills of
+# locally cloned marketplace repos into a <tgt> that
+# _claude_compose_skills_dir has already composed from the dotfiles SSOT.
+# Sources come from shell-common/functions/skill_sources.sh, which the
+# Codex / OpenCode / Gemini+agy / Hermes side (scripts/setup-skills-ssot.sh)
+# reads too — one definition of "what is a workspace skill" for all six
+# harnesses.
+#
+# Purely additive (NF-1): a name already taken — by a dotfiles skill, by a
+# marketplace overlay, by anything — is left exactly as it is, so this can
+# never repoint an entry _claude_compose_skills_dir owns. Stale workspace
+# links (their repo was removed) are pruned first, so a repo rename
+# converges in one run instead of two; links pointing outside the
+# workspace root are never touched.
+#
+# Every "nothing to do" path is silent and returns 0: no workspace root,
+# an empty one, a repo with no skills/, a skills/ entry with no SKILL.md.
+#
+# `find` replaces the glob loops used elsewhere in this file because an
+# empty workspace is the ordinary first-run state and zsh aborts the
+# enclosing function on an unmatched glob (`nomatch`).
+_claude_compose_workspace_skills() {
+    _ccws_tgt="${1:-}"
+    [ -n "$_ccws_tgt" ] || return 0
+    [ -d "$_ccws_tgt" ] || return 0
+
+    _ccws_root="$(_skill_workspace_root)" || return 0
+
+    # Prune first: a workspace link whose source vanished has to free its
+    # name before the add loop below can claim it.
+    _ccws_links="$(find "$_ccws_tgt" -mindepth 1 -maxdepth 1 -type l 2>/dev/null)"
+    while IFS= read -r _ccws_existing; do
+        [ -n "$_ccws_existing" ] || continue
+        _ccws_target_path=$(readlink "$_ccws_existing")
+        case "$_ccws_target_path" in
+            "$_ccws_root"/*) ;;
+            *) continue ;;
+        esac
+        [ -d "$_ccws_target_path" ] && continue
+        _ccws_stale_name="${_ccws_existing##*/}"
+        rm -f "$_ccws_existing" \
+            && ux_info "  removed stale workspace skill: $_ccws_stale_name"
+    done <<CCWS_LINKS
+$_ccws_links
+CCWS_LINKS
+
+    _ccws_dirs="$(_skill_workspace_dirs "$_ccws_root")"
+    [ -n "$_ccws_dirs" ] || return 0
+
+    _ccws_added=0
+    while IFS= read -r _ccws_want; do
+        [ -n "$_ccws_want" ] || continue
+        _ccws_name="${_ccws_want##*/}"
+        _ccws_link="${_ccws_tgt}/${_ccws_name}"
+
+        # Name already occupied — dotfiles SSOT, an overlay, or an earlier
+        # workspace repo won it. Leave it exactly as it is.
+        if [ -e "$_ccws_link" ] || [ -L "$_ccws_link" ]; then
+            continue
+        fi
+
+        ln -s "$_ccws_want" "$_ccws_link" || {
+            ux_error "  workspace symlink failed: $_ccws_link -> $_ccws_want"
+            return 1
+        }
+        _ccws_added=$((_ccws_added + 1))
+        ux_info "  new workspace skill: $_ccws_name"
+    done <<CCWS_DIRS
+$_ccws_dirs
+CCWS_DIRS
+
+    ux_success "  composed workspace skills: $_ccws_tgt (added=$_ccws_added root=$_ccws_root)"
+}
+
 # _claude_account_setup_one — 단일 계정의 link 멱등 셋업.
 #
 # skills/ 와 docs/ 는 SSOT 디렉토리 자체로의 단일 symlink 다 (issue #575).
@@ -956,6 +1032,8 @@ _claude_account_setup_one() {
     # added symlinks can be layered into the same target dir without
     # touching the dotfiles git tree.
     _claude_compose_skills_dir "${DOTFILES_ROOT}/claude/skills"             "$_caso_cdir/skills"
+    # Then layer locally cloned marketplace repos on top (issue #1652).
+    _claude_compose_workspace_skills "$_caso_cdir/skills"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/docs"                   "$_caso_cdir/docs"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/workflows"               "$_caso_cdir/workflows"
     # Global instructions (Advisor/Worker) — SSOT symlink, all projects (#1115).

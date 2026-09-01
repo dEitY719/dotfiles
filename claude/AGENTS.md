@@ -22,6 +22,23 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 `~/.claude*/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`, `~/.gemini/skills/` 는 모두 **실제 디렉토리** 이며 child entry 만 `dotfiles/claude/skills/<name>` 로 가는 symlink. 이 4-way 일관성이 외부에서 추가된 symlink (마켓플레이스 `npx skills add`, 수동 링크 등) 를 모든 CLI 의 같은 디렉토리에 추가 entry 로 layer 할 여지를 만든다. SSOT 위치 자체는 변하지 않음.
 
+### 두 번째 소스: 로컬 워크스페이스 (issue #1652 / #1410 F-6)
+
+위 표의 SSOT 에 더해, 로컬에 나란히 clone 된 marketplace repo 의 스킬도 같은
+디렉토리에 **추가** entry 로 합성된다 — 소스 경로는
+`${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`.
+
+- 판별·열거 규칙 SSOT: `shell-common/functions/skill_sources.sh`
+  (`_skill_workspace_root`, `_skill_workspace_dirs`) — 6개 하네스가 공유한다.
+- 순수 추가다. 이름이 겹치면 dotfiles `claude/skills/` 가 이기고 기존 링크는
+  재조준되지 않는다. dotfiles 소스 제거는 #1410 Phase 4 몫.
+- 자동 발견: repo 를 clone 하면 다음 setup 실행에서 그냥 잡힌다. `skills/` 가
+  없는 repo, `SKILL.md` 가 없는 하위 디렉토리, 그리고 **linked git worktree**
+  (`.git` 가 파일) 는 조용히 스킵된다 — worktree 는 `<repo>-<branch>` 가 정렬상
+  앞서서 원본 clone 을 가려버리기 때문.
+- repo 가 사라지면 그 repo 를 가리키던 entry 만 정리된다. 워크스페이스 밖을
+  가리키는 링크(마켓플레이스 오버레이 등)는 건드리지 않는다.
+
 ### 관리 스크립트
 
 | 도구 | 담당 스크립트 / 함수 | 트리거 |
@@ -29,6 +46,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 | Claude Code (각 계정) | `shell-common/tools/integrations/claude.sh` → `_claude_account_setup_one()` + `_claude_compose_skills_dir()` (#707, F-8) | `./claude/setup.sh` |
 | OpenCode / Gemini | `scripts/setup-skills-ssot.sh` → `link_skills_compose()` (#791) | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
 | Codex | `scripts/setup-skills-ssot.sh` → `link_skills_individual_codex()` | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
+| 워크스페이스 소스 (#1652) | `shell-common/functions/skill_sources.sh` + `_claude_compose_workspace_skills()` (Claude Code) / `collect_skill_sources()` (나머지) | 위와 동일 |
 
 ### 신규 스킬 추가 후 동기화
 
@@ -48,7 +66,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 ### 절대 하지 말 것
 
 - `~/.claude*/skills/`, `~/.gemini/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/` 직접 편집 금지
-- 스킬은 반드시 SSOT인 `dotfiles/claude/skills/`에만 생성/수정
+- 스킬은 SSOT인 `dotfiles/claude/skills/` 또는 워크스페이스 repo(`~/para/project/skills/<repo>/skills/`)에서만 생성/수정 — 합성 대상 디렉토리에서 직접 만들지 말 것
 - Codex `.system/` 디렉토리 삭제 금지 (Codex 내장 스킬)
 
 ---
