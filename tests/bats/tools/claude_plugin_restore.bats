@@ -274,3 +274,10 @@ notes-skills|dEitY719/notes-skills|notes
 authoring-skills|dEitY719/authoring-skills|authoring
 TABLE
 }
+
+@test "restore.sh --dry-run installs gh-setup@gh-setup-skills from its marketplace (#1658)" {
+    run "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/restore.sh" --dry-run
+    assert_success
+    assert_output --partial 'add: gh-setup-skills (dEitY719/gh-setup-skills)'
+    assert_output --partial 'install: gh-setup@gh-setup-skills'
+}
