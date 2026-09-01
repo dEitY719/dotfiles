@@ -30,6 +30,9 @@ load '../test_helper'
     assert_success
     run git -C "${_BATS_REAL_DOTFILES_ROOT}" check-ignore -q claude/plugin/marketplaces.local.json
     assert_success
+    # 묘비도 머신 로컬 상태다 (#1695) — 추적되면 fork 충돌이 되돌아온다.
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" check-ignore -q claude/plugin/removed.local.json
+    assert_success
 }
 
 @test "the tracked registration contract is NOT ignored (#1685)" {

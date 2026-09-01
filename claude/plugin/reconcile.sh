@@ -148,6 +148,9 @@ PRIV_DIR="$SCRIPT_DIR/company"
 # 이 스크립트는 절대 쓰지 않고, 읽어서 오버레이 목표에서 빼기만 한다.
 PUB_LOCAL_MP="$PUB_DIR/marketplaces.local.json"
 PUB_LOCAL_PL="$PUB_DIR/plugins.local.json"
+# "이 PC 에서 계약 항목을 uninstall 했다" 는 묘비 (#1695). --apply 는 다시
+# 설치된 항목의 묘비만 지우고, 나머지는 건드리지 않는다.
+PUB_TOMBSTONE="$PUB_DIR/removed.local.json"
 
 SHARED_DIR="${CLAUDE_SHARED_PLUGINS_DIR:-$HOME/.claude-shared/plugins}"
 MP_SRC="$SHARED_DIR/known_marketplaces.json"
@@ -348,6 +351,16 @@ _run_apply() {
 	pl_pretty=$(jq -n --argjson p "$overlay_plugins_common" '{plugins: $p}')
 	_write_if_changed "$PUB_LOCAL_MP" "$mp_pretty"
 	_write_if_changed "$PUB_LOCAL_PL" "$pl_pretty"
+	# 묘비 정리 (#1695): SSOT 가 "지금 설치돼 있다" 고 말하는 항목의 묘비는
+	# 낡았다. 훅의 add 분기가 같은 일을 하지만 이 스크립트는 훅이 놓친 이벤트를
+	# 메우는 자리이므로, 여기서도 한 번 맞춰 준다. 손대지 않은 묘비는 그대로다.
+	if [ -f "$PUB_TOMBSTONE" ]; then
+		_tomb=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_TOMBSTONE" '{}')" \
+			--argjson pl "$plugins_common" --argjson mp "$target_common" \
+			'{marketplaces: (($old.marketplaces // []) - ($mp | keys)),
+			  plugins:      (($old.plugins // []) - $pl)}' 2>/dev/null)
+		[ -n "$_tomb" ] && _write_if_changed "$PUB_TOMBSTONE" "$_tomb"
+	fi
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
 		priv_title=$(_plugin_sync_title "$SYNC_MSG" \

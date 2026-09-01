@@ -60,6 +60,9 @@ claude/settings.local.json
 # 소비자(restore.sh / reconcile.sh)는 tracked + local 의 union 을 읽는다.
 /claude/plugin/marketplaces.local.json
 /claude/plugin/plugins.local.json
+# 이 PC 에서 계약 항목을 uninstall 했다는 묘비(tombstone). 훅은 계약 파일을
+# 쓰지 않으므로, 이것이 없으면 restore.sh 가 계약을 보고 다시 설치해 버린다.
+/claude/plugin/removed.local.json
 
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json

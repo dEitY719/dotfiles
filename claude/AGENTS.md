@@ -156,8 +156,12 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
 변경, 훅은 읽기만 함)이고, gitignored `*.local.json` 은 **이 PC 의 설치 상태**
 (`plugin-sync.sh` / `reconcile.sh --apply` 가 쓰는 유일한 대상)다. 한 파일이 두
 소유자를 가지던 탓에 fork/mirror 가 upstream 의 등록 커밋마다 충돌했다. 소비자
-(`restore.sh`, `reconcile.sh --check`)는 둘의 **union** 을 본다. 공용 스코프는
-더 이상 커밋하지 않는다 — `sync manifest` 자동 커밋은 `company/` 에만 남는다.
+(`restore.sh`, `reconcile.sh --check`)는 둘의 **union** 을 보되, 키가 충돌하면
+**계약이 이긴다**(낡은 오버레이가 upstream 의 URL 정정을 덮어쓰지 못하도록).
+공용 스코프는 더 이상 커밋하지 않는다 — `sync manifest` 자동 커밋은 `company/`
+에만 남는다. 훅은 계약을 못 쓰므로, 계약 항목을 uninstall 하면 gitignored
+`removed.local.json` **묘비**에 기록해 `restore.sh` 의 재설치를 막는다(재설치하면
+묘비가 취소된다).
 
 커밋 제목의 변경 키 나열 규칙
 (`... sync manifest (+foo -bar 외 N개)`)은 `shell-common/functions/plugin_sync_title.sh`
