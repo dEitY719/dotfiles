@@ -204,6 +204,37 @@ $2
 EOF
 }
 
+_gcp_scan_report_conflict_stop() {
+    # Shared "Failed at $sha, resolve manually" message for the execution
+    # loop's two abort-the-batch exits (--stop-on-conflict, and the rollback
+    # itself failing to clear the sequencer) — issue #1647, defect B.
+    local sha="$1"
+    if type ux_error >/dev/null 2>&1; then
+        ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+    fi
+}
+
+_gcp_scan_pick_list_prior() {
+    # Return the newline-joined pick_list entries strictly BEFORE $1 in $2's
+    # order (issue #1647, defect A). pick_list ORDER matters: the execution
+    # loop applies picks in order, so an entry AFTER $1 cannot have run yet
+    # and is not a precedent — `break` (not `continue`) on the self-match
+    # stops accumulation there. Shared by _gcp_scan_check_file_deps and
+    # _gcp_scan_predict_content_conflict, which used to each hand-roll this
+    # walk separately.
+    local target="$1" pick_list="$2"
+    local _p prior=""
+    while IFS= read -r _p; do
+        [ -z "$_p" ] && continue
+        [ "$_p" = "$target" ] && break
+        prior="${prior}${_p}
+"
+    done <<EOF
+$pick_list
+EOF
+    printf '%s' "$prior"
+}
+
 _gcp_scan_check_file_deps() {
     # File-dependency pre-check (issue #1033). Returns 1 when cherry-picking
     # commit $1 would hit a modify/delete conflict because a file it
@@ -222,28 +253,18 @@ _gcp_scan_check_file_deps() {
     #
     # pick_list ORDER matters (issue #1647, defect A): the execution loop
     # applies pick_list in order, so a creator commit AFTER $sha in that order
-    # cannot have run yet — it is not a precedent. Only count commits BEFORE
-    # $sha. This prefix is itself an over-approximation (an earlier entry may
-    # still get skipped as a dup/no-op/path-excluded and never actually
-    # apply), but that bias is deliberately toward DEFERRING judgment rather
-    # than wrongly skipping a real dependency — the execution loop's own
-    # rollback-and-continue handling absorbs any false negative that slips
-    # through.
+    # cannot have run yet — it is not a precedent. `_gcp_scan_pick_list_prior`
+    # (shared with _gcp_scan_predict_content_conflict) gives only the commits
+    # BEFORE $sha. This prefix is itself an over-approximation (an earlier
+    # entry may still get skipped as a dup/no-op/path-excluded and never
+    # actually apply), but that bias is deliberately toward DEFERRING
+    # judgment rather than wrongly skipping a real dependency — the execution
+    # loop's own rollback-and-continue handling absorbs any false negative
+    # that slips through.
     local sha="$1" base="$2" source="$3" pick_list="$4"
-    local changes st f up_add rc=0 tab prior_prefix="" _p
+    local changes st f up_add rc=0 tab prior_prefix
     tab=$(printf '\t')
-    while IFS= read -r _p; do
-        [ -z "$_p" ] && continue
-        [ "$_p" = "$sha" ] && break
-        if [ -z "$prior_prefix" ]; then
-            prior_prefix="$_p"
-        else
-            prior_prefix="${prior_prefix}
-${_p}"
-        fi
-    done <<EOF
-$pick_list
-EOF
+    prior_prefix=$(_gcp_scan_pick_list_prior "$sha" "$pick_list")
     # name-status of the candidate (single-parent diff -> one status letter).
     changes=$(git diff-tree --no-commit-id -r --name-status "$sha" 2>/dev/null)
     while IFS="$tab" read -r st f; do
@@ -395,7 +416,7 @@ _gcp_scan_predict_content_conflict() {
     #
     # Prints the first guaranteed-conflict file path to stdout when it flags.
     local sha="$1" pick_list="$2"
-    local parent merge_out conflicted f other_files p rc
+    local parent merge_out conflicted f other_files p rc prior_shas
     # Root commit (no parent) or merge commit (2+ parents): the cherry-pick
     # merge base is undefined/ambiguous -> out of scope, defer to the real
     # cherry-pick rather than probe with the wrong base.
@@ -420,18 +441,17 @@ _gcp_scan_predict_content_conflict() {
     # the --author=all false-positive guard. pick_list ORDER matters (issue
     # #1647, defect A): the execution loop applies picks in order, so nothing
     # AFTER $sha can have changed HEAD's copy by the time $sha is picked — it
-    # is not a precedent. `break` (not `continue`) on the self-match stops
-    # accumulating once $sha is reached, so only genuinely-prior candidates
-    # count. If $sha is absent from pick_list, the loop reads the whole list
-    # as a fallback (unchanged from before).
+    # is not a precedent. `_gcp_scan_pick_list_prior` stops at the self-match
+    # so only genuinely-prior candidates count; if $sha is absent from
+    # pick_list it reads the whole list as a fallback (unchanged from before).
     other_files=""
+    prior_shas=$(_gcp_scan_pick_list_prior "$sha" "$pick_list")
     while IFS= read -r p; do
         [ -z "$p" ] && continue
-        [ "$p" = "$sha" ] && break
         other_files="${other_files}$(git diff-tree --no-commit-id -r --name-only "$p" 2>/dev/null)
 "
     done <<EOF
-$pick_list
+$prior_shas
 EOF
     while IFS= read -r f; do
         [ -z "$f" ] && continue
@@ -1456,9 +1476,7 @@ $sha
             # legacy behavior: abort the whole remaining batch here, exactly
             # as before.
             if [ "$stop_on_conflict" -eq 1 ]; then
-                if type ux_error >/dev/null 2>&1; then
-                    ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
-                fi
+                _gcp_scan_report_conflict_stop "$sha"
                 return 1
             fi
 
@@ -1480,9 +1498,7 @@ $sha
             # never continue the batch on top of a live sequencer — fall
             # through to the legacy error path instead.
             if [ -f "${_gcp_git_dir}/CHERRY_PICK_HEAD" ]; then
-                if type ux_error >/dev/null 2>&1; then
-                    ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
-                fi
+                _gcp_scan_report_conflict_stop "$sha"
                 return 1
             fi
             deferred_list="${deferred_list}${sha}
@@ -1557,14 +1573,13 @@ EOF
         fi
         while IFS= read -r _def_sha; do
             [ -z "$_def_sha" ] && continue
-            local _def_title _def_short
-            _def_title=$(git log --no-walk --format='%s' "$_def_sha" 2>/dev/null)
-            _def_short=$(git rev-parse --short "$_def_sha" 2>/dev/null)
+            local _def_line
+            _def_line=$(git log --no-walk --format='%h %s' "$_def_sha" 2>/dev/null)
             if type ux_bullet >/dev/null 2>&1; then
-                ux_bullet "${_def_short} ${_def_title}"
+                ux_bullet "${_def_line}"
                 ux_bullet "  git cherry-pick ${_def_sha}"
             else
-                echo "  ${_def_short} ${_def_title}"
+                echo "  ${_def_line}"
                 echo "  git cherry-pick ${_def_sha}"
             fi
         done <<EOF
