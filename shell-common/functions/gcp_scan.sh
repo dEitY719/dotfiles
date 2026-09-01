@@ -1615,8 +1615,10 @@ $deferred_list
 EOF
         if type ux_info >/dev/null 2>&1; then
             ux_info "Resolve each manually, or — if HEAD is already a superset of the change — register it in git/config/gcp-scan-skip.conf."
+            ux_info "Also review the commits that DID apply after the ones above: static prediction can't see cross-file dependencies, so an already-applied commit may silently assume content a deferred commit was supposed to add (issue #1647, codex review PR #1649)."
         else
             echo "ℹ Resolve each manually, or — if HEAD is already a superset of the change — register it in git/config/gcp-scan-skip.conf." >&2
+            echo "ℹ Also review the commits that DID apply after the ones above: static prediction can't see cross-file dependencies, so an already-applied commit may silently assume content a deferred commit was supposed to add (issue #1647, codex review PR #1649)." >&2
         fi
     fi
 
