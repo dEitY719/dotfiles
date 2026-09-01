@@ -169,10 +169,52 @@ JSON
     run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
 
-    # 계약이 이미 담고 있으므로 오버레이는 비어 있어야 한다 — 중복 기록은
-    # 나중에 계약이 바뀌었을 때 로컬이 옛 값을 되살리는 원인이 된다.
-    run jq -e '. == {}' "$MAIN_ROOT/claude/plugin/marketplaces.local.json"
+    # 계약이 이미 담고 있으므로 오버레이 목표가 비고, 빈 오버레이 파일은
+    # 애초에 만들지 않는다 (#1695 agy FOLLOW-UP). 중복 기록은 나중에 계약이
+    # 바뀌었을 때 로컬이 옛 값을 되살리는 원인이 되므로 어느 쪽이든 금지다.
+    [ ! -e "$MAIN_ROOT/claude/plugin/marketplaces.local.json" ]
+    [ ! -e "$MAIN_ROOT/claude/plugin/plugins.local.json" ]
+}
+
+@test "install → reinstalling a tombstoned plugin cancels its tombstone (#1695)" {
+    # 묘비가 남아 있으면 재설치해도 restore.sh 가 되돌린다 — add 경로가 지워야 한다.
+    _known_marketplaces
+    _installed_plugins
+    mkdir -p "$MAIN_ROOT/claude/plugin"
+    cat > "$MAIN_ROOT/claude/plugin/removed.local.json" <<'JSON'
+{"plugins": ["ralph-loop@claude-plugins-official", "other@claude-plugins-official"],
+ "marketplaces": ["claude-plugins-official", "gone-mp"]}
+JSON
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
+
+    # 실제로 설치된 것만 묘비에서 빠지고, 나머지 묘비는 그대로 남는다.
+    run jq -e '.plugins == ["other@claude-plugins-official"]' \
+        "$MAIN_ROOT/claude/plugin/removed.local.json"
+    assert_success
+    run jq -e '.marketplaces == ["gone-mp"]' \
+        "$MAIN_ROOT/claude/plugin/removed.local.json"
+    assert_success
+}
+
+@test "install → an EXISTING overlay is still emptied when its last local entry goes (#1695)" {
+    # 위 가드는 "생성"만 막는다 — 이미 있는 파일은 비워지는 것이 정상 동작이다.
+    _known_marketplaces
+    _installed_plugins
+    mkdir -p "$MAIN_ROOT/claude/plugin"
+    echo '{"claude-plugins-official": "anthropics/claude-plugins-official"}' \
+        > "$MAIN_ROOT/claude/plugin/marketplaces.json"
+    echo '{"plugins": ["ralph-loop@claude-plugins-official"]}' \
+        > "$MAIN_ROOT/claude/plugin/plugins.json"
+    echo '{"plugins": []}' > "$MAIN_ROOT/claude/plugin/plugins.local.json"
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    [ -e "$MAIN_ROOT/claude/plugin/plugins.local.json" ]
     run jq -e '.plugins == []' "$MAIN_ROOT/claude/plugin/plugins.local.json"
     assert_success
 }

@@ -123,6 +123,69 @@ JSON
     assert_output --partial 'install: understand-anything@understand-anything'
 }
 
+@test "restore.sh: the tracked contract wins a marketplace key collision (#1695 codex BLOCKER)" {
+    # 낡은 오버레이가 같은 키를 들고 있어도 upstream 이 고친 계약 URL 이 이겨야
+    # 한다. 오버레이가 이기면 upstream 의 마켓플레이스 URL 정정이 조용히 무시된다.
+    cat > "$PLUGDIR/marketplaces.json" <<'JSON'
+{"understand-anything": "Egonex-AI/Understand-Anything"}
+JSON
+    cat > "$PLUGDIR/marketplaces.local.json" <<'JSON'
+{"understand-anything": "stale-owner/old-repo"}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial 'add: understand-anything (Egonex-AI/Understand-Anything)'
+    refute_output --partial 'stale-owner/old-repo'
+}
+
+@test "restore.sh: an overlay-only marketplace still survives the collision rule (#1695)" {
+    # 우선순위 수정이 union 자체를 깨지 않았는지 — 충돌하지 않는 오버레이 키는 그대로.
+    cat > "$PLUGDIR/marketplaces.local.json" <<'JSON'
+{"understand-anything": "stale-owner/old-repo", "caveman": "JuliusBrussee/caveman"}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial 'add: understand-anything (Egonex-AI/Understand-Anything)'
+    assert_output --partial 'add: caveman (JuliusBrussee/caveman)'
+}
+
+@test "restore.sh: a tombstoned contract plugin is NOT reinstalled (#1695 agy BLOCKER)" {
+    # 계약에 남아 있는 플러그인을 이 PC 에서 uninstall 했다는 묘비가 있으면
+    # restore.sh 는 다시 설치하지 않는다 — 이것이 없으면 uninstall 이 무효가 된다.
+    cat > "$PLUGDIR/removed.local.json" <<'JSON'
+{"plugins": ["understand-anything@understand-anything"]}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    refute_output --partial 'install: understand-anything@understand-anything'
+    # 마켓플레이스는 따로 묘비를 두지 않았으므로 그대로 남는다.
+    assert_output --partial 'add: understand-anything (Egonex-AI/Understand-Anything)'
+}
+
+@test "restore.sh: a tombstoned contract marketplace is NOT re-added (#1695)" {
+    cat > "$PLUGDIR/removed.local.json" <<'JSON'
+{"marketplaces": ["understand-anything"]}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    refute_output --partial 'add: understand-anything (Egonex-AI/Understand-Anything)'
+}
+
+@test "restore.sh --sync prunes a tombstoned contract plugin instead of keeping it (#1695)" {
+    _seed_local_state
+    # SSOT 에 설치돼 있고 계약에도 있지만, 이 PC 에서 지웠다고 묘비가 말한다 →
+    # keep-set 에서 빠져 prune 대상이 되어야 한다.
+    cat > "$PLUGDIR/plugins.json" <<'JSON'
+{"plugins": ["understand-anything@understand-anything"]}
+JSON
+    cat > "$PLUGDIR/removed.local.json" <<'JSON'
+{"plugins": ["understand-anything@understand-anything"]}
+JSON
+    run "$PLUGDIR/restore.sh" --sync --dry-run
+    assert_success
+    assert_output --partial 'uninstall: understand-anything@understand-anything'
+}
+
 @test "restore.sh --dry-run skips 공용 when neither tracked nor overlay manifest exists (#1685)" {
     rm -f "$PLUGDIR/marketplaces.json" "$PLUGDIR/plugins.json"
     run "$PLUGDIR/restore.sh" --dry-run

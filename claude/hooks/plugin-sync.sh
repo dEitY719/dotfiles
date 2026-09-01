@@ -232,7 +232,54 @@ _extract_plugins_for_mp() {
 # (the older `jq ... >tmp && mv` form got that for free).
 _write_manifest() {
 	[ -n "$2" ] || return 0
+	# Don't CREATE a file whose content is empty (#1695 agy FOLLOW-UP): a
+	# contract-only machine — every installed entry already registered
+	# upstream — subtracts down to `{}` / `{"plugins":[]}`, and writing that
+	# leaves two puzzling empty overlays behind. An existing file is still
+	# rewritten, so a real emptying (last local extra uninstalled) lands.
+	if [ ! -f "$1" ]; then
+		case "$2" in
+		'{}' | '{"plugins":[]}' | '{ "plugins": [] }') return 0 ;;
+		esac
+		# `jq -n '{plugins: $p}'` pretty-prints, so compare structurally too.
+		if [ "$(printf '%s' "$2" | jq -c '. as $x | ($x == {}) or ($x == {plugins:[]})' 2>/dev/null)" = "true" ]; then
+			return 0
+		fi
+	fi
 	printf '%s\n' "$2" >"$1.tmp" && mv "$1.tmp" "$1"
+}
+
+# --- 계약 항목 묘비 (#1695 agy BLOCKER) -------------------------------------
+# 이 훅은 tracked 등록 계약을 쓰지 않는다. 그래서 계약에 있는 플러그인을
+# uninstall 하면 오버레이에서만 빠지고, restore.sh 는 계약을 보고 그대로 다시
+# 설치한다 — #1685 이전에는 훅이 계약 파일에서 지웠으므로 동작 퇴행이다.
+# 묘비 파일이 그 "이 PC 에서는 지웠다" 는 사실을 머신 로컬로 기록하고,
+# restore.sh 의 union 이 이것을 뺀다. 계약은 여전히 손대지 않는다.
+TOMBSTONE="$PUB_DIR/removed.local.json"
+
+# 묘비에 $2 를 추가한다. $1 은 "marketplaces" 또는 "plugins".
+_tombstone_add() {
+	local kind="$1" name="$2" out
+	out=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$TOMBSTONE" '{}')" \
+		--arg k "$kind" --arg n "$name" \
+		'$old | .[$k] = (((.[$k] // []) + [$n]) | unique)' 2>/dev/null) || return 0
+	[ -n "$out" ] || return 0
+	mkdir -p "$PUB_DIR"
+	printf '%s\n' "$out" >"$TOMBSTONE.tmp" && mv "$TOMBSTONE.tmp" "$TOMBSTONE"
+}
+
+# 다시 설치된 항목의 묘비를 지운다 — 지우지 않으면 재설치가 restore.sh 에서
+# 되돌려진다. add 분기에서 SSOT 에 실제로 존재하는 것들을 통째로 뺀다.
+# $1 = 현재 설치된 plugin id 배열(JSON), $2 = 현재 마켓플레이스 이름 배열(JSON).
+_tombstone_clear_installed() {
+	[ -f "$TOMBSTONE" ] || return 0
+	local out
+	out=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$TOMBSTONE" '{}')" \
+		--argjson pl "$1" --argjson mp "$2" \
+		'{marketplaces: ((($old.marketplaces // []) - $mp)),
+		  plugins:      ((($old.plugins // []) - $pl))}' 2>/dev/null) || return 0
+	[ -n "$out" ] || return 0
+	printf '%s\n' "$out" >"$TOMBSTONE.tmp" && mv "$TOMBSTONE.tmp" "$TOMBSTONE"
 }
 
 # Commit title for one manifest pair. A single install/uninstall keeps the
@@ -287,6 +334,10 @@ if [ "$action" = "add" ]; then
 		'((($old.plugins? // []) + $new) - ($tracked.plugins? // []) | unique | sort)')
 	_write_manifest "$PUB_DIR/marketplaces.local.json" "$mp_pub"
 	_write_manifest "$PUB_DIR/plugins.local.json" "$(jq -n --argjson p "$pl_pub" '{plugins: $p}')"
+	# 재설치는 묘비를 취소한다 (#1695). SSOT 에 실제로 있는 것만 지우므로,
+	# 손대지 않은 다른 묘비는 그대로 남는다.
+	_tombstone_clear_installed "$plugins_common" \
+		"$(jq -n --argjson m "$mp_common" '$m | keys')"
 
 	if [ -d "$PRIV_DIR/.git" ] && [ "$mp_internal" != "{}" ]; then
 		# Its own commit over its own files, so its own title — reusing the
@@ -353,9 +404,16 @@ _warn_if_contract_entry() {
 			"$PUB_DIR/plugins.json" 2>/dev/null)
 	fi
 	[ -n "$hit" ] || return 0
-	printf 'plugin-sync: %s 는 claude/plugin/%s (upstream 등록 계약) 에도 있습니다 — 이 훅은 계약 파일을 쓰지 않습니다 (#1685)\n' \
-		"$hit" "$file" >&2
-	printf 'plugin-sync:   → 계약에서 빼려면 별도 PR 로 그 파일을 편집하세요. 그러지 않으면 restore.sh 가 다시 설치합니다.\n' >&2
+	# 계약은 그대로 두고, "이 PC 에서는 지웠다" 를 묘비로 남긴다 (#1695).
+	# 이것이 restore.sh 의 재설치 퇴행을 막는다 — 계약 편집은 여전히 PR 의 일이다.
+	if [ "$action" = "marketplace_remove" ]; then
+		_tombstone_add marketplaces "$hit"
+	else
+		_tombstone_add plugins "$hit"
+	fi
+	printf 'plugin-sync: %s 는 claude/plugin/%s (upstream 등록 계약) 에도 있습니다 — 계약은 그대로 두고 %s 에 묘비를 남깁니다 (#1685)\n' \
+		"$hit" "$file" "$(basename "$TOMBSTONE")" >&2
+	printf 'plugin-sync:   → 이 PC 에서는 restore.sh 가 더 이상 설치하지 않습니다. 모든 PC 에서 빼려면 별도 PR 로 계약 파일을 편집하세요.\n' >&2
 }
 
 if [ "$action" = "uninstall" ] || [ "$action" = "marketplace_remove" ]; then

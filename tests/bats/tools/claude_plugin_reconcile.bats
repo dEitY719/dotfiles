@@ -165,6 +165,28 @@ _activate_company() {
     assert_output ''
 }
 
+@test "reconcile.sh --apply clears a tombstone for a plugin the SSOT says is installed (#1695)" {
+    _seed_in_sync_manifest
+    cat > "$REPO/claude/plugin/removed.local.json" <<'JSON'
+{"plugins": ["superpowers@official", "gone@nowhere"], "marketplaces": ["official", "dead-mp"]}
+JSON
+    run "$SCRIPT" --apply
+    assert_success
+
+    # 설치돼 있는 것만 묘비에서 빠지고, 나머지는 그대로 남는다.
+    run jq -r '.plugins | join(",")' "$REPO/claude/plugin/removed.local.json"
+    assert_output 'gone@nowhere'
+    run jq -r '.marketplaces | join(",")' "$REPO/claude/plugin/removed.local.json"
+    assert_output 'dead-mp'
+}
+
+@test "reconcile.sh --apply leaves a tombstone alone when there is no tombstone file (#1695)" {
+    _seed_in_sync_manifest
+    run "$SCRIPT" --apply
+    assert_success
+    [ ! -e "$REPO/claude/plugin/removed.local.json" ]
+}
+
 @test "reconcile.sh --check does not report a contract entry absent from the SSOT as a ghost (#1685)" {
     _seed_in_sync_manifest
     run "$SCRIPT" --check
