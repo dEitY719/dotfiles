@@ -186,6 +186,23 @@ run_compose() {
     [ -L "$TGT/marketplace-skill" ]
 }
 
+@test "missing skill_sources.sh warns instead of silently no-opping (#1652 / #724)" {
+    seed_ws_repo "packaging-skills" "create"
+
+    # Same helper, minus the skill_sources.sh source line.
+    local no_lib="$TEST_TEMP_HOME/no-lib.sh"
+    grep -v 'functions/skill_sources.sh' "$HELPER_SCRIPT" > "$no_lib"
+    chmod +x "$no_lib"
+
+    WORKSPACE_ROOT="$WS" run "$no_lib" "$SRC" "$TGT"
+    assert_success
+    assert_output --partial "workspace skill sources unavailable"
+
+    # dotfiles composition still succeeded; no workspace entry was linked.
+    [ -L "$TGT/alpha" ]
+    [ ! -e "$TGT/create" ]
+}
+
 @test "WORKSPACE_ROOT of \$HOME is refused as too broad (#1652 safety)" {
     seed_ws_repo "packaging-skills" "create"
 

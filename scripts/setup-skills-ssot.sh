@@ -45,19 +45,23 @@ _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
 SKILLS_SOURCE="${DOTFILES_ROOT}/claude/skills"
 
-# 워크스페이스 루트 (issue #1652 / #1410 F-6): 로컬에 나란히 clone 된
-# marketplace repo 들이 사는 디렉토리. `<root>/<repo>/skills/<skill>/SKILL.md`
-# 형태만 소스로 인정한다. PC 마다 clone 위치가 다를 수 있어 환경변수로
-# 오버라이드 가능 (F-3). 존재하지 않으면 조용히 무시된다 — dotfiles SSOT
-# 단독으로 정상 동작한다.
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-$HOME/para/project/skills}"
-
 # Load UX library
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "$UX_LIB" ]; then
     source "$UX_LIB"
 else
     echo "Error: UX library not found at $UX_LIB"
+    exit 1
+fi
+
+# 워크스페이스 소스 판별/열거의 SSOT (issue #1652 / #1410 F-6). Claude Code
+# 계정 쪽(shell-common/tools/integrations/claude.sh)이 같은 파일을 읽으므로
+# "무엇이 워크스페이스 skill 인가" 규칙이 두 벌로 갈라지지 않는다.
+SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+if [ -f "$SKILL_SOURCES_LIB" ]; then
+    source "$SKILL_SOURCES_LIB"
+else
+    echo "Error: skill sources library not found at $SKILL_SOURCES_LIB"
     exit 1
 fi
 
@@ -80,31 +84,25 @@ _realpath_or_self() {
 }
 
 SKILLS_SOURCE_REAL="$(_realpath_or_self "$SKILLS_SOURCE")"
-WORKSPACE_ROOT_REAL="$(_realpath_or_self "$WORKSPACE_ROOT")"
+# 빈 문자열 = 워크스페이스 없음/너무 넓음 → dotfiles SSOT 단독 동작(종전과 동일).
+WORKSPACE_ROOT_RESOLVED="$(_skill_workspace_root || true)"
+WORKSPACE_ROOT_REAL=""
+[ -n "$WORKSPACE_ROOT_RESOLVED" ] \
+    && WORKSPACE_ROOT_REAL="$(_realpath_or_self "$WORKSPACE_ROOT_RESOLVED")"
 
-# 안전장치: WORKSPACE_ROOT 가 $HOME 이나 / 로 설정되면 stale-prune 이
-# 사용자 심볼릭 전부를 "우리 것" 으로 오인해 지울 수 있다. 그 경우 워크스페이스
-# 스캔을 비활성화한다 (dotfiles SSOT 단독 동작 = 종전 동작).
-case "$WORKSPACE_ROOT_REAL" in
-    "" | "/" | "$(_realpath_or_self "$HOME")")
-        WORKSPACE_ROOT=""
-        WORKSPACE_ROOT_REAL=""
-        ;;
-esac
-
-# 모든 skill 소스 디렉토리를 한 줄에 하나씩(끝에 `/` 포함) 표준출력으로 낸다.
+# 모든 skill 소스 디렉토리를 한 줄에 하나씩 표준출력으로 낸다.
 #
 # 소스는 두 곳 (issue #1652 / #1410 F-6):
 #   1. dotfiles SSOT     ${SKILLS_SOURCE}/<skill>/
-#   2. 워크스페이스 clone ${WORKSPACE_ROOT}/<repo>/skills/<skill>/   (SKILL.md 필수)
+#   2. 워크스페이스 clone <root>/<repo>/skills/<skill>   (열거 규칙은 shell-common SSOT)
 #
 # dotfiles 를 먼저 내보내 이름 충돌 시 dotfiles 가 이긴다 — 이 이슈는 소스를
 # **추가**만 하므로(NF-1) 기존 링크가 다른 곳으로 재조준돼선 안 된다. 워크스페이스
-# repo 끼리 충돌하면 glob 정렬 순서상 앞선 repo 가 이긴다(재현 가능한 결정).
+# repo 끼리 충돌하면 정렬 순서상 앞선 repo 가 이긴다(재현 가능한 결정).
 # 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
 collect_skill_sources() {
     local seen="|"
-    local skill_path skill_name repo_path
+    local skill_path skill_name
 
     for skill_path in "$SKILLS_SOURCE"/*/; do
         [ -d "$skill_path" ] || continue
@@ -113,30 +111,22 @@ collect_skill_sources() {
         printf "%s\n" "$skill_path"
     done
 
-    [ -n "$WORKSPACE_ROOT" ] || return 0
-    [ -d "$WORKSPACE_ROOT" ] || return 0
+    [ -n "$WORKSPACE_ROOT_RESOLVED" ] || return 0
 
-    for repo_path in "$WORKSPACE_ROOT"/*/; do
-        # skills/ 가 없는 비정형 repo 는 조용히 스킵 (Error Case 2).
-        [ -d "${repo_path}skills" ] || continue
+    while IFS= read -r skill_path; do
+        [ -n "$skill_path" ] || continue
+        skill_name="$(basename "$skill_path")"
 
-        for skill_path in "${repo_path}skills"/*/; do
-            # SKILL.md 가 있어야 skill 로 인정 — skills/ 밑의 잡다한
-            # 디렉토리(_shared 등)를 소스로 오인하지 않는다.
-            [ -f "${skill_path}SKILL.md" ] || continue
+        case "$seen" in
+            *"|${skill_name}|"*)
+                log_dim "[skills] 이름 충돌 — 먼저 발견된 소스 유지, 건너뜀: ${skill_path}" >&2
+                continue
+                ;;
+        esac
 
-            skill_name="$(basename "$skill_path")"
-            case "$seen" in
-                *"|${skill_name}|"*)
-                    log_dim "[skills] 이름 충돌 — 먼저 발견된 소스 유지, 건너뜀: ${skill_path}" >&2
-                    continue
-                    ;;
-            esac
-
-            seen="${seen}${skill_name}|"
-            printf "%s\n" "$skill_path"
-        done
-    done
+        seen="${seen}${skill_name}|"
+        printf "%s\n" "$skill_path"
+    done <<< "$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
 }
 
 # symlink target 이 우리가 관리하는 소스 루트 아래인지 판별.
@@ -149,7 +139,7 @@ skill_source_is_managed() {
     [ -n "$path" ] || return 1
 
     for root in "$SKILLS_SOURCE" "$SKILLS_SOURCE_REAL" \
-                "$WORKSPACE_ROOT" "$WORKSPACE_ROOT_REAL"; do
+                "$WORKSPACE_ROOT_RESOLVED" "$WORKSPACE_ROOT_REAL"; do
         [ -n "$root" ] || continue
         case "$path" in
             "$root"/*) return 0 ;;
@@ -551,10 +541,10 @@ fi
 # fan-out 로직 자체는 그대로다 — 달라진 건 enumeration 뿐 (F-4).
 SKILL_SOURCE_LIST="$(collect_skill_sources)"
 
-if [ -n "$WORKSPACE_ROOT" ] && [ -d "$WORKSPACE_ROOT" ]; then
+if [ -n "$WORKSPACE_ROOT_RESOLVED" ]; then
     workspace_skill_count="$(printf '%s\n' "$SKILL_SOURCE_LIST" \
-        | grep -c "^${WORKSPACE_ROOT}/" || true)"
-    log_info "[workspace] ${workspace_skill_count}개 skill 합류 (루트: $WORKSPACE_ROOT)"
+        | grep -c "^${WORKSPACE_ROOT_RESOLVED}/" || true)"
+    log_info "[workspace] ${workspace_skill_count}개 skill 합류 (루트: $WORKSPACE_ROOT_RESOLVED)"
 fi
 
 # 1. OpenCode: entry-level 합성 (issue #791 — 5 CLI 공통 layout)

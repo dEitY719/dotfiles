@@ -8,6 +8,8 @@ load '../test_helper'
 SETUP_SSOT_SCRIPT="${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
 DIAG_SCRIPT="${DOTFILES_ROOT}/scripts/maintenance/check_codex_skills_budget.py"
 UX_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
+# Workspace source enumeration is shared with the Claude Code side (#1652).
+SKILL_SOURCES_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 
 setup() {
     setup_isolated_home
@@ -22,10 +24,13 @@ setup() {
         "${FIXTURE_DOTFILES}/claude/skills/beta" \
         "${FIXTURE_DOTFILES}/claude/skills/gamma" \
         "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib" \
+        "${FIXTURE_DOTFILES}/shell-common/functions" \
         "${FIXTURE_HOME}/.codex/skills"
 
     cp "$SETUP_SSOT_SCRIPT" "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
     cp "$UX_LIB_SOURCE" "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib/ux_lib.sh"
+    cp "$SKILL_SOURCES_LIB_SOURCE" \
+        "${FIXTURE_DOTFILES}/shell-common/functions/skill_sources.sh"
 
     for s in alpha beta gamma; do
         cat > "${FIXTURE_DOTFILES}/claude/skills/${s}/SKILL.md" <<EOF
@@ -431,6 +436,8 @@ EOF
 # dotfiles claude/skills/ 스캔은 그대로 두고(F-2/NF-1), 로컬에 clone 된
 # marketplace repo 들(${WORKSPACE_ROOT}/<repo>/skills/<skill>/SKILL.md)을
 # 소스 목록에 **추가로** 합류시킨다. fan-out 로직은 손대지 않는다(F-4).
+# 워크스페이스 열거 규칙 자체의 SSOT 는 shell-common/functions/skill_sources.sh
+# 이고, Claude Code 계정 쪽 커버리지는 claude_compose_workspace_skills.bats.
 # ---------------------------------------------------------------------
 
 # Seed a workspace repo under the given root.
@@ -600,6 +607,37 @@ run_setup_with_workspace() {
     assert_success
     [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/delta")" \
         = "$(readlink -f "${ws}/aaa-skills/skills/delta")" ]
+}
+
+@test "workspace: a linked git worktree never shadows its clone (#1652)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "packaging-skills" "delta"
+    mkdir -p "${ws}/packaging-skills/.git"
+    # A linked worktree of the same repo: `.git` is a file, and the name
+    # sorts ahead of the clone under LC_ALL=C ('-' < '/').
+    seed_workspace_skill "$ws" "packaging-skills-feat-1" "delta"
+    printf 'gitdir: /elsewhere\n' > "${ws}/packaging-skills-feat-1/.git"
+
+    run_setup
+    assert_success
+
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/delta")" \
+        = "$(readlink -f "${ws}/packaging-skills/skills/delta")" ]
+}
+
+@test "workspace: WORKSPACE_ROOT of \$HOME is refused as too broad (#1652 safety)" {
+    seed_opencode_home
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
+
+    run_setup_with_workspace "$FIXTURE_HOME"
+    assert_success
+
+    [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
+    for s in alpha beta gamma; do
+        [ -L "${FIXTURE_HOME}/.config/opencode/skills/${s}" ]
+    done
 }
 
 @test "workspace: stale entry is pruned when the repo disappears (#1652 NF-3)" {
