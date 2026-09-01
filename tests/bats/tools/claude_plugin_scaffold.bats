@@ -71,3 +71,16 @@ TABLE
         "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
     assert_success
 }
+
+# #1410 NF-1: a Phase-1 split copies its skills out, it does not move them.
+# The dotfiles originals must survive until Phase 4 retires them deliberately,
+# so `/write:rca` keeps working for anyone who has not installed the plugin.
+# When Phase 4 does delete them, this test is the thing that must be removed
+# in the same commit — that is the point: the removal becomes a decision
+# someone makes, not a side effect nobody notices.
+@test "notes-skills split left the claude/skills/write-* originals in place (#1643)" {
+    for skill in rca insight release-note task-history blog-dev-learnings; do
+        [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/write-${skill}/SKILL.md" ] \
+            || fail "claude/skills/write-${skill}/SKILL.md is missing — #1410 NF-1 says Phase 1 copies, never moves"
+    done
+}
