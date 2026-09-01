@@ -86,3 +86,11 @@ run = [
 [tasks.fix-sh]
 description = "Shell auto-format (shfmt -w)"
 run = "shfmt -w -i 4 bash/"
+
+# ─── Network audits (never part of `test` — #1671 NF-1) ──────────────
+[tasks.audit-split-repos]
+description = "#1410 분리 레포 원격 계약 + 드리프트 감사 (네트워크 필요)"
+# `mise run test` 는 오프라인·워크트리 병렬 실행이 전제라 여기에 넣지 않는다.
+# 정기 실행은 .github/workflows/split-skill-repo-audit.yml, 이 태스크는 수동 호출용.
+# 규칙과 근거는 scripts/maintenance/check_split_skill_repos.py 헤더가 SSOT.
+run = "python3 scripts/maintenance/check_split_skill_repos.py"
