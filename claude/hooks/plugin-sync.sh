@@ -11,7 +11,14 @@
 # See docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md
 #
 # Always exits 0 — best-effort, never blocks the session.
+#
+# Set DOTFILES_PLUGIN_SYNC_DISABLED=1 (e.g. in settings.local.json's "env")
+# to turn manifest auto-sync/auto-commit off. plugin-sync-session.sh
+# (SessionStart/Stop) drives its add/remove work through this script too, so
+# gating here covers both the CLI path and the /plugin slash-command path.
 set -u
+
+[ -z "${DOTFILES_PLUGIN_SYNC_DISABLED-}" ] || exit 0
 
 # A PostToolUse hook always receives JSON on stdin. If stdin is a terminal
 # the script was launched by hand — bail before `cat` blocks forever.
