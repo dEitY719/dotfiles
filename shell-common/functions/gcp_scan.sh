@@ -135,11 +135,21 @@ _gcp_scan_preflight_is_noop() {
     # clean-apply-of-broken-config path (PR #1018 review). `cp` touches only the
     # worktree, never the index, so the staged-diff no-op verdict below is
     # unaffected.
+    #
+    # `-f` on the RESTORE only (agy review, PR #1686): a plain `cp` onto a
+    # read-only destination fails with "Permission denied", and the `2>/dev/null`
+    # here turns that into exactly the silent restore failure this function was
+    # hardened against — the corruption would survive. `-f` unlinks and recreates
+    # instead. The snapshot `cp`s above deliberately do NOT take it: their
+    # destination is a fresh `mktemp` file, always writable, so `-f` would only
+    # widen what they may clobber. `_gcfg1`/`_gcfg2` are resolved real paths
+    # (slot 1 is `readlink`-ed above), never the symlink itself, so `-f` cannot
+    # replace a symlink with a regular file here.
     if [ -n "$_gcfg1_bak" ] && [ -f "$_gcfg1_bak" ]; then
-        command cp "$_gcfg1_bak" "$_gcfg1" 2>/dev/null
+        command cp -f "$_gcfg1_bak" "$_gcfg1" 2>/dev/null
     fi
     if [ -n "$_gcfg2_bak" ] && [ -f "$_gcfg2_bak" ]; then
-        command cp "$_gcfg2_bak" "$_gcfg2" 2>/dev/null
+        command cp -f "$_gcfg2_bak" "$_gcfg2" 2>/dev/null
     fi
     if [ "$_gcp_cp_rc" -eq 0 ]; then
         git diff --cached --quiet && result=0
