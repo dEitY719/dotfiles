@@ -22,8 +22,12 @@
   head-advancing skill uses (#1563) — never an inlined DELETE.
 - Never **add** `review-passed` or `review-blocked` by hand — no bare
   `gh pr edit --add-label`, no inlined REST POST. The Step 6 gate helper
-  `_gh_pr_reply_apply_review_passed` is the only path, and it writes through
-  the shared `devx_pr_review_all_write_label` primitive.
+  `_gh_pr_reply_apply_review_passed` is the only automatic path, and it
+  writes through the shared `devx_pr_review_all_write_label` primitive. The
+  one other path is the explicit `--review-pass` / `--review-block` flags
+  (Step 1.5, `references/manual-override.md`, #1726) — a user-invoked
+  override, not a second automatic judgment — which calls the same
+  `devx_pr_review_all_write_label` primitive directly, bypassing the gate.
 - **NF-2 — "never self-certify" — is deliberately RELAXED here, on this one
   path (#1636).** State it plainly rather than quietly: this skill now applies
   `review-passed` **from its own judgment, with no external AI CLI re-call**,
@@ -45,3 +49,10 @@
     ever. A failed label write leaves the PR unlabelled, and unlabelled still
     reads downstream as "not verified", never as a pass. `review-blocked` is
     still issued only by an external reviewer's verdict.
+- **A second, narrower exception: `--review-pass` / `--review-block`
+  (#1726).** Unlike the #1636 gate above, this one skips BLOCKER/evidence
+  evaluation entirely — the human operator is asserting the verdict, not
+  asking the skill to judge it. It requires the flag on the exact
+  invocation; there is no automatic or cron-triggered path to it, and a
+  plain `/gh:pr-reply <N>` is unaffected. See
+  `references/manual-override.md`.
