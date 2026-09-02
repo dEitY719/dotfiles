@@ -82,14 +82,9 @@ retroactive duration would be worse than reporting a short one.
 When `--auto` was used and the post-merge `gh pr view` still reports
 `state == "OPEN"`, the PR was **enqueued, not merged** — none of the six steps
 above may run, because the merge they all assume has not happened yet. That is
-neither success nor failure in the existing sense; it is a third outcome with
-its own report shape (`SKILL.md` Step 3.5):
-
-```
-[QUEUED] PR #<N> added to merge queue — not yet merged
-  Branch:  <headRefName> → <baseRefName>
-  URL:     <pr-url>
-```
+neither success nor failure in the existing sense; it is a third outcome whose
+report shape is `SKILL.md` Step 3.5's `[QUEUED]` block — this file is an index
+over the sequence, not a second copy of that block.
 
 The PR keeps its `review-passed` label precisely because step 3 did not run,
 and that is what a later `gh:pr-merge-train` Step 0 sweep matches on.

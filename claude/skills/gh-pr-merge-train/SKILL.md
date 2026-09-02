@@ -60,24 +60,23 @@ merged — they are not candidates, they are unfinished business (#1707).
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh"
 GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state merged \
   --limit 30 --json number,title,state,labels \
-  | jq -c '.[]?' \
-  | while IFS= read -r _pr; do
-        printf '%s' "$_pr" | _gh_pr_merge_train_needs_finalize || continue
-        printf '%s\n' "$(printf '%s' "$_pr" | jq -r '.number')"
-    done
+  | _gh_pr_merge_train_finalize_targets \
+  | jq -r '.[].number'
 ```
 
 Each number that comes out gets **one**
 `Skill(gh:pr-merge, "<N> rebase <remote> --finalize")`, then a
 `[FINALIZED] #<N> <title>` line in the Step 5 report.
 
-`_gh_pr_merge_train_needs_finalize` is the **shared** predicate in
-`shell-common/functions/gh_pr_merge_train.sh`, beside the label predicates
-Step 3.5 uses — run it, do not paraphrase it. It answers "MERGED **and** still
-carrying `review-passed`", and that combination is the signal precisely because
-`gh:pr-merge` drops that label as the last step of a completed merge (#1636):
-a merged PR that still has it is a PR whose completion steps never ran, which
-is what an enqueued (`--auto`) merge leaves behind.
+`_gh_pr_merge_train_finalize_targets` is the **shared** array-level filter in
+`shell-common/functions/gh_pr_merge_train.sh`, same shape as Step 2's
+`_gh_pr_merge_train_filter_targets` — run it, do not paraphrase it. It answers
+"MERGED **and** still carrying `review-passed`" for the whole list in one pass
+(the same rule `_gh_pr_merge_train_needs_finalize` answers for a single PR),
+and that combination is the signal precisely because `gh:pr-merge` drops that
+label as the last step of a completed merge (#1636): a merged PR that still
+has it is a PR whose completion steps never ran, which is what an enqueued
+(`--auto`) merge leaves behind.
 
 The finalize work itself is **not done here**. The train writes nothing to
 GitHub of its own (`references/constraints.md`); `gh:pr-merge --finalize` owns

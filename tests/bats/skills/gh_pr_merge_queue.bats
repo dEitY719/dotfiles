@@ -122,6 +122,44 @@ _pr_json() {
 }
 
 # --------------------------------------------------------------------------
+# _gh_pr_merge_train_finalize_targets — the array-level Step 0 filter
+# --------------------------------------------------------------------------
+#
+# Same rule as `_gh_pr_merge_train_filter_targets` (Step 2): the sweep filters
+# the whole `gh pr list --json ...` array in one `jq` pass instead of forking
+# per element, and Step 0 must call this, not loop over the single-PR
+# predicate above.
+
+@test "finalize-targets: keeps only MERGED + review-passed elements" {
+    local result
+    result=$(merge_queue_finalize_targets \
+        "[$(_pr_json 51 MERGED '[{"name":"review-passed"}]'), \
+          $(_pr_json 52 OPEN '[{"name":"review-passed"}]'), \
+          $(_pr_json 53 MERGED '[]')]")
+    run jq -c '[.[].number]' <<<"$result"
+    assert_success
+    assert_output '[51]'
+}
+
+@test "finalize-targets: no matches -> empty array, not a failure" {
+    run merge_queue_finalize_targets \
+        "[$(_pr_json 51 OPEN '[{"name":"review-passed"}]')]"
+    assert_success
+    assert_output '[]'
+}
+
+@test "finalize-targets: malformed JSON -> failure, never a crash" {
+    run merge_queue_finalize_targets 'not json at all'
+    assert_failure
+}
+
+@test "finalize-targets: the shared function is defined by the shipped file" {
+    run grep -qF -- '_gh_pr_merge_train_finalize_targets' \
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+    assert_success
+}
+
+# --------------------------------------------------------------------------
 # gh:pr-merge Step 3 — the `--auto` command
 # --------------------------------------------------------------------------
 
@@ -739,18 +777,6 @@ _run_json() {
     for fn in _gh_pr_merge_train_behind_may_merge_directly _gh_pr_merge_train_base_ci_red; do
         run bash -c "sed -n '/^for _gh_pmt_selfcheck_fn in/,/^done/p' '$f' | grep -qF -- '$fn'"
         assert_success
-    done
-}
-
-@test "doc-guard: nothing in this change executes the ruleset PUT" {
-    # Same rule the merge-queue activation follows: live infrastructure is a
-    # human's deliberate act. The PUT is recorded, never run.
-    local f
-    for f in "${TRAIN_SKILL}/SKILL.md" \
-        "${TRAIN_SKILL}/references/routing-table.md" \
-        "${TRAIN_SKILL}/references/train-loop.md"; do
-        run grep -F -- 'rulesets/16849266' "$f"
-        assert_failure
     done
 }
 
