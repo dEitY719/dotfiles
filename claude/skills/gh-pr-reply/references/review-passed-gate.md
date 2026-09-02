@@ -149,7 +149,18 @@ ME="${GH_PR_REPLY_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .
 # 이다 (본문만 뽑아 둔 텍스트가 아니다 — #1639). 두 경로 모두 Step 2 가 이미
 # 받아 둔 그 덤프를 그대로 쓴다 — API 추가 호출은 없다.
 HISTORY=$(_gh_pr_reply_history_origins "$ME" <"$COMMENT_JSON")
-if _gh_pr_reply_history_has_review "$ME" <"$COMMENT_JSON"; then
+# ORIGINS 가 비어 있는 경로(Step 2.5, 답할 코멘트가 하나도 없는 pass)에서는
+# history 가 **유일한** 근거다. 그 경우에만 마커가 현재 head 를 지목할 것을
+# 요구한다 (PR #1703 review, BLOCKER 3): 그러지 않으면 리뷰 이후 head 가
+# 전진한 PR 이 "예전에 리뷰된 적 있음"만으로 새 head 에 인증을 받는다.
+# Step 6 의 정상 경로는 이번 pass 가 현재 head 기준으로 분류한 ORIGINS 를
+# 함께 들고 오므로 기존의 "마커 존재" 판정을 유지한다.
+if [ -n "$ORIGINS" ]; then
+    _EVIDENCE_SHA=""
+else
+    _EVIDENCE_SHA="$HEAD_SHA"
+fi
+if _gh_pr_reply_history_has_review "$ME" "$_EVIDENCE_SHA" <"$COMMENT_JSON"; then
     EVIDENCE=yes
 else
     EVIDENCE=no
@@ -215,9 +226,12 @@ agy:FOLLOW-UP:ACCEPT
 외부 AI, 해소 확인은 `gh:pr-reply`** — 인데, 발견자가 없으면 확인할 대상도
 없다.
 
-`_gh_pr_reply_history_has_review <expected-login>` 가 **`<expected-login>` 이
-작성한** PR 코멘트에 `<!-- ai-review:` 마커가
-하나라도 있는지 본다(rc 0 = 있음). 게이트의 5번째 인자는 **fail-closed 기본값**
+`_gh_pr_reply_history_has_review <expected-login> [head-sha]` 가
+**`<expected-login>` 이 작성한** PR 코멘트에 `<!-- ai-review:` 마커가
+하나라도 있는지 본다(rc 0 = 있음). `[head-sha]` 를 주면 **그 sha 를 지목한**
+마커만 인정한다 — 위 블록은 `ORIGINS` 가 빈 경로(Step 2.5)에서만 이를 넘긴다.
+근거가 history 하나뿐인 pass 에서 "언젠가 리뷰된 적 있음"은 현재 head 에 대한
+근거가 아니기 때문이다(PR #1703 review, BLOCKER 3). 게이트의 5번째 인자는 **fail-closed 기본값**
 이다: 생략/빈 값/그 외 어떤 값이든 "근거 없음"으로 읽고 `hold` 한다. 근거를
 조회하지 않은 호출자가 인증을 얻어 가서는 안 되기 때문이다.
 

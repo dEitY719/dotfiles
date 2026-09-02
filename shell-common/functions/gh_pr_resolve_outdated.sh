@@ -249,14 +249,26 @@ _gh_pr_resolve_outdated_patch_id() {
     printf '%s\n' "$_out" | awk '{print $1; exit}'
 }
 
-# Returns 0 when <label> is currently on the PR, 1 when it is not (including
-# every lookup failure — fail closed, same as the freshness check this file
-# feeds: an unreadable label list must never be read as "present").
+# Three-state, because "absent" and "could not tell" are different answers
+# (PR #1703 review, BLOCKER 1):
+#
+#   rc 0 — the label IS attached
+#   rc 1 — the lookup succeeded and the label is NOT attached
+#   rc 2 — the lookup itself failed (API error, usage error): UNDETERMINED
+#
+# Collapsing 2 into 1 is only safe while every caller asks "is it present?",
+# where "no" is the conservative read. The `review-blocked` guard below asks
+# the NEGATED question, and there "no" is the PERMISSIVE read — a transient
+# labels-API blip would have re-granted `review-passed` onto a PR that is
+# actually blocked, which is the exact case that guard exists to stop. Callers
+# must therefore test for the state they need, never merely for non-zero. The
+# shape mirrors `_gh_pr_merge_train_review_passed_stale`'s four-state rc this
+# file already consumes, where 3 is likewise "undetermined".
 _gh_pr_resolve_outdated_has_label() {
     local _pr="$1" _repo="$2" _host="${3-}" _label="$4"
     if [ -z "$_pr" ] || [ -z "$_repo" ] || [ -z "$_label" ]; then
         printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>\n' >&2
-        return 1
+        return 2
     fi
     local _labels
     _labels=$(
@@ -265,7 +277,7 @@ _gh_pr_resolve_outdated_has_label() {
             export GH_HOST="$_host"
         fi
         gh api "repos/$_repo/issues/$_pr/labels" --jq '.[].name' 2>/dev/null
-    ) || return 1
+    ) || return 2
     printf '%s\n' "$_labels" | grep -Fxq -- "$_label"
 }
 
@@ -310,30 +322,49 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
 
     # A currently-attached `review-blocked` disqualifies the keep/re-grant path
     # outright — see the file header's "A surviving marker proves..." section
-    # (PR #1703 review, codex BLOCKER). Read LAST in the `&&` chain so the
-    # extra API call only happens on a PR that already cleared the cheap local
-    # checks. `!` inside an `if` condition, so a rc-1 lookup (fail-closed:
-    # "not present") cannot trip a caller's errexit.
+    # (PR #1703 review, codex BLOCKER). Read only AFTER the cheap local checks
+    # pass, so the extra API call is not spent on a PR that cannot qualify.
+    #
+    # The test is `-eq 1` ("looked, and it is not there"), NOT `!` on the rc
+    # (PR #1703 review, BLOCKER 1). `!` treats every non-zero alike, and rc 2
+    # means the lookup FAILED — under `!` a transient labels-API blip would
+    # read as "no `review-blocked`" and re-grant `review-passed` onto a PR
+    # that is actually blocked. Unknown must never fall through to the
+    # permissive branch on a safety gate. The rc is captured with the
+    # `var=0; cmd || var=$?` idiom for the same errexit reason spelled out
+    # below.
+    # Any non-zero `_fresh_rc` falls through to the single drop site at the end
+    # of this function; `_drop_reason` is what that one report line names.
     _fresh_rc=1
+    local _drop_reason=patch-id _blocked_rc=2
     if [ "$_pid_state" = identical ] &&
-        command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1 &&
-        ! _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-blocked; then
-        _me="${GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN:-$(
-            if [ -n "$_host" ]; then
-                # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
-                export GH_HOST="$_host"
-            fi
-            gh api user -q .login 2>/dev/null
-        )}"
-        # `|| _fresh_rc=$?`, not a bare call: this file is sourced into
-        # callers that may have `set -e` armed (bats test bodies do), and
-        # errexit fires on the non-zero rc BEFORE a trailing `_fresh_rc=$?`
-        # would ever run (same caveat `devx_pr_review_all.sh` documents).
-        # Pre-set to 0 (fresh) so a genuine rc-0 success needs no assignment
-        # of its own — only the `||` branch overwrites it, on failure.
-        _fresh_rc=0
-        _gh_pr_merge_train_review_passed_stale "$_pr" "$_repo" "$_host" "$_old_head" "$_me" ||
-            _fresh_rc=$?
+        command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1; then
+        _blocked_rc=0
+        _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-blocked ||
+            _blocked_rc=$?
+        case "$_blocked_rc" in
+        0) _drop_reason=review-blocked ;;
+        2) _drop_reason=blocked-lookup-undetermined ;;
+        1)
+            _drop_reason=not-fresh
+            _me="${GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN:-$(
+                if [ -n "$_host" ]; then
+                    # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
+                    export GH_HOST="$_host"
+                fi
+                gh api user -q .login 2>/dev/null
+            )}"
+            # `|| _fresh_rc=$?`, not a bare call: this file is sourced into
+            # callers that may have `set -e` armed (bats test bodies do), and
+            # errexit fires on the non-zero rc BEFORE a trailing `_fresh_rc=$?`
+            # would ever run (same caveat `devx_pr_review_all.sh` documents).
+            # Pre-set to 0 (fresh) so a genuine rc-0 success needs no
+            # assignment of its own — only the `||` branch overwrites it.
+            _fresh_rc=0
+            _gh_pr_merge_train_review_passed_stale "$_pr" "$_repo" "$_host" "$_old_head" "$_me" ||
+                _fresh_rc=$?
+            ;;
+        esac
     fi
 
     if [ "$_fresh_rc" -eq 0 ]; then
@@ -388,6 +419,11 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
     fi
 
     _gh_pr_drop_label "$_pr" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :
-    printf 'patch-id=%s label=dropped\n' "$_pid_state"
+    # `reason=` distinguishes the four ways this path is reached (PR #1703
+    # self-record review): `patch-id` (content changed), `not-fresh` (no
+    # marker proving certification of the old head), `review-blocked` (a
+    # blocking verdict is attached), and `blocked-lookup-undetermined` (the
+    # labels API could not answer — dropped because unknown is not safe).
+    printf 'patch-id=%s label=dropped reason=%s\n' "$_pid_state" "${_drop_reason:-not-fresh}"
     return 0
 }

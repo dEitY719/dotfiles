@@ -243,6 +243,28 @@ _1698_make_repo() {
     refute_output --partial 'labels/review-blocked'
 }
 
+@test "reconcile (PR #1703 review): an UNDETERMINED review-blocked lookup drops, it does not re-grant" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # BLOCKER 1, PR #1703 self-record review. The guard used to be
+    # `! _gh_pr_resolve_outdated_has_label ... review-blocked`, and the helper
+    # answered rc 1 for BOTH "not attached" and "the lookup failed". Negated,
+    # a transient labels-API blip therefore read as "no review-blocked" and
+    # re-granted `review-passed` onto a PR that may well be blocked — unknown
+    # falling through to the permissive branch of a safety gate. The helper now
+    # answers rc 2 for undetermined and the call site tests for rc 1 exactly.
+    STUB_LABELS_RC=1
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    assert_success
+    assert_output --partial 'label=dropped'
+    assert_output --partial 'reason=blocked-lookup-undetermined'
+    run cat "$GH_LOG"
+    refute_output --partial 'add 1695 review-passed'
+    refute_output --partial 'labels/review-blocked'
+}
+
 @test "reconcile (PR #1703): keep path reports label=failed marker=skipped when the label add itself fails" {
     eval "$(_1698_make_repo)"
     cd "$REPO_DIR" || fail "cd failed"

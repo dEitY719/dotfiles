@@ -563,3 +563,50 @@ codex:BLOCKER:ACCEPT
     run grep -qF -- '_gh_pr_reply_apply_review_passed' "${SKILL_DIR}/references/final-summary.md"
     assert_success
 }
+
+# ---------------------------------------------------------------------------
+# PR #1703 self-record review, BLOCKER 3 — evidence freshness on the
+# ORIGINS-empty path (`gh:pr-reply` Step 2.5).
+# ---------------------------------------------------------------------------
+
+@test "has_review (PR #1703 review): a marker for a DIFFERENT head is not evidence for this head" {
+    # Step 2.5 runs the gate with ORIGINS empty by construction, so history is
+    # the ONLY evidence. Before the fix the probe matched `<!-- ai-review:`
+    # with no sha comparison at all, so a PR reviewed at sha A and then pushed
+    # to sha B — with every comment already answered, which is exactly what
+    # sends the pass down the Step 2.5 path — got `review-passed` stamped for
+    # a head no reviewer had ever seen.
+    local _stale=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    local _head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    local _login=dEitY719
+    local _json="${BATS_TEST_TMPDIR}/bodies.json"
+    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    jq -nc --arg l "$_login" --arg s "$_stale" \
+        '[{user: {login: $l}, body: ("<!-- ai-review:codex:" + $s + " -->")}]' >"$_json"
+
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_head' <'$_json'"
+    assert_failure
+
+    # The same marker IS evidence for its own head.
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_stale' <'$_json'"
+    assert_success
+
+    # Omitting the sha keeps the pre-existing behaviour for Step 6, which
+    # carries its own fresh ORIGINS and does not need this stricter probe.
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' <'$_json'"
+    assert_success
+
+    # A marker from ANOTHER commenter is never evidence, sha or not (#1639).
+    jq -nc --arg s "$_head" \
+        '[{user: {login: "someone-else"}, body: ("<!-- ai-review:codex:" + $s + " -->")}]' >"$_json"
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_head' <'$_json'"
+    assert_failure
+}
+
+@test "doc-guard (PR #1703 review): the gate doc requires a fresh marker when ORIGINS is empty" {
+    local _d="${SKILL_DIR}/references/review-passed-gate.md"
+    run grep -qF -- '_EVIDENCE_SHA' "$_d"
+    assert_success
+    run grep -qF -- '_gh_pr_reply_history_has_review "$ME" "$_EVIDENCE_SHA"' "$_d"
+    assert_success
+}
