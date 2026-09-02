@@ -1160,3 +1160,122 @@ def test_plugin_namespace_sibling_not_matched_as_gh_pr(tmp_path: Path, sibling: 
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", f"{sibling} must not be a boundary"
+
+
+# ---------------------------------------------------------------------------
+# Separator-agnostic matching — reviewer follow-ups on PR #1694
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "gh-issue-implement",  # canonical catalog form
+        "gh-issue:implement",  # plugin-namespace form (the #1677 shape)
+        "gh:issue-implement",  # legacy colon-namespace form
+        "gh:issue:implement",  # fully colonized (pre-#1689 sibling)
+    ],
+)
+def test_multi_hyphen_name_accepts_every_separator_mix(tmp_path: Path, spelling: str) -> None:
+    """A 2-hyphen key must match at every separator position (agy FOLLOW-UP, PR #1694).
+
+    `gh-pr-create` has one interior separator, so it cannot distinguish "the
+    last separator varies" from "every separator varies". `gh-issue-implement`
+    has two, which is what makes the 2**k claim testable rather than assumed.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [_user_text(f"/{spelling} 42"), _assistant_text("running")],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block", f"{spelling!r} must be a boundary"
+    # Whatever spelling matched, the guard reports the canonical hyphen key.
+    assert "gh-issue-implement" in decision["reason"]
+
+
+def test_plugin_namespace_wrapped_command_boundary(tmp_path: Path) -> None:
+    """Surface (b), the `<command-name>` wrapper, for a namespaced skill.
+
+    codex FOLLOW-UP on PR #1694: the first round covered only surface (a).
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [_user_slash_command("gh-pr:create", "1677"), _assistant_text("running")],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-pr-create" in decision["reason"]
+
+
+def test_plugin_namespace_skill_h1_boundary(tmp_path: Path) -> None:
+    """Surface (d), the SKILL.md H1 line, for a namespaced skill.
+
+    The migrated `create/SKILL.md` opens with `# gh-pr:create — …`, so this is
+    the surface that fires when the skill body is read into the transcript.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("# gh-pr:create — Create Pull Request\n\nsome body"),
+            _assistant_text("running"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-pr-create" in decision["reason"]
+
+
+def test_migrated_skill_base_directory_is_not_a_boundary(tmp_path: Path) -> None:
+    """Surface (c) genuinely cannot fire for a migrated skill — documented, not fixed.
+
+    A plugin lays the skill out as `<repo>/skills/create/`, so the base-directory
+    line names `create`, not the catalog key `gh-pr-create`. Surfaces (a), (b)
+    and (d) are what carry a migrated skill; this test pins that asymmetry so a
+    future reader does not mistake it for a regression in the separator fix.
+    """
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text(
+                "Base directory for this skill: "
+                "/home/u/.claude/plugins/marketplaces/gh-pr-skills/skills/create"
+            ),
+            _assistant_text("running"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", "plugin base-dir names the bare skill, not the catalog key"
+
+
+def test_no_two_catalog_keys_collide_under_separator_agnosticism(tmp_path: Path) -> None:
+    """Every spelling of every shipped key must resolve back to that same key.
+
+    This is the concrete safety property behind declining the reviewers'
+    "restrict to documented forms" suggestion: broader matching is only unsafe
+    if two distinct keys can claim one spelling. Run against the real shipped
+    catalog so adding a colliding key later fails here.
+    """
+    import itertools
+    import sys
+
+    sys.path.insert(0, str(REPO_ROOT / "claude" / "hooks"))
+    import skill_completion_guard as guard  # noqa: PLC0415
+
+    catalog = guard._load_catalog(CATALOG_PATH)
+    boundary_re = guard._build_boundary_regex(catalog)
+
+    for name in sorted(catalog):
+        parts = name.split("-")
+        for combo in itertools.product("-:", repeat=len(parts) - 1):
+            spelling = parts[0] + "".join(sep + part for sep, part in zip(combo, parts[1:]))
+            match = boundary_re.search(f"/{spelling} 1")
+            assert match, f"{spelling!r} (a spelling of {name!r}) must match"
+            resolved = guard._normalize_skill(match.group(0).lstrip("/ ").split()[0])
+            assert resolved == name, f"{spelling!r} resolved to {resolved!r}, expected {name!r}"
