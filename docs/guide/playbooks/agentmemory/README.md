@@ -132,8 +132,18 @@ false-positive로 뜨고, 그 fix가 systemd cgroup 밖에서 별도 엔진을 �
 - 데모 정리용 `curl -X DELETE .../sessions?project=...`는 405를 반환한다
   (동작 안 함, 무해 — 데모 데이터는 `/tmp`라 재부팅 시 사라짐).
 - `/exit` 직후 `SessionEnd hook ... failed: Hook cancelled`가 가끔 뜰 수
-  있다 — agentmemory REST 서버(`localhost:3111`) 응답 지연으로
-  `session-end.mjs`의 fetch가 최대 30초까지 프로세스를 붙잡고 있다가
-  Claude Code의 SessionEnd 훅 예산을 넘겨 abort된 것. 세션 종료 자체는
-  정상이며 무해하다(`claude/settings.json`의
-  `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`로 완화, #1715).
+  있다. `session-end.mjs`(v0.9.28/0.9.29 실측)는 `/agentmemory/session/end`,
+  `/agentmemory/claude-bridge/sync` 두 REST 요청을 `await` 없이
+  `.catch(()=>{})`만 걸어 발사하고, 그 직후 `setTimeout(()=>process.exit(0),
+  1500).unref()`로 1.5초 뒤 강제 종료하는 failsafe가 걸려 있다 —
+  `AbortSignal.timeout(3e4)`(30초)는 fetch 요청 자체의 abort 시한일 뿐 프로세스
+  수명을 좌우하지 않는다. 실측 최악 케이스는 세션 프롬프트 관찰용
+  `/agentmemory/observe` 호출(최대 3초 `await`) + 1.5초 failsafe ≈ 4.5초
+  + node 콜드스타트 오버헤드. `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`(기본
+  값 미상)가 이 실측치보다 짧으면 여전히 abort될 수 있어
+  `claude/settings.json`의 env 블록에 여유(10초)를 뒀다(#1715). 세션 종료
+  자체는 정상이며 무해하다.
+  **사내 PC(2026-08-18~)에서는 적용되지 않는다** — `gateway-cli`가
+  live `settings.json`의 `env.*`를 소유하고 dotfiles의 drift-heal 훅은
+  `.hooks`/`.statusLine`만 복구하므로(`claude/AGENTS.md` "Configuration
+  Files" 참고), 이 SSOT 변경은 외부/공용 PC에서만 적용된다.
