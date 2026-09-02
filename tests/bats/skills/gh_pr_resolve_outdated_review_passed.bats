@@ -250,7 +250,7 @@ _1704_make_repo() {
     # cancels the evidence the reconcile reads.
     STUB_COMMENTS_JSON=$(jq -nc \
         --argjson passed "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
-        --argjson revoked "$(_revoked_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
+        --argjson revoked "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD" revoked)" \
         '[$passed, $revoked]')
     resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
         "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
@@ -267,7 +267,7 @@ _1704_make_repo() {
     # the normal #1698/#1700 keep path resumes.
     STUB_COMMENTS_JSON=$(jq -nc \
         --argjson passed "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
-        --argjson revoked "$(_revoked_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
+        --argjson revoked "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD" revoked)" \
         --argjson again "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
         '[$passed, $revoked, $again]')
     resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
