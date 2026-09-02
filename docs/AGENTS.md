@@ -9,9 +9,8 @@
 - **Review**: open in markdown viewer (VS Code, grip)
 - **Line count**: `wc -l docs/**/*.md`
 - **Markdown lint**: 비활성화 — 자동 실행 금지
-- **Docs 린트**: `mise run lint-docs` — 세 개를 순차 실행한다.
+- **Docs 린트**: `mise run lint-docs` — 두 개를 순차 실행한다 (changelog fragment 검사는 2026-09-02 중단, `CLAUDE.md` 참고).
   - `scripts/lint_docs_filenames.sh` — docs 파일명 kebab-case 검사 (`adr/`·`requirement/` 강제, 나머지 warn-only, #1027)
-  - `scripts/lint_changelog_fragments.sh` — `public/changelog.d/` fragment 의 파일명·내용 형식 강제 (#1471)
   - `scripts/lint_shell_common_fallback.sh` — `claude/skills/**/*.md` 안 `${SHELL_COMMON}/...` 소싱 지시문의 `$HOME` 폴백 누락 강제 (#1612)
 
 # Golden Rules
