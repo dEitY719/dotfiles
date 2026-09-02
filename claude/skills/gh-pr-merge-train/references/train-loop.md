@@ -268,13 +268,30 @@ just fixed, on every following tick, forever (`ordering.md` → "Exemption — t
 train's own just-finished push"). Right after step 5's mandatory re-query has
 refreshed `$STATE` (the atom's success alone proves nothing —
 `routing-table.md` → "After every remediation: re-query, do not assume"), stamp
-the head it now reports as this train's own:
+the head it now reports as this train's own — but **only when that re-query's
+head actually changed**:
 
 ```bash
-# Not dead code: this is what lets Step 2 re-admit the PR next tick (#1708).
-_gh_pr_merge_train_record_pushed_sha "$STATE_DIR" "<N>" \
-    "$(printf '%s' "$STATE" | jq -r '.headRefOid')" || true
+# $OLD_HEAD_OID is loop step 1's F-3 headRefOid, captured BEFORE the atom ran
+# (i.e. from the $STATE this same PR's iteration first read at the top of the
+# loop, not from a previous PR). A BEHIND row's atom (gh:pr-resolve-outdated)
+# has a documented no-op path — "already up to date" — that returns success
+# WITHOUT pushing anything (its own Step 2 mergeable-triage). Recording in that
+# case would stamp a head the train never touched as its own, and a later,
+# unrelated updatedAt bump on that same unchanged head (e.g. a label add) would
+# then wrongly clear the quiet period for it (codex, PR #1724 review, BLOCKER).
+NEW_HEAD_OID=$(printf '%s' "$STATE" | jq -r '.headRefOid')
+if [ "$NEW_HEAD_OID" != "$OLD_HEAD_OID" ]; then
+    # Not dead code: this is what lets Step 2 re-admit the PR next tick (#1708).
+    _gh_pr_merge_train_record_pushed_sha "$STATE_DIR" "<N>" "$NEW_HEAD_OID" || true
+fi
 ```
+
+`$OLD_HEAD_OID` must be bound at loop step 1 (F-3), right after the initial
+`gh pr view` for this PR's turn (`routing-table.md` → "Reading the state") —
+`OLD_HEAD_OID=$(printf '%s' "$STATE" | jq -r '.headRefOid')` — before step 4's
+remediation runs. Comparing against a stale value from a previous PR's
+iteration would defeat the guard; each PR's turn binds its own.
 
 `$STATE_DIR` is the variable Step 2 bound, threaded across these reference
 files the same way `$TARGET_REPO` / `$TARGET_HOST` already are — same run, same
