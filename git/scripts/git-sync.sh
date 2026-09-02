@@ -7,8 +7,8 @@
 # 구 oneliner alias (fetch && merge && pull && push) 가 충돌 시 && 체인이
 # 끊긴 채 멈추고 "이제 뭘 해야 하는지" 안내가 없던 문제를 해결한다.
 #
-# 4단계 오케스트레이션:
-#   1. 사전 가드: upstream 리모트 존재 확인
+# 5단계 오케스트레이션:
+#   1. 사전 가드: upstream 리모트 존재 + 현재 브랜치 = main
 #   2. git fetch upstream main + git fetch origin main
 #   3. git merge --no-edit origin/main     ← 충돌 지점 A
 #   4. git merge --no-edit upstream/main   ← 충돌 지점 B
@@ -29,7 +29,7 @@
 # 사용:
 #   git sync                       # 전역 alias (git/.gitconfig SSOT)
 #   bash "${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/git-sync.sh"
-#   git sync -h                    # 도움말 — `--help` 는 git 이 가로챈다(아래 usage 주석)
+#   git sync -h                    # 도움말
 set -euo pipefail
 
 BOLD=$'\033[1m'
@@ -60,32 +60,32 @@ git-sync.sh — origin/main + upstream/main 동기화 후 origin/main push
 `git sync` 를 재실행하면 남은 단계를 이어서 진행합니다(멱등 재개).
 
 환경 변수(테스트/특수 환경용):
-  SYNC_INTERNAL_REMOTE  기본 origin
-  SYNC_EXTERNAL_REMOTE  기본 upstream
-  SYNC_BRANCH           기본 main
+  GIT_SYNC_INTERNAL_REMOTE  기본 origin
+  GIT_SYNC_EXTERNAL_REMOTE  기본 upstream
+  GIT_SYNC_BRANCH           기본 main
 EOF
 }
 
-INTERNAL_REMOTE="${SYNC_INTERNAL_REMOTE:-origin}"
-EXTERNAL_REMOTE="${SYNC_EXTERNAL_REMOTE:-upstream}"
-BRANCH="${SYNC_BRANCH:-main}"
+# 접두사가 GIT_SYNC_* 인 이유: SYNC_* 는 shell-common/tools/integrations/sync_to_deploy.sh
+# 가 다른 의미로 이미 쓰고 있어(같은 이름·같은 기본값) 한쪽 export 가 다른 쪽을 조용히 바꾼다.
+INTERNAL_REMOTE="${GIT_SYNC_INTERNAL_REMOTE:-origin}"
+EXTERNAL_REMOTE="${GIT_SYNC_EXTERNAL_REMOTE:-upstream}"
+BRANCH="${GIT_SYNC_BRANCH:-main}"
 
-for arg in "$@"; do
-    case "$arg" in
-    -h | --help | help)
-        usage
-        exit 0
-        ;;
-    *)
-        log_fail "알 수 없는 인자: $arg (지원: -h)"
-        exit 1
-        ;;
-    esac
-done
+case "${1-}" in
+"") ;;
+-h | --help | help)
+    usage
+    exit 0
+    ;;
+*)
+    log_fail "알 수 없는 인자: $1 (지원: -h)"
+    exit 1
+    ;;
+esac
 
 EXT_REF="${EXTERNAL_REMOTE}/${BRANCH}"
 INT_REF="${INTERNAL_REMOTE}/${BRANCH}"
-GIT_DIR=$(git rev-parse --git-dir)
 
 # 미해결 충돌 판정 — (1) git add 전 미병합 경로가 남았거나,
 # (2) git add 됐더라도 스테이징 내용에 충돌 마커가 잔존하면 true.
@@ -101,9 +101,7 @@ has_unresolved_conflicts() {
 
 # 충돌 파일 목록을 들여쓰기해 출력
 print_conflicted_files() {
-    git diff --name-only --diff-filter=U | while IFS= read -r f; do
-        [[ -n "$f" ]] && log_info "  - $f"
-    done
+    git diff --name-only --diff-filter=U | sed 's/^/    - /'
 }
 
 # 3/4단계 공용 merge — 충돌 시 abort 하지 않고 안내 후 중단(멱등 재개 핵심).
@@ -127,11 +125,11 @@ merge_or_guide() {
 }
 
 # ── 1. 사전 가드: upstream(외부 SSOT) 리모트 존재 ──
-if ! git remote | grep -qx "$EXTERNAL_REMOTE"; then
+if ! git config --get "remote.${EXTERNAL_REMOTE}.url" >/dev/null; then
     log_fail "'$EXTERNAL_REMOTE' 리모트가 없습니다 — 이 프로젝트는 git sync 대상이 아닙니다."
     log_info "포크 워크플로라면 상위 리모트를 먼저 등록하세요:"
     log_info "  git remote add $EXTERNAL_REMOTE <상위 저장소 URL>"
-    log_info "리모트 이름이 다르면 SYNC_EXTERNAL_REMOTE 로 지정할 수 있습니다."
+    log_info "리모트 이름이 다르면 GIT_SYNC_EXTERNAL_REMOTE 로 지정할 수 있습니다."
     exit 1
 fi
 
@@ -145,7 +143,7 @@ if [[ "$CUR_BRANCH" != "$BRANCH" ]]; then
 fi
 
 # ── 멱등 재개: 이전 충돌 해결을 이어간다 ──
-if [[ -f "${GIT_DIR}/MERGE_HEAD" ]]; then
+if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
     log_start "이전 merge 재개 감지 (.git/MERGE_HEAD 존재)"
     if has_unresolved_conflicts; then
         log_fail "아직 해결되지 않은 충돌이 남아 있습니다."
@@ -172,16 +170,13 @@ log_start "git sync — ${INT_REF} + ${EXT_REF} → 로컬 ${BRANCH}, 이후 ${I
 # ── 2. Fetch (stale ref 로 merge 하면 고유분을 놓치므로 실패 시 즉시 중단) ──
 # fetch 순서는 merge 순서와 일부러 반대다 — 먼저 병합할 origin 을 마지막에 받아
 # 두 명령 사이 창을 최소화한다(그만큼 남의 최신 push 를 놓칠 확률이 낮아진다).
-log_step "git fetch $EXTERNAL_REMOTE $BRANCH"
-git fetch "$EXTERNAL_REMOTE" "$BRANCH" || {
-    log_fail "$EXTERNAL_REMOTE fetch 실패."
-    exit 1
-}
-log_step "git fetch $INTERNAL_REMOTE $BRANCH"
-git fetch "$INTERNAL_REMOTE" "$BRANCH" || {
-    log_fail "$INTERNAL_REMOTE fetch 실패."
-    exit 1
-}
+for remote in "$EXTERNAL_REMOTE" "$INTERNAL_REMOTE"; do
+    log_step "git fetch $remote $BRANCH"
+    git fetch "$remote" "$BRANCH" || {
+        log_fail "$remote fetch 실패."
+        exit 1
+    }
+done
 
 # ── 3. origin/main merge (지점 A) ──
 merge_or_guide "$INT_REF" "A"
