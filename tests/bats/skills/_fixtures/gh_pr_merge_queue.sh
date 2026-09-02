@@ -26,6 +26,13 @@ merge_queue_needs_finalize() {
     printf '%s' "$1" | _gh_pr_merge_train_needs_finalize
 }
 
+# Usage: merge_queue_finalize_targets '<gh pr list --json ... array>'
+# Echoes the filtered array (the real shared array-level filter, same rule as
+# the single-PR predicate above).
+merge_queue_finalize_targets() {
+    printf '%s' "$1" | _gh_pr_merge_train_finalize_targets
+}
+
 # --- the two strict-relaxation predicates (Step 3.6) ----------------------
 #
 # Same rule as above: these call the real shipped functions, never a copy.

@@ -26,6 +26,7 @@
 #   _gh_pr_merge_train_forget_pushed_sha <state-dir> <pr>
 #   <raw gh-pr-list JSON array> | _gh_pr_merge_train_readmit_own_pushes <state-dir> <filtered-json>
 #   <one gh-pr-view JSON object> | _gh_pr_merge_train_needs_finalize
+#   <gh-pr-list JSON array>       | _gh_pr_merge_train_finalize_targets
 #   <rules/branches/<base> JSON>  | _gh_pr_merge_train_behind_may_merge_directly
 #   <commits/<base>/check-runs JSON> | _gh_pr_merge_train_base_ci_red <ctx>...
 #
@@ -315,10 +316,35 @@ _gh_pr_merge_train_has_review_passed_label() {
 # twice. A PR that was merged without ever earning the label (a hand-merge, a
 # pre-#1636 merge) also never matches — the sweep is deliberately conservative,
 # because every step it would re-run is a GitHub write.
+#
+# Composes with `_gh_pr_merge_train_has_review_passed_label` above rather than
+# re-deriving its label-index jq, for the same reason the header's "one place
+# the predicate lives" rule exists for the quiet-minutes number.
 _gh_pr_merge_train_needs_finalize() {
-    jq -e '(.state == "MERGED")
-           and (([ .labels[]?.name? ] | index("review-passed")) != null)' \
-        >/dev/null 2>&1
+    local _json
+    _json=$(cat)
+    printf '%s' "$_json" | jq -e '.state == "MERGED"' >/dev/null 2>&1 || return 1
+    printf '%s' "$_json" | _gh_pr_merge_train_has_review_passed_label
+}
+
+# Array-level sibling of the predicate above (#1707 follow-up), same shape as
+# `_gh_pr_merge_train_filter_targets`: a `gh pr list --json ...` array on
+# stdin, the filtered array back on stdout. Step 0 of `gh:pr-merge-train`
+# calls THIS, not a per-element loop over the single-PR predicate — a
+# `--limit 30` sweep would otherwise fork `jq` up to twice per element just to
+# filter an array it already has in hand.
+_gh_pr_merge_train_finalize_targets() {
+    local _json _out
+    _json=$(cat)
+    [ -n "$_json" ] || return 1
+    _out=$(printf '%s' "$_json" \
+        | jq -c '[ .[]?
+            | select(.state == "MERGED")
+            | select(([ .labels[]?.name? ] | index("review-passed")) != null)
+          ]' 2>/dev/null) || return 1
+    [ -n "$_out" ] || return 1
+
+    printf '%s\n' "$_out"
 }
 
 # Does a merely-BEHIND PR on this base need a LOCAL rebase before it can
@@ -871,6 +897,7 @@ for _gh_pmt_selfcheck_fn in \
     _gh_pr_merge_train_has_review_blocked_label \
     _gh_pr_merge_train_has_review_passed_label \
     _gh_pr_merge_train_needs_finalize \
+    _gh_pr_merge_train_finalize_targets \
     _gh_pr_merge_train_behind_may_merge_directly \
     _gh_pr_merge_train_base_ci_red \
     _gh_pr_merge_train_review_passed_marker_sha \
