@@ -51,14 +51,14 @@ _gh_flow_get_state() {
 # Post-condition helpers (worker uses these to verify each step did real work)
 # ============================================================================
 
-# Returns 0 if the current tree has something /gh-commit could commit:
+# Returns 0 if the current tree has something /gh-pr:commit could commit:
 # staged, unstaged, or untracked changes. (Runs inside the worktree.)
 _gh_flow_has_work_for_commit() {
     [ -n "$(git status --porcelain 2>/dev/null | head -n1)" ]
 }
 
 # Returns 0 if the current branch has at least one commit ahead of
-# the upstream default branch (origin/HEAD). Used to verify /gh-commit.
+# the upstream default branch (origin/HEAD). Used to verify /gh-pr:commit.
 _gh_flow_has_branch_commits() {
     local _base _count
     _base="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/||')"
@@ -108,7 +108,7 @@ _gh_flow_require_ai_cli() {
 # Pre-flight health check for the gh CLI token. Returns 0 if `gh api user`
 # succeeds (token valid + network reachable), non-zero otherwise. Run by the
 # worker BEFORE `gwt spawn` so an expired token cannot waste an AI turn on
-# /gh-issue-implement (issue #378, #437 incident).
+# /gh-issue:implement (issue #378, #437 incident).
 _gh_flow_check_gh_auth() {
     gh api user --jq .login >/dev/null 2>&1
 }
@@ -224,7 +224,7 @@ EOF
             else
                 case "$_pr_decision" in
                 CHANGES_REQUESTED)
-                    _verdict="comments arrived — worker about to run /gh-pr-reply"
+                    _verdict="comments arrived — worker about to run /gh-pr:reply"
                     ;;
                 *)
                     _verdict="awaiting first review"
@@ -680,9 +680,9 @@ gh_flow_help() {
     ux_bullet "gh-flow -h|--help|help           this help"
     ux_info ""
     ux_info "Spawn pipeline (each worker runs these sequentially):"
-    ux_bullet "gwt spawn → /gh-issue-implement → /gh-commit → /gh-pr"
-    ux_bullet "poll reviews → /gh-pr-reply (once, if comments)"
-    ux_bullet "poll for APPROVED → /gh-pr-merge → gwt teardown"
+    ux_bullet "gwt spawn → /gh-issue:implement → /gh-pr:commit → /gh-pr:create"
+    ux_bullet "poll reviews → /gh-pr:reply (once, if comments)"
+    ux_bullet "poll for APPROVED → /gh-pr:merge → gwt teardown"
     ux_info ""
     ux_info "Examples:"
     ux_bullet "gh-flow 13                  # single issue"
@@ -1010,53 +1010,53 @@ _gh_flow_worker() {
         return 1
     }
 
-    # ---- Step 2a: implement (selected ai runs /gh-issue-implement) ----
-    # The original single `/gh-issue-flow` call was unreliable in
+    # ---- Step 2a: implement (selected ai runs /gh-issue:implement) ----
+    # The original single `/gh-flow:issue` call was unreliable in
     # non-interactive mode: it often stopped after the implement phase and printed
     # a "Next: …" hint without running commit/PR. We invoke the 3 atomic skills
     # ourselves so each phase has a distinct state + post-condition check.
     _gh_flow_set_state "$_dir" "implementing"
     _gh_project_status_sync issue "$_issue" "In progress"
-    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-issue-implement $_issue direct" "/gh-issue-implement $_issue direct"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-issue:implement $_issue direct" "/gh-issue:implement $_issue direct"; then
         _gh_flow_set_state "$_dir" "failed:implementing"
-        printf '[gh-flow-worker] /gh-issue-implement failed\n' >&2
+        printf '[gh-flow-worker] /gh-issue:implement failed\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: implementing)"
         return 1
     fi
     if ! _gh_flow_has_work_for_commit; then
         _gh_flow_set_state "$_dir" "failed:implementing"
-        printf '[gh-flow-worker] /gh-issue-implement produced no changes\n' >&2
+        printf '[gh-flow-worker] /gh-issue:implement produced no changes\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: implementing/no-op)"
         return 1
     fi
 
-    # ---- Step 2b: commit (selected ai runs /gh-commit) ----
+    # ---- Step 2b: commit (selected ai runs /gh-pr:commit) ----
     _gh_flow_set_state "$_dir" "committing"
-    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-commit" "/gh-commit"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr:commit" "/gh-pr:commit"; then
         _gh_flow_set_state "$_dir" "failed:committing"
-        printf '[gh-flow-worker] /gh-commit failed\n' >&2
+        printf '[gh-flow-worker] /gh-pr:commit failed\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: committing)"
         return 1
     fi
     if ! _gh_flow_has_branch_commits; then
         _gh_flow_set_state "$_dir" "failed:committing"
-        printf '[gh-flow-worker] /gh-commit left no new commit on branch\n' >&2
+        printf '[gh-flow-worker] /gh-pr:commit left no new commit on branch\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: committing/no-commit)"
         return 1
     fi
 
-    # ---- Step 2c: open PR (selected ai runs /gh-pr) ----
+    # ---- Step 2c: open PR (selected ai runs /gh-pr:create) ----
     _gh_flow_set_state "$_dir" "opening-pr"
-    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr $_issue" "/gh-pr $_issue"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr:create $_issue" "/gh-pr:create $_issue"; then
         _gh_flow_set_state "$_dir" "failed:opening-pr"
-        printf '[gh-flow-worker] /gh-pr failed\n' >&2
+        printf '[gh-flow-worker] /gh-pr:create failed\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: opening-pr)"
         return 1
     fi
     _pr="$(gh pr view --json number --jq '.number' 2>/dev/null)"
     if [ -z "$_pr" ]; then
         _gh_flow_set_state "$_dir" "failed:opening-pr"
-        printf '[gh-flow-worker] /gh-pr did not create a PR\n' >&2
+        printf '[gh-flow-worker] /gh-pr:create did not create a PR\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: opening-pr/no-pr)"
         return 1
     fi
@@ -1084,13 +1084,13 @@ _gh_flow_worker() {
                 2>/dev/null)"
             if [ -n "$_comments" ] && [ "$_comments" -gt 0 ]; then
                 _gh_flow_set_state "$_dir" "replying"
-                printf '[gh-flow-worker] running /gh-pr-reply (%s review(s))\n' "$_comments"
-                if _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr-reply" "/gh-pr-reply"; then
+                printf '[gh-flow-worker] running /gh-pr:reply (%s review(s))\n' "$_comments"
+                if _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr:reply" "/gh-pr:reply"; then
                     touch "$_dir/reply.done"
                     _gh_flow_set_state "$_dir" "polling"
                 else
                     _gh_flow_set_state "$_dir" "failed:replying"
-                    printf '[gh-flow-worker] /gh-pr-reply failed\n' >&2
+                    printf '[gh-flow-worker] /gh-pr:reply failed\n' >&2
                     _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: replying)"
                     return 1
                 fi
@@ -1100,9 +1100,9 @@ _gh_flow_worker() {
 
     # ---- Step 4: merge ----
     _gh_flow_set_state "$_dir" "merging"
-    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr-merge" "/gh-pr-merge"; then
+    if ! _gh_flow_run_ai_prompt "$_ai" "$_usage_log" "/gh-pr:merge" "/gh-pr:merge"; then
         _gh_flow_set_state "$_dir" "failed:merging"
-        printf '[gh-flow-worker] /gh-pr-merge failed\n' >&2
+        printf '[gh-flow-worker] /gh-pr:merge failed\n' >&2
         _ai_usage_summary "$_usage_log" "Token Usage (issue #$_issue — failed: merging)"
         return 1
     fi
@@ -1124,8 +1124,8 @@ _gh_flow_worker() {
 # ============================================================================
 # Project board Status sync
 # ============================================================================
-# Helper extracted to shell-common/functions/gh_project_status.sh so /gh-pr
-# and /gh-commit (single-skill execution paths, not the gh-flow worker) can
+# Helper extracted to shell-common/functions/gh_project_status.sh so /gh-pr:create
+# and /gh-pr:commit (single-skill execution paths, not the gh-flow worker) can
 # also push board transitions. The worker calls _gh_project_status_sync at
 # Step 2a (implement → "In progress") and after Step 2c (PR opened →
 # "In review"); see lines 412 and 454.

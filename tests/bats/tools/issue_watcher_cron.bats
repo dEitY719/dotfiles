@@ -586,7 +586,7 @@ case "$1 $2" in
         exit 0
     fi
     if [ "$5" = "40" ]; then
-        printf '> /gh-issue-flow 11\n5-hour limit reached. Resets at 3pm.\n'
+        printf '> /gh-flow:issue 11\n5-hour limit reached. Resets at 3pm.\n'
         exit 0
     fi
     _seq="${HERDR_SETTLE_READ_SEQUENCE:-> claude ready}"
@@ -1093,13 +1093,13 @@ _assert_not_hung() {
     _assert_logged "gwt spawn --wt-name issue-11"
     _assert_logged "tab create --workspace"
     _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9"
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
 }
 
 @test "issue_watcher_cron: the prompt is the slash command, not a subagent instruction" {
     _run_tick
     assert_success
-    _assert_logged "/gh-issue-flow 11"
+    _assert_logged "/gh-flow:issue 11"
     # The pre-#1440 prompt told the receiving session to run another agent,
     # which is the ambiguity #1394 was about. Nothing may reintroduce it.
     _refute_logged "issue-watcher:dispatcher"
@@ -1220,7 +1220,7 @@ _assert_not_hung() {
 }
 
 @test "issue_watcher_cron: an existing worktree no longer retires the issue" {
-    # The bug this replaces: /gh-issue-flow stops at "PR opened", so a worktree
+    # The bug this replaces: /gh-flow:issue stops at "PR opened", so a worktree
     # removed before the merge used to re-dispatch, and one kept until the merge
     # piled up — while an issue whose session had died was never offered again,
     # because its worktree was still there. A worktree is a workspace now.
@@ -2442,7 +2442,7 @@ _two_repo_fixture() {
     # here would mean the outer loop absorbed it, which is the defect.
     [ "$(_log_count 'agent start')" -eq 2 ]
     [ "$(_log_count 'tab create')" -eq 1 ]
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
 }
 
 # The retry has to be visible: 130 ticks of silent failure is what made this
@@ -2586,7 +2586,7 @@ _two_repo_fixture() {
     _install_failing_mktemp
     _run_tick
     assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
 }
 
 # Same fallback on the failing side: the tick reports the failure and cleans up
@@ -2611,7 +2611,7 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a spawn that fails once then succeeds still dispatches" {
     _run_tick "GWT_SPAWN_FAIL_TIMES=1"
     assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-issue-flow 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
 }
 
 @test "issue_watcher_cron: a non-stall prompt failure is not retried within the attempt" {
@@ -3066,7 +3066,7 @@ _two_repo_fixture() {
 
 @test "issue_watcher_cron: a confirmed dispatch that never reaches working records a strike" {
     # The prompt landed — `agent prompt` succeeded — and a minute later the pane
-    # is still idle. One /gh-issue-flow runs for minutes, so the work never
+    # is still idle. One /gh-flow:issue runs for minutes, so the work never
     # started.
     _run_tick
     assert_success
