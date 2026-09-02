@@ -2005,20 +2005,64 @@ FIXTURE
     # the test: strip the call sites that ARE prefixed, then any surviving
     # cp/rm/mv word is by definition unprefixed, whatever precedes it.
     #
-    # Full-line comments are dropped first so prose about `rm -rf` does not
-    # trip the guard. A trailing comment still can, which is the deliberate
-    # direction: a false positive is loud and fixed by rewording, while a
-    # false negative is the silent hole this guard exists to close.
+    # Comments are stripped QUOTE-AWARE (agy BLOCKER, PR #1686): a `#` only
+    # opens a comment when it is outside double quotes and follows whitespace
+    # or starts the line. Stripping every `#` onwards would swallow real code
+    # after a `#` inside a string, and `${var#pattern}` expansions — both
+    # would be silent false NEGATIVES, which is the one failure direction a
+    # guard must not have. Prose such as `# ... rm -rf the temp dir` no longer
+    # trips it.
     run bash -c '
-        sed "s/^[[:space:]]*#.*//" "$1" |
+        awk "{
+            line = \$0; out = \"\"; inq = 0; n = length(line)
+            for (i = 1; i <= n; i++) {
+                c = substr(line, i, 1)
+                if (c == \"\\\"\") inq = !inq
+                if (c == \"#\" && !inq && (i == 1 || substr(line, i-1, 1) ~ /[ \t]/)) break
+                out = out c
+            }
+            print out
+        }" "$1" |
             sed "s/\\bcommand[[:space:]][[:space:]]*\\(cp\\|rm\\|mv\\)\\b/command_OK/g" |
             grep -nE "(^|[^[:alnum:]_./-])(cp|rm|mv)[[:space:]]" || true
     ' _ "${SHELL_COMMON}/functions/gcp_scan.sh"
     # No `assert_success`: the pipeline ends in `|| true` (grep exits 1 on the
     # expected no-match), so status is always 0. `assert_output ""` is the real
-    # assertion, and it also catches a broken `sed` — bats folds stderr into
-    # $output. Same shape as tests/bats/git/test_global_hooks.bats.
+    # assertion, and it also catches a broken `sed`/`awk` — bats folds stderr
+    # into $output.
     assert_output ""
+}
+
+@test "alias-immunity #1663: read-only ~/.gitconfig keeps its original mode across the probe" {
+    # codex review, PR #1686. `cp -f` on the restore fixes the read-only
+    # destination, but `-f` unlinks and recreates — so the new file takes the
+    # SOURCE's mode. `mktemp` creates 0600, so a snapshot taken without `-p`
+    # silently rewrites a 0444 ~/.gitconfig as 0600. Measured: 444 -> 600
+    # without `-p`, 444 -> 444 with it.
+    #
+    # The assertion targets slot 1 (~/.gitconfig) deliberately. The tracked
+    # git/.gitconfig (slot 2) cannot show this: the function ends in
+    # `git reset --hard HEAD`, and git re-materializes a tracked file at its
+    # own 644 whatever cp did — so slot 2 would pass with or without the fix.
+    # Only the untracked slot 1 has cp as the last writer of its mode.
+    run_in_bash "
+        $(_gcp1149_make_repo)
+        rm -f \"\$HOME/.gitconfig\"
+        printf '[include]\n\tpath = %s/git/.gitconfig\n' \"\$repo\" > \"\$HOME/.gitconfig\"
+        chmod 444 \"\$HOME/.gitconfig\"
+        echo \"before=\$(stat -c %a \"\$HOME/.gitconfig\")\"
+        _gcp_scan_preflight_is_noop \"\$side_sha\"; echo \"rc=\$?\"
+        echo \"after=\$(stat -c %a \"\$HOME/.gitconfig\")\"
+        grep -q '<<<<<<<' git/.gitconfig && echo MARKERS || echo NO_MARKERS
+        grep -q 'mainvalue' git/.gitconfig && echo CONTENT_OK || echo CONTENT_LOST
+    "
+    assert_success
+    assert_output --partial "before=444"
+    # The mode survived the unlink+recreate (this is what `cp -p` buys).
+    assert_output --partial "after=444"
+    # And the corruption defence still holds on the tracked file.
+    assert_output --partial "NO_MARKERS"
+    assert_output --partial "CONTENT_OK"
 }
 
 @test "alias-immunity #1663: preflight body carries no imprinted 'cp -i' under interactive zsh" {
