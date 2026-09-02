@@ -90,11 +90,12 @@ INT_REF="${INTERNAL_REMOTE}/${BRANCH}"
 # 미해결 충돌 판정 — (1) git add 전 미병합 경로가 남았거나,
 # (2) git add 됐더라도 스테이징 내용에 충돌 마커가 잔존하면 true.
 # (`git diff --check` 는 마커 발견 시 non-zero 지만 whitespace 오류 등 다른
-#  사유와 구분하려 출력 문자열의 'conflict marker' 만 신뢰한다.)
+#  사유와 구분하려 출력 문자열의 'conflict marker' 만 신뢰한다. 비영어 로케일에서
+#  이 문구가 번역되면 탐지가 조용히 실패하므로 LC_ALL=C 로 고정한다.)
 has_unresolved_conflicts() {
     [[ -n "$(git ls-files --unmerged)" ]] && return 0
     local check
-    check=$(git diff --cached --check 2>/dev/null || true)
+    check=$(LC_ALL=C git diff --cached --check 2>/dev/null || true)
     [[ "$check" == *"conflict marker"* ]] && return 0
     return 1
 }
@@ -105,12 +106,31 @@ print_conflicted_files() {
 }
 
 # 3/4단계 공용 merge — 충돌 시 abort 하지 않고 안내 후 중단(멱등 재개 핵심).
+#
+# merge 실패가 곧 충돌은 아니다: 병합이 덮어쓸 untracked 파일이 있거나 로컬 변경이
+# 걸리면 git 은 병합을 **시작조차 하지 않고** 거부한다. 이때는 미병합 경로가 없어
+# "충돌 파일 편집 → git add" 안내가 통하지 않으므로, 실제 미병합 경로 유무로
+# 두 경우를 갈라 안내한다.
 merge_or_guide() {
-    local ref="$1" point="$2"
+    local ref="$1" point="$2" out
     log_step "git merge --no-edit $ref"
-    if git merge --no-edit "$ref"; then
+    if out=$(git merge --no-edit "$ref" 2>&1); then
+        [[ -n "$out" ]] && printf '%s\n' "$out"
         return 0
     fi
+
+    if [[ -z "$(git ls-files --unmerged)" ]]; then
+        log_fail "merge 실패 (지점 $point) — '$ref' 병합이 시작되지도 못했습니다."
+        log_info "git 출력:"
+        printf '%s\n' "$out" | sed 's/^/    /'
+        log_info ""
+        log_info "해결 후 재개:"
+        log_info "  1) 위 메시지가 지목한 파일을 삭제·이동하거나 커밋해 작업 트리를 비우기"
+        log_info "  2) git sync 재실행"
+        exit 1
+    fi
+
+    printf '%s\n' "$out"
     log_fail "merge conflict (지점 $point) — '$ref' 병합 중 충돌이 발생했습니다."
     log_info "충돌 파일:"
     print_conflicted_files
@@ -125,7 +145,9 @@ merge_or_guide() {
 }
 
 # ── 1. 사전 가드: upstream(외부 SSOT) 리모트 존재 ──
-if ! git config --get "remote.${EXTERNAL_REMOTE}.url" >/dev/null; then
+# (`git config --get remote.<name>.url` 은 url 이 여러 개일 때 git 버전에 따라 exit 2 를
+#  내 "없음"으로 오판한다 — `git remote get-url` 이 정확한 존재 확인 API.)
+if ! git remote get-url "$EXTERNAL_REMOTE" >/dev/null 2>&1; then
     log_fail "'$EXTERNAL_REMOTE' 리모트가 없습니다 — 이 프로젝트는 git sync 대상이 아닙니다."
     log_info "포크 워크플로라면 상위 리모트를 먼저 등록하세요:"
     log_info "  git remote add $EXTERNAL_REMOTE <상위 저장소 URL>"
