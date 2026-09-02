@@ -36,7 +36,9 @@ setup() {
     _STATE_HOME="${_WORK_DIR}/state"
     _STATE_DIR="${_STATE_HOME}/pr-merge-train"
     _LOCK_FILE="${_STATE_DIR}/.lock"
-    _BACKOFF_FILE="${_STATE_DIR}/backoff"
+    # One backoff file per target, not per machine (PR #1719 review) — the name
+    # is `<basename>-<host>-<owner>-<repo>` over _make_repo's origin.
+    _BACKOFF_FILE="${_STATE_DIR}/backoff-github.com-acme-dotfiles"
     _LOG="${_WORK_DIR}/calls.log"
     _REPO_DIR="${_WORK_DIR}/dotfiles"
     _LOCK_HOLDER_PID=""
@@ -85,6 +87,22 @@ _make_repo() {
     git -C "${_REPO_DIR}" commit -qm "seed"
 }
 
+# A second checkout aimed at a *different* repo on the same machine — the
+# two-cron-lines-two-`--cwd`s invocation the help text documents. Binds
+# `_REPO_DIR_B` (pass it as `_TICK_CWD`) and the backoff file that target owns.
+_make_second_repo() {
+    _REPO_DIR_B="${_WORK_DIR}/other"
+    mkdir -p "${_REPO_DIR_B}"
+    git -C "${_REPO_DIR_B}" init -q
+    git -C "${_REPO_DIR_B}" config user.email "test@example.com"
+    git -C "${_REPO_DIR_B}" config user.name "test"
+    git -C "${_REPO_DIR_B}" remote add origin "https://github.com/acme/other.git"
+    printf 'seed\n' >"${_REPO_DIR_B}/README.md"
+    git -C "${_REPO_DIR_B}" add -A
+    git -C "${_REPO_DIR_B}" commit -qm "seed"
+    _BACKOFF_FILE_B="${_STATE_DIR}/backoff-github.com-acme-other"
+}
+
 # `_epoch_to_iso` is shared via test_helper.bash (`load '../test_helper'`
 # above already pulls it in) — every suite that builds `gh pr list` fixtures
 # uses the one GNU/BSD/python3 cascade rather than its own copy.
@@ -93,15 +111,16 @@ _make_repo() {
 # optionally a draft (<3>, default `false`) — a draft is never mergeable, so
 # never a reason to wake a session.
 #
-# <4> head sha, <5> mergeStateStatus and <6> the labels array are the #1709
-# fingerprint fields. All three default, and the defaults are *stable for a
-# given PR number*, so every pre-#1709 caller keeps describing one unchanging
-# PR — which is what lets the backoff tests vary exactly one field at a time.
+# <4> head sha, <5> mergeStateStatus, <6> the labels array and <7> mergeable are
+# the #1709 fingerprint fields. All four default, and the defaults are *stable
+# for a given PR number*, so every pre-#1709 caller keeps describing one
+# unchanging PR — which is what lets the backoff tests vary exactly one field at
+# a time.
 _pr_json() {
     local _stamp
     _stamp=$(_epoch_to_iso "$(($(date +%s) - $2 * 60))") || fail "cannot format a timestamp on this platform"
-    printf '{"number":%s,"updatedAt":"%s","isDraft":%s,"headRefOid":"%s","mergeStateStatus":"%s","labels":%s}' \
-        "$1" "${_stamp}" "${3:-false}" "${4:-oid$1}" "${5:-BEHIND}" "${6:-[]}"
+    printf '{"number":%s,"updatedAt":"%s","isDraft":%s,"headRefOid":"%s","mergeStateStatus":"%s","labels":%s,"mergeable":"%s"}' \
+        "$1" "${_stamp}" "${3:-false}" "${4:-oid$1}" "${5:-BEHIND}" "${6:-[]}" "${7:-MERGEABLE}"
 }
 
 # A `gh pr list --json` element whose `updatedAt` cannot be read — the raw JSON
@@ -309,7 +328,7 @@ _run_tick() {
         "PMT_IDLE_POLL_SLEEP=0" \
         "PMT_START_RETRY_SLEEP=0" \
         "${_env[@]}" \
-        bash "${SCRIPT}" --cwd "${_REPO_DIR}" "$@"
+        bash "${SCRIPT}" --cwd "${_TICK_CWD:-${_REPO_DIR}}" "$@"
 }
 
 # Call-log assertions that leave `$output` and `$status` alone — tests pair
@@ -575,6 +594,7 @@ _hold_lock() {
     assert_success
     _assert_logged "headRefOid"
     _assert_logged "mergeStateStatus"
+    _assert_logged "mergeable"
 }
 
 @test "pr_merge_train_cron: an unchanged queue backs the next tick off" {
@@ -701,6 +721,58 @@ _hold_lock() {
     assert_success
     _assert_logged "herdr agent prompt"
     assert_equal "$(_backoff_window)" "1"
+}
+
+# The other half of the same rule, and the one the corrupt-file test above does
+# not reach: a file that reads fine but cannot be *written*. The countdown lives
+# on disk, so a skip taken here would re-read the same open window every period
+# and the queue would never be looked at again — the exact unbounded window the
+# cap exists to make impossible (PR #1719 review, codex BLOCKER).
+@test "pr_merge_train_cron: an unwritable backoff file does not skip a tick" {
+    [ "$(id -u)" -ne 0 ] || skip "running as root — file permissions do not bite"
+
+    _run_tick # fingerprint recorded, window 1 armed
+    assert_success
+    chmod 444 "${_BACKOFF_FILE}"
+
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    refute_output --partial "Queue unchanged"
+    _assert_logged "herdr agent prompt"
+
+    chmod 644 "${_BACKOFF_FILE}"
+}
+
+# `mergeable` is the D-1 table's second column, and a separate API field from
+# `mergeStateStatus` — held constant here on purpose, so the reset can only come
+# from `mergeable` itself (PR #1719 review, codex FOLLOW-UP).
+@test "pr_merge_train_cron: a mergeable change resets the backoff" {
+    _assert_change_wakes_train \
+        "[$(_pr_json 11 30 false oid11 BLOCKED '[]' MERGEABLE)]" \
+        "[$(_pr_json 11 30 false oid11 BLOCKED '[]' CONFLICTING)]"
+}
+
+# Two checkouts, two repos, one machine — the `--cwd` invocation the help text
+# documents. The `.lock` is shared by design (NF-1 is per host); the backoff
+# window is not, or each target's tick would wipe the other's fingerprint every
+# period and neither would ever accumulate one (PR #1719 review, agy BLOCKER).
+@test "pr_merge_train_cron: a second target does not clobber the first's backoff" {
+    _make_second_repo
+
+    _run_tick # target A records its fingerprint
+    assert_success
+    _TICK_CWD="${_REPO_DIR_B}" _run_tick # target B records its own
+    assert_success
+
+    [ -s "${_BACKOFF_FILE}" ]
+    [ -s "${_BACKOFF_FILE_B}" ]
+
+    : >"${_LOG}"
+    _run_tick # A's queue has not moved — B's tick must not have reset it
+    assert_success
+    assert_output --partial "Queue unchanged"
+    _refute_train_started
 }
 
 # ---------------------------------------------------------------------------
