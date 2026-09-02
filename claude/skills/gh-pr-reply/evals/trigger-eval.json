@@ -4,6 +4,15 @@
     "should_trigger": true
   },
   {
+    "query": "/gh-pr-reply 1707 --review-pass",
+    "should_trigger": true,
+    "note": "slash-literal manual override flag (#1726): update if the skill is renamed (#1410)"
+  },
+  {
+    "query": "이 PR 내가 직접 확인했어, review-blocked 떼고 review-passed 강제로 붙여줘",
+    "should_trigger": true
+  },
+  {
     "query": "gemini 봇이 달아준 인라인 코멘트들 아직 아무 답이 없는데 정리해줘",
     "should_trigger": true
   },
