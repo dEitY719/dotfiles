@@ -13,6 +13,12 @@
 # The deprecated 'gcp_scan' / 'gcp-scan' forms remain available as aliases
 # (defined in gcp.sh) for backward compatibility — issue #697.
 #
+# FILE RULE (issue #1663, #1149 3차 재발) — every `cp`/`rm`/`mv` call site in
+# this file MUST keep its `command ` prefix. zsh expands aliases at PARSE time,
+# so a bare word here gets `-i` imprinted from shell-common/aliases/core.sh
+# before the function is ever called. Do not strip the prefix as noise; the
+# guard is `alias-immunity #1663` in tests/bats/functions/gcp.bats.
+#
 # Note: git cherry marks commits as:
 #   '+' = present in source, missing in base (will be cherry-picked)
 #   '-' = already merged in base
