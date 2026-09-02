@@ -628,7 +628,14 @@ _gh_pr_merge_train_review_passed_stale() {
 #        above), and re-deriving it here would be a second definition of it.
 #        The check reuses `_gh_pr_merge_train_has_reply_pending_label` rather
 #        than re-writing its jq, for the same reason F-3 does;
-#     4. `.headRefOid` matches this train's recorded push for that PR.
+#     4. `.updatedAt` is present and parseable. Without this check a PR the
+#        shared filter dropped for its OWN fail-closed reason (rule 3 above:
+#        missing/unparseable `updatedAt`, never the ordinary quiet-period
+#        timing) could still be re-admitted on a sha match, silently
+#        overriding a data-integrity refusal this pass has no business
+#        overriding (codex, PR #1724 review, BLOCKER) — this pass may only
+#        undo the ordinary timing drop, never the fail-closed one;
+#     5. `.headRefOid` matches this train's recorded push for that PR.
 #   In other words: the ONLY thing this pass can undo is a drop caused SOLELY
 #   by the quiet period, on a head the train itself put there.
 #
@@ -709,7 +716,10 @@ _gh_pr_merge_train_readmit_own_pushes() {
         [ -n "$_elem" ] || continue
         _num=$(printf '%s' "$_elem" | jq -r '.number // empty' 2>/dev/null)
         case "$_num" in
-            '' | *[!0-9]*) continue ;;
+            '' | *[!0-9]*)
+                printf '[gh-pr-merge-train] readmit: skipping a raw element with no numeric .number\n' >&2
+                continue
+                ;;
         esac
         # 1. already a target on its own merit — nothing was dropped.
         printf '%s' "$_filtered" | jq -e --argjson n "$_num" \
@@ -718,7 +728,11 @@ _gh_pr_merge_train_readmit_own_pushes() {
         printf '%s' "$_elem" | jq -e '(.isDraft // false)' >/dev/null 2>&1 && continue
         # 3. the label always wins (#1708 AC2).
         printf '%s' "$_elem" | _gh_pr_merge_train_has_reply_pending_label && continue
-        # 4. is this head the one the train itself pushed?
+        # 4. only undo the ORDINARY quiet-period drop, never the shared
+        # filter's own fail-closed one (missing/unparseable updatedAt).
+        printf '%s' "$_elem" | jq -e '((.updatedAt // "") | fromdateiso8601?) != null' \
+            >/dev/null 2>&1 || continue
+        # 5. is this head the one the train itself pushed?
         _gh_pr_merge_train_pushed_sha_matches "$_dir" "$_num" \
             "$(printf '%s' "$_elem" | jq -r '.headRefOid // empty' 2>/dev/null)" || continue
         printf '%s\n' "$_num"
