@@ -1129,9 +1129,7 @@ def test_plugin_namespace_command_is_a_boundary(tmp_path: Path, cmd: str) -> Non
         ("/gh-pr:commit", "gh-pr-commit", ["stage-commit", "metrics-board-sync", "report"]),
     ],
 )
-def test_plugin_namespace_required_steps_satisfy(
-    tmp_path: Path, cmd: str, skill: str, steps: list[str]
-) -> None:
+def test_plugin_namespace_required_steps_satisfy(tmp_path: Path, cmd: str, skill: str, steps: list[str]) -> None:
     """The migrated skills' own markers clear their new catalog keys."""
     transcript = _write_transcript(
         tmp_path,
@@ -1243,8 +1241,7 @@ def test_migrated_skill_base_directory_is_not_a_boundary(tmp_path: Path) -> None
         tmp_path,
         [
             _user_text(
-                "Base directory for this skill: "
-                "/home/u/.claude/plugins/marketplaces/gh-pr-skills/skills/create"
+                "Base directory for this skill: /home/u/.claude/plugins/marketplaces/gh-pr-skills/skills/create"
             ),
             _assistant_text("running"),
         ],
