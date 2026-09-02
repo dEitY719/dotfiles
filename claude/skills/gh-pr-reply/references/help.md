@@ -6,12 +6,18 @@
 |---|------|---------|-------------|
 | 1 | PR number, or `-h`/`--help`/`help` | current-branch PR | Target PR, e.g. `123` |
 | 2 | remote name | `origin` | Git remote used to resolve the target repo (`owner/repo`) — pins the repo when multiple remotes share one GitHub host |
+| — | `--review-pass` | off | Skip comment processing; drop `review-blocked`, apply `review-passed` directly. Mutually exclusive with `--review-block`. May appear anywhere among the args. |
+| — | `--review-block` | off | Skip comment processing; drop `review-passed`, apply `review-blocked` directly. Mutually exclusive with `--review-pass`. May appear anywhere among the args. |
 
 ## Usage
 
 - `/gh-pr-reply` — process review comments on the PR for the current branch
 - `/gh-pr-reply 123` — process review comments on PR #123 explicitly
 - `/gh-pr-reply 123 upstream` — target PR #123 on the `upstream` remote's repo
+- `/gh-pr-reply 123 --review-pass` — skip comment processing; force
+  `review-passed` on PR #123 (drops `review-blocked` first)
+- `/gh-pr-reply 123 --review-block` — skip comment processing; force
+  `review-blocked` on PR #123 (drops `review-passed` first)
 - `/gh-pr-reply -h` / `--help` / `help` — print this help
 
 ## What the skill does
@@ -37,6 +43,16 @@
 6. Pushes fix commits (`git push`, never force) if any landed.
 7. Prints a compact summary: Accepted / Declined / Answered counts plus
    commit SHAs, and lists any comments skipped as "already replied".
+
+## Manual verdict override
+
+`--review-pass` / `--review-block` bypass everything above — no comment
+fetch, no evaluation, no fixes, no reply, no push. They swap the verdict
+label directly and stop. This is an explicit, user-invoked override: the
+BLOCKER gate that the normal flow uses to decide `review-passed`
+(`references/review-passed-gate.md`) is not consulted. Use it when you have
+verified the PR through channels the skill cannot see and need the label to
+reflect that now. See `references/manual-override.md`.
 
 ## What the skill will NOT do
 

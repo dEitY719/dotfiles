@@ -38,6 +38,16 @@ Read `references/target-resolution.md` and follow it: positional args
 `gh`'s default-repo heuristic), the fork tradeoff. Every later `gh` call runs as
 `GH_HOST="$TARGET_HOST" gh ... --repo "$TARGET_REPO"` (#1403, #1407).
 
+## Step 1.5: Manual Verdict Override (`--review-pass` / `--review-block`)
+
+If `--review-pass` or `--review-block` was passed, read
+`references/manual-override.md` and follow it: strip the flag from arg
+parsing (it may appear anywhere among the positional args), swap the
+`review-passed`/`review-blocked` labels directly via
+`devx_pr_review_all_write_label` — no BLOCKER gate, no evidence check, this
+is the user asserting the verdict directly (#1726) — then **stop**. Steps
+2–7 do not run. Both flags together is a usage error handled before Step 1.
+
 ## Step 2: Fetch All Review Comments
 
 Read `references/comment-fetching.md` for the three API endpoints, field
