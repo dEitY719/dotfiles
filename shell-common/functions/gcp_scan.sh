@@ -352,16 +352,28 @@ _gcp_scan_json_leaves() {
     # still emits a trailing comma on every element but the last, so a
     # line-based comparison over canonical text reproduces the exact bug this
     # replaces. Paths carry array indices, so element ORDER stays visible while
-    # comma/indentation noise disappears. Containers are recorded as `{}`/`[]`
-    # so adding an empty object or array is content, not a no-op. The leading
-    # `[[], ...]` record covers a top-level scalar, for which `paths` is empty.
+    # comma/indentation noise disappears. Containers are recorded as the
+    # literal (unquoted) empty-container values `{}`/`[]` — not the STRINGS
+    # `"{}"`/`"[]"` — so adding an empty object or array is content, not a
+    # no-op. The leading `[[], ...]` record covers a top-level scalar, for
+    # which `paths` is empty.
+    #
+    # Unquoted is load-bearing (codex BLOCKER, PR #1690 round-3): a JSON
+    # string leaf whose bytes happen to be `{}`/`[]` (e.g. `{"note": "{}"}`)
+    # serializes, quoted, as `"{}"`. Collapsing a container to that same
+    # quoted string would make the two indistinguishable in the compact
+    # output the awk set-comparison below reads. `jq -c` renders an actual
+    # empty object/array as the bare `{}`/`[]` — no valid JSON scalar ever
+    # serializes to those exact unquoted bytes — so keeping the real
+    # container value (rather than converting it to a string) preserves the
+    # distinction.
     #
     # `-S` sorts object keys so a pure key reordering — not meaningful in JSON
     # — does not read as new content. An empty file yields no records and rc 0,
     # which is the correct reading of "the commit adds this file".
     jq -Sc '
-        [[], (if type == "object" then "{}" elif type == "array" then "[]" else . end)],
-        (paths as $p | [$p, (getpath($p) | if type == "object" then "{}" elif type == "array" then "[]" else . end)])
+        [[], (if type == "object" then {} elif type == "array" then [] else . end)],
+        (paths as $p | [$p, (getpath($p) | if type == "object" then {} elif type == "array" then [] else . end)])
     ' "$1"
 }
 
