@@ -20,6 +20,8 @@
 	autoSetupRemote = true
 [fetch]
 	prune = true
+[alias]
+	sync = !${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/git-sync.sh
 [credential "https://github.com"]
 	helper =
 	useHttpPath = true
