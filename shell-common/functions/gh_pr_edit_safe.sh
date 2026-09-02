@@ -71,6 +71,11 @@
 #                           invalidation but a cleanup: the PR is closed and
 #                           the label has no reader left, so leaving it on
 #                           only makes a reopened PR look pre-verified.
+#   gh:pr-resolve-ci-fail   Step 7 — after a successful fast-forward push
+#                           (#1705). Calls this primitive directly, with no
+#                           reconciliation: a CI-fix commit changes file
+#                           content by definition, so the patch-id "keep"
+#                           path the two rebase skills have can never apply.
 #
 # The asymmetry rule (`review-passed` drops unconditionally; `review-blocked`
 # never drops through this primitive at all):
