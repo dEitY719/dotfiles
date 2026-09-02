@@ -77,7 +77,11 @@ _review_passed_gh_stub_setup() {
     # shellcheck disable=SC2317  # called indirectly by the helpers under test
     _gh_pr_edit_safe_label() {
         printf 'add %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$GH_LOG"
-        return 0
+        # STUB_LABEL_ADD_RC simulates the label ADD itself failing — distinct
+        # from STUB_MARKER_POST_RC (the marker POST that follows it). Before
+        # PR #1703's agy FOLLOW-UP the two were indistinguishable in the
+        # report token, which claimed `label=granted` even here.
+        return "${STUB_LABEL_ADD_RC:-0}"
     }
 }
 
