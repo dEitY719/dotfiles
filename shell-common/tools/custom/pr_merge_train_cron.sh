@@ -59,7 +59,8 @@ _PMT_STATE_SUBDIR="pr-merge-train"
 _PMT_LOCK_BASENAME=".lock"
 
 # The queue-fingerprint / backoff state (#1709), a sibling of the lock in the
-# same directory. One line: `<window> <remaining> <fingerprint>`.
+# same directory. One line: `<window> <remaining> <fingerprint>`. The real file
+# name carries the target too — see _pmt_backoff_file.
 _PMT_BACKOFF_BASENAME="backoff"
 # Ceiling on the backoff window, in ticks. 8 at the shipped `*/3` cadence is
 # ~24 minutes between wake-ups on a wedged queue — long enough to stop paying
@@ -215,6 +216,26 @@ _pmt_state_dir() {
         "${_PMT_STATE_SUBDIR}"
 }
 
+# The backoff state file for *this tick's target*, not for the machine.
+#
+# The state directory is one per machine and the `.lock` inside it is global on
+# purpose — NF-1 bounds concurrent ticks per host, whatever they point at. The
+# backoff window is the opposite kind of state: it is a property of one repo's
+# queue. `--cwd` makes a second target a first-class invocation (two cron lines,
+# two checkouts), and with a shared file those two ticks overwrite each other's
+# fingerprint every period, so each one always reads "the queue moved" and the
+# backoff never accumulates — the feature silently off exactly where the cost it
+# saves is doubled (PR #1719 review, agy BLOCKER).
+#
+# Keyed by the same `<host>/<repo>` the fingerprint carries, flattened to one
+# path segment. `tr -c` rather than a `${var//}` swap of `/` alone: the host and
+# owner/repo come from a remote URL, so this is a filesystem-path boundary and
+# an allow-list is the only sanitisation that stays correct when the URL is odd.
+_pmt_backoff_file() {
+    printf '%s/%s-%s' "$(_pmt_state_dir)" "${_PMT_BACKOFF_BASENAME}" \
+        "$(printf '%s/%s' "${_PMT_HOST}" "${_PMT_REPO}" | tr -c 'A-Za-z0-9._-' '-')"
+}
+
 # Extract one string field from JSON on stdin.
 #   $1 = jq filter, e.g. '.result.agent.agent_status'.
 #
@@ -317,15 +338,16 @@ _pmt_bind_target() {
 # never auto-merged). Everything else — drafts, the `reply-pending` label, and
 # the D-6 quiet period — is `_gh_pr_merge_train_filter_targets`, the SSOT the
 # `gh:pr-merge-train` skill runs too (#1524). `labels` is in the `--json` list
-# for that filter's sake; `headRefOid` and `mergeStateStatus` are there for the
-# fingerprint below (#1709). Nothing here reads any of the three directly.
+# for that filter's sake; `headRefOid`, `mergeStateStatus` and `mergeable` are
+# there for the fingerprint below (#1709). Nothing here reads any of the four
+# directly.
 _PMT_TARGET_COUNT=0
 _pmt_target_count() {
     local _json _filtered _now
 
     _json=$(GH_HOST="${_PMT_HOST}" gh pr list --repo "${_PMT_REPO}" \
         --author @me --state open --limit "${_PMT_PR_LIMIT}" \
-        --json number,updatedAt,isDraft,labels,headRefOid,mergeStateStatus 2>/dev/null) || return 1
+        --json number,updatedAt,isDraft,labels,headRefOid,mergeStateStatus,mergeable 2>/dev/null) || return 1
     [ -n "${_json}" ] || return 1
 
     _now=$(_pmt_now)
@@ -358,20 +380,24 @@ _pmt_target_count() {
 _PMT_FINGERPRINT=""
 
 # Fold the filtered PR array <1> into one line: the target, then the sorted
-# `(number, headRefOid, mergeStateStatus, verdict labels)` tuples (#1709).
+# `(number, headRefOid, mergeStateStatus, mergeable, verdict labels)` tuples
+# (#1709).
 #
-# Those four fields are what the D-1 routing table actually branches on — the
+# Those five fields are what the D-1 routing table actually branches on — the
 # three short-circuit labels (`reply-pending`, `review-blocked`,
-# `review-passed`) plus the state the table itself is keyed by. Every other
-# field `gh pr list` returns is either constant for the PR's lifetime or
+# `review-passed`) plus the two columns the table itself is keyed by. Every
+# other field `gh pr list` returns is either constant for the PR's lifetime or
 # irrelevant to the verdict, so including it would only manufacture changes.
+# `mergeable` is in that list because the table has a column for it: it usually
+# moves with `mergeStateStatus` (DIRTY/CONFLICTING travel together), but the two
+# are separate API fields and betting the wake-up on their staying in lockstep
+# is a bet with no upside — an extra field can only make the fingerprint reset
+# sooner (PR #1719 review, codex FOLLOW-UP).
 #
-# The `<host>/<repo>` prefix is not decoration: the state directory is one per
-# machine, not one per target (the `.lock` has always been global too), so two
-# checkouts pointed at different repos share this file. Without the prefix,
-# repo B's tick could match repo A's stored fingerprint and skip a queue it has
-# never looked at. With it, the mismatch resets — two alternating targets get
-# no backoff, which is exactly today's behaviour and the safe direction.
+# The `<host>/<repo>` prefix is belt to _pmt_backoff_file's braces: since that
+# helper keys the file by target, a cross-repo match is already impossible, and
+# the prefix additionally makes a file inherited from a renamed or re-pointed
+# remote read as "changed" rather than as a queue this tick never looked at.
 _pmt_bind_fingerprint() {
     local _tuples
 
@@ -380,6 +406,7 @@ _pmt_bind_fingerprint() {
           | [ (.number // "?" | tostring),
               (.headRefOid // ""),
               (.mergeStateStatus // ""),
+              (.mergeable // ""),
               ([ .labels[]?.name?
                  | select(. == "review-passed" or . == "review-blocked"
                           or . == "reply-pending") ] | sort | join(","))
@@ -394,17 +421,25 @@ _pmt_bind_fingerprint() {
     _PMT_FINGERPRINT="${_PMT_HOST}/${_PMT_REPO}|${_tuples}"
 }
 
-# Persist the tick's verdict for the next one to compare against. Best effort:
-# a state file that cannot be written degrades to "no backoff", which is the
-# pre-#1709 behaviour, and warning about it every three minutes would be worse
-# than the token cost it is trying to save. _pmt_acquire_lock has already
-# warned if the directory itself is the problem.
+# Persist the tick's verdict for the next one to compare against. Quiet — a
+# state directory that cannot be written would warn every three minutes, which
+# is worse than the token cost this is trying to save, and _pmt_acquire_lock has
+# already warned if the directory itself is the problem — but **not** silent to
+# the caller: returns non-zero when the line did not land.
+#
+# The failure has to be visible because "degrade to no backoff" is a property of
+# the *gate*, not of this function: it is the caller that decides whether to
+# skip, and a skip it could not record is a skip it cannot bound. Swallowing the
+# rc here is what made a readable-but-unwritable file (root-owned, `chmod 444`,
+# a read-only mount) skip the same queue for ever — `remaining` never decremented
+# on disk, so every later tick re-read the same open window (PR #1719 review,
+# codex BLOCKER).
 _pmt_backoff_write() {
     local _file="$1" _window="$2" _remaining="$3"
 
-    mkdir -p "$(dirname "${_file}")" 2>/dev/null || return 0
+    mkdir -p "$(dirname "${_file}")" 2>/dev/null || return 1
     printf '%s %s %s\n' "${_window}" "${_remaining}" "${_PMT_FINGERPRINT}" \
-        >"${_file}" 2>/dev/null || return 0
+        >"${_file}" 2>/dev/null || return 1
     return 0
 }
 
@@ -430,7 +465,7 @@ _pmt_backoff_write() {
 _pmt_backoff_gate() {
     local _target="$1" _file _prev_fp="" _window=0 _remaining=0
 
-    _file="$(_pmt_state_dir)/${_PMT_BACKOFF_BASENAME}"
+    _file="$(_pmt_backoff_file)"
 
     # No fingerprint is no evidence. Skipping on a queue this tick could not
     # summarise would be backing off from a state it never observed.
@@ -451,7 +486,12 @@ _pmt_backoff_gate() {
     fi
 
     if [ "${_remaining}" -gt 0 ]; then
-        _pmt_backoff_write "${_file}" "${_window}" "$((_remaining - 1))"
+        # A decrement that does not land is a window that never closes: the next
+        # tick re-reads this same `remaining`, skips again, and the "the window
+        # always expires" guarantee is gone. So an unwritable state file runs the
+        # tick instead — "no backoff", the pre-#1709 behaviour and the safe
+        # direction (PR #1719 review, codex BLOCKER).
+        _pmt_backoff_write "${_file}" "${_window}" "$((_remaining - 1))" || return 1
         # Deliberately not the "No target PR" wording: that line means zero
         # candidates, this one means candidates that have not moved. Reading
         # a cron log full of the same sentence for both would hide exactly the
@@ -1140,14 +1180,15 @@ _pmt_usage() {
     ux_bullet_sub "the lock covers overlapping ticks; the agent probe covers the running train"
     ux_bullet_sub "agent working/blocked -> hold; still registered -> prompt that pane; missing -> open a new one"
     ux_bullet "unchanged-queue backoff (#1709)"
-    ux_bullet_sub "each tick fingerprints its targets: (number, headRefOid, mergeStateStatus, verdict labels)"
+    ux_bullet_sub "each tick fingerprints its targets: (number, headRefOid, mergeStateStatus, mergeable, verdict labels)"
     ux_bullet_sub "same fingerprint as the previous tick -> skip, logged as 'Queue unchanged'"
     ux_bullet_sub "the skipped window doubles 1 -> 2 -> 4 -> ${_PMT_BACKOFF_MAX} ticks, then holds at ${_PMT_BACKOFF_MAX}"
     ux_bullet_sub "any fingerprint change (a merge, a push, a verdict label) resets it to 1 and wakes a session"
     ux_bullet_sub "the window always expires — a board promotion the fingerprint cannot see is still picked up"
+    ux_bullet_sub "an unwritable state file runs the tick, never skips one — an unbounded window is worse than no backoff"
     ux_bullet "state"
-    ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_LOCK_BASENAME}   (tick lock)"
-    ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_BACKOFF_BASENAME}   (queue fingerprint + backoff window)"
+    ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_LOCK_BASENAME}   (tick lock, one per machine)"
+    ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_BACKOFF_BASENAME}-<host>-<owner>-<repo>   (queue fingerprint + backoff window, one per target)"
     ux_bullet "claude session (claude-yolo parity)"
     ux_bullet_sub "the pane runs claude --dangerously-skip-permissions (unattended cron)"
     ux_bullet_sub "that session can merge — NF-2 (no emergency bypass) and the fail-closed"

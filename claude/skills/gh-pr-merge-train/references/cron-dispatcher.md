@@ -89,23 +89,39 @@ A tick whose queue looks exactly like the previous tick's does not wake a
 session. It records a **fingerprint** instead —
 
 ```
-<host>/<repo>|<number>:<headRefOid>:<mergeStateStatus>:<verdict labels>;…   (sorted)
+<host>/<repo>|<number>:<headRefOid>:<mergeStateStatus>:<mergeable>:<verdict labels>;…   (sorted)
 ```
 
-— in `${XDG_STATE_HOME:-$HOME/.local/state}/pr-merge-train/backoff`, next to
-the `.lock`, and compares the next tick's against it. Same fingerprint: skip,
-and double the window of ticks to skip (1 → 2 → 4, holding at 8). Any change:
-reset to 1 and wake a session immediately.
+— in
+`${XDG_STATE_HOME:-$HOME/.local/state}/pr-merge-train/backoff-<host>-<owner>-<repo>`,
+next to the `.lock`, and compares the next tick's against it. Same fingerprint:
+skip, and double the window of ticks to skip (1 → 2 → 4, holding at 8). Any
+change: reset to 1 and wake a session immediately.
 
-The four fields are the ones the D-1 table actually branches on, plus the three
-short-circuit labels (`reply-pending`, `review-blocked`, `review-passed`).
-`updatedAt` is deliberately *not* one of them — a bot comment moves it without
-moving anything the routing table would decide differently, and the D-6 quiet
-period already owns that stamp. The `<host>/<repo>` prefix is there because the
-state directory is one per machine, not one per target (so is the `.lock`): two
-checkouts aimed at different repos would otherwise be able to match each
-other's fingerprint. They mismatch instead, which costs the backoff and keeps
-the correctness.
+The five fields are the ones the D-1 table actually branches on (both its
+columns), plus the three short-circuit labels (`reply-pending`,
+`review-blocked`, `review-passed`). `updatedAt` is deliberately *not* one of
+them — a bot comment moves it without moving anything the routing table would
+decide differently, and the D-6 quiet period already owns that stamp.
+
+**The state file is per target, the `.lock` is not.** That asymmetry is the
+point: NF-1 bounds concurrent ticks per *machine*, whatever they aim at, while a
+backoff window is a property of one repo's queue. `--cwd` makes a second target
+a first-class invocation, and a single shared `backoff` file would let two
+repos' ticks overwrite each other's fingerprint every period — each would read
+"the queue moved", and the backoff would be silently off on exactly the host
+paying twice for it (PR #1719 review). The `<host>/<repo>` prefix inside the
+fingerprint stays as a second line of defence: a file inherited from a renamed
+or re-pointed remote reads as changed rather than as a queue this tick never
+looked at.
+
+**An unwritable state file runs the tick.** `remaining` is decremented on disk,
+so a state file that can be read but not written (root-owned, `chmod 444`, a
+read-only mount) would otherwise hand every later tick the same open window and
+skip the queue for ever — the one failure mode the cap exists to make
+impossible. The write's failure is therefore propagated, and a skip that cannot
+be recorded is not taken: no backoff, which is the pre-#1709 behaviour (PR #1719
+review).
 
 **Why the fingerprint alone satisfies "never back off after progress".** #1709
 asks that a tick which produced `[MERGED]` or `[FAILED]` run the next tick
@@ -139,7 +155,7 @@ ticks running.
   the report. Those are this skill's text. A shell reimplementation would be a
   second SSOT that drifts.
 - It does **not** write to GitHub. Its only `gh` call is a `pr list` read — one
-  per tick, fingerprint included (#1709 added two `--json` fields to that same
+  per tick, fingerprint included (#1709 added three `--json` fields to that same
   call rather than a second one).
 - It does **not** read the session's `[SKIPPED]`/`[MERGED]`/`[FAILED]` report.
   There is no channel for it, and #1709 deliberately did not build one — see
@@ -166,6 +182,7 @@ ticks running.
 | zero target PRs | end the tick quietly — `No target PR on …` |
 | targets exist, but the queue fingerprint is unchanged | end the tick quietly — `Queue unchanged on … — backoff skip, window N, next wake in M tick(s)` (#1709). A *different* line from the row above on purpose: zero candidates and unmoved candidates are different states, and a cron log that spelled them the same way would hide the one this backoff exists for |
 | the backoff state file is unreadable or corrupt | run the tick — a state file that cannot be trusted never earns a skip |
+| the backoff state file cannot be **written** | run the tick — a window whose countdown does not persist would never expire (PR #1719 review) |
 
 Every one of these is "do nothing and try again next period". A dispatcher that
 retried a *prompt* harder would be the thing most likely to produce two trains —
