@@ -52,14 +52,14 @@ run = [
 ]
 
 [tasks.lint-docs]
-description = "Docs 린터 (파일명 kebab-case #1027 + changelog fragment #1471 + SHELL_COMMON 폴백 #1612)"
+description = "Docs 린터 (파일명 kebab-case #1027 + SHELL_COMMON 폴백 #1612)"
 # adr/ + requirement/ 는 강제(FAIL), 나머지 docs/ 는 warn-only.
 # 레거시 위반 일괄 정리는 별도 이슈로 분리한다.
-# changelog fragment 규칙과 그 근거는 scripts/lint_changelog_fragments.sh 헤더가 SSOT.
+# changelog fragment 검사(scripts/lint_changelog_fragments.sh)는 토큰 소모 문제로
+# 2026-09-02 중단했다 — 재개 조건은 CLAUDE.md "변경 기록 (changelog)" 참고.
 # ${SHELL_COMMON} $HOME 폴백 규칙과 근거는 scripts/lint_shell_common_fallback.sh 헤더가 SSOT.
 run = [
     "sh scripts/lint_docs_filenames.sh",
-    "sh scripts/lint_changelog_fragments.sh",
     "sh scripts/lint_shell_common_fallback.sh",
 ]
 
