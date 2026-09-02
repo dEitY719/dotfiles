@@ -36,6 +36,9 @@ setup() {
     _STATE_HOME="${_WORK_DIR}/state"
     _STATE_DIR="${_STATE_HOME}/pr-merge-train"
     _LOCK_FILE="${_STATE_DIR}/.lock"
+    # The aicron job state the #1714 pause is written to. `aicron` keeps its
+    # own directory under the same XDG_STATE_HOME the tick already isolates.
+    _AICRON_STATE="${_STATE_HOME}/aicron/merge-train.json"
     # One backoff file per target, not per machine (PR #1719 review) — the name
     # is `<basename>-<host>-<owner>-<repo>` over _make_repo's origin.
     _BACKOFF_FILE="${_STATE_DIR}/backoff-github.com-acme-dotfiles"
@@ -116,11 +119,19 @@ _make_second_repo() {
 # for a given PR number*, so every pre-#1709 caller keeps describing one
 # unchanging PR — which is what lets the backoff tests vary exactly one field at
 # a time.
+#
+# `review-passed` is in the default labels because since #1714 an unlabelled PR
+# is not actionable and pauses the job instead of waking a session. Every test
+# whose subject is something else ("is this a target", "was the lock released")
+# needs its fixture to be a PR the train would really act on, or it would be
+# asserting the pause path by accident.
 _pr_json() {
-    local _stamp
+    local _stamp _labels="${6:-}"
+    [ -n "${_labels}" ] || _labels='[{"name":"review-passed"}]'
     _stamp=$(_epoch_to_iso "$(($(date +%s) - $2 * 60))") || fail "cannot format a timestamp on this platform"
     printf '{"number":%s,"updatedAt":"%s","isDraft":%s,"headRefOid":"%s","mergeStateStatus":"%s","labels":%s,"mergeable":"%s"}' \
-        "$1" "${_stamp}" "${3:-false}" "${4:-oid$1}" "${5:-BEHIND}" "${6:-[]}" "${7:-MERGEABLE}"
+        "$1" "${_stamp}" "${3:-false}" "${4:-oid$1}" "${5:-BEHIND}" \
+        "${_labels}" "${7:-MERGEABLE}"
 }
 
 # A `gh pr list --json` element whose `updatedAt` cannot be read — the raw JSON
@@ -675,10 +686,14 @@ _hold_lock() {
 
 # A verdict label flipping is the #1709 scenario in reverse: the queue that had
 # nothing to do suddenly has something to do, and must not wait out a window.
+#
+# PR 11 carries `review-passed` throughout so the queue stays actionable and the
+# tick reaches the backoff gate at all — since #1714 an all-blocked queue pauses
+# the job instead, which is a different test (below).
 @test "pr_merge_train_cron: a verdict label change resets the backoff" {
     _assert_change_wakes_train \
-        "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-blocked"}]')]" \
-        "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-passed"}]')]"
+        "[$(_pr_json 11 30),$(_pr_json 12 30 false oid12 BEHIND '[{"name":"review-blocked"}]')]" \
+        "[$(_pr_json 11 30),$(_pr_json 12 30 false oid12 BEHIND '[{"name":"review-passed"}]')]"
 }
 
 @test "pr_merge_train_cron: a mergeStateStatus change resets the backoff" {
@@ -749,8 +764,8 @@ _hold_lock() {
 # from `mergeable` itself (PR #1719 review, codex FOLLOW-UP).
 @test "pr_merge_train_cron: a mergeable change resets the backoff" {
     _assert_change_wakes_train \
-        "[$(_pr_json 11 30 false oid11 BLOCKED '[]' MERGEABLE)]" \
-        "[$(_pr_json 11 30 false oid11 BLOCKED '[]' CONFLICTING)]"
+        "[$(_pr_json 11 30 false oid11 BLOCKED '[{"name":"review-passed"}]' MERGEABLE)]" \
+        "[$(_pr_json 11 30 false oid11 BLOCKED '[{"name":"review-passed"}]' CONFLICTING)]"
 }
 
 # Two checkouts, two repos, one machine — the `--cwd` invocation the help text
@@ -773,6 +788,150 @@ _hold_lock() {
     assert_success
     assert_output --partial "Queue unchanged"
     _refute_train_started
+}
+
+# ---------------------------------------------------------------------------
+# Nothing-actionable pause (#1714)
+#
+# A queue can be full and still have nothing the train can move: every PR
+# `review-blocked`, or none reviewed at all. Waking a session for that is what
+# #1691/#1703 spent a dozen identical ticks on, so the tick pauses the aicron
+# job and leaves the restart to a human.
+# ---------------------------------------------------------------------------
+
+# The two labels, as `gh pr list --json labels` answers with them.
+_labels_json() {
+    printf '['
+    local _sep="" _l
+    for _l in "$@"; do
+        printf '%s{"name":"%s"}' "${_sep}" "${_l}"
+        _sep=","
+    done
+    printf ']'
+}
+
+_assert_paused() {
+    [ -f "${_AICRON_STATE}" ] || fail "expected an aicron state file at ${_AICRON_STATE}"
+    run jq -r '.paused' "${_AICRON_STATE}"
+    assert_output "true"
+}
+
+@test "pr_merge_train_cron: an all-blocked queue pauses instead of waking a session" {
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND "$(_labels_json review-blocked)"),\
+$(_pr_json 12 30 false oid12 BEHIND "$(_labels_json review-blocked)")]"
+    _run_tick
+    assert_success
+    assert_output --partial "No actionable PR among 2 target(s)"
+    assert_output --partial "aicron resume merge-train"
+    _refute_train_started
+    _assert_paused
+}
+
+@test "pr_merge_train_cron: an unreviewed queue is not actionable either" {
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND '[]')]"
+    _run_tick
+    assert_success
+    assert_output --partial "No actionable PR among 1 target(s)"
+    _refute_train_started
+    _assert_paused
+}
+
+# `review-blocked` wins over `review-passed`: a PR carrying both is exactly the
+# PR a reviewer has just re-blocked, and the label pair is how that arrives.
+@test "pr_merge_train_cron: a PR carrying both verdict labels is not actionable" {
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND "$(_labels_json review-passed review-blocked)")]"
+    _run_tick
+    assert_success
+    assert_output --partial "No actionable PR"
+    _refute_train_started
+    _assert_paused
+}
+
+# An empty queue is the same verdict, but it keeps its own sentence — a cron log
+# has to distinguish "nobody has an open PR" from "the open PRs are stuck".
+@test "pr_merge_train_cron: an empty queue pauses under its own log line" {
+    _set_prs '[]'
+    _run_tick
+    assert_success
+    assert_output --partial "No target PR"
+    refute_output --partial "No actionable PR"
+    assert_output --partial "aicron resume merge-train"
+    _assert_paused
+}
+
+# The positive control: BEHIND, which is what the default fixture is, stays
+# actionable — the next tick's train is what rebases it.
+@test "pr_merge_train_cron: a review-passed target is actionable and writes no pause" {
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+    refute_output --partial "No actionable PR"
+    [ ! -e "${_AICRON_STATE}" ]
+}
+
+@test "pr_merge_train_cron: one actionable PR carries a blocked sibling through" {
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND "$(_labels_json review-blocked)"),\
+$(_pr_json 12 30)]"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+    [ ! -e "${_AICRON_STATE}" ]
+}
+
+# Idempotency: the pause is a human's flag once set, and a tick that rewrote it
+# every three minutes would churn the state file for no new information.
+@test "pr_merge_train_cron: an already-paused job is not written again" {
+    mkdir -p "$(dirname "${_AICRON_STATE}")"
+    printf '%s\n' '{"paused":true,"last_run":"marker"}' >"${_AICRON_STATE}"
+    local _before
+    _before=$(cat "${_AICRON_STATE}")
+
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND '[]')]"
+    _run_tick
+    assert_success
+    _refute_train_started
+    assert_equal "$(cat "${_AICRON_STATE}")" "${_before}"
+}
+
+# A state directory the tick cannot write is not a reason to wake a session —
+# the verdict "nothing to do" is already correct without the record.
+@test "pr_merge_train_cron: an unwritable aicron state dir warns but still skips" {
+    [ "$(id -u)" -ne 0 ] || skip "running as root — file permissions do not bite"
+    mkdir -p "$(dirname "${_AICRON_STATE}")"
+    chmod 555 "$(dirname "${_AICRON_STATE}")"
+
+    _set_prs '[]'
+    _run_tick
+    assert_success
+    assert_output --partial "Could not record the pause"
+    _refute_train_started
+
+    chmod 755 "$(dirname "${_AICRON_STATE}")"
+}
+
+@test "pr_merge_train_cron: --dry-run reports the actionable count and pauses nothing" {
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND "$(_labels_json review-blocked)")]"
+    _run_tick -- --dry-run
+    assert_success
+    assert_output --partial "1 target PR(s), 0 actionable"
+    assert_output --partial "would pause"
+    _refute_train_started
+    [ ! -e "${_AICRON_STATE}" ]
+}
+
+@test "pr_merge_train_cron: --dry-run on an actionable queue still reports the prompt" {
+    _run_tick -- --dry-run
+    assert_success
+    assert_output --partial "1 target PR(s), 1 actionable"
+    assert_output --partial "would prompt agent"
+    [ ! -e "${_AICRON_STATE}" ]
+}
+
+@test "pr_merge_train_cron: --help documents the pause and its resume command" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "nothing-actionable pause"
+    assert_output --partial "aicron resume merge-train"
 }
 
 # ---------------------------------------------------------------------------

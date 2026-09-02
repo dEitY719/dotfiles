@@ -51,6 +51,17 @@ fi
 # shellcheck source=/dev/null
 . "${_PMT_SHELL_COMMON}/functions/gh_pr_merge_train.sh" || exit 1
 
+# The aicron job state, for the "nothing actionable" pause (#1714). Hard
+# failure for the same reason as the filter above: a tick that cannot record
+# the pause is a tick that keeps waking a session every three minutes for a
+# queue nothing in this repo can move — the waste the pause exists to stop.
+if [ ! -f "${_PMT_SHELL_COMMON}/tools/custom/lib/aicron_state.sh" ]; then
+    ux_error "aicron_state.sh not found under ${_PMT_SHELL_COMMON}/tools/custom/lib — cannot pause the cron job."
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "${_PMT_SHELL_COMMON}/tools/custom/lib/aicron_state.sh" || exit 1
+
 # ============================================================
 # Constants (SSOT for the dispatcher)
 # ============================================================
@@ -202,6 +213,11 @@ _PMT_DRY_RUN=0
 # The GitHub target, bound once in main() from the checkout's `origin` (#1403).
 _PMT_REPO=""
 _PMT_HOST=""
+# The aicron job this dispatcher is registered as, and therefore the job the
+# #1714 pause writes to and `aicron resume` takes. A literal, never derived
+# from _PMT_REPO: cron-jobs.json names exactly this one job, so a second
+# `--cwd` target still pauses the same schedule that woke it.
+_PMT_AICRON_JOB="merge-train"
 
 # ============================================================
 # Helpers — state paths and JSON
@@ -362,6 +378,7 @@ _pmt_target_count() {
         _gh_pr_merge_train_filter_targets --now "${_now}") || return 1
 
     _pmt_bind_fingerprint "${_filtered}"
+    _pmt_bind_actionable "${_filtered}"
 
     _PMT_TARGET_COUNT=$(printf '%s' "${_filtered}" | jq -r 'length' 2>/dev/null) ||
         return 1
@@ -508,6 +525,60 @@ _pmt_backoff_gate() {
     [ "${_window}" -le "${_PMT_BACKOFF_MAX}" ] || _window="${_PMT_BACKOFF_MAX}"
     _pmt_backoff_write "${_file}" "${_window}" "${_window}"
     return 1
+}
+
+# ============================================================
+# Precondition 5 — is anything in the queue actionable (#1714)
+# ============================================================
+
+# How many of this tick's targets the train could actually move, bound by
+# _pmt_target_count from the same filtered array the fingerprint is folded
+# from — a second `gh pr list` to answer this would be the round trip #1709
+# already refused to spend.
+_PMT_ACTIONABLE_COUNT=0
+
+# Actionable is `review-passed` and no `review-blocked` (#1714). BEHIND or a
+# pending check still counts: the routing table has rows for those and the next
+# tick acts on them. A PR with neither verdict label does not — it is waiting on
+# a review nothing in this loop performs, and waking a session for it is the
+# dozen identical ticks #1691/#1703 spent.
+#
+# The two predicates are `gh_pr_merge_train.sh`'s, called one object at a time
+# because that is their contract; re-deriving the label test in jq here is the
+# duplicated-logic bug #1524 removed.
+_pmt_bind_actionable() {
+    local _pr _n=0
+
+    # A here-doc, not a pipe: `while ... | read` runs the loop body in a
+    # subshell, where the count would be discarded at the last element.
+    while IFS= read -r _pr; do
+        [ -n "${_pr}" ] || continue
+        printf '%s' "${_pr}" | _gh_pr_merge_train_has_review_passed_label || continue
+        printf '%s' "${_pr}" | _gh_pr_merge_train_has_review_blocked_label && continue
+        _n=$((_n + 1))
+    done <<EOF
+$(printf '%s' "$1" | jq -c '.[]?' 2>/dev/null)
+EOF
+
+    _PMT_ACTIONABLE_COUNT="${_n}"
+}
+
+# Record the pause the "nothing actionable" exit takes, so cron stops paying a
+# session per period for a queue only a human can unstick. Idempotent: an
+# already-paused job is left alone rather than rewritten every tick.
+#
+# A failed write warns instead of ending the tick — the tick's own verdict
+# (do not wake a session) is already correct without it, and the only cost is
+# that the next period re-derives the same answer. That is the pre-#1714
+# behaviour, i.e. the safe direction, unlike the backoff counter above whose
+# unwritten decrement would open an unbounded window.
+_pmt_pause_job() {
+    aicron_state_paused "${_PMT_AICRON_JOB}" && return 0
+
+    if ! aicron_state_ensure || ! aicron_state_set "${_PMT_AICRON_JOB}" paused true; then
+        ux_warning "Could not record the pause for aicron job ${_PMT_AICRON_JOB} — the next tick will judge the queue again."
+        return 1
+    fi
 }
 
 # ============================================================
@@ -1186,6 +1257,12 @@ _pmt_usage() {
     ux_bullet_sub "any fingerprint change (a merge, a push, a verdict label) resets it to 1 and wakes a session"
     ux_bullet_sub "the window always expires — a board promotion the fingerprint cannot see is still picked up"
     ux_bullet_sub "an unwritable state file runs the tick, never skips one — an unbounded window is worse than no backoff"
+    ux_bullet "nothing-actionable pause (#1714)"
+    ux_bullet_sub "actionable = the review-passed label and no review-blocked (BEHIND or pending CI still counts)"
+    ux_bullet_sub "zero actionable targets -> no session is woken; the aicron job ${_PMT_AICRON_JOB} is paused"
+    ux_bullet_sub "an empty queue is that same case, logged as 'No target PR'"
+    ux_bullet_sub "resume with: aicron resume ${_PMT_AICRON_JOB} (an already-paused job is not rewritten)"
+    ux_bullet_sub "--dry-run reports the judgement and never pauses"
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_LOCK_BASENAME}   (tick lock, one per machine)"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_BACKOFF_BASENAME}-<host>-<owner>-<repo>   (queue fingerprint + backoff window, one per target)"
@@ -1288,8 +1365,14 @@ main() {
             ux_error "gh pr list failed for ${_PMT_REPO} — a real tick would end here."
             exit 1
         fi
-        ux_success "Dry run — ${_PMT_REPO} on ${_PMT_HOST}: ${_PMT_TARGET_COUNT} target PR(s)."
-        ux_bullet "would prompt agent ${_agent} with /gh-pr-merge-train ${_PMT_REPO}"
+        ux_success "Dry run — ${_PMT_REPO} on ${_PMT_HOST}: ${_PMT_TARGET_COUNT} target PR(s), ${_PMT_ACTIONABLE_COUNT} actionable."
+        # Reported, never written: the probe stays read-only, so it can be run
+        # against a live schedule without pausing it (#1714).
+        if [ "${_PMT_ACTIONABLE_COUNT}" -eq 0 ]; then
+            ux_bullet "would pause aicron job ${_PMT_AICRON_JOB} and wake nothing (resume: aicron resume ${_PMT_AICRON_JOB})"
+        else
+            ux_bullet "would prompt agent ${_agent} with /gh-pr-merge-train ${_PMT_REPO}"
+        fi
         exit 0
     fi
 
@@ -1310,8 +1393,17 @@ main() {
         exit 0
     fi
     _target="${_PMT_TARGET_COUNT}"
-    if [ "${_target}" -eq 0 ]; then
-        ux_info "No target PR on ${_PMT_REPO} — nothing to wake a session for."
+    # An empty queue is the zero-actionable case with one target, so the two
+    # share the exit — but not the wording: "no candidates at all" and "every
+    # candidate is blocked or unreviewed" are different things to read in a cron
+    # log, and the second is the one that names a human's next move (#1714).
+    if [ "${_PMT_ACTIONABLE_COUNT}" -eq 0 ]; then
+        if [ "${_target}" -eq 0 ]; then
+            ux_info "No target PR on ${_PMT_REPO} — nothing to wake a session for; pausing aicron job ${_PMT_AICRON_JOB} (resume: aicron resume ${_PMT_AICRON_JOB})."
+        else
+            ux_info "No actionable PR among ${_target} target(s) on ${_PMT_REPO} — each is review-blocked or carries no verdict label; pausing aicron job ${_PMT_AICRON_JOB} (resume: aicron resume ${_PMT_AICRON_JOB})."
+        fi
+        _pmt_pause_job || :
         exit 0
     fi
 
