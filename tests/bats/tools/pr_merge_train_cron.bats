@@ -383,6 +383,27 @@ _seed_backoff() {
     printf '%s %s %s\n' "$1" "$2" "${_fp}" >"${_BACKOFF_FILE}"
 }
 
+# Park the backoff on queue <1> — tick once to record its fingerprint, once
+# more to prove that fingerprint now skips — then present queue <2> and assert
+# the change woke a session. Every "X resets the backoff" test is this shape
+# with a different pair, so the pair IS the test: what varies between the two
+# arguments is the single field under examination.
+#
+# `$output`/`$status` are left holding the final tick's, for a caller that
+# wants to assert more (the window reset, say).
+_assert_change_wakes_train() {
+    _set_prs "$1"
+    _run_tick
+    _run_tick
+    assert_output --partial "Queue unchanged"
+
+    _set_prs "$2"
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+}
+
 # Hold an exclusive flock on the tick's lock file in a background process
 # until teardown kills it, so the script under test sees a contended lock.
 # Blocks until the holder has actually acquired the lock.
@@ -626,45 +647,24 @@ _hold_lock() {
 }
 
 @test "pr_merge_train_cron: a moved head resets the backoff immediately" {
-    _set_prs "[$(_pr_json 11 30 false oid-a)]"
-    _run_tick
-    _run_tick
-    assert_output --partial "Queue unchanged"
-
-    _set_prs "[$(_pr_json 11 30 false oid-b)]"
-    : >"${_LOG}"
-    _run_tick
-    assert_success
-    _assert_logged "herdr agent prompt"
+    _assert_change_wakes_train \
+        "[$(_pr_json 11 30 false oid-a)]" \
+        "[$(_pr_json 11 30 false oid-b)]"
     assert_equal "$(_backoff_window)" "1"
 }
 
 # A verdict label flipping is the #1709 scenario in reverse: the queue that had
 # nothing to do suddenly has something to do, and must not wait out a window.
 @test "pr_merge_train_cron: a verdict label change resets the backoff" {
-    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-blocked"}]')]"
-    _run_tick
-    _run_tick
-    assert_output --partial "Queue unchanged"
-
-    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-passed"}]')]"
-    : >"${_LOG}"
-    _run_tick
-    assert_success
-    _assert_logged "herdr agent prompt"
+    _assert_change_wakes_train \
+        "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-blocked"}]')]" \
+        "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-passed"}]')]"
 }
 
 @test "pr_merge_train_cron: a mergeStateStatus change resets the backoff" {
-    _set_prs "[$(_pr_json 11 30 false oid11 BLOCKED)]"
-    _run_tick
-    _run_tick
-    assert_output --partial "Queue unchanged"
-
-    _set_prs "[$(_pr_json 11 30 false oid11 CLEAN)]"
-    : >"${_LOG}"
-    _run_tick
-    assert_success
-    _assert_logged "herdr agent prompt"
+    _assert_change_wakes_train \
+        "[$(_pr_json 11 30 false oid11 BLOCKED)]" \
+        "[$(_pr_json 11 30 false oid11 CLEAN)]"
 }
 
 # AC-3, and the whole reason the dispatcher needs no second signal channel: a
@@ -672,16 +672,9 @@ _hold_lock() {
 # already a fingerprint change. Same for a failed attempt that pushed anything
 # (covered by the moved-head test above).
 @test "pr_merge_train_cron: a merged PR leaving the queue resets the backoff" {
-    _set_prs "[$(_pr_json 11 30),$(_pr_json 12 30)]"
-    _run_tick
-    _run_tick
-    assert_output --partial "Queue unchanged"
-
-    _set_prs "[$(_pr_json 12 30)]"
-    : >"${_LOG}"
-    _run_tick
-    assert_success
-    _assert_logged "herdr agent prompt"
+    _assert_change_wakes_train \
+        "[$(_pr_json 11 30),$(_pr_json 12 30)]" \
+        "[$(_pr_json 12 30)]"
     assert_equal "$(_backoff_window)" "1"
 }
 

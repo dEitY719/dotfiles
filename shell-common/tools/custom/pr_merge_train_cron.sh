@@ -444,7 +444,7 @@ _pmt_backoff_gate() {
     case "${_window}" in '' | *[!0-9]*) _window=0 ;; esac
     case "${_remaining}" in '' | *[!0-9]*) _remaining=0 ;; esac
 
-    if [ "${_PMT_FINGERPRINT}" != "${_prev_fp:-}" ]; then
+    if [ "${_PMT_FINGERPRINT}" != "${_prev_fp}" ]; then
         # Reset to the smallest window, and run: something moved.
         _pmt_backoff_write "${_file}" 1 1
         return 1
