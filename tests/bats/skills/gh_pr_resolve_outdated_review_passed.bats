@@ -45,18 +45,15 @@
 # `STUB_COMMENTS_JSON` / `STUB_ME_LOGIN` control the #1601 freshness lookup —
 # `_marker_comment <login> <sha>` builds one matching comment object.
 # `STUB_MARKER_POST_RC` fails the keep-path's marker repost.
+#
+# `_marker_comment`, the `gh`/`_gh_pr_edit_safe_label` stubs, and the rebase
+# repo builder are shared with the sister `gh:pr-resolve-conflict` suite —
+# see `_fixtures/review_passed_gh_stub.sh` (#1700).
 
 load '../test_helper'
 
 FIXTURE='tests/bats/skills/_fixtures/gh_pr_resolve_outdated_review_passed.sh'
-
-# One PR-comment object carrying a fresh `review-verdict:review-passed`
-# marker for <sha>, authored by <login> — mirrors what
-# `devx_pr_review_all_write_label` actually posts.
-_marker_comment() {
-    jq -nc --arg login "$1" --arg sha "$2" \
-        '{user: {login: $login}, body: ("<!-- review-verdict:review-passed:" + $sha + " -->")}'
-}
+GH_STUB='tests/bats/skills/_fixtures/review_passed_gh_stub.sh'
 
 setup() {
     setup_isolated_home
@@ -68,109 +65,19 @@ setup() {
     : "${STUB_COMMENTS_JSON:=[]}"
     export STUB_CURRENT_LABELS STUB_ME_LOGIN STUB_COMMENTS_JSON
     # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/${GH_STUB}"
+    # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
-    # shellcheck disable=SC2317  # called indirectly by the helpers under test
-    gh() {
-        printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$GH_LOG"
-        if [ "$1" = "api" ]; then
-            case "$2" in
-                */labels)
-                    printf '%s\n' "$STUB_CURRENT_LABELS" | tr ',' '\n'
-                    return 0
-                    ;;
-                user)
-                    printf '%s\n' "$STUB_ME_LOGIN"
-                    return 0
-                    ;;
-            esac
-            case "$*" in
-                *"/comments"*"--jq"*)
-                    # Single-page only (no Link header) — enough to exercise
-                    # the freshness check without re-deriving pagination,
-                    # already pinned elsewhere (gh_pr_merge_train_review_verdict_gate.bats).
-                    _fs_jq_expr=""
-                    _fs_want_next=0
-                    for _fs_arg in "$@"; do
-                        if [ "$_fs_want_next" -eq 1 ]; then
-                            _fs_jq_expr="$_fs_arg"
-                            _fs_want_next=0
-                            continue
-                        fi
-                        case "$_fs_arg" in
-                            --jq) _fs_want_next=1 ;;
-                            -i)
-                                printf 'HTTP/1.1 200 OK\n'
-                                printf 'Content-Type: application/json; charset=utf-8\r\n'
-                                printf '\r\n'
-                                ;;
-                        esac
-                    done
-                    printf '%s' "$STUB_COMMENTS_JSON" | jq -r "$_fs_jq_expr"
-                    return 0
-                    ;;
-                *"-X POST"*"/comments"*)
-                    # The keep-path marker repost — distinct from the
-                    # freshness GET above (no `--jq`). STUB_MARKER_POST_RC
-                    # simulates the POST itself failing (PR #1699 review,
-                    # codex round-3 BLOCKER: this path was untested).
-                    return "${STUB_MARKER_POST_RC:-0}"
-                    ;;
-            esac
-        fi
-        return 0
-    }
-    # shellcheck disable=SC2317  # called indirectly by the helpers under test
-    _gh_pr_edit_safe_label() {
-        printf 'add %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$GH_LOG"
-        return 0
-    }
+    _review_passed_gh_stub_setup
 }
 
 teardown() {
     teardown_isolated_home
 }
 
-# Builds a repo where a clean rebase is simulated with a real `git
-# cherry-pick`: OLD_HEAD's diff for x.txt onto OLD_BASE is reproduced
-# byte-for-byte as NEW_HEAD_SAME's diff onto NEW_BASE (new commit, same
-# content) -- the exact shape a conflict-free rebase produces. NEW_HEAD_DIFF
-# instead carries genuinely different content, for the "real change" case.
+# eval-friendly: exports REPO_DIR/OLD_BASE/OLD_HEAD/NEW_BASE/NEW_HEAD_SAME/NEW_HEAD_DIFF.
 _1698_make_repo() {
-    REPO_DIR="$(mktemp -d "${BATS_TEST_TMPDIR}/repo.XXXXXX")"
-    (
-        cd "$REPO_DIR" || exit 1
-        git init -q -b main
-        git config user.email t@t
-        git config user.name Test
-
-        printf 'a=1\n' >a.txt
-        git add a.txt
-        git commit -qm "base v1"
-        OLD_BASE=$(git rev-parse HEAD)
-
-        printf 'hello\n' >x.txt
-        git add x.txt
-        git commit -qm "PR: add x.txt"
-        OLD_HEAD=$(git rev-parse HEAD)
-
-        git checkout -q "$OLD_BASE"
-        printf 'a=2\n' >a.txt
-        git add a.txt
-        git commit -qm "base v2 (another PR merged first)"
-        NEW_BASE=$(git rev-parse HEAD)
-
-        git cherry-pick "$OLD_HEAD" >/dev/null
-        NEW_HEAD_SAME=$(git rev-parse HEAD)
-
-        git checkout -q "$NEW_BASE"
-        printf 'goodbye\n' >x.txt
-        git add x.txt
-        git commit -qm "PR: add x.txt (different content after rebase)"
-        NEW_HEAD_DIFF=$(git rev-parse HEAD)
-
-        printf 'REPO_DIR=%s\nOLD_BASE=%s\nOLD_HEAD=%s\nNEW_BASE=%s\nNEW_HEAD_SAME=%s\nNEW_HEAD_DIFF=%s\n' \
-            "$REPO_DIR" "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME" "$NEW_HEAD_DIFF"
-    )
+    _review_passed_make_rebase_repo OLD_HEAD
 }
 
 # ---------------------------------------------------------------------------
