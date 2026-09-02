@@ -1984,7 +1984,7 @@ FIXTURE
 # `_gcp_scan_preflight_is_noop` (#1149 3차 재발).
 #
 # zsh expands aliases at PARSE time, so sourcing gcp_scan.sh while
-# `alias cp='cp -i'` is active (shell-common/aliases/core.sh:68, loaded in
+# `alias cp='cp -i'` is active (shell-common/aliases/core.sh, loaded in
 # zsh/main.zsh Phase 4 — BEFORE Phase 5 functions) permanently imprints
 # `cp -i` into the function body. The restore `cp` then blocks on an
 # overwrite confirmation it can never receive on a non-TTY stdin, silently
@@ -2014,7 +2014,10 @@ FIXTURE
             sed "s/\\bcommand[[:space:]][[:space:]]*\\(cp\\|rm\\|mv\\)\\b/command_OK/g" |
             grep -nE "(^|[^[:alnum:]_./-])(cp|rm|mv)[[:space:]]" || true
     ' _ "${SHELL_COMMON}/functions/gcp_scan.sh"
-    assert_success
+    # No `assert_success`: the pipeline ends in `|| true` (grep exits 1 on the
+    # expected no-match), so status is always 0. `assert_output ""` is the real
+    # assertion, and it also catches a broken `sed` — bats folds stderr into
+    # $output. Same shape as tests/bats/git/test_global_hooks.bats.
     assert_output ""
 }
 
