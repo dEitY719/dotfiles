@@ -164,6 +164,17 @@ def check_manifest_contract(target: Target, manifest: dict[str, Any] | None) -> 
             f".claude-plugin/marketplace.json — {install_ids} cannot be installed"
         ]
 
+    if not isinstance(manifest, dict):
+        # Valid JSON, wrong shape (a top-level list, say). `.get` would raise
+        # AttributeError out of `run_audit`'s per-target loop and take every
+        # remaining repo down with it — the same whole-audit abort the clone
+        # timeout and the null `plugins` key each produced (PR #1691 round 2,
+        # gh:pr-approve analysis).
+        return [
+            f"{target.marketplace}: {target.repo}'s .claude-plugin/marketplace.json "
+            f"is not a JSON object — nothing can be installed from it"
+        ]
+
     violations = []
 
     remote_marketplace = manifest.get("name")
@@ -521,6 +532,10 @@ class GitCloneRemoteSource:
     # (PR #1691 /simplify). A healthy shallow clone of a skills repo is ~1s.
     CLONE_TIMEOUT_SECONDS = 60
 
+    # The git invocation, overridable so a test can point at a binary that
+    # does not exist and prove the OSError path is absorbed per-repo.
+    _git = ["git"]
+
     def __init__(self, workdir: Path, host: str = "https://github.com") -> None:
         self._workdir = workdir
         self._host = host.rstrip("/")
@@ -534,7 +549,7 @@ class GitCloneRemoteSource:
             # one leaves the other two open: `credential.helper=` disables any
             # configured helper (a GCM on the WSL box this repo targets), while
             # the two env vars cover the terminal and askpass paths.
-            command = ["git", "-c", "credential.helper=", "clone", "--depth", "1", "--quiet"]
+            command = [*self._git, "-c", "credential.helper=", "clone", "--depth", "1", "--quiet"]
             no_prompt = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "/bin/false"}
             try:
                 completed = subprocess.run(
@@ -545,10 +560,13 @@ class GitCloneRemoteSource:
                     env={**os.environ, **no_prompt},
                     stdin=subprocess.DEVNULL,
                 )
-            except subprocess.TimeoutExpired:
+            except (subprocess.TimeoutExpired, OSError):
                 # One slow clone must not abort the others — it is this repo's
                 # own "unreachable" F-1 finding (PR #1691 review, both
-                # reviewers).
+                # reviewers). `OSError` joined it in round 2 (gh:pr-approve
+                # analysis): a missing or unexecutable `git` propagated instead
+                # of being absorbed the same way, which is the identical
+                # whole-audit abort by a different door.
                 self._clones[repo] = None
             else:
                 self._clones[repo] = dest if completed.returncode == 0 else None
