@@ -24,12 +24,19 @@ For each PR `N` in the Step 2 queue order:
    and `DIRTY` rows that means the scratch-worktree sequence below, not a bare
    `Skill(...)` call.
 5. **Re-query and re-route.** An atom returning success does not prove the PR
-   is mergeable now.
+   is mergeable now. On the `BEHIND` / `DIRTY` rows, that re-query is also what
+   records the sha this train just pushed — see "Recording the push" below.
 6. **Merge** — `Skill(gh:pr-merge, "<N>")`. No strategy argument (D-4).
 7. **Close the merged PR's implementation tab** — only on a successful merge,
    only when that tab is `idle`. The block is below ("Closing the merged PR's
    implementation tab").
-8. **Record** the outcome and continue.
+8. **Record** the outcome and continue. After a **successful** merge only, drop
+   that PR's pushed-sha record — otherwise the state dir grows one file per
+   merged PR forever (#1708). Best-effort; it can never fail the merge:
+
+   ```bash
+   _gh_pr_merge_train_forget_pushed_sha "$STATE_DIR" "<N>" || true
+   ```
 
 ## Closing the merged PR's implementation tab (step 7, #1565)
 
@@ -252,6 +259,28 @@ The atom runs every git command as `git -C "$SCRATCH_DIR" ...` and pushes with
 an explicit refspec (`HEAD:refs/heads/<head>`), because a detached HEAD has no
 upstream to infer. That contract is the atoms' own — see their
 `references/preflight.md` / `references/rebase-flow.md`.
+
+### Recording the push (#1708)
+
+The atom's push bumps this PR's `updatedAt` to *now*, so the next Step 2 queue
+build would drop it inside the D-6 quiet period — the train excluding the PR it
+just fixed, on every following tick, forever (`ordering.md` → "Exemption — the
+train's own just-finished push"). Right after step 5's mandatory re-query has
+refreshed `$STATE` (the atom's success alone proves nothing —
+`routing-table.md` → "After every remediation: re-query, do not assume"), stamp
+the head it now reports as this train's own:
+
+```bash
+# Not dead code: this is what lets Step 2 re-admit the PR next tick (#1708).
+_gh_pr_merge_train_record_pushed_sha "$STATE_DIR" "<N>" \
+    "$(printf '%s' "$STATE" | jq -r '.headRefOid')" || true
+```
+
+`$STATE_DIR` is the variable Step 2 bound, threaded across these reference
+files the same way `$TARGET_REPO` / `$TARGET_HOST` already are — same run, same
+turn sequence, no export mechanism of its own. Failing to record costs only the
+exemption, never the remediation: continue routing through the D-1 table
+either way.
 
 ### Teardown — the one exception
 

@@ -164,3 +164,42 @@ session on a queue that would come out empty. This skill re-runs the filter
 **authoritatively**, because minutes pass between that count and the moment
 each PR is actually processed, and a PR can be touched — or labelled — again
 in between. Same code, later clock.
+
+### Exemption — the train's own just-finished push (#1708)
+
+The quiet period asks "has outside work on this PR settled?", and `updatedAt`
+is its proxy for the answer. The proxy breaks when the train is the one that
+moved the PR: a Step 4 `BEHIND` / `DIRTY` remediation rebases and pushes the
+head, `updatedAt` becomes *now*, and the next queue build drops the PR the
+train just finished fixing. The tick after that re-remediates it and drops it
+again. Nothing is inbound on such a PR — there is nothing left to wait for.
+
+So a PR the filter dropped **solely** for the quiet period rejoins the queue
+when its current `headRefOid` is one this train recorded pushing:
+
+| Function | Where it runs | What it does |
+|---|---|---|
+| `_gh_pr_merge_train_record_pushed_sha` | `train-loop.md`, right after the remediation's re-query | stamps the head the atom just pushed as this train's own |
+| `_gh_pr_merge_train_readmit_own_pushes` | `SKILL.md` Step 2, after the filter | re-admits the PRs whose current head carries that stamp |
+| `_gh_pr_merge_train_forget_pushed_sha` | `train-loop.md` step 8, successful merge only | drops the record so the state dir stays bounded |
+
+**`_gh_pr_merge_train_filter_targets` is not touched by any of this.** The
+re-admission is a *second, additive pass over the same raw list*, never a new
+clause in the shared filter — which is the point: the filter is the one
+implementation this skill and the cron dispatcher both run, and the dispatcher
+has no business granting an exemption only the authoritative run can even
+record. The filter behaves identically for both callers, before and after
+#1708.
+
+`reply-pending` **always wins over the exemption** — a PR carrying it is never
+re-admitted, however certain the train is that it pushed the head itself,
+because the label answers a different question (is a reply pass still
+outstanding) that a rebase does nothing to settle. Plain label presence, no
+staleness window: expiry belongs to the label's own lifecycle, defined once by
+`_gh_pr_merge_train_reply_pending_stale_minutes` above and not re-derived here.
+Drafts are likewise never re-admitted — DRAFT is a D-1 skip row, not a
+quiet-period drop, so the exemption has nothing to release.
+
+A head that has moved past the recorded sha stops matching, and the quiet
+period stands: someone else's commit is on the branch now, which is exactly
+the case D-6 exists for.

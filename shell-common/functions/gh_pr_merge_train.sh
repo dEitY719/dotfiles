@@ -21,6 +21,10 @@
 #   <one gh-pr-view JSON object> | _gh_pr_merge_train_has_reply_pending_label
 #   <one gh-pr-view JSON object> | _gh_pr_merge_train_has_review_blocked_label
 #   <one gh-pr-view JSON object> | _gh_pr_merge_train_has_review_passed_label
+#   _gh_pr_merge_train_record_pushed_sha <state-dir> <pr> <sha>
+#   _gh_pr_merge_train_pushed_sha_matches <state-dir> <pr> <sha>
+#   _gh_pr_merge_train_forget_pushed_sha <state-dir> <pr>
+#   <raw gh-pr-list JSON array> | _gh_pr_merge_train_readmit_own_pushes <state-dir> <filtered-json>
 #
 # `_gh_pr_merge_train_quiet_minutes`
 #   Echo the quiet period in minutes. Default 11; override with the env var
@@ -547,6 +551,190 @@ _gh_pr_merge_train_review_passed_stale() {
     return 2
 }
 
+# The train's own pushes — a quiet-period exemption (issue #1708).
+#
+# The D-6 quiet period drops any PR whose `updatedAt` is too recent, because a
+# deferred `gh:pr-reply` pass (scheduled 4 minutes after the PR opens, by
+# `gh:issue-flow` Step 2.4's `--defer-reply 4`) may still be inbound. That is
+# the right default for work arriving from OUTSIDE the train. It is exactly
+# wrong for work the train did ITSELF: a Step 4 `BEHIND`/`DIRTY` remediation
+# rebases and pushes the PR, which bumps `updatedAt` to "just now", so the very
+# next Step 2 queue build drops the PR the train just finished fixing — and the
+# next tick repeats the whole remediation, forever. Nothing is pending on such
+# a PR; there is nothing left for the quiet period to wait for.
+#
+# The fix is deliberately an ADDITIVE SECOND PASS, not a new clause in
+# `_gh_pr_merge_train_filter_targets`. That filter is the one implementation
+# this skill and `shell-common/tools/custom/pr_merge_train_cron.sh` both run
+# (#1524), and the whole value of it is that the two callers cannot disagree —
+# the dispatcher's cheap "is there anything worth waking a session for"
+# pre-check has no business granting this exemption, since only the
+# authoritative skill run records the pushes in the first place. So the filter
+# stays untouched and byte-for-byte the same for both callers, and the skill
+# alone re-admits, over the SAME raw list, the PRs it can prove it pushed.
+#
+# "Can prove it pushed" is a tiny piece of state: one file per PR under a
+# caller-supplied directory (`SKILL.md` Step 2 binds it under the git common
+# dir), holding the head sha the train pushed. The directory is a PARAMETER,
+# never resolved internally via `git`, for the same reason `--now` is required
+# above: these functions stay pure and the bats suite tests them without
+# mocking anything external.
+#
+# `_gh_pr_merge_train_record_pushed_sha <state-dir> <pr> <sha>`
+#   Write `<sha>` as "the head this train pushed for `<pr>`", creating
+#   `<state-dir>` if needed. Called from `references/train-loop.md`'s
+#   remediation path, right after the mandatory post-remediation re-query has
+#   confirmed the new head. Best-effort: rc 1 on a usage error or an
+#   unwritable state dir (one stderr line, so a broken dir is not invisible
+#   forever), and the caller ignores it — a failure to record only costs the
+#   exemption, never the merge.
+#
+# `_gh_pr_merge_train_pushed_sha_matches <state-dir> <pr> <sha>`
+#   Predicate, no stdout, same shape as the label predicates above. rc 0 iff a
+#   record exists for `<pr>` and equals `<sha>` exactly. rc 1 for: no record,
+#   a different sha (the head moved past what the train pushed — someone
+#   else's commit is on it now and the quiet period must stand), or a `<sha>`
+#   that is empty or the literal string `null` (`jq -r '.headRefOid'` on a
+#   missing field emits `null`, which is the caller's unresolved state, never
+#   evidence — the same fail-closed reading `_gh_pr_merge_train_review_passed_stale`
+#   applies to its own `<head-oid>`).
+#
+# `_gh_pr_merge_train_forget_pushed_sha <state-dir> <pr>`
+#   Drop the record. Called after a successful merge so the state dir does not
+#   grow one file per merged PR forever. Always rc 0 unless `<pr>` is invalid:
+#   removing a record that was never written is not an error.
+#
+#   All three validate `<pr>` against `^[0-9]+$` and refuse anything else,
+#   because `<pr>` becomes a path component — same fail-closed posture as the
+#   login validator in `_gh_pr_merge_train_review_passed_marker_sha`.
+#
+# `_gh_pr_merge_train_readmit_own_pushes <state-dir> <filtered-json>`
+#   The pass itself. Reads the RAW `gh pr list --json ...` array on stdin —
+#   the same array `_gh_pr_merge_train_filter_targets` was given, except it
+#   MUST also carry `headRefOid` (this function needs it; the shared filter
+#   never reads it) — and takes that filter's own output as `<filtered-json>`.
+#   Echoes `<filtered-json>` with the exempt elements APPENDED, unmodified and
+#   whole (same "never project fields away" rule the filter follows). Order is
+#   irrelevant: Step 2's D-2 sort runs over the union afterwards.
+#
+#   An element is re-admitted only when ALL of these hold:
+#     1. it is not already in `<filtered-json>` — never duplicate an element
+#        that survived the ordinary filter on its own;
+#     2. `.isDraft` is not true — DRAFT is a skip row in the D-1 table, not a
+#        quiet-period drop, so there is nothing here to release;
+#     3. it does not carry `reply-pending` — the label ALWAYS wins over this
+#        exemption (#1708 AC2). Simple presence, no staleness window: label
+#        expiry is `_gh_pr_merge_train_filter_targets`'s own business (rule 2
+#        above), and re-deriving it here would be a second definition of it.
+#        The check reuses `_gh_pr_merge_train_has_reply_pending_label` rather
+#        than re-writing its jq, for the same reason F-3 does;
+#     4. `.headRefOid` matches this train's recorded push for that PR.
+#   In other words: the ONLY thing this pass can undo is a drop caused SOLELY
+#   by the quiet period, on a head the train itself put there.
+#
+#   Return codes mirror the shared filter's: 0 with the array on stdout, 1 on
+#   a usage error or unparsable input (nothing on stdout).
+#
+#   A shell loop plus a per-element `jq`, not one jq expression, because
+#   conditions 3 and 4 are shell functions — jq cannot call them, and
+#   re-deriving them inline is exactly the drift this file exists to prevent.
+
+_gh_pr_merge_train_record_pushed_sha() {
+    local _dir="${1-}" _pr="${2-}" _sha="${3-}"
+
+    case "$_pr" in
+        '' | *[!0-9]*)
+            printf '[gh-pr-merge-train] refusing to record a pushed sha for a non-numeric PR: %s\n' \
+                "$_pr" >&2
+            return 1
+            ;;
+    esac
+    if [ -z "$_dir" ]; then
+        printf '[gh-pr-merge-train] usage: _gh_pr_merge_train_record_pushed_sha <state-dir> <pr> <sha>\n' >&2
+        return 1
+    fi
+
+    if ! mkdir -p "$_dir" 2>/dev/null || ! printf '%s\n' "$_sha" >"$_dir/$_pr" 2>/dev/null; then
+        printf '[gh-pr-merge-train] could not record the pushed sha for PR %s under %s — the D-6 exemption (#1708) will not apply.\n' \
+            "$_pr" "$_dir" >&2
+        return 1
+    fi
+}
+
+_gh_pr_merge_train_pushed_sha_matches() {
+    local _dir="${1-}" _pr="${2-}" _sha="${3-}" _recorded
+
+    case "$_pr" in
+        '' | *[!0-9]*) return 1 ;;
+    esac
+    case "$_sha" in
+        '' | null) return 1 ;;
+    esac
+    [ -n "$_dir" ] || return 1
+    [ -f "$_dir/$_pr" ] || return 1
+
+    # `$(...)` strips the trailing newline the recorder writes.
+    _recorded=$(cat "$_dir/$_pr" 2>/dev/null) || return 1
+    [ "$_recorded" = "$_sha" ]
+}
+
+_gh_pr_merge_train_forget_pushed_sha() {
+    local _dir="${1-}" _pr="${2-}"
+
+    case "$_pr" in
+        '' | *[!0-9]*) return 1 ;;
+    esac
+    [ -n "$_dir" ] || return 1
+
+    rm -f "$_dir/$_pr" 2>/dev/null
+    return 0
+}
+
+_gh_pr_merge_train_readmit_own_pushes() {
+    local _dir="${1-}" _filtered="${2-}" _raw _nums _out
+
+    if [ -z "$_dir" ] || [ -z "$_filtered" ]; then
+        printf '[gh-pr-merge-train] usage: _gh_pr_merge_train_readmit_own_pushes <state-dir> <filtered-json>\n' >&2
+        return 1
+    fi
+
+    _raw=$(cat)
+    [ -n "$_raw" ] || return 1
+    printf '%s' "$_raw" | jq -e 'type == "array"' >/dev/null 2>&1 || return 1
+
+    # The four conditions, per element. The loop runs in a subshell (it is the
+    # tail of a pipeline), so it carries its verdict out as PR numbers on
+    # stdout rather than by mutating a variable.
+    _nums=$(printf '%s' "$_raw" | jq -c '.[]?' | while IFS= read -r _elem; do
+        [ -n "$_elem" ] || continue
+        _num=$(printf '%s' "$_elem" | jq -r '.number // empty' 2>/dev/null)
+        case "$_num" in
+            '' | *[!0-9]*) continue ;;
+        esac
+        # 1. already a target on its own merit — nothing was dropped.
+        printf '%s' "$_filtered" | jq -e --argjson n "$_num" \
+            'any(.[]?; .number == $n)' >/dev/null 2>&1 && continue
+        # 2. drafts are a D-1 skip row, not a quiet-period drop.
+        printf '%s' "$_elem" | jq -e '(.isDraft // false)' >/dev/null 2>&1 && continue
+        # 3. the label always wins (#1708 AC2).
+        printf '%s' "$_elem" | _gh_pr_merge_train_has_reply_pending_label && continue
+        # 4. is this head the one the train itself pushed?
+        _gh_pr_merge_train_pushed_sha_matches "$_dir" "$_num" \
+            "$(printf '%s' "$_elem" | jq -r '.headRefOid // empty' 2>/dev/null)" || continue
+        printf '%s\n' "$_num"
+    done)
+
+    # `--argjson filtered` also validates it: an unparsable argument fails the
+    # whole call rather than answering with a half-built queue.
+    _out=$(printf '%s' "$_raw" | jq -c --argjson filtered "$_filtered" --arg nums "$_nums" '
+        ($nums | split("\n") | map(select(length > 0) | tonumber)) as $keep
+        | $filtered + [ .[]? | select(.number as $n | $keep | index($n)) ]
+    ' 2>/dev/null) || return 1
+    [ -n "$_out" ] || return 1
+
+    printf '%s\n' "$_out"
+}
+
 # Self-check (issue #724): catch silent breakage where this file sources
 # cleanly but its public functions never get defined — an interactive-guard
 # regression, a syntax error mid-file, a future rename. Both call sites treat a
@@ -560,7 +748,11 @@ for _gh_pmt_selfcheck_fn in \
     _gh_pr_merge_train_has_review_blocked_label \
     _gh_pr_merge_train_has_review_passed_label \
     _gh_pr_merge_train_review_passed_marker_sha \
-    _gh_pr_merge_train_review_passed_stale; do
+    _gh_pr_merge_train_review_passed_stale \
+    _gh_pr_merge_train_record_pushed_sha \
+    _gh_pr_merge_train_pushed_sha_matches \
+    _gh_pr_merge_train_forget_pushed_sha \
+    _gh_pr_merge_train_readmit_own_pushes; do
     command -v "$_gh_pmt_selfcheck_fn" >/dev/null 2>&1 && continue
     printf '[gh_pr_merge_train] BUG: %s undefined after source — the merge-train target filter will not run. See dotfiles #724 / #1524.\n' \
         "$_gh_pmt_selfcheck_fn" >&2
