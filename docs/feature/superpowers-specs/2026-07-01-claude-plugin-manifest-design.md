@@ -123,6 +123,28 @@ upstream 이 플러그인을 하나 등록할 때마다 sync 가 충돌했다 �
    분기(그리고 `reconcile.sh --apply`)가 해당 묘비를 취소한다. 계약 자체는
    여전히 손대지 않는다 — 모든 PC 에서 빼는 것은 PR 의 일이다.
 
+   묘비에는 세 가지 규칙이 더 붙는다 (PR #1695 라운드2, agy+codex BLOCKER):
+
+   - **묘비 파일은 스코프마다 따로다** (`<scope>/removed.local.json`). 하나를
+     전역으로 쓰면 공용에서 uninstall 한 이름이 같은 이름의 사내 항목까지
+     company/ 복원에서 지운다 — 두 스코프는 이름공간을 공유하지 않는다.
+   - **마켓플레이스 묘비는 그 마켓플레이스의 플러그인까지 함께 지운다.**
+     `marketplace remove foo` 뒤에 `x@foo` 가 union 에 남아 있으면 restore.sh
+     가 방금 건너뛴 마켓플레이스에 설치를 시도한다.
+   - **bare 이름 uninstall 은 계약의 모든 매치를 묘비 처리한다.** 같은 플러그인
+     이름이 두 마켓플레이스에 있으면 uninstall 은 둘 다 지우므로, 첫 매치만
+     기록하면 나머지가 되살아난다.
+
+   묘비 차집합 규칙(`_claude_plugin_tombstone_prune`)은 훅과
+   `reconcile.sh --apply` 가 공유한다 — 두 벌이면 "다시 설치됨" 의 정의가 갈린다.
+
+   **알려진 한계 (agy assumption, 의도적 수용)**: 묘비는 gitignored 머신 로컬
+   상태라 git 으로 전파되지 않는다. 머신 A 에서 지운 계약 플러그인은 머신 B 의
+   계약에 그대로 남아 B 에서는 계속 설치된다. 이것은 버그가 아니라 이 설계의
+   경계다 — 모든 PC 에서 빼는 것은 계약을 고치는 PR 의 일이고, 묘비는 "이 PC
+   에서만" 을 표현하는 수단이다. 두 요구를 한 파일에 겹쳐 담던 것이 #1685 이
+   고친 문제 그 자체다.
+
 효과: upstream 등록 커밋이 fork 와 충돌하지 않고, `plugin-sync.sh` 실행 후
 `git status` 가 깨끗하며, `gcp-scan-skip-paths.conf` 의 매니페스트 항목이
 불필요해진다(#1685 에서 은퇴).

@@ -115,3 +115,25 @@ _claude_plugin_read_json_or() {
         printf '%s' "$2"
     fi
 }
+
+# _claude_plugin_tombstone_prune <tombstone-json> <installed-plugins-json> <installed-marketplaces-json>
+#
+# Drop from a tombstone every entry the SSOT says is installed again, and emit
+# the pruned tombstone as compact JSON. Reinstalling has to cancel a tombstone
+# or the reinstall silently does not stick — claude/plugin/restore.sh subtracts
+# tombstones from its restore union, so a stale one keeps uninstalling the
+# plugin the user just asked for.
+#
+# Two writers need this identical subtraction (PR #1695 agy FOLLOW-UP):
+# claude/hooks/plugin-sync.sh's add branch (the event path) and
+# claude/plugin/reconcile.sh --apply (the full-recompute path that covers
+# events the hook missed). Keeping one copy is what stops them drifting into
+# two different notions of "installed again".
+#
+# Emits nothing on a jq failure, so a caller can tell "prune produced no
+# change" (unchanged JSON) from "prune failed" (empty) and skip the write.
+_claude_plugin_tombstone_prune() {
+    jq -cn --argjson old "$1" --argjson pl "$2" --argjson mp "$3" \
+        '{marketplaces: (($old.marketplaces // []) - $mp),
+          plugins:      (($old.plugins // []) - $pl)}' 2>/dev/null
+}

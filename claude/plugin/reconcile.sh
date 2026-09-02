@@ -140,6 +140,16 @@ if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
 	}
 fi
 
+# Same bootstrap-fallback contract for the tombstone prune (#1695 라운드2):
+# --apply calls it, and this script must keep working on a half-installed tree.
+if ! command -v _claude_plugin_tombstone_prune >/dev/null 2>&1; then
+	_claude_plugin_tombstone_prune() {
+		jq -cn --argjson old "$1" --argjson pl "$2" --argjson mp "$3" \
+			'{marketplaces: (($old.marketplaces // []) - $mp),
+			  plugins:      (($old.plugins // []) - $pl)}' 2>/dev/null
+	}
+fi
+
 PUB_DIR="$SCRIPT_DIR"
 PRIV_DIR="$SCRIPT_DIR/company"
 
@@ -355,10 +365,14 @@ _run_apply() {
 	# 낡았다. 훅의 add 분기가 같은 일을 하지만 이 스크립트는 훅이 놓친 이벤트를
 	# 메우는 자리이므로, 여기서도 한 번 맞춰 준다. 손대지 않은 묘비는 그대로다.
 	if [ -f "$PUB_TOMBSTONE" ]; then
-		_tomb=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$PUB_TOMBSTONE" '{}')" \
-			--argjson pl "$plugins_common" --argjson mp "$target_common" \
-			'{marketplaces: (($old.marketplaces // []) - ($mp | keys)),
-			  plugins:      (($old.plugins // []) - $pl)}' 2>/dev/null)
+		# 차집합 규칙은 claude/hooks/plugin-sync.sh 와 공유한다 (#1695 라운드2
+		# agy FOLLOW-UP) — 두 벌이면 "다시 설치됨" 의 정의가 갈린다.
+		# `local` 은 필수다: 없으면 이 이름이 전역으로 샌다.
+		local _tomb
+		_tomb=$(_claude_plugin_tombstone_prune \
+			"$(_claude_plugin_read_json_or "$PUB_TOMBSTONE" '{}')" \
+			"$plugins_common" \
+			"$(jq -cn --argjson m "$target_common" '$m | keys')")
 		[ -n "$_tomb" ] && _write_if_changed "$PUB_TOMBSTONE" "$_tomb"
 	fi
 

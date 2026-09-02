@@ -161,7 +161,8 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
 공용 스코프는 더 이상 커밋하지 않는다 — `sync manifest` 자동 커밋은 `company/`
 에만 남는다. 훅은 계약을 못 쓰므로, 계약 항목을 uninstall 하면 gitignored
 `removed.local.json` **묘비**에 기록해 `restore.sh` 의 재설치를 막는다(재설치하면
-묘비가 취소된다).
+묘비가 취소된다). 묘비는 스코프별 파일이고, 마켓플레이스 묘비는 그 마켓플레이스의
+플러그인까지 복원 대상에서 뺀다.
 
 커밋 제목의 변경 키 나열 규칙
 (`... sync manifest (+foo -bar 외 N개)`)은 `shell-common/functions/plugin_sync_title.sh`
