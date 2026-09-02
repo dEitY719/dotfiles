@@ -193,3 +193,53 @@ _review_passed_make_context_drift_repo() {
             "$REPO_DIR" "$OLD_BASE" "$_old_head_var" "$_rpr_old_head" "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT"
     )
 }
+
+# The negative twin of `_review_passed_make_context_drift_repo` (PR #1712
+# review, codex BLOCKER). Identical in every respect the `-U0` comparison can
+# see — same PR change (line3 -> line3-changed), so the `-U0` patch-ids still
+# match across the two ranges — except that the base's own advance also MODIFIES
+# an existing line (line1) instead of only inserting. That is the shape a
+# context-free patch-id cannot distinguish from harmless drift but which could
+# have rewritten something the PR's surviving lines depend on, so the
+# pure-insertion guard must refuse to rescue it: `patch-id=changed`, label
+# dropped, even under `lenient`.
+#
+# Prints REPO_DIR / OLD_BASE / <old-head-var> / NEW_BASE /
+# NEW_HEAD_BASE_MODIFIED as `eval`-able assignments ($1 names the old-head
+# variable, same convention as its siblings).
+_review_passed_make_base_modify_repo() {
+    local _old_head_var="${1:-OLD_HEAD}"
+    REPO_DIR="$(mktemp -d "${BATS_TEST_TMPDIR}/repo.XXXXXX")"
+    (
+        cd "$REPO_DIR" || exit 1
+        git init -q -b main
+        git config user.email t@t
+        git config user.name Test
+
+        printf 'line1\nline2\nline3\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "base v1"
+        OLD_BASE=$(git rev-parse HEAD)
+
+        printf 'line1\nline2\nline3-changed\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "PR: change line3"
+        _rpr_old_head=$(git rev-parse HEAD)
+
+        git checkout -q "$OLD_BASE"
+        # Inserts extra-block AND rewrites line1 -- the deletion that
+        # disqualifies the rescue.
+        printf 'line1-changed-by-main\nline2\nextra-block\nline3\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "base v2 (inserts a block AND rewrites line1)"
+        NEW_BASE=$(git rev-parse HEAD)
+
+        printf 'line1-changed-by-main\nline2\nextra-block\nline3-changed\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "PR: change line3 (rebased)"
+        NEW_HEAD_BASE_MODIFIED=$(git rev-parse HEAD)
+
+        printf 'REPO_DIR=%s\nOLD_BASE=%s\n%s=%s\nNEW_BASE=%s\nNEW_HEAD_BASE_MODIFIED=%s\n' \
+            "$REPO_DIR" "$OLD_BASE" "$_old_head_var" "$_rpr_old_head" "$NEW_BASE" "$NEW_HEAD_BASE_MODIFIED"
+    )
+}
