@@ -198,7 +198,14 @@ $(printf '%s' "$BASE_RULES" | jq -r '.[]? | select(.type == "required_status_che
                                           | .parameters.required_status_checks[]?.context' 2>/dev/null)
 EOF
 
-BASE_CHECKS=$(GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/commits/$BASE_ENC/check-runs" 2>/dev/null) \
+# `--paginate` (#1707, codex FOLLOW-UP): the check-runs endpoint pages at 30
+# per the default page size, and `gh api --paginate` on this object-shaped
+# response (`{total_count, check_runs: [...]}`) merges the `check_runs` array
+# across pages into one combined object rather than concatenating separate
+# JSON documents — verified empirically against this repo's own `main`. A base
+# with more than 30 check runs would otherwise silently drop a later, possibly
+# failing required context off the one page an un-paginated call sees.
+BASE_CHECKS=$(GH_HOST="$TARGET_HOST" gh api --paginate "repos/$TARGET_REPO/commits/$BASE_ENC/check-runs" 2>/dev/null) \
     || BASE_CHECKS=''
 # Same normalisation, same reason: `_gh_pr_merge_train_base_ci_red` answers
 # "no proof of red" for a malformed body, which must not read as "green".
