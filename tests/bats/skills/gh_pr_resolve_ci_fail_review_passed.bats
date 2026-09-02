@@ -1,8 +1,11 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_resolve_ci_fail_review_passed.bats
-# Issue #1705 — gh:pr-resolve-ci-fail Step 7 drops a stale `review-passed`:
-#   claude/skills/gh-pr-resolve-ci-fail/references/safety.md  (SSOT block)
-#   claude/skills/gh-pr-resolve-ci-fail/SKILL.md              (Step 7)
+# Issue #1705 — gh:pr-resolve-ci-fail Step 5 drops a stale `review-passed`
+# immediately after the push (moved out of Step 7 by #1711, codex review
+# BLOCKER — see below):
+#   claude/skills/gh-pr-resolve-ci-fail/references/safety.md  (SSOT block,
+#     under "Step 5 push")
+#   claude/skills/gh-pr-resolve-ci-fail/SKILL.md              (Step 5)
 # Source-of-truth fixture: _fixtures/gh_pr_resolve_ci_fail_review_passed.sh
 #
 # Why this file is so much smaller than its two rebase siblings
@@ -14,6 +17,13 @@
 # pinning) stay pinned in tests/bats/functions/gh_pr_edit_safe.bats; what this
 # file pins is that THIS skill reaches the primitive, with the right label,
 # and never widens to `review-blocked`.
+#
+# #1711 (codex review of PR #1711, BLOCKER): the original #1705 landing put
+# the drop in Step 7, after Step 6's optional `--wait`. A re-review completing
+# during that wait could grant a genuinely fresh `review-passed` for the new
+# head, and the deferred drop would then delete a verdict that was correct at
+# the moment it ran. The ordering tests below pin that the drop now runs
+# before Step 7 — i.e. before `--wait` ever gets a chance to run.
 
 load '../test_helper'
 
@@ -89,7 +99,7 @@ _stub_gh_fails() {
 
 @test "#1705: a successful CI-fix push drops review-passed from that PR" {
     _stub_gh_ok
-    run resolve_ci_fail_step7 99 acme/widget github.com
+    run resolve_ci_fail_step5_drop_review_passed 99 acme/widget github.com
     assert_success
     run cat "$GH_LOG"
     assert_output --partial 'api -X DELETE repos/acme/widget/issues/99/labels/review-passed'
@@ -97,16 +107,49 @@ _stub_gh_fails() {
 
 @test "#1705: the drop reports one line" {
     _stub_gh_ok
-    run resolve_ci_fail_step7 99 acme/widget github.com
+    run resolve_ci_fail_step5_drop_review_passed 99 acme/widget github.com
     assert_output --partial '[OK] `review-passed` 라벨 제거됨'
     assert_output --partial 'CI 수정 커밋으로 head 가 바뀌어 이전 판정 무효화'
 }
 
 @test "#1705: the drop is pinned to the target host (#1403 / #1407)" {
     _stub_gh_ok
-    resolve_ci_fail_step7 99 acme/widget ghe.example.com
+    resolve_ci_fail_step5_drop_review_passed 99 acme/widget ghe.example.com
     run cat "$GH_LOG"
     assert_output --partial 'labels/review-passed [GH_HOST=ghe.example.com]'
+}
+
+# ---------------------------------------------------------------------
+# #1711 — the drop must run BEFORE Step 7 (i.e. before Step 6's --wait
+# ever gets a chance to run), closing the race a deferred drop opened.
+# ---------------------------------------------------------------------
+
+@test "#1711: the review-passed drop precedes the CI-fail label removal in the call log" {
+    _stub_gh_ok
+    resolve_ci_fail_step5_through_7 99 acme/widget github.com
+    run cat "$GH_LOG"
+    assert_success
+    # The review-passed DELETE must appear before the CI-fail DELETE — if
+    # a --wait had run between them, this is the exact window (#1711).
+    local _rp_line _ci_line
+    _rp_line=$(grep -n 'labels/review-passed' "$GH_LOG" | head -1 | cut -d: -f1)
+    _ci_line=$(grep -n 'labels/CI%20fail' "$GH_LOG" | head -1 | cut -d: -f1)
+    [ -n "$_rp_line" ]
+    [ -n "$_ci_line" ]
+    [ "$_rp_line" -lt "$_ci_line" ]
+}
+
+@test "#1711: safety.md places the review-passed drop under Step 5, before the Step 7 heading" {
+    local _doc="${SKILL_DIR}/references/safety.md"
+    local _step5_line _drop_line _step7_line
+    _step5_line=$(grep -n '^## Step 5 push' "$_doc" | head -1 | cut -d: -f1)
+    _drop_line=$(grep -n '_gh_pr_drop_label "\$PR_NUMBER" review-passed' "$_doc" | head -1 | cut -d: -f1)
+    _step7_line=$(grep -n '^## Step 7 label removal' "$_doc" | head -1 | cut -d: -f1)
+    [ -n "$_step5_line" ]
+    [ -n "$_drop_line" ]
+    [ -n "$_step7_line" ]
+    [ "$_step5_line" -lt "$_drop_line" ]
+    [ "$_drop_line" -lt "$_step7_line" ]
 }
 
 # ---------------------------------------------------------------------
@@ -119,7 +162,7 @@ _stub_gh_fails() {
     # `review-blocked` as genuinely attached, so a widened drop would have
     # something real to hit.
     _stub_gh_absent_but_blocked
-    run resolve_ci_fail_step7 99 acme/widget github.com
+    run resolve_ci_fail_step5_drop_review_passed 99 acme/widget github.com
     assert_success
     run cat "$GH_LOG"
     # The skill saw the label in the list...
@@ -136,7 +179,7 @@ _stub_gh_fails() {
 
 @test "soft-fail: a PR that never earned the label warns about nothing" {
     _stub_gh_absent_but_blocked
-    run resolve_ci_fail_step7 99 acme/widget github.com
+    run resolve_ci_fail_step5_through_7 99 acme/widget github.com
     assert_success
     refute_output --partial '[WARN] `review-passed`'
     assert_output --partial '[OK] PR #99 CI 복구 완료'
@@ -144,7 +187,7 @@ _stub_gh_fails() {
 
 @test "soft-fail: a genuine delete failure warns but the CI-fix report still prints" {
     _stub_gh_fails
-    run resolve_ci_fail_step7 99 acme/widget github.com
+    run resolve_ci_fail_step5_through_7 99 acme/widget github.com
     assert_success
     assert_output --partial '[WARN] `review-passed` 라벨 제거 실패'
     assert_output --partial '[OK] PR #99 CI 복구 완료'
@@ -154,7 +197,7 @@ _stub_gh_fails() {
 # Doc guards
 # ---------------------------------------------------------------------
 
-@test "doc-guard: SKILL.md Step 7 names the shared helper and the issue" {
+@test "doc-guard: SKILL.md Step 5 names the shared helper and the issue" {
     run grep -qF -- '_gh_pr_drop_label' "${SKILL_DIR}/SKILL.md"
     assert_success
     run grep -qF -- '#1705' "${SKILL_DIR}/SKILL.md"
@@ -192,7 +235,7 @@ _stub_gh_fails() {
 }
 
 @test "doc-guard: the #1563 SSOT lists gh:pr-resolve-ci-fail as a consumer" {
-    run grep -qE 'gh:pr-resolve-ci-fail +Step 7' \
+    run grep -qE 'gh:pr-resolve-ci-fail +Step 5' \
         "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh"
     assert_success
 }
