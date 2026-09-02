@@ -12,23 +12,17 @@
 # were identical between the two files. Kept in one place per #1524 (a test
 # helper must not be free to drift from the fixture it exercises).
 
-# One PR-comment object carrying a fresh `review-verdict:review-passed`
-# marker for <sha>, authored by <login> — mirrors what
-# `devx_pr_review_all_write_label` actually posts.
-_marker_comment() {
-    jq -nc --arg login "$1" --arg sha "$2" \
-        '{user: {login: $login}, body: ("<!-- review-verdict:review-passed:" + $sha + " -->")}'
-}
-
-# The #1706 counterpart: one PR-comment object carrying a REVOCATION marker,
-# the thing a human posts by hand after removing `review-passed` from the UI.
-# Read side: the last marker of either type wins by comment order, and a
-# revocation reads as "no verdict at all" — see
+# One PR-comment object carrying a fresh `review-verdict:<verdict>` marker
+# for <sha>, authored by <login> — mirrors what `devx_pr_review_all_write_label`
+# actually posts. <verdict> defaults to `review-passed`; pass `revoked` for
+# the #1706 counterpart, the marker a human posts by hand after removing
+# `review-passed` from the UI. Read side: the last marker of either type wins
+# by comment order, and a revocation reads as "no verdict at all" — see
 # `devx-pr-review-all/references/review-verdict-label.md` → "Revoking a stale
 # review-passed by hand".
-_revoked_marker_comment() {
-    jq -nc --arg login "$1" --arg sha "$2" \
-        '{user: {login: $login}, body: ("<!-- review-verdict:revoked:" + $sha + " -->")}'
+_marker_comment() {
+    jq -nc --arg login "$1" --arg sha "$2" --arg verdict "${3:-review-passed}" \
+        '{user: {login: $login}, body: ("<!-- review-verdict:" + $verdict + ":" + $sha + " -->")}'
 }
 
 # Call from setup(), AFTER GH_LOG/STUB_* are exported and the skill-specific

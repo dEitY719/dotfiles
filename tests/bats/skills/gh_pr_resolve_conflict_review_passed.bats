@@ -151,7 +151,7 @@ _1700_make_repo() {
     # content-identical rebase once the marker was revoked.
     STUB_COMMENTS_JSON=$(jq -nc \
         --argjson passed "$(_marker_comment "$STUB_ME_LOGIN" "$BACKUP")" \
-        --argjson revoked "$(_revoked_marker_comment "$STUB_ME_LOGIN" "$BACKUP")" \
+        --argjson revoked "$(_marker_comment "$STUB_ME_LOGIN" "$BACKUP" revoked)" \
         '[$passed, $revoked]')
     resolve_conflict_step5_reconcile 1687 acme/widget ghe.example.com \
         "$OLD_BASE" "$BACKUP" "$NEW_BASE" "$NEW_HEAD_SAME"

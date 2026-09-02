@@ -388,7 +388,7 @@ _gh_pr_merge_train_has_review_passed_label() {
 #   before.
 _gh_pr_merge_train_review_passed_marker_sha() {
     local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}" \
-        _jq _raw _rc _login_base _headers _bodies _link _last _last_marker
+        _jq _raw _rc _login_base _headers _bodies _link _last
 
     _login_base="$_login"
     case "$_login_base" in
@@ -458,19 +458,13 @@ _gh_pr_merge_train_review_passed_marker_sha() {
 
     # BOTH marker types in one pass, so `tail -n 1` picks the chronologically
     # last one whichever type it is — "latest marker wins", not "latest
-    # review-passed wins" (#1706).
-    _last_marker=$(printf '%s\n' "$_bodies" |
+    # review-passed wins" (#1706). The trailing `sed` then drops a revoked
+    # last marker outright (prints NOTHING, zero bytes — same as no marker at
+    # all, per the documented contract above) and otherwise extracts the sha.
+    printf '%s\n' "$_bodies" |
         grep -oE '<!-- review-verdict:(review-passed|revoked):[0-9a-f]+ -->' |
-        tail -n 1)
-
-    case "$_last_marker" in
-        # No marker at all, or a revocation — both print NOTHING (zero bytes,
-        # not a bare newline: the pre-#1706 pipeline emitted nothing here and
-        # the documented contract above says "empty").
-        '' | *':revoked:'*) ;;
-        *) printf '%s\n' "$_last_marker" |
-            sed -E 's/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/' ;;
-    esac
+        tail -n 1 |
+        sed -E '/:revoked:/d; s/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/'
 
     return 0
 }
