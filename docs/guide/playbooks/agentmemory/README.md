@@ -147,3 +147,8 @@ false-positive로 뜨고, 그 fix가 systemd cgroup 밖에서 별도 엔진을 �
   live `settings.json`의 `env.*`를 소유하고 dotfiles의 drift-heal 훅은
   `.hooks`/`.statusLine`만 복구하므로(`claude/AGENTS.md` "Configuration
   Files" 참고), 이 SSOT 변경은 외부/공용 PC에서만 적용된다.
+  훅이 이 예산을 넘겨 강제 abort될 경우 진행 중이던 `session/end` /
+  `claude-bridge/sync` REST 요청도 함께 끊겨 그 세션의 관찰 데이터가
+  agentmemory 서버에 반영되지 않을 수 있다 — 예산을 늘리면 정상적인
+  1.5~4.5초 failsafe 종료 전에 abort당할 가능성이 줄어 이 유실도 함께
+  줄어든다.
