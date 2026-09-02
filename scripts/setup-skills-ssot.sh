@@ -82,6 +82,21 @@ _realpath_or_self() {
     readlink -f "$1" 2>/dev/null || printf "%s" "$1"
 }
 
+# 끊어진 symlink 하나가 "옛 dotfiles SSOT(claude/skills, #1680 삭제)를
+# 가리키다 끊어졌다"인지 판별한다. `skill_source_is_managed`는 워크스페이스
+# 루트만 인식하므로(F-3), 삭제된 옛 SSOT를 가리키던 링크는 그 검사를
+# 통과하지 못하면서 동시에 broken이다 — 두 조건을 함께 봐야만 "복구할 사용자
+# 데이터가 없는 broken symlink"와 "정체를 알 수 없는 임의의 broken symlink"
+# (예: 일시적으로 unmount된 사용자 마운트)를 구분할 수 있다 (agy+codex FOLLOW-UP,
+# PR #1729).
+# Usage: _ssot_is_legacy_broken_link <resolved_target_path>
+_ssot_is_legacy_broken_link() {
+    case "$1" in
+        "${DOTFILES_ROOT}/claude/skills" | "${DOTFILES_ROOT}/claude/skills"/*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 # 빈 문자열 = 워크스페이스 없음/너무 넓음 → 연결할 소스가 없다.
 WORKSPACE_ROOT_RESOLVED="$(_skill_workspace_root || true)"
 WORKSPACE_ROOT_REAL=""
@@ -194,9 +209,11 @@ collect_codex_homes() {
 #
 # 마이그레이션 정책:
 #   - target 이 관리 대상으로 향하는 dir-symlink → 해제 후 합성으로 전환.
-#   - target 이 끊어진 dir-symlink → 해제 후 합성으로 전환. #1680 이 삭제한
-#     dotfiles `claude/skills/` 를 가리키던 예전 링크가 정확히 이 모습이고,
-#     끊어진 symlink 에는 보존할 사용자 데이터가 없다.
+#   - target 이 끊어진 dir-symlink이면서 옛 dotfiles `claude/skills/`(#1680
+#     삭제)를 가리키던 것 → 해제 후 합성으로 전환. 그 경우에만 "보존할 사용자
+#     데이터가 없다"고 확신할 수 있다.
+#   - target 이 끊어진 dir-symlink이지만 다른 곳(예: 일시적으로 unmount된
+#     사용자 마운트)을 가리켰던 것 → 보존 + warn (skip, 무손실).
 #   - target 이 사용자 symlink (살아 있고 관리 대상 밖) → 보존 + warn (skip, 무손실).
 #   - target 이 일반 파일 → 보존 + warn (사용자 데이터 가능성, skip).
 #   - target 이 일반 디렉토리 → 합성 시도 (기존 entry 보존).
@@ -207,9 +224,14 @@ link_skills_compose() {
 
     # 1. Migrate legacy directory-symlink → real directory.
     if [ -L "$target" ]; then
-        local current_target
+        local current_target current_target_raw
         current_target="$(readlink -f "$target" 2>/dev/null)"
-        if [ ! -e "$target" ] || skill_source_is_managed "$current_target"; then
+        # raw (비-canonicalize) 버전도 따로 구한다 — 끊어진 symlink 는 부모
+        # 디렉토리(`claude/`)까지 사라졌을 수 있고, `readlink -f` 는 마지막
+        # 컴포넌트를 뺀 나머지가 전부 존재해야 값을 낸다. 존재 여부와 무관한
+        # legacy-경로 패턴 매치는 raw 문자열로 한다.
+        current_target_raw="$(readlink "$target" 2>/dev/null)"
+        if skill_source_is_managed "$current_target" || { [ ! -e "$target" ] && _ssot_is_legacy_broken_link "$current_target_raw"; }; then
             log_info "[$tool] legacy dir-symlink 감지 — entry-level 합성으로 마이그레이션"
             rm -f "$target"
         else
@@ -468,11 +490,15 @@ else
         codex_can_manage=1
 
         # 기존에 전체 dir symlink였다면 해제 후 codex 전용 방식으로 마이그레이션.
-        # 끊어진 링크(=#1680 이 삭제한 dotfiles SSOT 를 가리키던 예전 링크)도
-        # 같은 취급 — 보존할 사용자 데이터가 없다.
+        # 끊어진 링크가 #1680 이 삭제한 dotfiles SSOT 를 가리키던 예전 링크일
+        # 때만 같은 취급 — 그 외의 끊어진 링크는 사용자 symlink 취급으로 보존한다
+        # (agy+codex FOLLOW-UP, PR #1729).
         if [ -L "$CODEX_SKILLS" ]; then
             codex_link_target="$(readlink -f "$CODEX_SKILLS" 2>/dev/null)"
-            if [ ! -e "$CODEX_SKILLS" ] || skill_source_is_managed "$codex_link_target"; then
+            # raw 버전: opencode/gemini 쪽과 같은 이유(#1729) — 끊어진 symlink 는
+            # `readlink -f` 가 canonicalize 못 할 수 있다.
+            codex_link_target_raw="$(readlink "$CODEX_SKILLS" 2>/dev/null)"
+            if skill_source_is_managed "$codex_link_target" || { [ ! -e "$CODEX_SKILLS" ] && _ssot_is_legacy_broken_link "$codex_link_target_raw"; }; then
                 rm -f "$CODEX_SKILLS"
             else
                 log_warning "Codex skills 경로가 사용자 symlink입니다. 건너뜁니다: $CODEX_SKILLS"
