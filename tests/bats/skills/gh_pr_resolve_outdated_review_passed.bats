@@ -220,6 +220,50 @@ _1698_make_repo() {
     refute_output --partial 'add 1695 review-passed'
 }
 
+@test "reconcile (PR #1703): patch-id identical + fresh marker but review-blocked is attached -> drops" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # codex BLOCKER, PR #1703 review: `devx:pr-review-all` applying
+    # `review-blocked` for the SAME head deletes the opposite `review-passed`
+    # LABEL but never the old `review-verdict:review-passed:<old-head>` marker
+    # comment, and posts no marker of its own. The surviving marker is
+    # evidence of a SUPERSEDED verdict, so re-granting off it alone would
+    # leave two contradictory verdicts on one PR.
+    STUB_CURRENT_LABELS="test,review-blocked"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    assert_success
+    assert_output --partial 'patch-id=identical'
+    assert_output --partial 'label=dropped'
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
+    # Reading `review-blocked` must never turn into writing it (#1563).
+    refute_output --partial 'labels/review-blocked'
+}
+
+@test "reconcile (PR #1703): keep path reports label=failed marker=skipped when the label add itself fails" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # agy FOLLOW-UP, PR #1703 review: the add and the marker POST used to sit
+    # in one `&&` chain, so a failed ADD still reported `label=granted`.
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    STUB_LABEL_ADD_RC=1
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    assert_success
+    assert_output --partial 'patch-id=identical'
+    assert_output --partial 'label=failed'
+    refute_output --partial 'label=granted'
+    # The marker POST is unreachable once the add failed — say so, rather
+    # than reporting a `marker=` outcome that never happened.
+    assert_output --partial 'marker=skipped'
+    refute_output --partial 'marker=reposted'
+    run cat "$GH_LOG"
+    refute_output --partial "review-verdict:review-passed:${NEW_HEAD_SAME}"
+}
+
 @test "reconcile: changed patch-id drops the label exactly as before, no add" {
     eval "$(_1698_make_repo)"
     cd "$REPO_DIR" || fail "cd failed"

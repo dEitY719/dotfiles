@@ -86,6 +86,33 @@
 # `_gh_pr_resolve_outdated_has_label` survives as a function, but its call
 # site is now purely DIAGNOSTIC — it fills the report's `prior=` field.
 #
+# A surviving marker proves a verdict was ISSUED for that head, not that it is
+# still the CURRENT one (PR #1703 review, codex BLOCKER). Nothing deletes a
+# marker — the property #1700 leans on — but that cuts both ways: when
+# `devx:pr-review-all` re-runs against the SAME head (e.g. `--force-review`)
+# and this time finds a real blocker, `devx_pr_review_all_write_label` deletes
+# the opposite `review-passed` LABEL and applies `review-blocked`, while the
+# old `review-verdict:review-passed:<same-head>` comment stays put and no
+# marker is written for the blocked verdict at all. The #1601 freshness check
+# then still answers rc 0 (FRESH) off that superseded marker, so a later
+# content-identical rebase would re-grant `review-passed` on top of a live
+# `review-blocked` — two contradictory verdicts on one PR.
+#
+# So the keep/re-grant gate carries one more precondition: the PR must NOT
+# currently carry `review-blocked`. That label is a much safer thing to gate on
+# than `review-passed` ever was. It is applied only by an explicit BLOCKER
+# finding and cleared only by an explicit resolution (`devx:pr-review-all`'s
+# pass path, or `gh:pr-reply` Step 6 once the blockers are answered, #1634) —
+# it has none of the incidental unconditional-drop paths that made
+# `review-passed` presence the wrong question in the first place (see the
+# section above), so re-introducing a label check HERE does not re-introduce
+# the #1700 race. This is a READ, never a write: the "never touch
+# `review-blocked`" rule below governs adding and removing it, not consulting
+# it to decide whether some OTHER label may be granted. A disqualified PR
+# takes the ordinary drop path, which is still correct — `review-passed` is
+# either already absent (the usual post-#1700 state) or is being correctly
+# invalidated in favour of the blocked verdict that superseded it.
+#
 # Label presence alone was never enough either (PR #1699 review, codex round-2
 # BLOCKER): a label can outlive its own freshness marker (e.g. some other bug
 # already left the PR in a stale-but-labelled state before this skill ever
@@ -154,11 +181,18 @@
 #
 # Report token — two INDEPENDENT dimensions on every path (#1700 F-4):
 #   patch-id=<identical|changed|unreadable>  what the content comparison said
-#   label=<granted|dropped>                  what this run actually did
-#   prior=<present|absent>                   (granted only) was the label still
-#       attached — `absent` marks a #1700 re-grant after another path already
-#       stripped it, `present` an ordinary #1698 keep
-#   marker=<reposted|failed>                 (granted only) did the repost land
+#   label=<granted|dropped|failed>           what this run actually did
+#   prior=<present|absent>                   (keep path only) was the label
+#       still attached — `absent` marks a #1700 re-grant after another path
+#       already stripped it, `present` an ordinary #1698 keep
+#   marker=<reposted|failed|skipped>         (keep path only) did the repost
+#       land — `skipped` when the label add above failed, so the repost was
+#       never reached
+# `label=failed` is the keep path whose label ADD itself failed (PR #1703
+# review, agy FOLLOW-UP): the add and the repost used to share one `&&` chain,
+# so either failing reported the same `marker=failed` under a flat, unearned
+# `label=granted` — reading as "the label is on the PR" when it never landed.
+# Still soft-fail: the next tick's #1601 check self-heals it either way.
 # Before the split, the drop path printed a fixed `patch-id=changed` whatever
 # its reason, so `patch-id=identical label=dropped` ("content was the same,
 # but nothing proved it was ever certified") was reported as if the content
@@ -274,9 +308,16 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         _pid_state=changed
     fi
 
+    # A currently-attached `review-blocked` disqualifies the keep/re-grant path
+    # outright — see the file header's "A surviving marker proves..." section
+    # (PR #1703 review, codex BLOCKER). Read LAST in the `&&` chain so the
+    # extra API call only happens on a PR that already cleared the cheap local
+    # checks. `!` inside an `if` condition, so a rc-1 lookup (fail-closed:
+    # "not present") cannot trip a caller's errexit.
     _fresh_rc=1
     if [ "$_pid_state" = identical ] &&
-        command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1; then
+        command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1 &&
+        ! _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-blocked; then
         _me="${GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN:-$(
             if [ -n "$_host" ]; then
                 # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
@@ -312,21 +353,37 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         # "What proves..." section): `_prior` is a report field, not a gate.
         # Read BEFORE the add below, or it would always report `present`. An
         # `if` (not `&&`) so a rc-1 lookup cannot trip a caller's errexit.
-        local _marker=reposted _prior=absent
+        local _prior=absent
         if _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-passed; then
             _prior=present
         fi
+        # The two writes stay in ONE subshell (the `GH_HOST` export must scope
+        # to both), but exit with DISTINCT codes so the report can tell which
+        # of them failed (PR #1703 review, agy FOLLOW-UP): the old single `&&`
+        # chain collapsed both into one `marker=failed` while still printing a
+        # flat `label=granted`, so a PR whose label add never landed was
+        # reported as labelled. The marker POST is unreachable when the add
+        # fails, so that case reports `marker=skipped`, not an outcome.
+        local _write_rc=0
         (
             if [ -n "$_host" ]; then
                 # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
                 export GH_HOST="$_host"
             fi
-            _gh_pr_edit_safe_label "$_pr" review-passed --repo "$_repo" >/dev/null 2>&1 &&
-                gh api -X POST "repos/$_repo/issues/$_pr/comments" \
-                    -f "body=<!-- review-verdict:review-passed:$_new_head -->" >/dev/null 2>&1
-        ) || _marker=failed
-        printf 'patch-id=%s label=granted prior=%s marker=%s\n' \
-            "$_pid_state" "$_prior" "$_marker"
+            _gh_pr_edit_safe_label "$_pr" review-passed --repo "$_repo" >/dev/null 2>&1 ||
+                exit 3
+            gh api -X POST "repos/$_repo/issues/$_pr/comments" \
+                -f "body=<!-- review-verdict:review-passed:$_new_head -->" >/dev/null 2>&1 ||
+                exit 4
+        ) || _write_rc=$?
+        local _label=granted _marker=reposted
+        case "$_write_rc" in
+            0) ;;
+            3) _label=failed _marker=skipped ;;
+            *) _marker=failed ;;
+        esac
+        printf 'patch-id=%s label=%s prior=%s marker=%s\n' \
+            "$_pid_state" "$_label" "$_prior" "$_marker"
         return 0
     fi
 

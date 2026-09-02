@@ -130,6 +130,12 @@ case "$_vl_result" in
         # Step 5 의 검증/보고는 그대로 진행).
         echo "[WARN] \`review-passed\` 유지는 됐으나 새 SHA marker 재게시 실패 — 다음 tick 에 stale 로 self-heal 됨"
         ;;
+    *"label=failed"*)
+        # 라벨 추가 자체가 실패한 경우 — 라벨은 붙지 않았고 marker 재게시는
+        # 아예 시도되지 않았다(`marker=skipped`). 위 WARN 과 달리 "유지됐다"고
+        # 말하면 안 된다(PR #1703 리뷰, agy FOLLOW-UP).
+        echo "[WARN] \`review-passed\` 재확인 실패 — 라벨 추가 자체가 실패해 아무것도 부여되지 않음"
+        ;;
     *)
         echo "[OK] \`review-passed\` 무효화됨(또는 애초에 없었음) — 최신 판정 없음"
         ;;
@@ -137,13 +143,22 @@ esac
 ```
 
 토큰은 patch-id 상태와 결과를 **각각** 보고한다(#1700 F-4):
-`patch-id=<identical|changed|unreadable>` 와 `label=<granted|dropped>` 가
-독립된 필드다. `label=granted` 에는 `prior=<present|absent>` 가 따라붙어,
+`patch-id=<identical|changed|unreadable>` 와 `label=<granted|dropped|failed>` 가
+독립된 필드다. 유지/재부여 경로에는 `prior=<present|absent>` 가 따라붙어,
 평범한 #1698 유지(`present`)와 다른 경로가 이미 떼어 간 뒤의 #1700
 재부여(`absent`)를 구분해 준다. `patch-id=identical label=dropped` 는
-"내용은 같았지만 재확인 근거(마커)가 없었다"는 뜻이다 — 예전 판은 이 경우까지
+"내용은 같았지만 재확인 근거가 없었다"는 뜻이다 — 예전 판은 이 경우까지
 `patch-id=changed` 로 뭉개 보고해서, 운영자가 "내용이 바뀌었으니 재리뷰가
-필요하다"로 오독했다(#1700 결함 4).
+필요하다"로 오독했다(#1700 결함 4). 그 "근거 없음" 에는 마커 부재/stale 뿐
+아니라 **지금 `review-blocked` 가 붙어 있는 경우**도 포함된다(PR #1703 리뷰,
+codex BLOCKER) — 같은 head 에 나중에 내려진 블로커 판정이 예전
+`review-passed` 마커를 지우지는 않으므로, 마커만 보고 재부여하면 서로 모순되는
+두 판정이 한 PR 에 공존하게 된다.
+
+`label=failed` 는 `marker=failed` 와 다르다: 후자는 라벨은 붙었는데 마커만
+못 올린 경우이고, 전자는 라벨 추가 자체가 실패해 마커 게시까지 도달하지 못한
+경우(`marker=skipped`)다. 둘 다 soft-fail 이라 Step 5 의 나머지 검증/보고는
+그대로 진행한다.
 
 Soft-fail 이다: 실패해도 Step 5 의 검증/보고는 그대로 진행한다.
 

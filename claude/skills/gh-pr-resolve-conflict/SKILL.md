@@ -65,13 +65,24 @@ itself, so a locally stale `$REMOTE/$BASE` still yields the PR's real diff
 start:
 
 ```bash
-OLD_BASE_SHA=$(git merge-base HEAD "$REMOTE/$BASE")
+OLD_BASE_SHA=$(git merge-base HEAD "$REMOTE/$BASE" 2>/dev/null || true)
 ```
 
-A locally stale `$REMOTE/$BASE` only widens `OLD_BASE_SHA`'s range with content
-the PR never touched, which pulls the two patch-ids apart, never together — the
-failure direction is the fail-safe one (an extra `devx:pr-review-all` re-run,
-never a wrongly-preserved `review-passed`).
+Both ways this can go wrong resolve safely, so neither may abort Step 2:
+
+- **`$REMOTE/$BASE` is locally stale** — `merge-base` still succeeds, and only
+  widens `OLD_BASE_SHA`'s range with content the PR never touched, which pulls
+  the two patch-ids apart, never together.
+- **`$REMOTE/$BASE` does not exist locally at all** — never fetched in this
+  checkout, so `merge-base` exits non-zero. The `|| true` keeps that off the
+  step's own exit status and leaves `OLD_BASE_SHA` empty; Step 5's helper reads
+  an empty base as `patch-id=unreadable` and falls through to the ordinary drop.
+
+The failure direction is the fail-safe one in both cases (an extra
+`devx:pr-review-all` re-run, never a wrongly-preserved `review-passed`).
+Do not reorder this before/after `git fetch` to dodge the second case —
+capturing the range *pre*-fetch is what makes Step 5's before/after comparison
+of the same ref name meaningful.
 
 Then run `git fetch "$REMOTE" "$BASE"` and `git rebase "$REMOTE/$BASE"` (all
 three as `git -C "<path>" ...` in `--worktree` mode). Full rebase mechanics,
