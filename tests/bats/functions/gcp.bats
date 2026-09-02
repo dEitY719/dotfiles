@@ -925,36 +925,35 @@ FIXTURE
 }
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Issue #1688 — the context-drift discriminator compared WHOLE LINES as set
-# keys, so a line whose only difference is syntactic noise (a JSON trailing
+# keys, so a line whose only difference was syntactic noise (a JSON trailing
 # comma gained when a later entry was appended after it) read as "content HEAD
 # lacks" and the already-absorbed commit was reported as real work forever.
 #
-# `_gcp_scan_conflict_adds_new_content` now normalizes each line (trailing
-# whitespace + one trailing comma stripped) before the membership test, under
-# two guards added by the PR #1690 review (agy + codex, both BLOCKER — each
-# reproduced against a fixture before being accepted):
+# Stripping that comma textually was tried and REJECTED across three PR #1690
+# review rounds — every round found another place the stripped character
+# carries meaning, each measured flipping a real commit to "drift" (silently
+# dropped, the #1177 data-loss direction). So the discriminator now reads the
+# STRUCTURE: `_gcp_scan_json_leaves` renders each side as one `[path, value]`
+# record per node via `jq -Sc`, and the original byte-exact set comparison runs
+# over those records.
 #
-#  1. SCOPE — normalization runs only on the JSON family (.json/.jsonc/.json5).
-#     On every other path norm() is the identity, so `gcp scan` keeps byte-exact
-#     comparison for Python tuples, CSV empty fields and Markdown hard breaks,
-#     where a trailing comma or trailing space is semantic.
-#  2. EXACT-vs-NORMALIZED SPLIT — normalizing `base` too erased the commit's OWN
-#     delta whenever that delta was itself the noise, so a commit whose only
-#     work was deleting a stray JSON trailing comma was silently dropped. A
-#     theirs line present in base under normalization but not byte-identical to
-#     it is a noise-only modification and now demands a byte-exact match in HEAD.
+# Two properties make that correct where line-stripping was not:
+#   * commas and indentation do not survive parsing -> #1688 drift is absorbed;
+#   * an array index lives IN the path -> element ORDER stays visible.
 #
-# The #1177 contract is unchanged: a commit carrying genuinely new content still
-# returns 0 (real), and a commit that really deletes a line HEAD still has is
-# still caught by the delete branch.
+# The structural path is taken only when jq is present AND all three sides
+# parse. Otherwise the pre-#1688 byte-exact line comparison runs unchanged,
+# which is what keeps non-JSON files (and invalid JSON) behaving as before —
+# with no extension list to maintain.
 # ---------------------------------------------------------------------------
 
 _gcp1688_make_json_repo() {
-    # Emits shell building the marketplaces.json-shaped fixture: `main` gains
-    # entry "b" AND "c", `source` gains only "b". The source commit's payload is
-    # therefore fully absorbed by HEAD, but its last line reads `  "b": "2"`
-    # while HEAD's reads `  "b": "2",` — the trailing comma "c" forced onto it.
+    # marketplaces.json-shaped fixture: `main` gains entry "b" AND "c",
+    # `source` gains only "b". The source commit's payload is fully absorbed by
+    # HEAD, but its last line reads `  "b": "2"` while HEAD's reads
+    # `  "b": "2",` — the trailing comma "c" forced onto it.
     cat <<'FIXTURE'
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1688.XXXXXX")"
         trap "rm -rf $repo" EXIT
@@ -971,17 +970,43 @@ _gcp1688_make_json_repo() {
 FIXTURE
 }
 
+@test "bash: _gcp_scan_json_leaves private function exists" {
+    run_in_bash 'declare -f _gcp_scan_json_leaves >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "leaves #1688: array index lives in the path, so order is preserved" {
+    run_in_bash "
+        f=\$(mktemp); printf '[\"a\",\"b\"]' > \"\$f\"
+        _gcp_scan_json_leaves \"\$f\"; rm -f \"\$f\"
+    "
+    assert_success
+    assert_output --partial '[[0],"a"]'
+    assert_output --partial '[[1],"b"]'
+}
+
+@test "leaves #1688: invalid JSON fails to parse (caller falls back to exact)" {
+    run_in_bash "
+        f=\$(mktemp); printf '{\n  \"a\": \"1\",\n}\n' > \"\$f\"
+        _gcp_scan_json_leaves \"\$f\" >/dev/null 2>&1; echo \"rc=\$?\"; rm -f \"\$f\"
+    "
+    assert_success
+    refute_output --partial "rc=0"
+}
+
+# --- the reported case: still absorbed -------------------------------------
+
 @test "drift #1688: trailing-comma-only difference is drift, not new content (1)" {
     run_in_bash "
         $(_gcp1688_make_json_repo)
         _gcp_scan_conflict_adds_new_content \"\$src\" m.json; echo \"rc=\$?\"
     "
     assert_success
-    # theirs' \`  \"b\": \"2\"\` == HEAD's \`  \"b\": \"2\",\` modulo the comma -> drift.
     assert_output --partial "rc=1"
 }
 
-@test "drift #1688: trailing-whitespace-only difference is drift inside JSON (1)" {
+@test "drift #1688: JSON whitespace noise is drift (1)" {
     run_in_bash "
         $(_gcp903_make_repo)
         printf '{\n  \"a\": \"1\"\n}\n' > w.json && git add w.json && git commit -qm 'add w'
@@ -996,11 +1021,82 @@ FIXTURE
     assert_output --partial "rc=1"
 }
 
-# --- Scope guard (#1690 review: codex BLOCKER) -------------------------------
-# Outside the JSON family norm() is the identity, so trailing whitespace and a
-# trailing comma stay significant. Each case below is a commit whose ENTIRE
-# work is that character; before the scope guard every one read as drift and
-# was silently dropped by Stage-2.
+@test "drift #1688: an extensionless JSON config is covered, no extension list (1)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '{\n  \"a\": \"1\"\n}\n' > .eslintrc && git add .eslintrc && git commit -qm 'add rc'
+        git checkout -q -b source
+        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\"\n}\n' > .eslintrc && git add .eslintrc && git commit -qm 'add b'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\",\n  \"c\": \"3\"\n}\n' > .eslintrc && git add .eslintrc && git commit -qm 'add b and c'
+        _gcp_scan_conflict_adds_new_content \"\$src\" .eslintrc; echo \"rc=\$?\"
+    "
+    assert_success
+    # An extension whitelist could never have reached this file (agy FOLLOW-UP).
+    assert_output --partial "rc=1"
+}
+
+# --- round 3 (codex BLOCKER): JSON array order is content -------------------
+
+@test "drift #1688: a JSON array reorder is real content, not drift (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '[\n  \"a\"\n]\n' > arr.json && git add arr.json && git commit -qm 'add arr'
+        git checkout -q -b source
+        printf '[\n  \"b\",\n  \"a\"\n]\n' > arr.json && git add arr.json && git commit -qm 'insert b BEFORE a'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '[\n  \"a\",\n  \"b\"\n]\n' > arr.json && git add arr.json && git commit -qm 'append b AFTER a'
+        _gcp_scan_conflict_adds_new_content \"\$src\" arr.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # Same elements, different order -> different array. The comma was the only
+    # positional signal, so stripping it textually absorbed this commit.
+    assert_output --partial "rc=0"
+}
+
+@test "drift #1688: a JSON array append HEAD already has is still drift (1)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '[\n  \"a\"\n]\n' > arr.json && git add arr.json && git commit -qm 'add arr'
+        git checkout -q -b source
+        printf '[\n  \"a\",\n  \"b\"\n]\n' > arr.json && git add arr.json && git commit -qm 'append b'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '[\n  \"a\",\n  \"b\",\n  \"c\"\n]\n' > arr.json && git add arr.json && git commit -qm 'append b and c'
+        _gcp_scan_conflict_adds_new_content \"\$src\" arr.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # Order-compatible prefix -> genuinely absorbed. Guards the reorder test
+    # above from being satisfied by a blanket "arrays are always real".
+    assert_output --partial "rc=1"
+}
+
+# --- round 2 (agy + codex BLOCKER): the commit's own delta ------------------
+
+@test "drift #1688: a JSON commit whose only work is deleting a stray comma is NOT dropped (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '{\n  \"a\": \"1\",\n}\n' > s.json && git add s.json && git commit -qm 'add s with stray comma'
+        git checkout -q -b source
+        printf '{\n  \"a\": \"1\"\n}\n' > s.json && git add s.json && git commit -qm 'drop the stray trailing comma'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\",\n}\n' > s.json && git add s.json && git commit -qm 'HEAD never applied the fix'
+        _gcp_scan_conflict_adds_new_content \"\$src\" s.json; echo \"adds=\$?\"
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"noop=\$?\"
+    "
+    assert_success
+    # The base is invalid JSON, so this falls back to exact comparison and the
+    # commit that makes the file parseable stays visible.
+    assert_output --partial "adds=0"
+    assert_output --partial "noop=1"
+}
+
+# --- round 1 (agy + codex BLOCKER): non-JSON stays byte-exact ---------------
+# Each case below is a commit whose ENTIRE work is the character a textual
+# strip would have removed. All three were measured as silently dropped.
 
 @test "drift #1688: trailing whitespace is significant outside JSON (0)" {
     run_in_bash "
@@ -1029,7 +1125,6 @@ FIXTURE
         _gcp_scan_conflict_adds_new_content \"\$src\" t.py; echo \"rc=\$?\"
     "
     assert_success
-    # \`x = 1,\` (tuple) and \`x = 1\` (scalar) are different values -> real.
     assert_output --partial "rc=0"
 }
 
@@ -1048,42 +1143,17 @@ FIXTURE
     assert_output --partial "rc=0"
 }
 
-# --- Exact-vs-normalized split (#1690 review: agy + codex BLOCKER) -----------
-# Inside a JSON file, normalizing `base` as well as `ours` erased the commit's
-# own delta when that delta WAS the noise. Measured before the fix: rc flipped
-# 0 -> 1 and _gcp_scan_preflight_is_noop 1 -> 0, i.e. silently dropped.
+# --- degradation + the #1177 contract ---------------------------------------
 
-@test "drift #1688: a JSON commit whose only work is deleting a stray comma is NOT dropped (0)" {
+@test "drift #1688: without jq the discriminator degrades to exact lines (0)" {
     run_in_bash "
-        $(_gcp903_make_repo)
-        printf '{\n  \"a\": \"1\",\n}\n' > s.json && git add s.json && git commit -qm 'add s with stray comma'
-        git checkout -q -b source
-        printf '{\n  \"a\": \"1\"\n}\n' > s.json && git add s.json && git commit -qm 'drop the stray trailing comma'
-        src=\$(git rev-parse HEAD)
-        git checkout -q main
-        printf '{\n  \"a\": \"1\",\n  \"b\": \"2\",\n}\n' > s.json && git add s.json && git commit -qm 'HEAD never applied the fix'
-        _gcp_scan_conflict_adds_new_content \"\$src\" s.json; echo \"adds=\$?\"
-        _gcp_scan_preflight_is_noop \"\$src\"; echo \"noop=\$?\"
+        $(_gcp1688_make_json_repo)
+        # Shadow jq so the structural guard fails; the pre-#1688 byte-exact
+        # comparison must run, which reads this same fixture as real work.
+        jq() { return 127; }
+        _gcp_scan_conflict_adds_new_content \"\$src\" m.json; echo \"rc=\$?\"
     "
     assert_success
-    # The commit's whole delta IS the comma, and HEAD still carries it -> real.
-    assert_output --partial "adds=0"
-    assert_output --partial "noop=1"
-}
-
-@test "drift #1688: a lone comma line never normalizes to empty (0)" {
-    run_in_bash "
-        $(_gcp903_make_repo)
-        printf '[\n\n]\n' > l.json && git add l.json && git commit -qm 'add l'
-        git checkout -q -b source
-        printf '[\n,\n]\n' > l.json && git add l.json && git commit -qm 'blank line -> lone comma'
-        src=\$(git rev-parse HEAD)
-        git checkout -q main
-        printf '[\n\n\"x\"\n]\n' > l.json && git add l.json && git commit -qm 'HEAD keeps the blank line'
-        _gcp_scan_conflict_adds_new_content \"\$src\" l.json; echo \"rc=\$?\"
-    "
-    assert_success
-    # norm(\",\") must stay \",\" — collapsing it to \"\" would false-match the blank.
     assert_output --partial "rc=0"
 }
 
@@ -1098,11 +1168,10 @@ FIXTURE
         _gcp_scan_conflict_adds_new_content \"\$zsrc\" m.json; echo \"rc=\$?\"
     "
     assert_success
-    # \`  \"z\": \"9\"\` is absent from HEAD in any normalized form -> real.
     assert_output --partial "rc=0"
 }
 
-@test "drift #1688: normalization is symmetric — a real deletion is still detected (0)" {
+@test "drift #1688: a real deletion is still detected (0)" {
     run_in_bash "
         $(_gcp903_make_repo)
         printf '{\n  \"a\": \"1\",\n  \"drop\": \"0\"\n}\n' > d.json && git add d.json && git commit -qm 'add d'
@@ -1114,7 +1183,6 @@ FIXTURE
         _gcp_scan_conflict_adds_new_content \"\$src\" d.json; echo \"rc=\$?\"
     "
     assert_success
-    # base's \`  \"drop\": \"0\"\` is gone from theirs but still in HEAD -> real.
     assert_output --partial "rc=0"
 }
 
@@ -1130,8 +1198,6 @@ FIXTURE
     "
     assert_success
     assert_output --partial "rc=0"
-    # The pre-existing untracked file must survive the probe — without this the
-    # setup line above was unread and the title's non-destructive claim unproven.
     assert_output --partial "EDIT_KEPT"
     assert_output --partial "HEAD_SAME"
     assert_output --partial "PICK_CLEAR"

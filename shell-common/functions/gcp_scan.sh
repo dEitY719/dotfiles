@@ -342,6 +342,29 @@ EOF
     return $rc
 }
 
+_gcp_scan_json_leaves() {
+    # Render JSON file $1 as one `[path, value]` record per node, for the
+    # structural comparison in `_gcp_scan_conflict_adds_new_content` (#1688,
+    # PR #1690 review). Returns non-zero when $1 is not valid JSON — the
+    # caller then falls back to byte-exact line comparison.
+    #
+    # Why `[path, value]` and not canonical text: canonicalizing with `jq -S .`
+    # still emits a trailing comma on every element but the last, so a
+    # line-based comparison over canonical text reproduces the exact bug this
+    # replaces. Paths carry array indices, so element ORDER stays visible while
+    # comma/indentation noise disappears. Containers are recorded as `{}`/`[]`
+    # so adding an empty object or array is content, not a no-op. The leading
+    # `[[], ...]` record covers a top-level scalar, for which `paths` is empty.
+    #
+    # `-S` sorts object keys so a pure key reordering — not meaningful in JSON
+    # — does not read as new content. An empty file yields no records and rc 0,
+    # which is the correct reading of "the commit adds this file".
+    jq -Sc '
+        [[], (if type == "object" then "{}" elif type == "array" then "[]" else . end)],
+        (paths as $p | [$p, (getpath($p) | if type == "object" then "{}" elif type == "array" then "[]" else . end)])
+    ' "$1"
+}
+
 _gcp_scan_conflict_adds_new_content() {
     # Context-drift discriminator (issue #913 regression, #1151, #1688). Returns 0
     # (true) when cherry-picking commit $1 introduces content to file $2 that
@@ -361,7 +384,7 @@ _gcp_scan_conflict_adds_new_content() {
     # below is what distinguishes the two, letting Stage-1.6 defer the drift
     # case to Stage-2 (no-op) while still flagging the real one. Non-destructive:
     # reads blobs only (no checkout / cherry-pick).
-    local sha="$1" f="$2" parent td _gcp_norm
+    local sha="$1" f="$2" parent td _b _o _t
     parent=$(git rev-parse -q --verify "${sha}^1" 2>/dev/null) || return 0
     td=$(mktemp -d "${TMPDIR:-/tmp}/gcp_drift.XXXXXX" 2>/dev/null) || return 0
     # base = the file in the commit's parent (the cherry-pick merge base);
@@ -382,84 +405,66 @@ _gcp_scan_conflict_adds_new_content() {
     #     still present in ours (HEAD has not removed it).
     # Checking adds alone would misclassify a delete-only commit as drift and
     # let Stage-2 silently skip it — silent data loss (gemini PR #1157 review).
-    # Set membership over lines; no sort needed (order-independent).
+    # Set membership; no sort needed (order-independent).
     #
-    # Normalization (issue #1688): raw `$0` keys promote syntactic noise to a
-    # semantic difference. The reported shape is a JSON object — appending an
-    # entry puts a trailing comma on the line before it, so a line the commit
-    # added verbatim (`  "x": "y"`, last entry at the time) no longer matches
-    # HEAD's copy (`  "x": "y",`, no longer last) and the fully absorbed commit
-    # reads as real work forever.
+    # WHAT IS COMPARED (issue #1688, redesigned in PR #1690 review): comparing
+    # raw LINES promotes syntactic noise to a semantic difference. The reported
+    # shape is a JSON object — appending an entry puts a trailing comma on the
+    # line before it, so a line the commit added verbatim (`  "x": "y"`, last
+    # entry at the time) no longer matches HEAD's copy (`  "x": "y",`, no
+    # longer last) and the fully absorbed commit reads as real work forever.
     #
-    # Two guards keep that normalization from reopening the #1177 data-loss
-    # direction (PR #1690 review: agy + codex, both BLOCKER — each verified
-    # here against a reproducing fixture before being accepted):
+    # Stripping that comma textually was tried and rejected across three review
+    # rounds — each round found another place the stripped character carries
+    # meaning (a Python tuple `x = 1,`; a CSV empty trailing field; a Markdown
+    # hard break; a commit whose only work IS deleting a stray comma; and a
+    # JSON array reorder, where the comma is the sole positional signal). Every
+    # one was measured flipping a real commit to "drift", i.e. silently dropped
+    # — the #1177 data-loss direction. A line-textual rule was approximating a
+    # structural property, so the structure is now read directly (#1688 안 B).
     #
-    #  1. SCOPE — normalization runs only on files whose syntax makes a
-    #     trailing comma and trailing whitespace insignificant, i.e. the JSON
-    #     family ($_gcp_norm below). Everywhere else `norm()` is the identity
-    #     and this function behaves EXACTLY as it did before #1688. `gcp scan`
-    #     handles arbitrary files, where both characters carry meaning: a
-    #     Python tuple (`x = 1,` vs `x = 1`), a CSV empty trailing field, a
-    #     Markdown hard break (two trailing spaces).
-    #  2. EXACT-vs-NORMALIZED SPLIT — normalizing `base` as well as `ours`
-    #     erases the commit's OWN delta whenever that delta lies entirely
-    #     inside the normalization equivalence class, making a real change
-    #     indistinguishable from a no-op. Measured: a commit whose only work is
-    #     deleting a stray JSON trailing comma flipped from real to drift, i.e.
-    #     silently dropped. So a theirs line already present in base under
-    #     normalization but NOT byte-identical to it is a noise-only
-    #     modification — the commit's entire work on that line IS the noise —
-    #     and only a byte-exact match in HEAD proves HEAD already applied it.
-    #     Genuinely new lines (absent from base even after norm) keep the
-    #     lenient normalized comparison, which is what absorbs the #1688 drift.
+    # `_gcp_scan_json_leaves` renders each side as one `[path, value]` record
+    # per node, which answers the noise and the ordering question at once:
+    # trailing commas and indentation do not survive parsing, while an array
+    # index lives IN the path, so a reorder (`["b","a"]` vs `["a","b"]`) yields
+    # different records and stays visible. Object keys are sorted (`jq -S`), so
+    # a pure key reordering — which JSON does not consider meaningful — does
+    # not read as content.
     #
-    # `norm()` never returns the empty string: a lone `,` line would otherwise
-    # collapse to `""` and false-match a blank line (agy). Leading indentation
-    # is deliberately KEPT — it is semantic in YAML.
-    #
-    # Residual, deliberately accepted: inside a JSON-family file, a commit that
-    # ADDS a line HEAD already holds modulo the trailing comma is still read as
-    # drift. That is precisely the #1688 target case and is textually
-    # indistinguishable from it; the scope guard confines it to files where the
-    # comma is not semantic.
-    #
-    # Rule for extending norm(): strip only a suffix a LATER append can force
-    # onto an already-correct line. A trailing `\` fails that test — a
-    # continuation marker changes when the commit itself reflows the block, so
-    # stripping it would hide the commit's own work; keep it significant.
+    # The structural path is taken ONLY when jq is present AND all three sides
+    # parse; otherwise the original byte-exact line comparison runs unchanged.
+    # That fallback is what keeps every non-JSON file behaving exactly as it
+    # did before #1688, and it needs no extension list: a Python, CSV or
+    # Markdown file does not parse as JSON, while an extensionless or
+    # oddly-cased JSON config (`.eslintrc`, `.JSON`) does (agy FOLLOW-UP).
+    # Invalid JSON also fails to parse — the correct outcome for the
+    # stray-trailing-comma commit, whose whole purpose is to make the file
+    # valid: it falls back to exact comparison and stays visible.
     # NOTE: a bare `exit` (not `exit 0`) is required on a hit — `exit 0` would
     # still run END, whose `exit 1` would override it back to "drift".
-    case "$f" in
-        *.json | *.jsonc | *.json5) _gcp_norm=1 ;;
-        *) _gcp_norm=0 ;;
-    esac
-    if awk -v NORMALIZE="$_gcp_norm" '
-        function norm(s, r) {
-            if (!NORMALIZE) return s
-            r = s
-            sub(/[[:space:]]*,?[[:space:]]*$/, "", r)
-            return (r == "" ? s : r)
-        }
-        FILENAME == B { base_x[$0] = 1; base_n[norm($0)] = 1; next }
-        FILENAME == O { ours_x[$0] = 1; ours_n[norm($0)] = 1; next }
+    _b="${td}/base" _o="${td}/ours" _t="${td}/theirs"
+    if command -v jq >/dev/null 2>&1 &&
+        _gcp_scan_json_leaves "${td}/base" >"${td}/base.j" 2>/dev/null &&
+        _gcp_scan_json_leaves "${td}/ours" >"${td}/ours.j" 2>/dev/null &&
+        _gcp_scan_json_leaves "${td}/theirs" >"${td}/theirs.j" 2>/dev/null; then
+        _b="${td}/base.j" _o="${td}/ours.j" _t="${td}/theirs.j"
+    fi
+    if awk '
+        FILENAME == B { base[$0] = 1; next }
+        FILENAME == O { ours[$0] = 1; next }
         {
-            n = norm($0)
-            theirs_n[n] = 1
-            if ($0 in base_x) next
-            if (n in base_n) {
-                if (!($0 in ours_x)) { found = 1; exit }
-            } else if (!(n in ours_n)) { found = 1; exit }
+            theirs[$0] = 1
+            if (!($0 in base) && !($0 in ours)) { found = 1; exit }
         }
         END {
             if (!found) {
-                for (l in base_n) {
-                    if (!(l in theirs_n) && (l in ours_n)) { found = 1; break }
+                for (l in base) {
+                    if (!(l in theirs) && (l in ours)) { found = 1; break }
                 }
             }
             exit(found ? 0 : 1)
         }
-    ' B="${td}/base" O="${td}/ours" "${td}/base" "${td}/ours" "${td}/theirs"; then
+    ' B="${_b}" O="${_o}" "${_b}" "${_o}" "${_t}"; then
         command rm -rf "$td"
         return 0
     fi
