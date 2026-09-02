@@ -39,6 +39,18 @@
 #  11-15. F-4 report token: patch-id state and outcome are reported as two
 #      independent fields, so `patch-id=identical label=dropped` is no longer
 #      indistinguishable from a genuine content change.
+#  16. `_gh_pr_resolve_outdated_patch_id`'s new optional `-U0` flag: on a
+#      context-drift repo the default (context-included) hashes differ while
+#      the `-U0` hashes match (#1704).
+#  17. Context drift + `lenient` (9th arg) + fresh marker -> label KEPT and
+#      the marker re-stamped, reported as `patch-id=context-identical`.
+#  18. The SAME repo WITHOUT the 9th arg (default `strict`) -> dropped,
+#      `patch-id=changed`. The relaxation is opt-in and must not leak into a
+#      caller that never asked for it.
+#  19. Genuinely changed content + `lenient` -> still dropped: `-U0` differs
+#      too there, so it cannot rescue a real content change.
+#  20. Regression on the REAL PR #1687 commits, against this very repo's git
+#      history rather than a synthetic fixture (issue #1704's own evidence).
 #
 # `STUB_CURRENT_LABELS` (comma-separated, default "review-passed") controls
 # what `_gh_pr_resolve_outdated_has_label`'s `gh api .../labels` GET returns.
@@ -78,6 +90,11 @@ teardown() {
 # eval-friendly: exports REPO_DIR/OLD_BASE/OLD_HEAD/NEW_BASE/NEW_HEAD_SAME/NEW_HEAD_DIFF.
 _1698_make_repo() {
     _review_passed_make_rebase_repo OLD_HEAD
+}
+
+# eval-friendly: exports REPO_DIR/OLD_BASE/OLD_HEAD/NEW_BASE/NEW_HEAD_CONTEXT_SHIFT.
+_1704_make_repo() {
+    _review_passed_make_context_drift_repo OLD_HEAD
 }
 
 # ---------------------------------------------------------------------------
@@ -383,4 +400,100 @@ _1698_make_repo() {
     run cat "$GH_LOG"
     refute_output --partial 'labels/review-passed'
     assert_output --partial "review-verdict:review-passed:${NEW_HEAD_SAME}"
+}
+
+# ---------------------------------------------------------------------------
+# #1704 — context-free (`-U0`) rescue. `git patch-id --stable` normalizes hunk
+# line numbers but still hashes CONTEXT lines, so an unrelated commit landing
+# next to a spot the PR touches reported `changed` on a rebase whose own +/-
+# lines never moved. The relaxation is opt-in (9th arg `lenient`) and can only
+# upgrade `changed`, never override `identical`/`unreadable`.
+# ---------------------------------------------------------------------------
+
+@test "patch-id (#1704): context drift differs by default but matches under -U0" {
+    eval "$(_1704_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    old_pid=$(_gh_pr_resolve_outdated_patch_id "$OLD_BASE" "$OLD_HEAD")
+    new_pid=$(_gh_pr_resolve_outdated_patch_id "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT")
+    [ -n "$old_pid" ]
+    # The false positive itself: the PR's own diff is byte-identical, yet the
+    # context-included hashes disagree because the hunk's neighbours moved.
+    [ "$old_pid" != "$new_pid" ]
+    old_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$OLD_BASE" "$OLD_HEAD" "" -U0)
+    new_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT" "" -U0)
+    [ -n "$old_pid_u0" ]
+    [ "$old_pid_u0" = "$new_pid_u0" ]
+}
+
+@test "reconcile (#1704): context-only drift under lenient keeps the label as context-identical" {
+    eval "$(_1704_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT" "" lenient
+    assert_success
+    assert_output --partial 'patch-id=context-identical'
+    assert_output --partial 'label=granted'
+    assert_output --partial 'marker=reposted'
+    run cat "$GH_LOG"
+    refute_output --partial 'labels/review-passed'
+    refute_output --partial 'review-blocked'
+    assert_output --partial "add 1695 review-passed --repo acme/widget"
+    assert_output --partial "review-verdict:review-passed:${NEW_HEAD_CONTEXT_SHIFT}"
+}
+
+@test "reconcile (#1704): the SAME drift without the 9th arg stays strict and drops" {
+    eval "$(_1704_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # The relaxation is opt-in only. A caller that does not ask for `lenient`
+    # — gh:pr-resolve-conflict, and every pre-#1704 call site — must see
+    # exactly the pre-#1704 verdict on this identical scenario.
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT"
+    assert_success
+    assert_output --partial 'patch-id=changed'
+    assert_output --partial 'label=dropped'
+    refute_output --partial 'context-identical'
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
+}
+
+@test "reconcile (#1704): lenient cannot rescue a genuine content change" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # NEW_HEAD_DIFF really does carry different content, so the `-U0` hashes
+    # differ too — `-U0` strips context, it does not forgive changed lines.
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_DIFF" "" lenient
+    assert_success
+    assert_output --partial 'patch-id=changed'
+    assert_output --partial 'label=dropped'
+    refute_output --partial 'context-identical'
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
+}
+
+@test "reconcile (#1704): regression on PR #1687's real commits in this repo's own history" {
+    # The exact pair from issue #1704's body — PR #1687's pre- and post-rebase
+    # ranges, whose diffs are byte-identical yet hash differently with context
+    # (477b6bda… vs a792a259…) and identically without it (e5d59e1f… twice).
+    # Hashes independently reverified against this checkout before use; run
+    # straight against $_BATS_REAL_DOTFILES_ROOT (ordinary ancestors of main),
+    # so no synthetic repo can drift away from the case that motivated #1704.
+    cd "${BATS_TEST_TMPDIR}" || fail "cd failed"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "2759fc13")" '[$c]')
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        23e7295a01da1202010a89463387ddf1898236c1 2759fc13 25835c39 dc614bcc \
+        "$_BATS_REAL_DOTFILES_ROOT" lenient
+    assert_success
+    assert_output --partial 'patch-id=context-identical'
+    assert_output --partial 'label=granted'
+    run cat "$GH_LOG"
+    refute_output --partial 'labels/review-passed'
+    assert_output --partial 'add 1695 review-passed --repo acme/widget'
+    assert_output --partial 'review-verdict:review-passed:dc614bcc'
 }
