@@ -99,6 +99,23 @@ _1700_make_repo() {
     refute_output --partial 'add 1687 review-passed'
 }
 
+@test "conflict Step 5 (PR #1703): an attached review-blocked disqualifies the keep path here too" {
+    eval "$(_1700_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # Smoke-level only — the full matrix for this gate lives in the sister
+    # suite, since both skills reach the very same helper. What this pins is
+    # that THIS skill's wrapper does not bypass it (codex BLOCKER, PR #1703).
+    STUB_CURRENT_LABELS="test,review-blocked"
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$BACKUP")" '[$c]')
+    run resolve_conflict_step5_reconcile 1687 acme/widget ghe.example.com \
+        "$OLD_BASE" "$BACKUP" "$NEW_BASE" "$NEW_HEAD_SAME"
+    assert_success
+    assert_output --partial 'label=dropped'
+    run cat "$GH_LOG"
+    refute_output --partial 'add 1687 review-passed'
+    refute_output --partial 'labels/review-blocked'
+}
+
 @test "conflict Step 5 (#1700): works in --worktree mode, which gh:pr-merge-train always uses" {
     eval "$(_1700_make_repo)"
     cd "${BATS_TEST_TMPDIR}" || fail "cd failed"
