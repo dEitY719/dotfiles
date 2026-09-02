@@ -60,8 +60,13 @@
 #                           fixes (#1636's own gate handles `review-blocked`
 #                           indirectly, via `devx_pr_review_all_write_label`
 #                           below — never through this primitive directly)
-#   gh:pr-resolve-conflict  Step 5 — after a successful --force-with-lease
-#   gh:pr-resolve-outdated  Step 5 — after a successful --force-with-lease
+#   gh:pr-resolve-conflict  Step 5 — after a successful --force-with-lease,
+#   gh:pr-resolve-outdated  Step 5 — after a successful --force-with-lease.
+#                           Both reach this primitive through
+#                           `_gh_pr_resolve_outdated_reconcile_review_passed`
+#                           rather than calling it directly (#1698, extended
+#                           to the conflict skill by #1700) — see the
+#                           asymmetry note below.
 #   gh:pr-merge             Step 4 — after a successful merge (#1636). Not an
 #                           invalidation but a cleanup: the PR is closed and
 #                           the label has no reader left, so leaving it on
@@ -69,9 +74,18 @@
 #
 # The asymmetry rule (`review-passed` drops unconditionally; `review-blocked`
 # never drops through this primitive at all):
-#   - `review-passed` is dropped UNCONDITIONALLY by all three. Any new head
-#     invalidates "this head was reviewed"; dropping is always the safe
-#     direction because absence means "not verified", not "blocked".
+#   - `review-passed` is dropped whenever a new head invalidates "this head
+#     was reviewed"; dropping is always the safe direction because absence
+#     means "not verified", not "blocked". `gh:pr-reply` drops it
+#     unconditionally on `PUSHED_FIXES > 0` — a fix commit is new content by
+#     definition. The two rebase skills instead RECONCILE (#1698 / #1700):
+#     a rebase that reproduced a byte-identical diff (same `git patch-id`)
+#     under a new SHA keeps the verdict and re-stamps its #1601 freshness
+#     marker for the new head, because nothing a reviewer read actually
+#     changed. That keep path is gated on the `review-verdict` marker
+#     proving the verdict was genuinely issued for the old head, so it
+#     re-confirms an existing grant and never manufactures a new one —
+#     a PR nobody reviewed has no marker and still drops.
 #   - `review-blocked` is never dropped by this primitive. It is cleared only
 #     as the side effect of a NEW decision, both of which delete the opposite
 #     label on their way through `devx_pr_review_all_write_label`:

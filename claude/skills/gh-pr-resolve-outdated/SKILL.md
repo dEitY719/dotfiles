@@ -121,7 +121,10 @@ Only if Step 4's push actually succeeded, reconcile the `review-passed`
 label per `references/verdict-label-removal.sh.md` (soft-fail) — a clean
 rebase that reproduced the exact same diff (patch-id unchanged) keeps the
 label and re-stamps its freshness marker for the new head; a rebase whose
-content actually changed drops it as before (#1698). Never touch
+content actually changed drops it as before (#1698). Since #1700 the keep
+path is gated on the `review-verdict` marker rather than on the label still
+being attached, so it also re-grants a label some other path already
+dropped — the same shared helper `gh:pr-resolve-conflict` now calls. Never touch
 `review-blocked` — this skill holds no evidence the blockers were addressed —
 and never *add* `review-blocked`; `devx:pr-review-all` owns that (#1563).
 

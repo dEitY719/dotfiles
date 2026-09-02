@@ -44,16 +44,31 @@ Caller contract: `PR_NUMBER`, `TARGET_REPO`, `TARGET_HOST` 는 Step 1 이
 패치-id 비교와 라벨 재조정은 `shell-common/functions/gh_pr_resolve_outdated.sh`
 의 `_gh_pr_resolve_outdated_reconcile_review_passed` 가 담당한다 — 이 문서는
 로직을 다시 구현하지 않고 그 함수를 호출한다(#1524 규칙: 문서와 구현이 갈라질 수
-없다). 내부적으로 다음 **두 조건이 모두** 참일 때만 유지+재발급한다 — patch-id
-가 동일**하고**, `review-passed` 가 **지금** 그 PR 에 실제로 붙어 있을 때
-(`_gh_pr_resolve_outdated_has_label`) — 그 외에는 전부 공유 헬퍼
-`_gh_pr_drop_label` 로 삭제한다(REST DELETE 관용구 — `gh pr edit
---remove-label` 이 classic Projects 보드 repo 에서 GraphQL deprecation 으로
-**조용히 실패**하는 문제(#326 Bug B)를 피한다). 두 번째 조건이 없으면 한
-번도 리뷰된 적 없는 PR 이 우연히 patch-id 가 일치한다는 이유만으로
-`review-passed` 를 새로 얻는 자가인증이 된다(PR #1699 review, codex
-BLOCKER) — 유지+재발급 경로는 라벨을 **새로 발급**하지 않고, 이미 있는
-라벨을 새 SHA 로 **재확인**할 뿐이다. 라벨 추가와 marker 게시는
+없다). `gh:pr-resolve-conflict` Step 5 도 **같은 함수**를 부른다 — 두 스킬이
+물리적으로 같은 동작(clean rebase + `--force-with-lease` push)을 하므로 로직도
+하나다(#1700).
+
+내부적으로 다음 **두 조건이 모두** 참일 때만 유지+재발급한다 — patch-id 가
+동일**하고**, 그 PR 에 `<!-- review-verdict:review-passed:<old-head> -->`
+마커가 신선하게 남아 있을 때(#1601 의 `_gh_pr_merge_train_review_passed_stale`
+가 rc 0) — 그 외에는 전부 공유 헬퍼 `_gh_pr_drop_label` 로 삭제한다(REST DELETE
+관용구 — `gh pr edit --remove-label` 이 classic Projects 보드 repo 에서 GraphQL
+deprecation 으로 **조용히 실패**하는 문제(#326 Bug B)를 피한다).
+
+두 번째 조건이 없으면 한 번도 리뷰된 적 없는 PR 이 우연히 patch-id 가
+일치한다는 이유만으로 `review-passed` 를 새로 얻는 자가인증이 된다(PR #1699
+review, codex BLOCKER) — 유지+재발급 경로는 라벨을 **새로 발급**하지 않고, 이미
+발급됐던 판정을 새 SHA 로 **재확인**할 뿐이다.
+
+**#1700 이전에는 이 두 번째 조건이 "지금 라벨이 붙어 있나"
+(`_gh_pr_resolve_outdated_has_label`)였다.** 그게 버그였다 — 라벨은 다섯 개
+drop 경로 중 아무나 떼어 갈 수 있는 파괴 가능한 상태라, **먼저 뗀 쪽이 나중
+쪽의 재확인 자격까지 없애 버렸다**(실증 PR #1687: patch-id 완전 동일인데 복구
+경로 없음). 마커는 어느 경로도 지우지 않으므로 그 경쟁 조건이 사라진다. 자가인증
+가드는 오히려 **강해진다** — 마커의 존재 자체가 "실제로 발급된 적 있음"의
+직접 증거이고, 마커 없는 PR 은 freshness 검사가 rc 2(ABSENT)로 떨어뜨린다.
+`has_label` 은 함수로 남아 있지만 이제 **진단 보고 전용**이다(아래 토큰의
+`prior=` 필드). 라벨 추가와 marker 게시는
 `devx_pr_review_all_write_label` 을 거치지 않고 직접 한다 — 그 헬퍼는
 반대쪽 `review-blocked` 를 첫 동작으로 삭제하므로, 아래 "`review-blocked`
 는 절대 건드리지 않는다" 규칙을 어기게 된다(PR #1699 review, codex
@@ -104,10 +119,10 @@ _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
 
 ```bash
 case "$_vl_result" in
-    *"label=kept"*"marker=reposted"*)
+    *"label=granted"*"marker=reposted"*)
         echo "[OK] \`review-passed\` 유지됨 — rebase 는 diff 내용 변경 없음(patch-id 동일), 새 SHA 로 재확인"
         ;;
-    *"label=kept"*"marker=failed"*)
+    *"label=granted"*"marker=failed"*)
         # 라벨 추가는 성공했지만 새 SHA 로의 marker 재게시가 실패한 경우 —
         # `devx_pr_review_all_write_label` 의 marker=failed 와 동일한 의미:
         # 다음 #1601 freshness 재검증에서 자연히 stale 로 self-heal 되지만,
@@ -120,6 +135,15 @@ case "$_vl_result" in
         ;;
 esac
 ```
+
+토큰은 patch-id 상태와 결과를 **각각** 보고한다(#1700 F-4):
+`patch-id=<identical|changed|unreadable>` 와 `label=<granted|dropped>` 가
+독립된 필드다. `label=granted` 에는 `prior=<present|absent>` 가 따라붙어,
+평범한 #1698 유지(`present`)와 다른 경로가 이미 떼어 간 뒤의 #1700
+재부여(`absent`)를 구분해 준다. `patch-id=identical label=dropped` 는
+"내용은 같았지만 재확인 근거(마커)가 없었다"는 뜻이다 — 예전 판은 이 경우까지
+`patch-id=changed` 로 뭉개 보고해서, 운영자가 "내용이 바뀌었으니 재리뷰가
+필요하다"로 오독했다(#1700 결함 4).
 
 Soft-fail 이다: 실패해도 Step 5 의 검증/보고는 그대로 진행한다.
 
