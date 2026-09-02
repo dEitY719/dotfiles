@@ -745,8 +745,36 @@ done
 # `claude` 를 실행하면 Claude Code 가 기본값으로 쓰는 경로이기도 하다
 # (issue #1701). 계정 루프와 별도로, 여기도 같은 실파일화를 적용해
 # write-through 심볼릭 링크가 SSOT 를 오염시키는 경로를 막는다.
-log_info "Bare config dir: \$HOME/.claude"
-_claude_ensure_settings_copy "$CLAUDE_SETTINGS_SOURCE" "$HOME/.claude/settings.json"
+#
+# 계정 디렉터리와 달리 이 경로는 지금까지 setup.sh 가 전혀 관리하지 않았다
+# — 심볼릭 링크(#1701 재현 상태)나 부재 상태만 예상되지만, 사용자가 손으로
+# 만든 실파일이 이미 있을 가능성을 배제할 수 없다. _claude_ensure_settings_copy
+# 는 그런 실파일을 model/enabledPlugins 를 제외하고 SSOT 로 조용히 덮어쓰므로
+# (#940 기존 동작), 최초 이 경로를 넘겨받는 지금만 한 번 백업해 데이터 손실을
+# 막는다 (PR #1702 codex review BLOCKER). 심볼릭 링크·부재 상태는 잃을 실체가
+# 없으므로 백업 대상이 아니다 — _migrate_legacy_statusline_command 의
+# ${HOME}/.claude-backups/ latest-only 백업 관례(#919)를 그대로 따른다.
+if [ -f "$HOME/.claude/settings.json" ] && [ ! -L "$HOME/.claude/settings.json" ] \
+    && ! cmp -s "$CLAUDE_SETTINGS_SOURCE" "$HOME/.claude/settings.json"; then
+    _bare_claude_backup_dir="${HOME}/.claude-backups"
+    if mkdir -p "$_bare_claude_backup_dir"; then
+        _bare_claude_backup="${_bare_claude_backup_dir}/settings.json.pre-1701-bare-claude.backup"
+        if cp "$HOME/.claude/settings.json" "$_bare_claude_backup"; then
+            log_warning "\$HOME/.claude/settings.json 이 SSOT 와 다른 기존 실파일 — 백업 후 SSOT 로 교체:"
+            log_warning "  backup: $_bare_claude_backup"
+        else
+            log_error "\$HOME/.claude/settings.json 백업 실패 — 실파일 전환 중단"
+            _bare_claude_backup_failed=1
+        fi
+    else
+        log_error "백업 디렉토리 생성 실패: $_bare_claude_backup_dir — 실파일 전환 중단"
+        _bare_claude_backup_failed=1
+    fi
+fi
+if [ "${_bare_claude_backup_failed:-0}" != "1" ]; then
+    log_info "Bare config dir: \$HOME/.claude"
+    _claude_ensure_settings_copy "$CLAUDE_SETTINGS_SOURCE" "$HOME/.claude/settings.json"
+fi
 
 # --- Verify Links (모든 활성 계정 + 접두사 없는 \$HOME/.claude) ---
 # skills/ is a real directory of entry-level symlinks (#707, F-8), so it

@@ -853,6 +853,31 @@ _setup_sh_prereqs() {
     [ ! -L "$HOME/.claude/settings.json" ]
 }
 
+@test "bash: claude/setup.sh backs up a pre-existing bare ~/.claude/settings.json real file before overwriting it (#1701, PR #1702 codex review)" {
+    _setup_sh_prereqs
+
+    # Reproduce the risk codex's review flagged: bare ~/.claude/settings.json
+    # was never a symlink and never dotfiles-managed — it is a plain file
+    # with content that differs from SSOT (e.g. hand-crafted by a user who
+    # ran bare `claude` before this PR existed). _claude_ensure_settings_copy
+    # would silently overwrite everything except model/enabledPlugins, so
+    # setup.sh must back the file up first.
+    mkdir -p "$HOME/.claude"
+    printf '{ "hand-crafted": "user content, not SSOT" }\n' > "$HOME/.claude/settings.json"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+
+    # SSOT still wins — settings.json is real-file-copied per #1701.
+    [ -f "$HOME/.claude/settings.json" ]
+    [ ! -L "$HOME/.claude/settings.json" ]
+
+    # But the original content survives in the backup, not silently lost.
+    backup="$HOME/.claude-backups/settings.json.pre-1701-bare-claude.backup"
+    [ -f "$backup" ]
+    grep -q "hand-crafted" "$backup"
+}
+
 @test "bash: claude/setup.sh respects Internal-PC mode via .dotfiles-setup-mode" {
     # Issue #571 (F-1) made Internal-PC mode key off the .dotfiles-setup-mode
     # SSOT (single source of truth, set by shell-common/setup.sh) instead of
