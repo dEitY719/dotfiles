@@ -238,8 +238,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Check the gh:* skills' GH_HOST pinning contract (#1407).")
     parser.add_argument(
         "--skills-dir",
-        default=str(Path(__file__).resolve().parents[2] / "claude" / "skills"),
-        help="Directory holding the skill folders (default: claude/skills).",
+        required=True,
+        help="Directory holding the skill folders. No default (#1680) — the "
+        "gh-* skills this checks now live in their own marketplace repos, "
+        "e.g. <workspace>/gh-pr-skills/skills.",
     )
     parser.add_argument(
         "--prefix", default="gh-", help="Only scan skills whose directory starts with this (default: gh-)."
