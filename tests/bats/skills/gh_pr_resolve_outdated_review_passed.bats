@@ -51,6 +51,11 @@
 #      too there, so it cannot rescue a real content change.
 #  20. Regression on the REAL PR #1687 commits, against this very repo's git
 #      history rather than a synthetic fixture (issue #1704's own evidence).
+#  21-22. The pure-insertion narrowing of that rescue (PR #1712 review, codex
+#      BLOCKER): `_gh_pr_resolve_outdated_base_pure_insertion` answers 0 on a
+#      base that only inserted and 1 on one that also modified a line, and a
+#      `-U0`-matching drift whose base MODIFIED a touched file is NOT rescued
+#      even under `lenient` — it stays `patch-id=changed` and drops.
 #
 # `STUB_CURRENT_LABELS` (comma-separated, default "review-passed") controls
 # what `_gh_pr_resolve_outdated_has_label`'s `gh api .../labels` GET returns.
@@ -95,6 +100,11 @@ _1698_make_repo() {
 # eval-friendly: exports REPO_DIR/OLD_BASE/OLD_HEAD/NEW_BASE/NEW_HEAD_CONTEXT_SHIFT.
 _1704_make_repo() {
     _review_passed_make_context_drift_repo OLD_HEAD
+}
+
+# eval-friendly: exports REPO_DIR/OLD_BASE/OLD_HEAD/NEW_BASE/NEW_HEAD_BASE_MODIFIED.
+_1712_make_repo() {
+    _review_passed_make_base_modify_repo OLD_HEAD
 }
 
 # ---------------------------------------------------------------------------
@@ -468,6 +478,70 @@ _1704_make_repo() {
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
     run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
         "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_DIFF" "" lenient
+    assert_success
+    assert_output --partial 'patch-id=changed'
+    assert_output --partial 'label=dropped'
+    refute_output --partial 'context-identical'
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
+}
+
+# ---------------------------------------------------------------------------
+# PR #1712 review, codex BLOCKER — the `-U0` rescue is narrowed to the case
+# where main's OWN advance is a pure insertion in every file the PR touches.
+# Matching `-U0` ids prove the PR's +/- lines are unchanged and nothing more; a
+# base that removed or modified a line next to them could have rewritten
+# something those surviving lines depend on. Narrowing only: a `-U0` match that
+# fails this check falls back to the pre-#1704 `changed`/drop path.
+# ---------------------------------------------------------------------------
+
+# `run` cannot take a pipeline, and the helper reads its file list on stdin —
+# so feed it through this one-liner, which `run` CAN invoke (a bash -c subshell
+# would not inherit the sourced function).
+_pure_insertion_of() {
+    printf 'f.txt\n' | _gh_pr_resolve_outdated_base_pure_insertion "$@"
+}
+
+@test "pure-insertion (PR #1712): 0 when main only inserted, 1 when it also modified a line" {
+    eval "$(_1704_make_repo)"
+    drift_repo="$REPO_DIR" drift_old="$OLD_BASE" drift_new="$NEW_BASE"
+    eval "$(_1712_make_repo)"
+    cd "${BATS_TEST_TMPDIR}" || fail "cd failed"
+
+    # The rescued shape: base v2 only inserted `extra-block` above the PR's line.
+    run _pure_insertion_of "$drift_old" "$drift_new" "$drift_repo"
+    assert_success
+
+    # The refused shape: base v2 ALSO rewrote line1 in that same file.
+    run _pure_insertion_of "$OLD_BASE" "$NEW_BASE" "$REPO_DIR"
+    assert_failure
+
+    # Unreadable is refused too, never assumed safe (same fail-closed rule the
+    # patch-id helper follows).
+    run _pure_insertion_of deadbeef cafef00d "$REPO_DIR"
+    assert_failure
+
+    # No files named at all is vacuously true — nothing to disqualify.
+    run _gh_pr_resolve_outdated_base_pure_insertion "$OLD_BASE" "$NEW_BASE" "$REPO_DIR" </dev/null
+    assert_success
+}
+
+@test "reconcile (PR #1712): -U0 matches but main MODIFIED a touched file -> not rescued, drops" {
+    eval "$(_1712_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # The `-U0` ids DO match here (the PR's own line3 change is untouched), so
+    # pre-#1712 this would have been rescued as `context-identical`. The base
+    # rewrote line1 of the same file, which is exactly the semantically-material
+    # shape a context-free patch-id cannot see.
+    old_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$OLD_BASE" "$OLD_HEAD" "" -U0)
+    new_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$NEW_BASE" "$NEW_HEAD_BASE_MODIFIED" "" -U0)
+    [ -n "$old_pid_u0" ]
+    [ "$old_pid_u0" = "$new_pid_u0" ]
+
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" '[$c]')
+    run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_BASE_MODIFIED" "" lenient
     assert_success
     assert_output --partial 'patch-id=changed'
     assert_output --partial 'label=dropped'

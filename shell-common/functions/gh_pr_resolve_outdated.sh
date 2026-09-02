@@ -195,6 +195,29 @@
 # still differs leaves `changed` exactly as it was. Fail-closed is preserved:
 # an empty (unreadable) `-U0` hash is not a match.
 #
+# That rescue is NARROWED, never widened, by one further condition (PR #1712
+# review, codex BLOCKER): main's own advance (`old_base..new_base`) must be a
+# PURE INSERTION in every file the PR touches — no line removed or modified,
+# only new lines added. Matching `-U0` patch-ids prove the PR's own +/- lines
+# are byte-identical and nothing else; they say nothing about whether the base
+# change sitting next to those lines rewrote a signature, deleted a variable, or
+# reordered a statement the PR's surviving lines depend on. A base-side change
+# that only ADDS cannot do any of that (it can only add new, disjoint content);
+# one that removes or modifies an existing line in a touched file is exactly the
+# shape that can, so it disqualifies the rescue. Direction matters: this can
+# only ever REFUSE an upgrade the `-U0` comparison would otherwise have granted.
+# A `-U0` match that fails it leaves `changed` untouched and takes the ordinary
+# drop path that has always existed, so no case that passed before this
+# follow-up can start failing because of it — strictly safer, never a
+# regression.
+#
+# It does not eliminate the residual above, only shrink it: even a pure
+# insertion could in principle matter (main adds a definition that shadows a
+# name the PR's code resolves elsewhere, say). This is a TEXTUAL heuristic, not
+# a semantic proof, and is meant as one — bounded, as before, by the
+# conflict-free-rebase-only scope, by CI running against the new head, and by
+# `gh:pr-merge-train`'s #1601 freshness marker backstop.
+#
 # The relaxation is OPT-IN, via the 9th `[context-mode]` argument, default
 # `strict` — i.e. today's behavior for every caller that does not ask. Only
 # `gh:pr-resolve-outdated` passes `lenient`. `gh:pr-resolve-conflict` never
@@ -211,6 +234,8 @@
 # Usage:
 #   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path] \
 #       [diff-flag]
+#   _gh_pr_resolve_outdated_base_pure_insertion <old-base-sha> <new-base-sha> \
+#       [worktree-path]   # file list on stdin, one path per line
 #   _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>
 #   _gh_pr_resolve_outdated_reconcile_review_passed \
 #       <pr> <repo> <host> <old-base-sha> <old-head-sha> \
@@ -229,7 +254,11 @@
 #       the same keep/re-grant checks below — but stays a distinct value so
 #       an operator reading the report can tell a byte-identical rebase from
 #       one whose diff only survived the context-free comparison. It is a
-#       new value of this existing field, not a field of its own.
+#       new value of this existing field, not a field of its own. A `-U0`
+#       match that the pure-insertion guard refuses is NOT reported under a
+#       state of its own: it stays plain `changed`, because downstream it is
+#       indistinguishable from — and must be treated identically to —
+#       genuinely different content (drop, re-review).
 #   label=<granted|dropped|failed>           what this run actually did
 #   prior=<present|absent>                   (keep path only) was the label
 #       still attached — `absent` marks a #1700 re-grant after another path
@@ -303,6 +332,49 @@ _gh_pr_resolve_outdated_patch_id() {
     # patch-id output is "<hash> <commit>"; only the hash is comparable across
     # the two sides (the trailing commit field differs by construction).
     printf '%s\n' "$_out" | awk '{print $1; exit}'
+}
+
+# Is main's OWN advance (<old-base>..<new-base>) a PURE INSERTION in every file
+# named on stdin (one path per line, the PR's touched-file list)? rc 0 yes, rc 1
+# no — including when the diff is unreadable, since "cannot tell" must never
+# read as "proven safe" (same fail-closed rule as the patch-id helper above).
+# Empty stdin is vacuously rc 0: no file, nothing to disqualify.
+#
+# Why (#1704 follow-up, PR #1712 review, codex BLOCKER): a `-U0`-identical
+# patch-id proves the PR's own +/- lines are unchanged, and nothing more. It
+# says nothing about whether main's change NEXT to those lines rewrote a
+# signature, deleted a variable, or reordered a statement the PR's surviving
+# lines depend on. A base-side change that only ADDS lines cannot do any of
+# that — it can only introduce new, disjoint content. One that removes or
+# modifies an existing line in a file the PR touches is exactly the shape that
+# can, so it disqualifies the rescue.
+#
+# `git diff --numstat` (`<added>\t<deleted>\t<path>`), NOT a `grep '^-[^-]'`
+# over the raw diff: that pattern is fail-OPEN, and measurably so. It cannot
+# see a removed EMPTY line (the diff line is a bare `-`) nor a removed line
+# whose own first character is `-` (`--flag`, a `- ` markdown bullet) — a diff
+# deleting one of each counts 0 under it. `--numstat` counts deletions
+# directly, with no diff-line parsing to get wrong. Its `-` output for a binary
+# file is not "0", so binaries disqualify too, which is the right answer here.
+_gh_pr_resolve_outdated_base_pure_insertion() {
+    local _old_base="$1" _new_base="$2" _worktree="${3-}"
+    if [ -z "$_old_base" ] || [ -z "$_new_base" ]; then
+        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_base_pure_insertion <old-base-sha> <new-base-sha> [worktree-path] <files-on-stdin>\n' >&2
+        return 2
+    fi
+    local _file _stat
+    while IFS= read -r _file; do
+        [ -n "$_file" ] || continue
+        if [ -n "$_worktree" ]; then
+            _stat=$(git -C "$_worktree" diff --numstat "$_old_base".."$_new_base" -- "$_file" 2>/dev/null) || return 1
+        else
+            _stat=$(git diff --numstat "$_old_base".."$_new_base" -- "$_file" 2>/dev/null) || return 1
+        fi
+        # No line at all == the base never touched this file == pure insertion
+        # vacuously. Otherwise the deleted column must be a literal 0.
+        printf '%s\n' "$_stat" | awk -F'\t' 'NF > 1 && $2 != "0" { exit 1 }' || return 1
+    done
+    return 0
 }
 
 # Three-state, because "absent" and "could not tell" are different answers
@@ -386,11 +458,24 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
     # here, so this can only ever rescue, never override. See the file
     # header's "#1704" section for the scope rule (outdated: yes, conflict:
     # never).
+    #
+    # AND the base's own advance must be a pure insertion in every file the PR
+    # touches (PR #1712 review, codex BLOCKER — see the helper above and the
+    # file header's follow-up paragraph). Both conditions, never either: a `-U0`
+    # match that fails the insertion check leaves `_pid_state` at `changed` and
+    # takes the ordinary drop, exactly as it did before #1704 existed.
     if [ "$_pid_state" = changed ] && [ "$_context_mode" = lenient ]; then
-        local _old_pid_u0 _new_pid_u0
+        local _old_pid_u0 _new_pid_u0 _touched
         _old_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$_old_base" "$_old_head" "$_worktree" -U0)
         _new_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$_new_base" "$_new_head" "$_worktree" -U0)
-        if [ -n "$_old_pid_u0" ] && [ "$_old_pid_u0" = "$_new_pid_u0" ]; then
+        if [ -n "$_worktree" ]; then
+            _touched=$(git -C "$_worktree" diff --name-only "$_old_base".."$_old_head" 2>/dev/null)
+        else
+            _touched=$(git diff --name-only "$_old_base".."$_old_head" 2>/dev/null)
+        fi
+        if [ -n "$_old_pid_u0" ] && [ "$_old_pid_u0" = "$_new_pid_u0" ] &&
+            printf '%s\n' "$_touched" |
+            _gh_pr_resolve_outdated_base_pure_insertion "$_old_base" "$_new_base" "$_worktree"; then
             _pid_state=context-identical
         fi
     fi
