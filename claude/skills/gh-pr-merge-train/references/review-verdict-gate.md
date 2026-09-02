@@ -128,6 +128,23 @@ This still does not make the train a comment parser in the sense "What this
 gate is not" forbids below: it never reads a *reviewer's* verdict line, only
 a fixed machine stamp this same subsystem writes for exactly this check.
 
+### Revocation (#1706)
+
+A second marker type, `<!-- review-verdict:revoked:<sha> -->`, withdraws an
+earlier `review-passed` marker — the explicit act a human takes after pulling
+the label by hand, so a later content-identical rebase cannot re-grant it off
+the surviving evidence. The lookup takes the LAST marker of *either* type from
+the trusted login, by comment order; the sha a revocation names is audit
+metadata and is never compared. Full spec (format, how to post one, the trust
+boundary):
+`devx-pr-review-all/references/review-verdict-label.md` → "Revoking a stale
+`review-passed` by hand".
+
+No new gate outcome: a revoked latest marker reads as ABSENT, so the decision
+table's `review-passed` only, no marker at all from the trusted login row
+covers it — same `[SKIPPED] review-passed not confirmed for this head — no
+freshness marker found` line, and the label is likewise left untouched.
+
 ### Marker authorship (PR #1608 review, agy + codex BLOCKER)
 
 A plain comment has no write-permission floor the way a label does — on most
