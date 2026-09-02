@@ -496,34 +496,28 @@ _1712_make_repo() {
 # fails this check falls back to the pre-#1704 `changed`/drop path.
 # ---------------------------------------------------------------------------
 
-# `run` cannot take a pipeline, and the helper reads its file list on stdin —
-# so feed it through this one-liner, which `run` CAN invoke (a bash -c subshell
-# would not inherit the sourced function).
-_pure_insertion_of() {
-    printf 'f.txt\n' | _gh_pr_resolve_outdated_base_pure_insertion "$@"
-}
-
 @test "pure-insertion (PR #1712): 0 when main only inserted, 1 when it also modified a line" {
     eval "$(_1704_make_repo)"
-    drift_repo="$REPO_DIR" drift_old="$OLD_BASE" drift_new="$NEW_BASE"
+    drift_repo="$REPO_DIR" drift_old="$OLD_BASE" drift_old_head="$OLD_HEAD" drift_new="$NEW_BASE"
     eval "$(_1712_make_repo)"
     cd "${BATS_TEST_TMPDIR}" || fail "cd failed"
 
     # The rescued shape: base v2 only inserted `extra-block` above the PR's line.
-    run _pure_insertion_of "$drift_old" "$drift_new" "$drift_repo"
+    run _gh_pr_resolve_outdated_base_pure_insertion "$drift_old" "$drift_old_head" "$drift_new" "$drift_repo"
     assert_success
 
     # The refused shape: base v2 ALSO rewrote line1 in that same file.
-    run _pure_insertion_of "$OLD_BASE" "$NEW_BASE" "$REPO_DIR"
+    run _gh_pr_resolve_outdated_base_pure_insertion "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$REPO_DIR"
     assert_failure
 
     # Unreadable is refused too, never assumed safe (same fail-closed rule the
     # patch-id helper follows).
-    run _pure_insertion_of deadbeef cafef00d "$REPO_DIR"
+    run _gh_pr_resolve_outdated_base_pure_insertion deadbeef "$OLD_HEAD" cafef00d "$REPO_DIR"
     assert_failure
 
-    # No files named at all is vacuously true — nothing to disqualify.
-    run _gh_pr_resolve_outdated_base_pure_insertion "$OLD_BASE" "$NEW_BASE" "$REPO_DIR" </dev/null
+    # An old-head identical to old-base touches no files at all — vacuously
+    # true, nothing to disqualify.
+    run _gh_pr_resolve_outdated_base_pure_insertion "$OLD_BASE" "$OLD_BASE" "$NEW_BASE" "$REPO_DIR"
     assert_success
 }
 

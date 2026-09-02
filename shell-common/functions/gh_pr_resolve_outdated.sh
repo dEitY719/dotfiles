@@ -234,8 +234,8 @@
 # Usage:
 #   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path] \
 #       [diff-flag]
-#   _gh_pr_resolve_outdated_base_pure_insertion <old-base-sha> <new-base-sha> \
-#       [worktree-path]   # file list on stdin, one path per line
+#   _gh_pr_resolve_outdated_base_pure_insertion <old-base-sha> <old-head-sha> \
+#       <new-base-sha> [worktree-path]   # derives the touched-file list itself
 #   _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>
 #   _gh_pr_resolve_outdated_reconcile_review_passed \
 #       <pr> <repo> <host> <old-base-sha> <old-head-sha> \
@@ -310,6 +310,20 @@ unset _drg_self _drg_helper
 # failing) is reported as an empty string, never guessed at: the caller
 # treats "unreadable" the same as "different" (fail closed, same rule this
 # repo already uses for the approval gate and the #1601 freshness check).
+# Runs `git <args...>` against `<worktree>` when non-empty, else against the
+# current checkout. Centralizes the worktree-or-cwd dispatch this file needs
+# at multiple call sites (simplify pass, PR #1720 review) — a single point to
+# fix if that dispatch itself ever needs to change.
+_gh_pr_resolve_outdated_git() {
+    local _worktree="$1"
+    shift
+    if [ -n "$_worktree" ]; then
+        git -C "$_worktree" "$@"
+    else
+        git "$@"
+    fi
+}
+
 # The optional 4th argument passes one flag straight to `git diff` — `-U0`
 # for the context-free comparison the lenient mode below uses (#1704); empty
 # (the default) keeps `git diff`'s ordinary -U3 context-included hash.
@@ -324,21 +338,18 @@ _gh_pr_resolve_outdated_patch_id() {
     # word when `_diff_flag` is unset — no combinatorial branch needed for
     # this second, independent dimension (simplify pass, #1704).
     local _out
-    if [ -n "$_worktree" ]; then
-        _out=$(git -C "$_worktree" diff ${_diff_flag:+"$_diff_flag"} "$_base".."$_head" 2>/dev/null | git -C "$_worktree" patch-id --stable 2>/dev/null)
-    else
-        _out=$(git diff ${_diff_flag:+"$_diff_flag"} "$_base".."$_head" 2>/dev/null | git patch-id --stable 2>/dev/null)
-    fi
+    _out=$(_gh_pr_resolve_outdated_git "$_worktree" diff ${_diff_flag:+"$_diff_flag"} "$_base".."$_head" 2>/dev/null |
+        _gh_pr_resolve_outdated_git "$_worktree" patch-id --stable 2>/dev/null)
     # patch-id output is "<hash> <commit>"; only the hash is comparable across
     # the two sides (the trailing commit field differs by construction).
     printf '%s\n' "$_out" | awk '{print $1; exit}'
 }
 
-# Is main's OWN advance (<old-base>..<new-base>) a PURE INSERTION in every file
-# named on stdin (one path per line, the PR's touched-file list)? rc 0 yes, rc 1
-# no — including when the diff is unreadable, since "cannot tell" must never
-# read as "proven safe" (same fail-closed rule as the patch-id helper above).
-# Empty stdin is vacuously rc 0: no file, nothing to disqualify.
+# Is main's OWN advance (<old-base>..<new-base>) a PURE INSERTION across every
+# file the PR touched (<old-base>..<old-head>)? rc 0 yes, rc 1 no — including
+# when a diff is unreadable, since "cannot tell" must never read as "proven
+# safe" (same fail-closed rule as the patch-id helper above). No touched files
+# at all is vacuously rc 0: nothing to disqualify.
 #
 # Why (#1704 follow-up, PR #1712 review, codex BLOCKER): a `-U0`-identical
 # patch-id proves the PR's own +/- lines are unchanged, and nothing more. It
@@ -349,6 +360,16 @@ _gh_pr_resolve_outdated_patch_id() {
 # modifies an existing line in a file the PR touches is exactly the shape that
 # can, so it disqualifies the rescue.
 #
+# One `git diff --numstat` call over ALL touched files (`-- "${_files[@]}"`),
+# not one per file (PR #1720 review, agy + codex + simplify-pass findings):
+# this file's sibling `_gh_pr_resolve_outdated_patch_id` already does one call
+# per whole range, never per-file, and per-file forking here would repeat the
+# same `old_base..new_base` tree walk N times for N touched files. The touched
+# list itself is read NUL-delimited (`git diff --name-only -z`), never
+# newline-split, so a path containing a literal newline or tab cannot be
+# mis-parsed into two entries or truncated (PR #1720 review, agy + codex
+# BLOCKER — both independently flagged the newline-unsafe reader).
+#
 # `git diff --numstat` (`<added>\t<deleted>\t<path>`), NOT a `grep '^-[^-]'`
 # over the raw diff: that pattern is fail-OPEN, and measurably so. It cannot
 # see a removed EMPTY line (the diff line is a bare `-`) nor a removed line
@@ -357,24 +378,34 @@ _gh_pr_resolve_outdated_patch_id() {
 # directly, with no diff-line parsing to get wrong. Its `-` output for a binary
 # file is not "0", so binaries disqualify too, which is the right answer here.
 _gh_pr_resolve_outdated_base_pure_insertion() {
-    local _old_base="$1" _new_base="$2" _worktree="${3-}"
-    if [ -z "$_old_base" ] || [ -z "$_new_base" ]; then
-        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_base_pure_insertion <old-base-sha> <new-base-sha> [worktree-path] <files-on-stdin>\n' >&2
+    local _old_base="$1" _old_head="$2" _new_base="$3" _worktree="${4-}"
+    if [ -z "$_old_base" ] || [ -z "$_old_head" ] || [ -z "$_new_base" ]; then
+        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_base_pure_insertion <old-base-sha> <old-head-sha> <new-base-sha> [worktree-path]\n' >&2
         return 2
     fi
-    local _file _stat
-    while IFS= read -r _file; do
-        [ -n "$_file" ] || continue
-        if [ -n "$_worktree" ]; then
-            _stat=$(git -C "$_worktree" diff --numstat "$_old_base".."$_new_base" -- "$_file" 2>/dev/null) || return 1
-        else
-            _stat=$(git diff --numstat "$_old_base".."$_new_base" -- "$_file" 2>/dev/null) || return 1
-        fi
-        # No line at all == the base never touched this file == pure insertion
-        # vacuously. Otherwise the deleted column must be a literal 0.
-        printf '%s\n' "$_stat" | awk -F'\t' 'NF > 1 && $2 != "0" { exit 1 }' || return 1
-    done
-    return 0
+    # Validate both shas resolve BEFORE trusting an empty touched-file list as
+    # vacuous truth. `git diff --name-only` on a bogus sha also prints
+    # nothing, and process substitution below cannot surface that command's
+    # own exit status to this function's `$?` — an unreadable sha would
+    # otherwise read identically to "old-base == old-head, nothing touched"
+    # and pass as vacuously safe instead of failing closed.
+    _gh_pr_resolve_outdated_git "$_worktree" rev-parse --verify --quiet "${_old_base}^{commit}" >/dev/null 2>&1 &&
+        _gh_pr_resolve_outdated_git "$_worktree" rev-parse --verify --quiet "${_old_head}^{commit}" >/dev/null 2>&1 &&
+        _gh_pr_resolve_outdated_git "$_worktree" rev-parse --verify --quiet "${_new_base}^{commit}" >/dev/null 2>&1 ||
+        return 1
+
+    local _files=() _f
+    while IFS= read -r -d '' _f; do
+        _files+=("$_f")
+    done < <(_gh_pr_resolve_outdated_git "$_worktree" diff --name-only -z "$_old_base".."$_old_head" 2>/dev/null)
+
+    [ "${#_files[@]}" -eq 0 ] && return 0
+
+    local _stat
+    _stat=$(_gh_pr_resolve_outdated_git "$_worktree" diff --numstat "$_old_base".."$_new_base" -- "${_files[@]}" 2>/dev/null) || return 1
+    # No line at all == the base never touched any of these files == pure
+    # insertion vacuously. Otherwise every deleted column must be a literal 0.
+    printf '%s\n' "$_stat" | awk -F'\t' 'NF > 1 && $2 != "0" { exit 1 }'
 }
 
 # Three-state, because "absent" and "could not tell" are different answers
@@ -465,17 +496,16 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
     # match that fails the insertion check leaves `_pid_state` at `changed` and
     # takes the ordinary drop, exactly as it did before #1704 existed.
     if [ "$_pid_state" = changed ] && [ "$_context_mode" = lenient ]; then
-        local _old_pid_u0 _new_pid_u0 _touched
+        local _old_pid_u0 _new_pid_u0
         _old_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$_old_base" "$_old_head" "$_worktree" -U0)
         _new_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$_new_base" "$_new_head" "$_worktree" -U0)
-        if [ -n "$_worktree" ]; then
-            _touched=$(git -C "$_worktree" diff --name-only "$_old_base".."$_old_head" 2>/dev/null)
-        else
-            _touched=$(git diff --name-only "$_old_base".."$_old_head" 2>/dev/null)
-        fi
+        # The pure-insertion check (a `git diff --name-only` + `--numstat`
+        # pair) only runs once the cheap `-U0` comparison already matched
+        # (PR #1720 review, efficiency finding) — on the common path, where
+        # the base rebase genuinely changed content, `-U0` already differs
+        # and short-circuits before either extra `git` call.
         if [ -n "$_old_pid_u0" ] && [ "$_old_pid_u0" = "$_new_pid_u0" ] &&
-            printf '%s\n' "$_touched" |
-            _gh_pr_resolve_outdated_base_pure_insertion "$_old_base" "$_new_base" "$_worktree"; then
+            _gh_pr_resolve_outdated_base_pure_insertion "$_old_base" "$_old_head" "$_new_base" "$_worktree"; then
             _pid_state=context-identical
         fi
     fi

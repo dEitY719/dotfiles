@@ -152,11 +152,22 @@ _review_passed_make_rebase_repo() {
 # the false `changed` verdict #1704 fixes. Default (-U3) patch-ids differ across
 # the two ranges; `-U0` patch-ids match.
 #
-# Prints REPO_DIR / OLD_BASE / <old-head-var> / NEW_BASE /
-# NEW_HEAD_CONTEXT_SHIFT as `eval`-able assignments, same convention as its
-# sibling ($1 names the old-head variable).
-_review_passed_make_context_drift_repo() {
-    local _old_head_var="${1:-OLD_HEAD}"
+# Shared builder behind the two thin wrappers below (simplify pass, PR #1720
+# review — the two were a ~35-line copy differing only in base v2's content
+# and the result variable name). Same PR change in both (line3 -> line3-
+# changed) so the `-U0` patch-ids always match across the two ranges; what
+# differs is whether base v2's own commit ($2) also modifies an existing line
+# (disqualifying the pure-insertion rescue) or only inserts (qualifying it).
+#
+# $1 old-head-var name ($1 of the public wrappers, same convention as
+#    `_review_passed_make_rebase_repo`)
+# $2 base v2's file content (the "unrelated main change" commit)
+# $3 result-var name for the rebased head sha
+#
+# Prints REPO_DIR / OLD_BASE / <old-head-var> / NEW_BASE / <result-var> as
+# `eval`-able assignments.
+_review_passed_make_context_or_base_modify_repo() {
+    local _old_head_var="${1:-OLD_HEAD}" _base_v2_content="$2" _result_var="$3"
     REPO_DIR="$(mktemp -d "${BATS_TEST_TMPDIR}/repo.XXXXXX")"
     (
         cd "$REPO_DIR" || exit 1
@@ -175,71 +186,58 @@ _review_passed_make_context_drift_repo() {
         _rpr_old_head=$(git rev-parse HEAD)
 
         git checkout -q "$OLD_BASE"
-        printf 'line1\nline2\nextra-block\nline3\nline4\nline5\n' >f.txt
+        printf '%s' "$_base_v2_content" >f.txt
         git add f.txt
-        git commit -qm "base v2 (unrelated block inserted just above line3)"
+        git commit -qm "base v2 (unrelated main change)"
         NEW_BASE=$(git rev-parse HEAD)
 
         # Reapply the PR's own change (line3 -> line3-changed) onto the new
-        # base. The +/- lines are byte-identical to the old head's diff, but
-        # the hunk's context window now includes "extra-block" -- default
-        # (-U3) patch-id differs, -U0 does not.
-        printf 'line1\nline2\nextra-block\nline3-changed\nline4\nline5\n' >f.txt
+        # base. The +/- lines stay byte-identical to the old head's diff
+        # regardless of what base v2 did elsewhere in the file.
+        printf '%s' "$_base_v2_content" | sed 's/^line3$/line3-changed/' >f.txt
         git add f.txt
         git commit -qm "PR: change line3 (rebased)"
-        NEW_HEAD_CONTEXT_SHIFT=$(git rev-parse HEAD)
+        _rpr_new_head=$(git rev-parse HEAD)
 
-        printf 'REPO_DIR=%s\nOLD_BASE=%s\n%s=%s\nNEW_BASE=%s\nNEW_HEAD_CONTEXT_SHIFT=%s\n' \
-            "$REPO_DIR" "$OLD_BASE" "$_old_head_var" "$_rpr_old_head" "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT"
+        printf 'REPO_DIR=%s\nOLD_BASE=%s\n%s=%s\nNEW_BASE=%s\n%s=%s\n' \
+            "$REPO_DIR" "$OLD_BASE" "$_old_head_var" "$_rpr_old_head" "$NEW_BASE" "$_result_var" "$_rpr_new_head"
     )
 }
 
-# The negative twin of `_review_passed_make_context_drift_repo` (PR #1712
-# review, codex BLOCKER). Identical in every respect the `-U0` comparison can
-# see — same PR change (line3 -> line3-changed), so the `-U0` patch-ids still
-# match across the two ranges — except that the base's own advance also MODIFIES
-# an existing line (line1) instead of only inserting. That is the shape a
-# context-free patch-id cannot distinguish from harmless drift but which could
-# have rewritten something the PR's surviving lines depend on, so the
-# pure-insertion guard must refuse to rescue it: `patch-id=changed`, label
-# dropped, even under `lenient`.
-#
-# Prints REPO_DIR / OLD_BASE / <old-head-var> / NEW_BASE /
-# NEW_HEAD_BASE_MODIFIED as `eval`-able assignments ($1 names the old-head
-# variable, same convention as its siblings).
+# The #1704 shape, which `_review_passed_make_rebase_repo` above structurally
+# CANNOT produce: its PR commit only ADDS a new file, and a new file's diff has
+# no context lines to shift, so `git patch-id --stable` matches there whether or
+# not the base moved. Here the PR edits a line inside an existing file and the
+# new base inserts an unrelated block directly above it — the PR's own +/- lines
+# stay byte-identical while the hunk's context window changes, which is exactly
+# the false `changed` verdict #1704 fixes. Default (-U3) patch-ids differ across
+# the two ranges; `-U0` patch-ids match. Base v2 is a PURE INSERTION (no line
+# removed), so the #1712 pure-insertion guard also allows the rescue.
+_review_passed_make_context_drift_repo() {
+    _review_passed_make_context_or_base_modify_repo "${1:-OLD_HEAD}" \
+        'line1
+line2
+extra-block
+line3
+line4
+line5
+' NEW_HEAD_CONTEXT_SHIFT
+}
+
+# The negative twin (PR #1712 review, codex BLOCKER). Identical in every
+# respect the `-U0` comparison can see — the `-U0` patch-ids still match across
+# the two ranges — except that base v2 also MODIFIES an existing line (line1)
+# instead of only inserting. That is the shape a context-free patch-id cannot
+# distinguish from harmless drift but which could have rewritten something the
+# PR's surviving lines depend on, so the pure-insertion guard must refuse to
+# rescue it: `patch-id=changed`, label dropped, even under `lenient`.
 _review_passed_make_base_modify_repo() {
-    local _old_head_var="${1:-OLD_HEAD}"
-    REPO_DIR="$(mktemp -d "${BATS_TEST_TMPDIR}/repo.XXXXXX")"
-    (
-        cd "$REPO_DIR" || exit 1
-        git init -q -b main
-        git config user.email t@t
-        git config user.name Test
-
-        printf 'line1\nline2\nline3\nline4\nline5\n' >f.txt
-        git add f.txt
-        git commit -qm "base v1"
-        OLD_BASE=$(git rev-parse HEAD)
-
-        printf 'line1\nline2\nline3-changed\nline4\nline5\n' >f.txt
-        git add f.txt
-        git commit -qm "PR: change line3"
-        _rpr_old_head=$(git rev-parse HEAD)
-
-        git checkout -q "$OLD_BASE"
-        # Inserts extra-block AND rewrites line1 -- the deletion that
-        # disqualifies the rescue.
-        printf 'line1-changed-by-main\nline2\nextra-block\nline3\nline4\nline5\n' >f.txt
-        git add f.txt
-        git commit -qm "base v2 (inserts a block AND rewrites line1)"
-        NEW_BASE=$(git rev-parse HEAD)
-
-        printf 'line1-changed-by-main\nline2\nextra-block\nline3-changed\nline4\nline5\n' >f.txt
-        git add f.txt
-        git commit -qm "PR: change line3 (rebased)"
-        NEW_HEAD_BASE_MODIFIED=$(git rev-parse HEAD)
-
-        printf 'REPO_DIR=%s\nOLD_BASE=%s\n%s=%s\nNEW_BASE=%s\nNEW_HEAD_BASE_MODIFIED=%s\n' \
-            "$REPO_DIR" "$OLD_BASE" "$_old_head_var" "$_rpr_old_head" "$NEW_BASE" "$NEW_HEAD_BASE_MODIFIED"
-    )
+    _review_passed_make_context_or_base_modify_repo "${1:-OLD_HEAD}" \
+        'line1-changed-by-main
+line2
+extra-block
+line3
+line4
+line5
+' NEW_HEAD_BASE_MODIFIED
 }
