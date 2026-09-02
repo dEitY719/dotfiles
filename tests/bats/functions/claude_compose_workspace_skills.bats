@@ -1,22 +1,18 @@
 #!/usr/bin/env bats
 # tests/bats/functions/claude_compose_workspace_skills.bats
 # Cover _claude_compose_workspace_skills — the issue #1652 helper that
-# layers locally cloned marketplace repos (#1410 F-6) on top of the
-# dotfiles entries _claude_compose_skills_dir already wrote. The
-# dotfiles-only composition itself is covered by
-# claude_compose_skills_dir.bats.
+# composes the locally cloned marketplace repos (#1410 F-6) into a
+# harness skills dir. Since #1680 deleted the dotfiles `claude/skills/`
+# tree this is the *only* skill source, so the helper also owns the
+# target-directory migrations that _claude_compose_skills_dir used to
+# perform (now _claude_prepare_skills_dir, covered at the bottom).
 
 load '../test_helper'
 
 setup() {
     setup_isolated_home
-    SRC="$TEST_TEMP_HOME/src-skills"
     TGT="$TEST_TEMP_HOME/.claude/skills"
     WS="$TEST_TEMP_HOME/workspace"
-
-    mkdir -p "$SRC/alpha" "$SRC/beta"
-    : > "$SRC/alpha/SKILL.md"
-    : > "$SRC/beta/SKILL.md"
 
     HELPER_SCRIPT="$(mktemp "$TEST_TEMP_HOME/run.XXXXXX.sh")"
     cat > "$HELPER_SCRIPT" <<EOF
@@ -27,10 +23,7 @@ source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/mount.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
-# Compose the dotfiles SSOT first, exactly as _claude_account_setup_one does,
-# then layer the workspace on top.
-_claude_compose_skills_dir "\$1" "\$2"
-_claude_compose_workspace_skills "\$2"
+_claude_compose_workspace_skills "\$1"
 EOF
     chmod +x "$HELPER_SCRIPT"
 }
@@ -53,19 +46,15 @@ seed_ws_repo() {
 }
 
 run_compose() {
-    WORKSPACE_ROOT="$WS" run "$HELPER_SCRIPT" "$SRC" "$TGT"
+    WORKSPACE_ROOT="$WS" run "$HELPER_SCRIPT" "$TGT"
 }
 
-@test "workspace skills are layered next to the dotfiles entries (#1652)" {
+@test "workspace skills are composed as entry-level symlinks (#1652 / #1680)" {
     seed_ws_repo "packaging-skills" "create" "rename-repo"
 
     run_compose
     assert_success
 
-    # dotfiles entries survive, pointing at the dotfiles source.
-    [ "$(readlink "$TGT/alpha")" = "$SRC/alpha" ]
-    [ "$(readlink "$TGT/beta")" = "$SRC/beta" ]
-    # workspace entries are added alongside.
     [ "$(readlink "$TGT/create")" = "$WS/packaging-skills/skills/create" ]
     [ "$(readlink "$TGT/rename-repo")" = "$WS/packaging-skills/skills/rename-repo" ]
 }
@@ -76,7 +65,10 @@ run_compose() {
     run_compose
     assert_success
 
-    [ -L "$TGT/alpha" ] && [ -L "$TGT/beta" ]
+    # The target is still normalized into a real composition directory —
+    # it just gets no entries.
+    [ -d "$TGT" ] && [ ! -L "$TGT" ]
+    [ -z "$(find "$TGT" -mindepth 1 -maxdepth 1)" ]
 }
 
 @test "repo without a skills/ dir is skipped (#1652 Error Case 2)" {
@@ -102,13 +94,17 @@ run_compose() {
     [ ! -e "$TGT/_shared" ]
 }
 
-@test "a dotfiles skill of the same name is never repointed (#1652 NF-1)" {
-    seed_ws_repo "packaging-skills" "alpha"
+@test "an overlay entry of the same name is never repointed (#1652 NF-1)" {
+    # A marketplace overlay (or any externally added entry) owns the name
+    # first; the workspace pass must leave it exactly as it is.
+    mkdir -p "$TEST_TEMP_HOME/overlay/create" "$TGT"
+    ln -s "$TEST_TEMP_HOME/overlay/create" "$TGT/create"
+    seed_ws_repo "packaging-skills" "create"
 
     run_compose
     assert_success
 
-    [ "$(readlink "$TGT/alpha")" = "$SRC/alpha" ]
+    [ "$(readlink "$TGT/create")" = "$TEST_TEMP_HOME/overlay/create" ]
 }
 
 @test "linked git worktrees are skipped so they cannot shadow the clone (#1652)" {
@@ -151,8 +147,6 @@ run_compose() {
     run_compose
     assert_success
     [ ! -e "$TGT/create" ]
-    # dotfiles entries are untouched by the workspace prune.
-    [ -L "$TGT/alpha" ]
 }
 
 @test "a repo rename converges in a single run (#1652)" {
@@ -186,21 +180,31 @@ run_compose() {
     [ -L "$TGT/marketplace-skill" ]
 }
 
-@test "both claude/setup.sh compose sites layer the workspace (#1652)" {
-    # agy BLOCKER on PR #1670: the internal/single-account branch composes
-    # skills directly instead of going through _claude_account_setup_one, so
-    # the workspace call has to appear at BOTH sites or single-account PCs
-    # (the company setup) silently get dotfiles skills only.
+@test "every skills-composing site goes through the workspace pass (#1652 / #1680)" {
+    # agy BLOCKER on PR #1670: the internal/single-account branch of
+    # claude/setup.sh composes skills directly instead of going through
+    # _claude_account_setup_one, so a workspace call has to appear in BOTH
+    # files or single-account PCs (the company setup) silently get no skills
+    # at all. #1680 removed the dotfiles pass, so this call is now the *only*
+    # thing that ever writes a harness skills dir.
+    #
+    # Asserted per file rather than as one total: a bare count says nothing
+    # about *which* file lost its call, which is exactly the failure #1670
+    # shipped. The number of callers inside claude.sh is free to grow
+    # (_claude_account_setup_one and claude_init both compose today).
     local setup="${_BATS_REAL_DOTFILES_ROOT}/claude/setup.sh"
     local integ="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
 
-    # Every _claude_compose_skills_dir call must be followed by a workspace call.
-    local compose_sites workspace_sites
-    compose_sites=$(grep -c '^[[:space:]]*_claude_compose_skills_dir ' "$setup" "$integ"         | awk -F: '{s+=$2} END {print s}')
-    workspace_sites=$(grep -c '^[[:space:]]*_claude_compose_workspace_skills ' "$setup" "$integ"         | awk -F: '{s+=$2} END {print s}')
+    local f
+    for f in "$setup" "$integ"; do
+        run grep -c '^[[:space:]]*_claude_compose_workspace_skills ' "$f"
+        assert_success
+        [ "$output" -ge 1 ] || fail "no workspace compose call in $f"
+    done
 
-    [ "$compose_sites" -gt 0 ]
-    [ "$workspace_sites" -eq "$compose_sites" ]
+    # And the retired dotfiles composer must not creep back in.
+    run grep -n '_claude_compose_skills_dir' "$setup" "$integ"
+    assert_failure
 }
 
 @test "missing skill_sources.sh warns instead of silently no-opping (#1652 / #724)" {
@@ -211,21 +215,68 @@ run_compose() {
     grep -v 'functions/skill_sources.sh' "$HELPER_SCRIPT" > "$no_lib"
     chmod +x "$no_lib"
 
-    WORKSPACE_ROOT="$WS" run "$no_lib" "$SRC" "$TGT"
+    WORKSPACE_ROOT="$WS" run "$no_lib" "$TGT"
     assert_success
     assert_output --partial "workspace skill sources unavailable"
 
-    # dotfiles composition still succeeded; no workspace entry was linked.
-    [ -L "$TGT/alpha" ]
     [ ! -e "$TGT/create" ]
 }
 
 @test "WORKSPACE_ROOT of \$HOME is refused as too broad (#1652 safety)" {
     seed_ws_repo "packaging-skills" "create"
 
-    WORKSPACE_ROOT="$HOME" run "$HELPER_SCRIPT" "$SRC" "$TGT"
+    WORKSPACE_ROOT="$HOME" run "$HELPER_SCRIPT" "$TGT"
     assert_success
 
     [ ! -e "$TGT/create" ]
-    [ -L "$TGT/alpha" ]
+}
+
+# ---------------------------------------------------------------------
+# Target-directory migrations (_claude_prepare_skills_dir, #707 F-8).
+# These used to live in claude_compose_skills_dir.bats; #1680 retired that
+# function and folded its prologue into the workspace composer, so the
+# migrations are exercised through the composer now.
+# ---------------------------------------------------------------------
+
+@test "legacy dir-symlink target is migrated to a real composition dir (#707 F-8)" {
+    mkdir -p "$TEST_TEMP_HOME/.claude" "$TEST_TEMP_HOME/legacy-skills"
+    ln -s "$TEST_TEMP_HOME/legacy-skills" "$TGT"
+    [ -L "$TGT" ]
+    seed_ws_repo "packaging-skills" "create"
+
+    run_compose
+    assert_success
+
+    [ -d "$TGT" ] && [ ! -L "$TGT" ]
+    [ "$(readlink "$TGT/create")" = "$WS/packaging-skills/skills/create" ]
+}
+
+@test "a dir-symlink to the deleted dotfiles SSOT is migrated, not preserved (#1680)" {
+    # The #1680 cutover leaves this exact shape on existing machines: a
+    # symlink whose target (dotfiles/claude/skills) no longer exists.
+    mkdir -p "$TEST_TEMP_HOME/.claude"
+    ln -s "$TEST_TEMP_HOME/gone/claude/skills" "$TGT"
+    [ -L "$TGT" ] && [ ! -e "$TGT" ]
+    seed_ws_repo "packaging-skills" "create"
+
+    run_compose
+    assert_success
+
+    [ -d "$TGT" ] && [ ! -L "$TGT" ]
+    [ -L "$TGT/create" ]
+}
+
+@test "an unexpected regular file at the target is backed up, not clobbered (#707 F-8)" {
+    mkdir -p "$TEST_TEMP_HOME/.claude"
+    printf 'user data\n' > "$TGT"
+    seed_ws_repo "packaging-skills" "create"
+
+    run_compose
+    assert_success
+
+    [ -d "$TGT" ] && [ ! -L "$TGT" ]
+    [ -L "$TGT/create" ]
+    run bash -c "cat \"$TEST_TEMP_HOME/.claude\"/skills-*-original"
+    assert_success
+    assert_output --partial "user data"
 }

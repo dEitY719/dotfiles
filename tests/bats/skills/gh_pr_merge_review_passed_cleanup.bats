@@ -1,10 +1,14 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_merge_review_passed_cleanup.bats
 # Issue #1636, F-5 — gh:pr-merge drops `review-passed` after a successful
-# merge:
-#   claude/skills/gh-pr-merge/references/review-passed-cleanup.sh.md  (SSOT)
-#   claude/skills/gh-pr-merge/SKILL.md  (Step 4)
+# merge.
 # Source-of-truth fixture: _fixtures/gh_pr_merge_review_passed_cleanup.sh
+#
+# #1680: the gh-pr-merge skill moved to its own marketplace repo, so the doc
+# guards that pinned this fixture to that skill's SKILL.md and
+# references/review-passed-cleanup.sh.md live there now. The mirror below is
+# unpinned in this repo — behaviour is still tested, drift against the skill
+# text is not.
 #
 # Why the label is dropped at all: it is a claim about one head commit of an
 # OPEN PR, read only by `gh:pr-merge-train`'s gate. After the merge nothing
@@ -20,7 +24,6 @@ FIXTURE='tests/bats/skills/_fixtures/gh_pr_merge_review_passed_cleanup.sh'
 
 setup() {
     setup_isolated_home
-    SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge"
     GH_LOG="${BATS_TEST_TMPDIR}/gh.log"
     : >"$GH_LOG"
     export GH_LOG
@@ -160,37 +163,11 @@ _stub_gh_fails() {
 
 # ---------------------------------------------------------------------
 # Doc guards
+#
+# The guards against gh-pr-merge's own SKILL.md / references/*.md moved out
+# with that skill in #1680. What is left is the guard on the shared primitive,
+# which still ships from this repo.
 # ---------------------------------------------------------------------
-
-@test "doc-guard: SKILL.md Step 4 runs the cleanup and names the shared helper" {
-    run grep -qF -- 'review-passed-cleanup.sh.md' "${SKILL_DIR}/SKILL.md"
-    assert_success
-    run grep -qF -- '_gh_pr_drop_label' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: SKILL.md marks the cleanup soft-fail" {
-    run grep -q 'soft-fail' "${SKILL_DIR}/SKILL.md"
-    assert_success
-    run grep -qF -- '#1636' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: the cleanup doc uses the shared primitive, never an inline DELETE" {
-    local _doc="${SKILL_DIR}/references/review-passed-cleanup.sh.md"
-    run grep -qF -- '_gh_pr_drop_label' "$_doc"
-    assert_success
-    run grep -qE 'gh api -X DELETE' "$_doc"
-    assert_failure
-}
-
-@test "doc-guard: the cleanup doc explains it is cleanup, not invalidation" {
-    local _doc="${SKILL_DIR}/references/review-passed-cleanup.sh.md"
-    run grep -q 'not an invalidation' "$_doc"
-    assert_success
-    run grep -qF -- '#1636' "$_doc"
-    assert_success
-}
 
 @test "doc-guard: the #1563 SSOT lists gh:pr-merge as a consumer of the primitive" {
     run grep -qE 'gh:pr-merge +Step 4' \

@@ -18,9 +18,6 @@
 load '../test_helper'
 
 HELPER="${DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
-TRAIN_SKILL="${DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/SKILL.md"
-TRAIN_LOOP="${DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/train-loop.md"
-TRAIN_ORDERING="${DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/ordering.md"
 
 setup() {
     _NOW=1800000000
@@ -327,63 +324,11 @@ _readmit_numbers() {
 }
 
 # ---------------------------------------------------------------------------
-# Drift guard — the wiring is what makes any of this reachable
+# Drift guard — REMOVED (#1680)
 # ---------------------------------------------------------------------------
 #
-# Both halves live in prose executed by an LLM, so a future edit can drop them
-# without touching a line of shell. Same spirit as the quiet-period suite's own
-# drift guard on `_gh_pr_merge_train_filter_targets`.
-
-@test "own_push: SKILL.md Step 2 runs the readmission pass" {
-    run grep -qF -- "_gh_pr_merge_train_readmit_own_pushes" "${TRAIN_SKILL}"
-    assert_success
-}
-
-@test "own_push: SKILL.md still asks gh pr list for headRefOid" {
-    run grep -qE -- '--json [^|]*headRefOid' "${TRAIN_SKILL}"
-    assert_success
-}
-
-@test "own_push: train-loop.md records the sha the remediation pushed" {
-    run grep -qF -- "_gh_pr_merge_train_record_pushed_sha" "${TRAIN_LOOP}"
-    assert_success
-}
-
-@test "own_push: train-loop.md forgets the record after a merge" {
-    run grep -qF -- "_gh_pr_merge_train_forget_pushed_sha" "${TRAIN_LOOP}"
-    assert_success
-}
-
-@test "own_push: ordering.md documents the D-6 exemption" {
-    run grep -qF -- "_gh_pr_merge_train_readmit_own_pushes" "${TRAIN_ORDERING}"
-    assert_success
-}
-
-# AC3 made visible in the doc, not only true in code: the shared filter both
-# callers run is untouched by this feature.
-@test "own_push: ordering.md still names the shared filter as unchanged" {
-    run grep -qF -- "_gh_pr_merge_train_filter_targets" "${TRAIN_ORDERING}"
-    assert_success
-}
-
-# codex, PR #1724 review, FOLLOW-UP: the re-admission INFO line had no defined
-# format anywhere a future edit would notice it drifted. Pin the exact string.
-@test "own_push: SKILL.md pins the re-admission INFO line format" {
-    run grep -qF -- \
-        "[INFO] gh:pr-merge-train: PR #<N> re-admitted — this train pushed its current head (#1708 D-6 exemption)." \
-        "${TRAIN_SKILL}"
-    assert_success
-}
-
-# codex, PR #1724 review, BLOCKER: recording must be conditioned on the head
-# having actually changed, not fired unconditionally after every remediation —
-# a no-op atom (e.g. gh:pr-resolve-outdated's "already up to date" path) must
-# never be recorded as a push the train made.
-@test "own_push: train-loop.md only records when the head actually changed" {
-    run grep -qF -- "NEW_HEAD_OID" "${TRAIN_LOOP}"
-    assert_success
-    run grep -qF -- "OLD_HEAD_OID" "${TRAIN_LOOP}"
-    assert_success
-    run grep -qE -- '\[ "\$NEW_HEAD_OID" != "\$OLD_HEAD_OID" \]' "${TRAIN_LOOP}"
-    assert_success
-}
+# The prose half of this feature (gh-pr-merge-train's SKILL.md, train-loop.md,
+# ordering.md) moved out to its own marketplace repo, so the guards that pinned
+# the skill wiring to these functions now belong there. What survives here is
+# the shell SSOT in shell-common/functions/gh_pr_merge_train.sh — the wiring
+# that makes it reachable is no longer pinned from this repo.

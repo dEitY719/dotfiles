@@ -2,7 +2,7 @@
 # tests/bats/lint/shell_common_fallback.bats
 # Issue #1612 — scripts/lint_shell_common_fallback.sh 회귀 가드.
 #
-# claude/skills/**/*.md 안의 `${SHELL_COMMON}/functions/...` 소싱 지시문에
+# 스킬 `**/*.md` 안의 `${SHELL_COMMON}/functions/...` 소싱 지시문에
 # `$HOME` 폴백이 빠지면, $SHELL_COMMON 이 비어 있는 셸(Claude Code의 Bash
 # tool)에서 agent 가 상대경로로 우회하다 라벨링 함수가 조용히 사라지는
 # 실패로 이어진다 — 그 실패를 재현/고정한 회귀 테스트는
@@ -63,11 +63,5 @@ run_linter() {
     printf 'no shell-common references here\n' \
         >"$SKILLS_DIR/some-skill/references/detail.md"
     run_linter
-    assert_success
-}
-
-@test "the repository's own claude/skills passes" {
-    run env CLAUDE_SKILLS_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills" \
-        sh "$LINTER"
     assert_success
 }

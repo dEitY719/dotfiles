@@ -121,35 +121,18 @@ TABLE
     assert_success
 }
 
-# #1410 NF-1: a phase split copies its skills out, it does not move them.
-# The dotfiles originals must survive until Phase 4 retires them deliberately,
-# so `/write:rca`, `/gh:pr-resolve-conflict` and `/devx:session-close` keep
-# working for anyone who has not installed the plugin.
-#
-# One row per phase — the same convention the registration table above uses,
-# because this check grows the same way (#1643 was the first; #1660 and #1661
-# followed). The row, not a whole hand-copied @test block, is what a new phase
-# adds. When Phase 4 deletes a phase's originals, its row goes in the same
-# commit: the removal stays a decision someone makes, not a side effect nobody
-# notices, and the failure message names which phase broke.
-@test "split-out phases left their claude/skills originals in place (#1410 NF-1)" {
-    while IFS='|' read -r issue skills; do
-        for skill in ${skills}; do
-            [ -f "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}/SKILL.md" ] \
-                || fail "claude/skills/${skill}/SKILL.md is missing (${issue}) — #1410 NF-1 says a phase split copies, never moves"
-        done
-    done <<'TABLE'
-#1643|write-rca write-insight write-release-note write-task-history write-blog-dev-learnings
-#1660|gh-pr-resolve-ci-fail gh-pr-resolve-conflict gh-pr-resolve-outdated
-#1661|devx-restart devx-session-close devx-session-handoff devx-rate-limit-guard devx-resume-after-limit devx-schedule ai-worktree-spawn ai-worktree-teardown
-#1659|devx-pr-review-all devx-pr-verify-live devx-pr-verify-merged devx-exception-merge-checklist gh-pr-post-merge-verify
-#1657|devx-prd-to-trd devx-trd-to-issues devx-pr-to-ssot-issue devx-reverse-engineering-analysis devx-claude-to-codex
-#1662|skill-create skill-check skill-refactor sh-check devx-ux-guidelines devx-command-rename
-#1658|gh-label-bootstrap gh-kanban-bootstrap gh-add-ai-metrics devx-docs-bootstrap
-#1676|gh-issue-read gh-issue-create gh-issue-implement gh-issue-proceed gh-discussion-create gh-discussion-convert
-#1677|gh-commit gh-pr gh-pr-review gh-pr-reply gh-pr-approve gh-pr-merge gh-pr-merge-emergency gh-pr-merge-train
-#1678|gh-issue-flow devx-autopilot gh-issue-relay-flow gh-relay-merge
-TABLE
+# #1410 NF-1 said a phase split copies its skills out rather than moving
+# them, so the dotfiles originals survived every phase. #1680 (Phase 4)
+# retired them deliberately, in one commit, now that all 15 repos are
+# published and registered above. The guard flips: the tree must be gone,
+# and nothing may quietly recreate it.
+@test "the dotfiles claude/skills tree is gone (#1680 Phase 4)" {
+    [ ! -e "${_BATS_REAL_DOTFILES_ROOT}/claude/skills" ] \
+        || fail "claude/skills/ is back — #1680 removed it; skills belong in their marketplace repo"
+
+    run git -C "${_BATS_REAL_DOTFILES_ROOT}" ls-files -- 'claude/skills'
+    assert_success
+    [ -z "$output" ] || fail "claude/skills/ files are tracked again: $output"
 }
 
 # claude-plugin-visuals 는 #1646 에서 visuals-skills 로 rename 됐다. GitHub 이

@@ -78,21 +78,23 @@ _codex_skills_state_version() {
     echo "3"
 }
 
+# Fingerprint the skill sources so a change triggers exactly one re-sync.
+# Since #1680 the source is the workspace clone tree, not the deleted
+# dotfiles `claude/skills/` — enumeration comes from the shared SSOT
+# shell-common/functions/skill_sources.sh so this cannot drift from what
+# scripts/setup-skills-ssot.sh actually links.
 _codex_skills_fingerprint() {
-    local src="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
-    local skill_path skill_file
+    local root skill_dir
 
-    [ -d "$src" ] || return 1
+    command -v _skill_workspace_dirs >/dev/null 2>&1 || return 1
+    root="$(_skill_workspace_root)" || return 1
 
     (
-        cd "$src" || exit 1
-        find . -mindepth 1 -maxdepth 2 -not -name "." -not -name ".." | LC_ALL=C sort | while IFS= read -r skill_path; do
-            printf "entry:%s\n" "$skill_path"
-        done
-        find . -mindepth 2 -maxdepth 2 -name "SKILL.md" | LC_ALL=C sort | while IFS= read -r skill_path; do
-            skill_file="$src/${skill_path#./}"
-            [ -f "$skill_file" ] || continue
-            printf "skill-md:%s:%s\n" "$skill_path" "$(cksum < "$skill_file" | awk '{print $1 ":" $2}')"
+        _skill_workspace_dirs "$root" | while IFS= read -r skill_dir; do
+            [ -n "$skill_dir" ] || continue
+            printf "entry:%s\n" "${skill_dir#"$root"/}"
+            printf "skill-md:%s:%s\n" "${skill_dir#"$root"/}" \
+                "$(cksum < "${skill_dir}/SKILL.md" | awk '{print $1 ":" $2}')"
         done
     ) | LC_ALL=C sort | cksum | awk '{print $1 ":" $2}'
 }
@@ -148,8 +150,9 @@ _codex_skills_has_legacy_layout() {
     legacy_link="$(find "$target_dir" -mindepth 2 -maxdepth 2 -type l -name "SKILL.md" -print -quit 2>/dev/null)"
     [ -n "$legacy_link" ] && return 0
 
-    src_root="$(readlink -f "${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills" 2>/dev/null || true)"
+    src_root="$(_skill_workspace_root 2>/dev/null || true)"
     [ -n "$src_root" ] || return 1
+    src_root="$(readlink -f "$src_root" 2>/dev/null || printf "%s" "$src_root")"
 
     # Copy layout heuristic: non-symlink skill dir containing SKILL.md plus symlinked entries to SSOT
     for skill_dir in "$target_dir"/*; do
