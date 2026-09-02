@@ -46,9 +46,11 @@
 #   Read a JSON array on stdin — the shape `gh pr list --json ...` answers with
 #   — and echo the same array on stdout with every non-target element removed.
 #   A surviving element is passed through UNCHANGED, every field included: the
-#   dispatcher only reads `number`/`updatedAt`/`isDraft`, but the skill also
-#   needs `mergeable`/`mergeStateStatus`/`baseRefName`/`title` for the D-2 sort
-#   and the D-1 routing table, so this function must never project fields away.
+#   dispatcher reads `number`/`updatedAt`/`isDraft` plus
+#   `headRefOid`/`mergeStateStatus`/`labels` for its unchanged-queue
+#   fingerprint (#1709), and the skill also needs
+#   `mergeable`/`baseRefName`/`title` for the D-2 sort and the D-1 routing
+#   table, so this function must never project fields away.
 #
 #   An element is DROPPED when any of these holds:
 #     1. `.isDraft` is true               — DRAFT is a skip row in the D-1 table.

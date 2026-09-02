@@ -58,6 +58,19 @@ fi
 _PMT_STATE_SUBDIR="pr-merge-train"
 _PMT_LOCK_BASENAME=".lock"
 
+# The queue-fingerprint / backoff state (#1709), a sibling of the lock in the
+# same directory. One line: `<window> <remaining> <fingerprint>`.
+_PMT_BACKOFF_BASENAME="backoff"
+# Ceiling on the backoff window, in ticks. 8 at the shipped `*/3` cadence is
+# ~24 minutes between wake-ups on a wedged queue — long enough to stop paying
+# a session per period for a state nothing in this repo can self-resolve
+# (#1709: two PRs sat in `review-blocked` / board-not-promoted for a dozen
+# identical ticks), short enough that a change the fingerprint cannot see (a
+# project-board promotion, a required check appearing) is still picked up
+# within one coffee break. Not unbounded: the fingerprint is a proxy, and a
+# proxy that never re-checks is a wedge of its own.
+_PMT_BACKOFF_MAX="8"
+
 # D-6 — the quiet period is NOT a constant here. Its SSOT, together with the
 # whole target filter (draft / `reply-pending` label / quiet period), is
 # `shell-common/functions/gh_pr_merge_train.sh` — sourced below and called by
@@ -287,22 +300,32 @@ _pmt_bind_target() {
 # Precondition 3 — are there PRs worth waking a session for
 # ============================================================
 
-# Echo the number of PRs this tick considers targets. Returns non-zero when
-# GitHub could not be asked at all — the caller ends the tick rather than
-# launching a train that would start by guessing (issue #1470, Error Cases:
-# "상태를 모르는 채 머지하지 않는다").
+# Bind `_PMT_TARGET_COUNT` — how many PRs this tick considers targets — and
+# `_PMT_FINGERPRINT`, from one and the same `gh pr list` response. Returns
+# non-zero when GitHub could not be asked at all — the caller ends the tick
+# rather than launching a train that would start by guessing (issue #1470,
+# Error Cases: "상태를 모르는 채 머지하지 않는다").
+#
+# Globals rather than an echoed count, for the reason _pmt_bind_target already
+# assigns rather than echoes: a caller writing `_n=$(...)` runs this in a
+# subshell, so a second result set inside it — the #1709 fingerprint — is
+# discarded the moment the substitution closes. Two results, one call, one
+# response: the alternative is a second `gh pr list` purely to answer "has
+# anything changed", which is the round trip #1709 exists to stop spending.
 #
 # The `--author @me` scope is this function's own (D-7: a colleague's PR is
 # never auto-merged). Everything else — drafts, the `reply-pending` label, and
 # the D-6 quiet period — is `_gh_pr_merge_train_filter_targets`, the SSOT the
 # `gh:pr-merge-train` skill runs too (#1524). `labels` is in the `--json` list
-# for that filter's sake; nothing here reads it directly.
+# for that filter's sake; `headRefOid` and `mergeStateStatus` are there for the
+# fingerprint below (#1709). Nothing here reads any of the three directly.
+_PMT_TARGET_COUNT=0
 _pmt_target_count() {
     local _json _filtered _now
 
     _json=$(GH_HOST="${_PMT_HOST}" gh pr list --repo "${_PMT_REPO}" \
         --author @me --state open --limit "${_PMT_PR_LIMIT}" \
-        --json number,updatedAt,isDraft,labels 2>/dev/null) || return 1
+        --json number,updatedAt,isDraft,labels,headRefOid,mergeStateStatus 2>/dev/null) || return 1
     [ -n "${_json}" ] || return 1
 
     _now=$(_pmt_now)
@@ -316,7 +339,135 @@ _pmt_target_count() {
     _filtered=$(printf '%s' "${_json}" |
         _gh_pr_merge_train_filter_targets --now "${_now}") || return 1
 
-    printf '%s' "${_filtered}" | jq -r 'length' 2>/dev/null || return 1
+    _pmt_bind_fingerprint "${_filtered}"
+
+    _PMT_TARGET_COUNT=$(printf '%s' "${_filtered}" | jq -r 'length' 2>/dev/null) ||
+        return 1
+    case "${_PMT_TARGET_COUNT}" in
+    '' | *[!0-9]*) return 1 ;;
+    esac
+}
+
+# ============================================================
+# Precondition 4 — has the queue moved since the last tick (#1709)
+# ============================================================
+
+# The queue fingerprint this tick would hand the train, bound by
+# _pmt_target_count. Empty means "could not be summarised", which the gate
+# below treats as "run" rather than "skip".
+_PMT_FINGERPRINT=""
+
+# Fold the filtered PR array <1> into one line: the target, then the sorted
+# `(number, headRefOid, mergeStateStatus, verdict labels)` tuples (#1709).
+#
+# Those four fields are what the D-1 routing table actually branches on — the
+# three short-circuit labels (`reply-pending`, `review-blocked`,
+# `review-passed`) plus the state the table itself is keyed by. Every other
+# field `gh pr list` returns is either constant for the PR's lifetime or
+# irrelevant to the verdict, so including it would only manufacture changes.
+#
+# The `<host>/<repo>` prefix is not decoration: the state directory is one per
+# machine, not one per target (the `.lock` has always been global too), so two
+# checkouts pointed at different repos share this file. Without the prefix,
+# repo B's tick could match repo A's stored fingerprint and skip a queue it has
+# never looked at. With it, the mismatch resets — two alternating targets get
+# no backoff, which is exactly today's behaviour and the safe direction.
+_pmt_bind_fingerprint() {
+    local _tuples
+
+    _tuples=$(printf '%s' "$1" | jq -r '
+        [ .[]?
+          | [ (.number // "?" | tostring),
+              (.headRefOid // ""),
+              (.mergeStateStatus // ""),
+              ([ .labels[]?.name?
+                 | select(. == "review-passed" or . == "review-blocked"
+                          or . == "reply-pending") ] | sort | join(","))
+            ] | join(":")
+        ] | sort | join(";")
+    ' 2>/dev/null) || _tuples=""
+
+    if [ -z "${_tuples}" ]; then
+        _PMT_FINGERPRINT=""
+        return 0
+    fi
+    _PMT_FINGERPRINT="${_PMT_HOST}/${_PMT_REPO}|${_tuples}"
+}
+
+# Persist the tick's verdict for the next one to compare against. Best effort:
+# a state file that cannot be written degrades to "no backoff", which is the
+# pre-#1709 behaviour, and warning about it every three minutes would be worse
+# than the token cost it is trying to save. _pmt_acquire_lock has already
+# warned if the directory itself is the problem.
+_pmt_backoff_write() {
+    local _file="$1" _window="$2" _remaining="$3"
+
+    mkdir -p "$(dirname "${_file}")" 2>/dev/null || return 0
+    printf '%s %s %s\n' "${_window}" "${_remaining}" "${_PMT_FINGERPRINT}" \
+        >"${_file}" 2>/dev/null || return 0
+    return 0
+}
+
+# Decide whether this tick may be skipped because nothing in the queue moved,
+# and record what the next tick compares against. <1> is the target count, for
+# the log line only. 0 = skip, 1 = run.
+#
+# On the criterion "a tick that produced [MERGED] or [FAILED] never backs off"
+# (#1709): the dispatcher has no channel to the session's per-PR report and
+# must not grow one — it is fire-and-forget by design (`references/cron-
+# dispatcher.md`, "Why the train runs inside a claude session"), and a second,
+# half-observed signal would be a state machine nobody can debug. It does not
+# need one, because every outcome that criterion names moves the fingerprint on
+# its own: a `[MERGED]` PR leaves `gh pr list --state open` outright, and a
+# `[FAILED]` attempt got that far by pushing a rebase or a CI fix (new
+# `headRefOid`), by moving `mergeStateStatus`, or by a verdict label changing
+# hands. So the reset branch below *is* the "progress happened" branch.
+#
+# The one case it does not cover is a failure that changed nothing observable —
+# an atom skill that died before touching the PR. That backs off, deliberately:
+# re-running an identical failure every three minutes is precisely the waste
+# #1709 was filed about, and the window still expires.
+_pmt_backoff_gate() {
+    local _target="$1" _file _prev_fp="" _window=0 _remaining=0
+
+    _file="$(_pmt_state_dir)/${_PMT_BACKOFF_BASENAME}"
+
+    # No fingerprint is no evidence. Skipping on a queue this tick could not
+    # summarise would be backing off from a state it never observed.
+    [ -n "${_PMT_FINGERPRINT}" ] || return 1
+
+    if [ -r "${_file}" ]; then
+        IFS=' ' read -r _window _remaining _prev_fp <"${_file}" 2>/dev/null || :
+    fi
+    # A truncated or hand-edited file reads as "no window open", never as a
+    # licence to skip — the fingerprint comparison below is what gates that.
+    case "${_window}" in '' | *[!0-9]*) _window=0 ;; esac
+    case "${_remaining}" in '' | *[!0-9]*) _remaining=0 ;; esac
+
+    if [ "${_PMT_FINGERPRINT}" != "${_prev_fp:-}" ]; then
+        # Reset to the smallest window, and run: something moved.
+        _pmt_backoff_write "${_file}" 1 1
+        return 1
+    fi
+
+    if [ "${_remaining}" -gt 0 ]; then
+        _pmt_backoff_write "${_file}" "${_window}" "$((_remaining - 1))"
+        # Deliberately not the "No target PR" wording: that line means zero
+        # candidates, this one means candidates that have not moved. Reading
+        # a cron log full of the same sentence for both would hide exactly the
+        # state #1709 was filed about.
+        ux_info "Queue unchanged on ${_PMT_REPO} since the last tick (${_target} target PR(s), same fingerprint) — backoff skip, window ${_window}, next wake in ${_remaining} tick(s)."
+        return 0
+    fi
+
+    # The window has elapsed. This tick wakes a session — the fingerprint is a
+    # proxy and cannot see a board promotion or a newly satisfied branch rule —
+    # and arms the next, doubled one.
+    _window=$((_window * 2))
+    [ "${_window}" -ge 1 ] || _window=1
+    [ "${_window}" -le "${_PMT_BACKOFF_MAX}" ] || _window="${_PMT_BACKOFF_MAX}"
+    _pmt_backoff_write "${_file}" "${_window}" "${_window}"
+    return 1
 }
 
 # ============================================================
@@ -988,8 +1139,15 @@ _pmt_usage() {
     ux_bullet "duplicate-start guard (NF-1)"
     ux_bullet_sub "the lock covers overlapping ticks; the agent probe covers the running train"
     ux_bullet_sub "agent working/blocked -> hold; still registered -> prompt that pane; missing -> open a new one"
+    ux_bullet "unchanged-queue backoff (#1709)"
+    ux_bullet_sub "each tick fingerprints its targets: (number, headRefOid, mergeStateStatus, verdict labels)"
+    ux_bullet_sub "same fingerprint as the previous tick -> skip, logged as 'Queue unchanged'"
+    ux_bullet_sub "the skipped window doubles 1 -> 2 -> 4 -> ${_PMT_BACKOFF_MAX} ticks, then holds at ${_PMT_BACKOFF_MAX}"
+    ux_bullet_sub "any fingerprint change (a merge, a push, a verdict label) resets it to 1 and wakes a session"
+    ux_bullet_sub "the window always expires — a board promotion the fingerprint cannot see is still picked up"
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_LOCK_BASENAME}   (tick lock)"
+    ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_PMT_STATE_SUBDIR}/${_PMT_BACKOFF_BASENAME}   (queue fingerprint + backoff window)"
     ux_bullet "claude session (claude-yolo parity)"
     ux_bullet_sub "the pane runs claude --dangerously-skip-permissions (unattended cron)"
     ux_bullet_sub "that session can merge — NF-2 (no emergency bypass) and the fail-closed"
@@ -1078,7 +1236,7 @@ main() {
     # would make a dry run silently no-op while a real tick is mid-cycle —
     # exactly when a human is most likely to be asking what the train sees.
     if [ "${_PMT_DRY_RUN}" -eq 1 ]; then
-        if ! _target=$(_pmt_target_count); then
+        if ! _pmt_target_count; then
             # Non-zero here, unlike the real tick below, and the difference is
             # deliberate. A real tick exits 0 because cron must not treat a
             # transient GitHub failure as a hard error — there is nothing to
@@ -1089,7 +1247,7 @@ main() {
             ux_error "gh pr list failed for ${_PMT_REPO} — a real tick would end here."
             exit 1
         fi
-        ux_success "Dry run — ${_PMT_REPO} on ${_PMT_HOST}: ${_target} target PR(s)."
+        ux_success "Dry run — ${_PMT_REPO} on ${_PMT_HOST}: ${_PMT_TARGET_COUNT} target PR(s)."
         ux_bullet "would prompt agent ${_agent} with /gh-pr-merge-train ${_PMT_REPO}"
         exit 0
     fi
@@ -1104,14 +1262,22 @@ main() {
         exit 0
     fi
 
-    if ! _target=$(_pmt_target_count); then
+    if ! _pmt_target_count; then
         # Exit 0, unlike the --dry-run branch above: a transient API failure is
         # not something cron should mail about, and the next period retries.
         ux_error "gh pr list failed for ${_PMT_REPO} — ending this tick rather than merging blind."
         exit 0
     fi
+    _target="${_PMT_TARGET_COUNT}"
     if [ "${_target}" -eq 0 ]; then
         ux_info "No target PR on ${_PMT_REPO} — nothing to wake a session for."
+        exit 0
+    fi
+
+    # There are targets, but they may be the *same* targets in the same state
+    # this tick found last time (#1709). Placed after the two exits above so a
+    # tick that never got to look at the queue leaves no fingerprint behind.
+    if _pmt_backoff_gate "${_target}"; then
         exit 0
     fi
 
