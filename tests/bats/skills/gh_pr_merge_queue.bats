@@ -725,6 +725,14 @@ _run_json() {
     assert_success
 }
 
+@test "doc-guard: the check-runs fetch is paginated" {
+    # codex FOLLOW-UP, PR #1725: a base with more than one page of check runs
+    # must not silently drop a later, possibly-failing required context.
+    run grep -qF -- 'gh api --paginate "repos/$TARGET_REPO/commits/$BASE_ENC/check-runs"' \
+        "${TRAIN_SKILL}/references/strict-mode-relaxation.md"
+    assert_success
+}
+
 @test "doc-guard: the Step 3.6 block and the fixture have not drifted apart" {
     local pat f
     for pat in \
