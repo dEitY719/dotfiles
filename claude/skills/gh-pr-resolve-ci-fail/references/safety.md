@@ -117,6 +117,44 @@ instead of git's remote, which on a dual-host login silently DELETEs a label on
 the wrong server (#1403 / #1407). `GH_HOST="$TARGET_HOST"` pins that server.
 URL-encode any space or special char in the label name (e.g. `CI%20fail`).
 
+### `review-passed` drop (soft-fail, #1705)
+
+`review-passed` is a claim about **one head commit**, and Step 5 just pushed a
+new one — so the verdict is now false. Drop it right after the `CI fail`
+removal, through the shared `_gh_pr_drop_label` helper (the single REST-DELETE
+implementation every head-advancing skill routes through, never a hand-inlined
+REST DELETE; #1563, and #326 Bug B for the add side). The helper
+percent-encodes the label, pins `GH_HOST`, and absorbs "label was never there"
+as success after verifying the PR's real label list (#1583) — no pre-check
+needed.
+
+```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh"
+
+_gh_pr_drop_label "$PR_NUMBER" review-passed "$TARGET_REPO" "$TARGET_HOST" \
+    >/dev/null 2>&1 \
+  && echo "[OK] \`review-passed\` 라벨 제거됨 — CI 수정 커밋으로 head 가 바뀌어 이전 판정 무효화" \
+  || echo "[WARN] \`review-passed\` 라벨 제거 실패 (권한/네트워크 — 수동 확인 필요할 수 있음)"
+```
+
+**Unconditional** — no patch-id comparison, unlike `gh:pr-resolve-outdated` /
+`gh:pr-resolve-conflict`. Those two can produce a byte-identical diff under a
+new SHA (a clean rebase), which is why they reconcile instead of dropping
+(#1698 / #1700). A CI fix changes file content by definition, so no keep /
+re-stamp path can ever apply here — there is nothing to reconcile.
+
+**`review-blocked` is never touched** (#1563). This skill holds no evidence
+that a reviewer's blocker was addressed — fixing red CI and answering review
+comments are unrelated — so leaving that label on is the safe direction, not a
+bug. Issuing either verdict label is likewise not this skill's job:
+`devx:pr-review-all` (and `gh:pr-reply` under its delegation, #1636) is the
+only writer.
+
+Soft-fail: a failed drop costs one `[WARN]` line and nothing else — it never
+changes the CI-fix success/failure or the Step 7 report. Both mutations sit
+behind the same gate as the `CI fail` removal above: Step 5's push failed →
+Step 7 does not run at all, and the label stays valid because head never moved.
+
 ### ai-metrics PR comment (soft-fail)
 
 ```bash

@@ -86,6 +86,13 @@ removal.` Without flag, skip. Polling loop: `references/ci-log-analysis.md` →
 --remove-label` — classic-Projects silent-fail, #326 Bug B); 404 = absent →
 soft-fail. Full block + ai-metrics comment: `references/safety.md` → "Step 7".
 
+The same step also drops a stale `review-passed` via the shared
+`_gh_pr_drop_label` helper — **unconditional**, because a CI-fix commit
+changes file content by definition, so the patch-id "keep" path that
+`gh:pr-resolve-outdated` / `gh:pr-resolve-conflict` have can never apply here
+(#1705). Never touches `review-blocked` (#1563). Soft-fail: one `[WARN]` line,
+CI-fix success unaffected. Exact block: `references/safety.md` → "Step 7".
+
 Report: `[OK] PR #<N> CI 복구 완료 · 라벨 제거됨 · <sha> push 됨.` followed by
 `Next: /gh-pr-reply <N>  # CI 그린 확인 후 리뷰어 회신`.
 
