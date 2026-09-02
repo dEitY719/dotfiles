@@ -237,6 +237,47 @@ _1704_make_repo() {
     refute_output --partial 'add 1695 review-passed'
 }
 
+@test "reconcile (#1706): patch-id identical but review-passed was revoked by hand -> drops, does not resurrect" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # The #1706 scenario end to end: sha A passed review (label + marker), a
+    # human spotted something and pulled the `review-passed` LABEL by hand
+    # without opening a formal `review-blocked` round, then a content-identical
+    # rebase landed. Every other precondition still holds — patch-id identical,
+    # marker authored by the trusted login, no `review-blocked` — so before the
+    # revocation marker existed the label came straight back and silently
+    # overrode the human's judgment. The revocation is the explicit act that
+    # cancels the evidence the reconcile reads.
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson passed "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
+        --argjson revoked "$(_revoked_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
+        '[$passed, $revoked]')
+    resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1695/labels/review-passed'
+    refute_output --partial 'add 1695 review-passed'
+}
+
+@test "reconcile (#1706): a revocation followed by a genuine re-review re-grants again" {
+    eval "$(_1698_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # The revocation must not be a permanent poison pill: once the PR is
+    # actually re-reviewed, the newest marker is a `review-passed` again and
+    # the normal #1698/#1700 keep path resumes.
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson passed "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
+        --argjson revoked "$(_revoked_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
+        --argjson again "$(_marker_comment "$STUB_ME_LOGIN" "$OLD_HEAD")" \
+        '[$passed, $revoked, $again]')
+    resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \
+        "$OLD_BASE" "$OLD_HEAD" "$NEW_BASE" "$NEW_HEAD_SAME"
+    run cat "$GH_LOG"
+    refute_output --partial 'labels/review-passed'
+    assert_output --partial "add 1695 review-passed --repo acme/widget"
+    assert_output --partial "review-verdict:review-passed:${NEW_HEAD_SAME}"
+}
+
 @test "reconcile (PR #1703): patch-id identical + fresh marker but review-blocked is attached -> drops" {
     eval "$(_1698_make_repo)"
     cd "$REPO_DIR" || fail "cd failed"

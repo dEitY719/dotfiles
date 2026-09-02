@@ -20,6 +20,17 @@ _marker_comment() {
         '{user: {login: $login}, body: ("<!-- review-verdict:review-passed:" + $sha + " -->")}'
 }
 
+# The #1706 counterpart: one PR-comment object carrying a REVOCATION marker,
+# the thing a human posts by hand after removing `review-passed` from the UI.
+# Read side: the last marker of either type wins by comment order, and a
+# revocation reads as "no verdict at all" — see
+# `devx-pr-review-all/references/review-verdict-label.md` → "Revoking a stale
+# review-passed by hand".
+_revoked_marker_comment() {
+    jq -nc --arg login "$1" --arg sha "$2" \
+        '{user: {login: $login}, body: ("<!-- review-verdict:revoked:" + $sha + " -->")}'
+}
+
 # Call from setup(), AFTER GH_LOG/STUB_* are exported and the skill-specific
 # fixture is sourced — defines the `gh` and `_gh_pr_edit_safe_label` stubs
 # both suites share verbatim.

@@ -160,6 +160,13 @@ case "$_vl_result" in
         echo "[WARN] \`review-passed\` 재확인 실패 — 라벨 추가 자체가 실패해 아무것도 부여되지 않음"
         ;;
     *)
+        # 여기로 떨어지는 "재확인 근거 없음"에는 취소 마커
+        # (`<!-- review-verdict:revoked:<sha> -->`)로 이전 판정을 명시적으로
+        # 거둬들인 경우도 포함된다(#1706). 사람이 UI 에서 라벨만 떼면 마커는
+        # 그대로 남아 다음 내용-동일 리베이스에서 재부여되므로, 취소는 마커를
+        # 남기는 별도 행위여야 한다. 남기는 방법은
+        # `devx-pr-review-all/references/review-verdict-label.md` →
+        # "Revoking a stale `review-passed` by hand" 참고.
         echo "[OK] \`review-passed\` 무효화됨(또는 애초에 없었음) — 최신 판정 없음"
         ;;
 esac

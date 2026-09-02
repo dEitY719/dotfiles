@@ -138,6 +138,23 @@ _1700_make_repo() {
     assert_output --partial 'patch-id=changed'
     assert_output --partial 'label=dropped'
     refute_output --partial 'context-identical'
+}
+
+@test "conflict Step 5 (#1706): a hand-revoked review-passed is not resurrected here either" {
+    eval "$(_1700_make_repo)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # Smoke-level, same reasoning as the #1703 case above: the revocation
+    # semantics themselves are pinned in the sister suite and in
+    # gh_pr_merge_train_review_verdict_gate.bats. What this pins is that THIS
+    # skill's zero-conflict rebase path reaches the shared helper and so
+    # inherits the #1706 fix — the label must not come back on a
+    # content-identical rebase once the marker was revoked.
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson passed "$(_marker_comment "$STUB_ME_LOGIN" "$BACKUP")" \
+        --argjson revoked "$(_revoked_marker_comment "$STUB_ME_LOGIN" "$BACKUP")" \
+        '[$passed, $revoked]')
+    resolve_conflict_step5_reconcile 1687 acme/widget ghe.example.com \
+        "$OLD_BASE" "$BACKUP" "$NEW_BASE" "$NEW_HEAD_SAME"
     run cat "$GH_LOG"
     assert_output --partial 'api -X DELETE repos/acme/widget/issues/1687/labels/review-passed'
     refute_output --partial 'add 1687 review-passed'
