@@ -1,7 +1,8 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/functions/gh_pr_resolve_outdated.sh
-# gh:pr-resolve-outdated Step 5's `review-passed` reconciliation (issue #1698).
+# Step 5 `review-passed` reconciliation for BOTH rebase+force-push skills —
+# gh:pr-resolve-outdated and gh:pr-resolve-conflict (issues #1698, #1700).
 #
 # Before this file existed, Step 5 unconditionally dropped `review-passed`
 # after every successful `git push --force-with-lease` — the rebase changed
@@ -13,15 +14,30 @@
 # observed 2026-09-01: 4 PRs stuck on this after a `gh:pr-merge-train` run.
 #
 # Fix: compare `git patch-id --stable` of the PR's diff before vs. after the
-# rebase. Identical, AND `review-passed` is CURRENTLY on the PR -> the label
-# is still true for the new head, so instead of dropping it, re-post the SAME
-# freshness marker format (#1601) for the new SHA — the existing
+# rebase. Identical, AND the PR still carries a FRESH `review-verdict`
+# marker for the old head -> the verdict is still true for the new head, so
+# instead of dropping the label, re-post the SAME freshness marker format
+# (#1601) for the new SHA — the existing
 # `_gh_pr_merge_train_review_passed_stale()` reader then sees it as fresh on
 # the very next tick, with no changes to that reader or to the marker format.
-# Anything else (patch-id differs, unreadable, or the label was never there to
-# begin with) -> drop as before (a no-op when absent). Conflict resolution
-# (`gh:pr-resolve-conflict`) is untouched by this file and keeps its own
-# unconditional drop, since resolving a conflict by definition changes content.
+# Anything else (patch-id differs, unreadable, or no fresh marker) -> drop as
+# before (a no-op when absent).
+#
+# BOTH rebase skills call this (#1700). #1698 shipped it to
+# `gh:pr-resolve-outdated` alone, on the claim that "resolving a conflict by
+# definition changes content" — which is FALSE, and was this issue's root
+# cause. `gh:pr-resolve-conflict`'s own Step 3 routinely completes with ZERO
+# conflicts: `git rebase` exits 0 even when GitHub had marked the PR
+# `CONFLICTING` (the base moved again, or the verdict was simply stale), and
+# what it leaves behind is the identical content-identical-rebase shape this
+# file already handles. So whichever skill happened to pick a PR up decided
+# whether its label survived. Duplicating the logic instead of sharing it
+# would just re-open that gap, so the conflict skill sources this file
+# directly (the same cross-file sourcing convention this file itself uses for
+# `gh_pr_merge_train.sh` / `gh_pr_edit_safe.sh`). The function keeps its
+# original name and home: it is reached by an explicit `.` + call from one
+# extra doc, and renaming it would churn every existing call site and test
+# for cosmetic reasons alone (issue #1700 marks the rename optional).
 #
 # Residual, deliberately accepted (PR #1699 review, codex round-4): identical
 # patch-id proves the PR's OWN diff is byte-for-byte unchanged, not that the
@@ -50,16 +66,33 @@
 # helper's first action is deleting the OPPOSITE label (`review-blocked`,
 # because it services both directions), which would violate this skill's
 # absolute "never touch review-blocked" constraint (PR #1699 review, codex
-# BLOCKER). Checking current-label presence first also closes a second gap
-# from the same review: without it, a PR that was NEVER reviewed could earn
-# `review-passed` from a coincidentally-matching patch-id — a self-certifying
-# grant this file must never manufacture.
+# BLOCKER). A PR that was NEVER reviewed must also never earn `review-passed`
+# from a coincidentally-matching patch-id — a self-certifying grant this file
+# must never manufacture (same review).
 #
-# Label presence alone is not enough either (PR #1699 review, codex round-2
+# What proves "was certified" is the MARKER, not the label (#1700). Until then
+# the guard above was `_gh_pr_resolve_outdated_has_label` — "is the label
+# attached right now" — and that was the wrong question. A label is
+# destructible state that any of five drop paths can strip, so whichever path
+# reached a PR first also destroyed every other path's standing to ever
+# re-confirm the verdict: content byte-for-byte unchanged, yet the only way
+# back was a full 4-CLI re-review (PR #1687, issue #1700). The
+# `<!-- review-verdict:review-passed:<sha> -->` marker is never deleted by any
+# path, so gating on it removes that race entirely. It is also the STRONGER
+# guard, not a weaker one: the marker is direct evidence a verdict was
+# actually issued for that exact head, where a bare label only shows one is
+# attached now. A never-reviewed PR has no marker at all, so the freshness
+# check below returns rc 2 (ABSENT) and the drop path still wins.
+# `_gh_pr_resolve_outdated_has_label` survives as a function, but its call
+# site is now purely DIAGNOSTIC — it fills the report's `prior=` field.
+#
+# Label presence alone was never enough either (PR #1699 review, codex round-2
 # BLOCKER): a label can outlive its own freshness marker (e.g. some other bug
 # already left the PR in a stale-but-labelled state before this skill ever
-# ran) — reusing it would launder that staleness onto the new head. So the
-# "keep" path also calls the existing #1601 freshness check,
+# ran) — reusing it would launder that staleness onto the new head. That
+# review is what put the #1601 freshness check on the "keep" path in the first
+# place; #1700 merely promoted it from second condition to only condition. So
+# the "keep" path calls the existing #1601 freshness check,
 # `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <old-head-sha>
 # <trusted-login>` (`shell-common/functions/gh_pr_merge_train.sh`) — only its
 # rc 0 (FRESH: last marker from the trusted login equals `OLD_HEAD_SHA`
@@ -115,7 +148,21 @@
 #   _gh_pr_resolve_outdated_reconcile_review_passed \
 #       <pr> <repo> <host> <old-base-sha> <old-head-sha> \
 #       <new-base-sha> <new-head-sha> [worktree-path]
+#   (`gh:pr-resolve-conflict` passes its own `BACKUP_SHA` as <old-head-sha>;
+#    the two skills differ only in what they name that argument)
 #   (the freshness marker, when reposted, is stamped with <new-head-sha>)
+#
+# Report token — two INDEPENDENT dimensions on every path (#1700 F-4):
+#   patch-id=<identical|changed|unreadable>  what the content comparison said
+#   label=<granted|dropped>                  what this run actually did
+#   prior=<present|absent>                   (granted only) was the label still
+#       attached — `absent` marks a #1700 re-grant after another path already
+#       stripped it, `present` an ordinary #1698 keep
+#   marker=<reposted|failed>                 (granted only) did the repost land
+# Before the split, the drop path printed a fixed `patch-id=changed` whatever
+# its reason, so `patch-id=identical label=dropped` ("content was the same,
+# but nothing proved it was ever certified") was reported as if the content
+# had changed — reading as "re-review warranted" when it was not.
 
 # Advisory only (issue #1454, propagated by #1505; PR #1699 review, codex
 # round-4 FOLLOW-UP): warn once on stderr when this file was sourced from a
@@ -211,13 +258,29 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh" 2>/dev/null || :
     fi
 
-    local _old_pid _new_pid _me _fresh_rc
+    local _old_pid _new_pid _me _fresh_rc _pid_state
     _old_pid=$(_gh_pr_resolve_outdated_patch_id "$_old_base" "$_old_head" "$_worktree")
     _new_pid=$(_gh_pr_resolve_outdated_patch_id "$_new_base" "$_new_head" "$_worktree")
 
+    # The patch-id dimension is resolved ONCE, up front, and reported on every
+    # path (#1700 F-4). Before this split the drop path printed a fixed
+    # `patch-id=changed` no matter why it was taken, so a rebase that was
+    # byte-for-byte identical but simply had no fresh marker still told the
+    # operator the content had changed — the exact misreading issue #1700
+    # documents on PR #1687, where it argued for a full 4-CLI re-review of a
+    # diff nothing had touched. `unreadable` stays distinct from `changed`
+    # for the same reason: both fail closed to the drop, but only one of them
+    # is evidence about the content.
+    if [ -z "$_old_pid" ] || [ -z "$_new_pid" ]; then
+        _pid_state=unreadable
+    elif [ "$_old_pid" = "$_new_pid" ]; then
+        _pid_state=identical
+    else
+        _pid_state=changed
+    fi
+
     _fresh_rc=1
-    if [ -n "$_old_pid" ] && [ -n "$_new_pid" ] && [ "$_old_pid" = "$_new_pid" ] &&
-        _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-passed &&
+    if [ "$_pid_state" = identical ] &&
         command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1; then
         _me="${GH_PR_RESOLVE_OUTDATED_TRUSTED_LOGIN:-$(
             if [ -n "$_host" ]; then
@@ -250,7 +313,19 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         # already makes (`review-verdict-label.md` → "Freshness marker").
         # Soft-fail is unchanged: this is a report string, never a non-zero
         # return — the next tick's #1601 check self-heals either way.
-        local _marker=reposted
+        # DIAGNOSTIC ONLY (#1700 F-2): `has_label` used to GATE this branch,
+        # which is what made the bug unrecoverable — whichever drop path ran
+        # first also destroyed the other path's standing to ever re-confirm.
+        # The freshness marker is the durable evidence, so it does the gating
+        # now; the label's prior state survives purely as a report field that
+        # separates an ordinary #1698 keep (`present`) from a #1700 re-grant
+        # after another path already stripped it (`absent`). Read BEFORE the
+        # add below, or it would always report `present`. An `if` (not `&&`)
+        # so a rc-1 lookup cannot trip a caller's errexit.
+        local _marker=reposted _prior=absent
+        if _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-passed; then
+            _prior=present
+        fi
         (
             if [ -n "$_host" ]; then
                 # shellcheck disable=SC2030,SC2031  # deliberately subshell-scoped
@@ -260,11 +335,12 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
                 gh api -X POST "repos/$_repo/issues/$_pr/comments" \
                     -f "body=<!-- review-verdict:review-passed:$_new_head -->" >/dev/null 2>&1
         ) || _marker=failed
-        printf 'patch-id=unchanged label=kept marker=%s\n' "$_marker"
+        printf 'patch-id=%s label=granted prior=%s marker=%s\n' \
+            "$_pid_state" "$_prior" "$_marker"
         return 0
     fi
 
     _gh_pr_drop_label "$_pr" review-passed "$_repo" "$_host" >/dev/null 2>&1 || :
-    printf 'patch-id=changed label=dropped\n'
+    printf 'patch-id=%s label=dropped\n' "$_pid_state"
     return 0
 }

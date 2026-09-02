@@ -59,9 +59,25 @@ these run as `git -C "<path>" ...` and the auto-stash never fires — see
 
 ## Step 2: Fetch + Rebase
 
-Run `git fetch "$REMOTE" "$BASE"` then `git rebase "$REMOTE/$BASE"` (with
-`-C "<path>"` in `--worktree` mode). Full rebase mechanics, stash handling, and
-abort instructions live in `references/rebase-flow.md`.
+Before fetching, capture the PR's pre-rebase diff range for Step 5's patch-id
+comparison (#1698 / #1700) — `git merge-base` rather than the tracking ref
+itself, so a locally stale `$REMOTE/$BASE` still yields the PR's real diff
+start:
+
+```bash
+OLD_BASE_SHA=$(git merge-base HEAD "$REMOTE/$BASE")
+```
+
+A locally stale `$REMOTE/$BASE` only widens `OLD_BASE_SHA`'s range with content
+the PR never touched, which pulls the two patch-ids apart, never together — the
+failure direction is the fail-safe one (an extra `devx:pr-review-all` re-run,
+never a wrongly-preserved `review-passed`).
+
+Then run `git fetch "$REMOTE" "$BASE"` and `git rebase "$REMOTE/$BASE"` (all
+three as `git -C "<path>" ...` in `--worktree` mode). Full rebase mechanics,
+stash handling, and abort instructions live in `references/rebase-flow.md`.
+`BACKUP_SHA` from Step 1 is the pre-rebase head — Step 5 passes it as the
+old-head argument.
 
 ## Step 3: Conflict Resolution Loop
 
@@ -100,11 +116,15 @@ Helper policy (each soft-fail; the first three apply only when
 - Remove the `conflict` label per `references/label-removal.sh.md`.
 - Return the board status to `In review` per `references/board-sync-in-review.sh.md`.
 - Post the ai-metrics PR comment per `references/ai-metrics-comment.sh.md` (soft-fail; skip when `GH_DISABLE_AI_METRICS=1`).
-- Drop the `review-passed` label per `references/verdict-label-removal.sh.md`.
+- Reconcile the `review-passed` label per `references/verdict-label-removal.sh.md`.
   **Different gate**: this one keys off Step 4's push, not `mergeable` — a
-  force-push replaced the reviewed commit, so the stale verdict must go even
+  force-push replaced the reviewed commit, so a stale verdict must go even
   if the PR still reads `CONFLICTING`. Skip it entirely when the push was
-  rejected or never ran. Never touch `review-blocked` here (#1563).
+  rejected or never ran. A rebase that reproduced the exact same diff
+  (patch-id unchanged, which Step 3 can well produce with zero conflicts)
+  keeps the label and re-stamps its freshness marker for the new head
+  instead; only a rebase whose content actually changed drops it
+  (#1698 / #1700). Never touch `review-blocked` here (#1563).
 
 ## Constraints
 
@@ -114,9 +134,15 @@ Helper policy (each soft-fail; the first three apply only when
 - Never auto-resolve ambiguous conflicts. Ask the user.
 - Never retry a rejected `--force-with-lease` by fetching and re-rebasing on the user's behalf. Surface divergence and stop.
 - Never skip Step 5. The whole point is clearing the PR warning.
-- Never add `review-passed` / `review-blocked`, and never remove
-  `review-blocked` — this skill has no evidence the blockers were addressed
-  (#1563). Removing `review-passed` after a successful push is mandatory.
+- Never remove `review-blocked`, and never independently *decide* to add
+  either label — `devx:pr-review-all` owns that (#1563); this skill has no
+  evidence the blockers were addressed. Reconciling `review-passed` after a
+  successful push is mandatory (drop on real content change, keep + re-stamp
+  on a patch-id-identical rebase, #1698 / #1700) — a stale verdict on an
+  unreviewed head is the bug that rule exists to prevent, and so is an
+  unnecessary re-review of content nothing changed. The keep path
+  re-*confirms* a grant the `review-verdict` marker proves was already
+  issued; it never issues one.
 - Never create or remove the `--worktree` path. The caller owns its lifecycle.
 
 ## Related Skills

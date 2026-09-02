@@ -1,4 +1,4 @@
-# `review-passed` 게이트 — Step 6 (이슈 #1636, #1616 승계)
+# `review-passed` 게이트 — Step 6 및 Step 2.5 (이슈 #1636, #1616 승계, #1700 F-3)
 
 `gh:pr-reply` 는 BLOCKER 를 실제로 고친다. 그러니 "고쳐졌다"를 아는 스킬도
 이 스킬이다. #1636 부터 `review-passed` 라벨은 **이 스킬이 직접** 붙인다 —
@@ -82,7 +82,42 @@ BLOCKER 가 미해결로 남았나"를 묻는 것이므로, 아직 답하지 않
 
 1. **drop** — `PUSHED_FIXES > 0` 이면 `review-passed` 를 먼저 뗀다
    (`references/verdict-label-removal.sh.md`). 게이트보다 **앞**이어야 한다 —
-   뒤로 가면 방금 붙인 라벨을 지운다.
+   뒤로 가면 방금 붙인 라벨을 지운다. **Step 6 전용**이다: Step 2.5 조기
+   종료 경로에는 `PUSHED_FIXES` 가 언제나 0 이라 no-op 이다.
+2-5. 아래 **"게이트+적용 블록"** 을 실행한다. `ORIGINS` 는 이 pass 가 Step 3
+   에서 모은 스트림이고, `HEAD_SHA` 는 push **이후에** 읽은 head 다.
+
+## 게이트+적용 블록 — 호출 지점 두 곳 (#1700 F-3)
+
+이 블록은 **한 곳에만** 적혀 있고 두 곳에서 호출된다 (인라인 복제 금지 —
+`references/reply-pending-label-removal.sh.md` 가 같은 이유로 쓰는 패턴이다):
+
+| 호출 지점 | `ORIGINS` | `HEAD_SHA` |
+|---|---|---|
+| Step 6 | 이 pass 가 Step 3 에서 모은 스트림 | push **이후**의 head |
+| Step 2.5 조기 종료 | **빈 문자열** (`ORIGINS=""`) | PR 의 현재 head (push 자체가 없었다) |
+
+### 왜 조기 종료에서도 돌리나 (#1700 결함 3)
+
+`review-passed` 를 붙일 수 있는 곳은 이 게이트 하나뿐이다(#1636). 그런데
+Step 2.5 는 미답변 코멘트가 0건이면 Step 3–7 을 통째로 건너뛰었다 — **이미
+전부 답변이 끝난 PR**, 즉 라벨을 받을 자격이 가장 확실한 상태가 정확히 그
+경로로 막혔다. 앞선 pass 에서 라벨이 어떤 이유로든 떨어졌다면 재부여 진입로가
+아예 없었다.
+
+빈 `ORIGINS` 는 옳은 입력이다: 3번의 merge 가 **전적으로 이전 pass 이력으로**
+폴백하고, 그게 정확히 이 상황의 진실이다 — "이번 pass 는 새로 기여한 것이
+없으니 이미 알려진 것만으로 판단하라". 안전 방향도 그대로다. 이력에 미해결
+BLOCKER 가 있으면 `hold` 이고, 외부 리뷰 근거(`ai-review` 마커)가 없으면
+`hold=no-external-review` 라 **아무것도 쓰지 않는다**. 조기 종료가 라벨을
+만들어 내는 일은 없고, 이미 벌어 둔 라벨을 확인해 줄 뿐이다.
+
+Step 6 의 1번(drop)과 `In review` 보드 동기화는 이 경로에서 **건너뛴다** —
+둘 다 `PUSHED_FIXES > 0` 조건이고, 이 경로는 수정을 평가한 적조차 없어
+언제나 0 이다.
+
+### 2-5 단계
+
 2. **history + evidence** — Step 2 에서 이미 받아 둔 PR 코멘트를 재사용해
    (API 추가 호출 없음) 과거 pass 들의 origin 이력과 외부 리뷰 근거를 구한다.
    #1639 이후 두 리더는 **본문 텍스트가 아니라 원본 코멘트 JSON 배열**
@@ -102,8 +137,17 @@ BLOCKER 가 미해결로 남았나"를 묻는 것이므로, 아직 답하지 않
 # 도는 배포를 위한 탈출구다 (아래 "마커 작성자" 절).
 ME="${GH_PR_REPLY_TRUSTED_LOGIN:-${ME:-$(GH_HOST="$TARGET_HOST" gh api user -q .login)}}"
 
+# $HEAD_SHA — Step 6 에서는 push **이후**의 head(NF-1), Step 2.5 조기 종료
+# 에서는 PR 의 현재 head 다(push 가 없었으므로 같은 값):
+#   HEAD_SHA=$(GH_HOST="$TARGET_HOST" gh pr view "$PR_NUMBER" \
+#       --repo "$TARGET_REPO" --json headRefOid -q .headRefOid)
+#
+# $ORIGINS — Step 6 에서는 이 pass 가 Step 3 에서 모은 스트림, Step 2.5 조기
+# 종료에서는 빈 문자열이다. 아래 merge 가 이력으로 폴백한다.
+#
 # $COMMENT_JSON 은 Step 2 가 받아 둔 /issues/<N>/comments 응답 **원본 배열**
-# 이다 (본문만 뽑아 둔 텍스트가 아니다 — #1639).
+# 이다 (본문만 뽑아 둔 텍스트가 아니다 — #1639). 두 경로 모두 Step 2 가 이미
+# 받아 둔 그 덤프를 그대로 쓴다 — API 추가 호출은 없다.
 HISTORY=$(_gh_pr_reply_history_origins "$ME" <"$COMMENT_JSON")
 if _gh_pr_reply_history_has_review "$ME" <"$COMMENT_JSON"; then
     EVIDENCE=yes

@@ -47,10 +47,25 @@ reference's "Bot service notices" section (service-notice classification,
 single-line ack in Step 5, counted separately in Step 7).
 
 **Step 2.5 early exit:** if this yields **zero unaddressed threads** after
-dedup, first run the `reply-pending` removal block of
-`references/reply-pending-label-removal.sh.md` (this exit path is why it lives
-there and not inline in Step 6), then print exactly `No unaddressed review
-comments — nothing to do.` and **stop**: no Steps 3–7, no ai-metrics, no push.
+dedup, run these three in order, then **stop**: no Steps 3–7, no ai-metrics,
+no push.
+
+1. The **gate+apply block** of `references/review-passed-gate.md` (soft-fail)
+   — items 2-5 of Step 6's ordered list, described once and called from both
+   places — with `ORIGINS=""`. This pass processed no comments, so it
+   contributes nothing and the gate judges purely on prior-pass history.
+   `HEAD_SHA` is the PR's current head (`gh pr view --json headRefOid`);
+   nothing was pushed. `$COMMENT_JSON` is the raw array Step 2 already
+   fetched — no extra API call. Step 6's item 1 (`review-passed` drop) and
+   its `In review` board sync are **not** part of the block and do not run
+   here: both are gated on `PUSHED_FIXES > 0`, always 0 on this path.
+   Without this, a PR already answered in full — the state most deserving of
+   `review-passed` — could never reach the only gate that grants it (#1700).
+2. The `reply-pending` removal block of
+   `references/reply-pending-label-removal.sh.md` (this exit path is why it
+   lives there and not inline in Step 6). Same order Step 6 uses: gate first,
+   then the unconditional label cleanup.
+3. Print exactly `No unaddressed review comments — nothing to do.`
 
 ## Step 3: Evaluate Each Comment
 
@@ -91,9 +106,10 @@ Still under `PUSHED_FIXES > 0`, invalidate the stale review verdict per
 unconditionally — the reviewed commit is no longer head.
 
 Then, **after Step 5 has replied to every comment and regardless of
-`PUSHED_FIXES`**, run the `review-passed` gate of
-`references/review-passed-gate.md` (soft-fail): read `HEAD_SHA` (`gh pr view`
-`--json headRefOid`, *after* any push). First recover the PR's origin history
+`PUSHED_FIXES`**, run the same **gate+apply block** of
+`references/review-passed-gate.md` that Step 2.5 calls (soft-fail) — here with
+`ORIGINS` set to the stream Step 3 collected on this pass. Read `HEAD_SHA`
+(`gh pr view --json headRefOid`, *after* any push). First recover the PR's origin history
 and its external-review evidence from the Step 2 comment fetch (no extra API
 call — pass the **raw `/issues/<N>/comments` JSON**, not `--jq '.[].body'`
 output, so `.user.login` survives) with
