@@ -25,6 +25,10 @@
 #   3. A PR that was never reviewed (no marker) -> dropped; sharing the helper
 #      must not let this skill manufacture a verdict either (#1699 guard).
 #   4. `--worktree <path>` mode, which `gh:pr-merge-train` always uses.
+#   5. #1704's scope restriction from this side: on a context-drift repo —
+#      where `gh:pr-resolve-outdated` now KEEPS the label via the `-U0`
+#      rescue — this skill still drops it, because its call shape omits the
+#      9th `[context-mode]` argument and so stays on the strict comparison.
 
 # `_marker_comment`, the `gh`/`_gh_pr_edit_safe_label` stubs, and the rebase
 # repo builder are shared with the sister `gh:pr-resolve-outdated` suite —
@@ -114,6 +118,29 @@ _1700_make_repo() {
     run cat "$GH_LOG"
     refute_output --partial 'add 1687 review-passed'
     refute_output --partial 'labels/review-blocked'
+}
+
+@test "conflict Step 5 (#1704): the -U0 rescue is NOT available here — context drift still drops" {
+    eval "$(_review_passed_make_context_drift_repo BACKUP)"
+    cd "$REPO_DIR" || fail "cd failed"
+    # Same repo, same fresh marker, same shared helper as the sister suite's
+    # `patch-id=context-identical` keep — the ONLY difference is that this
+    # skill's call shape omits #1704's 9th `[context-mode]` argument, so it
+    # stays on the strict, context-included comparison. Deliberate: a
+    # conflict-free `git rebase` here can still follow a HUMAN hunk edit made
+    # during actual conflict resolution, and patch-id identity proves the PR's
+    # own diff is unchanged, not that a manual resolution is safe on the new
+    # base. gh:pr-resolve-outdated's rebases are mechanical by construction.
+    STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "$BACKUP")" '[$c]')
+    run resolve_conflict_step5_reconcile 1687 acme/widget ghe.example.com \
+        "$OLD_BASE" "$BACKUP" "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT"
+    assert_success
+    assert_output --partial 'patch-id=changed'
+    assert_output --partial 'label=dropped'
+    refute_output --partial 'context-identical'
+    run cat "$GH_LOG"
+    assert_output --partial 'api -X DELETE repos/acme/widget/issues/1687/labels/review-passed'
+    refute_output --partial 'add 1687 review-passed'
 }
 
 @test "conflict Step 5 (#1700): works in --worktree mode, which gh:pr-merge-train always uses" {

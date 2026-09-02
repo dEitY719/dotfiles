@@ -21,7 +21,11 @@
 #
 # Usage: resolve_outdated_step5_reconcile <pr> <repo> <host> \
 #            <old-base-sha> <old-head-sha> <new-base-sha> <new-head-sha> \
-#            [worktree-path]
+#            [worktree-path] [context-mode]
+#
+# The doc passes `lenient` as [context-mode] (#1704) — this skill's own opt-in
+# to the context-free `-U0` rescue, which its `gh:pr-resolve-conflict` sibling
+# deliberately omits.
 resolve_outdated_step5_reconcile() {
     _gh_pr_resolve_outdated_reconcile_review_passed "$@"
 }

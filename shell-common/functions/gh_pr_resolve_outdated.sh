@@ -169,18 +169,67 @@
 # `gh` identity is a misconfiguration, not a case this file can compensate
 # for.
 #
+# `git patch-id --stable` normalizes hunk LINE NUMBERS but still hashes the
+# CONTEXT LINES around each hunk, so a rebase that changed nothing about the
+# PR itself still reported `changed` whenever an unrelated commit landed on
+# main next to a spot the PR touches: the hunk's context window now shows
+# different neighbours, and the hash moves with it (#1704). Proof from this
+# repo's own history — PR #1687, whose reviewed diff was byte-identical
+# before and after its rebase: `23e7295a..2759fc13` hashes to
+# `477b6bda…` and `25835c39..dc614bcc` to `a792a259…` (different), while the
+# same two ranges under `git diff -U0` both hash to `e5d59e1f…` (identical).
+# That false `changed` cost the exact 4-CLI re-review this file exists to
+# avoid, on a PR nothing had actually changed in.
+#
+# So `changed` now gets a second, CONTEXT-FREE opinion: both sides are
+# re-hashed with `git diff -U0`, which strips the context lines and leaves
+# only the PR's own +/- lines. Matching there means the PR's contribution is
+# byte-for-byte what was reviewed and only its surroundings moved, which the
+# report calls `context-identical`.
+#
+# Priority is fixed and one-directional. The context-included (`-U3`, git's
+# default) comparison ALWAYS runs first and is the primary verdict; `-U0` is
+# consulted ONLY when that first comparison said `changed`, and can only ever
+# UPGRADE it to `context-identical`. It never runs on — and so can never
+# override — an `identical` or `unreadable` verdict, and a `-U0` pair that
+# still differs leaves `changed` exactly as it was. Fail-closed is preserved:
+# an empty (unreadable) `-U0` hash is not a match.
+#
+# The relaxation is OPT-IN, via the 9th `[context-mode]` argument, default
+# `strict` — i.e. today's behavior for every caller that does not ask. Only
+# `gh:pr-resolve-outdated` passes `lenient`. `gh:pr-resolve-conflict` never
+# does, deliberately: its rebases are not necessarily mechanical. Its Step 3
+# can finish conflict-free (that is the whole reason it shares this function,
+# #1700), but it can equally have finished after a HUMAN edited a conflicting
+# hunk by hand. There, patch-id identity — context-free or not — proves the
+# PR's own diff is unchanged, not that a person's manual resolution is safe
+# on the new base; nothing in this file can attest to that, and the strict
+# comparison at least still notices when the surroundings moved. The outdated
+# skill has no such case: its rebases are 100% mechanical by construction, it
+# hands off to the conflict skill the moment `git rebase` stops (#1704).
+#
 # Usage:
-#   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path]
+#   _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path] \
+#       [diff-flag]
 #   _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>
 #   _gh_pr_resolve_outdated_reconcile_review_passed \
 #       <pr> <repo> <host> <old-base-sha> <old-head-sha> \
-#       <new-base-sha> <new-head-sha> [worktree-path]
+#       <new-base-sha> <new-head-sha> [worktree-path] [context-mode]
 #   (`gh:pr-resolve-conflict` passes its own `BACKUP_SHA` as <old-head-sha>;
 #    the two skills differ only in what they name that argument)
 #   (the freshness marker, when reposted, is stamped with <new-head-sha>)
+#   ([diff-flag] is `-U0` for the #1704 context-free hash, empty otherwise;
+#    [context-mode] is `strict` (default) or `lenient`, and a caller that
+#    wants `lenient` must pass an explicit "" for [worktree-path] first)
 #
 # Report token — two INDEPENDENT dimensions on every path (#1700 F-4):
-#   patch-id=<identical|changed|unreadable>  what the content comparison said
+#   patch-id=<identical|context-identical|changed|unreadable>
+#       what the content comparison said. `context-identical` (#1704) is
+#       functionally equivalent to `identical` for GATING — both proceed to
+#       the same keep/re-grant checks below — but stays a distinct value so
+#       an operator reading the report can tell a byte-identical rebase from
+#       one whose diff only survived the context-free comparison. It is a
+#       new value of this existing field, not a field of its own.
 #   label=<granted|dropped|failed>           what this run actually did
 #   prior=<present|absent>                   (keep path only) was the label
 #       still attached — `absent` marks a #1700 re-grant after another path
@@ -232,15 +281,24 @@ unset _drg_self _drg_helper
 # failing) is reported as an empty string, never guessed at: the caller
 # treats "unreadable" the same as "different" (fail closed, same rule this
 # repo already uses for the approval gate and the #1601 freshness check).
+# The optional 4th argument passes one flag straight to `git diff` — `-U0`
+# for the context-free comparison the lenient mode below uses (#1704); empty
+# (the default) keeps `git diff`'s ordinary -U3 context-included hash.
 _gh_pr_resolve_outdated_patch_id() {
-    local _base="$1" _head="$2" _worktree="${3-}"
+    local _base="$1" _head="$2" _worktree="${3-}" _diff_flag="${4-}"
     if [ -z "$_base" ] || [ -z "$_head" ]; then
-        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path]\n' >&2
+        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path] [diff-flag]\n' >&2
         return 2
     fi
+    # Four explicit branches rather than an unquoted `$_diff_flag` expansion:
+    # this file is shellcheck'd and an empty unquoted word would be SC2086.
     local _out
-    if [ -n "$_worktree" ]; then
+    if [ -n "$_worktree" ] && [ -n "$_diff_flag" ]; then
+        _out=$(git -C "$_worktree" diff "$_diff_flag" "$_base".."$_head" 2>/dev/null | git -C "$_worktree" patch-id --stable 2>/dev/null)
+    elif [ -n "$_worktree" ]; then
         _out=$(git -C "$_worktree" diff "$_base".."$_head" 2>/dev/null | git -C "$_worktree" patch-id --stable 2>/dev/null)
+    elif [ -n "$_diff_flag" ]; then
+        _out=$(git diff "$_diff_flag" "$_base".."$_head" 2>/dev/null | git patch-id --stable 2>/dev/null)
     else
         _out=$(git diff "$_base".."$_head" 2>/dev/null | git patch-id --stable 2>/dev/null)
     fi
@@ -289,9 +347,10 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
     local _pr="$1" _repo="$2" _host="$3"
     local _old_base="$4" _old_head="$5" _new_base="$6" _new_head="$7"
     local _worktree="${8-}"
+    local _context_mode="${9:-strict}"
 
     if [ -z "$_pr" ] || [ -z "$_repo" ]; then
-        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_reconcile_review_passed <pr> <repo> <host> <old-base> <old-head> <new-base> <new-head> [worktree-path]\n' >&2
+        printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_reconcile_review_passed <pr> <repo> <host> <old-base> <old-head> <new-base> <new-head> [worktree-path] [context-mode]\n' >&2
         return 2
     fi
 
@@ -320,6 +379,24 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         _pid_state=changed
     fi
 
+    # Second chance for `changed` ONLY, and only when the caller opted in
+    # (#1704): re-run both sides with `-U0` so the hash covers the PR's own
+    # +/- lines and nothing else. A `changed` verdict that survives the
+    # context-included comparison but not this one was never about the PR's
+    # content — an unrelated commit landed next to a hunk and shifted which
+    # lines show up as its context. `identical` and `unreadable` never enter
+    # here, so this can only ever rescue, never override. See the file
+    # header's "#1704" section for the scope rule (outdated: yes, conflict:
+    # never).
+    if [ "$_pid_state" = changed ] && [ "$_context_mode" = lenient ]; then
+        local _old_pid_u0 _new_pid_u0
+        _old_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$_old_base" "$_old_head" "$_worktree" -U0)
+        _new_pid_u0=$(_gh_pr_resolve_outdated_patch_id "$_new_base" "$_new_head" "$_worktree" -U0)
+        if [ -n "$_old_pid_u0" ] && [ "$_old_pid_u0" = "$_new_pid_u0" ]; then
+            _pid_state=context-identical
+        fi
+    fi
+
     # A currently-attached `review-blocked` disqualifies the keep/re-grant path
     # outright — see the file header's "A surviving marker proves..." section
     # (PR #1703 review, codex BLOCKER). Read only AFTER the cheap local checks
@@ -337,7 +414,7 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
     # of this function; `_drop_reason` is what that one report line names.
     _fresh_rc=1
     local _drop_reason=patch-id _blocked_rc=2
-    if [ "$_pid_state" = identical ] &&
+    if { [ "$_pid_state" = identical ] || [ "$_pid_state" = context-identical ]; } &&
         command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1; then
         _blocked_rc=0
         _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-blocked ||

@@ -142,3 +142,54 @@ _review_passed_make_rebase_repo() {
             "$REPO_DIR" "$OLD_BASE" "$_old_head_var" "$_rpr_old_head" "$NEW_BASE" "$NEW_HEAD_SAME" "$NEW_HEAD_DIFF"
     )
 }
+
+# The #1704 shape, which `_review_passed_make_rebase_repo` above structurally
+# CANNOT produce: its PR commit only ADDS a new file, and a new file's diff has
+# no context lines to shift, so `git patch-id --stable` matches there whether or
+# not the base moved. Here the PR edits a line inside an existing file and the
+# new base inserts an unrelated block directly above it — the PR's own +/- lines
+# stay byte-identical while the hunk's context window changes, which is exactly
+# the false `changed` verdict #1704 fixes. Default (-U3) patch-ids differ across
+# the two ranges; `-U0` patch-ids match.
+#
+# Prints REPO_DIR / OLD_BASE / <old-head-var> / NEW_BASE /
+# NEW_HEAD_CONTEXT_SHIFT as `eval`-able assignments, same convention as its
+# sibling ($1 names the old-head variable).
+_review_passed_make_context_drift_repo() {
+    local _old_head_var="${1:-OLD_HEAD}"
+    REPO_DIR="$(mktemp -d "${BATS_TEST_TMPDIR}/repo.XXXXXX")"
+    (
+        cd "$REPO_DIR" || exit 1
+        git init -q -b main
+        git config user.email t@t
+        git config user.name Test
+
+        printf 'line1\nline2\nline3\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "base v1"
+        OLD_BASE=$(git rev-parse HEAD)
+
+        printf 'line1\nline2\nline3-changed\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "PR: change line3"
+        _rpr_old_head=$(git rev-parse HEAD)
+
+        git checkout -q "$OLD_BASE"
+        printf 'line1\nline2\nextra-block\nline3\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "base v2 (unrelated block inserted just above line3)"
+        NEW_BASE=$(git rev-parse HEAD)
+
+        # Reapply the PR's own change (line3 -> line3-changed) onto the new
+        # base. The +/- lines are byte-identical to the old head's diff, but
+        # the hunk's context window now includes "extra-block" -- default
+        # (-U3) patch-id differs, -U0 does not.
+        printf 'line1\nline2\nextra-block\nline3-changed\nline4\nline5\n' >f.txt
+        git add f.txt
+        git commit -qm "PR: change line3 (rebased)"
+        NEW_HEAD_CONTEXT_SHIFT=$(git rev-parse HEAD)
+
+        printf 'REPO_DIR=%s\nOLD_BASE=%s\n%s=%s\nNEW_BASE=%s\nNEW_HEAD_CONTEXT_SHIFT=%s\n' \
+            "$REPO_DIR" "$OLD_BASE" "$_old_head_var" "$_rpr_old_head" "$NEW_BASE" "$NEW_HEAD_CONTEXT_SHIFT"
+    )
+}

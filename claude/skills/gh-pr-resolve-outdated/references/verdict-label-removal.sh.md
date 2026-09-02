@@ -98,11 +98,14 @@ NEW_BASE_SHA=$(git rev-parse "$REMOTE/$BASE")
 NEW_HEAD_SHA=$(git rev-parse HEAD)
 _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
     "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
-    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA")
+    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "" lenient)
 ```
 
+여덟 번째 인자의 빈 문자열 `""` 은 worktree 자리를 비워 두는 것이다 — 아홉 번째
+`lenient`(#1704, 아래 참조)가 위치 인자라 건너뛸 수 없다.
+
 `--worktree <path>` 모드에서는 세 `git` 호출 모두 `git -C "<path>" ...` 로,
-마지막 인자로 `"<path>"` 를 추가한다:
+여덟 번째 인자로 `"<path>"` 를 넣는다:
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_resolve_outdated.sh"
@@ -112,8 +115,28 @@ NEW_BASE_SHA=$(git -C "<path>" rev-parse "$REMOTE/$BASE")
 NEW_HEAD_SHA=$(git -C "<path>" rev-parse HEAD)
 _vl_result=$(_gh_pr_resolve_outdated_reconcile_review_passed \
     "$PR_NUMBER" "$TARGET_REPO" "$TARGET_HOST" \
-    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "<path>")
+    "$OLD_BASE_SHA" "$OLD_HEAD_SHA" "$NEW_BASE_SHA" "$NEW_HEAD_SHA" "<path>" lenient)
 ```
+
+## 아홉 번째 인자 `lenient` — context-free 비교 (#1704)
+
+`git patch-id --stable` 은 hunk 의 **줄 번호**만 정규화하고 **context 줄은 그대로
+해시**한다. 그래서 PR 이 건드린 자리 바로 옆에 무관한 커밋이 main 에 들어오면,
+리베이스 후 hunk 의 context 창에 다른 이웃 줄이 들어오면서 **PR 자신의 +/- 줄은
+한 글자도 안 바뀌었는데** patch-id 가 "changed" 로 나온다. 실증은 PR #1687 이다 —
+`23e7295a..2759fc13`(`477b6bda…`)와 `25835c39..dc614bcc`(`a792a259…`)는 다르지만,
+같은 두 범위를 `git diff -U0` 로 뜨면 둘 다 `e5d59e1f…` 로 **동일**하다.
+
+그래서 `changed` 판정에 한해 context 를 뺀 `-U0` 비교를 한 번 더 물어본다. 우선순위는
+고정이다: context 포함(`-U3`, git 기본) 비교가 **항상 먼저** 돌고 그게 1차 판정이며,
+`-U0` 는 그 1차가 `changed` 일 때만 조회돼 `context-identical` 로 **구제만** 할 수
+있다. `identical`/`unreadable` 판정은 아예 이 경로에 들어오지 않으므로 뒤집히지
+않고, `-U0` 도 다르면 `changed` 그대로다.
+
+이 완화는 **이 스킬의 선택**이지 공유 함수의 기본값이 아니다 — 기본값은 `strict`
+(#1704 이전 동작)이고, 아홉 번째 인자로 `lenient` 를 명시하는 호출자만 탄다.
+`gh:pr-resolve-conflict` 는 같은 함수를 부르면서도 이 인자를 **일부러 넘기지
+않는다**(그쪽 문서의 같은 절 참조).
 
 두 형태 모두 결과는 같은 방식으로 읽는다:
 
@@ -143,8 +166,12 @@ esac
 ```
 
 토큰은 patch-id 상태와 결과를 **각각** 보고한다(#1700 F-4):
-`patch-id=<identical|changed|unreadable>` 와 `label=<granted|dropped|failed>` 가
-독립된 필드다. 유지/재부여 경로에는 `prior=<present|absent>` 가 따라붙어,
+`patch-id=<identical|context-identical|changed|unreadable>` 와
+`label=<granted|dropped|failed>` 가 독립된 필드다. `context-identical`(#1704)
+은 게이팅상 `identical` 과 완전히 동등하지만(둘 다 같은 유지/재부여 검사로
+넘어간다), 운영자가 "완전히 동일한 리베이스"와 "context 만 밀린 리베이스"를
+구분할 수 있도록 보고에서만 값을 나눠 둔 것이다 — 새 필드가 아니라 기존
+`patch-id=` 필드의 새 값이다. 유지/재부여 경로에는 `prior=<present|absent>` 가 따라붙어,
 평범한 #1698 유지(`present`)와 다른 경로가 이미 떼어 간 뒤의 #1700
 재부여(`absent`)를 구분해 준다. `patch-id=identical label=dropped` 는
 "내용은 같았지만 재확인 근거가 없었다"는 뜻이다 — 예전 판은 이 경우까지
