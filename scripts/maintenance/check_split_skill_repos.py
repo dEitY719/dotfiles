@@ -43,12 +43,22 @@ Why this is not in the bats/pytest suite (NF-1)
 
 Usage:
     python3 check_split_skill_repos.py [--check contract|drift|all]
+                                       [--fail-on any|contract]
                                        [--repo-root PATH] [--owner NAME]
                                        [--quiet]
 
+What gates the run (--fail-on)
+    Findings are always printed; `--fail-on` only decides which half is
+    allowed to fail the process. `any` (the default) gates on everything.
+    `contract` gates on F-1 alone — the scheduled workflow uses it because
+    Phase 2-3 drift is expected and would otherwise pin the job red forever,
+    while a broken install id is actionable the moment it appears. It is
+    refused with `--check drift`, which never runs the half it gates on.
+    Phase 4 retires the flag along with the drift half.
+
 Exit codes:
-    0  every registered split repo honors its contract and shows no drift
-    1  at least one contract violation or content drift
+    0  nothing that `--fail-on` gates on was found
+    1  a gating finding: a contract violation, or drift under `--fail-on any`
     2  error (registration SSOT missing or unreadable)
 """
 
@@ -137,11 +147,10 @@ def check_manifest_contract(target: Target, manifest: dict[str, Any] | None) -> 
         ]
 
     if manifest is None:
+        install_ids = ", ".join(f"`{plugin}@{target.marketplace}`" for plugin in target.plugins)
         return [
             f"{target.marketplace}: {target.repo} unreachable, or it has no "
-            f".claude-plugin/marketplace.json — "
-            f"{', '.join(f'`{p}@{target.marketplace}`' for p in target.plugins)} "
-            f"cannot be installed"
+            f".claude-plugin/marketplace.json — {install_ids} cannot be installed"
         ]
 
     violations = []
@@ -474,6 +483,13 @@ class GitCloneRemoteSource:
     the local side uses, so neither side can drift in how it is parsed.
     """
 
+    # Per-clone ceiling. Kept well under the workflow's own `timeout-minutes`
+    # so that even an all-repos-unreachable run finishes and still reaches the
+    # "Publish findings to the job summary" step: a job killed by GitHub's
+    # timeout skips it, and a degraded network would report nothing at all
+    # (PR #1691 /simplify). A healthy shallow clone of a skills repo is ~1s.
+    CLONE_TIMEOUT_SECONDS = 60
+
     def __init__(self, workdir: Path, host: str = "https://github.com") -> None:
         self._workdir = workdir
         self._host = host.rstrip("/")
@@ -482,21 +498,25 @@ class GitCloneRemoteSource:
     def _clone(self, repo: str) -> Path | None:
         if repo not in self._clones:
             dest = self._workdir / repo.replace("/", "__")
+            # A renamed or newly-private repo otherwise blocks on a credential
+            # prompt until the timeout. Git has three such channels and closing
+            # one leaves the other two open: `credential.helper=` disables any
+            # configured helper (a GCM on the WSL box this repo targets), while
+            # the two env vars cover the terminal and askpass paths.
+            command = ["git", "-c", "credential.helper=", "clone", "--depth", "1", "--quiet"]
+            no_prompt = {"GIT_TERMINAL_PROMPT": "0", "GIT_ASKPASS": "/bin/false"}
             try:
                 completed = subprocess.run(
-                    ["git", "clone", "--depth", "1", "--quiet", f"{self._host}/{repo}.git", str(dest)],
+                    [*command, f"{self._host}/{repo}.git", str(dest)],
                     capture_output=True,
                     text=True,
-                    timeout=180,
-                    # A renamed or newly-private repo makes `git` prompt for
-                    # credentials and hang until the timeout; refusing the
-                    # prompt turns that into a prompt failure instead
-                    # (PR #1691 review, agy FOLLOW-UP).
-                    env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+                    timeout=self.CLONE_TIMEOUT_SECONDS,
+                    env={**os.environ, **no_prompt},
+                    stdin=subprocess.DEVNULL,
                 )
             except subprocess.TimeoutExpired:
-                # One slow clone must not abort the other twelve — it is this
-                # repo's own "unreachable" F-1 finding (PR #1691 review, both
+                # One slow clone must not abort the others — it is this repo's
+                # own "unreachable" F-1 finding (PR #1691 review, both
                 # reviewers).
                 self._clones[repo] = None
             else:
@@ -531,20 +551,30 @@ class RemoteSource(Protocol):
 
 @dataclass
 class AuditResult:
-    findings: list[str] = field(default_factory=list)
+    """The findings of one audit, kept in two halves the gate can tell apart.
+
+    The halves are separate lists rather than one list plus a count, so there
+    is no hand-maintained invariant tying a counter to the list it counts.
+    `findings` recomposes them for every caller that just wants the report.
+
+    The split exists because `--fail-on contract` gates on the F-1 half alone
+    (PR #1691 review, agy BLOCKER): a broken install id is always actionable,
+    while drift is expected until #1410 Phase 4 retires the dotfiles originals.
+    """
+
+    contract_findings: list[str] = field(default_factory=list)
+    drift_findings: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
-    # How many of `findings` came from the F-1 contract half. Tracked
-    # separately so `--fail-on contract` can gate on those alone (PR #1691
-    # review, agy BLOCKER): a broken install id is always actionable, while
-    # drift is expected until #1410 Phase 4 retires the dotfiles originals.
-    contract_findings: int = 0
-    fail_on: str = "any"
 
     @property
-    def exit_code(self) -> int:
-        if self.fail_on == "contract":
-            return 1 if self.contract_findings else 0
-        return 1 if self.findings else 0
+    def findings(self) -> list[str]:
+        """Everything worth printing, F-1 before F-2 — the gating half first."""
+        return self.contract_findings + self.drift_findings
+
+    def exit_code(self, fail_on: str = "any") -> int:
+        """Apply a gate policy. Not stored on the result: the audit runs the
+        same either way, and `fail_on` is the caller's presentation choice."""
+        return 1 if (self.contract_findings if fail_on == "contract" else self.findings) else 0
 
 
 def run_audit(
@@ -552,17 +582,15 @@ def run_audit(
     local_skills: dict[str, dict[str, str]],
     source: RemoteSource,
     checks: str = "all",
-    fail_on: str = "any",
 ) -> AuditResult:
     """Run F-1 and/or F-2 over every derived target.
 
     `source` is anything with `marketplace_manifest(repo)` and `skill_tree(repo)`
     — the seam that keeps the network out of the offline suite (NF-1).
 
-    `fail_on` selects what the exit code gates on; findings are reported either
-    way. See `AuditResult.contract_findings`.
+    What fails the run is not decided here — see `AuditResult.exit_code`.
     """
-    result = AuditResult(fail_on=fail_on)
+    result = AuditResult()
     do_contract = checks in ("all", "contract")
     do_drift = checks in ("all", "drift")
 
@@ -570,9 +598,7 @@ def run_audit(
         manifest = source.marketplace_manifest(target.repo)
 
         if do_contract:
-            contract_violations = check_manifest_contract(target, manifest)
-            result.findings.extend(contract_violations)
-            result.contract_findings += len(contract_violations)
+            result.contract_findings.extend(check_manifest_contract(target, manifest))
 
         if not do_drift:
             continue
@@ -600,7 +626,7 @@ def run_audit(
             if pairing.local_name is None:
                 line = f"{target.marketplace}: '{pairing.remote_name}' unpaired — {pairing.note}"
                 if any_paired:
-                    result.findings.append(
+                    result.drift_findings.append(
                         f"{line}; siblings in this repo still pair, so the dotfiles "
                         f"original should exist — treat as drift severe enough to break pairing"
                     )
@@ -612,7 +638,7 @@ def run_audit(
             if report is None or not report.content_drift:
                 continue
 
-            result.findings.append(
+            result.drift_findings.append(
                 f"{target.marketplace}: '{pairing.remote_name}' has drifted from "
                 f"claude/skills/{pairing.local_name} "
                 f"({report.similarity:.0%} similar, "
@@ -620,9 +646,9 @@ def run_audit(
                 f"{len(report.only_remote)} only in the split repo)"
             )
             for line in report.only_local[:5]:
-                result.findings.append(f"    only in dotfiles: {line}")
+                result.drift_findings.append(f"    only in dotfiles: {line}")
             for line in report.only_remote[:5]:
-                result.findings.append(f"    only in {target.repo}: {line}")
+                result.drift_findings.append(f"    only in {target.repo}: {line}")
 
     return result
 
@@ -658,6 +684,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
 
+    # `--fail-on contract` gates on the F-1 half, which `--check drift` never
+    # runs — the combination can only ever exit 0. Refusing it beats shipping a
+    # flag pair with a silently green cell (PR #1691 /simplify).
+    if args.fail_on == "contract" and args.check == "drift":
+        parser.error("--fail-on contract never fails under --check drift: the contract half does not run")
+
     try:
         marketplaces, plugins = load_registration(args.repo_root)
     except (OSError, json.JSONDecodeError, KeyError) as exc:
@@ -672,13 +704,7 @@ def main(argv: list[str] | None = None) -> int:
     local_skills = read_skill_tree(args.repo_root / "claude" / "skills")
 
     with tempfile.TemporaryDirectory(prefix="split-skill-audit-") as workdir:
-        result = run_audit(
-            targets,
-            local_skills,
-            GitCloneRemoteSource(Path(workdir)),
-            checks=args.check,
-            fail_on=args.fail_on,
-        )
+        result = run_audit(targets, local_skills, GitCloneRemoteSource(Path(workdir)), checks=args.check)
 
     if not args.quiet:
         for note in result.notes:
@@ -690,7 +716,16 @@ def main(argv: list[str] | None = None) -> int:
     if not result.findings and not args.quiet:
         print(f"{Colors.GREEN}[OK]{Colors.RESET} every registered split repo matches its manifest and shows no drift")
 
-    return result.exit_code
+    exit_code = result.exit_code(args.fail_on)
+    # Say so when findings were printed but deliberately not gated, so nobody
+    # reads a green exit beside a wall of [FAIL] lines as "the gate is broken".
+    if not args.quiet and exit_code == 0 and result.drift_findings and args.fail_on == "contract":
+        print(
+            f"{Colors.YELLOW}[NOTE]{Colors.RESET} {len(result.drift_findings)} drift line(s) reported but "
+            f"not gated (--fail-on contract); only F-1 contract breakage fails this run"
+        )
+
+    return exit_code
 
 
 if __name__ == "__main__":
