@@ -208,6 +208,42 @@ _readmit_numbers() {
 
 # AC2: the label always wins. A deferred reply pass is outstanding whatever the
 # train did to the branch.
+# codex, PR #1724 review, BLOCKER: an element the shared filter dropped for
+# its OWN fail-closed reason (unreadable `updatedAt`) must never be readmitted
+# on a sha match alone — that would silently override a data-integrity refusal
+# this pass has no business overriding. Only the ordinary quiet-period drop
+# (readable, recent `updatedAt`) may be undone.
+@test "own_push: a PR with no updatedAt at all is never readmitted, even with a matching sha" {
+    _gh_pr_merge_train_record_pushed_sha "${STATE_DIR}" 11 deadbeef
+    run _readmit_numbers \
+        '[{"number":11,"headRefOid":"deadbeef","isDraft":false,"labels":[]}]' '[]'
+    assert_success
+    assert_output ""
+}
+
+@test "own_push: a null updatedAt is never readmitted, even with a matching sha" {
+    _gh_pr_merge_train_record_pushed_sha "${STATE_DIR}" 11 deadbeef
+    run _readmit_numbers \
+        '[{"number":11,"updatedAt":null,"headRefOid":"deadbeef","isDraft":false,"labels":[]}]' '[]'
+    assert_success
+    assert_output ""
+}
+
+@test "own_push: an unparseable updatedAt is never readmitted, even with a matching sha" {
+    _gh_pr_merge_train_record_pushed_sha "${STATE_DIR}" 11 deadbeef
+    run _readmit_numbers \
+        '[{"number":11,"updatedAt":"not-a-timestamp","headRefOid":"deadbeef","isDraft":false,"labels":[]}]' '[]'
+    assert_success
+    assert_output ""
+}
+
+@test "own_push: an invalid raw element with no numeric number warns to stderr and is skipped" {
+    _gh_pr_merge_train_record_pushed_sha "${STATE_DIR}" 11 deadbeef
+    run bash -c "printf '%s' '[{\"headRefOid\":\"deadbeef\",\"isDraft\":false,\"labels\":[]}]' | { . '${HELPER}'; _gh_pr_merge_train_readmit_own_pushes '${STATE_DIR}' '[]'; }"
+    assert_success
+    assert_output --partial "no numeric .number"
+}
+
 @test "own_push: reply-pending blocks the exemption" {
     _gh_pr_merge_train_record_pushed_sha "${STATE_DIR}" 11 deadbeef
     run _readmit_numbers \
@@ -327,5 +363,27 @@ _readmit_numbers() {
 # callers run is untouched by this feature.
 @test "own_push: ordering.md still names the shared filter as unchanged" {
     run grep -qF -- "_gh_pr_merge_train_filter_targets" "${TRAIN_ORDERING}"
+    assert_success
+}
+
+# codex, PR #1724 review, FOLLOW-UP: the re-admission INFO line had no defined
+# format anywhere a future edit would notice it drifted. Pin the exact string.
+@test "own_push: SKILL.md pins the re-admission INFO line format" {
+    run grep -qF -- \
+        "[INFO] gh:pr-merge-train: PR #<N> re-admitted — this train pushed its current head (#1708 D-6 exemption)." \
+        "${TRAIN_SKILL}"
+    assert_success
+}
+
+# codex, PR #1724 review, BLOCKER: recording must be conditioned on the head
+# having actually changed, not fired unconditionally after every remediation —
+# a no-op atom (e.g. gh:pr-resolve-outdated's "already up to date" path) must
+# never be recorded as a push the train made.
+@test "own_push: train-loop.md only records when the head actually changed" {
+    run grep -qF -- "NEW_HEAD_OID" "${TRAIN_LOOP}"
+    assert_success
+    run grep -qF -- "OLD_HEAD_OID" "${TRAIN_LOOP}"
+    assert_success
+    run grep -qE -- '\[ "\$NEW_HEAD_OID" != "\$OLD_HEAD_OID" \]' "${TRAIN_LOOP}"
     assert_success
 }
