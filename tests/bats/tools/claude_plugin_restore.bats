@@ -171,6 +171,70 @@ JSON
     refute_output --partial 'add: understand-anything (Egonex-AI/Understand-Anything)'
 }
 
+@test "restore.sh: a marketplace tombstone also drops that marketplace's plugins (#1695 round2 BLOCKER)" {
+    # `marketplace remove` 뒤에 그 마켓플레이스의 플러그인이 union 에 남으면
+    # restore.sh 가 방금 건너뛴 마켓플레이스에 설치를 시도한다.
+    cat > "$PLUGDIR/plugins.json" <<'JSON'
+{"plugins": ["understand-anything@understand-anything", "keep@other-mp"]}
+JSON
+    cat > "$PLUGDIR/marketplaces.json" <<'JSON'
+{"understand-anything": "Egonex-AI/Understand-Anything", "other-mp": "o/other"}
+JSON
+    cat > "$PLUGDIR/removed.local.json" <<'JSON'
+{"marketplaces": ["understand-anything"]}
+JSON
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    refute_output --partial 'add: understand-anything'
+    refute_output --partial 'install: understand-anything@understand-anything'
+    # 무관한 마켓플레이스와 그 플러그인은 그대로.
+    assert_output --partial 'add: other-mp (o/other)'
+    assert_output --partial 'install: keep@other-mp'
+}
+
+@test "restore.sh: a public tombstone never suppresses a same-named company entry (#1695 round2 BLOCKER)" {
+    # 묘비는 스코프마다 따로다 — 두 스코프는 이름공간을 공유하지 않는다.
+    echo "internal" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    mkdir -p "$PLUGDIR/company"
+    git -C "$PLUGDIR/company" init -q
+    cat > "$PLUGDIR/company/marketplaces.json" <<'JSON'
+{"shared-name": "git@ghes.example.com:team/internal.git"}
+JSON
+    cat > "$PLUGDIR/company/plugins.json" <<'JSON'
+{"plugins": ["secret@shared-name"]}
+JSON
+    # 공용 쪽에서 같은 이름을 지웠다고 기록한다.
+    cat > "$PLUGDIR/removed.local.json" <<'JSON'
+{"marketplaces": ["shared-name"], "plugins": ["secret@shared-name"]}
+JSON
+
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    # 사내 스코프는 자기 묘비만 본다 → 그대로 복원돼야 한다.
+    assert_output --partial 'add: shared-name (git@ghes.example.com:team/internal.git)'
+    assert_output --partial 'install: secret@shared-name'
+}
+
+@test "restore.sh: the company scope honours its OWN tombstone file (#1695 round2)" {
+    echo "internal" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    mkdir -p "$PLUGDIR/company"
+    git -C "$PLUGDIR/company" init -q
+    cat > "$PLUGDIR/company/marketplaces.json" <<'JSON'
+{"internal-tools": "git@ghes.example.com:team/internal-tools.git"}
+JSON
+    cat > "$PLUGDIR/company/plugins.json" <<'JSON'
+{"plugins": ["secret@internal-tools"]}
+JSON
+    cat > "$PLUGDIR/company/removed.local.json" <<'JSON'
+{"plugins": ["secret@internal-tools"]}
+JSON
+
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    refute_output --partial 'install: secret@internal-tools'
+    assert_output --partial 'add: internal-tools (git@ghes.example.com:team/internal-tools.git)'
+}
+
 @test "restore.sh --sync prunes a tombstoned contract plugin instead of keeping it (#1695)" {
     _seed_local_state
     # SSOT 에 설치돼 있고 계약에도 있지만, 이 PC 에서 지웠다고 묘비가 말한다 →

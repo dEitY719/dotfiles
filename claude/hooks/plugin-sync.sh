@@ -145,6 +145,19 @@ if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
 	}
 fi
 
+
+# Same bootstrap-fallback contract for the tombstone prune (#1695 라운드2):
+# the add branch calls it on every install, so an unreachable shell-common must
+# degrade to identical behavior rather than a `command not found` that silently
+# skips cancelling a reinstalled plugin's tombstone.
+if ! command -v _claude_plugin_tombstone_prune >/dev/null 2>&1; then
+	_claude_plugin_tombstone_prune() {
+		jq -cn --argjson old "$1" --argjson pl "$2" --argjson mp "$3" \
+			'{marketplaces: (($old.marketplaces // []) - $mp),
+			  plugins:      (($old.plugins // []) - $pl)}' 2>/dev/null
+	}
+fi
+
 SRC="$HOME/.claude-shared/plugins"
 MP_SRC="$SRC/known_marketplaces.json"
 PL_SRC="$SRC/installed_plugins.json"
@@ -273,12 +286,16 @@ _tombstone_add() {
 # $1 = 현재 설치된 plugin id 배열(JSON), $2 = 현재 마켓플레이스 이름 배열(JSON).
 _tombstone_clear_installed() {
 	[ -f "$TOMBSTONE" ] || return 0
-	local out
-	out=$(jq -n --argjson old "$(_claude_plugin_read_json_or "$TOMBSTONE" '{}')" \
-		--argjson pl "$1" --argjson mp "$2" \
-		'{marketplaces: ((($old.marketplaces // []) - $mp)),
-		  plugins:      ((($old.plugins // []) - $pl))}' 2>/dev/null) || return 0
+	local cur out
+	cur=$(_claude_plugin_read_json_or "$TOMBSTONE" '{}')
+	# 차집합 규칙은 reconcile.sh --apply 와 공유한다 (#1695 라운드2 agy FOLLOW-UP)
+	# — 두 벌이면 "다시 설치됨" 의 정의가 갈린다.
+	out=$(_claude_plugin_tombstone_prune "$cur" "$1" "$2") || return 0
 	[ -n "$out" ] || return 0
+	# 결과가 그대로면 쓰지 않는다 (#1695 라운드2 agy FOLLOW-UP): no-op 재작성은
+	# mtime 만 흔들어 "무엇이 실제로 바뀌었나" 를 읽기 어렵게 만든다.
+	[ "$(printf '%s' "$cur" | jq -cS '{marketplaces:(.marketplaces//[]),plugins:(.plugins//[])}' 2>/dev/null)" \
+		= "$(printf '%s' "$out" | jq -cS '.' 2>/dev/null)" ] && return 0
 	printf '%s\n' "$out" >"$TOMBSTONE.tmp" && mv "$TOMBSTONE.tmp" "$TOMBSTONE"
 }
 
@@ -392,27 +409,34 @@ _prune_manifest_pair() {
 # so without the hint the user would see restore.sh reinstall the plugin on the
 # next run with no explanation. Advisory only — never blocks, never writes.
 _warn_if_contract_entry() {
-	local hit file
+	local hit file kind one
 	if [ "$action" = "marketplace_remove" ]; then
 		file="marketplaces.json"
+		kind="marketplaces"
 		hit=$(jq -r --arg t "$target" 'select(has($t)) | $t' \
 			"$PUB_DIR/marketplaces.json" 2>/dev/null)
 	else
 		file="plugins.json"
+		kind="plugins"
+		# EVERY match, not `first(...)` (#1695 라운드2 agy BLOCKER): a bare
+		# `uninstall <name>` removes that plugin from every marketplace that
+		# carries it, so tombstoning only the first leaves the rest to be
+		# reinstalled by restore.sh.
 		hit=$(jq -r --arg t "$target" \
-			'first((.plugins // [])[] | select(. == $t or startswith($t + "@"))) // empty' \
+			'(.plugins // [])[] | select(. == $t or startswith($t + "@"))' \
 			"$PUB_DIR/plugins.json" 2>/dev/null)
 	fi
 	[ -n "$hit" ] || return 0
 	# 계약은 그대로 두고, "이 PC 에서는 지웠다" 를 묘비로 남긴다 (#1695).
 	# 이것이 restore.sh 의 재설치 퇴행을 막는다 — 계약 편집은 여전히 PR 의 일이다.
-	if [ "$action" = "marketplace_remove" ]; then
-		_tombstone_add marketplaces "$hit"
-	else
-		_tombstone_add plugins "$hit"
-	fi
-	printf 'plugin-sync: %s 는 claude/plugin/%s (upstream 등록 계약) 에도 있습니다 — 계약은 그대로 두고 %s 에 묘비를 남깁니다 (#1685)\n' \
-		"$hit" "$file" "$(basename "$TOMBSTONE")" >&2
+	while IFS= read -r one; do
+		[ -n "$one" ] || continue
+		_tombstone_add "$kind" "$one"
+		printf 'plugin-sync: %s 는 claude/plugin/%s (upstream 등록 계약) 에도 있습니다 — 계약은 그대로 두고 %s 에 묘비를 남깁니다 (#1685)\n' \
+			"$one" "$file" "$(basename "$TOMBSTONE")" >&2
+	done <<HIT_EOF
+$hit
+HIT_EOF
 	printf 'plugin-sync:   → 이 PC 에서는 restore.sh 가 더 이상 설치하지 않습니다. 모든 PC 에서 빼려면 별도 PR 로 계약 파일을 편집하세요.\n' >&2
 }
 
