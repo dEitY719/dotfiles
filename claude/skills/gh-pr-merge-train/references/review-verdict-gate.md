@@ -145,6 +145,16 @@ table's `review-passed` only, no marker at all from the trusted login row
 covers it — same `[SKIPPED] review-passed not confirmed for this head — no
 freshness marker found` line, and the label is likewise left untouched.
 
+**The #1615 pagination bound (page 1 XOR the last page, never both) does not
+create a resurrection risk for revocation** (PR #1713 review, codex BLOCKER —
+declined): a `revoked` marker is by construction posted *after* the
+`review-passed` marker it cancels, so on a multi-page PR it can never age off
+the fetched (most-recent) page while the older `review-passed` marker it
+targets is still on it — whichever of the two survives the window, the newer
+one (the revocation, if either) does. The only failure this bound can cause is
+both markers aging off together, which reads as ABSENT — the same fail-safe
+direction the "STALE, ABSENT" row above already takes, not a resurrection.
+
 ### Marker authorship (PR #1608 review, agy + codex BLOCKER)
 
 A plain comment has no write-permission floor the way a label does — on most
