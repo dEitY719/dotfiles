@@ -40,9 +40,15 @@ the same remote URL (#1403/#1407). An explicit `owner/repo` positional pins
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh"
-GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state open \
-  --limit 50 --json number,updatedAt,isDraft,mergeable,mergeStateStatus,baseRefName,title,labels \
-  | _gh_pr_merge_train_filter_targets --now "$(date +%s)"
+# One file per PR, holding the head sha THIS train pushed (#1708). Same
+# `--path-format=absolute` care `references/train-loop.md` → "Detached scratch
+# worktree" already documents for `--git-common-dir` — see there for why.
+STATE_DIR="$(git rev-parse --path-format=absolute --git-common-dir)/pr-merge-train-pushed-sha"
+
+RAW=$(GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state open \
+  --limit 50 --json number,updatedAt,isDraft,mergeable,mergeStateStatus,baseRefName,title,labels,headRefOid)
+FILTERED=$(printf '%s' "$RAW" | _gh_pr_merge_train_filter_targets --now "$(date +%s)")
+QUEUE=$(printf '%s' "$RAW" | _gh_pr_merge_train_readmit_own_pushes "$STATE_DIR" "$FILTERED")
 ```
 
 `--author @me` is not optional (D-7) — never auto-merge a colleague's PR.
@@ -52,7 +58,20 @@ D-6 quiet period — the exact same function
 `shell-common/tools/custom/pr_merge_train_cron.sh` runs, so the two can never
 disagree. **Do not re-implement or paraphrase that filter here** — run it.
 
-Sort the surviving array `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`, ties by
+`_gh_pr_merge_train_readmit_own_pushes` is a **separate, additive second pass**
+that runs AFTER it and **never changes what the shared filter does** (#1708) —
+the dispatcher's own pre-check keeps calling the untouched filter alone. It
+re-admits only a PR the filter dropped *solely* for the quiet period whose
+current `headRefOid` is one this train recorded pushing in an earlier run's
+Step 4 remediation (`references/train-loop.md`); `reply-pending` and `isDraft`
+always win over it. `headRefOid` is in the `--json` list for this pass. Print
+one line per re-admitted PR so a PR that looks "too fresh" is not mysterious:
+
+```
+[INFO] gh:pr-merge-train: PR #<N> re-admitted — this train pushed its current head (#1708 D-6 exemption).
+```
+
+Sort `QUEUE` — the union, not `FILTERED` — `CLEAN` → `BEHIND` → `UNSTABLE` → `DIRTY`, ties by
 ascending PR number (D-2). Ordering, the label, and the quiet-period rationale:
 `references/ordering.md`.
 
