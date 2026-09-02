@@ -575,3 +575,86 @@ class TestFailOnScope:
         actionable half before the expected Phase 2-3 drift."""
         result = self._audit(self.MANIFEST_BAD)
         assert result.findings == result.contract_findings + result.drift_findings
+
+
+class TestNullPluginsArray:
+    """PR #1691 round 2, agy BLOCKER + codex FOLLOW-UP (found independently).
+
+    `.get("plugins", [])` returns None when the key is present and null — the
+    default never fires — so iterating it raised and aborted the whole audit
+    instead of reporting one repo's contract violation. The round-1 fix
+    covered several entries being dropped, not a null-valued key.
+    """
+
+    def test_null_plugins_array_is_a_violation_not_a_crash(self) -> None:
+        violations = check_manifest_contract(_target(), {"name": MARKETPLACE, "plugins": None})
+        assert len(violations) == 1
+        assert "gh-resolve" in violations[0]
+
+    def test_missing_plugins_key_is_a_violation_not_a_crash(self) -> None:
+        assert len(check_manifest_contract(_target(), {"name": MARKETPLACE})) == 1
+
+
+class TestOrphanFloor:
+    """PR #1691 round 2, /simplify lane: the sibling rule had a hole.
+
+    "Some sibling still pairs" proxies for "the originals still exist", and it
+    goes silent exactly where drift is worst — a repo whose skills ALL drifted
+    past the pairing floor produced zero findings and exit 0, which is the
+    fail-open the round-1 codex BLOCKER exists to close.
+
+    Measured separation (real `claude/skills/` tree): an unrelated or genuinely
+    new skill scores 0.000-0.010 against every original, while the same skill
+    heavily reworded still scores 0.106. `PAIR_ORPHAN_FLOOR` sits between them,
+    so recognizable-but-drifted is a finding while gone-or-new stays a note.
+    """
+
+    REWORDED = CONFLICT_BODY.replace("Rebase", "Re-apply").replace("hunks", "chunks")
+
+    def _audit(self, remote: dict, local: dict) -> AuditResult:
+        return run_audit([_target()], local, _FakeSource({REPO: MANIFEST_OK}, {REPO: remote}), checks="drift")
+
+    def test_a_repo_where_every_skill_drifted_past_the_floor_still_fails(self) -> None:
+        result = self._audit(
+            {"conflict": {"SKILL.md": self.REWORDED}},
+            {"gh-pr-resolve-conflict": {"SKILL.md": CONFLICT_BODY}},
+        )
+        assert result.exit_code("any") == 1
+        assert any("conflict" in f for f in result.drift_findings)
+
+    def test_a_genuinely_new_skill_stays_a_note(self) -> None:
+        result = self._audit(
+            {"brand-new": {"SKILL.md": "Provision a Kubernetes cluster.\nApply the manifest.\n"}},
+            {"gh-pr-resolve-conflict": {"SKILL.md": CONFLICT_BODY}},
+        )
+        assert result.exit_code("any") == 0
+        assert result.notes
+
+    def test_phase_4_deleted_originals_stay_quiet(self) -> None:
+        result = self._audit({"conflict": {"SKILL.md": CONFLICT_BODY}}, {})
+        assert result.exit_code("any") == 0
+        assert result.drift_findings == []
+        assert result.notes
+
+
+class TestRunnerUpPairing:
+    """PR #1691 round 2, codex FOLLOW-UP (agy raised it in round 1).
+
+    When the top-ranked original was already claimed, the code reported
+    unpaired instead of falling through to an eligible runner-up — which
+    contradicted the docstring's own stated intent. Round 1 added a regression
+    guard but left the algorithm alone; this closes it for real.
+    """
+
+    def test_runner_up_is_used_when_the_top_match_is_claimed(self) -> None:
+        shared = "Run the preflight.\nVerify mergeable.\nPush with lease.\n"
+        local = {
+            "gh-pr-resolve-conflict": {"SKILL.md": shared + "Resolve hunks by intent.\n"},
+            "gh-pr-resolve-outdated": {"SKILL.md": shared + "Sync a clean base.\n"},
+        }
+        remote = {
+            "conflict": {"SKILL.md": shared + "Resolve hunks by intent.\n"},
+            "outdated": {"SKILL.md": shared + "Sync a clean base.\n"},
+        }
+        pairs = {p.remote_name: p.local_name for p in pair_skills(remote, local)}
+        assert pairs == {"conflict": "gh-pr-resolve-conflict", "outdated": "gh-pr-resolve-outdated"}

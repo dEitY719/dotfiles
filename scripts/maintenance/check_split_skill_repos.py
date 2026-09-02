@@ -27,6 +27,17 @@ Why drift is not a file diff
     compares the *union* of SKILL.md and references/ as a normalized line set —
     the procedure a skill instructs, not the files it is spread across.
 
+Known limitation: the comparison is order-insensitive
+    A skill's fingerprint is a *set* of instruction lines, so reordering its
+    procedural steps produces an identical set and reports no drift (PR #1691
+    review, agy FOLLOW-UP). That is not an oversight — order-insensitivity is
+    exactly what makes a `references/` extraction a non-event, since a block
+    moved to another file lands elsewhere in any concatenation. Catching a
+    genuine step reorder needs a sequence-aware comparison that still tolerates
+    relocation, which is a design change rather than a tweak to this file.
+    Tracked as follow-up work; until then a reorder-only change is invisible
+    here and has to be caught in review.
+
 Why the pairing has no table (NF-2)
     Split repos are derived from the registration SSOT: an entry in
     `marketplaces.json` owned by --owner whose repo name ends in `-skills`.
@@ -163,7 +174,13 @@ def check_manifest_contract(target: Target, manifest: dict[str, Any] | None) -> 
             f"'{target.marketplace}'"
         )
 
-    remote_plugins = [p.get("name") for p in manifest.get("plugins", []) if isinstance(p, dict)]
+    # `or []`, not just the `.get` default: a manifest carrying an explicit
+    # `"plugins": null` returns None, the default never fires, and iterating it
+    # raised — aborting every remaining repo instead of reporting this one's
+    # violation (PR #1691 round 2, agy BLOCKER + codex FOLLOW-UP, found
+    # independently). The round-1 multi-plugin fix covered several entries
+    # being dropped, not a null-valued key.
+    remote_plugins = [p.get("name") for p in (manifest.get("plugins") or []) if isinstance(p, dict)]
     for plugin in target.plugins:
         if plugin not in remote_plugins:
             violations.append(
@@ -372,6 +389,17 @@ def compare_skills(
 # their preflight and push steps almost verbatim) from being coin-flipped.
 PAIR_MIN_SIMILARITY = 0.35
 PAIR_MIN_MARGIN = 0.05
+# Below the pairing floor, this separates "an original exists and the copy
+# drifted badly" from "there is no original" (Phase 4 deleted it, or the skill
+# is genuinely new). Measured against the real `claude/skills/` tree: an
+# unrelated skill scores 0.000-0.010 against every original, while the same
+# skill heavily reworded still scores 0.106. 0.05 sits in that gap.
+#
+# What it does NOT separate: a skill re-authored until almost no line survives
+# is, by content alone, indistinguishable from a new one — the assumption codex
+# named in its round-1 review. That limit is inherent to content-based pairing,
+# not to this constant.
+PAIR_ORPHAN_FLOOR = 0.05
 
 
 @dataclass
@@ -422,14 +450,17 @@ def pair_skills(
     # Most confident first, so a contested original goes to its best claimant.
     for remote_name in sorted(ranked_by_remote, key=lambda name: ranked_by_remote[name][0][0], reverse=True):
         ranked = ranked_by_remote[remote_name]
-        best_score, best_name = ranked[0]
-        runner_up = next((s for s, n in ranked[1:] if n not in claimed), 0.0)
+        # The best candidate nobody has claimed yet, not simply `ranked[0]`.
+        # Reporting "unpaired" the moment the top match was taken discarded a
+        # perfectly good runner-up and contradicted this function's own stated
+        # intent (PR #1691, agy round 1 / codex round 2).
+        unclaimed = [(score, name) for score, name in ranked if name not in claimed]
+        best_score, best_name = unclaimed[0] if unclaimed else (0.0, None)
+        runner_up = unclaimed[1][0] if len(unclaimed) > 1 else 0.0
 
         note = ""
         if best_name is None or best_score < min_similarity:
             note = f"no dotfiles original above {min_similarity:.0%} similarity"
-        elif best_name in claimed:
-            note = f"'{best_name}' is already paired with another skill in this repo"
         elif best_score - runner_up < min_margin:
             note = f"ambiguous — '{best_name}' and the runner-up score within {min_margin:.0%}"
 
@@ -625,10 +656,19 @@ def run_audit(
         for pairing in pairings:
             if pairing.local_name is None:
                 line = f"{target.marketplace}: '{pairing.remote_name}' unpaired — {pairing.note}"
-                if any_paired:
+                # Two independent reasons to treat an unpaired skill as drift.
+                # The sibling test alone had a hole the /simplify lane
+                # reproduced (PR #1691 round 2): a repo whose skills ALL drift
+                # past the floor pairs nothing, so nothing vouched for the
+                # originals still existing and the audit went silent on exactly
+                # the worst case. `PAIR_ORPHAN_FLOOR` closes it from the other
+                # side — a skill that still recognizably overlaps some original
+                # has one to have drifted from, sibling or not.
+                if any_paired or pairing.similarity >= PAIR_ORPHAN_FLOOR:
                     result.drift_findings.append(
-                        f"{line}; siblings in this repo still pair, so the dotfiles "
-                        f"original should exist — treat as drift severe enough to break pairing"
+                        f"{line} (best match {pairing.similarity:.0%}); a dotfiles "
+                        f"original still exists to have drifted from — treat as drift "
+                        f"severe enough to break pairing"
                     )
                 else:
                     result.notes.append(line)
