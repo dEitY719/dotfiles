@@ -219,6 +219,26 @@ JSON
     assert_success
 }
 
+@test "install → a no-op tombstone prune does not rewrite the file (#1695 round2 FOLLOW-UP)" {
+    # 차집합 결과가 그대로면 쓰지 않는다 — no-op 재작성은 mtime 만 흔든다.
+    _known_marketplaces
+    _installed_plugins
+    mkdir -p "$MAIN_ROOT/claude/plugin"
+    cat > "$MAIN_ROOT/claude/plugin/removed.local.json" <<'JSON'
+{"marketplaces":["gone-mp"],"plugins":["gone@gone-mp"]}
+JSON
+    before=$(stat -c %Y "$MAIN_ROOT/claude/plugin/removed.local.json")
+    before_body=$(cat "$MAIN_ROOT/claude/plugin/removed.local.json")
+
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install ralph-loop@claude-plugins-official"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    after=$(stat -c %Y "$MAIN_ROOT/claude/plugin/removed.local.json")
+    [ "$before" = "$after" ]
+    [ "$(cat "$MAIN_ROOT/claude/plugin/removed.local.json")" = "$before_body" ]
+}
+
 @test "install → directory-source and scope:local entries excluded" {
     _known_marketplaces
     _installed_plugins

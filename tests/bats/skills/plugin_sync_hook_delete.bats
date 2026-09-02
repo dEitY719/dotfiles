@@ -176,6 +176,23 @@ JSON
     assert_success
 }
 
+@test "bare-name uninstall tombstones EVERY contract match, not just the first (#1695 round2 BLOCKER)" {
+    # 같은 플러그인 이름이 두 마켓플레이스에 있으면 uninstall 은 둘 다 지운다.
+    # 첫 매치만 묘비 처리하면 나머지는 restore.sh 가 되살린다.
+    cat > "$MAIN_ROOT/claude/plugin/plugins.json" <<'JSON'
+{"plugins": ["ralph-loop@claude-plugins-official", "ralph-loop@second-mp", "other@second-mp"]}
+JSON
+    payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin uninstall ralph-loop"}}'
+    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    assert_success
+
+    run jq -r '.plugins | sort | join(",")' "$MAIN_ROOT/claude/plugin/removed.local.json"
+    assert_output 'ralph-loop@claude-plugins-official,ralph-loop@second-mp'
+    # 무관한 항목은 묘비에 들어가지 않는다.
+    run jq -e '.plugins | any(. == "other@second-mp")' "$MAIN_ROOT/claude/plugin/removed.local.json"
+    assert_failure
+}
+
 @test "uninstall of a plugin absent from the contract writes no tombstone (#1695)" {
     # 계약에 없으면 오버레이에서 빠지는 것으로 충분하다 — 묘비는 계약 항목 전용이다.
     payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin uninstall ralph-loop@claude-plugins-official"}}'
