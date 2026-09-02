@@ -105,3 +105,4 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 - fragment 작성 요구는 **중단됐다** — 토큰 소모가 커서 잠정 정지. 완료 후 fragment 파일을 만들지 않는다.
 - `mise run lint-docs` 에서도 `scripts/lint_changelog_fragments.sh` 호출을 뺐다 — 게이트 비활성.
 - 과거 규칙(파일명 `<YYYY-MM-DD>-<issue>.md`, `- 변경: **요약**` 포맷)과 스크립트/`tests/bats/lint/changelog_fragments.bats` 는 재개를 위해 그대로 남겨뒀다. 재개 시 이 섹션과 `mise.toml` 의 `lint-docs` 를 되돌린다.
+- **my-share 영향**: 일일/주간 보고 허브(`my-share`)의 수집기(`scripts/report_range.py`)는 `changelog.d/` 가 비어 있어도 에러 없이 빈 결과를 반환한다 — 이 기간 동안 dotfiles 항목은 보고서에서 조용히 빠진다(수집기 오작동이 아니라 fragment 부재의 정상 결과). 재개 전까지는 dotfiles 변경 사항을 daily/weekly 보고서에서 볼 수 없다는 뜻이다.
