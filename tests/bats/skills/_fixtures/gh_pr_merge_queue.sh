@@ -42,6 +42,11 @@ train_behind_may_merge_directly() {
     printf '%s' "$1" | _gh_pr_merge_train_behind_may_merge_directly
 }
 
+# Usage: train_base_strict_confirmed '<rules/branches/<base> JSON>'
+train_base_strict_confirmed() {
+    printf '%s' "$1" | _gh_pr_merge_train_base_strict_confirmed
+}
+
 # Usage: train_base_ci_red '<check-runs JSON>' <required-context>...
 train_base_ci_red() {
     local _json="$1"
@@ -63,9 +68,17 @@ train_base_ci_red() {
 # Usage: train_step3_6 <base> <rules-json-or-empty> <checks-json-or-empty>
 train_step3_6() {
     local BASE="$1" BASE_RULES="$2" BASE_CHECKS="$3" BEHIND_DIRECT=no _ctx
+    local BASE_STRICT_CONFIRMED=no
     local BASE_CONTEXTS=()
 
+    # The two normalisations the doc block does right after each `gh api` call:
+    # a malformed body is as unreadable as a failed call, and collapsing both to
+    # the empty string keeps ONE sentinel for the `-z` tests below.
+    printf '%s' "$BASE_RULES" | jq -e 'type == "array"' >/dev/null 2>&1 || BASE_RULES=''
+    printf '%s' "$BASE_CHECKS" | jq -e 'has("check_runs")' >/dev/null 2>&1 || BASE_CHECKS=''
+
     printf '%s' "$BASE_RULES" | _gh_pr_merge_train_behind_may_merge_directly && BEHIND_DIRECT=yes
+    printf '%s' "$BASE_RULES" | _gh_pr_merge_train_base_strict_confirmed && BASE_STRICT_CONFIRMED=yes
 
     while IFS= read -r _ctx; do
         [ -n "$_ctx" ] && BASE_CONTEXTS+=("$_ctx")
@@ -75,7 +88,7 @@ $(printf '%s' "$BASE_RULES" | jq -r '.[]? | select(.type == "required_status_che
 EOF
 
     printf 'BEHIND_DIRECT=%s\n' "$BEHIND_DIRECT"
-    if [ "$BEHIND_DIRECT" = yes ] && [ -z "$BASE_CHECKS" ]; then
+    if [ "$BASE_STRICT_CONFIRMED" = no ] && { [ -z "$BASE_RULES" ] || [ -z "$BASE_CHECKS" ]; }; then
         echo "[SKIPPED] base health unreadable on $BASE — not merging onto an unverified base"
     elif printf '%s' "$BASE_CHECKS" | _gh_pr_merge_train_base_ci_red "${BASE_CONTEXTS[@]}"; then
         echo "[SKIPPED] $BASE is red — halting the merge phase until it is green"

@@ -27,25 +27,33 @@ happened, so nothing here may change an exit status or suppress the report.
 |---|---|---|
 | 1 | PR card → `Done`, linked Issue cards → `Done` | `references/project-board-sync.md` |
 | 2 | herdr idle-tab hint (read-only, one `[INFO]` line) | `references/herdr-tab-notify.sh.md` |
-| 3 | drop the now-readerless `review-passed` label | `references/review-passed-cleanup.sh.md` |
-| 4 | ai-metrics PR comment (skipped when `GH_DISABLE_AI_METRICS=1`) | `references/ai-metrics-comment.sh.md` |
-| 5 | fetch the merge SHA, print the report line | `references/strategy-selection.md` → "Final report format" |
-| 6 | post-merge verification dispatch | `SKILL.md` Step 5's staging block, which reads `claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md` |
+| 3 | ai-metrics PR comment (skipped when `GH_DISABLE_AI_METRICS=1`) | `references/ai-metrics-comment.sh.md` |
+| 4 | fetch the merge SHA, print the report line | `references/strategy-selection.md` → "Final report format" |
+| 5 | post-merge verification dispatch | `SKILL.md` Step 5's staging block, which reads `claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md` |
+| 6 | drop the now-readerless `review-passed` label | `references/review-passed-cleanup.sh.md` |
 
-Step 3 is **last among the writes on purpose**, and that ordering is
-load-bearing beyond tidiness: dropping `review-passed` is what makes
-`_gh_pr_merge_train_needs_finalize` stop matching this PR. Drop it first and a
-sweep interrupted halfway leaves a PR that is neither finalized nor findable.
-Drop it after the other writes and an interrupted sweep simply gets picked up
-again on the next tick — every step above is idempotent, so a repeat costs
-nothing (the board sync is a no-op on an already-`Done` card, the label delete
-absorbs its own 404, the tab is already closed, and the PMV dispatch re-runs
-its own registry gate).
+Dropping `review-passed` is **step 6 of 6, after every other step including the
+dispatch**, and that ordering is load-bearing beyond tidiness: that label is
+what makes `_gh_pr_merge_train_needs_finalize` match this PR at all. While it
+is on, an unfinished PR is findable; the moment it comes off, the PR is done as
+far as the next tick's Step 0 sweep can tell. So the label must not come off
+until there is nothing left to find the PR *for*. Ordered last, a run
+interrupted anywhere in 1-5 simply gets swept again on the next tick — every
+step is idempotent enough to repeat (the board sync is a no-op on an
+already-`Done` card, the label delete absorbs its own 404, the tab is already
+closed, and the PMV dispatch re-runs its own registry gate).
 
-The one step that is **not** idempotent in that sense is #4: a second
-ai-metrics comment would land a second footer on the same PR. Ordering #3 last
-bounds the exposure to a sweep that dies between #4 and #3, which is one API
-call wide.
+Until PR #1725 this step sat at #3 — before the ai-metrics comment and before
+the dispatch — while this paragraph claimed it was last. A run that died
+between them dropped the label with two steps still owed, and no later sweep
+could ever find the PR again (codex BLOCKER on #1725). Anything added to this
+sequence in future goes **above** the label drop, never below it.
+
+The one step that is **not** idempotent in that sense is #3: a second
+ai-metrics comment would land a second footer on the same PR. That exposure is
+inherent to a resumable sweep and is not what the ordering trades against — a
+duplicated footer is visible and harmless, whereas a PR that no sweep can find
+is silent and permanent.
 
 ## Required bindings
 
@@ -86,5 +94,5 @@ neither success nor failure in the existing sense; it is a third outcome whose
 report shape is `SKILL.md` Step 3.5's `[QUEUED]` block — this file is an index
 over the sequence, not a second copy of that block.
 
-The PR keeps its `review-passed` label precisely because step 3 did not run,
+The PR keeps its `review-passed` label precisely because step 6 did not run,
 and that is what a later `gh:pr-merge-train` Step 0 sweep matches on.

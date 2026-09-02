@@ -42,8 +42,9 @@
 0. **Finalizes leftovers first** (#1707): any of your PRs that is already
    `MERGED` but still carries `review-passed` was merged by the **merge queue**
    with no session watching, so its post-merge steps never ran. Each gets one
-   `gh:pr-merge --finalize` and a `[FINALIZED]` line. Predicate:
-   `_gh_pr_merge_train_needs_finalize`.
+   `gh:pr-merge --finalize` and a `[FINALIZED]` line. Found by label search
+   (`is:merged label:review-passed`), so a leftover cannot age out of a recency
+   window; predicate: `_gh_pr_merge_train_needs_finalize`.
 1. Binds `TARGET_REPO` / `TARGET_HOST` from one remote URL (`references/github-target.md`).
 2. Lists your own open PRs and runs them through the shared filter
    `_gh_pr_merge_train_filter_targets` (`shell-common/functions/gh_pr_merge_train.sh`,

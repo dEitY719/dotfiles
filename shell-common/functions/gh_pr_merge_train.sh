@@ -28,6 +28,7 @@
 #   <one gh-pr-view JSON object> | _gh_pr_merge_train_needs_finalize
 #   <gh-pr-list JSON array>       | _gh_pr_merge_train_finalize_targets
 #   <rules/branches/<base> JSON>  | _gh_pr_merge_train_behind_may_merge_directly
+#   <rules/branches/<base> JSON>  | _gh_pr_merge_train_base_strict_confirmed
 #   <commits/<base>/check-runs JSON> | _gh_pr_merge_train_base_ci_red <ctx>...
 #
 # `_gh_pr_merge_train_quiet_minutes`
@@ -320,26 +321,37 @@ _gh_pr_merge_train_has_review_passed_label() {
 # Composes with `_gh_pr_merge_train_has_review_passed_label` above rather than
 # re-deriving its label-index jq, for the same reason the header's "one place
 # the predicate lives" rule exists for the quiet-minutes number.
+#
+# `.state` is compared case-INSENSITIVELY (#1707, PR #1725): `gh pr list` and
+# `gh pr view` answer `"MERGED"`, but `gh search prs` — which is what Step 0's
+# sweep now calls, so that a leftover cannot age out of a `--limit` window —
+# answers `"merged"`. A case-sensitive compare would make the sweep silently
+# match nothing, which looks exactly like "no leftovers" and is the same class
+# of invisible failure this whole predicate exists to prevent.
 _gh_pr_merge_train_needs_finalize() {
     local _json
     _json=$(cat)
-    printf '%s' "$_json" | jq -e '.state == "MERGED"' >/dev/null 2>&1 || return 1
+    printf '%s' "$_json" | jq -e '((.state // "") | ascii_upcase) == "MERGED"' \
+        >/dev/null 2>&1 || return 1
     printf '%s' "$_json" | _gh_pr_merge_train_has_review_passed_label
 }
 
 # Array-level sibling of the predicate above (#1707 follow-up), same shape as
-# `_gh_pr_merge_train_filter_targets`: a `gh pr list --json ...` array on
-# stdin, the filtered array back on stdout. Step 0 of `gh:pr-merge-train`
-# calls THIS, not a per-element loop over the single-PR predicate — a
-# `--limit 30` sweep would otherwise fork `jq` up to twice per element just to
+# `_gh_pr_merge_train_filter_targets`: a `gh pr list` / `gh search prs`
+# `--json ...` array on stdin, the filtered array back on stdout. Step 0 of
+# `gh:pr-merge-train` calls THIS, not a per-element loop over the single-PR
+# predicate — a sweep would otherwise fork `jq` up to twice per element just to
 # filter an array it already has in hand.
+#
+# Same case-insensitive `.state` compare, for the same reason (PR #1725): Step 0
+# feeds this `gh search prs --merged` output, whose `state` is `"merged"`.
 _gh_pr_merge_train_finalize_targets() {
     local _json _out
     _json=$(cat)
     [ -n "$_json" ] || return 1
     _out=$(printf '%s' "$_json" \
         | jq -c '[ .[]?
-            | select(.state == "MERGED")
+            | select(((.state // "") | ascii_upcase) == "MERGED")
             | select(([ .labels[]?.name? ] | index("review-passed")) != null)
           ]' 2>/dev/null) || return 1
     [ -n "$_out" ] || return 1
@@ -375,6 +387,43 @@ _gh_pr_merge_train_behind_may_merge_directly() {
     jq -e '[ .[]? | select(.type == "required_status_checks") ] as $r
            | ($r | length) > 0
              and all($r[]; .parameters.strict_required_status_checks_policy == false)' \
+        >/dev/null 2>&1
+}
+
+# Is this base PROVABLY still fully strict? (#1707, PR #1725 codex BLOCKER.)
+#
+# Same stdin as the predicate above — the whole
+# `repos/{repo}/rules/branches/{base}` response — but it answers a DIFFERENT
+# question, and conflating the two was the bug this exists to fix.
+#
+# `_gh_pr_merge_train_behind_may_merge_directly` answers the ROUTING question
+# ("may a BEHIND PR skip its local rebase"), where rc 1 correctly collapses
+# three inputs — strict on, no rule found, body unreadable — into one safe "no".
+# The Step 3.6 red-base guard needs the SAFETY-NET question instead ("does this
+# base still carry the strict guarantee that made the net unnecessary"), and
+# for that the collapse is wrong: an unreadable body must not read as "strict is
+# on, so this base never needed the net". Before this function existed, the
+# guard keyed its unreadable-base halt off `BEHIND_DIRECT = yes`, so a failed
+# RULES lookup — the situation with the LEAST information — silently disabled
+# the halt entirely.
+#
+# rc 0 = the body was readable, at least one `required_status_checks` rule was
+#        found, and EVERY one of them has strict on. Only then may the caller
+#        skip its unreadable-base halt: this base never relaxed strict mode, so
+#        it never depended on the net.
+# rc 1 = everything else — strict relaxed on any rule, no rule found, or the
+#        body was unreadable. All three mean "cannot prove this base is still
+#        fully strict", which is halt-eligible.
+#
+# Note this is NOT the boolean negation of the predicate above, and must never
+# be refactored into one. Both answer rc 1 for an unreadable body and for a base
+# with no `required_status_checks` rule, on purpose: each fails closed in its
+# own direction (no shortcut / no exemption), and an input that is unknown is
+# never evidence for either.
+_gh_pr_merge_train_base_strict_confirmed() {
+    jq -e '[ .[]? | select(.type == "required_status_checks") ] as $r
+           | ($r | length) > 0
+             and all($r[]; .parameters.strict_required_status_checks_policy == true)' \
         >/dev/null 2>&1
 }
 
@@ -899,6 +948,7 @@ for _gh_pmt_selfcheck_fn in \
     _gh_pr_merge_train_needs_finalize \
     _gh_pr_merge_train_finalize_targets \
     _gh_pr_merge_train_behind_may_merge_directly \
+    _gh_pr_merge_train_base_strict_confirmed \
     _gh_pr_merge_train_base_ci_red \
     _gh_pr_merge_train_review_passed_marker_sha \
     _gh_pr_merge_train_review_passed_stale \

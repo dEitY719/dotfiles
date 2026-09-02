@@ -88,8 +88,9 @@ Corollary: **this skill makes no writes to GitHub of its own.** Every mutation
 it causes happens inside an atom skill that already owns that mutation's rules.
 
 Step 0's finalize sweep (#1707) is bound by that corollary, not an exception to
-it. The sweep itself is two read-only calls — one `gh pr list --state merged`
-and the shared `_gh_pr_merge_train_needs_finalize` predicate over its output.
+it. The sweep itself is one read-only call — `gh search prs --merged --label
+review-passed` — and the shared `_gh_pr_merge_train_finalize_targets` filter
+(the array-level form of `_gh_pr_merge_train_needs_finalize`) over its output.
 Every write it triggers (board sync, ai-metrics comment, `review-passed`
 delete, tab close, post-merge-verify dispatch) happens inside
 `gh:pr-merge --finalize`, running the sequence defined in

@@ -154,10 +154,11 @@ Push CI detects a bad landing but nothing acted on it, so the train would have
 merged PR2 and PR3 onto a broken `main` and left three suspects for one
 failure. That is the one piece worth automating, and it is Step 3.6.
 
-The shared predicates are `_gh_pr_merge_train_behind_may_merge_directly` and
+The shared predicates are `_gh_pr_merge_train_behind_may_merge_directly`,
+`_gh_pr_merge_train_base_strict_confirmed` and
 `_gh_pr_merge_train_base_ci_red`, in
 `shell-common/functions/gh_pr_merge_train.sh` beside the label predicates —
-their full contracts are the comments above each. Both are answered from calls
+their full contracts are the comments above each. All are answered from calls
 the train makes **once per distinct base branch**, never per PR, so the guard
 adds no per-PR round trip. The rules body is the one
 `references/approval-gate.md` already fetches for the approval count.
@@ -168,10 +169,23 @@ adds no per-PR round trip. The rules body is the one
 BASE_ENC=$(jq -rn --arg b "$BASE" '$b|@uri')
 BASE_RULES=$(GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/rules/branches/$BASE_ENC" 2>/dev/null) \
     || BASE_RULES=''
+# ONE sentinel for "unreadable", not two. A failed call and a 200 carrying
+# something that is not the expected array (a proxy interstitial, a truncated
+# body) are equally unreadable, so both become the empty string here and every
+# test below can just ask `-z`. Without this, a malformed body sails past the
+# `-z` guard while every predicate reading it still answers its own fail-closed
+# rc 1 — which is silence, not a halt.
+printf '%s' "$BASE_RULES" | jq -e 'type == "array"' >/dev/null 2>&1 || BASE_RULES=''
 
 # Does BEHIND still owe a local rebase on this base? (routing-table.md D-1)
 BEHIND_DIRECT=no
 printf '%s' "$BASE_RULES" | _gh_pr_merge_train_behind_may_merge_directly && BEHIND_DIRECT=yes
+
+# A SEPARATE question from the one above, deliberately: can we PROVE this base
+# is still fully strict, and therefore never depended on the net below? Only a
+# readable body that positively confirms strict-on everywhere is an exemption.
+BASE_STRICT_CONFIRMED=no
+printf '%s' "$BASE_RULES" | _gh_pr_merge_train_base_strict_confirmed && BASE_STRICT_CONFIRMED=yes
 
 # Is the base already broken?  Fail closed: an unreadable answer halts.
 # An array, not a string — a context like `Lint (mise)` contains a space, and
@@ -186,19 +200,54 @@ EOF
 
 BASE_CHECKS=$(GH_HOST="$TARGET_HOST" gh api "repos/$TARGET_REPO/commits/$BASE_ENC/check-runs" 2>/dev/null) \
     || BASE_CHECKS=''
+# Same normalisation, same reason: `_gh_pr_merge_train_base_ci_red` answers
+# "no proof of red" for a malformed body, which must not read as "green".
+printf '%s' "$BASE_CHECKS" | jq -e 'has("check_runs")' >/dev/null 2>&1 || BASE_CHECKS=''
 
-if [ "$BEHIND_DIRECT" = yes ] && [ -z "$BASE_CHECKS" ]; then
+# EITHER lookup being unreadable is an unreadable base. An empty $BASE_RULES is
+# not merely "one of two answers missing": it also empties $BASE_CONTEXTS, so
+# the red check below has nothing to match and a genuinely red base would read
+# as green. The only exemption is a base proven still-strict.
+if [ "$BASE_STRICT_CONFIRMED" = no ] && { [ -z "$BASE_RULES" ] || [ -z "$BASE_CHECKS" ]; }; then
     echo "[SKIPPED] base health unreadable on $BASE — not merging onto an unverified base"
 elif printf '%s' "$BASE_CHECKS" | _gh_pr_merge_train_base_ci_red "${BASE_CONTEXTS[@]}"; then
     echo "[SKIPPED] $BASE is red — halting the merge phase until it is green"
 fi
 ```
 
-The condition is `BEHIND_DIRECT = yes` for the unreadable case on purpose: a
-base that never relaxed strict mode never depended on this net, and must not
-start being blocked by a lookup it never needed.
+The exemption is keyed on `BASE_STRICT_CONFIRMED`, **not** on `BEHIND_DIRECT`,
+and that distinction is the whole point (PR #1725, codex BLOCKER). The rule
+being preserved is unchanged: *a base that never relaxed strict mode never
+depended on this net, and must not start being blocked by a lookup it never
+needed.* What changed is what counts as proof of "never relaxed".
+`BEHIND_DIRECT = no` is not that proof — it is the answer to a different
+question (`_gh_pr_merge_train_behind_may_merge_directly`'s contract collapses
+"strict is on", "no rule found" and "the body was unreadable" into one rc 1),
+so keying the halt off `BEHIND_DIRECT = yes` meant a **failed RULES lookup
+switched the halt off**: exactly the case with the least information got the
+least protection. And when the same outage took the check-runs call with it,
+`_gh_pr_merge_train_base_ci_red` on an empty body is rc 1 ("no proof of red")
+by its own contract, so the `elif` stayed quiet too and the tick merged CLEAN
+PRs onto a base nothing had verified — the CLEAN row never consults
+`$BEHIND_DIRECT` at all (`references/routing-table.md`), so this guard was the
+only thing between an API outage and an unverified merge.
 
-Three properties of that guard, each a deliberate limit:
+`_gh_pr_merge_train_base_strict_confirmed` answers the exemption question
+directly and positively: rc 0 only for a readable body in which every
+`required_status_checks` rule found has strict **on**. Unreadable, no rule, or
+any relaxed rule → rc 1 → halt-eligible. So the four cases are:
+
+| `BASE_RULES` | `BASE_CHECKS` | Outcome |
+|---|---|---|
+| confirms strict ON everywhere | anything | exempt — no unreadable-halt (a red tip still halts on the `elif`) |
+| relaxed, or no rule found | readable | proceed; red tip halts normally |
+| relaxed, or no rule found | unreadable | **halt** — base health unreadable |
+| unreadable | readable **or** unreadable | **halt** — cannot even name the required contexts |
+
+"Unreadable" means the empty sentinel above, which by then covers both a failed
+call and a 200 whose body is not the expected shape.
+
+Four properties of that guard, each a deliberate limit:
 
 - **It halts the merge phase, not one PR.** Everything queued this tick is
   `[SKIPPED]` with the base's name as the reason. Never `[FAILED]` — the next
@@ -212,6 +261,12 @@ Three properties of that guard, each a deliberate limit:
   minutes and lint takes 1-2, so treating a still-running check as red would
   stall the train for a full CI cycle after every merge — reinstating exactly
   the serialisation this change removed, under a new name.
+- **An unread answer halts; only a positively-strict base is exempt.** The two
+  `gh api` calls fail together in an outage far more often than separately, and
+  the failure modes of both predicates point the same way ("no proof of red",
+  "no shortcut"), so nothing downstream would notice a double failure on its
+  own. The halt is the only thing that does, and it is deliberately keyed on
+  raw unreadability rather than on any predicate's verdict.
 
 **What it does not do:** it cannot prevent the *first* bad merge. Nothing can,
 once strict is off — that is the accepted risk, restated. What it does is turn

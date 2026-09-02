@@ -729,6 +729,10 @@ _run_json() {
     local pat f
     for pat in \
         '_gh_pr_merge_train_behind_may_merge_directly && BEHIND_DIRECT=yes' \
+        '_gh_pr_merge_train_base_strict_confirmed && BASE_STRICT_CONFIRMED=yes' \
+        "printf '%s' \"\$BASE_RULES\" | jq -e 'type == \"array\"' >/dev/null 2>&1 || BASE_RULES=''" \
+        "printf '%s' \"\$BASE_CHECKS\" | jq -e 'has(\"check_runs\")' >/dev/null 2>&1 || BASE_CHECKS=''" \
+        'if [ "$BASE_STRICT_CONFIRMED" = no ] && { [ -z "$BASE_RULES" ] || [ -z "$BASE_CHECKS" ]; }; then' \
         '[SKIPPED] base health unreadable on $BASE — not merging onto an unverified base' \
         '[SKIPPED] $BASE is red — halting the merge phase until it is green'; do
         for f in "${TRAIN_SKILL}/references/strict-mode-relaxation.md" \
@@ -811,4 +815,313 @@ _run_json() {
         run grep -F -- 'rulesets/16849266' "$f"
         assert_failure
     done
+}
+
+# --------------------------------------------------------------------------
+# PR #1725, codex BLOCKER 1 — the `review-passed` drop must be the LAST step
+# of the post-merge completion sequence, not the third of six.
+#
+# The label is the ONLY thing `_gh_pr_merge_train_needs_finalize` matches on.
+# While it is on, an unfinished PR is findable by the next tick's Step 0
+# sweep; the moment it comes off, that PR is invisible forever. So no step
+# that can still be owed may run after the drop — and until #1725 two did
+# (the ai-metrics comment and the post-merge-verify dispatch).
+# --------------------------------------------------------------------------
+
+# First line number carrying a fixed string, or empty if absent.
+_line_of() {
+    grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1
+}
+
+@test "drop-last: the finalize SSOT orders the label drop after ai-metrics" {
+    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
+    local metrics drop
+    metrics=$(_line_of "$doc" 'references/ai-metrics-comment.sh.md')
+    drop=$(_line_of "$doc" 'references/review-passed-cleanup.sh.md')
+    [ -n "$metrics" ]
+    [ -n "$drop" ]
+    [ "$drop" -gt "$metrics" ]
+}
+
+@test "drop-last: the finalize SSOT orders the label drop after the PMV dispatch" {
+    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
+    local dispatch drop
+    dispatch=$(_line_of "$doc" 'dispatch.sh.md')
+    drop=$(_line_of "$doc" 'references/review-passed-cleanup.sh.md')
+    [ -n "$dispatch" ]
+    [ "$drop" -gt "$dispatch" ]
+}
+
+@test "drop-last: the finalize SSOT numbers the label drop 6 of 6" {
+    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
+    run grep -qE '^\| 6 \|.*review-passed' "$doc"
+    assert_success
+}
+
+@test "drop-last: the SSOT prose no longer claims the drop is step 3" {
+    # The exact false statement #1725 found: the doc said "Step 3 is last among
+    # the writes on purpose" while sitting 3rd of 6 with two writes after it.
+    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
+    run grep -F -- 'Step 3 is **last among the writes on purpose**' "$doc"
+    assert_failure
+}
+
+@test "drop-last: gh:pr-merge runs the drop after ai-metrics and after the dispatch" {
+    local skill="${MERGE_SKILL}/SKILL.md"
+    local metrics dispatch drop
+    metrics=$(_line_of "$skill" 'references/ai-metrics-comment.sh.md')
+    dispatch=$(_line_of "$skill" 'gh-pr-post-merge-verify/references/dispatch.sh.md')
+    drop=$(_line_of "$skill" 'references/review-passed-cleanup.sh.md')
+    [ -n "$metrics" ]
+    [ -n "$dispatch" ]
+    [ -n "$drop" ]
+    [ "$drop" -gt "$metrics" ]
+    [ "$drop" -gt "$dispatch" ]
+}
+
+@test "drop-last: gh:pr-merge Step 4 explicitly says the drop is not there" {
+    # A reader following Step 4 top to bottom must not re-add it in place.
+    run grep -qF -- 'is **not** dropped here' "${MERGE_SKILL}/SKILL.md"
+    assert_success
+}
+
+@test "drop-last: the cleanup SSOT states where in the sequence it runs" {
+    local doc="${MERGE_SKILL}/references/review-passed-cleanup.sh.md"
+    run grep -qF -- 'step 6 of 6' "$doc"
+    assert_success
+    run grep -qF -- '#1725' "$doc"
+    assert_success
+}
+
+# --------------------------------------------------------------------------
+# PR #1725, codex BLOCKER 2 (agy FOLLOW-UP) — a failed RULES lookup must not
+# silently disable the red-base safety net.
+#
+# The old guard was `[ "$BEHIND_DIRECT" = yes ] && [ -z "$BASE_CHECKS" ]`.
+# `_gh_pr_merge_train_behind_may_merge_directly` returns rc 1 for an
+# unreadable body just as it does for "strict is on", so a failed rules call
+# set BEHIND_DIRECT=no and the halt could never fire — in the exact situation
+# with the least information. `_gh_pr_merge_train_base_strict_confirmed`
+# answers the exemption question directly instead.
+# --------------------------------------------------------------------------
+
+@test "strict-confirmed: strict on everywhere -> yes, this base is exempt" {
+    run train_base_strict_confirmed "$(_rules_json true)"
+    assert_success
+}
+
+@test "strict-confirmed: strict off -> no, this base depends on the net" {
+    run train_base_strict_confirmed "$(_rules_json false)"
+    assert_failure
+}
+
+@test "strict-confirmed: an unreadable body is NOT an exemption" {
+    # The whole bug: "we could not read the rules" must never be read as
+    # "strict is still on, so this base never needed the guard".
+    run train_base_strict_confirmed 'not json at all'
+    assert_failure
+    run train_base_strict_confirmed ''
+    assert_failure
+}
+
+@test "strict-confirmed: no required_status_checks rule -> not confirmed" {
+    # Symmetric with behind_may_merge_directly's own `length > 0` requirement:
+    # zero rules is an absence of evidence, not evidence of strictness.
+    run train_base_strict_confirmed '[{"type":"pull_request","parameters":{}}]'
+    assert_failure
+}
+
+@test "strict-confirmed: one relaxed rule among strict ones -> not confirmed" {
+    run train_base_strict_confirmed \
+        "$(printf '[{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true}},
+                    {"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":false}}]')"
+    assert_failure
+}
+
+@test "strict-confirmed: it is not the negation of behind_may_merge_directly" {
+    # Both are rc 1 for an unreadable body and for a base with no rule. A
+    # future refactor that made one `! other` would silently re-open the bug.
+    local body
+    for body in 'not json at all' '[{"type":"pull_request","parameters":{}}]'; do
+        run train_behind_may_merge_directly "$body"
+        assert_failure
+        run train_base_strict_confirmed "$body"
+        assert_failure
+    done
+}
+
+@test "step3.6: BOTH lookups failing halts — the correlated-outage case" {
+    # codex FOLLOW-UP #2. Before #1725 this printed nothing at all: the first
+    # branch needed BEHIND_DIRECT=yes (impossible with unreadable rules) and
+    # the elif's base_ci_red is rc 1 on an empty body by its own contract.
+    run train_step3_6 main '' ''
+    assert_output --partial '[SKIPPED] base health unreadable on main'
+}
+
+@test "step3.6: an unreadable rules body alone halts, even with readable checks" {
+    # Not defensive padding: with no rules body, BASE_CONTEXTS is empty, so
+    # base_ci_red has nothing to match and a red base reads as green.
+    run train_step3_6 main '' \
+        "$(_checks_json "$(_run_json 'Lint (mise)' completed '"success"')")"
+    assert_output --partial '[SKIPPED] base health unreadable on main'
+}
+
+@test "step3.6: a MALFORMED body is as unreadable as a failed call" {
+    # `-z` alone only catches the `|| BASE_RULES=''` path. A 200 carrying a
+    # proxy interstitial is non-empty, and every predicate reading it answers
+    # its own fail-closed rc 1 — which is silence, not a halt. Hence the
+    # normalisation to the same empty sentinel.
+    run train_step3_6 main 'not json' \
+        "$(_checks_json "$(_run_json 'Lint (mise)' completed '"success"')")"
+    assert_output --partial '[SKIPPED] base health unreadable on main'
+
+    run train_step3_6 main "$(_rules_json false)" 'not json either'
+    assert_output --partial '[SKIPPED] base health unreadable on main'
+}
+
+@test "step3.6: rules unreadable + checks genuinely RED still halts" {
+    # The OR must not let a red base through just because the other call failed.
+    run train_step3_6 main 'not json' \
+        "$(_checks_json "$(_run_json 'Lint (mise)' completed '"failure"')")"
+    assert_output --partial '[SKIPPED]'
+    refute_output --partial '[FAILED]'
+}
+
+@test "step3.6: a confirmed-strict base is still exempt from the unreadable halt" {
+    # The preserved rule: a base that never relaxed strict mode never depended
+    # on this net and must not start being blocked by a lookup it never needed.
+    run train_step3_6 main "$(_rules_json true)" ''
+    assert_line 'BEHIND_DIRECT=no'
+    refute_output --partial '[SKIPPED]'
+}
+
+@test "step3.6: a relaxed base with unreadable checks halts, as before" {
+    run train_step3_6 main "$(_rules_json false)" ''
+    assert_output --partial '[SKIPPED] base health unreadable on main'
+}
+
+@test "step3.6: a base with no required-checks rule halts when checks are unreadable" {
+    # It cannot be proven strict, so it is not exempt — and with no contexts
+    # the red check could never speak for it either.
+    run train_step3_6 main '[{"type":"pull_request","parameters":{}}]' ''
+    assert_output --partial '[SKIPPED] base health unreadable on main'
+}
+
+@test "step3.6: the halt never depends on BEHIND_DIRECT any more" {
+    # BEHIND_DIRECT is the ROUTING answer; conflating it with safety-net
+    # eligibility is the bug. Assert the guard does not mention it.
+    local f
+    for f in "${TRAIN_SKILL}/references/strict-mode-relaxation.md" \
+        "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_queue.sh"; do
+        run grep -F -- '[ "$BEHIND_DIRECT" = yes ] && [ -z "$BASE_CHECKS" ]' "$f"
+        assert_failure
+    done
+}
+
+@test "doc-guard: the new predicate is in the shipped self-check list" {
+    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+    run bash -c "sed -n '/^for _gh_pmt_selfcheck_fn in/,/^done/p' '$f' \
+        | grep -qF -- '_gh_pr_merge_train_base_strict_confirmed'"
+    assert_success
+}
+
+@test "doc-guard: Step 3.6 names the exemption predicate, not a paraphrase" {
+    run grep -qF -- '_gh_pr_merge_train_base_strict_confirmed' "${TRAIN_SKILL}/SKILL.md"
+    assert_success
+    run grep -qF -- '_gh_pr_merge_train_base_strict_confirmed' \
+        "${TRAIN_SKILL}/references/strict-mode-relaxation.md"
+    assert_success
+}
+
+# --------------------------------------------------------------------------
+# PR #1725, codex BLOCKER 3 — the finalize sweep must query by LABEL, not by
+# recency. `gh pr list --limit 30` lost a still-unfinalized PR forever once 30
+# further merges had happened, with no error and no report line.
+# --------------------------------------------------------------------------
+
+@test "finalize-targets: gh search's lowercase \"merged\" state matches" {
+    # `gh search prs --json state` answers "merged"; `gh pr list` answers
+    # "MERGED". A case-sensitive compare would make the new sweep silently
+    # return nothing — indistinguishable from "no leftovers".
+    local result
+    result=$(merge_queue_finalize_targets \
+        "[$(_pr_json 51 merged '[{"name":"review-passed"}]')]")
+    run jq -c '[.[].number]' <<<"$result"
+    assert_success
+    assert_output '[51]'
+}
+
+@test "needs-finalize: lowercase \"merged\" + review-passed -> true" {
+    run merge_queue_needs_finalize "$(_pr_json 51 merged '[{"name":"review-passed"}]')"
+    assert_success
+}
+
+@test "finalize-targets: lowercase \"closed\" is still not a finalize target" {
+    # Search reports a closed-unmerged PR as "closed". Case-insensitivity must
+    # not widen the rule beyond MERGED.
+    run merge_queue_finalize_targets \
+        "[$(_pr_json 51 closed '[{"name":"review-passed"}]')]"
+    assert_success
+    assert_output '[]'
+}
+
+@test "finalize-targets: lowercase \"open\" is still not a finalize target" {
+    run merge_queue_finalize_targets \
+        "[$(_pr_json 51 open '[{"name":"review-passed"}]')]"
+    assert_success
+    assert_output '[]'
+}
+
+@test "sweep: Step 0 queries the search index by label, not gh pr list" {
+    local skill="${TRAIN_SKILL}/SKILL.md"
+    run grep -qF -- 'gh search prs --repo "$TARGET_REPO" --author @me' "$skill"
+    assert_success
+    run grep -qF -- '--merged --label review-passed' "$skill"
+    assert_success
+}
+
+@test "sweep: the recency-capped call is gone" {
+    # `--limit 30` may still be NAMED in the prose that explains the bug; what
+    # must be gone is the invocation. Assert on the command, not the mention.
+    local skill="${TRAIN_SKILL}/SKILL.md"
+    run grep -F -- 'gh pr list --repo "$TARGET_REPO" --author @me --state merged' "$skill"
+    assert_failure
+    run grep -qF -- '--limit 100 --json number,title,state,labels' "$skill"
+    assert_success
+}
+
+@test "sweep: the prose no longer calls an aged-out leftover a human's problem" {
+    # That sentence justified the bug. It must not survive the fix.
+    run grep -F -- "is a human's problem, not a loop's" "${TRAIN_SKILL}/SKILL.md"
+    assert_failure
+}
+
+@test "sweep: --author @me survives the switch to search (D-7)" {
+    # Never sweep — and therefore never finalize — a colleague's PR.
+    run grep -qF -- '--author @me' "${TRAIN_SKILL}/SKILL.md"
+    assert_success
+}
+
+@test "sweep: the shared filter still runs over the search result" {
+    # The query and the filter now encode the same rule; the filter is what
+    # keeps that rule in ONE place and normalises `state` across both sources.
+    local skill="${TRAIN_SKILL}/SKILL.md"
+    run grep -qF -- '| _gh_pr_merge_train_finalize_targets' "$skill"
+    assert_success
+}
+
+@test "sweep: the sweep is still read-only (constraints.md corollary)" {
+    local skill="${TRAIN_SKILL}/SKILL.md"
+    run bash -c "grep -n 'gh api\|-X POST\|-X DELETE\|-X PATCH\|gh pr edit' '$skill'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
+}
+
+@test "sweep: constraints.md describes the same call the skill makes" {
+    run grep -qF -- 'gh search prs --merged --label' \
+        "${TRAIN_SKILL}/references/constraints.md"
+    assert_success
+    run grep -F -- 'one `gh pr list --state merged`' \
+        "${TRAIN_SKILL}/references/constraints.md"
+    assert_failure
 }
