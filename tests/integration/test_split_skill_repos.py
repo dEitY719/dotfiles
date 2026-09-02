@@ -20,6 +20,7 @@ import pytest
 
 from scripts.maintenance.check_split_skill_repos import (
     AuditResult,
+    GitCloneRemoteSource,
     Target,
     check_manifest_contract,
     compare_skills,
@@ -658,3 +659,42 @@ class TestRunnerUpPairing:
         }
         pairs = {p.remote_name: p.local_name for p in pair_skills(remote, local)}
         assert pairs == {"conflict": "gh-pr-resolve-conflict", "outdated": "gh-pr-resolve-outdated"}
+
+
+class TestMalformedRemoteIsIsolated:
+    """PR #1691 round 2, gh:pr-approve analysis: two more whole-audit aborts.
+
+    Same class as the null-plugins crash and the clone timeout — one repo's
+    bad data must never take the other fourteen down with it, which is the
+    stated goal `GitCloneRemoteSource` and `check_manifest_contract` share.
+    """
+
+    def test_a_manifest_that_is_not_an_object_is_a_violation_not_a_crash(self) -> None:
+        """Valid JSON, wrong shape: a top-level list has no `.get`."""
+        violations = check_manifest_contract(_target(), [{"name": "gh-resolve"}])  # type: ignore[arg-type]
+        assert len(violations) == 1
+        assert "not a JSON object" in violations[0]
+
+    def test_a_malformed_manifest_does_not_stop_later_targets(self) -> None:
+        source = _FakeSource(
+            {
+                REPO: ["not", "an", "object"],
+                "dEitY719/other-skills": {"name": "other-skills", "plugins": [{"name": "other"}]},
+            },
+            {},
+        )
+        targets = [_target(), Target("other-skills", "dEitY719/other-skills", ("other",))]
+        result = run_audit(targets, {}, source, checks="contract")
+
+        # Exactly one finding: the malformed repo's own. The clean target after
+        # it was still reached, which is the point — before this fix the
+        # AttributeError escaped the loop and the second target never ran.
+        assert len(result.contract_findings) == 1
+        assert REPO in result.contract_findings[0]
+
+    def test_a_missing_git_binary_is_an_unreachable_finding_not_a_crash(self, tmp_path: Path) -> None:
+        """`_clone` caught only TimeoutExpired; other OSErrors propagated."""
+        source = GitCloneRemoteSource(tmp_path)
+        source._git = ["definitely-not-a-real-git-binary-1671"]  # type: ignore[attr-defined]
+        assert source.marketplace_manifest("dEitY719/gh-resolve-skills") is None
+        assert source.skill_tree("dEitY719/gh-resolve-skills") == {}
