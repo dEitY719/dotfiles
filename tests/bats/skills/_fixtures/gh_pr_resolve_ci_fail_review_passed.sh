@@ -38,10 +38,8 @@ resolve_ci_fail_step7_drop_review_passed() {
 resolve_ci_fail_step7() {
     local _pr="$1" _repo="$2" _host="$3"
     # shellcheck disable=SC2016  # backticks are markdown in the message
-    (
-        [ -n "$_host" ] && export GH_HOST="$_host"
-        gh api -X DELETE "repos/$_repo/issues/$_pr/labels/CI%20fail"
-    ) >/dev/null 2>&1 \
+    GH_HOST="$_host" gh api -X DELETE "repos/$_repo/issues/$_pr/labels/CI%20fail" \
+        >/dev/null 2>&1 \
       && printf '[OK] `CI fail` 라벨 제거됨 — 동료 재-Approve 흐름 해제\n' \
       || printf '[WARN] `CI fail` 라벨 제거 실패 (이미 없거나 권한 없음 — 수동 제거 필요할 수 있음)\n'
     resolve_ci_fail_step7_drop_review_passed "$_pr" "$_repo" "$_host"
