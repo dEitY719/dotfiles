@@ -179,6 +179,25 @@ def _load_catalog(path: Path) -> dict[str, dict[str, Any]]:
     return out
 
 
+def _separator_agnostic_pattern(name: str) -> str:
+    """Return a regex alternative matching `name` with `-` or `:` separators.
+
+    Regex counterpart of `_normalize_skill`, which collapses the colon form
+    back to the canonical hyphen form after a match. A catalog key is always
+    stored hyphenated (`gh-pr-create`), but the live command form puts a colon
+    at the plugin-namespace boundary: `/gh-pr:create` (#1677). The pre-#1689
+    pair — the whole name hyphenated OR the whole name colonized
+    (`gh:pr:create`) — covered neither that spelling nor any other mixture, so
+    no boundary surface matched a migrated skill and the guard silently failed
+    open for it. Letting each separator vary independently accepts all 2**k
+    spellings in a single alternative.
+
+    Sibling exclusion is unaffected: surface (a)'s `(?![\\w:-])` lookahead is
+    what rejects `/gh-pr-review` and `/gh-pr:review` as `gh-pr` (#1164).
+    """
+    return "[-:]".join(re.escape(part) for part in name.split("-"))
+
+
 def _build_boundary_regex(catalog: dict[str, dict[str, Any]]) -> re.Pattern[str]:
     """Build a multi-skill boundary regex from the catalog keys.
 
@@ -193,17 +212,7 @@ def _build_boundary_regex(catalog: dict[str, dict[str, Any]]) -> re.Pattern[str]
     if not catalog:
         return re.compile(r"(?!x)x")  # match nothing
     names = sorted(catalog.keys())
-    # Every separator in a name may independently appear as `-` or `:` at
-    # match time. A catalog key is always stored hyphenated (`gh-pr-create`),
-    # but the live command form puts a colon only at the plugin-namespace
-    # boundary: `/gh-pr:create` (#1677). The pre-#1689 pair — the whole name
-    # hyphenated OR the whole name colonized (`gh:pr:create`) — covered
-    # neither that spelling nor any other mixture, so no boundary surface
-    # matched a migrated skill and the guard silently failed open for it.
-    # A per-separator class accepts all 2**k spellings in one alternative.
-    # Sibling exclusion is unaffected: surface (a)'s `(?![\w:-])` lookahead
-    # is what rejects `/gh-pr-review` and `/gh-pr:review` as `gh-pr` (#1164).
-    union = "|".join("[-:]".join(re.escape(part) for part in n.split("-")) for n in names)
+    union = "|".join(_separator_agnostic_pattern(n) for n in names)
     return re.compile(
         rf"""
         (?m)                                                    # multiline: ^ matches each line start
