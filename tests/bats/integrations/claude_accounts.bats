@@ -818,6 +818,41 @@ _setup_sh_prereqs() {
     [ -L "$HOME/.claude-personal/CLAUDE.md" ]
 }
 
+# ---------- Regression: issue #1701 ----------
+#
+# The account loop above only real-file-copies settings.json for accounts in
+# CLAUDE_ENABLED_ACCOUNTS (~/.claude-<name>). The unsuffixed ~/.claude was
+# never in that loop, so it stayed a legacy write-through symlink into the
+# tracked SSOT for anyone who ran bare `claude` instead of `claude-yolo` —
+# exactly the #924 pollution path #940 was supposed to close. setup.sh must
+# now real-file-copy that bare path too, independent of ENABLED_ACCOUNTS.
+
+@test "bash: claude/setup.sh installs a real-file settings.json at bare ~/.claude too (#1701)" {
+    _setup_sh_prereqs
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+
+    [ -f "$HOME/.claude/settings.json" ]
+    [ ! -L "$HOME/.claude/settings.json" ]
+}
+
+@test "bash: claude/setup.sh converts a legacy bare ~/.claude/settings.json symlink to a real file (#1701)" {
+    _setup_sh_prereqs
+
+    # Reproduce the reported state: ~/.claude/settings.json still a
+    # write-through symlink into the tracked SSOT, as it stayed on a PC that
+    # migrated to multi-account mode before this fix existed.
+    mkdir -p "$HOME/.claude"
+    ln -s "${DOTFILES_ROOT}/claude/settings.json" "$HOME/.claude/settings.json"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+
+    [ -f "$HOME/.claude/settings.json" ]
+    [ ! -L "$HOME/.claude/settings.json" ]
+}
+
 @test "bash: claude/setup.sh respects Internal-PC mode via .dotfiles-setup-mode" {
     # Issue #571 (F-1) made Internal-PC mode key off the .dotfiles-setup-mode
     # SSOT (single source of truth, set by shell-common/setup.sh) instead of
