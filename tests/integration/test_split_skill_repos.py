@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from scripts.maintenance.check_split_skill_repos import (
+    AuditResult,
     Target,
     check_manifest_contract,
     compare_skills,
@@ -35,6 +36,30 @@ REPO_ROOT = Path(__file__).parent.parent.parent
 # The one skill body the pairing and audit fixtures are built from. Written
 # once so the deliberate one-line variant below reads as the only difference.
 CONFLICT_BODY = "Rebase onto base.\nResolve hunks by intent.\nPush with lease.\n"
+# The same procedure with one instruction changed — the minimal real drift.
+DRIFTED_BODY = CONFLICT_BODY.replace("lease", "force")
+
+# The fixture repo every audit test runs against, and the manifest that
+# honors its registration. Module-level because `Target`'s shape has already
+# changed once under review (`plugin` -> `plugins`), and each copy of these
+# was a separate edit when it did.
+MARKETPLACE = "gh-resolve-skills"
+REPO = f"dEitY719/{MARKETPLACE}"
+MANIFEST_OK: dict = {"name": MARKETPLACE, "plugins": [{"name": "gh-resolve"}]}
+
+
+def _target(plugins: tuple[str, ...] = ("gh-resolve",)) -> Target:
+    """The fixture target. `plugins=()` is "nothing in plugins.json installs it"."""
+    return Target(MARKETPLACE, REPO, plugins)
+
+
+# The dotfiles originals the pairing and drift-gating tests match against:
+# two siblings that share most of their procedure, plus one unrelated skill.
+LOCAL_SKILLS = {
+    "gh-pr-resolve-conflict": {"SKILL.md": CONFLICT_BODY},
+    "gh-pr-resolve-outdated": {"SKILL.md": "Sync a clean base.\nNo conflicts expected.\nPush with lease.\n"},
+    "write-rca": {"SKILL.md": "Write a postmortem.\nName the root cause.\nList the timeline.\n"},
+}
 
 
 @pytest.fixture(scope="module")
@@ -83,25 +108,22 @@ class TestManifestContract:
     """F-1: the registered id must be installable against the real remote."""
 
     MANIFEST = {
-        "name": "gh-resolve-skills",
+        "name": MARKETPLACE,
         "plugins": [{"name": "gh-resolve", "source": "./"}],
     }
 
-    def _target(self, plugin: tuple[str, ...] = ("gh-resolve",)) -> Target:
-        return Target("gh-resolve-skills", "dEitY719/gh-resolve-skills", plugin)
-
     def test_matching_manifest_reports_no_violation(self) -> None:
-        assert check_manifest_contract(self._target(), self.MANIFEST) == []
+        assert check_manifest_contract(_target(), self.MANIFEST) == []
 
     def test_renamed_remote_plugin_is_a_violation(self) -> None:
         manifest = {"name": "gh-resolve-skills", "plugins": [{"name": "gh-fix"}]}
-        violations = check_manifest_contract(self._target(), manifest)
+        violations = check_manifest_contract(_target(), manifest)
         assert len(violations) == 1
         assert "gh-resolve" in violations[0] and "gh-fix" in violations[0]
 
     def test_renamed_remote_marketplace_is_a_violation(self) -> None:
         manifest = {"name": "gh-resolve-plugins", "plugins": [{"name": "gh-resolve"}]}
-        violations = check_manifest_contract(self._target(), manifest)
+        violations = check_manifest_contract(_target(), manifest)
         assert len(violations) == 1
         assert "gh-resolve-plugins" in violations[0]
 
@@ -111,15 +133,15 @@ class TestManifestContract:
             "name": "gh-resolve-skills",
             "plugins": [{"name": "other"}, {"name": "gh-resolve"}],
         }
-        assert check_manifest_contract(self._target(), manifest) == []
+        assert check_manifest_contract(_target(), manifest) == []
 
     def test_unreachable_remote_is_a_violation(self) -> None:
-        violations = check_manifest_contract(self._target(), None)
+        violations = check_manifest_contract(_target(), None)
         assert len(violations) == 1
         assert "unreachable" in violations[0].lower() or "no .claude-plugin" in violations[0].lower()
 
     def test_marketplace_with_no_plugins_json_entry_is_a_violation(self) -> None:
-        violations = check_manifest_contract(self._target(plugin=()), self.MANIFEST)
+        violations = check_manifest_contract(_target(()), self.MANIFEST)
         assert len(violations) == 1
         assert "plugins.json" in violations[0]
 
@@ -221,11 +243,7 @@ class TestPairing:
     `gh-pr-resolve-conflict`), so the pairing is made on content.
     """
 
-    LOCAL = {
-        "gh-pr-resolve-conflict": {"SKILL.md": CONFLICT_BODY},
-        "gh-pr-resolve-outdated": {"SKILL.md": "Sync a clean base.\nNo conflicts expected.\nPush with lease.\n"},
-        "write-rca": {"SKILL.md": "Write a postmortem.\nName the root cause.\nList the timeline.\n"},
-    }
+    LOCAL = LOCAL_SKILLS
 
     def test_pairs_a_renamed_skill_to_its_original(self) -> None:
         remote = {"conflict": {"SKILL.md": CONFLICT_BODY}}
@@ -257,6 +275,20 @@ class TestPairing:
         pairs = {p.remote_name: p.local_name for p in pair_skills(remote, self.LOCAL)}
         assert pairs["conflict"] == "gh-pr-resolve-conflict"
         assert pairs["conflict-copy"] is None
+
+    def test_runner_up_is_tried_when_the_top_match_is_already_claimed(self) -> None:
+        """PR #1691 review, agy FOLLOW-UP: a claimed top match discarded the rest.
+
+        The complement of the test above: when the loser of a contested
+        original has an original of its own, it must find it rather than
+        inherit the loss.
+        """
+        remote = {
+            "conflict": {"SKILL.md": CONFLICT_BODY},
+            "outdated": {"SKILL.md": self.LOCAL["gh-pr-resolve-outdated"]["SKILL.md"]},
+        }
+        pairs = {p.remote_name: p.local_name for p in pair_skills(remote, self.LOCAL)}
+        assert pairs == {"conflict": "gh-pr-resolve-conflict", "outdated": "gh-pr-resolve-outdated"}
 
 
 class TestSkillTreeLoading:
@@ -297,8 +329,7 @@ class _FakeSource:
 
 
 class TestAudit:
-    REPO = "dEitY719/gh-resolve-skills"
-    MANIFEST = {"name": "gh-resolve-skills", "plugins": [{"name": "gh-resolve"}]}
+    MANIFEST = MANIFEST_OK
     LOCAL = {"gh-pr-resolve-conflict": {"SKILL.md": CONFLICT_BODY}}
 
     def _audit(
@@ -307,37 +338,34 @@ class TestAudit:
         manifest: dict | None = None,
         remote_body: str | None = None,
         checks: str = "all",
-    ) -> object:
+    ) -> AuditResult:
         """Audit one target, stating only what this test varies.
 
         `manifest=None` is an unreachable repo; `remote_body=None` a repo with
         no skills/ — both are the "absent" case the checker must still report.
         """
         source = _FakeSource(
-            {self.REPO: manifest} if manifest is not None else {},
-            {self.REPO: {"conflict": {"SKILL.md": remote_body}}} if remote_body is not None else {},
+            {REPO: manifest} if manifest is not None else {},
+            {REPO: {"conflict": {"SKILL.md": remote_body}}} if remote_body is not None else {},
         )
-        return run_audit([Target("gh-resolve-skills", self.REPO, ("gh-resolve",))], self.LOCAL, source, checks=checks)
+        return run_audit([_target()], self.LOCAL, source, checks=checks)
 
     def test_faithful_port_is_clean(self) -> None:
         result = self._audit(manifest=self.MANIFEST, remote_body=CONFLICT_BODY)
         assert result.findings == []
-        assert result.exit_code == 0
+        assert result.exit_code() == 0
 
     def test_remote_plugin_rename_is_caught(self) -> None:
         result = self._audit(
-            manifest={"name": "gh-resolve-skills", "plugins": [{"name": "renamed"}]},
+            manifest={"name": MARKETPLACE, "plugins": [{"name": "renamed"}]},
             remote_body=CONFLICT_BODY,
         )
-        assert result.exit_code == 1
+        assert result.exit_code() == 1
         assert any("renamed" in f for f in result.findings)
 
     def test_one_sided_edit_is_caught_as_drift(self) -> None:
-        result = self._audit(
-            manifest=self.MANIFEST,
-            remote_body="Rebase onto base.\nResolve hunks by intent.\nPush with force.\n",
-        )
-        assert result.exit_code == 1
+        result = self._audit(manifest=self.MANIFEST, remote_body=DRIFTED_BODY)
+        assert result.exit_code() == 1
         assert any("conflict" in f and "gh-pr-resolve-conflict" in f for f in result.findings)
 
     def test_contract_only_run_ignores_drift(self) -> None:
@@ -346,11 +374,11 @@ class TestAudit:
             remote_body="Completely different procedure.\n",
             checks="contract",
         )
-        assert result.exit_code == 0
+        assert result.exit_code() == 0
 
     def test_unreachable_repo_fails_the_audit(self) -> None:
         result = self._audit()
-        assert result.exit_code == 1
+        assert result.exit_code() == 1
         assert any("unreachable" in f for f in result.findings)
 
 
@@ -463,16 +491,13 @@ class TestMultiPluginMarketplace:
         assert [t.plugins for t in targets] == [("gh-extra", "gh-resolve")]
 
     def test_a_plugin_missing_from_the_remote_is_a_violation_even_when_a_sibling_matches(self) -> None:
-        target = Target("gh-resolve-skills", "dEitY719/gh-resolve-skills", ("gh-resolve", "gh-extra"))
-        manifest = {"name": "gh-resolve-skills", "plugins": [{"name": "gh-resolve"}]}
-        violations = check_manifest_contract(target, manifest)
+        violations = check_manifest_contract(_target(("gh-resolve", "gh-extra")), MANIFEST_OK)
         assert len(violations) == 1
         assert "gh-extra" in violations[0]
 
     def test_every_registered_plugin_present_is_clean(self) -> None:
-        target = Target("gh-resolve-skills", "dEitY719/gh-resolve-skills", ("gh-resolve", "gh-extra"))
-        manifest = {"name": "gh-resolve-skills", "plugins": [{"name": "gh-extra"}, {"name": "gh-resolve"}]}
-        assert check_manifest_contract(target, manifest) == []
+        manifest = {"name": MARKETPLACE, "plugins": [{"name": "gh-extra"}, {"name": "gh-resolve"}]}
+        assert check_manifest_contract(_target(("gh-resolve", "gh-extra")), manifest) == []
 
 
 class TestUnpairedIsNotSilent:
@@ -485,19 +510,9 @@ class TestUnpairedIsNotSilent:
     pairs — i.e. the dotfiles originals are still there to drift from.
     """
 
-    LOCAL = {
-        "gh-pr-resolve-conflict": {"SKILL.md": CONFLICT_BODY},
-        "gh-pr-resolve-outdated": {"SKILL.md": "Sync a clean base.\nNo conflicts expected.\nPush with lease.\n"},
-    }
-    MANIFEST = {"name": "gh-resolve-skills", "plugins": [{"name": "gh-resolve"}]}
-
-    def _audit(self, remote_skills: dict, local: dict | None = None) -> object:
-        source = _FakeSource(
-            {"dEitY719/gh-resolve-skills": self.MANIFEST},
-            {"dEitY719/gh-resolve-skills": remote_skills},
-        )
-        target = Target("gh-resolve-skills", "dEitY719/gh-resolve-skills", ("gh-resolve",))
-        return run_audit([target], self.LOCAL if local is None else local, source, checks="drift")
+    def _audit(self, remote_skills: dict, local: dict | None = None) -> AuditResult:
+        source = _FakeSource({REPO: MANIFEST_OK}, {REPO: remote_skills})
+        return run_audit([_target()], LOCAL_SKILLS if local is None else local, source, checks="drift")
 
     def test_unpaired_skill_beside_a_paired_sibling_fails_the_audit(self) -> None:
         result = self._audit(
@@ -506,29 +521,15 @@ class TestUnpairedIsNotSilent:
                 "outdated": {"SKILL.md": "Provision a Kubernetes cluster.\nApply the manifest.\n"},
             }
         )
-        assert result.exit_code == 1
+        assert result.exit_code() == 1
         assert any("outdated" in f and "unpaired" in f for f in result.findings)
 
     def test_a_wholly_unpaired_repo_stays_quiet(self) -> None:
         """Phase 4 deleted the originals — every skill is legitimately unpaired."""
         result = self._audit({"conflict": {"SKILL.md": CONFLICT_BODY}}, local={})
-        assert result.exit_code == 0
+        assert result.exit_code() == 0
         assert result.findings == []
         assert result.notes
-
-    def test_runner_up_is_tried_when_the_top_match_is_already_claimed(self) -> None:
-        """PR #1691 review, agy FOLLOW-UP: a claimed top match discarded the rest."""
-        pairs = {
-            p.remote_name: p.local_name
-            for p in pair_skills(
-                {
-                    "conflict": {"SKILL.md": CONFLICT_BODY},
-                    "outdated": {"SKILL.md": self.LOCAL["gh-pr-resolve-outdated"]["SKILL.md"]},
-                },
-                self.LOCAL,
-            )
-        }
-        assert pairs == {"conflict": "gh-pr-resolve-conflict", "outdated": "gh-pr-resolve-outdated"}
 
 
 class TestFailOnScope:
@@ -540,33 +541,37 @@ class TestFailOnScope:
     permanently red. `--fail-on` makes the intent explicit instead: contract
     breakage is always actionable and gates; drift is reported while the
     two-copy window lasts.
+
+    The gate is a property of the *caller*, not of the audit, so these drive
+    `AuditResult.exit_code(fail_on)` over one unchanged audit.
     """
 
-    MANIFEST_BAD = {"name": "gh-resolve-skills", "plugins": [{"name": "renamed"}]}
+    MANIFEST_BAD: dict = {"name": MARKETPLACE, "plugins": [{"name": "renamed"}]}
     LOCAL = {"gh-pr-resolve-conflict": {"SKILL.md": CONFLICT_BODY}}
 
-    def _audit(self, manifest: dict, remote: dict, fail_on: str) -> object:
-        source = _FakeSource({"dEitY719/gh-resolve-skills": manifest}, {"dEitY719/gh-resolve-skills": remote})
-        target = Target("gh-resolve-skills", "dEitY719/gh-resolve-skills", ("gh-resolve",))
-        return run_audit([target], self.LOCAL, source, fail_on=fail_on)
+    def _audit(self, manifest: dict) -> AuditResult:
+        """Audit a repo whose one skill has drifted, under `manifest`."""
+        source = _FakeSource({REPO: manifest}, {REPO: {"conflict": {"SKILL.md": DRIFTED_BODY}}})
+        return run_audit([_target()], self.LOCAL, source)
 
     def test_drift_alone_does_not_gate_under_fail_on_contract(self) -> None:
-        result = self._audit(
-            {"name": "gh-resolve-skills", "plugins": [{"name": "gh-resolve"}]},
-            {"conflict": {"SKILL.md": "Rebase onto base.\nResolve hunks by intent.\nPush with force.\n"}},
-            fail_on="contract",
-        )
-        assert result.findings, "drift must still be reported"
-        assert result.exit_code == 0
+        result = self._audit(MANIFEST_OK)
+        assert result.drift_findings, "drift must still be reported"
+        assert result.contract_findings == []
+        assert result.exit_code("contract") == 0
 
     def test_contract_breakage_gates_under_fail_on_contract(self) -> None:
-        result = self._audit(self.MANIFEST_BAD, {"conflict": {"SKILL.md": CONFLICT_BODY}}, fail_on="contract")
-        assert result.exit_code == 1
+        result = self._audit(self.MANIFEST_BAD)
+        assert result.contract_findings
+        assert result.exit_code("contract") == 1
 
     def test_fail_on_any_is_the_default_and_gates_on_drift(self) -> None:
-        result = self._audit(
-            {"name": "gh-resolve-skills", "plugins": [{"name": "gh-resolve"}]},
-            {"conflict": {"SKILL.md": "Rebase onto base.\nResolve hunks by intent.\nPush with force.\n"}},
-            fail_on="any",
-        )
-        assert result.exit_code == 1
+        result = self._audit(MANIFEST_OK)
+        assert result.exit_code() == 1
+        assert result.exit_code("any") == 1
+
+    def test_findings_lead_with_the_gating_half(self) -> None:
+        """`findings` recomposes the two lists; F-1 first, so a reader sees the
+        actionable half before the expected Phase 2-3 drift."""
+        result = self._audit(self.MANIFEST_BAD)
+        assert result.findings == result.contract_findings + result.drift_findings

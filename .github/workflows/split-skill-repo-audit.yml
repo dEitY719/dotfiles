@@ -25,6 +25,12 @@ name: split-skill-repo-audit
 # not turn the workflow permanently red. F-1 breakage still fails the job the
 # moment it appears. Phase 4 drains the drift half by deleting the originals,
 # after which every skill is legitimately unpaired and `--fail-on` can go.
+#
+# Be clear about what that costs while it lasts: NOTHING in the drift half
+# fails this job — not a drifted skill, and not the "unpaired beside a paired
+# sibling" finding either. Those reach humans only through the job summary
+# below. `mise run audit-split-repos` runs the same checker with the default
+# `--fail-on any`, and that is the invocation where drift actually gates.
 
 on:
   schedule:
@@ -40,12 +46,12 @@ on:
         options: [all, contract, drift]
   # A change to the registration SSOT is the one push worth auditing
   # immediately — it is exactly when a name can stop matching its remote.
-  # Only on main: a registration is not real until it is merged, and every
-  # other workflow here pins its branches the same way (ci.yml, test.yml).
+  # Only on main: a registration is not real until it is merged, every other
+  # workflow here pins its branches the same way (ci.yml, test.yml), and a
+  # topic branch editing a skill would otherwise fire a full clone audit of
+  # every split repo on every push (agy FOLLOW-UP). Drift becomes real when it
+  # lands on main, which is exactly what this filter watches.
   push:
-    # main only: a topic branch editing a skill would otherwise fire a
-    # 13-repo clone audit on every push (agy FOLLOW-UP). Drift becomes real
-    # when it lands on main, which is exactly what this filter watches.
     branches: [main]
     paths:
       - "claude/plugin/marketplaces.json"
@@ -93,8 +99,17 @@ jobs:
         env:
           CHECK: ${{ inputs.check || 'all' }}
         run: |
+          # `--fail-on contract` gates on the F-1 half, so it is incoherent
+          # with `--check drift` (which never runs that half) and the checker
+          # refuses the pair rather than exiting a silent 0. A drift-only run
+          # is only ever a manual dispatch — someone asking to see the drift
+          # half — so that one gates on what it actually ran.
+          FAIL_ON=contract
+          if [ "$CHECK" = "drift" ]; then
+            FAIL_ON=any
+          fi
           python3 scripts/maintenance/check_split_skill_repos.py \
-            --check "$CHECK" --fail-on contract | tee audit.log
+            --check "$CHECK" --fail-on "$FAIL_ON" | tee audit.log
 
       - name: Publish findings to the job summary
         if: always()

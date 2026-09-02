@@ -52,14 +52,15 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
 
 ### check_split_skill_repos.py
 - **목적**: #1410 으로 분리해 나간 스킬 레포가 등록값과 맞는지, 원본과 드리프트했는지 감시 (issue #1671)
-- **사용**: `python3 check_split_skill_repos.py [--check contract|drift|all] [--repo-root PATH] [--owner NAME] [--quiet]`
+- **사용**: `python3 check_split_skill_repos.py [--check contract|drift|all] [--fail-on any|contract] [--repo-root PATH] [--owner NAME] [--quiet]`
 - **요구사항**: Python stdlib 만 (외부 의존성 없음) + 네트워크 (`git clone --depth 1`)
 - **기능**:
   - 대상 레포를 `claude/plugin/{marketplaces,plugins}.json` 에서 유도 — 손으로 유지하는 표 없음 (NF-2)
   - F-1: 원격 `.claude-plugin/marketplace.json` 이 등록된 `<plugin>@<marketplace>` 를 실제로 제공하는지 검사
   - F-2: 분리본과 `claude/skills/` 원본을 SKILL.md + `references/` 합집합의 정규화 라인 집합으로 비교 — 네임스페이스 재작성·100줄 상한 분할은 오탐이 되지 않는다
   - 스킬 짝짓기는 이름이 아니라 내용 유사도로 하고, 짝을 못 찾으면 조용히 넘기지 않고 보고
-  - 위반/드리프트 1건 이상이면 종료 코드 1, 등록 SSOT 를 못 읽으면 2
+  - 발견은 항상 출력하고, 무엇이 실행을 실패시킬지는 `--fail-on` 이 정한다 — 기본 `any` 는 위반·드리프트 모두, `contract` 는 F-1 위반만 (Phase 2-3 드리프트가 워크플로를 상시 red 로 만들지 않게 스케줄 실행이 쓰는 값). 게이트 대상이 없으면 0, 있으면 1, 등록 SSOT 를 못 읽으면 2
+  - `--check drift --fail-on contract` 는 게이트할 절반을 아예 실행하지 않아 항상 0 이므로 거부한다
 - **회귀 가드**: `tests/integration/test_split_skill_repos.py` 가 순수 로직을 픽스처로 오프라인 검증 (네트워크는 `RemoteSource` 뒤에 격리 — NF-1)
 - **정기 실행**: `.github/workflows/split-skill-repo-audit.yml` (주 1회) / 수동은 `mise run audit-split-repos`
 
