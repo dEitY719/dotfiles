@@ -47,6 +47,48 @@
 
 ---
 
+## 전역 alias: `git sync` (issue #1721)
+
+모든 프로젝트에서 쓸 수 있는 전역 git alias. `origin/main` 과 `upstream/main` 을
+순서대로 로컬 `main` 에 병합한 뒤 `origin main` 으로 push 한다.
+
+- SSOT: `git/.gitconfig` 의 `[alias] sync`
+- 실행 파일: `git/scripts/git-sync.sh`
+- 설치: `./setup.sh` (`git/setup.sh` 의 `~/.gitconfig` include 모델로 자동 반영)
+
+```bash
+git sync        # origin/main + upstream/main 흡수 후 origin/main push
+git sync -h     # 도움말 (git 이 `--help` 를 alias 정의 출력으로 가로챈다)
+```
+
+동작 순서와 실패 지점:
+
+| 단계 | 명령 | 실패 시 |
+|---|---|---|
+| 1 | 사전 가드 (`upstream` 리모트, 현재 브랜치 = `main`) | 안내 후 종료 |
+| 2 | `git fetch upstream main` → `git fetch origin main` | 즉시 중단 |
+| 3 | `git merge --no-edit origin/main` | 지점 A — 멈추고 안내 |
+| 4 | `git merge --no-edit upstream/main` | 지점 B — 멈추고 안내 |
+| 5 | `git push origin main` | 지점 C — 멈추고 재실행 안내 |
+
+`origin` 을 먼저 병합한다. 여러 명이 동시에 실행할 때 같은 upstream 반영이
+서로 다른 merge commit 으로 중복 기록되는 것을 막는다.
+
+충돌은 자동으로 `merge --abort` 하지 않는다. 충돌 파일을 고쳐 `git add` 한 뒤
+`git sync` 를 다시 실행하면 `.git/MERGE_HEAD` 를 감지해 남은 단계를 이어서
+진행한다(멱등 재개).
+
+리모트/브랜치 이름이 다르면 `SYNC_INTERNAL_REMOTE`(기본 `origin`),
+`SYNC_EXTERNAL_REMOTE`(기본 `upstream`), `SYNC_BRANCH`(기본 `main`) 로 덮어쓴다.
+`upstream` 이 없는 프로젝트에서는 사전 가드가 안내 메시지만 남기고 종료한다.
+
+저장소-로컬 alias(`git config --local alias.sync`)는 git 우선순위상 이 전역
+alias 를 자동으로 덮으므로, 자체 `git sync` 를 가진 프로젝트와 충돌하지 않는다.
+
+회귀 테스트: `tests/bats/git/test_git_sync.bats`
+
+---
+
 ## 🚀 빠른 시작
 
 ### 파일 수정 후 커밋할 때
