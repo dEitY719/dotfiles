@@ -2,15 +2,23 @@
 """
 Codex Skill Description Budget Checker
 
-Reports the total length of skill description metadata in claude/skills/.
+Reports the total length of skill description metadata across every
+installed skill.
 Codex truncates skill descriptions when they exceed roughly 2% of the
 context window (about 5440 chars on current builds), which silently degrades
 trigger accuracy. Run this to detect when the SSOT is approaching that limit.
 
 Scope: Codex only (#1376, G-4/F-6)
-    The same SSOT also composes into OpenCode, Gemini (incl. `agy`), and
+    The same sources also compose into OpenCode, Gemini (incl. `agy`), and
     Hermes, but none has shown truncation — it's a Codex-specific loader
     behaviour. Not parameterized by --target until another target shows it.
+
+Source: since #1680 skills live in marketplace repos cloned side by side
+    under ${WORKSPACE_ROOT:-~/para/project/skills}; the default scan walks
+    <root>/<repo>/skills/<skill>/SKILL.md. `--skills-dir` overrides it with
+    a flat <dir>/<skill>/SKILL.md layout (used by tests and one-off checks).
+    The shell-side SSOT for the same rule is
+    shell-common/functions/skill_sources.sh.
 
 Usage:
     python3 check_codex_skills_budget.py [--budget N] [--top N] [--all]
@@ -29,8 +37,10 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 
@@ -108,17 +118,36 @@ def parse_skill_md(path: Path, fallback_name: str) -> tuple[str, str]:
     return (name, re.sub(r"\s+", " ", text).strip())
 
 
-def collect_rows(skills_dir: Path) -> list[tuple[str, int, Path]]:
+def collect_rows(skill_dirs: list[Path]) -> list[tuple[str, int, Path]]:
     rows: list[tuple[str, int, Path]] = []
-    for entry in sorted(skills_dir.iterdir()):
-        if not entry.is_dir() or entry.name.startswith("."):
-            continue
+    for entry in skill_dirs:
         skill_md = entry / "SKILL.md"
         if not skill_md.is_file():
             continue
         name, desc = parse_skill_md(skill_md, entry.name)
         rows.append((name, len(desc), entry))
     return rows
+
+
+def flat_skill_dirs(skills_dir: Path) -> list[Path]:
+    """<dir>/<skill>/SKILL.md — the `--skills-dir` layout."""
+    return sorted(e for e in skills_dir.iterdir() if e.is_dir() and not e.name.startswith("."))
+
+
+def workspace_skill_dirs(root: Path) -> list[Path]:
+    """<root>/<repo>/skills/<skill>/SKILL.md — the #1680 default layout.
+
+    A linked git worktree (`.git` is a file, not a directory) is skipped so
+    a feature checkout cannot double-count its clone's skills — the same
+    rule shell-common/functions/skill_sources.sh applies.
+    """
+    dirs: list[Path] = []
+    for skill_md in sorted(root.glob("*/skills/*/SKILL.md")):
+        repo = skill_md.parents[2]
+        if (repo / ".git").is_file():
+            continue
+        dirs.append(skill_md.parent)
+    return dirs
 
 
 def format_marker(length: int) -> str:
@@ -163,7 +192,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--skills-dir",
         type=Path,
         default=None,
-        help="skills directory (default: <dotfiles>/claude/skills)",
+        help=(
+            "flat skills directory (<dir>/<skill>/SKILL.md). Default: scan "
+            "${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/"
+        ),
     )
     parser.add_argument(
         "--per-skill-max",
@@ -181,11 +213,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
+    lister: Callable[[Path], list[Path]]
     if args.skills_dir is not None:
         skills_dir = args.skills_dir
+        lister = flat_skill_dirs
     else:
-        script_path = Path(__file__).resolve()
-        skills_dir = script_path.parents[2] / "claude" / "skills"
+        skills_dir = Path(os.environ.get("WORKSPACE_ROOT") or (Path.home() / "para/project/skills"))
+        lister = workspace_skill_dirs
 
     if not skills_dir.is_dir():
         print(
@@ -194,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    rows = collect_rows(skills_dir)
+    rows = collect_rows(lister(skills_dir))
     total_chars = sum(r[1] for r in rows)
     skill_count = len(rows)
     avg = total_chars / skill_count if skill_count else 0
@@ -235,8 +269,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{Colors.RED}! Total description chars ({total_chars}) exceed budget ({args.budget}).{Colors.RESET}")
         print(
             f"{Colors.YELLOW}  Suggestion: trim long descriptions to "
-            f"150-250 chars, or pin Codex to a subset via "
-            f"claude/skills/.codex-allowlist.{Colors.RESET}"
+            f"150-250 chars, or uninstall the marketplace plugins you "
+            f"do not actually use.{Colors.RESET}"
         )
 
     if over_limit or over_budget:

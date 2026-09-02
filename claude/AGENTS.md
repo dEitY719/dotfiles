@@ -7,31 +7,19 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 ---
 
-## Skills SSOT — 가장 자주 실수하는 부분
+## Skills 소스 — 가장 자주 실수하는 부분
 
-**`dotfiles/claude/skills/`** 가 Claude Code·Gemini·Codex 3개 도구 모두의 단일 SSOT다.
+**dotfiles 에는 더 이상 스킬이 없다 (#1680).** 73개 스킬은 #1410 으로 15개
+marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭제됐다.
+등록은 `claude/plugin/{marketplaces,plugins}.json`.
 
-### 도구별 연결 방식 (issue #791 — 4 CLI 모두 entry-level 합성으로 통일)
-
-| 도구 | 경로 | 연결 방식 | 신규 스킬 자동 반영 |
-|------|------|-----------|---------------------|
-| **Claude Code** (모든 모드) | `~/.claude*/skills/<name>` → `dotfiles/claude/skills/<name>` | entry-level symlink (#707, F-8) | ❌ setup 재실행 필요 |
-| **Codex** | `~/.codex/skills/<name>` → `dotfiles/claude/skills/<name>` | entry-level symlink (#707 → #791) + `.system` 로컬 보존 | ❌ setup 재실행 필요 |
-| **OpenCode** | `~/.config/opencode/skills/<name>` → `dotfiles/claude/skills/<name>` | entry-level symlink (#791) | ❌ setup 재실행 필요 |
-| **Gemini CLI** | `~/.gemini/skills/<name>` → `dotfiles/claude/skills/<name>` | entry-level symlink (#791) | ❌ setup 재실행 필요 |
-
-`~/.claude*/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`, `~/.gemini/skills/` 는 모두 **실제 디렉토리** 이며 child entry 만 `dotfiles/claude/skills/<name>` 로 가는 symlink. 이 4-way 일관성이 외부에서 추가된 symlink (마켓플레이스 `npx skills add`, 수동 링크 등) 를 모든 CLI 의 같은 디렉토리에 추가 entry 로 layer 할 여지를 만든다. SSOT 위치 자체는 변하지 않음.
-
-### 두 번째 소스: 로컬 워크스페이스 (issue #1652 / #1410 F-6)
-
-위 표의 SSOT 에 더해, 로컬에 나란히 clone 된 marketplace repo 의 스킬도 같은
-디렉토리에 **추가** entry 로 합성된다 — 소스 경로는
+유일한 소스는 로컬에 나란히 clone 된 marketplace repo 다 — 소스 경로는
 `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`.
 
 - 판별·열거 규칙 SSOT: `shell-common/functions/skill_sources.sh`
   (`_skill_workspace_root`, `_skill_workspace_dirs`) — 6개 하네스가 공유한다.
-- 순수 추가다. 이름이 겹치면 dotfiles `claude/skills/` 가 이기고 기존 링크는
-  재조준되지 않는다. dotfiles 소스 제거는 #1410 Phase 4 몫.
+- repo 끼리 이름이 겹치면 정렬 순서상 앞선 repo 가 이긴다 (재현 가능한 결정).
+  워크스페이스 밖을 가리키는 링크(마켓플레이스 오버레이 등)는 건드리지 않는다.
 - 자동 발견: repo 를 clone 하면 다음 setup 실행에서 그냥 잡힌다. `skills/` 가
   없는 repo, `SKILL.md` 가 없는 하위 디렉토리, 그리고 **linked git worktree**
   (`.git` 가 파일) 는 조용히 스킵된다 — worktree 는 `<repo>-<branch>` 가 정렬상
@@ -43,10 +31,10 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 
 | 도구 | 담당 스크립트 / 함수 | 트리거 |
 |------|----------------------|--------|
-| Claude Code (각 계정) | `shell-common/tools/integrations/claude.sh` → `_claude_account_setup_one()` + `_claude_compose_skills_dir()` (#707, F-8) | `./claude/setup.sh` |
+| Claude Code (각 계정) | `shell-common/tools/integrations/claude.sh` → `_claude_account_setup_one()` + `_claude_compose_workspace_skills()` (#707 F-8, #1680) | `./claude/setup.sh` |
 | OpenCode / Gemini | `scripts/setup-skills-ssot.sh` → `link_skills_compose()` (#791) | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
 | Codex | `scripts/setup-skills-ssot.sh` → `link_skills_individual_codex()` | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
-| 워크스페이스 소스 (#1652) | `shell-common/functions/skill_sources.sh` + `_claude_compose_workspace_skills()` (Claude Code) / `collect_skill_sources()` (나머지) | 위와 동일 |
+| 소스 열거 (#1652 / #1680) | `shell-common/functions/skill_sources.sh` + `_claude_compose_workspace_skills()` (Claude Code) / `collect_skill_sources()` (나머지) | 위와 동일 |
 
 ### 신규 스킬 추가 후 동기화
 
@@ -66,7 +54,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 ### 절대 하지 말 것
 
 - `~/.claude*/skills/`, `~/.gemini/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/` 직접 편집 금지
-- 스킬은 SSOT인 `dotfiles/claude/skills/` 또는 워크스페이스 repo(`~/para/project/skills/<repo>/skills/`)에서만 생성/수정 — 합성 대상 디렉토리에서 직접 만들지 말 것
+- 스킬은 워크스페이스 repo(`~/para/project/skills/<repo>/skills/`)에서만 생성/수정 — 합성 대상 디렉토리에서 직접 만들지 말 것
 - Codex `.system/` 디렉토리 삭제 금지 (Codex 내장 스킬)
 
 ---
@@ -77,7 +65,7 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 # 외부 PC (옵션 1, 3) — 멀티-계정
 ~/.claude-personal/settings.json         = dotfiles/claude/settings.json 의 실파일 복사 (#940, symlink 아님)
 ~/.claude-personal/statusline-command.sh -> dotfiles/claude/statusline-command.sh
-~/.claude-personal/skills/<name>         -> dotfiles/claude/skills/<name>   (entry symlink, #707)
+~/.claude-personal/skills/<name>         -> <workspace>/<repo>/skills/<name> (entry symlink, #707/#1680)
 ~/.claude-personal/docs                  -> dotfiles/claude/docs            (dir symlink, #575)
 ~/.claude-personal/plugins               -> ~/.claude-shared/plugins
 ~/.claude-personal/projects/GLOBAL/memory -> dotfiles/claude/global-memory
@@ -86,16 +74,16 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 # 사내 PC (옵션 2) — 단일 계정 (issue #571)
 ~/.claude/settings.json                  = gateway-cli setup 이 쓰는 실파일 (조직 LLM Gateway 도구 소유, 2026-08-18~)
 ~/.claude/statusline-command.sh          -> dotfiles/claude/statusline-command.sh
-~/.claude/skills/<name>                  -> dotfiles/claude/skills/<name>   (entry symlink, #707)
+~/.claude/skills/<name>                  -> <workspace>/<repo>/skills/<name> (entry symlink, #707/#1680)
 ~/.claude/docs                           -> dotfiles/claude/docs            (dir symlink)
 ~/.claude/plugins                        -> ~/.claude-shared/plugins
 ~/.claude/projects/GLOBAL/memory         -> dotfiles/claude/global-memory
 ~/.claude/CLAUDE.md                      -> dotfiles/claude/CLAUDE.md       (글로벌 지침, #1115)
 
 # 모든 환경 공통 (issue #791 — 4 CLI 모두 entry-level 합성)
-~/.codex/skills/<name>                   -> dotfiles/claude/skills/<name>   (entry symlink, #707 → #791)
-~/.config/opencode/skills/<name>         -> dotfiles/claude/skills/<name>   (entry symlink, #791)
-~/.gemini/skills/<name>                  -> dotfiles/claude/skills/<name>   (entry symlink, #791)
+~/.codex/skills/<name>                   -> <workspace>/<repo>/skills/<name> (entry symlink, #707 → #791)
+~/.config/opencode/skills/<name>         -> <workspace>/<repo>/skills/<name> (entry symlink, #791)
+~/.gemini/skills/<name>                  -> <workspace>/<repo>/skills/<name> (entry symlink, #791)
 ```
 
 `statusline-tokens.sh` (#1380) 은 계정 dir 로 링크하지 **않는다** — `statusline-command.sh` 가 자기 경로의 symlink 를 따라간 뒤 형제 파일로 source 하므로 SSOT 한 곳에만 있으면 직접 실행/symlink 경로 양쪽에서 해석된다. 없으면 세션 누적 토큰 세그먼트만 빠지고 나머지는 정상 렌더된다.
@@ -193,19 +181,20 @@ origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
 
 ## Skill 작성 규칙
 
-- SSOT: `dotfiles/claude/skills/<name>/SKILL.md`
+- SSOT: 해당 marketplace repo 의 `skills/<name>/SKILL.md` (#1680 이후 dotfiles 밖)
 - frontmatter: `name`, `description`, `allowed-tools` 필수
 - `name` 형식: `{namespace}:{action}` (e.g. `skill:check`, `gh:commit`)
 - SKILL.md ≤ 100줄; 상세 내용은 `references/`로 분리 (Progressive Disclosure)
 - `description:` — 단일행 또는 YAML `>-` 멀티라인 모두 허용
 - 실행 가능 helper 스크립트 (`.sh` 등) 는 `lib/` 에 둔다 (#699). `references/`
   는 markdown 전용 (paste-verbatim 또는 사람 읽기). 직접 호출 패턴:
-  `bash claude/skills/<name>/lib/<script>.sh`. 첫 사례:
+  `bash <repo>/skills/<name>/lib/<script>.sh`. 첫 사례:
   `gh-kanban-bootstrap` — 이전 `scripts/` 하위 진입점을 흡수해 단일 SSOT 로 통합.
 - `description:` 를 줄이거나 스킬을 리네임한 뒤에는 **트리거 정확도를 실측**한다
   (#1417). `skill:check` Check 16 은 길이만 재므로 "짧으면서 동시에 안 걸리는"
-  상태를 통과시킨다. 표본 스킬은 `claude/skills/<name>/evals/trigger-eval.json`
-  (20쿼리, should-trigger 10 / should-not 10) 을 가지며 수동 하네스
-  `claude/tools/run-trigger-eval.sh` 로 before/after 를 비교한다 — 계약은
-  `after >= before - 5%p`. 절차·격리 4종·모델 고정 근거:
-  `claude/skills/skill-check/references/trigger-eval-procedure.md`.
+  상태를 통과시킨다. 표본 스킬은 `<repo>/skills/<name>/evals/trigger-eval.json`
+  (20쿼리, should-trigger 10 / should-not 10) 을 가지며 계약은
+  `after >= before - 5%p`. 수동 하네스 `claude/tools/run-trigger-eval.sh` 는
+  #1680 이후 **포팅 대기** 상태다 — 입력(스킬·eval 세트·`run_eval.py`·비교
+  대상 git 이력)이 전부 marketplace repo 로 옮겨갔다. 절차·격리 4종·모델 고정 근거:
+  `authoring-skills` repo 의 `skills/skill-check/references/trigger-eval-procedure.md`.

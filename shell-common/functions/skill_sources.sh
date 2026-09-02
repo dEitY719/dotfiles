@@ -1,16 +1,16 @@
 #!/bin/sh
 # shell-common/functions/skill_sources.sh
-# Enumerate skill sources that live outside the dotfiles SSOT.
+# Enumerate the skill sources every harness composes from.
 #
-# SSOT for the "workspace" half of the skill-source list (issue #1652 —
-# the non-destructive half of #1410 F-6). Locally cloned marketplace
-# repos sit side by side under a single root:
+# SSOT for the skill-source list (issue #1652, completed by #1680 —
+# #1410 F-6/Phase 4). Locally cloned marketplace repos sit side by side
+# under a single root:
 #
 #     ${WORKSPACE_ROOT:-$HOME/para/project/skills}/<repo>/skills/<skill>/SKILL.md
 #
-# and every harness links them as additional entry-level symlinks on top
-# of the dotfiles `claude/skills/` entries it already composes. The
-# dotfiles tree stays a source — removing it is #1410 Phase 4, not this.
+# and every harness links them as entry-level symlinks. This workspace is
+# now the *only* source: #1680 deleted the dotfiles `claude/skills/` tree
+# after #1410 copied all 73 skills out into 15 marketplace repos.
 #
 # Two consumers share these helpers so their notion of "what counts as a
 # workspace skill" cannot drift apart:

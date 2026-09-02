@@ -52,7 +52,9 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 
 ### Claude Code Integration
 
-`claude/statusline-command.sh`, `claude/skills/`, and `claude/docs/` are symlinked into each account's Claude config dir; `claude/settings.json` is copied as a real file (not symlinked) so `/model` writes don't dirty the tracked SSOT. Full symlink-vs-copy scheme and rationale: `claude/AGENTS.md` → "Configuration Files".
+`claude/statusline-command.sh` and `claude/docs/` are symlinked into each account's Claude config dir; `claude/settings.json` is copied as a real file (not symlinked) so `/model` writes don't dirty the tracked SSOT. Full symlink-vs-copy scheme and rationale: `claude/AGENTS.md` → "Configuration Files".
+
+**Skills no longer live in this repo (#1680)** — the 73 skills moved to 15 standalone marketplace repos, registered in `claude/plugin/{marketplaces,plugins}.json`. The only skill source is now the workspace: repos cloned side by side under `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`. `shell-common/functions/skill_sources.sh` (`_skill_workspace_root` / `_skill_workspace_dirs`) is the enumeration SSOT; `scripts/setup-skills-ssot.sh` entry-level symlink-composes them into Codex / OpenCode / Gemini (agy inherits) / Hermes, and `_claude_compose_workspace_skills` (via `claude/setup.sh`) does the same for each Claude Code account.
 
 **Personal overrides (model, env vars)** — `claude/settings.local.json` is gitignored (#924). Create `settings.local.json` in your active Claude config directory for machine-specific settings:
 

@@ -52,15 +52,16 @@ run = [
 ]
 
 [tasks.lint-docs]
-description = "Docs 린터 (파일명 kebab-case #1027 + SHELL_COMMON 폴백 #1612)"
+description = "Docs 린터 (파일명 kebab-case #1027)"
 # adr/ + requirement/ 는 강제(FAIL), 나머지 docs/ 는 warn-only.
 # 레거시 위반 일괄 정리는 별도 이슈로 분리한다.
 # changelog fragment 검사(scripts/lint_changelog_fragments.sh) 중단(2026-09-02) —
 # 근거/재개 조건은 CLAUDE.md "변경 기록 (changelog)" 가 SSOT.
-# ${SHELL_COMMON} $HOME 폴백 규칙과 근거는 scripts/lint_shell_common_fallback.sh 헤더가 SSOT.
+# ${SHELL_COMMON} $HOME 폴백 린터(#1612)는 이 게이트에서 빠졌다 — 검사 대상인
+# 스킬 마크다운이 #1680 으로 marketplace repo 로 옮겨가 이 저장소에 남아 있지
+# 않다. 스크립트는 남아 있고 CLAUDE_SKILLS_DIR 로 해당 repo 를 가리켜 수동 실행한다.
 run = [
     "sh scripts/lint_docs_filenames.sh",
-    "sh scripts/lint_shell_common_fallback.sh",
 ]
 
 # ─── Test gate ───────────────────────────────────────────────────────

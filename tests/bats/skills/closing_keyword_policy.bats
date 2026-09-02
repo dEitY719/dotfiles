@@ -1,12 +1,16 @@
 #!/usr/bin/env bats
 # tests/bats/skills/closing_keyword_policy.bats
 # Verify the closing-keyword policy from issue #392:
-#   - skill (gh-commit / gh-pr) docs only generate Closes/Fixes
 #   - commit-msg hook (git/hooks/checks/closing_keyword_check.sh) rejects
 #     Refs / Resolves / See / References at the start of a footer line
 #   - hook accepts Closes / Fixes / no-footer
 #   - --no-verify escape works (covered indirectly: git itself skips the
 #     hook on --no-verify, so we only verify the hook returns 0/1 cleanly)
+#
+# #1680: the gh-commit / gh-pr skills moved out to their own marketplace
+# repos, so the four doc-guards asserting their templates only emit
+# Closes/Fixes were dropped — they belong in those repos now. The hook is
+# the half of the policy this repo still owns.
 
 load '../test_helper'
 
@@ -166,33 +170,4 @@ EOF
     run check_closing_keyword "$MSG_FILE"
     [ "$status" -eq 1 ]
     assert_output --partial "5:Refs #200"
-}
-
-# ─── Skill side: docs do not instruct skill to emit forbidden keywords ──
-
-@test "skill: gh-commit format doc has no 'Refs #' template/instruction" {
-    # Search the canonical skill doc — only Closes/Fixes should appear in
-    # template lines or rule lines. Old commit examples elsewhere may use
-    # Refs (history not rewritten), but THIS file is the skill SSOT.
-    run grep -nE '^[[:space:]]*Refs[[:space:]]+#' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-commit/references/commit-message-format.md"
-    [ "$status" -eq 1 ]
-}
-
-@test "skill: gh-commit format doc has no 'Resolves #' template" {
-    run grep -nE '^[[:space:]]*Resolves[[:space:]]+#' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-commit/references/commit-message-format.md"
-    [ "$status" -eq 1 ]
-}
-
-@test "skill: gh-pr body template has no 'Refs #' / 'Resolves #' template line" {
-    run grep -nE '^[[:space:]]*(Refs|Resolves)[[:space:]]+#' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr/references/pr-body-template.md"
-    [ "$status" -eq 1 ]
-}
-
-@test "skill: gh-commit format doc explicitly forbids the four keywords" {
-    run grep -E 'Refs.*Resolves.*See.*References|금지 키워드' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-commit/references/commit-message-format.md"
-    assert_success
 }

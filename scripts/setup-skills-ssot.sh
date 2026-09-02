@@ -1,15 +1,22 @@
 #!/bin/bash
 
-# scripts/setup-skills-ssot.sh: Skills SSOT 연결 설정
+# scripts/setup-skills-ssot.sh: Skills 워크스페이스 연결 설정
 #
-# PURPOSE: claude/skills/를 SSOT로 삼아 OpenCode·Codex·Gemini·Hermes에 연결
+# PURPOSE: 워크스페이스에 clone 된 marketplace repo 의 skills/ 를
+#          OpenCode·Codex·Gemini·Hermes 에 연결
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
+#
+# 소스는 워크스페이스 하나뿐이다 (issue #1680 — #1410 Phase 4 컷오버). 예전의
+# dotfiles `claude/skills/` SSOT 는 15개 marketplace repo 로 분리된 뒤 삭제됐고,
+# "무엇이 skill 소스인가" 의 SSOT 는 shell-common/functions/skill_sources.sh 다:
+#
+#     ${WORKSPACE_ROOT:-$HOME/para/project/skills}/<repo>/skills/<skill>/SKILL.md
 #
 # 연결 전략 (issue #791 / #1376 — 5 CLI 모두 entry-level 합성):
 #   - entry-level 합성 디렉토리 (#707 / #791 / #1376):
-#     ~/.config/opencode/skills/<skill>     → ~/dotfiles/claude/skills/<skill>
-#     ~/.gemini/skills/<skill>              → ~/dotfiles/claude/skills/<skill>
-#     ~/.hermes/skills/dotfiles/<skill>     → ~/dotfiles/claude/skills/<skill>
+#     ~/.config/opencode/skills/<skill>     → <workspace>/<repo>/skills/<skill>
+#     ~/.gemini/skills/<skill>              → <workspace>/<repo>/skills/<skill>
+#     ~/.hermes/skills/dotfiles/<skill>     → <workspace>/<repo>/skills/<skill>
 #
 #   - Hermes 예외 (#1376, NF-1): Hermes 는 다른 CLI 와 달리 ~/.hermes/skills/
 #     루트를 자체 hub/curator 가 능동적으로 관리한다 (.hub/, .bundled_manifest,
@@ -19,17 +26,11 @@
 #
 #   - Codex 전용 합성: .system 디렉토리는 로컬 보존
 #     ~/.codex/skills/.system                          ← local (codex managed)
-#     ~/.codex/skills/<custom-skill>                   → ~/dotfiles/claude/skills/<custom-skill>
-#
-#   - Codex 선택적 연결: claude/skills/.codex-allowlist 가 존재하고 비어 있지 않으면
-#     해당 파일에 나열된 skill 만 연결되고 나머지 SSOT skill 은 codex 관리 대상에서 제거됨.
-#     description 합계가 Codex 의 2% 컨텍스트 예산 (~5440자) 을 초과해 트렁케이션이
-#     발생하는 것을 막는 용도. 한 줄에 하나의 skill 디렉토리 이름, '#' 으로 시작하는
-#     주석과 빈 줄은 무시됨. 파일이 없거나 모두 비어 있으면 종전대로 전체 연결.
+#     ~/.codex/skills/<custom-skill>                   → <workspace>/<repo>/skills/<skill>
 #
 #   - 마이그레이션 (#791): 기존 opencode/gemini 의 디렉토리-단위 symlink 는
 #     entry-level 합성으로 변환된다. 사용자가 직접 만든 symlink (target 이
-#     SSOT 가 아닌 경우) 는 보존 + warn.
+#     관리 대상 밖이면서 살아 있는 경우) 는 보존 + warn.
 #
 # ~/.claude*/skills 는 claude/setup.sh 가 entry-level 합성 디렉토리로 관리 (#707, F-8).
 # 5 CLI 모두 동일 layout (Hermes 만 서브디렉토리 — 위 예외 참고) 이므로 외부에서
@@ -43,7 +44,6 @@
 
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
-SKILLS_SOURCE="${DOTFILES_ROOT}/claude/skills"
 
 # Load UX library
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
@@ -54,9 +54,9 @@ else
     exit 1
 fi
 
-# 워크스페이스 소스 판별/열거의 SSOT (issue #1652 / #1410 F-6). Claude Code
+# 소스 판별/열거의 SSOT (issue #1652 / #1410 F-6 → #1680). Claude Code
 # 계정 쪽(shell-common/tools/integrations/claude.sh)이 같은 파일을 읽으므로
-# "무엇이 워크스페이스 skill 인가" 규칙이 두 벌로 갈라지지 않는다.
+# "무엇이 skill 소스인가" 규칙이 두 벌로 갈라지지 않는다.
 SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 if [ -f "$SKILL_SOURCES_LIB" ]; then
     source "$SKILL_SOURCES_LIB"
@@ -72,7 +72,6 @@ log_warning() { ux_warning "$1"; }
 log_critical() { ux_error "$1"; exit 1; }
 
 CODEX_MANAGED_MARKER=".dotfiles-skill-source"
-CODEX_ALLOWLIST_FILE="${SKILLS_SOURCE}/.codex-allowlist"
 
 # --- Helper Functions ---
 
@@ -83,8 +82,7 @@ _realpath_or_self() {
     readlink -f "$1" 2>/dev/null || printf "%s" "$1"
 }
 
-SKILLS_SOURCE_REAL="$(_realpath_or_self "$SKILLS_SOURCE")"
-# 빈 문자열 = 워크스페이스 없음/너무 넓음 → dotfiles SSOT 단독 동작(종전과 동일).
+# 빈 문자열 = 워크스페이스 없음/너무 넓음 → 연결할 소스가 없다.
 WORKSPACE_ROOT_RESOLVED="$(_skill_workspace_root || true)"
 WORKSPACE_ROOT_REAL=""
 [ -n "$WORKSPACE_ROOT_RESOLVED" ] \
@@ -92,24 +90,14 @@ WORKSPACE_ROOT_REAL=""
 
 # 모든 skill 소스 디렉토리를 한 줄에 하나씩 표준출력으로 낸다.
 #
-# 소스는 두 곳 (issue #1652 / #1410 F-6):
-#   1. dotfiles SSOT     ${SKILLS_SOURCE}/<skill>/
-#   2. 워크스페이스 clone <root>/<repo>/skills/<skill>   (열거 규칙은 shell-common SSOT)
+# 소스는 워크스페이스 clone 한 곳뿐이다 (issue #1680):
+#   <root>/<repo>/skills/<skill>   (열거 규칙은 shell-common SSOT)
 #
-# dotfiles 를 먼저 내보내 이름 충돌 시 dotfiles 가 이긴다 — 이 이슈는 소스를
-# **추가**만 하므로(NF-1) 기존 링크가 다른 곳으로 재조준돼선 안 된다. 워크스페이스
-# repo 끼리 충돌하면 정렬 순서상 앞선 repo 가 이긴다(재현 가능한 결정).
-# 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
+# 워크스페이스 repo 끼리 이름이 겹치면 정렬 순서상 앞선 repo 가 이긴다
+# (재현 가능한 결정). 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
 collect_skill_sources() {
     local seen="|"
     local skill_path skill_name
-
-    for skill_path in "$SKILLS_SOURCE"/*/; do
-        [ -d "$skill_path" ] || continue
-        skill_name="$(basename "$skill_path")"
-        seen="${seen}${skill_name}|"
-        printf "%s\n" "$skill_path"
-    done
 
     [ -n "$WORKSPACE_ROOT_RESOLVED" ] || return 0
 
@@ -138,8 +126,7 @@ skill_source_is_managed() {
 
     [ -n "$path" ] || return 1
 
-    for root in "$SKILLS_SOURCE" "$SKILLS_SOURCE_REAL" \
-                "$WORKSPACE_ROOT_RESOLVED" "$WORKSPACE_ROOT_REAL"; do
+    for root in "$WORKSPACE_ROOT_RESOLVED" "$WORKSPACE_ROOT_REAL"; do
         [ -n "$root" ] || continue
         case "$path" in
             "$root"/*) return 0 ;;
@@ -164,42 +151,6 @@ skill_source_path_for() {
         fi
     done <<< "$SKILL_SOURCE_LIST"
 
-    return 1
-}
-
-# Read codex allowlist file and emit one skill name per line.
-# Strips comments (#...) and blank lines. Stdout is empty if no entries
-# were found, allowing callers to detect "no allowlist" via -z check.
-read_codex_allowlist() {
-    local file="${1:-$CODEX_ALLOWLIST_FILE}"
-    [ -f "$file" ] || return 0
-
-    awk '
-        {
-            sub(/#.*/, "")        # strip inline comments
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "")
-            if (length($0) == 0) next
-            print
-        }
-    ' "$file"
-}
-
-# Test whether a skill name is allowed.
-# Args: <skill_name> <allowlist_text>
-# Returns 0 if skill is allowed (allowlist empty OR skill listed), 1 otherwise.
-codex_skill_is_allowed() {
-    local skill="$1"
-    local allowlist="$2"
-
-    [ -z "$allowlist" ] && return 0
-
-    case "
-${allowlist}
-" in
-        *"
-${skill}
-"*) return 0 ;;
-    esac
     return 1
 }
 
@@ -242,22 +193,23 @@ collect_codex_homes() {
 # symlink 가 이후 같은 디렉토리에 추가 entry 를 layer할 수 있다.
 #
 # 마이그레이션 정책:
-#   - target 이 SSOT 로 향하는 dir-symlink → 해제 후 합성으로 전환.
-#   - target 이 사용자 symlink (다른 위치) → 보존 + warn (skip, 무손실).
+#   - target 이 관리 대상으로 향하는 dir-symlink → 해제 후 합성으로 전환.
+#   - target 이 끊어진 dir-symlink → 해제 후 합성으로 전환. #1680 이 삭제한
+#     dotfiles `claude/skills/` 를 가리키던 예전 링크가 정확히 이 모습이고,
+#     끊어진 symlink 에는 보존할 사용자 데이터가 없다.
+#   - target 이 사용자 symlink (살아 있고 관리 대상 밖) → 보존 + warn (skip, 무손실).
 #   - target 이 일반 파일 → 보존 + warn (사용자 데이터 가능성, skip).
 #   - target 이 일반 디렉토리 → 합성 시도 (기존 entry 보존).
 # Usage: link_skills_compose <tool_name> <target_dir>
 link_skills_compose() {
     local tool="$1"
     local target="$2"
-    local source_root
-    source_root="$(readlink -f "$SKILLS_SOURCE")"
 
     # 1. Migrate legacy directory-symlink → real directory.
     if [ -L "$target" ]; then
         local current_target
         current_target="$(readlink -f "$target" 2>/dev/null)"
-        if [ "$current_target" = "$source_root" ]; then
+        if [ ! -e "$target" ] || skill_source_is_managed "$current_target"; then
             log_info "[$tool] legacy dir-symlink 감지 — entry-level 합성으로 마이그레이션"
             rm -f "$target"
         else
@@ -325,61 +277,19 @@ link_skills_compose() {
     log_info "[$tool] skill 합성 완료: ${linked}개 신규, ${refreshed}개 갱신, ${skipped}개 보존, ${pruned}개 정리"
 }
 
-# 개별 skill을 SSOT에서 symlink (기존 디렉토리 보존)
-# Usage: link_skills_individual <tool_name> <target_dir>
-link_skills_individual() {
-    local tool="$1"
-    local target_dir="$2"
-    local linked=0
-    local skipped=0
-
-    while IFS= read -r skill_path; do
-        [ -n "$skill_path" ] || continue
-        local skill_name
-        skill_name="$(basename "$skill_path")"
-        local link_target="${target_dir}/${skill_name}"
-
-        if [ -L "$link_target" ]; then
-            local current_target
-            current_target="$(readlink -f "$link_target" 2>/dev/null)"
-            if [ "$current_target" = "$(readlink -f "$skill_path")" ]; then
-                skipped=$((skipped + 1))
-                continue
-            fi
-            rm "$link_target"
-        elif [ -d "$link_target" ]; then
-            # 실제 디렉토리면 건너뜀 (도구 내장 스킬 보존)
-            log_dim "[$tool] 내장 디렉토리 보존: $link_target"
-            skipped=$((skipped + 1))
-            continue
-        fi
-
-        ln -s "$skill_path" "$link_target" || {
-            log_error "[$tool] skill symlink 생성 실패: $link_target"
-            continue
-        }
-        linked=$((linked + 1))
-    done <<< "$SKILL_SOURCE_LIST"
-
-    log_info "[$tool] 개별 skill 연결 완료: ${linked}개 신규, ${skipped}개 기존 유지"
-}
-
 # Codex skills 연결:
 # - .system 은 로컬 보존
-# - custom skill 은 디렉토리 symlink (SSOT 직결)
+# - custom skill 은 디렉토리 symlink (소스 직결)
 # - 기존 copy/marker 레이아웃(.dotfiles-skill-source)은 자동 마이그레이션
-# - allowlist 가 존재하면 그 안에 명시된 skill 만 연결 (Codex 컨텍스트 예산 보호)
-# Usage: link_skills_individual_codex <target_dir> [allowlist_text]
+# Usage: link_skills_individual_codex <target_dir>
 link_skills_individual_codex() {
     local target_dir="$1"
-    local allowlist="${2:-}"
     local linked=0
     local unchanged=0
     local migrated=0
     local skipped=0
     local pruned=0
     local prune_skipped=0
-    local excluded=0
 
     mkdir -p "$target_dir"
 
@@ -389,11 +299,6 @@ link_skills_individual_codex() {
         local skill_name
         skill_name="$(basename "$skill_path")"
         if [ "$skill_name" = ".system" ]; then
-            continue
-        fi
-
-        if ! codex_skill_is_allowed "$skill_name" "$allowlist"; then
-            excluded=$((excluded + 1))
             continue
         fi
 
@@ -486,8 +391,7 @@ link_skills_individual_codex() {
             continue
         fi
 
-        if skill_source_path_for "$existing_name" >/dev/null && \
-           codex_skill_is_allowed "$existing_name" "$allowlist"; then
+        if skill_source_path_for "$existing_name" >/dev/null; then
             continue
         fi
 
@@ -521,38 +425,28 @@ link_skills_individual_codex() {
         prune_skipped=$((prune_skipped + 1))
     done
 
-    if [ -n "$allowlist" ]; then
-        log_info "[codex] skill 연결 완료: ${linked}개 신규, ${unchanged}개 유지, ${migrated}개 마이그레이션, ${skipped}개 보존, ${pruned}개 정리, ${prune_skipped}개 stale 보존, ${excluded}개 allowlist 제외"
-    else
-        log_info "[codex] skill 연결 완료: ${linked}개 신규, ${unchanged}개 유지, ${migrated}개 마이그레이션, ${skipped}개 보존, ${pruned}개 정리, ${prune_skipped}개 stale 보존"
-    fi
+    log_info "[codex] skill 연결 완료: ${linked}개 신규, ${unchanged}개 유지, ${migrated}개 마이그레이션, ${skipped}개 보존, ${pruned}개 정리, ${prune_skipped}개 stale 보존"
 }
 
 # --- Main ---
 
-ux_section "Skills SSOT 연결"
-
-# SSOT 존재 확인
-if [ ! -d "$SKILLS_SOURCE" ]; then
-    log_critical "SSOT 디렉토리가 없습니다: $SKILLS_SOURCE"
-fi
+ux_section "Skills 워크스페이스 연결"
 
 # 소스 목록을 한 번만 만들어 4개 CLI fan-out 이 공유한다 (issue #1652).
-# fan-out 로직 자체는 그대로다 — 달라진 건 enumeration 뿐 (F-4).
 SKILL_SOURCE_LIST="$(collect_skill_sources)"
 
-if [ -n "$WORKSPACE_ROOT_RESOLVED" ]; then
-    # -F, not a regex: a workspace root containing regex metacharacters
-    # (`+`, `[`, `.`) would otherwise mis-count. Anchoring is done by the
-    # case-glob below rather than by `^`, which -F does not honour.
-    workspace_skill_count=0
-    while IFS= read -r _src; do
-        case "$_src" in
-            "${WORKSPACE_ROOT_RESOLVED}"/*) workspace_skill_count=$((workspace_skill_count + 1)) ;;
-        esac
-    done <<< "$SKILL_SOURCE_LIST"
-    log_info "[workspace] ${workspace_skill_count}개 skill 합류 (루트: $WORKSPACE_ROOT_RESOLVED)"
+# 소스가 하나도 없으면 아무것도 하지 않고 끝낸다. 그냥 진행하면 아래 fan-out 의
+# stale prune 이 "이 이름은 더 이상 소스가 아니다" 라고 판단해 이미 합성된 링크를
+# 전부 지운다 — 워크스페이스를 아직 clone 하지 않은 PC 에서 setup 한 번으로 모든
+# 하네스의 skill 이 사라지는 시나리오다 (#1680).
+if [ -z "$SKILL_SOURCE_LIST" ]; then
+    log_warning "skill 소스가 없습니다 — 합성을 건너뜁니다 (루트: ${WORKSPACE_ROOT_RESOLVED:-<미설정>})"
+    log_info "marketplace repo 를 \${WORKSPACE_ROOT:-\$HOME/para/project/skills} 아래에 clone 한 뒤 다시 실행하세요."
+    exit 0
 fi
+
+workspace_skill_count="$(printf '%s\n' "$SKILL_SOURCE_LIST" | grep -c .)"
+log_info "[workspace] ${workspace_skill_count}개 skill 발견 (루트: $WORKSPACE_ROOT_RESOLVED)"
 
 # 1. OpenCode: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills"
@@ -562,30 +456,24 @@ else
     link_skills_compose "opencode" "$OPENCODE_SKILLS"
 fi
 
-# 2. Codex: .system 보존 + custom skill 디렉토리 symlink (선택적 allowlist 적용)
+# 2. Codex: .system 보존 + custom skill 디렉토리 symlink
 CODEX_HOME_LIST="$(collect_codex_homes)"
 if [ -z "$CODEX_HOME_LIST" ]; then
     log_warning "Codex 설정 디렉토리가 없습니다. 건너뜁니다: ~/.codex 또는 ~/.config/codex"
 else
-    CODEX_ALLOWLIST_TEXT="$(read_codex_allowlist "$CODEX_ALLOWLIST_FILE")"
-    if [ -n "$CODEX_ALLOWLIST_TEXT" ]; then
-        codex_allowlist_count="$(printf '%s\n' "$CODEX_ALLOWLIST_TEXT" | grep -c .)"
-        log_info "[codex] allowlist 적용: ${codex_allowlist_count}개 skill (출처: $CODEX_ALLOWLIST_FILE)"
-    fi
-
     while IFS= read -r codex_home; do
         [ -n "$codex_home" ] || continue
 
         CODEX_SKILLS="${codex_home}/skills"
         codex_can_manage=1
 
-        # 기존에 전체 dir symlink였다면 해제 후 codex 전용 방식으로 마이그레이션
+        # 기존에 전체 dir symlink였다면 해제 후 codex 전용 방식으로 마이그레이션.
+        # 끊어진 링크(=#1680 이 삭제한 dotfiles SSOT 를 가리키던 예전 링크)도
+        # 같은 취급 — 보존할 사용자 데이터가 없다.
         if [ -L "$CODEX_SKILLS" ]; then
             codex_link_target="$(readlink -f "$CODEX_SKILLS" 2>/dev/null)"
-            if [ "$codex_link_target" = "$(readlink -f "$SKILLS_SOURCE")" ]; then
-                if [ -e "$CODEX_SKILLS" ] || [ -L "$CODEX_SKILLS" ]; then
-                    rm -f "$CODEX_SKILLS"
-                fi
+            if [ ! -e "$CODEX_SKILLS" ] || skill_source_is_managed "$codex_link_target"; then
+                rm -f "$CODEX_SKILLS"
             else
                 log_warning "Codex skills 경로가 사용자 symlink입니다. 건너뜁니다: $CODEX_SKILLS"
                 codex_can_manage=0
@@ -594,7 +482,7 @@ else
 
         if [ "$codex_can_manage" -eq 1 ]; then
             mkdir -p "$CODEX_SKILLS"
-            link_skills_individual_codex "$CODEX_SKILLS" "$CODEX_ALLOWLIST_TEXT"
+            link_skills_individual_codex "$CODEX_SKILLS"
         fi
     done <<< "$CODEX_HOME_LIST"
 fi
@@ -619,7 +507,7 @@ fi
 
 # --- Verify ---
 
-ux_section "Skills SSOT 연결 확인"
+ux_section "Skills 워크스페이스 연결 확인"
 
 verify_link() {
     local tool="$1"
@@ -658,4 +546,4 @@ fi
 [ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "compose"
 [ -d "${HOME}/.hermes" ] && verify_link "hermes" "$HERMES_SKILLS" "compose"
 
-ux_success "Skills SSOT 연결 완료"
+ux_success "Skills 워크스페이스 연결 완료"

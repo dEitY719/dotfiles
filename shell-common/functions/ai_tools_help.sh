@@ -83,7 +83,7 @@ _claude_help_rows_statusline() {
 
 _claude_help_rows_skills() {
     ux_table_row "claude-skills" "List available Claude Code skills" ""
-    ux_info "Skills location: ${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills/"
+    ux_info "Skills location: ${CLAUDE_SKILLS_PATH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills}/"
 }
 
 _claude_help_rows_plugin() {
@@ -262,7 +262,9 @@ puts desc
 }
 
 get_claude_skills() {
-    local skills_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
+    # #1680: skills live in marketplace repos now; the composed harness
+    # directory is the one place a shell can enumerate them.
+    local skills_dir="${CLAUDE_SKILLS_PATH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills}"
     local skill_path skill_name skill_md yaml_name yaml_desc
 
     # Check if skills directory exists

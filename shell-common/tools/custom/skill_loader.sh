@@ -11,7 +11,7 @@ source "$(dirname "$0")/init.sh" || exit 1
 
 main() {
     # Get skills directory (fallback if not set globally)
-    local skills_dir="${CLAUDE_SKILLS_PATH:-${DOTFILES_ROOT}/claude/skills}"
+    local skills_dir="${CLAUDE_SKILLS_PATH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills}"
 
     # Show help if no arguments
     if [ -z "$1" ]; then

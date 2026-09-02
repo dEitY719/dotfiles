@@ -1,9 +1,13 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_approve_board_sync.bats
-# Verify the Step 4.5 promotion into `Approved` documented in
-#   claude/skills/gh-pr-approve/SKILL.md                        (Step 4.5)
-#   claude/skills/gh-pr-approve/references/board-approved-sync.sh.md
+# Verify the Step 4.5 promotion into `Approved`.
 # Source-of-truth fixture: _fixtures/gh_pr_approve_board_sync.sh.
+#
+# #1680: the gh-pr-approve / gh-pr-reply skills moved out to their own
+# marketplace repos, so the three doc-guards that grepped
+# claude/skills/** were dropped and belong in that repo now. The fixture
+# below is therefore no longer pinned to a SKILL.md — it stands alone as
+# the behavioural contract.
 #
 # Issue #1350: ownership of the `Approved` column moved here from
 # gh:pr-reply Step 8 (deleted). Cases:
@@ -12,9 +16,6 @@
 #   3. bypass does not leak to caller    → prefix form scoping contract
 #   4. helper rc=2                       → soft-fail WARN, rc=0
 #   5. --only-from "Backlog,In progress,In review" guard on every call
-#   6. doc-guard: gh:pr-reply carries no Step 8 auto-approve any more
-#   7. doc-guard: gh:pr-approve documents the Step 4.5 promotion
-#   8. doc-guard: no OTHER skill promotes to Approved (the invariant)
 
 load '../test_helper'
 
@@ -86,38 +87,4 @@ teardown() {
     gh_pr_approve_board_sync_step45 1349 0 owner/repo >/dev/null 2>&1
     gh_pr_approve_board_sync_step45 1349 1 owner/repo >/dev/null 2>&1
     [ "$(grep -c -- '--repo owner/repo' "$FAKE_HELPER_LOG")" = "2" ]
-}
-
-@test "issue #1350 doc-guard: gh:pr-reply no longer auto-promotes to Approved" {
-    local reply_dir="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-reply"
-    [ ! -e "${reply_dir}/references/auto-approve.md" ]
-    ! grep -rq 'STEP8_OUTCOME' "$reply_dir"
-    ! grep -rq 'GH_PR_REPLY_AUTO_APPROVE_REPOS' "$reply_dir"
-}
-
-@test "issue #1350 doc-guard: gh:pr-approve is the only skill promoting to Approved" {
-    # The invariant, not just the #1349 regression: no skill other than
-    # gh:pr-approve may carry an `_gh_project_status_sync pr … "Approved"`
-    # call. Catches Step 8 reappearing anywhere, not only in gh:pr-reply.
-    # (`.*` — not `[^\n]*`, which in ERE means "not backslash, not n".)
-    run grep -rlE '_gh_project_status_sync[[:space:]]+pr.*"Approved"' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills"
-    assert_success
-    while IFS= read -r hit; do
-        [ -n "$hit" ] || continue
-        case "$hit" in
-        */claude/skills/gh-pr-approve/*) ;;
-        *) fail "Approved promotion found outside gh:pr-approve: $hit" ;;
-        esac
-    done <<<"$output"
-}
-
-@test "issue #1350 doc-guard: gh:pr-approve documents the Step 4.5 promotion" {
-    local approve_dir="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-approve"
-    [ -r "${approve_dir}/references/board-approved-sync.sh.md" ]
-    grep -q 'board-approved-sync.sh.md' "${approve_dir}/SKILL.md"
-    grep -q '_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS=1' \
-        "${approve_dir}/references/board-approved-sync.sh.md"
-    grep -q -- '--only-from "Backlog,In progress,In review"' \
-        "${approve_dir}/references/board-approved-sync.sh.md"
 }

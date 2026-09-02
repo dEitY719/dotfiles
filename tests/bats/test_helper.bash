@@ -91,7 +91,9 @@ setup_isolated_dotfiles_root() {
     cp "$real_root/claude/setup.sh" "$iso_root/claude/setup.sh"
     ln -s "$real_root/claude/statusline-command.sh"  "$iso_root/claude/statusline-command.sh"
 
-    mkdir -p "$iso_root/claude/skills" "$iso_root/claude/docs" "$iso_root/claude/global-memory" \
+    # No claude/skills: #1680 moved every skill into its own marketplace repo,
+    # and the harness dirs are composed from ${WORKSPACE_ROOT} instead.
+    mkdir -p "$iso_root/claude/docs" "$iso_root/claude/global-memory" \
         "$iso_root/claude/workflows"
     cp "$real_root/claude/CLAUDE.md" "$iso_root/claude/CLAUDE.md"
 

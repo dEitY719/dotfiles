@@ -16,6 +16,15 @@
 # Fail-closed is the whole point: "no label" must never be reachable from
 # "everything passed", and "a lane ran but said nothing parseable" must never
 # be promoted to a pass.
+#
+# #1680: devx-pr-review-all moved out to its own marketplace repo, so the
+# seven doc-guards that pinned its SKILL.md / review-verdict-label.md to
+# these helpers' call shapes (Step 3.5 ordering, lane_block arguments, the
+# trusted-login wiring, and the #1636 label-ownership split) were dropped —
+# they belong in that repo now. The helpers in
+# shell-common/functions/devx_pr_review_all.sh remain this repo's code and
+# stay fully covered below; what is no longer checked here is that the skill
+# prose actually calls them.
 load '../test_helper'
 
 setup() {
@@ -676,8 +685,8 @@ Verdict: LGTM
 EOF
 }
 
-# The Step 5 call site from
-# claude/skills/devx-pr-review-all/references/review-verdict-label.md, with
+# The Step 5 call site the skill runs (its SSOT doc moved out of this repo
+# in #1680), with
 # `lane_ran` reduced to a fixed two-of-four so the other two lanes exercise
 # the skipped-lane invariant (they contribute no line at all).
 _two_lane_body() {
@@ -1021,48 +1030,6 @@ _apply_stub() {
     unset GH_HOST
 }
 
-# The whole point of a shared helper: the SKILL step must CALL it, not
-# paraphrase the delete-then-add dance into prose an LLM can skip (#1524's
-# lesson, applied to the producer side).
-@test "doc-guard: devx:pr-review-all Step 3.5 calls the shared apply helper" {
-    local _skill="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    run grep -qF -- 'devx_pr_review_all_apply_label' "$_skill"
-    assert_success
-    run grep -qF -- 'Step 3.5' "$_skill"
-    assert_success
-}
-
-# Ordering is load-bearing: read the head sha BEFORE Step 4 pushes, or every
-# lane misses on the post-simplify sha and the gate silently labels nothing.
-@test "doc-guard: Step 3.5 is documented as running before the push" {
-    run grep -q 'before Step 4' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    assert_success
-}
-
-# The producer must pass the sha — omitting it is the stale-verdict hole —
-# and, since #1639, the trusted login too: without it the harvester would
-# accept a forged marker from any commenter.
-@test "doc-guard: the SKILL passes head_sha and the trusted login to lane_block" {
-    run grep -qF -- 'devx_pr_review_all_lane_block "$ai" "$head_sha" "$ME"' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    assert_success
-}
-
-# #1639: the runnable Step 3.5 block must resolve a trusted login and pass it
-# down. Asserted positively (the env var + the call shape above) rather than by
-# grepping for the removed `--jq` body extraction, which prose legitimately
-# still mentions when explaining why it went away.
-@test "doc-guard (#1639): Step 3.5's reference block resolves the trusted login" {
-    run grep -qF -- 'DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
-    assert_success
-
-    run grep -qF -- 'DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    assert_success
-}
-
 # ---------------------------------------------------------------------------
 # devx_pr_review_all_write_label — the shared, verdict-free write (#1636)
 # ---------------------------------------------------------------------------
@@ -1381,37 +1348,4 @@ _apply_stub() {
     assert_output --partial '[OK] PR #7: every lane non-blocking (2 lane(s))'
     assert_output --partial 'cleared'
     refute_output --partial '[WARN]'
-}
-
-# ---------------------------------------------------------------------------
-# #1636 doc guards — the label-ownership split must be written down
-# ---------------------------------------------------------------------------
-
-@test "doc-guard (#1636): the SSOT names gh:pr-reply as the review-passed producer" {
-    local _producer="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
-    run grep -qF -- '#1636' "$_producer"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_apply_review_passed' "$_producer"
-    assert_success
-    run grep -qF -- 'devx_pr_review_all_write_label' "$_producer"
-    assert_success
-}
-
-# A safety-principle change gets documented loudly, not buried (#1636).
-@test "doc-guard (#1636): the SSOT spells out the NF-2 relaxation and its rationale" {
-    local _producer="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
-    run grep -qF -- 'NF-2' "$_producer"
-    assert_success
-    run grep -q 'relaxation' "$_producer"
-    assert_success
-    run grep -qF -- 'never writes' "$_producer"
-    assert_success
-}
-
-@test "doc-guard (#1636): devx:pr-review-all's SKILL.md disclaims review-passed" {
-    local _skill="${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    run grep -qF -- 'never writes' "$_skill"
-    assert_success
-    run grep -qF -- 'gh:pr-reply' "$_skill"
-    assert_success
 }

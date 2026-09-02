@@ -4,11 +4,10 @@
 # target filter (#1524).
 #
 # The filter used to exist twice: as real `jq` in the cron dispatcher and as
-# English prose in `claude/skills/gh-pr-merge-train/SKILL.md`. The prose half
-# was executed by an LLM, which could skip it — and did, merging PR #1522
-# inside the quiet period. This suite covers the one shared implementation both
-# call sites now run, plus a drift guard on the skill doc so a future edit
-# cannot quietly turn the invocation back into prose.
+# English prose in the gh-pr-merge-train SKILL.md. The prose half was executed
+# by an LLM, which could skip it — and did, merging PR #1522 inside the quiet
+# period. This suite covers the one shared implementation both call sites now
+# run. The drift guard on the skill doc left with the skill itself (#1680).
 #
 # No PATH stubs: the function is pure over stdin JSON plus a caller-supplied
 # `--now`, which is exactly why `--now` is required rather than defaulted to
@@ -17,8 +16,6 @@
 load '../test_helper'
 
 HELPER="${DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
-TRAIN_SKILL="${DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/SKILL.md"
-TRAIN_ORDERING="${DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/ordering.md"
 
 setup() {
     # A fixed clock, not `date +%s`: every fixture stamp below is derived from
@@ -331,72 +328,19 @@ _kept_numbers() {
 }
 
 # ---------------------------------------------------------------------------
-# Drift guard — the skill must CALL the filter, not describe it
+# Drift guard — REMOVED (#1680)
 # ---------------------------------------------------------------------------
 #
-# This is the actual fix issue #1524 is about. Reverting the SKILL.md Step 2
-# block to bare prose ("drop every PR updated within the last 11 minutes")
-# reintroduces the bug without touching a line of shell, so it has to fail
-# here instead of drifting silently. Same spirit as the fixture-mirror tests
-# that pin doc/code correspondence elsewhere in this suite.
-
-@test "gh_pr_merge_train: the merge-train SKILL.md invokes the shared filter" {
-    run grep -qF -- "_gh_pr_merge_train_filter_targets" "${TRAIN_SKILL}"
-    assert_success
-}
-
-@test "gh_pr_merge_train: the merge-train SKILL.md sources the shared helper" {
-    run grep -qF -- "functions/gh_pr_merge_train.sh" "${TRAIN_SKILL}"
-    assert_success
-}
-
-@test "gh_pr_merge_train: ordering.md names the shared filter, not a parallel one" {
-    run grep -qF -- "_gh_pr_merge_train_filter_targets" "${TRAIN_ORDERING}"
-    assert_success
-}
-
-# ordering.md D-6 promises the quiet period is a backstop for a session that
-# died before removing the label. That promise is only true because the hard
-# skip expires, so the doc has to name the function that expires it.
-@test "gh_pr_merge_train: ordering.md names the staleness window function" {
-    run grep -qF -- "_gh_pr_merge_train_reply_pending_stale_minutes" "${TRAIN_ORDERING}"
-    assert_success
-}
-
-# The other half of the same wedge: the label must come off on EVERY exit path
-# of gh:pr-reply, so both the Step 2.5 early exit and Step 6 have to point at
-# the one removal block (PR #1545 review, agy BLOCKER).
-@test "gh_pr_merge_train: gh-pr-reply removes reply-pending on both exit paths" {
-    local _skill="${DOTFILES_ROOT}/claude/skills/gh-pr-reply/SKILL.md"
-    local _refs
-    _refs=$(grep -cF -- "reply-pending-label-removal.sh.md" "${_skill}")
-    [ "${_refs}" -ge 2 ] \
-        || fail "gh-pr-reply SKILL.md cites the removal block ${_refs}x; both Step 2.5 and Step 6 must"
-}
-
-# 404 is the ordinary inline-run outcome, not a failure — reporting it as WARN
-# is what buried real auth/network failures in routine noise.
-@test "gh_pr_merge_train: the removal block reports a 404 as OK, not WARN" {
-    run grep -qF -- 'HTTP 404' \
-        "${DOTFILES_ROOT}/claude/skills/gh-pr-reply/references/reply-pending-label-removal.sh.md"
-    assert_success
-}
-
-@test "gh_pr_merge_train: the reply-pending label name is spelled the same in all four places" {
-    local _f
-    for _f in "${HELPER}" \
-        "${TRAIN_ORDERING}" \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/reply-pending-label.sh.md" \
-        "${DOTFILES_ROOT}/claude/skills/gh-pr-reply/references/reply-pending-label-removal.sh.md"; do
-        grep -qF -- "reply-pending" "${_f}" || fail "reply-pending not found in ${_f}"
-    done
-}
+# The guards that pinned gh-pr-merge-train / gh-pr-reply / devx-pr-review-all
+# prose to this helper moved out with those skills to their own marketplace
+# repos. The shell SSOT below is still the one both call sites run, but nothing
+# in this repo now pins the skill wiring to it.
 
 # ---------------------------------------------------------------------------
 # The two verdict-label predicates (#1564) — same single-PR shape as the
 # reply-pending sibling above. The gate that consumes them is a queue-level
-# step, NOT another clause in the array filter: see
-# claude/skills/gh-pr-merge-train/references/review-verdict-gate.md.
+# step, NOT another clause in the array filter (the gh-pr-merge-train
+# review-verdict-gate.md that documents it left this repo with #1680).
 # ---------------------------------------------------------------------------
 
 _has_blocked() {

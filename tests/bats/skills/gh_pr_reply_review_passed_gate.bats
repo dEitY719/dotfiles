@@ -1,11 +1,9 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_reply_review_passed_gate.bats
-# Issue #1636 — gh:pr-reply Step 6's `review-passed` gate, end to end:
-#   claude/skills/gh-pr-reply/references/review-passed-gate.md   (procedure SSOT)
-#   claude/skills/gh-pr-reply/references/verdict-label-removal.sh.md
-#   claude/skills/gh-pr-reply/references/final-summary.md
-#   claude/skills/gh-pr-reply/references/constraints.md
+# Issue #1636 — gh:pr-reply Step 6's `review-passed` gate, end to end.
 # Source-of-truth fixture: _fixtures/gh_pr_reply_review_passed_gate.sh
+# (the skill's SKILL.md / references/ left this repo with #1680, so the fixture
+# is no longer pinned to them)
 #
 # Supersedes gh_pr_reply_targeted_rereview.bats (#1616), whose subject — a
 # scoped `gh:pr-review` re-call that had to return a non-blocking verdict
@@ -33,7 +31,6 @@ FIXTURE='tests/bats/skills/_fixtures/gh_pr_reply_review_passed_gate.sh'
 
 setup() {
     setup_isolated_home
-    SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-reply"
     GH_LOG="${BATS_TEST_TMPDIR}/gh.log"
     : >"$GH_LOG"
     export GH_LOG
@@ -367,143 +364,18 @@ codex:BLOCKER:ACCEPT
 }
 
 # ---------------------------------------------------------------------
-# Doc guards — the fixture is only trustworthy while the docs agree
+# Doc guards — only the shell SSOT ones survive (#1680)
 # ---------------------------------------------------------------------
+#
+# gh-pr-reply's SKILL.md and references/ (review-passed-gate.md,
+# verdict-label-removal.sh.md, final-summary.md, constraints.md,
+# comment-fetching.md), and devx-pr-review-all's label-lifecycle SSOT, moved
+# out to their own marketplace repos, so the guards that pinned the fixture
+# above to that prose belong there. What is left below pins the invalidation
+# SSOT in shell-common/functions/gh_pr_edit_safe.sh. The fixture mirror stays
+# as real, runnable behaviour — it is simply no longer pinned to any doc in
+# this repo.
 
-@test "doc-guard: review-passed-gate.md exists and names the gate functions" {
-    run grep -qF -- '_gh_pr_reply_review_passed_gate' \
-        "${SKILL_DIR}/references/review-passed-gate.md"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_origin_line' \
-        "${SKILL_DIR}/references/review-passed-gate.md"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_apply_review_passed' \
-        "${SKILL_DIR}/references/review-passed-gate.md"
-    assert_success
-}
-
-@test "doc-guard (PR #1637 review): the gate doc documents the origin ledger" {
-    local _d="${SKILL_DIR}/references/review-passed-gate.md"
-    run grep -qF -- 'pr-reply-origins' "$_d"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_history_origins' "$_d"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_origins_merge' "$_d"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_post_origins_ledger' "$_d"
-    assert_success
-}
-
-@test "doc-guard (PR #1637 review): the gate doc documents the external-review evidence" {
-    local _d="${SKILL_DIR}/references/review-passed-gate.md"
-    run grep -qF -- '_gh_pr_reply_history_has_review' "$_d"
-    assert_success
-    run grep -qF -- 'hold=no-external-review' "$_d"
-    assert_success
-}
-
-@test "doc-guard (PR #1637 review): SKILL.md Step 6 recovers the origin history" {
-    run grep -qF -- '_gh_pr_reply_history_origins' "${SKILL_DIR}/SKILL.md"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_post_origins_ledger' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-# #1639: both readers must be documented as login-scoped, and the escape
-# hatch for a split-identity deployment has to be named somewhere runnable.
-@test "doc-guard (#1639): the gate doc and SKILL.md pass a trusted login" {
-    local _d="${SKILL_DIR}/references/review-passed-gate.md"
-    run grep -qF -- 'GH_PR_REPLY_TRUSTED_LOGIN' "$_d"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_history_origins "$ME"' "$_d"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_history_has_review "$ME"' "$_d"
-    assert_success
-
-    run grep -qF -- 'GH_PR_REPLY_TRUSTED_LOGIN' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard (#1639): comment-fetching.md warns the raw array must survive" {
-    run grep -qF -- '#1639' "${SKILL_DIR}/references/comment-fetching.md"
-    assert_success
-    run grep -qF -- 'user.login' "${SKILL_DIR}/references/comment-fetching.md"
-    assert_success
-}
-
-@test "doc-guard: the gate doc routes the label through the shared writer" {
-    run grep -qF -- 'devx_pr_review_all_write_label' \
-        "${SKILL_DIR}/references/review-passed-gate.md"
-    assert_success
-}
-
-@test "doc-guard: the gate doc forbids fabricating a verdict token" {
-    # The one shortcut #1636 rules out: feeding a synthetic `lgtm` through
-    # devx_pr_review_all_apply_label to dress this skill's judgment up as a
-    # reviewer CLI's opinion.
-    run grep -qF -- 'devx_pr_review_all_apply_label' \
-        "${SKILL_DIR}/references/review-passed-gate.md"
-    assert_success
-    run grep -q '을 쓰지 않는다' "${SKILL_DIR}/references/review-passed-gate.md"
-    assert_success
-}
-
-@test "doc-guard: the #1616 targeted-rereview doc is gone, not left contradicting" {
-    [ ! -e "${SKILL_DIR}/references/targeted-rereview.md" ] ||
-        fail 'targeted-rereview.md still exists — it documents a lane #1636 removed'
-}
-
-# The relaxation is a safety-principle change; this repo documents those
-# loudly. A silent deletion of the old NF-2 bullet would be the failure mode.
-@test "doc-guard: constraints.md states the NF-2 relaxation, its scope and its reason" {
-    local _c="${SKILL_DIR}/references/constraints.md"
-    run grep -qF -- 'NF-2' "$_c"
-    assert_success
-    run grep -q 'RELAXED' "$_c"
-    assert_success
-    run grep -qF -- '#1636' "$_c"
-    assert_success
-    run grep -q 'trade-off' "$_c"
-    assert_success
-}
-
-@test "doc-guard: constraints.md still pins the fail-closed half" {
-    local _c="${SKILL_DIR}/references/constraints.md"
-    run grep -q 'fail-closed' "$_c"
-    assert_success
-    run grep -q 'not verified' "$_c"
-    assert_success
-}
-
-@test "doc-guard: constraints.md still forbids hand-written labels" {
-    run grep -q 'Never \*\*add\*\*' "${SKILL_DIR}/references/constraints.md"
-    assert_success
-}
-
-# The whole of #1616: this exact expression is what pinned review-blocked on
-# PR #1609. Its removal was the fix, so its return is the regression.
-@test "doc-guard: the global DECLINED_COUNT gate is gone from the removal doc" {
-    run grep -qE 'DECLINED_COUNT.*-eq 0|DECLINED_COUNT == 0' \
-        "${SKILL_DIR}/references/verdict-label-removal.sh.md"
-    assert_failure
-}
-
-@test "doc-guard: the removal doc still drops review-passed unconditionally on push" {
-    run grep -qF -- 'review-passed' "${SKILL_DIR}/references/verdict-label-removal.sh.md"
-    assert_success
-    run grep -qF -- '_gh_pr_drop_label' "${SKILL_DIR}/references/verdict-label-removal.sh.md"
-    assert_success
-}
-
-@test "doc-guard: the removal doc hands review-blocked to the gate" {
-    run grep -qF -- 'review-passed-gate.md' \
-        "${SKILL_DIR}/references/verdict-label-removal.sh.md"
-    assert_success
-}
-
-# The invalidation SSOT lives in the shell library's header (#1563). It
-# spelled the replaced global rule out verbatim; leaving it there would make
-# the SSOT contradict the shipped behaviour.
 @test "doc-guard: the #1563 invalidation SSOT no longer states the global counter rule" {
     run grep -qE 'ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0' \
         "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh"
@@ -522,45 +394,6 @@ codex:BLOCKER:ACCEPT
     assert_success
     run grep -q 'RELAXED' \
         "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh"
-    assert_success
-}
-
-# devx:pr-review-all's reference doc is the label-lifecycle SSOT. A reader who
-# did not know the ownership moved would conclude a `review-passed` written by
-# a gh:pr-reply pass was forged.
-@test "doc-guard: the label-lifecycle SSOT names gh:pr-reply as the review-passed producer" {
-    local _producer="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
-    run grep -qF -- '#1636' "$_producer"
-    assert_success
-    run grep -qF -- 'gh:pr-reply' "$_producer"
-    assert_success
-    run grep -qF -- 'review-passed-gate.md' "$_producer"
-    assert_success
-}
-
-@test "doc-guard: SKILL.md Step 3 records the per-reviewer origin token" {
-    run grep -qF -- '<reviewer>:<severity>:<verdict>' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: SKILL.md Step 6 runs the gate and names its helper" {
-    run grep -qF -- 'review-passed-gate.md' "${SKILL_DIR}/SKILL.md"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_apply_review_passed' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: SKILL.md Step 6 no longer re-invokes gh:pr-review" {
-    run grep -qF -- 'Skill(gh:pr-review' "${SKILL_DIR}/SKILL.md"
-    assert_failure
-}
-
-@test "doc-guard: final-summary.md reports the per-reviewer breakdown and the gate outcome" {
-    run grep -qF -- '_gh_pr_reply_origin_tally' "${SKILL_DIR}/references/final-summary.md"
-    assert_success
-    run grep -qF -- 'review-passed' "${SKILL_DIR}/references/final-summary.md"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_apply_review_passed' "${SKILL_DIR}/references/final-summary.md"
     assert_success
 }
 
@@ -601,12 +434,4 @@ codex:BLOCKER:ACCEPT
         '[{user: {login: "someone-else"}, body: ("<!-- ai-review:codex:" + $s + " -->")}]' >"$_json"
     run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_head' <'$_json'"
     assert_failure
-}
-
-@test "doc-guard (PR #1703 review): the gate doc requires a fresh marker when ORIGINS is empty" {
-    local _d="${SKILL_DIR}/references/review-passed-gate.md"
-    run grep -qF -- '_EVIDENCE_SHA' "$_d"
-    assert_success
-    run grep -qF -- '_gh_pr_reply_history_has_review "$ME" "$_EVIDENCE_SHA"' "$_d"
-    assert_success
 }

@@ -8,8 +8,7 @@
 # so a failing mkdir was never detected. The step now lives in
 # docker_proxy_create_dropin_dir(), which branches on `sudo mkdir -p` directly.
 #
-# `sudo` is a PATH-injected mock binary (same pattern as
-# tests/bats/skills/gh_label_bootstrap.bats) — no privileged call is ever made.
+# `sudo` is a PATH-injected mock binary — no privileged call is ever made.
 
 load '../test_helper'
 

@@ -7,8 +7,13 @@
 # whole point here, the opposite of the verdict gate's fail-closed rule:
 # anything short of a complete block for that exact ai+sha pair means "not yet
 # reviewed", so the lane runs.
-# Background + full rationale (SSOT):
-# claude/skills/devx-pr-review-all/references/duplicate-review-guard.md
+#
+# #1680: devx-pr-review-all moved out to its own marketplace repo, so the
+# five doc-guards that pinned SKILL.md / duplicate-review-guard.md to the
+# helper's call shape were dropped — they belong in that repo now. The
+# shared helper in shell-common/functions/devx_pr_review_all.sh is still
+# this repo's code and stays fully covered below; what is no longer
+# checked here is that the skill prose actually calls it.
 load '../test_helper'
 
 setup() {
@@ -226,50 +231,4 @@ Verdict: LGTM
     '
     assert_success
     assert_output --partial "session_a=1 session_b=1"
-}
-
-# ── doc guards ───────────────────────────────────────────────────────
-# Same rule as the verdict suite's doc-guards: the SKILL step must CALL the
-# shared helper by its literal call shape, not paraphrase the guard into prose
-# an LLM can quietly skip.
-
-@test "doc-guard: devx:pr-review-all Step 3 calls the shared dedupe helper" {
-    run grep -qF -- 'devx_pr_review_all_already_reviewed "$ai" "$head_sha" "$ME"' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    assert_success
-}
-
-# #1639: the guard's fetch must keep `.user.login`, and the guard must be
-# asked as a specific login — stripping the author is exactly what let a
-# forged marker suppress a lane.
-@test "doc-guard (#1639): the dedupe guard resolves and passes a trusted login" {
-    run grep -qF -- 'DEVX_PR_REVIEW_ALL_TRUSTED_LOGIN' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/duplicate-review-guard.md"
-    assert_success
-
-    run grep -qF -- 'devx_pr_review_all_already_reviewed "$ai" "$head_sha" "$ME"' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/duplicate-review-guard.md"
-    assert_success
-}
-
-@test "doc-guard: the SKILL documents the --force-review bypass" {
-    run grep -qF -- '--force-review' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard (#1623 agy BLOCKER): a guard-skipped lane must still be aggregated in Step 3.5" {
-    run grep -qF -- 'each lane that actually ran' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    assert_failure
-
-    run grep -qF -- 'either ran fresh in Step 3 OR was skipped by the' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard (#1623 codex BLOCKER): the TOCTOU limitation is documented" {
-    run grep -qF -- 'Known limitation: this is a check, not a lock' \
-        "${DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/duplicate-review-guard.md"
-    assert_success
 }

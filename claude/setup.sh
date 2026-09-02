@@ -68,7 +68,6 @@ HOME_CLAUDE_MD="${HOME_CLAUDE}/CLAUDE.md"
 # Dotfiles source locations
 CLAUDE_SETTINGS_SOURCE="${CLAUDE_DOTFILES}/settings.json"
 CLAUDE_STATUSLINE_SOURCE="${CLAUDE_DOTFILES}/statusline-command.sh"
-CLAUDE_SKILLS_SOURCE="${CLAUDE_DOTFILES}/skills"
 CLAUDE_DOCS_SOURCE="${CLAUDE_DOTFILES}/docs"
 CLAUDE_GLOBAL_MEMORY_SOURCE="${CLAUDE_DOTFILES}/global-memory"
 CLAUDE_WORKFLOWS_SOURCE="${CLAUDE_DOTFILES}/workflows"
@@ -516,19 +515,20 @@ SETUP_MIGRATIONS=0
 
 # _print_change_summary — 완료 메시지 직전 "이번 실행에서 바뀐 것" 한 줄
 # 롤업 (#997). 사용자가 로그 전체를 훑지 않고도 변경 규모를 파악하게 한다.
-# 최소 집계 원칙(#997 비범위): 마이그레이션 건수 + SSOT 가 관리하는 스킬 수.
+# 최소 집계 원칙(#997 비범위): 마이그레이션 건수 + 합성된 스킬 수.
+# 스킬은 #1680 이후 워크스페이스 clone 이 유일한 소스이므로 소스 트리가 아니라
+# 합성 결과 디렉토리(HOME_SKILLS)의 entry 를 센다.
 # 인자 $1 이 있으면 뒤에 추가(예: 다중 계정 분기의 활성 계정 수).
 _print_change_summary() {
     local skills
-    skills=$(find "$CLAUDE_SKILLS_SOURCE" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
-    ux_info "요약: 마이그레이션 ${SETUP_MIGRATIONS}건 · 관리 스킬 ${skills}개${1:+ · $1}"
+    skills=$(find "$HOME_SKILLS" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+    ux_info "요약: 마이그레이션 ${SETUP_MIGRATIONS}건 · 합성 스킬 ${skills}개${1:+ · $1}"
 }
 
 # 필수 dotfiles source 검증
 # settings.json 은 이제 tracked SSOT (#584) — 부트스트랩/템플릿 단계 불필요.
 [ -f "$CLAUDE_SETTINGS_SOURCE" ]      || log_error_and_exit "settings.json 없음: $CLAUDE_SETTINGS_SOURCE"
 [ -f "$CLAUDE_STATUSLINE_SOURCE" ]    || log_error_and_exit "statusline-command.sh 없음: $CLAUDE_STATUSLINE_SOURCE"
-[ -d "$CLAUDE_SKILLS_SOURCE" ]        || log_error_and_exit "skills 디렉토리 없음: $CLAUDE_SKILLS_SOURCE"
 [ -d "$CLAUDE_DOCS_SOURCE" ]          || log_error_and_exit "docs 디렉토리 없음: $CLAUDE_DOCS_SOURCE"
 [ -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ] || log_error_and_exit "global-memory 없음: $CLAUDE_GLOBAL_MEMORY_SOURCE"
 [ -d "$CLAUDE_WORKFLOWS_SOURCE" ]    || log_error_and_exit "workflows 디렉토리 없음: $CLAUDE_WORKFLOWS_SOURCE"
@@ -666,13 +666,10 @@ if [ "$_setup_mode" = "internal" ]; then
     # 손대지 않는다. dotfiles SSOT 변경은 session-start-settings-drift.sh 가 전파.
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
     # skills/ uses entry-level composition (issue #707, F-8) so externally
-    # added symlinks can be layered into the same target dir without
-    # touching the dotfiles git tree. See _claude_compose_skills_dir in
-    # shell-common/tools/integrations/claude.sh.
-    _claude_compose_skills_dir "$CLAUDE_SKILLS_SOURCE"                  "$HOME_SKILLS"
-    # Then layer locally cloned marketplace repos on top (issue #1652). This
-    # branch does not go through _claude_account_setup_one, so the call has to
-    # be repeated here — internal PCs are single-account by design.
+    # added symlinks can be layered into the same target dir. Since #1680
+    # the locally cloned marketplace repos are the only source. This branch
+    # does not go through _claude_account_setup_one, so the call has to be
+    # repeated here — internal PCs are single-account by design.
     _claude_compose_workspace_skills "$HOME_SKILLS"
     _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
     _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"

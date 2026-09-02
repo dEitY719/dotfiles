@@ -13,10 +13,16 @@ F-1  Remote contract
     `/plugin install gh-resolve@gh-resolve-skills` fails for everyone.
 
 F-2  Content drift
-    #1410 NF-1 keeps the dotfiles originals in `claude/skills/` until Phase 4
-    retires them, so every split skill lives in two places for the whole of
-    Phase 2-3. A fix or prompt improvement landing on one side only is
-    invisible today.
+    #1410 NF-1 kept the dotfiles originals in `claude/skills/` so every split
+    skill lived in two places for the whole of Phase 2-3, and a fix landing on
+    one side only was invisible.
+
+    DORMANT since #1680 (Phase 4) deleted those originals: with no local side
+    left to compare against, every remote skill now reports as unpairable and
+    this half finds nothing. It is left in place because the scheduled run
+    gates on `--fail-on contract` (F-1 only), so a dormant F-2 cannot turn the
+    workflow red. Re-pointing it at a workspace clone, or retiring it, is a
+    follow-up decision, not something this checker should guess at.
 
 Why drift is not a file diff
     The split is a re-authoring, not a copy: the `gh:pr-resolve-conflict`

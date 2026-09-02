@@ -216,7 +216,7 @@ LOCAL
 # ---------- Task 5: account setup ----------
 
 @test "bash: _claude_account_setup_one creates directory-level symlinks (issue #575 → #707)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-shared/plugins"
 
     run_in_bash "_claude_account_setup_one personal '$HOME/.claude-personal'"
@@ -340,7 +340,7 @@ LOCAL
 }
 
 @test "bash: _claude_account_setup_one unmounts a legacy bind mount on skills (issue #575 migration)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-shared/plugins"
     # Simulate a Home-PC that came up under the #287 bind-mount layout:
     # ~/.claude-personal/skills/ exists as a real (would-be-mounted) dir.
@@ -377,7 +377,7 @@ SH
 }
 
 @test "bash: claude_accounts_init creates only ENABLED account dirs" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
 
     run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="work" CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
     assert_success
@@ -415,7 +415,7 @@ SH
 @test "bash: claude_accounts_init tolerates empty skills/docs leftovers" {
     # Real Home-PC scenario: user unmounted bind mounts, leaving empty dirs.
     # Guard must NOT false-positive on these.
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/skills" "$HOME/.claude/docs"
 
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
@@ -424,7 +424,7 @@ SH
 }
 
 @test "bash: claude_accounts_init is idempotent (second run skips)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
 
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
@@ -435,7 +435,7 @@ SH
 # ---------- Task 6: status ----------
 
 @test "bash: claude_accounts_status shows enabled accounts" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && claude_accounts_status'
     assert_success
     assert_output --partial "Default: personal"
@@ -448,7 +448,7 @@ SH
     # loop only knew symlink / real-file shapes, so the real dir fell to
     # the else arm and printed "skills: ✗ missing" even though setup.sh's
     # own verify confirmed the dir — a false negative the diagnostic showed.
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
     assert_success
     assert_output --partial "skills: composed dir ✓"
@@ -459,7 +459,7 @@ SH
     # The status loop omitted workflows entirely, so a broken workflows
     # link would never surface at diagnosis time even though setup.sh
     # creates and verifies it.
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
     assert_success
     assert_output --partial "workflows: symlink ✓"
@@ -469,20 +469,20 @@ SH
     # The status loop enumerates the well-known link set by hand; a new
     # link name must be added here or breakage never surfaces at
     # diagnosis time (same failure mode as the #707 workflows omission).
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
     assert_success
     assert_output --partial "CLAUDE.md: symlink ✓"
 }
 
 @test "bash: claude_accounts_status reports NOT logged in when no .credentials.json" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && claude_accounts_status'
     assert_output --partial "NOT logged in"
 }
 
 @test "bash: claude_accounts_status hides disabled accounts (Internal-PC)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     run_in_bash 'CLAUDE_ENABLED_ACCOUNTS="work" CLAUDE_DEFAULT_ACCOUNT=work CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS="work" CLAUDE_DEFAULT_ACCOUNT=work claude_accounts_status'
     assert_success
     refute_output --partial "Account: personal"
@@ -492,7 +492,7 @@ SH
 # ---------- Task 7: migrate ----------
 
 @test "bash: claude_accounts_migrate moves ~/.claude → ~/.claude-personal" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/projects" "$HOME/.claude/sessions"
     echo "creds" > "$HOME/.claude/.credentials.json"
     echo "history" > "$HOME/.claude/history.jsonl"
@@ -510,7 +510,7 @@ SH
 }
 
 @test "bash: claude_accounts_migrate promotes ~/.claude/plugins → ~/.claude-shared/" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/plugins/marketplaces"
     echo "plugin" > "$HOME/.claude/plugins/marketplaces/test"
 
@@ -540,7 +540,7 @@ SH
 # ---------- Issue #294: .claude.json preservation + recovery ----------
 
 @test "bash: claude_accounts_migrate preserves .claude.json content (issue #294)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/projects"
     # Realistic .claude.json with the fields users care about preserving.
     cat > "$HOME/.claude/.claude.json" <<'JSON'
@@ -565,7 +565,7 @@ JSON
 }
 
 @test "bash: claude_accounts_migrate logs pre/post .claude.json size (issue #294)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/projects"
     printf '{"firstStartTime":"x","oauthAccount":{"e":"a@b"},"migrationVersion":5}' \
         > "$HOME/.claude/.claude.json"
@@ -577,7 +577,7 @@ JSON
 }
 
 @test "bash: claude_accounts_migrate creates sealed snapshot for recovery (issue #294)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/projects"
     printf '{"firstStartTime":"x","oauthAccount":{"e":"a@b"},"migrationVersion":5}' \
         > "$HOME/.claude/.claude.json"
@@ -590,7 +590,7 @@ JSON
 }
 
 @test "bash: claude_accounts_migrate warns when pre-mv .claude.json is tiny (issue #294)" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/projects"
     # Already in first-start placeholder state before migrate runs.
     printf '{"firstStartTime":"x"}' > "$HOME/.claude/.claude.json"
@@ -677,7 +677,7 @@ JSON
 }
 
 @test "bash: claude-accounts (no arg) defaults to status" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     run_in_bash 'shopt -s expand_aliases; CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init && eval "claude-accounts"'
     assert_success
     assert_output --partial "Default: personal"
@@ -1105,7 +1105,7 @@ $HOME/.claude/docs" ]
 # ---------- Issue #300, item C: claude_accounts_status shows oauth binding ----------
 
 @test "issue #300-C: claude_accounts_status prints email/org from .claude.json" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-personal"
     echo "creds" > "$HOME/.claude-personal/.credentials.json"
     cat > "$HOME/.claude-personal/.claude.json" <<'JSON'
@@ -1125,7 +1125,7 @@ JSON
 }
 
 @test "issue #300-C: claude_accounts_status omits oauth lines when .claude.json missing" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-personal"
     echo "creds" > "$HOME/.claude-personal/.credentials.json"
     # No .claude.json — first run / fresh login.
@@ -1137,7 +1137,7 @@ JSON
 }
 
 @test "issue #300-C: claude_accounts_status flags expected/actual mismatch with marker" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-work"
     echo "creds" > "$HOME/.claude-work/.credentials.json"
     cat > "$HOME/.claude-work/.claude.json" <<'JSON'
@@ -1188,38 +1188,62 @@ JSON
     refute_output --partial "Account mismatch"
 }
 
-# ---------- Issue #575 → #707: skills/ entry composition, docs/ dir-symlink ----------
+# ---------- Issue #575 → #707 → #1680: skills/ entry composition, docs/ dir-symlink ----------
 #
 # Issue #575 collapsed the bind-mount (#287) + per-skill symlinks
 # (#342/#344) into a single directory-level symlink. Issue #707, F-8
 # then promoted skills/ to a real directory of per-entry symlinks so
 # externally added symlinks can layer into the same target.
 # docs/ retained the #575 single directory-symlink design.
+#
+# #1680 deleted the dotfiles `claude/skills/` SSOT and retired
+# _claude_compose_skills_dir: _claude_account_setup_one now composes
+# skills only from the workspace, via _claude_compose_workspace_skills,
+# so every source below is `${WORKSPACE_ROOT}/<repo>/skills/<skill>/`.
+# The composed-target contract (real dir, per-entry symlinks, user data
+# untouched) is unchanged — only where the entries come from moved.
 
-# Stage a FAKE_DOTFILES_ROOT under $HOME with skills/<name>/SKILL.md fixtures.
-# bash/main.bash unconditionally re-derives DOTFILES_ROOT from its own path
-# (see bash/main.bash:59), so setup_isolated_dotfiles_root cannot survive a
-# run_in_bash. Instead we override DOTFILES_ROOT *after* main.bash sources —
-# claude.sh reads ${DOTFILES_ROOT} at call time, not load time, so the
-# override takes effect for the function call under test.
+# Stage a FAKE_DOTFILES_ROOT under $HOME (docs/ and the other dotfiles-owned
+# symlink sources) plus a fake WORKSPACE_ROOT holding marketplace-repo skill
+# fixtures. bash/main.bash unconditionally re-derives DOTFILES_ROOT from its
+# own path (see bash/main.bash:59), so setup_isolated_dotfiles_root cannot
+# survive a run_in_bash. Instead we override DOTFILES_ROOT *after* main.bash
+# sources — claude.sh reads ${DOTFILES_ROOT} at call time, not load time, so
+# the override takes effect for the function call under test.
+#
+# Usage: _seed_ssot_skills <repo> <skill> [<skill>...]
 _seed_ssot_skills() {
     export FAKE_DOTFILES_ROOT="$HOME/fake-dotfiles"
-    rm -rf "$FAKE_DOTFILES_ROOT"
-    mkdir -p "$FAKE_DOTFILES_ROOT/claude/skills" "$FAKE_DOTFILES_ROOT/claude/docs"
+    export FAKE_WORKSPACE_ROOT="$HOME/fake-workspace"
+    rm -rf "$FAKE_DOTFILES_ROOT" "$FAKE_WORKSPACE_ROOT"
+    mkdir -p "$FAKE_DOTFILES_ROOT/claude/docs"
+    _seed_ws_skills "$@"
+}
+
+# Add skills to a workspace repo without resetting the roots — the
+# post-setup half of the re-run test needs exactly that.
+# Usage: _seed_ws_skills <repo> <skill> [<skill>...]
+_seed_ws_skills() {
+    _repo="$1"
+    shift
     for _skill in "$@"; do
-        mkdir -p "$FAKE_DOTFILES_ROOT/claude/skills/${_skill}"
+        mkdir -p "$FAKE_WORKSPACE_ROOT/$_repo/skills/${_skill}"
         printf -- '---\nname: %s\ndescription: stub for %s\n---\n' "$_skill" "$_skill" \
-            > "$FAKE_DOTFILES_ROOT/claude/skills/${_skill}/SKILL.md"
+            > "$FAKE_WORKSPACE_ROOT/$_repo/skills/${_skill}/SKILL.md"
     done
+    # A real clone keeps .git as a directory (a linked worktree keeps a file,
+    # and _skill_workspace_dirs skips those).
+    mkdir -p "$FAKE_WORKSPACE_ROOT/$_repo/.git"
 }
 
-# Wrap run_in_bash with a DOTFILES_ROOT override for the seeded fake root.
+# Wrap run_in_bash with the DOTFILES_ROOT / WORKSPACE_ROOT overrides for the
+# seeded fake roots.
 run_with_fake_ssot() {
-    run_in_bash "export DOTFILES_ROOT='$FAKE_DOTFILES_ROOT'; $1"
+    run_in_bash "export DOTFILES_ROOT='$FAKE_DOTFILES_ROOT' WORKSPACE_ROOT='$FAKE_WORKSPACE_ROOT'; $1"
 }
 
-@test "issue #575 → #707: claude_accounts_init composes skills/ entries and dir-symlinks docs/" {
-    _seed_ssot_skills alpha beta
+@test "issue #575 → #1680: claude_accounts_init composes workspace skills and dir-symlinks docs/" {
+    _seed_ssot_skills packaging-skills alpha beta
     mkdir -p "$HOME/.claude-shared/plugins"
 
     run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
@@ -1228,32 +1252,31 @@ run_with_fake_ssot() {
     # docs/ remains a single directory-level symlink (#575).
     [ -L "$HOME/.claude-personal/docs" ]
     [ "$(readlink "$HOME/.claude-personal/docs")" = "$FAKE_DOTFILES_ROOT/claude/docs" ]
-    # skills/ is a real composed directory of per-entry symlinks (#707, F-8).
+    # skills/ is a real composed directory of per-entry symlinks (#707, F-8)
+    # sourced from the workspace marketplace clones (#1680).
     [ -d "$HOME/.claude-personal/skills" ]
     [ ! -L "$HOME/.claude-personal/skills" ]
     [ -L "$HOME/.claude-personal/skills/alpha" ]
-    [ "$(readlink "$HOME/.claude-personal/skills/alpha")" = "$FAKE_DOTFILES_ROOT/claude/skills/alpha" ]
+    [ "$(readlink "$HOME/.claude-personal/skills/alpha")" = "$FAKE_WORKSPACE_ROOT/packaging-skills/skills/alpha" ]
     [ -L "$HOME/.claude-personal/skills/beta" ]
     [ -f "$HOME/.claude-personal/skills/alpha/SKILL.md" ]
 }
 
-@test "issue #707, F-8: re-running setup picks up newly added SSOT skill entries" {
+@test "issue #707, F-8: re-running setup picks up newly added workspace skill entries" {
     # #575's instant-visibility property (a new SSOT entry visible without
     # re-running setup) was intentionally traded by #707, F-8 for overlay
     # support: skills/ is now a real directory of per-entry symlinks, so a
     # new entry is wired in only on the next compose call. This test pins
     # the new contract — visible after re-run, not before.
-    _seed_ssot_skills alpha
+    _seed_ssot_skills packaging-skills alpha
     mkdir -p "$HOME/.claude-shared/plugins"
 
     run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
     assert_success
 
-    mkdir -p "$FAKE_DOTFILES_ROOT/claude/skills/just-added"
-    printf -- '---\nname: just-added\ndescription: post-setup skill\n---\n' \
-        > "$FAKE_DOTFILES_ROOT/claude/skills/just-added/SKILL.md"
+    _seed_ws_skills packaging-skills just-added
 
-    # Pre-rerun: the new SSOT entry is NOT yet wired into the composed dir.
+    # Pre-rerun: the new workspace entry is NOT yet wired into the composed dir.
     [ ! -e "$HOME/.claude-personal/skills/just-added" ]
 
     # Re-run is idempotent for existing entries and wires the new one in.
@@ -1263,13 +1286,13 @@ run_with_fake_ssot() {
     [ -f "$HOME/.claude-personal/skills/just-added/SKILL.md" ]
 }
 
-@test "issue #707, F-8: user data in skills/ coexists with dotfiles per-entry symlinks" {
+@test "issue #707, F-8: user data in skills/ coexists with workspace per-entry symlinks" {
     # #575 backed up the entire skills/ directory on real-dir collision.
     # #707, F-8 dropped that path: the composed-directory model treats a
     # pre-existing real skills/ as the target itself, lays per-entry
     # symlinks alongside user data, and refuses to overwrite non-symlink
     # children (logs `skill entry blocked by non-symlink — skipped`).
-    _seed_ssot_skills alpha
+    _seed_ssot_skills packaging-skills alpha
     mkdir -p "$HOME/.claude-shared/plugins"
     mkdir -p "$HOME/.claude-personal/skills/leftover"
     echo "user-data" > "$HOME/.claude-personal/skills/leftover/notes.md"
@@ -1281,13 +1304,13 @@ run_with_fake_ssot() {
     [ -d "$HOME/.claude-personal/skills" ]
     [ ! -L "$HOME/.claude-personal/skills" ]
     [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
-    # User data preserved in place; dotfiles entry wired alongside.
+    # User data preserved in place; workspace entry wired alongside.
     grep -q "user-data" "$HOME/.claude-personal/skills/leftover/notes.md"
     [ -L "$HOME/.claude-personal/skills/alpha" ]
 }
 
 @test "issue #575 → #707: second _claude_account_setup_one is idempotent for skills/docs" {
-    _seed_ssot_skills alpha
+    _seed_ssot_skills packaging-skills alpha
     mkdir -p "$HOME/.claude-shared/plugins"
 
     run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
@@ -1388,7 +1411,7 @@ run_with_fake_ssot() {
 }
 
 @test "issue #500-F3: claude_accounts_migrate warns on missing pre-migrate .claude.json" {
-    mkdir -p "${DOTFILES_ROOT}/claude/skills" "${DOTFILES_ROOT}/claude/docs"
+    mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude/projects"
     # .claude.json 자체가 부재한 디렉토리 (Home-PC 일부 회복 시나리오).
 

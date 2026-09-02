@@ -56,7 +56,6 @@ claude_init() {
     local settings_target="$HOME/.claude/settings.json"
     local statusline_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/statusline-command.sh"
     local statusline_target="$HOME/.claude/statusline-command.sh"
-    local skills_source_dir="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills"
     local skills_target_dir="$HOME/.claude/skills"
 
     ux_info "Initializing Claude Code configuration..."
@@ -106,39 +105,11 @@ claude_init() {
     fi
     echo ""
 
-    # Handle skills directory
+    # Skills: composed from the locally cloned marketplace repos (#1652 /
+    # #1680). This used to link per-file from a dotfiles `claude/skills/`
+    # source, which no longer exists.
     ux_section "Claude Code Skills"
-    skill_count=0
-    if [ -d "$skills_source_dir" ]; then
-        for skill_file in "$skills_source_dir"/*.md; do
-            if [ -f "$skill_file" ]; then
-                skill_name=$(basename "$skill_file")
-                skill_target="$skills_target_dir/$skill_name"
-
-                if [ -L "$skill_target" ]; then
-                    ux_success "$skill_name (already linked)"
-                elif [ -f "$skill_target" ]; then
-                    ux_warning "$skill_name exists as regular file"
-                    ux_info "Backing up to $skill_name.backup..."
-                    mv "$skill_target" "$skill_target.backup"
-                    ln -s "$skill_file" "$skill_target"
-                    ux_success "$skill_name (linked)"
-                else
-                    ln -s "$skill_file" "$skill_target"
-                    ux_success "$skill_name (linked)"
-                fi
-                skill_count=$((skill_count + 1))
-            fi
-        done
-
-        if [ "$skill_count" -eq 0 ]; then
-            ux_info "No skill files found in $skills_source_dir"
-        else
-            ux_success "Total: $skill_count skill(s) linked"
-        fi
-    else
-        ux_warning "Skills source directory not found: $skills_source_dir"
-    fi
+    _claude_compose_workspace_skills "$skills_target_dir"
     echo ""
 
     ux_header "Claude Code Initialization Complete"
@@ -152,12 +123,14 @@ claude_init() {
     done
     echo ""
 
+    # Entry-level composition (#707 F-8): each child is a directory symlink
+    # into a marketplace clone, not a bare `*.md` file.
     ux_section "Skills"
     if [ -d "$skills_target_dir" ]; then
         linked_skill_found=0
-        for skill_target_file in "$skills_target_dir"/*.md; do
-            if [ -e "$skill_target_file" ]; then
-                ls -la -- "$skill_target_file"
+        for skill_target_file in "$skills_target_dir"/*; do
+            if [ -e "$skill_target_file" ] || [ -L "$skill_target_file" ]; then
+                ls -lad -- "$skill_target_file"
                 linked_skill_found=1
             fi
         done
@@ -822,32 +795,23 @@ _claude_ensure_settings_copy() {
 # `claude-skills-sync` alias and `claude-accounts skills-sync`
 # sub-command went away with them.
 
-# _claude_compose_skills_dir <src_skills_dir> <target_skills_dir>
+# _claude_prepare_skills_dir <target_skills_dir>
 #
-# F-8 (issue #707): replace the directory-level symlink "<tgt> -> <src>"
-# (the #575 design) with a real directory at <tgt> that contains an
-# entry-level symlink for every skill subdirectory of <src>. This is
-# what lets externally added symlinks (e.g. marketplace `npx skills add`
-# results, manually linked skills) layer additional entries into the
-# same <tgt> without those skills ever entering the dotfiles git tree.
+# F-8 (issue #707): make <tgt> a real directory that entry-level symlinks
+# can be composed into, converting whatever legacy shape is there now.
+# This is what lets externally added symlinks (marketplace `npx skills
+# add` results, manually linked skills) and the workspace composer layer
+# entries into the same <tgt>.
 #
-# Idempotent — converges on the same state on repeat calls. Also
-# performs three migrations in place:
-#   1. If <tgt> is a legacy directory-symlink (#575), remove it and
-#      replace with a real directory.
+# Idempotent, and performs two migrations in place:
+#   1. If <tgt> is a legacy directory-symlink (#575 / #1680's deleted
+#      dotfiles SSOT), remove it and replace with a real directory.
 #   2. If <tgt> is a legacy bind-mount (#287/#342 era), unmount it.
-#   3. Stale entries — symlinks under <tgt> that point into <src> but
-#      whose target no longer exists — are removed. Symlinks pointing
-#      outside <src> (e.g. externally added entries) are left alone.
-_claude_compose_skills_dir() {
-    _ccsd_src="${1:-}"
-    _ccsd_tgt="${2:-}"
-    if [ -z "$_ccsd_src" ] || [ -z "$_ccsd_tgt" ]; then
-        ux_error "_claude_compose_skills_dir: src and tgt required"
-        return 1
-    fi
-    if [ ! -d "$_ccsd_src" ]; then
-        ux_error "_claude_compose_skills_dir: source missing: $_ccsd_src"
+# An unexpected regular file at <tgt> is backed up rather than clobbered.
+_claude_prepare_skills_dir() {
+    _ccsd_tgt="${1:-}"
+    if [ -z "$_ccsd_tgt" ]; then
+        ux_error "_claude_prepare_skills_dir: tgt required"
         return 1
     fi
 
@@ -878,71 +842,27 @@ _claude_compose_skills_dir() {
         mv "$_ccsd_tgt" "$_ccsd_backup" || return 1
     fi
     mkdir -p "$_ccsd_tgt"
-
-    _ccsd_added=0
-    _ccsd_refreshed=0
-    for _ccsd_dir in "$_ccsd_src"/*/; do
-        [ -d "$_ccsd_dir" ] || continue
-        _ccsd_name="${_ccsd_dir%/}"
-        _ccsd_name="${_ccsd_name##*/}"
-        _ccsd_link="${_ccsd_tgt}/${_ccsd_name}"
-        _ccsd_want="${_ccsd_src}/${_ccsd_name}"
-
-        if [ -L "$_ccsd_link" ]; then
-            if [ "$(readlink "$_ccsd_link")" = "$_ccsd_want" ]; then
-                continue
-            fi
-            rm -f "$_ccsd_link"
-            _ccsd_refreshed=$((_ccsd_refreshed + 1))
-            ux_info "  refreshed skill: $_ccsd_name"
-        elif [ -e "$_ccsd_link" ]; then
-            ux_warning "  skill entry blocked by non-symlink — skipped: $_ccsd_link"
-            continue
-        else
-            _ccsd_added=$((_ccsd_added + 1))
-            ux_info "  new skill: $_ccsd_name"
-        fi
-        ln -s "$_ccsd_want" "$_ccsd_link" || {
-            ux_error "  symlink failed: $_ccsd_link -> $_ccsd_want"
-            return 1
-        }
-    done
-
-    # Drop stale dotfiles-sourced links whose source entry was removed.
-    # Only touch symlinks that point into <src> so externally added
-    # links (marketplace overlays, user-managed entries) survive.
-    for _ccsd_existing in "$_ccsd_tgt"/*; do
-        [ -L "$_ccsd_existing" ] || continue
-        _ccsd_target_path=$(readlink "$_ccsd_existing")
-        case "$_ccsd_target_path" in
-            "$_ccsd_src"/*)
-                if [ ! -d "$_ccsd_target_path" ]; then
-                    _ccsd_stale_name="${_ccsd_existing##*/}"
-                    rm -f "$_ccsd_existing" && ux_info "  removed stale skill: $_ccsd_stale_name"
-                fi
-                ;;
-        esac
-    done
-
-    ux_success "  composed skills dir: $_ccsd_tgt (added=$_ccsd_added refreshed=$_ccsd_refreshed)"
 }
 
 # _claude_compose_workspace_skills <target_skills_dir>
 #
 # issue #1652 (#1410 F-6, non-destructive half): layer the skills of
 # locally cloned marketplace repos into a <tgt> that
-# _claude_compose_skills_dir has already composed from the dotfiles SSOT.
+# the only skill source there is (#1680).
 # Sources come from shell-common/functions/skill_sources.sh, which the
 # Codex / OpenCode / Gemini+agy / Hermes side (scripts/setup-skills-ssot.sh)
 # reads too — one definition of "what is a workspace skill" for all six
 # harnesses.
 #
-# Purely additive (NF-1): a name already taken — by a dotfiles skill, by a
-# marketplace overlay, by anything — is left exactly as it is, so this can
-# never repoint an entry _claude_compose_skills_dir owns. Stale workspace
-# links (their repo was removed) are pruned first, so a repo rename
-# converges in one run instead of two; links pointing outside the
-# workspace root are never touched.
+# Purely additive (NF-1): a name already taken — by a marketplace overlay,
+# by anything — is left exactly as it is. Stale workspace links (their repo
+# was removed) are pruned first, so a repo rename converges in one run
+# instead of two; links pointing outside the workspace root are never
+# touched.
+#
+# Since #1680 this is the only skill source, so it also normalizes <tgt>
+# into a real composition directory (_claude_prepare_skills_dir) — that
+# migration used to ride along on the now-deleted dotfiles pass.
 #
 # Every "nothing to do" path is silent and returns 0: no workspace root,
 # an empty one, a repo with no skills/, a skills/ entry with no SKILL.md.
@@ -953,7 +873,7 @@ _claude_compose_skills_dir() {
 _claude_compose_workspace_skills() {
     _ccws_tgt="${1:-}"
     [ -n "$_ccws_tgt" ] || return 0
-    [ -d "$_ccws_tgt" ] || return 0
+    _claude_prepare_skills_dir "$_ccws_tgt" || return 1
 
     # Defense-in-depth (#724 lesson): a caller that sources this file but not
     # functions/skill_sources.sh would hit `command not found` (rc 127), the
@@ -1007,8 +927,7 @@ CCWS_LINKS
 
         ln -s "$_ccws_want" "$_ccws_link" || {
             # One bad entry must not cost the remaining workspace skills —
-            # _claude_compose_skills_dir's own `return 1` predates this lane
-            # and is not a precedent worth copying here.
+            # A single bad entry is not worth aborting the whole lane for.
             ux_error "  workspace symlink failed: $_ccws_link -> $_ccws_want"
             continue
         }
@@ -1046,11 +965,9 @@ _claude_account_setup_one() {
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
     _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
-    # skills/ uses entry-level composition (issue #707, F-8) so externally
-    # added symlinks can be layered into the same target dir without
-    # touching the dotfiles git tree.
-    _claude_compose_skills_dir "${DOTFILES_ROOT}/claude/skills"             "$_caso_cdir/skills"
-    # Then layer locally cloned marketplace repos on top (issue #1652).
+    # skills/ is an entry-level composition (issue #707, F-8) of the
+    # locally cloned marketplace repos (#1652 / #1680) — the dotfiles
+    # SSOT is gone, and externally added symlinks still layer in.
     _claude_compose_workspace_skills "$_caso_cdir/skills"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/docs"                   "$_caso_cdir/docs"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/workflows"               "$_caso_cdir/workflows"
@@ -1166,7 +1083,7 @@ claude_accounts_status() {
                 echo "  $_cas_link: regular file ✓"
             elif [ "$_cas_link" = "skills" ] && [ -d "$_cas_cdir/$_cas_link" ]; then
                 # skills/ is an entry-level *composed directory* since #707
-                # (F-8), not a symlink — _claude_compose_skills_dir fills it
+                # (F-8), not a symlink — _claude_compose_workspace_skills fills it
                 # with per-skill links so externally added symlinks can
                 # layer in. Without this branch the diagnostic fell to
                 # the else arm and wrongly reported "✗ missing" even though

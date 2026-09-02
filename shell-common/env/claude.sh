@@ -13,9 +13,12 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # Can be overridden per-command or per-session
 export CLAUDE_DOC_GENERATOR=claude
 
-# Skills directory path (used by skill_loader and other tools)
-# Points to version-controlled skills repository
-export CLAUDE_SKILLS_PATH="${DOTFILES_ROOT}/claude/skills"
+# Skills directory path (used by skill_loader and other tools).
+# Points at the composed harness directory, not a dotfiles source: #1680
+# moved every skill into its own marketplace repo, and the composition of
+# those clones into "<config dir>/skills/<name>" is what a shell actually
+# has on hand (scripts/setup-skills-ssot.sh / _claude_compose_workspace_skills).
+export CLAUDE_SKILLS_PATH="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
 
 # ═══════════════════════════════════════════════════════════════
 # Multi-account configuration (issue #287)

@@ -1,10 +1,9 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_merge_train_approval_gate.bats
-# Verify the approval-gate classification and the gate-off delegated review:
-#   claude/skills/gh-pr-merge-train/references/approval-gate.md
-#   claude/skills/gh-pr-merge-train/references/train-loop.md
-#   claude/skills/gh-pr-merge-train/references/report-format.md
+# Verify the approval-gate classification and the gate-off delegated review of
+# gh:pr-merge-train.
 # Source-of-truth fixture: _fixtures/gh_pr_merge_train_approval_gate.sh
+# (the skill docs it used to mirror left this repo with #1680)
 #
 # Issue #1519 acceptance criteria:
 #   AC-2  403 on both sources        -> gate off, "no policy on <base>"
@@ -24,7 +23,6 @@ setup() {
     export FAKE_PATH_LOG
     # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
-    SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train"
 }
 
 teardown() {
@@ -307,90 +305,11 @@ plan_403() {
 }
 
 # ---------------------------------------------------------------------
-# Doc guards — the fixture above is only trustworthy while the docs agree
+# Doc guards — REMOVED (#1680)
 # ---------------------------------------------------------------------
-
-@test "doc-guard: approval-gate.md splits 403 by body, keeps 404 as 'no policy'" {
-    run grep -qE '^\| `403` \+ `Upgrade to GitHub Pro`.*`none` \|$' "${SKILL_DIR}/references/approval-gate.md"
-    assert_success
-    run grep -qE '^\| `403`, any other body \|.*`unknown` \|$' "${SKILL_DIR}/references/approval-gate.md"
-    assert_success
-    run grep -qE '^\| `404` \|.*`none` \|$' "${SKILL_DIR}/references/approval-gate.md"
-    assert_success
-    run grep -qE '^\| anything else .*`unknown` \|$' "${SKILL_DIR}/references/approval-gate.md"
-    assert_success
-    run grep -q '`none` is a whitelist, never a fallback' "${SKILL_DIR}/references/approval-gate.md"
-    assert_success
-}
-
-@test "doc-guard: train-loop.md paginates the reviews read (#1526 review)" {
-    run grep -q 'gh api --paginate "repos/\$TARGET_REPO/pulls/\$N/reviews"' "${SKILL_DIR}/references/train-loop.md"
-    assert_success
-}
-
-@test "doc-guard: approval-gate.md reads BOTH sources (#1519 D-2)" {
-    run grep -qE 'branches/\$BASE_ENC/protection' "${SKILL_DIR}/references/approval-gate.md"
-    assert_success
-    run grep -qE 'rules/branches/\$BASE_ENC' "${SKILL_DIR}/references/approval-gate.md"
-    assert_success
-}
-
-@test "doc-guard: train-loop.md documents the delegated review" {
-    run grep -q 'Delegated review on the gate-off path' "${SKILL_DIR}/references/train-loop.md"
-    assert_success
-}
-
-@test "doc-guard: train-loop.md still says the board is not a policy gate (#1513)" {
-    run grep -q 'nothing may consult the board \*before\* a review has been run' "${SKILL_DIR}/references/train-loop.md"
-    assert_success
-}
-
-@test "doc-guard: report-format.md carries all three #1519 NF-1 header strings" {
-    run grep -q 'off (no policy on <base>)' "${SKILL_DIR}/references/report-format.md"
-    assert_success
-    run grep -q 'on (<source>: <n> approvals)' "${SKILL_DIR}/references/report-format.md"
-    assert_success
-    run grep -q 'on (fail-closed: <base> policy unreadable)' "${SKILL_DIR}/references/report-format.md"
-    assert_success
-}
-
-@test "doc-guard: report-format.md lists the four delegated-review reasons" {
-    run grep -q 'self-record withheld approval (BLOCKER)' "${SKILL_DIR}/references/report-format.md"
-    assert_success
-    run grep -q 'approval withheld (unchanged since review)' "${SKILL_DIR}/references/report-format.md"
-    assert_success
-    run grep -q 'board unreadable — approval unconfirmed' "${SKILL_DIR}/references/report-format.md"
-    assert_success
-    run grep -q 'self-record failed' "${SKILL_DIR}/references/report-format.md"
-    assert_success
-}
-
-@test "doc-guard: NF-2 still forbids gh:pr-merge-emergency in the train" {
-    run grep -q 'Never call `gh:pr-merge-emergency`' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: constraints.md documents the delegated-review exception" {
-    # The old blanket "Never review, never approve" contradicted step 2b.
-    run grep -q 'Never form a review judgement of its own' "${SKILL_DIR}/references/constraints.md"
-    assert_success
-    run grep -q 'self-record' "${SKILL_DIR}/references/constraints.md"
-    assert_success
-}
-
-@test "doc-guard: help.md no longer claims a single-source, one-call gate" {
-    run grep -q "repo ruleset's .required_approving_review_count. once per" "${SKILL_DIR}/references/help.md"
-    assert_failure
-    run grep -q 'classic branch protection' "${SKILL_DIR}/references/help.md"
-    assert_success
-}
-
-@test "doc-guard: help.md lists gh:pr-approve among the atoms" {
-    run grep -q 'gh:pr-approve' "${SKILL_DIR}/references/help.md"
-    assert_success
-}
-
-@test "doc-guard: allowed-tools gained no Agent (D-8 serial contract)" {
-    run grep -qE '^allowed-tools:.*\bAgent\b' "${SKILL_DIR}/SKILL.md"
-    assert_failure
-}
+#
+# gh-pr-merge-train's SKILL.md and references/ (approval-gate.md, train-loop.md,
+# report-format.md, constraints.md, help.md) moved out to their own marketplace
+# repo, so the guards that pinned the fixture above to that prose belong there.
+# The fixture mirror is real, runnable behaviour and stays — it is simply no
+# longer pinned to any doc in this repo.
