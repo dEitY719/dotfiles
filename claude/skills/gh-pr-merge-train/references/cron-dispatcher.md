@@ -5,7 +5,8 @@ cron -> shell-common/tools/custom/pr_merge_train_cron.sh   (thin dispatcher, 1 t
           |- 1. flock                    — one tick at a time
           |- 2. herdr agent get mt-<repo>  — is a train from a previous tick still live
           |- 3. gh pr list --author @me  — is there anything worth waking a session for
-          `- 4. herdr workspace -> tab -> claude -> /gh-pr-merge-train <owner/repo>
+          |- 4. queue fingerprint        — has any of it moved since the last tick (#1709)
+          `- 5. herdr workspace -> tab -> claude -> /gh-pr-merge-train <owner/repo>
 ```
 
 Register it with something like:
@@ -82,12 +83,68 @@ statuses to a fresh launch would wedge every later tick on the same collision.
 Only a name that no longer resolves at all (`agent_not_found` — the pane is
 gone, the name is released) earns a new workspace/tab/agent.
 
+## The unchanged-queue backoff (#1709)
+
+A tick whose queue looks exactly like the previous tick's does not wake a
+session. It records a **fingerprint** instead —
+
+```
+<host>/<repo>|<number>:<headRefOid>:<mergeStateStatus>:<verdict labels>;…   (sorted)
+```
+
+— in `${XDG_STATE_HOME:-$HOME/.local/state}/pr-merge-train/backoff`, next to
+the `.lock`, and compares the next tick's against it. Same fingerprint: skip,
+and double the window of ticks to skip (1 → 2 → 4, holding at 8). Any change:
+reset to 1 and wake a session immediately.
+
+The four fields are the ones the D-1 table actually branches on, plus the three
+short-circuit labels (`reply-pending`, `review-blocked`, `review-passed`).
+`updatedAt` is deliberately *not* one of them — a bot comment moves it without
+moving anything the routing table would decide differently, and the D-6 quiet
+period already owns that stamp. The `<host>/<repo>` prefix is there because the
+state directory is one per machine, not one per target (so is the `.lock`): two
+checkouts aimed at different repos would otherwise be able to match each
+other's fingerprint. They mismatch instead, which costs the backoff and keeps
+the correctness.
+
+**Why the fingerprint alone satisfies "never back off after progress".** #1709
+asks that a tick which produced `[MERGED]` or `[FAILED]` run the next tick
+normally. The dispatcher cannot read those verdicts — it is fire-and-forget by
+construction (see the section above), and the report is the session's, not
+its. It does not need to: every outcome that criterion names moves the
+fingerprint by itself. A `[MERGED]` PR leaves `gh pr list --state open`
+entirely; a `[FAILED]` attempt that got as far as pushing a rebase or a CI fix
+carries a new `headRefOid`, and one that ended in a new block carries a moved
+`mergeStateStatus` or verdict label. So the reset branch **is** the
+progress branch, and building a second channel to observe what the fingerprint
+already reports would be a state machine with two sources of truth.
+
+The one case it does not cover — a failure that changed nothing observable, an
+atom skill that died before touching the PR — backs off on purpose. Re-running
+an identical failure every three minutes is exactly the waste #1709 was filed
+about, and the window always expires.
+
+**The window is capped, and that is load-bearing.** The fingerprint is a proxy
+built from `gh pr list`, and some things the train reacts to are invisible to
+it: a project-board promotion, a required check that starts existing, a
+`review-passed` marker posted after the label. Backing off forever on an
+unchanged fingerprint would wedge on precisely those. 8 ticks at the shipped
+`*/3` cadence is ~24 minutes between wake-ups on a queue nothing can
+self-resolve — the #1709 report was two PRs re-deciding identically a dozen
+ticks running.
+
 ## What the dispatcher deliberately does not do
 
 - It does **not** implement the routing table, the ordering, the attempt cap or
   the report. Those are this skill's text. A shell reimplementation would be a
   second SSOT that drifts.
-- It does **not** write to GitHub. Its only `gh` call is a `pr list` read.
+- It does **not** write to GitHub. Its only `gh` call is a `pr list` read — one
+  per tick, fingerprint included (#1709 added two `--json` fields to that same
+  call rather than a second one).
+- It does **not** read the session's `[SKIPPED]`/`[MERGED]`/`[FAILED]` report.
+  There is no channel for it, and #1709 deliberately did not build one — see
+  "The unchanged-queue backoff" above for why the queue fingerprint already
+  carries the only part of that report the dispatcher would act on.
 - It does **not** decide which PRs the train works on. Its target count is a
   "worth waking a session?" heuristic; this skill re-derives the real queue and
   re-runs the filter authoritatively (`ordering.md`). Both call the *same*
@@ -106,7 +163,9 @@ gone, the name is released) earns a new workspace/tab/agent.
 | `agent start` says `agent_name_taken` | close this tick's tab, then prompt the name's existing holder — a second pane under that name is impossible, and failing here would repeat every period. The holder is on another pane, so the tab this tick opened holds nothing and is closed like any other failed start (#1512) |
 | `agent start` says `agent_pane_busy` | make up to 3 start attempts with a short backoff — a pane's shell is not interactive the instant `tab create` answers (#1512) |
 | a train is already live | end the tick quietly (NF-1) |
-| zero target PRs | end the tick quietly |
+| zero target PRs | end the tick quietly — `No target PR on …` |
+| targets exist, but the queue fingerprint is unchanged | end the tick quietly — `Queue unchanged on … — backoff skip, window N, next wake in M tick(s)` (#1709). A *different* line from the row above on purpose: zero candidates and unmoved candidates are different states, and a cron log that spelled them the same way would hide the one this backoff exists for |
+| the backoff state file is unreadable or corrupt | run the tick — a state file that cannot be trusted never earns a skip |
 
 Every one of these is "do nothing and try again next period". A dispatcher that
 retried a *prompt* harder would be the thing most likely to produce two trains —

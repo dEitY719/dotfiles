@@ -27,6 +27,15 @@ eligible once its own 11-minute quiet period elapses, and from there the
 `*/5 * * * *` cron backstop picks it up within another 5 minutes at most —
 so the triggering PR's real idle time is **~11–16 minutes**, not zero.
 
+Since #1709 the wake call can also end in `Queue unchanged on … — backoff
+skip`: the dispatcher skips a tick whose target queue fingerprints identically
+to the previous tick's. The PR this step just created is *not* in that
+fingerprint (the quiet period excluded it), so creating it does not by itself
+reset the window. That is the intended outcome — this step exists to shorten
+*other* PRs' idle time, and if none of them has moved there is nothing for a
+session to do differently — but it means "the wake call did nothing" now has
+two possible readings in the log, not one.
+
 What this step *does* reliably shorten is the idle time of **other** PRs
 already sitting in the queue past their quiet period (the common case when
 several `gh:issue-flow` runs are in flight) — those get swept up to 5 minutes

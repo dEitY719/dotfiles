@@ -36,6 +36,7 @@ setup() {
     _STATE_HOME="${_WORK_DIR}/state"
     _STATE_DIR="${_STATE_HOME}/pr-merge-train"
     _LOCK_FILE="${_STATE_DIR}/.lock"
+    _BACKOFF_FILE="${_STATE_DIR}/backoff"
     _LOG="${_WORK_DIR}/calls.log"
     _REPO_DIR="${_WORK_DIR}/dotfiles"
     _LOCK_HOLDER_PID=""
@@ -91,10 +92,16 @@ _make_repo() {
 # One `gh pr list --json` element: PR <1>, last updated <2> minutes ago,
 # optionally a draft (<3>, default `false`) — a draft is never mergeable, so
 # never a reason to wake a session.
+#
+# <4> head sha, <5> mergeStateStatus and <6> the labels array are the #1709
+# fingerprint fields. All three default, and the defaults are *stable for a
+# given PR number*, so every pre-#1709 caller keeps describing one unchanging
+# PR — which is what lets the backoff tests vary exactly one field at a time.
 _pr_json() {
     local _stamp
     _stamp=$(_epoch_to_iso "$(($(date +%s) - $2 * 60))") || fail "cannot format a timestamp on this platform"
-    printf '{"number":%s,"updatedAt":"%s","isDraft":%s}' "$1" "${_stamp}" "${3:-false}"
+    printf '{"number":%s,"updatedAt":"%s","isDraft":%s,"headRefOid":"%s","mergeStateStatus":"%s","labels":%s}' \
+        "$1" "${_stamp}" "${3:-false}" "${4:-oid$1}" "${5:-BEHIND}" "${6:-[]}"
 }
 
 # A `gh pr list --json` element whose `updatedAt` cannot be read — the raw JSON
@@ -358,6 +365,24 @@ _path_without() {
     printf '%s:%s' "${_BIN_DIR}" "${_d}"
 }
 
+# The #1709 backoff state file's fields: `<window> <remaining> <fingerprint>`.
+_backoff_window() {
+    cut -d' ' -f1 "${_BACKOFF_FILE}"
+}
+
+_backoff_remaining() {
+    cut -d' ' -f2 "${_BACKOFF_FILE}"
+}
+
+# Rewrite the window/remaining counters while keeping the fingerprint the last
+# tick actually stored — the only way a test can stand at an arbitrary point in
+# the backoff sequence without running that many ticks for real.
+_seed_backoff() {
+    local _fp
+    _fp=$(cut -d' ' -f3- "${_BACKOFF_FILE}")
+    printf '%s %s %s\n' "$1" "$2" "${_fp}" >"${_BACKOFF_FILE}"
+}
+
 # Hold an exclusive flock on the tick's lock file in a background process
 # until teardown kills it, so the script under test sees a contended lock.
 # Blocks until the holder has actually acquired the lock.
@@ -503,6 +528,189 @@ _hold_lock() {
 }
 
 # ---------------------------------------------------------------------------
+# Unchanged-queue backoff (#1709)
+#
+# The state file outlives the tick that wrote it, so every test here is two or
+# more *separate* `_run_tick` processes against one `$XDG_STATE_HOME` — the
+# same cross-invocation shape the lock-release test uses. `: >"${_LOG}"`
+# between them is load-bearing: `_refute_train_started` reads the whole log,
+# and without a truncation it would still be seeing the first tick's launch.
+# ---------------------------------------------------------------------------
+
+@test "pr_merge_train_cron: the first tick records a queue fingerprint" {
+    _run_tick
+    assert_success
+    [ -s "${_BACKOFF_FILE}" ]
+    # Reset state: one window armed, and the target's own fingerprint stored.
+    assert_equal "$(_backoff_window)" "1"
+    run cat "${_BACKOFF_FILE}"
+    assert_output --partial "acme/dotfiles|11:oid11:BEHIND:"
+}
+
+# The fields the fingerprint is made of have to be asked for. Dropping one from
+# the --json list would leave the fingerprint constant and the train asleep.
+@test "pr_merge_train_cron: the PR query asks for the fingerprint fields" {
+    _run_tick
+    assert_success
+    _assert_logged "headRefOid"
+    _assert_logged "mergeStateStatus"
+}
+
+@test "pr_merge_train_cron: an unchanged queue backs the next tick off" {
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    assert_output --partial "Queue unchanged"
+    _refute_train_started
+}
+
+# The two quiet exits must not read the same in a cron log — one means "no
+# candidates", the other "candidates that have not moved" (#1709 AC-4).
+@test "pr_merge_train_cron: the backoff skip line is distinct from the no-target line" {
+    _run_tick
+    assert_success
+
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    assert_output --partial "Queue unchanged"
+    refute_output --partial "No target PR"
+
+    _set_prs '[]'
+    _run_tick
+    assert_success
+    assert_output --partial "No target PR"
+    refute_output --partial "Queue unchanged"
+}
+
+@test "pr_merge_train_cron: the backoff window doubles across unchanged ticks" {
+    _run_tick # fingerprint recorded, window 1 armed
+    assert_equal "$(_backoff_window)" "1"
+
+    _run_tick # skipped, window 1 spent
+    assert_output --partial "Queue unchanged"
+    assert_equal "$(_backoff_remaining)" "0"
+
+    : >"${_LOG}"
+    _run_tick # window elapsed: wake a session, arm 2
+    _assert_logged "herdr agent prompt"
+    assert_equal "$(_backoff_window)" "2"
+
+    _run_tick
+    assert_output --partial "Queue unchanged"
+    _run_tick
+    assert_output --partial "Queue unchanged"
+
+    : >"${_LOG}"
+    _run_tick # window elapsed again: wake, arm 4
+    _assert_logged "herdr agent prompt"
+    assert_equal "$(_backoff_window)" "4"
+}
+
+# Seeded rather than run 20 times: the property is "the doubling stops", and
+# reaching 8 honestly costs a dozen process launches to assert one comparison.
+@test "pr_merge_train_cron: the backoff window is capped" {
+    _run_tick
+    assert_success
+
+    _seed_backoff 8 0
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+    assert_equal "$(_backoff_window)" "8"
+}
+
+@test "pr_merge_train_cron: a moved head resets the backoff immediately" {
+    _set_prs "[$(_pr_json 11 30 false oid-a)]"
+    _run_tick
+    _run_tick
+    assert_output --partial "Queue unchanged"
+
+    _set_prs "[$(_pr_json 11 30 false oid-b)]"
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+    assert_equal "$(_backoff_window)" "1"
+}
+
+# A verdict label flipping is the #1709 scenario in reverse: the queue that had
+# nothing to do suddenly has something to do, and must not wait out a window.
+@test "pr_merge_train_cron: a verdict label change resets the backoff" {
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-blocked"}]')]"
+    _run_tick
+    _run_tick
+    assert_output --partial "Queue unchanged"
+
+    _set_prs "[$(_pr_json 11 30 false oid11 BEHIND '[{"name":"review-passed"}]')]"
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: a mergeStateStatus change resets the backoff" {
+    _set_prs "[$(_pr_json 11 30 false oid11 BLOCKED)]"
+    _run_tick
+    _run_tick
+    assert_output --partial "Queue unchanged"
+
+    _set_prs "[$(_pr_json 11 30 false oid11 CLEAN)]"
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+}
+
+# AC-3, and the whole reason the dispatcher needs no second signal channel: a
+# merged PR leaves `gh pr list --state open`, so the progress it represents is
+# already a fingerprint change. Same for a failed attempt that pushed anything
+# (covered by the moved-head test above).
+@test "pr_merge_train_cron: a merged PR leaving the queue resets the backoff" {
+    _set_prs "[$(_pr_json 11 30),$(_pr_json 12 30)]"
+    _run_tick
+    _run_tick
+    assert_output --partial "Queue unchanged"
+
+    _set_prs "[$(_pr_json 12 30)]"
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+    assert_equal "$(_backoff_window)" "1"
+}
+
+# A tick that never reached the queue made no judgement about it, so it must
+# leave no fingerprint for the next one to match against.
+@test "pr_merge_train_cron: a live train leaves no backoff state" {
+    _run_tick PMT_AGENT_STATUS=working
+    assert_success
+    [ ! -e "${_BACKOFF_FILE}" ]
+}
+
+@test "pr_merge_train_cron: a failing gh pr list leaves no backoff state" {
+    _run_tick GH_PR_LIST_FAIL=1
+    assert_success
+    [ ! -e "${_BACKOFF_FILE}" ]
+}
+
+# A hand-edited or truncated state file must fall back to running the tick,
+# never to skipping one.
+@test "pr_merge_train_cron: a corrupt backoff file does not skip a tick" {
+    mkdir -p "${_STATE_DIR}"
+    printf 'garbage\n' >"${_BACKOFF_FILE}"
+    _run_tick
+    assert_success
+    _assert_logged "herdr agent prompt"
+    assert_equal "$(_backoff_window)" "1"
+}
+
+# ---------------------------------------------------------------------------
 # NF-1 — one train at a time
 # ---------------------------------------------------------------------------
 
@@ -517,6 +725,11 @@ _hold_lock() {
 @test "pr_merge_train_cron: the lock is released so the next tick runs" {
     _run_tick
     assert_success
+    : >"${_LOG}"
+    # A moved head puts the second tick outside the #1709 backoff window, so
+    # what this test asserts stays "the lock was released" rather than
+    # accidentally becoming "the queue was unchanged".
+    _set_prs "[$(_pr_json 11 30 false oid-moved)]"
     _run_tick
     assert_success
     _assert_logged "herdr agent prompt"
@@ -1205,6 +1418,9 @@ _hold_lock() {
     _run_tick -- --dry-run
     assert_success
     [ ! -e "${_LOCK_FILE}" ]
+    # Including the #1709 fingerprint: a probe that recorded one would make the
+    # *next real* tick believe it had already looked at this queue.
+    [ ! -e "${_BACKOFF_FILE}" ]
 }
 
 # ---------------------------------------------------------------------------
