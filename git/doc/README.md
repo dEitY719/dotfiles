@@ -78,9 +78,9 @@ git sync -h     # 도움말 (git 이 `--help` 를 alias 정의 출력으로 가�
 `git sync` 를 다시 실행하면 `.git/MERGE_HEAD` 를 감지해 남은 단계를 이어서
 진행한다(멱등 재개).
 
-리모트/브랜치 이름이 다르면 `SYNC_INTERNAL_REMOTE`(기본 `origin`),
-`SYNC_EXTERNAL_REMOTE`(기본 `upstream`), `SYNC_BRANCH`(기본 `main`) 로 덮어쓴다.
-`upstream` 이 없는 프로젝트에서는 사전 가드가 안내 메시지만 남기고 종료한다.
+리모트/브랜치 이름 재정의(`GIT_SYNC_INTERNAL_REMOTE` / `GIT_SYNC_EXTERNAL_REMOTE` /
+`GIT_SYNC_BRANCH`)는 `git sync -h` 참고. `upstream` 이 없는 프로젝트에서는 사전
+가드가 안내 메시지만 남기고 종료한다.
 
 저장소-로컬 alias(`git config --local alias.sync`)는 git 우선순위상 이 전역
 alias 를 자동으로 덮으므로, 자체 `git sync` 를 가진 프로젝트와 충돌하지 않는다.
