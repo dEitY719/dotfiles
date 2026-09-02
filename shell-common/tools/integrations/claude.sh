@@ -809,19 +809,19 @@ _claude_ensure_settings_copy() {
 #   2. If <tgt> is a legacy bind-mount (#287/#342 era), unmount it.
 # An unexpected regular file at <tgt> is backed up rather than clobbered.
 _claude_prepare_skills_dir() {
-    _ccsd_tgt="${1:-}"
-    if [ -z "$_ccsd_tgt" ]; then
+    _cpsd_tgt="${1:-}"
+    if [ -z "$_cpsd_tgt" ]; then
         ux_error "_claude_prepare_skills_dir: tgt required"
         return 1
     fi
 
-    if [ -L "$_ccsd_tgt" ]; then
-        ux_info "  legacy dir-symlink at $_ccsd_tgt — converting to entry composition"
-        rm -f "$_ccsd_tgt"
-    elif _is_mounted "$_ccsd_tgt" 2>/dev/null; then
-        ux_warning "  bind-mount detected at $_ccsd_tgt — unmounting (sudo may prompt)"
-        if ! sudo umount "$_ccsd_tgt"; then
-            ux_error "  unmount failed: $_ccsd_tgt"
+    if [ -L "$_cpsd_tgt" ]; then
+        ux_info "  legacy dir-symlink at $_cpsd_tgt — converting to entry composition"
+        rm -f "$_cpsd_tgt"
+    elif _is_mounted "$_cpsd_tgt" 2>/dev/null; then
+        ux_warning "  bind-mount detected at $_cpsd_tgt — unmounting (sudo may prompt)"
+        if ! sudo umount "$_cpsd_tgt"; then
+            ux_error "  unmount failed: $_cpsd_tgt"
             return 1
         fi
         # Post-umount the underlying directory is revealed. If empty,
@@ -831,17 +831,17 @@ _claude_prepare_skills_dir() {
         # symlinks with the user's data. Mirrors _claude_ensure_symlink's
         # post-umount backup (line 625) so a mixed-version install sees
         # one consistent naming convention.
-        if [ -e "$_ccsd_tgt" ] && ! rmdir "$_ccsd_tgt" 2>/dev/null; then
-            _ccsd_backup="${_ccsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
-            ux_warning "  backing up revealed directory: $_ccsd_tgt → $_ccsd_backup"
-            mv "$_ccsd_tgt" "$_ccsd_backup" || return 1
+        if [ -e "$_cpsd_tgt" ] && ! rmdir "$_cpsd_tgt" 2>/dev/null; then
+            _cpsd_backup="${_cpsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
+            ux_warning "  backing up revealed directory: $_cpsd_tgt → $_cpsd_backup"
+            mv "$_cpsd_tgt" "$_cpsd_backup" || return 1
         fi
-    elif [ -e "$_ccsd_tgt" ] && [ ! -d "$_ccsd_tgt" ]; then
-        _ccsd_backup="${_ccsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
-        ux_warning "  unexpected file at $_ccsd_tgt — backing up: $_ccsd_backup"
-        mv "$_ccsd_tgt" "$_ccsd_backup" || return 1
+    elif [ -e "$_cpsd_tgt" ] && [ ! -d "$_cpsd_tgt" ]; then
+        _cpsd_backup="${_cpsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
+        ux_warning "  unexpected file at $_cpsd_tgt — backing up: $_cpsd_backup"
+        mv "$_cpsd_tgt" "$_cpsd_backup" || return 1
     fi
-    mkdir -p "$_ccsd_tgt"
+    mkdir -p "$_cpsd_tgt"
 }
 
 # _claude_compose_workspace_skills <target_skills_dir>
