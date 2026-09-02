@@ -58,8 +58,9 @@ merged — they are not candidates, they are unfinished business (#1707).
 
 ```bash
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh"
-GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state merged \
-  --limit 30 --json number,title,state,labels \
+GH_HOST="$TARGET_HOST" gh search prs --repo "$TARGET_REPO" --author @me \
+  --merged --label review-passed \
+  --limit 100 --json number,title,state,labels \
   | _gh_pr_merge_train_finalize_targets \
   | jq -r '.[].number'
 ```
@@ -78,12 +79,34 @@ label as the last step of a completed merge (#1636): a merged PR that still
 has it is a PR whose completion steps never ran, which is what an enqueued
 (`--auto`) merge leaves behind.
 
+The query asks the **search index by label**, not `gh pr list` by recency (PR
+#1725, codex BLOCKER). `gh pr list --state merged --limit 30` returned "the 30
+most recently merged PRs" and filtered those — so a PR that genuinely still
+owed a finalize pass fell out of the sweep forever once 30 further merges had
+happened, silently, with no error and no report line. Exactly the PRs a long
+outage or a merge burst strands are the ones that window drops. `is:merged
+label:review-passed` returns that set directly, with no recency cap, however
+long ago they merged; `--limit 100` is a sanity bound on a set that is normally
+empty and never legitimately large — if it is ever hit, the leftovers are a
+real incident, not a window to widen.
+
+The tradeoff taken knowingly: the search index is eventually consistent, so a
+PR merged (or labelled) seconds ago may not appear for a tick or two. That
+delays a finalize by minutes on a train that ticks every 3, against a bug that
+lost it permanently.
+
+`_gh_pr_merge_train_finalize_targets` still runs over the result even though
+the query already filters to the same rule. It is not redundant belt-and-braces:
+`gh search` reports `state` lowercase (`"merged"`), `gh pr list` uppercase
+(`"MERGED"`), and the shared filter is the one place that normalises — routing
+the search output through it is what keeps the *rule* in one place, so a future
+change of query or of `gh`'s output shape cannot quietly turn the sweep into
+"finalize everything the API returned".
+
 The finalize work itself is **not done here**. The train writes nothing to
 GitHub of its own (`references/constraints.md`); `gh:pr-merge --finalize` owns
 every one of those mutations already, and the sequence it runs is defined in
-`../gh-pr-merge/references/finalize-merged-pr.sh.md`. `--state merged` with
-`--limit 30` bounds the sweep: a PR older than that window and still labelled
-is a human's problem, not a loop's.
+`../gh-pr-merge/references/finalize-merged-pr.sh.md`.
 
 ## Step 2: Collect and order the queue
 
@@ -177,10 +200,22 @@ It answers two questions with the shared predicates in
   strict checks are off on this base, so the D-1 table's `BEHIND` row merges
   directly instead of rebasing locally (`references/routing-table.md`).
   Anything unread or unclear is `no` — the pre-#1707 local remediation.
+- `_gh_pr_merge_train_base_strict_confirmed` → `$BASE_STRICT_CONFIRMED`. `yes`
+  only when the rules body was readable and **positively** confirms strict is
+  still on for every `required_status_checks` rule found — the one base that is
+  exempt from the unreadable-base halt, because it never depended on this net.
+  This is a separate question from `$BEHIND_DIRECT`, not its negation: keying
+  the halt off `$BEHIND_DIRECT` let a failed rules lookup disable the halt
+  outright (PR #1725).
 - `_gh_pr_merge_train_base_ci_red` → is the base's tip already failing a check
   **it requires**? If so, every PR on that base is `[SKIPPED] <base> is red`
   and the merge phase does not run for it. Never `[FAILED]`: the next tick
   proceeds the moment the base is green.
+
+Either lookup coming back **unreadable** halts the merge phase for that base
+with `[SKIPPED] base health unreadable on <base>` unless
+`$BASE_STRICT_CONFIRMED` is `yes` — an empty rules body also empties the
+required-context list, so the red check would silently pass a broken base.
 
 This is the safety net that replaces what strict mode used to guarantee. It
 cannot prevent one bad merge — nothing can, once strict is off — but it stops
