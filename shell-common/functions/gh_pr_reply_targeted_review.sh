@@ -377,7 +377,16 @@ _gh_pr_reply_history_origins() {
 # takes). rc 0 = an `ai-review` block posted by <expected-login> is present on
 # this PR; rc 1 = none is.
 #
-#   _gh_pr_reply_history_has_review <expected-login>
+#   _gh_pr_reply_history_has_review <expected-login> [head-sha]
+#
+# <head-sha>, when non-empty, additionally requires the marker to name THAT
+# sha — "this exact head was reviewed", not merely "this PR was reviewed at
+# some point" (PR #1703 review, BLOCKER 3). Callers that carry independent
+# fresh evidence (Step 6, whose ORIGINS was classified against the current
+# head) may omit it; the caller that has NONE — Step 2.5's zero-comment path,
+# where ORIGINS is empty by construction and history is the only evidence —
+# must pass it, or a PR whose head advanced past the last external review
+# would be certified for a head no reviewer has ever seen.
 #
 # <expected-login> is REQUIRED (#1639) for the same reason as its sibling
 # above, and matters MORE here, not less: this probe is the only thing
@@ -405,12 +414,21 @@ _gh_pr_reply_history_origins() {
 # the PR UNLABELLED — the fail-closed direction, since downstream has always
 # read "no label" as "not verified".
 _gh_pr_reply_history_has_review() {
-    local _bodies
+    local _bodies _sha="${2-}"
     # Read whole rather than `grep -q`: an early exit would hand EPIPE to a
     # piped producer, and this reads a comment dump that is already in memory.
     # The author filter runs FIRST — checking for the marker before scoping to
     # the trusted login would be the bug this parameter exists to fix.
     _bodies=$(_gh_pr_reply_login_bodies "${1-}")
+    if [ -n "$_sha" ]; then
+        # Marker shape is `<!-- ai-review:<ai>:<sha> -->`. The reviewer field
+        # is matched as "no colon" so the sha cannot be satisfied by a colon
+        # further left in the same comment. A sha is hex, so it carries no
+        # regex metacharacter of its own.
+        printf '%s\n' "$_bodies" |
+            grep -q -e "<!-- ai-review:[^:]*:$_sha -->" || return 1
+        return 0
+    fi
     case "$_bodies" in
     *'<!-- ai-review:'*) return 0 ;;
     esac

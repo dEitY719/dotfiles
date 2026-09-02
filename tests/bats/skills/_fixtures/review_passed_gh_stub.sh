@@ -30,6 +30,13 @@ _review_passed_gh_stub_setup() {
         if [ "$1" = "api" ]; then
             case "$2" in
                 */labels)
+                    # `STUB_LABELS_RC` (default 0) lets a test reproduce a
+                    # labels-API failure, which the helper must report as
+                    # UNDETERMINED (rc 2) rather than "not attached" — the
+                    # BLOCKER 1 the PR #1703 self-record review found.
+                    if [ "${STUB_LABELS_RC:-0}" -ne 0 ]; then
+                        return "$STUB_LABELS_RC"
+                    fi
                     printf '%s\n' "$STUB_CURRENT_LABELS" | tr ',' '\n'
                     return 0
                     ;;
