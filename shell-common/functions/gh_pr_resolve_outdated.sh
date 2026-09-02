@@ -262,15 +262,10 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
     _old_pid=$(_gh_pr_resolve_outdated_patch_id "$_old_base" "$_old_head" "$_worktree")
     _new_pid=$(_gh_pr_resolve_outdated_patch_id "$_new_base" "$_new_head" "$_worktree")
 
-    # The patch-id dimension is resolved ONCE, up front, and reported on every
-    # path (#1700 F-4). Before this split the drop path printed a fixed
-    # `patch-id=changed` no matter why it was taken, so a rebase that was
-    # byte-for-byte identical but simply had no fresh marker still told the
-    # operator the content had changed — the exact misreading issue #1700
-    # documents on PR #1687, where it argued for a full 4-CLI re-review of a
-    # diff nothing had touched. `unreadable` stays distinct from `changed`
-    # for the same reason: both fail closed to the drop, but only one of them
-    # is evidence about the content.
+    # The patch-id dimension is resolved ONCE, up front, and reported on
+    # every path — see the file header's "Report token" section for why
+    # (#1700 F-4). `unreadable` stays distinct from `changed`: both fail
+    # closed to the drop, but only one is evidence about the content.
     if [ -z "$_old_pid" ] || [ -z "$_new_pid" ]; then
         _pid_state=unreadable
     elif [ "$_old_pid" = "$_new_pid" ]; then
@@ -313,15 +308,10 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
         # already makes (`review-verdict-label.md` → "Freshness marker").
         # Soft-fail is unchanged: this is a report string, never a non-zero
         # return — the next tick's #1601 check self-heals either way.
-        # DIAGNOSTIC ONLY (#1700 F-2): `has_label` used to GATE this branch,
-        # which is what made the bug unrecoverable — whichever drop path ran
-        # first also destroyed the other path's standing to ever re-confirm.
-        # The freshness marker is the durable evidence, so it does the gating
-        # now; the label's prior state survives purely as a report field that
-        # separates an ordinary #1698 keep (`present`) from a #1700 re-grant
-        # after another path already stripped it (`absent`). Read BEFORE the
-        # add below, or it would always report `present`. An `if` (not `&&`)
-        # so a rc-1 lookup cannot trip a caller's errexit.
+        # DIAGNOSTIC ONLY (#1700 F-2, full rationale in the file header's
+        # "What proves..." section): `_prior` is a report field, not a gate.
+        # Read BEFORE the add below, or it would always report `present`. An
+        # `if` (not `&&`) so a rc-1 lookup cannot trip a caller's errexit.
         local _marker=reposted _prior=absent
         if _gh_pr_resolve_outdated_has_label "$_pr" "$_repo" "$_host" review-passed; then
             _prior=present
