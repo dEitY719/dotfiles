@@ -26,13 +26,20 @@ For each PR `N` in the Step 2 queue order:
 5. **Re-query and re-route.** An atom returning success does not prove the PR
    is mergeable now. On the `BEHIND` / `DIRTY` rows, that re-query is also what
    records the sha this train just pushed — see "Recording the push" below.
-6. **Merge** — `Skill(gh:pr-merge, "<N>")`. No strategy argument (D-4).
+6. **Merge** — `Skill(gh:pr-merge, "<N> rebase <remote> --auto")` (#1707).
+   `rebase` is spelled out only because `--auto` is a flag behind two
+   positionals; it is still D-4's default, never a strategy choice. `--auto`
+   enqueues instead of blocking, so this step returns without waiting.
 7. **Close the merged PR's implementation tab** — only on a successful merge,
    only when that tab is `idle`. The block is below ("Closing the merged PR's
-   implementation tab").
-8. **Record** the outcome and continue. After a **successful** merge only, drop
-   that PR's pushed-sha record — otherwise the state dir grows one file per
-   merged PR forever (#1708). Best-effort; it can never fail the merge:
+   implementation tab"). A `[QUEUED]` PR is **not** a successful merge: its
+   worktree is still the thing the queue is about to merge, so its tab stays.
+8. **Record** the outcome — `[MERGED]`, `[QUEUED]`, `[SKIPPED]` or `[FAILED]`
+   (`report-format.md`) — and continue. A `[QUEUED]` PR is done for this tick;
+   Step 0's sweep finalizes it on a later one. After a **successful merge only**
+   (`[MERGED]`, never `[QUEUED]`), drop that PR's pushed-sha record —
+   otherwise the state dir grows one file per merged PR forever (#1708).
+   Best-effort; it can never fail the merge:
 
    ```bash
    _gh_pr_merge_train_forget_pushed_sha "$STATE_DIR" "<N>" || true

@@ -39,6 +39,11 @@
 
 ## What the skill does
 
+0. **Finalizes leftovers first** (#1707): any of your PRs that is already
+   `MERGED` but still carries `review-passed` was merged by the **merge queue**
+   with no session watching, so its post-merge steps never ran. Each gets one
+   `gh:pr-merge --finalize` and a `[FINALIZED]` line. Predicate:
+   `_gh_pr_merge_train_needs_finalize`.
 1. Binds `TARGET_REPO` / `TARGET_HOST` from one remote URL (`references/github-target.md`).
 2. Lists your own open PRs and runs them through the shared filter
    `_gh_pr_merge_train_filter_targets` (`shell-common/functions/gh_pr_merge_train.sh`,
@@ -75,7 +80,10 @@
    worktree").
 7. Caps remediation at **3 attempts per PR** (F-5). Over that, the PR is
    `[FAILED]` and the train moves on (F-6).
-8. Prints a per-PR `[MERGED]` / `[SKIPPED]` / `[FAILED]` report with reasons (F-9).
+8. Prints a per-PR `[FINALIZED]` / `[MERGED]` / `[QUEUED]` / `[SKIPPED]` /
+   `[FAILED]` report with reasons (F-9). `[QUEUED]` means the PR went to the
+   merge queue and has **not** merged yet — step 0 of a later tick finishes it
+   (#1707).
 
 ## What the skill will NOT do
 
@@ -88,8 +96,10 @@
 - Merge a PR carrying `review-blocked`, or one carrying no verdict label at
   all — and it will not read a review comment body to second-guess either.
 - Call `gh:pr-merge-emergency`, or file an incident issue.
-- Pass a merge strategy — `gh:pr-merge`'s default rebase is what
-  `required_linear_history` allows (D-4).
+- Choose a merge strategy — `rebase`, `gh:pr-merge`'s own default, is the only
+  value it ever passes, and it is what `required_linear_history` allows (D-4).
+- Wait for a queued merge to land. Merges are fire-and-forget since #1707
+  (`gh:pr-merge --auto`); the queue owns the merge and step 0 owns the cleanup.
 - Abort the whole train because one PR failed.
 - Process two PRs at once.
 

@@ -25,6 +25,9 @@
 #   _gh_pr_merge_train_pushed_sha_matches <state-dir> <pr> <sha>
 #   _gh_pr_merge_train_forget_pushed_sha <state-dir> <pr>
 #   <raw gh-pr-list JSON array> | _gh_pr_merge_train_readmit_own_pushes <state-dir> <filtered-json>
+#   <one gh-pr-view JSON object> | _gh_pr_merge_train_needs_finalize
+#   <rules/branches/<base> JSON>  | _gh_pr_merge_train_behind_may_merge_directly
+#   <commits/<base>/check-runs JSON> | _gh_pr_merge_train_base_ci_red <ctx>...
 #
 # `_gh_pr_merge_train_quiet_minutes`
 #   Echo the quiet period in minutes. Default 11; override with the env var
@@ -287,6 +290,112 @@ _gh_pr_merge_train_has_review_blocked_label() {
 
 _gh_pr_merge_train_has_review_passed_label() {
     jq -e '[ .labels[]?.name? ] | index("review-passed")' >/dev/null 2>&1
+}
+
+# The merge-queue finalize predicate (#1707).
+#
+# One PR object on stdin — the shape `gh pr list --json state,labels,...`
+# answers with. rc 0 = this PR is MERGED but its post-merge completion steps
+# never ran, so `gh:pr-merge --finalize` still owes it a pass. rc 1 = nothing
+# to do (still open, or already finalized, or malformed).
+#
+# Why `state == MERGED` AND `review-passed` is the signal, rather than a
+# queue-side lookup: `gh:pr-merge` Step 4 drops `review-passed` as the LAST
+# thing it does after a merge (`references/review-passed-cleanup.sh.md`, #1636),
+# and it is the only writer of that drop. So a MERGED PR still carrying the
+# label is, by construction, a PR whose completion steps did not run — which is
+# exactly what happens when the merge was ENQUEUED rather than performed
+# (`--auto`, #1707): `gh pr merge` returned success, the PR stayed OPEN, and
+# minutes later the queue merged it with no session watching. Reusing the label
+# this way costs no extra API call — the train's Step 0 sweep already has to
+# list PRs — and needs no new state file to go stale.
+#
+# The inverse is safe too: a PR merged the ordinary immediate way had its label
+# dropped in the same run, so it never matches here and is never finalized
+# twice. A PR that was merged without ever earning the label (a hand-merge, a
+# pre-#1636 merge) also never matches — the sweep is deliberately conservative,
+# because every step it would re-run is a GitHub write.
+_gh_pr_merge_train_needs_finalize() {
+    jq -e '(.state == "MERGED")
+           and (([ .labels[]?.name? ] | index("review-passed")) != null)' \
+        >/dev/null 2>&1
+}
+
+# Does a merely-BEHIND PR on this base need a LOCAL rebase before it can
+# merge? (#1707, `references/strict-mode-relaxation.md`.)
+#
+# The whole `repos/{repo}/rules/branches/{base}` response on stdin — the same
+# endpoint `references/approval-gate.md`'s `_gate_probe` already reads for the
+# approval count, so this answer is free if the caller keeps that body.
+#
+# rc 0 = strict required-status-checks is DEFINITIVELY off on this base, so
+#        GitHub rebases at merge time and a BEHIND PR may go straight to
+#        `gh:pr-merge`. rc 1 = everything else: strict is on, no
+#        required_status_checks rule was found, or the body was unreadable.
+#
+# The asymmetry is deliberate and points the same way every other gate in this
+# skill points. rc 1 keeps the pre-#1707 behaviour — remediate locally through
+# `gh:pr-resolve-outdated` — which is merely slower, and slower is the cost
+# this repo has always been willing to pay for an unread answer. Never invert
+# it: reading "unknown" as "strict is off" would send a PR to a merge the
+# platform then refuses, burning F-5 attempts on a deterministic refusal.
+#
+# Absence of a `required_status_checks` rule is rc 1 rather than rc 0 on
+# purpose. "No required checks at all" does mean GitHub will not block the
+# merge — but it also means the base-CI guard below has nothing to watch, so
+# the safety net that justifies the shortcut is not there either. A base with
+# no checks is a base this shortcut has no evidence about.
+_gh_pr_merge_train_behind_may_merge_directly() {
+    jq -e '[ .[]? | select(.type == "required_status_checks") ] as $r
+           | ($r | length) > 0
+             and all($r[]; .parameters.strict_required_status_checks_policy == false)' \
+        >/dev/null 2>&1
+}
+
+# Is the base branch's tip commit RED on a check this base actually requires?
+# (#1707, `references/strict-mode-relaxation.md` — the safety net.)
+#
+# `repos/{repo}/commits/{base}/check-runs` on stdin; the required contexts as
+# arguments (from the same rules body the predicate above reads). rc 0 = at
+# least one REQUIRED check has COMPLETED with a non-green conclusion, i.e.
+# positive proof that what is already on the base is broken.
+#
+# This is what replaces the guarantee strict mode used to give. Strict mode
+# verified the rebased result BEFORE it landed; `on: push` CI verifies the
+# identical checks AFTER it lands (`.github/workflows/ci.yml`, `test.yml`).
+# The coverage is the same set of checks — only the timing moved — so the one
+# thing left to add was somebody reading the answer. That is this.
+#
+# Two scoping rules, both load-bearing:
+#
+#   * REQUIRED contexts only. A base tip also carries check runs from
+#     workflows nobody gated on (this repo's weekly `Contract + drift` audit,
+#     a paths-filtered package build). Halting the train on those would wedge
+#     it on a failure no PR in the queue caused and no merge can clear — the
+#     unclearable-skip disease `references/approval-gate.md` documents at
+#     length. An empty context list is therefore rc 1, not rc 0.
+#
+#   * COMPLETED runs only. A check still `in_progress` on the tip is the
+#     ordinary state 30 seconds after a merge, and the train ticks every 3
+#     minutes. Treating pending as red would stall the train for one full CI
+#     cycle after every single merge — which is precisely the serialisation
+#     removing strict mode was meant to end, reintroduced under a new name.
+#     Only a concluded failure halts.
+#
+# Green is a whitelist (`success` / `neutral` / `skipped`), so an unfamiliar
+# conclusion — `startup_failure`, or whatever GitHub adds next — halts rather
+# than passing unread. A malformed or empty body is rc 1 because this
+# predicate only ever answers "is there proof of red"; the caller classifies
+# an unreadable response as its own fail-closed case, the way `_gate_probe`
+# does, and neither concern belongs in the other.
+_gh_pr_merge_train_base_ci_red() {
+    [ "$#" -gt 0 ] || return 1
+    jq -e '[ .check_runs[]?
+             | select(.name as $n | $ARGS.positional | index($n))
+             | select(.status == "completed")
+             | select([(.conclusion // "")]
+                      | inside(["success", "neutral", "skipped"]) | not)
+           ] | length > 0' --args "$@" >/dev/null 2>&1
 }
 
 # Sha-freshness check for `review-passed` (#1601).
@@ -761,6 +870,9 @@ for _gh_pmt_selfcheck_fn in \
     _gh_pr_merge_train_has_reply_pending_label \
     _gh_pr_merge_train_has_review_blocked_label \
     _gh_pr_merge_train_has_review_passed_label \
+    _gh_pr_merge_train_needs_finalize \
+    _gh_pr_merge_train_behind_may_merge_directly \
+    _gh_pr_merge_train_base_ci_red \
     _gh_pr_merge_train_review_passed_marker_sha \
     _gh_pr_merge_train_review_passed_stale \
     _gh_pr_merge_train_record_pushed_sha \

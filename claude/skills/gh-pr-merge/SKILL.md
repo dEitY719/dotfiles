@@ -31,6 +31,19 @@ Record `START_TS=$(date +%s)` immediately for elapsed-time tracking in Step 4.
 - `remote` — default `origin`. Bind `TARGET_REPO` **and** `TARGET_HOST` from
   that one remote URL and `export GH_HOST` per `references/github-target.md`
   (#1403/#1407). Missing remote → list `git remote -v`, stop (no silent fallback).
+- `--auto` — optional flag, any position after the positionals (#1707). Merge
+  **fire-and-forget**: hand the PR to the base branch's merge queue instead of
+  blocking until it merges. Step 3 and Step 3.5 below own the behavior.
+- `--finalize` — optional flag, any position (#1707). Run **only** the
+  post-merge completion sequence on a PR that is **already merged**, then stop:
+  skip Step 2 and Step 3 entirely, jump straight to Step 4 per
+  `references/finalize-merged-pr.sh.md`, and print `[FINALIZED] #<N>` instead
+  of `[OK] PR #<N> merged`. `gh:pr-merge-train`'s Step 0 sweep is its only
+  caller. If `gh pr view <N> --json state` is not `MERGED`, print
+  `[FAIL] PR #<N> not finalized — state is <state>, expected MERGED` and stop:
+  every step in that sequence is a GitHub write that assumes a merge happened.
+  `--auto` and `--finalize` together is a usage error — they are the two halves
+  of one deferred merge, never one invocation.
 
 ## Step 2: Pre-flight (parallel)
 
@@ -56,8 +69,62 @@ here. Rationale + the retired Step 2-B in `references/board-policy.md`.
 
 ## Step 3: Merge (no confirmation)
 
+Without `--auto` — the default, unchanged:
+
 ```bash
 GH_HOST="$TARGET_HOST" gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch
+```
+
+With `--auto` (#1707), paste this block instead. It **tries the queue-aware
+form first and falls back to the line above**, so the flag can never be the
+reason a merge that would otherwise have worked does not:
+
+```bash
+# Substitute PR_NUMBER / TARGET_REPO / TARGET_HOST / STRATEGY_FLAG (one of
+# --rebase / --squash / --merge, per references/strategy-selection.md).
+#
+# `--auto` is the whole point of #1707: with a merge queue active on the base,
+# it hands the PR to the queue and returns immediately, so N PRs cost ONE
+# batched CI cycle instead of N serial rebase+CI round trips.
+#
+# What `--auto` does on a base with NO merge queue, verified against
+# cli/cli v2.45.0 `pkg/cmd/pr/merge/merge.go` (the version installed here):
+# gh computes `autoMerge = --auto AND NOT isImmediatelyMergeable(state)`, and
+# `CLEAN` IS immediately mergeable — so for the only PRs the train ever merges
+# (the D-1 `CLEAN`/`MERGEABLE` row), `--auto` collapses to the ordinary
+# `mergePullRequest` mutation and the PR merges immediately, exit 0, branch
+# deleted. The flag is a genuine no-op there, not a hopeful one.
+#
+# The fallback covers the case that is NOT a no-op: a PR gh does not consider
+# immediately mergeable, where `--auto` really does reach
+# `enablePullRequestAutoMerge` — a mutation GitHub refuses outright when the
+# repo has `allow_auto_merge: false`, which is the CURRENT state of
+# dEitY719/dotfiles. Without the retry, that path would fail a merge the
+# pre-#1707 skill would have completed, on a train the 5-minute cron runs
+# unattended. See
+# ../../gh-pr-merge-train/references/merge-queue-investigation.md.
+#
+# Deliberately NO error-string matching: gh's and GitHub's wording for
+# "auto-merge is not available here" has several forms and is not a stable
+# API. Retrying the plain merge on ANY failure costs one extra call on a path
+# that was already failing, and the second failure is the one reported — which
+# is exactly the error the pre-#1707 skill would have printed.
+#
+# Caveat, same source: when a merge really IS deferred, gh returns before the
+# merge happens and `--delete-branch` silently does nothing in that run (it
+# returns early on the deferred path, with no warning). The head branch is
+# then GitHub's "Automatically delete head branches" setting to clean up, not
+# this skill's. Nothing downstream depends on it: the train's tab-close reads
+# the LOCAL worktree branch, which `--delete-branch` never touched anyway.
+if MERGE_OUT=$(GH_HOST="$TARGET_HOST" gh pr merge "$PR_NUMBER" --repo "$TARGET_REPO" \
+        "$STRATEGY_FLAG" --delete-branch --auto 2>&1); then
+    printf '%s\n' "$MERGE_OUT"
+else
+    printf '[INFO] gh:pr-merge: --auto refused (%s) — retrying the plain merge.\n' \
+        "$(printf '%s' "$MERGE_OUT" | tr '\n' ' ')"
+    GH_HOST="$TARGET_HOST" gh pr merge "$PR_NUMBER" --repo "$TARGET_REPO" \
+        "$STRATEGY_FLAG" --delete-branch
+fi
 ```
 
 Flag mapping in `references/strategy-selection.md`. If `gh` returns
@@ -65,7 +132,46 @@ Flag mapping in `references/strategy-selection.md`. If `gh` returns
 `references/strategy-selection.md` and stop. **Never** silently switch
 strategies.
 
+## Step 3.5: Did it actually merge? (`--auto` only)
+
+Skip this step entirely unless `--auto` was given — without the flag, Step 3
+returning success means the PR is merged, exactly as before.
+
+With `--auto`, success means "GitHub accepted responsibility for the merge",
+which is **not** the same as "the PR is merged". Ask:
+
+```bash
+GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json state,mergedAt
+```
+
+| `state` | Meaning | Do |
+|---|---|---|
+| `MERGED` | the queue was off, or the PR merged immediately | continue to Step 4 exactly as today |
+| `OPEN` | **queued, not yet merged** | print the `[QUEUED]` report below and **stop** — run none of Step 4, none of Step 5 |
+| `CLOSED` | someone closed it out from under us | `[FAIL] PR #<N> not merged — closed` |
+
+```
+[QUEUED] PR #<N> added to merge queue — not yet merged
+  Branch:  <headRefName> → <baseRefName>
+  URL:     <pr-url>
+```
+
+`[QUEUED]` is a **third outcome**, not a dressed-up success and not a failure:
+nothing went wrong, and nothing is finished. Running Step 4/5 here would sync
+a board to `Done`, post an ai-metrics footer and dispatch a post-merge
+verification for a merge that has not happened — and dropping `review-passed`
+would destroy the one signal that says this PR still owes a completion pass.
+`gh:pr-merge-train`'s Step 0 sweep finalizes it on a later tick
+(`_gh_pr_merge_train_needs_finalize`, `references/finalize-merged-pr.sh.md`).
+
 ## Step 4: Sync Project Board Status
+
+Steps 4 and 5 together are **the post-merge completion sequence**, and its
+membership and order are defined once in `references/finalize-merged-pr.sh.md`
+(#1707). `--finalize` re-enters at exactly this point, running the same six
+steps against a PR the merge queue merged with no session watching — same
+order, same SSOT blocks, only the Step 5 report line differs (`[FINALIZED]`
+rather than `[OK]`). Change the sequence there, not only here.
 
 Run the two post-merge board reconciliations (PR card → Done; linked Issue cards
 → Done) per `references/project-board-sync.md` — paste the snippets verbatim
@@ -94,6 +200,9 @@ GH_HOST="$TARGET_HOST" gh pr view <N> --repo "$TARGET_REPO" --json mergeCommit -
 ```
 
 Print **only** the compact report (format in `references/strategy-selection.md` → "Final report format").
+Under `--finalize` the same report is printed with `[FINALIZED] #<N>` as its
+verdict line — the merge SHA and branch fields are identical, only the claim
+"this run merged it" is not made twice (#1707).
 
 **After** the report has printed, paste this block verbatim — it is the
 post-merge verification gate **and** its dispatch, in one run:
@@ -186,6 +295,10 @@ its own so it stays usable standalone. Detail:
 - Never ask for confirmation — running the skill is the confirmation.
 - Never merge an un-approved PR; redirect to `gh:pr-merge-emergency`. Never bypass CI.
 - Never swap strategy if the chosen one fails. Always `--delete-branch`.
+- Never run Step 4/5's completion steps for a PR that is not `MERGED` (#1707).
+  A `[QUEUED]` PR keeps its `review-passed` label — that label is what a later
+  `gh:pr-merge-train` Step 0 sweep matches on, and dropping it early makes the
+  finalize pass unfindable.
 
 ## Related Skills
 
@@ -194,4 +307,7 @@ is the admin-override path when approval cannot be obtained · `gh:pr-post-merge
 owns the dispatch block Step 5 runs inline for repos registered in
 `${IW_WATCHED_REPOS:-${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json}`,
 and stays a standalone manual entry point
-(`/gh-pr-post-merge-verify <N>`).
+(`/gh-pr-post-merge-verify <N>`) · `gh:pr-merge-train` is the only caller of
+`--auto` and `--finalize`: its per-PR merge passes the first, and its Step 0
+sweep passes the second to finish PRs the merge queue merged unattended
+(#1707).
