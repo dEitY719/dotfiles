@@ -461,12 +461,27 @@ marker, which is then the last one and wins again.
 To revoke by hand, after removing the label:
 
 ```
-gh pr comment <PR> --repo <owner>/<repo> --body '<!-- review-verdict:revoked:<current-head-sha> -->'
+GH_HOST="<target-host>" gh pr comment <PR> --repo <owner>/<repo> --body '<!-- review-verdict:revoked:<current-head-sha> -->'
 ```
 
-The trust boundary is unchanged: only markers from the pipeline's own login
-count, so a revocation from any other commenter is ignored exactly as a forged
-grant is.
+`GH_HOST` is not optional here (same cross-host contract as every other `gh`
+call in this pipeline, `references/github-target.md`): a bare `gh pr comment`
+follows `gh`'s own `gh repo set-default`, which on a dual-host login can post
+the marker to the wrong server without an error (#1403).
+
+The trust boundary is unchanged: only markers from the pipeline's own
+login — `_gh_pr_merge_train_review_passed_marker_sha`'s `<expected-login>`,
+`GH_PR_MERGE_TRAIN_TRUSTED_LOGIN` when set, otherwise `gh api user -q .login`
+in the reading context — count, so a revocation from any other commenter is
+ignored exactly as a forged grant is. **Run the command above authenticated as
+that login** — `gh auth status` shows which account the current `gh` session
+is; on this repo's single-account setup that is simply the repo owner's own
+login, so a human revoking under their normal `gh` session already matches.
+On a deployment that splits the review/reply/merge pipeline onto a separate
+bot account, a revocation posted under a human's personal login is silently
+ignored (a real gap flagged in PR #1713 review, codex BLOCKER) — post it
+authenticated as that bot account instead, or from wherever
+`GH_PR_MERGE_TRAIN_TRUSTED_LOGIN` is set to.
 
 `_gh_pr_merge_train_review_passed_marker_sha` and
 `_gh_pr_merge_train_review_passed_stale`
