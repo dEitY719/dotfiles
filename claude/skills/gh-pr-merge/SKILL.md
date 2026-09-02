@@ -184,14 +184,13 @@ Then run the herdr idle-tab hint per `references/herdr-tab-notify.sh.md` — one
 tab (soft-fail and read-only; skip entirely when there is no local worktree, no
 `herdr`, or the agent is not idle — never close a tab or delete a worktree).
 
-Then drop the now-readerless `review-passed` label per
-`references/review-passed-cleanup.sh.md` — `_gh_pr_drop_label "$PR_NUMBER"
-review-passed "$TARGET_REPO" "$TARGET_HOST"` (#1636, soft-fail: the merge
-already succeeded, so a failed delete is one `[WARN]` line and never touches
-the Step 5 report or the exit status).
-
 After the board sync completes, post the ai-metrics PR comment per
 `references/ai-metrics-comment.sh.md` (soft-fail; skip entirely when `GH_DISABLE_AI_METRICS=1`).
+
+The `review-passed` label is **not** dropped here — it is the last thing Step 5
+does, after every other write and after the post-merge verification dispatch.
+That ordering is load-bearing, not tidiness: see
+`references/finalize-merged-pr.sh.md`.
 
 ## Step 5: Fetch Merge SHA + Report
 
@@ -289,6 +288,21 @@ The dispatch owns every step and every failure mode from there (all soft-fail,
 so the report above stands regardless), and re-runs the same registry gate on
 its own so it stays usable standalone. Detail:
 `claude/skills/gh-pr-post-merge-verify/SKILL.md`.
+
+**Last of all** — after the report, after ai-metrics, after the dispatch block
+above has returned — drop the now-readerless `review-passed` label per
+`references/review-passed-cleanup.sh.md` — `_gh_pr_drop_label "$PR_NUMBER"
+review-passed "$TARGET_REPO" "$TARGET_HOST"` (#1636, soft-fail: the merge
+already succeeded, so a failed delete is one `[WARN]` line and never touches
+the report or the exit status).
+
+This is the **last** write of the sequence on purpose (PR #1725, codex
+BLOCKER). That label is the only signal `_gh_pr_merge_train_needs_finalize`
+matches on, so dropping it while any later step is still outstanding makes a
+run that dies in between permanently undiscoverable by the next tick's Step 0
+sweep. Ordering it here bounds an interrupted run to "gets swept again next
+tick" — every step above is idempotent enough to repeat.
+`references/finalize-merged-pr.sh.md` owns the full rationale.
 
 ## Constraints
 
