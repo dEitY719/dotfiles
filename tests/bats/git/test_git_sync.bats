@@ -22,9 +22,9 @@ setup() {
     printf '[include]\n\tpath = %s/git/.gitconfig\n' "$REAL_ROOT" \
         >"${WORK_DIR}/gitconfig.global"
 
-    mkdir -p "${WORK_DIR}/repo"
-    git -C "${WORK_DIR}/repo" init -q -b main .
-    git -C "${WORK_DIR}/repo" commit -q --allow-empty --no-verify -m init
+    git init -q -b main "${WORK_DIR}/repo"
+    git -C "${WORK_DIR}/repo" -c user.email=t@t -c user.name=t \
+        commit -q --allow-empty --no-verify -m init
 }
 
 teardown() {
@@ -54,7 +54,7 @@ _git_in_repo() {
     # `--help` 는 git 이 alias 정의 출력으로 가로채므로 `-h` 로 확인한다.
     run _git_in_repo sync -h
     [ "$status" -eq 0 ]
-    [[ "$output" == *"SYNC_EXTERNAL_REMOTE"* ]]
+    [[ "$output" == *"GIT_SYNC_EXTERNAL_REMOTE"* ]]
 }
 
 @test "git-sync.sh: upstream 리모트가 없으면 안내 후 종료한다" {
