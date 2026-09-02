@@ -290,17 +290,15 @@ _gh_pr_resolve_outdated_patch_id() {
         printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path] [diff-flag]\n' >&2
         return 2
     fi
-    # Four explicit branches rather than an unquoted `$_diff_flag` expansion:
-    # this file is shellcheck'd and an empty unquoted word would be SC2086.
+    # `${_diff_flag:+"$_diff_flag"}` (not a bare `$_diff_flag`) keeps the
+    # empty-flag case shellcheck-clean (SC2086) while vanishing as a whole
+    # word when `_diff_flag` is unset — no combinatorial branch needed for
+    # this second, independent dimension (simplify pass, #1704).
     local _out
-    if [ -n "$_worktree" ] && [ -n "$_diff_flag" ]; then
-        _out=$(git -C "$_worktree" diff "$_diff_flag" "$_base".."$_head" 2>/dev/null | git -C "$_worktree" patch-id --stable 2>/dev/null)
-    elif [ -n "$_worktree" ]; then
-        _out=$(git -C "$_worktree" diff "$_base".."$_head" 2>/dev/null | git -C "$_worktree" patch-id --stable 2>/dev/null)
-    elif [ -n "$_diff_flag" ]; then
-        _out=$(git diff "$_diff_flag" "$_base".."$_head" 2>/dev/null | git patch-id --stable 2>/dev/null)
+    if [ -n "$_worktree" ]; then
+        _out=$(git -C "$_worktree" diff ${_diff_flag:+"$_diff_flag"} "$_base".."$_head" 2>/dev/null | git -C "$_worktree" patch-id --stable 2>/dev/null)
     else
-        _out=$(git diff "$_base".."$_head" 2>/dev/null | git patch-id --stable 2>/dev/null)
+        _out=$(git diff ${_diff_flag:+"$_diff_flag"} "$_base".."$_head" 2>/dev/null | git patch-id --stable 2>/dev/null)
     fi
     # patch-id output is "<hash> <commit>"; only the hash is comparable across
     # the two sides (the trailing commit field differs by construction).
