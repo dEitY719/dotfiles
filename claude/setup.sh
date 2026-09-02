@@ -740,7 +740,15 @@ for acct in $ENABLED_ACCOUNTS; do
     _claude_account_setup_one "$acct" "$cdir"
 done
 
-# --- Verify Links (모든 활성 계정) ---
+# 접두사 없는 $HOME/.claude 는 어떤 계정에도 속하지 않아 위 루프의 대상이
+# 아니지만, claude-yolo / claude-yolo-<account> 래퍼를 거치지 않고 맨몸
+# `claude` 를 실행하면 Claude Code 가 기본값으로 쓰는 경로이기도 하다
+# (issue #1701). 계정 루프와 별도로, 여기도 같은 실파일화를 적용해
+# write-through 심볼릭 링크가 SSOT 를 오염시키는 경로를 막는다.
+log_info "Bare config dir: \$HOME/.claude"
+_claude_ensure_settings_copy "$CLAUDE_SETTINGS_SOURCE" "$HOME/.claude/settings.json"
+
+# --- Verify Links (모든 활성 계정 + 접두사 없는 \$HOME/.claude) ---
 # skills/ is a real directory of entry-level symlinks (#707, F-8), so it
 # is checked as `-d` (and `! -L`) rather than `-L`.
 # settings.json is a real-file copy since #940 (not a symlink) — the
@@ -766,6 +774,14 @@ for acct in $ENABLED_ACCOUNTS; do
         log_error_and_exit "${acct}/skills entry-level 합성 실패 (디렉토리 아님)"
     fi
 done
+# 접두사 없는 \$HOME/.claude/settings.json 도 실파일이어야 한다 (#1701) —
+# 위 계정 루프와 달리 심볼릭 링크·docs·skills 등 다른 항목은 이 경로에서
+# 관리하지 않으므로 settings.json 하나만 검증한다.
+if [ -f "$HOME/.claude/settings.json" ] && [ ! -L "$HOME/.claude/settings.json" ]; then
+    log_dim "✓ \$HOME/.claude/settings.json 실파일 확인됨"
+else
+    log_error_and_exit "\$HOME/.claude/settings.json 실파일 생성 실패"
+fi
 
 # OpenCode / Codex / Gemini / Hermes entry-level 합성은 scripts/setup-skills-ssot.sh 가
 # 책임짐 (#791, #1376). agy 는 별도 연동 없이 Gemini 런타임을 공유해 상속(agy/AGENTS.md 참고).
