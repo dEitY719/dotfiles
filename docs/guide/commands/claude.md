@@ -72,7 +72,7 @@
 ### skills
 
 - **claude-skills** — List available Claude Code skills
-- Skills location: ~/dotfiles/claude/skills/
+- Skills location: ~/.claude/skills/
 
 ### plugin
 

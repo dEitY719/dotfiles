@@ -1,8 +1,9 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_merge_train_close_impl_tab.bats
-# Verify the step-7 impl-tab close documented in
-#   claude/skills/gh-pr-merge-train/SKILL.md → references/train-loop.md
+# Verify the step-7 impl-tab close of gh:pr-merge-train.
 # Source-of-truth fixture: _fixtures/gh_pr_merge_train_close_impl_tab.sh.
+# The skill doc this fixture used to mirror left this repo with #1680, so the
+# fixture is no longer pinned to a doc — only to the behaviour below.
 #
 # Issue #1565: gh:pr-merge Step 5's post-merge-verify dispatch was prose
 # ("call `Skill(gh:pr-post-merge-verify, ...)`") at the tail of a skill the
@@ -18,7 +19,7 @@
 #   4. two agents on one cwd                       → first wins, closed once
 #   5. herdr tab close fails                       → [WARN], never fatal
 #   6. anti-starvation regression: the live count does not grow across N merges
-#   7. doc/fixture drift guard + the SKILL.md pointer
+#   7. fixture-mirror guards (the doc drift guard left with #1680)
 #   8. PR #1567 review: the lookup matches `.cwd` OR `.foreground_cwd`, on a
 #      path boundary, against the PHYSICAL path — a shell that `cd`'d inside
 #      the worktree and a symlinked worktree path both still resolve, while a
@@ -484,36 +485,21 @@ branch refs/heads/wt/issue-2/1
     assert_output "tab-1"
 }
 
-# --- 7. doc/fixture correspondence ----------------------------------------
+# --- 7. fixture-mirror guards ---------------------------------------------
+#
+# #1680: the doc half of this correspondence (gh-pr-merge-train's SKILL.md and
+# references/train-loop.md) left this repo with the skill, so the doc/fixture
+# drift guard and the SKILL.md pointer guards went with it. The fixture below
+# is therefore no longer pinned to any doc in this repo — it is now only pinned
+# by the behavioural tests above.
 
-@test "close-impl-tab: reference doc and fixture have not drifted apart" {
-    local doc="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/train-loop.md"
-    local fixture="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_train_close_impl_tab.sh"
-    local f pat
-    for pat in \
-        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) {print p; exit}}' \
-        'shell-common/functions/herdr_agent_lookup.sh' \
-        'herdr_agent_tab_for_cwd "$(herdr_agent_physical_path ' \
-        ')" idle); then' \
-        '[INFO] gh:pr-merge-train: closed implementation tab %s (%s).' \
-        '[WARN] gh:pr-merge-train: herdr tab close %s failed'; do
-        for f in "$doc" "$fixture"; do
-            run grep -F -- "$pat" "$f"
-            assert_success
-        done
-    done
-}
-
-@test "close-impl-tab: neither the doc nor the fixture carries an inline match predicate (#1569)" {
+@test "close-impl-tab: the fixture carries no inline match predicate (#1569)" {
     # The unification's acceptance criterion: the cwd/foreground_cwd boundary
-    # match exists in exactly one file, and it is neither of these two.
-    local f
-    for f in "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/train-loop.md" \
-        "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_train_close_impl_tab.sh"; do
-        run bash -c "grep -n -e 'def under(' -e 'startswith(' -e 'result.agents' '$f'"
-        [ "$status" -ne 0 ]
-        [ -z "$output" ]
-    done
+    # match exists in exactly one file, and it is not this one.
+    local f="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_train_close_impl_tab.sh"
+    run bash -c "grep -n -e 'def under(' -e 'startswith(' -e 'result.agents' '$f'"
+    [ "$status" -ne 0 ]
+    [ -z "$output" ]
 }
 
 @test "close-impl-tab: an unreadable lookup SSOT is a silent skip, not a fallback" {
@@ -526,28 +512,4 @@ branch refs/heads/wt/issue-2/1
     [ -z "$output" ]
     run cat "$FAKE_CLOSED_LOG"
     assert_output ""
-}
-
-@test "close-impl-tab: the train-loop close block is gated on idle, never unconditional" {
-    local doc="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/train-loop.md"
-    # `herdr tab close` may appear only inside the idle-gated branch: the one
-    # thing this step must never become is a blanket close.
-    run bash -c "grep -c 'herdr tab close \"' '$doc'"
-    assert_output "1"
-}
-
-@test "close-impl-tab: the merge-train SKILL.md points at the close step" {
-    local skill="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/SKILL.md"
-    run grep -qF -- "Closing the merged" "$skill"
-    assert_success
-    run grep -qF -- "_IW_MAX_PER_REPO" "$skill"
-    assert_success
-}
-
-@test "close-impl-tab: the close runs only after a successful merge" {
-    local doc="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train/references/train-loop.md"
-    run grep -qF -- "only after" "$doc"
-    assert_success
-    run grep -qF -- "only on a successful merge" "$doc"
-    assert_success
 }

@@ -33,17 +33,17 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
 - **사용**: `python3 check_codex_skills_budget.py [--budget N] [--top N] [--all] [--quiet] [--per-skill-max N]`
 - **요구사항**: Python stdlib 만 (외부 의존성 없음)
 - **기능**:
-  - `claude/skills/*/SKILL.md` frontmatter 의 `description` 길이 합산
+  - `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/*/SKILL.md` frontmatter 의 `description` 길이 합산 (`--skills-dir` 로 평평한 디렉토리 지정 가능)
   - 가장 긴 설명 Top N 노출 (기본 10개)
   - 개별 skill 이 `--per-skill-max` (기본 1024자) 초과 시 종료 코드 1 — 로더가 해당 skill 을 silently drop 하기 전에 사전 차단
-  - 총합 예산 초과 시 종료 코드 1, 트리밍 또는 `.codex-allowlist` 사용 안내
+  - 총합 예산 초과 시 종료 코드 1, 트리밍 또는 미사용 플러그인 제거 안내
 
 ### check_gh_skill_host_pinning.py
 - **목적**: `gh:*` 스킬의 `GH_HOST` pinning 계약 (issue #1403 / PR #1404) 위반 감지 (issue #1407)
 - **사용**: `python3 check_gh_skill_host_pinning.py [--skills-dir PATH] [--prefix gh-] [--quiet]`
 - **요구사항**: Python stdlib 만 (외부 의존성 없음)
 - **기능**:
-  - `claude/skills/gh-*/**/*.md` 의 실행 가능한 `gh` 호출을 전수 스캔 (backslash 연속 행은 논리 행으로 결합)
+  - `--skills-dir` 아래 `gh-*/**/*.md` 의 실행 가능한 `gh` 호출을 전수 스캔 (backslash 연속 행은 논리 행으로 결합)
   - host 미고정 (`GH_HOST=` 접두사도 `--hostname` 도 없음) 시 위반
   - repo 미고정 (`--repo` 부재) 시 위반 — `gh gist` / `gh auth` 등 repo 스코프가 아닌 서브커맨드는 예외
   - `gh api` 는 `--repo` 플래그가 없으므로 경로에 `$TARGET_REPO` 를 요구하고, 리터럴 `{owner}/{repo}` placeholder 는 위반으로 잡는다 (암묵 해석 = #1403 의 조용한 오호스트 경로)
@@ -57,7 +57,7 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
 - **기능**:
   - 대상 레포를 `claude/plugin/{marketplaces,plugins}.json` 에서 유도 — 손으로 유지하는 표 없음 (NF-2)
   - F-1: 원격 `.claude-plugin/marketplace.json` 이 등록된 `<plugin>@<marketplace>` 를 실제로 제공하는지 검사
-  - F-2: 분리본과 `claude/skills/` 원본을 SKILL.md + `references/` 합집합의 정규화 라인 집합으로 비교 — 네임스페이스 재작성·100줄 상한 분할은 오탐이 되지 않는다
+  - F-2: 분리본과 `claude/skills/` 원본을 SKILL.md + `references/` 합집합의 정규화 라인 집합으로 비교 — 네임스페이스 재작성·100줄 상한 분할은 오탐이 되지 않는다. **#1680 이후 원본이 삭제되어 이 절반은 사실상 비활성**(모든 스킬이 unpairable 로 보고됨); 스케줄 실행은 `--fail-on contract` 라 red 가 되지는 않는다. 드리프트 감시 재설계는 별도 이슈.
   - 스킬 짝짓기는 이름이 아니라 내용 유사도로 하고, 짝을 못 찾으면 조용히 넘기지 않고 보고
   - 발견은 항상 출력하고, 무엇이 실행을 실패시킬지는 `--fail-on` 이 정한다 — 기본 `any` 는 위반·드리프트 모두, `contract` 는 F-1 위반만 (Phase 2-3 드리프트가 워크플로를 상시 red 로 만들지 않게 스케줄 실행이 쓰는 값). 게이트 대상이 없으면 0, 있으면 1, 등록 SSOT 를 못 읽으면 2
   - `--check drift --fail-on contract` 는 게이트할 절반을 아예 실행하지 않아 항상 0 이므로 거부한다
@@ -79,7 +79,7 @@ Dotfiles 유지보수를 위한 1회성/주기적 도구 모음
 ### Codex skill 예산 감시
 - 신규 skill 추가 / description 갱신 후 합계 점검
 - 트렁케이션 경고 발견 시 origin 추적
-- `.codex-allowlist` 운영 결정 자료로 활용
+- description 트리밍 / 미사용 marketplace 플러그인 제거 판단 자료로 활용
 
 ## 🔗 관련 문서
 

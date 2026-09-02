@@ -1,15 +1,15 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_issue_create_open_questions_gate.bats
-# Locks the Step 3.1 미결 게이트 documented in
-#   claude/skills/gh-issue-create/SKILL.md
-#   claude/skills/gh-issue-create/references/clarification.md
-# and the `--no-ask` escape it ships with (#1446).
+# Locks the Step 3.1 미결 게이트 and the `--no-ask` escape it ships
+# with (#1446): behaviour, via
+# _fixtures/gh_issue_create_open_questions_gate.sh — the D-2 detection
+# rules and the create/ask/auto-decide dispatch.
 #
-# Two layers:
-#   - behaviour, via _fixtures/gh_issue_create_open_questions_gate.sh —
-#     the D-2 detection rules and the create/ask/auto-decide dispatch.
-#   - doc drift, by asserting on the skill files themselves — the gate is
-#     prose the model follows, so the prose IS the implementation.
+# #1680: gh-issue-create / devx-autopilot / gh-issue-proceed moved out to
+# their own marketplace repos, so the whole "Doc drift" section (which
+# grepped claude/skills/**) was dropped — those guards belong in those
+# repos now. The fixture below is therefore no longer pinned to the
+# SKILL.md prose it mirrors.
 
 bats_require_minimum_version 1.5.0
 
@@ -17,7 +17,6 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
-    SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-create"
     # shellcheck disable=SC1091
     source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_issue_create_open_questions_gate.sh"
 }
@@ -349,89 +348,5 @@ teardown() {
 
 @test "decision mark: an unknown source is a caller bug" {
     run gh_issue_create_decision_mark bogus
-    assert_failure
-}
-
-# ── Doc drift: the prose IS the implementation ───────────────────────
-@test "docs: feat template ships 확정 사항, not Open Questions" {
-    run grep -c '^## Open Questions' "${SKILL_DIR}/references/templates/feat.md"
-    assert_failure
-    run grep -c '^## 확정 사항 (Decisions)' "${SKILL_DIR}/references/templates/feat.md"
-    assert_success
-    assert_output '1'
-}
-
-@test "docs: SKILL.md places Step 3.1 between Step 3 and Step 3.5" {
-    run awk '
-        /^## Step 3: / { a = NR }
-        /^## Step 3\.1: / { b = NR }
-        /^## Step 3\.5: / { c = NR }
-        END { exit !(a && b && c && a < b && b < c) }
-    ' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "docs: --no-ask is documented in options.md and help.md" {
-    run grep -q -- '--no-ask' "${SKILL_DIR}/references/options.md"
-    assert_success
-    run grep -q -- '--no-ask' "${SKILL_DIR}/references/help.md"
-    assert_success
-}
-
-@test "docs: clarification.md carries the Step 3.1 gate section" {
-    run grep -q '^## 미결 게이트 (Step 3.1)' "${SKILL_DIR}/references/clarification.md"
-    assert_success
-}
-
-@test "docs: clarification.md documents the 미정 token boundary" {
-    run grep -q '미정' "${SKILL_DIR}/references/clarification.md"
-    assert_success
-    run grep -q '김미정' "${SKILL_DIR}/references/clarification.md"
-    assert_success
-}
-
-@test "docs: clarification.md scopes rule 3 beyond 수용 기준" {
-    run grep -qE '## 검증|Verification Goal' "${SKILL_DIR}/references/clarification.md"
-    assert_success
-}
-
-@test "docs: constraints.md refuses the waive escape under --no-ask" {
-    run grep -q '보류 — 사용자 지시' "${SKILL_DIR}/references/constraints.md"
-    assert_success
-}
-
-@test "docs: constraints.md forbids creating with unresolved items" {
-    run grep -q '미결이 남은 초안으로 `gh issue create` 를 호출하지 않는다' \
-        "${SKILL_DIR}/references/constraints.md"
-    assert_success
-}
-
-@test "docs: devx-autopilot Step 0b passes --no-ask to gh:issue-create" {
-    run grep -q 'Skill(gh:issue-create, "--no-ask")' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/devx-autopilot/SKILL.md"
-    assert_success
-}
-
-@test "docs: gh-issue-proceed file_issue passes --no-ask to gh:issue-create" {
-    _flow="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-proceed/references/execution-flow.md"
-    # The file_issue verb row must wire the flag through.
-    run grep -q 'file_issue.*--no-ask' "$_flow"
-    assert_success
-    # And the NO_INTERACTIVE follow-up note must no longer claim
-    # gh:issue-create is un-wired (#1460).
-    run grep -q '^>.*gh:issue-create' "$_flow"
-    assert_failure
-}
-
-@test "docs: the structured-payload example passes --no-ask as a call arg" {
-    # PR #1466 agy/codex: grepping for the bare string is not enough.
-    # gh:issue-create reads flags from its Args, never from the prompt
-    # text, so `--no-ask` sitting inside the STRUCTURED heredoc body is
-    # invisible to it and the gate still stalls the unattended run.
-    _flow="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-proceed/references/execution-flow.md"
-    run grep -q '^Skill(gh:issue-create, "--no-ask",' "$_flow"
-    assert_success
-    # Nothing may reintroduce it as a payload field line.
-    run grep -q '^--no-ask$' "$_flow"
     assert_failure
 }

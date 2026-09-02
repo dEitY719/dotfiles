@@ -1,17 +1,15 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_merge_train_review_verdict_gate.bats
-# The merge train's review verdict gate (#1564, umbrella #1527):
-#   claude/skills/gh-pr-merge-train/references/review-verdict-gate.md
-#   claude/skills/gh-pr-merge-train/references/routing-table.md
-#   claude/skills/gh-pr-merge-train/references/report-format.md
+# The merge train's review verdict gate (#1564, umbrella #1527).
 # Source-of-truth fixture: _fixtures/gh_pr_merge_train_review_verdict_gate.sh
+# (the skill docs it used to mirror left this repo with #1680)
 #
 # Issue #1564 verification checklist:
 #   review-blocked / no label / review-passed  -> [SKIPPED] · [SKIPPED] · proceed
 #   review-blocked beats a stale review-passed
 #   the gate runs AFTER _gh_pr_merge_train_filter_targets, independently of it
-#   gh:label-bootstrap provisions both labels and --prune preserves them
-#     (covered in tests/bats/skills/gh_label_bootstrap.bats)
+#   (gh:label-bootstrap's own provisioning coverage left this repo with the
+#    skill in #1680 — it lives in the gh-setup-skills repo now)
 #   no code path in the train parses a review comment body
 
 load '../test_helper'
@@ -22,7 +20,6 @@ setup() {
     setup_isolated_home
     # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/${FIXTURE}"
-    SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train"
 }
 
 teardown() {
@@ -156,90 +153,19 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------
-# Doc guards — the fixture above is only trustworthy while the docs agree
+# Doc guards — only the shell SSOT ones survive (#1680)
 # ---------------------------------------------------------------------
-
-@test "doc-guard: review-verdict-gate.md exists and carries the decision table" {
-    run grep -q 'review-blocked — reviewer verdict is blocking' \
-        "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-    run grep -q 'review not verified — no review-passed label' \
-        "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-}
-
-@test "doc-guard: review-verdict-gate.md states absence is blocking" {
-    run grep -q 'Why absence is blocking' "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-}
-
-# #1564 explicitly rules a time backstop out. A future edit that adds one
-# would weaken the gate rather than bound it — fail here instead.
-@test "doc-guard: review-verdict-gate.md rules out a time backstop" {
-    run grep -q 'Why no time backstop' "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-    run grep -qE '_gh_pr_merge_train_review_(blocked|passed)_stale_minutes' \
-        "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_failure
-}
+#
+# gh-pr-merge-train's SKILL.md and references/ (review-verdict-gate.md,
+# routing-table.md, report-format.md), and devx-pr-review-all's producer SSOT,
+# moved out to their own marketplace repos, so the guards that pinned the
+# fixture above to that prose belong there. The fixture mirror stays as real,
+# runnable behaviour — it is simply no longer pinned to any doc in this repo.
 
 @test "doc-guard: no staleness window function exists for the verdict labels" {
     run grep -qE '_gh_pr_merge_train_review_(blocked|passed)_stale_minutes' \
         "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
     assert_failure
-}
-
-@test "doc-guard: the board Approved gate is not revived" {
-    run grep -q 'Not the board `Approved` gate' \
-        "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-}
-
-@test "doc-guard: SKILL.md runs the gate and names the shared predicates" {
-    run grep -qF -- '_gh_pr_merge_train_has_review_blocked_label' "${SKILL_DIR}/SKILL.md"
-    assert_success
-    run grep -qF -- '_gh_pr_merge_train_has_review_passed_label' "${SKILL_DIR}/SKILL.md"
-    assert_success
-    run grep -qF -- 'Step 3.5' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: routing-table.md re-checks both verdict labels per PR" {
-    run grep -qF -- '_gh_pr_merge_train_has_review_blocked_label' \
-        "${SKILL_DIR}/references/routing-table.md"
-    assert_success
-    run grep -qF -- '_gh_pr_merge_train_has_review_passed_label' \
-        "${SKILL_DIR}/references/routing-table.md"
-    assert_success
-}
-
-@test "doc-guard: report-format.md tables both new [SKIPPED] reasons" {
-    run grep -q 'review-blocked — reviewer verdict is blocking' \
-        "${SKILL_DIR}/references/report-format.md"
-    assert_success
-    run grep -q 'review not verified — no review-passed label' \
-        "${SKILL_DIR}/references/report-format.md"
-    assert_success
-}
-
-# The failure direction is the whole design: parsing here would let a reviewer
-# reformatting its verdict line silently UNLOCK the gate.
-@test "doc-guard: the train never parses a review comment body" {
-    run grep -rqE 'issues/[^ ]*/comments|ai-review:' "${SKILL_DIR}"
-    assert_failure
-}
-
-# The producer side has to stay the only writer, or the gate becomes circular.
-@test "doc-guard: the producer SSOT is linked from the gate doc" {
-    run grep -q 'review-verdict-label.md' "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-}
-
-# Without provisioning, _gh_pr_edit_safe_label rc 3 means the producer can
-# never issue either label and every PR skips forever (#326).
-@test "doc-guard: the gate doc names the provisioning path" {
-    run grep -q 'gh:label-bootstrap' "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
 }
 
 # ---------------------------------------------------------------------
@@ -776,55 +702,4 @@ more text')" '[$c]')
     assert_output 'skip:review-passed freshness unknown — marker lookup failed, treating as unverified'
     run cat "$STUB_LOG"
     refute_output --partial 'DELETE'
-}
-
-@test "doc-guard: routing-table.md fetches headRefOid for the freshness check" {
-    run grep -qF -- 'headRefOid' "${SKILL_DIR}/references/routing-table.md"
-    assert_success
-}
-
-@test "doc-guard: routing-table.md and review-verdict-gate.md name the freshness predicate" {
-    run grep -qF -- '_gh_pr_merge_train_review_passed_stale' "${SKILL_DIR}/references/routing-table.md"
-    assert_success
-    run grep -qF -- '_gh_pr_merge_train_review_passed_stale' "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-}
-
-# #1636 moved the marker POST from `devx_pr_review_all_apply_label` down into
-# the shared `devx_pr_review_all_write_label` primitive, so the doc guard
-# follows it. Nothing about how the TRAIN reads the marker changed.
-@test "doc-guard: the producer's freshness marker is documented as its only writer" {
-    local _producer="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/devx-pr-review-all/references/review-verdict-label.md"
-    run grep -qF -- 'review-verdict:review-passed:' "$_producer"
-    assert_success
-    run grep -qF -- 'devx_pr_review_all_write_label' "$_producer"
-    assert_success
-}
-
-# PR #1608 review (agy + codex BLOCKER): the marker must be author-checked,
-# not trusted by text alone.
-@test "doc-guard: the gate doc explains marker authorship (anti-forgery)" {
-    run grep -q 'Marker authorship' "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-    run grep -qF -- 'expected-login' "${SKILL_DIR}/references/review-verdict-gate.md"
-    assert_success
-}
-
-@test "doc-guard: routing-table.md resolves and passes the expected login" {
-    run grep -qF -- 'gh api user -q .login' "${SKILL_DIR}/references/routing-table.md"
-    assert_success
-}
-
-# agy round-4 FOLLOW-UP: the F-3 snippet used to be `... && echo "[SKIPPED]
-# reply-pending"` as its own statement, with no exit before the verdict-gate
-# if-chain below it — a reply-pending PR would print that line and then fall
-# straight into the next check too. Pin that reply-pending is now a branch
-# of the SAME if/elif chain, not a separate leading statement.
-@test "doc-guard: routing-table.md folds reply-pending into the same if/elif chain (no fall-through)" {
-    run grep -qF -- 'if printf '"'"'%s'"'"' "$STATE" | _gh_pr_merge_train_has_reply_pending_label; then' \
-        "${SKILL_DIR}/references/routing-table.md"
-    assert_success
-    run grep -qE -- '_gh_pr_merge_train_has_reply_pending_label \&\&' \
-        "${SKILL_DIR}/references/routing-table.md"
-    assert_failure
 }

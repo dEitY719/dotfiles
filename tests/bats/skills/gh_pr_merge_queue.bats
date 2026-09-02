@@ -2,12 +2,13 @@
 # tests/bats/skills/gh_pr_merge_queue.bats
 # Issue #1707 — merge the train's PRs through GitHub's merge queue instead of
 # one blocking merge + one full CI cycle per PR:
-#   claude/skills/gh-pr-merge/SKILL.md                          (Step 1/3/3.5)
-#   claude/skills/gh-pr-merge/references/finalize-merged-pr.sh.md
-#   claude/skills/gh-pr-merge-train/SKILL.md                    (Step 0 sweep)
-#   claude/skills/gh-pr-merge-train/references/report-format.md ([QUEUED])
 #   shell-common/functions/gh_pr_merge_train.sh                 (the predicate)
 # Source-of-truth fixture: _fixtures/gh_pr_merge_queue.sh
+#
+# #1680: the gh-pr-merge and gh-pr-merge-train skills moved to their own
+# marketplace repos, taking every doc guard that pinned this fixture to their
+# SKILL.md / references/*.md with them. The mirror below is unpinned in this
+# repo — behaviour is still tested, drift against the skill text is not.
 #
 # The bug being fixed: merging serially means every merge advances `main`,
 # which puts every remaining queued PR BEHIND, which forces a rebase + a full
@@ -22,8 +23,6 @@ FIXTURE='tests/bats/skills/_fixtures/gh_pr_merge_queue.sh'
 
 setup() {
     setup_isolated_home
-    MERGE_SKILL="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge"
-    TRAIN_SKILL="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge-train"
     GH_LOG="${BATS_TEST_TMPDIR}/gh.log"
     FINALIZE_LOG="${BATS_TEST_TMPDIR}/finalize.log"
     : >"$GH_LOG"
@@ -338,136 +337,6 @@ _stub_gh_view_state() {
 }
 
 # --------------------------------------------------------------------------
-# Doc guards — the blocks above exist only as prose in a SKILL.md
-# --------------------------------------------------------------------------
-
-@test "doc-guard: SKILL.md Step 3 and the fixture have not drifted apart" {
-    local pat f
-    for pat in \
-        '"$STRATEGY_FLAG" --delete-branch --auto 2>&1); then' \
-        '[INFO] gh:pr-merge: --auto refused (%s) — retrying the plain merge.' \
-        '[QUEUED] PR #' \
-        'added to merge queue — not yet merged' \
-        '  Branch:  ' \
-        '  URL:     '; do
-        for f in "${MERGE_SKILL}/SKILL.md" \
-            "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_queue.sh"; do
-            run grep -F -- "$pat" "$f"
-            assert_success
-        done
-    done
-}
-
-@test "doc-guard: gh:pr-merge documents both new flags" {
-    local f
-    for f in "${MERGE_SKILL}/SKILL.md" "${MERGE_SKILL}/references/help.md"; do
-        run grep -qF -- '--auto' "$f"
-        assert_success
-        run grep -qF -- '--finalize' "$f"
-        assert_success
-    done
-}
-
-@test "doc-guard: --finalize refuses a PR that is not MERGED" {
-    run grep -qF -- 'expected MERGED' "${MERGE_SKILL}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: the finalize sequence has one SSOT, cited by both callers" {
-    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
-    [ -r "$doc" ]
-    run grep -qF -- 'references/finalize-merged-pr.sh.md' "${MERGE_SKILL}/SKILL.md"
-    assert_success
-    run grep -qF -- 'finalize-merged-pr.sh.md' "${TRAIN_SKILL}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: the finalize SSOT names every step of the sequence" {
-    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
-    local pat
-    for pat in \
-        'references/project-board-sync.md' \
-        'references/herdr-tab-notify.sh.md' \
-        'references/review-passed-cleanup.sh.md' \
-        'references/ai-metrics-comment.sh.md' \
-        'dispatch.sh.md'; do
-        run grep -qF -- "$pat" "$doc"
-        assert_success
-    done
-}
-
-@test "doc-guard: the finalize SSOT is an index, not a second copy of the blocks" {
-    # #1524's rule in the other direction: this file must not grow its own
-    # copies of blocks that already have an SSOT, or there are two again.
-    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
-    run bash -c "grep -c -e '_gh_pr_drop_label' -e '_gh_project_status_sync' -e 'gh api' '$doc' || true"
-    assert_output "0"
-}
-
-@test "doc-guard: the train routes CLEAN through --auto" {
-    run grep -qF -- 'Skill(gh:pr-merge, "<N> rebase <remote> --auto")' \
-        "${TRAIN_SKILL}/references/routing-table.md"
-    assert_success
-    run grep -qF -- '--auto' "${TRAIN_SKILL}/references/train-loop.md"
-    assert_success
-}
-
-@test "doc-guard: no train call site still passes the bare '<N>' merge form" {
-    # The regression this would be: one row left blocking, and the whole
-    # batching benefit is gone for any queue it lands in.
-    local f
-    for f in "${TRAIN_SKILL}/SKILL.md" \
-        "${TRAIN_SKILL}/references/routing-table.md" \
-        "${TRAIN_SKILL}/references/train-loop.md" \
-        "${TRAIN_SKILL}/references/github-target.md"; do
-        run grep -F -- 'Skill(gh:pr-merge, "<N>")' "$f"
-        assert_failure
-    done
-}
-
-@test "doc-guard: report-format documents [QUEUED] and [FINALIZED]" {
-    local doc="${TRAIN_SKILL}/references/report-format.md"
-    run grep -qF -- '[QUEUED]' "$doc"
-    assert_success
-    run grep -qF -- '[FINALIZED]' "$doc"
-    assert_success
-    run grep -qF -- 'not yet merged' "$doc"
-    assert_success
-}
-
-@test "doc-guard: the train's Step 0 runs the shared predicate, not a paraphrase" {
-    local skill="${TRAIN_SKILL}/SKILL.md"
-    run grep -qF -- '_gh_pr_merge_train_needs_finalize' "$skill"
-    assert_success
-    run grep -qF -- 'Skill(gh:pr-merge, "<N> rebase <remote> --finalize")' "$skill"
-    assert_success
-}
-
-@test "doc-guard: the train's Step 0 makes no GitHub write of its own" {
-    # constraints.md's corollary. The sweep may only READ; every mutation
-    # belongs to gh:pr-merge --finalize.
-    local skill="${TRAIN_SKILL}/SKILL.md"
-    run bash -c "grep -n 'gh api\|-X POST\|-X DELETE\|-X PATCH\|gh pr edit' '$skill'"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-}
-
-@test "doc-guard: BEHIND still has a local-remediation branch to fall back to" {
-    # The shortcut is conditional on the base, so the pre-#1707 path must stay
-    # documented and reachable — a base with strict still on needs it.
-    run grep -qF -- 'gh:pr-resolve-outdated' "${TRAIN_SKILL}/references/routing-table.md"
-    assert_success
-    run grep -qF -- '$BEHIND_DIRECT' "${TRAIN_SKILL}/references/routing-table.md"
-    assert_success
-}
-
-@test "doc-guard: ordering.md says the queue does not move D-2/D-3" {
-    run grep -qF -- 'does not change D-2 or D-3' \
-        "${TRAIN_SKILL}/references/ordering.md"
-    assert_success
-}
-
-# --------------------------------------------------------------------------
 # #1707, the change that actually shipped: strict required-status-checks is
 # OFF on `main`, so a BEHIND-but-clean PR merges without a local rebase and
 # without a fresh CI cycle. Doc: references/strict-mode-relaxation.md
@@ -654,47 +523,12 @@ _run_json() {
 
 # --------------------------------------------------------------------------
 # Doc guards for the relaxation
+#
+# The guards on gh-pr-merge-train's own references/strict-mode-relaxation.md
+# and merge-queue-investigation.md moved out with that skill in #1680. What
+# stays is what this repo still ships: the workflows the safety net rests on
+# and the self-check list in gh_pr_merge_train.sh.
 # --------------------------------------------------------------------------
-
-@test "doc-guard: the strict-relaxation doc exists and states the rollback" {
-    local doc="${TRAIN_SKILL}/references/strict-mode-relaxation.md"
-    [ -r "$doc" ]
-    run grep -qF -- 'strict_required_status_checks_policy' "$doc"
-    assert_success
-    run grep -qF -- 'ruleset-before.json' "$doc"
-    assert_success
-    run grep -qF -- 'rulesets/16849266' "$doc"
-    assert_success
-}
-
-@test "doc-guard: the accepted risk is stated, not buried" {
-    # The user's approval was conditioned on this being prominent.
-    local doc="${TRAIN_SKILL}/references/strict-mode-relaxation.md"
-    run grep -qF -- 'never itself run through' "$doc"
-    assert_success
-    run grep -qF -- 'textually' "$doc"
-    assert_success
-}
-
-@test "doc-guard: the doc does not oversell CI as running the test suite" {
-    # #754 removed `Test (mise)` from CI; both the pre- and post-merge gates
-    # are lint-only. Claiming otherwise would make the net look stronger than
-    # it is, which is the one thing this page must not do.
-    local doc="${TRAIN_SKILL}/references/strict-mode-relaxation.md"
-    run grep -qF -- '#754' "$doc"
-    assert_success
-    run grep -qF -- 'lint-only' "$doc"
-    assert_success
-}
-
-@test "doc-guard: the safety net names the push-triggered workflows" {
-    local doc="${TRAIN_SKILL}/references/strict-mode-relaxation.md"
-    local pat
-    for pat in '.github/workflows/ci.yml' 'test.yml' 'Lint (mise)' 'Shell Lint (mise)'; do
-        run grep -qF -- "$pat" "$doc"
-        assert_success
-    done
-}
 
 @test "doc-guard: both required checks really do run on push to the base" {
     # The entire safety net rests on this. If a future edit narrows either
@@ -708,80 +542,6 @@ _run_json() {
     done
 }
 
-@test "doc-guard: Step 3.6 runs the shared predicates, not a paraphrase" {
-    local skill="${TRAIN_SKILL}/SKILL.md"
-    run grep -qF -- '_gh_pr_merge_train_behind_may_merge_directly' "$skill"
-    assert_success
-    run grep -qF -- '_gh_pr_merge_train_base_ci_red' "$skill"
-    assert_success
-    run grep -qF -- 'strict-mode-relaxation.md' "$skill"
-    assert_success
-}
-
-@test "doc-guard: Step 3.6 is a per-base lookup, never per-PR" {
-    # The whole point of #1707 is removing per-PR round trips; a guard that
-    # added one back would be self-defeating.
-    run grep -qF -- 'once per distinct `baseRefName`' "${TRAIN_SKILL}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: the check-runs fetch is paginated" {
-    # codex FOLLOW-UP, PR #1725: a base with more than one page of check runs
-    # must not silently drop a later, possibly-failing required context.
-    run grep -qF -- 'gh api --paginate "repos/$TARGET_REPO/commits/$BASE_ENC/check-runs"' \
-        "${TRAIN_SKILL}/references/strict-mode-relaxation.md"
-    assert_success
-}
-
-@test "doc-guard: the Step 3.6 block and the fixture have not drifted apart" {
-    local pat f
-    for pat in \
-        '_gh_pr_merge_train_behind_may_merge_directly && BEHIND_DIRECT=yes' \
-        '_gh_pr_merge_train_base_strict_confirmed && BASE_STRICT_CONFIRMED=yes' \
-        "printf '%s' \"\$BASE_RULES\" | jq -e 'type == \"array\"' >/dev/null 2>&1 || BASE_RULES=''" \
-        "printf '%s' \"\$BASE_CHECKS\" | jq -e 'has(\"check_runs\")' >/dev/null 2>&1 || BASE_CHECKS=''" \
-        'if [ "$BASE_STRICT_CONFIRMED" = no ] && { [ -z "$BASE_RULES" ] || [ -z "$BASE_CHECKS" ]; }; then' \
-        '[SKIPPED] base health unreadable on $BASE — not merging onto an unverified base' \
-        '[SKIPPED] $BASE is red — halting the merge phase until it is green'; do
-        for f in "${TRAIN_SKILL}/references/strict-mode-relaxation.md" \
-            "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_queue.sh"; do
-            run grep -F -- "$pat" "$f"
-            assert_success
-        done
-    done
-}
-
-@test "doc-guard: DIRTY is never routed around by the relaxation" {
-    # The one line that must survive every future edit to this row.
-    local f
-    for f in "${TRAIN_SKILL}/references/routing-table.md" \
-        "${TRAIN_SKILL}/references/strict-mode-relaxation.md" \
-        "${TRAIN_SKILL}/SKILL.md"; do
-        run grep -qF -- 'gh:pr-resolve-conflict' "$f"
-        assert_success
-    done
-    run grep -qF -- '`DIRTY` is completely unaffected' \
-        "${TRAIN_SKILL}/references/routing-table.md"
-    assert_success
-}
-
-@test "doc-guard: the two #1707 docs cross-reference each other" {
-    # A reader must land on the right one: the investigation is why the merge
-    # queue is blocked, the relaxation is what actually shipped.
-    run grep -qF -- 'strict-mode-relaxation.md' \
-        "${TRAIN_SKILL}/references/merge-queue-investigation.md"
-    assert_success
-    run grep -qF -- 'merge-queue-investigation.md' \
-        "${TRAIN_SKILL}/references/strict-mode-relaxation.md"
-    assert_success
-}
-
-@test "doc-guard: the investigation doc no longer claims strict is on" {
-    run grep -F -- '`strict_required_status_checks_policy: true`** is currently on' \
-        "${TRAIN_SKILL}/references/merge-queue-investigation.md"
-    assert_failure
-}
-
 @test "doc-guard: the new predicates are in the shipped self-check list" {
     # #724's rule: a rename that breaks Step 3.6 must be loud, not silent.
     local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
@@ -792,114 +552,10 @@ _run_json() {
     done
 }
 
-@test "doc-guard: the investigation doc exists and is flagged manual-only" {
-    local doc="${TRAIN_SKILL}/references/merge-queue-investigation.md"
-    [ -r "$doc" ]
-    run grep -qF -- 'merge-queue-investigation.md' "${TRAIN_SKILL}/SKILL.md"
-    assert_success
-    run grep -qF -- '16849266' "$doc"
-    assert_success
-    run grep -qF -- 'merge_queue' "$doc"
-    assert_success
-}
-
-@test "doc-guard: the investigation doc corrects the 404 premise" {
-    local doc="${TRAIN_SKILL}/references/merge-queue-investigation.md"
-    run grep -qF -- '404' "$doc"
-    assert_success
-    run grep -qF -- 'branches/main/protection' "$doc"
-    assert_success
-}
-
-@test "doc-guard: nothing in this change executes the ruleset PATCH" {
-    # The activation is a human's deliberate act on live infrastructure: a
-    # 5-minute cron drives this train, and flipping the rule from inside the
-    # code that depends on it would break the running pipeline mid-flight.
-    local f
-    for f in "${TRAIN_SKILL}/SKILL.md" \
-        "${TRAIN_SKILL}/references/routing-table.md" \
-        "${TRAIN_SKILL}/references/train-loop.md" \
-        "${MERGE_SKILL}/SKILL.md"; do
-        run grep -F -- 'rulesets/16849266' "$f"
-        assert_failure
-    done
-}
-
-# --------------------------------------------------------------------------
-# PR #1725, codex BLOCKER 1 — the `review-passed` drop must be the LAST step
-# of the post-merge completion sequence, not the third of six.
-#
-# The label is the ONLY thing `_gh_pr_merge_train_needs_finalize` matches on.
-# While it is on, an unfinished PR is findable by the next tick's Step 0
-# sweep; the moment it comes off, that PR is invisible forever. So no step
-# that can still be owed may run after the drop — and until #1725 two did
-# (the ai-metrics comment and the post-merge-verify dispatch).
-# --------------------------------------------------------------------------
-
-# First line number carrying a fixed string, or empty if absent.
-_line_of() {
-    grep -nF -- "$2" "$1" | head -n 1 | cut -d: -f1
-}
-
-@test "drop-last: the finalize SSOT orders the label drop after ai-metrics" {
-    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
-    local metrics drop
-    metrics=$(_line_of "$doc" 'references/ai-metrics-comment.sh.md')
-    drop=$(_line_of "$doc" 'references/review-passed-cleanup.sh.md')
-    [ -n "$metrics" ]
-    [ -n "$drop" ]
-    [ "$drop" -gt "$metrics" ]
-}
-
-@test "drop-last: the finalize SSOT orders the label drop after the PMV dispatch" {
-    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
-    local dispatch drop
-    dispatch=$(_line_of "$doc" 'dispatch.sh.md')
-    drop=$(_line_of "$doc" 'references/review-passed-cleanup.sh.md')
-    [ -n "$dispatch" ]
-    [ "$drop" -gt "$dispatch" ]
-}
-
-@test "drop-last: the finalize SSOT numbers the label drop 6 of 6" {
-    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
-    run grep -qE '^\| 6 \|.*review-passed' "$doc"
-    assert_success
-}
-
-@test "drop-last: the SSOT prose no longer claims the drop is step 3" {
-    # The exact false statement #1725 found: the doc said "Step 3 is last among
-    # the writes on purpose" while sitting 3rd of 6 with two writes after it.
-    local doc="${MERGE_SKILL}/references/finalize-merged-pr.sh.md"
-    run grep -F -- 'Step 3 is **last among the writes on purpose**' "$doc"
-    assert_failure
-}
-
-@test "drop-last: gh:pr-merge runs the drop after ai-metrics and after the dispatch" {
-    local skill="${MERGE_SKILL}/SKILL.md"
-    local metrics dispatch drop
-    metrics=$(_line_of "$skill" 'references/ai-metrics-comment.sh.md')
-    dispatch=$(_line_of "$skill" 'gh-pr-post-merge-verify/references/dispatch.sh.md')
-    drop=$(_line_of "$skill" 'references/review-passed-cleanup.sh.md')
-    [ -n "$metrics" ]
-    [ -n "$dispatch" ]
-    [ -n "$drop" ]
-    [ "$drop" -gt "$metrics" ]
-    [ "$drop" -gt "$dispatch" ]
-}
-
-@test "drop-last: gh:pr-merge Step 4 explicitly says the drop is not there" {
-    # A reader following Step 4 top to bottom must not re-add it in place.
-    run grep -qF -- 'is **not** dropped here' "${MERGE_SKILL}/SKILL.md"
-    assert_success
-}
-
-@test "drop-last: the cleanup SSOT states where in the sequence it runs" {
-    local doc="${MERGE_SKILL}/references/review-passed-cleanup.sh.md"
-    run grep -qF -- 'step 6 of 6' "$doc"
-    assert_success
-    run grep -qF -- '#1725' "$doc"
-    assert_success
-}
+# PR #1725's codex BLOCKER 1 — the `review-passed` drop must be the LAST step
+# of the post-merge completion sequence — was pinned entirely by ordering
+# guards over gh-pr-merge's SKILL.md and references/*.md. Those moved to that
+# skill's own repo in #1680.
 
 # --------------------------------------------------------------------------
 # PR #1725, codex BLOCKER 2 (agy FOLLOW-UP) — a failed RULES lookup must not
@@ -1018,26 +674,17 @@ _line_of() {
 @test "step3.6: the halt never depends on BEHIND_DIRECT any more" {
     # BEHIND_DIRECT is the ROUTING answer; conflating it with safety-net
     # eligibility is the bug. Assert the guard does not mention it.
-    local f
-    for f in "${TRAIN_SKILL}/references/strict-mode-relaxation.md" \
-        "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_queue.sh"; do
-        run grep -F -- '[ "$BEHIND_DIRECT" = yes ] && [ -z "$BASE_CHECKS" ]' "$f"
-        assert_failure
-    done
+    # The doc side of this pair (references/strict-mode-relaxation.md) left
+    # with the skill in #1680; the fixture is what this repo still ships.
+    run grep -F -- '[ "$BEHIND_DIRECT" = yes ] && [ -z "$BASE_CHECKS" ]' \
+        "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_queue.sh"
+    assert_failure
 }
 
 @test "doc-guard: the new predicate is in the shipped self-check list" {
     local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
     run bash -c "sed -n '/^for _gh_pmt_selfcheck_fn in/,/^done/p' '$f' \
         | grep -qF -- '_gh_pr_merge_train_base_strict_confirmed'"
-    assert_success
-}
-
-@test "doc-guard: Step 3.6 names the exemption predicate, not a paraphrase" {
-    run grep -qF -- '_gh_pr_merge_train_base_strict_confirmed' "${TRAIN_SKILL}/SKILL.md"
-    assert_success
-    run grep -qF -- '_gh_pr_merge_train_base_strict_confirmed' \
-        "${TRAIN_SKILL}/references/strict-mode-relaxation.md"
     assert_success
 }
 
@@ -1078,58 +725,4 @@ _line_of() {
         "[$(_pr_json 51 open '[{"name":"review-passed"}]')]"
     assert_success
     assert_output '[]'
-}
-
-@test "sweep: Step 0 queries the search index by label, not gh pr list" {
-    local skill="${TRAIN_SKILL}/SKILL.md"
-    run grep -qF -- 'gh search prs --repo "$TARGET_REPO" --author @me' "$skill"
-    assert_success
-    run grep -qF -- '--merged --label review-passed' "$skill"
-    assert_success
-}
-
-@test "sweep: the recency-capped call is gone" {
-    # `--limit 30` may still be NAMED in the prose that explains the bug; what
-    # must be gone is the invocation. Assert on the command, not the mention.
-    local skill="${TRAIN_SKILL}/SKILL.md"
-    run grep -F -- 'gh pr list --repo "$TARGET_REPO" --author @me --state merged' "$skill"
-    assert_failure
-    run grep -qF -- '--limit 100 --json number,title,state,labels' "$skill"
-    assert_success
-}
-
-@test "sweep: the prose no longer calls an aged-out leftover a human's problem" {
-    # That sentence justified the bug. It must not survive the fix.
-    run grep -F -- "is a human's problem, not a loop's" "${TRAIN_SKILL}/SKILL.md"
-    assert_failure
-}
-
-@test "sweep: --author @me survives the switch to search (D-7)" {
-    # Never sweep — and therefore never finalize — a colleague's PR.
-    run grep -qF -- '--author @me' "${TRAIN_SKILL}/SKILL.md"
-    assert_success
-}
-
-@test "sweep: the shared filter still runs over the search result" {
-    # The query and the filter now encode the same rule; the filter is what
-    # keeps that rule in ONE place and normalises `state` across both sources.
-    local skill="${TRAIN_SKILL}/SKILL.md"
-    run grep -qF -- '| _gh_pr_merge_train_finalize_targets' "$skill"
-    assert_success
-}
-
-@test "sweep: the sweep is still read-only (constraints.md corollary)" {
-    local skill="${TRAIN_SKILL}/SKILL.md"
-    run bash -c "grep -n 'gh api\|-X POST\|-X DELETE\|-X PATCH\|gh pr edit' '$skill'"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-}
-
-@test "sweep: constraints.md describes the same call the skill makes" {
-    run grep -qF -- 'gh search prs --merged --label' \
-        "${TRAIN_SKILL}/references/constraints.md"
-    assert_success
-    run grep -F -- 'one `gh pr list --state merged`' \
-        "${TRAIN_SKILL}/references/constraints.md"
-    assert_failure
 }

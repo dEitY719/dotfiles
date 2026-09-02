@@ -1471,28 +1471,6 @@ def test_bash_grep_of_real_report_line_does_not_terminate(tmp_path: Path) -> Non
     assert decision["decision"] == "block"
 
 
-def test_report_template_still_carries_the_fields_the_hook_matches() -> None:
-    """Issue #1274 drift guard (not a hook-behavior test).
-
-    The Bash channel now requires a report *field* line in the paired
-    `tool_result`, and those field names live in the report template the
-    model is told to emit. If the template is ever edited to rename or drop
-    `PR URL:` / `Resume after fix:`, the hook's matching would silently go
-    stale — real reports would stop being recognized and the flow would
-    block forever (the #1270 bug, reintroduced). Fail loudly here instead."""
-    template = (REPO_ROOT / "claude" / "skills" / "gh-issue-flow" / "references" / "report-template.md").read_text(
-        encoding="utf-8"
-    )
-    assert "PR URL:" in template, (
-        "The success report template no longer contains 'PR URL:' — update "
-        "_TERMINAL_REPORT_FIELDS in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
-    )
-    assert "Resume after fix:" in template, (
-        "The failure report template no longer contains 'Resume after fix:' — update "
-        "_TERMINAL_REPORT_FIELDS in claude/hooks/gh_issue_flow_stop_guard.py (#1274)."
-    )
-
-
 def test_template_text_in_tool_result_of_bash_cat_does_not_terminate(
     tmp_path: Path,
 ) -> None:

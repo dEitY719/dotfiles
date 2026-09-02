@@ -13,7 +13,7 @@ skill_loader() {
     fi
 
     # Get skills directory
-    local skills_dir="${CLAUDE_SKILLS_PATH:-${DOTFILES_ROOT:-$HOME/dotfiles}/claude/skills}"
+    local skills_dir="${CLAUDE_SKILLS_PATH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills}"
 
     # Detect if output is piped or redirected (smart output mode)
     # If stdout is NOT a terminal (not -t 1), we're in a pipeline → quiet mode

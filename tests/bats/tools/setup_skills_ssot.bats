@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # tests/bats/tools/setup_skills_ssot.bats
-# Validate scripts/setup-skills-ssot.sh — focuses on the Codex allowlist
-# behaviour that gates the .codex-allowlist file (issue #216).
+# Validate scripts/setup-skills-ssot.sh — the workspace-only fan-out that
+# composes locally cloned marketplace repos into every non-Claude harness
+# (issue #791 / #1376 / #1652, cut over to workspace-only by #1680).
 
 load '../test_helper'
 
@@ -18,11 +19,14 @@ setup() {
     # script can be invoked without touching the real dotfiles tree.
     FIXTURE_DOTFILES="${TEST_TEMP_HOME}/fixture-dotfiles"
     FIXTURE_HOME="${TEST_TEMP_HOME}/fixture-home"
+    # Since #1680 the only skill source is the workspace, so the baseline
+    # alpha/beta/gamma fixtures live in a clone under the default root.
+    BASE_REPO="${FIXTURE_HOME}/para/project/skills/base-skills"
     mkdir -p \
         "${FIXTURE_DOTFILES}/scripts" \
-        "${FIXTURE_DOTFILES}/claude/skills/alpha" \
-        "${FIXTURE_DOTFILES}/claude/skills/beta" \
-        "${FIXTURE_DOTFILES}/claude/skills/gamma" \
+        "${BASE_REPO}/skills/alpha" \
+        "${BASE_REPO}/skills/beta" \
+        "${BASE_REPO}/skills/gamma" \
         "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib" \
         "${FIXTURE_DOTFILES}/shell-common/functions" \
         "${FIXTURE_HOME}/.codex/skills"
@@ -33,7 +37,7 @@ setup() {
         "${FIXTURE_DOTFILES}/shell-common/functions/skill_sources.sh"
 
     for s in alpha beta gamma; do
-        cat > "${FIXTURE_DOTFILES}/claude/skills/${s}/SKILL.md" <<EOF
+        cat > "${BASE_REPO}/skills/${s}/SKILL.md" <<EOF
 ---
 name: ${s}
 description: stub description for ${s}
@@ -41,7 +45,7 @@ description: stub description for ${s}
 EOF
     done
 
-    export FIXTURE_DOTFILES FIXTURE_HOME
+    export FIXTURE_DOTFILES FIXTURE_HOME BASE_REPO
 }
 
 # Provision the opencode + gemini config dirs so the script's CLI-presence
@@ -81,9 +85,9 @@ run_setup() {
     HOME="$FIXTURE_HOME" run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
 }
 
-# --- Allowlist behaviour ---
+# --- Codex fan-out ---
 
-@test "no allowlist file: every SSOT skill is symlinked into ~/.codex/skills" {
+@test "every workspace skill is symlinked into ~/.codex/skills" {
     run_setup
     assert_success
 
@@ -92,63 +96,23 @@ run_setup() {
         [ -L "$target" ]
         local resolved
         resolved="$(readlink -f "$target")"
-        [ "$resolved" = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+        [ "$resolved" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
     done
 }
 
-@test "allowlist with two entries: only listed skills are linked" {
-    cat > "${FIXTURE_DOTFILES}/claude/skills/.codex-allowlist" <<EOF
-# Pinned codex skills
-alpha
-gamma
-EOF
-
-    run_setup
-    assert_success
-    assert_output --partial "allowlist 적용: 2개 skill"
-
-    [ -L "${FIXTURE_HOME}/.codex/skills/alpha" ]
-    [ -L "${FIXTURE_HOME}/.codex/skills/gamma" ]
-    [ ! -e "${FIXTURE_HOME}/.codex/skills/beta" ]
-}
-
-@test "allowlist prunes a previously linked skill that is no longer allowed" {
-    # First sync without an allowlist — beta gets linked.
-    run_setup
-    assert_success
-    [ -L "${FIXTURE_HOME}/.codex/skills/beta" ]
-
-    # Add an allowlist that excludes beta and re-run.
-    printf 'alpha\ngamma\n' \
-        > "${FIXTURE_DOTFILES}/claude/skills/.codex-allowlist"
-
-    run_setup
-    assert_success
-    [ ! -e "${FIXTURE_HOME}/.codex/skills/beta" ]
-    [ -L "${FIXTURE_HOME}/.codex/skills/alpha" ]
-    [ -L "${FIXTURE_HOME}/.codex/skills/gamma" ]
-}
-
-@test "allowlist with only comments behaves as if missing (link all)" {
-    cat > "${FIXTURE_DOTFILES}/claude/skills/.codex-allowlist" <<EOF
-# everything is commented out
-# beta
-EOF
-
-    run_setup
-    assert_success
-    refute_output --partial "allowlist 적용"
-
-    for s in alpha beta gamma; do
-        [ -L "${FIXTURE_HOME}/.codex/skills/${s}" ]
-    done
+# #1680 removed the .codex-allowlist gate along with the dotfiles SSOT that
+# held the file. Nothing may reintroduce a silent per-skill filter.
+@test "no allowlist gate survives the workspace cutover (#1680)" {
+    run grep -n -e "codex-allowlist" -e "codex_skill_is_allowed" \
+        "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
+    assert_failure
 }
 
 # --- Diagnostic script ---
 
 @test "check_codex_skills_budget: reports under-budget and exits 0" {
     run python3 "$DIAG_SCRIPT" \
-        --skills-dir "${FIXTURE_DOTFILES}/claude/skills" \
+        --skills-dir "${BASE_REPO}/skills" \
         --budget 1000
     assert_success
     assert_output --partial "Skills:     3"
@@ -157,11 +121,21 @@ EOF
 
 @test "check_codex_skills_budget: flags over-budget and exits 1" {
     run python3 "$DIAG_SCRIPT" \
-        --skills-dir "${FIXTURE_DOTFILES}/claude/skills" \
+        --skills-dir "${BASE_REPO}/skills" \
         --budget 5
     [ "$status" -eq 1 ]
     assert_output --partial "exceed budget"
-    assert_output --partial ".codex-allowlist"
+    # #1680 retired the .codex-allowlist escape hatch; the advice must not
+    # point at a mechanism that no longer exists.
+    refute_output --partial ".codex-allowlist"
+}
+
+@test "check_codex_skills_budget: no --skills-dir scans the workspace (#1680)" {
+    WORKSPACE_ROOT="${FIXTURE_HOME}/para/project/skills" \
+        run python3 "$DIAG_SCRIPT" --budget 1000
+    assert_success
+    assert_output --regexp 'Skills: +3'
+    assert_output --partial "para/project/skills"
 }
 
 # ---------------------------------------------------------------------
@@ -179,7 +153,7 @@ EOF
     [ -d "$oc_dir" ] && [ ! -L "$oc_dir" ]
     for s in alpha beta gamma; do
         [ -L "${oc_dir}/${s}" ]
-        [ "$(readlink -f "${oc_dir}/${s}")" = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+        [ "$(readlink -f "${oc_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
     done
 }
 
@@ -193,13 +167,14 @@ EOF
     [ -d "$g_dir" ] && [ ! -L "$g_dir" ]
     for s in alpha beta gamma; do
         [ -L "${g_dir}/${s}" ]
-        [ "$(readlink -f "${g_dir}/${s}")" = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+        [ "$(readlink -f "${g_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
     done
 }
 
 @test "opencode: legacy dir-symlink migrates to entry-level synthesis (#791)" {
     seed_opencode_home
-    # Pre-state: legacy directory symlink → SSOT.
+    # Pre-state: the legacy directory symlink into the dotfiles SSOT that
+    # #1680 deleted — i.e. a dangling link, which holds no user data.
     ln -s "${FIXTURE_DOTFILES}/claude/skills" \
         "${FIXTURE_HOME}/.config/opencode/skills"
     [ -L "${FIXTURE_HOME}/.config/opencode/skills" ]
@@ -218,6 +193,7 @@ EOF
 
 @test "gemini: legacy dir-symlink migrates to entry-level synthesis (#791)" {
     seed_gemini_home
+    # Dangling — the #1680 cutover removed the target (see opencode twin).
     ln -s "${FIXTURE_DOTFILES}/claude/skills" "${FIXTURE_HOME}/.gemini/skills"
     [ -L "${FIXTURE_HOME}/.gemini/skills" ]
 
@@ -281,7 +257,7 @@ EOF
 
     # Remove `beta` from the SSOT, then re-run. The stale entry under
     # opencode must be cleaned up.
-    rm -rf "${FIXTURE_DOTFILES}/claude/skills/beta"
+    rm -rf "${BASE_REPO}/skills/beta"
 
     run_setup
     assert_success
@@ -308,7 +284,7 @@ EOF
     [ -d "$h_dir" ] && [ ! -L "$h_dir" ]
     for s in alpha beta gamma; do
         [ -L "${h_dir}/${s}" ]
-        [ "$(readlink -f "${h_dir}/${s}")" = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+        [ "$(readlink -f "${h_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
     done
 
     # skills/ 루트에는 entry symlink 가 직접 생기지 않는다.
@@ -318,6 +294,7 @@ EOF
 @test "hermes: legacy dir-symlink migrates to entry-level synthesis (#1376)" {
     seed_hermes_home
     mkdir -p "${FIXTURE_HOME}/.hermes/skills"
+    # Dangling — the #1680 cutover removed the target (see opencode twin).
     ln -s "${FIXTURE_DOTFILES}/claude/skills" \
         "${FIXTURE_HOME}/.hermes/skills/dotfiles"
     [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
@@ -421,7 +398,7 @@ EOF
     # stale-entry pruning must also fire on the nested target dir
     # (~/.hermes/skills/dotfiles), not just root-level compose targets
     # like opencode/gemini (codex review, PR #1383).
-    rm -rf "${FIXTURE_DOTFILES}/claude/skills/beta"
+    rm -rf "${BASE_REPO}/skills/beta"
 
     run_setup
     assert_success
@@ -432,12 +409,11 @@ EOF
 }
 
 # ---------------------------------------------------------------------
-# issue #1652 — 다중 워크스페이스 루트 스캔 (#1410 F-6 조기 도입)
-# dotfiles claude/skills/ 스캔은 그대로 두고(F-2/NF-1), 로컬에 clone 된
-# marketplace repo 들(${WORKSPACE_ROOT}/<repo>/skills/<skill>/SKILL.md)을
-# 소스 목록에 **추가로** 합류시킨다. fan-out 로직은 손대지 않는다(F-4).
-# 워크스페이스 열거 규칙 자체의 SSOT 는 shell-common/functions/skill_sources.sh
-# 이고, Claude Code 계정 쪽 커버리지는 claude_compose_workspace_skills.bats.
+# issue #1652 / #1680 — 워크스페이스 루트 스캔이 유일한 소스
+# 로컬에 clone 된 marketplace repo 들
+# (${WORKSPACE_ROOT}/<repo>/skills/<skill>/SKILL.md) 이 소스 전부다.
+# 열거 규칙 자체의 SSOT 는 shell-common/functions/skill_sources.sh 이고,
+# Claude Code 계정 쪽 커버리지는 claude_compose_workspace_skills.bats.
 # ---------------------------------------------------------------------
 
 # Seed a workspace repo under the given root.
@@ -482,7 +458,7 @@ run_setup_with_workspace() {
     done
 }
 
-@test "workspace: dotfiles SSOT keeps being scanned in parallel (#1652 F-2/NF-1)" {
+@test "workspace: every repo under the root is scanned (#1652 F-2)" {
     seed_opencode_home
     seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
 
@@ -490,11 +466,11 @@ run_setup_with_workspace() {
     assert_success
 
     local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
-    # Both sources are represented at once.
+    # Both workspace repos are represented at once.
     for s in alpha beta gamma; do
         [ -L "${oc_dir}/${s}" ]
         [ "$(readlink -f "${oc_dir}/${s}")" \
-            = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/${s}")" ]
+            = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
     done
     [ -L "${oc_dir}/delta" ]
 }
@@ -529,14 +505,25 @@ run_setup_with_workspace() {
     [ ! -e "${oc_dir}/delta" ]
 }
 
-@test "workspace: absent root is a silent no-op, dotfiles still linked (#1652 Error Case 1)" {
+# With the dotfiles SSOT gone (#1680) an absent workspace means there is
+# nothing to link. The script must say so and stop — NOT fall through to the
+# fan-out, whose stale-prune would then wipe every entry already composed.
+@test "workspace: absent root skips the fan-out instead of pruning it (#1680)" {
     seed_opencode_home
+    # Compose once from a real workspace, then take the workspace away.
+    run_setup
+    assert_success
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/alpha" ]
+
+    rm -rf "${FIXTURE_HOME}/para"
     [ ! -d "$(default_workspace_root)" ]
 
     run_setup
     assert_success
     refute_output --partial "No such file"
+    assert_output --partial "skill 소스가 없습니다"
 
+    # Previously composed entries survive untouched.
     for s in alpha beta gamma; do
         [ -L "${FIXTURE_HOME}/.config/opencode/skills/${s}" ]
     done
@@ -574,16 +561,16 @@ run_setup_with_workspace() {
     [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/_shared" ]
 }
 
-@test "workspace: name collision keeps the dotfiles SSOT source (#1652 NF-1)" {
+@test "workspace: name collision resolves by sorted repo order (#1652 NF-1)" {
     seed_opencode_home
-    # `alpha` already exists in the dotfiles SSOT.
+    # `alpha` already comes from base-skills, which sorts first.
     seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "alpha"
 
     run_setup
     assert_success
 
     [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/alpha")" \
-        = "$(readlink -f "${FIXTURE_DOTFILES}/claude/skills/alpha")" ]
+        = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
 }
 
 @test "workspace: two repos exposing the same skill — first wins, deterministically (#1652)" {
@@ -634,10 +621,9 @@ run_setup_with_workspace() {
     run_setup_with_workspace "$FIXTURE_HOME"
     assert_success
 
+    # Refused root == no sources == the #1680 skip guard, not a wipe.
+    assert_output --partial "skill 소스가 없습니다"
     [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
-    for s in alpha beta gamma; do
-        [ -L "${FIXTURE_HOME}/.config/opencode/skills/${s}" ]
-    done
 }
 
 @test "workspace: stale entry is pruned when the repo disappears (#1652 NF-3)" {
@@ -655,7 +641,7 @@ run_setup_with_workspace() {
     run_setup
     assert_success
     [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
-    # dotfiles-sourced entries are untouched.
+    # The surviving repo's entries are untouched.
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/alpha" ]
 }
 
@@ -711,15 +697,3 @@ run_setup_with_workspace() {
     [ "$before" = "$after" ]
 }
 
-@test "workspace: allowlist still gates codex for workspace skills (#1652 F-4)" {
-    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
-    printf 'alpha\ndelta\n' \
-        > "${FIXTURE_DOTFILES}/claude/skills/.codex-allowlist"
-
-    run_setup
-    assert_success
-
-    [ -L "${FIXTURE_HOME}/.codex/skills/alpha" ]
-    [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
-    [ ! -e "${FIXTURE_HOME}/.codex/skills/beta" ]
-}

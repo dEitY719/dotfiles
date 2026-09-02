@@ -35,4 +35,4 @@
 - `docs/guide/playbooks/` — 정책 적용을 위한 실행 절차 (예: 칸반 보드 초기 셋업)
 - `docs/archive/` — 더 이상 정책 SSOT가 아닌 결정 분석·검토 문서
 - `docs/guide/learnings/` — PR/커밋에서 추출한 재사용 가능한 패턴 노트
-- `claude/skills/` — 스킬 SKILL.md / references (실행 가능한 워크플로우 SSOT)
+- `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/` — 스킬 SKILL.md / references (실행 가능한 워크플로우 SSOT, #1680 이후 dotfiles 밖)

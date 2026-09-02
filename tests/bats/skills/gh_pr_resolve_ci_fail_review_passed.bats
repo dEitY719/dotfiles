@@ -2,11 +2,10 @@
 # tests/bats/skills/gh_pr_resolve_ci_fail_review_passed.bats
 # Issue #1705 — gh:pr-resolve-ci-fail Step 5 drops a stale `review-passed`
 # immediately after the push (moved out of Step 7 by #1711, codex review
-# BLOCKER — see below):
-#   claude/skills/gh-pr-resolve-ci-fail/references/safety.md  (SSOT block,
-#     under "Step 5 push")
-#   claude/skills/gh-pr-resolve-ci-fail/SKILL.md              (Step 5)
+# BLOCKER — see below).
 # Source-of-truth fixture: _fixtures/gh_pr_resolve_ci_fail_review_passed.sh
+# (the skill's SKILL.md / references/ left this repo with #1680, so the fixture
+# is no longer pinned to them)
 #
 # Why this file is so much smaller than its two rebase siblings
 # (gh_pr_resolve_{outdated,conflict}_review_passed.bats): those skills can
@@ -31,7 +30,6 @@ FIXTURE='tests/bats/skills/_fixtures/gh_pr_resolve_ci_fail_review_passed.sh'
 
 setup() {
     setup_isolated_home
-    SKILL_DIR="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-resolve-ci-fail"
     GH_LOG="${BATS_TEST_TMPDIR}/gh.log"
     : >"$GH_LOG"
     export GH_LOG
@@ -139,19 +137,6 @@ _stub_gh_fails() {
     [ "$_rp_line" -lt "$_ci_line" ]
 }
 
-@test "#1711: safety.md places the review-passed drop under Step 5, before the Step 7 heading" {
-    local _doc="${SKILL_DIR}/references/safety.md"
-    local _step5_line _drop_line _step7_line
-    _step5_line=$(grep -n '^## Step 5 push' "$_doc" | head -1 | cut -d: -f1)
-    _drop_line=$(grep -n '_gh_pr_drop_label "\$PR_NUMBER" review-passed' "$_doc" | head -1 | cut -d: -f1)
-    _step7_line=$(grep -n '^## Step 7 label removal' "$_doc" | head -1 | cut -d: -f1)
-    [ -n "$_step5_line" ]
-    [ -n "$_drop_line" ]
-    [ -n "$_step7_line" ]
-    [ "$_step5_line" -lt "$_drop_line" ]
-    [ "$_drop_line" -lt "$_step7_line" ]
-}
-
 # ---------------------------------------------------------------------
 # #1563 — review-blocked is off limits to this skill, always
 # ---------------------------------------------------------------------
@@ -194,45 +179,13 @@ _stub_gh_fails() {
 }
 
 # ---------------------------------------------------------------------
-# Doc guards
+# Doc guards — only the shell SSOT one survives (#1680)
 # ---------------------------------------------------------------------
-
-@test "doc-guard: SKILL.md Step 5 names the shared helper and the issue" {
-    run grep -qF -- '_gh_pr_drop_label' "${SKILL_DIR}/SKILL.md"
-    assert_success
-    run grep -qF -- '#1705' "${SKILL_DIR}/SKILL.md"
-    assert_success
-}
-
-@test "doc-guard: safety.md drops review-passed via the shared primitive, unconditionally" {
-    local _doc="${SKILL_DIR}/references/safety.md"
-    run grep -qF -- '_gh_pr_drop_label "$PR_NUMBER" review-passed' "$_doc"
-    assert_success
-    run grep -q 'Unconditional' "$_doc"
-    assert_success
-    # No hand-inlined DELETE for the verdict label — the `CI fail` one above it
-    # is the file's only raw `gh api -X DELETE`.
-    run grep -c 'gh api -X DELETE' "$_doc"
-    assert_output "1"
-}
-
-@test "doc-guard: safety.md states review-blocked is never touched (#1563)" {
-    local _doc="${SKILL_DIR}/references/safety.md"
-    run grep -qF -- 'review-blocked' "$_doc"
-    assert_success
-    run grep -qF -- '#1563' "$_doc"
-    assert_success
-}
-
-@test "doc-guard: constraints.md carries the label policy" {
-    local _doc="${SKILL_DIR}/references/constraints.md"
-    run grep -qF -- 'review-blocked' "$_doc"
-    assert_success
-    run grep -qF -- 'devx:pr-review-all' "$_doc"
-    assert_success
-    run grep -qF -- '#1705' "$_doc"
-    assert_success
-}
+#
+# gh-pr-resolve-ci-fail's SKILL.md and references/ (safety.md, constraints.md)
+# moved out to their own marketplace repo, so the guards that pinned them to
+# the fixture above belong there. The fixture mirror stays as real, runnable
+# behaviour — it is simply no longer pinned to any doc in this repo.
 
 @test "doc-guard: the #1563 SSOT lists gh:pr-resolve-ci-fail as a consumer" {
     run grep -qE 'gh:pr-resolve-ci-fail +Step 5' \

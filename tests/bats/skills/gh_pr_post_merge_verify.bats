@@ -1,9 +1,12 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_post_merge_verify.bats
-# Verify the post-merge verification dispatch documented in
-#   claude/skills/gh-pr-post-merge-verify/SKILL.md
-#   claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md
+# Verify the post-merge verification dispatch.
 # Source-of-truth fixture: _fixtures/gh_pr_post_merge_verify.sh.
+#
+# #1680: the gh-pr-post-merge-verify skill — SKILL.md and
+# references/dispatch.sh.md — moved to its own marketplace repo, and every
+# guard that pinned this mirror to it went with it. The mirror is unpinned in
+# this repo: behaviour is still tested, drift against the doc is not.
 #
 # Cases are issue #1511's acceptance criteria and error cases, one test each:
 #   A-1  unregistered repo      -> byte-identical to pre-#1511 (no herdr call)
@@ -660,15 +663,9 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
     refute_output --partial "tab close"
 }
 
-# --- PR #1518 review: FOLLOW-UP-6/7/8 -------------------------------------
-
-@test "R-6: the dispatch block never uses \`set --\` (it would eat \$1, \$2, ...)" {
-    # The block is pasted at the top level of the caller's shell, so `set --`
-    # there would destroy the caller's own arguments. Comment lines are skipped
-    # — the rationale for NOT using it is allowed to name it.
-    run bash -c "grep -vE '^[[:space:]]*#' '${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md' | grep -n 'set --'"
-    [ "$status" -ne 0 ]
-}
+# --- PR #1518 review: FOLLOW-UP-7/8 ---------------------------------------
+# (FOLLOW-UP-6 pinned dispatch.sh.md itself; that doc left with the skill in
+# #1680.)
 
 @test "R-7: an unreachable herdr WARNs, it does not claim 'nothing to close'" {
     FAKE_HERDR_OUT_AGENT_LIST=""
@@ -699,262 +696,12 @@ pane_of() { printf '%s' "$1" | pmv_json_first pane_id; }
     assert_output ""
 }
 
-@test "R-8: both watched-repos gates carry the same jq guard" {
-    # gh:pr-merge's gate and the dispatch block's step-0 gate must agree, or an
-    # unregistered repo stops being byte-identical to pre-#1511.
-    run grep -c 'if command -v jq >/dev/null 2>&1 && \[ -r "$WATCHED_FILE" \]; then' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/SKILL.md"
-    assert_output "1"
-    run grep -c 'if command -v jq >/dev/null 2>&1 && \[ -r "$WATCHED_FILE" \]; then' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md"
-    assert_output "1"
-}
-
-# --- #1565: gh:pr-merge Step 5 runs the dispatch, it does not call a Skill --
-#
-# The dispatch used to be prose at the very tail of gh:pr-merge ("Otherwise
-# call `Skill(gh:pr-post-merge-verify, "<N> <remote>")`"), inside a skill
-# gh:pr-merge-train invokes in a loop. It executed 0/10 times in that loop and
-# 1/1 at top level, while every pasted shell block in the same skill's Step 4
-# ran 10/10. The form is the fix: a block that is there to run cannot be
-# forgotten the way an instruction to call something else can.
-
-_pmv_merge_skill() { printf '%s' "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/SKILL.md"; }
-_pmv_dispatch_doc() { printf '%s' "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md"; }
-
-# The exact awk program gh:pr-merge Step 5 uses to take the FIRST bash fence
-# out of dispatch.sh.md. Pinned here and then actually run below, so an edit to
-# either side turns this suite red instead of silently extracting nothing.
-_PMV_EXTRACT_AWK='$0 == f "bash" && !b { b = 1; next } $0 == f && b { exit } b'
-
-@test "1565: gh:pr-merge Step 5 no longer delegates through Skill()" {
-    # Comment lines are skipped — the rationale for NOT calling it is allowed
-    # to name it (same carve-out as R-6 above).
-    run bash -c "grep -vE '^[[:space:]]*#' '$(_pmv_merge_skill)' | grep -n 'Skill(gh:pr-post-merge-verify'"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-}
-
-@test "1565: gh:pr-merge Step 5 reads the dispatch SSOT instead of copying it" {
-    run grep -qF -- 'claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md' \
-        "$(_pmv_merge_skill)"
-    assert_success
-    # Sourced, not described.
-    run grep -qF -- '. "$PMV_SH"' "$(_pmv_merge_skill)"
-    assert_success
-}
-
-@test "1565: gh:pr-merge Step 5 carries the extraction program verbatim" {
-    run grep -qF -- "$_PMV_EXTRACT_AWK" "$(_pmv_merge_skill)"
-    assert_success
-}
-
-@test "1565: gh:pr-merge Step 5 binds the inputs the dispatch reads" {
-    local _v
-    for _v in PR_NUMBER HEAD_BRANCH BASE_BRANCH REMOTE; do
-        run grep -qE "^${_v}=" "$(_pmv_merge_skill)"
-        assert_success
-    done
-}
-
-@test "1565: the extraction yields the dispatch block, not a doc snippet" {
-    local _out
-    _out="${TEST_TEMP_HOME}/extracted.sh"
-    run bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    assert_success
-    run head -n 2 "$_out"
-    assert_output --partial 'WATCHED_FILE='
-    run tail -n 1 "$_out"
-    assert_output --partial 'attach: herdr agent attach'
-    # The file's later fences are documentation — the standalone head/base ref
-    # recovery must not be swept into the executed block.
-    run grep -c 'gh pr view' "$_out"
-    assert_output "0"
-}
-
-@test "1565: the extracted dispatch block is syntactically valid shell" {
-    local _out
-    _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    run bash -n "$_out"
-    assert_success
-}
-
-@test "1565: the extracted block returns rather than exiting when sourced" {
-    # Every early exit is `return 0 2>/dev/null || exit 0` so that sourcing it
-    # from Step 5 cannot kill the caller's shell mid-report.
-    local _out
-    _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    run bash -c "grep -n 'exit 0' '${_out}' | grep -v 'return 0 2>/dev/null || exit 0'"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-}
-
-# --- the soft-fail exit-code contract (PR #1567 review) --------------------
-#
-# Every path through the dispatch is a soft-fail: gh:pr-merge sources it after
-# the merge already happened and after its own report is written, so a non-zero
-# status would abort a caller running under `set -e` over work that succeeded.
-# The tests above pin the *shape* of each terminator; these pin the status.
-
-@test "1565: no path in the extracted dispatch block exits non-zero" {
-    local _out
-    _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    # `return N` inside the sourced lookup helper (#1569) is a helper's answer
-    # to its caller, not a status the block ever leaves with — only `exit` ends
-    # the dispatch.
-    run bash -c "grep -nE 'exit[[:space:]]+[1-9]' '${_out}'"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-}
-
-@test "1565: the extracted block exits 0 on its unregistered-repo gate" {
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-
-    # #1555: the block reads IW_WATCHED_REPOS (or the issue-watcher default
-    # under HOME), never DOTFILES_ROOT/docs/.ssot — same registry, same
-    # override rule as issue_watcher_cron.sh. No DOTFILES_ROOT here: the
-    # unregistered-repo gate exits before the block ever reaches
-    # PMV_NAME_LIB, which is the only line that reads it.
-    run env IW_WATCHED_REPOS="$WATCHED" \
-        TARGET_REPO="acme/not-watched" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
-    assert_success
-    [ -z "$output" ]
-}
-
-@test "1565: the extracted block exits 0 on the paths that stop with a WARN" {
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    local _root="${TEST_TEMP_HOME}/fakeroot"
-    mkdir -p "${_root}"
-    local _reg="${TEST_TEMP_HOME}/warn-watched.json"
-
-    # A herdr stub keeps the run off this machine's real herdr; the block only
-    # needs `command -v herdr` to succeed before it reaches these stops.
-    local _bin="${TEST_TEMP_HOME}/stubbin"
-    mkdir -p "$_bin"
-    printf '#!/bin/sh\nexit 0\n' >"${_bin}/herdr"
-    chmod +x "${_bin}/herdr"
-
-    # 1. A verify_skill outside the allowlist: WARN, stop, status 0.
-    printf '[{"repo":"acme/dotfiles","verify_skill":"evil:do-something-else"}]\n' >"$_reg"
-    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$_reg" DOTFILES_ROOT="$_root" \
-        TARGET_REPO="acme/dotfiles" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
-    assert_success
-    assert_output --partial 'is not one of devx:pr-verify-merged'
-
-    # 2. The deliberate stale-main-checkout stop: WARN, stop, status 0. Nothing
-    #    has been closed or rebased at that point, and it must stay that way.
-    mkdir -p "${_root}/shell-common/functions"
-    # Both SSOTs the block sources: the name helper (#1530) and the agent
-    # lookup (#1569). Either one missing is its own WARN-and-stop, which would
-    # pre-empt the stale-main-checkout stop this case is here to observe.
-    local _lib
-    for _lib in herdr_agent_name.sh herdr_agent_lookup.sh; do
-        cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/${_lib}" \
-            "${_root}/shell-common/functions/${_lib}"
-    done
-    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
-        "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
-    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$_reg" DOTFILES_ROOT="$_root" \
-        TARGET_REPO="acme/dotfiles" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
-    assert_success
-    assert_output --partial 'is not a git worktree root'
-}
-
-@test "1569: a missing agent-lookup SSOT warns and skips, it never guesses" {
-    # The counterpart to the name helper's guard: the block sources the lookup
-    # SSOT rather than carrying a copy of the predicate, so an unreadable
-    # helper must stop the dispatch the same way — one WARN, status 0, and
-    # nothing touched. Falling back to an inline match is what #1569 removed.
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-
-    local _root="${TEST_TEMP_HOME}/fakeroot-nolookup"
-    mkdir -p "${_root}/shell-common/functions"
-    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_name.sh" \
-        "${_root}/shell-common/functions/herdr_agent_name.sh"
-
-    local _bin="${TEST_TEMP_HOME}/stubbin-nolookup"
-    mkdir -p "$_bin"
-    printf '#!/bin/sh\nexit 0\n' >"${_bin}/herdr"
-    chmod +x "${_bin}/herdr"
-
-    local _reg="${TEST_TEMP_HOME}/nolookup-watched.json"
-    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
-        "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
-
-    run env PATH="${_bin}:${PATH}" IW_WATCHED_REPOS="$_reg" DOTFILES_ROOT="$_root" \
-        TARGET_REPO="acme/dotfiles" TARGET_HOST="github.com" PR_NUMBER="7" bash "$_out"
-    assert_success
-    assert_output --partial 'herdr_agent_lookup.sh not readable'
-    # Stopped there — the later stops never ran.
-    refute_output --partial 'is not a git worktree root'
-}
-
-@test "1569: the dispatch block carries no inline agent-match predicate" {
-    # The whole point of the unification: `under(` and the cwd/foreground_cwd
-    # select must exist in exactly one file, and it is not this one.
-    # The executed block only, not the prose fences below it — the herdr API
-    # table there names `.foreground_cwd` as documentation, which is fine.
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    run bash -c "grep -n -e 'def under(' -e 'foreground_cwd' '$_out'"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-    # …and it does source the file that has it.
-    run grep -qF -- 'shell-common/functions/herdr_agent_lookup.sh' "$_out"
-    assert_success
-}
-
-@test "1565: gh:pr-merge Step 5 cannot leak the staged temp file" {
-    # mktemp'd, sourced, and removed — but the sourced block returns early on
-    # most paths and the caller may run under `set -e`, so the removal has to
-    # be armed as a trap before anything can go wrong.
-    local _skill
-    _skill="$(_pmv_merge_skill)"
-    run grep -qF -- "trap 'rm -f \"\$PMV_SH\"' EXIT INT TERM" "$_skill"
-    assert_success
-    run grep -qF -- 'trap - EXIT INT TERM' "$_skill"
-    assert_success
-}
-
-@test "1565: gh:pr-post-merge-verify survives as a standalone entry point" {
-    # Removing the skill would take `/gh-pr-post-merge-verify <N>` — the manual
-    # re-run — with it. Step 5 borrows its block; it does not absorb it.
-    local _skill="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/SKILL.md"
-    [ -r "$_skill" ]
-    run grep -qF -- 'name: gh:pr-post-merge-verify' "$_skill"
-    assert_success
-    run grep -qF -- 'references/dispatch.sh.md' "$_skill"
-    assert_success
-    [ -r "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/help.md" ]
-}
-
-@test "1565: top-level gh:pr-merge behavior is otherwise untouched" {
-    # The merge itself, the report, and the unwatched-repo silence are what a
-    # top-level `/gh-pr-merge <N>` run is judged on — Step 5 gained a block,
-    # it did not gain a gate.
-    local _skill
-    _skill="$(_pmv_merge_skill)"
-    run grep -qF -- 'gh pr merge <N> --repo "$TARGET_REPO" --<strategy> --delete-branch' "$_skill"
-    assert_success
-    run grep -qF -- 'Print **only** the compact report' "$_skill"
-    assert_success
-    run grep -qF -- 'no output, no' "$_skill"
-    assert_success
-}
+# #1565 (gh:pr-merge Step 5 sources the dispatch instead of calling a Skill),
+# #1576 (its gate names an empty binding) and the soft-fail exit-code contract
+# from PR #1567 were pinned by extracting the shipped bash fence out of
+# gh-pr-merge/SKILL.md and gh-pr-post-merge-verify/references/dispatch.sh.md.
+# Both moved to their own marketplace repos in #1680, so those guards live
+# there now — the fixture mirror below is unpinned in this repo.
 
 # --- #1571: the herdr settle waits ----------------------------------------
 #
@@ -1062,71 +809,28 @@ JSON
     [ "$(_pmv_log_count '^sleep 13$')" -eq 0 ]
 }
 
-# --- #1571: the shipped block, not just the mirror -------------------------
-
-@test "1571: dispatch.sh.md declares the settle constant with the 13s default" {
-    run grep -qF -- 'PMV_SETTLE_SECONDS="${PMV_SETTLE_SECONDS:-13}"' "$(_pmv_dispatch_doc)"
-    assert_success
-    run grep -qF -- 'pmv_settle() { [ "$PMV_SETTLE_SECONDS" = "0" ] || sleep "$PMV_SETTLE_SECONDS"; }' \
-        "$(_pmv_dispatch_doc)"
-    assert_success
-}
-
-@test "1571: dispatch.sh.md settles between tab create and agent start" {
-    local _doc _tab _settle _start
-    _doc="$(_pmv_dispatch_doc)"
-    _tab=$(grep -n 'TAB_JSON=$(herdr tab create' "$_doc" | head -1 | cut -d: -f1)
-    _settle=$(grep -n '^pmv_settle$' "$_doc" | head -1 | cut -d: -f1)
-    _start=$(grep -n 'herdr agent start "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
-    [ -n "$_tab" ] && [ -n "$_settle" ] && [ -n "$_start" ]
-    [ "$_tab" -lt "$_settle" ]
-    [ "$_settle" -lt "$_start" ]
-}
-
-@test "1571: dispatch.sh.md settles between agent start and agent prompt, fresh only" {
-    local _doc _start _settle _prompt
-    _doc="$(_pmv_dispatch_doc)"
-    _start=$(grep -n 'herdr agent start "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
-    _settle=$(grep -n 'pmv_settle$' "$_doc" | awk -F: -v s="$_start" '$1 > s {print $1; exit}' | cut -d: -f1)
-    _prompt=$(grep -n 'herdr agent prompt "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
-    [ -n "$_start" ] && [ -n "$_settle" ] && [ -n "$_prompt" ]
-    [ "$_start" -lt "$_settle" ]
-    [ "$_settle" -lt "$_prompt" ]
-    # The settle call sits in the `else` branch of the start guard — reached
-    # only on a fresh start, never on the agent_name_taken fallback path.
-    run grep -qF -- 'already registered — prompting the existing session' "$_doc"
-    assert_success
-}
-
-@test "1571: dispatch.sh.md does not grow a fourth agent_pane_busy retry loop" {
-    # #1569 unifies the three dispatchers' start logic; a hand-rolled retry
-    # here would be a copy that unification has to undo (#1571 D-3). Comment
-    # lines are skipped — the rationale for NOT retrying names the error code
-    # it is about (same carve-out as R-6 above).
-    run bash -c "grep -vE '^[[:space:]]*#' '$(_pmv_dispatch_doc)' | grep -n 'agent_pane_busy'"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-}
-
 # --- #1571: the cross-file drift guard ------------------------------------
 #
 # This repo has now shipped the same defect twice by fixing two of the three
 # herdr dispatchers (#1530 -> #1549, #1560 -> #1571). The comments name each
 # other; this pins the values, so the third site cannot quietly stay behind.
+#
+# #1680: the third dispatcher (gh-pr-post-merge-verify's dispatch.sh.md) moved
+# to its own marketplace repo, taking PMV_SETTLE_SECONDS with it. What this
+# repo can still pin is the two cron dispatchers and their four constants.
 
 _pmv_wait_files() {
     printf '%s\n' \
         "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/issue_watcher_cron.sh" \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/pr_merge_train_cron.sh" \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/pr_merge_train_cron.sh"
 }
 
 _PMV_WAIT_ASSIGN='^(_IW_SETTLE_SECONDS|_PMT_SETTLE_SECONDS|PMV_SETTLE_SECONDS|_IW_START_RETRY_SLEEP|_PMT_START_RETRY_SLEEP)='
 
-@test "1571: all five herdr wait constants exist across the three dispatchers" {
+@test "1571: all four herdr wait constants exist across the two cron dispatchers" {
     local _n
     _n=$(_pmv_wait_files | xargs grep -hE "$_PMV_WAIT_ASSIGN" | wc -l)
-    [ "$_n" -eq 5 ]
+    [ "$_n" -eq 4 ]
 }
 
 @test "1571: no herdr wait constant has drifted off 13" {
@@ -1142,18 +846,15 @@ _PMV_WAIT_ASSIGN='^(_IW_SETTLE_SECONDS|_PMT_SETTLE_SECONDS|PMV_SETTLE_SECONDS|_I
     [ -z "$_bad" ] || fail "wait constant is not env-overridable: ${_bad}"
 }
 
-@test "1571: the three dispatchers' wait comments name each other" {
-    local _iw _pmt _doc
+@test "1571: the cron dispatchers' wait comments still name the third site" {
+    # The half of the cross-reference this repo still owns: the dispatch doc's
+    # own back-references left with it in #1680.
+    local _iw _pmt
     _iw="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/issue_watcher_cron.sh"
     _pmt="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/pr_merge_train_cron.sh"
-    _doc="$(_pmv_dispatch_doc)"
     run grep -qF -- 'PMV_SETTLE_SECONDS' "$_iw"
     assert_success
     run grep -qF -- 'PMV_SETTLE_SECONDS' "$_pmt"
-    assert_success
-    run grep -qF -- '_IW_SETTLE_SECONDS' "$_doc"
-    assert_success
-    run grep -qF -- '_PMT_SETTLE_SECONDS' "$_doc"
     assert_success
 }
 
@@ -1211,192 +912,6 @@ _PMV_WAIT_ASSIGN='^(_IW_SETTLE_SECONDS|_PMT_SETTLE_SECONDS|PMV_SETTLE_SECONDS|_I
     refute_output --partial "could not close tab"
     run cat "$FAKE_HERDR_LOG"
     refute_output --partial "tab close -"
-}
-
-@test "1554: dispatch.sh.md closes the verification tab on the same agent-start failure branch" {
-    local _doc _start _close
-    _doc="$(_pmv_dispatch_doc)"
-    _start=$(grep -n 'herdr agent start "\$PMV_AGENT"' "$_doc" | head -1 | cut -d: -f1)
-    _close=$(grep -n 'herdr tab close "\$NEW_TAB"' "$_doc" | head -1 | cut -d: -f1)
-    [ -n "$_start" ] && [ -n "$_close" ]
-    [ "$_start" -lt "$_close" ]
-    run grep -qF -- 'closed the empty verification tab' "$_doc"
-    assert_success
-}
-
-# --- #1576: an empty binding in Step 5's gate is named, never silent -------
-#
-# The gate looks one registry key up and does nothing when the answer is empty.
-# An unwatched repo and a TARGET_REPO that was never substituted both produce
-# that same empty answer, so PR #1572's missing dispatch left no trace at all:
-# no pr-<N> tab, no rebase, and not one line to say which of the two happened.
-# The lookup only means "unwatched" once the five values are known to be bound,
-# so the binding check runs first and names the offenders. The unwatched-repo
-# silence (#1511 A-1) is what must NOT change, and is pinned here too.
-
-# Step 5's gate is the first bash fence under "## Step 5" — the one opened by
-# the `# Substitute the five values` comment, not Step 3's merge command or
-# Step 5's own `gh pr view`. Taken out of the shipped SKILL.md, never a copy.
-_PMV_GATE_AWK='$0 == f "bash" { inb = 1; p = 0; next }
-inb && $0 == f { if (p) exit; inb = 0; next }
-inb && !p && $0 ~ /^# Substitute the five values/ { p = 1 }
-p { print }'
-
-_pmv_gate_block() {
-    local _out="${TEST_TEMP_HOME}/gate-block.sh"
-    awk -v f="$(printf '\140\140\140')" "$_PMV_GATE_AWK" "$(_pmv_merge_skill)" >"$_out"
-    printf '%s' "$_out"
-}
-
-# Paste it the way Step 5 instructs: the five placeholders are replaced by the
-# caller's values — an empty one is exactly the mistake under test. Quoted so
-# a whitespace-only value survives the substitution instead of collapsing to
-# an unquoted no-op (an unquoted `TARGET_REPO=   ` assigns empty anyway,
-# which would silently retest the plain-empty case).
-_pmv_gate_bind() {
-    local _out="${TEST_TEMP_HOME}/gate-bound.sh"
-    sed -e "s|^PR_NUMBER=<N>.*|PR_NUMBER=\"${1-}\"|" \
-        -e "s|^TARGET_REPO=<owner/repo>.*|TARGET_REPO=\"${2-}\"|" \
-        -e "s|^HEAD_BRANCH=<headRefName>.*|HEAD_BRANCH=\"${3-}\"|" \
-        -e "s|^BASE_BRANCH=<baseRefName>.*|BASE_BRANCH=\"${4-}\"|" \
-        -e "s|^REMOTE=<remote>.*|REMOTE=\"${5-}\"|" "$(_pmv_gate_block)" >"$_out"
-    printf '%s' "$_out"
-}
-
-# A herdr that records instead of acting: an empty binding must never reach it.
-_pmv_gate_bin() {
-    local _bin="${TEST_TEMP_HOME}/gatebin"
-    mkdir -p "$_bin"
-    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >>"%s"\nexit 0\n' "$FAKE_HERDR_LOG" >"${_bin}/herdr"
-    chmod +x "${_bin}/herdr"
-    printf '%s' "$_bin"
-}
-
-# Bind and run the gate in one call, the way Step 5 pastes it: $1 is the
-# registry, then the five values. Leaves `run`'s $status/$output/$lines set.
-_pmv_gate_run() {
-    local _reg="$1"
-    shift
-    run env PATH="$(_pmv_gate_bin):${PATH}" IW_WATCHED_REPOS="$_reg" \
-        DOTFILES_ROOT="$_BATS_REAL_DOTFILES_ROOT" bash "$(_pmv_gate_bind "$@")"
-}
-
-@test "1576: Step 5's gate block extracts, binds, and is valid shell" {
-    local _bound
-    _bound="$(_pmv_gate_bind 77 acme/dotfiles wt/issue-77/1 main origin)"
-    run head -n 1 "$_bound"
-    assert_output --partial 'Substitute the five values'
-    run tail -n 1 "$_bound"
-    assert_output "fi"
-    # A renamed placeholder would leave the assignments unsubstituted and make
-    # every test below pass for the wrong reason.
-    run grep -cE '^(PR_NUMBER|TARGET_REPO|HEAD_BRANCH|BASE_BRANCH|REMOTE)=<' "$_bound"
-    assert_output "0"
-    run bash -n "$_bound"
-    assert_success
-}
-
-@test "1576: an empty TARGET_REPO is named instead of read as 'unwatched'" {
-    _pmv_gate_run "$WATCHED" 77 "" wt/issue-77/1 main origin
-    assert_success
-    assert_output --partial '[WARN] gh:pr-merge:'
-    assert_output --partial 'TARGET_REPO'
-    # Named, and stopped: nothing may be closed or rebased on a half-bound run.
-    refute_output --partial 'gh:pr-post-merge-verify'
-    run cat "$FAKE_HERDR_LOG"
-    assert_output ""
-}
-
-# PR #1603 review (agy + codex): "non-empty" is not "correctly substituted" —
-# a forgotten placeholder or a whitespace-only paste both pass a bare
-# `[ -n ]` check and would silently reproduce the exact #1576 bug this gate
-# exists to surface.
-
-@test "1576: an unsubstituted placeholder is named, not read as a real value" {
-    _pmv_gate_run "$WATCHED" 77 '<owner/repo>' wt/issue-77/1 main origin
-    assert_success
-    assert_output --partial '[WARN] gh:pr-merge:'
-    assert_output --partial 'TARGET_REPO'
-    refute_output --partial 'gh:pr-post-merge-verify'
-    run cat "$FAKE_HERDR_LOG"
-    assert_output ""
-}
-
-@test "1576: a whitespace-only value is named, not read as bound" {
-    _pmv_gate_run "$WATCHED" 77 '   ' wt/issue-77/1 main origin
-    assert_success
-    assert_output --partial '[WARN] gh:pr-merge:'
-    assert_output --partial 'TARGET_REPO'
-    refute_output --partial 'gh:pr-post-merge-verify'
-    run cat "$FAKE_HERDR_LOG"
-    assert_output ""
-}
-
-@test "1576: whichever of the five is empty is the one the WARN names" {
-    local _v
-    for _v in PR_NUMBER TARGET_REPO HEAD_BRANCH BASE_BRANCH REMOTE; do
-        case "$_v" in
-        PR_NUMBER) _pmv_gate_run "$WATCHED" "" acme/dotfiles wt/issue-77/1 main origin ;;
-        TARGET_REPO) _pmv_gate_run "$WATCHED" 77 "" wt/issue-77/1 main origin ;;
-        HEAD_BRANCH) _pmv_gate_run "$WATCHED" 77 acme/dotfiles "" main origin ;;
-        BASE_BRANCH) _pmv_gate_run "$WATCHED" 77 acme/dotfiles wt/issue-77/1 "" origin ;;
-        REMOTE) _pmv_gate_run "$WATCHED" 77 acme/dotfiles wt/issue-77/1 main "" ;;
-        esac
-        assert_success
-        assert_output --partial "$_v"
-        [ "${#lines[@]}" -eq 1 ]
-    done
-    run cat "$FAKE_HERDR_LOG"
-    assert_output ""
-}
-
-@test "1576: several empty bindings share one WARN line, not one each" {
-    _pmv_gate_run "$WATCHED" "" "" wt/issue-77/1 main ""
-    assert_success
-    [ "${#lines[@]}" -eq 1 ]
-    assert_output --partial 'PR_NUMBER'
-    assert_output --partial 'TARGET_REPO'
-    assert_output --partial 'REMOTE'
-    refute_output --partial 'HEAD_BRANCH'
-    refute_output --partial 'BASE_BRANCH'
-}
-
-@test "1576: a fully bound but unwatched repo is still silent (#1511 A-1)" {
-    # The regression this fix must not cause: an unregistered repo stays
-    # byte-identical to its pre-#1511 behavior — no WARN, no output at all.
-    _pmv_gate_run "$WATCHED" 77 other/repo wt/issue-77/1 main origin
-    assert_success
-    assert_output ""
-    run cat "$FAKE_HERDR_LOG"
-    assert_output ""
-}
-
-@test "1576: a fully bound registered repo still reaches the dispatch" {
-    # The other half of the same guard: the binding check must gate nothing
-    # when all five are bound. The registry points the dispatch at a path that
-    # is not a git worktree root, so it stops with its own WARN before any
-    # side effect — proof the staged block ran.
-    local _reg="${TEST_TEMP_HOME}/bound-watched.json"
-    printf '[{"repo":"acme/dotfiles","verify_skill":"devx:pr-verify-merged","path":"%s"}]\n' \
-        "${TEST_TEMP_HOME}/not-a-repo" >"$_reg"
-    _pmv_gate_run "$_reg" 77 acme/dotfiles wt/issue-77/1 main origin
-    assert_success
-    assert_output --partial '[WARN] gh:pr-post-merge-verify:'
-    assert_output --partial 'is not a git worktree root'
-    # codex review (PR #1603): the warning text alone doesn't prove the
-    # dispatch actually ran rather than being skipped — pin that no herdr
-    # call happened either, which is what this stop point guarantees.
-    run cat "$FAKE_HERDR_LOG"
-    assert_output ""
-}
-
-@test "1576: the binding check runs before the registry lookup" {
-    local _skill _check _lookup
-    _skill="$(_pmv_merge_skill)"
-    _check=$(grep -n 'PMV_MISSING=""' "$_skill" | head -1 | cut -d: -f1)
-    _lookup=$(grep -n 'VERIFY_SKILL=\$(jq -r --arg r' "$_skill" | head -1 | cut -d: -f1)
-    [ -n "$_check" ] && [ -n "$_lookup" ]
-    [ "$_check" -lt "$_lookup" ]
 }
 
 # --- #1577: the verification session lives in its own detached worktree ----
@@ -1558,47 +1073,4 @@ _pmv_scratch_for() { printf '%s/.git/pr-post-merge-verify/pr-%s' "$MAIN_ROOT" "$
     assert_success
     run cat "$FAKE_GIT_LOG"
     refute_output --partial "worktree-remove"
-}
-
-@test "1577: dispatch.sh.md opens the tab on the scratch worktree, both argv forms" {
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    run grep -c -- 'herdr tab create --workspace "$WS_ID" --cwd "$PMV_SCRATCH"' "$_out"
-    assert_output "2"
-    run grep -c -- 'herdr tab create --workspace "$WS_ID" --cwd "$MAIN_ROOT"' "$_out"
-    assert_output "0"
-}
-
-@test "1577: dispatch.sh.md derives the path per PR under the git common dir" {
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    run grep -qF -- 'PMV_SCRATCH="${PMV_COMMON_DIR}/pr-post-merge-verify/pr-${PR_NUMBER}"' "$_out"
-    assert_success
-    # `--path-format=absolute` (git 2.31+): a bare --git-common-dir prints a
-    # path relative to the cwd, which would place the worktree anywhere.
-    run grep -qF -- 'rev-parse --path-format=absolute --git-common-dir' "$_out"
-    assert_success
-}
-
-@test "1577: dispatch.sh.md creates it detached, off the ref step 3 already fetched" {
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    run grep -qF -- 'worktree add --detach "$PMV_SCRATCH" "${REMOTE}/${BASE_BRANCH}"' "$_out"
-    assert_success
-    # A second fetch would be redundant: step 3's is the only one in the block.
-    run grep -c -- 'git -C "$MAIN_ROOT" fetch' "$_out"
-    assert_output "1"
-}
-
-@test "1577: dispatch.sh.md reuses an existing worktree and tears none down" {
-    local _out="${TEST_TEMP_HOME}/extracted.sh"
-    bash -c "awk -v f=\"\$(printf '\\140\\140\\140')\" '${_PMV_EXTRACT_AWK}' \
-        '$(_pmv_dispatch_doc)' > '${_out}'"
-    run grep -qF -- 'if [ -d "$PMV_SCRATCH" ]; then' "$_out"
-    assert_success
-    run grep -c -- 'worktree remove' "$_out"
-    assert_output "0"
 }

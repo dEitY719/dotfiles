@@ -3,18 +3,17 @@
 # Issue #399 — verify every gh:* skill that writes ai-metrics to GitHub
 # carries the GH_DISABLE_AI_METRICS=1 short-circuit.
 #
-# Two layers:
-#   1. Doc-level: each SKILL.md that calls `gh api ... comments`,
-#      `gh issue create`, or appends a `<!-- ai-metrics:* -->` block
-#      to a body file MUST contain the env-guard literal. Catches
-#      future SKILL.md edits that forget to wrap a new metrics block.
-#   2. Behavioural: a fixture mirrors the exact env-guard pattern from
-#      the SSOT (gh-issue-create/references/metrics-helper.md). With
-#      env unset/empty/!=1 the body is appended; with env=1 it is
-#      skipped. Catches semantic drift in the guard itself.
+# What is left here after #1680:
+#   1. The env-vars.md catalog registration (docs/.ssot lives in this repo).
+#   2. Behavioural: a fixture mirrors the env-guard pattern. With env
+#      unset/empty/!=1 the body is appended; with env=1 it is skipped.
+#      Catches semantic drift in the guard itself.
 #
-# Backfill (gh-add-ai-metrics) is intentionally exempt — it ignores
-# the env var by design (see issue #399 acceptance criteria).
+# #1680: the gh:* skills moved out to their own marketplace repos, so the
+# three doc-guards that grepped claude/skills/** (per-SKILL.md guard
+# presence, the metrics-helper.md SSOT, and the gh-add-ai-metrics
+# backfill exemption) were dropped and belong in those repos now. The
+# fixture below is consequently no longer pinned to the SSOT doc.
 
 load '../test_helper'
 
@@ -29,56 +28,7 @@ teardown() {
     unset GH_DISABLE_AI_METRICS
 }
 
-# -- Layer 1: doc-level env-guard presence -----------------------------------
-
-# Every entry: <skill-dir>:<expected-substring-anchor> — anchor is something
-# unique to that skill's metrics block so the test pinpoints the right region.
-SKILLS_REQUIRING_GUARD=(
-    "gh-issue-create"
-    "gh-pr"
-    "gh-commit"
-    "gh-pr-reply"
-    "gh-pr-approve"
-    "gh-pr-review"
-    "gh-pr-merge"
-    "gh-pr-merge-emergency"
-    "gh-pr-resolve-conflict"
-    "gh-issue-flow"
-)
-
-@test "doc-guard: every gh:* SKILL.md that writes ai-metrics has GH_DISABLE_AI_METRICS branch" {
-    for skill in "${SKILLS_REQUIRING_GUARD[@]}"; do
-        local dir="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/${skill}"
-        # Progressive disclosure: the guard may live inline in SKILL.md or in
-        # any references/*.md file the SKILL.md delegates to. Either is fine.
-        # POSIX-compliant recursive grep via find -exec (no GNU/BSD grep -R).
-        run find "$dir" -type f -exec grep -F 'GH_DISABLE_AI_METRICS:-0' {} +
-        [ "$status" -eq 0 ] || {
-            echo "missing GH_DISABLE_AI_METRICS guard in $dir (SKILL.md + references/)"
-            return 1
-        }
-    done
-}
-
-@test "doc-guard: SSOT metrics-helper.md documents the env var" {
-    local f="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-issue-create/references/metrics-helper.md"
-    run grep -F 'GH_DISABLE_AI_METRICS' "$f"
-    assert_success
-    run grep -F 'gh-add-ai-metrics' "$f"
-    assert_success
-}
-
-@test "doc-guard: gh-add-ai-metrics SKILL.md does NOT skip on the env var (backfill is explicit)" {
-    # Backfill is the deliberate retrofit path; respecting the env there
-    # would defeat the entire purpose of the tool. Verify it never adds
-    # an opt-out branch by accident.
-    local f="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-add-ai-metrics/SKILL.md"
-    run grep -F 'GH_DISABLE_AI_METRICS' "$f"
-    [ "$status" -ne 0 ] || {
-        echo "gh-add-ai-metrics must not honor GH_DISABLE_AI_METRICS — backfill is explicit"
-        return 1
-    }
-}
+# -- Layer 1: catalog registration -------------------------------------------
 
 @test "doc-guard: env-vars.md catalog registers GH_DISABLE_AI_METRICS" {
     local f="${_BATS_REAL_DOTFILES_ROOT}/docs/.ssot/env-vars.md"

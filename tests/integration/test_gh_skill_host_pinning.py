@@ -6,14 +6,13 @@ kept 66 `gh` calls with no host (the issue counted 65 with a narrower ad-hoc
 regex), several of them writes (`gh pr merge --admin`, `gh pr review
 --approve`, `gh api -X DELETE`). Nothing detected the gap.
 
-These tests pin the checker's rules, and the last one is the regression gate:
-every executable `gh` call in the shipped `claude/skills/gh-*` tree must carry
-both halves of the contract.
+These tests pin the checker's rules. The shipped-tree regression gate they
+used to end with went away with `claude/skills/` in #1680 — the `gh-*` skills
+now live in their own marketplace repos, which is where that gate belongs.
 """
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -22,7 +21,6 @@ import pytest
 
 REPO_ROOT = Path(__file__).parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "maintenance" / "check_gh_skill_host_pinning.py"
-SKILLS_DIR = REPO_ROOT / "claude" / "skills"
 
 
 def _make_skill(skills_dir: Path, name: str, body: str, filename: str = "SKILL.md") -> None:
@@ -261,41 +259,3 @@ class TestScanScope:
             "The `rebaseable` field is REST-only; `gh pr view --json rebaseable` fails.\n",
         )
         assert _run(skills_root).returncode == 0
-
-
-def test_shipped_gh_skills_are_all_host_pinned() -> None:
-    """Regression gate for #1407 — the contract holds across every gh:* skill.
-
-    Verified to fail on the pre-fix tree with 66 unpinned calls in 13 skills,
-    and to stay silent on the 6 skills PR #1404 had already fixed.
-    """
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--skills-dir", str(SKILLS_DIR), "--quiet"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, f"unpinned gh calls found:\n{result.stdout}"
-
-
-def test_gate_actually_scanned_the_gh_skill_tree() -> None:
-    """Exit 0 alone is not proof — an empty scan also exits 0.
-
-    Without this, a moved `claude/skills/`, a renamed prefix, or an over-broad
-    exemption would leave the gate silently green (PR #1425 review, agy).
-    """
-    result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--skills-dir", str(SKILLS_DIR)],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert result.returncode == 0, result.stdout
-    match = re.search(r"in (\d+) skill\(s\)", result.stdout)
-    assert match, f"checker did not report a scanned-skill count:\n{result.stdout}"
-    assert int(match.group(1)) >= 15, f"only {match.group(1)} gh-* skills scanned — the tree moved or the prefix broke"
-
-    # And the files inside them are really being read: the shipped tree must
-    # contain executable gh calls for the gate to be meaningful at all.
-    md_with_gh = [p for p in SKILLS_DIR.glob("gh-*/**/*.md") if "GH_HOST=" in p.read_text(encoding="utf-8")]
-    assert len(md_with_gh) >= 20, f"only {len(md_with_gh)} skill docs carry a pinned gh call — scan scope is wrong"

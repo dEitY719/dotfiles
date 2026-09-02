@@ -2,10 +2,16 @@
 
 # scripts/measure-skill-descriptions.sh: SKILL.md description 길이 일괄 측정
 #
-# PURPOSE: claude/skills/*/SKILL.md 의 frontmatter description 을 문자 수로
-#          측정해 skill:check Check 16 (PASS <=250 / WARN 251-400 / FAIL >400)
-#          판정과 총량을 보고한다 (issue #1411).
+# PURPOSE: SKILL.md 의 frontmatter description 을 문자 수로 측정해 skill:check
+#          Check 16 (PASS <=250 / WARN 251-400 / FAIL >400) 판정과 총량을
+#          보고한다 (issue #1411).
 # WHEN TO RUN: description 다이어트 진행 중 진척 확인, 또는 CI 게이트.
+#
+# 측정 대상은 기본적으로 워크스페이스에 clone 된 marketplace repo 들이다
+# (issue #1680 — dotfiles `claude/skills/` 는 삭제됐다). 열거 규칙은
+# shell-common/functions/skill_sources.sh 가 SSOT 이고, setup-skills-ssot.sh
+# 가 실제로 하네스에 연결하는 것과 정확히 같은 목록을 본다. `--skills-dir` 로
+# 단일 디렉토리(`<dir>/<skill>/SKILL.md`)를 직접 지정하면 그쪽이 우선한다.
 #
 # 판정 로직은 중복 구현하지 않고 Check 16 의 실행 가능 미러
 # tests/bats/skills/_fixtures/skill_description_length.sh 를 그대로 재사용한다.
@@ -19,10 +25,11 @@ set -uo pipefail
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
 
-# Codex 2% 컨텍스트 예산 (scripts/setup-skills-ssot.sh 의 .codex-allowlist 근거)
+# Codex 2% 컨텍스트 예산 — 설치된 전체 스킬 description 합계의 상한
 CODEX_BUDGET=5440
 
-SKILLS_DIR="${DOTFILES_ROOT}/claude/skills"
+# 비어 있으면 워크스페이스를 스캔한다. --skills-dir 가 주면 그 디렉토리만.
+SKILLS_DIR=""
 FAIL_ON_VIOLATION=0
 
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
@@ -37,12 +44,14 @@ _usage() {
     cat <<'EOF'
 Usage: measure-skill-descriptions.sh [--skills-dir <path>] [--strict] [-h|--help]
 
-  --skills-dir <path>  측정 대상 디렉토리 (기본: <repo>/claude/skills)
+  --skills-dir <path>  측정 대상 디렉토리 (<path>/<skill>/SKILL.md).
+                       생략하면 \${WORKSPACE_ROOT:-\$HOME/para/project/skills}
+                       아래 clone 된 marketplace repo 전체를 스캔한다.
   --strict             FAIL 이 하나라도 있으면 종료 코드 1 (CI 게이트용)
   -h, --help           이 도움말 출력 후 종료
 
 출력: 스킬별 "<이름> <문자수> <PASS|WARN|FAIL>" 한 줄씩 + 요약 1줄.
-판정 SSOT: claude/skills/skill-check/references/checks.md (Check 16)
+판정 SSOT: authoring-skills repo 의 skills/skill-check/references/checks.md (Check 16)
 EOF
 }
 
@@ -81,9 +90,32 @@ fi
 # shellcheck source=../tests/bats/skills/_fixtures/skill_description_length.sh
 source "$MIRROR"
 
-if [ ! -d "$SKILLS_DIR" ]; then
-    printf '%s[FAIL]%s skills 디렉토리 없음: %s\n' "$UX_ERROR" "$UX_RESET" "$SKILLS_DIR" >&2
-    exit 1
+# 측정 대상 디렉토리 목록 (한 줄에 하나). --skills-dir 는 평평한
+# `<dir>/<skill>/` 레이아웃, 기본은 워크스페이스 열거 SSOT.
+if [ -n "$SKILLS_DIR" ]; then
+    if [ ! -d "$SKILLS_DIR" ]; then
+        printf '%s[FAIL]%s skills 디렉토리 없음: %s\n' "$UX_ERROR" "$UX_RESET" "$SKILLS_DIR" >&2
+        exit 1
+    fi
+    SKILL_DIRS="$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | LC_ALL=C sort)"
+    SOURCE_LABEL="$SKILLS_DIR"
+else
+    SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+    if [ ! -r "$SOURCES_LIB" ]; then
+        printf '%s[FAIL]%s skill 소스 라이브러리 없음: %s\n' "$UX_ERROR" "$UX_RESET" "$SOURCES_LIB" >&2
+        exit 1
+    fi
+    # shellcheck source=../shell-common/functions/skill_sources.sh
+    source "$SOURCES_LIB"
+
+    if ! WORKSPACE_DIR="$(_skill_workspace_root)"; then
+        printf '%s[FAIL]%s 워크스페이스 루트가 없습니다: %s\n' "$UX_ERROR" "$UX_RESET" \
+            "${WORKSPACE_ROOT:-$HOME/para/project/skills}" >&2
+        printf 'Next: marketplace repo 를 그 아래에 clone 하거나 --skills-dir 로 직접 지정하세요.\n' >&2
+        exit 1
+    fi
+    SKILL_DIRS="$(_skill_workspace_dirs "$WORKSPACE_DIR")"
+    SOURCE_LABEL="$WORKSPACE_DIR"
 fi
 
 total=0
@@ -93,10 +125,11 @@ warn=0
 fail=0
 missing=0
 
-for _dir in "$SKILLS_DIR"/*/; do
+while IFS= read -r _dir; do
+    [ -n "$_dir" ] || continue
     [ -d "$_dir" ] || continue
     _name="$(basename "$_dir")"
-    _md="${_dir}SKILL.md"
+    _md="${_dir}/SKILL.md"
     [ -f "$_md" ] || continue
 
     if ! _len="$(skill_desc_length "$_md")"; then
@@ -116,10 +149,10 @@ for _dir in "$SKILLS_DIR"/*/; do
     printf '%-36s %5d %s\n' "$_name" "$_len" "$_verdict"
     total=$((total + _len))
     count=$((count + 1))
-done
+done <<< "$SKILL_DIRS"
 
 if [ "$count" -eq 0 ]; then
-    printf '%s[FAIL]%s 측정 대상 SKILL.md 가 없습니다: %s\n' "$UX_ERROR" "$UX_RESET" "$SKILLS_DIR" >&2
+    printf '%s[FAIL]%s 측정 대상 SKILL.md 가 없습니다: %s\n' "$UX_ERROR" "$UX_RESET" "$SOURCE_LABEL" >&2
     exit 1
 fi
 
@@ -127,6 +160,7 @@ mean=$((total / count))
 budget_pct=$((total * 100 / CODEX_BUDGET))
 
 printf -- '---\n'
+printf 'source=%s\n' "$SOURCE_LABEL"
 printf 'skills=%d total=%d자 mean=%d자 | PASS=%d WARN=%d FAIL=%d N/A=%d\n' \
     "$count" "$total" "$mean" "$pass" "$warn" "$fail" "$missing"
 printf 'Codex 예산(%d자) 대비 총량: %d%%\n' "$CODEX_BUDGET" "$budget_pct"

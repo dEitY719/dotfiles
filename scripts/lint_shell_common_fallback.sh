@@ -2,7 +2,7 @@
 # lint_shell_common_fallback.sh — ${SHELL_COMMON} $HOME 폴백 검사 (issue #1612)
 #
 # 정책:
-#   - `claude/skills/**/*.md` 안의 소싱 지시문은 Claude Code의 Bash tool
+#   - 스킬 `**/*.md` 안의 소싱 지시문은 Claude Code의 Bash tool
 #     (`bash --noprofile --norc`, dotfiles rc 미실행)처럼 $SHELL_COMMON 이
 #     비어 있는 셸에서도 그대로 복붙 실행 가능해야 한다.
 #   - 그러려면 모든 `${SHELL_COMMON}/...` 참조(functions/ 뿐 아니라 tools/ 등
@@ -13,9 +13,13 @@
 #     실패로 이어진다(#1612 재현 스크립트 참고) — 즉시 에러가 나는 쪽보다도
 #     나쁘다.
 #
-# 사용:
-#   sh scripts/lint_shell_common_fallback.sh
-#   CLAUDE_SKILLS_DIR=path/to/skills sh scripts/lint_shell_common_fallback.sh
+# 사용 (issue #1680 이후 수동 전용):
+#   CLAUDE_SKILLS_DIR=<marketplace-repo>/skills sh scripts/lint_shell_common_fallback.sh
+#
+# 검사 대상 스킬은 #1680 으로 15개 marketplace repo 로 옮겨갔다. dotfiles 에는
+# `claude/skills/` 가 없으므로 기본값으로 실행하면 exit 2 다 — mise `lint-docs`
+# 게이트에서도 그래서 빠졌다. 규칙 자체는 그대로 유효하니 워크스페이스 clone 을
+# 가리켜 돌린다.
 
 set -eu
 

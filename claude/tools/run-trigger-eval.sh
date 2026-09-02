@@ -4,6 +4,18 @@
 # Trigger-accuracy regression harness for SKILL.md `description:` fields
 # (issue #1417, verifying the #1411 description diet).
 #
+# STATUS — needs a port (issue #1680). Every input this harness reads left
+# the repo when #1410 Phase 4 deleted `claude/skills/`: the skills, their
+# `evals/trigger-eval.json` sets, the `run_eval.py` runner (now in the
+# authoring-skills repo), and the `--before-ref` git history it diffs
+# descriptions across (now each marketplace repo's own history). It fails
+# fast and loudly in `_resolve_paths` rather than measuring anything wrong,
+# so it is safe to leave in place — but it cannot run from dotfiles again
+# until someone repoints it at a marketplace clone, or moves it there.
+# Its shell logic (scheduling, aggregation, verdict) stays under test in
+# tests/bats/skills/run_trigger_eval.bats, which drives those functions
+# directly with stubs and never touches the skill tree.
+#
 # It answers one question per skill: does the SHRUNK description still get the
 # skill invoked as often as the ORIGINAL one did? The contract #1417 inherits
 # from #1411 is

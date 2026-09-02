@@ -1,8 +1,12 @@
 #!/usr/bin/env bats
 # tests/bats/skills/gh_pr_merge_herdr_notify.bats
-# Verify the Step 4 herdr idle-tab hint documented in
-#   claude/skills/gh-pr-merge/SKILL.md → references/herdr-tab-notify.sh.md
+# Verify the Step 4 herdr idle-tab hint.
 # Source-of-truth fixture: _fixtures/gh_pr_merge_herdr_notify.sh.
+#
+# #1680: the gh-pr-merge skill moved to its own marketplace repo. The guards
+# that pinned this fixture to references/herdr-tab-notify.sh.md (drift, doc
+# read-only, SKILL.md pointer) went with it, so the mirror below is unpinned
+# in this repo — behaviour is still tested, drift against the doc is not.
 #
 # Cases drawn from issue #1508's acceptance criteria:
 #   1. local worktree + idle agent      → one [INFO] line, label/tab/path filled
@@ -11,8 +15,8 @@
 #   4. herdr not installed              → empty output, rc=0
 #   5. herdr agent list empty / no cwd match → empty output, rc=0
 #   6. two agents on the same cwd       → first wins, printed once, no error
-#   7. read-only (NF-2)                 → neither the doc, the fixture, nor
-#                                         the shared lookup SSOT contains a
+#   7. read-only (NF-2)                 → neither the fixture nor the shared
+#                                         lookup SSOT contains a
 #                                         state-changing invocation
 # Issue #1569 replaced this hint's own `.cwd == $wt` equality with the shared
 # predicate in shell-common/functions/herdr_agent_lookup.sh, WIDENING the
@@ -320,17 +324,10 @@ branch refs/heads/wt/issue-1508/1
 
 # --- NF-2: read-only verification -----------------------------------------
 
-@test "herdr-notify (NF-2): reference doc contains no state-changing invocation" {
-    local doc="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/references/herdr-tab-notify.sh.md"
-    [ -r "$doc" ]
-    # `tab close` / `worktree remove` legitimately appear once, inside the F-3
-    # printf's advisory text (a suggested command for a human to run, never
-    # executed here) — exclude that line and assert nothing else matches.
-    run bash -c "grep -n -e 'tab close' -e 'worktree remove' '$doc' | grep -v printf"
-    [ "$status" -ne 0 ]
-    [ -z "$output" ]
-}
-
+# The doc-side counterpart of the fixture guard below moved out with the skill
+# in #1680; `tab close` / `worktree remove` legitimately appear once here,
+# inside the F-3 printf's advisory text (a command suggested to a human, never
+# executed) — that line is excluded and nothing else may match.
 @test "herdr-notify (NF-2): fixture contains no state-changing invocation" {
     local fixture="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_herdr_notify.sh"
     [ -r "$fixture" ]
@@ -380,31 +377,4 @@ herdr workspace list'
     assert_output 'git worktree list
 herdr agent list
 herdr workspace list'
-}
-
-@test "herdr-notify: reference doc and fixture have not drifted apart" {
-    # The fixture is a hand-kept mirror of the doc's bash block (house pattern,
-    # cf. helper_fallback_nf1.bats). Pin the load-bearing literals so editing
-    # only one side turns this suite red instead of silently diverging.
-    local doc="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/references/herdr-tab-notify.sh.md"
-    local fixture="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_herdr_notify.sh"
-    local f pat
-    for pat in \
-        "[INFO] herdr tab %s/%s is idle for the merged branch's worktree (%s)" \
-        '/^worktree /{p=substr($0,10)} /^branch /{if (substr($0,8)==b) print p}' \
-        'shell-common/functions/herdr_agent_lookup.sh' \
-        'herdr_agent_match_for_cwd "$(herdr_agent_physical_path ' \
-        '")" idle)' \
-        '.result.workspaces[]? | select(.workspace_id == $id) | .label // empty'; do
-        for f in "$doc" "$fixture"; do
-            run grep -F -- "$pat" "$f"
-            assert_success
-        done
-    done
-}
-
-@test "herdr-notify: SKILL.md Step 4 points at the reference doc" {
-    local skill="${_BATS_REAL_DOTFILES_ROOT}/claude/skills/gh-pr-merge/SKILL.md"
-    run grep -n 'references/herdr-tab-notify.sh.md' "$skill"
-    assert_success
 }
