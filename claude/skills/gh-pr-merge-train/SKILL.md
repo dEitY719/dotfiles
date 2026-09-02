@@ -23,6 +23,21 @@ metadata:
 **충돌 해결과 CI 수정 두 지점에서만** 필요하다 — 그 둘은 원자 스킬에 위임한다.
 한 PR 이 막혀도 그 PR 만 건너뛰고 train 은 계속한다.
 
+머지는 **fire-and-forget** 이다 (#1707): `gh:pr-merge` 를 `--auto` 로 호출해
+merge queue 에 넣고 기다리지 않으며, 실제 머지 후 처리는 다음 tick 의 Step 0
+finalize sweep 이 맡는다. 이 저장소에서 merge queue 자체는 **쓸 수 없고**(조직
+소유 저장소 전용), 그 조사 결과와 사람이 직접 실행해야 하는 활성화 절차는
+`references/merge-queue-investigation.md` 에 있다 — 이 스킬은 그 명령을
+실행하지 않는다.
+
+N번의 직렬 CI 왕복을 실제로 없앤 것은 큐가 아니라 **`main` ruleset 의 strict
+required-status-checks 해제**다 (#1707). 그래서 `BEHIND` + `MERGEABLE` PR 은
+로컬 리베이스 없이 바로 머지되고, 그 대가로 "리베이스된 결과가 착지 전에는
+CI 를 거치지 않는다" 는 위험을 받아들인다. 무엇을 얻고 무엇을 잃었는지, 그
+위험을 받치는 안전망(Step 3.6 + `main` push CI)은
+`references/strict-mode-relaxation.md` 에 있다. `DIRTY` 는 이 완화의 영향을
+전혀 받지 않는다 — 실제 충돌은 언제나 `gh:pr-resolve-conflict` 가 먼저다.
+
 ## Help
 
 If arg #1 is `-h`, `--help`, or `help`, read `references/help.md` and output its
@@ -35,6 +50,41 @@ Copy the binding block from `references/github-target.md` and run it **before
 any `gh` call** — `TARGET_REPO` / `TARGET_HOST` / `GH_HOST` come from one and
 the same remote URL (#1403/#1407). An explicit `owner/repo` positional pins
 `TARGET_REPO` directly; the host still comes from the remote URL.
+
+## Step 0: Finalize PRs the merge queue merged since the last tick
+
+Runs **before** Step 2 builds this tick's queue, because these PRs are already
+merged — they are not candidates, they are unfinished business (#1707).
+
+```bash
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh"
+GH_HOST="$TARGET_HOST" gh pr list --repo "$TARGET_REPO" --author @me --state merged \
+  --limit 30 --json number,title,state,labels \
+  | jq -c '.[]?' \
+  | while IFS= read -r _pr; do
+        printf '%s' "$_pr" | _gh_pr_merge_train_needs_finalize || continue
+        printf '%s\n' "$(printf '%s' "$_pr" | jq -r '.number')"
+    done
+```
+
+Each number that comes out gets **one**
+`Skill(gh:pr-merge, "<N> rebase <remote> --finalize")`, then a
+`[FINALIZED] #<N> <title>` line in the Step 5 report.
+
+`_gh_pr_merge_train_needs_finalize` is the **shared** predicate in
+`shell-common/functions/gh_pr_merge_train.sh`, beside the label predicates
+Step 3.5 uses — run it, do not paraphrase it. It answers "MERGED **and** still
+carrying `review-passed`", and that combination is the signal precisely because
+`gh:pr-merge` drops that label as the last step of a completed merge (#1636):
+a merged PR that still has it is a PR whose completion steps never ran, which
+is what an enqueued (`--auto`) merge leaves behind.
+
+The finalize work itself is **not done here**. The train writes nothing to
+GitHub of its own (`references/constraints.md`); `gh:pr-merge --finalize` owns
+every one of those mutations already, and the sequence it runs is defined in
+`../gh-pr-merge/references/finalize-merged-pr.sh.md`. `--state merged` with
+`--limit 30` bounds the sweep: a PR older than that window and still labelled
+is a human's problem, not a loop's.
 
 ## Step 2: Collect and order the queue
 
@@ -114,12 +164,38 @@ before it is actually acted on, at Step 4's F-3 re-query
 (`references/routing-table.md`) — the same point that already re-derives
 everything else Step 2/3.5 could not have seen coming.
 
+## Step 3.6: Read the base's check policy and health — once per base
+
+Run the block in `references/strict-mode-relaxation.md` → "New: the train
+refuses to pile onto a red base", **once per distinct `baseRefName`**, cached
+per base like Step 3's approval lookup. It costs one extra read-only REST call
+per base (the rules body is the one Step 3 already fetches) and **none** per PR.
+
+It answers two questions with the shared predicates in
+`shell-common/functions/gh_pr_merge_train.sh` — run them, do not paraphrase:
+
+- `_gh_pr_merge_train_behind_may_merge_directly` → `$BEHIND_DIRECT`. `yes` means
+  strict checks are off on this base, so the D-1 table's `BEHIND` row merges
+  directly instead of rebasing locally (`references/routing-table.md`).
+  Anything unread or unclear is `no` — the pre-#1707 local remediation.
+- `_gh_pr_merge_train_base_ci_red` → is the base's tip already failing a check
+  **it requires**? If so, every PR on that base is `[SKIPPED] <base> is red`
+  and the merge phase does not run for it. Never `[FAILED]`: the next tick
+  proceeds the moment the base is green.
+
+This is the safety net that replaces what strict mode used to guarantee. It
+cannot prevent one bad merge — nothing can, once strict is off — but it stops
+the train from stacking more onto a base already known to be broken. Scope,
+limits, and the accepted risk: `references/strict-mode-relaxation.md`.
+
 ## Step 4: Run the train — one PR at a time
 
 For each PR in queue order, run the loop in `references/train-loop.md`:
 **re-query state immediately before processing** (F-3 — the previous merge
 invalidated everything behind it), route through the D-1 table
-(`references/routing-table.md`), then merge with `Skill(gh:pr-merge, "<N>")`.
+(`references/routing-table.md`), then merge with
+`Skill(gh:pr-merge, "<N> rebase <remote> --auto")` — fire-and-forget, so a
+`[QUEUED]` answer ends that PR's turn rather than starting a wait (#1707).
 Gate off with an empty `reviewDecision` first runs one
 `Skill(gh:pr-approve, "<N> <remote> --self-record")` and reads the board back as
 its verdict — no approval, no merge.
@@ -127,24 +203,29 @@ After a **successful** merge, close that PR's implementation tab when its herdr
 agent is `idle` — the block in `references/train-loop.md` → "Closing the merged
 PR's implementation tab". A merged PR whose tab stays open keeps counting toward
 issue-watcher's `_IW_MAX_PER_REPO` budget and starves the pipeline (#1565).
-The `BEHIND` / `DIRTY` rows rebase inside a **detached scratch worktree** the
-train creates and unconditionally removes per attempt (#1493). Attempts are
+The `DIRTY` row — and `BEHIND` only when Step 3.6 left `$BEHIND_DIRECT` at `no`
+— rebases inside a **detached scratch worktree** the train creates and
+unconditionally removes per attempt (#1493). With `$BEHIND_DIRECT = yes`,
+`BEHIND` merges directly and builds no worktree at all (#1707). Attempts are
 capped at 3 per PR (F-5); a failure skips that PR and the train continues
 (F-6). Never process two PRs concurrently.
 
 ## Step 5: Report
 
-Emit the structured `[MERGED]` / `[SKIPPED]` / `[FAILED]` report — one line per
-PR with a reason — per `references/report-format.md` (F-9). Always as plain
-assistant text, never via a `Bash` heredoc or `Write`.
+Emit the structured `[FINALIZED]` / `[MERGED]` / `[QUEUED]` / `[SKIPPED]` /
+`[FAILED]` report — one line per PR with a reason — per
+`references/report-format.md` (F-9). Always as plain assistant text, never via
+a `Bash` heredoc or `Write`.
 
 ## Constraints
 
 - **Never call `gh:pr-merge-emergency`** (NF-2). Admin bypass is not this
   skill's path; an unmergeable PR is `[SKIPPED]` with a reason.
 - **Never abort the whole train** for one PR's failure (F-6).
-- **No merge strategy argument** — `gh:pr-merge`'s default rebase is what
-  `required_linear_history` allows (D-4).
+- **No merge strategy choice** — `rebase` is the only value the train ever
+  passes, and it is `gh:pr-merge`'s own default, which is what
+  `required_linear_history` allows (D-4). It is spelled out only because
+  `--auto` is a flag that cannot sit in a positional slot (#1707).
 - **No review judgement of its own** — `gh:issue-flow` already ran
   `devx:pr-review-all`, and the gate-off path delegates to `gh:pr-approve`
   rather than deciding anything here. Step 3.5 reads that fan-out's verdict
