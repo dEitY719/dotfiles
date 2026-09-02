@@ -995,6 +995,42 @@ FIXTURE
     refute_output --partial "rc=0"
 }
 
+@test "leaves #1690: a real empty object is NOT the same record as a string leaf spelled '{}' (codex BLOCKER)" {
+    # An earlier version stringified empty containers to the STRINGS "{}"/"[]",
+    # which collide byte-for-byte with a real JSON string leaf holding those
+    # same characters. The fix keeps the literal (unquoted) container value —
+    # `jq -c` never renders any other JSON type as bare `{}`/`[]` — so the two
+    # records must differ by more than just their path.
+    run_in_bash "
+        f=\$(mktemp)
+        printf '{\"note\": \"{}\", \"empty\": {}, \"arr\": [], \"strarr\": \"[]\"}' > \"\$f\"
+        _gcp_scan_json_leaves \"\$f\"; rm -f \"\$f\"
+    "
+    assert_success
+    # The string leaf keeps its quotes; the real container does not.
+    assert_output --partial '["note"],"{}"]'
+    assert_output --partial '["empty"],{}]'
+    assert_output --partial '["arr"],[]]'
+    assert_output --partial '["strarr"],"[]"]'
+}
+
+@test "drift #1690: a string leaf changed TO the bytes '{}' is real content, not absorbed as an empty-container no-op (codex BLOCKER)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '{\"note\": \"pending\"}' > obj.json && git add obj.json && git commit -qm 'add obj'
+        git checkout -q -b source
+        printf '{\"note\": \"{}\"}' > obj.json && git add obj.json && git commit -qm 'note becomes literally {}'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '{\"note\": \"pending\", \"unrelated\": 1}' > obj.json && git add obj.json && git commit -qm 'unrelated addition'
+        _gcp_scan_conflict_adds_new_content \"\$src\" obj.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # HEAD never held the string "{}" at .note — a collision with the empty-
+    # object sentinel would wrongly read this as already-present (rc=1).
+    assert_output --partial "rc=0"
+}
+
 # --- the reported case: still absorbed -------------------------------------
 
 @test "drift #1688: trailing-comma-only difference is drift, not new content (1)" {
