@@ -313,6 +313,22 @@ _gh_pr_merge_train_has_review_passed_label() {
 #   exists. AT MOST TWO `gh api` calls, regardless of how many comment
 #   pages the PR has (#1615).
 #
+#   Revocation (#1706): a second marker type,
+#   `<!-- review-verdict:revoked:<sha> -->`, cancels an earlier
+#   `review-passed` marker. Both types are matched in ONE pass and the single
+#   LAST one wins BY COMMENT ORDER — not by sha. If that last marker is a
+#   `revoked` one, this function prints NOTHING and returns 0: for reading
+#   purposes a revocation is indistinguishable from "no marker was ever
+#   posted" (a CONFIRMED absence, rc 2 out of `_stale` below — never rc 1/3).
+#   The sha inside `revoked:<sha>` is audit metadata only; it is never
+#   compared against anything, so a revocation naming any sha still cancels
+#   the `review-passed` marker before it. Ordering, not sha, decides.
+#   Revocation is not permanent: a later `review-passed` marker (a genuine
+#   re-review) is then the last one and wins again. Existing markers are
+#   never edited or deleted — the audit trail is append-only. Full spec:
+#   `devx-pr-review-all/references/review-verdict-label.md` → "Revoking a
+#   stale review-passed by hand".
+#
 #   Why not `--paginate` (#1615): the first cut walked EVERY comment page to
 #   find the last marker, so a long-running PR cost one HTTP round trip per
 #   100 comments on EVERY merge-train tick — flagged independently by three
@@ -372,7 +388,7 @@ _gh_pr_merge_train_has_review_passed_label() {
 #   before.
 _gh_pr_merge_train_review_passed_marker_sha() {
     local _pr="$1" _repo="$2" _host="${3-}" _login="${4-}" \
-        _jq _raw _rc _login_base _headers _bodies _link _last
+        _jq _raw _rc _login_base _headers _bodies _link _last _last_marker
 
     _login_base="$_login"
     case "$_login_base" in
@@ -440,10 +456,21 @@ _gh_pr_merge_train_review_passed_marker_sha() {
         _bodies=$(printf '%s\n' "$_raw" | sed '1,/^\r\{0,1\}$/d')
     fi
 
-    printf '%s\n' "$_bodies" |
-        grep -oE '<!-- review-verdict:review-passed:[0-9a-f]+ -->' |
-        tail -n 1 |
-        sed -E 's/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/'
+    # BOTH marker types in one pass, so `tail -n 1` picks the chronologically
+    # last one whichever type it is — "latest marker wins", not "latest
+    # review-passed wins" (#1706).
+    _last_marker=$(printf '%s\n' "$_bodies" |
+        grep -oE '<!-- review-verdict:(review-passed|revoked):[0-9a-f]+ -->' |
+        tail -n 1)
+
+    case "$_last_marker" in
+        # No marker at all, or a revocation — both print NOTHING (zero bytes,
+        # not a bare newline: the pre-#1706 pipeline emitted nothing here and
+        # the documented contract above says "empty").
+        '' | *':revoked:'*) ;;
+        *) printf '%s\n' "$_last_marker" |
+            sed -E 's/^<!-- review-verdict:review-passed:([0-9a-f]+) -->$/\1/' ;;
+    esac
 
     return 0
 }
@@ -469,6 +496,21 @@ _gh_pr_merge_train_review_passed_marker_sha() {
 #          unacceptable operational cliff — a re-review clears it exactly as
 #          cheaply either way, so there is nothing to gain by deleting rather
 #          than merely not trusting it.
+#
+#          Since #1706 this is also the answer when the LAST marker from
+#          `<expected-login>` is a revocation
+#          (`<!-- review-verdict:revoked:<sha> -->`) rather than a
+#          `review-passed` one: a revocation is deliberately
+#          indistinguishable from "no marker at all" here, because both mean
+#          the same thing to this check — there is no standing verdict for
+#          any head. It is a confirmed absence, so it is rc 2, never rc 1
+#          (nothing was proven stale) and never rc 3 (the lookup completed
+#          fine). Which marker is last is decided by COMMENT ORDER alone —
+#          the sha a revocation names is audit metadata and is never compared
+#          against `<head-oid>` or against the earlier marker's sha. That
+#          means the caller still does not self-heal: a hand-revoked
+#          `review-passed` label is left attached and merely not trusted,
+#          exactly like the pre-existing absent case.
 #   rc 3 — STALE, UNDETERMINED: the underlying lookup itself failed (network,
 #          auth, rate limit) or `<expected-login>` was invalid, so nothing
 #          was confirmed either way. Route as unverified this tick (fail-

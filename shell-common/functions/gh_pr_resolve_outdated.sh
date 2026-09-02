@@ -86,6 +86,15 @@
 # `_gh_pr_resolve_outdated_has_label` survives as a function, but its call
 # site is now purely DIAGNOSTIC — it fills the report's `prior=` field.
 #
+# Indestructible evidence needed a withdraw path, though (#1706): a human who
+# pulls `review-passed` off in the UI removes the label but not the marker, so
+# the next content-identical rebase re-granted it and silently overrode them.
+# A `<!-- review-verdict:revoked:<sha> -->` comment now cancels the marker
+# before it — appended, never a delete, so the audit trail survives — and the
+# freshness check reads it as rc 2 (ABSENT), landing on the same drop path.
+# See `devx-pr-review-all/references/review-verdict-label.md` → "Revoking a
+# stale `review-passed` by hand".
+#
 # A surviving marker proves a verdict was ISSUED for that head, not that it is
 # still the CURRENT one (PR #1703 review, codex BLOCKER). Nothing deletes a
 # marker — the property #1700 leans on — but that cuts both ways: when

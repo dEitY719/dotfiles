@@ -134,6 +134,10 @@ case "$_vl_result" in
         echo "[WARN] \`review-passed\` 재확인 실패 — 라벨 추가 자체가 실패해 아무것도 부여되지 않음"
         ;;
     *)
+        # 자매 스킬과 같은 헬퍼를 쓰므로 취소 마커
+        # (`<!-- review-verdict:revoked:<sha> -->`) 도 그대로 여기로 떨어진다(#1706).
+        # 남기는 방법은 `devx-pr-review-all/references/review-verdict-label.md` →
+        # "Revoking a stale `review-passed` by hand" 참고.
         echo "[OK] \`review-passed\` 무효화됨(또는 애초에 없었음) — 최신 판정 없음"
         ;;
 esac

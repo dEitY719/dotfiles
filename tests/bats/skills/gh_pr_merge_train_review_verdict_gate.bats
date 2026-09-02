@@ -385,6 +385,64 @@ more text')" '[$c]')
     assert_output '2222222'
 }
 
+# ── #1706: the revocation marker ──
+# `<!-- review-verdict:revoked:<sha> -->` cancels an earlier `review-passed`
+# marker. The rule is "the LAST marker of EITHER type from the trusted login
+# wins, by comment order" — the sha a revocation names is audit metadata and
+# is never compared against anything.
+
+@test "freshness (#1706): a revoked marker after a review-passed one yields nothing, rc 0" {
+    # rc 0, not rc 1: a revocation is a CONFIRMED absence (the lookup ran and
+    # answered "no standing verdict"), which is a different thing from the
+    # lookup itself having failed.
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson c1 "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" \
+        --argjson c2 "$(_comment bot '<!-- review-verdict:revoked:1111111 -->')" \
+        '[$c1, $c2]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output ''
+}
+
+@test "freshness (#1706): a revocation naming a DIFFERENT sha still cancels — order decides, not sha" {
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson c1 "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" \
+        --argjson c2 "$(_comment bot '<!-- review-verdict:revoked:9999999 -->')" \
+        '[$c1, $c2]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output ''
+}
+
+@test "freshness (#1706): a revocation that is NOT last does not poison a later re-review" {
+    # Revocation only wins while it is the last marker. A genuine re-review
+    # afterwards stamps a new `review-passed` and that one is now last.
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson c1 "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" \
+        --argjson c2 "$(_comment bot '<!-- review-verdict:revoked:1111111 -->')" \
+        --argjson c3 "$(_comment bot '<!-- review-verdict:review-passed:3333333 -->')" \
+        '[$c1, $c2, $c3]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output '3333333'
+}
+
+@test "freshness (#1706): a revocation from ANY OTHER commenter is ignored" {
+    # Same trust boundary as every other marker in this file: an untrusted
+    # login can neither grant nor revoke. The trusted marker still wins.
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson real "$(_comment bot '<!-- review-verdict:review-passed:1111111 -->')" \
+        --argjson forged "$(_comment some-random-contributor '<!-- review-verdict:revoked:1111111 -->')" \
+        '[$real, $forged]')
+    run _gh_pr_merge_train_review_passed_marker_sha 11 acme/widget '' bot
+    assert_success
+    assert_output '1111111'
+}
+
 @test "freshness: marker_sha pins GH_HOST on the lookup" {
     _freshness_stub
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:abc1234 -->')" '[$c]')
@@ -577,6 +635,20 @@ more text')" '[$c]')
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" '[$c]')
     run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
     assert_success
+}
+
+@test "freshness (#1706): a revoked latest marker is ABSENT (rc 2), not MISMATCH or UNDETERMINED" {
+    # The revocation names the CURRENT head, so a sha-comparing implementation
+    # would answer rc 0 (fresh) — the whole point is that a revocation is not
+    # compared at all, it just erases the standing verdict. rc 2 also means
+    # the caller leaves the label alone rather than self-healing it away.
+    _freshness_stub
+    STUB_COMMENTS_JSON=$(jq -nc \
+        --argjson c1 "$(_comment bot '<!-- review-verdict:review-passed:deadbeef -->')" \
+        --argjson c2 "$(_comment bot '<!-- review-verdict:revoked:deadbeef -->')" \
+        '[$c1, $c2]')
+    run _gh_pr_merge_train_review_passed_stale 11 acme/widget '' deadbeef bot
+    [ "$status" -eq 2 ]
 }
 
 @test "freshness (BLOCKER fix): a lookup failure is UNDETERMINED (rc 3), not MISMATCH or ABSENT" {

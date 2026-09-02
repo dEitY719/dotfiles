@@ -426,6 +426,53 @@ PR (PR #1608 review, agy + codex BLOCKER: silently losing the marker meant a
 no trace of why). Since #1636 that producer is `gh:pr-reply`
 (`_gh_pr_reply_apply_review_passed`), which prints the same wording.
 
+## Revoking a stale `review-passed` by hand (#1706)
+
+The marker above is append-only — nothing in this repo ever edits or deletes
+one. That left no way to *withdraw* a verdict: a human who spots a problem and
+pulls the `review-passed` label off in the GitHub UI (without opening a formal
+`review-blocked` round) removes only the label, not the evidence. The next
+content-identical rebase then finds patch-id identical, the marker still fresh
+for the old head, and no `review-blocked` — and
+`gh:pr-resolve-outdated` / `gh:pr-resolve-conflict` Step 5 re-grants the label,
+silently overriding the human.
+
+A second marker type withdraws the verdict without touching the first:
+
+```
+<!-- review-verdict:revoked:<sha> -->
+```
+
+It is a plain issue comment, posted exactly like the `review-passed` marker —
+never an edit or a delete of the earlier one, so the audit trail stays intact
+and both the grant and its withdrawal remain visible on the PR.
+
+**Read-side rule: the single LAST marker of EITHER type from the trusted login
+wins, by comment order.** If that last marker is a `revoked` one, the freshness
+check reads as if no `review-passed` marker had ever been posted — a *confirmed
+absence* (`rc 2`), not a lookup failure. The sha in `revoked:<sha>` is therefore
+audit metadata only and is **never compared against anything** — not the
+current head, not the sha the revoked marker named. Ordering alone decides, so
+a revocation cancels the grant before it whatever sha either one carries.
+
+Revocation is not permanent: a genuine re-review posts a new `review-passed`
+marker, which is then the last one and wins again.
+
+To revoke by hand, after removing the label:
+
+```
+gh pr comment <PR> --repo <owner>/<repo> --body '<!-- review-verdict:revoked:<current-head-sha> -->'
+```
+
+The trust boundary is unchanged: only markers from the pipeline's own login
+count, so a revocation from any other commenter is ignored exactly as a forged
+grant is.
+
+`_gh_pr_merge_train_review_passed_marker_sha` and
+`_gh_pr_merge_train_review_passed_stale`
+(`shell-common/functions/gh_pr_merge_train.sh`) implement the reading side, for
+both the merge-train gate and the Step 5 reconcile.
+
 ## Why this lives in the producer
 
 The alternative — having the merge train grep review comment bodies — couples
