@@ -131,3 +131,9 @@ false-positive로 뜨고, 그 fix가 systemd cgroup 밖에서 별도 엔진을 �
   믿지 말고 실제 `smart-search`/`memory_recall` 결과로 판단할 것.
 - 데모 정리용 `curl -X DELETE .../sessions?project=...`는 405를 반환한다
   (동작 안 함, 무해 — 데모 데이터는 `/tmp`라 재부팅 시 사라짐).
+- `/exit` 직후 `SessionEnd hook ... failed: Hook cancelled`가 가끔 뜰 수
+  있다 — agentmemory REST 서버(`localhost:3111`) 응답 지연으로
+  `session-end.mjs`의 fetch가 최대 30초까지 프로세스를 붙잡고 있다가
+  Claude Code의 SessionEnd 훅 예산을 넘겨 abort된 것. 세션 종료 자체는
+  정상이며 무해하다(`claude/settings.json`의
+  `CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS`로 완화, #1715).
