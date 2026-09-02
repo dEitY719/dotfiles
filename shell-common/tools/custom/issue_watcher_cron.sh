@@ -4,7 +4,7 @@
 #
 # cron 이 주기마다 이 스크립트를 호출하면 tick 1회를 수행한다. tick 은 감시부터
 # 디스패치까지를 직접 수행한다 — 판단이 필요한 지점은 마지막 한 곳,
-# 디스패치된 pane 안에서 도는 `/gh-issue-flow <N>` 뿐이다 (issue #1440):
+# 디스패치된 pane 안에서 도는 `/gh-flow:issue <N>` 뿐이다 (issue #1440):
 #   1) 끝난 이슈의 워크트리 회수 (closed + agent 없음 + 미커밋 변경 없음)
 #   2) 살아있는 per-issue agent 수가 상한이면 이번 tick 보류
 #   3) `gh search issues` 로 할당된 open 이슈를 교차 저장소 한 번에 조회
@@ -12,7 +12,7 @@
 #   5) repo 라운드로빈 · 이슈 번호 오름차순으로 후보 정렬
 #   6) 이미 실행 중 / 이미 처리됨(이슈를 닫는 open PR) / blockedBy OPEN 스킵
 #   7) tick 당 최대 _IW_DISPATCH_PER_TICK 건만 워크트리 + herdr tab + agent 생성
-#   8) `/gh-issue-flow <N>` 프롬프트 전달
+#   8) `/gh-flow:issue <N>` 프롬프트 전달
 # 토큰 한도 게이트가 닫혀 있으면 사이클 전체를 보류한다 (issue #1436, #1444).
 #
 # 워크트리 존재 여부는 어떤 판정에도 쓰이지 않는다 (issue #1453 NF-1) — 순수
@@ -331,7 +331,7 @@ _IW_SATURATION_STATE_BASENAME="saturation.json"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
 # How long a *confirmed* dispatch has to hold `working` before the tick accepts
-# it as proof the quota is intact (issue #1444). One `/gh-issue-flow` runs for
+# it as proof the quota is intact (issue #1444). One `/gh-flow:issue` runs for
 # minutes — review gate included — so a prompt that provably reached the pane
 # and is idle again a minute later did not finish early, it never started.
 _IW_LIMIT_OBSERVE_SEC="60"
@@ -2062,7 +2062,7 @@ _iw_escalate_prompt_stall() {
         "issue #${_number} prompt failure" || true
 }
 
-# Send `/gh-issue-flow <N>` to the issue's agent.
+# Send `/gh-flow:issue <N>` to the issue's agent.
 #
 # The prompt is a slash command, not prose: pre-#1440 this channel carried an
 # instruction to *run another agent*, and the receiving session had to work out
@@ -2072,7 +2072,7 @@ _iw_escalate_prompt_stall() {
 _iw_prompt_issue() {
     local _agent="$1" _number="$2" _tab="${3-}" _attempt="${4-}" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code
 
-    _prompt="/gh-issue-flow ${_number}"
+    _prompt="/gh-flow:issue ${_number}"
     _IW_STALL_RECOVER_ERROR=""
     _IW_PROMPT_KEEP_ATTEMPT=0
 
@@ -2254,7 +2254,7 @@ EOF
 #      failed proves nothing about the quota: it is an input-loop or transport
 #      problem, so the gate is left exactly as it was.
 #   2. Did the submitted work hold? A confirmed dispatch is polled for
-#      `_IW_LIMIT_OBSERVE_SEC`. One `/gh-issue-flow` runs for minutes, so an
+#      `_IW_LIMIT_OBSERVE_SEC`. One `/gh-flow:issue` runs for minutes, so an
 #      agent that never reaches `working`, or falls back to `idle`/`done`
 #      inside that window, did not do the work it was handed. That is the
 #      shape quota exhaustion takes, and it earns the strike.
@@ -3239,7 +3239,7 @@ _iw_acquire_lock() {
 _iw_usage() {
     ux_header "issue_watcher_cron"
     ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | [-h|--help|help]"
-    ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-issue-flow."
+    ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:issue."
     ux_bullet "options"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"

@@ -387,7 +387,7 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 220"
     assert_success
     assert_output --partial "comments arrived"
-    assert_output --partial "/gh-pr-reply"
+    assert_output --partial "/gh-pr:reply"
     assert_output --partial "still working"
 }
 
