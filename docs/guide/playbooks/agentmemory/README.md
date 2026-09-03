@@ -152,3 +152,15 @@ false-positive로 뜨고, 그 fix가 systemd cgroup 밖에서 별도 엔진을 �
   agentmemory 서버에 반영되지 않을 수 있다 — 예산을 늘리면 정상적인
   1.5~4.5초 failsafe 종료 전에 abort당할 가능성이 줄어 이 유실도 함께
   줄어든다.
+- **위 예산 조정(#1715)으로도 재발하면 `iii` 엔진 자체가 좀비 상태인지부터
+  의심할 것** (2026-09-03 SERAPH 실측, #1715 후속). `iii`가 20일 넘게
+  재시작 없이 떠 있으면 listen backlog(기본 128)가 다 차 새 TCP 연결을
+  아예 accept 못하는 상태로 빠질 수 있다 — 프로세스는 살아 있고 포트도
+  `LISTEN`으로 뜨지만 `curl localhost:3111/...`이 그냥 hang한다.
+  `agentmemory status`가 "Not running — no response"를 내면 이 상태다
+  (session-end.mjs 자체 실행 시간은 이 상태에서도 ~4.5초로 정상 — 훅
+  예산과 무관하게 서버가 죽어 있는 게 원인). 복구:
+  `agentmemory stop --force` → 안 먹으면(Docker-heuristic guard가
+  pidfile을 남긴 채 거부) `kill -TERM <iii pid> <agentmemory pid>`,
+  그래도 안 죽으면 `kill -KILL`, `~/.agentmemory/*.pid` 정리 후
+  `agentmemory` 재실행. 디스크에 저장된 메모리 데이터는 유지된다.
