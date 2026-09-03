@@ -37,7 +37,7 @@
 | **`adr/`** | 아키텍처 결정 로그 (#1027) — 프로젝트 전체에 파급되는 **굵직한 결정**의 불변 기록. `NNNN-<kebab>.md` | [`adr/README.md`](./adr/README.md) |
 | **`guide/`** | 사람-팀원 가이드 — setup, team-git, learnings, playbooks, technic, superpowers-ko 한글 가이드. `commands/` 는 row 함수에서 자동 생성 (#1262) | [`guide/README.md`](./guide/README.md) |
 | **`feature/`** | 피처별 설계·분석 번들 — 한 디렉토리 = 한 피처. superpowers-plans/specs 포함 | (디렉토리 직접 탐색) |
-| **`archive/`** | 보관소 — 사후 분석, 평가 자료(company), 다이어그램, 도래일 지난 todo. 외부 노출 차단 영역 포함 | [`archive/README.md`](./archive/README.md) |
+| **`archive/`** | 보관소 — 사후 분석, 평가 자료(company), 다이어그램, 도래일 지난 todo, 폐기된 피처 설계 이력. 외부 노출 차단 영역 포함 | [`archive/README.md`](./archive/README.md) |
 
 **`adr/` vs `requirement/` D-섹션 경계**: 여러 모듈에 파급되는 굵직한 결정은 `adr/`,
 제품 요구사항 맥락의 경량 결정은 `requirement/` D-섹션 (상세: [`adr/README.md`](./adr/README.md)).

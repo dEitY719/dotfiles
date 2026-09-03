@@ -3,7 +3,7 @@
 - **문서 위치**: `docs/feature/ux-enhance/my-help-ux-modernization.md`
 - **작성일자**: 2026-09-03
 - **상태**: Draft / Proposal (동료 워크트리 연구 문서 2종 통합 및 고도화 완료)
-- **대상**: `shell-common/functions/my_help.sh`, `docs/feature/my-cli/`
+- **대상**: `shell-common/functions/my_help.sh`, `docs/archive/my-cli/`
 - **검토 및 수용 대상 문서**:
   1. `docs/feature/ux-enhance/my-help-tui-ux.md` (feat-1 브랜치: 실측 데이터, fzf 버전 제약, 고아 packages/my-cli 분석)
   2. `docs/feature/ux-enhance/my-help-command-palette-ux-research.md` (feat-codex-1 브랜치: 5열 TSV 스키마 확장, 읽기 전용 안전성, ZLE 충돌 방지)

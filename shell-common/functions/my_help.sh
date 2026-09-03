@@ -801,15 +801,24 @@ _my_help_alias_index() {
 }
 
 # Internal: render one alias index record picked out of fzf.
+# Also renders `func` records (#1740): the schema is identical, only the
+# heading differs — a second renderer would be the same code with one word
+# changed.
 _my_help_show_alias_entry() {
     local record="$1"
-    local name desc location defn
+    local name desc location defn kind label
     name=$(printf '%s' "$record" | cut -f1)
     desc=$(printf '%s' "$record" | cut -f2)
+    kind=$(printf '%s' "$record" | cut -f3)
     location=$(printf '%s' "$record" | cut -f4)
     defn=$(printf '%s' "$record" | cut -f5)
 
-    ux_section "Alias: ${name}"
+    case "$kind" in
+        func) label="Function" ;;
+        *) label="Alias" ;;
+    esac
+
+    ux_section "${label}: ${name}"
     ux_bullet "definition: ${defn}"
     # Field 4 is always populated for an alias record (see the record layout
     # above), so no emptiness guard is needed here.
@@ -822,55 +831,333 @@ _my_help_show_alias_entry() {
     return 0
 }
 
-# Internal: emit every fzf candidate — help topics first, then repo aliases.
+# ═══════════════════════════════════════════════════════════════
+# Public function candidates (issue #1740, Phase 3a)
+# ═══════════════════════════════════════════════════════════════
+#
+# Registry, not a full source scan. Scanning every `name() {` in bash/, zsh/
+# and shell-common/ yields 578 names and a scan narrowed to the documented
+# "utility function" home (shell-common/functions/*.sh) still yields 111 —
+# both dominated by internal helpers that happen to lack the `_` prefix
+# (aicron_crontab_write, devx_pr_review_all_parse, ...). The picker would drown
+# in them, which is exactly the noise Phase 3b was gated behind. The registry
+# below lists what a user actually types; locations are resolved from the
+# source tree at read time so a moved definition cannot go stale here.
+#
+# Rules the registry must keep (enforced again in _my_help_function_index so a
+# bad entry cannot leak): no `_`-prefixed names, no `*_help` names — those are
+# already `topic` candidates and the topic row carries a real description.
+_my_help_func_registry() {
+    # name <TAB> description
+    printf '%s\n' \
+        "devx	Dev helper — mise wrapper and repo checks" \
+        "gwt	Git worktree helper (add/list/spawn/teardown)" \
+        "gbr	Git feature-branch teardown" \
+        "grs	Git restore helper" \
+        "git_log	Formatted git log views" \
+        "gh_flow	gh-flow issue/PR worker pipeline" \
+        "gh_pr_review	Delegate a PR review to an external AI CLI" \
+        "gh_pr_reply	Handle PR review comments" \
+        "gh_pr_approve	PR approval workflow" \
+        "gh_audit_builtin_workflows	Audit built-in GitHub workflows" \
+        "ghes_mirror	Mirror a public repo to an internal GHES instance" \
+        "mirror_pages_activate	Activate GHE Pages and rewrite upstream URLs" \
+        "claude_skills_marketplace	Claude skills marketplace manager" \
+        "skill_loader	Load skills into an agent harness" \
+        "aicron	Scheduled AI job manager" \
+        "gcp	gcloud / GCP helpers" \
+        "wsl_check	WSL and Docker environment health check" \
+        "del_file	Clean backup/original garbage files" \
+        "psgrep	Grep the process table" \
+        "srcpack	Pack source files for sharing" \
+        "myman	Friendlier man page viewer" \
+        "ta	tmux attach helper" \
+        "tmux_spawn	Spawn a tmux working session" \
+        "tmux_teardown	Tear down a tmux working session" \
+        "mount_add	Add a mount entry" \
+        "mount_show	Show current mounts" \
+        "obsidian_clone	Clone the Obsidian vault" \
+        "obsidian_claude	Run Claude against the Obsidian vault" \
+        "zsh_switch	Switch the login shell to zsh" \
+        "bash_switch	Switch the login shell to bash" \
+        "zsh_reload	Reload the zsh configuration" \
+        "zsh_theme	Show or change the zsh theme" \
+        "zsh_snippet	Manage zsh snippets"
+}
+
+# Internal: emit `func` index records (same 5-field schema as the alias index).
+# One grep resolves every registered name at once; no cache, because the scan
+# is a single pass over ~30 anchored names rather than the alias index's
+# 105-file sweep. Emits nothing and returns 1 when the tree is missing.
+_my_help_function_index() {
+    local root names pattern
+    root="${DOTFILES_ROOT:-${SHELL_COMMON%/shell-common}}"
+    [ -n "$root" ] && [ -d "$root" ] || return 1
+
+    names=$(_my_help_func_registry | cut -f1 | tr '\n' '|')
+    [ -n "$names" ] || return 1
+    pattern="^(${names%|})\\(\\)[[:space:]]*\\{"
+
+    local found
+    found=$(
+        {
+            _my_help_func_registry
+            # Sentinel: awk switches from "reading the registry" to "reading
+            # grep output" here. A literal FS byte keeps it unmatchable by any
+            # real line.
+            printf '\034\n'
+            grep -rnE "$pattern" \
+                --include='*.sh' --include='*.bash' --include='*.zsh' \
+                "$root/bash" "$root/zsh" "$root/shell-common" 2>/dev/null
+        } | awk -v root="${root}/" '
+            BEGIN { mode = 1 }
+            mode == 1 {
+                if ($0 == "\034") { mode = 2; next }
+                t = index($0, "\t")
+                if (t < 2) next
+                desc[substr($0, 1, t - 1)] = substr($0, t + 1)
+                next
+            }
+            {
+                # grep -n emits <path>:<line>:<content>; anchor on the first
+                # ":<digits>:" so a colon in a parent directory name cannot
+                # split the path (same rule as the alias indexer).
+                if (!match($0, /:[0-9]+:/)) next
+                path = substr($0, 1, RSTART - 1)
+                lineno = substr($0, RSTART + 1, RLENGTH - 2)
+                body = substr($0, RSTART + RLENGTH)
+
+                p = index(body, "(")
+                if (p < 2) next
+                name = substr(body, 1, p - 1)
+                if (!(name in desc)) next
+                # Belt and braces: the registry is hand-written.
+                if (substr(name, 1, 1) == "_") next
+                if (name ~ /_help$/ || name ~ /-help$/) next
+
+                rel = path
+                if (index(rel, root) == 1) rel = substr(rel, length(root) + 1)
+                printf "%s\t%s\tfunc\t%s:%s\t%s()\n", name, desc[name], rel, lineno, name
+            }' | LC_ALL=C sort -u
+    )
+
+    [ -n "$found" ] || return 1
+    printf '%s\n' "$found"
+}
+
+# Internal: emit one `category` record per registered help category (F-5).
+_my_help_category_candidates() {
+    # Pre-declared for the same reason as _my_help_search_candidates below.
+    local category members total topic
+    for category in $(_my_help_get_category_keys 2>/dev/null); do
+        members="${HELP_CATEGORY_MEMBERS[$category]}"
+        total=0
+        for topic in $(_my_help_split_members "$members"); do
+            total=$((total + 1))
+        done
+        printf '%s\t%s\tcategory\t%s topics\t\n' \
+            "$category" "${HELP_CATEGORIES[$category]}" "$total"
+    done
+}
+
+# Internal: emit fzf candidates for one scope — topics, categories, aliases,
+# public functions, or (default) all four.
 # Split out of _my_help_search so it can be exercised without a TTY or fzf.
 _my_help_search_candidates() {
+    local scope="${1:-all}"
+
+    # Categories need the default registry; callers other than my_help_impl
+    # (tests, the preview helper) may not have triggered it yet.
+    if [ -z "${_HELP_DEFAULTS_REGISTERED}" ]; then
+        _register_default_help_descriptions
+        _HELP_DEFAULTS_REGISTERED=1
+    fi
+
     # Declare the loop-body variables once, up front: `local x=$(cmd)` inside
     # the piped while-read makes zsh echo the assignment as a stray stdout line
     # (#1248) and also masks $cmd's exit status behind the `local` builtin's.
     # Pre-declaring keeps the in-loop assignments plain and does neither.
     local underscore_name desc
-    _my_help_enumerate_topic_names | while IFS= read -r display_name; do
-        underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
-        desc=$(_my_help_topic_description "${underscore_name%_help}")
-        printf '%s\t%s\ttopic\t\t\n' "$display_name" "$desc"
-    done
 
-    # Aliases extend the same stream. A failed/empty scan writes nothing,
-    # leaving the topic list exactly as it was before #1261.
-    _my_help_alias_index 2>/dev/null || true
+    case "$scope" in
+        all | topic)
+            _my_help_enumerate_topic_names | while IFS= read -r display_name; do
+                underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
+                desc=$(_my_help_topic_description "${underscore_name%_help}")
+                printf '%s\t%s\ttopic\t\t\n' "$display_name" "$desc"
+            done
+            ;;
+    esac
+
+    case "$scope" in
+        all | category)
+            _my_help_category_candidates 2>/dev/null || true
+            ;;
+    esac
+
+    # Aliases and functions extend the same stream. A failed/empty scan writes
+    # nothing, leaving the topic list exactly as it was before #1261.
+    case "$scope" in
+        all | alias)
+            _my_help_alias_index 2>/dev/null || true
+            ;;
+    esac
+
+    case "$scope" in
+        all | func)
+            _my_help_function_index 2>/dev/null || true
+            ;;
+    esac
 }
 
-# Internal: fzf-based fuzzy finder over help topics + repo aliases
+# Internal: parse a palette query that opens with a slash scope command (F-4).
+# Prints "<scope>\t<remaining query>" and returns 0; returns 1 for anything
+# that is not a scope switch, which the caller treats as an ordinary query.
+_my_help_parse_scope() {
+    local raw="$1"
+    local word rest scope
+
+    case "$raw" in
+        /*) ;;
+        *) return 1 ;;
+    esac
+
+    raw="${raw#/}"
+    word="${raw%% *}"
+    rest="${raw#"$word"}"
+    while [ "${rest# }" != "$rest" ]; do
+        rest="${rest# }"
+    done
+
+    case "$word" in
+        all) scope="all" ;;
+        topic | t) scope="topic" ;;
+        alias | a) scope="alias" ;;
+        func | f) scope="func" ;;
+        cat | c) scope="category" ;;
+        *) return 1 ;;
+    esac
+
+    printf '%s\t%s\n' "$scope" "$rest"
+}
+
+# Internal: true (0) when the interactive palette can run.
+_my_help_palette_available() {
+    command -v fzf >/dev/null 2>&1 && [ -t 0 ] && [ -t 1 ]
+}
+
+# Internal: fzf command palette over help topics, categories, aliases and
+# public functions (#1740).
+#
+# Scope switching runs as a loop in *this* function rather than an fzf action:
+# fzf 0.44.1 (the version this repo targets) has no `transform`, and every
+# alternative binding would have to interpolate state into the action string.
+# With `--print-query` the parent simply reads back whatever the user typed,
+# and a leading slash re-invokes fzf with a different candidate stream. `/`
+# therefore stays an ordinary query character — no ZLE/readline binding, so
+# bash and zsh behave identically (NF-5).
 _my_help_search() {
     # Degrade to the static category table when fzf is missing or there is no
     # TTY (piped output, scripts, test harness) — fzf needs an interactive terminal.
-    if ! command -v fzf >/dev/null 2>&1 || [ ! -t 0 ] || [ ! -t 1 ]; then
+    if ! _my_help_palette_available; then
         _my_help_show_categories
         return $?
     fi
 
-    # Feed name\tdescription lines straight into fzf — nothing else reads this
-    # list, so there's no need for a temp file (see _my_help_show_all's temp
-    # file, which the "unique count" and "uncategorized topics" checks below
-    # it still need to re-read).
-    local selected
-    selected=$(
-        _my_help_search_candidates |
-            fzf --delimiter='\t' --with-nth=1,2 --prompt="my-help> "
-    ) || true
+    # Users may run with noclobber set; keep the temp-file redirection below
+    # working without leaking the option change (same guard as _my_help_show_all).
+    if [ -n "$ZSH_VERSION" ]; then
+        setopt localoptions clobber 2>/dev/null || true
+    fi
+
+    local preview tmp_dir tmp scope query out rc parsed selected kind count
+
+    preview="${SHELL_COMMON}/tools/custom/my_help_preview.sh"
+    tmp_dir="${TMPDIR:-/tmp}"
+    if command -v mktemp >/dev/null 2>&1; then
+        tmp=$(mktemp "${tmp_dir%/}/my_help_palette.XXXXXX" 2>/dev/null) ||
+            tmp="${tmp_dir%/}/.my_help_palette_$$"
+    else
+        tmp="${tmp_dir%/}/.my_help_palette_$$"
+    fi
+
+    # D-1: 550+ candidates make /all a noisy first screen; start on topics.
+    scope="${MY_HELP_DEFAULT_SCOPE:-topic}"
+    query=""
+
+    while :; do
+        rm -f "$tmp" 2>/dev/null || true
+        _my_help_search_candidates "$scope" > "$tmp" 2>/dev/null || true
+
+        # Best-effort count for the header (F-10) — never fatal.
+        count=$(wc -l < "$tmp" 2>/dev/null | tr -d ' ') || count=""
+
+        # Only paths this function owns are interpolated into the fzf action
+        # strings; a candidate value never is (NF-2). fzf hands the preview
+        # `{n}`, the integer row index, and the helper reads the record back
+        # out of "$tmp" itself.
+        # `|| rc=$?` rather than a bare assignment: callers may be running under
+        # `set -e` / `err_exit`, where fzf's non-zero abort status would take
+        # the whole shell down (PR #1247).
+        rc=0
+        out=$(
+            fzf --delimiter='\t' --with-nth=1,3,2 \
+                --height=80% --layout=reverse --border \
+                --print-query --query="$query" \
+                --prompt="my-help /${scope}> " \
+                --header="scope /${scope} · ${count:-?} items · / scope · ? keys · esc quit" \
+                --preview "'${preview}' '${tmp}' {n}" \
+                --preview-window='right,55%,border-left,<80(down,60%,border-top)' \
+                --bind "?:preview('${preview}' --keys ${scope})" \
+                < "$tmp"
+        ) || rc=$?
+
+        # 130 = Esc / Ctrl-C, 2 = fzf error. Both exit without printing.
+        if [ "$rc" -ge 2 ]; then
+            rm -f "$tmp" 2>/dev/null || true
+            return 0
+        fi
+
+        # --print-query puts the typed query on its own line ahead of the
+        # selection. Split them on the tab rather than the line number: a query
+        # can never contain a tab (fzf's prompt does not accept one) and a
+        # candidate record always does, so this also stays correct for a caller
+        # that stubs fzf and prints the selected record alone.
+        query=$(printf '%s\n' "$out" | awk -F'\t' 'NF == 1 { print; exit }')
+        selected=$(printf '%s\n' "$out" | awk -F'\t' 'NF > 1 { print; exit }')
+
+        # A slash query is a scope switch even when it happened to fuzzy-match
+        # a row (locations contain slashes), so it is checked before the
+        # selection is honoured.
+        if parsed=$(_my_help_parse_scope "$query"); then
+            scope=$(printf '%s' "$parsed" | cut -f1)
+            query=$(printf '%s' "$parsed" | cut -f2)
+            continue
+        fi
+
+        break
+    done
+
+    # Explicit cleanup rather than `trap ... EXIT`: this runs inside the user's
+    # interactive shell, where an EXIT trap would both clobber theirs and only
+    # fire when the shell itself exits.
+    rm -f "$tmp" 2>/dev/null || true
 
     # Esc / empty selection: nothing to show.
     if [ -z "$selected" ]; then
         return 0
     fi
 
-    local kind
+    # F-9: Enter is read-only. alias/func print their definition and source;
+    # topic/category go through the existing my_help_impl routing. Nothing is
+    # ever executed.
     kind=$(printf "%s" "$selected" | cut -f3)
-    if [ "$kind" = "alias" ]; then
-        _my_help_show_alias_entry "$selected"
-        return $?
-    fi
+    case "$kind" in
+        alias | func)
+            _my_help_show_alias_entry "$selected"
+            return $?
+            ;;
+    esac
 
     local topic
     topic=$(printf "%s" "$selected" | cut -f1)
@@ -965,7 +1252,19 @@ my_help_impl() {
     fi
 
     case "${1:-}" in
-        ""|-h|--help|help)
+        "")
+            # F-1: bare `my-help` opens the palette on an interactive terminal
+            # that has fzf. Everywhere else (pipes, CI, scripts, fzf absent)
+            # the 6-line usage summary is byte-identical to what it always was
+            # (NF-4). `-h`/`--help`/`help` stay on the summary unconditionally.
+            if _my_help_palette_available; then
+                _my_help_search
+            else
+                _my_help_summary
+            fi
+            rc=$?
+            ;;
+        -h|--help|help)
             _my_help_summary
             rc=$?
             ;;

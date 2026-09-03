@@ -59,9 +59,9 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 | Alias | `aliases/*.sh` | yes | `gs='git status'` |
 | Environment | `env/*.sh` | yes | `export PATH=...` |
 | Help function | `functions/*_help.sh` | yes | `apt_help()` — row 함수는 `docs/guide/commands/` 자동생성 소스 (#1262) |
-| Utility function | `functions/*.sh` | yes | `devx()`, `gitlog()` |
+| Utility function | `functions/*.sh` | yes | `devx()`, `gitlog()` — 사용자가 직접 치는 함수면 `my_help.sh` 의 `_my_help_func_registry` 에도 등록해야 `my-help` 팔레트 `/func` 에 뜬다 (#1740) |
 | 3rd-party wrapper | `tools/integrations/*.sh` | yes | `npm.sh`, `docker.sh` |
-| Executable script | `tools/custom/*.sh` (+ `lib/*.sh`) | **no** | `install_npm.sh` · `aicron.sh` + `lib/aicron_*.sh` · `session_doctor_cron.sh` + `lib/session_doctor_*.sh` |
+| Executable script | `tools/custom/*.sh` (+ `lib/*.sh`) | **no** | `install_npm.sh` · `aicron.sh` + `lib/aicron_*.sh` · `session_doctor_cron.sh` + `lib/session_doctor_*.sh` · `my_help_preview.sh` (my-help 팔레트 preview) |
 | Shell-specific | `bash/*.bash` 또는 `zsh/*.zsh` | varies | bash prompt setup |
 | Project-specific | `projects/<name>/*.sh` | yes | finrx utilities |
 

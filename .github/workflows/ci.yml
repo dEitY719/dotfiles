@@ -14,9 +14,6 @@ name: CI
 #   (see `git/hooks/pre-push` and `docs/.ssot/local-test-policy.md`).
 #   Roll back: `git revert` this commit and re-add the job. Branch
 #   protection's required-check list must drop `Test (mise)` to match.
-#
-# The previous packages/my-cli Node.js pipeline moved to
-# .github/workflows/cli-package.yml unchanged.
 
 on:
   push:
