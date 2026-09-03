@@ -16,6 +16,7 @@
 #   - entry-level 합성 디렉토리 (#707 / #791 / #1376):
 #     ~/.config/opencode/skills/<skill>     → <workspace>/<repo>/skills/<skill>
 #     ~/.gemini/skills/<skill>              → <workspace>/<repo>/skills/<skill>
+#     ~/.gemini/config/skills/<skill>       → <workspace>/<repo>/skills/<skill>  (agy)
 #     ~/.hermes/skills/dotfiles/<skill>     → <workspace>/<repo>/skills/<skill>
 #
 #   - Hermes 예외 (#1376, NF-1): Hermes 는 다른 CLI 와 달리 ~/.hermes/skills/
@@ -36,9 +37,12 @@
 # 5 CLI 모두 동일 layout (Hermes 만 서브디렉토리 — 위 예외 참고) 이므로 외부에서
 # 추가된 symlink 도 5 곳 전부에 동일하게 적용된다.
 #
-# Antigravity CLI (agy) 는 본 스크립트에 별도 분기가 없다 — agy 의 OAuth 토큰이
-# ~/.gemini/antigravity-cli/ 에 저장되어 Gemini 런타임을 그대로 공유하므로
-# ~/.gemini/skills 합성을 자동 상속한다. 상세: agy/AGENTS.md (Non-Goals).
+# Antigravity CLI (agy) 는 전용 분기를 갖는다 (#1731). agy 는 OAuth 토큰을
+# ~/.gemini/antigravity-cli/ 에 두어 Gemini 런타임을 공유하지만, skill 검색
+# 경로까지 상속하지는 않는다 — agy 의 Global Customizations Root 는
+# ~/.gemini/config/ 이고 skill 은 그 아래 skills/ 에서만 발견된다.
+# ~/.gemini/skills 는 agy 가 읽지 않으므로 (#1684 에서 FAIL 로 실측),
+# 두 경로 모두에 합성한다. 상세: agy/AGENTS.md.
 
 # --- Constants ---
 
@@ -569,12 +573,21 @@ else
 fi
 
 # 3. Gemini: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
-#    agy 상속 근거는 파일 상단 헤더 주석 참고.
 GEMINI_SKILLS="${HOME}/.gemini/skills"
 if [ ! -d "${HOME}/.gemini" ]; then
     log_warning "Gemini 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.gemini"
 else
     link_skills_compose "gemini" "$GEMINI_SKILLS"
+fi
+
+# 3b. Antigravity CLI (agy): 자체 Global Customizations Root 에서 합성 (#1731).
+#     ~/.gemini 를 공유하지만 skills 검색 경로는 상속하지 않는다 — 근거는
+#     파일 상단 헤더 주석 참고. 존재 표식은 OAuth 토큰 디렉토리다.
+AGY_SKILLS="${HOME}/.gemini/config/skills"
+if [ ! -d "${HOME}/.gemini/antigravity-cli" ]; then
+    log_warning "Antigravity(agy) 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.gemini/antigravity-cli"
+else
+    link_skills_compose "agy" "$AGY_SKILLS"
 fi
 
 # 4. Hermes: 전용 네임스페이스 서브디렉토리에서 entry-level 합성 (issue #1376)
@@ -625,6 +638,7 @@ if [ -n "${CODEX_HOME_LIST:-}" ]; then
     done <<< "$CODEX_HOME_LIST"
 fi
 [ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "compose"
+[ -d "${HOME}/.gemini/antigravity-cli" ] && verify_link "agy" "$AGY_SKILLS" "compose"
 [ -d "${HOME}/.hermes" ] && verify_link "hermes" "$HERMES_SKILLS" "compose"
 
 ux_success "Skills 워크스페이스 연결 완료"
