@@ -867,10 +867,7 @@ seed_legacy_entries() {
 }
 
 # ---------------------------------------------------------------------
-# issue #1731 — Antigravity CLI (agy) 전용 합성
-# agy 는 Gemini 런타임을 공유하지만 skill 검색 경로는 상속하지 않는다.
-# agy 의 Global Customizations Root 는 ~/.gemini/config/ 이고 skill 은
-# 그 아래 skills/ 에서만 발견된다 — ~/.gemini/skills 는 읽지 않는다.
+# issue #1731 — Antigravity CLI (agy) 전용 합성 (근거: agy/AGENTS.md)
 # ---------------------------------------------------------------------
 
 # agy 존재 표식은 OAuth 토큰이 놓이는 ~/.gemini/antigravity-cli/ 다.

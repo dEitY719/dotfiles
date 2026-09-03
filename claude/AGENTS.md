@@ -45,7 +45,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 ./setup.sh
 ```
 
-4 CLI 모두 entry-level symlink 합성이라 (#707, F-8 + #791) 새 스킬 디렉토리를 추가했을 때 위 명령으로 빠진 entry 만 추가된다. Idempotent.
+위 CLI 모두 entry-level symlink 합성이라 (#707, F-8 + #791) 새 스킬 디렉토리를 추가했을 때 위 명령으로 빠진 entry 만 추가된다. Idempotent.
 
 ### 연결 방식이 통일된 이유 (issue #791)
 
@@ -80,7 +80,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 ~/.claude/projects/GLOBAL/memory         -> dotfiles/claude/global-memory
 ~/.claude/CLAUDE.md                      -> dotfiles/claude/CLAUDE.md       (글로벌 지침, #1115)
 
-# 모든 환경 공통 (issue #791 — 4 CLI 모두 entry-level 합성)
+# 모든 환경 공통 (issue #791 — CLI 모두 entry-level 합성)
 ~/.codex/skills/<name>                   -> <workspace>/<repo>/skills/<name> (entry symlink, #707 → #791)
 ~/.config/opencode/skills/<name>         -> <workspace>/<repo>/skills/<name> (entry symlink, #791)
 ~/.gemini/skills/<name>                  -> <workspace>/<repo>/skills/<name> (entry symlink, #791 — 순정 gemini)

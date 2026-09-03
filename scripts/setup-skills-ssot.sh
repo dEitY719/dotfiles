@@ -12,7 +12,7 @@
 #
 #     ${WORKSPACE_ROOT:-$HOME/para/project/skills}/<repo>/skills/<skill>/SKILL.md
 #
-# 연결 전략 (issue #791 / #1376 — 5 CLI 모두 entry-level 합성):
+# 연결 전략 (issue #791 / #1376 — 아래 CLI 모두 entry-level 합성):
 #   - entry-level 합성 디렉토리 (#707 / #791 / #1376):
 #     ~/.config/opencode/skills/<skill>     → <workspace>/<repo>/skills/<skill>
 #     ~/.gemini/skills/<skill>              → <workspace>/<repo>/skills/<skill>
@@ -34,8 +34,8 @@
 #     관리 대상 밖이면서 살아 있는 경우) 는 보존 + warn.
 #
 # ~/.claude*/skills 는 claude/setup.sh 가 entry-level 합성 디렉토리로 관리 (#707, F-8).
-# 5 CLI 모두 동일 layout (Hermes 만 서브디렉토리 — 위 예외 참고) 이므로 외부에서
-# 추가된 symlink 도 5 곳 전부에 동일하게 적용된다.
+# 모두 동일 layout (Hermes 만 서브디렉토리 — 위 예외 참고) 이므로 외부에서
+# 추가된 symlink 도 합성 대상 전부에 동일하게 적용된다.
 #
 # Antigravity CLI (agy) 는 전용 분기를 갖는다 (#1731). agy 는 OAuth 토큰을
 # ~/.gemini/antigravity-cli/ 에 두어 Gemini 런타임을 공유하지만, skill 검색

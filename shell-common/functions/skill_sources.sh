@@ -14,7 +14,7 @@
 #
 # Two consumers share these helpers so their notion of "what counts as a
 # workspace skill" cannot drift apart:
-#   - scripts/setup-skills-ssot.sh              (Codex / OpenCode / Gemini+agy / Hermes)
+#   - scripts/setup-skills-ssot.sh              (Codex / OpenCode / Gemini / agy / Hermes)
 #   - shell-common/tools/integrations/claude.sh (Claude Code accounts)
 #
 # No interactive guard — this file only defines functions and prints
