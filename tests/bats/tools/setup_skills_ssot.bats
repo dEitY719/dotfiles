@@ -11,6 +11,9 @@ DIAG_SCRIPT="${DOTFILES_ROOT}/scripts/maintenance/check_codex_skills_budget.py"
 UX_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 # Workspace source enumeration is shared with the Claude Code side (#1652).
 SKILL_SOURCES_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+# main-worktree canonicalization SSOT (#589) — the script reuses it to widen
+# the legacy-link match to the main checkout when run from a worktree (#1732).
+DOTFILES_ROOT_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
 
 setup() {
     setup_isolated_home
@@ -35,6 +38,8 @@ setup() {
     cp "$UX_LIB_SOURCE" "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib/ux_lib.sh"
     cp "$SKILL_SOURCES_LIB_SOURCE" \
         "${FIXTURE_DOTFILES}/shell-common/functions/skill_sources.sh"
+    cp "$DOTFILES_ROOT_LIB_SOURCE" \
+        "${FIXTURE_DOTFILES}/shell-common/functions/dotfiles_root.sh"
 
     for s in alpha beta gamma; do
         cat > "${BASE_REPO}/skills/${s}/SKILL.md" <<EOF
@@ -81,8 +86,11 @@ teardown() {
     teardown_isolated_home
 }
 
+# $1 (optional) — the checkout to run the script from; defaults to the
+# fixture dotfiles tree. The worktree test (#1732) passes its linked
+# worktree instead of re-declaring the invocation.
 run_setup() {
-    HOME="$FIXTURE_HOME" run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
+    HOME="$FIXTURE_HOME" run bash "${1:-$FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
 }
 
 # --- Codex fan-out ---
@@ -827,7 +835,7 @@ seed_legacy_entries() {
 
     # Run from the worktree — DOTFILES_ROOT is now "$wt", but the links
     # still name "$FIXTURE_DOTFILES".
-    HOME="$FIXTURE_HOME" run bash "${wt}/scripts/setup-skills-ssot.sh"
+    run_setup "$wt"
     assert_success
 
     [ -e "${g_dir}/alpha" ]
