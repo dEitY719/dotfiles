@@ -334,6 +334,14 @@ setup() {
     assert_output --partial "PR# must be a positive integer: '12a'"
 }
 
+# codex review on PR #1749: a bare "#" strips to an empty pr, which must not
+# silently bypass validation and fall back to PR auto-detection.
+@test "bare hash with no digits -> exit 2, not silent auto-detect fallback" {
+    run devx_pr_verify_live_parse "#"
+    assert_failure 2
+    assert_output --partial "PR# must be a positive integer: ''"
+}
+
 @test "remote-only + extra positional -> exit 2" {
     run devx_pr_verify_live_parse upstream extra
     assert_failure 2
