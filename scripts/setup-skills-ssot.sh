@@ -151,32 +151,44 @@ WORKSPACE_ROOT_REAL=""
 [ -n "$WORKSPACE_ROOT_RESOLVED" ] \
     && WORKSPACE_ROOT_REAL="$(_realpath_or_self "$WORKSPACE_ROOT_RESOLVED")"
 
-# 모든 skill 소스 디렉토리를 한 줄에 하나씩 표준출력으로 낸다.
+# 모든 skill 소스를 `<소스 경로><TAB><합성 엔트리 이름>` 한 줄씩 표준출력으로 낸다.
 #
 # 소스는 워크스페이스 clone 한 곳뿐이다 (issue #1680):
 #   <root>/<repo>/skills/<skill>   (열거 규칙은 shell-common SSOT)
 #
-# 워크스페이스 repo 끼리 이름이 겹치면 정렬 순서상 앞선 repo 가 이긴다
-# (재현 가능한 결정). 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
+# 이름이 겹치는 repo 끼리 서로를 가리지 않게 한다 (#1746). 예전에는 basename
+# 하나를 키로 dedupe 해서 gh-issue-skills/gh-pr-skills/packaging-skills 의
+# `create` 중 하나만 살아남았다. 이제 dedupe 키는 `<repo>/<skill>` 이고,
+# 정렬 순서상 앞선 repo 만 bare 이름을 갖고 나머지는 `<repo>__<skill>` 로
+# 합성된다 — 겹치지 않는 대다수 skill 의 이름은 그대로라 참조가 안 깨진다.
+# 구분자로 `__` 를 쓰는 이유: `-` `.` 는 repo/skill 이름에 이미 흔하다.
+# 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
 collect_skill_sources() {
-    local seen="|"
-    local skill_path skill_name
+    local seen="|" used="|"
+    local skill_path skill_name repo entry_name
 
     [ -n "$WORKSPACE_ROOT_RESOLVED" ] || return 0
 
     while IFS= read -r skill_path; do
         [ -n "$skill_path" ] || continue
         skill_name="$(basename "$skill_path")"
+        repo="$(basename "$(dirname "$(dirname "$skill_path")")")"
 
         case "$seen" in
+            *"|${repo}/${skill_name}|"*) continue ;;
+        esac
+        seen="${seen}${repo}/${skill_name}|"
+
+        entry_name="$skill_name"
+        case "$used" in
             *"|${skill_name}|"*)
-                log_dim "[skills] 이름 충돌 — 먼저 발견된 소스 유지, 건너뜀: ${skill_path}" >&2
-                continue
+                entry_name="${repo}__${skill_name}"
+                log_dim "[skills] 이름 충돌 — 접두사 부여: ${entry_name} (원본: ${skill_path})" >&2
                 ;;
+            *) used="${used}${skill_name}|" ;;
         esac
 
-        seen="${seen}${skill_name}|"
-        printf "%s\n" "$skill_path"
+        printf "%s\t%s\n" "$skill_path" "$entry_name"
     done <<< "$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
 }
 
@@ -198,17 +210,19 @@ skill_source_is_managed() {
     return 1
 }
 
-# skill 이름으로 소스 경로를 되찾는다. 없으면 비어 있는 출력 + rc 1.
+# 합성 엔트리 이름으로 소스 경로를 되찾는다. 없으면 비어 있는 출력 + rc 1.
 # codex 의 stale prune 이 "이 이름이 아직 유효한 소스인가" 를 물을 때 쓴다.
+# 이름은 basename 재계산이 아니라 목록이 실어 보낸 엔트리 이름과 대조한다 —
+# `<repo>__<skill>` 로 합성된 엔트리도 되찾을 수 있어야 한다 (#1746).
 skill_source_path_for() {
     local name="$1"
-    local candidate
+    local candidate candidate_name
 
     [ -n "$name" ] || return 1
 
-    while IFS= read -r candidate; do
+    while IFS=$'\t' read -r candidate candidate_name; do
         [ -n "$candidate" ] || continue
-        if [ "$(basename "$candidate")" = "$name" ]; then
+        if [ "$candidate_name" = "$name" ]; then
             printf "%s\n" "$candidate"
             return 0
         fi
@@ -291,9 +305,8 @@ link_skills_compose() {
     local linked=0 refreshed=0 skipped=0 pruned=0
     local skill_path skill_name link_target source_realpath current_link existing_target_path
 
-    while IFS= read -r skill_path; do
+    while IFS=$'\t' read -r skill_path skill_name; do
         [ -n "$skill_path" ] || continue
-        skill_name="$(basename "$skill_path")"
         link_target="${target}/${skill_name}"
         source_realpath="$(readlink -f "$skill_path")"
 
@@ -370,11 +383,10 @@ link_skills_individual_codex() {
 
     mkdir -p "$target_dir"
 
-    while IFS= read -r skill_path; do
+    local skill_path skill_name
+    while IFS=$'\t' read -r skill_path skill_name; do
         [ -n "$skill_path" ] || continue
 
-        local skill_name
-        skill_name="$(basename "$skill_path")"
         if [ "$skill_name" = ".system" ]; then
             continue
         fi
