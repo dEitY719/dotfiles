@@ -127,6 +127,9 @@ STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null || e
 if [ -z "$STAGED_FILES" ]; then
     exit 0
 fi
+# Includes deletions (D) — ACMR alone hides a removed tools/custom/*.sh from
+# the command-docs staleness check below (codex review, PR #1741).
+STAGED_FILES_WITH_DELETIONS=$(git diff --cached --name-only --diff-filter=ACDMR 2>/dev/null || echo "")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Run checks
@@ -285,9 +288,11 @@ while IFS= read -r file; do
     fi
 done <<<"$STAGED_FILES"
 
-# 10) Command docs staleness warning (issue #1737): tools/custom staged
-# without the generated docs/guide/commands/mytool.md
-if ! check_command_docs_staleness "$STAGED_FILES" "$COMMAND_DOCS_STALENESS_FILE"; then
+# 10) Command docs staleness warning (issue #1737): tools/custom added,
+# removed, or renamed without the generated docs/guide/commands/mytool.md.
+# Uses STAGED_FILES_WITH_DELETIONS (not STAGED_FILES) so a removed tool
+# script isn't invisible to the check (codex review, PR #1741).
+if ! check_command_docs_staleness "$STAGED_FILES_WITH_DELETIONS" "$COMMAND_DOCS_STALENESS_FILE"; then
     ((command_docs_staleness_violations++))
 fi
 
@@ -358,7 +363,7 @@ if [ $blocking_violations -eq 0 ]; then
 
     if [ $command_docs_staleness_violations -gt 0 ] && [ -s "$COMMAND_DOCS_STALENESS_FILE" ]; then
         echo -e "${YELLOW}⚠ [WARNING] Command docs may be stale (issue #1737):${NC}"
-        cat "$COMMAND_DOCS_STALENESS_FILE" | sed 's/^/  /'
+        sed 's/^/  /' "$COMMAND_DOCS_STALENESS_FILE"
         echo ""
         has_warnings=1
     fi
