@@ -319,6 +319,21 @@ setup() {
     assert_output --partial "PR# must be a positive integer: '12a'"
 }
 
+# #1748: `#N` is the common GitHub PR notation and must classify as a PR#,
+# not fall through to the remote-name branch.
+@test "hash-prefixed PR# -> pr stripped of '#', remote defaults to origin" {
+    run devx_pr_verify_live_parse "#1745"
+    assert_success
+    assert_line "pr=1745"
+    assert_line "remote=origin"
+}
+
+@test "hash-prefixed digit-leading typo stays a PR# error, not a remote" {
+    run devx_pr_verify_live_parse "#12a"
+    assert_failure 2
+    assert_output --partial "PR# must be a positive integer: '12a'"
+}
+
 @test "remote-only + extra positional -> exit 2" {
     run devx_pr_verify_live_parse upstream extra
     assert_failure 2

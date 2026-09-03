@@ -174,15 +174,19 @@ devx_pr_verify_live_parse() {
             ;;
         *)
             # `[pr-number] [remote]` with an optional PR#. Discriminator:
-            # PR numbers start with a digit, git remote names conventionally
+            # PR numbers start with a digit (optionally `#`-prefixed, the
+            # common GitHub PR notation), git remote names conventionally
             # do not. A leading digit therefore always means "this is the
-            # PR#" — `12a` stays a loud PR# error instead of silently
-            # becoming a remote name.
+            # PR#" — `12a` / `#12a` stay a loud PR# error instead of
+            # silently becoming a remote name.
             if [ "$_pos_seen" -eq 0 ]; then
                 _pos_seen=1
                 case "$1" in
                 [0-9]*)
                     pr="$1"
+                    ;;
+                '#'*)
+                    pr="${1#\#}"
                     ;;
                 *)
                     remote="$1"
