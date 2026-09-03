@@ -164,29 +164,31 @@ WORKSPACE_ROOT_REAL=""
 # 구분자로 `__` 를 쓰는 이유: `-` `.` 는 repo/skill 이름에 이미 흔하다.
 # 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
 collect_skill_sources() {
-    local seen="|" used="|"
+    local seen="|"
     local skill_path skill_name repo entry_name
 
     [ -n "$WORKSPACE_ROOT_RESOLVED" ] || return 0
 
     while IFS= read -r skill_path; do
         [ -n "$skill_path" ] || continue
-        skill_name="$(basename "$skill_path")"
-        repo="$(basename "$(dirname "$(dirname "$skill_path")")")"
+        # 고정 레이아웃(<root>/<repo>/skills/<skill>)이라 basename/dirname
+        # 서브셸 없이 parameter expansion 만으로 뽑아낼 수 있다.
+        skill_name="${skill_path##*/}"
+        repo="${skill_path%/*/*}"
+        repo="${repo##*/}"
 
         case "$seen" in
             *"|${repo}/${skill_name}|"*) continue ;;
         esac
-        seen="${seen}${repo}/${skill_name}|"
 
         entry_name="$skill_name"
-        case "$used" in
-            *"|${skill_name}|"*)
+        case "$seen" in
+            *"/${skill_name}|"*)
                 entry_name="${repo}__${skill_name}"
                 log_dim "[skills] 이름 충돌 — 접두사 부여: ${entry_name} (원본: ${skill_path})" >&2
                 ;;
-            *) used="${used}${skill_name}|" ;;
         esac
+        seen="${seen}${repo}/${skill_name}|"
 
         printf "%s\t%s\n" "$skill_path" "$entry_name"
     done <<< "$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
