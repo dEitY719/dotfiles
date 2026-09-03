@@ -111,6 +111,16 @@ gh-flow|gh-issue gh-pr gh-verify gh-resolve session
 TABLE
 }
 
+@test "claudecode-skills marketplace and claudecode plugin are registered (#1751)" {
+    run jq -e '."claudecode-skills" == "dEitY719/claudecode-skills"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
+    assert_success
+
+    run jq -e '.plugins | index("claudecode@claudecode-skills") != null' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
+    assert_success
+}
+
 @test "pkm-skills marketplace and pkm plugin are registered (#1644)" {
     run jq -e '."pkm-skills" == "dEitY719/pkm-skills"' \
         "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
