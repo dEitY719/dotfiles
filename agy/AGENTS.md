@@ -45,13 +45,31 @@ PATH SSOT 로 관리한다. 따라서:
   `export PATH=".../.local/bin:$PATH"` 라인이 다시 나타나면 그것은
   `agy install` 이 재삽입한 중복이므로 제거한다.
 
+## Skill 검색 경로 (#1731)
+
+`agy` 는 `~/.gemini/` 를 Gemini 와 공유하지만 **skill 검색 경로는 상속하지
+않는다**. `agy` 의 Global Customizations Root 는 `~/.gemini/config/` 이고,
+skill 은 그 아래 `skills/<name>/SKILL.md` 에서만 발견된다. 워크스페이스
+루트는 `<workspace>/.agents/skills/` 다. `~/.gemini/skills` 는 `agy` 가
+전혀 읽지 않는다.
+
+| 경로 | 읽는 도구 |
+|---|---|
+| `~/.gemini/config/skills/<name>/` | `agy` (global) |
+| `<workspace>/.agents/skills/<name>/` | `agy` (workspace) |
+| `~/.gemini/antigravity-cli/builtin/skills/` | `agy` 내장 (수정 금지) |
+| `~/.gemini/skills/<name>/` | 순정 `gemini` CLI 전용 — `agy` 는 무시 |
+
+따라서 `scripts/setup-skills-ssot.sh` 는 Gemini 블록과 별개로 `agy` 전용
+합성 블록(`AGY_SKILLS`)을 갖는다. 두 경로 모두에 합성하므로 어느 CLI 를
+쓰든 워크스페이스 15-repo 스킬이 보인다.
+
+`#1684` 가 "agy 에 repo 스킬이 하나도 안 보인다" 로 FAIL 한 원인이 이
+상속 가정이었다 (#1410 Phase 4-5 G-1).
+
 ## Non-Goals
 
 - `antigravity`(WSL 이 상속한 Windows VS Code 계열 GUI 실행기) 통합 — 별개 도구.
-- `~/.gemini/skills` 합성 로직(`scripts/setup-skills-ssot.sh`) — `agy` 의 OAuth
-  토큰이 `~/.gemini/antigravity-cli/` 에 저장되므로 Gemini 런타임 디렉토리는
-  그대로 둔다. 즉 `agy` 는 별도 연동 분기 없이 Gemini 합성 결과를 상속한다
-  (역방향 참조: `scripts/setup-skills-ssot.sh` 헤더 주석 + Gemini 블록, #1376).
 - Gemini CLI(`gemini` 바이너리) 자체 제거 — 이 모듈은 shell 통합 레이어만 다룬다.
 
 ## References

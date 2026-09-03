@@ -865,3 +865,67 @@ seed_legacy_entries() {
     [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
     [ ! -L "${g_dir}/legacy-orphan" ]
 }
+
+# ---------------------------------------------------------------------
+# issue #1731 — Antigravity CLI (agy) 전용 합성
+# agy 는 Gemini 런타임을 공유하지만 skill 검색 경로는 상속하지 않는다.
+# agy 의 Global Customizations Root 는 ~/.gemini/config/ 이고 skill 은
+# 그 아래 skills/ 에서만 발견된다 — ~/.gemini/skills 는 읽지 않는다.
+# ---------------------------------------------------------------------
+
+# agy 존재 표식은 OAuth 토큰이 놓이는 ~/.gemini/antigravity-cli/ 다.
+seed_agy_home() {
+    mkdir -p "${FIXTURE_HOME}/.gemini/antigravity-cli"
+}
+
+@test "agy: composes into ~/.gemini/config/skills, not ~/.gemini/skills (#1731)" {
+    seed_agy_home
+
+    run_setup
+    assert_success
+
+    local a_dir="${FIXTURE_HOME}/.gemini/config/skills"
+    [ -d "$a_dir" ] && [ ! -L "$a_dir" ]
+    for s in alpha beta gamma; do
+        [ -L "${a_dir}/${s}" ]
+        [ "$(readlink -f "${a_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
+    done
+}
+
+@test "agy: absent antigravity-cli dir skips the fan-out (#1731)" {
+    # ~/.gemini 는 있지만 agy 는 설치되지 않은 순정 Gemini 환경.
+    seed_gemini_home
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.gemini/config/skills" ]
+}
+
+@test "agy: stale entry whose source vanished gets pruned (#1731)" {
+    seed_agy_home
+
+    run_setup
+    assert_success
+    [ -L "${FIXTURE_HOME}/.gemini/config/skills/beta" ]
+
+    rm -rf "${BASE_REPO}/skills/beta"
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.gemini/config/skills/beta" ]
+    [ -L "${FIXTURE_HOME}/.gemini/config/skills/alpha" ]
+}
+
+@test "agy: user symlink to non-SSOT location is preserved + warned (#1731)" {
+    seed_agy_home
+    mkdir -p "${FIXTURE_HOME}/.gemini/config" "${TEST_TEMP_HOME}/elsewhere/agy-skills"
+    ln -s "${TEST_TEMP_HOME}/elsewhere/agy-skills" \
+        "${FIXTURE_HOME}/.gemini/config/skills"
+
+    run_setup
+    assert_success
+    assert_output --partial "[agy] 사용자 symlink"
+
+    [ -L "${FIXTURE_HOME}/.gemini/config/skills" ]
+    [ "$(readlink "${FIXTURE_HOME}/.gemini/config/skills")" = "${TEST_TEMP_HOME}/elsewhere/agy-skills" ]
+}
