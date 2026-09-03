@@ -45,6 +45,14 @@
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
 
+# 워크트리에서 실행하면 DOTFILES_ROOT 는 워크트리 경로다. 정리 대상 링크는
+# main 체크아웃 경로(`~/dotfiles/claude/skills/...`)로 적혀 있으므로 워크트리
+# 경로만 보면 하나도 매치되지 않는다 — git common dir 로 main 체크아웃을 함께
+# 구해 두 경로 모두를 레거시 패턴으로 인정한다 (#1732).
+DOTFILES_MAIN_ROOT="$DOTFILES_ROOT"
+_git_common_dir="$(git -C "$DOTFILES_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+[ -n "$_git_common_dir" ] && DOTFILES_MAIN_ROOT="$(dirname "$_git_common_dir")"
+
 # Load UX library
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "$UX_LIB" ]; then
@@ -91,10 +99,14 @@ _realpath_or_self() {
 # PR #1729).
 # Usage: _ssot_is_legacy_broken_link <resolved_target_path>
 _ssot_is_legacy_broken_link() {
-    case "$1" in
-        "${DOTFILES_ROOT}/claude/skills" | "${DOTFILES_ROOT}/claude/skills"/*) return 0 ;;
-        *) return 1 ;;
-    esac
+    local root
+    for root in "$DOTFILES_ROOT" "$DOTFILES_MAIN_ROOT"; do
+        [ -n "$root" ] || continue
+        case "$1" in
+            "${root}/claude/skills" | "${root}/claude/skills"/*) return 0 ;;
+        esac
+    done
+    return 1
 }
 
 # 빈 문자열 = 워크스페이스 없음/너무 넓음 → 연결할 소스가 없다.
@@ -260,7 +272,11 @@ link_skills_compose() {
                 || [ "$(readlink -f "$link_target" 2>/dev/null)" = "$source_realpath" ]; then
                 continue
             fi
-            if skill_source_is_managed "$current_link"; then
+            # 디렉토리-단위 마이그레이션과 같은 판정을 엔트리에도 적용한다
+            # (#1732): 옛 SSOT 를 가리키다 끊어진 링크는 이름이 살아 있는
+            # 소스와 겹치는 한 그 스킬을 계속 가린다.
+            if skill_source_is_managed "$current_link" \
+                || { [ ! -e "$link_target" ] && _ssot_is_legacy_broken_link "$current_link"; }; then
                 rm -f "$link_target"
                 refreshed=$((refreshed + 1))
             else
@@ -288,6 +304,14 @@ link_skills_compose() {
     for existing in "$target"/*; do
         [ -L "$existing" ] || continue
         existing_target_path="$(readlink "$existing")"
+        # 이름이 더 이상 어떤 소스와도 겹치지 않는 레거시 링크는 위 엔트리
+        # 루프가 아예 방문하지 않는다 — 여기서만 정리된다 (#1732).
+        if [ ! -e "$existing" ] && _ssot_is_legacy_broken_link "$existing_target_path"; then
+            log_info "[$tool] legacy stale entry 정리: $existing"
+            rm -f "$existing"
+            pruned=$((pruned + 1))
+            continue
+        fi
         skill_source_is_managed "$existing_target_path" || continue
         if [ ! -d "$existing_target_path" ]; then
             log_info "[$tool] stale entry 정리: $existing"
@@ -329,16 +353,24 @@ link_skills_individual_codex() {
         source_realpath="$(readlink -f "$skill_path")"
 
         if [ -L "$skill_target" ]; then
-            local current_target
+            local current_target current_target_raw
             current_target="$(readlink -f "$skill_target" 2>/dev/null || true)"
             if [ "$current_target" = "$source_realpath" ]; then
                 unchanged=$((unchanged + 1))
                 continue
             fi
 
-            log_dim "[codex] 기존 사용자 symlink 보존: $skill_target"
-            skipped=$((skipped + 1))
-            continue
+            # compose 쪽과 동일한 레거시 판정 (#1732). 끊어진 링크는
+            # `readlink -f` 가 값을 못 내므로 raw 문자열로 매치한다.
+            current_target_raw="$(readlink "$skill_target" 2>/dev/null || true)"
+            if [ ! -e "$skill_target" ] && _ssot_is_legacy_broken_link "$current_target_raw"; then
+                rm -f "$skill_target"
+                migrated=$((migrated + 1))
+            else
+                log_dim "[codex] 기존 사용자 symlink 보존: $skill_target"
+                skipped=$((skipped + 1))
+                continue
+            fi
         fi
 
         if [ -e "$skill_target" ] && [ ! -d "$skill_target" ]; then
@@ -418,9 +450,12 @@ link_skills_individual_codex() {
         fi
 
         if [ -L "$existing_skill_entry" ]; then
-            local stale_target
+            local stale_target stale_target_raw
             stale_target="$(readlink -f "$existing_skill_entry" 2>/dev/null || true)"
-            if skill_source_is_managed "$stale_target"; then
+            stale_target_raw="$(readlink "$existing_skill_entry" 2>/dev/null || true)"
+            if skill_source_is_managed "$stale_target" \
+                || { [ ! -e "$existing_skill_entry" ] \
+                    && _ssot_is_legacy_broken_link "$stale_target_raw"; }; then
                 rm -f "$existing_skill_entry" || {
                     log_error "[codex] stale skill 제거 실패: $existing_skill_entry"
                     continue
