@@ -870,12 +870,19 @@ seed_legacy_entries() {
 # issue #1731 — Antigravity CLI (agy) 전용 합성 (근거: agy/AGENTS.md)
 # ---------------------------------------------------------------------
 
-# agy 존재 표식은 OAuth 토큰이 놓이는 ~/.gemini/antigravity-cli/ 다.
+# agy 상태 디렉토리. 설치 판별은 이 디렉토리 또는 PATH 상의 `agy` 바이너리다.
 seed_agy_home() {
     mkdir -p "${FIXTURE_HOME}/.gemini/antigravity-cli"
 }
 
-@test "agy: composes into ~/.gemini/config/skills, not ~/.gemini/skills (#1731)" {
+# agy 가 설치되지 않은 환경을 재현한다 — 상태 디렉토리를 안 만드는 것만으로는
+# 부족하고, 실행 PC 의 PATH 에 놓인 실제 `agy` 바이너리도 가려야 한다.
+run_setup_without_agy() {
+    HOME="$FIXTURE_HOME" PATH="/usr/bin:/bin" \
+        run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
+}
+
+@test "agy: composes into its own ~/.gemini/config/skills root (#1731)" {
     seed_agy_home
 
     run_setup
@@ -887,15 +894,37 @@ seed_agy_home() {
         [ -L "${a_dir}/${s}" ]
         [ "$(readlink -f "${a_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
     done
+
+    # agy 루트는 Gemini 루트를 대체하지 않고 **추가**된다: seed_agy_home 이
+    # 만든 ~/.gemini 때문에 Gemini 블록도 함께 돌아 두 경로가 모두 채워진다
+    # (PR #1734 codex FOLLOW-UP — 예전 테스트명은 반대를 주장했다).
+    [ -L "${FIXTURE_HOME}/.gemini/skills/alpha" ]
 }
 
-@test "agy: absent antigravity-cli dir skips the fan-out (#1731)" {
+@test "agy: neither state dir nor binary skips the fan-out (#1731)" {
     # ~/.gemini 는 있지만 agy 는 설치되지 않은 순정 Gemini 환경.
     seed_gemini_home
 
-    run_setup
+    run_setup_without_agy
     assert_success
     [ ! -e "${FIXTURE_HOME}/.gemini/config/skills" ]
+    # Gemini 자신의 합성은 영향을 받지 않는다.
+    [ -L "${FIXTURE_HOME}/.gemini/skills/alpha" ]
+}
+
+@test "agy: binary on PATH alone triggers the fan-out (#1731, agy FOLLOW-UP)" {
+    # 바이너리는 설치됐지만 아직 한 번도 실행하지 않아 상태 디렉토리가 없는 환경.
+    seed_gemini_home
+    mkdir -p "${TEST_TEMP_HOME}/fake-bin"
+    printf '#!/bin/sh\nexit 0\n' > "${TEST_TEMP_HOME}/fake-bin/agy"
+    chmod +x "${TEST_TEMP_HOME}/fake-bin/agy"
+
+    HOME="$FIXTURE_HOME" PATH="${TEST_TEMP_HOME}/fake-bin:${PATH}" \
+        run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
+    assert_success
+
+    [ ! -d "${FIXTURE_HOME}/.gemini/antigravity-cli" ]
+    [ -L "${FIXTURE_HOME}/.gemini/config/skills/alpha" ]
 }
 
 @test "agy: stale entry whose source vanished gets pruned (#1731)" {
