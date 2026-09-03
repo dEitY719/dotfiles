@@ -45,3 +45,12 @@ teardown() {
     run check_command_docs_staleness "$staged" "$WARN_FILE"
     [ "$status" -eq 1 ]
 }
+
+@test "deleted tools/custom script without doc update is flagged (codex review, PR #1741)" {
+    # pre-commit's STAGED_FILES (--diff-filter=ACMR) excludes deletions, so
+    # this check must be fed a deletion-inclusive file list — this test
+    # asserts the check itself still fires when a deleted path is present.
+    local staged=$'shell-common/tools/custom/removed_tool.sh\nshell-common/functions/foo.sh'
+    run check_command_docs_staleness "$staged" "$WARN_FILE"
+    [ "$status" -eq 1 ]
+}
