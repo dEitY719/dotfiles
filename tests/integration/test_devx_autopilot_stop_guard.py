@@ -8,9 +8,9 @@ event['transcript_path'], and either:
   - exits 0 with `{"decision":"block","reason":"..."}` on stdout
     → block the stop and re-prompt the model.
 
-Unlike the gh-issue-flow guard (which counts sub-skill invocations),
-devx:autopilot's inline mode runs no implement sub-skill, so this guard
-tracks the ORDERED STEP MARKERS `[step:devx-autopilot/<id>] OK` that the
+Unlike the gh-flow:issue guard (which counts sub-skill invocations),
+gh-flow:autopilot's inline mode runs no implement sub-skill, so this guard
+tracks the ORDERED STEP MARKERS `[step:gh-flow-autopilot/<id>] OK` that the
 SKILL.md emits via printf. Because printf output lands in a Bash
 tool_result block, the step-marker scan includes tool_result payloads;
 the terminal scan does not (report-template.md text must not false-terminate).
@@ -169,10 +169,10 @@ def _step_markers_result(*step_ids: str) -> dict[str, Any]:
     """A tool_result block carrying the printf step markers for the given ids.
 
     This mirrors the real transcript shape: the SKILL.md emits
-    `printf '[step:devx-autopilot/<id>] OK\\n'`, whose stdout lands in a
+    `printf '[step:gh-flow-autopilot/<id>] OK\\n'`, whose stdout lands in a
     Bash tool_result block.
     """
-    body = "\n".join(f"[step:devx-autopilot/{sid}] OK" for sid in step_ids)
+    body = "\n".join(f"[step:gh-flow-autopilot/{sid}] OK" for sid in step_ids)
     return _user_tool_result(body)
 
 
@@ -237,7 +237,7 @@ def test_stop_hook_active_short_circuits(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
         ],
     )
@@ -251,7 +251,7 @@ def test_malformed_jsonl_lines_skipped(tmp_path: Path) -> None:
     """Garbage lines in the middle of the transcript don't crash the hook."""
     p = tmp_path / "transcript.jsonl"
     with p.open("w", encoding="utf-8") as f:
-        f.write(json.dumps(_user_text("/devx-autopilot")) + "\n")
+        f.write(json.dumps(_user_text("/gh-flow:autopilot")) + "\n")
         f.write("not valid json at all {{{\n")
         f.write(json.dumps(_step_markers_result("plan")) + "\n")
         f.write("\n")  # blank line
@@ -266,75 +266,44 @@ def test_malformed_jsonl_lines_skipped(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_boundary_via_raw_slash_command(tmp_path: Path) -> None:
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/devx-autopilot"),
-            _step_markers_result("plan"),
-        ],
-    )
+@pytest.mark.parametrize(
+    ("label", "boundary"),
+    [
+        ("colon-form", "/gh-flow:autopilot"),
+        ("hyphen-form", "/gh-flow-autopilot"),
+        ("command-name-wrapper", "<command-name>/gh-flow:autopilot</command-name>"),
+        (
+            "skill-base-dir-marketplace",
+            "Base directory for this skill: /home/u/.claude/plugins/marketplaces/gh-flow-skills/skills/autopilot",
+        ),
+        (
+            "skill-base-dir-cache",
+            "Base directory for this skill: "
+            "/home/u/.claude/plugins/cache/gh-flow-skills/gh-flow/0.1.0/skills/autopilot",
+        ),
+        ("skill-base-dir-flat", "Base directory for this skill: /home/u/.claude/skills/gh-flow/skills/autopilot"),
+        ("skill-h1", "# gh-flow:autopilot — spec → PR"),
+    ],
+)
+def test_boundary_surfaces(tmp_path: Path, label: str, boundary: str) -> None:
+    """Every boundary surface (a)-(d) arms the guard.
+
+    Without a boundary the guard never looks for a step marker at all, so
+    each surface is load-bearing on its own.
+    """
+    transcript = _write_transcript(tmp_path, [_user_text(boundary), _assistant_text("done!")])
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-
-
-def test_boundary_via_command_name_wrapper(tmp_path: Path) -> None:
-    content = (
-        "<command-message>devx-autopilot</command-message>\n"
-        "<command-name>/devx-autopilot</command-name>\n"
-        "<command-args></command-args>\n"
-    )
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            {"type": "user", "message": {"role": "user", "content": content}},
-            _step_markers_result("plan"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-
-
-def test_boundary_via_base_dir_line(tmp_path: Path) -> None:
-    content = "Base directory for this skill: /home/user/.claude/skills/devx-autopilot\n"
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            {"type": "user", "message": {"role": "user", "content": content}},
-            _step_markers_result("plan"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-
-
-def test_boundary_via_h1_line(tmp_path: Path) -> None:
-    content = "# devx:autopilot — Stage-B 자율 실행 (spec → PR)\n"
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            {"type": "user", "message": {"role": "user", "content": content}},
-            _step_markers_result("plan"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
+    assert result.stdout.strip(), f"{label}: expected a block, got empty stdout"
+    assert json.loads(result.stdout)["decision"] == "block"
 
 
 def test_boundary_via_skill_tool_use(tmp_path: Path) -> None:
-    """Boundary can be a Skill(devx-autopilot) tool_use, not just user text."""
+    """Boundary can be a Skill(gh-flow-autopilot) tool_use, not just user text."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _assistant_skill("devx-autopilot"),
+            _assistant_skill("gh-flow-autopilot"),
             _step_markers_result("plan"),
         ],
     )
@@ -348,7 +317,7 @@ def test_boundary_via_colon_skill_tool_use(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _assistant_skill("devx:autopilot"),
+            _assistant_skill("gh-flow:autopilot"),
             _step_markers_result("plan"),
         ],
     )
@@ -363,7 +332,7 @@ def test_mid_sentence_mention_not_a_boundary(tmp_path: Path) -> None:
         tmp_path,
         [
             _user_text(
-                "I was reading the docs about /devx-autopilot and got confused — "
+                "I was reading the docs about /gh-flow:autopilot and got confused — "
                 "could you summarize how the chain works?"
             ),
             _assistant_text("Sure — here's a summary: ..."),
@@ -384,7 +353,7 @@ def test_mid_flow_only_plan_and_issue_blocks_naming_mode(tmp_path: Path) -> None
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan", "issue"),
             # The model writes a fake-looking progress note but no terminal report.
             _assistant_text("plan and issue done, continuing..."),
@@ -405,7 +374,7 @@ def test_mid_flow_partial_markers_split_across_results(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _step_markers_result("issue"),
             _step_markers_result("mode"),
@@ -417,17 +386,17 @@ def test_mid_flow_partial_markers_split_across_results(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     # First missing after implement is pr.
-    assert "gh:pr" in decision["reason"] or "pr" in decision["reason"]
+    assert "gh-pr:create" in decision["reason"]
     assert "4/7" in decision["reason"]
 
 
 def test_partial_marker_without_ok_does_not_count(tmp_path: Path) -> None:
-    """A `[step:devx-autopilot/plan]` without ` OK` must not satisfy the step."""
+    """A `[step:gh-flow-autopilot/plan]` without ` OK` must not satisfy the step."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
-            _user_tool_result("[step:devx-autopilot/plan]\n(no OK suffix here)"),
+            _user_text("/gh-flow:autopilot"),
+            _user_tool_result("[step:gh-flow-autopilot/plan]\n(no OK suffix here)"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -445,7 +414,7 @@ def test_all_steps_present_but_no_terminal_blocks_for_report(tmp_path: Path) -> 
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan", "issue", "mode", "implement", "pr", "simplify", "pr-reply"),
             # No terminal report yet.
         ],
@@ -464,68 +433,51 @@ def test_all_steps_present_but_no_terminal_blocks_for_report(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
-def test_terminal_ok_marker_in_assistant_text_allows_stop(tmp_path: Path) -> None:
-    """A real `[OK] devx:autopilot` in assistant text ends the flow."""
+@pytest.mark.parametrize(
+    ("label", "terminal"),
+    [
+        ("report-marker", "[step:gh-flow-autopilot/report] OK"),
+        ("ok-report", "[OK] gh-flow:autopilot #1678 — PR https://github.com/o/r/pull/1"),
+        ("fail-report", "[FAIL] gh-flow:autopilot #1678 — stopped at Step 3"),
+    ],
+)
+def test_terminal_markers_allow_stop(tmp_path: Path, label: str, terminal: str) -> None:
+    """Each terminal marker ends the flow — even with steps still outstanding.
+
+    Only 3 of the 7 step markers are present, so this also pins the ordering
+    inside the hook: the terminal check runs BEFORE the missing-step check
+    (a `[FAIL]` hard stop is legitimate mid-chain).
+    """
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
-            _step_markers_result("plan", "issue", "mode", "implement", "pr", "simplify", "pr-reply"),
-            _assistant_text("[OK] devx:autopilot 완료 — my-feature-design.md\n  PR: #42"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == ""
-
-
-def test_terminal_report_step_marker_in_assistant_text_allows_stop(tmp_path: Path) -> None:
-    """`[step:devx-autopilot/report] OK` echoed in assistant text is terminal."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/devx-autopilot"),
-            _step_markers_result("plan", "issue", "mode", "implement", "pr", "simplify", "pr-reply"),
-            _assistant_text("[step:devx-autopilot/report] OK"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == ""
-
-
-def test_terminal_fail_marker_in_assistant_text_allows_stop(tmp_path: Path) -> None:
-    """A `[FAIL] devx:autopilot` hard-stop report also ends the flow."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan", "issue", "mode"),
-            _assistant_text("[FAIL] devx:autopilot 정지 — Step 2 (구현)"),
+            _assistant_text(terminal),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
-    assert result.stdout.strip() == ""
+    assert result.stdout.strip() == "", f"{label}: expected allow, got {result.stdout!r}"
 
 
 def test_report_template_text_in_tool_result_does_not_terminate(tmp_path: Path) -> None:
     """L1.5 false-positive guard: report-template.md text (which literally
-    contains `[OK] devx:autopilot 완료`) read into a tool_result during a
+    contains `[OK] gh-flow:autopilot 완료`) read into a tool_result during a
     real flow must NOT count as a terminal marker → still block.
     """
     template_excerpt = (
         "# Report Templates\n\n"
         "## 성공 ([OK])\n"
-        "    [OK] devx:autopilot 완료 — <spec 파일명>\n"
+        "    [OK] gh-flow:autopilot 완료 — <spec 파일명>\n"
         "    - 이슈:   #<N>  <issue-url>\n"
         "## 실패 ([FAIL])\n"
-        "    [FAIL] devx:autopilot 정지 — Step <k>\n"
+        "    [FAIL] gh-flow:autopilot 정지 — Step <k>\n"
     )
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan", "issue"),
             # Model reads the report template while mid-flow.
             _user_tool_result(template_excerpt),
@@ -546,7 +498,7 @@ def test_report_template_text_in_tool_result_does_not_terminate(tmp_path: Path) 
 def test_step_marker_in_doc_read_as_tool_result_is_fail_open_safe(tmp_path: Path) -> None:
     """Documented behavior: step markers are counted from tool_result on
     purpose (that is where the SKILL.md printf output lands). So if a doc
-    that quotes `[step:devx-autopilot/<id>] OK` is read into a tool_result
+    that quotes `[step:gh-flow-autopilot/<id>] OK` is read into a tool_result
     during a real flow, those ids count toward the step set — a fail-OPEN
     direction (it can only let a stop through sooner, never trap the user).
 
@@ -557,7 +509,7 @@ def test_step_marker_in_doc_read_as_tool_result_is_fail_open_safe(tmp_path: Path
     doc_quoting_markers = (
         "The autopilot skill emits, in order:\n"
         + "\n".join(
-            f"[step:devx-autopilot/{sid}] OK"
+            f"[step:gh-flow-autopilot/{sid}] OK"
             for sid in ("plan", "issue", "mode", "implement", "pr", "simplify", "pr-reply")
         )
         + "\n"
@@ -565,7 +517,7 @@ def test_step_marker_in_doc_read_as_tool_result_is_fail_open_safe(tmp_path: Path
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _user_tool_result(doc_quoting_markers),
         ],
     )
@@ -588,7 +540,7 @@ def test_trace_off_by_default_no_stderr(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
         ],
     )
@@ -604,7 +556,7 @@ def test_trace_on_emits_block_diagnostics(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
         ],
     )
@@ -632,7 +584,7 @@ def test_trace_on_emits_allow_reason_for_no_boundary(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stdout.strip() == ""
     assert "[autopilot-stop-guard] allow:" in result.stderr
-    assert "no devx-autopilot boundary" in result.stderr
+    assert "no gh-flow-autopilot boundary" in result.stderr
 
 
 # ---------------------------------------------------------------------------
@@ -649,7 +601,7 @@ def test_three_fresh_user_prompts_expire_the_boundary(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text("actually, forget that — what does mise tasks list?"),
             _assistant_text("It lists the repo's lint/test tasks."),
@@ -662,7 +614,7 @@ def test_three_fresh_user_prompts_expire_the_boundary(tmp_path: Path) -> None:
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", (
-        f"Stale devx-autopilot boundary kept blocking unrelated turns. stdout={result.stdout!r}"
+        f"Stale gh-flow:autopilot boundary kept blocking unrelated turns. stdout={result.stdout!r}"
     )
 
 
@@ -671,7 +623,7 @@ def test_boundary_expiry_reported_in_trace(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text("unrelated question one"),
             _user_text("unrelated question two"),
@@ -694,7 +646,7 @@ def test_two_fresh_user_prompts_still_block(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _user_text("wait, is the PR going to close the issue?"),
             _assistant_text("Yes, via Closes #1275."),
             _user_text("ok continue"),
@@ -714,7 +666,7 @@ def test_skill_expansion_user_messages_are_not_fresh_prompts(tmp_path: Path) -> 
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _user_text("Base directory for this skill: /home/user/.claude/skills/gh-issue-create\n"),
             _assistant_skill("gh-issue-create"),
             _user_text("<command-message>gh-pr</command-message>\n<command-args></command-args>\n"),
@@ -741,7 +693,7 @@ def test_tool_result_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_tool_result("tests: 42 passed"),
             _user_tool_result("commit abc123 created"),
@@ -766,7 +718,7 @@ def test_system_reminder_only_user_message_is_not_a_fresh_prompt(
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text(reminder),
             _user_text(reminder),
@@ -787,7 +739,7 @@ def test_expiry_disabled_by_env_zero(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             *[_user_text(f"unrelated prompt {i}") for i in range(5)],
         ],
@@ -806,7 +758,7 @@ def test_expiry_limit_configurable_via_env(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text("never mind, different topic now"),
         ],
@@ -822,7 +774,7 @@ def test_expiry_limit_configurable_via_env(tmp_path: Path) -> None:
 def test_invalid_expiry_env_falls_back_to_default(tmp_path: Path) -> None:
     """An unparseable / negative value degrades to the default of 3."""
     two_prompts = [
-        _user_text("/devx-autopilot"),
+        _user_text("/gh-flow:autopilot"),
         _step_markers_result("plan"),
         _user_text("question one"),
         _user_text("question two"),
@@ -841,7 +793,7 @@ def test_invalid_expiry_env_falls_back_to_default(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Issue #1275 — fresh-prompt counter over/under-counting.
 #
-# Measured on gh-issue-flow's twin guard (PR #1272): a naive `role=user` count
+# Measured on gh-flow:issue's twin guard (PR #1272): a naive `role=user` count
 # saw 102 "fresh prompts" on a real transcript of which only 4 were human —
 # the rest were Stop-hook feedback re-injections and `<task-notification>`
 # background-subagent completions, so the limit of 3 was hit mid-flow and the
@@ -856,7 +808,7 @@ def test_ismeta_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_meta_text("please continue with the next step"),
             _user_meta_text("keep going, do not stop"),
@@ -879,11 +831,11 @@ def test_ismeta_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
             # this is the self-defeat loop: every block the guard emits comes back
             # as a "fresh user prompt", and three of them would expire the guard's
             # own boundary.
-            "Stop hook feedback: devx-autopilot incomplete: 1/7 Stage-B step markers "
-            "emitted since the flow started, and no terminal report "
-            "('[OK] devx:autopilot' / '[FAIL] devx:autopilot') has been emitted yet. "
-            "Per the CRITICAL CONTRACT in claude/skills/devx-autopilot/SKILL.md, you "
-            "MUST continue immediately. Next action: Step 0b — Skill(gh:issue-create).",
+            "Stop hook feedback: gh-flow:autopilot incomplete: 1/7 Stage-B step "
+            "markers emitted since the flow started, and no terminal report "
+            "('[OK] gh-flow:autopilot' / '[FAIL] gh-flow:autopilot') has been emitted "
+            "yet. Per the CRITICAL CONTRACT in the gh-flow:autopilot SKILL.md, you "
+            "MUST continue immediately. Next action: Step 0b — Skill(gh-issue:create).",
         ),
         (
             "task-notification",
@@ -902,7 +854,7 @@ def test_harness_injection_markers_are_not_fresh_prompts(tmp_path: Path, label: 
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text(notice),
             _user_text(notice),
@@ -927,7 +879,7 @@ def test_mixed_text_and_tool_result_message_counts_as_fresh_prompt(
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text_with_tool_result("stop that — what does mise tasks list?"),
             _user_text_with_tool_result("and where is the zsh env file?"),
@@ -949,7 +901,7 @@ def test_tool_result_only_message_still_not_a_fresh_prompt(tmp_path: Path) -> No
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _user_tool_result("tests: 42 passed"),
             _user_tool_result("commit abc123 created"),
             _user_tool_result("PR https://x/pull/9 opened"),
@@ -992,7 +944,7 @@ def test_quoted_marker_mid_sentence_still_counts_as_fresh_prompt(tmp_path: Path,
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text(prompt),
         ],
@@ -1022,9 +974,9 @@ def test_already_loaded_injection_alone_is_not_a_fresh_prompt(tmp_path: Path) ->
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
-            _user_text("Skill /devx-autopilot is already loaded above; instructions unchanged. Arguments: "),
+            _user_text("Skill /gh-flow:autopilot is already loaded above; instructions unchanged. Arguments: "),
         ],
     )
     result = _run_hook(
@@ -1056,7 +1008,7 @@ def test_marker_quoted_at_true_line_start_is_still_not_a_fresh_prompt(tmp_path: 
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _user_text("Stop hook feedback: I'm quoting this exactly to ask you about it."),
         ],
@@ -1103,144 +1055,8 @@ def test_hook_callable_two_ways(tmp_path: Path, exec_form: list[str]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# D-12 dual-form namespace recognition (#1678)
-#
-# Phase 3 of #1410 migrates this skill into the `gh-flow-skills` repo as
-# `gh-flow:autopilot`, while NF-1 keeps the dotfiles original (emitting the
-# old `[step:devx-autopilot/...]` markers) alive until Phase 4. The guard
-# must recognize BOTH marker namespaces at once. Every case below is an
-# ADDITION — no existing assertion above is modified (issue #1678, NF-4).
+# Post-migration step labels (#1678 F-9)
 # ---------------------------------------------------------------------------
-
-
-def _step_markers_result_new(*step_ids: str) -> dict[str, Any]:
-    """`_step_markers_result`'s post-migration twin (`gh-flow-autopilot`)."""
-    body = "\n".join(f"[step:gh-flow-autopilot/{sid}] OK" for sid in step_ids)
-    return _user_tool_result(body)
-
-
-@pytest.mark.parametrize(
-    ("label", "boundary"),
-    [
-        ("colon-form", "/gh-flow:autopilot"),
-        ("hyphen-form", "/gh-flow-autopilot"),
-        ("command-name-wrapper", "<command-name>/gh-flow:autopilot</command-name>"),
-        (
-            "skill-base-dir-marketplace",
-            "Base directory for this skill: /home/u/.claude/plugins/marketplaces/gh-flow-skills/skills/autopilot",
-        ),
-        (
-            "skill-base-dir-cache",
-            "Base directory for this skill: "
-            "/home/u/.claude/plugins/cache/gh-flow-skills/gh-flow/0.1.0/skills/autopilot",
-        ),
-        ("skill-base-dir-flat", "Base directory for this skill: /home/u/.claude/skills/gh-flow/skills/autopilot"),
-        ("skill-h1", "# gh-flow:autopilot — spec → PR"),
-    ],
-)
-def test_new_namespace_boundary_surfaces(tmp_path: Path, label: str, boundary: str) -> None:
-    """The post-migration name opens a Stage-B flow on every boundary surface.
-
-    Without this the F-9 marker widening would be unreachable: the guard
-    never arms, so it never looks for a marker in either namespace.
-    """
-    transcript = _write_transcript(tmp_path, [_user_text(boundary), _assistant_text("done!")])
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip(), f"{label}: expected a block, got empty stdout"
-    assert json.loads(result.stdout)["decision"] == "block"
-
-
-def test_new_namespace_step_markers_are_counted(tmp_path: Path) -> None:
-    """`[step:gh-flow-autopilot/<id>] OK` satisfies the same required steps."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-flow:autopilot"),
-            _step_markers_result_new("plan", "issue"),
-            _assistant_text("continuing..."),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-    assert "2/7" in decision["reason"], decision["reason"]
-    assert "mode" in decision["reason"], decision["reason"]
-
-
-def test_old_namespace_step_markers_still_counted_after_widening(tmp_path: Path) -> None:
-    """Regression twin of the case above: the old marker keeps working."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-flow:autopilot"),
-            _step_markers_result("plan", "issue"),
-            _assistant_text("continuing..."),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-    assert "2/7" in decision["reason"], decision["reason"]
-
-
-def test_mixed_namespace_step_markers_reach_all_seven(tmp_path: Path) -> None:
-    """A run that switches namespace mid-flow still completes its step set."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/devx-autopilot"),
-            _step_markers_result("plan", "issue", "mode"),
-            _step_markers_result_new("implement", "pr", "simplify", "pr-reply"),
-            _assistant_text("continuing..."),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-    assert "all 7 Stage-B step" in decision["reason"], decision["reason"]
-
-
-@pytest.mark.parametrize(
-    ("label", "terminal"),
-    [
-        ("report-marker", "[step:gh-flow-autopilot/report] OK"),
-        ("ok-report", "[OK] gh-flow:autopilot #1678 — PR https://github.com/o/r/pull/1"),
-        ("fail-report", "[FAIL] gh-flow:autopilot #1678 — stopped at Step 3"),
-    ],
-)
-def test_new_namespace_terminal_markers_allow_stop(tmp_path: Path, label: str, terminal: str) -> None:
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-flow:autopilot"),
-            _step_markers_result_new("plan", "issue", "mode", "implement", "pr", "simplify", "pr-reply"),
-            _assistant_text(terminal),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == "", f"{label}: expected allow, got {result.stdout!r}"
-
-
-def test_partial_new_marker_without_ok_does_not_count(tmp_path: Path) -> None:
-    """The strictness of the marker regex survives the widening."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-flow:autopilot"),
-            _user_tool_result("[step:gh-flow-autopilot/plan]"),
-            _assistant_text("continuing..."),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-    assert "0/7" in decision["reason"], decision["reason"]
 
 
 def test_step_labels_name_the_post_migration_sub_skills(tmp_path: Path) -> None:
@@ -1248,7 +1064,7 @@ def test_step_labels_name_the_post_migration_sub_skills(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/devx-autopilot"),
+            _user_text("/gh-flow:autopilot"),
             _step_markers_result("plan"),
             _assistant_text("continuing..."),
         ],
