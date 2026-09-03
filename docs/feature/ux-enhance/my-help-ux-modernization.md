@@ -2,7 +2,8 @@
 
 - **문서 위치**: `docs/feature/ux-enhance/my-help-ux-modernization.md`
 - **작성일자**: 2026-09-03
-- **상태**: Draft / Proposal (동료 워크트리 연구 문서 2종 통합 및 고도화 완료)
+- **상태**: Superseded — 결정과 구현은 `docs/feature/ux-enhance/my-help-tui-ux.md` (설계 SSOT) 및 이슈 #1740 이 SSOT 다. 이 문서는 그 결정에 이르는 조사 기록으로 남긴다.
+- **로드맵 §5 주의**: 아래 Phase 표기는 이 문서 작성 시점의 제안이며 확정 순서가 아니다. 실제로는 #1740 이 Phase 0~3(진입·preview·슬래시 스코프·함수 registry)과 `packages/my-cli` 삭제를 함께 처리했고(D-2 — 패키지는 삭제, 설계 문서만 `docs/archive/my-cli/` 로 보존), 셸 버퍼 주입·클립보드 복사는 후속 이슈로 분리했다(D-3). "Ink TUI 고도화 검토"는 D-5 의 재개 조건을 만족할 때까지 착수하지 않는다.
 - **대상**: `shell-common/functions/my_help.sh`, `docs/archive/my-cli/`
 - **검토 및 수용 대상 문서**:
   1. `docs/feature/ux-enhance/my-help-tui-ux.md` (feat-1 브랜치: 실측 데이터, fzf 버전 제약, 고아 packages/my-cli 분석)

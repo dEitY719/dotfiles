@@ -356,3 +356,69 @@ STUB
     assert_line "query=carried"
     assert_line "render=alias"
 }
+
+# ---------------------------------------------------------------------------
+# P20-P22: PR #1745 review follow-ups
+# ---------------------------------------------------------------------------
+
+# The func grep pattern is built *from* the registry, so an entry whose real
+# definition the pattern cannot match (e.g. `function name {`, or a rename)
+# drops out silently — the palette just shows one row fewer. agy flagged the
+# narrow regex; the cheaper guard is a tripwire that fails when an entry stops
+# resolving, rather than widening the pattern for forms this repo does not use.
+@test "P20: every registry entry resolves to a real definition" {
+    run_in_bash '
+        printf "registry=%s\n" "$(_my_help_func_registry | wc -l)"
+        printf "resolved=%s\n" "$(_my_help_function_index | cut -f1 | LC_ALL=C sort -u | wc -l)"
+        printf "unresolved=%s\n" "$(comm -13 \
+            <(_my_help_function_index | cut -f1 | LC_ALL=C sort -u) \
+            <(_my_help_func_registry | cut -f1 | LC_ALL=C sort -u) | tr "\n" " ")"
+    '
+    assert_success
+    assert_line --index 0 "registry=33"
+    assert_line --index 1 "resolved=33"
+    assert_line --index 2 "unresolved="
+}
+
+@test "P21: an unknown MY_HELP_DEFAULT_SCOPE falls back to topic, not an empty palette" {
+    # codex review: the value reaches the candidate stream and (before the fix)
+    # an fzf action string, so a typo opened a palette with nothing in it.
+    run_in_bash '
+        STUB_DIR="$HOME/fzfstub"; mkdir -p "$STUB_DIR/bin"; export STUB_DIR
+        printf "#!/usr/bin/env bash\ncat > \"\$STUB_DIR/stream\"\nprintf \"\\n\"\nhead -1 \"\$STUB_DIR/stream\"\n" > "$STUB_DIR/bin/fzf"
+        chmod +x "$STUB_DIR/bin/fzf"
+        PATH="$STUB_DIR/bin:$PATH"
+        _my_help_palette_available() { return 0; }
+        MY_HELP_DEFAULT_SCOPE=nonsense _my_help_search > /dev/null 2>&1
+        awk -F"\t" "{print \$3}" "$STUB_DIR/stream" | LC_ALL=C sort -u | tr "\n" ","
+    '
+    assert_success
+    assert_output "topic,"
+}
+
+@test "P22: an fzf failure degrades to the category table instead of printing nothing" {
+    # agy BLOCKER: rc=2 (unsupported option, lost tty) was absorbed as if the
+    # user had pressed Esc, so the palette exited silently with no fallback.
+    run_in_bash '
+        STUB_DIR="$HOME/fzfstub"; mkdir -p "$STUB_DIR/bin"; export STUB_DIR
+        printf "#!/usr/bin/env bash\ncat > /dev/null\nexit 2\n" > "$STUB_DIR/bin/fzf"
+        chmod +x "$STUB_DIR/bin/fzf"
+        PATH="$STUB_DIR/bin:$PATH"
+        _my_help_palette_available() { return 0; }
+        _my_help_search
+    '
+    assert_success
+    assert_output --partial "Categories"
+
+    # Esc (130) stays silent — the fallback must not fire on a user cancel.
+    run_in_bash '
+        STUB_DIR="$HOME/fzfstub"; mkdir -p "$STUB_DIR/bin"; export STUB_DIR
+        printf "#!/usr/bin/env bash\ncat > /dev/null\nexit 130\n" > "$STUB_DIR/bin/fzf"
+        chmod +x "$STUB_DIR/bin/fzf"
+        PATH="$STUB_DIR/bin:$PATH"
+        _my_help_palette_available() { return 0; }
+        _my_help_search
+    '
+    assert_success
+    assert_output ""
+}
