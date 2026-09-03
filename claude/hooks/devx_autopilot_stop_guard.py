@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Claude Code Stop hook: harness-level guard for /devx-autopilot early-stop (issue #1138).
+"""Claude Code Stop hook: harness-level guard for /gh-flow:autopilot early-stop (issue #1138).
 
 Reads a Stop event JSON from stdin, parses the conversation transcript, and
 emits a `block` decision when the model tries to end its turn while a
-devx:autopilot chain (Stage-B: plan -> issue -> mode -> implement -> pr ->
+gh-flow:autopilot chain (Stage-B: plan -> issue -> mode -> implement -> pr ->
 simplify -> pr-reply -> report) is still in progress.
 
-Failure mode being mitigated: like gh:issue-flow, the model self-authors a
+Failure mode being mitigated: like gh-flow:issue, the model self-authors a
 success-looking summary between chained Skill() calls and treats it as a
 turn-ending answer, leaving the Stage-B chain half-run. Prose rules in
 SKILL.md alone are not enough — the harness must mechanically force
@@ -16,21 +16,21 @@ Why marker-based (not skill-count-based like gh_issue_flow_stop_guard.py):
 autopilot's *inline* implementation mode runs no implement sub-skill at all,
 so counting Skill() invocations would undercount a legitimately-complete
 flow. Instead this guard tracks the ORDERED STEP MARKERS the SKILL.md emits
-via `printf '[step:devx-autopilot/<id>] OK\\n'`. Because printf output lands
-in a Bash `tool_result` block, the step-marker scan intentionally includes
-tool_result payloads (fail-open direction is acceptable — a stray marker
-merely lets a stop through, it never traps the user). The terminal scan, by
-contrast, is restricted to `role=assistant` text (include_tool_results=False)
-so the report-template.md text — which literally contains `[OK] devx:autopilot`
-— cannot false-terminate the flow when read into a tool_result (mirrors the
-gh-issue-flow L1.5 fix).
+via `printf '[step:gh-flow-autopilot/<id>] OK\\n'`. Because printf output
+lands in a Bash `tool_result` block, the step-marker scan intentionally
+includes tool_result payloads (fail-open direction is acceptable — a stray
+marker merely lets a stop through, it never traps the user). The terminal
+scan, by contrast, is restricted to `role=assistant` text
+(include_tool_results=False) so the report-template.md text — which literally
+contains `[OK] gh-flow:autopilot` — cannot false-terminate the flow when read
+into a tool_result (mirrors the gh-flow:issue L1.5 fix).
 
 Safety rails (each is critical — never accidentally trap the user):
   - Empty / unreadable / malformed stdin → exit 0 (allow stop).
   - Missing or unreadable transcript_path → exit 0.
   - `stop_hook_active == True` → exit 0 (we already blocked once in this
     chain; bowing out prevents an infinite Stop→block→Stop loop).
-  - No devx-autopilot boundary in the transcript → exit 0 (not our flow).
+  - No gh-flow:autopilot boundary in the transcript → exit 0 (not our flow).
   - Terminal report marker present in assistant text → exit 0 (chain done).
   - Boundary went stale (N fresh user prompts since it) → exit 0 (#1275).
   - Any unexpected exception → exit 0 (fail open).
@@ -54,8 +54,8 @@ from typing import Any
 _TRACE_ENABLED: bool = os.environ.get("DEVX_AUTOPILOT_STOP_GUARD_TRACE") == "1"
 
 # Issue #1275 (ported from #1270 / PR #1272) — how many *fresh* user prompts
-# may accumulate after a devx-autopilot boundary before the hook declares that
-# boundary stale and fails open. Without this valve a boundary lives forever:
+# may accumulate after a gh-flow:autopilot boundary before the hook declares
+# that boundary stale and fails open. Without this valve a boundary lives forever:
 # `stop_hook_active` only prevents an infinite Stop→block→Stop loop *within*
 # one turn, and it resets the moment the user sends a new message, so an
 # abandoned Stage-B run that never emitted a terminal report would keep
@@ -108,25 +108,14 @@ _STEP_LABELS: dict[str, str] = {
 }
 
 # Strict step-marker regex. Requires the literal `[step:<skill>/<id>] OK`
-# so a partial `[step:devx-autopilot/plan]` without ` OK` does NOT match.
-#
-# Two skill names are honoured: the dotfiles-native `devx-autopilot` and,
-# since #1410 Phase 3, the migrated `gh-flow-autopilot` (D-12, issue #1678).
-# Both are accepted for the whole transition — NF-1 keeps the dotfiles
-# original emitting the old marker until Phase 4, while anyone running the
-# `gh-flow-skills` plugin emits the new one. Both are spelled out literally
-# here, like the `TERMINAL_PATTERNS` twins just below and the (a')-(d')
-# boundary twins further down, so that a `grep gh-flow-autopilot` surfaces
-# every namespace-sensitive site including the pattern actually compiled.
-_STEP_MARKER_RE: re.Pattern[str] = re.compile(r"\[step:(?:devx-autopilot|gh-flow-autopilot)/([a-z-]+)\]\s+OK\b")
+# so a partial `[step:gh-flow-autopilot/plan]` without ` OK` does NOT match.
+# `gh-flow-autopilot` is the only namespace the skill ships under since the
+# #1410 migration completed (#1680 / #1681 F-5).
+_STEP_MARKER_RE: re.Pattern[str] = re.compile(r"\[step:gh-flow-autopilot/([a-z-]+)\]\s+OK\b")
 
 # Terminal markers — presence in any *assistant text* block after the boundary
 # means the flow has finished (or hard-failed) and the model may stop.
 TERMINAL_PATTERNS: tuple[str, ...] = (
-    "[step:devx-autopilot/report] OK",
-    "[OK] devx:autopilot",
-    "[FAIL] devx:autopilot",
-    # Post-migration twins (#1678, D-12).
     "[step:gh-flow-autopilot/report] OK",
     "[OK] gh-flow:autopilot",
     "[FAIL] gh-flow:autopilot",
@@ -192,7 +181,7 @@ _SKILL_EXPANSION_RE: re.Pattern[str] = _line_anchored_alternation(
 # (which identifies an expanded SKILL.md body), so it lives in its own tuple;
 # both are consulted.
 #
-# WHY this exists (measured on gh-issue-flow's twin guard in PR #1272): a
+# WHY this exists (measured on gh-flow:issue's twin guard in PR #1272): a
 # naive `role=user` count reported 102 "fresh prompts" on a real transcript of
 # which only 4 were human — the rest were Stop-hook feedback blocks (Claude
 # Code re-injects THIS hook's own `reason` string as a `role=user` text
@@ -203,62 +192,53 @@ _SKILL_EXPANSION_RE: re.Pattern[str] = _line_anchored_alternation(
 # `<task-notification>` case is the norm here too.
 #
 # `isMeta` on the outer transcript entry is the primary defense; this tuple is
-# defense-in-depth for transcripts that lack the flag. `devx-autopilot
+# defense-in-depth for transcripts that lack the flag. `gh-flow:autopilot
 # incomplete:` is this hook's own block-reason prefix — exactly the string
-# that gets re-injected — so it is the strongest single signal available.
+# that gets re-injected — so it is the strongest single signal available. It
+# is matched against this hook's own output, so the entry here and every
+# `_block()` reason must be renamed together or the #1275 self-defeat loop
+# reopens silently.
 _HARNESS_INJECTION_MARKERS: tuple[str, ...] = (
     "Stop hook feedback:",
-    "devx-autopilot incomplete:",
+    "gh-flow:autopilot incomplete:",
     "<task-notification>",
     "[SYSTEM NOTIFICATION - NOT USER INPUT]",
     "<local-command-caveat>",
 )
 _HARNESS_INJECTION_RE: re.Pattern[str] = _line_anchored_alternation(_HARNESS_INJECTION_MARKERS)
 
-# Regex that marks the *start* of a devx-autopilot chain in a user message.
+# Regex that marks the *start* of a gh-flow:autopilot chain in a user message.
 # Matches four real-world surfaces (mirrors gh_issue_flow_stop_guard.py):
-#   (a) raw `/devx-autopilot ...` (or colon `/devx:autopilot ...`) at line start
-#   (b) the `<command-name>/devx-autopilot</command-name>` wrapper Claude Code
-#       emits when a user invokes the slash command interactively
-#   (c) the `Base directory for this skill: …/devx-autopilot` expansion marker
-#   (d) the SKILL.md H1 line `# devx:autopilot — …`
-# Each has a primed twin (a')–(d') for the post-migration `gh-flow:autopilot`
-# namespace (#1678, D-12). Without them the widened markers above would be
-# unreachable for anyone running the migrated plugin: the guard would never
-# arm, so it would never look for a marker in either namespace. (c') allows
-# arbitrary path segments between `gh-flow` and `/autopilot`: an installed
-# plugin's base dir is `plugins/marketplaces/gh-flow-skills/skills/autopilot`
-# or `plugins/cache/gh-flow-skills/gh-flow/<version>/skills/autopilot`, not
-# `<plugin>/skills/<skill>` (measured).
+#   (a) raw `/gh-flow:autopilot ...` (or hyphen `/gh-flow-autopilot ...`) at
+#       line start
+#   (b) the `<command-name>/gh-flow:autopilot</command-name>` wrapper Claude
+#       Code emits when a user invokes the slash command interactively
+#   (c) the `Base directory for this skill: …/autopilot` expansion marker —
+#       arbitrary path segments are allowed between `gh-flow` and `/autopilot`
+#       because an installed plugin's base dir is
+#       `plugins/marketplaces/gh-flow-skills/skills/autopilot` or
+#       `plugins/cache/gh-flow-skills/gh-flow/<version>/skills/autopilot`, not
+#       `<plugin>/skills/<skill>` (measured)
+#   (d) the SKILL.md H1 line `# gh-flow:autopilot — …`
 # `(?m)` anchors `^` to per-line starts. tool_result payloads are excluded by
 # `_iter_text_blocks(..., include_tool_results=False)` at the call site.
 _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
     r"""
     (?m)                                                          # multiline: ^ matches each line start
     (?:
-        ^\s*/devx[-:]autopilot\b                                  # (a) raw slash command
+        ^\s*/gh-flow[-:]autopilot(?![\w-])                        # (a) raw slash command
         |
-        <command-name>\s*/devx[-:]autopilot\s*</command-name>     # (b) Claude Code wrapped form
-        |
-        ^Base\s+directory\s+for\s+this\s+skill:\s+.*devx-autopilot\b  # (c) skill base dir
-        |
-        ^\#\s+devx:autopilot\s+—                                  # (d) SKILL.md H1
-        |
-        ^\s*/gh-flow[-:]autopilot(?![\w-])                        # (a') new namespace
-        |
-        <command-name>\s*/gh-flow[-:]autopilot\s*</command-name>  # (b') new namespace
+        <command-name>\s*/gh-flow[-:]autopilot\s*</command-name>  # (b) Claude Code wrapped form
         |
         ^Base\s+directory\s+for\s+this\s+skill:\s+
-            .*gh-flow(?:-autopilot(?![\w-])|[\w./-]*/autopilot(?![\w-]))  # (c') new namespace
+            .*gh-flow(?:-autopilot(?![\w-])|[\w./-]*/autopilot(?![\w-]))  # (c) skill base dir
         |
-        ^\#\s+gh-flow:autopilot\s+—                               # (d') new namespace
+        ^\#\s+gh-flow:autopilot\s+—                               # (d) SKILL.md H1
     )
     """,
     re.VERBOSE,
 )
 FLOW_SKILL_NAMES: set[str] = {
-    "devx-autopilot",
-    "devx:autopilot",
     "gh-flow-autopilot",
     "gh-flow:autopilot",
 }
@@ -274,7 +254,7 @@ def _allow(trace_reason: str = "", *, layer: str | None = None) -> int:
 def _block(reason: str, *, layer: str | None = None) -> int:
     """Block the stop with a directive shown to the model."""
     json.dump({"decision": "block", "reason": reason}, sys.stdout)
-    _trace("block: devx-autopilot incomplete — re-prompting model", layer=layer)
+    _trace("block: gh-flow:autopilot incomplete — re-prompting model", layer=layer)
     return 0
 
 
@@ -363,11 +343,11 @@ def _message_payload(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _find_flow_boundary(messages: list[dict[str, Any]]) -> int:
-    """Return the index of the most recent devx-autopilot START, or -1.
+    """Return the index of the most recent gh-flow:autopilot START, or -1.
 
     Boundary signals (role-restricted to avoid false positives from file
     content read into tool_result blocks):
-      - assistant message: tool_use of Skill(devx-autopilot | devx:autopilot)
+      - assistant message: tool_use of Skill(gh-flow-autopilot | gh-flow:autopilot)
       - user message: text content matches `_USER_BOUNDARY_RE` (four surfaces).
         `tool_result` blocks are excluded so a doc mentioning the command
         does not trip the boundary.
@@ -394,9 +374,9 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     - Terminal detection is restricted to `role=assistant` text blocks with
       `include_tool_results=False`, and the boundary message itself is skipped
       (`start + 1`). This prevents report-template.md text (which literally
-      contains `[OK] devx:autopilot`) — whether delivered as the expanded
+      contains `[OK] gh-flow:autopilot`) — whether delivered as the expanded
       SKILL.md user block or read into a tool_result — from false-matching a
-      terminal marker (mirrors gh-issue-flow's L1.5 fix).
+      terminal marker (mirrors gh-flow:issue's L1.5 fix).
     - Step-marker detection scans ALL roles WITH tool_results, because the
       SKILL.md `printf '[step:...] OK'` output lands in Bash tool_result.
     """
@@ -522,7 +502,7 @@ def main() -> int:
 
     boundary = _find_flow_boundary(messages)
     if boundary < 0:
-        return _allow("no devx-autopilot boundary in transcript", layer="L1")
+        return _allow("no gh-flow-autopilot boundary in transcript", layer="L1")
 
     terminal, steps = _scan_after_boundary(messages, boundary)
     # Issue #1275 — the fresh-prompt count feeds nothing but the expiry valve
@@ -549,21 +529,24 @@ def main() -> int:
     if limit > 0 and fresh_prompts >= limit:
         return _allow(
             f"stale boundary expiry — {fresh_prompts} fresh user prompt(s) since the "
-            f"devx-autopilot boundary (limit {limit}); flow abandoned, failing open",
+            f"gh-flow:autopilot boundary (limit {limit}); flow abandoned, failing open",
             layer="L1.5",
         )
 
+    # Both reasons below open with the literal `gh-flow:autopilot incomplete:`
+    # prefix — `_HARNESS_INJECTION_MARKERS` matches that same string when
+    # Claude Code re-injects the reason, so the two move together.
     missing = _first_missing_step(steps)
     if missing is None:
         # All required steps emitted but no terminal report yet → ask for it.
         reason = (
-            f"devx-autopilot incomplete: all {len(REQUIRED_STEPS)} Stage-B step "
+            f"gh-flow:autopilot incomplete: all {len(REQUIRED_STEPS)} Stage-B step "
             f"markers are present but no terminal report has been emitted yet. Per "
-            f"the CRITICAL CONTRACT in claude/skills/devx-autopilot/SKILL.md, you "
+            f"the CRITICAL CONTRACT in the gh-flow:autopilot SKILL.md, you "
             f"MUST continue immediately. Next action: Step 6 — emit the final "
-            f"report per references/report-template.md ('[OK] devx:autopilot ...' or "
-            f"'[FAIL] devx:autopilot ...') followed by "
-            f"'[step:devx-autopilot/report] OK'. Output ZERO conversational text "
+            f"report per references/report-template.md ('[OK] gh-flow:autopilot ...' or "
+            f"'[FAIL] gh-flow:autopilot ...') followed by "
+            f"'[step:gh-flow-autopilot/report] OK'. Output ZERO conversational text "
             f"before it — no recap, no per-step bullets, no progress headers."
         )
         return _block(reason, layer="L1.5")
@@ -573,12 +556,12 @@ def main() -> int:
     seen_count = len(steps)
     label = _STEP_LABELS.get(missing, missing)
     reason = (
-        f"devx-autopilot incomplete: {seen_count}/{len(REQUIRED_STEPS)} Stage-B "
+        f"gh-flow:autopilot incomplete: {seen_count}/{len(REQUIRED_STEPS)} Stage-B "
         f"step markers emitted since the flow started, and no terminal report "
-        f"('[OK] devx:autopilot' / '[FAIL] devx:autopilot') has been emitted yet. "
-        f"Per the CRITICAL CONTRACT in claude/skills/devx-autopilot/SKILL.md, you "
+        f"('[OK] gh-flow:autopilot' / '[FAIL] gh-flow:autopilot') has been emitted yet. "
+        f"Per the CRITICAL CONTRACT in the gh-flow:autopilot SKILL.md, you "
         f"MUST continue immediately. Next action: {label}; when it completes emit "
-        f"'[step:devx-autopilot/{missing}] OK'. Output ZERO conversational text — "
+        f"'[step:gh-flow-autopilot/{missing}] OK'. Output ZERO conversational text — "
         f"no recap, no markdown summary, no per-step bullets, no progress headers — "
         f"just the next step's work and its completion marker."
     )

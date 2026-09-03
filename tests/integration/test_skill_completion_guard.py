@@ -37,7 +37,7 @@ def _run_hook(
 
     final_env: dict[str, str] = _os.environ.copy()
     # Default: point the hook at the shipped catalog so the standard
-    # gh-issue-implement / gh-pr / gh-commit entries are in scope.
+    # gh-issue-implement / gh-pr-create / gh-pr-commit entries are in scope.
     final_env.setdefault("GH_SKILL_GUARD_CATALOG", str(CATALOG_PATH))
     if env is not None:
         final_env.update(env)
@@ -265,7 +265,7 @@ def test_wrapped_command_boundary_detected(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_slash_command("gh-pr", "42"),
+            _user_slash_command("gh-pr-create", "42"),
             _assistant_text("running"),
         ],
     )
@@ -273,7 +273,7 @@ def test_wrapped_command_boundary_detected(tmp_path: Path) -> None:
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-pr" in decision["reason"]
+    assert "gh-pr-create" in decision["reason"]
 
 
 def test_skill_tool_use_boundary_detected(tmp_path: Path) -> None:
@@ -281,7 +281,7 @@ def test_skill_tool_use_boundary_detected(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr-commit"),
             _assistant_text("running"),
         ],
     )
@@ -289,7 +289,7 @@ def test_skill_tool_use_boundary_detected(tmp_path: Path) -> None:
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-commit" in decision["reason"]
+    assert "gh-pr-commit" in decision["reason"]
 
 
 def test_colon_namespace_skill_tool_use_counted(tmp_path: Path) -> None:
@@ -308,11 +308,11 @@ def test_colon_namespace_skill_tool_use_counted(tmp_path: Path) -> None:
 
 
 def test_mid_sentence_command_does_not_match(tmp_path: Path) -> None:
-    """Mid-sentence mention of /gh-pr is not a boundary (PR #386 regression class)."""
+    """Mid-sentence mention of /gh-pr-create is not a boundary (PR #386 regression class)."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("I was reading docs about /gh-pr and got confused"),
+            _user_text("I was reading docs about /gh-pr-create and got confused"),
             _assistant_text("sure"),
         ],
     )
@@ -335,13 +335,12 @@ def test_mid_sentence_command_does_not_match(tmp_path: Path) -> None:
         "/gh:pr:resolve-conflict 123",
     ],
 )
-def test_hyphenated_sibling_command_not_matched_as_gh_pr(tmp_path: Path, sibling: str) -> None:
-    """Line-start `/gh-pr-review` etc. must NOT be read as a `gh-pr` boundary (issue #1164).
+def test_hyphenated_sibling_command_not_matched_as_a_catalog_key(tmp_path: Path, sibling: str) -> None:
+    """Line-start `/gh-pr-review` etc. must NOT arm the guard (issue #1164).
 
-    Both `-` and `:` are non-word chars, so the old `\\b` after `gh-pr` in
-    surface (a) let `/gh-pr-review` (and, after the first fix, the colon
-    form `/gh:pr:review`) false-match the `gh-pr` catalog entry, wedging the
-    Stop hook into a permanent block. Surface (a) now uses `(?![\\w:-])`.
+    Both `-` and `:` are non-word chars, so a `\\b` at the end of surface (a)
+    let a longer sibling command false-match a shorter catalog key, wedging
+    the Stop hook into a permanent block. Surface (a) uses `(?![\\w:-])`.
     """
     transcript = _write_transcript(
         tmp_path,
@@ -352,14 +351,14 @@ def test_hyphenated_sibling_command_not_matched_as_gh_pr(tmp_path: Path, sibling
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
-    assert result.stdout.strip() == "", f"{sibling} should not be a gh-pr boundary"
+    assert result.stdout.strip() == "", f"{sibling} should not be a boundary"
 
 
-@pytest.mark.parametrize("cmd", ["/gh-pr", "/gh-pr 123", "/gh:pr", "/gh:pr 123"])
-def test_bare_gh_pr_command_still_matched(tmp_path: Path, cmd: str) -> None:
-    """The real `/gh-pr` (hyphen or colon form, bare or with args) must still
-    be detected (issue #1164 / PR #1169). Whitespace or EOL after the name
-    passes the `(?![\\w:-])` lookahead."""
+@pytest.mark.parametrize("cmd", ["/gh-pr-create", "/gh-pr-create 123", "/gh:pr:create", "/gh:pr:create 123"])
+def test_bare_command_still_matched(tmp_path: Path, cmd: str) -> None:
+    """The real `/gh-pr-create` (hyphen or colon form, bare or with args) must
+    still be detected (issue #1164 / PR #1169). Whitespace or EOL after the
+    name passes the `(?![\\w:-])` lookahead."""
     transcript = _write_transcript(
         tmp_path,
         [
@@ -370,17 +369,17 @@ def test_bare_gh_pr_command_still_matched(tmp_path: Path, cmd: str) -> None:
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     decision = json.loads(result.stdout)
-    assert decision["decision"] == "block", f"{cmd!r} should be a gh-pr boundary"
-    assert "gh-pr" in decision["reason"]
+    assert decision["decision"] == "block", f"{cmd!r} should be a boundary"
+    assert "gh-pr-create" in decision["reason"]
 
 
 def test_tool_result_command_mention_not_boundary(tmp_path: Path) -> None:
-    """A `/gh-pr` substring in a tool_result block is documentation, not a real boundary."""
+    """A `/gh-pr-create` substring in a tool_result block is documentation, not a real boundary."""
     transcript = _write_transcript(
         tmp_path,
         [
             _user_text("read the docs"),
-            _user_tool_result("Examples: run `/gh-pr` or `/gh-commit` or `/gh-issue-implement N`"),
+            _user_tool_result("Examples: run `/gh-pr-create` or `/gh-pr-commit` or `/gh-issue-implement N`"),
             _assistant_text("ok"),
         ],
     )
@@ -438,16 +437,16 @@ def test_missing_board_transition_step_blocks(tmp_path: Path) -> None:
     assert "gh-issue-implement" in decision["reason"]
 
 
-def test_missing_gh_pr_board_sync_step_blocks(tmp_path: Path) -> None:
-    """The other half of issue #753: gh-pr Step 7 board-sync skipped."""
+def test_missing_gh_pr_create_board_sync_step_blocks(tmp_path: Path) -> None:
+    """The other half of issue #753: gh-pr-create Step 7 board-sync skipped."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-pr"),
-            _emit_marker("gh-pr", "push-and-create"),
-            _emit_marker("gh-pr", "labels"),
+            _user_text("/gh-pr-create"),
+            _emit_marker("gh-pr-create", "push-and-create"),
+            _emit_marker("gh-pr-create", "labels"),
             # board-sync deliberately omitted.
-            _emit_marker("gh-pr", "report"),
+            _emit_marker("gh-pr-create", "report"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -455,7 +454,7 @@ def test_missing_gh_pr_board_sync_step_blocks(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     assert "board-sync" in decision["reason"]
-    assert "gh-pr" in decision["reason"]
+    assert "gh-pr-create" in decision["reason"]
 
 
 def test_markers_in_assistant_text_also_count(tmp_path: Path) -> None:
@@ -463,10 +462,10 @@ def test_markers_in_assistant_text_also_count(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-commit"),
-            _assistant_text("[step:gh-commit/stage-commit] OK"),
-            _assistant_text("[step:gh-commit/metrics-board-sync] OK"),
-            _assistant_text("[step:gh-commit/report] OK"),
+            _user_text("/gh-pr-commit"),
+            _assistant_text("[step:gh-pr-commit/stage-commit] OK"),
+            _assistant_text("[step:gh-pr-commit/metrics-board-sync] OK"),
+            _assistant_text("[step:gh-pr-commit/report] OK"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -475,14 +474,14 @@ def test_markers_in_assistant_text_also_count(tmp_path: Path) -> None:
 
 
 def test_colon_skill_markers_recognized(tmp_path: Path) -> None:
-    """Markers written as `gh:commit/<step>` (colon form) should also satisfy."""
+    """Markers written as `gh-pr:commit/<step>` (colon form) should also satisfy."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-commit"),
-            _emit_marker("gh:commit", "stage-commit"),
-            _emit_marker("gh:commit", "metrics-board-sync"),
-            _emit_marker("gh:commit", "report"),
+            _user_text("/gh-pr-commit"),
+            _emit_marker("gh-pr:commit", "stage-commit"),
+            _emit_marker("gh-pr:commit", "metrics-board-sync"),
+            _emit_marker("gh-pr:commit", "report"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -495,10 +494,10 @@ def test_partial_marker_without_ok_does_not_satisfy(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-commit"),
-            _user_tool_result("[step:gh-commit/stage-commit]\n"),
-            _user_tool_result("[step:gh-commit/metrics-board-sync]\n"),
-            _user_tool_result("[step:gh-commit/report]\n"),
+            _user_text("/gh-pr-commit"),
+            _user_tool_result("[step:gh-pr-commit/stage-commit]\n"),
+            _user_tool_result("[step:gh-pr-commit/metrics-board-sync]\n"),
+            _user_tool_result("[step:gh-pr-commit/report]\n"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -512,16 +511,16 @@ def test_unrelated_skill_markers_do_not_satisfy(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-commit"),
-            _emit_marker("gh-pr", "push-and-create"),
-            _emit_marker("gh-pr", "labels"),
+            _user_text("/gh-pr-commit"),
+            _emit_marker("gh-pr-create", "push-and-create"),
+            _emit_marker("gh-pr-create", "labels"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-commit" in decision["reason"]
+    assert "gh-pr-commit" in decision["reason"]
 
 
 # ---------------------------------------------------------------------------
@@ -566,7 +565,7 @@ def test_unknown_skill_in_transcript_does_not_block(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Multi-boundary scenarios (gh-issue-flow chain compatibility)
+# Multi-boundary scenarios (gh-flow:issue chain compatibility)
 # ---------------------------------------------------------------------------
 
 
@@ -584,9 +583,9 @@ def test_most_recent_boundary_governs(tmp_path: Path) -> None:
             _emit_marker("gh-issue-implement", "board-transition"),
             _emit_marker("gh-issue-implement", "implement"),
             _emit_marker("gh-issue-implement", "report"),
-            # Now the model moves on to gh-commit but skips half the steps.
-            _assistant_skill("gh-commit"),
-            _emit_marker("gh-commit", "stage-commit"),
+            # Now the model moves on to gh-pr-commit but skips half the steps.
+            _assistant_skill("gh-pr-commit"),
+            _emit_marker("gh-pr-commit", "stage-commit"),
             # metrics-board-sync and report missing.
         ],
     )
@@ -594,34 +593,34 @@ def test_most_recent_boundary_governs(tmp_path: Path) -> None:
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-commit" in decision["reason"]
+    assert "gh-pr-commit" in decision["reason"]
     assert "metrics-board-sync" in decision["reason"]
-    # The previous skill's report markers must NOT bleed into gh-commit.
+    # The previous skill's report markers must NOT bleed into gh-pr-commit.
     assert "fetch-issue" not in decision["reason"]
 
 
 def test_chain_of_catalog_skills_with_each_completing_allows_stop(tmp_path: Path) -> None:
-    """The gh-issue-flow happy path: each sub-skill emits all its required markers."""
+    """The gh-flow:issue happy path: each sub-skill emits all its required markers."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
             _emit_marker("gh-issue-implement", "fetch-issue"),
             _emit_marker("gh-issue-implement", "self-assign"),
             _emit_marker("gh-issue-implement", "board-transition"),
             _emit_marker("gh-issue-implement", "implement"),
             _emit_marker("gh-issue-implement", "report"),
-            _assistant_skill("gh-commit"),
-            _emit_marker("gh-commit", "stage-commit"),
-            _emit_marker("gh-commit", "metrics-board-sync"),
-            _emit_marker("gh-commit", "report"),
-            _assistant_skill("gh-pr"),
-            _emit_marker("gh-pr", "push-and-create"),
-            _emit_marker("gh-pr", "labels"),
-            _emit_marker("gh-pr", "board-sync"),
-            _emit_marker("gh-pr", "report"),
-            _assistant_text("gh:issue-flow complete (#42)"),
+            _assistant_skill("gh-pr-commit"),
+            _emit_marker("gh-pr-commit", "stage-commit"),
+            _emit_marker("gh-pr-commit", "metrics-board-sync"),
+            _emit_marker("gh-pr-commit", "report"),
+            _assistant_skill("gh-pr-create"),
+            _emit_marker("gh-pr-create", "push-and-create"),
+            _emit_marker("gh-pr-create", "labels"),
+            _emit_marker("gh-pr-create", "board-sync"),
+            _emit_marker("gh-pr-create", "report"),
+            _assistant_text("gh-flow:issue complete (#42)"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -842,14 +841,14 @@ def test_colon_form_step_prefix_accepted(tmp_path: Path) -> None:
 
 
 def test_async_wait_marker_for_another_skill_does_not_reprieve(tmp_path: Path) -> None:
-    """Grace never crosses skills — a `gh-pr/report` marker cannot excuse
+    """Grace never crosses skills — a `gh-pr-create/report` marker cannot excuse
     `gh-issue-implement/report`."""
     transcript = _write_transcript(
         tmp_path,
         [
             *_partially_implemented(),
             _async_wait_text("gh-issue-implement/implement"),
-            _async_wait_text("gh-pr/report"),
+            _async_wait_text("gh-pr-create/report"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
