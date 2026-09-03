@@ -381,7 +381,7 @@ _migrate_install_gh_issue_flow_stop_hook() {
     if [ "${existing_stop:-0}" -gt 0 ]; then
         log_warning "settings.json 에 다른 Stop hook 이 이미 있습니다 — 자동 머지 생략."
         log_warning "  수동 추가 필요: claude/hooks/gh_issue_flow_stop_guard.py"
-        log_warning "  참조: claude/skills/gh-issue-flow/references/stop-guard.md"
+        log_warning "  참조: gh-flow:issue 스킬의 references/stop-guard.md (gh-flow-skills 플러그인)"
         return 0
     fi
 

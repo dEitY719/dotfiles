@@ -360,7 +360,7 @@ _HARNESS_INJECTION_RE: re.Pattern[str] = _line_anchored_alternation(_HARNESS_INJ
 #       (issue #608 — second wrapper-independent anchor, useful if the
 #       `<command-name>` / `Base directory` lines ever stop being emitted).
 #
-# (a)–(c) end on `(?![\w-])` rather than `\b`: a word boundary sits between
+# (a) and (c) end on `(?![\w-])` rather than `\b`: a word boundary sits between
 # `issue` and the `-relay` of the sibling `gh-flow:issue-relay`, so `\b` would
 # arm this six-step chain guard on a skill that has no such chain.
 #
@@ -898,13 +898,13 @@ def _count_fresh_user_prompts(messages: list[dict[str, Any]], start: int) -> int
 def _next_step_label(seen: list[str]) -> str:
     """Map the highest-index sub-skill seen to a human label for the *next* one.
 
-    Both names of the slot are quoted (#1678): the canonical dotfiles one the
-    model is most likely to have installed, and the post-migration alias. A
-    session running the `gh-flow-skills` plugin has only the latter, so naming
-    the canonical form alone would answer a block with an instruction to invoke
-    a skill that does not exist there. The canonical name stays first and
-    unparenthesised, which is also what keeps the existing
-    `"Step 2.2 — Skill(gh-pr-commit)"` substring assertions matching.
+    Both spellings of the slot are quoted: the hyphen form and the colon form
+    of the same `gh-flow-skills` skill. Claude Code accepts either, and which
+    one a transcript records depends on how the skill was invoked, so quoting
+    only one would answer a block with a name the session may never have
+    produced. The hyphen form stays first and unparenthesised, which is also
+    what keeps the existing `"Step 2.2 — Skill(gh-pr-commit)"` substring
+    assertions matching.
 
     The alias comes from `_SUB_SKILL_HINT_ALIAS`, keyed by slot — never from
     a position inside the slot's alias tuple.
