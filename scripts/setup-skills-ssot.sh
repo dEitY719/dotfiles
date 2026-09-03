@@ -164,15 +164,17 @@ WORKSPACE_ROOT_REAL=""
 # 구분자로 `__` 를 쓰는 이유: `-` `.` 는 repo/skill 이름에 이미 흔하다.
 # 진단 로그는 stdout 을 오염시키지 않도록 stderr 로 보낸다.
 collect_skill_sources() {
-    local seen="|"
+    local seen="|" used_entries="|"
     local skill_path skill_name repo entry_name
 
     [ -n "$WORKSPACE_ROOT_RESOLVED" ] || return 0
 
     while IFS= read -r skill_path; do
         [ -n "$skill_path" ] || continue
-        # 고정 레이아웃(<root>/<repo>/skills/<skill>)이라 basename/dirname
-        # 서브셸 없이 parameter expansion 만으로 뽑아낼 수 있다.
+        # 고정 레이아웃(<root>/<repo>/skills/<skill>) 은 이 값의 유일한 생산자인
+        # _skill_workspace_dirs 가 `-mindepth 4 -maxdepth 4 -path */skills/*/SKILL.md`
+        # 로 강제하는 불변식이다 — 추정이 아니라 skill_sources.sh SSOT 가 보장한다.
+        # basename/dirname 서브셸 없이 parameter expansion 만으로 뽑아낸다.
         skill_name="${skill_path##*/}"
         repo="${skill_path%/*/*}"
         repo="${repo##*/}"
@@ -189,6 +191,20 @@ collect_skill_sources() {
                 ;;
         esac
         seen="${seen}${repo}/${skill_name}|"
+
+        # repo/skill 이름 자체에 `__` 가 들어 있으면 <repo>__<skill> 합성이
+        # 단사(injective)라는 보장이 없다 — 서로 다른 두 소스가 같은 최종
+        # entry_name 으로 수렴할 수 있다 (codex 리뷰, PR #1747 BLOCKER). 조용히
+        # 하나가 다른 하나를 덮어쓰게 두는 대신, 먼저 배정된 소스를 지키고 늦게
+        # 온 쪽을 건너뛰며 경고한다. 실사용 저장소/스킬 이름에는 `__` 가 없어
+        # 사실상 발동하지 않는 방어선이다.
+        case "$used_entries" in
+            *"|${entry_name}|"*)
+                log_warning "[skills] 합성 엔트리 이름 충돌 — 건너뜀: ${entry_name} (원본: ${skill_path})" >&2
+                continue
+                ;;
+        esac
+        used_entries="${used_entries}${entry_name}|"
 
         printf "%s\t%s\n" "$skill_path" "$entry_name"
     done <<< "$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
