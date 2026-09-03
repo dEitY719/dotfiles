@@ -61,10 +61,10 @@ main() {
     # my_help.sh returns early in a non-interactive shell unless this is set.
     export DOTFILES_FORCE_INIT=1
 
-    # shellcheck source=../../functions/my_help.sh
-    . "${SHELL_COMMON}/functions/my_help.sh" >/dev/null 2>&1 || return 0
-
+    # The key sheet is static text needing only ux_lib, so it skips the
+    # my_help.sh load entirely — fzf re-runs this helper on every keypress.
     if [ "${1:-}" = "--keys" ]; then
+        . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" >/dev/null 2>&1 || return 0
         _myhp_keys "${2:-all}"
         return 0
     fi
@@ -78,12 +78,23 @@ main() {
     esac
     [ -f "$records" ] || return 0
 
-    local record name kind helper
-    record=$(sed -n "$((index + 1))p" "$records" 2>/dev/null) || return 0
+    local record tab name desc kind helper
+    record=$(sed -n "$((index + 1)){p;q}" "$records" 2>/dev/null) || return 0
     [ -n "$record" ] || return 0
 
-    name=$(printf '%s' "$record" | cut -f1)
-    kind=$(printf '%s' "$record" | cut -f3)
+    tab=$(printf '\t')
+    IFS="$tab" read -r name desc kind _ <<EOF
+$record
+EOF
+
+    # alias/func rows render out of ux_lib alone; skip sourcing the 37
+    # *_help.sh topic files that only the topic/category arms below need.
+    case "$kind" in
+        alias | func) export MY_HELP_SKIP_TOPIC_SOURCES=1 ;;
+    esac
+
+    # shellcheck source=../../functions/my_help.sh
+    . "${SHELL_COMMON}/functions/my_help.sh" >/dev/null 2>&1 || return 0
 
     case "$kind" in
         alias | func)
@@ -101,12 +112,8 @@ main() {
                 my_help_impl "$name"
             else
                 ux_section "Topic: ${name}"
-                ux_bullet "$(printf '%s' "$record" | cut -f2)"
+                ux_bullet "$desc"
             fi
-            ;;
-        *)
-            ux_section "${name}"
-            ux_bullet "$(printf '%s' "$record" | cut -f2)"
             ;;
     esac
 

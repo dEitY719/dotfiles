@@ -41,13 +41,19 @@ if [ -z "$SHELL_COMMON" ]; then
     SHELL_COMMON="${_MYHELP_DIR%/functions}"
 fi
 
-# Source all *_help.sh files from the functions directory
-for _help_file in "${SHELL_COMMON}/functions"/*_help.sh; do
-    if [ -f "$_help_file" ] && [ "$_help_file" != "${SHELL_COMMON}/functions/my_help.sh" ]; then
-        source "$_help_file" 2>/dev/null || true
-    fi
-done
-unset _help_file
+# Source all *_help.sh files from the functions directory.
+# MY_HELP_SKIP_TOPIC_SOURCES=1 loads the registry and renderers without the
+# ~380KB of topic files. Only the fzf preview helper sets it, and only for
+# alias/func rows: those render from ux_lib alone, and fzf re-runs the helper
+# on every cursor move.
+if [ -z "${MY_HELP_SKIP_TOPIC_SOURCES-}" ]; then
+    for _help_file in "${SHELL_COMMON}/functions"/*_help.sh; do
+        if [ -f "$_help_file" ] && [ "$_help_file" != "${SHELL_COMMON}/functions/my_help.sh" ]; then
+            source "$_help_file" 2>/dev/null || true
+        fi
+    done
+    unset _help_file
+fi
 
 # ═══════════════════════════════════════════════════════════════
 # Help Registry Initialization (bash/zsh compatible)
@@ -196,6 +202,12 @@ _register_default_help_categories() {
 }
 
 _register_default_help_descriptions() {
+    # Idempotent by itself: every caller (my_help_impl, the candidate builder,
+    # category_help, register_help, tests) just calls it instead of copying a
+    # `_HELP_DEFAULTS_REGISTERED` check of its own.
+    [ -z "${_HELP_DEFAULTS_REGISTERED-}" ] || return 0
+    _HELP_DEFAULTS_REGISTERED=1
+
     _register_default_help_categories
     _register_default_help_content
 
@@ -806,12 +818,13 @@ _my_help_alias_index() {
 # changed.
 _my_help_show_alias_entry() {
     local record="$1"
-    local name desc location defn kind label
-    name=$(printf '%s' "$record" | cut -f1)
-    desc=$(printf '%s' "$record" | cut -f2)
-    kind=$(printf '%s' "$record" | cut -f3)
-    location=$(printf '%s' "$record" | cut -f4)
-    defn=$(printf '%s' "$record" | cut -f5)
+    local name desc location defn kind label tab
+    # One `read` rather than five `printf | cut` pipelines: fzf re-runs the
+    # preview (and therefore this renderer) on every cursor move.
+    tab=$(printf '\t')
+    IFS="$tab" read -r name desc kind location defn <<EOF
+$record
+EOF
 
     case "$kind" in
         func) label="Function" ;;
@@ -844,9 +857,10 @@ _my_help_show_alias_entry() {
 # below lists what a user actually types; locations are resolved from the
 # source tree at read time so a moved definition cannot go stale here.
 #
-# Rules the registry must keep (enforced again in _my_help_function_index so a
-# bad entry cannot leak): no `_`-prefixed names, no `*_help` names — those are
-# already `topic` candidates and the topic row carries a real description.
+# Rules the registry must keep (pinned by test P10, which reads the emitted
+# index rather than this list): no `_`-prefixed names, no `*_help` names —
+# those are already `topic` candidates and the topic row carries a real
+# description.
 _my_help_func_registry() {
     # name <TAB> description
     printf '%s\n' \
@@ -886,9 +900,11 @@ _my_help_func_registry() {
 }
 
 # Internal: emit `func` index records (same 5-field schema as the alias index).
-# One grep resolves every registered name at once; no cache, because the scan
-# is a single pass over ~30 anchored names rather than the alias index's
-# 105-file sweep. Emits nothing and returns 1 when the tree is missing.
+# One grep resolves every registered name at once. No cache: this is the same
+# tree sweep the alias index caches, so the honest reason is that it has not
+# been worth a second cache file — fold it into _my_help_build_alias_index's
+# grep if the palette ever feels slow on a slow mount. Emits nothing and
+# returns 1 when the tree is missing.
 _my_help_function_index() {
     local root names pattern
     root="${DOTFILES_ROOT:-${SHELL_COMMON%/shell-common}}"
@@ -931,9 +947,6 @@ _my_help_function_index() {
                 if (p < 2) next
                 name = substr(body, 1, p - 1)
                 if (!(name in desc)) next
-                # Belt and braces: the registry is hand-written.
-                if (substr(name, 1, 1) == "_") next
-                if (name ~ /_help$/ || name ~ /-help$/) next
 
                 rel = path
                 if (index(rel, root) == 1) rel = substr(rel, length(root) + 1)
@@ -968,10 +981,7 @@ _my_help_search_candidates() {
 
     # Categories need the default registry; callers other than my_help_impl
     # (tests, the preview helper) may not have triggered it yet.
-    if [ -z "${_HELP_DEFAULTS_REGISTERED}" ]; then
-        _register_default_help_descriptions
-        _HELP_DEFAULTS_REGISTERED=1
-    fi
+    _register_default_help_descriptions
 
     # Declare the loop-body variables once, up front: `local x=$(cmd)` inside
     # the piped while-read makes zsh echo the assignment as a stray stdout line
@@ -982,7 +992,7 @@ _my_help_search_candidates() {
     case "$scope" in
         all | topic)
             _my_help_enumerate_topic_names | while IFS= read -r display_name; do
-                underscore_name=$(printf "%s" "$display_name" | tr '-' '_')
+                underscore_name="${display_name//-/_}"
                 desc=$(_my_help_topic_description "${underscore_name%_help}")
                 printf '%s\t%s\ttopic\t\t\n' "$display_name" "$desc"
             done
@@ -1074,12 +1084,10 @@ _my_help_search() {
 
     preview="${SHELL_COMMON}/tools/custom/my_help_preview.sh"
     tmp_dir="${TMPDIR:-/tmp}"
-    if command -v mktemp >/dev/null 2>&1; then
-        tmp=$(mktemp "${tmp_dir%/}/my_help_palette.XXXXXX" 2>/dev/null) ||
-            tmp="${tmp_dir%/}/.my_help_palette_$$"
-    else
+    # A missing mktemp fails the substitution, so the `||` covers both the
+    # "no mktemp" and the "mktemp refused" cases.
+    tmp=$(mktemp "${tmp_dir%/}/my_help_palette.XXXXXX" 2>/dev/null) ||
         tmp="${tmp_dir%/}/.my_help_palette_$$"
-    fi
 
     # D-1: 550+ candidates make /all a noisy first screen; start on topics.
     scope="${MY_HELP_DEFAULT_SCOPE:-topic}"
@@ -1089,8 +1097,9 @@ _my_help_search() {
         rm -f "$tmp" 2>/dev/null || true
         _my_help_search_candidates "$scope" > "$tmp" 2>/dev/null || true
 
-        # Best-effort count for the header (F-10) — never fatal.
-        count=$(wc -l < "$tmp" 2>/dev/null | tr -d ' ') || count=""
+        # Best-effort count for the header (F-10); "${count:-?}" covers an
+        # empty result.
+        count=$(wc -l < "$tmp" 2>/dev/null | tr -d ' ')
 
         # Only paths this function owns are interpolated into the fzf action
         # strings; a candidate value never is (NF-2). fzf hands the preview
@@ -1245,11 +1254,8 @@ my_help_impl() {
         fi
     fi
 
-    # Register default descriptions (only once)
-    if [ -z "${_HELP_DEFAULTS_REGISTERED}" ]; then
-        _register_default_help_descriptions
-        _HELP_DEFAULTS_REGISTERED=1
-    fi
+    # Register default descriptions (the function is idempotent).
+    _register_default_help_descriptions
 
     case "${1:-}" in
         "")
