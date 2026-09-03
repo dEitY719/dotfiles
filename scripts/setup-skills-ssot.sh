@@ -126,8 +126,19 @@ _ssot_is_legacy_broken_link() {
 # 다수이므로 루프마다 fork 를 아끼는 효과).
 # Usage: _ssot_link_is_legacy_stale <link_path>
 _ssot_link_is_legacy_stale() {
+    local _target
     [ ! -e "$1" ] || return 1
-    _ssot_is_legacy_broken_link "$(readlink "$1" 2>/dev/null)"
+    _target="$(readlink "$1" 2>/dev/null)"
+    # 상대 경로로 적힌 링크도 같은 판정을 받아야 한다 (#1732 agy FOLLOW-UP).
+    # 이 스크립트 자신은 항상 절대 경로로 링크를 만들지만, 수동/외부 도구가
+    # 만든 상대 경로 링크는 절대 경로 prefix 매칭을 그냥 빠져나간다. 끊어진
+    # 링크라 `readlink -f` 는 못 쓰므로, 존재 여부와 무관하게 `..` 를 펴 주는
+    # `realpath -m` 으로 링크 자신의 디렉토리 기준 절대 경로를 만든다.
+    case "$_target" in
+        "" | /*) ;;
+        *) _target="$(realpath -m "$(dirname "$1")/$_target" 2>/dev/null)" ;;
+    esac
+    _ssot_is_legacy_broken_link "$_target"
 }
 
 # 빈 문자열 = 워크스페이스 없음/너무 넓음 → 연결할 소스가 없다.
