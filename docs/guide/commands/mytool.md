@@ -76,6 +76,7 @@
 - **make_confluence** — Transform a technical markdown document into a Confluence...
 - **make_jira** — Simple version handling both:
 - **mirror-pages-activate** — Activates GitHub Pages on the GHE origin repo and replace...
+- **my_help_preview** — fzf preview renderer for the `my-help` command palette (i...
 - **open_in_windows_chrome** — Open links in the Windows-side Chrome from WSL (#1408).
 - **pr_merge_train_cron** — merge-train cron 디스패처 — 1회 tick (issue #1470).
 - **repo_stats** — Initialize common tools environment
@@ -91,7 +92,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 68 custom tools available
+- Total: 69 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage

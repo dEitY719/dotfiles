@@ -368,7 +368,7 @@ fzf 에는 `--with-nth` 로 앞 3필드(name/desc/kind 배지)만 노출하고, 
 초판의 미결 4건은 2026-09-03 사용자 확인으로 전부 결정으로 전환했다.
 
 - **D-1. 기본 스코프는 `/topic`** — 근거: 후보가 550+ 라 `/all` 로 시작하면 첫 화면이 노이즈가 된다. 82개 토픽만 먼저 보여주고 필요할 때 `/all` 로 넓힌다.
-- **D-2. `packages/my-cli` 는 삭제하고 설계 문서만 아카이브** — 근거: fzf 로 방향이 정해진 이상 유지 비용만 남는다. `docs/feature/my-cli/` 는 `docs/archive/` 로 옮겨 이력을 보존한다.
+- **D-2. `packages/my-cli` 는 삭제하고 설계 문서만 아카이브** — 근거: fzf 로 방향이 정해진 이상 유지 비용만 남는다. `docs/feature/my-cli/` 는 `docs/archive/my-cli/` 로 옮겨 이력을 보존한다.
 - **D-3. 이번 작업 범위는 Phase 0~3 (MVP)** — 근거: 액션 키(`Ctrl-Y`/`Tab`/`Ctrl-O`)는 bash/zsh 라인 에디터 분기를 타므로 범위를 키운다. Phase 4 는 후속 이슈로 분리한다.
 - **D-4. `fzf` 는 선택 의존성으로 유지** — 근거: WSL/minimal/CI 가 설치 없이 그대로 동작해야 한다. 부재 시 기존 정적 출력으로 강등하는 경로가 이미 검증돼 있다.
 - **D-5. Ink TUI 재개 조건** — "한 화면에서 여러 카테고리를 *동시에* 비교해야 하는" 요구가 실제로 관측될 때만 재검토한다. 그 전까지는 재개하지 않는다. 근거: 회상 도구의 세션 길이(수 초)가 다중 패널의 전제와 맞지 않는다.
@@ -393,5 +393,5 @@ fzf 에는 `--with-nth` 로 앞 3필드(name/desc/kind 배지)만 노출하고, 
 - [The Ultimate Terminal Stack in 2026](https://medium.com/vmacwrites/the-ultimate-terminal-stack-in-2026-a-cross-platform-guide-for-macos-linux-and-windows-c0d1f93cd9cc)
 - [12 Modern CLI Tools Every Developer Should Use in 2026](https://nexasphere.io/blog/modern-cli-tools-developers-2026)
 - 동료 문서: `docs/feature/ux-enhance/my-help-ux-modernization.md`, `docs/feature/ux-enhance/my-help-command-palette-ux-research.md`
-- 저장소 내부: `docs/feature/my-cli/` (2026-02 my-cli 마이그레이션 분석, 정지 상태)
+- 저장소 내부: `docs/archive/my-cli/` (2026-02 my-cli 마이그레이션 분석, 정지 상태)
 - 추적 이슈: #1740

@@ -15,8 +15,10 @@
 | `company/` | `docs/company/` | JIRA Story draft · OKR · AIE 평가 자료. **외부 노출 금지** — git 추적은 유지하되 archive 하위로 격리 (#660) |
 | `diagram/` | `docs/diagram/` | setup-sh-flow 단일 다이어그램, 재참조 빈도 낮음 (#660) |
 | `todo-ollama.md` | `docs/todo.txt` | 2026-02-04 Ollama 작업 — 대부분 완료, 잔여 항목 archive (#660) |
+| `my-cli/` | `docs/feature/my-cli/` | 2026-02 Ink/React TUI 마이그레이션 분석. `packages/my-cli` 삭제와 함께 설계 이력만 보존 (#1740 D-2) |
 | `todo-defer-2026-05.md` | `docs/todo/todo-defer-until-2026-05-plugin-loader-and-ux-library-split.md` | 도래일(2026-05) 지남. 별도 트래킹 이슈로 옮길지 검토 필요 (#660) |
 
 ## 이동 로그
 
 - 2026-05-16 (#660): `docs/` 5-디렉토리 재정렬 — `postmortem/`, `review/`, `company/`, `diagram/`, `todo.txt`, `todo/` 6 개 항목을 archive 하위로 통합. 사유: 단발 디렉토리 해체 + 내부 자료 격리 + 도래일 지난 todo 정리.
+- 2026-09-03 (#1740 D-2): `docs/feature/my-cli/` -> `docs/archive/my-cli/`. 사유: `my-help` UX 방향이 fzf 명령 팔레트로 확정돼 `packages/my-cli` (Ink/React TUI) 를 삭제했다. 되살리기는 UX 작업이 아니라 부채 정리라 설계 문서만 보관한다.
