@@ -569,7 +569,7 @@ run_setup_with_workspace() {
     [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/_shared" ]
 }
 
-@test "workspace: name collision resolves by sorted repo order (#1652 NF-1)" {
+@test "workspace: name collision — bare name to first repo, others get qualified entries (#1652 NF-1, #1746)" {
     seed_opencode_home
     # `alpha` already comes from base-skills, which sorts first.
     seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "alpha"
@@ -579,9 +579,13 @@ run_setup_with_workspace() {
 
     [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/alpha")" \
         = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
+    # The loser is no longer dropped — it is composed under a repo-qualified
+    # entry name so both skills stay reachable (#1746).
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/packaging-skills__alpha")" \
+        = "$(readlink -f "$(default_workspace_root)/packaging-skills/skills/alpha")" ]
 }
 
-@test "workspace: two repos exposing the same skill — first wins, deterministically (#1652)" {
+@test "workspace: two repos exposing the same skill — both coexist, bare name to first repo (#1652, #1746)" {
     seed_opencode_home
     local ws
     ws="$(default_workspace_root)"
@@ -593,15 +597,39 @@ run_setup_with_workspace() {
     run_setup
     assert_success
 
-    # Glob order is sorted, so the alphabetically first repo wins — and
-    # the choice must not flip between runs.
+    # Glob order is sorted, so the alphabetically first repo keeps the bare
+    # name — and the choice must not flip between runs.
     [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/delta")" \
         = "$(readlink -f "${ws}/aaa-skills/skills/delta")" ]
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/zzz-skills__delta")" \
+        = "$(readlink -f "${ws}/zzz-skills/skills/delta")" ]
 
     run_setup
     assert_success
     [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/delta")" \
         = "$(readlink -f "${ws}/aaa-skills/skills/delta")" ]
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/zzz-skills__delta")" \
+        = "$(readlink -f "${ws}/zzz-skills/skills/delta")" ]
+}
+
+# The exact shape #1746 reports: three unrelated repos each shipping `create`.
+@test "workspace: a three-way name collision exposes all three skills (#1746)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "gh-issue-skills" "create"
+    seed_workspace_skill "$ws" "gh-pr-skills" "create"
+    seed_workspace_skill "$ws" "packaging-skills" "create"
+
+    run_setup
+    assert_success
+
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/create")" \
+        = "$(readlink -f "${ws}/gh-issue-skills/skills/create")" ]
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/gh-pr-skills__create")" \
+        = "$(readlink -f "${ws}/gh-pr-skills/skills/create")" ]
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/packaging-skills__create")" \
+        = "$(readlink -f "${ws}/packaging-skills/skills/create")" ]
 }
 
 @test "workspace: a linked git worktree never shadows its clone (#1652)" {
@@ -620,6 +648,9 @@ run_setup_with_workspace() {
 
     [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/delta")" \
         = "$(readlink -f "${ws}/packaging-skills/skills/delta")" ]
+    # The worktree is filtered out upstream, so there is no real collision to
+    # qualify — no `<worktree>__delta` entry may appear (#1746).
+    [ ! -e "${FIXTURE_HOME}/.config/opencode/skills/packaging-skills-feat-1__delta" ]
 }
 
 @test "workspace: WORKSPACE_ROOT of \$HOME is refused as too broad (#1652 safety)" {
@@ -668,6 +699,28 @@ run_setup_with_workspace() {
     assert_success
     [ ! -e "${FIXTURE_HOME}/.codex/skills/delta" ]
     [ -L "${FIXTURE_HOME}/.codex/skills/alpha" ]
+}
+
+# The qualified name has to round-trip through skill_source_path_for, or
+# codex's stale prune would delete it on the very next run (#1746).
+@test "workspace: codex keeps a qualified entry, then prunes it with its repo (#1746)" {
+    local ws
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "aaa-skills" "delta"
+    seed_workspace_skill "$ws" "zzz-skills" "delta"
+
+    run_setup
+    assert_success
+    run_setup
+    assert_success
+    [ -L "${FIXTURE_HOME}/.codex/skills/zzz-skills__delta" ]
+
+    rm -rf "${ws}/zzz-skills"
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.codex/skills/zzz-skills__delta" ]
+    [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
 }
 
 @test "workspace: SKILL.md edits are live through the composed link (#1652 NF-2)" {
