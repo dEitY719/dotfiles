@@ -1,15 +1,15 @@
 #!/bin/sh
 # shell-common/functions/claude_stop_hook_install.sh
 #
-# Auto-install the gh-issue-flow Stop hook into claude/settings.json on
+# Auto-install the gh-flow:issue Stop hook into claude/settings.json on
 # interactive shell startup (issue #505).
 #
 # Background: claude/setup.sh:_migrate_install_gh_issue_flow_stop_hook
 # already performs this migration, but it only runs when the user
 # explicitly re-executes setup.sh. Users on a multi-account layout
 # whose live settings.json predates issue #383 silently miss the hook —
-# the harness backstop documented in gh-issue-flow/SKILL.md never
-# fires, and /gh-issue-flow regresses to the early-stop pattern.
+# the harness backstop documented in the gh-flow:issue SKILL.md never
+# fires, and /gh-flow:issue regresses to the early-stop pattern.
 #
 # This helper closes that gap by re-running the same idempotent
 # migration on every interactive shell. Hot-path is silent (no jq
@@ -79,7 +79,7 @@ _claude_install_gh_issue_flow_stop_hook() {
     if jq --arg cmd "$_csh_hook_command" \
         '.hooks = ((.hooks // {}) | .Stop = ((.Stop // []) + [{"hooks":[{"type":"command","command":$cmd}]}]))' \
         "$_csh_source_file" >"$_csh_tmp" && command mv "$_csh_tmp" "$_csh_source_file"; then
-        echo "claude/settings.json: gh-issue-flow Stop hook 자동 등록 (issue #505 / #383, backup: $_csh_backup)" >&2
+        echo "claude/settings.json: gh-flow:issue Stop hook 자동 등록 (issue #505 / #383, backup: $_csh_backup)" >&2
         _csh_rc=0
     else
         command rm -f "$_csh_tmp"

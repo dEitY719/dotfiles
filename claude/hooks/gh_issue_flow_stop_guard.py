@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-"""Claude Code Stop hook: harness-level guard for /gh-issue-flow early-stop (issue #383).
+"""Claude Code Stop hook: harness-level guard for /gh-flow:issue early-stop (issue #383).
 
 Reads a `Stop` or `SubagentStop` event JSON from stdin, parses the
 conversation transcript, and emits a `block` decision when the model tries
-to end its turn while a gh-issue-flow chain is still in progress (6
+to end its turn while a gh-flow:issue chain is still in progress (6
 sub-skills + Step 3 report).
 
 Registered on BOTH turn-ending events (issue #1434): a subagent ending its
-turn fires `SubagentStop`, never `Stop`, so an unattended `gh:issue-flow`
+turn fires `SubagentStop`, never `Stop`, so an unattended `gh-flow:issue`
 dispatched inside a subagent (#1389) would otherwise run with the harness
 layer of the three-layer guard entirely absent.
 
 Failure mode being mitigated: the model self-authors a markdown success
-report between Skill() calls in Step 2 of gh-issue-flow and treats that
+report between Skill() calls in Step 2 of gh-flow:issue and treats that
 report as a turn-ending answer, even though `--no-next-hint` suppressed
 the sub-skill's own trailing `Next:` line. Prose rules in SKILL.md alone
 are not enough — the harness must mechanically force continuation.
@@ -27,7 +27,7 @@ Safety rails (each is critical — never accidentally trap the user):
     `_resolve_transcript_path`).
   - `stop_hook_active == True` → exit 0 (we already blocked once in this
     chain; bowing out prevents an infinite Stop→block→Stop loop).
-  - No gh-issue-flow boundary in the transcript → exit 0 (not our flow).
+  - No gh-flow:issue boundary in the transcript → exit 0 (not our flow).
   - Terminal Step 3 marker present → exit 0 (chain finished cleanly).
   - Boundary went stale (N fresh user prompts since it) → exit 0 (#1270).
   - `[flow:async-wait]` marker streak within the grace limit → exit 0
@@ -61,7 +61,7 @@ from typing import Any
 _TRACE_ENABLED: bool = os.environ.get("GH_ISSUE_FLOW_STOP_GUARD_TRACE") == "1"
 
 # Issue #1270 — how many *fresh* user prompts may accumulate after a
-# gh-issue-flow boundary before the hook declares that boundary stale and
+# gh-flow:issue boundary before the hook declares that boundary stale and
 # fails open. Without this valve a boundary lives forever: `stop_hook_active`
 # only prevents an infinite Stop→block→Stop loop *within* one turn, and it
 # resets the moment the user sends a new message, so a flow that never
@@ -109,7 +109,7 @@ def _trace(message: str, *, layer: str | None = None) -> None:
     Acceptance Criteria: standardize trace fields):
       - `L1`   — boundary detection (`_find_flow_boundary`)
       - `L1.5` — terminal-marker / sub-skill scan (`_scan_after_boundary`)
-      - `L2`   — state file (`.claude/.gh-issue-flow-state.json`, future)
+      - `L2`   — state file (`.claude/.gh-flow-issue-state.json`, future)
       - `L3`   — heartbeat cron (`CronCreate(durable=true)`, future)
     Boundary *expiry* (#1270) is scored `L1.5` even though it invalidates an
     `L1` boundary: it is decided purely from the post-boundary window that
@@ -125,47 +125,44 @@ def _trace(message: str, *, layer: str | None = None) -> None:
             pass
 
 
-# One entry per slot of the canonical 6-step gh-issue-flow chain; order
-# matters. Each entry lists EVERY name that addresses that slot — the
-# dotfiles-native pair (hyphen, colon) plus, since #1410 Phase 3, the
-# post-migration pair the skill answers to once installed from its own
-# plugin repo (D-12, issue #1678).
+# One entry per slot of the canonical 6-step gh-flow:issue chain; order
+# matters. Each entry lists both names that address that slot — the hyphen
+# form and the colon form of the skill now installed from its own plugin
+# repo (#1410 Phase 3, D-12).
 #
-# Why both, and not a swap: NF-1 keeps the dotfiles originals in place until
-# Phase 4, and the live automation in `shell-common/functions/gh_flow.sh` +
-# `shell-common/tools/custom/issue_watcher_cron.sh` still dispatches the old
-# slash commands. Narrowing this list to the new names would drop the
-# harness guard off that operational path the moment it landed; ignoring the
-# new names would leave anyone running the migrated plugin unguarded. Phase 4
-# removes the old forms, here and there, together.
+# The migration is COMPLETE (#1681, #1410 Phase 4-2): the dotfiles-native
+# originals (`gh-commit`, `gh:pr`, `devx:pr-review-all`, …) were deleted in
+# Phase 4-1 (#1680) and the automation in `shell-common/functions/gh_flow.sh`
+# + `shell-common/tools/custom/issue_watcher_cron.sh` was switched to the new
+# slash commands in Phase 4-3 (#1682), so listing the old forms here would
+# only match names nothing can invoke any more.
 #
 # Element 0 is the CANONICAL name of the slot: it is what `seen` records and
-# what `_next_step_label` quotes back to the model. It stays the old hyphen
-# form on purpose — the copy actually installed in this repo is still the one
-# the model is being told to invoke.
+# what `_next_step_label` quotes back to the model.
 EXPECTED_CHAIN: list[tuple[str, ...]] = [
-    # `gh-issue-implement`'s hyphen form is unchanged by the migration; only
-    # its colon form moves namespace (`gh:issue-implement` → `gh-issue:implement`).
-    ("gh-issue-implement", "gh:issue-implement", "gh-issue:implement"),
-    ("gh-commit", "gh:commit", "gh-pr-commit", "gh-pr:commit"),
-    ("gh-pr", "gh:pr", "gh-pr-create", "gh-pr:create"),
-    ("devx-pr-review-all", "devx:pr-review-all", "gh-verify-review-all", "gh-verify:review-all"),
-    ("gh-pr-resolve-conflict", "gh:pr-resolve-conflict", "gh-resolve-conflict", "gh-resolve:conflict"),
-    ("gh-pr-resolve-outdated", "gh:pr-resolve-outdated", "gh-resolve-outdated", "gh-resolve:outdated"),
+    ("gh-issue-implement", "gh-issue:implement"),
+    ("gh-pr-commit", "gh-pr:commit"),
+    ("gh-pr-create", "gh-pr:create"),
+    ("gh-verify-review-all", "gh-verify:review-all"),
+    ("gh-resolve-conflict", "gh-resolve:conflict"),
+    ("gh-resolve-outdated", "gh-resolve:outdated"),
 ]
 SUB_SKILL_NAMES: set[str] = {n for forms in EXPECTED_CHAIN for n in forms}
 
-# Alias → canonical slot name. This replaces the old `skill.replace(":", "-")`
-# normalization, which only ever worked because a slot's colon and hyphen
-# forms were the same string modulo the separator. That stops being true
-# under the migration — `gh-pr:commit` normalizes to `gh-pr-commit`, which is
-# NOT `gh-commit` — so the mapping has to be explicit or two aliases of one
-# slot would count as two distinct steps.
+# Alias → canonical slot name. Deliberately derived from EXPECTED_CHAIN
+# rather than computed with the old `skill.replace(":", "-")` normalization
+# (#1678): that shortcut only works while every slot's colon form is its
+# hyphen form modulo the separator, which the migration already broke once
+# (`gh-pr:commit` normalizes to `gh-pr-commit`, which was NOT the then-canonical
+# `gh-commit`). Reading the membership straight off the chain table cannot
+# drift that way, so a slot whose two forms diverge again still counts as one
+# step instead of two.
 _SUB_SKILL_CANONICAL: dict[str, str] = {n: forms[0] for forms in EXPECTED_CHAIN for n in forms}
 
 # The one alias `_next_step_label` quotes alongside the canonical name, so a
-# session running only the migrated plugin is told a skill it actually has.
-# Spelled out per slot rather than taken positionally out of EXPECTED_CHAIN
+# block names the slot in the colon form Claude Code's own slash-command
+# surface uses as well as the hyphen form. Spelled out per slot rather than
+# taken positionally out of EXPECTED_CHAIN
 # (`forms[-1]`): those tuples are alias *sets* whose order carries no meaning
 # past element 0, so adding a form later would silently change which name the
 # model is told to invoke (agy review, PR #1693). `_assert_hint_aliases_known`
@@ -173,11 +170,11 @@ _SUB_SKILL_CANONICAL: dict[str, str] = {n: forms[0] for forms in EXPECTED_CHAIN 
 # than a wrong hint at block time.
 _SUB_SKILL_HINT_ALIAS: dict[str, str] = {
     "gh-issue-implement": "gh-issue:implement",
-    "gh-commit": "gh-pr:commit",
-    "gh-pr": "gh-pr:create",
-    "devx-pr-review-all": "gh-verify:review-all",
-    "gh-pr-resolve-conflict": "gh-resolve:conflict",
-    "gh-pr-resolve-outdated": "gh-resolve:outdated",
+    "gh-pr-commit": "gh-pr:commit",
+    "gh-pr-create": "gh-pr:create",
+    "gh-verify-review-all": "gh-verify:review-all",
+    "gh-resolve-conflict": "gh-resolve:conflict",
+    "gh-resolve-outdated": "gh-resolve:outdated",
 }
 
 
@@ -200,7 +197,7 @@ def _assert_hint_aliases_known() -> None:
 _assert_hint_aliases_known()
 
 # Human-facing SKILL.md step labels, parallel to EXPECTED_CHAIN. These are
-# NOT derived arithmetically because gh-pr-resolve-outdated is labeled
+# NOT derived arithmetically because gh-resolve-outdated is labeled
 # "Step 2.5.1" in SKILL.md (it runs after the "Step 2.5" resolve-conflict
 # step), not "Step 2.6". Keep this list in lockstep with EXPECTED_CHAIN.
 STEP_LABELS: list[str] = [
@@ -213,16 +210,13 @@ STEP_LABELS: list[str] = [
 ]
 
 # Terminal Step 3 markers — presence in any assistant text after the
-# gh-issue-flow boundary means the flow has finished and the model may stop.
-# The `gh-flow:issue` / `gh-flow-issue` half is the post-migration name
-# (#1678, D-12). Each pattern keeps the trailing space or `(#` that follows
-# the skill name, which is also what keeps the sibling `gh-flow:issue-relay`
-# out: its name continues with `-relay` exactly where these demand a space.
+# gh-flow:issue boundary means the flow has finished and the model may stop.
+# `gh-flow:issue` / `gh-flow-issue` is the only namespace left after the
+# migration (#1681, #1410 Phase 4-2). Each pattern keeps the trailing space
+# or `(#` that follows the skill name, which is also what keeps the sibling
+# `gh-flow:issue-relay` out: its name continues with `-relay` exactly where
+# these demand a space.
 TERMINAL_PATTERNS: tuple[str, ...] = (
-    "gh:issue-flow complete (#",
-    "gh:issue-flow stopped at step",
-    "gh-issue-flow complete (#",
-    "gh-issue-flow stopped at step",
     "gh-flow:issue complete (#",
     "gh-flow:issue stopped at step",
     "gh-flow-issue complete (#",
@@ -235,29 +229,28 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 # Deliberately STRICTER than TERMINAL_PATTERNS: it demands a literal digit
 # exactly where the SKILL.md / report-template.md templates carry the
 # placeholders `<N>` and `<i>`. A command that merely mentions or greps the
-# template text — `grep "gh:issue-flow complete" SKILL.md`, `rg
-# 'gh:issue-flow stopped at step'` — therefore cannot match, while a real
-# report (`gh:issue-flow complete (#1270)`, `gh:issue-flow stopped at step
+# template text — `grep "gh-flow:issue complete" SKILL.md`, `rg
+# 'gh-flow:issue stopped at step'` — therefore cannot match, while a real
+# report (`gh-flow:issue complete (#1270)`, `gh-flow:issue stopped at step
 # 2/6`) does.
 #
-# The two namespaces are kept as SEPARATE alternatives rather than folded
-# into one character class (#1678 Error Cases): `gh[-:]issue-flow` and
-# `gh-flow[-:]issue` share no safe common shape, and a naive merge would
-# widen the match in ways neither name intends. The shared report shape is
-# factored out instead, so the two branches can never drift apart.
+# Only one namespace survives the migration (#1681, #1410 Phase 4-2), so the
+# pattern is a single branch. The report shape stays factored out because
+# `_TERMINAL_REPORT_SHAPE` is what carries the literal-digit strictness this
+# comment is about, and keeping it named is what makes that legible.
 _TERMINAL_REPORT_SHAPE: str = r"(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)"
 _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
-    rf"(?:gh[-:]issue-flow|gh-flow[-:]issue)\s+{_TERMINAL_REPORT_SHAPE}",
+    rf"gh-flow[-:]issue\s+{_TERMINAL_REPORT_SHAPE}",
 )
 
 # Issue #1274 — report-SHAPE requirement, applied to the paired
 # `tool_result` only (never to the command; why: `_scan_after_boundary`).
-# `_TERMINAL_COMMAND_RE` alone still let `grep "gh:issue-flow complete
+# `_TERMINAL_COMMAND_RE` alone still let `grep "gh-flow:issue complete
 # (#1270)" some.log` terminate a flow: the command carries the literal-digit
 # marker and grep echoes the matched line straight back into the
 # tool_result, so both halves of the #1272 pair were satisfied by a plain
-# log search. A real Step 3 report is never one line — per
-# `claude/skills/gh-issue-flow/references/report-template.md` the success
+# log search. A real Step 3 report is never one line — per the
+# `gh-flow:issue` skill's `references/report-template.md` the success
 # form always carries a `PR URL:` line and the failure form a `Resume after
 # fix:` line, neither of which a single grepped marker line reproduces.
 # Kept as its own pattern (not folded into `_TERMINAL_COMMAND_RE`) because
@@ -324,7 +317,7 @@ _SKILL_EXPANSION_RE: re.Pattern[str] = _line_anchored_alternation(
 # `_SKILL_EXPANSION_MARKERS` above (which identifies an expanded SKILL.md
 # body), so it lives in its own tuple; both are consulted.
 #
-# WHY this exists: measured on a real 2489-entry gh-issue-flow transcript,
+# WHY this exists: measured on a real 2489-entry gh-flow:issue transcript,
 # `_count_fresh_user_prompts` reported 102 "fresh prompts" of which only 4
 # were human — 62 were Stop-hook feedback blocks (Claude Code re-injects
 # THIS hook's own `reason` string as a `role=user` text message) and 40 were
@@ -335,43 +328,43 @@ _SKILL_EXPANSION_RE: re.Pattern[str] = _line_anchored_alternation(
 # three background agents, guaranteeing that outcome.
 #
 # `isMeta` on the outer transcript entry is the primary defense; this tuple
-# is defense-in-depth for transcripts that lack the flag. `gh-issue-flow
+# is defense-in-depth for transcripts that lack the flag. `gh-flow:issue
 # incomplete:` is this hook's own block-reason prefix — exactly the string
 # that gets re-injected — so it is the strongest single signal available.
 _HARNESS_INJECTION_MARKERS: tuple[str, ...] = (
     "Stop hook feedback:",
-    "gh-issue-flow incomplete:",
+    "gh-flow:issue incomplete:",
     "<task-notification>",
     "[SYSTEM NOTIFICATION - NOT USER INPUT]",
     "<local-command-caveat>",
 )
 _HARNESS_INJECTION_RE: re.Pattern[str] = _line_anchored_alternation(_HARNESS_INJECTION_MARKERS)
 
-# Regex that marks the *start* of a gh-issue-flow chain in a user message.
+# Regex that marks the *start* of a gh-flow:issue chain in a user message.
 # Matches four real-world forms that user-typed slash commands take in Claude
-# Code transcripts (issues #607 / #609 / #608):
+# Code transcripts (issues #607 / #609 / #608), all in the post-migration
+# `gh-flow:issue` / `gh-flow-issue` namespace — the only one left once #1410
+# Phase 4-1 deleted the dotfiles originals (#1681, Phase 4-2):
 #
-#   (a) Raw `/gh-issue-flow ...` (or colon form `/gh:issue-flow ...`) at the
+#   (a) Raw `/gh-flow:issue ...` (or hyphen form `/gh-flow-issue ...`) at the
 #       start of a line — historical fixture form, still valid for tests
 #       and for users who paste the command into a longer message.
-#   (b) The `<command-name>/gh-issue-flow</command-name>` (or colon form)
+#   (b) The `<command-name>/gh-flow:issue</command-name>` (or hyphen form)
 #       wrapper that Claude Code emits when a user invokes the slash
 #       command interactively.
-#   (c) The `Base directory for this skill: …/gh-issue-flow` marker line
+#   (c) The `Base directory for this skill: …/gh-flow…/issue` marker line
 #       Claude Code emits when expanding a slash command into the
 #       SKILL.md prompt (issue #608 — defense in depth against future
 #       wrapper format drift; matches the resolved skill base path).
-#   (d) The SKILL.md H1 line `# gh:issue-flow — Issue → PR composition`
+#   (d) The SKILL.md H1 line `# gh-flow:issue — Issue → PR composition`
 #       (issue #608 — second wrapper-independent anchor, useful if the
 #       `<command-name>` / `Base directory` lines ever stop being emitted).
 #
-# Each of the four has a primed twin (a')–(d') for the post-migration
-# `gh-flow:issue` / `gh-flow-issue` namespace (#1678, D-12). Those twins end
-# on `(?![\w-])` rather than `\b`: a word boundary sits between `issue` and
-# the `-relay` of the sibling `gh-flow:issue-relay`, so `\b` would arm this
-# six-step chain guard on a skill that has no such chain.
+# (a)–(c) end on `(?![\w-])` rather than `\b`: a word boundary sits between
+# `issue` and the `-relay` of the sibling `gh-flow:issue-relay`, so `\b` would
+# arm this six-step chain guard on a skill that has no such chain.
 #
-# (c') allows arbitrary path segments between `gh-flow` and `/issue` because
+# (c) allows arbitrary path segments between `gh-flow` and `/issue` because
 # an installed plugin's base directory is not `<plugin>/skills/<skill>` —
 # measured, the two real Claude Code layouts are
 # `plugins/marketplaces/gh-flow-skills/skills/issue` and
@@ -379,7 +372,7 @@ _HARNESS_INJECTION_RE: re.Pattern[str] = _line_anchored_alternation(_HARNESS_INJ
 # pinned to one nesting depth silently matches neither.
 #
 # The `(?m)` prefix anchors `^` to per-line starts so a mid-sentence
-# mention like "I was reading about /gh-issue-flow..." stays out.
+# mention like "I was reading about /gh-flow:issue..." stays out.
 # False-positive guards for `tool_result` payloads (e.g. SKILL.md being
 # read by the model) are layered separately in `_iter_text_blocks(...,
 # include_tool_results=False)`.
@@ -387,32 +380,19 @@ _USER_BOUNDARY_RE: re.Pattern[str] = re.compile(
     r"""
     (?m)                                                    # multiline: ^ matches each line start
     (?:
-        ^\s*/gh[-:]issue-flow\b                             # (a) raw slash command
+        ^\s*/gh-flow[-:]issue(?![\w-])                       # (a) raw slash command
         |
-        <command-name>\s*/gh[-:]issue-flow\s*</command-name>  # (b) Claude Code wrapped form
-        |
-        ^Base\s+directory\s+for\s+this\s+skill:\s+.*gh-issue-flow\b  # (c) skill base dir
-        |
-        ^\#\s+gh:issue-flow\s+—\s+Issue\s+→\s+PR\s+composition\s*$  # (d) SKILL.md H1
-        |
-        ^\s*/gh-flow[-:]issue(?![\w-])                       # (a') new namespace
-        |
-        <command-name>\s*/gh-flow[-:]issue\s*</command-name>  # (b') new namespace
+        <command-name>\s*/gh-flow[-:]issue\s*</command-name>  # (b) Claude Code wrapped form
         |
         ^Base\s+directory\s+for\s+this\s+skill:\s+
-            .*gh-flow(?:-issue(?![\w-])|[\w./-]*/issue(?![\w-]))  # (c') new namespace
+            .*gh-flow(?:-issue(?![\w-])|[\w./-]*/issue(?![\w-]))  # (c) skill base dir
         |
-        ^\#\s+gh-flow:issue\s+—\s+Issue\s+→\s+PR\s+composition\s*$  # (d') new namespace
+        ^\#\s+gh-flow:issue\s+—\s+Issue\s+→\s+PR\s+composition\s*$  # (d) SKILL.md H1
     )
     """,
     re.VERBOSE,
 )
-FLOW_SKILL_NAMES: set[str] = {
-    "gh-issue-flow",
-    "gh:issue-flow",
-    "gh-flow-issue",
-    "gh-flow:issue",
-}
+FLOW_SKILL_NAMES: set[str] = {"gh-flow-issue", "gh-flow:issue"}
 
 
 def _allow(trace_reason: str = "", *, layer: str | None = None) -> int:
@@ -425,7 +405,7 @@ def _allow(trace_reason: str = "", *, layer: str | None = None) -> int:
 def _block(reason: str, *, layer: str | None = None) -> int:
     """Block the stop with a directive shown to the model."""
     json.dump({"decision": "block", "reason": reason}, sys.stdout)
-    _trace("block: gh-issue-flow incomplete — re-prompting model", layer=layer)
+    _trace("block: gh-flow:issue incomplete — re-prompting model", layer=layer)
     return 0
 
 
@@ -458,7 +438,7 @@ def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = Fals
     than removed) so future callers needing inclusive scans can opt in
     explicitly, but the safe default is now the default. In particular,
     the SKILL.md Step 3 template literally contains the lines
-    `gh:issue-flow complete (#<N>)` and `gh:issue-flow stopped at step
+    `gh-flow:issue complete (#<N>)` and `gh-flow:issue stopped at step
     <i>/5` as instructions; if those were visible to the terminal scan
     via tool_result, every Read of SKILL.md during a flow would falsely
     flag completion (issue #608, layer L1.5; PR #635 review tightening).
@@ -581,7 +561,7 @@ def _iter_tool_results(message: dict[str, Any]) -> list[tuple[str, str]]:
     Joined with `""`, not `"\\n"` (PR #1279 codex review): the sub-blocks are
     fragments of ONE underlying stdout string, and nothing guarantees the
     split points fall on line boundaries. Inserting a synthetic `"\\n"`
-    between two fragments that split mid-token (e.g. `"gh:issue-flow compl"`
+    between two fragments that split mid-token (e.g. `"gh-flow:issue compl"`
     + `"ete (#42)"`) would sever the very marker this function exists to
     detect — the opposite of `_count_fresh_user_prompts`'s join, which
     concatenates distinct, already-line-bounded *messages* and so safely
@@ -634,14 +614,14 @@ def _message_payload(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _find_flow_boundary(messages: list[dict[str, Any]]) -> int:
-    """Return the index of the most recent gh-issue-flow START, or -1.
+    """Return the index of the most recent gh-flow:issue START, or -1.
 
     Boundary signals (role-restricted to avoid false positives from file
     content read into tool_result blocks — see PR #386 review feedback):
-      - assistant message: tool_use of Skill(gh-issue-flow | gh:issue-flow)
+      - assistant message: tool_use of Skill(gh-flow-issue | gh-flow:issue)
       - user message: text content matches `_USER_BOUNDARY_RE`, which
-        recognizes both the raw `/gh-issue-flow ...` form (line start) and
-        the `<command-name>/gh-issue-flow</command-name>` wrapper Claude
+        recognizes both the raw `/gh-flow:issue ...` form (line start) and
+        the `<command-name>/gh-flow:issue</command-name>` wrapper Claude
         Code emits when the user invokes the slash command interactively
         (issues #607 / #609). `tool_result` blocks are excluded so a file
         mentioning the command does not trip the boundary.
@@ -672,11 +652,11 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     motivation: the SKILL.md body (delivered as a `role=user` text
     block when Claude Code expands a slash command) literally contains
     the lines
-        gh:issue-flow complete (#<N>)
-        gh:issue-flow stopped at step <i>/5
+        gh-flow:issue complete (#<N>)
+        gh-flow:issue stopped at step <i>/5
     as Step 3 *instructions*. Without this restriction the scan would
     false-match those template lines and fail-open on every real
-    `/gh-issue-flow` invocation, defeating the harness guard. Sub-skill
+    `/gh-flow:issue` invocation, defeating the harness guard. Sub-skill
     invocation tracking is already restricted to assistant `tool_use`
     blocks (`_iter_skill_uses` only inspects that block type), so the
     skill counter is unaffected — only the terminal-marker scan
@@ -714,7 +694,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
     also carry a report *field* line (`_TERMINAL_REPORT_FIELDS` — `PR
     URL:` for the success form, `Resume after fix:` for the failure form).
     The marker line alone used to be enough, which let `grep
-    "gh:issue-flow complete (#1270)" some.log` terminate a live flow: the
+    "gh-flow:issue complete (#1270)" some.log` terminate a live flow: the
     command holds a literal-digit marker and grep echoes the matched line
     back, satisfying both halves without any report being produced. A real
     Step 3 report is multi-line and always carries one of those fields, so
@@ -725,7 +705,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
 
     Residual risk after #1274, stated honestly: a context-grep that happens
     to pull a real report's field line along with its marker line — e.g.
-    `grep -A5 "gh:issue-flow complete (#1270)" some.log` over a log that
+    `grep -A5 "gh-flow:issue complete (#1270)" some.log` over a log that
     stores a genuine past report. That is markedly more contrived than the
     bare `grep` it replaces (concrete issue number, matching the *live*
     flow's number, plus a context flag wide enough to reach the field
@@ -935,7 +915,7 @@ def _next_step_label(seen: list[str]) -> str:
         if name in seen:
             next_idx = i + 1
     if next_idx >= len(canonical):
-        return "Step 3 — emit the final 'gh:issue-flow complete (#N)' / 'gh-flow:issue complete (#N)' report"
+        return "Step 3 — emit the final 'gh-flow:issue complete (#N)' report"
     alias = _SUB_SKILL_HINT_ALIAS[canonical[next_idx]]
     return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]}) (or Skill({alias}))"
 
@@ -1016,7 +996,7 @@ def main() -> int:
 
     boundary = _find_flow_boundary(messages)
     if boundary < 0:
-        return _allow("no gh-issue-flow boundary in transcript", layer="L1")
+        return _allow("no gh-flow:issue boundary in transcript", layer="L1")
 
     terminal, seen = _scan_after_boundary(messages, boundary)
     # Issue #1270 — the fresh-prompt count feeds nothing but the expiry
@@ -1052,7 +1032,7 @@ def main() -> int:
     if limit > 0 and fresh_prompts >= limit:
         return _allow(
             f"stale boundary expiry — {fresh_prompts} fresh user prompt(s) since the "
-            f"gh-issue-flow boundary (limit {limit}); flow abandoned, failing open",
+            f"gh-flow:issue boundary (limit {limit}); flow abandoned, failing open",
             layer="L1.5",
         )
 
@@ -1073,10 +1053,10 @@ def main() -> int:
 
     next_label = _next_step_label(seen)
     reason = (
-        f"gh-issue-flow incomplete: {len(seen)}/{len(EXPECTED_CHAIN)} sub-skills invoked since the "
-        f"flow started, and no terminal Step 3 report ('gh:issue-flow complete' "
-        f"or 'gh:issue-flow stopped at step') has been emitted yet. Per the "
-        f"CRITICAL CONTRACT in claude/skills/gh-issue-flow/SKILL.md, you MUST "
+        f"gh-flow:issue incomplete: {len(seen)}/{len(EXPECTED_CHAIN)} sub-skills invoked since the "
+        f"flow started, and no terminal Step 3 report ('gh-flow:issue complete' "
+        f"or 'gh-flow:issue stopped at step') has been emitted yet. Per the "
+        f"CRITICAL CONTRACT in the gh-flow:issue SKILL.md, you MUST "
         f"continue immediately. Next action: {next_label}. Output ZERO "
         f"conversational text — no recap, no markdown summary, no per-step "
         f"bullets, no progress headers — just the next Skill() call (or, if all "

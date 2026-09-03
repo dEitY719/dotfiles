@@ -40,7 +40,7 @@
 #     `[flow:async-wait] step=<skill>/<step-id> agent=<id>
 #     reason=background-worker-delegated` line instead of its OK marker, for
 #     up to `GH_SKILL_GUARD_ASYNC_WAIT_LIMIT` turns (`0` disables). Default
-#     and mechanism: `claude/skills/gh-issue-flow/references/stop-guard.md`.
+#     and mechanism: the gh-flow:issue skill's `references/stop-guard.md`.
 #
 # Coexistence with gh_issue_flow_stop_guard.py:
 #   Stop hooks chain in `claude/settings.json` and run independently. Both
@@ -57,37 +57,15 @@ gh-issue-implement:
     - implement
     - report
 
-gh-pr:
-  enforce: true
-  description: "Create Pull Request from current branch"
-  required:
-    - push-and-create
-    - labels
-    - board-sync
-    - report
-
-gh-commit:
-  enforce: true
-  description: "Git commit with issue linking"
-  required:
-    - stage-commit
-    - metrics-board-sync
-    - report
-
-# --- #1410 Phase 3 migration (#1677) -----------------------------------------
+# --- #1410 Phase 3 migration (#1677), Phase 4 cutover (#1681) ----------------
 # The eight commit-to-merge skills moved to the `gh-pr-skills` repo, where the
 # plugin namespace `gh-pr` plus the de-prefixed directory names `create` /
-# `commit` spell markers the old keys above do not match. The migrated copies
-# therefore emit `[step:gh-pr-create/<id>]` and `[step:gh-pr-commit/<id>]`.
+# `commit` spell the markers below: `[step:gh-pr-create/<id>]` and
+# `[step:gh-pr-commit/<id>]`.
 #
-# The two keys below are ADDED, not renamed (#1677 D-12): the dotfiles
-# originals in `claude/skills/{gh-pr,gh-commit}/` are kept until Phase 4
-# (#1410 NF-1) and still emit the old markers, so deleting `gh-pr` / `gh-commit`
-# would strip their guard. Both paths are protected until Phase 4 removes the
-# originals and the old keys together.
-#
-# NF-4: each `required` list must stay identical to the key it mirrors —
-# migrating a skill does not change its steps.
+# The pre-migration `gh-pr` / `gh-commit` keys are gone with the dotfiles
+# originals they guarded (Phase 4-1 / #1680) — the migrated copies are now the
+# only thing that emits either step set.
 
 gh-pr-create:
   enforce: true

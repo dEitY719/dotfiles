@@ -80,7 +80,7 @@ def _user_tool_result(text: str, tool_use_id: str = "toolu_test") -> dict[str, A
     """Build a user message carrying a single tool_result block.
 
     Used to simulate Read/Bash tool output landing in the transcript — i.e.
-    file content that happens to mention "/gh-issue-flow" but is NOT a
+    file content that happens to mention "/gh-flow:issue" but is NOT a
     user-typed command. `tool_use_id` is explicit because the #1270 Bash
     terminal channel pairs a command with its OWN result by that id
     (PR #1272 review).
@@ -214,22 +214,22 @@ def _assistant_bash_no_id(command: str) -> dict[str, Any]:
     }
 
 
-# The canonical 6-step gh-issue-flow chain, restated here on purpose: these
+# The canonical 6-step gh-flow:issue chain, restated here on purpose: these
 # tests drive the hook as a black box via subprocess and never import its
 # EXPECTED_CHAIN, so a change to the chain must break the tests loudly.
 _ALL_SIX_SUB_SKILLS = [
     "gh-issue-implement",
-    "gh-commit",
-    "gh-pr",
-    "devx-pr-review-all",
-    "gh-pr-resolve-conflict",
-    "gh-pr-resolve-outdated",
+    "gh-pr-commit",
+    "gh-pr-create",
+    "gh-verify-review-all",
+    "gh-resolve-conflict",
+    "gh-resolve-outdated",
 ]
 
 
 def _full_chain_prefix() -> list[dict[str, Any]]:
     """Boundary + all six sub-skill invocations, with no Step 3 report yet."""
-    return [_user_text("/gh-issue-flow 1270"), *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS)]
+    return [_user_text("/gh-flow:issue 1270"), *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS)]
 
 
 def _hook_event(transcript_path: Path | None, /, **extras: Any) -> str:
@@ -307,7 +307,7 @@ def test_stop_hook_active_short_circuits(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement", "42 direct origin --no-next-hint"),
         ],
     )
@@ -322,29 +322,14 @@ def test_completed_flow_allows_stop(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
-            _assistant_skill("gh-pr"),
-            _assistant_skill("devx-pr-review-all"),
-            _assistant_skill("gh-pr-resolve-conflict"),
-            _assistant_skill("gh-pr-resolve-outdated"),
-            _assistant_text("gh:issue-flow complete (#42)\n  PR URL: https://github.com/example/repo/pull/99"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == ""
-
-
-def test_stopped_marker_also_allows_stop(tmp_path: Path) -> None:
-    """The 'stopped at step' failure marker counts as terminal too."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-issue-flow 42"),
-            _assistant_skill("gh-issue-implement"),
-            _assistant_text("gh:issue-flow stopped at step 1/5 (gh:issue-implement)"),
+            _assistant_skill("gh-pr-commit"),
+            _assistant_skill("gh-pr-create"),
+            _assistant_skill("gh-verify-review-all"),
+            _assistant_skill("gh-resolve-conflict"),
+            _assistant_skill("gh-resolve-outdated"),
+            _assistant_text("gh-flow:issue complete (#42)\n  PR URL: https://github.com/example/repo/pull/99"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -353,14 +338,14 @@ def test_stopped_marker_also_allows_stop(tmp_path: Path) -> None:
 
 
 def test_mid_flow_after_step_2_1_blocks_with_next_hint(tmp_path: Path) -> None:
-    """Only gh-issue-implement called → block, naming gh-commit as next."""
+    """Only gh-issue-implement called → block, naming gh-pr-commit as next."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement", "42 direct origin --no-next-hint"),
             # The model writes a fake-looking success block but no Step 3 marker.
-            _assistant_text("gh:issue-implement #42 complete\n  Mode: direct\n  Tests: 42 passed, 0 failed"),
+            _assistant_text("gh-issue:implement #42 complete\n  Mode: direct\n  Tests: 42 passed, 0 failed"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -369,26 +354,26 @@ def test_mid_flow_after_step_2_1_blocks_with_next_hint(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision.get("decision") == "block"
     reason = decision.get("reason", "")
-    assert "gh-commit" in reason
+    assert "gh-pr-commit" in reason
     assert "Step 2.2" in reason
     assert "1/6" in reason
 
 
 def test_mid_flow_skill_call_with_colon_namespace_counted(tmp_path: Path) -> None:
-    """Skill names like 'gh:issue-implement' (colon form) count too."""
+    """Skill names like 'gh-issue:implement' (colon form) count too."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
-            _assistant_skill("gh:issue-implement"),
-            _assistant_skill("gh:commit"),
+            _user_text("/gh-flow:issue 42"),
+            _assistant_skill("gh-issue:implement"),
+            _assistant_skill("gh-pr:commit"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-pr" in decision["reason"]
+    assert "gh-pr-create" in decision["reason"]
     assert "Step 2.3" in decision["reason"]
     assert "2/6" in decision["reason"]
 
@@ -398,13 +383,13 @@ def test_mid_flow_after_all_6_blocks_for_step_3_report(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
-            _assistant_skill("gh-pr"),
-            _assistant_skill("devx-pr-review-all"),
-            _assistant_skill("gh-pr-resolve-conflict"),
-            _assistant_skill("gh-pr-resolve-outdated"),
+            _assistant_skill("gh-pr-commit"),
+            _assistant_skill("gh-pr-create"),
+            _assistant_skill("gh-verify-review-all"),
+            _assistant_skill("gh-resolve-conflict"),
+            _assistant_skill("gh-resolve-outdated"),
             # No Step 3 report yet.
         ],
     )
@@ -417,17 +402,17 @@ def test_mid_flow_after_all_6_blocks_for_step_3_report(tmp_path: Path) -> None:
 
 
 def test_mid_flow_after_resolve_conflict_blocks_for_resolve_outdated(tmp_path: Path) -> None:
-    """5 sub-skills through gh-pr-resolve-conflict, no terminal → block,
-    naming gh-pr-resolve-outdated (Step 2.5.1) as the next step."""
+    """5 sub-skills through gh-resolve-conflict, no terminal → block,
+    naming gh-resolve-outdated (Step 2.5.1) as the next step."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
-            _assistant_skill("gh-pr"),
-            _assistant_skill("devx-pr-review-all"),
-            _assistant_skill("gh-pr-resolve-conflict"),
+            _assistant_skill("gh-pr-commit"),
+            _assistant_skill("gh-pr-create"),
+            _assistant_skill("gh-verify-review-all"),
+            _assistant_skill("gh-resolve-conflict"),
             # No Step 3 report yet — resolve-outdated still pending.
         ],
     )
@@ -436,23 +421,23 @@ def test_mid_flow_after_resolve_conflict_blocks_for_resolve_outdated(tmp_path: P
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     reason = decision["reason"]
-    assert "gh-pr-resolve-outdated" in reason
+    assert "gh-resolve-outdated" in reason
     assert "Step 2.5.1" in reason
     assert "5/6" in reason
 
 
 def test_missing_pr_review_all_blocks_naming_step_2_4(tmp_path: Path) -> None:
-    """A run that reaches gh-pr but has not yet invoked devx:pr-review-all
+    """A run that reaches gh-pr but has not yet invoked gh-verify:review-all
     (Step 2.4) → block, and the reason names that step as the next action."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
-            _assistant_skill("gh-pr"),
-            # devx:pr-review-all NOT invoked; model authors a fake wrap-up.
-            _assistant_text("gh:pr #42 opened — PR URL: https://x/pull/9\nAll done!"),
+            _assistant_skill("gh-pr-commit"),
+            _assistant_skill("gh-pr-create"),
+            # gh-verify:review-all NOT invoked; model authors a fake wrap-up.
+            _assistant_text("gh-pr:create #42 opened — PR URL: https://x/pull/9\nAll done!"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -460,17 +445,17 @@ def test_missing_pr_review_all_blocks_naming_step_2_4(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     reason = decision["reason"]
-    assert "devx-pr-review-all" in reason
+    assert "gh-verify-review-all" in reason
     assert "Step 2.4" in reason
     assert "3/6" in reason
 
 
 def test_skill_invocation_via_assistant_works_as_boundary(tmp_path: Path) -> None:
-    """Boundary can be a Skill(gh-issue-flow) tool_use, not just user text."""
+    """Boundary can be a Skill(gh-flow:issue) tool_use, not just user text."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _assistant_skill("gh-issue-flow", "42"),
+            _assistant_skill("gh-flow:issue", "42"),
             _assistant_skill("gh-issue-implement"),
         ],
     )
@@ -481,11 +466,11 @@ def test_skill_invocation_via_assistant_works_as_boundary(tmp_path: Path) -> Non
 
 
 def test_unrelated_skill_after_boundary_not_counted(tmp_path: Path) -> None:
-    """Random other Skill() calls don't advance the gh-issue-flow counter."""
+    """Random other Skill() calls don't advance the gh-flow:issue counter."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
             _assistant_skill("some-unrelated-skill"),
             _assistant_skill("another-helper"),
@@ -503,7 +488,7 @@ def test_malformed_jsonl_lines_skipped(tmp_path: Path) -> None:
     """Garbage lines in the middle of the transcript don't crash the hook."""
     p = tmp_path / "transcript.jsonl"
     with p.open("w", encoding="utf-8") as f:
-        f.write(json.dumps(_user_text("/gh-issue-flow 42")) + "\n")
+        f.write(json.dumps(_user_text("/gh-flow:issue 42")) + "\n")
         f.write("not valid json at all {{{\n")
         f.write(json.dumps(_assistant_skill("gh-issue-implement")) + "\n")
         f.write("\n")  # blank line
@@ -514,24 +499,24 @@ def test_malformed_jsonl_lines_skipped(tmp_path: Path) -> None:
 
 
 def test_tool_result_mentioning_command_not_treated_as_boundary(tmp_path: Path) -> None:
-    """File content read by the model that contains "/gh-issue-flow" must
+    """File content read by the model that contains "/gh-flow:issue" must
     NOT be treated as the user invoking the command (PR #386 review fix).
 
     Regression for the boundary-detection false positive: previously,
     `_find_flow_boundary` did `tok in text` across all blocks including
     tool_result, so any session that read this skill's own SKILL.md (which
-    documents `/gh-issue-flow ...`) would be flagged as in-flow and stops
+    documents `/gh-flow:issue ...`) would be flagged as in-flow and stops
     would be blocked.
     """
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("can you read the gh-issue-flow SKILL.md and explain it?"),
+            _user_text("can you read the gh-flow:issue SKILL.md and explain it?"),
             # Simulate a Read tool_result returning the SKILL.md content,
             # which legitimately contains the command string.
             _user_tool_result(
-                "# gh:issue-flow — Issue → PR composition\n\n"
-                "Use when the user runs /gh-issue-flow N or /gh:issue-flow N.\n"
+                "# gh-flow:issue — Issue → PR composition\n\n"
+                "Use when the user runs /gh-flow:issue N or /gh-flow-issue N.\n"
                 "Step 2.1 invokes Skill(gh-issue-implement) ...\n"
             ),
             _assistant_text("Here's how the skill works: ..."),
@@ -539,14 +524,14 @@ def test_tool_result_mentioning_command_not_treated_as_boundary(tmp_path: Path) 
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
-    # No real /gh-issue-flow boundary anywhere — must allow stop.
+    # No real /gh-flow:issue boundary anywhere — must allow stop.
     assert result.stdout.strip() == "", (
         f"Hook treated tool_result file content as a flow boundary. stdout={result.stdout!r}"
     )
 
 
 def test_command_only_at_start_of_user_text_counts(tmp_path: Path) -> None:
-    """User text that *mentions* /gh-issue-flow mid-sentence is NOT a
+    """User text that *mentions* /gh-flow:issue mid-sentence is NOT a
     command; only text starting with the token counts as a boundary
     (PR #386 review fix — preferred form per gemini suggestion).
     """
@@ -554,7 +539,7 @@ def test_command_only_at_start_of_user_text_counts(tmp_path: Path) -> None:
         tmp_path,
         [
             _user_text(
-                "I was reading the docs about /gh-issue-flow and got confused — "
+                "I was reading the docs about /gh-flow:issue and got confused — "
                 "could you summarize how Step 2.x chains together?"
             ),
             _assistant_text("Sure — here's a summary: ..."),
@@ -563,18 +548,18 @@ def test_command_only_at_start_of_user_text_counts(tmp_path: Path) -> None:
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", (
-        f"Hook treated mid-sentence mention of /gh-issue-flow as a command. stdout={result.stdout!r}"
+        f"Hook treated mid-sentence mention of /gh-flow:issue as a command. stdout={result.stdout!r}"
     )
 
 
 def test_command_with_leading_whitespace_still_counts(tmp_path: Path) -> None:
-    """Leading whitespace before /gh-issue-flow is tolerated (typo-friendly)
+    """Leading whitespace before /gh-flow:issue is tolerated (typo-friendly)
     so users who paste with indent still get the chain protection.
     """
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("   /gh-issue-flow 42"),
+            _user_text("   /gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
         ],
     )
@@ -618,7 +603,7 @@ def test_trace_off_by_default_no_stderr(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
         ],
     )
@@ -635,7 +620,7 @@ def test_trace_on_emits_block_diagnostics(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
         ],
     )
@@ -657,7 +642,7 @@ def test_trace_on_emits_allow_reason_for_no_boundary(tmp_path: Path) -> None:
     """Allow path should also report its reason when trace mode is on."""
     transcript = _write_transcript(
         tmp_path,
-        [_user_text("just a chat unrelated to gh-issue-flow")],
+        [_user_text("just a chat unrelated to gh-flow:issue")],
     )
     result = _run_hook(
         _hook_event(transcript),
@@ -666,7 +651,7 @@ def test_trace_on_emits_allow_reason_for_no_boundary(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stdout.strip() == ""
     assert "[stop-guard] allow:" in result.stderr
-    assert "no gh-issue-flow boundary" in result.stderr
+    assert "no gh-flow:issue boundary" in result.stderr
 
 
 def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None:
@@ -674,14 +659,14 @@ def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 42"),
+            _user_text("/gh-flow:issue 42"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
-            _assistant_skill("gh-pr"),
-            _assistant_skill("devx-pr-review-all"),
-            _assistant_skill("gh-pr-resolve-conflict"),
-            _assistant_skill("gh-pr-resolve-outdated"),
-            _assistant_text("gh:issue-flow complete (#42)"),
+            _assistant_skill("gh-pr-commit"),
+            _assistant_skill("gh-pr-create"),
+            _assistant_skill("gh-verify-review-all"),
+            _assistant_skill("gh-resolve-conflict"),
+            _assistant_skill("gh-resolve-outdated"),
+            _assistant_text("gh-flow:issue complete (#42)"),
         ],
     )
     result = _run_hook(
@@ -697,21 +682,21 @@ def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None
 # ---------------------------------------------------------------------------
 # Wrapped slash-command boundary (issues #607 / #609)
 #
-# When a user invokes `/gh-issue-flow N` interactively, Claude Code does not
+# When a user invokes `/gh-flow:issue N` interactively, Claude Code does not
 # place the raw command in the transcript. Instead it writes a multi-line
 # user message of the form:
 #
-#     <command-message>gh-issue-flow</command-message>
-#     <command-name>/gh-issue-flow</command-name>
+#     <command-message>gh-flow:issue</command-message>
+#     <command-name>/gh-flow:issue</command-name>
 #     <command-args>N</command-args>
-#     Base directory for this skill: .../skills/gh-issue-flow
-#     # gh:issue-flow — Issue → PR composition
+#     Base directory for this skill: .../gh-flow-skills/skills/issue
+#     # gh-flow:issue — Issue → PR composition
 #     ...(SKILL.md body)...
 #     ARGUMENTS: N
 #
-# The pre-#607 boundary detector used `lstrip().startswith("/gh-issue-flow")`,
+# The pre-#607 boundary detector used `lstrip().startswith("/gh-flow:issue")`,
 # which never matched this wrapped form — so every Stop event in a real
-# `/gh-issue-flow` session fell through to fail-open and the chain stopped
+# `/gh-flow:issue` session fell through to fail-open and the chain stopped
 # the moment the model emitted any prose between sub-skills. These fixtures
 # reproduce the actual transcript form and pin down the regression.
 # ---------------------------------------------------------------------------
@@ -738,59 +723,59 @@ def _user_slash_command(skill_name: str, args: str) -> dict[str, Any]:
 
 
 def test_wrapped_slash_command_recognized_as_flow_start(tmp_path: Path) -> None:
-    """`<command-name>/gh-issue-flow</command-name>` must mark a boundary."""
+    """`<command-name>/gh-flow-issue</command-name>` must mark a boundary."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_slash_command("gh-issue-flow", "457"),
+            _user_slash_command("gh-flow-issue", "457"),
             _assistant_skill("gh-issue-implement", "457 direct origin --no-next-hint"),
-            _assistant_text("gh:issue-implement #457 complete\n  Tests: 12 passed"),
+            _assistant_text("gh-issue:implement #457 complete\n  Tests: 12 passed"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip(), (
-        "Hook must recognize the <command-name>/gh-issue-flow</command-name> "
+        "Hook must recognize the <command-name>/gh-flow-issue</command-name> "
         f"wrapped form as a flow boundary. stdout={result.stdout!r}"
     )
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-commit" in decision["reason"]
+    assert "gh-pr-commit" in decision["reason"]
     assert "Step 2.2" in decision["reason"]
 
 
 def test_wrapped_slash_command_colon_namespace_recognized(tmp_path: Path) -> None:
-    """The colon-namespace form `<command-name>/gh:issue-flow</command-name>`
+    """The colon-namespace form `<command-name>/gh-flow:issue</command-name>`
     must also be recognized — Claude Code occasionally emits either form
     depending on how the skill is registered.
     """
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_slash_command("gh:issue-flow", "457"),
+            _user_slash_command("gh-flow:issue", "457"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr-commit"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-pr" in decision["reason"]
+    assert "gh-pr-create" in decision["reason"]
     assert "Step 2.3" in decision["reason"]
 
 
 def test_wrapped_command_inside_tool_result_does_not_trigger(tmp_path: Path) -> None:
-    """A `<command-name>/gh-issue-flow</command-name>` substring landing in
+    """A `<command-name>/gh-flow:issue</command-name>` substring landing in
     a tool_result block (e.g. the model reads a doc that quotes Claude
     Code's wrapping format) must NOT be treated as a real invocation —
     the existing `include_tool_results=False` guard still applies to the
     new regex matcher.
     """
     wrapped_inside_doc = (
-        "Example: when a user types /gh-issue-flow N, the transcript looks like\n"
+        "Example: when a user types /gh-flow:issue N, the transcript looks like\n"
         "\n"
-        "    <command-name>/gh-issue-flow</command-name>\n"
+        "    <command-name>/gh-flow:issue</command-name>\n"
         "    <command-args>N</command-args>\n"
         "\n"
         "and the hook treats that as the flow start.\n"
@@ -798,7 +783,7 @@ def test_wrapped_command_inside_tool_result_does_not_trigger(tmp_path: Path) -> 
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("can you read the docs about the gh-issue-flow stop hook?"),
+            _user_text("can you read the docs about the gh-flow:issue stop hook?"),
             _user_tool_result(wrapped_inside_doc),
             _assistant_text("Sure — the hook ..."),
         ],
@@ -816,7 +801,7 @@ def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
 ) -> None:
     """End-to-end shape of the production regression in #607 / #609:
 
-    user invokes /gh-issue-flow → Claude Code wraps it in <command-name>
+    user invokes /gh-flow:issue → Claude Code wraps it in <command-name>
     tags → assistant invokes Skill(gh-issue-implement) → assistant emits
     a self-authored success summary and tries to stop. The hook must
     block and route the model to Step 2.2.
@@ -824,17 +809,17 @@ def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_slash_command("gh-issue-flow", "457"),
+            _user_slash_command("gh-flow-issue", "457"),
             _assistant_skill("gh-issue-implement", "457 direct origin --no-next-hint"),
             _assistant_text(
-                "gh:issue-implement complete for #457.\n\n"
+                "gh-issue:implement complete for #457.\n\n"
                 "Summary\n"
                 "  Issue:        #457 feat(db): index strategy\n"
                 "  Mode:         direct\n"
                 "  Files:        1 new\n"
                 "  Tests:        12 passed\n\n"
                 "[ai-metrics:gh-issue-implement] ~7 min — will be included "
-                "in gh-commit metrics\n"
+                "in gh-pr-commit metrics\n"
             ),
         ],
     )
@@ -844,7 +829,7 @@ def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
     assert decision["decision"] == "block"
     reason = decision["reason"]
     assert "Step 2.2" in reason
-    assert "gh-commit" in reason
+    assert "gh-pr-commit" in reason
     assert "1/6" in reason
 
 
@@ -854,8 +839,8 @@ def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
 # Two motivations layered together:
 #
 # 1. **L1 (defense-in-depth boundary surfaces).** Add the `Base directory
-#    for this skill: …/gh-issue-flow` marker line and the SKILL.md H1
-#    `# gh:issue-flow — Issue → PR composition` as additional boundary
+#    for this skill: …/gh-flow-issue` marker line and the SKILL.md H1
+#    `# gh-flow:issue — Issue → PR composition` as additional boundary
 #    anchors so the hook keeps working even if Claude Code ever changes
 #    the `<command-name>` wrapper format (preserves chain protection
 #    across CLI version drift).
@@ -864,8 +849,8 @@ def test_wrapped_command_full_session_blocks_with_step_2_2_reason(
 #    it was that `_scan_after_boundary` matched `TERMINAL_PATTERNS`
 #    against the SKILL.md body delivered as a `role=user` text block.
 #    The template literally contains the lines
-#        gh:issue-flow complete (#<N>)
-#        gh:issue-flow stopped at step <i>/5
+#        gh-flow:issue complete (#<N>)
+#        gh-flow:issue stopped at step <i>/5
 #    as Step 3 instructions, so the scan saw a terminal marker before
 #    any sub-skill ran and fail-opened every invocation. Restricting
 #    the scan to `role=assistant` text (excluding the boundary message
@@ -881,17 +866,17 @@ _SKILL_TEMPLATE_FALSE_POSITIVE = (
     "\n"
     "If all steps succeeded:\n"
     "```\n"
-    "gh:issue-flow complete (#<N>)\n"
-    "  [OK] Step 1: gh:issue-implement\n"
+    "gh-flow:issue complete (#<N>)\n"
+    "  [OK] Step 1: gh-issue:implement\n"
     "```\n"
     "If a step failed:\n"
     "```\n"
-    "gh:issue-flow stopped at step <i>/5 (<skill-name>)\n"
+    "gh-flow:issue stopped at step <i>/5 (<skill-name>)\n"
     "```\n"
 )
 
 
-def _user_skill_base_dir_marker(skill_name: str = "gh-issue-flow") -> dict[str, Any]:
+def _user_skill_base_dir_marker(skill_name: str = "gh-flow-issue") -> dict[str, Any]:
     """User message containing only the `Base directory for this skill:` line.
 
     Mirrors the line Claude Code emits when expanding a slash command,
@@ -907,24 +892,24 @@ def _user_skill_h1_marker() -> dict[str, Any]:
 
     Exercises surface (d) — the H1 anchor — in isolation.
     """
-    content = "# gh:issue-flow — Issue → PR composition\n"
+    content = "# gh-flow:issue — Issue → PR composition\n"
     return {"type": "user", "message": {"role": "user", "content": content}}
 
 
 def test_base_dir_marker_recognized_as_flow_start(tmp_path: Path) -> None:
-    """Surface (c): `Base directory for this skill: …/gh-issue-flow` marks the flow."""
+    """Surface (c): `Base directory for this skill: …/gh-flow-issue` marks the flow."""
     transcript = _write_transcript(
         tmp_path,
         [
             _user_skill_base_dir_marker(),
             _assistant_skill("gh-issue-implement", "608 direct origin --no-next-hint"),
-            _assistant_text("gh:issue-implement #608 complete\n  Tests: 12 passed"),
+            _assistant_text("gh-issue:implement #608 complete\n  Tests: 12 passed"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip(), (
-        "Hook must recognize 'Base directory for this skill: …/gh-issue-flow' "
+        "Hook must recognize 'Base directory for this skill: …/gh-flow-issue' "
         f"as a flow boundary. stdout={result.stdout!r}"
     )
     decision = json.loads(result.stdout)
@@ -933,11 +918,11 @@ def test_base_dir_marker_recognized_as_flow_start(tmp_path: Path) -> None:
 
 
 def test_base_dir_marker_does_not_match_unrelated_skill(tmp_path: Path) -> None:
-    """Surface (c) only matches when the path ends with gh-issue-flow.
+    """Surface (c) only matches a `gh-flow`-rooted issue-skill path.
 
     False-positive guard: a base-directory line for some *other* skill
-    (e.g. `gh-issue-implement` or `gh-issue-flow-archive`) must not be
-    treated as a gh-issue-flow boundary.
+    (e.g. `gh-issue-implement` or `gh-flow-issue-archive`) must not be
+    treated as a gh-flow:issue boundary.
     """
     transcript = _write_transcript(
         tmp_path,
@@ -950,7 +935,7 @@ def test_base_dir_marker_does_not_match_unrelated_skill(tmp_path: Path) -> None:
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", (
-        f"Hook treated a non-gh-issue-flow skill base directory as a flow boundary. stdout={result.stdout!r}"
+        f"Hook treated an unrelated skill base directory as a flow boundary. stdout={result.stdout!r}"
     )
 
 
@@ -961,7 +946,7 @@ def test_skill_h1_marker_recognized_as_flow_start(tmp_path: Path) -> None:
         [
             _user_skill_h1_marker(),
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
+            _assistant_skill("gh-pr-commit"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -969,13 +954,13 @@ def test_skill_h1_marker_recognized_as_flow_start(tmp_path: Path) -> None:
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     assert "Step 2.3" in decision["reason"]
-    assert "gh-pr" in decision["reason"]
+    assert "gh-pr-create" in decision["reason"]
 
 
 def test_skill_h1_mid_sentence_does_not_match(tmp_path: Path) -> None:
     """Surface (d) requires the H1 to occupy its own line.
 
-    A mid-sentence quote like "the file starts with # gh:issue-flow — Issue
+    A mid-sentence quote like "the file starts with # gh-flow:issue — Issue
     → PR composition and ..." must not trip the boundary.
     """
     transcript = _write_transcript(
@@ -983,7 +968,7 @@ def test_skill_h1_mid_sentence_does_not_match(tmp_path: Path) -> None:
         [
             _user_text(
                 "I was reading the source — it has the line "
-                "# gh:issue-flow — Issue → PR composition embedded in a paragraph."
+                "# gh-flow:issue — Issue → PR composition embedded in a paragraph."
             ),
             _assistant_text("ok"),
         ],
@@ -1002,7 +987,7 @@ def test_base_dir_marker_inside_tool_result_does_not_trigger(tmp_path: Path) -> 
     """
     doc_excerpt = (
         "Each skill invocation begins with a banner like\n"
-        "    Base directory for this skill: /home/user/.claude/skills/gh-issue-flow\n"
+        "    Base directory for this skill: /home/user/.claude/skills/gh-flow:issue\n"
         "which the hook detects as a boundary.\n"
     )
     transcript = _write_transcript(
@@ -1025,9 +1010,9 @@ def test_skill_h1_inside_tool_result_does_not_trigger(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("explain the gh-issue-flow SKILL.md"),
+            _user_text("explain the gh-flow:issue SKILL.md"),
             _user_tool_result(
-                "# gh:issue-flow — Issue → PR composition\n\n(rest of SKILL.md body that the model just read)\n"
+                "# gh-flow:issue — Issue → PR composition\n\n(rest of SKILL.md body that the model just read)\n"
             ),
             _assistant_text("It chains 5 sub-skills..."),
         ],
@@ -1043,11 +1028,11 @@ def test_skill_template_text_in_user_message_does_not_false_terminate(
     tmp_path: Path,
 ) -> None:
     """L1.5 (issue #608 root cause): SKILL.md template lines literally
-    containing `gh:issue-flow complete (#<N>)` and `gh:issue-flow stopped
+    containing `gh-flow:issue complete (#<N>)` and `gh-flow:issue stopped
     at step <i>/5` must NOT count as a terminal marker.
 
     Reproduction of the 5th regression: when a user types
-    `/gh-issue-flow N`, Claude Code expands the SKILL.md body inline as
+    `/gh-flow:issue N`, Claude Code expands the SKILL.md body inline as
     a `role=user` text block. The body contains the Step 3 template
     *as instructions*. Before this fix, `_scan_after_boundary` saw the
     template text, set `terminal=True`, and the hook fail-opened on
@@ -1058,12 +1043,12 @@ def test_skill_template_text_in_user_message_does_not_false_terminate(
     # User message contains BOTH the wrapped slash command (boundary)
     # AND the SKILL.md Step 3 template lines (would-be false-terminator).
     boundary_with_template = (
-        "<command-message>gh-issue-flow</command-message>\n"
-        "<command-name>/gh-issue-flow</command-name>\n"
+        "<command-message>gh-flow:issue</command-message>\n"
+        "<command-name>/gh-flow:issue</command-name>\n"
         "<command-args>608</command-args>\n"
-        "Base directory for this skill: /home/user/.claude/skills/gh-issue-flow\n"
+        "Base directory for this skill: /home/user/.claude/skills/gh-flow:issue\n"
         "\n"
-        "# gh:issue-flow — Issue → PR composition\n"
+        "# gh-flow:issue — Issue → PR composition\n"
         "\n" + _SKILL_TEMPLATE_FALSE_POSITIVE + "ARGUMENTS: 608\n"
     )
     transcript = _write_transcript(
@@ -1074,20 +1059,20 @@ def test_skill_template_text_in_user_message_does_not_false_terminate(
                 "message": {"role": "user", "content": boundary_with_template},
             },
             _assistant_skill("gh-issue-implement", "608 direct origin --no-next-hint"),
-            _assistant_text("gh:issue-implement #608 complete\n  Files: 2 changed\n  Tests: 32 passed"),
+            _assistant_text("gh-issue:implement #608 complete\n  Files: 2 changed\n  Tests: 32 passed"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip(), (
-        "Hook fail-opened on a real /gh-issue-flow invocation — the SKILL.md "
+        "Hook fail-opened on a real /gh-flow:issue invocation — the SKILL.md "
         "template text in the user message false-matched TERMINAL_PATTERNS. "
         f"stdout={result.stdout!r}"
     )
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     assert "Step 2.2" in decision["reason"]
-    assert "gh-commit" in decision["reason"]
+    assert "gh-pr-commit" in decision["reason"]
     assert "1/6" in decision["reason"]
 
 
@@ -1107,13 +1092,13 @@ def test_skill_template_text_in_tool_result_does_not_false_terminate(
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 608"),
+            _user_text("/gh-flow:issue 608"),
             _assistant_skill("gh-issue-implement"),
             # Model reads the hook source while inside the flow.
             _user_tool_result(
                 "TERMINAL_PATTERNS: tuple[str, ...] = (\n"
-                '    "gh:issue-flow complete (#",\n'
-                '    "gh:issue-flow stopped at step",\n'
+                '    "gh-flow:issue complete (#",\n'
+                '    "gh-flow:issue stopped at step",\n'
                 "    ...\n"
                 ")\n"
             ),
@@ -1141,8 +1126,8 @@ def test_real_terminal_marker_in_assistant_text_still_allows_stop(
     accidental "block everything forever" regression.
     """
     boundary_with_template = (
-        "<command-name>/gh-issue-flow</command-name>\n"
-        "Base directory for this skill: /home/user/.claude/skills/gh-issue-flow\n" + _SKILL_TEMPLATE_FALSE_POSITIVE
+        "<command-name>/gh-flow:issue</command-name>\n"
+        "Base directory for this skill: /home/user/.claude/skills/gh-flow:issue\n" + _SKILL_TEMPLATE_FALSE_POSITIVE
     )
     transcript = _write_transcript(
         tmp_path,
@@ -1152,13 +1137,13 @@ def test_real_terminal_marker_in_assistant_text_still_allows_stop(
                 "message": {"role": "user", "content": boundary_with_template},
             },
             _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-commit"),
-            _assistant_skill("gh-pr"),
-            _assistant_skill("devx-pr-review-all"),
-            _assistant_skill("gh-pr-resolve-conflict"),
-            _assistant_skill("gh-pr-resolve-outdated"),
+            _assistant_skill("gh-pr-commit"),
+            _assistant_skill("gh-pr-create"),
+            _assistant_skill("gh-verify-review-all"),
+            _assistant_skill("gh-resolve-conflict"),
+            _assistant_skill("gh-resolve-outdated"),
             # Real Step 3 success report — assistant role, real terminal marker.
-            _assistant_text("gh:issue-flow complete (#608)\n  PR URL: https://x/pull/9"),
+            _assistant_text("gh-flow:issue complete (#608)\n  PR URL: https://x/pull/9"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -1175,7 +1160,7 @@ def test_trace_emits_layer_field_for_block(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 608"),
+            _user_text("/gh-flow:issue 608"),
             _assistant_skill("gh-issue-implement"),
         ],
     )
@@ -1213,19 +1198,19 @@ def test_trace_emits_layer_field_for_no_boundary_allow(tmp_path: Path) -> None:
 # (PR #1272 review, Codex BLOCKER — a command string alone proves the model
 # mentioned the marker, not that it emitted a report). `tool_result` on its
 # own (issue #608) and non-`Bash` tool inputs stay non-terminal. Mechanism
-# and rationale: claude/skills/gh-issue-flow/references/stop-guard.md step 4.
+# and rationale: gh-flow-skills/skills/issue/references/stop-guard.md step 4.
 # ---------------------------------------------------------------------------
 
 _BASH_REPORT_HEREDOC = (
     "cat <<'EOF'\n"
-    "gh:issue-flow complete (#1270)\n"
-    "  [OK] Step 1: gh:issue-implement\n"
+    "gh-flow:issue complete (#1270)\n"
+    "  [OK] Step 1: gh-issue:implement\n"
     "  PR URL: https://github.com/example/repo/pull/99\n"
     "EOF\n"
 )
 _BASH_REPORT_HEREDOC_STDOUT = (
-    "gh:issue-flow complete (#1270)\n"
-    "  [OK] Step 1: gh:issue-implement\n"
+    "gh-flow:issue complete (#1270)\n"
+    "  [OK] Step 1: gh-issue:implement\n"
     "  PR URL: https://github.com/example/repo/pull/99\n"
 )
 
@@ -1235,13 +1220,13 @@ _BASH_REPORT_HEREDOC_STDOUT = (
     [
         pytest.param(_BASH_REPORT_HEREDOC, _BASH_REPORT_HEREDOC_STDOUT, id="heredoc"),
         pytest.param(
-            "printf 'gh:issue-flow complete (#42)\\n  PR URL: https://github.com/example/repo/pull/7\\n'",
-            "gh:issue-flow complete (#42)\n  PR URL: https://github.com/example/repo/pull/7\n",
+            "printf 'gh-flow:issue complete (#42)\\n  PR URL: https://github.com/example/repo/pull/7\\n'",
+            "gh-flow:issue complete (#42)\n  PR URL: https://github.com/example/repo/pull/7\n",
             id="printf",
         ),
         pytest.param(
-            "echo 'gh:issue-flow stopped at step 2/6 (gh:commit)\\n\\nResume after fix:\\n  /gh-pr-resolve-conflict 7'",
-            "gh:issue-flow stopped at step 2/6 (gh:commit)\n\nResume after fix:\n  /gh-pr-resolve-conflict 7\n",
+            "echo 'gh-flow:issue stopped at step 2/6 (gh-pr:commit)\\n\\nResume after fix:\\n  /gh-resolve-conflict 7'",
+            "gh-flow:issue stopped at step 2/6 (gh-pr:commit)\n\nResume after fix:\n  /gh-resolve-conflict 7\n",
             id="stopped-at-step",
         ),
     ],
@@ -1274,7 +1259,7 @@ def test_bash_terminal_report_list_shaped_tool_result_allows_stop(tmp_path: Path
             *_full_chain_prefix(),
             _assistant_bash(_BASH_REPORT_HEREDOC, "toolu_report"),
             _user_tool_result_blocks(
-                ["gh:issue-flow complete (#1270)", "  PR URL: https://github.com/example/repo/pull/99"],
+                ["gh-flow:issue complete (#1270)", "  PR URL: https://github.com/example/repo/pull/99"],
                 "toolu_report",
             ),
         ],
@@ -1296,7 +1281,7 @@ def test_bash_terminal_report_split_mid_token_still_allows_stop(tmp_path: Path) 
             *_full_chain_prefix(),
             _assistant_bash(_BASH_REPORT_HEREDOC, "toolu_report"),
             _user_tool_result_blocks(
-                ["gh:issue-flow compl", "ete (#1270)\n  PR URL: https://github.com/example/repo/pull/99"],
+                ["gh-flow:issue compl", "ete (#1270)\n  PR URL: https://github.com/example/repo/pull/99"],
                 "toolu_report",
             ),
         ],
@@ -1317,7 +1302,7 @@ def test_bash_report_redirected_to_file_does_not_terminate(tmp_path: Path) -> No
         [
             *_full_chain_prefix(),
             _assistant_bash(
-                "cat <<'EOF' > /tmp/report.txt\ngh:issue-flow complete (#1270)\nEOF\n",
+                "cat <<'EOF' > /tmp/report.txt\ngh-flow:issue complete (#1270)\nEOF\n",
                 "toolu_redirect",
             ),
             _user_tool_result("", "toolu_redirect"),
@@ -1342,7 +1327,7 @@ def test_bash_marker_in_comment_with_unrelated_output_does_not_terminate(
         [
             *_full_chain_prefix(),
             _assistant_bash(
-                "# next up: gh:issue-flow complete (#1270)\ngit status --short\n",
+                "# next up: gh-flow:issue complete (#1270)\ngit status --short\n",
                 "toolu_comment",
             ),
             _user_tool_result(" M claude/hooks/gh_issue_flow_stop_guard.py\n", "toolu_comment"),
@@ -1367,9 +1352,9 @@ def test_marker_in_tool_result_without_matching_command_does_not_terminate(
         tmp_path,
         [
             *_full_chain_prefix(),
-            _assistant_bash("cat claude/skills/gh-issue-flow/references/report-template.md", "toolu_cat"),
+            _assistant_bash("cat gh-flow-skills/skills/issue/references/report-template.md", "toolu_cat"),
             _user_tool_result(
-                "If all steps succeeded:\n```\ngh:issue-flow complete (#<N>)\n```\n",
+                "If all steps succeeded:\n```\ngh-flow:issue complete (#<N>)\n```\n",
                 "toolu_cat",
             ),
         ],
@@ -1425,9 +1410,9 @@ def test_bash_grep_of_template_text_does_not_terminate(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_bash('grep "gh:issue-flow complete" claude/skills/gh-issue-flow/SKILL.md'),
+            _assistant_bash('grep "gh-flow:issue complete" gh-flow-skills/skills/issue/SKILL.md'),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -1449,7 +1434,7 @@ def test_bash_grep_of_template_text_does_not_terminate(tmp_path: Path) -> None:
 
 
 def test_bash_grep_of_real_report_line_does_not_terminate(tmp_path: Path) -> None:
-    """Issue #1274: `grep "gh:issue-flow complete (#1270)" some.log` echoes
+    """Issue #1274: `grep "gh-flow:issue complete (#1270)" some.log` echoes
     exactly the line it searched for, so before #1274 both halves of the
     #1272 pair matched and a live flow terminated on a log search. The result
     carries no `PR URL:` / `Resume after fix:` field, so it is not a report
@@ -1458,8 +1443,8 @@ def test_bash_grep_of_real_report_line_does_not_terminate(tmp_path: Path) -> Non
         tmp_path,
         [
             *_full_chain_prefix(),
-            _assistant_bash('grep "gh:issue-flow complete (#1270)" some.log', "toolu_grep"),
-            _user_tool_result("gh:issue-flow complete (#1270)\n", "toolu_grep"),
+            _assistant_bash('grep "gh-flow:issue complete (#1270)" some.log', "toolu_grep"),
+            _user_tool_result("gh-flow:issue complete (#1270)\n", "toolu_grep"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -1480,17 +1465,17 @@ def test_template_text_in_tool_result_of_bash_cat_does_not_terminate(
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
-            _assistant_bash("cat claude/skills/gh-issue-flow/references/report-template.md"),
+            _assistant_bash("cat gh-flow-skills/skills/issue/references/report-template.md"),
             _user_tool_result(
                 "If all steps succeeded:\n"
                 "```\n"
-                "gh:issue-flow complete (#<N>)\n"
+                "gh-flow:issue complete (#<N>)\n"
                 "```\n"
                 "If a step failed:\n"
                 "```\n"
-                "gh:issue-flow stopped at step <i>/6 (<skill-name>)\n"
+                "gh-flow:issue stopped at step <i>/6 (<skill-name>)\n"
                 "```\n"
             ),
         ],
@@ -1509,28 +1494,28 @@ def test_edit_and_write_tool_inputs_are_not_scanned_for_terminal(
     """F-1 scope guard: only `Bash` tool inputs are scanned.
 
     Editing SKILL.md / report-template.md legitimately puts a real-looking
-    `gh:issue-flow complete (#1270)` string into an `Edit.new_string` or
+    `gh-flow:issue complete (#1270)` string into an `Edit.new_string` or
     `Write.content` — exactly what the #1270 change itself did. Those must
     never terminate the flow.
     """
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _assistant_tool_use(
                 "Edit",
                 {
-                    "file_path": "claude/skills/gh-issue-flow/references/report-template.md",
+                    "file_path": "gh-flow-skills/skills/issue/references/report-template.md",
                     "old_string": "example report",
-                    "new_string": "example report: gh:issue-flow complete (#1270)",
+                    "new_string": "example report: gh-flow:issue complete (#1270)",
                 },
             ),
             _assistant_tool_use(
                 "Write",
                 {
                     "file_path": "notes.md",
-                    "content": "gh:issue-flow stopped at step 3/6 (gh:pr)",
+                    "content": "gh-flow:issue stopped at step 3/6 (gh-pr:create)",
                 },
             ),
         ],
@@ -1550,7 +1535,7 @@ def test_edit_and_write_tool_inputs_are_not_scanned_for_terminal(
 # (default 3, `GH_ISSUE_FLOW_STOP_GUARD_MAX_USER_TURNS`, `0` = disabled)
 # the boundary is abandoned and the hook fails open. What counts as
 # "fresh", and why the valve is needed at all:
-# claude/skills/gh-issue-flow/references/stop-guard.md step 5.
+# gh-flow-skills/skills/issue/references/stop-guard.md step 5.
 # ---------------------------------------------------------------------------
 
 
@@ -1559,7 +1544,7 @@ def test_three_fresh_user_prompts_expire_the_boundary(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text("actually, forget that — what does mise tasks list?"),
             _assistant_text("It lists the repo's lint/test tasks."),
@@ -1572,7 +1557,7 @@ def test_three_fresh_user_prompts_expire_the_boundary(tmp_path: Path) -> None:
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", (
-        f"Stale gh-issue-flow boundary kept blocking unrelated turns. stdout={result.stdout!r}"
+        f"Stale gh-flow:issue boundary kept blocking unrelated turns. stdout={result.stdout!r}"
     )
 
 
@@ -1581,7 +1566,7 @@ def test_boundary_expiry_reported_in_trace(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text("unrelated question one"),
             _user_text("unrelated question two"),
@@ -1604,7 +1589,7 @@ def test_two_fresh_user_prompts_still_block(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text("wait, is the PR going to close the issue?"),
             _assistant_text("Yes, via Closes #1270."),
@@ -1625,14 +1610,14 @@ def test_skill_expansion_user_messages_are_not_fresh_prompts(tmp_path: Path) -> 
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text("Base directory for this skill: /home/user/.claude/skills/gh-issue-implement\n"),
-            _assistant_skill("gh-commit"),
-            _user_slash_command("gh-commit", ""),
-            _user_text("<command-name>/gh-commit</command-name>\n<command-args></command-args>\n"),
+            _assistant_skill("gh-pr-commit"),
+            _user_slash_command("gh-pr-commit", ""),
+            _user_text("<command-name>/gh-pr-commit</command-name>\n<command-args></command-args>\n"),
             _user_text("<local-command-stdout>ok</local-command-stdout>"),
-            _user_text("Skill /gh-commit is already loaded above; instructions unchanged. Arguments: "),
+            _user_text("Skill /gh-pr-commit is already loaded above; instructions unchanged. Arguments: "),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -1649,7 +1634,7 @@ def test_tool_result_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_tool_result("tests: 42 passed"),
             _user_tool_result("commit abc123 created"),
@@ -1674,7 +1659,7 @@ def test_system_reminder_only_user_message_is_not_a_fresh_prompt(
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text(reminder),
             _user_text(reminder),
@@ -1695,7 +1680,7 @@ def test_expiry_disabled_by_env_zero(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             *[_user_text(f"unrelated prompt {i}") for i in range(5)],
         ],
@@ -1714,7 +1699,7 @@ def test_expiry_limit_configurable_via_env(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text("never mind, different topic now"),
         ],
@@ -1730,7 +1715,7 @@ def test_expiry_limit_configurable_via_env(tmp_path: Path) -> None:
 def test_invalid_expiry_env_falls_back_to_default(tmp_path: Path) -> None:
     """F-2: an unparseable / negative value degrades to the default of 3."""
     two_prompts = [
-        _user_text("/gh-issue-flow 1270"),
+        _user_text("/gh-flow:issue 1270"),
         _assistant_skill("gh-issue-implement"),
         _user_text("question one"),
         _user_text("question two"),
@@ -1749,12 +1734,12 @@ def test_invalid_expiry_env_falls_back_to_default(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Issue #1270 / PR #1272 review — fresh-prompt counter over-counting.
 #
-# Measured on a real 2489-entry gh-issue-flow transcript: 102 "fresh
+# Measured on a real 2489-entry gh-flow:issue transcript: 102 "fresh
 # prompts" of which only 4 were human. 62 were Stop-hook feedback blocks
 # (Claude Code re-injects the hook's own `reason` as a `role=user` message)
 # and 40 were `<task-notification>` background-subagent completions — so the
 # limit of 3 was hit at entry 322 with 1/6 sub-skills done and the guard
-# disabled itself mid-flow. `devx:pr-review-all` (Step 2.4 of the guarded
+# disabled itself mid-flow. `gh-verify:review-all` (Step 2.4 of the guarded
 # chain) fans out three background agents, which makes that self-defeat the
 # normal case rather than an edge case.
 #
@@ -1769,7 +1754,7 @@ def test_ismeta_user_messages_are_not_fresh_prompts(tmp_path: Path) -> None:
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_meta_text("please continue with the next step"),
             _user_meta_text("keep going, do not stop"),
@@ -1790,14 +1775,14 @@ def test_stop_hook_feedback_messages_are_not_fresh_prompts(tmp_path: Path) -> No
     a "fresh user prompt" and three of them expired the guard's own boundary.
     """
     feedback = (
-        "Stop hook feedback: gh-issue-flow incomplete: 1/6 sub-skills invoked since "
+        "Stop hook feedback: gh-flow:issue incomplete: 1/6 sub-skills invoked since "
         "the flow started, and no terminal Step 3 report has been emitted yet. "
-        "Next action: Step 2.2 — Skill(gh-commit)."
+        "Next action: Step 2.2 — Skill(gh-pr-commit)."
     )
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text(feedback),
             _user_text(feedback),
@@ -1817,7 +1802,7 @@ def test_task_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> Non
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text(notice),
             _user_text(notice),
@@ -1837,7 +1822,7 @@ def test_system_notification_messages_are_not_fresh_prompts(tmp_path: Path) -> N
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text(notice),
             _user_text(notice),
@@ -1864,7 +1849,7 @@ def test_mixed_text_and_tool_result_message_counts_as_fresh_prompt(
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_text_with_tool_result("stop that — what does mise tasks list?"),
             _user_text_with_tool_result("and where is the zsh env file?"),
@@ -1886,7 +1871,7 @@ def test_tool_result_only_message_still_not_a_fresh_prompt(tmp_path: Path) -> No
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1270"),
+            _user_text("/gh-flow:issue 1270"),
             _assistant_skill("gh-issue-implement"),
             _user_tool_result("tests: 42 passed"),
             _user_tool_result("commit abc123 created"),
@@ -1930,7 +1915,7 @@ def test_quoted_marker_mid_sentence_still_counts_as_fresh_prompt(tmp_path: Path,
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1281"),
+            _user_text("/gh-flow:issue 1281"),
             _assistant_skill("gh-issue-implement"),
             _user_text(prompt),
         ],
@@ -1960,9 +1945,9 @@ def test_already_loaded_injection_alone_is_not_a_fresh_prompt(tmp_path: Path) ->
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1281"),
+            _user_text("/gh-flow:issue 1281"),
             _assistant_skill("gh-issue-implement"),
-            _user_text("Skill /gh-issue-flow is already loaded above; instructions unchanged. Arguments: 1281"),
+            _user_text("Skill /gh-flow:issue is already loaded above; instructions unchanged. Arguments: 1281"),
         ],
     )
     result = _run_hook(
@@ -1994,7 +1979,7 @@ def test_marker_quoted_at_true_line_start_is_still_not_a_fresh_prompt(tmp_path: 
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1281"),
+            _user_text("/gh-flow:issue 1281"),
             _assistant_skill("gh-issue-implement"),
             _user_text("Stop hook feedback: I'm quoting this exactly to ask you about it."),
         ],
@@ -2013,7 +1998,7 @@ def test_marker_quoted_at_true_line_start_is_still_not_a_fresh_prompt(tmp_path: 
 
 # ---------------------------------------------------------------------------
 # Issue #1434 — the `SubagentStop` path. The guard used to be registered on
-# `Stop` only, so a `gh:issue-flow` chain running inside a subagent (the
+# `Stop` only, so a `gh-flow:issue` chain running inside a subagent (the
 # unattended issue-watcher dispatch, #1389) lost the harness layer of the
 # three-layer guard entirely.
 #
@@ -2066,13 +2051,13 @@ def _subagent_hook_event(
 def _mid_flow_messages() -> list[dict[str, Any]]:
     """Boundary + one sub-skill, no Step 3 report — the blockable state."""
     return [
-        _user_text("/gh-issue-flow 1434"),
+        _user_text("/gh-flow:issue 1434"),
         _assistant_skill("gh-issue-implement", "1434 direct origin --no-next-hint"),
     ]
 
 
 def _unrelated_messages() -> list[dict[str, Any]]:
-    """A transcript with no gh-issue-flow boundary anywhere."""
+    """A transcript with no gh-flow:issue boundary anywhere."""
     return [
         _user_text("summarize this directory for me"),
         _assistant_text("here is the summary you asked for."),
@@ -2113,7 +2098,7 @@ def test_subagent_stop_mid_flow_blocks(tmp_path: Path) -> None:
     )
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-issue-flow incomplete" in decision["reason"]
+    assert "gh-flow:issue incomplete" in decision["reason"]
 
 
 def test_subagent_stop_does_not_inherit_parent_flow(tmp_path: Path) -> None:
@@ -2151,9 +2136,9 @@ def test_subagent_stop_terminal_marker_allows_stop(tmp_path: Path) -> None:
     agent, parent = _write_subagent_pair(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1434"),
+            _user_text("/gh-flow:issue 1434"),
             *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS),
-            _assistant_text("gh:issue-flow complete (#1434)\n  PR URL: https://github.com/example/repo/pull/1435"),
+            _assistant_text("gh-flow:issue complete (#1434)\n  PR URL: https://github.com/example/repo/pull/1435"),
         ],
         _unrelated_messages(),
     )
@@ -2211,8 +2196,8 @@ def test_stop_event_trace_names_transcript_path_source(tmp_path: Path) -> None:
     [
         # Measured: the subagent transcript's FIRST entry is the dispatch
         # prompt as plain user text, exactly this shape.
-        ("dispatch-prompt-user-text", _user_text("/gh-issue-flow 1434")),
-        ("assistant-skill-tool-use", _assistant_skill("gh-issue-flow", "1434")),
+        ("dispatch-prompt-user-text", _user_text("/gh-flow:issue 1434")),
+        ("assistant-skill-tool-use", _assistant_skill("gh-flow:issue", "1434")),
         ("skill-expansion-base-dir", _user_skill_base_dir_marker()),
     ],
 )
@@ -2247,7 +2232,7 @@ def test_real_subagent_entry_shapes_parse_and_block(tmp_path: Path) -> None:
                 "isSidechain": True,
                 "agentId": "agent-test-1434",
                 "uuid": "11111111-1111-1111-1111-111111111111",
-                "message": {"role": "user", "content": "/gh-issue-flow 1434"},
+                "message": {"role": "user", "content": "/gh-flow:issue 1434"},
             },
             {"type": "attachment", "attachment": {"type": "file", "path": "/tmp/context.md"}},
             {
@@ -2523,10 +2508,10 @@ def test_subagent_harness_entries_never_expire_the_boundary(tmp_path: Path) -> N
         [
             *_mid_flow_messages(),
             _user_tool_result("tests: 42 passed", tool_use_id="toolu_subagent_1"),
-            _user_text("Stop hook feedback:\ngh-issue-flow incomplete: 1/6 sub-skills invoked since the flow started."),
+            _user_text("Stop hook feedback:\ngh-flow:issue incomplete: 1/6 sub-skills invoked since the flow started."),
             _user_text("<task-notification>Agent 'reviewer' finished.</task-notification>"),
-            _user_skill_base_dir_marker("gh-commit"),
-            _user_meta_text("Skill gh-commit is already loaded above; instructions unchanged."),
+            _user_skill_base_dir_marker("gh-pr-commit"),
+            _user_meta_text("Skill gh-pr-commit is already loaded above; instructions unchanged."),
         ],
         _unrelated_messages(),
     )
@@ -2647,14 +2632,14 @@ def test_three_consecutive_async_wait_markers_block(tmp_path: Path) -> None:
     assert result.stdout.strip(), "3 markers with no progress is stagnation and must block"
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
-    assert "gh-issue-flow incomplete" in decision["reason"]
-    assert "Step 2.2 — Skill(gh-commit)" in decision["reason"]
+    assert "gh-flow:issue incomplete" in decision["reason"]
+    assert "Step 2.2 — Skill(gh-pr-commit)" in decision["reason"]
 
 
 def test_progress_resets_the_async_wait_streak(tmp_path: Path) -> None:
     """A real sub-skill call after a marker restarts the count from zero.
 
-    Marker → `Skill(gh:commit)` (progress) → stop with no further marker.
+    Marker → `Skill(gh-pr:commit)` (progress) → stop with no further marker.
     The pre-progress marker must not carry over, so the ordinary 2/6 block
     applies. This is what stops a streak accumulating across a whole flow.
     """
@@ -2663,7 +2648,7 @@ def test_progress_resets_the_async_wait_streak(tmp_path: Path) -> None:
         [
             *_mid_flow_messages(),
             _async_wait_text(),
-            _assistant_skill("gh:commit"),
+            _assistant_skill("gh-pr:commit"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
@@ -2804,21 +2789,22 @@ def test_async_wait_limit_one_allows_exactly_one(tmp_path: Path, marker_count: i
 
 
 # ---------------------------------------------------------------------------
-# D-12 dual-form namespace recognition (#1678)
+# Post-migration namespace recognition (#1678, finished by #1681 / #1410
+# Phase 4-2)
 #
-# Phase 3 of #1410 migrates this composition into the `gh-flow-skills` repo
-# as `gh-flow:issue`, while NF-1 keeps the dotfiles original alive (and the
-# automation in `gh_flow.sh` / `issue_watcher_cron.sh` still dispatches the
-# old `/gh-issue-flow`) until Phase 4. The guard must therefore recognize
-# BOTH namespaces at once. Every case below is an ADDITION — no existing
-# assertion above is modified (issue #1678, NF-4).
+# #1410 moved this composition into the `gh-flow-skills` plugin repo as
+# `gh-flow:issue`. Phase 4-1 (#1680) then deleted the dotfiles originals and
+# Phase 4-3 (#1682) switched `gh_flow.sh` / `issue_watcher_cron.sh` to the new
+# slash commands, so `gh-flow:issue` / `gh-flow-issue` is now the ONLY
+# namespace the guard answers to. These cases pin the surfaces that only the
+# plugin layout produces (installed base dirs, the `-relay` sibling).
 # ---------------------------------------------------------------------------
 
-# The same six chain slots as `_ALL_SIX_SUB_SKILLS`, addressed by their
-# post-migration names. Restated as literals for the same reason: the tests
-# drive the hook as a black box, so a silent drift in EXPECTED_CHAIN must
-# break them loudly.
-_ALL_SIX_SUB_SKILLS_NEW = [
+# The same six chain slots as `_ALL_SIX_SUB_SKILLS`, addressed by their COLON
+# form instead of their hyphen form. Restated as literals for the same reason:
+# the tests drive the hook as a black box, so a silent drift in EXPECTED_CHAIN
+# must break them loudly.
+_ALL_SIX_SUB_SKILLS_COLON = [
     "gh-issue:implement",
     "gh-pr:commit",
     "gh-pr:create",
@@ -2902,7 +2888,7 @@ def test_new_namespace_sub_skills_are_all_recognized(tmp_path: Path) -> None:
         tmp_path,
         [
             _user_text("/gh-flow:issue 1678"),
-            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS_NEW),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS_COLON),
             _assistant_text("all done"),
         ],
     )
@@ -2912,13 +2898,13 @@ def test_new_namespace_sub_skills_are_all_recognized(tmp_path: Path) -> None:
     assert "6/6 sub-skills" in reason, reason
 
 
-def test_old_and_new_alias_of_one_slot_count_once(tmp_path: Path) -> None:
-    """`gh-commit` and `gh-pr:commit` are the same chain slot, not two."""
+def test_hyphen_and_colon_alias_of_one_slot_count_once(tmp_path: Path) -> None:
+    """`gh-pr-commit` and `gh-pr:commit` are the same chain slot, not two."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("/gh-issue-flow 1678"),
-            _assistant_skill("gh-commit"),
+            _user_text("/gh-flow:issue 1678"),
+            _assistant_skill("gh-pr-commit"),
             _assistant_skill("gh-pr:commit"),
             _assistant_text("committed"),
         ],
@@ -2929,18 +2915,18 @@ def test_old_and_new_alias_of_one_slot_count_once(tmp_path: Path) -> None:
     assert "1/6 sub-skills" in reason, reason
 
 
-def test_mixed_old_and_new_names_complete_the_chain(tmp_path: Path) -> None:
-    """A chain half-invoked under each namespace still reaches 6/6.
+def test_mixed_hyphen_and_colon_names_complete_the_chain(tmp_path: Path) -> None:
+    """A chain invoked with a mix of hyphen and colon forms still reaches 6/6.
 
-    This is the transition-period shape D-12 exists for: the dotfiles copy
-    and the `gh-flow-skills` copy can both be installed at once.
+    Both forms address the same slot, so the per-slot canonicalization must
+    hold across a whole chain, not just the one-slot case above.
     """
     mixed = [
-        "gh:issue-implement",
+        "gh-issue:implement",
         "gh-pr:commit",
-        "gh-pr",
+        "gh-pr-create",
         "gh-verify:review-all",
-        "gh-pr-resolve-conflict",
+        "gh-resolve-conflict",
         "gh-resolve:outdated",
     ]
     transcript = _write_transcript(
@@ -2981,25 +2967,6 @@ def test_new_namespace_terminal_marker_allows_stop(tmp_path: Path, label: str, m
     assert result.stdout.strip() == "", f"{label}: expected allow, got {result.stdout!r}"
 
 
-def test_new_namespace_terminal_marker_via_bash_channel(tmp_path: Path) -> None:
-    """The #1270 Bash fallback channel accepts the new-name marker too."""
-    command = "printf 'gh-flow:issue complete (#1678)\\n'"
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-flow:issue 1678"),
-            _assistant_bash(command, block_id="toolu_report"),
-            _user_tool_result(
-                "gh-flow:issue complete (#1678)\n  PR URL: https://github.com/o/r/pull/1",
-                tool_use_id="toolu_report",
-            ),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == "", f"expected allow, got {result.stdout!r}"
-
-
 def test_new_namespace_relay_report_does_not_terminate_a_flow(tmp_path: Path) -> None:
     """`gh-flow:issue-relay complete (#N)` must not satisfy `gh-flow:issue`'s terminal.
 
@@ -3020,12 +2987,12 @@ def test_new_namespace_relay_report_does_not_terminate_a_flow(tmp_path: Path) ->
     assert json.loads(result.stdout)["decision"] == "block"
 
 
-def test_next_step_hint_names_both_namespaces(tmp_path: Path) -> None:
-    """A block's "next action" must be invocable under either namespace (#1678).
+def test_next_step_hint_names_both_forms_of_the_slot(tmp_path: Path) -> None:
+    """A block's "next action" quotes BOTH forms of the next slot (#1678).
 
-    A session running only the migrated `gh-flow-skills` plugin has no
-    `gh-commit` skill, so a hint naming that alone answers the block with an
-    instruction it cannot follow.
+    The canonical hyphen name comes first (existing substring assertions
+    depend on that), the colon alias follows in parentheses — that is the form
+    Claude Code's own slash-command surface uses.
     """
     transcript = _write_transcript(
         tmp_path,
@@ -3038,24 +3005,23 @@ def test_next_step_hint_names_both_namespaces(tmp_path: Path) -> None:
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     reason = json.loads(result.stdout)["reason"]
-    assert "Skill(gh-commit)" in reason, reason
+    assert "Skill(gh-pr-commit)" in reason, reason
     assert "Skill(gh-pr:commit)" in reason, reason
 
 
-def test_terminal_hint_after_full_chain_names_both_report_forms(tmp_path: Path) -> None:
-    """The Step 3 nudge quotes the old and new terminal marker (#1678)."""
+def test_terminal_hint_after_full_chain_names_the_report_form(tmp_path: Path) -> None:
+    """The Step 3 nudge quotes the terminal marker the guard actually accepts."""
     transcript = _write_transcript(
         tmp_path,
         [
             _user_text("/gh-flow:issue 1678"),
-            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS_NEW),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS_COLON),
             _assistant_text("all done"),
         ],
     )
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     reason = json.loads(result.stdout)["reason"]
-    assert "gh:issue-flow complete (#N)" in reason, reason
     assert "gh-flow:issue complete (#N)" in reason, reason
 
 
@@ -3092,8 +3058,8 @@ def test_hint_alias_table_is_consistent_with_the_chain(tmp_path: Path) -> None:
     """
     checks = [
         ("gh-issue-implement", "Skill(gh-issue:implement)", []),
-        ("gh-commit", "Skill(gh-pr:commit)", ["gh-issue-implement"]),
-        ("gh-pr", "Skill(gh-pr:create)", ["gh-issue-implement", "gh-commit"]),
+        ("gh-pr-commit", "Skill(gh-pr:commit)", ["gh-issue-implement"]),
+        ("gh-pr-create", "Skill(gh-pr:create)", ["gh-issue-implement", "gh-pr-commit"]),
     ]
     for canonical, expected_hint, prefix in checks:
         transcript = _write_transcript(
