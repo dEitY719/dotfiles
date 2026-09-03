@@ -40,10 +40,14 @@ teardown() {
     [ ! -s "$WARN_FILE" ]
 }
 
-@test "tools/custom subdirectory helper (not top-level entrypoint) still matches by path" {
+@test "tools/custom subdirectory helper is silent — never in mytool.md (agy+codex review, PR #1741)" {
+    # mytool_help.sh's generator uses `find -maxdepth 1`, so a nested helper
+    # under shell-common/tools/custom/<subdir>/ never appears in mytool.md —
+    # flagging it here would be a pure false positive.
     local staged='shell-common/tools/custom/subdir/helper.sh'
     run check_command_docs_staleness "$staged" "$WARN_FILE"
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
+    [ ! -s "$WARN_FILE" ]
 }
 
 @test "deleted tools/custom script without doc update is flagged (codex review, PR #1741)" {
