@@ -582,12 +582,23 @@ fi
 
 # 3b. Antigravity CLI (agy): 자체 Global Customizations Root 에서 합성 (#1731).
 #     ~/.gemini 를 공유하지만 skills 검색 경로는 상속하지 않는다 — 근거는
-#     파일 상단 헤더 주석 참고. 존재 표식은 OAuth 토큰 디렉토리다.
+#     파일 상단 헤더 주석 참고.
+#
+#     설치 판별은 상태 디렉토리 **또는** PATH 상의 바이너리다 (PR #1734 agy
+#     FOLLOW-UP): 디렉토리만 보면 바이너리를 막 설치했고 아직 한 번도 실행하지
+#     않은 환경 — 또는 토큰을 정리한 뒤 — 에서 조용히 스킵된다. 반대로 바이너리만
+#     보면 순정 Gemini PC 에서 오탐할 일이 없다(agy 가 없으면 `command -v` 도
+#     실패). 둘 중 하나라도 잡히면 합성한다.
+_agy_is_installed() {
+    [ -d "${HOME}/.gemini/antigravity-cli" ] && return 0
+    command -v agy >/dev/null 2>&1
+}
+
 AGY_SKILLS="${HOME}/.gemini/config/skills"
-if [ ! -d "${HOME}/.gemini/antigravity-cli" ]; then
-    log_warning "Antigravity(agy) 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.gemini/antigravity-cli"
-else
+if _agy_is_installed; then
     link_skills_compose "agy" "$AGY_SKILLS"
+else
+    log_warning "Antigravity(agy) 를 찾지 못했습니다. 건너뜁니다: ${HOME}/.gemini/antigravity-cli / PATH"
 fi
 
 # 4. Hermes: 전용 네임스페이스 서브디렉토리에서 entry-level 합성 (issue #1376)
@@ -638,7 +649,7 @@ if [ -n "${CODEX_HOME_LIST:-}" ]; then
     done <<< "$CODEX_HOME_LIST"
 fi
 [ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "compose"
-[ -d "${HOME}/.gemini/antigravity-cli" ] && verify_link "agy" "$AGY_SKILLS" "compose"
+_agy_is_installed && verify_link "agy" "$AGY_SKILLS" "compose"
 [ -d "${HOME}/.hermes" ] && verify_link "hermes" "$HERMES_SKILLS" "compose"
 
 ux_success "Skills 워크스페이스 연결 완료"
