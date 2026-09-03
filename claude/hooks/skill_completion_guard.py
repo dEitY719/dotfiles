@@ -3,13 +3,13 @@
 
 Generalizes the boundary-detection / counting logic from
 `gh_issue_flow_stop_guard.py` (#383) into a catalog-driven guard that
-backstops INNER steps of individually-invoked skills (gh:issue-implement,
-gh:pr, gh:commit, …). The motivation is identical: prompt rules in
+backstops INNER steps of individually-invoked skills (gh-issue:implement,
+gh-pr:create, gh-pr:commit, …). The motivation is identical: prompt rules in
 SKILL.md alone are insufficient — the harness must mechanically force
 the model to emit a completion marker per step before allowing turn end.
 
 Sister hook of `gh_issue_flow_stop_guard.py`:
-  - That one guards the OUTER 5-sub-skill chain of `/gh-issue-flow`.
+  - That one guards the OUTER 6-sub-skill chain of `/gh-flow:issue`.
   - This one guards INNER required-step emit of each catalog skill.
   - Both can coexist on the Stop hook chain — if either says block, the
     model is re-prompted with the union of their reasons.
@@ -99,7 +99,7 @@ _DEFAULT_ASYNC_WAIT_LIMIT: int = 2
 # must read `tool_result` because the step markers come from a `printf` in a
 # Bash call. This marker is only ever the model's own turn-ending prose, and a
 # `tool_result` can carry arbitrary file content — including this file and
-# `claude/skills/gh-issue-flow/references/stop-guard.md`, both of which now
+# the gh-flow:issue skill's `references/stop-guard.md`, both of which now
 # document the marker literally. Reading tool_results here would
 # false-positive on any `Read` of those files (the issue #608 precedent).
 #
