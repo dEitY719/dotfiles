@@ -235,12 +235,9 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 # 2/6`) does.
 #
 # Only one namespace survives the migration (#1681, #1410 Phase 4-2), so the
-# pattern is a single branch. The report shape stays factored out because
-# `_TERMINAL_REPORT_SHAPE` is what carries the literal-digit strictness this
-# comment is about, and keeping it named is what makes that legible.
-_TERMINAL_REPORT_SHAPE: str = r"(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)"
+# pattern is a single branch.
 _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
-    rf"gh-flow[-:]issue\s+{_TERMINAL_REPORT_SHAPE}",
+    r"gh-flow[-:]issue\s+(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)",
 )
 
 # Issue #1274 — report-SHAPE requirement, applied to the paired
@@ -328,12 +325,15 @@ _SKILL_EXPANSION_RE: re.Pattern[str] = _line_anchored_alternation(
 # three background agents, guaranteeing that outcome.
 #
 # `isMeta` on the outer transcript entry is the primary defense; this tuple
-# is defense-in-depth for transcripts that lack the flag. `gh-flow:issue
-# incomplete:` is this hook's own block-reason prefix — exactly the string
-# that gets re-injected — so it is the strongest single signal available.
+# is defense-in-depth for transcripts that lack the flag. `_BLOCK_REASON_PREFIX`
+# is this hook's own block-reason opener — exactly the string that gets
+# re-injected — so it is the strongest single signal available. It is shared
+# with the `_block()` reason rather than re-typed here: a rename that hit only
+# one side would reopen the #1270 self-defeat loop silently.
+_BLOCK_REASON_PREFIX: str = "gh-flow:issue incomplete:"
 _HARNESS_INJECTION_MARKERS: tuple[str, ...] = (
     "Stop hook feedback:",
-    "gh-flow:issue incomplete:",
+    _BLOCK_REASON_PREFIX,
     "<task-notification>",
     "[SYSTEM NOTIFICATION - NOT USER INPUT]",
     "<local-command-caveat>",
@@ -904,7 +904,7 @@ def _next_step_label(seen: list[str]) -> str:
     the canonical form alone would answer a block with an instruction to invoke
     a skill that does not exist there. The canonical name stays first and
     unparenthesised, which is also what keeps the existing
-    `"Step 2.2 — Skill(gh-commit)"` substring assertions matching.
+    `"Step 2.2 — Skill(gh-pr-commit)"` substring assertions matching.
 
     The alias comes from `_SUB_SKILL_HINT_ALIAS`, keyed by slot — never from
     a position inside the slot's alias tuple.
@@ -1053,7 +1053,7 @@ def main() -> int:
 
     next_label = _next_step_label(seen)
     reason = (
-        f"gh-flow:issue incomplete: {len(seen)}/{len(EXPECTED_CHAIN)} sub-skills invoked since the "
+        f"{_BLOCK_REASON_PREFIX} {len(seen)}/{len(EXPECTED_CHAIN)} sub-skills invoked since the "
         f"flow started, and no terminal Step 3 report ('gh-flow:issue complete' "
         f"or 'gh-flow:issue stopped at step') has been emitted yet. Per the "
         f"CRITICAL CONTRACT in the gh-flow:issue SKILL.md, you MUST "

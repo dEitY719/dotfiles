@@ -57,19 +57,13 @@ gh-issue-implement:
     - implement
     - report
 
-# --- #1410 Phase 3 migration (#1677), Phase 4 cutover (#1681) ----------------
-# The eight commit-to-merge skills moved to the `gh-pr-skills` repo, where the
-# plugin namespace `gh-pr` plus the de-prefixed directory names `create` /
-# `commit` spell the markers below: `[step:gh-pr-create/<id>]` and
-# `[step:gh-pr-commit/<id>]`.
-#
-# The pre-migration `gh-pr` / `gh-commit` keys are gone with the dotfiles
-# originals they guarded (Phase 4-1 / #1680) — the migrated copies are now the
-# only thing that emits either step set.
+# Keys are the plugin-namespace marker names the migrated skills emit —
+# `[step:gh-pr-create/<id>]`, `[step:gh-pr-commit/<id>]` — from the
+# `gh-pr-skills` repo (#1410 Phase 3 / #1677, Phase 4 cutover / #1681).
 
 gh-pr-create:
   enforce: true
-  description: "Create Pull Request from current branch (gh-pr-skills)"
+  description: "Create Pull Request from current branch"
   required:
     - push-and-create
     - labels
@@ -78,7 +72,7 @@ gh-pr-create:
 
 gh-pr-commit:
   enforce: true
-  description: "Git commit with issue linking (gh-pr-skills)"
+  description: "Git commit with issue linking"
   required:
     - stage-commit
     - metrics-board-sync

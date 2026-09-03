@@ -107,16 +107,20 @@ _STEP_LABELS: dict[str, str] = {
     "pr-reply": "Step 5 — Skill(gh-pr:reply, <PR_NUM>) (emit the marker even with no comments / [SKIP])",
 }
 
+# The marker namespace the skill emits — the only one it ships under since
+# the #1410 migration completed (#1680 / #1681 F-5). Named, not inlined: the
+# guard both RECOGNIZES this marker and INSTRUCTS the model to emit it, so a
+# drift between the two would re-block a compliant model forever.
+_STEP_MARKER_SKILL: str = "gh-flow-autopilot"
+
 # Strict step-marker regex. Requires the literal `[step:<skill>/<id>] OK`
 # so a partial `[step:gh-flow-autopilot/plan]` without ` OK` does NOT match.
-# `gh-flow-autopilot` is the only namespace the skill ships under since the
-# #1410 migration completed (#1680 / #1681 F-5).
-_STEP_MARKER_RE: re.Pattern[str] = re.compile(r"\[step:gh-flow-autopilot/([a-z-]+)\]\s+OK\b")
+_STEP_MARKER_RE: re.Pattern[str] = re.compile(rf"\[step:{_STEP_MARKER_SKILL}/([a-z-]+)\]\s+OK\b")
 
 # Terminal markers — presence in any *assistant text* block after the boundary
 # means the flow has finished (or hard-failed) and the model may stop.
 TERMINAL_PATTERNS: tuple[str, ...] = (
-    "[step:gh-flow-autopilot/report] OK",
+    f"[step:{_STEP_MARKER_SKILL}/report] OK",
     "[OK] gh-flow:autopilot",
     "[FAIL] gh-flow:autopilot",
 )
@@ -192,15 +196,15 @@ _SKILL_EXPANSION_RE: re.Pattern[str] = _line_anchored_alternation(
 # `<task-notification>` case is the norm here too.
 #
 # `isMeta` on the outer transcript entry is the primary defense; this tuple is
-# defense-in-depth for transcripts that lack the flag. `gh-flow:autopilot
-# incomplete:` is this hook's own block-reason prefix — exactly the string
-# that gets re-injected — so it is the strongest single signal available. It
-# is matched against this hook's own output, so the entry here and every
-# `_block()` reason must be renamed together or the #1275 self-defeat loop
-# reopens silently.
+# defense-in-depth for transcripts that lack the flag. `_BLOCK_REASON_PREFIX`
+# is this hook's own block-reason opener — exactly the string that gets
+# re-injected — so it is the strongest single signal available. It is shared
+# with the `_block()` reasons rather than re-typed here: a rename that hit
+# only one side would reopen the #1275 self-defeat loop silently.
+_BLOCK_REASON_PREFIX: str = "gh-flow:autopilot incomplete:"
 _HARNESS_INJECTION_MARKERS: tuple[str, ...] = (
     "Stop hook feedback:",
-    "gh-flow:autopilot incomplete:",
+    _BLOCK_REASON_PREFIX,
     "<task-notification>",
     "[SYSTEM NOTIFICATION - NOT USER INPUT]",
     "<local-command-caveat>",
@@ -533,20 +537,17 @@ def main() -> int:
             layer="L1.5",
         )
 
-    # Both reasons below open with the literal `gh-flow:autopilot incomplete:`
-    # prefix — `_HARNESS_INJECTION_MARKERS` matches that same string when
-    # Claude Code re-injects the reason, so the two move together.
     missing = _first_missing_step(steps)
     if missing is None:
         # All required steps emitted but no terminal report yet → ask for it.
         reason = (
-            f"gh-flow:autopilot incomplete: all {len(REQUIRED_STEPS)} Stage-B step "
+            f"{_BLOCK_REASON_PREFIX} all {len(REQUIRED_STEPS)} Stage-B step "
             f"markers are present but no terminal report has been emitted yet. Per "
             f"the CRITICAL CONTRACT in the gh-flow:autopilot SKILL.md, you "
             f"MUST continue immediately. Next action: Step 6 — emit the final "
             f"report per references/report-template.md ('[OK] gh-flow:autopilot ...' or "
             f"'[FAIL] gh-flow:autopilot ...') followed by "
-            f"'[step:gh-flow-autopilot/report] OK'. Output ZERO conversational text "
+            f"'[step:{_STEP_MARKER_SKILL}/report] OK'. Output ZERO conversational text "
             f"before it — no recap, no per-step bullets, no progress headers."
         )
         return _block(reason, layer="L1.5")
@@ -556,12 +557,12 @@ def main() -> int:
     seen_count = len(steps)
     label = _STEP_LABELS.get(missing, missing)
     reason = (
-        f"gh-flow:autopilot incomplete: {seen_count}/{len(REQUIRED_STEPS)} Stage-B "
+        f"{_BLOCK_REASON_PREFIX} {seen_count}/{len(REQUIRED_STEPS)} Stage-B "
         f"step markers emitted since the flow started, and no terminal report "
         f"('[OK] gh-flow:autopilot' / '[FAIL] gh-flow:autopilot') has been emitted yet. "
         f"Per the CRITICAL CONTRACT in the gh-flow:autopilot SKILL.md, you "
         f"MUST continue immediately. Next action: {label}; when it completes emit "
-        f"'[step:gh-flow-autopilot/{missing}] OK'. Output ZERO conversational text — "
+        f"'[step:{_STEP_MARKER_SKILL}/{missing}] OK'. Output ZERO conversational text — "
         f"no recap, no markdown summary, no per-step bullets, no progress headers — "
         f"just the next step's work and its completion marker."
     )

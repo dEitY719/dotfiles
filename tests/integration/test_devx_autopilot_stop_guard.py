@@ -298,26 +298,13 @@ def test_boundary_surfaces(tmp_path: Path, label: str, boundary: str) -> None:
     assert json.loads(result.stdout)["decision"] == "block"
 
 
-def test_boundary_via_skill_tool_use(tmp_path: Path) -> None:
-    """Boundary can be a Skill(gh-flow-autopilot) tool_use, not just user text."""
+@pytest.mark.parametrize("skill", ["gh-flow-autopilot", "gh-flow:autopilot"])
+def test_boundary_via_skill_tool_use(tmp_path: Path, skill: str) -> None:
+    """Boundary can be a Skill() tool_use, not just user text — either form."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _assistant_skill("gh-flow-autopilot"),
-            _step_markers_result("plan"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-
-
-def test_boundary_via_colon_skill_tool_use(tmp_path: Path) -> None:
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _assistant_skill("gh-flow:autopilot"),
+            _assistant_skill(skill),
             _step_markers_result("plan"),
         ],
     )

@@ -323,12 +323,7 @@ def test_completed_flow_allows_stop(tmp_path: Path) -> None:
         tmp_path,
         [
             _user_text("/gh-flow:issue 42"),
-            _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-pr-commit"),
-            _assistant_skill("gh-pr-create"),
-            _assistant_skill("gh-verify-review-all"),
-            _assistant_skill("gh-resolve-conflict"),
-            _assistant_skill("gh-resolve-outdated"),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS),
             _assistant_text("gh-flow:issue complete (#42)\n  PR URL: https://github.com/example/repo/pull/99"),
         ],
     )
@@ -384,12 +379,7 @@ def test_mid_flow_after_all_6_blocks_for_step_3_report(tmp_path: Path) -> None:
         tmp_path,
         [
             _user_text("/gh-flow:issue 42"),
-            _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-pr-commit"),
-            _assistant_skill("gh-pr-create"),
-            _assistant_skill("gh-verify-review-all"),
-            _assistant_skill("gh-resolve-conflict"),
-            _assistant_skill("gh-resolve-outdated"),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS),
             # No Step 3 report yet.
         ],
     )
@@ -660,12 +650,7 @@ def test_trace_on_emits_allow_reason_for_terminal_marker(tmp_path: Path) -> None
         tmp_path,
         [
             _user_text("/gh-flow:issue 42"),
-            _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-pr-commit"),
-            _assistant_skill("gh-pr-create"),
-            _assistant_skill("gh-verify-review-all"),
-            _assistant_skill("gh-resolve-conflict"),
-            _assistant_skill("gh-resolve-outdated"),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS),
             _assistant_text("gh-flow:issue complete (#42)"),
         ],
     )
@@ -1136,12 +1121,7 @@ def test_real_terminal_marker_in_assistant_text_still_allows_stop(
                 "type": "user",
                 "message": {"role": "user", "content": boundary_with_template},
             },
-            _assistant_skill("gh-issue-implement"),
-            _assistant_skill("gh-pr-commit"),
-            _assistant_skill("gh-pr-create"),
-            _assistant_skill("gh-verify-review-all"),
-            _assistant_skill("gh-resolve-conflict"),
-            _assistant_skill("gh-resolve-outdated"),
+            *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS),
             # Real Step 3 success report — assistant role, real terminal marker.
             _assistant_text("gh-flow:issue complete (#608)\n  PR URL: https://x/pull/9"),
         ],
@@ -2817,30 +2797,6 @@ _ALL_SIX_SUB_SKILLS_COLON = [
 @pytest.mark.parametrize(
     ("label", "boundary"),
     [
-        ("colon-form", "/gh-flow:issue 1678"),
-        ("hyphen-form", "/gh-flow-issue 1678"),
-    ],
-)
-def test_new_namespace_slash_command_is_a_boundary(tmp_path: Path, label: str, boundary: str) -> None:
-    """`/gh-flow:issue` and `/gh-flow-issue` open a chain just like the old names."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text(boundary),
-            _assistant_text("done!"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip(), f"{label}: expected a block, got empty stdout"
-    assert json.loads(result.stdout)["decision"] == "block"
-
-
-@pytest.mark.parametrize(
-    ("label", "boundary"),
-    [
-        ("command-name-wrapper", "<command-name>/gh-flow:issue</command-name>"),
-        ("command-name-wrapper-hyphen", "<command-name>/gh-flow-issue</command-name>"),
         # The two real Claude Code install layouts, plus a flat dev checkout.
         (
             "skill-base-dir-marketplace",
@@ -2851,11 +2807,17 @@ def test_new_namespace_slash_command_is_a_boundary(tmp_path: Path, label: str, b
             "Base directory for this skill: /home/u/.claude/plugins/cache/gh-flow-skills/gh-flow/0.1.0/skills/issue",
         ),
         ("skill-base-dir-flat", "Base directory for this skill: /home/u/.claude/skills/gh-flow/skills/issue"),
-        ("skill-h1", "# gh-flow:issue — Issue → PR composition"),
     ],
 )
-def test_new_namespace_boundary_surfaces(tmp_path: Path, label: str, boundary: str) -> None:
-    """All four boundary surfaces have a new-namespace twin."""
+def test_installed_plugin_base_dirs_are_boundaries(tmp_path: Path, label: str, boundary: str) -> None:
+    """Surface (c) for the path-nested layouts an installed plugin produces.
+
+    `test_base_dir_marker_recognized_as_flow_start` covers only the
+    hyphen-joined `…/gh-flow-issue` shape; these three pin the `gh-flow…/issue`
+    layouts that a pattern fixed to one nesting depth silently misses. The
+    other three surfaces — raw slash command, `<command-name>` wrapper and
+    SKILL.md H1 — are covered with stronger assertions above.
+    """
     transcript = _write_transcript(tmp_path, [_user_text(boundary), _assistant_text("done!")])
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0

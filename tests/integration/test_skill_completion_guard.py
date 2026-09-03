@@ -261,11 +261,17 @@ def test_raw_slash_command_boundary_detected(tmp_path: Path) -> None:
     assert "gh-issue-implement" in decision["reason"]
 
 
-def test_wrapped_command_boundary_detected(tmp_path: Path) -> None:
+@pytest.mark.parametrize("spelling", ["gh-pr-create", "gh-pr:create"])
+def test_wrapped_command_boundary_detected(tmp_path: Path, spelling: str) -> None:
+    """Surface (b), the `<command-name>` wrapper, in both live spellings.
+
+    The plugin-namespace form is the one the `gh-pr-skills` migration made
+    live (#1677); it has to reach the same catalog key as the hyphen form.
+    """
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_slash_command("gh-pr-create", "42"),
+            _user_slash_command(spelling, "42"),
             _assistant_text("running"),
         ],
     )
@@ -333,6 +339,12 @@ def test_mid_sentence_command_does_not_match(tmp_path: Path) -> None:
         "/gh:pr:review --ai agy 123",
         "/gh:pr:reply 123",
         "/gh:pr:resolve-conflict 123",
+        # Plugin-namespace siblings: loosening the separator (#1677) must not
+        # resurrect the false-match class for the mixed spelling either.
+        "/gh-pr:review 99",
+        "/gh-pr:approve 99",
+        "/gh-pr:merge 51",
+        "/gh-pr:merge-train",
     ],
 )
 def test_hyphenated_sibling_command_not_matched_as_a_catalog_key(tmp_path: Path, sibling: str) -> None:
@@ -354,9 +366,26 @@ def test_hyphenated_sibling_command_not_matched_as_a_catalog_key(tmp_path: Path,
     assert result.stdout.strip() == "", f"{sibling} should not be a boundary"
 
 
-@pytest.mark.parametrize("cmd", ["/gh-pr-create", "/gh-pr-create 123", "/gh:pr:create", "/gh:pr:create 123"])
-def test_bare_command_still_matched(tmp_path: Path, cmd: str) -> None:
-    """The real `/gh-pr-create` (hyphen or colon form, bare or with args) must
+@pytest.mark.parametrize(
+    ("cmd", "key"),
+    [
+        ("/gh-pr-create", "gh-pr-create"),
+        ("/gh-pr-create 123", "gh-pr-create"),
+        ("/gh:pr:create", "gh-pr-create"),
+        ("/gh:pr:create 123", "gh-pr-create"),
+        # Plugin-namespace spelling (#1677): hyphen inside the namespace,
+        # colon before the skill. The regex used to offer only the two
+        # whole-string spellings above, so this mixture matched nothing and
+        # the guard failed open for every migrated skill. Separators are now
+        # independently `-` or `:`.
+        ("/gh-pr:create", "gh-pr-create"),
+        ("/gh-pr:create 1677 origin", "gh-pr-create"),
+        ("/gh-pr:commit", "gh-pr-commit"),
+        ("/gh-pr:commit 1677 origin", "gh-pr-commit"),
+    ],
+)
+def test_bare_command_still_matched(tmp_path: Path, cmd: str, key: str) -> None:
+    """A real catalog command (any separator mix, bare or with args) must
     still be detected (issue #1164 / PR #1169). Whitespace or EOL after the
     name passes the `(?![\\w:-])` lookahead."""
     transcript = _write_transcript(
@@ -370,7 +399,7 @@ def test_bare_command_still_matched(tmp_path: Path, cmd: str) -> None:
     assert result.returncode == 0
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block", f"{cmd!r} should be a boundary"
-    assert "gh-pr-create" in decision["reason"]
+    assert key in decision["reason"]
 
 
 def test_tool_result_command_mention_not_boundary(tmp_path: Path) -> None:
@@ -1090,38 +1119,6 @@ def test_trace_reports_async_wait_reprieve(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "cmd",
-    [
-        "/gh-pr:create",
-        "/gh-pr:create 1677 origin",
-        "/gh-pr:commit",
-        "/gh-pr:commit 1677 origin",
-    ],
-)
-def test_plugin_namespace_command_is_a_boundary(tmp_path: Path, cmd: str) -> None:
-    """`/gh-pr:create` — hyphen inside the namespace, colon before the skill.
-
-    The `gh-pr-skills` migration (#1677) made this the live invocation form of
-    the `gh-pr-create` / `gh-pr-commit` catalog keys. The boundary regex used
-    to offer only two whole-string spellings per key — fully hyphenated
-    (`gh-pr-create`) or fully colonized (`gh:pr:create`) — so this mixture
-    matched nothing, no boundary was detected, and the guard failed open for
-    every migrated skill. Separators are now independently `-` or `:`.
-    """
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text(cmd),
-            _assistant_text("running"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip(), f"{cmd!r} must be detected as a boundary"
-    assert json.loads(result.stdout)["decision"] == "block"
-
-
-@pytest.mark.parametrize(
     ("cmd", "skill", "steps"),
     [
         ("/gh-pr:create", "gh-pr-create", ["push-and-create", "labels", "board-sync", "report"]),
@@ -1137,26 +1134,6 @@ def test_plugin_namespace_required_steps_satisfy(tmp_path: Path, cmd: str, skill
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert result.stdout.strip() == "", f"stdout={result.stdout!r}"
-
-
-@pytest.mark.parametrize(
-    "sibling",
-    ["/gh-pr:review 99", "/gh-pr:approve 99", "/gh-pr:merge 51", "/gh-pr:merge-train"],
-)
-def test_plugin_namespace_sibling_not_matched_as_gh_pr(tmp_path: Path, sibling: str) -> None:
-    """Loosening the separator must not resurrect the #1164 false-match class.
-
-    `/gh-pr:review` is a real skill with no catalog entry; it must not be read
-    as the `gh-pr` entry. Surface (a)'s `(?![\\w:-])` lookahead is what keeps
-    that true, and it has to keep holding for the colon spelling too.
-    """
-    transcript = _write_transcript(
-        tmp_path,
-        [_user_text(sibling), _assistant_text("running")],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    assert result.stdout.strip() == "", f"{sibling} must not be a boundary"
 
 
 # ---------------------------------------------------------------------------
@@ -1190,22 +1167,6 @@ def test_multi_hyphen_name_accepts_every_separator_mix(tmp_path: Path, spelling:
     assert decision["decision"] == "block", f"{spelling!r} must be a boundary"
     # Whatever spelling matched, the guard reports the canonical hyphen key.
     assert "gh-issue-implement" in decision["reason"]
-
-
-def test_plugin_namespace_wrapped_command_boundary(tmp_path: Path) -> None:
-    """Surface (b), the `<command-name>` wrapper, for a namespaced skill.
-
-    codex FOLLOW-UP on PR #1694: the first round covered only surface (a).
-    """
-    transcript = _write_transcript(
-        tmp_path,
-        [_user_slash_command("gh-pr:create", "1677"), _assistant_text("running")],
-    )
-    result = _run_hook(_hook_event(transcript))
-    assert result.returncode == 0
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-    assert "gh-pr-create" in decision["reason"]
 
 
 def test_plugin_namespace_skill_h1_boundary(tmp_path: Path) -> None:
