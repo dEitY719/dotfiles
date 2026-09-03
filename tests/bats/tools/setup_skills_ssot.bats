@@ -697,3 +697,140 @@ run_setup_with_workspace() {
     [ "$before" = "$after" ]
 }
 
+
+# ---------------------------------------------------------------------
+# issue #1732 — entry-level stale symlink cleanup
+# PR #1729 taught the *directory-level* migration to recognize a broken
+# link into the deleted `dotfiles/claude/skills` SSOT (#1680), but the
+# *entry-level* loops kept classifying such a link as user data. Two
+# distinct symptoms follow: an entry whose name still has a live source
+# is never replaced (the skill stays hidden), and an entry whose name no
+# longer exists anywhere is never pruned (dead links accumulate).
+# ---------------------------------------------------------------------
+
+# Seed the composed dir, then inject the legacy links the #1680 cutover
+# stranded there. Two shapes: `alpha` collides with a live source (hidden
+# skill), `legacy-orphan` has no source at all (dead link).
+seed_legacy_entries() {
+    local dir="$1"
+    rm -f "${dir}/alpha"
+    ln -s "${FIXTURE_DOTFILES}/claude/skills/alpha/" "${dir}/alpha"
+    ln -s "${FIXTURE_DOTFILES}/claude/skills/legacy-orphan/" "${dir}/legacy-orphan"
+}
+
+@test "gemini: legacy entry shadowing a live source is relinked (#1732)" {
+    seed_gemini_home
+    run_setup
+    assert_success
+
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    seed_legacy_entries "$g_dir"
+
+    run_setup
+    assert_success
+
+    [ -L "${g_dir}/alpha" ]
+    [ -e "${g_dir}/alpha" ]
+    [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
+}
+
+@test "gemini: legacy entry with no live source is pruned (#1732)" {
+    seed_gemini_home
+    run_setup
+    assert_success
+
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    seed_legacy_entries "$g_dir"
+
+    run_setup
+    assert_success
+
+    [ ! -L "${g_dir}/legacy-orphan" ]
+}
+
+@test "opencode: legacy entries are cleaned across every harness (#1732)" {
+    seed_opencode_home
+    seed_hermes_home
+    run_setup
+    assert_success
+
+    local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
+    local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    seed_legacy_entries "$oc_dir"
+    seed_legacy_entries "$h_dir"
+
+    run_setup
+    assert_success
+
+    local d
+    for d in "$oc_dir" "$h_dir"; do
+        [ -e "${d}/alpha" ]
+        [ "$(readlink -f "${d}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
+        [ ! -L "${d}/legacy-orphan" ]
+    done
+}
+
+@test "codex: legacy entries are relinked and pruned (#1732)" {
+    run_setup
+    assert_success
+
+    local c_dir="${FIXTURE_HOME}/.codex/skills"
+    seed_legacy_entries "$c_dir"
+
+    run_setup
+    assert_success
+
+    [ -e "${c_dir}/alpha" ]
+    [ "$(readlink -f "${c_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
+    [ ! -L "${c_dir}/legacy-orphan" ]
+}
+
+# The counter-case that keeps the fix honest: a broken link pointing
+# somewhere that is NOT the deleted SSOT (a temporarily unmounted user
+# mount, say) still holds recoverable user intent — preserve it.
+@test "gemini: broken entry outside the legacy SSOT is preserved (#1732)" {
+    seed_gemini_home
+    run_setup
+    assert_success
+
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    rm -f "${g_dir}/beta"
+    ln -s "${TEST_TEMP_HOME}/unmounted/skills/beta" "${g_dir}/beta"
+
+    run_setup
+    assert_success
+    assert_output --partial "[gemini] 사용자 symlink 보존"
+
+    [ -L "${g_dir}/beta" ]
+    [ "$(readlink "${g_dir}/beta")" = "${TEST_TEMP_HOME}/unmounted/skills/beta" ]
+}
+
+# A worktree checkout resolves DOTFILES_ROOT to the worktree path, while
+# the stranded links were written against the main checkout. Matching on
+# DOTFILES_ROOT alone therefore misses every one of them — exactly the
+# state a re-run from a worktree has to be able to repair.
+@test "gemini: legacy entries are cleaned when run from a git worktree (#1732)" {
+    seed_gemini_home
+
+    git -C "$FIXTURE_DOTFILES" init -q
+    git -C "$FIXTURE_DOTFILES" config user.email t@example.com
+    git -C "$FIXTURE_DOTFILES" config user.name t
+    git -C "$FIXTURE_DOTFILES" add -A
+    git -C "$FIXTURE_DOTFILES" commit -qm init
+    local wt="${TEST_TEMP_HOME}/wt-dotfiles"
+    git -C "$FIXTURE_DOTFILES" worktree add -q -b wt/test "$wt"
+
+    run_setup
+    assert_success
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    seed_legacy_entries "$g_dir"
+
+    # Run from the worktree — DOTFILES_ROOT is now "$wt", but the links
+    # still name "$FIXTURE_DOTFILES".
+    HOME="$FIXTURE_HOME" run bash "${wt}/scripts/setup-skills-ssot.sh"
+    assert_success
+
+    [ -e "${g_dir}/alpha" ]
+    [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
+    [ ! -L "${g_dir}/legacy-orphan" ]
+}
