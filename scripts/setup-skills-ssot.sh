@@ -45,14 +45,6 @@
 _SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 DOTFILES_ROOT="$(cd "$(dirname "$_SCRIPT_PATH")/.." && pwd)"
 
-# 워크트리에서 실행하면 DOTFILES_ROOT 는 워크트리 경로다. 정리 대상 링크는
-# main 체크아웃 경로(`~/dotfiles/claude/skills/...`)로 적혀 있으므로 워크트리
-# 경로만 보면 하나도 매치되지 않는다 — git common dir 로 main 체크아웃을 함께
-# 구해 두 경로 모두를 레거시 패턴으로 인정한다 (#1732).
-DOTFILES_MAIN_ROOT="$DOTFILES_ROOT"
-_git_common_dir="$(git -C "$DOTFILES_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-[ -n "$_git_common_dir" ] && DOTFILES_MAIN_ROOT="$(dirname "$_git_common_dir")"
-
 # Load UX library
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "$UX_LIB" ]; then
@@ -61,6 +53,21 @@ else
     echo "Error: UX library not found at $UX_LIB"
     exit 1
 fi
+
+# 워크트리에서 실행하면 DOTFILES_ROOT 는 워크트리 경로다. 정리 대상 링크는
+# main 체크아웃 경로(`~/dotfiles/claude/skills/...`)로 적혀 있으므로 워크트리
+# 경로만 보면 하나도 매치되지 않는다 — 두 경로 모두를 레거시 패턴으로
+# 인정해야 한다 (#1732). main 체크아웃 해석은 #589 의 canonicalize SSOT 를
+# 그대로 쓴다 — 서브모듈 오탐 가드와 DOTFILES_ROOT_NO_CANONICALIZE 탈출구를
+# 여기서 다시 구현하지 않기 위해서다.
+DOTFILES_ROOT_LIB="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+if [ -f "$DOTFILES_ROOT_LIB" ]; then
+    source "$DOTFILES_ROOT_LIB"
+else
+    echo "Error: dotfiles root library not found at $DOTFILES_ROOT_LIB"
+    exit 1
+fi
+DOTFILES_MAIN_ROOT="$(_resolve_dotfiles_root_canonical "$DOTFILES_ROOT")"
 
 # 소스 판별/열거의 SSOT (issue #1652 / #1410 F-6 → #1680). Claude Code
 # 계정 쪽(shell-common/tools/integrations/claude.sh)이 같은 파일을 읽으므로
@@ -99,14 +106,28 @@ _realpath_or_self() {
 # PR #1729).
 # Usage: _ssot_is_legacy_broken_link <resolved_target_path>
 _ssot_is_legacy_broken_link() {
-    local root
-    for root in "$DOTFILES_ROOT" "$DOTFILES_MAIN_ROOT"; do
-        [ -n "$root" ] || continue
-        case "$1" in
-            "${root}/claude/skills" | "${root}/claude/skills"/*) return 0 ;;
-        esac
-    done
-    return 1
+    case "$1" in
+        "${DOTFILES_ROOT}/claude/skills" | "${DOTFILES_ROOT}/claude/skills"/* \
+            | "${DOTFILES_MAIN_ROOT}/claude/skills" | "${DOTFILES_MAIN_ROOT}/claude/skills"/*)
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+# 위 판정을 "링크 하나"에 적용하는 호출부용 래퍼 (#1732). 끊어짐 검사와 raw
+# target 획득을 한곳에 묶어, 6개 호출부가 조건을 각자 손으로 조립하지 않게
+# 한다 — 규칙이 바뀔 때 고쳐야 할 곳도 여기 하나뿐이다.
+#
+# raw(`readlink`)로 매치하는 이유: 끊어진 링크는 부모 디렉토리(`claude/`)까지
+# 사라졌을 수 있고 `readlink -f` 는 마지막 컴포넌트를 뺀 나머지가 전부 존재해야
+# 값을 낸다. 존재 여부와 무관한 경로 패턴 매치는 raw 문자열로 해야 한다.
+# `readlink` 는 링크가 실제로 끊어졌을 때만 실행된다 (살아 있는 링크가 절대
+# 다수이므로 루프마다 fork 를 아끼는 효과).
+# Usage: _ssot_link_is_legacy_stale <link_path>
+_ssot_link_is_legacy_stale() {
+    [ ! -e "$1" ] || return 1
+    _ssot_is_legacy_broken_link "$(readlink "$1" 2>/dev/null)"
 }
 
 # 빈 문자열 = 워크스페이스 없음/너무 넓음 → 연결할 소스가 없다.
@@ -236,14 +257,9 @@ link_skills_compose() {
 
     # 1. Migrate legacy directory-symlink → real directory.
     if [ -L "$target" ]; then
-        local current_target current_target_raw
+        local current_target
         current_target="$(readlink -f "$target" 2>/dev/null)"
-        # raw (비-canonicalize) 버전도 따로 구한다 — 끊어진 symlink 는 부모
-        # 디렉토리(`claude/`)까지 사라졌을 수 있고, `readlink -f` 는 마지막
-        # 컴포넌트를 뺀 나머지가 전부 존재해야 값을 낸다. 존재 여부와 무관한
-        # legacy-경로 패턴 매치는 raw 문자열로 한다.
-        current_target_raw="$(readlink "$target" 2>/dev/null)"
-        if skill_source_is_managed "$current_target" || { [ ! -e "$target" ] && _ssot_is_legacy_broken_link "$current_target_raw"; }; then
+        if skill_source_is_managed "$current_target" || _ssot_link_is_legacy_stale "$target"; then
             log_info "[$tool] legacy dir-symlink 감지 — entry-level 합성으로 마이그레이션"
             rm -f "$target"
         else
@@ -276,7 +292,7 @@ link_skills_compose() {
             # (#1732): 옛 SSOT 를 가리키다 끊어진 링크는 이름이 살아 있는
             # 소스와 겹치는 한 그 스킬을 계속 가린다.
             if skill_source_is_managed "$current_link" \
-                || { [ ! -e "$link_target" ] && _ssot_is_legacy_broken_link "$current_link"; }; then
+                || _ssot_link_is_legacy_stale "$link_target"; then
                 rm -f "$link_target"
                 refreshed=$((refreshed + 1))
             else
@@ -306,7 +322,7 @@ link_skills_compose() {
         existing_target_path="$(readlink "$existing")"
         # 이름이 더 이상 어떤 소스와도 겹치지 않는 레거시 링크는 위 엔트리
         # 루프가 아예 방문하지 않는다 — 여기서만 정리된다 (#1732).
-        if [ ! -e "$existing" ] && _ssot_is_legacy_broken_link "$existing_target_path"; then
+        if _ssot_link_is_legacy_stale "$existing"; then
             log_info "[$tool] legacy stale entry 정리: $existing"
             rm -f "$existing"
             pruned=$((pruned + 1))
@@ -353,17 +369,15 @@ link_skills_individual_codex() {
         source_realpath="$(readlink -f "$skill_path")"
 
         if [ -L "$skill_target" ]; then
-            local current_target current_target_raw
+            local current_target
             current_target="$(readlink -f "$skill_target" 2>/dev/null || true)"
             if [ "$current_target" = "$source_realpath" ]; then
                 unchanged=$((unchanged + 1))
                 continue
             fi
 
-            # compose 쪽과 동일한 레거시 판정 (#1732). 끊어진 링크는
-            # `readlink -f` 가 값을 못 내므로 raw 문자열로 매치한다.
-            current_target_raw="$(readlink "$skill_target" 2>/dev/null || true)"
-            if [ ! -e "$skill_target" ] && _ssot_is_legacy_broken_link "$current_target_raw"; then
+            # compose 쪽과 동일한 레거시 판정 (#1732).
+            if _ssot_link_is_legacy_stale "$skill_target"; then
                 rm -f "$skill_target"
                 migrated=$((migrated + 1))
             else
@@ -450,12 +464,10 @@ link_skills_individual_codex() {
         fi
 
         if [ -L "$existing_skill_entry" ]; then
-            local stale_target stale_target_raw
+            local stale_target
             stale_target="$(readlink -f "$existing_skill_entry" 2>/dev/null || true)"
-            stale_target_raw="$(readlink "$existing_skill_entry" 2>/dev/null || true)"
             if skill_source_is_managed "$stale_target" \
-                || { [ ! -e "$existing_skill_entry" ] \
-                    && _ssot_is_legacy_broken_link "$stale_target_raw"; }; then
+                || _ssot_link_is_legacy_stale "$existing_skill_entry"; then
                 rm -f "$existing_skill_entry" || {
                     log_error "[codex] stale skill 제거 실패: $existing_skill_entry"
                     continue
@@ -530,10 +542,7 @@ else
         # (agy+codex FOLLOW-UP, PR #1729).
         if [ -L "$CODEX_SKILLS" ]; then
             codex_link_target="$(readlink -f "$CODEX_SKILLS" 2>/dev/null)"
-            # raw 버전: opencode/gemini 쪽과 같은 이유(#1729) — 끊어진 symlink 는
-            # `readlink -f` 가 canonicalize 못 할 수 있다.
-            codex_link_target_raw="$(readlink "$CODEX_SKILLS" 2>/dev/null)"
-            if skill_source_is_managed "$codex_link_target" || { [ ! -e "$CODEX_SKILLS" ] && _ssot_is_legacy_broken_link "$codex_link_target_raw"; }; then
+            if skill_source_is_managed "$codex_link_target" || _ssot_link_is_legacy_stale "$CODEX_SKILLS"; then
                 rm -f "$CODEX_SKILLS"
             else
                 log_warning "Codex skills 경로가 사용자 symlink입니다. 건너뜁니다: $CODEX_SKILLS"
