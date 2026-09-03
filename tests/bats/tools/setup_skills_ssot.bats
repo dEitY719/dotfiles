@@ -842,3 +842,26 @@ seed_legacy_entries() {
     [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
     [ ! -L "${g_dir}/legacy-orphan" ]
 }
+
+# 레거시 링크가 상대 경로로 적혀 있어도 같은 판정을 받아야 한다 (#1732,
+# agy FOLLOW-UP). 스크립트 자신은 항상 절대 경로로 링크를 만들지만, 수동/
+# 외부 도구가 만든 상대 경로 링크는 절대 경로 prefix 매칭을 그냥 빠져나간다.
+@test "gemini: relative-path legacy entry is cleaned too (#1732)" {
+    seed_gemini_home
+    run_setup
+    assert_success
+
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    local rel
+    rel="$(realpath -m --relative-to="$g_dir" "${FIXTURE_DOTFILES}/claude/skills")"
+    rm -f "${g_dir}/alpha"
+    ln -s "${rel}/alpha" "${g_dir}/alpha"
+    ln -s "${rel}/legacy-orphan" "${g_dir}/legacy-orphan"
+
+    run_setup
+    assert_success
+
+    [ -e "${g_dir}/alpha" ]
+    [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
+    [ ! -L "${g_dir}/legacy-orphan" ]
+}
