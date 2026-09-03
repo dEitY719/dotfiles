@@ -57,8 +57,9 @@ load '../test_helper'
 # 워크플로가 그쪽을 본다.
 # 상위 테스트(참조 무결성)는 dangling 참조만 잡고 "빠짐"은 못 잡으므로,
 # 레포/플러그인 이름을 여기서 명시적으로 고정한다.
-# 새 phase 가 나면 아래 테이블에 한 줄만 추가한다.
-@test "split-out skill marketplaces and plugins are registered (#1410)" {
+# 새 phase 나 새 마켓플레이스(#1751 claudecode 등)가 나면 아래 테이블에
+# 한 줄만 추가한다.
+@test "standalone skill marketplaces and plugins are registered (#1410)" {
     while IFS='|' read -r mp_key repo plugin; do
         run jq -er --arg k "$mp_key" '"\($k)=\(.[$k])"' \
             "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
@@ -83,6 +84,7 @@ gh-setup-skills|dEitY719/gh-setup-skills|gh-setup
 gh-issue-skills|dEitY719/gh-issue-skills|gh-issue
 gh-pr-skills|dEitY719/gh-pr-skills|gh-pr
 gh-flow-skills|dEitY719/gh-flow-skills|gh-flow
+claudecode-skills|dEitY719/claudecode-skills|claudecode
 TABLE
 }
 
@@ -109,16 +111,6 @@ TABLE
     done <<'TABLE'
 gh-flow|gh-issue gh-pr gh-verify gh-resolve session
 TABLE
-}
-
-@test "claudecode-skills marketplace and claudecode plugin are registered (#1751)" {
-    run jq -e '."claudecode-skills" == "dEitY719/claudecode-skills"' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/marketplaces.json"
-    assert_success
-
-    run jq -e '.plugins | index("claudecode@claudecode-skills") != null' \
-        "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/plugins.json"
-    assert_success
 }
 
 @test "pkm-skills marketplace and pkm plugin are registered (#1644)" {
