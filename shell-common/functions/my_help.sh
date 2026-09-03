@@ -1084,47 +1084,82 @@ _my_help_search() {
 
     preview="${SHELL_COMMON}/tools/custom/my_help_preview.sh"
     tmp_dir="${TMPDIR:-/tmp}"
-    # A missing mktemp fails the substitution, so the `||` covers both the
-    # "no mktemp" and the "mktemp refused" cases.
-    tmp=$(mktemp "${tmp_dir%/}/my_help_palette.XXXXXX" 2>/dev/null) ||
-        tmp="${tmp_dir%/}/.my_help_palette_$$"
+    # Fail closed rather than fall back to a predictable name: `$TMPDIR` is
+    # world-writable, so a guessable path lets another user pre-plant a symlink
+    # and have the palette truncate a file of their choosing (PR #1745 review,
+    # codex BLOCKER + agy). A missing mktemp fails the substitution, so this
+    # covers both "no mktemp" and "mktemp refused".
+    if ! tmp=$(mktemp "${tmp_dir%/}/my_help_palette.XXXXXX" 2>/dev/null); then
+        ux_warning "임시 파일을 만들 수 없습니다 — 정적 카테고리 목록으로 대체합니다."
+        _my_help_show_categories
+        return $?
+    fi
 
     # D-1: 550+ candidates make /all a noisy first screen; start on topics.
+    # An unknown MY_HELP_DEFAULT_SCOPE would otherwise open an empty palette
+    # with no hint as to why (PR #1745 review, codex).
     scope="${MY_HELP_DEFAULT_SCOPE:-topic}"
+    case "$scope" in
+        all | topic | alias | func | category) ;;
+        *) scope="topic" ;;
+    esac
     query=""
 
     while :; do
-        rm -f "$tmp" 2>/dev/null || true
+        # Truncate in place — never `rm` then recreate. Re-opening the path
+        # each round reopens the symlink-race window that mktemp closed.
         _my_help_search_candidates "$scope" > "$tmp" 2>/dev/null || true
 
         # Best-effort count for the header (F-10); "${count:-?}" covers an
         # empty result.
         count=$(wc -l < "$tmp" 2>/dev/null | tr -d ' ')
 
-        # Only paths this function owns are interpolated into the fzf action
-        # strings; a candidate value never is (NF-2). fzf hands the preview
-        # `{n}`, the integer row index, and the helper reads the record back
-        # out of "$tmp" itself.
+        # No path is interpolated into the fzf action strings at all: they are
+        # single-quoted, so the shell fzf spawns expands the three MY_HELP_*
+        # variables itself. A path containing a quote would otherwise break the
+        # action's own parsing (PR #1745 review, codex + agy). A candidate value
+        # still never reaches a command string (NF-2) — fzf hands the preview
+        # `{n}`, the integer row index, and the helper reads the record back out
+        # of the records file itself.
         # `|| rc=$?` rather than a bare assignment: callers may be running under
         # `set -e` / `err_exit`, where fzf's non-zero abort status would take
         # the whole shell down (PR #1247).
         rc=0
+        # SC2016: the single quotes are the fix, not an oversight — the three
+        # MY_HELP_* names must reach fzf's own shell unexpanded.
+        # SC2094: `$tmp` is written by the command above and only *read* here;
+        # the env-assignment prefix makes shellcheck read it as one pipeline.
+        # shellcheck disable=SC2016,SC2094
         out=$(
-            fzf --delimiter='\t' --with-nth=1,3,2 \
-                --height=80% --layout=reverse --border \
-                --print-query --query="$query" \
-                --prompt="my-help /${scope}> " \
-                --header="scope /${scope} · ${count:-?} items · / scope · ? keys · esc quit" \
-                --preview "'${preview}' '${tmp}' {n}" \
-                --preview-window='right,55%,border-left,<80(down,60%,border-top)' \
-                --bind "?:preview('${preview}' --keys ${scope})" \
-                < "$tmp"
+            MY_HELP_PREVIEW="$preview" \
+            MY_HELP_RECORDS="$tmp" \
+            MY_HELP_SCOPE="$scope" \
+                fzf --delimiter='\t' --with-nth=1,3,2 \
+                    --height=80% --layout=reverse --border \
+                    --print-query --query="$query" \
+                    --prompt="my-help /${scope}> " \
+                    --header="scope /${scope} · ${count:-?} items · / scope · ? keys · esc quit" \
+                    --preview '"$MY_HELP_PREVIEW" "$MY_HELP_RECORDS" {n}' \
+                    --preview-window='right,55%,border-left,<80(down,60%,border-top)' \
+                    --bind '?:preview("$MY_HELP_PREVIEW" --keys "$MY_HELP_SCOPE")' \
+                    < "$tmp"
         ) || rc=$?
 
-        # 130 = Esc / Ctrl-C, 2 = fzf error. Both exit without printing.
-        if [ "$rc" -ge 2 ]; then
+        # 130 = Esc / Ctrl-C — the user quit, print nothing.
+        if [ "$rc" -eq 130 ]; then
             rm -f "$tmp" 2>/dev/null || true
             return 0
+        fi
+        # 2 (and anything else >= 2) is fzf failing on its own terms: an option
+        # this build does not understand, a lost tty. Treating that as a quit
+        # left the palette silently printing nothing with no way to tell why
+        # (PR #1745 review, agy BLOCKER). Degrade to the static table instead —
+        # the same fallback the fzf-absent path already uses.
+        if [ "$rc" -ge 2 ]; then
+            rm -f "$tmp" 2>/dev/null || true
+            ux_warning "fzf 실행 실패 (rc=${rc}) — 정적 카테고리 목록으로 대체합니다."
+            _my_help_show_categories
+            return $?
         fi
 
         # --print-query puts the typed query on its own line ahead of the
