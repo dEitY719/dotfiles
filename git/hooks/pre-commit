@@ -62,8 +62,9 @@ DIRECT_EXEC_GUARD_FILE=$(mktemp "$TMPDIR/direct_exec_guard_XXXXXX.txt")
 SHELLCHECK_VIOLATIONS_FILE=$(mktemp "$TMPDIR/shellcheck_violations_XXXXXX.txt")
 GH_API_TYPE_FILE=$(mktemp "$TMPDIR/gh_api_type_XXXXXX.txt")
 ABS_HOME_VIOLATIONS_FILE=$(mktemp "$TMPDIR/abs_home_XXXXXX.txt")
+COMMAND_DOCS_STALENESS_FILE=$(mktemp "$TMPDIR/command_docs_staleness_XXXXXX.txt")
 
-trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$PIPE_LOOP_VIOLATIONS_FILE" "$ZSH_EMULATION_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE" "$SHELLCHECK_VIOLATIONS_FILE" "$GH_API_TYPE_FILE" "$ABS_HOME_VIOLATIONS_FILE"' EXIT
+trap 'rm -f "$VIOLATIONS_FILE" "$FUNC_VIOLATIONS_FILE" "$SHEBANG_VIOLATIONS_FILE" "$SUBSHELL_VIOLATIONS_FILE" "$PIPE_LOOP_VIOLATIONS_FILE" "$ZSH_EMULATION_FILE" "$ALIAS_CONFLICT_FILE" "$ALIAS_LOCATION_FILE" "$WRAPPER_VIOLATIONS_FILE" "$CUSTOM_TOOLS_SOURCING_FILE" "$AUTO_EXEC_CUSTOM_FILE" "$AUTO_EXEC_SOURCED_FILE" "$PURITY_VIOLATIONS_FILE" "$BACKUP_FILES_FILE" "$HELP_INTEGRITY_VIOLATIONS_FILE" "$DIRECT_EXEC_GUARD_FILE" "$SHELLCHECK_VIOLATIONS_FILE" "$GH_API_TYPE_FILE" "$ABS_HOME_VIOLATIONS_FILE" "$COMMAND_DOCS_STALENESS_FILE"' EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Load check modules
@@ -99,6 +100,7 @@ source_check_or_exit "${CHECKS_DIR}/shellcheck_check.sh"
 source_check_or_exit "${CHECKS_DIR}/gh_api_type_check.sh"
 source_check_or_exit "${CHECKS_DIR}/hardcoded_home_path_check.sh"
 source_check_or_exit "${CHECKS_DIR}/main_branch_guard.sh"
+source_check_or_exit "${CHECKS_DIR}/command_docs_staleness_check.sh"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Protected-branch guard (fail fast, before any file scanning)
@@ -150,6 +152,7 @@ direct_exec_guard_violations=0
 shellcheck_violations=0
 gh_api_type_violations=0
 abs_home_violations=0
+command_docs_staleness_violations=0
 
 # 1) Shebang consistency for staged .sh files under shell-common/bash/zsh
 while IFS= read -r file; do
@@ -282,6 +285,12 @@ while IFS= read -r file; do
     fi
 done <<<"$STAGED_FILES"
 
+# 10) Command docs staleness warning (issue #1737): tools/custom staged
+# without the generated docs/guide/commands/mytool.md
+if ! check_command_docs_staleness "$STAGED_FILES" "$COMMAND_DOCS_STALENESS_FILE"; then
+    ((command_docs_staleness_violations++))
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Reporting and exit logic
 # ═══════════════════════════════════════════════════════════════════════════
@@ -291,7 +300,7 @@ echo -e "${BLUE}Pre-commit validation (staged files only)${NC}"
 echo ""
 
 blocking_violations=$((shebang_violations + naming_violations + function_naming_violations + alias_conflict_violations + alias_location_violations + custom_tools_sourcing_violations + auto_exec_custom_violations + auto_exec_sourced_violations + library_purity_violations + help_integrity_violations + direct_exec_guard_violations + pipe_loop_violations + shellcheck_violations + abs_home_violations))
-warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found + gh_api_type_violations))
+warning_count=$((subshell_violations + wrapper_violations + ux_violations + backup_files_found + gh_api_type_violations + command_docs_staleness_violations))
 
 if [ $blocking_violations -eq 0 ]; then
     has_warnings=0
@@ -343,6 +352,13 @@ if [ $blocking_violations -eq 0 ]; then
         head -n 5 "$GH_API_TYPE_FILE" | sed 's/^/  /'
         [ $(wc -l <"$GH_API_TYPE_FILE") -gt 5 ] && echo "  ... and more"
         echo "  See: docs/guide/learnings/gh-api-type-casting.md (issue #395)"
+        echo ""
+        has_warnings=1
+    fi
+
+    if [ $command_docs_staleness_violations -gt 0 ] && [ -s "$COMMAND_DOCS_STALENESS_FILE" ]; then
+        echo -e "${YELLOW}⚠ [WARNING] Command docs may be stale (issue #1737):${NC}"
+        cat "$COMMAND_DOCS_STALENESS_FILE" | sed 's/^/  /'
         echo ""
         has_warnings=1
     fi
