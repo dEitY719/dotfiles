@@ -66,6 +66,7 @@ devx_pr_verify_live_parse() {
     local post_comment=1
     local _remote_set=0
     local _pos_seen=0
+    local _hash_prefixed=0
     local _url_set=0
     local _api_url_set=0
     local _start_set=0
@@ -187,6 +188,7 @@ devx_pr_verify_live_parse() {
                     ;;
                 '#'*)
                     pr="${1#\#}"
+                    _hash_prefixed=1
                     ;;
                 *)
                     remote="$1"
@@ -205,7 +207,11 @@ devx_pr_verify_live_parse() {
         esac
     done
 
-    if [ -n "$pr" ]; then
+    # A bare `#` with no digits (`_hash_prefixed=1`, `pr=""`) must still hit
+    # this check — otherwise it silently falls back to PR auto-detection
+    # instead of being rejected like any other malformed PR# (#1748 codex
+    # review, PR #1749).
+    if [ -n "$pr" ] || [ "$_hash_prefixed" -eq 1 ]; then
         if ! _devx_pr_verify_live_pos_int "$pr"; then
             echo "PR# must be a positive integer: '$pr'" >&2
             return 2
