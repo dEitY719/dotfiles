@@ -632,6 +632,38 @@ run_setup_with_workspace() {
         = "$(readlink -f "${ws}/packaging-skills/skills/create")" ]
 }
 
+# `__` inside a repo or skill name means <repo>__<skill> is not injective:
+# two unrelated sources can qualify to the exact same final entry name
+# (agy/codex review, PR #1747 BLOCKER). The later one must be dropped with a
+# warning, never silently overwrite the earlier one's symlink.
+@test "workspace: a literal '__' collision between qualified names is dropped, not overwritten (#1747)" {
+    seed_opencode_home
+    local ws
+    ws="$(default_workspace_root)"
+    # Claim the bare names "Z" and "Y__Z" first so the next two repos both
+    # get qualified — and qualify to the identical string "X__Y__Z".
+    seed_workspace_skill "$ws" "0-first" "Z"
+    seed_workspace_skill "$ws" "1-second" "Y__Z"
+    seed_workspace_skill "$ws" "X" "Y__Z"
+    seed_workspace_skill "$ws" "X__Y" "Z"
+
+    run_setup
+    assert_success
+    [[ "$output" == *"합성 엔트리 이름 충돌"* ]]
+
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/Z")" \
+        = "$(readlink -f "${ws}/0-first/skills/Z")" ]
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/Y__Z")" \
+        = "$(readlink -f "${ws}/1-second/skills/Y__Z")" ]
+    # "X" sorts before "X__Y", so X's Y__Z wins the collision.
+    [ "$(readlink -f "${FIXTURE_HOME}/.config/opencode/skills/X__Y__Z")" \
+        = "$(readlink -f "${ws}/X/skills/Y__Z")" ]
+    # X__Y's Z is dropped entirely — no entry, under any name, points to it.
+    # 3 from this fixture (Z, Y__Z, X__Y__Z) + the fixture's own base-skills
+    # alpha/beta/gamma (setup(), no collision) = 6, never 7.
+    [ "$(find "${FIXTURE_HOME}/.config/opencode/skills" -mindepth 1 -maxdepth 1 -type l | wc -l)" -eq 6 ]
+}
+
 @test "workspace: a linked git worktree never shadows its clone (#1652)" {
     seed_opencode_home
     local ws
