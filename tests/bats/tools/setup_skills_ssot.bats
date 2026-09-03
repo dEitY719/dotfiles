@@ -123,7 +123,7 @@ run_setup() {
         --skills-dir "${BASE_REPO}/skills" \
         --budget 1000
     assert_success
-    assert_output --partial "Skills:     3"
+    assert_output --regexp 'Skills: +3'
     assert_output --partial "Within budget"
 }
 
