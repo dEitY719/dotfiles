@@ -484,12 +484,11 @@ _gh_project_status_query_current() {
     # ids are base64url text; a value with anything else in it is a caller
     # bug and must not be spliced into the jq program below.
     local _proj_sel=''
-    if [ -n "$_proj_arg" ]; then
-        case "$_proj_arg" in
-            *[!A-Za-z0-9_=-]*) return 1 ;;
-            *) _proj_sel="| select(.project?.id == \"$_proj_arg\")" ;;
-        esac
-    fi
+    case "$_proj_arg" in
+        '') ;;
+        *[!A-Za-z0-9_=-]*) return 1 ;;
+        *) _proj_sel="| select(.project?.id == \"$_proj_arg\")" ;;
+    esac
 
     local _owner _repo _resolved
     # Resolution failure is a query failure, not "no board" (#1354). That
