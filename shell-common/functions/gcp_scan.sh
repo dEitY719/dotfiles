@@ -65,7 +65,6 @@ _gcp_scan_preflight_is_noop() {
         return 1
     fi
     local sha="$1" result=1 had_stash=0 conflicted f real_content_conflict=0
-    local _dup_files="" _dup_short=""
     if ! git diff --quiet || ! git diff --cached --quiet; then
         git stash push -q --include-untracked -m "gcp_preflight_probe" && had_stash=1
         # Data-loss guard (PR #916 review): a failed stash leaves the tree
@@ -175,6 +174,7 @@ _gcp_scan_preflight_is_noop() {
             # is the one verdict that drops a commit the staged diff still shows
             # as real work, so a wrong call has to be auditable from the scan
             # output alone.
+            local _dup_files _dup_short
             _dup_files=$(git diff --cached --name-only 2>/dev/null | tr '\n' ' ')
             _dup_short=$(git rev-parse --short "$sha" 2>/dev/null)
             if type ux_warning >/dev/null 2>&1; then
@@ -605,22 +605,16 @@ _gcp_scan_staged_is_duplicate_append() {
     td=$(mktemp -d "${TMPDIR:-/tmp}/gcp_dup.XXXXXX" 2>/dev/null) || return 1
     while IFS= read -r f; do
         [ -z "$f" ] && continue
-        if ! git cat-file -p "HEAD:${f}" >"${td}/head" 2>/dev/null; then
-            rc=1
-            break
-        fi
+        git cat-file -p "HEAD:${f}" >"${td}/head" 2>/dev/null || { rc=1; break; }
         # `-U0`: no context lines, so every `+`/`-` line inside a hunk is real
         # payload and the hunk headers alone delimit the blocks.
-        if ! git diff --cached -U0 -- "$f" >"${td}/diff" 2>/dev/null; then
-            rc=1
-            break
-        fi
+        git diff --cached -U0 -- "$f" >"${td}/diff" 2>/dev/null || { rc=1; break; }
         # `seen` skips the per-file diff header, whose `--- a/x` / `+++ b/x`
         # lines would otherwise read as payload; anchoring on those two
         # prefixes instead would mis-skip a deleted line that starts with
         # `-- `. A bare `exit` on a hit is deliberate — `exit 0` would still
         # run END, whose own exit would override the verdict.
-        if ! awk -v min="$floor" -v HF="${td}/head" '
+        awk -v min="$floor" -v HF="${td}/head" '
             function block_ok(   i, j, ok) {
                 if (bn == 0) { return 1 }
                 if (bn < min) { return 0 }
@@ -638,15 +632,11 @@ _gcp_scan_staged_is_duplicate_append() {
             !seen { next }
             /^-/ { bad = 1; exit }
             /^\+/ { b[++bn] = substr($0, 2); next }
-            { next }
             # nblocks == 0 means nothing was actually matched — a mode-only
             # or binary change has a non-empty staged diff but no hunks at
             # all, and "every block matched" is vacuously true for it.
             END { if (!bad && !block_ok()) { bad = 1 } exit((bad || nblocks == 0) ? 1 : 0) }
-        ' "${td}/head" "${td}/diff"; then
-            rc=1
-            break
-        fi
+        ' "${td}/head" "${td}/diff" || { rc=1; break; }
     done <<EOF
 $files
 EOF
