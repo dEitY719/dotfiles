@@ -2164,13 +2164,39 @@ FIXTURE
         git config advice.resolveConflict true
         printf 'y\n' | _gcp_scan main source --author=all
         echo \"scan_rc=\$?\"
+        ls .git/gcp-scan-cp-stderr >/dev/null 2>&1 && echo SCRATCH_LEFT || echo SCRATCH_CLEAN
     "
+    # The scratch file the filter writes through is cleaned up, and it lives in
+    # the git dir — never a per-commit mktemp in \$TMPDIR (PR #1755 review).
+    assert_output --partial "SCRATCH_CLEAN"
     # The noise is gone.
     refute_output --partial "hint:"
     # The informative body lines survive — no information loss.
     assert_output --partial "CONFLICT (content)"
     assert_output --partial "conf.txt"
     # The loop's own summary still reports the deferral.
+    assert_output --partial "rolled back, continuing with the rest"
+    assert_output --partial "1 deferred (conflict)"
+    assert_output --partial "scan_rc=1"
+}
+
+@test "scan #1753: hint filter survives color.advice=always (ANSI-prefixed hints)" {
+    # PR #1755 review (agy + codex FOLLOW-UP, generalized). With
+    # `color.advice=always` git prefixes every hint line with an ANSI SGR
+    # escape, so a bare `^hint: ` anchor misses and all six lines leak through
+    # — verified on git 2.43. The fix pins `-c color.advice=false` on the
+    # cherry-pick, and `-c` on the command line outranks repo config, so the
+    # setting below cannot defeat it.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        git config advice.mergeConflict true
+        git config color.advice always
+        git config color.ui always
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+    "
+    refute_output --partial "hint:"
+    assert_output --partial "CONFLICT (content)"
     assert_output --partial "rolled back, continuing with the rest"
     assert_output --partial "1 deferred (conflict)"
     assert_output --partial "scan_rc=1"

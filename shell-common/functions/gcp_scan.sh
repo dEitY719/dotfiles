@@ -246,6 +246,9 @@ _gcp_scan_report_conflict_stop() {
 }
 
 _gcp_scan_cherry_pick_quiet() {
+    #   $1  commit to pick
+    #   $2  the repo's git dir (the loop's $_gcp_git_dir) — scratch lives there
+    #
     # `git cherry-pick "$1"`, minus git's unactionable conflict-advice block
     # (issue #1753). On conflict git appends 5-6 `hint: ... --continue /
     # --skip / --abort` lines on STDERR, but the execution loop resolves the
@@ -255,22 +258,43 @@ _gcp_scan_cherry_pick_quiet() {
     # cannot act on, printed immediately above the loop's own `Deferred ...`
     # summary of the same event.
     #
-    # Filtering STDERR, not `-c advice.mergeConflict=false`: that key only
-    # gates this block from git 2.45 onwards and is silently ignored by older
-    # git (2.43 is what ships with Ubuntu 24.04), which prints the very same
-    # hints with no config gate at all — so the config-only fix is a no-op
-    # exactly where the bug was reported.
+    # Two git-side knobs plus one filter, because no single one covers every
+    # git (PR #1755 review, agy + codex FOLLOW-UP):
+    #
+    #   advice.mergeConflict=false — git >= 2.45 never emits the block at all,
+    #     so nothing has to be pattern-matched there (a translated `hint:`
+    #     prefix included). Silently ignored by older git, where `advise()` is
+    #     ungated — which is why the filter below still has to exist.
+    #   color.advice=false — makes the filter's `^hint: ` anchor unbreakable.
+    #     A user running `color.advice=always` gets each hint line prefixed
+    #     with an ANSI SGR escape, so the anchor misses and all six lines leak
+    #     (verified on git 2.43). `-c` on the command line outranks any
+    #     user config, so this cannot be turned back on from the outside.
+    #   grep -v '^hint: ' — the actual removal on git < 2.45.
+    #
+    # Residual, accepted: git < 2.45 with git's own translations installed AND
+    # a non-English locale would emit a translated prefix the filter misses.
+    # That combination degrades to today's behaviour (hints shown), never to a
+    # lost cherry-pick.
+    #
+    # Scratch file lives in the git dir under a fixed name, not `mktemp` in
+    # $TMPDIR: an interrupt mid-pick used to strand a `gcp_cp_err.*` file per
+    # commit (agy + codex FOLLOW-UP). A fixed path is truncated by the next
+    # `>` instead of accumulating, is scoped to the repo being picked into,
+    # and removes the `mktemp`-failure branch entirely.
     #
     # No information is lost: `Auto-merging` and `CONFLICT (content): ...` go
     # to STDOUT and are never touched, and `error: could not apply ...`
     # survives the filter because only `hint:` lines are dropped.
     local _err _rc
-    _err=$(mktemp "${TMPDIR:-/tmp}/gcp_cp_err.XXXXXX" 2>/dev/null) || {
-        # No temp file — never trade the cherry-pick itself for tidier output.
-        git cherry-pick "$1"
+    _err="${2:-}/gcp-scan-cp-stderr"
+    # Unwritable git dir (read-only checkout, odd permissions) — never trade
+    # the cherry-pick itself for tidier output.
+    if [ -z "${2:-}" ] || ! : >"$_err" 2>/dev/null; then
+        git -c advice.mergeConflict=false -c color.advice=false cherry-pick "$1"
         return $?
-    }
-    git cherry-pick "$1" 2>"$_err"
+    fi
+    git -c advice.mergeConflict=false -c color.advice=false cherry-pick "$1" 2>"$_err"
     _rc=$?
     grep -v '^hint: ' "$_err" >&2
     command rm -f "$_err"
@@ -1608,7 +1632,7 @@ $sha
         if type ux_info >/dev/null 2>&1; then
             ux_info "Cherry-picking $sha..."
         fi
-        if _gcp_scan_cherry_pick_quiet "$sha"; then
+        if _gcp_scan_cherry_pick_quiet "$sha" "$_gcp_git_dir"; then
             picked=$((picked + 1))
         else
             # Defensive: a commit that becomes empty against HEAD (no conflict)
