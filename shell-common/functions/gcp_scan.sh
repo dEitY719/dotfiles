@@ -168,7 +168,7 @@ _gcp_scan_preflight_is_noop() {
     if [ "$_gcp_cp_rc" -eq 0 ]; then
         if git diff --cached --quiet; then
             result=0
-        elif _gcp_scan_staged_is_duplicate_append; then
+        elif _gcp_scan_staged_is_duplicate_append "$sha"; then
             # A clean apply whose whole payload HEAD already holds, just
             # elsewhere in the file (issue #1759). Announced, never silent: this
             # is the one verdict that drops a commit the staged diff still shows
@@ -593,8 +593,9 @@ _gcp_scan_staged_is_duplicate_append() {
     #
     # Reads the index and HEAD blobs only — no checkout, no mutation. The
     # caller's `git reset --hard HEAD` is what clears the probe.
+    local sha="$1"
     local floor="${GCP_SCAN_DUP_BLOCK_MIN_LINES:-3}"
-    local files f td rc=0
+    local files f td rc=0 subject="" subject_seen=0
     # Precondition 1. `grep -v` answers 0 as soon as ONE staged path is not a
     # plain modification.
     if git diff --cached --name-status 2>/dev/null | grep -qv '^M'; then
@@ -615,6 +616,13 @@ _gcp_scan_staged_is_duplicate_append() {
         # `-- `. A bare `exit` on a hit is deliberate — `exit 0` would still
         # run END, whose own exit would override the verdict.
         awk -v min="$floor" -v HF="${td}/head" '
+            # O(n*m) sliding window: n = HEAD line count, m = block length.
+            # Bounded in practice by when this runs at all — only on a clean
+            # apply whose staged diff is non-empty, at most once per staged
+            # file. `b[1..bn]` is the whole block: entries left over from a
+            # LONGER previous hunk sit past bn and are never read, so bn = 0
+            # is a complete reset and `delete b` would be dead code (PR #1760
+            # review, agy; pinned by the multi-hunk bats cases).
             function block_ok(   i, j, ok) {
                 if (bn == 0) { return 1 }
                 if (bn < min) { return 0 }
@@ -641,7 +649,46 @@ _gcp_scan_staged_is_duplicate_append() {
 $files
 EOF
     command rm -rf "$td"
-    return $rc
+    [ "$rc" -eq 0 ] || return 1
+    # Precondition 4 — corroborating evidence that THIS commit was already
+    # applied (PR #1760 review, agy + codex BLOCKER, independently).
+    #
+    # Preconditions 1-3 establish that the payload is a verbatim repeat of
+    # content HEAD holds. They cannot, on their own, distinguish that from a
+    # commit deliberately adding a second copy of an existing stanza —
+    # repeated boilerplate, a config block, another table row. Absorbing one
+    # of those is the #1177 data-loss direction, and no threshold on block
+    # length fixes it: the repeat is verbatim in both cases.
+    #
+    # What separates them is not the diff, it is the history. A duplicate
+    # RE-application carries the subject of the commit that already landed —
+    # a cherry-pick copies the message — so HEAD's own log for the touched
+    # files already contains that exact subject. A commit legitimately adding
+    # a repeated stanza is new work with a subject of its own, which HEAD has
+    # never seen, so it stays visible. That is the same signal #1136 uses as
+    # its duplicate CANDIDATE filter, here as the corroborating half of a
+    # verdict the payload comparison has already narrowed to one commit.
+    #
+    # ANY touched file matching is enough: the reported case touched four
+    # files but only one carried the duplicated block, the other three having
+    # been absorbed silently by the 3-way merge.
+    #
+    # Deliberately last: it is the only precondition that walks history, and
+    # by here the candidate set is already down to "payload is a verbatim
+    # repeat", which is rare.
+    subject=$(git log -1 --format=%s "$sha" 2>/dev/null)
+    [ -n "$subject" ] || return 1
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        if git log --format=%s HEAD -- "$f" 2>/dev/null | grep -Fxq "$subject"; then
+            subject_seen=1
+            break
+        fi
+    done <<EOF
+$files
+EOF
+    [ "$subject_seen" -eq 1 ] || return 1
+    return 0
 }
 
 _gcp_scan_predict_content_conflict() {

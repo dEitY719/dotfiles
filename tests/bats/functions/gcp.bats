@@ -2568,6 +2568,10 @@ _gcp1759_make_dup_append_repo() {
     # that identical block, landed MID-file by an earlier cross-repo pick, so
     # the two insertions do not overlap: the cherry-pick applies cleanly and
     # appends a SECOND copy of B. Repeat the scan and it appends a third.
+    #
+    # main's landing commit reuses the source commit's SUBJECT — that is what
+    # a cherry-pick does, and precondition 4 reads it as the evidence that
+    # this payload already landed once.
     cat <<'FIXTURE'
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1759.XXXXXX")"
         trap "rm -rf $repo" EXIT
@@ -2581,7 +2585,7 @@ _gcp1759_make_dup_append_repo() {
         src=$(git rev-parse HEAD)
         git checkout -q main
         { head -6 f.txt; printf 'B1\nB2\nB3\nB4\n'; tail -6 f.txt; } > n.txt && mv n.txt f.txt
-        git add f.txt && git commit -qm "same block, landed mid-file"
+        git add f.txt && git commit -qm "append block B"
 FIXTURE
 }
 
@@ -2665,7 +2669,7 @@ FIXTURE
         src=\$(git rev-parse HEAD)
         git checkout -q main
         { head -6 f.txt; printf 'B1\nB2\nB3\nB4\n'; tail -6 f.txt; } > n.txt && mv n.txt f.txt
-        git add f.txt && git commit -qm 'same block, landed mid-file'
+        git add f.txt && git commit -qm 'append B and drop L3'
         _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
     "
     assert_success
@@ -2680,12 +2684,13 @@ FIXTURE
     # discriminator (not #1177's conflict-path one) owns the verdict.
     local fixture="
         $(_gcp903_make_repo)
-        printf 'alpha\nbeta\n    return 0\ngamma\n' > f.txt && git add f.txt && git commit -qm 'seed'
+        printf 'alpha\nbeta\ngamma\n' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source
         printf '    return 0\n' >> f.txt && git add f.txt && git commit -qm 'append a lone return'
         src=\$(git rev-parse HEAD)
         git checkout -q main
-        sed -i '1s/.*/alpha-edited/' f.txt && git add f.txt && git commit -qm 'unrelated head work'
+        printf 'alpha\nbeta\n    return 0\ngamma\n' > f.txt
+        git add f.txt && git commit -qm 'append a lone return'
     "
     run_in_bash "$fixture
         _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
@@ -2731,6 +2736,71 @@ FIXTURE
         chmod +x s.sh && git add s.sh && git commit -qm 'make it executable'
         src=\$(git rev-parse HEAD)
         git checkout -q main
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "dup #1759: an intentional repeat of an existing stanza is NOT absorbed (1)" {
+    # PR #1760 review, codex BLOCKER + agy Assumption, independently: the
+    # payload comparison alone cannot tell a duplicate RE-application from a
+    # commit deliberately adding a second copy of an existing stanza, and
+    # absorbing the latter is the #1177 data-loss direction. The diff shape
+    # here is identical to the absorbed case above — only the SUBJECT differs,
+    # which is exactly the signal precondition 4 reads.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
+        git checkout -q -b source
+        printf 'B1\nB2\nB3\nB4\n' >> f.txt
+        git add f.txt && git commit -qm 'add a SECOND copy of the B stanza on purpose'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        { head -6 f.txt; printf 'B1\nB2\nB3\nB4\n'; tail -6 f.txt; } > n.txt && mv n.txt f.txt
+        git add f.txt && git commit -qm 'introduce the B stanza'
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "dup #1759: multi-hunk — a SHORT hunk after a LONG one is judged on its own lines (0)" {
+    # PR #1760 review, agy BLOCKER: claimed the awk leaves stale tail entries
+    # in `b` when a hunk is shorter than its predecessor. It does leave them —
+    # past `bn`, where block_ok never reads. This case and the next pin that
+    # both verdicts come out right, so the claim stays disproved rather than
+    # merely argued.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        seq 1 30 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
+        git checkout -q -b source
+        { head -5 f.txt; printf 'P1\nP2\nP3\nP4\nP5\nP6\n'; tail -25 f.txt; printf 'Q1\nQ2\nQ3\n'; } > n.txt && mv n.txt f.txt
+        git add f.txt && git commit -qm 'two blocks'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        { head -20 f.txt; printf 'P1\nP2\nP3\nP4\nP5\nP6\nQ1\nQ2\nQ3\n'; tail -10 f.txt; } > n.txt && mv n.txt f.txt
+        git add f.txt && git commit -qm 'two blocks'
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=0"
+}
+
+@test "dup #1759: multi-hunk — one NEW short hunk keeps the whole commit visible (1)" {
+    # The other half of the stale-array disproof: were the leftover tail of the
+    # LONG first block still being compared, this short second hunk could match
+    # on those stale lines and the commit would be wrongly absorbed.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        seq 1 30 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
+        git checkout -q -b source
+        { head -5 f.txt; printf 'P1\nP2\nP3\nP4\nP5\nP6\n'; tail -25 f.txt; printf 'Z1\nZ2\nZ3\n'; } > n.txt && mv n.txt f.txt
+        git add f.txt && git commit -qm 'two blocks'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        { head -20 f.txt; printf 'P1\nP2\nP3\nP4\nP5\nP6\n'; tail -10 f.txt; } > n.txt && mv n.txt f.txt
+        git add f.txt && git commit -qm 'two blocks'
         _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
     "
     assert_success
