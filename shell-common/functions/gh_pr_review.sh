@@ -256,13 +256,17 @@ _gh_pr_review_require_internal_cli() {
     return 0
 }
 
-# _gh_pr_review_argv_prompt_or_fail — shared MAX_ARG_STRLEN guard for AI
-# CLIs that take the whole prompt as a value argument instead of --file or
-# stdin (agy --print, hermes -z). The kernel caps a single argv string at
-# MAX_ARG_STRLEN (32 pages = 131072 bytes on Linux) — passing an oversized
-# prompt straight through would blow past that as a bare "Argument list
-# too long" exec failure, so this guards it explicitly up front.
-# Args: $1 = CLI label for the error message (e.g. "agy --print"),
+# _gh_pr_review_argv_prompt_or_fail — MAX_ARG_STRLEN guard for AI CLIs that
+# take the whole prompt as a value argument instead of --file or stdin. The
+# kernel caps a single argv string at MAX_ARG_STRLEN (32 pages = 131072 bytes
+# on Linux) — passing an oversized prompt straight through would blow past
+# that as a bare "Argument list too long" exec failure, so this guards it
+# explicitly up front.
+# Sole remaining caller is `hermes -z` (issue #1761 moved agy onto stdin via
+# --input-format stream-json; `hermes --help` documents no equivalent — its
+# one-shot flag is `-z PROMPT` / `--oneshot PROMPT`, positional only). Revisit
+# if hermes grows a stdin path.
+# Args: $1 = CLI label for the error message (e.g. "hermes -z"),
 #       $2 = prompt_file to read, $3 = file to write an over-limit or
 #       read-error message to.
 # On success prints the prompt content on stdout and returns 0; on
@@ -452,6 +456,7 @@ _gh_pr_review_run_ai() {
     fi
     local _rc=0
     local _prompt_content
+    local _agy_stream
     local _opencode_workdir
     # Issue #1506: opencode / hermes routinely run 8-10 minutes and had no
     # bounded exit path at all. Without this the only bound is whatever
@@ -483,13 +488,46 @@ _gh_pr_review_run_ai() {
         codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
     agy)
-        # `agy --print` runs the Antigravity CLI non-interactively but
-        # takes the prompt as a value argument, not stdin — guarded by
-        # _gh_pr_review_argv_prompt_or_fail (shared with the hermes case).
-        if _prompt_content=$(_gh_pr_review_argv_prompt_or_fail "agy --print" "$prompt_file" "$_stderr_file"); then
-            agy --print "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
-        else
+        # Issue #1761: this used to be `agy --print "$prompt"`, which put the
+        # whole prompt in one argv value — capped by the kernel at
+        # MAX_ARG_STRLEN (131072B). A 62-file PR (131746B) tripped the guard
+        # and the lane produced no review at all. `--input-format stream-json`
+        # reads the prompt as one NDJSON message on stdin instead, so there is
+        # no argv ceiling; it requires `--output-format stream-json`, so the
+        # review text has to be lifted back out of the reply stream.
+        # Shapes below were verified against the real CLI, not just `agy --help`:
+        #   in   {"event":"user","message":{"content":"<prompt>"}}
+        #   out  {"event":"init",...}
+        #        {"event":"step_update",...}   (one per turn / tool step)
+        #        {"event":"result","result":{"status":"SUCCESS",
+        #                                    "response":"<review text>"}}
+        # `--print` still needs a value even in stream-json mode (Go's flag
+        # parser rejects a bare `--print` with "flag needs an argument"), so it
+        # is passed empty and the stdin message carries the prompt.
+        if ! _prompt_content=$(jq -Rs '{event: "user", message: {content: .}}' \
+            <"$prompt_file" 2>"$_stderr_file"); then
             _rc=1
+        else
+            # `printf` is a shell builtin, so the prompt reaches agy through a
+            # pipe and never through argv — that is the whole point of #1761.
+            _agy_stream=$(printf '%s\n' "$_prompt_content" |
+                agy --print '' --input-format stream-json \
+                    --output-format stream-json 2>>"$_stderr_file") || _rc=$?
+            if [ "$_rc" -eq 0 ]; then
+                # `response` is what plain `agy --print` used to write to
+                # stdout, so everything downstream (tee -> AI_OUT -> comment
+                # body) keeps seeing exactly the same review text.
+                printf '%s\n' "$_agy_stream" |
+                    jq -r 'select(.event == "result") | .result.response // ""' \
+                        2>>"$_stderr_file" || _rc=$?
+            else
+                # A non-SUCCESS run reports its cause in `result.error` on
+                # *stdout*, not stderr — without this the failure summary
+                # below would have an empty stderr file to work with.
+                printf '%s\n' "$_agy_stream" |
+                    jq -r 'select(.event == "result") | .result.error // empty' \
+                        >>"$_stderr_file" 2>/dev/null
+            fi
         fi
         ;;
     claude)
@@ -502,9 +540,11 @@ _gh_pr_review_run_ai() {
     hermes)
         # Confirmed against real `hermes --help` output on an internal PC
         # (issue #1452): there is no `exec` subcommand — the one-shot
-        # non-interactive flag is `-z` / `--oneshot`, and like `agy --print`
-        # it takes the prompt as a value argument rather than --file/stdin,
-        # guarded by the same _gh_pr_review_argv_prompt_or_fail helper.
+        # non-interactive flag is `-z` / `--oneshot`, and it takes the prompt
+        # as a value argument rather than --file/stdin, guarded by
+        # _gh_pr_review_argv_prompt_or_fail. Re-checked for #1761: hermes has
+        # no stdin equivalent of agy's `--input-format stream-json`, so this
+        # lane keeps the argv ceiling until it grows one.
         if ! _gh_pr_review_require_internal_cli hermes >"$_stderr_file" 2>&1; then
             _rc=1
         elif _prompt_content=$(_gh_pr_review_argv_prompt_or_fail "hermes -z" "$prompt_file" "$_stderr_file"); then
