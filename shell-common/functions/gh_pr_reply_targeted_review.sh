@@ -130,6 +130,13 @@ _gh_pr_reply_tracking_ref_is_valid() {
     return 0
 }
 
+# One stderr line for every reader that rejects a ledger line without the
+# minimum three fields. Callers still `return 2` themselves.
+_gh_pr_reply_malformed_origin_line() {
+    printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>[:<owner>/<repo>#<N>]): %s\n' \
+        "${1-}" >&2
+}
+
 _gh_pr_reply_origin_line() {
     local _reviewer _severity _verdict _ref
     _reviewer=$(printf '%s' "${1-}" | tr '[:upper:]' '[:lower:]')
@@ -175,18 +182,16 @@ _gh_pr_reply_origin_line() {
 
     # The 4th field is OPTIONAL and its absence is the pre-#1762 line, byte for
     # byte: the ledger is durable state already posted on live PRs, so this is
-    # a strict superset, never a migration.
-    if [ -n "$_ref" ]; then
-        if ! _gh_pr_reply_tracking_ref_is_valid "$_ref"; then
-            printf '[gh-pr-reply] malformed tracking ref: %s (want <owner>/<repo>#<N>, e.g. dEitY719/harness-skills#22)\n' \
-                "$_ref" >&2
-            return 2
-        fi
-        printf '%s:%s:%s:%s\n' "$_reviewer" "$_severity" "$_verdict" "$_ref"
-        return 0
+    # a strict superset, never a migration. `${_ref:+:$_ref}` is empty when
+    # `_ref` is, so one printf covers both shapes.
+    if [ -n "$_ref" ] &&
+        ! _gh_pr_reply_tracking_ref_is_valid "$_ref"; then
+        printf '[gh-pr-reply] malformed tracking ref: %s (want <owner>/<repo>#<N>, e.g. dEitY719/harness-skills#22)\n' \
+            "$_ref" >&2
+        return 2
     fi
 
-    printf '%s:%s:%s\n' "$_reviewer" "$_severity" "$_verdict"
+    printf '%s:%s:%s%s\n' "$_reviewer" "$_severity" "$_verdict" "${_ref:+:$_ref}"
 }
 
 # Blocking severity = the tag that made `review-blocked` happen. Everything
@@ -281,8 +286,7 @@ _gh_pr_reply_origins_block() {
         case "$_line" in
         *:*:*) ;;
         *)
-            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>[:<owner>/<repo>#<N>]): %s\n' \
-                "$_line" >&2
+            _gh_pr_reply_malformed_origin_line "$_line"
             return 2
             ;;
         esac
@@ -521,8 +525,7 @@ _gh_pr_reply_origins_merge() {
         case "$_line" in
         *:*:*) ;;
         *)
-            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>[:<owner>/<repo>#<N>]): %s\n' \
-                "$_line" >&2
+            _gh_pr_reply_malformed_origin_line "$_line"
             return 2
             ;;
         esac
@@ -542,8 +545,7 @@ EOF
         case "$_line" in
         *:*:*) ;;
         *)
-            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>[:<owner>/<repo>#<N>]): %s\n' \
-                "$_line" >&2
+            _gh_pr_reply_malformed_origin_line "$_line"
             return 2
             ;;
         esac
@@ -673,14 +675,18 @@ _gh_pr_reply_review_passed_gate() {
         case "$_line" in
         *:*:*) ;;
         *)
-            printf '[gh-pr-reply] malformed origin line (want <reviewer>:<severity>:<verdict>[:<owner>/<repo>#<N>]): %s\n' \
-                "$_line" >&2
+            _gh_pr_reply_malformed_origin_line "$_line"
             return 2
             ;;
         esac
         _rev="${_line%%:*}"
         _rest="${_line#*:}"
         _sev="${_rest%%:*}"
+        # Filter on severity BEFORE parsing the rest: only a blocking line's
+        # verdict and ref are ever read, and `_verd` costs a fork per line.
+        _gh_pr_reply_severity_is_blocking "$_sev" || continue
+        _blocking=$((_blocking + 1))
+
         _tail="${_rest#*:}"
         _verd=$(printf '%s' "${_tail%%:*}" | tr '[:lower:]' '[:upper:]')
         # #1762: everything after the verdict is the optional tracking ref. A
@@ -696,8 +702,6 @@ _gh_pr_reply_review_passed_gate() {
         esac
         _gh_pr_reply_tracking_ref_is_valid "$_ref" || _ref=""
 
-        _gh_pr_reply_severity_is_blocking "$_sev" || continue
-        _blocking=$((_blocking + 1))
         case "$_verd" in
         ACCEPT | ACCEPT-PARTIAL) ;;
         *)
