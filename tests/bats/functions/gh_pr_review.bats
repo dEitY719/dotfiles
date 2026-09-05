@@ -178,6 +178,21 @@ EOF
     assert_success
 }
 
+@test "require_ai_cli: agy without jq → exit 1 naming jq, not agy (#1761 transport dep)" {
+    # PR #1765 codex BLOCKER: the stream-json lane needs jq as much as it
+    # needs agy, but preflight only knew about the CLI.
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\nexit 0\n' >"$stub_dir/agy"
+    chmod +x "$stub_dir/agy"
+    # agy present, jq absent — the PATH holds the stub and nothing else.
+    PATH="$stub_dir" run _gh_pr_review_require_ai_cli agy
+    assert_failure 1
+    assert_output --partial "Required CLI 'jq' not found in PATH"
+    refute_output --partial "Required CLI 'agy'"
+}
+
 @test "require_ai_cli: opencode on non-internal PC refuses before PATH check" {
     _source_module
     _dotfiles_setup_mode() { echo external; }
@@ -1097,45 +1112,62 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_run_ai — agy transport (issue #1244 / PR #1245 review)
+# _gh_pr_review_run_ai — agy transport (issue #1244 / PR #1245 review; moved
+# from the `--print <value>` argv path to `--input-format stream-json` on
+# stdin in issue #1761, which removed the MAX_ARG_STRLEN ceiling)
 # ---------------------------------------------------------------------------
 
-# Stub `agy` so the run_ai dispatcher can exercise the --print value-argument
-# path without invoking the real Antigravity CLI. Echoes its own argv back
-# so tests can assert on exactly what the function passed as $1.
+# Stub `agy` so the run_ai dispatcher can exercise the stream-json stdin
+# transport without invoking the real Antigravity CLI. Mirrors the real CLI's
+# NDJSON contract: reads {"event":"user","message":{"content":...}} from
+# stdin, writes an `init` line then a `result` line whose `response` echoes
+# the prompt back — so tests can prove the whole prompt round-trips. Its own
+# argv lands in $AGY_STUB_ARGV so tests can prove nothing went through argv.
 _stub_agy_echo() {
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
+    export AGY_STUB_ARGV="$TEST_TEMP_HOME/agy-argv.txt"
+    : >"$AGY_STUB_ARGV"
     cat >"$stub_dir/agy" <<'EOF'
 #!/bin/sh
-# $1 is --print; $2 is the prompt value this test asserts on.
-echo "agy called with: $2"
-exit 0
+printf '%s\n' "$*" >"$AGY_STUB_ARGV"
+printf '{"event":"init","conversation_id":"stub"}\n'
+printf '{"event":"step_update","step_update":{"state":"DONE"}}\n'
+jq -c '{event:"result",result:{status:"SUCCESS",response:("agy reviewed: " + .message.content)}}'
 EOF
     chmod +x "$stub_dir/agy"
     export PATH="$stub_dir:$PATH"
 }
 
-@test "run_ai agy: small prompt → passed as value argument, not stdin" {
+@test "run_ai agy: prompt goes to stdin as stream-json, never as an argv value" {
     _source_module
     _stub_agy_echo
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
     run _gh_pr_review_run_ai agy "$f"
     assert_success
-    assert_output --partial "agy called with: review this diff"
+    # The `result` event's `response` is what reaches the PR comment body.
+    assert_output "agy reviewed: review this diff"
+    run cat "$AGY_STUB_ARGV"
+    assert_output --partial "--input-format stream-json"
+    assert_output --partial "--output-format stream-json"
+    refute_output --partial "review this diff"
 }
 
-@test "run_ai agy: prompt at/over MAX_ARG_STRLEN (131072 bytes) → fails with clear message, agy never invoked" {
+@test "run_ai agy: prompt over MAX_ARG_STRLEN (131072 bytes) still reaches agy (#1761)" {
     _source_module
     _stub_agy_echo
     local f="$TEST_TEMP_HOME/big.txt"
-    # 131072 bytes exactly — the guard's `-ge` boundary.
-    head -c 131072 /dev/zero | tr '\0' 'x' >"$f"
+    # 131746 bytes — the size observed live on the 62-file PR that produced
+    # `prompt 131746B > 131072B argv limit` and no review at all.
+    local size=131746 prefix="agy reviewed: "
+    head -c "$size" /dev/zero | tr '\0' 'x' >"$f"
     run _gh_pr_review_run_ai agy "$f"
-    assert_failure
-    assert_output --partial "over the 131072-byte argv limit"
-    refute_output --partial "agy called with"
+    assert_success
+    # The stub's prefix + the whole prompt — proves nothing was truncated.
+    # Derived from $prefix/$size rather than hardcoded so changing either
+    # does not turn this into a bare `131760 != 131755`.
+    [ "${#output}" -eq $((${#prefix} + size)) ]
 }
 
 @test "run_ai agy: unreadable prompt file → fails, does not silently swallow the read error" {
@@ -1146,8 +1178,75 @@ EOF
     chmod 000 "$f"
     run _gh_pr_review_run_ai agy "$f"
     assert_failure
-    refute_output --partial "agy called with"
+    refute_output --partial "agy reviewed"
     chmod 644 "$f" # restore so bats can clean up TEST_TEMP_HOME
+}
+
+@test "run_ai agy: ERROR result with a ZERO exit still fails — status, not exit code, is the signal" {
+    # PR #1765 codex BLOCKER: agy exiting 0 on a non-SUCCESS stream result
+    # would have posted an empty review as a passing lane.
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"init","conversation_id":"stub"}\n'
+printf '{"event":"result","result":{"status":"ERROR","response":"","error":"context window exceeded"}}\n'
+exit 0
+EOF
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure
+    assert_output --partial "context window exceeded"
+    assert_output --partial "status=ERROR"
+}
+
+@test "run_ai agy: stream-json ERROR result surfaces its cause (it lands on stdout, not stderr)" {
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"init","conversation_id":"stub"}\n'
+printf '{"event":"result","result":{"status":"ERROR","response":"","error":"model quota exhausted"}}\n'
+exit 1
+EOF
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure 1
+    assert_output --partial "model quota exhausted"
+}
+
+@test "run_ai agy: agy's own exit code survives the single-pass stream parse (#1765)" {
+    # PR #1765 agy FOLLOW-UP collapsed the two stream jq passes into one that
+    # also fails on non-SUCCESS. The failure summary prints "exit $_rc"
+    # verbatim, so that one program must not flatten agy's real exit code to
+    # a generic 1 — 3 here is distinguishable from the jq fallback.
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"result","result":{"status":"ERROR","error":"upstream 503"}}\n'
+exit 3
+EOF
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure 3
+    assert_output --partial "(exit 3)"
+    assert_output --partial "upstream 503"
 }
 
 # ---------------------------------------------------------------------------
@@ -1294,7 +1393,8 @@ EOF
 # ---------------------------------------------------------------------------
 # _gh_pr_review_run_ai — hermes transport (issue #1377, corrected in #1452:
 # hermes has no `exec` subcommand — the one-shot flag is `-z` and it takes the
-# prompt as a value argument, so it shares agy's MAX_ARG_STRLEN guard)
+# prompt as a value argument, so it is the sole user of the MAX_ARG_STRLEN
+# guard since #1761 moved agy onto stdin)
 # ---------------------------------------------------------------------------
 
 _stub_hermes_echo() {
@@ -1487,7 +1587,7 @@ _assert_slow_cli_within_bound() {
 
     run _gh_pr_review_run_ai agy "$f"
     assert_success
-    assert_output --partial "agy called with: review this diff"
+    assert_output --partial "agy reviewed: review this diff"
     # The success path still cleans the stderr file up after itself.
     [ ! -e "$fallback" ]
 }
@@ -1508,7 +1608,7 @@ _assert_slow_cli_within_bound() {
     assert_failure 1
     assert_output --partial "Could not create stderr temp file under /tmp"
     # Aborts before invoking the CLI — nothing is written through the link.
-    refute_output --partial "agy called with"
+    refute_output --partial "agy reviewed"
     [ -L "$fallback" ]
     run cat "$victim"
     assert_output "original"
