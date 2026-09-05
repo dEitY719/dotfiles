@@ -2678,7 +2678,7 @@ FIXTURE
     # through the CLEAN apply path on purpose — main's edit sits at the head of
     # the file, far from the appended line, so nothing conflicts and the new
     # discriminator (not #1177's conflict-path one) owns the verdict.
-    run_in_bash "
+    local fixture="
         $(_gcp903_make_repo)
         printf 'alpha\nbeta\n    return 0\ngamma\n' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source
@@ -2686,10 +2686,24 @@ FIXTURE
         src=\$(git rev-parse HEAD)
         git checkout -q main
         sed -i '1s/.*/alpha-edited/' f.txt && git add f.txt && git commit -qm 'unrelated head work'
+    "
+    run_in_bash "$fixture
         _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
     "
     assert_success
     assert_output --partial "rc=1"
+
+    # ...and it is the FLOOR that rejects it, not one of the other two
+    # preconditions: the same fixture IS absorbed once the floor drops to 1.
+    # Pins GCP_SCAN_DUP_BLOCK_MIN_LINES as a live knob — the phantom-commit
+    # runbook sends users to it, so a default-only test would leave the
+    # documented escape hatch unproven.
+    run_in_bash "$fixture
+        GCP_SCAN_DUP_BLOCK_MIN_LINES=1
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=0"
 }
 
 @test "dup #1759: a commit that ADDS a file is never a duplicate append (1)" {
