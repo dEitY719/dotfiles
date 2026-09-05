@@ -545,7 +545,7 @@ case "$1 $2" in
             # gets whichever row the API happened to list first — another
             # board's value. Models the uncorrelated read the fix removes.
             if [ -n "${FAKE_VERIFY_OTHER_BOARD:-}" ] \
-                && [[ "$all_args" != *"${FAKE_VERIFY_PROJECT:-proj1}"* ]]; then
+                && [[ "$all_args" != *proj1* ]]; then
                 echo "$FAKE_VERIFY_OTHER_BOARD"
                 exit 0
             fi
@@ -593,7 +593,6 @@ _run_full_bash() {
         export FAKE_VERIFY_SEQUENCE='${FAKE_VERIFY_SEQUENCE:-}'
         export FAKE_DISCOVER_PAGE2='${FAKE_DISCOVER_PAGE2:-}'
         export FAKE_VERIFY_OTHER_BOARD='${FAKE_VERIFY_OTHER_BOARD:-}'
-        export FAKE_VERIFY_PROJECT='${FAKE_VERIFY_PROJECT:-proj1}'
         export FAKE_REPO_VIEW_FAIL='${FAKE_REPO_VIEW_FAIL:-0}'
         export FAKE_VERIFY_FAIL='${FAKE_VERIFY_FAIL:-0}'
         export FAKE_VERIFY_FAIL_MSG='${FAKE_VERIFY_FAIL_MSG:-}'
