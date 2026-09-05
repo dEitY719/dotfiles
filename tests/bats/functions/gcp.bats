@@ -2140,6 +2140,66 @@ FIXTURE
     refute_output --partial "B10"
 }
 
+@test "bash: _gcp_scan_cherry_pick_quiet private function exists" {
+    run_in_bash 'declare -f _gcp_scan_cherry_pick_quiet >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "scan #1753: git's cherry-pick advice hints are suppressed, CONFLICT line kept" {
+    # Issue #1753. The apply loop rolls a deferred conflict back itself, so git's
+    # 5-line "hint: ... run git cherry-pick --continue/--skip/--abort" block is
+    # advice the user cannot act on, duplicated right above the loop's own
+    # `Deferred ... rolled back, continuing with the rest.` summary. Both
+    # abort-the-batch exits print their own recovery line via
+    # `_gcp_scan_report_conflict_stop`, so nothing actionable is lost.
+    # advice.mergeConflict is forced ON in the fixture repo so the test cannot
+    # pass vacuously on a machine that disabled it globally. Note that on
+    # git < 2.45 that key does not gate this block at all — which is why the
+    # fix filters `hint:` off the cherry-pick's stderr as well as setting it.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        git config advice.mergeConflict true
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+        ls .git/gcp-scan-cp-stderr >/dev/null 2>&1 && echo SCRATCH_LEFT || echo SCRATCH_CLEAN
+    "
+    # No scratch file is created at all: stderr is captured through an fd swap,
+    # so there is nothing to leak on an interrupt mid-pick (PR #1755 review).
+    assert_output --partial "SCRATCH_CLEAN"
+    # The noise is gone.
+    refute_output --partial "hint:"
+    # The informative body lines survive — no information loss.
+    assert_output --partial "CONFLICT (content)"
+    assert_output --partial "conf.txt"
+    # The loop's own summary still reports the deferral.
+    assert_output --partial "rolled back, continuing with the rest"
+    assert_output --partial "1 deferred (conflict)"
+    assert_output --partial "scan_rc=1"
+}
+
+@test "scan #1753: hint filter survives color.advice=always (ANSI-prefixed hints)" {
+    # PR #1755 review (agy + codex FOLLOW-UP, generalized). With
+    # `color.advice=always` git prefixes every hint line with an ANSI SGR
+    # escape, so a bare `^hint: ` anchor misses and all six lines leak through
+    # — verified on git 2.43. The fix pins `-c color.advice=false` on the
+    # cherry-pick, and `-c` on the command line outranks repo config, so the
+    # setting below cannot defeat it.
+    run_in_bash "
+        $(_gcp1647_make_repo)
+        git config advice.mergeConflict true
+        git config color.advice always
+        git config color.ui always
+        printf 'y\n' | _gcp_scan main source --author=all
+        echo \"scan_rc=\$?\"
+    "
+    refute_output --partial "hint:"
+    assert_output --partial "CONFLICT (content)"
+    assert_output --partial "rolled back, continuing with the rest"
+    assert_output --partial "1 deferred (conflict)"
+    assert_output --partial "scan_rc=1"
+}
+
 @test "scan #1647: --stop-on-conflict restores the legacy all-or-nothing abort" {
     # Defect B opt-out. With the flag the first unpredicted conflict aborts the
     # whole remaining batch exactly as before: the sequencer stays ACTIVE for the
@@ -2152,6 +2212,10 @@ FIXTURE
         [ -f \"\$repo/.git/CHERRY_PICK_HEAD\" ] && echo CPH_PRESENT || echo CPH_MISSING
     "
     assert_output --partial "Resolve and run"
+    # #1753: git's hint block is filtered out now, so the sequencer is left
+    # ACTIVE with only this message to recover from — it must name --abort too.
+    assert_output --partial "git cherry-pick --abort"
+    refute_output --partial "hint:"
     assert_output --partial "scan_rc=1"
     assert_output --partial "CPH_PRESENT"
     # Legacy behavior: the batch stopped, so the later candidate never applied.
