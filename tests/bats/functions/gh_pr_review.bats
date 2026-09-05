@@ -1145,12 +1145,14 @@ EOF
     local f="$TEST_TEMP_HOME/big.txt"
     # 131746 bytes — the size observed live on the 62-file PR that produced
     # `prompt 131746B > 131072B argv limit` and no review at all.
-    head -c 131746 /dev/zero | tr '\0' 'x' >"$f"
+    local size=131746 prefix="agy reviewed: "
+    head -c "$size" /dev/zero | tr '\0' 'x' >"$f"
     run _gh_pr_review_run_ai agy "$f"
     assert_success
-    refute_output --partial "argv limit"
-    # "agy reviewed: " (14) + the full prompt — proves nothing was truncated.
-    [ "${#output}" -eq $((14 + 131746)) ]
+    # The stub's prefix + the whole prompt — proves nothing was truncated.
+    # Derived from $prefix/$size rather than hardcoded so changing either
+    # does not turn this into a bare `131760 != 131755`.
+    [ "${#output}" -eq $((${#prefix} + size)) ]
 }
 
 @test "run_ai agy: unreadable prompt file → fails, does not silently swallow the read error" {
@@ -1314,7 +1316,8 @@ EOF
 # ---------------------------------------------------------------------------
 # _gh_pr_review_run_ai — hermes transport (issue #1377, corrected in #1452:
 # hermes has no `exec` subcommand — the one-shot flag is `-z` and it takes the
-# prompt as a value argument, so it shares agy's MAX_ARG_STRLEN guard)
+# prompt as a value argument, so it is the sole user of the MAX_ARG_STRLEN
+# guard since #1761 moved agy onto stdin)
 # ---------------------------------------------------------------------------
 
 _stub_hermes_echo() {

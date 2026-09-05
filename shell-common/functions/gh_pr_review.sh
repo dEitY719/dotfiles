@@ -426,7 +426,9 @@ _gh_pr_review_timeout() {
 #
 # Args: $1 = ai (codex|agy|claude|opencode), $2 = PROMPT_FILE, $3 = optional
 # CLAUDE_CONFIG_DIR (claude --user routing), $4 = optional pre-allocated
-# stderr temp path. Stdout of the CLI streams to the caller's stdout;
+# stderr temp path. Stdout of the CLI streams to the caller's stdout
+# (except agy, which must buffer: its failure cause arrives on stdout, so
+# the stream has to survive to be re-read — see that lane's comment);
 # stderr is captured for the failure summary.
 _gh_pr_review_run_ai() {
     local ai="$1"
@@ -504,8 +506,12 @@ _gh_pr_review_run_ai() {
         # `--print` still needs a value even in stream-json mode (Go's flag
         # parser rejects a bare `--print` with "flag needs an argument"), so it
         # is passed empty and the stdin message carries the prompt.
+        # `2>` before `<` is deliberate: redirections apply left to right, so
+        # with `<` first an unreadable $prompt_file is reported before stderr
+        # is redirected and the summary below gets "<no stderr>" (bash; zsh
+        # reports to the original stderr either way). Do not reorder.
         if ! _prompt_content=$(jq -Rs '{event: "user", message: {content: .}}' \
-            <"$prompt_file" 2>"$_stderr_file"); then
+            2>"$_stderr_file" <"$prompt_file"); then
             _rc=1
         else
             # `printf` is a shell builtin, so the prompt reaches agy through a
@@ -535,7 +541,7 @@ _gh_pr_review_run_ai() {
                 printf '%s\n' "$_agy_stream" |
                     jq -r 'select(.event == "result")
                            | "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")"' \
-                        >>"$_stderr_file" 2>/dev/null
+                        >>"$_stderr_file" 2>&1
             fi
         fi
         ;;
@@ -551,9 +557,8 @@ _gh_pr_review_run_ai() {
         # (issue #1452): there is no `exec` subcommand — the one-shot
         # non-interactive flag is `-z` / `--oneshot`, and it takes the prompt
         # as a value argument rather than --file/stdin, guarded by
-        # _gh_pr_review_argv_prompt_or_fail. Re-checked for #1761: hermes has
-        # no stdin equivalent of agy's `--input-format stream-json`, so this
-        # lane keeps the argv ceiling until it grows one.
+        # _gh_pr_review_argv_prompt_or_fail — see that helper's header for why
+        # this lane still has an argv ceiling.
         if ! _gh_pr_review_require_internal_cli hermes >"$_stderr_file" 2>&1; then
             _rc=1
         elif _prompt_content=$(_gh_pr_review_argv_prompt_or_fail "hermes -z" "$prompt_file" "$_stderr_file"); then
