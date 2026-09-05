@@ -530,30 +530,28 @@ _gh_pr_review_run_ai() {
             _agy_stream=$(printf '%s\n' "$_prompt_content" |
                 agy --print '' --input-format stream-json \
                     --output-format stream-json 2>>"$_stderr_file") || _rc=$?
-            if [ "$_rc" -eq 0 ]; then
-                # `response` is what plain `agy --print` used to write to
-                # stdout, so everything downstream (tee -> AI_OUT -> comment
-                # body) keeps seeing exactly the same review text.
-                # The exit code alone is NOT the success signal (PR #1765
-                # codex BLOCKER): the stream carries its own `result.status`,
-                # and a non-SUCCESS result that still exited 0 would post an
-                # empty review as if the lane had passed. Gate on the status
-                # and let `jq -e` turn "no SUCCESS result at all" into a
-                # failure instead of silent empty output.
-                printf '%s\n' "$_agy_stream" |
-                    jq -er 'select(.event == "result" and .result.status == "SUCCESS")
-                            | .result.response // ""' \
-                        2>>"$_stderr_file" || _rc=1
-            fi
-            if [ "$_rc" -ne 0 ]; then
-                # A non-SUCCESS run reports its cause in `result.error` on
-                # *stdout*, not stderr — without this the failure summary
-                # below would have an empty stderr file to work with.
-                printf '%s\n' "$_agy_stream" |
-                    jq -r 'select(.event == "result")
-                           | "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")"' \
-                        >>"$_stderr_file" 2>&1
-            fi
+            # One jq pass over the buffered stream, not two (PR #1765 agy
+            # FOLLOW-UP): status, response and error come out of the same
+            # program. `response` is what plain `agy --print` used to write
+            # to stdout, so everything downstream (tee -> AI_OUT -> comment
+            # body) keeps seeing exactly the same review text.
+            # The exit code alone is NOT the success signal (PR #1765 codex
+            # BLOCKER): the stream carries its own `result.status`, and a
+            # non-SUCCESS result that still exited 0 would post an empty
+            # review as if the lane had passed. `halt_error` routes the
+            # non-SUCCESS cause — reported in `result.error` on *stdout*,
+            # not stderr — into $_stderr_file so the failure summary below
+            # has something to work with, and `jq -e` turns "no result event
+            # at all" into a failure instead of silent empty output.
+            # `_rc` keeps agy's own exit code when it already failed: the
+            # summary prints it verbatim as "exit $_rc".
+            printf '%s\n' "$_agy_stream" |
+                jq -er 'select(.event == "result")
+                        | if .result.status == "SUCCESS" then .result.response // ""
+                          else "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")\n"
+                               | halt_error(1)
+                          end' \
+                    2>>"$_stderr_file" || { [ "$_rc" -ne 0 ] || _rc=1; }
         fi
         ;;
     claude)

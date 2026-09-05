@@ -1225,6 +1225,30 @@ EOF
     assert_output --partial "model quota exhausted"
 }
 
+@test "run_ai agy: agy's own exit code survives the single-pass stream parse (#1765)" {
+    # PR #1765 agy FOLLOW-UP collapsed the two stream jq passes into one that
+    # also fails on non-SUCCESS. The failure summary prints "exit $_rc"
+    # verbatim, so that one program must not flatten agy's real exit code to
+    # a generic 1 — 3 here is distinguishable from the jq fallback.
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"result","result":{"status":"ERROR","error":"upstream 503"}}\n'
+exit 3
+EOF
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure 3
+    assert_output --partial "(exit 3)"
+    assert_output --partial "upstream 503"
+}
+
 # ---------------------------------------------------------------------------
 # _gh_pr_review_run_ai — opencode transport (issue #1334)
 # ---------------------------------------------------------------------------
