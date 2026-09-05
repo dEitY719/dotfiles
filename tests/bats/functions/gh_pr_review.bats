@@ -1165,6 +1165,29 @@ EOF
     chmod 644 "$f" # restore so bats can clean up TEST_TEMP_HOME
 }
 
+@test "run_ai agy: ERROR result with a ZERO exit still fails — status, not exit code, is the signal" {
+    # PR #1765 codex BLOCKER: agy exiting 0 on a non-SUCCESS stream result
+    # would have posted an empty review as a passing lane.
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'EOF'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"init","conversation_id":"stub"}\n'
+printf '{"event":"result","result":{"status":"ERROR","response":"","error":"context window exceeded"}}\n'
+exit 0
+EOF
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure
+    assert_output --partial "context window exceeded"
+    assert_output --partial "status=ERROR"
+}
+
 @test "run_ai agy: stream-json ERROR result surfaces its cause (it lands on stdout, not stderr)" {
     _source_module
     local stub_dir="$TEST_TEMP_HOME/bin"

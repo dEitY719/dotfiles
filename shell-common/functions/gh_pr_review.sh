@@ -517,15 +517,24 @@ _gh_pr_review_run_ai() {
                 # `response` is what plain `agy --print` used to write to
                 # stdout, so everything downstream (tee -> AI_OUT -> comment
                 # body) keeps seeing exactly the same review text.
+                # The exit code alone is NOT the success signal (PR #1765
+                # codex BLOCKER): the stream carries its own `result.status`,
+                # and a non-SUCCESS result that still exited 0 would post an
+                # empty review as if the lane had passed. Gate on the status
+                # and let `jq -e` turn "no SUCCESS result at all" into a
+                # failure instead of silent empty output.
                 printf '%s\n' "$_agy_stream" |
-                    jq -r 'select(.event == "result") | .result.response // ""' \
-                        2>>"$_stderr_file" || _rc=$?
-            else
+                    jq -er 'select(.event == "result" and .result.status == "SUCCESS")
+                            | .result.response // ""' \
+                        2>>"$_stderr_file" || _rc=1
+            fi
+            if [ "$_rc" -ne 0 ]; then
                 # A non-SUCCESS run reports its cause in `result.error` on
                 # *stdout*, not stderr — without this the failure summary
                 # below would have an empty stderr file to work with.
                 printf '%s\n' "$_agy_stream" |
-                    jq -r 'select(.event == "result") | .result.error // empty' \
+                    jq -r 'select(.event == "result")
+                           | "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")"' \
                         >>"$_stderr_file" 2>/dev/null
             fi
         fi
