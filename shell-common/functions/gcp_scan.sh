@@ -232,10 +232,49 @@ _gcp_scan_report_conflict_stop() {
     # Shared "Failed at $sha, resolve manually" message for the execution
     # loop's two abort-the-batch exits (--stop-on-conflict, and the rollback
     # itself failing to clear the sequencer) — issue #1647, defect B.
+    #
+    # Names `--abort` as well as `--continue` (issue #1753): the sequencer is
+    # left ACTIVE on both of these exits, and git's own hint block — which
+    # used to spell out the full menu right here — is now filtered out by
+    # `_gcp_scan_cherry_pick_quiet`. `_gcp_assert_no_cherry_pick` shows the
+    # same pair, but only on the NEXT gcp invocation.
     local sha="$1"
     if type ux_error >/dev/null 2>&1; then
         ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
+        ux_error "  (or abandon it with: git cherry-pick --abort)"
     fi
+}
+
+_gcp_scan_cherry_pick_quiet() {
+    # `git cherry-pick "$1"`, minus git's unactionable conflict-advice block
+    # (issue #1753). On conflict git appends 5-6 `hint: ... --continue /
+    # --skip / --abort` lines on STDERR, but the execution loop resolves the
+    # sequencer itself — it rolls the single commit back and continues, and
+    # both abort-the-batch exits print their own recovery line via
+    # `_gcp_scan_report_conflict_stop`. So those hints are advice the user
+    # cannot act on, printed immediately above the loop's own `Deferred ...`
+    # summary of the same event.
+    #
+    # Filtering STDERR, not `-c advice.mergeConflict=false`: that key only
+    # gates this block from git 2.45 onwards and is silently ignored by older
+    # git (2.43 is what ships with Ubuntu 24.04), which prints the very same
+    # hints with no config gate at all — so the config-only fix is a no-op
+    # exactly where the bug was reported.
+    #
+    # No information is lost: `Auto-merging` and `CONFLICT (content): ...` go
+    # to STDOUT and are never touched, and `error: could not apply ...`
+    # survives the filter because only `hint:` lines are dropped.
+    local _err _rc
+    _err=$(mktemp "${TMPDIR:-/tmp}/gcp_cp_err.XXXXXX" 2>/dev/null) || {
+        # No temp file — never trade the cherry-pick itself for tidier output.
+        git cherry-pick "$1"
+        return $?
+    }
+    git cherry-pick "$1" 2>"$_err"
+    _rc=$?
+    grep -v '^hint: ' "$_err" >&2
+    command rm -f "$_err"
+    return "$_rc"
 }
 
 _gcp_scan_pick_list_prior() {
@@ -1569,7 +1608,7 @@ $sha
         if type ux_info >/dev/null 2>&1; then
             ux_info "Cherry-picking $sha..."
         fi
-        if git cherry-pick "$sha"; then
+        if _gcp_scan_cherry_pick_quiet "$sha"; then
             picked=$((picked + 1))
         else
             # Defensive: a commit that becomes empty against HEAD (no conflict)
