@@ -1182,7 +1182,45 @@ EOF
     assert_output --partial "opencode args: [run]"
     assert_output --partial "[--model] [codemate/CodeLLMPro]"
     assert_output --partial "[--dir]"
-    assert_output --partial "[--file] [$f]"
+    refute_output --partial "[--file] [$f]"
+}
+
+@test "run_ai opencode: --file prompt path lives inside --dir (issue #1763)" {
+    # opencode-guard rejects, in non-interactive mode, any --file path
+    # outside --dir. Passing the original $prompt_file (always under
+    # /tmp/gh-pr-review-prompt.*, a sibling of --dir's own /tmp/gh-pr-
+    # review-opencode.* directory) makes opencode unable to read its own
+    # prompt and return empty output every time.
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/opencode" <<'EOF'
+#!/bin/sh
+dir="" file="" prev=""
+for arg in "$@"; do
+    case "$prev" in
+    --dir) dir="$arg" ;;
+    --file) file="$arg" ;;
+    esac
+    prev="$arg"
+done
+printf 'dir=%s\n' "$dir"
+printf 'file=%s\n' "$file"
+case "$file" in
+"$dir"/*) cat "$file" ;;
+*) echo "REFUSED: file outside dir" >&2; exit 1 ;;
+esac
+EOF
+    chmod +x "$stub_dir/opencode"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    run _gh_pr_review_run_ai opencode "$f"
+    assert_success
+    assert_output --partial "review this diff"
+    refute_output --partial "REFUSED"
 }
 
 @test "run_ai opencode: non-internal mode refuses without invoking opencode" {
