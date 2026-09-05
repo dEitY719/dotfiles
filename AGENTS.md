@@ -67,6 +67,11 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 
 See **[Claude Code](./claude/AGENTS.md)** for skills management, multi-CLI registry, and commands.
 
-# 변경 기록 (changelog) — 중단 (2026-09-02)
+<!-- my-share:changelog:begin -->
+## 변경 기록 (changelog)
 
-- fragment 작성 요구는 중단됐다 — 상세와 재개 조건은 `CLAUDE.md` → "변경 기록 (changelog)" 참고.
+- 현재 OFF. changelog 를 갱신하지 않는다(허브 수집 일시 중단).
+- 재활성화는 my-share 에서 `python3 scripts/changelog_toggle.py on`.
+<!-- my-share:changelog:end -->
+
+- 상세와 재개 조건은 `CLAUDE.md` → "변경 기록 (changelog)" 참고.
