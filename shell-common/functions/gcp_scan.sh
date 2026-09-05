@@ -236,8 +236,8 @@ _gcp_scan_report_conflict_stop() {
     # Names `--abort` as well as `--continue` (issue #1753): the sequencer is
     # left ACTIVE on both of these exits, and git's own hint block — which
     # used to spell out the full menu right here — is now filtered out by
-    # `_gcp_scan_cherry_pick_quiet`. `_gcp_assert_no_cherry_pick` shows the
-    # same pair, but only on the NEXT gcp invocation.
+    # `_gcp_scan_cherry_pick_quiet`. Matches the same pair printed by this
+    # file's inline CHERRY_PICK_HEAD guard on the NEXT gcp scan.
     local sha="$1"
     if type ux_error >/dev/null 2>&1; then
         ux_error "Failed at $sha. Resolve and run: git cherry-pick --continue"
@@ -246,17 +246,13 @@ _gcp_scan_report_conflict_stop() {
 }
 
 _gcp_scan_cherry_pick_quiet() {
-    #   $1  commit to pick
-    #   $2  the repo's git dir (the loop's $_gcp_git_dir) — scratch lives there
-    #
     # `git cherry-pick "$1"`, minus git's unactionable conflict-advice block
     # (issue #1753). On conflict git appends 5-6 `hint: ... --continue /
     # --skip / --abort` lines on STDERR, but the execution loop resolves the
     # sequencer itself — it rolls the single commit back and continues, and
     # both abort-the-batch exits print their own recovery line via
     # `_gcp_scan_report_conflict_stop`. So those hints are advice the user
-    # cannot act on, printed immediately above the loop's own `Deferred ...`
-    # summary of the same event.
+    # cannot act on, printed right above the loop's own `Deferred ...` summary.
     #
     # Two git-side knobs plus one filter, because no single one covers every
     # git (PR #1755 review, agy + codex FOLLOW-UP):
@@ -265,39 +261,28 @@ _gcp_scan_cherry_pick_quiet() {
     #     so nothing has to be pattern-matched there (a translated `hint:`
     #     prefix included). Silently ignored by older git, where `advise()` is
     #     ungated — which is why the filter below still has to exist.
-    #   color.advice=false — makes the filter's `^hint: ` anchor unbreakable.
-    #     A user running `color.advice=always` gets each hint line prefixed
-    #     with an ANSI SGR escape, so the anchor misses and all six lines leak
-    #     (verified on git 2.43). `-c` on the command line outranks any
-    #     user config, so this cannot be turned back on from the outside.
+    #   color.advice=false — keeps the filter's `^hint: ` anchor unbreakable.
+    #     Under `color.advice=always` each hint line carries an ANSI SGR prefix,
+    #     so the anchor misses and all six leak (verified on git 2.43). `-c` on
+    #     the command line outranks user config, so this cannot be re-enabled
+    #     from the outside.
     #   grep -v '^hint: ' — the actual removal on git < 2.45.
     #
     # Residual, accepted: git < 2.45 with git's own translations installed AND
     # a non-English locale would emit a translated prefix the filter misses.
-    # That combination degrades to today's behaviour (hints shown), never to a
-    # lost cherry-pick.
+    # That degrades to today's behaviour (hints shown), never to a lost
+    # cherry-pick.
     #
-    # Scratch file lives in the git dir under a fixed name, not `mktemp` in
-    # $TMPDIR: an interrupt mid-pick used to strand a `gcp_cp_err.*` file per
-    # commit (agy + codex FOLLOW-UP). A fixed path is truncated by the next
-    # `>` instead of accumulating, is scoped to the repo being picked into,
-    # and removes the `mktemp`-failure branch entirely.
-    #
-    # No information is lost: `Auto-merging` and `CONFLICT (content): ...` go
-    # to STDOUT and are never touched, and `error: could not apply ...`
-    # survives the filter because only `hint:` lines are dropped.
+    # STDERR is captured through an fd swap, not a scratch file: `$(...)` sets
+    # `$?` from the command it ran, so git's exit status survives without the
+    # temp file a pipeline would force (`grep` would otherwise become `$?`, and
+    # PIPESTATUS is not POSIX). fd 3 carries STDOUT through untouched, so
+    # `Auto-merging` and `CONFLICT (content): ...` are never even captured;
+    # `error: could not apply ...` is, and survives the `hint:`-only filter.
     local _err _rc
-    _err="${2:-}/gcp-scan-cp-stderr"
-    # Unwritable git dir (read-only checkout, odd permissions) — never trade
-    # the cherry-pick itself for tidier output.
-    if [ -z "${2:-}" ] || ! : >"$_err" 2>/dev/null; then
-        git -c advice.mergeConflict=false -c color.advice=false cherry-pick "$1"
-        return $?
-    fi
-    git -c advice.mergeConflict=false -c color.advice=false cherry-pick "$1" 2>"$_err"
-    _rc=$?
-    grep -v '^hint: ' "$_err" >&2
-    command rm -f "$_err"
+    { _err=$(git -c advice.mergeConflict=false -c color.advice=false \
+        cherry-pick "$1" 2>&1 1>&3); _rc=$?; } 3>&1
+    [ -z "$_err" ] || printf '%s\n' "$_err" | grep -v '^hint: ' >&2
     return "$_rc"
 }
 
@@ -1632,7 +1617,7 @@ $sha
         if type ux_info >/dev/null 2>&1; then
             ux_info "Cherry-picking $sha..."
         fi
-        if _gcp_scan_cherry_pick_quiet "$sha" "$_gcp_git_dir"; then
+        if _gcp_scan_cherry_pick_quiet "$sha"; then
             picked=$((picked + 1))
         else
             # Defensive: a commit that becomes empty against HEAD (no conflict)

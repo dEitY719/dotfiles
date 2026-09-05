@@ -2141,9 +2141,9 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_cherry_pick_quiet private function exists" {
-    run_in_bash 'type _gcp_scan_cherry_pick_quiet >/dev/null 2>&1 && echo EXISTS'
+    run_in_bash 'declare -f _gcp_scan_cherry_pick_quiet >/dev/null && echo ok'
     assert_success
-    assert_output --partial "EXISTS"
+    assert_output --partial "ok"
 }
 
 @test "scan #1753: git's cherry-pick advice hints are suppressed, CONFLICT line kept" {
@@ -2153,21 +2153,19 @@ FIXTURE
     # `Deferred ... rolled back, continuing with the rest.` summary. Both
     # abort-the-batch exits print their own recovery line via
     # `_gcp_scan_report_conflict_stop`, so nothing actionable is lost.
-    # Both advice keys are forced ON in the fixture repo so the test cannot
-    # pass vacuously on a machine that disabled them globally. Note that on
-    # git < 2.45 neither key gates this block at all — which is why the fix
-    # filters `hint:` off the cherry-pick's stderr instead of setting them.
+    # advice.mergeConflict is forced ON in the fixture repo so the test cannot
+    # pass vacuously on a machine that disabled it globally. Note that on
+    # git < 2.45 that key does not gate this block at all — which is why the
+    # fix filters `hint:` off the cherry-pick's stderr as well as setting it.
     run_in_bash "
         $(_gcp1647_make_repo)
         git config advice.mergeConflict true
-        git config advice.skippedCherryPicks true
-        git config advice.resolveConflict true
         printf 'y\n' | _gcp_scan main source --author=all
         echo \"scan_rc=\$?\"
         ls .git/gcp-scan-cp-stderr >/dev/null 2>&1 && echo SCRATCH_LEFT || echo SCRATCH_CLEAN
     "
-    # The scratch file the filter writes through is cleaned up, and it lives in
-    # the git dir — never a per-commit mktemp in \$TMPDIR (PR #1755 review).
+    # No scratch file is created at all: stderr is captured through an fd swap,
+    # so there is nothing to leak on an interrupt mid-pick (PR #1755 review).
     assert_output --partial "SCRATCH_CLEAN"
     # The noise is gone.
     refute_output --partial "hint:"
