@@ -2535,3 +2535,199 @@ FIXTURE
     run bash -c "grep 'range_str' '${src}' | grep -vE 'local range_str=|ux_bullet|ux_info|echo '"
     assert_failure 1
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1759 — a duplicate block re-applied as a CLEAN append
+#
+# Both of Stage-2's verdict paths ask a textual question: "does the staged tree
+# still differ from HEAD?" That is the right question when the commit's payload
+# either landed identically (empty staged diff -> no-op) or collided (conflict
+# -> the drift discriminator decides). It is the WRONG question when the payload
+# already sits in HEAD at a DIFFERENT position: the merge then has no overlap to
+# resolve, applies the hunk cleanly a second time, and leaves a non-empty staged
+# diff that reads as real work.
+#
+# That shape is not hypothetical — it is what a cross-repo cherry-pick produces
+# whenever the base-side copy of a block landed somewhere other than where the
+# source commit put it. The reported case appended 54 lines to a bats file on
+# every single scan (`1 file changed, 54 insertions(+)`), six copies deep,
+# because the block was in HEAD but not where the commit expected it.
+#
+# `_gcp_scan_staged_is_duplicate_append` closes that path. It fires only on the
+# narrowest shape that can BE a re-application — every staged path a plain
+# modification, every hunk addition-only, and every added block already present
+# verbatim and contiguously in HEAD's copy of that same file — so a commit that
+# adds anything HEAD lacks, deletes anything, or adds a file keeps its "real
+# work" verdict untouched. Contiguity (not the set membership #1177/#1688 use)
+# is what keeps a coincidental line repeat out of the verdict, and the
+# GCP_SCAN_DUP_BLOCK_MIN_LINES floor covers the rest.
+# ---------------------------------------------------------------------------
+
+_gcp1759_make_dup_append_repo() {
+    # `source` appends block B to the END of the file. `main` already carries
+    # that identical block, landed MID-file by an earlier cross-repo pick, so
+    # the two insertions do not overlap: the cherry-pick applies cleanly and
+    # appends a SECOND copy of B. Repeat the scan and it appends a third.
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1759.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm "init"
+        git checkout -q -b source
+        printf 'B1\nB2\nB3\nB4\n' >> f.txt && git add f.txt && git commit -qm "append block B"
+        src=$(git rev-parse HEAD)
+        git checkout -q main
+        { head -6 f.txt; printf 'B1\nB2\nB3\nB4\n'; tail -6 f.txt; } > n.txt && mv n.txt f.txt
+        git add f.txt && git commit -qm "same block, landed mid-file"
+FIXTURE
+}
+
+@test "bash: _gcp_scan_staged_is_duplicate_append private function exists" {
+    run_in_bash 'declare -f _gcp_scan_staged_is_duplicate_append >/dev/null && echo ok'
+    assert_success
+    assert_output --partial "ok"
+}
+
+@test "preflight #1759: the reported shape really is a CLEAN apply, not a conflict" {
+    # Pins the premise the fix rests on. If a future git resolved this as a
+    # conflict instead, the clean-apply guard below would be dead code and the
+    # drift discriminator (#1177/#1688) would own the case again.
+    run_in_bash "
+        $(_gcp1759_make_dup_append_repo)
+        git cherry-pick -n \"\$src\" >/dev/null 2>&1; echo \"cp_rc=\$?\"
+        git diff --cached --quiet && echo STAGED_EMPTY || echo STAGED_DIRTY
+        git diff --cached --shortstat
+        git reset --hard -q HEAD
+    "
+    assert_success
+    assert_output --partial "cp_rc=0"
+    assert_output --partial "STAGED_DIRTY"
+    assert_output --partial "4 insertions(+)"
+}
+
+@test "preflight #1759: a cleanly re-applied duplicate block is absorbed as a no-op (0), non-destructive" {
+    run_in_bash "
+        $(_gcp1759_make_dup_append_repo)
+        orig=\$(git rev-parse HEAD)
+        echo localedit > untracked_note.txt
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+        grep -q localedit untracked_note.txt 2>/dev/null && echo EDIT_KEPT || echo EDIT_LOST
+        [ \"\$(git rev-parse HEAD)\" = \"\$orig\" ] && echo HEAD_SAME || echo HEAD_MOVED
+        git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
+    "
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "EDIT_KEPT"
+    assert_output --partial "HEAD_SAME"
+    assert_output --partial "PICK_CLEAR"
+}
+
+@test "preflight #1759: absorbing a duplicate append is announced, never silent" {
+    # The #1177 direction: a commit dropped from the candidate list must leave
+    # a trace naming the sha, so a wrong verdict is auditable rather than
+    # invisible.
+    run_in_bash "
+        $(_gcp1759_make_dup_append_repo)
+        _gcp_scan_preflight_is_noop \"\$src\"
+    "
+    assert_success
+    assert_output --partial "duplicate append"
+    assert_output --partial "f.txt"
+}
+
+@test "dup #1759: a genuinely new block is NOT a duplicate append (1)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
+        git checkout -q -b source
+        printf 'N1\nN2\nN3\nN4\n' >> f.txt && git add f.txt && git commit -qm 'append new block'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "dup #1759: a commit that also DELETES is never absorbed (1)" {
+    # Deletion is the #1177 data-loss direction — an addition-only staged diff
+    # is a precondition, not a detail.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
+        git checkout -q -b source
+        printf 'B1\nB2\nB3\nB4\n' >> f.txt
+        sed -i '3d' f.txt
+        git add f.txt && git commit -qm 'append B and drop L3'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        { head -6 f.txt; printf 'B1\nB2\nB3\nB4\n'; tail -6 f.txt; } > n.txt && mv n.txt f.txt
+        git add f.txt && git commit -qm 'same block, landed mid-file'
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "dup #1759: a block under the line floor is a coincidence, not a duplicate (1)" {
+    # A one-line addition that happens to repeat an existing line is the
+    # commonest false positive a contiguity test alone would accept. Routed
+    # through the CLEAN apply path on purpose — main's edit sits at the head of
+    # the file, far from the appended line, so nothing conflicts and the new
+    # discriminator (not #1177's conflict-path one) owns the verdict.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf 'alpha\nbeta\n    return 0\ngamma\n' > f.txt && git add f.txt && git commit -qm 'seed'
+        git checkout -q -b source
+        printf '    return 0\n' >> f.txt && git add f.txt && git commit -qm 'append a lone return'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        sed -i '1s/.*/alpha-edited/' f.txt && git add f.txt && git commit -qm 'unrelated head work'
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "dup #1759: a commit that ADDS a file is never a duplicate append (1)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
+        git checkout -q -b source
+        printf 'B1\nB2\nB3\nB4\n' > new.txt && git add new.txt && git commit -qm 'add new file'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf 'B1\nB2\nB3\nB4\n' >> f.txt && git add f.txt && git commit -qm 'same lines, other file'
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "dup #1759: a mode-only change has no hunks and is never absorbed (1)" {
+    # A non-empty staged diff with zero hunks would make "every added block is
+    # already in HEAD" vacuously true.
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf 'echo hi\n' > s.sh && git add s.sh && git commit -qm 'add script'
+        git checkout -q -b source
+        chmod +x s.sh && git add s.sh && git commit -qm 'make it executable'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
+    "
+    assert_success
+    assert_output --partial "rc=1"
+}
+
+@test "scan #1759: the re-application loop terminates — the dup is filtered in Analysis" {
+    run_in_bash "
+        $(_gcp1759_make_dup_append_repo)
+        printf 'y\n' | _gcp_scan main source --author=all
+    "
+    assert_success
+    assert_output --partial "Already in HEAD (no-op):"
+}

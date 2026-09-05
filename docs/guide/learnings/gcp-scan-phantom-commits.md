@@ -73,6 +73,7 @@ git reset --hard HEAD
 | 충돌 해결 후 `--continue` 거부 | net-zero (빈 커밋) | `git cherry-pick --skip` |
 | scan fix가 적용 안 됨 | phantom이 fix 앞에 있어서 | 위 수동 우회 절차 실행 |
 | `git cherry` 출력에 `+` | 내용이 달라서 중복 미인식 | preflight probe로 no-op 확인 |
+| 같은 커밋이 매 scan 마다 clean apply, 항상 `N insertions(+)` | HEAD 가 그 블록을 **다른 위치**에 이미 갖고 있어 머지가 충돌 없이 또 붙임 (#1759) | `_gcp_scan_staged_is_duplicate_append` 가 흡수. 안 잡히면 블록 최소 길이 `GCP_SCAN_DUP_BLOCK_MIN_LINES` 확인 |
 
 ## When to use
 
@@ -85,5 +86,6 @@ git reset --hard HEAD
 ## Related
 
 - `shell-common/functions/gcp_scan.sh` — `_gcp_scan_preflight_is_noop` (line ~40)
+- `shell-common/functions/gcp_scan.sh` — `_gcp_scan_staged_is_duplicate_append` (#1759: clean-apply 중복 append 흡수)
 - Discussion #927 (원본 전체 분석·로그 포함)
 - #913 (preflight probe 구현 PR)
