@@ -910,6 +910,347 @@ _apply_stub() {
 }
 
 # ---------------------------------------------------------------------
+# #1762 — the optional 4th field: a DECLINE escalated to a tracking issue
+# ---------------------------------------------------------------------
+#
+# Upstream half of dEitY719/gh-pr-skills#21. Five rollout PRs on 2026-09-05
+# each declined the same BLOCKER with a pointer to dEitY719/harness-skills#22
+# and all five correctly kept `review-blocked` — the item IS unresolved in
+# those PRs. What the ledger could not say is WHERE the item went: a
+# declined-and-escalated BLOCKER wrote the same `<r>:BLOCKER:DECLINE` line as
+# a declined-and-ignored one.
+#
+# The fix keeps `DECLINE` and appends an OPTIONAL 4th field carrying the ref.
+# Two properties are load-bearing and each has its own tests below:
+#   - every existing 3-field line keeps parsing, in every consumer (the ledger
+#     is durable state already posted on live PRs), and
+#   - the gate still HOLDS on a tracked decline. Escalation is not resolution;
+#     only the report line changes.
+
+@test "#1762: origin_line appends the tracking ref as a 4th field" {
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE dEitY719/harness-skills#22
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
+}
+
+@test "#1762: origin_line omits the 4th field when no ref is given" {
+    # The strict-superset guarantee: the 3-argument call is byte-identical to
+    # what it produced before this issue.
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE'
+}
+
+@test "#1762: an empty 4th argument is the same as omitting it" {
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE ''
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE'
+}
+
+@test "#1762: origin_line rejects a malformed tracking ref (exit 2)" {
+    # A typo must be a NAMED failure at the write boundary, not a garbage
+    # ledger line a later pass silently drops.
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE 'harness-skills#22'
+    assert_failure 2
+    assert_output --partial 'tracking ref'
+}
+
+@test "#1762: origin_line rejects a ref with no issue number (exit 2)" {
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE 'dEitY719/harness-skills'
+    assert_failure 2
+}
+
+@test "#1762: origin_line rejects a non-numeric issue number (exit 2)" {
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE 'dEitY719/harness-skills#abc'
+    assert_failure 2
+}
+
+@test "#1762: origin_line rejects a ref containing ':' (breaks the delimiter)" {
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE 'dEitY719/harn:ess#22'
+    assert_failure 2
+}
+
+@test "#1762: the ref is preserved verbatim, case included" {
+    # NOT because GitHub lookup is case-sensitive — it is not (PR #1764
+    # review, codex FOLLOW-UP corrected this comment). The field is echoed
+    # verbatim into a report a human reads, so the reviewer/verdict
+    # lowercase-then-uppercase normalization must not reach it.
+    run _gh_pr_reply_origin_line AGY '[Blocker]' decline dEitY719/Harness-Skills#7
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE:dEitY719/Harness-Skills#7'
+}
+
+@test "#1762: a tracked decline still HOLDS — escalation is not resolution" {
+    run _gate 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
+    assert_success
+    assert_output 'hold=unresolved-blocker-tracked:agy:dEitY719/harness-skills#22'
+}
+
+@test "#1762: an untracked decline keeps the original token unchanged" {
+    run _gate 'agy:BLOCKER:DECLINE'
+    assert_success
+    assert_output 'hold=unresolved-blocker:agy'
+}
+
+@test "#1762: a tracked ACCEPT is still a pass (the ref never blocks)" {
+    # The 4th field is provenance, not a verdict. Only the verdict decides.
+    run _gate 'codex:BLOCKER:ACCEPT:dEitY719/harness-skills#22'
+    assert_success
+    assert_output 'pass=blockers-resolved:1'
+}
+
+@test "#1762: a 4th field on a NON-blocking line never reaches the gate token" {
+    run _gate 'agy:FOLLOW-UP:DECLINE:dEitY719/harness-skills#22'
+    assert_success
+    assert_output 'pass=no-blocker'
+}
+
+@test "#1762: an unresolved untracked BLOCKER still outranks a tracked one" {
+    # First-unresolved-wins is unchanged; the tracked line is not privileged.
+    run _gate 'codex:BLOCKER:DECLINE
+agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
+    assert_success
+    assert_output 'hold=unresolved-blocker:codex'
+}
+
+@test "#1762: a malformed ref read back from the ledger degrades, never fails" {
+    # `_gh_pr_reply_history_origins` already drops unparseable ledger lines
+    # silently so a human editing the PR comment cannot hard-error the next
+    # pass. A garbage 4th field follows the same rule: it falls back to the
+    # plain hold token rather than reporting a ref nobody can follow.
+    run _gate 'agy:BLOCKER:DECLINE:not a ref'
+    assert_success
+    assert_output 'hold=unresolved-blocker:agy'
+}
+
+@test "#1762: a QUESTION carrying a ref is tracked too, not only DECLINE" {
+    run _gate 'agy:BLOCKER:QUESTION:dEitY719/harness-skills#22'
+    assert_success
+    assert_output 'hold=unresolved-blocker-tracked:agy:dEitY719/harness-skills#22'
+}
+
+@test "#1762: the report line names both the reviewer and where the item went" {
+    run _gh_pr_reply_review_passed_report \
+        hold=unresolved-blocker-tracked:agy:dEitY719/harness-skills#22
+    assert_success
+    assert_output --partial 'agy'
+    assert_output --partial 'dEitY719/harness-skills#22'
+    assert_output --partial 'review-passed 미부여'
+    assert_output --partial 'review-blocked 유지'
+}
+
+@test "#1762: the tracked report line is a [BLOCKED] line, never an [OK]" {
+    run _gh_pr_reply_review_passed_report \
+        hold=unresolved-blocker-tracked:agy:dEitY719/harness-skills#22
+    assert_success
+    assert_output --partial '[BLOCKED]'
+    refute_output --partial '[OK]'
+}
+
+@test "#1762: apply writes NO label for a tracked decline" {
+    # The whole point: legibility changed, the decision did not.
+    _apply_stub
+    printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes \
+            >"${BATS_TEST_TMPDIR}/out"
+    run cat "$APPLY_LOG"
+    assert_output ''
+    run cat "${BATS_TEST_TMPDIR}/out"
+    assert_output --partial 'dEitY719/harness-skills#22'
+    assert_output --partial 'review-passed 미부여'
+}
+
+@test "#1762: apply never deletes review-blocked on the tracked hold path" {
+    _apply_stub
+    printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' |
+        _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes >/dev/null
+    run cat "$APPLY_LOG"
+    refute_output --partial 'labels/review-blocked'
+}
+
+# ── The other four consumers must swallow the 4-field line unchanged ──
+
+@test "#1762: tally reads the verdict from \$3, not the whole tail" {
+    run bash -c "printf '%s\n' \
+        'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
+        'agy:BLOCKER:ACCEPT' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
+    assert_success
+    assert_output 'reviewer=agy blocking_total=2 blocking_accepted=1 nonblocking_total=0 nonblocking_declined=0'
+}
+
+@test "#1762: origins_block writes a 4-field line without complaint" {
+    run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+    assert_success
+    assert_output --partial 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
+}
+
+@test "#1762: a 4-field line round-trips through the ledger" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        block=\$(printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
+            | _gh_pr_reply_origins_block abc123)
+        printf '%s' \"\$block\" | jq -Rs '[{user:{login:\"tester\"},body:.}]' \
+            | _gh_pr_reply_history_origins tester
+    "
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
+}
+
+@test "#1762: merge supersedes a tracked line per reviewer, like any other" {
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '%s\n' agy:BLOCKER:ACCEPT \
+            | _gh_pr_reply_origins_merge 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'; }"
+    assert_success
+    assert_output 'agy:BLOCKER:ACCEPT'
+}
+
+@test "#1762: a tracked history line survives to the gate through merge" {
+    # The cross-pass hole PR #1637 closed must stay closed for the new shape.
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '%s\n' codex:FOLLOW-UP:ACCEPT \
+            | _gh_pr_reply_origins_merge 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
+            | _gh_pr_reply_review_passed_gate yes; }"
+    assert_success
+    assert_output 'hold=unresolved-blocker-tracked:agy:dEitY719/harness-skills#22'
+}
+
+# ── PR #1764 review — agy + codex findings on the #1762 shape ─────────
+
+@test "#1762 (PR #1764, codex BLOCKER): #0 is not an issue number" {
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE 'dEitY719/harness-skills#0'
+    assert_failure 2
+}
+
+@test "#1762 (PR #1764, codex BLOCKER): a zero-padded number is rejected" {
+    # `#022` does not resolve on GitHub, so a report naming it would point at
+    # a target the reader cannot open.
+    run _gh_pr_reply_origin_line agy BLOCKER DECLINE 'dEitY719/harness-skills#022'
+    assert_failure 2
+}
+
+@test "#1762 (PR #1764, agy FOLLOW-UP): an empty owner or repo segment is rejected" {
+    for _ref in 'owner#22' 'owner//repo#22' '/repo#22' 'owner/#22'; do
+        run _gh_pr_reply_origin_line agy BLOCKER DECLINE "$_ref"
+        assert_failure 2
+    done
+}
+
+@test "#1762 (PR #1764, agy FOLLOW-UP): a second / or # is rejected, not reinterpreted" {
+    for _ref in 'a/b/c#1' 'a/b#1#2'; do
+        run _gh_pr_reply_origin_line agy BLOCKER DECLINE "$_ref"
+        assert_failure 2
+    done
+}
+
+@test "#1762 (PR #1764, codex BLOCKER): the ledger write refuses an unvalidated ref" {
+    # `_gh_pr_reply_origin_line` is not the only way a line can reach the
+    # ledger. This function IS the write, and its contract is that garbage is
+    # never persisted — a hand-built line must not get past it either.
+    run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:not a ref' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+    assert_failure 2
+    assert_output --partial 'tracking ref'
+}
+
+@test "#1762 (PR #1764, codex BLOCKER): a valid ref still writes fine" {
+    run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+    assert_success
+    assert_output --partial 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
+}
+
+@test "#1762 (PR #1764, codex BLOCKER): history STRIPS a bad ref, keeping the blocker" {
+    # Dropping the whole line would take the BLOCKER's verdict with it and let
+    # the gate certify a PR whose blocker still stands — fail-OPEN, the exact
+    # hole this ledger closes. The verdict must survive; only the ref goes.
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:not a ref\n<!-- /pr-reply-origins:abc -->\n' \
+            | jq -Rs '[{user:{login:\"t\"},body:.}]' \
+            | _gh_pr_reply_history_origins t
+    "
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE'
+}
+
+@test "#1762 (PR #1764, codex BLOCKER): the sanitized history still HOLDS the gate" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:not a ref\n<!-- /pr-reply-origins:abc -->\n' \
+            | jq -Rs '[{user:{login:\"t\"},body:.}]' \
+            | _gh_pr_reply_history_origins t \
+            | _gh_pr_reply_review_passed_gate yes
+    "
+    assert_success
+    assert_output 'hold=unresolved-blocker:agy'
+}
+
+@test "#1762 (PR #1764, codex BLOCKER): a sanitized history line is re-writable" {
+    # The strip is what lets the strict ledger write above coexist with a
+    # human typing inside the PR comment: one typo must not break the write
+    # for every later pass.
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:not a ref\n<!-- /pr-reply-origins:abc -->\n' \
+            | jq -Rs '[{user:{login:\"t\"},body:.}]' \
+            | _gh_pr_reply_history_origins t \
+            | _gh_pr_reply_origins_block abc123
+    "
+    assert_success
+    assert_output --partial 'agy:BLOCKER:DECLINE'
+}
+
+@test "#1762 (PR #1764, agy FOLLOW-UP): extra colons past the ref degrade safely" {
+    run _gate 'agy:BLOCKER:DECLINE:a/b#1:junk'
+    assert_success
+    assert_output 'hold=unresolved-blocker:agy'
+}
+
+@test "#1762 (PR #1764, agy FOLLOW-UP): the ledger WRITE rejects a 5-field line" {
+    # `_gh_pr_reply_origin_ref` deliberately hands back everything past the
+    # third colon rather than one isolated token: an isolated token would make
+    # `a:b:c:d:e` look like a VALID 4-field line and let the junk tail into the
+    # ledger. Handing the tail over instead makes the ref fail validation,
+    # which is what closes the write here and drives the strip below.
+    run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:a/b#1:junk' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+    assert_failure 2
+    assert_output --partial 'malformed tracking ref'
+}
+
+@test "#1762 (PR #1764, agy FOLLOW-UP): a 5-field ledger line is stripped to 3" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:a/b#1:junk\n<!-- /pr-reply-origins:abc -->\n' \
+            | jq -Rs '[{user:{login:\"t\"},body:.}]' \
+            | _gh_pr_reply_history_origins t
+    "
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE'
+}
+
+@test "#1762 (PR #1764, codex FOLLOW-UP): the ref is advisory, allowed on any line" {
+    # The 4th field is provenance, not a verdict, so the WRITER takes it on a
+    # non-blocking ACCEPT too. The narrowing is on the read side: the gate
+    # only ever reads it on a held blocker (see the NON-blocking / tracked
+    # ACCEPT gate cases above), so this can mislead nobody.
+    run _gh_pr_reply_origin_line agy '[FOLLOW-UP]' accept 'dEitY719/harness-skills#22'
+    assert_success
+    assert_output 'agy:FOLLOW-UP:ACCEPT:dEitY719/harness-skills#22'
+}
+
+@test "#1762 (PR #1764): origin_ref returns the verdict for no 4-field line" {
+    # The trap the shared extractor exists to close: the same expansion on a
+    # 3-field line would hand back DECLINE.
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        _gh_pr_reply_origin_ref 'agy:BLOCKER:DECLINE'; }"
+    assert_success
+    assert_output ''
+}
+
+# ---------------------------------------------------------------------
 # The #1616 re-review lane is gone (#1636 F-3)
 # ---------------------------------------------------------------------
 
