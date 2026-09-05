@@ -109,8 +109,12 @@ _gh_pr_reply_reviewer_is_bot() {
 # reinterpreted, and a typo is caught at the WRITE boundary where a caller can
 # still be told about it.
 #
-# Deliberately NOT case-normalized by its caller: `owner/repo` is
-# case-sensitive on GitHub, so the reviewer/verdict folding must not reach it.
+# Deliberately NOT case-normalized by its caller. GitHub resolves `owner/repo`
+# case-INSENSITIVELY, so folding would still find the repo — the reason is that
+# this field is reproduced verbatim in a report a human reads, and echoing back
+# what the author actually typed is what makes it recognisable. Reviewer and
+# verdict are folded because they are compared against closed enums; this field
+# is compared against nothing (PR #1764 review, codex FOLLOW-UP).
 _gh_pr_reply_tracking_ref_is_valid() {
     local _ref="${1-}" _owner _rest _repo _num
 
@@ -126,8 +130,29 @@ _gh_pr_reply_tracking_ref_is_valid() {
 
     case "$_owner" in "" | *[!A-Za-z0-9._-]*) return 1 ;; esac
     case "$_repo" in "" | *[!A-Za-z0-9._-]*) return 1 ;; esac
-    case "$_num" in "" | *[!0-9]*) return 1 ;; esac
+    # `0*` rejects `#0` and any zero-padded number (`#022`): GitHub issue
+    # numbers start at 1 and are never padded, so both name a target no reader
+    # can open — exactly the failure this validator exists to prevent
+    # (PR #1764 review, codex BLOCKER).
+    case "$_num" in "" | *[!0-9]* | 0*) return 1 ;; esac
     return 0
+}
+
+# The optional 4th field of an origin line, or "" when the line has only three
+# (#1762).
+#
+# Guarded on the 4-field shape, because the same expansion applied to a 3-field
+# line hands back the VERDICT. That trap is why the readers below go through
+# here instead of each re-deriving it inline (PR #1764 review, codex BLOCKER).
+_gh_pr_reply_origin_ref() {
+    local _line="${1-}" _ref
+    case "$_line" in
+    *:*:*:*) ;;
+    *) return 0 ;;
+    esac
+    _ref="${_line#*:}"
+    _ref="${_ref#*:}"
+    printf '%s' "${_ref#*:}"
 }
 
 # One stderr line for every reader that rejects a ledger line without the
@@ -275,7 +300,7 @@ _gh_pr_reply_origin_tally() {
 # <head-sha> may be empty, in which case the unsuffixed marker form is emitted
 # — the same fallback `_gh_pr_review_build_comment_body`'s 8th argument makes.
 _gh_pr_reply_origins_block() {
-    local _sha="${1-}" _marker _origins _line _out=""
+    local _sha="${1-}" _marker _origins _line _ref _out=""
 
     _origins=$(cat)
     _marker="pr-reply-origins"
@@ -290,6 +315,19 @@ _gh_pr_reply_origins_block() {
             return 2
             ;;
         esac
+        # The 4th field is re-checked HERE, not only in
+        # `_gh_pr_reply_origin_line` (PR #1764 review, codex BLOCKER). This
+        # function is THE ledger write, and the contract in its header is that
+        # garbage never gets persisted in the first place. A caller that hand-
+        # builds a line, bypassing the builder, must not be able to leave a ref
+        # in the ledger that every later reader silently drops.
+        _ref=$(_gh_pr_reply_origin_ref "$_line")
+        if [ -n "$_ref" ] &&
+            ! _gh_pr_reply_tracking_ref_is_valid "$_ref"; then
+            printf '[gh-pr-reply] malformed tracking ref in origin line (want <owner>/<repo>#<N>): %s\n' \
+                "$_line" >&2
+            return 2
+        fi
         _out="${_out}${_line}
 "
     done <<EOF
@@ -373,7 +411,7 @@ _gh_pr_reply_login_bodies() {
 # comment, and a human replying inside it (or GitHub reflowing it) must not be
 # able to turn the next pass's gate into a hard error.
 _gh_pr_reply_history_origins() {
-    local _line
+    local _line _ref _rest _tail
     _gh_pr_reply_login_bodies "${1-}" |
     awk '
         # "\001" is the "marker absent on this line" sentinel: unlike
@@ -428,8 +466,27 @@ _gh_pr_reply_history_origins() {
         END { printf "%s", last }
     ' | while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in
-        *:*:*) printf '%s\n' "$_line" ;;
+        *:*:*) ;;
+        *) continue ;;
         esac
+        # An unusable 4th field is STRIPPED, never dropped with its line
+        # (PR #1764 review, codex BLOCKER). Dropping would take the BLOCKER's
+        # VERDICT with it and let the gate certify a PR whose blocker still
+        # stands — the fail-OPEN direction, and the very hole this ledger
+        # exists to close. Stripping keeps the verdict and loses only the ref
+        # nobody could have followed. It also means the sanitized stream can be
+        # handed straight back to the now-strict `_gh_pr_reply_origins_block`
+        # without one human typo inside the PR comment permanently breaking the
+        # ledger write.
+        _ref=$(_gh_pr_reply_origin_ref "$_line")
+        if [ -n "$_ref" ] &&
+            ! _gh_pr_reply_tracking_ref_is_valid "$_ref"; then
+            _rest="${_line#*:}"
+            _tail="${_rest#*:}"
+            printf '%s:%s:%s\n' "${_line%%:*}" "${_rest%%:*}" "${_tail%%:*}"
+            continue
+        fi
+        printf '%s\n' "$_line"
     done
 }
 
@@ -696,10 +753,7 @@ _gh_pr_reply_review_passed_gate() {
         # `_gh_pr_reply_history_origins` already drops garbage silently for
         # exactly that reason — reporting a ref nobody can follow would be
         # worse than reporting none, and the hold is identical either way.
-        _ref=""
-        case "$_tail" in
-        *:*) _ref="${_tail#*:}" ;;
-        esac
+        _ref=$(_gh_pr_reply_origin_ref "$_line")
         _gh_pr_reply_tracking_ref_is_valid "$_ref" || _ref=""
 
         case "$_verd" in
@@ -846,6 +900,7 @@ _gh_pr_reply_apply_review_passed() {
 for _gprtr_selfcheck_fn in \
     _gh_pr_reply_origin_line \
     _gh_pr_reply_tracking_ref_is_valid \
+    _gh_pr_reply_origin_ref \
     _gh_pr_reply_reviewer_is_bot \
     _gh_pr_reply_severity_is_blocking \
     _gh_pr_reply_origin_tally \
