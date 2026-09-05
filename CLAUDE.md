@@ -102,9 +102,13 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 - No emojis anywhere (token efficiency) — **단 하나의 예외**: `ai-metrics` footer (`<details>` 래퍼 및 `<!-- ai-metrics -->` 블록) 내부의 `📊 👤 🤖` 글리프. 이는 GitHub Issue/PR 카드 footer 의 의도된 시각 디자인이며 #317 F-2 요구사항 + PR #320 으로 SSOT 확정됨 (#367 의 `<details><summary>🤖 AI Metrics</summary>` 래퍼 포함). 다른 어떤 위치에도 이모지 사용 금지.
 - For AGENTS.md files, aim to keep them under 100 lines each
 
-## 변경 기록 (changelog) — 중단 (2026-09-02)
+<!-- my-share:changelog:begin -->
+## 변경 기록 (changelog)
 
-- fragment 작성 요구는 **중단됐다** — 토큰 소모가 커서 잠정 정지. 완료 후 fragment 파일을 만들지 않는다.
+- 현재 OFF. changelog 를 갱신하지 않는다(허브 수집 일시 중단).
+- 재활성화는 my-share 에서 `python3 scripts/changelog_toggle.py on`.
+<!-- my-share:changelog:end -->
+
 - `mise run lint-docs` 에서도 `scripts/lint_changelog_fragments.sh` 호출을 뺐다 — 게이트 비활성.
-- 과거 규칙(파일명 `<YYYY-MM-DD>-<issue>.md`, `- 변경: **요약**` 포맷)과 스크립트/`tests/bats/lint/changelog_fragments.bats` 는 재개를 위해 그대로 남겨뒀다. 재개 시 이 섹션과 `mise.toml` 의 `lint-docs` 를 되돌린다.
+- 과거 규칙(파일명 `<YYYY-MM-DD>-<issue>.md`, `- 변경: **요약**` 포맷)과 스크립트/`tests/bats/lint/changelog_fragments.bats` 는 재개를 위해 그대로 남겨뒀다. 재개 시 my-share 토글(`changelog_toggle.py on`)과 `mise.toml` 의 `lint-docs` 를 함께 되돌린다.
 - **my-share 영향**: 일일/주간 보고 허브(`my-share`)의 수집기(`scripts/report_range.py`)는 `changelog.d/` 가 비어 있어도 에러 없이 빈 결과를 반환한다 — 이 기간 동안 dotfiles 항목은 보고서에서 조용히 빠진다(수집기 오작동이 아니라 fragment 부재의 정상 결과). 재개 전까지는 dotfiles 변경 사항을 daily/weekly 보고서에서 볼 수 없다는 뜻이다.
