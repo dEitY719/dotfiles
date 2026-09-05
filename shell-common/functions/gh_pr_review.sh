@@ -223,6 +223,17 @@ _gh_pr_review_require_ai_cli() {
     opencode | hermes)
         _gh_pr_review_require_internal_cli "$ai" || return 1
         ;;
+    agy)
+        # Since #1761 the agy lane builds its stdin NDJSON and parses the
+        # stream-json reply with `jq`, so jq is as much a hard requirement as
+        # the CLI itself. Without this check a jq-less host fails deep inside
+        # the lane with `jq: command not found` attributed to agy — name the
+        # tool that is actually missing (PR #1765 codex BLOCKER).
+        if ! command -v jq >/dev/null 2>&1; then
+            echo "Required CLI 'jq' not found in PATH (--ai agy needs it for the stream-json transport)" >&2
+            return 1
+        fi
+        ;;
     esac
     if ! command -v "$ai" >/dev/null 2>&1; then
         echo "Required CLI '$ai' not found in PATH" >&2

@@ -178,6 +178,21 @@ EOF
     assert_success
 }
 
+@test "require_ai_cli: agy without jq → exit 1 naming jq, not agy (#1761 transport dep)" {
+    # PR #1765 codex BLOCKER: the stream-json lane needs jq as much as it
+    # needs agy, but preflight only knew about the CLI.
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\nexit 0\n' >"$stub_dir/agy"
+    chmod +x "$stub_dir/agy"
+    # agy present, jq absent — the PATH holds the stub and nothing else.
+    PATH="$stub_dir" run _gh_pr_review_require_ai_cli agy
+    assert_failure 1
+    assert_output --partial "Required CLI 'jq' not found in PATH"
+    refute_output --partial "Required CLI 'agy'"
+}
+
 @test "require_ai_cli: opencode on non-internal PC refuses before PATH check" {
     _source_module
     _dotfiles_setup_mode() { echo external; }
