@@ -841,6 +841,19 @@ _run_full_bash() {
     assert_output --partial "out=[In review]"
 }
 
+@test "query_current: a standard-base64 node id is accepted, not refused" {
+    # PR #1758 (codex): GraphQL node ids are opaque. Narrowing the guard to
+    # the base64url alphabet would reject an id carrying `+` or `/` and turn a
+    # working verify into a silent "verify failed twice".
+    _setup_fake_gh_full
+    FAKE_VERIFY_OTHER_BOARD="Done" \
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42 "" "PVT_a+b/c="); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=0"
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
 @test "query_current: a project pin that is not a node id returns rc=1 unqueried" {
     # The pin is spliced into the jq program, so a value outside the
     # base64url node-id alphabet is refused instead of being interpolated —

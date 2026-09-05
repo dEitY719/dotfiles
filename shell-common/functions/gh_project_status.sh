@@ -480,13 +480,18 @@ _gh_project_status_query_current() {
         *) return 1 ;;
     esac
 
-    # Project pin (#1757), validated before anything is queried. GitHub node
-    # ids are base64url text; a value with anything else in it is a caller
-    # bug and must not be spliced into the jq program below.
+    # Project pin (#1757), validated before anything is queried. The guard
+    # exists so a caller-supplied id cannot break out of the jq string
+    # literal it is spliced into below — only `"` and `\` could do that, so
+    # the class stays permissive over the id alphabet itself and covers both
+    # base64 (`+`, `/`) and base64url (`-`, `_`) plus `=` padding. GraphQL
+    # node ids are opaque and GitHub guarantees neither variant (PR #1758,
+    # codex), so narrowing this to base64url would reject a legitimate id and
+    # turn a working verify into a silent "verify failed twice".
     local _proj_sel=''
     case "$_proj_arg" in
         '') ;;
-        *[!A-Za-z0-9_=-]*) return 1 ;;
+        *[!A-Za-z0-9_=+/-]*) return 1 ;;
         *) _proj_sel="| select(.project?.id == \"$_proj_arg\")" ;;
     esac
 
