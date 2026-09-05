@@ -102,6 +102,18 @@ _gh_pr_reply_reviewer_is_bot() {
 # The optional 4th ledger field: where a declined BLOCKER was escalated to
 # (#1762, upstream half of dEitY719/gh-pr-skills#21).
 #
+# ADVISORY PROVENANCE, not a verdict — and the writer therefore accepts it on
+# ANY severity/verdict, not only `BLOCKER`+`DECLINE` (PR #1764 review, codex
+# FOLLOW-UP: the prose used to imply an invariant the code does not enforce).
+# The narrowing is on the READ side, where it is enforceable: only
+# `_gh_pr_reply_review_passed_gate`'s blocking-and-held branch ever looks at
+# the field, so a ref on an ACCEPT or a FOLLOW-UP line changes no decision and
+# reaches no report — see the "4th field on a NON-blocking line" and "tracked
+# ACCEPT is still a pass" cases in the bats file. Constraining the writer would
+# buy nothing real either: the ledger is a plain PR comment any collaborator
+# can hand-edit, so the readers must stay tolerant of an off-contract line no
+# matter what the builder allows.
+#
 # rc 0 when <ref> is exactly one `owner/repo#N`. Every field is checked against
 # a positive character class rather than a blacklist, which buys three things
 # at once: the ref can never smuggle in the `:` that delimits the ledger line,
@@ -109,12 +121,15 @@ _gh_pr_reply_reviewer_is_bot() {
 # reinterpreted, and a typo is caught at the WRITE boundary where a caller can
 # still be told about it.
 #
-# Deliberately NOT case-normalized by its caller. GitHub resolves `owner/repo`
-# case-INSENSITIVELY, so folding would still find the repo — the reason is that
-# this field is reproduced verbatim in a report a human reads, and echoing back
-# what the author actually typed is what makes it recognisable. Reviewer and
-# verdict are folded because they are compared against closed enums; this field
-# is compared against nothing (PR #1764 review, codex FOLLOW-UP).
+# Deliberately NOT case-normalized by its caller. Resolution is not the reason
+# either way: GitHub looks `owner/repo` up case-INSENSITIVELY and redirects to
+# the one canonical casing, so folding would still find the repo (PR #1764
+# review, agy FOLLOW-UP — the point being that each repo has exactly one
+# canonical casing, which is what makes folding lossy rather than unresolvable).
+# The reason is legibility: this field is reproduced verbatim in a report a
+# human reads, and echoing back what the author actually typed is what makes it
+# recognisable. Reviewer and verdict are folded because they are compared
+# against closed enums; this field is compared against nothing.
 _gh_pr_reply_tracking_ref_is_valid() {
     local _ref="${1-}" _owner _rest _repo _num
 
@@ -284,7 +299,9 @@ _gh_pr_reply_origin_tally() {
 # escalated to, so `review-blocked` stops meaning two different things at once
 # ("nobody acted on it" vs "triaged, out of scope here, filed where it
 # belongs"). It changes nothing about the DECISION — the gate still holds — only
-# about what the report can say. Written by `_gh_pr_reply_origin_line`,
+# about what the report can say, and it is accepted on any line (advisory
+# provenance; see `_gh_pr_reply_tracking_ref_is_valid`'s header for why the
+# narrowing lives on the read side). Written by `_gh_pr_reply_origin_line`,
 # validated by `_gh_pr_reply_tracking_ref_is_valid`, and read back by the gate;
 # every other reader here globs on `*:*:*` or takes `${line%%:*}` and is
 # indifferent to it.

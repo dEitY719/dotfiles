@@ -971,8 +971,10 @@ _apply_stub() {
 }
 
 @test "#1762: the ref is preserved verbatim, case included" {
-    # `owner/repo` is case-sensitive on GitHub, so the reviewer/verdict
-    # lowercase-then-uppercase normalization must not reach this field.
+    # NOT because GitHub lookup is case-sensitive — it is not (PR #1764
+    # review, codex FOLLOW-UP corrected this comment). The field is echoed
+    # verbatim into a report a human reads, so the reviewer/verdict
+    # lowercase-then-uppercase normalization must not reach it.
     run _gh_pr_reply_origin_line AGY '[Blocker]' decline dEitY719/Harness-Skills#7
     assert_success
     assert_output 'agy:BLOCKER:DECLINE:dEitY719/Harness-Skills#7'
@@ -1204,6 +1206,39 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
     run _gate 'agy:BLOCKER:DECLINE:a/b#1:junk'
     assert_success
     assert_output 'hold=unresolved-blocker:agy'
+}
+
+@test "#1762 (PR #1764, agy FOLLOW-UP): the ledger WRITE rejects a 5-field line" {
+    # `_gh_pr_reply_origin_ref` deliberately hands back everything past the
+    # third colon rather than one isolated token: an isolated token would make
+    # `a:b:c:d:e` look like a VALID 4-field line and let the junk tail into the
+    # ledger. Handing the tail over instead makes the ref fail validation,
+    # which is what closes the write here and drives the strip below.
+    run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:a/b#1:junk' \
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+    assert_failure 2
+    assert_output --partial 'malformed tracking ref'
+}
+
+@test "#1762 (PR #1764, agy FOLLOW-UP): a 5-field ledger line is stripped to 3" {
+    run bash -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:a/b#1:junk\n<!-- /pr-reply-origins:abc -->\n' \
+            | jq -Rs '[{user:{login:\"t\"},body:.}]' \
+            | _gh_pr_reply_history_origins t
+    "
+    assert_success
+    assert_output 'agy:BLOCKER:DECLINE'
+}
+
+@test "#1762 (PR #1764, codex FOLLOW-UP): the ref is advisory, allowed on any line" {
+    # The 4th field is provenance, not a verdict, so the WRITER takes it on a
+    # non-blocking ACCEPT too. The narrowing is on the read side: the gate
+    # only ever reads it on a held blocker (see the NON-blocking / tracked
+    # ACCEPT gate cases above), so this can mislead nobody.
+    run _gh_pr_reply_origin_line agy '[FOLLOW-UP]' accept 'dEitY719/harness-skills#22'
+    assert_success
+    assert_output 'agy:FOLLOW-UP:ACCEPT:dEitY719/harness-skills#22'
 }
 
 @test "#1762 (PR #1764): origin_ref returns the verdict for no 4-field line" {
