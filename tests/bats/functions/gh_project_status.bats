@@ -443,10 +443,14 @@ _run_resolve_bash() {
 #   3. `gh api graphql ... query: mutation(...)` → mutation. Outcome (ok/fail)
 #      driven by $FAKE_MUTATE_SEQUENCE (pipe-separated, defaults to all-ok).
 #   4. `gh api graphql ... query: query(...) options(names:` → discovery
-#      query; emits one synthetic record so the sync loop iterates once.
+#      query; emits one synthetic record so the sync loop iterates once,
+#      plus $FAKE_DISCOVER_PAGE2 when — and only when — the call opts into
+#      gh's own graphql pagination (#1757).
 #   5. `gh api graphql ... query: query(...) fieldValueByName` (no options)
 #      → verify-current query; emits the next entry of
-#      $FAKE_VERIFY_SEQUENCE (pipe-separated; missing entries → empty).
+#      $FAKE_VERIFY_SEQUENCE (pipe-separated; missing entries → empty), or
+#      $FAKE_VERIFY_OTHER_BOARD when the read does not name the board it is
+#      supposed to be verifying (#1757).
 #
 # All call shapes append a tag to $FAKE_GH_LOG for assertions.
 
@@ -512,6 +516,15 @@ case "$1 $2" in
             # joined with `|` to match the helper's --jq output shape:
             #   project.id | item.id | field.id | option.id | current_status
             echo "proj1|item1|field1|opt1|"
+            # #1757: a second page of memberships, reachable only when the
+            # caller opts into gh's graphql pagination — `--paginate` plus a
+            # declared `$endCursor` variable. An unpaginated query never
+            # learns this board exists, and the sync silently no-ops.
+            if [ -n "${FAKE_DISCOVER_PAGE2:-}" ] \
+                && [[ "$all_args" == *"--paginate"* ]] \
+                && [[ "$all_args" == *'$endCursor'* ]]; then
+                echo "$FAKE_DISCOVER_PAGE2"
+            fi
             exit 0
         elif [[ "$all_args" == *"fieldValueByName"* ]]; then
             echo "verify" >>"$LOG"
@@ -528,6 +541,14 @@ case "$1 $2" in
             # notices / proxy warnings on stderr even on a *successful*
             # (exit 0) call — see #1356 agy review, PR #1357.
             [ -n "${FAKE_VERIFY_STDERR_NOISE:-}" ] && echo "$FAKE_VERIFY_STDERR_NOISE" >&2
+            # #1757: a verify read that never names the board it is checking
+            # gets whichever row the API happened to list first — another
+            # board's value. Models the uncorrelated read the fix removes.
+            if [ -n "${FAKE_VERIFY_OTHER_BOARD:-}" ] \
+                && [[ "$all_args" != *"${FAKE_VERIFY_PROJECT:-proj1}"* ]]; then
+                echo "$FAKE_VERIFY_OTHER_BOARD"
+                exit 0
+            fi
             idx=$(cat "$FAKE_VERIFY_IDX")
             idx=$((idx + 1))
             echo "$idx" >"$FAKE_VERIFY_IDX"
@@ -570,6 +591,9 @@ _run_full_bash() {
         export FAKE_REVIEW_FAIL='${FAKE_REVIEW_FAIL:-0}'
         export FAKE_MUTATE_SEQUENCE='${FAKE_MUTATE_SEQUENCE:-}'
         export FAKE_VERIFY_SEQUENCE='${FAKE_VERIFY_SEQUENCE:-}'
+        export FAKE_DISCOVER_PAGE2='${FAKE_DISCOVER_PAGE2:-}'
+        export FAKE_VERIFY_OTHER_BOARD='${FAKE_VERIFY_OTHER_BOARD:-}'
+        export FAKE_VERIFY_PROJECT='${FAKE_VERIFY_PROJECT:-proj1}'
         export FAKE_REPO_VIEW_FAIL='${FAKE_REPO_VIEW_FAIL:-0}'
         export FAKE_VERIFY_FAIL='${FAKE_VERIFY_FAIL:-0}'
         export FAKE_VERIFY_FAIL_MSG='${FAKE_VERIFY_FAIL_MSG:-}'
@@ -768,6 +792,66 @@ _run_full_bash() {
     assert_success
     assert_output --partial "elapsed=0"
     [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+# ------- multi-board correctness (#1757) -----------------------------------
+#
+# Both defects need an item on more than one board, so neither shows up on
+# the happy path the cases above drive.
+
+@test "sync: a board past the first page of memberships still gets set" {
+    # Defect 1 — `projectItems(first: 10)` with no cursor follow. The board
+    # that owns the target Status can be the 11th membership; the jq select
+    # then finds nothing and the whole sync silently no-ops. The fake only
+    # hands over page 2 to a caller that paginates.
+    _setup_fake_gh_full
+    FAKE_DISCOVER_PAGE2="proj2|item2|field2|opt2|" \
+    FAKE_VERIFY_SEQUENCE="In review|In review" \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial "rc=0"
+    refute_output --partial "not in any project"
+    # One mutate + one verify per board — the page-2 board included.
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 2 ]
+    [ "$(grep -c '^verify$' "$FAKE_GH_LOG")" -eq 2 ]
+}
+
+@test "verify: reads the board it just wrote, not whichever row comes first" {
+    # Defect 2 — the verify read was uncorrelated with the project the
+    # mutation targeted. Here every read that fails to name proj1 answers
+    # with another board's "Done", which pre-fix reads as a revert and ends
+    # in "verify failed twice" on a write that actually landed.
+    _setup_fake_gh_full
+    FAKE_VERIFY_OTHER_BOARD="Done" \
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash '_gh_project_status_sync pr 42 "In review" 2>&1; echo "rc=$?"'
+    assert_success
+    assert_output --partial '-> "In review" (verified)'
+    refute_output --partial 'reverted to "Done"'
+    refute_output --partial "ERROR"
+    [ "$(grep -c '^mutate$' "$FAKE_GH_LOG")" -eq 1 ]
+}
+
+@test "query_current: an explicit project pin narrows the read to that board" {
+    _setup_fake_gh_full
+    FAKE_VERIFY_OTHER_BOARD="Done" \
+    FAKE_VERIFY_SEQUENCE="In review" \
+        _run_full_bash 'out=$(_gh_project_status_query_current pr 42 "" "proj1"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=0"
+    assert_output --partial "out=[In review]"
+}
+
+@test "query_current: a project pin that is not a node id returns rc=1 unqueried" {
+    # The pin is spliced into the jq program, so a value outside the
+    # base64url node-id alphabet is refused instead of being interpolated —
+    # and refused before any gh call goes out.
+    _setup_fake_gh_full
+    _run_full_bash 'out=$(_gh_project_status_query_current pr 42 "" "not a node id"); echo "rc=$?"; echo "out=[$out]"'
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "out=[]"
+    [ ! -s "$FAKE_GH_LOG" ]
 }
 
 # ------- Approved fail-closed guard ----------------------------------------
