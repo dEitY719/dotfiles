@@ -65,6 +65,7 @@ _gcp_scan_preflight_is_noop() {
         return 1
     fi
     local sha="$1" result=1 had_stash=0 conflicted f real_content_conflict=0
+    local _dup_files="" _dup_short=""
     if ! git diff --quiet || ! git diff --cached --quiet; then
         git stash push -q --include-untracked -m "gcp_preflight_probe" && had_stash=1
         # Data-loss guard (PR #916 review): a failed stash leaves the tree
@@ -166,7 +167,23 @@ _gcp_scan_preflight_is_noop() {
         command cp -f "$_gcfg2_bak" "$_gcfg2" 2>/dev/null
     fi
     if [ "$_gcp_cp_rc" -eq 0 ]; then
-        git diff --cached --quiet && result=0
+        if git diff --cached --quiet; then
+            result=0
+        elif _gcp_scan_staged_is_duplicate_append; then
+            # A clean apply whose whole payload HEAD already holds, just
+            # elsewhere in the file (issue #1759). Announced, never silent: this
+            # is the one verdict that drops a commit the staged diff still shows
+            # as real work, so a wrong call has to be auditable from the scan
+            # output alone.
+            _dup_files=$(git diff --cached --name-only 2>/dev/null | tr '\n' ' ')
+            _dup_short=$(git rev-parse --short "$sha" 2>/dev/null)
+            if type ux_warning >/dev/null 2>&1; then
+                ux_warning "Absorbing ${_dup_short} — its added block is already in HEAD (duplicate append): ${_dup_files}"
+            else
+                echo "[gcp-scan] Absorbing ${_dup_short} — its added block is already in HEAD (duplicate append): ${_dup_files}" >&2
+            fi
+            result=0
+        fi
     else
         conflicted=$(git diff --name-only --diff-filter=U)
         # Only a real merge conflict is eligible for the context-drift no-op
@@ -530,6 +547,111 @@ _gcp_scan_conflict_adds_new_content() {
     fi
     command rm -rf "$td"
     return 1
+}
+
+_gcp_scan_staged_is_duplicate_append() {
+    # True (0) when the CURRENTLY STAGED tree (a `cherry-pick -n` that applied
+    # CLEANLY) differs from HEAD only by re-inserting blocks HEAD's own copy of
+    # the same file already contains — issue #1759.
+    #
+    # Why the clean path needed its own discriminator: Stage-2's two verdicts
+    # both ask "does the staged tree still differ from HEAD?". That is the right
+    # question when the payload landed identically (empty staged diff) or
+    # collided (conflict -> `_gcp_scan_conflict_adds_new_content` decides). It is
+    # the WRONG question when HEAD holds the payload at a DIFFERENT position
+    # than the commit puts it: the two insertions do not overlap, so git's merge
+    # has nothing to resolve, appends the block a SECOND time, and leaves a
+    # non-empty staged diff that reads as real work. The commit is then
+    # re-recommended and re-applied on every scan, one more copy each time
+    # (`1 file changed, 54 insertions(+)`, six copies deep in the report).
+    # A cross-repo cherry-pick produces that shape whenever the base-side copy
+    # of a block landed somewhere other than where the source commit put it.
+    #
+    # THREE preconditions, all of them narrowing toward "this cannot be new
+    # work", because a wrong verdict here drops a commit silently — the #1177
+    # data-loss direction:
+    #
+    #   1. Every staged path is a plain modification (`M`). An add, delete,
+    #      rename or typechange is never a re-application of content HEAD
+    #      already holds.
+    #   2. Every hunk is addition-only. One deleted line means the commit
+    #      changes what HEAD has, not merely repeats it — and a pure MOVE
+    #      (delete here, add there) lands in exactly that shape, so this is
+    #      what keeps a reordering commit visible.
+    #   3. Every added block appears verbatim and CONTIGUOUSLY in HEAD's copy
+    #      of that same file, and is at least GCP_SCAN_DUP_BLOCK_MIN_LINES
+    #      long.
+    #
+    # Contiguity is the deliberate difference from the set-membership test
+    # `_gcp_scan_conflict_adds_new_content` uses: a set test accepts a commit
+    # whose every added line happens to exist SOMEWHERE in the file, which for
+    # boilerplate (`    return 0`, a lone `}`, a blank line) is coincidence
+    # rather than duplication. Requiring the whole hunk to match as one run
+    # rules that out for anything but the shortest blocks, and the line floor
+    # covers those. Default 3: long enough that an accidental verbatim run is
+    # implausible, short enough to catch a real appended stanza.
+    #
+    # Reads the index and HEAD blobs only — no checkout, no mutation. The
+    # caller's `git reset --hard HEAD` is what clears the probe.
+    local floor="${GCP_SCAN_DUP_BLOCK_MIN_LINES:-3}"
+    local files f td rc=0
+    # Precondition 1. `grep -v` answers 0 as soon as ONE staged path is not a
+    # plain modification.
+    if git diff --cached --name-status 2>/dev/null | grep -qv '^M'; then
+        return 1
+    fi
+    files=$(git diff --cached --name-only 2>/dev/null)
+    [ -n "$files" ] || return 1
+    td=$(mktemp -d "${TMPDIR:-/tmp}/gcp_dup.XXXXXX" 2>/dev/null) || return 1
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        if ! git cat-file -p "HEAD:${f}" >"${td}/head" 2>/dev/null; then
+            rc=1
+            break
+        fi
+        # `-U0`: no context lines, so every `+`/`-` line inside a hunk is real
+        # payload and the hunk headers alone delimit the blocks.
+        if ! git diff --cached -U0 -- "$f" >"${td}/diff" 2>/dev/null; then
+            rc=1
+            break
+        fi
+        # `seen` skips the per-file diff header, whose `--- a/x` / `+++ b/x`
+        # lines would otherwise read as payload; anchoring on those two
+        # prefixes instead would mis-skip a deleted line that starts with
+        # `-- `. A bare `exit` on a hit is deliberate — `exit 0` would still
+        # run END, whose own exit would override the verdict.
+        if ! awk -v min="$floor" -v HF="${td}/head" '
+            function block_ok(   i, j, ok) {
+                if (bn == 0) { return 1 }
+                if (bn < min) { return 0 }
+                for (i = 1; i + bn - 1 <= n; i++) {
+                    ok = 1
+                    for (j = 1; j <= bn; j++) {
+                        if (h[i + j - 1] != b[j]) { ok = 0; break }
+                    }
+                    if (ok) { nblocks++; return 1 }
+                }
+                return 0
+            }
+            FILENAME == HF { h[++n] = $0; next }
+            /^@@/ { if (!block_ok()) { bad = 1; exit } bn = 0; seen = 1; next }
+            !seen { next }
+            /^-/ { bad = 1; exit }
+            /^\+/ { b[++bn] = substr($0, 2); next }
+            { next }
+            # nblocks == 0 means nothing was actually matched — a mode-only
+            # or binary change has a non-empty staged diff but no hunks at
+            # all, and "every block matched" is vacuously true for it.
+            END { if (!bad && !block_ok()) { bad = 1 } exit((bad || nblocks == 0) ? 1 : 0) }
+        ' "${td}/head" "${td}/diff"; then
+            rc=1
+            break
+        fi
+    done <<EOF
+$files
+EOF
+    command rm -rf "$td"
+    return $rc
 }
 
 _gcp_scan_predict_content_conflict() {
