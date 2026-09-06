@@ -14,9 +14,13 @@
 #                   `agent send-keys ... enter` and a sleep would reproduce the
 #                   original bug's shape (two calls, one blind delay, no
 #                   confirmation) rather than fix it.
-#   --wait          the confirmation. A `--timeout` that elapses with no state
-#                   change is an injection FAILURE for that target, recorded as
-#                   `timed-out`, not a success we merely could not observe.
+#   --wait          the confirmation. herdr answers `agent_prompt_stalled` when
+#                   the agent never leaves its pre-submission state, and that
+#                   is an injection FAILURE for that target, recorded as
+#                   `stalled` — not a success we merely could not observe. A
+#                   timeout AFTER that state change is the opposite case: the
+#                   prompt landed, the agent is simply still working when the
+#                   bound elapses (`submitted-working`).
 #   exact cwd       a prompt lands on a pane, so the target must be the pane
 #                   the user named — never a plausible neighbour. Zero or two
 #                   matches refuse to inject rather than guess.
@@ -76,9 +80,13 @@ _SAP_DEFAULT_PROMPT="/restart"
 # strikes) but finite: a wait that never ends is the same as no confirmation.
 _SAP_TIMEOUT_MS="${SCHEDULE_AGENT_PROMPT_TIMEOUT_MS:-60000}"
 
-# The state `--wait` waits for. `idle` fits a Claude Code pane; an agent that
-# settles somewhere else is retargeted with the env var rather than a fork.
-_SAP_UNTIL="${SCHEDULE_AGENT_PROMPT_UNTIL:-idle}"
+# The state `--wait` waits for. Empty on purpose: herdr's own default already
+# matches `idle`, `done` OR `blocked` — every state a submitted prompt can
+# settle into. Pinning `idle` narrowed that to one, so an agent that settled
+# as `done` or `blocked` was reported as a failed injection even though the
+# prompt had landed (PR #1770, codex BLOCKER). The env var still pins a single
+# state for an agent whose settled state is known.
+_SAP_UNTIL="${SCHEDULE_AGENT_PROMPT_UNTIL:-}"
 
 # How often the detached waiter wakes to re-check the clock. Chunked rather
 # than one long `sleep` so a suspended laptop cannot oversleep the whole wait,
@@ -113,6 +121,11 @@ _sap_lock_file() {
 _sap_state_ensure() {
     _sap_d=$(_sap_state_dir)
     mkdir -p "${_sap_d}" 2>/dev/null || true
+    # A job file carries the prompt text verbatim and the target cwd paths, so
+    # a permissive umask would publish both to every account on the machine
+    # (PR #1770, agy FOLLOW-UP). Best effort: a directory we cannot chmod is
+    # still one the writability check below can reject on its own terms.
+    chmod 700 "${_sap_d}" 2>/dev/null || true
     [ -d "${_sap_d}" ] && [ -w "${_sap_d}" ]
 }
 
@@ -241,10 +254,16 @@ _sap_resolve_target() {
 # _sap_inject <pane> <prompt> — one `herdr agent prompt`, on stdout as
 # `<outcome><TAB><observed-state><TAB><detail>`.
 #
-# outcome is `submitted`, `timed-out` or `errored`; rc mirrors it (0 / 1 / 1).
+# outcome is `submitted`, `submitted-working`, `stalled` or `errored`; rc
+# mirrors it (0 / 0 / 1 / 1).
 _sap_inject() {
-    _sap_out=$(herdr agent prompt "$1" "$2" \
-        --wait --until "${_SAP_UNTIL}" --timeout "${_SAP_TIMEOUT_MS}" 2>&1)
+    if [ -n "${_SAP_UNTIL}" ]; then
+        _sap_out=$(herdr agent prompt "$1" "$2" \
+            --wait --until "${_SAP_UNTIL}" --timeout "${_SAP_TIMEOUT_MS}" 2>&1)
+    else
+        _sap_out=$(herdr agent prompt "$1" "$2" \
+            --wait --timeout "${_SAP_TIMEOUT_MS}" 2>&1)
+    fi
     _sap_rc=$?
 
     # herdr answers JSON on success; anything else (a plain-text error) leaves
@@ -259,17 +278,30 @@ _sap_inject() {
         return 0
     fi
 
-    # An elapsed `--wait` and a refused call are both failures, but they are
-    # not the same incident: one means the agent never left its pre-submission
-    # state, the other that herdr never accepted the prompt at all.
+    # Three different incidents hide behind a non-zero rc, and only two of them
+    # are injection failures:
+    #
+    #   agent_prompt_stalled  herdr watched for 5s and the agent never left its
+    #                         pre-submission state — the prompt did not take.
+    #                         This IS the 2026-09-05 shape, and the one outcome
+    #                         this tool exists to catch.
+    #   any other timeout     reached only AFTER that state change, so the
+    #                         prompt landed; the agent is still working when
+    #                         the bound elapses. Calling that a failed
+    #                         injection misreports a delivered prompt
+    #                         (PR #1770, codex BLOCKER).
+    #   anything else         herdr never accepted the call at all.
     case "${_sap_out}" in
-    *timeout* | *Timeout* | *"timed out"* | *"Timed out"*)
-        printf 'timed-out\t%s\t%s' "${_sap_state}" "${_sap_detail}"
+    *agent_prompt_stalled*)
+        printf 'stalled\t%s\t%s' "${_sap_state}" "${_sap_detail}"
+        return 1
         ;;
-    *)
-        printf 'errored\t%s\t%s' "${_sap_state}" "${_sap_detail}"
+    *timeout* | *Timeout* | *"timed out"* | *"Timed out"*)
+        printf 'submitted-working\t%s\t%s' "${_sap_state}" "${_sap_detail}"
+        return 0
         ;;
     esac
+    printf 'errored\t%s\t%s' "${_sap_state}" "${_sap_detail}"
     return 1
 }
 
@@ -369,7 +401,7 @@ _sap_dispatch_one() {
     _sap_record "${_sap_jf}" "${_sap_c}" "${_sap_pane}" "${_sap_outcome}" "${_sap_st}" "${_sap_dt}"
 
     if [ "${_sap_irc}" -eq 0 ]; then
-        ux_success "${_sap_c} (${_sap_pane}): submitted — agent state ${_sap_st:-unknown}."
+        ux_success "${_sap_c} (${_sap_pane}): ${_sap_outcome} — agent state ${_sap_st:-unknown}."
         return 0
     fi
     ux_error "${_sap_c} (${_sap_pane}): ${_sap_outcome} — agent state ${_sap_st:-unknown}. ${_sap_dt}"
@@ -394,8 +426,18 @@ _sap_record() {
 
 # Local HH:MM -> epoch seconds, today. Empty output = not a time this machine
 # can name.
+#
+# Two dialects because both are supported platforms (PR #1770, codex BLOCKER):
+# GNU `date -d` first, then BSD/macOS `date -j -f`. On BSD `-d` is the
+# daylight-savings flag, not "parse this date string", so the GNU form fails
+# there and EVERY `--at` registration died on macOS with "could not turn --at
+# into a local time". The BSD form is given the full date explicitly rather
+# than relying on `-f '%H:%M'` field defaulting, which would inherit the
+# current *second* and drift the wake-up by up to 59s.
 _sap_epoch_for() {
-    date -d "today $1" '+%s' 2>/dev/null || printf ''
+    date -d "today $1" '+%s' 2>/dev/null ||
+        date -j -f '%Y-%m-%d %H:%M:%S' "$(date '+%Y-%m-%d') $1:00" '+%s' 2>/dev/null ||
+        printf ''
 }
 
 _sap_register() {
@@ -525,6 +567,20 @@ EOF
 # re-reads it after its sleep, so a job whose kill failed still refuses to
 # inject), then the waiting process is killed (so a cancelled job does not sit
 # around until its hour).
+# Is <1> still this tool's own waiter? The pid was recorded when the job was
+# registered and is read back minutes-to-hours later, by which time the OS may
+# well have handed it to something else — and `kill` on a recycled pid signals
+# a stranger (PR #1770, agy FOLLOW-UP). `ps -o args=` rather than
+# /proc/<pid>/cmdline: the same portability line the `date` fix draws, since
+# macOS has no /proc. No `ps` at all degrades to not killing, which is safe —
+# the status flip above already stops the dispatcher.
+_sap_is_our_waiter() {
+    case "$(ps -p "$1" -o args= 2>/dev/null)" in
+    *schedule_agent_prompt*) return 0 ;;
+    esac
+    return 1
+}
+
 _sap_cancel_cmd() {
     _sap_want="${1-}"
     _sap_any=0
@@ -541,7 +597,8 @@ _sap_cancel_cmd() {
 
         _sap_job_apply "${_sap_jobf}" '.status = "cancelled"' || true
         _sap_pid=$(jq -r '.pid // 0' "${_sap_jobf}" 2>/dev/null)
-        if [ -n "${_sap_pid}" ] && [ "${_sap_pid}" -gt 0 ] 2>/dev/null; then
+        if [ -n "${_sap_pid}" ] && [ "${_sap_pid}" -gt 0 ] 2>/dev/null &&
+            _sap_is_our_waiter "${_sap_pid}"; then
             kill "${_sap_pid}" 2>/dev/null || true
         fi
         ux_success "Cancelled job ${_sap_id}."
@@ -582,15 +639,16 @@ _sap_usage() {
     ux_bullet_sub "foreground_cwd is never matched — it drifts with the pane's own 'cd'"
     ux_bullet_sub "zero or 2+ matches refuse to inject: this tool never guesses which pane you meant"
     ux_bullet "submission"
-    ux_bullet_sub "herdr agent prompt <pane> <TEXT> --wait --until ${_SAP_UNTIL} --timeout ${_SAP_TIMEOUT_MS}"
+    ux_bullet_sub "herdr agent prompt <pane> <TEXT> --wait ${_SAP_UNTIL:+--until ${_SAP_UNTIL} }--timeout ${_SAP_TIMEOUT_MS}"
     ux_bullet_sub "one call submits the text AND the agent's Enter key — never a send-text plus a blind sleep"
-    ux_bullet_sub "a --wait that times out is a FAILURE for that target, recorded as 'timed-out'"
+    ux_bullet_sub "an agent that never leaves its pre-submission state is a FAILURE, recorded as 'stalled'"
+    ux_bullet_sub "a timeout after that state change is 'submitted-working' — the prompt landed, the turn is long"
     ux_bullet_sub "targets are independent: one failure never skips the others"
     ux_bullet "prerequisites"
     ux_bullet_sub "herdr on PATH with a reachable server, and jq"
     ux_bullet_sub "the target agents already running — a cwd with no agent is refused at registration"
     ux_bullet "environment"
-    ux_bullet_sub "SCHEDULE_AGENT_PROMPT_UNTIL       state --wait waits for (default ${_SAP_UNTIL})"
+    ux_bullet_sub "SCHEDULE_AGENT_PROMPT_UNTIL       pin --wait to ONE state (default: herdr's idle/done/blocked)"
     ux_bullet_sub "SCHEDULE_AGENT_PROMPT_TIMEOUT_MS  --wait bound in ms (default ${_SAP_TIMEOUT_MS})"
     ux_bullet_sub "SCHEDULE_AGENT_PROMPT_TICK_S      waiter wake-up interval (default ${_SAP_TICK_S})"
     ux_bullet "state"

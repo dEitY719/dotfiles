@@ -76,7 +76,7 @@ herdr() {
         ;;
     "agent prompt")
         if [ -n "${FAIL_PANE-}" ] && [ "${FAIL_PANE}" = "$3" ]; then
-            printf '%s' "${FAIL_OUT:-herdr: timeout waiting for state idle (still working)}"
+            printf '%s' "${FAIL_OUT:-herdr: agent_prompt_stalled}"
             return "${FAIL_RC:-1}"
         fi
         printf '%s' "${PROMPT_OUT:-{\"result\":{\"agent_status\":\"idle\"}}}"
@@ -87,6 +87,24 @@ herdr() {
     esac
 }
 export -f herdr
+
+# A BSD/macOS `date`, on demand: `-d` is the daylight-savings flag there, not
+# "parse this date string", so it never yields an epoch. `-j -f` is the form
+# that does. Inert unless BSD_DATE is set, so every other test still runs
+# against the real thing.
+date() {
+    if [ -n "${BSD_DATE-}" ]; then
+        case "$1" in
+        -d) return 1 ;;
+        -j)
+            command date -d "$4" '+%s'
+            return $?
+            ;;
+        esac
+    fi
+    command date "$@"
+}
+export -f date
 STUB
 }
 
@@ -210,7 +228,23 @@ _prompt_calls() {
     _dispatch_job
     assert_success
     run cat "${_LOG}"
-    assert_output --partial '[agent][prompt][w1N:pH][/restart][--wait][--until][idle]'
+    # No `--until`: herdr's own default already matches idle/done/blocked, and
+    # pinning one of the three turned the other two into false failures.
+    assert_output --partial '[agent][prompt][w1N:pH][/restart][--wait][--timeout]'
+    refute_output --partial '[--until]'
+}
+
+@test "A2c: SCHEDULE_AGENT_PROMPT_UNTIL pins --wait back to one state" {
+    _set_agents "${_A}|w1N:pH"
+    sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
+    assert_success
+    _expire_job
+    : >"${_LOG}"
+    export SCHEDULE_AGENT_PROMPT_UNTIL=blocked
+    _dispatch_job
+    assert_success
+    run cat "${_LOG}"
+    assert_output --partial '[--wait][--until][blocked][--timeout]'
 }
 
 @test "A2b: a registered job starts pending, records its targets and detaches" {
@@ -438,6 +472,32 @@ _prompt_calls() {
     assert_output "0"
 }
 
+@test "A6e: --cancel refuses to signal a pid the job no longer owns" {
+    _set_agents "${_A}|w1N:pH"
+    sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
+    assert_success
+
+    # The waiter died and its pid was recycled: the number in the job file now
+    # belongs to a stranger, and a bare `kill` would signal it.
+    local f victim
+    f="$(_job_file)"
+    kill "$(jq -r '.pid' "$f")" 2>/dev/null || true
+    sleep 60 &
+    victim=$!
+    jq --argjson p "${victim}" '.pid = $p' "$f" >"${f}.t" && mv "${f}.t" "$f"
+
+    sap --cancel
+    assert_success
+
+    run kill -0 "${victim}"
+    assert_success
+    kill "${victim}" 2>/dev/null || true
+
+    # The status flip is what actually cancels; the kill is only cleanup.
+    run jq -r '.status' "$f"
+    assert_output "cancelled"
+}
+
 @test "A6d: --cancel takes a job id and leaves the other job pending" {
     _set_agents "${_A}|w1N:pH" "${_B}|w2N:pQ"
     sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
@@ -467,26 +527,50 @@ _prompt_calls() {
 # A7 — a --wait that never settles
 # ---------------------------------------------------------------------------
 
-@test "A7: a --wait timeout is recorded as a failure for that target" {
+@test "A7: a stalled prompt is recorded as a failure for that target" {
     _set_agents "${_A}|w1N:pH"
     sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
     assert_success
     _expire_job
 
+    # herdr's own word for "the agent never left its pre-submission state" —
+    # the 2026-09-05 shape, the one outcome that really is a lost prompt.
     export FAIL_PANE="w1N:pH"
     export FAIL_RC=1
-    export FAIL_OUT="herdr: timeout waiting for state idle"
+    export FAIL_OUT="herdr: agent_prompt_stalled"
     _dispatch_job
     assert_failure
-    assert_output --partial "timed-out"
+    assert_output --partial "stalled"
 
     run _job_field '.results[0].outcome'
-    assert_output "timed-out"
+    assert_output "stalled"
     run _job_field '.status'
     assert_output "failed"
 }
 
-@test "A7b: a non-timeout herdr failure is recorded as errored, not timed-out" {
+@test "A7a: a timeout after submission is delivery, not failure" {
+    _set_agents "${_A}|w1N:pH"
+    sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
+    assert_success
+    _expire_job
+
+    # The state change already happened (otherwise herdr would have said
+    # `agent_prompt_stalled`), so the prompt landed — the turn is simply still
+    # running when the bound elapses. Reporting that as a failed injection
+    # tells the user to re-send a prompt the agent is already working on.
+    export FAIL_PANE="w1N:pH"
+    export FAIL_RC=1
+    export FAIL_OUT="herdr: timeout waiting for settled state"
+    _dispatch_job
+    assert_success
+
+    run _job_field '.results[0].outcome'
+    assert_output "submitted-working"
+    run _job_field '.status'
+    assert_output "completed"
+}
+
+@test "A7b: a refused herdr call is recorded as errored, not stalled" {
     _set_agents "${_A}|w1N:pH"
     sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
     assert_success
@@ -576,6 +660,36 @@ _prompt_calls() {
     assert_output --partial "--dry-run"
     assert_output --partial "--status"
     assert_output --partial "--cancel"
+}
+
+# ---------------------------------------------------------------------------
+# A9 — portability and state hygiene
+# ---------------------------------------------------------------------------
+
+@test "A9: --at resolves on a BSD/macOS date, which has no -d" {
+    _set_agents "${_A}|w1N:pH"
+    local at expected
+    at="$(_future_hhmm)"
+    expected="$(date -d "today ${at}" '+%s')"
+
+    export BSD_DATE=1
+    sap --at "${at}" --agent-cwd "${_A}"
+    assert_success
+
+    # Same instant as the GNU path, not merely "some number": a fallback that
+    # inherited the current second would drift the wake-up by up to 59s.
+    run _job_field '.at_epoch'
+    assert_output "${expected}"
+}
+
+@test "A9b: the state directory is not readable by other accounts" {
+    _set_agents "${_A}|w1N:pH"
+    sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
+    assert_success
+
+    # Job files carry the prompt text and the target cwd paths verbatim.
+    run bash -c 'ls -ld "$1" | cut -c1-10' _ "${_STATE_DIR}"
+    assert_output "drwx------"
 }
 
 # ---------------------------------------------------------------------------
