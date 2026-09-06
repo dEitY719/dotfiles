@@ -57,7 +57,7 @@ generate_plugin_doc_ko() {
 
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
-        ux_bullet "agy - Antigravity CLI (uses --print flag)"
+        ux_bullet "agy - Antigravity CLI (stream-json on stdin)"
         ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
         ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
 
@@ -136,22 +136,17 @@ generate_plugin_doc_ko() {
         rc=$?
         ;;
     agy)
-        # Issue #1767: a bare trailing `--print` needs a value (Go's flag
-        # parser rejects it with "flag needs an argument: -print") — the
-        # prompt piped on stdin was never actually read. Same fix as
-        # gh_pr_review.sh (#1761/#1765): send the prompt as stream-json and
-        # pull the response back out of `.result.response`.
-        local _agy_stream
-        _agy_stream=$(_generate_plugin_doc_ko_prompt "$plugin_file" |
-            jq -Rs '{event: "user", message: {content: .}}' |
-            "$ai_tool" --print '' --input-format stream-json --output-format stream-json)
+        # Issue #1767: a bare trailing `--print` needs a value, so the prompt
+        # piped on stdin was never actually read. The transport (and the
+        # reason for every flag) is `_agy_run_stream` — see agy_run.sh.
+        # Stderr stays on the terminal rather than being merged into
+        # $output_file: the failure path below deletes that file, so a
+        # diagnostic written into it would never be seen.
+        # shellcheck disable=SC1090
+        command -v _agy_run_stream >/dev/null 2>&1 ||
+            . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/agy_run.sh"
+        _generate_plugin_doc_ko_prompt "$plugin_file" | _agy_run_stream >"$output_file"
         rc=$?
-        printf '%s\n' "$_agy_stream" |
-            jq -er 'select(.event == "result")
-                    | if .result.status == "SUCCESS" then .result.response // ""
-                      else "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")\n"
-                           | halt_error(1)
-                      end' >"$output_file" 2>&1 || { [ "$rc" -ne 0 ] || rc=1; }
         ;;
     codex)
         # Codex uses 'exec' subcommand for non-interactive execution
@@ -463,7 +458,7 @@ create_plugin_structure_ko() {
 
         ux_section "Available AI Tools"
         ux_bullet "claude (default) - Anthropic Claude (uses -p flag)"
-        ux_bullet "agy - Antigravity CLI (uses --print flag)"
+        ux_bullet "agy - Antigravity CLI (stream-json on stdin)"
         ux_bullet "codex - Codex CLI (uses 'exec' subcommand)"
         ux_bullet "Other tools - Any CLI tool that accepts -p, --prompt, exec, or positional argument"
 
