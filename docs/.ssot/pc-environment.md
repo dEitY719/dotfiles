@@ -16,7 +16,7 @@
 | 모드 | 대수 | 사양 / LLM | 네트워크 | 비고 |
 |------|------|-----------|----------|------|
 | `internal` | 2 | 1대만 사내 local LLM 연동 가능 | 사내망 | GHES 사용 |
-| `external` | 1 | 최고 사양, **Ollama 로컬 서빙** | 회사에서 외부 접속 가능 | (이 세션 PC) |
+| `external` | 1 | 최고 사양, **Ollama 로컬 서빙** | 회사에서 외부 접속 가능 | (이 세션 PC) · Obsidian vault WSL 단일 클론 통합 (2026-09-06, Windows-native 앱 폐기) |
 | `public` | 2 | 노트북, 저사양 → **local LLM 불가** | 집 | |
 
 
