@@ -204,15 +204,14 @@ _sap_resolve_pane() {
         else error("no agent list") end
     ' 2>/dev/null) || return 1
 
+    # Also covers a matched agent carrying no pane_id: herdr cannot be asked
+    # to type into an empty pane id, and reporting success for it would be
+    # the accepted-call-no-effect failure all over again.
     [ -n "${_sap_panes}" ] || return 3
 
     _sap_count=$(printf '%s\n' "${_sap_panes}" | grep -c '^') || _sap_count=0
     [ "${_sap_count}" -eq 1 ] || return 4
 
-    # A matched agent carrying no pane_id is not a target: herdr cannot be
-    # asked to type into an empty pane id, and reporting success for it would
-    # be the accepted-call-no-effect failure all over again.
-    [ -n "${_sap_panes}" ] || return 3
     printf '%s' "${_sap_panes}"
 }
 
@@ -224,6 +223,15 @@ _sap_resolve_error() {
     4) ux_error "2 or more agents report cwd ${1} — refusing to guess which pane was meant." ;;
     *) ux_error "No agent reports cwd ${1} (exact match on the pane's launch cwd) — nothing to inject into." ;;
     esac
+}
+
+# _sap_resolve_target <cwd> — physical-path resolution plus _sap_resolve_pane,
+# the two-step lookup both the dispatcher and the registration plan need
+# before they can act on a --agent-cwd. On stdout: the pane id (rc 0) or
+# nothing; rc mirrors _sap_resolve_pane's.
+_sap_resolve_target() {
+    _sap_phys=$(herdr_agent_physical_path "$1")
+    _sap_resolve_pane "${_sap_phys}"
 }
 
 # ============================================================
@@ -344,9 +352,7 @@ _sap_dispatch_one() {
     _sap_c="$2"
     _sap_p="$3"
 
-    _sap_phys=$(herdr_agent_physical_path "${_sap_c}")
-
-    _sap_pane=$(_sap_resolve_pane "${_sap_phys}")
+    _sap_pane=$(_sap_resolve_target "${_sap_c}")
     _sap_rrc=$?
     if [ "${_sap_rrc}" -ne 0 ]; then
         _sap_resolve_error "${_sap_c}" "${_sap_rrc}"
@@ -414,8 +420,7 @@ _sap_register() {
     _sap_plan=""
     while IFS= read -r _sap_cwd; do
         [ -n "${_sap_cwd}" ] || continue
-        _sap_phys=$(herdr_agent_physical_path "${_sap_cwd}")
-        _sap_pane=$(_sap_resolve_pane "${_sap_phys}")
+        _sap_pane=$(_sap_resolve_target "${_sap_cwd}")
         _sap_rrc=$?
         if [ "${_sap_rrc}" -ne 0 ]; then
             _sap_resolve_error "${_sap_cwd}" "${_sap_rrc}"
@@ -615,15 +620,13 @@ main() {
             ;;
         --cancel)
             _sap_cmd="cancel"
-            if [ "$#" -gt 1 ]; then
-                case "$2" in
-                --*) ;;
-                *)
-                    _sap_arg="$2"
-                    shift
-                    ;;
-                esac
-            fi
+            case "${2-}" in
+            "" | --*) ;;
+            *)
+                _sap_arg="$2"
+                shift
+                ;;
+            esac
             shift
             ;;
         --dispatch)
