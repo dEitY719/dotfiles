@@ -81,6 +81,7 @@
 - **pr_merge_train_cron** — merge-train cron 디스패처 — 1회 tick (issue #1470).
 - **repo_stats** — Initialize common tools environment
 - **run_agents_md_master_prompt** — Claude Code에게 AGENTS.md 생성 요청 (비대화형)
+- **schedule_agent_prompt** — One-shot scheduler that types a prompt into explicitly se...
 - **session_doctor_cron** — session-doctor cron 디스패처 — 1회 tick (issue #15...
 - **set_locale** — This script sets up the en_US.UTF-8 locale to resolve "ma...
 - **setup_crt** — CA Certificate Setup Script
@@ -92,7 +93,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 69 custom tools available
+- Total: 70 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage
