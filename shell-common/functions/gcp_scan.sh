@@ -436,10 +436,59 @@ _gcp_scan_json_leaves() {
     # `-S` sorts object keys so a pure key reordering — not meaningful in JSON
     # — does not read as new content. An empty file yields no records and rc 0,
     # which is the correct reading of "the commit adds this file".
-    jq -Sc '
+    #
+    # $2 (optional, issue #1775) is a JSON array of array paths whose ELEMENT
+    # records are suppressed — see `_gcp_scan_json_absorbed_array_paths`. The
+    # array's own `[$p, []]` record still shows, so the array cannot vanish.
+    jq -Sc --argjson drop "${2:-[]}" '
+        def dropped($p): any($drop[]; . as $d | ($p | length) > ($d | length) and $p[0:($d | length)] == $d);
         [[], (if type == "object" then {} elif type == "array" then [] else . end)],
-        (paths as $p | [$p, (getpath($p) | if type == "object" then {} elif type == "array" then [] else . end)])
+        (paths as $p | select(dropped($p) | not) | [$p, (getpath($p) | if type == "object" then {} elif type == "array" then [] else . end)])
     ' "$1"
+}
+
+_gcp_scan_json_absorbed_array_paths() {
+    # Issue #1775. Emits (as one compact JSON array) the paths of the scalar
+    # arrays whose base/$1 -> theirs/$3 -> ours/$2 difference is pure INDEX
+    # SHIFT rather than content, so the caller can compare them by value order
+    # instead of by absolute index.
+    #
+    # Why #1688's index-in-the-path design needs this exception: in an
+    # alphabetically sorted registry (`claude/plugin/plugins.json`) both
+    # branches append. If HEAD independently inserted an earlier-sorting entry,
+    # every later element shifts one slot, so the value the commit adds — which
+    # HEAD ALREADY HAS — carries a different index and reads as "content HEAD
+    # lacks" forever. That is the #1688 bug in a new coordinate.
+    #
+    # The discriminator is RELATIVE order, which an index shift cannot change:
+    # an array qualifies only when base is a subsequence of theirs (the commit
+    # only INSERTED — a removal must stay visible, the #1177 data-loss
+    # direction) AND theirs is a subsequence of ours (HEAD already holds every
+    # value the commit has, in the same relative order). The #1688 reorder case
+    # (`["b","a"]` vs `["a","b"]`) fails the second test — the two branches
+    # disagree about which of two shared values comes first — so it still reads
+    # as real content.
+    #
+    # Scalar arrays only. An array holding objects/arrays renders as deeper
+    # records whose paths this suppression would not reach, and its element
+    # order is far likelier to be meaningful; those keep the #1688 comparison.
+    jq -nc --slurpfile b "$1" --slurpfile o "$2" --slurpfile t "$3" '
+        def sc: type == "array" and all(.[]; type != "object" and type != "array");
+        # true when $a is a subsequence of the input array (greedy is exact here).
+        def subseq($a): (reduce .[] as $y ($a; if length > 0 and .[0] == $y then .[1:] else . end)) | length == 0;
+        ($b[0]) as $B | ($o[0]) as $O | ($t[0]) as $T |
+        if ($O | type) == "null" or ($T | type) == "null" then []
+        else
+            [ (([] | select($T | sc)), ($T | paths(sc))) as $p
+              | ($T | getpath($p)) as $Ta
+              | (((try ($O | getpath($p)) catch null) // []) | if sc then . else null end) as $Oa
+              | (((try ($B | getpath($p)) catch null) // []) | if sc then . else null end) as $Ba
+              | select($Oa != null and $Ba != null)
+              | select(($Ta | subseq($Ba)) and ($Oa | subseq($Ta)))
+              | $p
+            ]
+        end
+    '
 }
 
 _gcp_scan_conflict_adds_new_content() {
@@ -461,7 +510,7 @@ _gcp_scan_conflict_adds_new_content() {
     # below is what distinguishes the two, letting Stage-1.6 defer the drift
     # case to Stage-2 (no-op) while still flagging the real one. Non-destructive:
     # reads blobs only (no checkout / cherry-pick).
-    local sha="$1" f="$2" parent td _b _o _t
+    local sha="$1" f="$2" parent td _b _o _t _drop
     parent=$(git rev-parse -q --verify "${sha}^1" 2>/dev/null) || return 0
     td=$(mktemp -d "${TMPDIR:-/tmp}/gcp_drift.XXXXXX" 2>/dev/null) || return 0
     # base = the file in the commit's parent (the cherry-pick merge base);
@@ -519,11 +568,19 @@ _gcp_scan_conflict_adds_new_content() {
     # valid: it falls back to exact comparison and stays visible.
     # NOTE: a bare `exit` (not `exit 0`) is required on a hit — `exit 0` would
     # still run END, whose `exit 1` would override it back to "drift".
+    #
+    # `_gcp_scan_json_absorbed_array_paths` (#1775) is the one exception to the
+    # index-in-the-path rule: for a scalar array the commit only INSERTED into
+    # and whose values HEAD already holds in the same relative order, the
+    # per-element records are suppressed on all three sides, so an unrelated
+    # insertion earlier in a sorted registry cannot re-brand an already-applied
+    # value as new content. A reorder still fails its subsequence test.
     _b="${td}/base" _o="${td}/ours" _t="${td}/theirs"
     if command -v jq >/dev/null 2>&1 &&
-        _gcp_scan_json_leaves "${td}/base" >"${td}/base.j" 2>/dev/null &&
-        _gcp_scan_json_leaves "${td}/ours" >"${td}/ours.j" 2>/dev/null &&
-        _gcp_scan_json_leaves "${td}/theirs" >"${td}/theirs.j" 2>/dev/null; then
+        _drop=$(_gcp_scan_json_absorbed_array_paths "${td}/base" "${td}/ours" "${td}/theirs" 2>/dev/null) &&
+        _gcp_scan_json_leaves "${td}/base" "$_drop" >"${td}/base.j" 2>/dev/null &&
+        _gcp_scan_json_leaves "${td}/ours" "$_drop" >"${td}/ours.j" 2>/dev/null &&
+        _gcp_scan_json_leaves "${td}/theirs" "$_drop" >"${td}/theirs.j" 2>/dev/null; then
         _b="${td}/base.j" _o="${td}/ours.j" _t="${td}/theirs.j"
     fi
     if awk '
