@@ -311,20 +311,25 @@ _usage_record_count() {
 # minimal untracked record is appended — not full usage parsing.
 # ---------------------------------------------------------------------------
 
-# Stub agy — echoes its argv and copies stdin to stdout so a test can
-# assert on the exact invocation shape, then exits with $AGY_STUB_EXIT
-# (default 0).
+# Stub agy — echoes its argv on stderr (so it survives past the stream-json
+# capture below) and, on stdin, expects the {event:"user",...} NDJSON
+# message #1767 introduced; it echoes the prompt back inside a
+# {event:"result", result:{status:"SUCCESS", response: <prompt>}} line so a
+# test can assert the prompt actually reached agy via stdin, not argv. Exits
+# with $AGY_STUB_EXIT (default 0).
 _setup_agy_stub() {
     cat >"$STUB_BIN/agy" <<'STUB'
 #!/usr/bin/env bash
-printf 'agy-stub: args=%s\n' "$*"
-cat
+printf 'agy-stub: args=%s\n' "$*" >&2
+prompt=$(cat | jq -r '.message.content')
+printf '{"event":"init"}\n'
+printf '%s' "$prompt" | jq -Rs '{event: "result", result: {status: "SUCCESS", response: .}}'
 exit "${AGY_STUB_EXIT:-0}"
 STUB
     chmod +x "$STUB_BIN/agy"
 }
 
-@test "agy: invoked with --dangerously-skip-permissions --print and prompt on stdin" {
+@test "agy: prompt reaches agy via stream-json stdin, not a bare trailing --print (issue #1767)" {
     _setup_agy_stub
 
     run bash --noprofile --norc -c "
@@ -342,6 +347,7 @@ STUB
 
     assert_output --partial "rc=0"
     assert_output --partial "agy-stub: args=--dangerously-skip-permissions --print"
+    assert_output --partial "--input-format stream-json --output-format stream-json"
     assert_output --partial "hello agy"
     [ "$(jq -r '.ai' "$USAGE_LOG")" = "agy" ]
     [ "$(jq -r '.tracking' "$USAGE_LOG")" = "unsupported" ]
