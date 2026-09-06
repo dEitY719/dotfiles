@@ -8,20 +8,46 @@
 # functions are not. This is the SSOT for the `obsidian` command (issue #1023).
 #
 # Routed by environment:
-#   - WSL:          Windows desktop CLI redirector (Obsidian.com)
-#                   forwards subcommands: search / read / create / property:set / ...
-#   - native Linux: latest Obsidian-*.AppImage (GUI launcher)
+#   - REST configured: Local REST API plugin over HTTPS (read/create/search/
+#                      property:set only); no args -> launch the AppImage
+#   - WSL:             Windows desktop CLI redirector (Obsidian.com)
+#                      forwards subcommands: search / read / create / ...
+#   - native Linux:    latest Obsidian-*.AppImage (GUI launcher)
 #
 # Path overrides:
 #   OBSIDIAN_CLI_BIN  WSL redirector  (default: /mnt/c/Program Files/Obsidian/Obsidian.com)
 #   OBSIDIAN_BIN      explicit AppImage path (native Linux)
 #   OBSIDIAN_HOME     dir scanned for Obsidian-*.AppImage (default: ~/application)
 #
+# REST backend overrides (env wins; ~/.config/obsidian-rest-api/env fills gaps):
+#   OBSIDIAN_REST_API_KEY  API key of the "Local REST API with MCP" plugin
+#   OBSIDIAN_REST_API_URL  e.g. https://127.0.0.1:27124
+#
 # Usage:
 #   obsidian search query="PARA" limit=5
 #   obsidian read file="My Note"
 #   obsidian create name="New Note" path="folder/New Note.md" content="# Hello" silent
 #   obsidian                          # no args -> launch the app / GUI
+
+# ----------------------------------------------------------------- REST config
+# Env wins; the file only fills the gaps. An unreadable/empty/broken file is
+# NOT an error — routing simply falls through to the legacy OS-based branches.
+_ob_rest_key=${OBSIDIAN_REST_API_KEY-}
+_ob_rest_url=${OBSIDIAN_REST_API_URL-}
+if [ -z "$_ob_rest_key" ] || [ -z "$_ob_rest_url" ]; then
+	if [ -r "$HOME/.config/obsidian-rest-api/env" ]; then
+		# shellcheck source=/dev/null
+		. "$HOME/.config/obsidian-rest-api/env" 2>/dev/null || true
+		[ -n "$_ob_rest_key" ] || _ob_rest_key=${OBSIDIAN_REST_API_KEY-}
+		[ -n "$_ob_rest_url" ] || _ob_rest_url=${OBSIDIAN_REST_API_URL-}
+	fi
+fi
+
+# True when both REST credentials are known. Deliberately no network probe —
+# "configured" is a routing question, reachability is the request's problem.
+_ob_rest_configured() {
+	[ -n "$_ob_rest_key" ] && [ -n "$_ob_rest_url" ]
+}
 
 # True when running under WSL.
 _ob_is_wsl() {
@@ -58,12 +84,229 @@ _ob_usage() {
 	cat <<'USAGE'
 obsidian - launch Obsidian / forward CLI commands
 Usage: obsidian [cli-subcommand args...]
+  REST:  read / create / search / property:set via the Local REST API plugin
+         (active when OBSIDIAN_REST_API_KEY + OBSIDIAN_REST_API_URL are set)
   WSL:   forwards to Obsidian.com (search/read/create/property:set/backlinks/...)
   Linux: launches the latest Obsidian-*.AppImage
   (no args) launches / focuses the app
-Overrides: OBSIDIAN_CLI_BIN (WSL), OBSIDIAN_BIN / OBSIDIAN_HOME (Linux)
+Overrides: OBSIDIAN_CLI_BIN (WSL), OBSIDIAN_BIN / OBSIDIAN_HOME (Linux),
+           OBSIDIAN_REST_API_KEY / OBSIDIAN_REST_API_URL (REST)
 USAGE
 }
+
+_ob_err() {
+	printf 'obsidian: %s\n' "$1" >&2
+}
+
+# ---------------------------------------------------------------- REST backend
+
+_ob_tmpd=""
+_ob_rest_cleanup() {
+	[ -n "$_ob_tmpd" ] && rm -rf "$_ob_tmpd"
+}
+
+# Percent-encode each path segment, keeping "/" as a real separator (the API
+# does not resolve an encoded %2F between path components).
+_ob_urlpath() {
+	jq -rn --arg p "$1" '$p | split("/") | map(@uri) | join("/")'
+}
+
+# $1 method, $2 url path, rest: extra curl args.
+# Body -> $_ob_tmpd/body, status -> $_ob_status. Returns nonzero unless 2xx.
+_ob_req() {
+	_ob_method=$1
+	_ob_path=$2
+	shift 2
+	_ob_status=$(curl -sk -X "$_ob_method" \
+		-H "Authorization: Bearer $_ob_rest_key" \
+		-o "$_ob_tmpd/body" -w '%{http_code}' \
+		"$@" "${_ob_rest_url%/}$_ob_path" 2>/dev/null) || _ob_status=000
+	case "$_ob_status" in
+	2*) return 0 ;;
+	esac
+	return 1
+}
+
+# Report the failed request in $1's name and exit. Never echoes the API key.
+_ob_req_die() {
+	if [ "$_ob_status" = "000" ]; then
+		_ob_err "$1: cannot reach the Obsidian REST API at ${_ob_rest_url}"
+		printf '  -> Is Obsidian running with the "Local REST API" plugin enabled?\n' >&2
+		exit 1
+	fi
+	_ob_detail=$(jq -r '.message // .error // empty' "$_ob_tmpd/body" 2>/dev/null)
+	[ -n "$_ob_detail" ] || _ob_detail=$(head -c 200 "$_ob_tmpd/body" 2>/dev/null)
+	_ob_err "$1 failed (HTTP $_ob_status) $_ob_detail"
+	exit 1
+}
+
+# Append .md when the basename carries no extension (Obsidian's own convention).
+_ob_with_ext() {
+	case "${1##*/}" in
+	*.*) printf '%s' "$1" ;;
+	*) printf '%s.md' "$1" ;;
+	esac
+}
+
+# Resolve a wikilink-style `file=` name to exactly one vault path, into
+# $_ob_resolved. There is no REST endpoint for link resolution, so list every
+# note (one JsonLogic query returning each file's path) and match on basename.
+# Runs in the caller's shell, not a subshell — a bad name must `exit`, and an
+# exit inside a command substitution would only kill the substitution.
+_ob_resolve_file() {
+	_ob_want=$(_ob_with_ext "$1")
+	_ob_req POST /search/ \
+		-H 'Content-Type: application/vnd.olrapi.jsonlogic+json' \
+		--data-binary '{"var":"path"}' || _ob_req_die "file=\"$1\" lookup"
+	_ob_hits=$(jq -r --arg n "$_ob_want" \
+		'.[].filename | select(. == $n or endswith("/" + $n))' \
+		"$_ob_tmpd/body" 2>/dev/null)
+	if [ -z "$_ob_hits" ]; then
+		_ob_err "no note named \"$1\" in the vault"
+		exit 1
+	fi
+	if [ "$(printf '%s\n' "$_ob_hits" | wc -l)" -gt 1 ]; then
+		_ob_err "\"$1\" is ambiguous — $(printf '%s\n' "$_ob_hits" | wc -l) notes match:"
+		printf '%s\n' "$_ob_hits" | sed 's/^/  -> /' >&2
+		printf '  -> Use path="..." to pick one.\n' >&2
+		exit 1
+	fi
+	_ob_resolved=$_ob_hits
+}
+
+# Set $_ob_url to the note addressed by path= / file=, or /active/ when neither
+# is given (matching the native CLI, which falls back to the active file).
+_ob_set_note_url() {
+	if [ -n "$_ob_p_path" ]; then
+		_ob_url="/vault/$(_ob_urlpath "$(_ob_with_ext "$_ob_p_path")")"
+	elif [ -n "$_ob_p_file" ]; then
+		_ob_resolve_file "$_ob_p_file"
+		_ob_url="/vault/$(_ob_urlpath "$_ob_resolved")"
+	else
+		_ob_url="/active/"
+	fi
+}
+
+_ob_p_file=""
+_ob_p_path=""
+_ob_p_name=""
+_ob_p_value=""
+_ob_p_content=""
+_ob_p_query=""
+_ob_p_limit=""
+_ob_p_overwrite=""
+
+# Parse `key=value` params. Bare words are boolean flags: `silent` and friends
+# only steer the native GUI, which the REST backend has no hand in — accept and
+# ignore them. An unknown `key=value` is a loud error, never a silent drop.
+_ob_parse_params() {
+	for _ob_a in "$@"; do
+		case "$_ob_a" in
+		file=*) _ob_p_file=${_ob_a#file=} ;;
+		path=*) _ob_p_path=${_ob_a#path=} ;;
+		name=*) _ob_p_name=${_ob_a#name=} ;;
+		value=*) _ob_p_value=${_ob_a#value=} ;;
+		content=*) _ob_p_content=${_ob_a#content=} ;;
+		query=*) _ob_p_query=${_ob_a#query=} ;;
+		limit=*) _ob_p_limit=${_ob_a#limit=} ;;
+		overwrite) _ob_p_overwrite=1 ;;
+		*=*)
+			_ob_err "parameter \"${_ob_a%%=*}\" is not supported by the REST backend"
+			exit 2
+			;;
+		*) ;; # bare flag (silent, --copy, total, ...) — no GUI to steer
+		esac
+	done
+}
+
+_ob_rest_read() {
+	_ob_set_note_url
+	_ob_req GET "$_ob_url" || _ob_req_die read
+	cat "$_ob_tmpd/body"
+}
+
+_ob_rest_create() {
+	if [ -n "$_ob_p_path" ]; then
+		_ob_target=$(_ob_with_ext "$_ob_p_path")
+	elif [ -n "$_ob_p_name" ]; then
+		_ob_target=$(_ob_with_ext "$_ob_p_name")
+	else
+		_ob_err 'create needs name="..." or path="..."'
+		exit 2
+	fi
+	_ob_url="/vault/$(_ob_urlpath "$_ob_target")"
+	if [ -z "$_ob_p_overwrite" ] && _ob_req GET "$_ob_url"; then
+		_ob_err "$_ob_target already exists — pass the \`overwrite\` flag to replace it"
+		exit 1
+	fi
+	# \n / \t in content are escapes, as the native CLI documents them.
+	printf '%b' "$_ob_p_content" >"$_ob_tmpd/req"
+	_ob_req PUT "$_ob_url" \
+		-H 'Content-Type: text/markdown' \
+		--data-binary "@$_ob_tmpd/req" || _ob_req_die create
+	printf '%s\n' "$_ob_target"
+}
+
+_ob_rest_search() {
+	if [ -z "$_ob_p_query" ]; then
+		_ob_err 'search needs query="..."'
+		exit 2
+	fi
+	_ob_req POST /search/simple/ \
+		-G --data-urlencode "query=$_ob_p_query" || _ob_req_die search
+	jq -r --argjson n "${_ob_p_limit:-0}" '
+		(if $n > 0 then .[0:$n] else . end)[]
+		| .filename, "    " + ((.matches[0].context // "") | gsub("\\s+"; " "))
+	' "$_ob_tmpd/body"
+}
+
+_ob_rest_property_set() {
+	if [ -z "$_ob_p_name" ]; then
+		_ob_err 'property:set needs name="..."'
+		exit 2
+	fi
+	_ob_set_note_url
+	jq -n --arg k "$_ob_p_name" --arg v "$_ob_p_value" \
+		'{targetType: "frontmatter", target: $k, operation: "replace",
+		  value: $v, createTargetIfMissing: true}' >"$_ob_tmpd/req"
+	_ob_req PATCH "$_ob_url" \
+		-H 'Content-Type: application/json' \
+		--data-binary "@$_ob_tmpd/req" || _ob_req_die property:set
+}
+
+_ob_rest_dispatch() {
+	_ob_cmd=$1
+	shift
+	case "$_ob_cmd" in
+	read | create | search | property:set) ;;
+	vault=*)
+		_ob_err 'vault="..." is meaningless for the REST backend — it talks to the one vault its Obsidian instance has open'
+		exit 2
+		;;
+	*)
+		_ob_err "\"$_ob_cmd\" has no REST-backed equivalent (this backend covers read, create, search, property:set)"
+		printf '  -> Windows-native Obsidian (OBSIDIAN_CLI_BIN) still implements it; unset OBSIDIAN_REST_API_URL to route there.\n' >&2
+		exit 2
+		;;
+	esac
+	for _ob_dep in curl jq; do
+		command -v "$_ob_dep" >/dev/null 2>&1 || {
+			_ob_err "$_ob_dep is required for the REST backend but was not found in PATH"
+			exit 127
+		}
+	done
+	_ob_parse_params "$@"
+	_ob_tmpd=$(mktemp -d) || exit 1
+	trap _ob_rest_cleanup EXIT INT TERM
+	case "$_ob_cmd" in
+	read) _ob_rest_read ;;
+	create) _ob_rest_create ;;
+	search) _ob_rest_search ;;
+	property:set) _ob_rest_property_set ;;
+	esac
+}
+
+# ---------------------------------------------------------------------- routing
 
 case "${1:-}" in
 -h | --help | help)
@@ -72,7 +315,14 @@ case "${1:-}" in
 	;;
 esac
 
-if _ob_is_wsl; then
+# REST owns every subcommand once configured; with no args it is this PC's
+# AppImage (launched inside WSL via WSLg), not the Windows-native app.
+if _ob_rest_configured && [ $# -gt 0 ]; then
+	_ob_rest_dispatch "$@"
+	exit $?
+fi
+
+if _ob_is_wsl && ! _ob_rest_configured; then
 	_ob_bin=$(_ob_cli_bin)
 	# DrvFs (/mnt/c) may drop the Linux -x bit depending on mount options, yet
 	# WSL interop still runs the Windows binary — test existence (-f), not
