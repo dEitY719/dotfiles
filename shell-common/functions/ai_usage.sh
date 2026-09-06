@@ -351,23 +351,16 @@ _ai_usage_run() {
         # rather than silently reporting 0 tokens. Usage/cost tracking for
         # agy is a follow-up issue once its output format is investigated.
         #
-        # Issue #1767: a bare trailing `--print` needs a value (Go's flag
-        # parser rejects it with "flag needs an argument: -print"), so the
-        # prompt piped on stdin was never read. Same fix gh_pr_review.sh
-        # applied (#1761/#1765): send the prompt as stream-json and pull the
-        # human-readable text back out of `.result.response`.
-        local _agy_stream
-        _agy_stream=$(printf '%s\n' "$_prompt" |
-            jq -Rs '{event: "user", message: {content: .}}' |
-            agy --dangerously-skip-permissions --print '' \
-                --input-format stream-json --output-format stream-json)
+        # Issue #1767: a bare trailing `--print` needs a value, so the prompt
+        # piped on stdin was never read. The transport (and the reason for
+        # every flag) is `_agy_run_stream` — see functions/agy_run.sh.
+        # Auto-sourced with the rest of functions/ in a real shell; the
+        # explicit source is for standalone `. ai_usage.sh` (bats, skills).
+        # shellcheck disable=SC1090
+        command -v _agy_run_stream >/dev/null 2>&1 ||
+            . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/agy_run.sh"
+        printf '%s\n' "$_prompt" | _agy_run_stream --dangerously-skip-permissions
         _ec=$?
-        printf '%s\n' "$_agy_stream" |
-            jq -er 'select(.event == "result")
-                    | if .result.status == "SUCCESS" then .result.response // ""
-                      else "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")\n"
-                           | halt_error(1)
-                      end' || { [ "$_ec" -ne 0 ] || _ec=1; }
         printf '{"ai":"agy","ts":"%s","label":%s,"exit_code":%d,"tracking":"unsupported"}\n' \
             "$_now" \
             "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
