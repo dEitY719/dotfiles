@@ -350,8 +350,24 @@ _ai_usage_run() {
         # graceful-degradation shape as the cli_failed records above —
         # rather than silently reporting 0 tokens. Usage/cost tracking for
         # agy is a follow-up issue once its output format is investigated.
-        printf '%s\n' "$_prompt" | agy --dangerously-skip-permissions --print
+        #
+        # Issue #1767: a bare trailing `--print` needs a value (Go's flag
+        # parser rejects it with "flag needs an argument: -print"), so the
+        # prompt piped on stdin was never read. Same fix gh_pr_review.sh
+        # applied (#1761/#1765): send the prompt as stream-json and pull the
+        # human-readable text back out of `.result.response`.
+        local _agy_stream
+        _agy_stream=$(printf '%s\n' "$_prompt" |
+            jq -Rs '{event: "user", message: {content: .}}' |
+            agy --dangerously-skip-permissions --print '' \
+                --input-format stream-json --output-format stream-json)
         _ec=$?
+        printf '%s\n' "$_agy_stream" |
+            jq -er 'select(.event == "result")
+                    | if .result.status == "SUCCESS" then .result.response // ""
+                      else "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")\n"
+                           | halt_error(1)
+                      end' || { [ "$_ec" -ne 0 ] || _ec=1; }
         printf '{"ai":"agy","ts":"%s","label":%s,"exit_code":%d,"tracking":"unsupported"}\n' \
             "$_now" \
             "$(printf '%s' "$_label" | jq -Rsc . 2>/dev/null || printf '"%s"' "$_label")" \
