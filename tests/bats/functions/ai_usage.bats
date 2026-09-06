@@ -353,6 +353,40 @@ STUB
     [ "$(jq -r '.exit_code' "$USAGE_LOG")" = "0" ]
 }
 
+# Stub agy that exits 0 but reports a non-SUCCESS result — the exact shape
+# PR #1765 codex BLOCKER warned a bare exit-code check would misreport as a
+# pass (PR #1769 codex BLOCKER: this path was untested for the ai_usage.sh
+# call site specifically).
+_setup_agy_stub_error_status() {
+    cat >"$STUB_BIN/agy" <<'STUB'
+#!/usr/bin/env bash
+printf '{"event":"init"}\n'
+printf '{"event":"result","result":{"status":"ERROR","error":"stub failure"}}\n'
+exit 0
+STUB
+    chmod +x "$STUB_BIN/agy"
+}
+
+@test "agy: ERROR result with a ZERO exit still fails (issue #1769 codex BLOCKER)" {
+    _setup_agy_stub_error_status
+
+    run bash --noprofile --norc -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        export SHELL_COMMON='${SHELL_COMMON}'
+        export DOTFILES_FORCE_INIT=1
+        export DOTFILES_TEST_MODE=1
+        export HOME='${HOME}'
+        export TERM=dumb
+        export PATH='${STUB_BIN}:/usr/bin:/bin'
+        . '${DOTFILES_ROOT}/shell-common/functions/ai_usage.sh'
+        _ai_usage_run agy '${USAGE_LOG}' 'test-label' 'hello agy'
+        echo \"rc=\$?\"
+    "
+
+    refute_output --partial "rc=0"
+    [ "$(jq -r '.exit_code' "$USAGE_LOG")" != "0" ]
+}
+
 @test "agy: non-zero exit propagates and is recorded" {
     _setup_agy_stub
 
