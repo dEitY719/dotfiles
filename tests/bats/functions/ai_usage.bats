@@ -321,9 +321,8 @@ _setup_agy_stub() {
     cat >"$STUB_BIN/agy" <<'STUB'
 #!/usr/bin/env bash
 printf 'agy-stub: args=%s\n' "$*" >&2
-prompt=$(cat | jq -r '.message.content')
 printf '{"event":"init"}\n'
-printf '%s' "$prompt" | jq -Rs '{event: "result", result: {status: "SUCCESS", response: .}}'
+jq -c '{event: "result", result: {status: "SUCCESS", response: .message.content}}'
 exit "${AGY_STUB_EXIT:-0}"
 STUB
     chmod +x "$STUB_BIN/agy"
