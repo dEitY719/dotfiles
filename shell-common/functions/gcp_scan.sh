@@ -469,20 +469,29 @@ _gcp_scan_json_absorbed_array_paths() {
     # disagree about which of two shared values comes first — so it still reads
     # as real content.
     #
-    # Scalar arrays only. An array holding objects/arrays renders as deeper
-    # records whose paths this suppression would not reach, and its element
-    # order is far likelier to be meaningful; those keep the #1688 comparison.
+    # Scalar arrays only — a deliberately conservative carve-out, not a
+    # technical limit: the subsequence/equality machinery below would work
+    # just as well if `sc` also allowed object/array elements. It is narrowed
+    # to scalars because an array of objects/arrays is judged far likelier to
+    # have order that IS meaningful; those keep the #1688 index-sensitive
+    # comparison until evidence says otherwise.
     jq -nc --slurpfile b "$1" --slurpfile o "$2" --slurpfile t "$3" '
         def sc: type == "array" and all(.[]; type != "object" and type != "array");
         # true when $a is a subsequence of the input array (greedy is exact here).
         def subseq($a): (reduce .[] as $y ($a; if length > 0 and .[0] == $y then .[1:] else . end)) | length == 0;
+        # every path in the input, root ([]) included — the builtin `paths`
+        # filter is this same generator with the root filtered back out.
+        def scalar_array_paths: . as $root | path(..) | select(. as $p | $root | getpath($p) | sc);
+        # $x at $p if that side holds a scalar array there, else null (a
+        # missing or shape-mismatched side never qualifies as absorbed).
+        def side($x; $p): (try ($x | getpath($p)) catch null) // [] | if sc then . else null end;
         ($b[0]) as $B | ($o[0]) as $O | ($t[0]) as $T |
         if ($O | type) == "null" or ($T | type) == "null" then []
         else
-            [ (([] | select($T | sc)), ($T | paths(sc))) as $p
+            [ ($T | scalar_array_paths) as $p
               | ($T | getpath($p)) as $Ta
-              | (((try ($O | getpath($p)) catch null) // []) | if sc then . else null end) as $Oa
-              | (((try ($B | getpath($p)) catch null) // []) | if sc then . else null end) as $Ba
+              | (side($O; $p)) as $Oa
+              | (side($B; $p)) as $Ba
               | select($Oa != null and $Ba != null)
               | select(($Ta | subseq($Ba)) and ($Oa | subseq($Ta)))
               | $p
