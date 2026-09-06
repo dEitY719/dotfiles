@@ -1109,6 +1109,43 @@ FIXTURE
     assert_output --partial "rc=1"
 }
 
+# --- issue #1775 PR #1776 review (agy/codex FOLLOW-UP): coverage gaps ------
+
+@test "drift #1775: a nested (non-root) scalar array absorbs index shift too (1)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '{\n  \"plugins\": [\n    \"a\"\n  ]\n}\n' > reg.json && git add reg.json && git commit -qm 'add reg'
+        git checkout -q -b source
+        printf '{\n  \"plugins\": [\n    \"a\",\n    \"c\"\n  ]\n}\n' > reg.json && git add reg.json && git commit -qm 'register c'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '{\n  \"plugins\": [\n    \"a\",\n    \"b\",\n    \"c\"\n  ]\n}\n' > reg.json && git add reg.json && git commit -qm 'register b; c already present'
+        _gcp_scan_conflict_adds_new_content \"\$src\" reg.json; echo \"adds=\$?\"
+    "
+    assert_success
+    # Same index-shift shape as the root-array #1775 test, one level deeper —
+    # _gcp_scan_json_absorbed_array_paths must not be root-path-only.
+    assert_output --partial "adds=1"
+}
+
+@test "drift #1775: duplicate-valued array elements still absorb an index shift (1)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '[\n  \"a\",\n  \"a\"\n]\n' > reg.json && git add reg.json && git commit -qm 'add reg'
+        git checkout -q -b source
+        printf '[\n  \"a\",\n  \"a\",\n  \"b\"\n]\n' > reg.json && git add reg.json && git commit -qm 'register b'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '[\n  \"z\",\n  \"a\",\n  \"a\",\n  \"b\"\n]\n' > reg.json && git add reg.json && git commit -qm 'register z before the duplicate pair; b already present'
+        _gcp_scan_conflict_adds_new_content \"\$src\" reg.json; echo \"adds=\$?\"
+    "
+    assert_success
+    # The greedy subseq check must not misfire on duplicate values — each
+    # occurrence of \"a\" consumes independently in order, so the shift past
+    # the duplicate pair still reads as pure index drift, not new content.
+    assert_output --partial "adds=1"
+}
+
 # --- issue #1775: an unrelated insertion shifts the absolute indices --------
 
 @test "drift #1775: 배열에 값 삽입으로 인덱스가 밀려도 이미 존재하는 값은 no-op (1)" {
