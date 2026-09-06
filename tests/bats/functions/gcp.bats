@@ -1109,6 +1109,47 @@ FIXTURE
     assert_output --partial "rc=1"
 }
 
+# --- issue #1775: an unrelated insertion shifts the absolute indices --------
+
+@test "drift #1775: 배열에 값 삽입으로 인덱스가 밀려도 이미 존재하는 값은 no-op (1)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '[\n  \"a\"\n]\n' > reg.json && git add reg.json && git commit -qm 'add reg'
+        git checkout -q -b source
+        printf '[\n  \"a\",\n  \"c\"\n]\n' > reg.json && git add reg.json && git commit -qm 'register c'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        # HEAD already carries \"c\", but an unrelated later commit inserted the
+        # alphabetically-earlier \"b\" before it, so \"c\" sits at index 2 here and
+        # at index 1 in the commit being picked.
+        printf '[\n  \"a\",\n  \"b\",\n  \"c\"\n]\n' > reg.json && git add reg.json && git commit -qm 'register b; c already present'
+        _gcp_scan_conflict_adds_new_content \"\$src\" reg.json; echo \"adds=\$?\"
+        _gcp_scan_preflight_is_noop \"\$src\"; echo \"noop=\$?\"
+    "
+    assert_success
+    # Relative order of every shared value is unchanged between theirs and ours
+    # -> pure index shift, not content. Contrast with the reorder test above.
+    assert_output --partial "adds=1"
+    assert_output --partial "noop=0"
+}
+
+@test "drift #1775: an element the commit REMOVES from an array is still real content (0)" {
+    run_in_bash "
+        $(_gcp903_make_repo)
+        printf '[\n  \"a\",\n  \"b\"\n]\n' > reg.json && git add reg.json && git commit -qm 'add reg'
+        git checkout -q -b source
+        printf '[\n  \"a\"\n]\n' > reg.json && git add reg.json && git commit -qm 'unregister b'
+        src=\$(git rev-parse HEAD)
+        git checkout -q main
+        printf '[\n  \"a\",\n  \"b\",\n  \"c\"\n]\n' > reg.json && git add reg.json && git commit -qm 'HEAD keeps b, adds c'
+        _gcp_scan_conflict_adds_new_content \"\$src\" reg.json; echo \"rc=\$?\"
+    "
+    assert_success
+    # theirs is a subsequence of ours, but base is NOT a subsequence of theirs
+    # -> the removal must stay visible (#1177 data-loss direction).
+    assert_output --partial "rc=0"
+}
+
 # --- round 2 (agy + codex BLOCKER): the commit's own delta ------------------
 
 @test "drift #1688: a JSON commit whose only work is deleting a stray comma is NOT dropped (0)" {
