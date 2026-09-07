@@ -53,6 +53,19 @@ _devx_pr_verify_merged_pos_int() {
     esac
 }
 
+# A newline inside a free-form value would inject an extra line into the
+# `key=value` stdout contract callers parse line-by-line, forging a field
+# that was never passed (#1779 codex BLOCKER). `=` needs no guard — the
+# contract splits on the first one, so an embedded `=` stays in the value.
+# Returns 1 when "$1" contains a newline.
+_devx_pr_verify_merged_no_newline() {
+    case "$1" in
+    *"
+"*) return 1 ;;
+    *) return 0 ;;
+    esac
+}
+
 devx_pr_verify_merged_parse() {
     local pr=""
     local remote="origin"
@@ -197,6 +210,19 @@ devx_pr_verify_merged_parse() {
 
     if [ "$_clone_dir_set" -eq 1 ] && [ -z "$clone_dir" ]; then
         echo "--clone-dir value must not be empty" >&2
+        return 2
+    fi
+
+    # Both free-form values that reach stdout unescaped. `env_axes` and
+    # `matrix` are whitelisted below and `pr` is digits-only, so these two
+    # are the whole injection surface.
+    if ! _devx_pr_verify_merged_no_newline "$clone_dir"; then
+        echo "--clone-dir value must not contain a newline" >&2
+        return 2
+    fi
+
+    if ! _devx_pr_verify_merged_no_newline "$remote"; then
+        echo "remote name must not contain a newline: '$remote'" >&2
         return 2
     fi
 

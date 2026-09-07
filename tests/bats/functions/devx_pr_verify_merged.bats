@@ -173,6 +173,33 @@ setup() {
     assert_output --partial "--clone-dir value must not be empty"
 }
 
+@test "--clone-dir with embedded newline -> exit 2 (no injected line)" {
+    run devx_pr_verify_merged_parse --clone-dir "$(printf '/tmp/x\npr=999')"
+    assert_failure 2
+    assert_output --partial "--clone-dir value must not contain a newline"
+    refute_line "pr=999"
+}
+
+@test "--clone-dir= equals form with embedded newline -> exit 2" {
+    run devx_pr_verify_merged_parse "$(printf -- '--clone-dir=/tmp/x\nremote=evil')"
+    assert_failure 2
+    assert_output --partial "--clone-dir value must not contain a newline"
+    refute_line "remote=evil"
+}
+
+@test "remote positional with embedded newline -> exit 2" {
+    run devx_pr_verify_merged_parse "$(printf 'up\nmatrix=full')"
+    assert_failure 2
+    assert_output --partial "remote name must not contain a newline"
+    refute_line "matrix=full"
+}
+
+@test "--clone-dir value with = is kept verbatim" {
+    run devx_pr_verify_merged_parse --clone-dir /tmp/a=b
+    assert_success
+    assert_line "clone_dir=/tmp/a=b"
+}
+
 @test "--no-diff-check -> diff_check=0" {
     run devx_pr_verify_merged_parse --no-diff-check
     assert_success
