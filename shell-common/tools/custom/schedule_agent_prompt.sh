@@ -591,6 +591,13 @@ _sap_cancel_cmd() {
         _sap_st=$(jq -r '.status // ""' "${_sap_jobf}" 2>/dev/null)
         if [ -n "${_sap_want}" ]; then
             [ "${_sap_id}" = "${_sap_want}" ] || continue
+            case "${_sap_st}" in
+            pending) ;;
+            *)
+                ux_error "Job ${_sap_id} is already ${_sap_st} — nothing to cancel."
+                return 1
+                ;;
+            esac
         else
             [ "${_sap_st}" = "pending" ] || continue
         fi

@@ -523,6 +523,51 @@ _prompt_calls() {
     assert_output "pending"
 }
 
+@test "A6f: --cancel <id> refuses a job that already completed" {
+    _set_agents "${_A}|w1N:pH"
+    sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
+    assert_success
+    local id
+    id="$(_job_field '.id')"
+
+    _expire_job
+    _dispatch_job
+    assert_success
+    run _job_field '.status'
+    assert_output "completed"
+
+    sap --cancel "${id}"
+    assert_failure
+    assert_output --partial "already completed"
+
+    run _job_field '.status'
+    assert_output "completed"
+}
+
+@test "A6g: --cancel <id> refuses a job that already failed" {
+    _set_agents "${_A}|w1N:pH"
+    sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
+    assert_success
+    local id
+    id="$(_job_field '.id')"
+    _expire_job
+
+    export FAIL_PANE="w1N:pH"
+    export FAIL_RC=1
+    export FAIL_OUT="herdr: agent_prompt_stalled"
+    _dispatch_job
+    assert_failure
+    run _job_field '.status'
+    assert_output "failed"
+
+    sap --cancel "${id}"
+    assert_failure
+    assert_output --partial "already failed"
+
+    run _job_field '.status'
+    assert_output "failed"
+}
+
 # ---------------------------------------------------------------------------
 # A7 — a --wait that never settles
 # ---------------------------------------------------------------------------
