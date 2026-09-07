@@ -594,7 +594,7 @@ _sap_cancel_cmd() {
             case "${_sap_st}" in
             pending) ;;
             *)
-                ux_error "Job ${_sap_id} is already ${_sap_st} — nothing to cancel."
+                ux_error "Job ${_sap_id} is already ${_sap_st:-unknown} — nothing to cancel."
                 return 1
                 ;;
             esac

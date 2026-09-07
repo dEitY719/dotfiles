@@ -568,6 +568,23 @@ _prompt_calls() {
     assert_output "failed"
 }
 
+@test "A6h: --cancel <id> on a job with an unparseable status names it 'unknown'" {
+    _set_agents "${_A}|w1N:pH"
+    sap --at "$(_future_hhmm)" --agent-cwd "${_A}"
+    assert_success
+    local id f
+    id="$(_job_field '.id')"
+    f="$(_job_file)"
+    jq 'del(.status)' "$f" >"${f}.t" && mv "${f}.t" "$f"
+
+    sap --cancel "${id}"
+    assert_failure
+    assert_output --partial "already unknown"
+
+    run jq -r '.status' "$f"
+    assert_output "null"
+}
+
 # ---------------------------------------------------------------------------
 # A7 — a --wait that never settles
 # ---------------------------------------------------------------------------
