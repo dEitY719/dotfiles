@@ -221,10 +221,56 @@ _gb_help() {
     ux_bullet "sub-commands"
     ux_bullet_sub "gb -D local                              delete local branches (keeps: main + current + keywords)"
     ux_bullet_sub "gb -D remote [-y] [--all] [<remote>]     delete YOUR OWN branches on the remote SERVER (default: origin, e.g. origin, upstream, keeps: main/master; others' branches are listed but skipped unless --all)"
+    ux_bullet_sub "gb -D [remotes/]<remote>/<branch> [-y]    delete ONE branch on that remote server (as printed by 'gb -a'); falls back to local 'git branch -D' when the remote segment isn't a real remote or a local branch of that literal name exists"
     ux_bullet_sub "gb [flags]                               passthrough to git --no-pager branch"
     ux_bullet "options"
     ux_bullet_sub "-y, --yes                 skip the confirmation prompt (remote deletion is permanent)"
     ux_bullet_sub "    --all                 also delete branches authored by other people (default: your own only, matched by git config user.email)"
+}
+
+# Delete a single branch on a remote server, from the "remotes/<remote>/<branch>"
+# or "<remote>/<branch>" form `gb -a` prints. Returns 2 (not an error) when the
+# target doesn't look like a remote-branch reference, so the caller falls back
+# to plain `git branch -D` passthrough.
+_gb_delete_remote_single() {
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local target="$1" assume_yes=0 remote branch stripped
+    shift
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -y | --yes) assume_yes=1 ;;
+            *) ux_error "Unknown option: $1"; return 1 ;;
+        esac
+        shift
+    done
+
+    stripped="$target"
+    case "$stripped" in
+        remotes/*) stripped="${stripped#remotes/}" ;;
+    esac
+    remote="${stripped%%/*}"
+    branch="${stripped#*/}"
+    [ "$remote" != "$stripped" ] && [ -n "$branch" ] || return 2
+
+    git remote get-url "$remote" >/dev/null 2>&1 || return 2
+    git rev-parse --verify --quiet "refs/heads/$target" >/dev/null 2>&1 && return 2
+
+    if [ "$assume_yes" -ne 1 ]; then
+        if ! ux_confirm "Permanently delete '$remote/$branch' from '$remote'?"; then
+            ux_info "Aborted. No branch deleted."
+            return 0
+        fi
+    fi
+
+    if git push "$remote" --delete "$branch"; then
+        ux_success "Deleted: $remote/$branch"
+    else
+        ux_error "Failed to delete: $remote/$branch"
+        return 1
+    fi
 }
 
 git_branch() {
@@ -233,6 +279,14 @@ git_branch() {
             case "${2:-}" in
                 local)  shift 2; _gb_clean_local "$@" ;;
                 remote) shift 2; _gb_clean_remote "$@" ;;
+                */*)
+                    local rc
+                    shift
+                    _gb_delete_remote_single "$@"
+                    rc=$?
+                    [ "$rc" -ne 2 ] && return "$rc"
+                    git --no-pager branch -D "$@"
+                    ;;
                 *)
                     if [ $# -eq 2 ] && git remote get-url "$2" >/dev/null 2>&1 \
                         && ! git rev-parse --verify --quiet "refs/heads/$2" >/dev/null 2>&1; then
