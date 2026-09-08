@@ -351,6 +351,121 @@ teardown() {
     assert_output --partial "gb -D remote origin"
 }
 
+# --- gb -D remotes/<remote>/<branch> single-branch remote deletion (#1781) ---
+
+@test "bash: gb -D remotes/<remote>/<branch> deletes only that branch" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git push -q origin HEAD:wt/test/1
+        git push -q origin HEAD:wt/test/2
+        git_branch -D remotes/origin/wt/test/1 -y >/dev/null 2>&1
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+    '
+    assert_success
+    assert_output --partial "REMAINING: main wt/test/2"
+    refute_output --partial "wt/test/1"
+}
+
+@test "bash: gb -D <remote>/<branch> short form deletes only that branch" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git push -q origin HEAD:fix/20260907-b78cb1a
+        git_branch -D origin/fix/20260907-b78cb1a -y >/dev/null 2>&1
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+    '
+    assert_success
+    assert_output --partial "REMAINING: main"
+    refute_output --partial "fix/20260907-b78cb1a"
+}
+
+@test "bash: gb -D remotes/<remote>/<branch> without -y prompts and aborts on no" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git push -q origin HEAD:wt/test/1
+        echo n | git_branch -D remotes/origin/wt/test/1
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+    '
+    assert_success
+    assert_output --partial "REMAINING: main wt/test/1"
+}
+
+@test "bash: gb -D remotes/<bogus-remote>/<branch> falls back to passthrough (unknown remote)" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git_branch -D remotes/nope/some/branch
+    '
+    assert_failure
+    assert_output --partial "not found"
+}
+
+@test "bash: gb -D <remote>/<branch> falls back to local delete when a local branch of that literal name exists" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git branch "origin/feature"
+        git_branch -D origin/feature
+    '
+    assert_success
+    assert_output --partial "Deleted branch"
+}
+
+@test "zsh: gb -D remotes/<remote>/<branch> deletes only that branch" {
+    run_in_zsh '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git push -q origin HEAD:wt/test/1
+        git push -q origin HEAD:wt/test/2
+        git_branch -D remotes/origin/wt/test/1 -y >/dev/null 2>&1
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+    '
+    assert_success
+    assert_output --partial "REMAINING: main wt/test/2"
+    refute_output --partial "wt/test/1"
+}
+
 # --- git worktree functions ---
 
 @test "bash: gwt function exists" {
