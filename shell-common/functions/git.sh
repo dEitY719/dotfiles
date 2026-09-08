@@ -221,7 +221,7 @@ _gb_help() {
     ux_bullet "sub-commands"
     ux_bullet_sub "gb -D local                              delete local branches (keeps: main + current + keywords)"
     ux_bullet_sub "gb -D remote [-y] [--all] [<remote>]     delete YOUR OWN branches on the remote SERVER (default: origin, e.g. origin, upstream, keeps: main/master; others' branches are listed but skipped unless --all)"
-    ux_bullet_sub "gb -D [remotes/]<remote>/<branch> [-y]    delete ONE branch on that remote server (as printed by 'gb -a'); falls back to local 'git branch -D' when the remote segment isn't a real remote or a local branch of that literal name exists"
+    ux_bullet_sub "gb -D [remotes/]<remote>/<branch> [-y]    delete ONE branch on that remote server (as printed by 'gb -a', keeps: main/master); falls back to local 'git branch -D' when the remote segment isn't a real remote or a local branch of that literal name exists"
     ux_bullet_sub "gb [flags]                               passthrough to git --no-pager branch"
     ux_bullet "options"
     ux_bullet_sub "-y, --yes                 skip the confirmation prompt (remote deletion is permanent)"
@@ -229,9 +229,11 @@ _gb_help() {
 }
 
 # Delete a single branch on a remote server, from the "remotes/<remote>/<branch>"
-# or "<remote>/<branch>" form `gb -a` prints. Returns 2 (not an error) when the
-# target doesn't look like a remote-branch reference, so the caller falls back
-# to plain `git branch -D` passthrough.
+# or "<remote>/<branch>" form `gb -a` prints. Non-error fallback signals (the
+# caller falls back to `git branch -D`, never an error message): 2 — target
+# isn't a real remote-branch reference (fallback on the raw target); 3 — a
+# local branch of the normalized short name already exists (fallback on that
+# short name, not the raw target — #1781 PR #1782 review, agy BLOCKER).
 _gb_delete_remote_single() {
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -253,7 +255,19 @@ _gb_delete_remote_single() {
     [ "$remote" != "$stripped" ] && [ -n "$branch" ] || return 2
 
     git remote get-url "$remote" >/dev/null 2>&1 || return 2
-    git rev-parse --verify --quiet "refs/heads/$target" >/dev/null 2>&1 && return 2
+    # Check the normalized short form, not the raw $target: a caller passing
+    # the "remotes/<remote>/<branch>" form must still detect a local branch
+    # literally named "<remote>/<branch>".
+    git rev-parse --verify --quiet "refs/heads/$stripped" >/dev/null 2>&1 && return 3
+
+    # Same protected-branch policy as `_gb_clean_remote` — never let this
+    # single-target path delete main/master (#1781 PR #1782 review, agy FOLLOW-UP).
+    case "$branch" in
+        main | master)
+            ux_error "Refusing to delete protected branch '$remote/$branch'"
+            return 1
+            ;;
+    esac
 
     if [ "$assume_yes" -ne 1 ]; then
         if ! ux_confirm "Permanently delete '$remote/$branch' from '$remote'?"; then
@@ -277,12 +291,40 @@ git_branch() {
                 local)  shift 2; _gb_clean_local "$@" ;;
                 remote) shift 2; _gb_clean_remote "$@" ;;
                 */*)
-                    local rc
-                    shift
-                    _gb_delete_remote_single "$@"
-                    rc=$?
-                    [ "$rc" -ne 2 ] && return "$rc"
-                    git --no-pager branch -D "$@"
+                    # Only treat "-D <slash-target>" or "-D <slash-target> -y|--yes"
+                    # as a remote single-branch delete — anything else (extra
+                    # positionals, an unrecognized flag) is ambiguous with
+                    # `git branch -D`'s own multi-branch delete and must fall
+                    # through untouched (#1781 PR #1782 review, codex FOLLOW-UP).
+                    local rc="" fallback_target=""
+                    case "$#" in
+                        2) _gb_delete_remote_single "$2"; rc=$? ;;
+                        3)
+                            case "$3" in
+                                -y | --yes) _gb_delete_remote_single "$2" "$3"; rc=$? ;;
+                            esac
+                            ;;
+                    esac
+                    # rc=2 (not a real remote-branch ref) falls back on the raw
+                    # target as typed; rc=3 (local branch of that short name
+                    # already exists) falls back on the short name — the actual
+                    # local branch — never leaking -y/--yes into `git branch -D`
+                    # (#1781 PR #1782 review, agy FOLLOW-UP). Anything else that
+                    # reached this case (extra positionals, an unrecognized
+                    # flag) never called `_gb_delete_remote_single` at all
+                    # (rc=""), so it falls all the way through to the plain
+                    # passthrough below, unmodified.
+                    case "$rc" in
+                        "") ;;
+                        2) fallback_target="$2" ;;
+                        3) fallback_target="${2#remotes/}" ;;
+                        *) return "$rc" ;;
+                    esac
+                    if [ -n "$fallback_target" ]; then
+                        git --no-pager branch -D "$fallback_target"
+                    else
+                        git --no-pager branch "$@"
+                    fi
                     ;;
                 *)
                     if [ $# -eq 2 ] && git remote get-url "$2" >/dev/null 2>&1 \
