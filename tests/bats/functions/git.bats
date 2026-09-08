@@ -466,6 +466,82 @@ teardown() {
     refute_output --partial "wt/test/1"
 }
 
+# --- PR #1782 review fixes (#1781) ---
+
+@test "bash: gb -D refuses to delete a protected remote main/master via the single-branch path" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git_branch -D origin/main -y
+        gb_rc=$?
+        printf "REMAINING: "
+        git ls-remote --heads "$tmp/remote.git" | sed "s#.*refs/heads/##" | sort | tr "\n" " "
+        exit "$gb_rc"
+    '
+    assert_failure
+    assert_output --partial "Refusing to delete protected branch"
+    assert_output --partial "REMAINING: main"
+}
+
+@test "bash: gb -D remotes/<remote>/<branch> detects a same-literal local branch even in the remotes/ long form" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git branch "origin/feature"
+        git_branch -D remotes/origin/feature
+    '
+    assert_success
+    assert_output --partial "Deleted branch"
+}
+
+@test "bash: gb -D <slash-branch> <extra-arg> passes through untouched (not misread as remote delete)" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git branch "origin/topic"
+        git branch "other"
+        git_branch -D origin/topic other
+    '
+    assert_success
+    assert_output --partial "Deleted branch origin/topic"
+    assert_output --partial "Deleted branch other"
+}
+
+@test "bash: gb -D <local-branch-name>/<local-branch-name> falls back without leaking -y to git branch -D" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main --bare "$tmp/remote.git"
+        git clone -q "$tmp/remote.git" "$tmp/work" 2>/dev/null
+        cd "$tmp/work"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git push -q origin HEAD:main
+        git branch "origin/feature"
+        git_branch -D origin/feature -y
+    '
+    assert_success
+    assert_output --partial "Deleted branch"
+    refute_output --partial "unknown switch"
+}
+
 # --- git worktree functions ---
 
 @test "bash: gwt function exists" {
