@@ -247,10 +247,7 @@ _gb_delete_remote_single() {
         shift
     done
 
-    stripped="$target"
-    case "$stripped" in
-        remotes/*) stripped="${stripped#remotes/}" ;;
-    esac
+    stripped="${target#remotes/}"
     remote="${stripped%%/*}"
     branch="${stripped#*/}"
     [ "$remote" != "$stripped" ] && [ -n "$branch" ] || return 2
