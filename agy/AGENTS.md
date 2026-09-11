@@ -61,8 +61,11 @@ skill 은 그 아래 `skills/<name>/SKILL.md` 에서만 발견된다. 워크스�
 | `~/.gemini/antigravity-cli/builtin/skills/` | `agy` 내장 (수정 금지) |
 | `~/.gemini/skills/` | 레거시 경로 (순정 gemini 제거로 폐기/정리됨, #1787) |
 
-따라서 `scripts/setup-skills-ssot.sh` 는 `agy` 단일 경로(`AGY_SKILLS`)만
-합성하며, 잔여 `~/.gemini/skills` symlink 는 자동 정리한다 (#1787).
+따라서 `scripts/setup-skills-ssot.sh` 는 `agy` 단일 경로(`AGY_SKILLS`)에
+bare 이름(단축 호출용)과 `namespace:skill` 형태(플러그인 슬래시 커맨드 일치 및
+충돌 방지용) 심볼릭 링크를 함께 유지(듀얼 레이아웃)하며, 잔여 `~/.gemini/skills`
+symlink 는 자동 정리한다 (#1787, #1789).
+상세 근거: `docs/guide/learnings/antigravity-skills-dual-symlink-layout.md`.
 
 ## Non-Goals
 
