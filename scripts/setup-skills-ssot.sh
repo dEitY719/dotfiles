@@ -627,6 +627,8 @@ _agy_is_installed() {
     command -v agy >/dev/null 2>&1
 }
 
+# 3b. Antigravity CLI (agy): 글로벌 skills 디렉토리 (~/.gemini/config/skills)
+#     bare 이름 링크를 합성하여 /issue, /commit 등 단축 호출 지원 (#1731, #1789).
 AGY_SKILLS="${HOME}/.gemini/config/skills"
 if _agy_is_installed; then
     link_skills_compose "agy" "$AGY_SKILLS"
@@ -634,7 +636,9 @@ else
     log_warning "Antigravity(agy) 를 찾지 못했습니다. 건너뜁니다: ${HOME}/.gemini/antigravity-cli / PATH"
 fi
 
-# 3c. Gemini / Antigravity 네임스페이스(<namespace>:<skill>) 심볼릭 링크 동기화 (#1784)
+# 3c. Antigravity 네임스페이스(<namespace>:<skill>) 심볼릭 링크 동기화 (#1784, #1789)
+#     /gh-flow:issue 등 슬래시 커맨드 매칭 및 create 등 동일 스킬명 충돌 방지를
+#     위해 듀얼 레이아웃(bare + namespace)으로 공존 관리.
 NAMESPACE_SYNC_SCRIPT="${DOTFILES_ROOT}/scripts/sync-gemini-skills-namespace.sh"
 if [ -f "$NAMESPACE_SYNC_SCRIPT" ]; then
     bash "$NAMESPACE_SYNC_SCRIPT" || log_warning "네임스페이스 스킬 동기화 중 경고 발생"
