@@ -53,7 +53,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 
 ### 절대 하지 말 것
 
-- `~/.claude*/skills/`, `~/.gemini/skills/`, `~/.gemini/config/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/` 직접 편집 금지
+- `~/.claude*/skills/`, `~/.gemini/config/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/` 직접 편집 금지
 - 스킬은 워크스페이스 repo(`~/para/project/skills/<repo>/skills/`)에서만 생성/수정 — 합성 대상 디렉토리에서 직접 만들지 말 것
 - Codex `.system/` 디렉토리 삭제 금지 (Codex 내장 스킬)
 
@@ -83,8 +83,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 # 모든 환경 공통 (issue #791 — CLI 모두 entry-level 합성)
 ~/.codex/skills/<name>                   -> <workspace>/<repo>/skills/<name> (entry symlink, #707 → #791)
 ~/.config/opencode/skills/<name>         -> <workspace>/<repo>/skills/<name> (entry symlink, #791)
-~/.gemini/skills/<name>                  -> <workspace>/<repo>/skills/<name> (entry symlink, #791 — 순정 gemini)
-~/.gemini/config/skills/<name>           -> <workspace>/<repo>/skills/<name> (entry symlink, #1731 — agy)
+~/.gemini/config/skills/<name>           -> <workspace>/<repo>/skills/<name> (entry symlink, #1731 — agy, #1787)
 ```
 
 `statusline-tokens.sh` (#1380) 은 계정 dir 로 링크하지 **않는다** — `statusline-command.sh` 가 자기 경로의 symlink 를 따라간 뒤 형제 파일로 source 하므로 SSOT 한 곳에만 있으면 직접 실행/symlink 경로 양쪽에서 해석된다. 없으면 세션 누적 토큰 세그먼트만 빠지고 나머지는 정상 렌더된다.

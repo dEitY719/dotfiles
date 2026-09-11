@@ -70,23 +70,24 @@ run_sync() {
         run bash "${FIXTURE_DOTFILES}/scripts/sync-gemini-skills-namespace.sh" "$@"
 }
 
-@test "sync-gemini-skills-namespace: creates namespaced symlinks in agy and gemini dirs (#1784)" {
+@test "sync-gemini-skills-namespace: creates namespaced symlinks in agy dir (#1784, #1787)" {
     run_sync
     assert_success
 
     local agy_dir="${FIXTURE_HOME}/.gemini/config/skills"
     local gem_dir="${FIXTURE_HOME}/.gemini/skills"
 
-    for target in "$agy_dir" "$gem_dir"; do
-        [ -L "${target}/gh-flow:issue" ]
-        [ "$(readlink -f "${target}/gh-flow:issue")" = "$(readlink -f "${WORKSPACE}/gh-flow-skills/skills/issue")" ]
-        [ -L "${target}/gh-flow:autopilot" ]
-        [ "$(readlink -f "${target}/gh-flow:autopilot")" = "$(readlink -f "${WORKSPACE}/gh-flow-skills/skills/autopilot")" ]
-        [ -L "${target}/gh-issue:make-issue" ]
-        [ "$(readlink -f "${target}/gh-issue:make-issue")" = "$(readlink -f "${WORKSPACE}/gh-issue-skills/skills/make-issue")" ]
-        [ -L "${target}/authoring:skill-check" ]
-        [ "$(readlink -f "${target}/authoring:skill-check")" = "$(readlink -f "${WORKSPACE}/authoring-skills/skills/skill-check")" ]
-    done
+    [ -L "${agy_dir}/gh-flow:issue" ]
+    [ "$(readlink -f "${agy_dir}/gh-flow:issue")" = "$(readlink -f "${WORKSPACE}/gh-flow-skills/skills/issue")" ]
+    [ -L "${agy_dir}/gh-flow:autopilot" ]
+    [ "$(readlink -f "${agy_dir}/gh-flow:autopilot")" = "$(readlink -f "${WORKSPACE}/gh-flow-skills/skills/autopilot")" ]
+    [ -L "${agy_dir}/gh-issue:make-issue" ]
+    [ "$(readlink -f "${agy_dir}/gh-issue:make-issue")" = "$(readlink -f "${WORKSPACE}/gh-issue-skills/skills/make-issue")" ]
+    [ -L "${agy_dir}/authoring:skill-check" ]
+    [ "$(readlink -f "${agy_dir}/authoring:skill-check")" = "$(readlink -f "${WORKSPACE}/authoring-skills/skills/skill-check")" ]
+
+    # 순정 gemini skills 디렉토리에는 네임스페이스 링크가 생성되지 않는다 (#1787)
+    [ ! -e "${gem_dir}/gh-flow:issue" ]
 }
 
 @test "sync-gemini-skills-namespace: dry-run does not create symlinks (#1784)" {
