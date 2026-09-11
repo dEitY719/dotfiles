@@ -631,6 +631,12 @@ else
     log_warning "Antigravity(agy) 를 찾지 못했습니다. 건너뜁니다: ${HOME}/.gemini/antigravity-cli / PATH"
 fi
 
+# 3c. Gemini / Antigravity 네임스페이스(<namespace>:<skill>) 심볼릭 링크 동기화 (#1784)
+NAMESPACE_SYNC_SCRIPT="${DOTFILES_ROOT}/scripts/sync-gemini-skills-namespace.sh"
+if [ -f "$NAMESPACE_SYNC_SCRIPT" ]; then
+    bash "$NAMESPACE_SYNC_SCRIPT" || log_warning "네임스페이스 스킬 동기화 중 경고 발생"
+fi
+
 # 4. Hermes: 전용 네임스페이스 서브디렉토리에서 entry-level 합성 (issue #1376)
 #    루트를 직접 합성하지 않는 이유는 파일 상단 "Hermes 예외" 참고.
 HERMES_SKILLS="${HOME}/.hermes/skills/dotfiles"
