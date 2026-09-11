@@ -31,5 +31,9 @@ alias create-plugin-structure-ko='create_plugin_structure_ko'
 # Process plugin directory recursively
 alias process-plugin-ko='process_plugin_directory_ko'
 
+# Pull latest changes for all skills repositories
+alias git-pull-skills='${HOME}/dotfiles/claude/plugin/git-pull-skills.sh'
+
 # Show help for plugin management
 alias plugins-help='claude_plugins_help'
+

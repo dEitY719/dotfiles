@@ -13,7 +13,7 @@
 
 - Usage: claude-plugins-help [section|--list|--all]
 - sections
-    - commands: open_claude_plugins | list-plugins | claude-plugin-list | init-plugins-docs | sync-plugins-structure
+    - commands: open_claude_plugins | list-plugins | claude-plugin-list | git-pull-skills | init-plugins-docs | sync-plugins-structure
     - view: view-plugin-info | generate-plugin-doc-ko | create-plugin-structure-ko
     - examples: quick examples for create-plugin-ko
     - ai-tools: claude | agy | codex
@@ -29,6 +29,7 @@
 - open_claude_plugins  - Open marketplace plugins directory in VSCode
 - list-plugins         - List all available marketplaces and their skills
 - claude-plugin-list   - List installed plugins grouped by marketplace (SSOT: installed_plugins.json)
+- git-pull-skills      - Pull latest changes for all skill repositories under ~/para/project/skills
 - init-plugins-docs    - Initialize Korean documentation directory structure
 - sync-plugins-structure - Create directory structure mirroring plugins organization
 
