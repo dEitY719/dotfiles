@@ -13,11 +13,14 @@
 #     ${WORKSPACE_ROOT:-$HOME/para/project/skills}/<repo>/skills/<skill>/SKILL.md
 #
 # 연결 전략 (issue #791 / #1376 — 아래 CLI 모두 entry-level 합성):
-#   - entry-level 합성 디렉토리 (#707 / #791 / #1376):
+#   - entry-level 합성 디렉토리 (#707 / #791 / #1376 / #1787):
 #     ~/.config/opencode/skills/<skill>     → <workspace>/<repo>/skills/<skill>
-#     ~/.gemini/skills/<skill>              → <workspace>/<repo>/skills/<skill>
 #     ~/.gemini/config/skills/<skill>       → <workspace>/<repo>/skills/<skill>  (agy)
 #     ~/.hermes/skills/dotfiles/<skill>     → <workspace>/<repo>/skills/<skill>
+#
+#   - 순정 Gemini CLI 지원 제거 및 agy 단일화 (#1787):
+#     순정 gemini CLI 는 agy(Antigravity CLI)로 완전히 대체되었으며,
+#     ~/.gemini/skills 에 대한 합성은 중단되고 기존 잔여 링크는 정리된다.
 #
 #   - Hermes 예외 (#1376, NF-1): Hermes 는 다른 CLI 와 달리 ~/.hermes/skills/
 #     루트를 자체 hub/curator 가 능동적으로 관리한다 (.hub/, .bundled_manifest,
@@ -29,7 +32,7 @@
 #     ~/.codex/skills/.system                          ← local (codex managed)
 #     ~/.codex/skills/<custom-skill>                   → <workspace>/<repo>/skills/<skill>
 #
-#   - 마이그레이션 (#791): 기존 opencode/gemini 의 디렉토리-단위 symlink 는
+#   - 마이그레이션 (#791): 기존 opencode 의 디렉토리-단위 symlink 는
 #     entry-level 합성으로 변환된다. 사용자가 직접 만든 symlink (target 이
 #     관리 대상 밖이면서 살아 있는 경우) 는 보존 + warn.
 #
@@ -37,12 +40,9 @@
 # 모두 동일 layout (Hermes 만 서브디렉토리 — 위 예외 참고) 이므로 외부에서
 # 추가된 symlink 도 합성 대상 전부에 동일하게 적용된다.
 #
-# Antigravity CLI (agy) 는 전용 분기를 갖는다 (#1731). agy 는 OAuth 토큰을
-# ~/.gemini/antigravity-cli/ 에 두어 Gemini 런타임을 공유하지만, skill 검색
-# 경로까지 상속하지는 않는다 — agy 의 Global Customizations Root 는
-# ~/.gemini/config/ 이고 skill 은 그 아래 skills/ 에서만 발견된다.
-# ~/.gemini/skills 는 agy 가 읽지 않으므로 (#1684 에서 FAIL 로 실측),
-# 두 경로 모두에 합성한다. 상세: agy/AGENTS.md.
+# Antigravity CLI (agy) 는 자체 경로를 갖는다 (#1731, #1787). agy 의 Global
+# Customizations Root 는 ~/.gemini/config/ 이고 skill 은 그 아래 skills/ 에서만 발견된다.
+# 상세: agy/AGENTS.md.
 
 # --- Constants ---
 
@@ -602,12 +602,15 @@ else
     done <<< "$CODEX_HOME_LIST"
 fi
 
-# 3. Gemini: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
+# 3. Gemini: 순정 Gemini CLI 지원 제거 및 ~/.gemini/skills 정리 (#1787)
+#    순정 gemini CLI 대신 agy(Antigravity CLI)를 사용하므로, 레거시
+#    ~/.gemini/skills 디렉토리 내부 symlink 및 빈 디렉토리를 정리한다.
 GEMINI_SKILLS="${HOME}/.gemini/skills"
-if [ ! -d "${HOME}/.gemini" ]; then
-    log_warning "Gemini 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.gemini"
-else
-    link_skills_compose "gemini" "$GEMINI_SKILLS"
+if [ -L "$GEMINI_SKILLS" ]; then
+    rm -f "$GEMINI_SKILLS"
+elif [ -d "$GEMINI_SKILLS" ]; then
+    find "$GEMINI_SKILLS" -mindepth 1 -maxdepth 1 -type l -exec rm -f {} +
+    rmdir "$GEMINI_SKILLS" 2>/dev/null || true
 fi
 
 # 3b. Antigravity CLI (agy): 자체 Global Customizations Root 에서 합성 (#1731).
@@ -684,7 +687,6 @@ if [ -n "${CODEX_HOME_LIST:-}" ]; then
         verify_link "codex" "${codex_home}/skills" "codex"
     done <<< "$CODEX_HOME_LIST"
 fi
-[ -d "${HOME}/.gemini" ] && verify_link "gemini" "$GEMINI_SKILLS" "compose"
 _agy_is_installed && verify_link "agy" "$AGY_SKILLS" "compose"
 [ -d "${HOME}/.hermes" ] && verify_link "hermes" "$HERMES_SKILLS" "compose"
 

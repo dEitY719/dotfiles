@@ -165,18 +165,17 @@ run_setup() {
     done
 }
 
-@test "gemini: fresh install creates entry-level synthesis directory (#791)" {
+@test "gemini: legacy ~/.gemini/skills symlinks are cleaned up and dir removed (#1787)" {
     seed_gemini_home
+    local g_dir="${FIXTURE_HOME}/.gemini/skills"
+    mkdir -p "$g_dir"
+    ln -s "${BASE_REPO}/skills/alpha" "${g_dir}/alpha"
+    ln -s "${BASE_REPO}/skills/beta" "${g_dir}/beta"
 
     run_setup
     assert_success
 
-    local g_dir="${FIXTURE_HOME}/.gemini/skills"
-    [ -d "$g_dir" ] && [ ! -L "$g_dir" ]
-    for s in alpha beta gamma; do
-        [ -L "${g_dir}/${s}" ]
-        [ "$(readlink -f "${g_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
-    done
+    [ ! -e "$g_dir" ]
 }
 
 @test "opencode: legacy dir-symlink migrates to entry-level synthesis (#791)" {
@@ -199,24 +198,6 @@ run_setup() {
     done
 }
 
-@test "gemini: legacy dir-symlink migrates to entry-level synthesis (#791)" {
-    seed_gemini_home
-    # Dangling — the #1680 cutover removed the target (see opencode twin).
-    ln -s "${FIXTURE_DOTFILES}/claude/skills" "${FIXTURE_HOME}/.gemini/skills"
-    [ -L "${FIXTURE_HOME}/.gemini/skills" ]
-
-    run_setup
-    assert_success
-    assert_output --partial "[gemini] legacy dir-symlink"
-
-    local g_dir="${FIXTURE_HOME}/.gemini/skills"
-    [ ! -L "$g_dir" ]
-    [ -d "$g_dir" ]
-    for s in alpha beta gamma; do
-        [ -L "${g_dir}/${s}" ]
-    done
-}
-
 @test "opencode: synthesis is idempotent on re-run (#791)" {
     seed_opencode_home
 
@@ -231,21 +212,6 @@ run_setup() {
     after="$(ls -la "${FIXTURE_HOME}/.config/opencode/skills")"
 
     [ "$before" = "$after" ]
-}
-
-@test "gemini: user symlink to non-SSOT location is preserved + warned (#791)" {
-    seed_gemini_home
-    # User-managed symlink pointing somewhere other than the SSOT.
-    mkdir -p "${TEST_TEMP_HOME}/elsewhere/skills"
-    ln -s "${TEST_TEMP_HOME}/elsewhere/skills" "${FIXTURE_HOME}/.gemini/skills"
-
-    run_setup
-    assert_success
-    assert_output --partial "[gemini] 사용자 symlink"
-
-    # The user's symlink must NOT have been clobbered.
-    [ -L "${FIXTURE_HOME}/.gemini/skills" ]
-    [ "$(readlink "${FIXTURE_HOME}/.gemini/skills")" = "${TEST_TEMP_HOME}/elsewhere/skills" ]
 }
 
 @test "hermes: config dir absent is a non-fatal warn + skip (#1376)" {
@@ -483,9 +449,9 @@ run_setup_with_workspace() {
     [ -L "${oc_dir}/delta" ]
 }
 
-@test "workspace: skills reach every harness including codex (#1652 F-4)" {
+@test "workspace: skills reach every harness including codex (#1652 F-4, #1787)" {
     seed_opencode_home
-    seed_gemini_home
+    seed_agy_home
     seed_hermes_home
     seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
 
@@ -493,7 +459,7 @@ run_setup_with_workspace() {
     assert_success
 
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
-    [ -L "${FIXTURE_HOME}/.gemini/skills/delta" ]
+    [ -L "${FIXTURE_HOME}/.gemini/config/skills/delta" ]
     [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/delta" ]
     [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
 }
@@ -811,36 +777,6 @@ seed_legacy_entries() {
     ln -s "${FIXTURE_DOTFILES}/claude/skills/legacy-orphan/" "${dir}/legacy-orphan"
 }
 
-@test "gemini: legacy entry shadowing a live source is relinked (#1732)" {
-    seed_gemini_home
-    run_setup
-    assert_success
-
-    local g_dir="${FIXTURE_HOME}/.gemini/skills"
-    seed_legacy_entries "$g_dir"
-
-    run_setup
-    assert_success
-
-    [ -L "${g_dir}/alpha" ]
-    [ -e "${g_dir}/alpha" ]
-    [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
-}
-
-@test "gemini: legacy entry with no live source is pruned (#1732)" {
-    seed_gemini_home
-    run_setup
-    assert_success
-
-    local g_dir="${FIXTURE_HOME}/.gemini/skills"
-    seed_legacy_entries "$g_dir"
-
-    run_setup
-    assert_success
-
-    [ ! -L "${g_dir}/legacy-orphan" ]
-}
-
 @test "opencode: legacy entries are cleaned across every harness (#1732)" {
     seed_opencode_home
     seed_hermes_home
@@ -881,76 +817,6 @@ seed_legacy_entries() {
 # The counter-case that keeps the fix honest: a broken link pointing
 # somewhere that is NOT the deleted SSOT (a temporarily unmounted user
 # mount, say) still holds recoverable user intent — preserve it.
-@test "gemini: broken entry outside the legacy SSOT is preserved (#1732)" {
-    seed_gemini_home
-    run_setup
-    assert_success
-
-    local g_dir="${FIXTURE_HOME}/.gemini/skills"
-    rm -f "${g_dir}/beta"
-    ln -s "${TEST_TEMP_HOME}/unmounted/skills/beta" "${g_dir}/beta"
-
-    run_setup
-    assert_success
-    assert_output --partial "[gemini] 사용자 symlink 보존"
-
-    [ -L "${g_dir}/beta" ]
-    [ "$(readlink "${g_dir}/beta")" = "${TEST_TEMP_HOME}/unmounted/skills/beta" ]
-}
-
-# A worktree checkout resolves DOTFILES_ROOT to the worktree path, while
-# the stranded links were written against the main checkout. Matching on
-# DOTFILES_ROOT alone therefore misses every one of them — exactly the
-# state a re-run from a worktree has to be able to repair.
-@test "gemini: legacy entries are cleaned when run from a git worktree (#1732)" {
-    seed_gemini_home
-
-    git -C "$FIXTURE_DOTFILES" init -q
-    git -C "$FIXTURE_DOTFILES" config user.email t@example.com
-    git -C "$FIXTURE_DOTFILES" config user.name t
-    git -C "$FIXTURE_DOTFILES" add -A
-    git -C "$FIXTURE_DOTFILES" commit -qm init
-    local wt="${TEST_TEMP_HOME}/wt-dotfiles"
-    git -C "$FIXTURE_DOTFILES" worktree add -q -b wt/test "$wt"
-
-    run_setup
-    assert_success
-    local g_dir="${FIXTURE_HOME}/.gemini/skills"
-    seed_legacy_entries "$g_dir"
-
-    # Run from the worktree — DOTFILES_ROOT is now "$wt", but the links
-    # still name "$FIXTURE_DOTFILES".
-    run_setup "$wt"
-    assert_success
-
-    [ -e "${g_dir}/alpha" ]
-    [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
-    [ ! -L "${g_dir}/legacy-orphan" ]
-}
-
-# 레거시 링크가 상대 경로로 적혀 있어도 같은 판정을 받아야 한다 (#1732,
-# agy FOLLOW-UP). 스크립트 자신은 항상 절대 경로로 링크를 만들지만, 수동/
-# 외부 도구가 만든 상대 경로 링크는 절대 경로 prefix 매칭을 그냥 빠져나간다.
-@test "gemini: relative-path legacy entry is cleaned too (#1732)" {
-    seed_gemini_home
-    run_setup
-    assert_success
-
-    local g_dir="${FIXTURE_HOME}/.gemini/skills"
-    local rel
-    rel="$(realpath -m --relative-to="$g_dir" "${FIXTURE_DOTFILES}/claude/skills")"
-    rm -f "${g_dir}/alpha"
-    ln -s "${rel}/alpha" "${g_dir}/alpha"
-    ln -s "${rel}/legacy-orphan" "${g_dir}/legacy-orphan"
-
-    run_setup
-    assert_success
-
-    [ -e "${g_dir}/alpha" ]
-    [ "$(readlink -f "${g_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
-    [ ! -L "${g_dir}/legacy-orphan" ]
-}
-
 # ---------------------------------------------------------------------
 # issue #1731 — Antigravity CLI (agy) 전용 합성 (근거: agy/AGENTS.md)
 # ---------------------------------------------------------------------
@@ -967,7 +833,7 @@ run_setup_without_agy() {
         run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
 }
 
-@test "agy: composes into its own ~/.gemini/config/skills root (#1731)" {
+@test "agy: composes into its own ~/.gemini/config/skills root (#1731, #1787)" {
     seed_agy_home
 
     run_setup
@@ -980,21 +846,19 @@ run_setup_without_agy() {
         [ "$(readlink -f "${a_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
     done
 
-    # agy 루트는 Gemini 루트를 대체하지 않고 **추가**된다: seed_agy_home 이
-    # 만든 ~/.gemini 때문에 Gemini 블록도 함께 돌아 두 경로가 모두 채워진다
-    # (PR #1734 codex FOLLOW-UP — 예전 테스트명은 반대를 주장했다).
-    [ -L "${FIXTURE_HOME}/.gemini/skills/alpha" ]
+    # 순정 gemini skills 경로는 더 이상 합성되지 않는다 (#1787)
+    [ ! -e "${FIXTURE_HOME}/.gemini/skills" ]
 }
 
-@test "agy: neither state dir nor binary skips the fan-out (#1731)" {
+@test "agy: neither state dir nor binary skips the fan-out (#1731, #1787)" {
     # ~/.gemini 는 있지만 agy 는 설치되지 않은 순정 Gemini 환경.
     seed_gemini_home
 
     run_setup_without_agy
     assert_success
     [ ! -e "${FIXTURE_HOME}/.gemini/config/skills" ]
-    # Gemini 자신의 합성은 영향을 받지 않는다.
-    [ -L "${FIXTURE_HOME}/.gemini/skills/alpha" ]
+    # 순정 Gemini 경로는 더 이상 합성되지 않는다 (#1787).
+    [ ! -e "${FIXTURE_HOME}/.gemini/skills" ]
 }
 
 @test "agy: binary on PATH alone triggers the fan-out (#1731, agy FOLLOW-UP)" {
