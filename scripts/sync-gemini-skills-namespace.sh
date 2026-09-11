@@ -102,7 +102,10 @@ collect_namespace_skills() {
         esac
         [ -f "${skill_path%/*/*}/.git" ] && continue
 
-        namespace="${repo%-skills}"
+        case "$repo" in
+            *-skills) namespace="${repo%-skills}" ;;
+            *) namespace="$repo" ;;
+        esac
         entry_name="${namespace}:${skill_name}"
 
         case "$seen" in
@@ -138,6 +141,13 @@ if [ -z "$SKILL_ENTRIES" ]; then
     ux_warning "등록할 네임스페이스 스킬이 없습니다."
     exit 0
 fi
+
+# O(1) 조회를 위한 associative array 구성
+declare -A SKILL_MAP=()
+while IFS=$'\t' read -r src_path link_name; do
+    [ -n "$src_path" ] && [ -n "$link_name" ] || continue
+    SKILL_MAP["$link_name"]="$(readlink -f "$src_path" 2>/dev/null || printf '%s' "$src_path")"
+done <<< "$SKILL_ENTRIES"
 
 entry_count="$(printf '%s\n' "$SKILL_ENTRIES" | grep -c .)"
 ux_header "Gemini / Antigravity 네임스페이스 스킬 동기화"
@@ -176,6 +186,7 @@ for target_dir in "${TARGET_DIRS[@]}"; do
 
     # Stale prune: target_dir 내의 *:* 형태 symlink 중 유효하지 않거나 소스가 사라진 것 정리
     if [ "$PRUNE" -eq 1 ]; then
+        shopt -s nullglob
         for existing in "$target_dir"/*; do
             [ -L "$existing" ] || continue
             fname="${existing##*/}"
@@ -196,20 +207,11 @@ for target_dir in "${TARGET_DIRS[@]}"; do
                 continue
             fi
 
-            # 소스 목록에 포함되어 있는지 확인
+            # 소스 목록에 포함되어 있는지 O(1) 해시맵 검사
             existing_target="$(readlink -f "$existing" 2>/dev/null || true)"
-            is_valid=0
-            while IFS=$'\t' read -r chk_src chk_name; do
-                if [ "$chk_name" = "$fname" ]; then
-                    chk_real="$(readlink -f "$chk_src" 2>/dev/null || true)"
-                    if [ "$chk_real" = "$existing_target" ]; then
-                        is_valid=1
-                        break
-                    fi
-                fi
-            done <<< "$SKILL_ENTRIES"
+            expected_target="${SKILL_MAP[$fname]:-}"
 
-            if [ "$is_valid" -eq 0 ]; then
+            if [ -z "$expected_target" ] || [ "$expected_target" != "$existing_target" ]; then
                 if [ "$DRY_RUN" -eq 1 ]; then
                     ux_info "[dry-run] prune (unmanaged/stale): ${fname}"
                     pruned=$((pruned + 1))
@@ -219,6 +221,7 @@ for target_dir in "${TARGET_DIRS[@]}"; do
                 fi
             fi
         done
+        shopt -u nullglob
     fi
 
     ux_success "완료: 신규/갱신 ${linked}개, 유지 ${unchanged}개, 정리 ${pruned}개"
