@@ -1,9 +1,9 @@
 #!/bin/bash
-# scripts/sync-gemini-skills-namespace.sh: Antigravity/Gemini 네임스페이스 기반 skills 심볼릭 링크 일괄 등록
+# scripts/sync-gemini-skills-namespace.sh: Antigravity(agy) 네임스페이스 기반 skills 심볼릭 링크 일괄 등록
 #
 # PURPOSE: $WORKSPACE_ROOT 아래 각 <repo>/skills/<skill>/SKILL.md 를 탐색하여
-#          ~/.gemini/config/skills 및 ~/.gemini/skills 에 <namespace>:<skill> 형태의
-#          심볼릭 링크를 일괄 생성/동기화한다 (issue #1784).
+#          ~/.gemini/config/skills 에 <namespace>:<skill> 형태의
+#          심볼릭 링크를 일괄 생성/동기화한다 (issue #1784, #1787).
 #
 # WHEN TO RUN: 수동 실행 가능, 또는 scripts/setup-skills-ssot.sh 내부에서 자동 호출.
 
@@ -47,7 +47,6 @@ Options:
 
 대상 디렉터리:
   - ~/.gemini/config/skills/ (Antigravity CLI)
-  - ~/.gemini/skills/        (Gemini CLI)
 USAGE_EOF
 }
 
@@ -122,17 +121,14 @@ _agy_is_installed() {
     command -v agy >/dev/null 2>&1
 }
 
-# 심볼릭 링크 동기화 대상 디렉터리
+# 심볼릭 링크 동기화 대상 디렉터리 (Antigravity CLI 단일 경로, #1787)
 TARGET_DIRS=()
 if _agy_is_installed || [ -d "${HOME}/.gemini/config/skills" ]; then
     TARGET_DIRS+=("${HOME}/.gemini/config/skills")
 fi
-if [ -d "${HOME}/.gemini" ]; then
-    TARGET_DIRS+=("${HOME}/.gemini/skills")
-fi
 
 if [ ${#TARGET_DIRS[@]} -eq 0 ]; then
-    ux_info "Gemini / Antigravity 설정 디렉터리가 없어 동기화를 건너뜁니다."
+    ux_info "Antigravity 설정 디렉터리가 없어 동기화를 건너뜁니다."
     exit 0
 fi
 
@@ -150,7 +146,7 @@ while IFS=$'\t' read -r src_path link_name; do
 done <<< "$SKILL_ENTRIES"
 
 entry_count="$(printf '%s\n' "$SKILL_ENTRIES" | grep -c .)"
-ux_header "Gemini / Antigravity 네임스페이스 스킬 동기화"
+ux_header "Antigravity 네임스페이스 스킬 동기화"
 ux_info "발견된 스킬: ${entry_count}개 (루트: ${WORKSPACE_ROOT_RESOLVED})"
 [ "$DRY_RUN" -eq 1 ] && ux_warning "DRY-RUN 모드: 실제 링크를 생성하거나 삭제하지 않습니다."
 
