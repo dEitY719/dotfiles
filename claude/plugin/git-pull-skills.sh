@@ -154,6 +154,9 @@ while IFS= read -r repo_dir; do
 			continue
 		fi
 
+		local start_sha
+		start_sha="$(git -C "$repo_dir" rev-parse HEAD 2>/dev/null)"
+
 		# Check if local has incorporated both origin and upstream, and origin is at HEAD
 		if git -C "$repo_dir" merge-base --is-ancestor "origin/$branch" HEAD 2>/dev/null && \
 		   git -C "$repo_dir" merge-base --is-ancestor "upstream/$branch" HEAD 2>/dev/null && \
@@ -172,6 +175,7 @@ while IFS= read -r repo_dir; do
 		# Merge origin then upstream
 		if ! git -C "$repo_dir" merge --no-edit "origin/$branch" >/dev/null 2>&1; then
 			git -C "$repo_dir" merge --abort >/dev/null 2>&1 || true
+			git -C "$repo_dir" reset --hard "$start_sha" >/dev/null 2>&1 || true
 			ux_error "$repo_name: merge origin/$branch failed (conflict)"
 			FAILED=$((FAILED + 1))
 			continue
@@ -179,6 +183,7 @@ while IFS= read -r repo_dir; do
 
 		if ! git -C "$repo_dir" merge --no-edit "upstream/$branch" >/dev/null 2>&1; then
 			git -C "$repo_dir" merge --abort >/dev/null 2>&1 || true
+			git -C "$repo_dir" reset --hard "$start_sha" >/dev/null 2>&1 || true
 			ux_error "$repo_name: merge upstream/$branch failed (conflict)"
 			FAILED=$((FAILED + 1))
 			continue
