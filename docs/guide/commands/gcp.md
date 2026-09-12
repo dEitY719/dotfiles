@@ -13,7 +13,7 @@
 
 - Usage: gcp help [section|--list|--all]
 - sections
-    - scan    gcp scan [base] [src] [--author=<name|all>]   compare & cherry-pick missing commits
+    - scan    gcp scan [base] [src]                          compare & cherry-pick missing commits
     - theirs  gcp theirs <commit>...                         cherry-pick with -X theirs (incoming wins)
     - ours    gcp ours <commit>...                           cherry-pick with -X ours (current wins)
     - author  gcp author <range> [author]                    cherry-pick commits by author
@@ -24,15 +24,14 @@
 
 ### scan
 
-- **syntax** — gcp scan [base] [src] [--author=<name|all>] — Compare & pick missing commits
-- **default** — main <- upstream/main, author=dEitY719 — Filter by author by default
-- **--author=all** — show all authors — Bypass filter
+- **syntax** — gcp scan [base] [src] — Compare & pick missing commits
+- **default** — main <- upstream/main — Default branches
 - **behavior** — same subject -> patch-id compared — Skip confirmed only on an identical patch (issue #1136)
 - **behavior** — always individual cherry-pick — range shortcut removed in #913; Suggested Range is a manual hint
 - **--show-skip-list** — print known-resolved SHAs — git/config/gcp-scan-skip.conf (issue #1039)
-- **skip list** — registered SHAs skipped silently — ignored under --author=all
+- **skip list** — registered SHAs skipped silently
 - **--show-skip-paths** — print path-excluded paths — git/config/gcp-scan-skip-paths.conf
-- **skip paths** — commits touching only listed paths skipped — ignored under --author=all
+- **skip paths** — commits touching only listed paths skipped
 - **behavior** — unpredicted conflict -> rolled back, batch continues — reported under Needs manual resolution (issue #1647)
 - **--stop-on-conflict** — abort whole remaining batch on first conflict — legacy all-or-nothing behavior
 
