@@ -175,6 +175,7 @@ while IFS= read -r repo_dir; do
 		if ! git -C "$repo_dir" merge --no-edit "origin/$branch" >/dev/null 2>&1; then
 			git -C "$repo_dir" merge --abort >/dev/null 2>&1 || true
 			git -C "$repo_dir" reset --hard "$start_sha" >/dev/null 2>&1 || true
+			git -C "$repo_dir" clean -fd >/dev/null 2>&1 || true
 			ux_error "$repo_name: merge origin/$branch failed (conflict)"
 			FAILED=$((FAILED + 1))
 			continue
@@ -183,6 +184,7 @@ while IFS= read -r repo_dir; do
 		if ! git -C "$repo_dir" merge --no-edit "upstream/$branch" >/dev/null 2>&1; then
 			git -C "$repo_dir" merge --abort >/dev/null 2>&1 || true
 			git -C "$repo_dir" reset --hard "$start_sha" >/dev/null 2>&1 || true
+			git -C "$repo_dir" clean -fd >/dev/null 2>&1 || true
 			ux_error "$repo_name: merge upstream/$branch failed (conflict)"
 			FAILED=$((FAILED + 1))
 			continue
