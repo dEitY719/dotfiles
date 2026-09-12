@@ -186,6 +186,8 @@ _gcp_help_rows_scan() {
     ux_table_row "skip list" "registered SHAs skipped silently" ""
     ux_table_row "--show-skip-paths" "print path-excluded paths" "git/config/gcp-scan-skip-paths.conf"
     ux_table_row "skip paths" "commits touching only listed paths skipped" ""
+    ux_table_row "--show-deferred" "print cached deferred commits" ".git/gcp-scan-deferred (issue #1795)"
+    ux_table_row "deferred cache" "commits deferred at current HEAD skipped" "invalidated on HEAD change"
     ux_table_row "behavior" "unpredicted conflict -> rolled back, batch continues" "reported under Needs manual resolution (issue #1647)"
     ux_table_row "--stop-on-conflict" "abort whole remaining batch on first conflict" "legacy all-or-nothing behavior"
 }
