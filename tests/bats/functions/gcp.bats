@@ -390,7 +390,7 @@ FIXTURE
 @test "scan #1136: same-subject different-content commit is NOT skipped as a dup" {
     run_in_bash "
         $(_gcp811_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # #1136: subject alone must not confirm a skip — S2 carries a distinct patch
@@ -404,7 +404,7 @@ FIXTURE
 @test "scan #1136: same-subject different-content commit's payload IS applied" {
     run_in_bash "
         $(_gcp811_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=all >/dev/null 2>&1
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
         git cat-file -e HEAD:f1.txt && echo HAS_F1
         git cat-file -e HEAD:f3.txt && echo HAS_F3
         # The same-subject commit (f2.txt) must NOT be dropped -> present on main.
@@ -439,7 +439,7 @@ FIXTURE
         echo b > fb.txt && git add fb.txt && git commit -qm "sync manifest"
         git checkout -q main
         echo x > onbase.txt && git add onbase.txt && git commit -qm "sync manifest"
-        printf "y\n" | _gcp_scan main source --author=all
+        printf "y\n" | _gcp_scan main source
         git cat-file -e HEAD:fa.txt && echo HAS_FA
         git cat-file -e HEAD:fb.txt && echo HAS_FB
     '
@@ -464,7 +464,7 @@ FIXTURE
         echo one > f1.txt && git add f1.txt && git commit -qm "feat one"
         echo two > f2.txt && git add f2.txt && git commit -qm "feat two"
         git checkout -q main
-        printf "y\n" | _gcp_scan main source --author=all
+        printf "y\n" | _gcp_scan main source
         git cat-file -e HEAD:f1.txt && echo HAS_F1
         git cat-file -e HEAD:f2.txt && echo HAS_F2
     '
@@ -729,7 +729,7 @@ FIXTURE
         # roll the commit back and continue the batch instead (covered by the
         # "scan #1647" tests below) — orthogonal to what this test actually
         # guards: that the CHERRY_PICK_HEAD check survives config poisoning.
-        printf "y\n" | _gcp_scan main source --author=all --stop-on-conflict
+        printf "y\n" | _gcp_scan main source --stop-on-conflict
         echo "scan_rc=$?"
         # PR #1228 review (codex): assert the sequencer state itself, not just
         # the message text — guards against a future regression that clears
@@ -772,7 +772,7 @@ FIXTURE
         # so the patch-id differs from source -> git cherry still lists it.
         echo MIDDLE > shared.txt && git add shared.txt && git commit -qm "wip shared"
         echo TARGET > shared.txt && git add shared.txt && git commit -qm "finalize shared"
-        printf "y\n" | _gcp_scan main source --author=all
+        printf "y\n" | _gcp_scan main source
         git cat-file -e HEAD:f2.txt 2>/dev/null && echo HAS_F2 || echo NO_F2
     '
     assert_success
@@ -1320,7 +1320,7 @@ FIXTURE
 @test "scan #913: context-drift commit auto-skipped by pre-flight (no conflict surfaced)" {
     run_in_bash "
         $(_gcp907_make_partial_repo)
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Stage-2 pre-flight catches the context-drift commit in Analysis phase;
@@ -1354,7 +1354,7 @@ FIXTURE
         # state is identical. The context-drift conflict resolves to HEAD empty.
         echo middle > b.txt && git add b.txt && git commit -qm "main: b.txt middle"
         echo target > b.txt && git add b.txt && git commit -qm "main: b.txt target"
-        printf "n\n" | _gcp_scan main source --author=all
+        printf "n\n" | _gcp_scan main source
     '
     assert_success
     # Noop commit must NOT appear in Commit List (phantom removed in Stage-2).
@@ -1382,7 +1382,7 @@ FIXTURE
         git checkout -q main
         echo middle > b.txt && git add b.txt && git commit -qm "main: b.txt middle"
         echo target > b.txt && git add b.txt && git commit -qm "main: b.txt target"
-        _gcp_scan main source --author=all
+        _gcp_scan main source
     '
     assert_success
     assert_output --partial "Already in HEAD (no-op):"
@@ -1393,7 +1393,7 @@ FIXTURE
 @test "scan #907: partial-apply skipped while real commits still applied; HEAD drift intact" {
     run_in_bash "
         $(_gcp907_make_partial_repo)
-        printf 'y\n' | _gcp_scan main source --author=all >/dev/null 2>&1
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
         git cat-file -e HEAD:f1.txt && echo HAS_F1
         git cat-file -e HEAD:f4.txt && echo HAS_F4
         # conf.txt retains HEAD's drifted version (partial-apply did not touch it).
@@ -1417,9 +1417,9 @@ FIXTURE
 # "Dep-missing (skipped): N". Under --author=all the creating commit is in the
 # pick set, so the check must NOT false-positive.
 #
-# Fixture authors: a NON-author "Upstream Bot" creates dep.txt; the author
-# "Me" modifies dep.txt (the dependent candidate) and independently adds
-# other.txt (a clean, dependency-free candidate).
+# Fixture: creator commit creates dep.txt (which can be skipped via
+# GCP_SCAN_SKIP_FILE); author modifies dep.txt (the dependent candidate)
+# and independently adds other.txt (a clean, dependency-free candidate).
 # ---------------------------------------------------------------------------
 
 _gcp1033_make_repo() {
@@ -1432,9 +1432,10 @@ _gcp1033_make_repo() {
         git init -q -b main
         echo init > a.txt && git add a.txt && git commit -qm "init"
         git checkout -q -b source
-        # Non-author creates dep.txt (this is the commit the author filter drops).
+        # Creator commit creates dep.txt
         echo created > dep.txt && git add dep.txt \
             && git commit -q --author="Upstream Bot <bot@up>" -m "create dep.txt"
+        creator_sha=$(git rev-parse HEAD)
         # Author modifies dep.txt -> depends on the create above.
         echo modified > dep.txt && git add dep.txt && git commit -qm "modify dep.txt"
         # Author adds an independent file -> no dependency.
@@ -1452,13 +1453,16 @@ FIXTURE
 @test "scan #1033: create-then-modify dependency detected, dependent commit skipped (no conflict)" {
     run_in_bash "
         $(_gcp1033_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=Me
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
+        printf '%s\n' \"\$creator_sha\" > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Warning naming the dependent file + the absent precedent.
     assert_output --partial "Skipping"
     assert_output --partial "dep.txt"
-    assert_output --partial "--author=all"
+    refute_output --partial "--author=all"
     # Analysis Result counter.
     assert_output --partial "Dep-missing (skipped): 1"
     # The independent commit still applied; no conflict ever surfaced.
@@ -1470,7 +1474,10 @@ FIXTURE
 @test "scan #1033: dependent commit's file is absent, independent commit applied" {
     run_in_bash "
         $(_gcp1033_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
+        printf '%s\n' \"\$creator_sha\" > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
         git cat-file -e HEAD:other.txt && echo HAS_OTHER
         git cat-file -e HEAD:dep.txt 2>/dev/null && echo HAS_DEP || echo NO_DEP
         git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
@@ -1481,10 +1488,10 @@ FIXTURE
     assert_output --partial "PICK_CLEAR"
 }
 
-@test "scan #1033: --author=all includes the creator -> no false-positive, dep applied cleanly" {
+@test "scan #1033: creator in pick set -> no false-positive, dep applied cleanly" {
     run_in_bash "
         $(_gcp1033_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         git show HEAD:dep.txt 2>/dev/null
     "
     assert_success
@@ -1505,13 +1512,17 @@ FIXTURE
         git init -q -b main
         echo init > a.txt && git add a.txt && git commit -qm 'init'
         git checkout -q -b source
-        # Non-author creates del.txt; author later deletes it -> delete depends
-        # on a create absent from main.
+        # Creator creates del.txt; skipped via skip list -> delete depends
+        # on a create absent from main and absent from pick set.
         echo gone > del.txt && git add del.txt \
             && git commit -q --author='Upstream Bot <bot@up>' -m 'create del.txt'
+        c_sha=\$(git rev-parse HEAD)
         git rm -q del.txt && git commit -qm 'delete del.txt'
         git checkout -q main
-        printf 'y\n' | _gcp_scan main source --author=Me
+        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
+        printf '%s\n' \"\$c_sha\" > \"\$skipf\"
+        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     assert_output --partial "Dep-missing (skipped): 1"
@@ -1565,7 +1576,7 @@ FIXTURE
 @test "scan #1037: same-line edit on both sides predicted, candidate skipped (no conflict surfaced)" {
     run_in_bash "
         $(_gcp1037_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=Me
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Warning naming the conflicting file.
@@ -1583,7 +1594,7 @@ FIXTURE
 @test "scan #1037: conflicting commit skipped, independent commit applied, foo untouched" {
     run_in_bash "
         $(_gcp1037_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
         git cat-file -e HEAD:bar.txt && echo HAS_BAR
         git show HEAD:foo.txt
         git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
@@ -1599,7 +1610,7 @@ FIXTURE
 @test "scan #1037: non-conflicting candidate (different file) is NOT flagged" {
     run_in_bash "
         $(_gcp1037_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=Me
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Only foo.txt's edit conflicts; bar.txt is applied, never counted.
@@ -1607,13 +1618,13 @@ FIXTURE
     refute_output --partial "Content-conflict (skipped): 2"
 }
 
-@test "scan #1037: --author=all defers to precedent, no false-positive" {
+@test "scan #1037: earlier precedent in pick set defers conflict prediction, no false-positive" {
     # When the precedent that the dependent edit builds on is itself in the pick
-    # set (--author=all), Stage-1.6 must NOT flag the dependent as a content
-    # conflict — the real loop applies the precedent first. (The dependent is
-    # then absorbed by the pre-existing Stage-2 no-op pre-flight, which probes
-    # against bare main; that is out of Stage-1.6's scope. The point under test
-    # is solely the absence of a false content-conflict skip / surfaced conflict.)
+    # set, Stage-1.6 must NOT flag the dependent as a content conflict — the
+    # real loop applies the precedent first. (The dependent is then absorbed by
+    # the pre-existing Stage-2 no-op pre-flight, which probes against bare
+    # main; that is out of Stage-1.6's scope. The point under test is solely
+    # the absence of a false content-conflict skip / surfaced conflict.)
     run_in_bash "
         repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp_test.XXXXXX\")\"
         trap \"rm -rf \$repo\" EXIT
@@ -1631,7 +1642,7 @@ FIXTURE
         printf 'orig\nlineC1-modified\n' > foo.txt && git add foo.txt \
             && git commit -qm 'modify lineC1'
         git checkout -q main
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Precedent is in the pick set -> conflict prediction deferred, not skipped.
@@ -1716,8 +1727,7 @@ FIXTURE
 # an unmergeable precedent is detected correctly by Stage-1.5/1.6 every run,
 # producing repeated warning noise. Registering its SHA in the skip-list file
 # (git/config/gcp-scan-skip.conf, override GCP_SCAN_SKIP_FILE) drops it
-# SILENTLY before Stage-1.5/1.6, counted under "Known-resolved (skipped)". The
-# list is IGNORED under --author=all (full detection stays as a safety net).
+# SILENTLY before Stage-1.5/1.6, counted under "Known-resolved (skipped)".
 # Reuses _gcp1037_make_repo (foo.txt content-conflict fixture); the conflicting
 # "edit foo" commit is source~1.
 # ---------------------------------------------------------------------------
@@ -1777,7 +1787,7 @@ FIXTURE
         skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s  # manually resolved, already in HEAD\n' \"\$conflict_sha\" > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
-        printf 'y\n' | _gcp_scan main source --author=Me
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Counted as known-resolved in the Analysis Result.
@@ -1798,7 +1808,7 @@ FIXTURE
         skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s\n' \"\$conflict_sha\" > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
-        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
         git cat-file -e HEAD:bar.txt && echo HAS_BAR
         git show HEAD:foo.txt
         git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
@@ -1811,19 +1821,13 @@ FIXTURE
     assert_output --partial "PICK_CLEAR"
 }
 
-@test "scan #1039: --author=all ignores the skip list (safety net)" {
+@test "scan #1793: --author=all is rejected as an unknown option" {
     run_in_bash "
         $(_gcp1037_make_repo)
-        conflict_sha=\$(git rev-parse source~1)
-        skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
-        printf '%s\n' \"\$conflict_sha\" > \"\$skipf\"
-        export GCP_SCAN_SKIP_FILE=\"\$skipf\"
-        printf 'y\n' | _gcp_scan main source --author=all
+        _gcp_scan --author=all main source
     "
-    assert_success
-    # Under --author=all the list is bypassed -> Stage-1.6 still detects it.
-    assert_output --partial "Content-conflict (skipped): 1"
-    refute_output --partial "Known-resolved (skipped)"
+    assert_failure
+    assert_output --partial "Unknown option: --author=all"
 }
 
 @test "scan #1039: abbreviated SHA token matches by prefix" {
@@ -1833,7 +1837,7 @@ FIXTURE
         skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s  # short form\n' \"\$conflict_short\" > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
-        printf 'y\n' | _gcp_scan main source --author=Me
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     assert_output --partial "Known-resolved (skipped): 1"
@@ -1850,7 +1854,7 @@ FIXTURE
         skipf=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_skip.XXXXXX\")
         printf '%s\n' '*' '?' '0' 'zz12' '012' > \"\$skipf\"
         export GCP_SCAN_SKIP_FILE=\"\$skipf\"
-        printf 'y\n' | _gcp_scan main source --author=Me
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # No token survived validation -> nothing skipped as known-resolved.
@@ -1885,8 +1889,7 @@ FIXTURE
 # (git/config/gcp-scan-skip-paths.conf, override GCP_SCAN_SKIP_PATHS_FILE)
 # silently drops any commit whose whole changed-file SET is a subset of the
 # allowlist, counted under "Path-excluded (skipped)". A commit that also
-# touches any other file still surfaces. The list is IGNORED under
-# --author=all (full detection stays as a safety net). Independent of and
+# touches any other file still surfaces. Independent of and
 # parallel to the SHA-based Stage-1.4.
 #
 # Fixture: main seeds both manifest files; source commit A modifies ONLY
@@ -1940,7 +1943,7 @@ FIXTURE
 @test "scan path-skip: pure manifest-sync commit skipped silently as path-excluded" {
     run_in_bash "
         $(_gcp_pathskip_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=Me
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Counted as path-excluded in the Analysis Result.
@@ -1954,7 +1957,7 @@ FIXTURE
 @test "scan path-skip: manifest+unrelated commit is NOT skipped (surfaces and applies)" {
     run_in_bash "
         $(_gcp_pathskip_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=Me >/dev/null 2>&1
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
         git cat-file -e HEAD:unrelated.txt && echo HAS_UNRELATED
         git rev-parse -q --verify CHERRY_PICK_HEAD >/dev/null 2>&1 && echo PICK_ACTIVE || echo PICK_CLEAR
     "
@@ -1965,16 +1968,13 @@ FIXTURE
     assert_output --partial "PICK_CLEAR"
 }
 
-@test "scan path-skip: --author=all ignores the path list (safety net)" {
+@test "scan #1793: --author=<user> is rejected as an unknown option" {
     run_in_bash "
         $(_gcp_pathskip_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=all
+        _gcp_scan --author=Me main source
     "
-    assert_success
-    # Under --author=all the allowlist is bypassed -> nothing path-excluded and
-    # the pure-manifest commit surfaces in the commit list (full detection).
-    refute_output --partial "Path-excluded (skipped)"
-    assert_output --partial "sync manifest"
+    assert_failure
+    assert_output --partial "Unknown option: --author=Me"
 }
 
 @test "scan path-skip: --show-skip-paths prints entries, strips comments/blanks" {
@@ -2016,7 +2016,7 @@ FIXTURE
         $(_gcp_pathskip_make_repo)
         # Rewrite the config with comments and blanks interleaved.
         printf '# header comment\n\nclaude/plugin/plugins.json  # reason\n\n# trailing\nclaude/plugin/marketplaces.json\n' > \"\$skipf\"
-        printf 'y\n' | _gcp_scan main source --author=Me
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     # Parsing tolerates the noise -> the pure-manifest commit is still excluded.
@@ -2061,7 +2061,7 @@ FIXTURE
         echo dupbase > onbase.txt && git add onbase.txt && git commit -qm "shared old subject"
         # Push the twin beyond the retired 200-commit window.
         i=0; while [ $i -lt 205 ]; do git commit -q --allow-empty -m "pad $i"; i=$((i + 1)); done
-        printf "y\n" | _gcp_scan main source --author=all
+        printf "y\n" | _gcp_scan main source
         git cat-file -e HEAD:f2.txt 2>/dev/null && echo HAS_F2 || echo NO_F2
     '
     assert_success
@@ -2093,7 +2093,7 @@ FIXTURE
         # Override the Stage-2 helper: drain stdin like a stdin-reading git
         # subprocess, then report no-op so BOTH survivors must be counted.
         _gcp_scan_preflight_is_noop() { cat >/dev/null 2>&1; return 0; }
-        _gcp_scan main source --author=all
+        _gcp_scan main source
     '
     assert_success
     assert_output --partial "Already in HEAD (no-op): 2"
@@ -2190,7 +2190,7 @@ FIXTURE
     # report names B under "Needs manual resolution" with a copy-pasteable line.
     run_in_bash "
         $(_gcp1647_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         echo \"scan_rc=\$?\"
         git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
         # Plain-file test, not rev-parse (issue #1213 precedent).
@@ -2238,7 +2238,7 @@ FIXTURE
     run_in_bash "
         $(_gcp1647_make_repo)
         git config advice.mergeConflict true
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         echo \"scan_rc=\$?\"
         ls .git/gcp-scan-cp-stderr >/dev/null 2>&1 && echo SCRATCH_LEFT || echo SCRATCH_CLEAN
     "
@@ -2268,7 +2268,7 @@ FIXTURE
         git config advice.mergeConflict true
         git config color.advice always
         git config color.ui always
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         echo \"scan_rc=\$?\"
     "
     refute_output --partial "hint:"
@@ -2284,7 +2284,7 @@ FIXTURE
     # user to resolve, and later candidates are never attempted.
     run_in_bash "
         $(_gcp1647_make_repo)
-        printf 'y\n' | _gcp_scan main source --author=all --stop-on-conflict
+        printf 'y\n' | _gcp_scan main source --stop-on-conflict
         echo \"scan_rc=\$?\"
         git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
         [ -f \"\$repo/.git/CHERRY_PICK_HEAD\" ] && echo CPH_PRESENT || echo CPH_MISSING
@@ -2309,7 +2309,7 @@ FIXTURE
     run_in_bash "
         $(_gcp1647_make_repo)
         echo localedit >> a.txt
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         echo \"scan_rc=\$?\"
         grep -q localedit a.txt && echo EDIT_KEPT || echo EDIT_LOST
         git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
@@ -2335,7 +2335,7 @@ FIXTURE
     run_in_bash "
         $(_gcp1647_make_repo)
         echo scratch > untracked.txt
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         echo \"scan_rc=\$?\"
         [ -f untracked.txt ] && echo UNTRACKED_KEPT || echo UNTRACKED_LOST
         git cat-file -e HEAD:clean.txt 2>/dev/null && echo HAS_CLEAN || echo NO_CLEAN
@@ -2377,7 +2377,7 @@ FIXTURE
         git checkout -q main
         printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nM10\n' > conf.txt
         git add conf.txt && git commit -qm 'main: bottom edit'
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         echo \"scan_rc=\$?\"
         [ -e debris.txt ] && echo DEBRIS_PRESENT || echo DEBRIS_GONE
         git status --porcelain
@@ -2414,7 +2414,7 @@ FIXTURE
         echo 'source helper.sh' > caller.sh && git add caller.sh \
             && git commit -qm 'add caller.sh (depends on conf.txt content D2 would add)'
         git checkout -q main
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
         echo \"scan_rc=\$?\"
         # D2 ('conf: bottom edit') is the one that actually conflicted+deferred.
         git cat-file -e HEAD:caller.sh 2>/dev/null && echo HAS_CALLER || echo NO_CALLER
@@ -2888,7 +2888,7 @@ FIXTURE
 @test "scan #1759: the re-application loop terminates — the dup is filtered in Analysis" {
     run_in_bash "
         $(_gcp1759_make_dup_append_repo)
-        printf 'y\n' | _gcp_scan main source --author=all
+        printf 'y\n' | _gcp_scan main source
     "
     assert_success
     assert_output --partial "Already in HEAD (no-op):"

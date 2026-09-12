@@ -8,7 +8,7 @@
 # Exposed via the gcp dispatcher (Type 2A — see gcp.sh and
 # docs/.ssot/command-design-pattern.md §4):
 #
-#   gcp scan [base] [src] [--author=<name|all>]
+#   gcp scan [base] [src]
 #
 # The deprecated 'gcp_scan' / 'gcp-scan' forms remain available as aliases
 # (defined in gcp.sh) for backward compatibility — issue #697.
@@ -1088,7 +1088,6 @@ _gcp_scan() {
 
     local base="main"
     local source="upstream/main"
-    local author="dEitY719"
     local arg1="" arg2=""
     local show_skip_list=0
     local show_skip_paths=0
@@ -1113,22 +1112,6 @@ _gcp_scan() {
     # Parse arguments (simpler than bash array approach, works in all shells)
     while [ $# -gt 0 ]; do
         case "$1" in
-        --author=*)
-            author="${1#--author=}"
-            ;;
-        --author)
-            if [ -n "${2-}" ]; then
-                author="$2"
-                shift
-            else
-                if type ux_error >/dev/null 2>&1; then
-                    ux_error "--author requires a value"
-                else
-                    echo "Error: --author requires a value" >&2
-                fi
-                return 1
-            fi
-            ;;
         --show-skip-list)
             show_skip_list=1
             ;;
@@ -1137,6 +1120,14 @@ _gcp_scan() {
             ;;
         --stop-on-conflict)
             stop_on_conflict=1
+            ;;
+        -*)
+            if type ux_error >/dev/null 2>&1; then
+                ux_error "Unknown option: $1"
+            else
+                echo "Error: Unknown option: $1" >&2
+            fi
+            return 1
             ;;
         *)
             # Store positional arguments without array syntax
@@ -1219,40 +1210,7 @@ _gcp_scan() {
 
     local total_count
     total_count=$(echo "$missing_list" | wc -l)
-    local author_lc
-    author_lc=$(printf '%s' "$author" | tr '[:upper:]' '[:lower:]')
-
-    # Filter by author unless explicitly showing all
-    local selected_list=""
-    if [ "$author_lc" = "all" ]; then
-        selected_list="$missing_list"
-    else
-        while IFS= read -r sha; do
-            [ -z "$sha" ] && continue
-            local commit_author
-            commit_author=$(git show -s --format='%an' "$sha")
-            if [ "$(printf '%s' "$commit_author" | tr '[:upper:]' '[:lower:]')" = "$author_lc" ]; then
-                if [ -z "$selected_list" ]; then
-                    selected_list="$sha"
-                else
-                    selected_list="${selected_list}"$'\n'"$sha"
-                fi
-            fi
-        done <<EOF
-$missing_list
-EOF
-    fi
-
-    if [ -z "$selected_list" ]; then
-        if type ux_warning >/dev/null 2>&1; then
-            ux_warning "No missing commits match author '$author'."
-            ux_info "Use --author=all to show all missing commits."
-        else
-            echo "⚠ No missing commits match author '$author'." >&2
-            echo "ℹ Use --author=all to show all missing commits." >&2
-        fi
-        return 0
-    fi
+    local selected_list="$missing_list"
 
     local count
     count=$(echo "$selected_list" | wc -l)
@@ -1363,13 +1321,10 @@ EOF
     # depend on an unmergeable precedent — Stage-1.5/1.6 detect them correctly
     # every run, but re-warning about an already-known skip is pure UX noise.
     # Drop them here, BEFORE Stage-1.5/1.6, so no warning is emitted, and count
-    # them under a dedicated "Known-resolved" line. The list is IGNORED under
-    # --author=all so the full detection (safety net) is never silenced there.
+    # them under a dedicated "Known-resolved" line.
     local known_resolved_list="" known_resolved_count=0 kr_survivor_list=""
     local skip_list=""
-    if [ "$author_lc" != "all" ]; then
-        skip_list=$(_gcp_scan_load_skip_list)
-    fi
+    skip_list=$(_gcp_scan_load_skip_list)
     if [ -n "$skip_list" ]; then
         while IFS= read -r sha; do
             [ -z "$sha" ] && continue
@@ -1401,13 +1356,10 @@ EOF
     # machine-local plugin manifests) is silently dropped here — no per-SHA
     # registration, so a class of ever-new SHAs stops being whack-a-mole. A
     # commit that also touches any other file is left to surface (it carries
-    # real content). Like Stage-1.4 this is IGNORED under --author=all so the
-    # full detection safety net is never silenced.
+    # real content).
     local path_excluded_list="" path_excluded_count=0 pe_survivor_list=""
     local skip_paths=""
-    if [ "$author_lc" != "all" ]; then
-        skip_paths=$(_gcp_scan_load_skip_paths)
-    fi
+    skip_paths=$(_gcp_scan_load_skip_paths)
     if [ -n "$skip_paths" ]; then
         while IFS= read -r sha; do
             [ -z "$sha" ] && continue
@@ -1441,7 +1393,7 @@ EOF
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         local _dep_out=""
-        if _dep_out=$(_gcp_scan_check_file_deps "$sha" "$base" "$source" "$selected_list" </dev/null); then
+        if _dep_out=$(_gcp_scan_check_file_deps "$sha" "$base" "$source" "$final_selected_list" </dev/null); then
             if [ -z "$dep_survivor_list" ]; then
                 dep_survivor_list="$sha"
             else
@@ -1464,10 +1416,10 @@ EOF
             _c_short=$(git rev-parse --short "$sha" 2>/dev/null)
             if type ux_warning >/dev/null 2>&1; then
                 ux_warning "Skipping ${_c_short} — depends on ${_dep_sha} (creates/deletes ${_dep_file}) not yet in ${base}."
-                ux_info "Cherry-pick that commit first, or re-run with --author=all to include the dependency."
+                ux_info "Cherry-pick that commit first to include the dependency."
             else
                 echo "⚠ Skipping ${_c_short} — depends on ${_dep_sha} (creates/deletes ${_dep_file}) not yet in ${base}." >&2
-                echo "ℹ Cherry-pick that commit first, or re-run with --author=all to include the dependency." >&2
+                echo "ℹ Cherry-pick that commit first to include the dependency." >&2
             fi
         fi
     done <<EOF
@@ -1494,7 +1446,7 @@ EOF
     while IFS= read -r sha; do
         [ -z "$sha" ] && continue
         local _cf_out=""
-        if _cf_out=$(_gcp_scan_predict_content_conflict "$sha" "$selected_list" </dev/null); then
+        if _cf_out=$(_gcp_scan_predict_content_conflict "$sha" "$final_selected_list" </dev/null); then
             if [ -z "$conflict_survivor_list" ]; then
                 conflict_survivor_list="$sha"
             else
@@ -1551,8 +1503,7 @@ EOF
     if [ $count -eq 0 ]; then
         if type ux_section >/dev/null 2>&1; then
             ux_section "Analysis Result"
-            ux_bullet "Missing (all authors): $total_count"
-            ux_bullet "Author filter: $author -> 0 new commit(s)"
+            ux_bullet "Missing commits: $total_count"
             ux_bullet "Duplicates (already applied): $duplicate_count"
             if [ "$known_resolved_count" -gt 0 ]; then
                 printf "%s  ◆ Known-resolved (skipped): %d%s\n" "${UX_MUTED-}" "$known_resolved_count" "${UX_RESET-}"
@@ -1571,8 +1522,7 @@ EOF
             fi
         else
             echo "=== Analysis Result ==="
-            echo "  Missing (all authors): $total_count"
-            echo "  Author filter: $author -> 0 new commit(s)"
+            echo "  Missing commits: $total_count"
             echo "  Duplicates (already applied): $duplicate_count"
             if [ "$known_resolved_count" -gt 0 ]; then
                 echo "  Known-resolved (skipped): $known_resolved_count"
@@ -1608,8 +1558,7 @@ EOF
     # Display Summary
     if type ux_section >/dev/null 2>&1; then
         ux_section "Analysis Result"
-        ux_bullet "Missing (all authors): $total_count"
-        ux_bullet "Author filter: $author -> $count commit(s)"
+        ux_bullet "Missing commits: $total_count"
         if [ $duplicate_count -gt 0 ]; then
             ux_bullet "Duplicates (already applied): $duplicate_count"
         fi
@@ -1631,8 +1580,7 @@ EOF
         ux_bullet "Suggested Range: $range_str"
     else
         echo "=== Analysis Result ==="
-        echo "  Missing (all authors): $total_count"
-        echo "  Author filter: $author -> $count commit(s)"
+        echo "  Missing commits: $total_count"
         if [ $duplicate_count -gt 0 ]; then
             echo "  Duplicates (already applied): $duplicate_count"
         fi

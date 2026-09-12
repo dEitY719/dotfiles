@@ -160,7 +160,7 @@ _gcp_author() {
 _gcp_help_summary() {
     ux_info "Usage: gcp help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "scan    gcp scan [base] [src] [--author=<name|all>]   compare & cherry-pick missing commits"
+    ux_bullet_sub "scan    gcp scan [base] [src]                          compare & cherry-pick missing commits"
     ux_bullet_sub "theirs  gcp theirs <commit>...                         cherry-pick with -X theirs (incoming wins)"
     ux_bullet_sub "ours    gcp ours <commit>...                           cherry-pick with -X ours (current wins)"
     ux_bullet_sub "author  gcp author <range> [author]                    cherry-pick commits by author"
@@ -178,15 +178,14 @@ _gcp_help_list_sections() {
 }
 
 _gcp_help_rows_scan() {
-    ux_table_row "syntax" "gcp scan [base] [src] [--author=<name|all>]" "Compare & pick missing commits"
-    ux_table_row "default" "main <- upstream/main, author=dEitY719" "Filter by author by default"
-    ux_table_row "--author=all" "show all authors" "Bypass filter"
+    ux_table_row "syntax" "gcp scan [base] [src]" "Compare & pick missing commits"
+    ux_table_row "default" "main <- upstream/main" "Default branches"
     ux_table_row "behavior" "same subject -> patch-id compared" "Skip confirmed only on an identical patch (issue #1136)"
     ux_table_row "behavior" "always individual cherry-pick" "range shortcut removed in #913; Suggested Range is a manual hint"
     ux_table_row "--show-skip-list" "print known-resolved SHAs" "git/config/gcp-scan-skip.conf (issue #1039)"
-    ux_table_row "skip list" "registered SHAs skipped silently" "ignored under --author=all"
+    ux_table_row "skip list" "registered SHAs skipped silently" ""
     ux_table_row "--show-skip-paths" "print path-excluded paths" "git/config/gcp-scan-skip-paths.conf"
-    ux_table_row "skip paths" "commits touching only listed paths skipped" "ignored under --author=all"
+    ux_table_row "skip paths" "commits touching only listed paths skipped" ""
     ux_table_row "behavior" "unpredicted conflict -> rolled back, batch continues" "reported under Needs manual resolution (issue #1647)"
     ux_table_row "--stop-on-conflict" "abort whole remaining batch on first conflict" "legacy all-or-nothing behavior"
 }
