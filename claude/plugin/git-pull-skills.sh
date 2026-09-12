@@ -135,6 +135,66 @@ while IFS= read -r repo_dir; do
 		continue
 	fi
 
+	# 4.1 Check dual-remote (origin + upstream)
+	has_upstream=false
+	if git -C "$repo_dir" config --get remote.upstream.url >/dev/null 2>&1; then
+		has_upstream=true
+	fi
+
+	if $has_upstream; then
+		# Fetch origin and upstream
+		if ! git -C "$repo_dir" fetch origin "$branch" >/dev/null 2>&1; then
+			ux_error "$repo_name: git fetch origin failed"
+			FAILED=$((FAILED + 1))
+			continue
+		fi
+		if ! git -C "$repo_dir" fetch upstream "$branch" >/dev/null 2>&1; then
+			ux_error "$repo_name: git fetch upstream failed"
+			FAILED=$((FAILED + 1))
+			continue
+		fi
+
+		# Check if local has incorporated both origin and upstream, and origin is at HEAD
+		if git -C "$repo_dir" merge-base --is-ancestor "origin/$branch" HEAD 2>/dev/null && \
+		   git -C "$repo_dir" merge-base --is-ancestor "upstream/$branch" HEAD 2>/dev/null && \
+		   git -C "$repo_dir" merge-base --is-ancestor HEAD "origin/$branch" 2>/dev/null; then
+			ux_success "$repo_name: up-to-date (origin+upstream: $branch)"
+			UP_TO_DATE=$((UP_TO_DATE + 1))
+			continue
+		fi
+
+		if $DRY_RUN; then
+			ux_info "$repo_name: updates available from origin/upstream ($branch, dry-run)"
+			UPDATED=$((UPDATED + 1))
+			continue
+		fi
+
+		# Merge origin then upstream
+		if ! git -C "$repo_dir" merge --no-edit "origin/$branch" >/dev/null 2>&1; then
+			git -C "$repo_dir" merge --abort >/dev/null 2>&1 || true
+			ux_error "$repo_name: merge origin/$branch failed (conflict)"
+			FAILED=$((FAILED + 1))
+			continue
+		fi
+
+		if ! git -C "$repo_dir" merge --no-edit "upstream/$branch" >/dev/null 2>&1; then
+			git -C "$repo_dir" merge --abort >/dev/null 2>&1 || true
+			ux_error "$repo_name: merge upstream/$branch failed (conflict)"
+			FAILED=$((FAILED + 1))
+			continue
+		fi
+
+		# Push to origin
+		if git -C "$repo_dir" push origin "$branch" >/dev/null 2>&1; then
+			ux_success "$repo_name: synced and pushed to origin ($branch)"
+			UPDATED=$((UPDATED + 1))
+		else
+			ux_error "$repo_name: git push origin failed"
+			FAILED=$((FAILED + 1))
+		fi
+		continue
+	fi
+
 	# Fetch origin
 	if ! git -C "$repo_dir" fetch origin >/dev/null 2>&1; then
 		ux_error "$repo_name: git fetch origin failed"

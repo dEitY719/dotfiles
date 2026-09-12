@@ -32,7 +32,7 @@ _claude_plugins_help_rows_commands() {
     ux_bullet "open_claude_plugins  - Open marketplace plugins directory in VSCode"
     ux_bullet "list-plugins         - List all available marketplaces and their skills"
     ux_bullet "claude-plugin-list   - List installed plugins grouped by marketplace (SSOT: installed_plugins.json)"
-    ux_bullet "git-pull-skills      - Pull latest changes for all skill repositories under ~/para/project/skills"
+    ux_bullet "git-pull-skills      - Pull latest changes (+ upstream sync if configured) for all skill repositories"
     ux_bullet "init-plugins-docs    - Initialize Korean documentation directory structure"
     ux_bullet "sync-plugins-structure - Create directory structure mirroring plugins organization"
 }
