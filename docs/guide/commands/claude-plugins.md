@@ -29,7 +29,7 @@
 - open_claude_plugins  - Open marketplace plugins directory in VSCode
 - list-plugins         - List all available marketplaces and their skills
 - claude-plugin-list   - List installed plugins grouped by marketplace (SSOT: installed_plugins.json)
-- git-pull-skills      - Pull latest changes for all skill repositories under ~/para/project/skills
+- git-pull-skills      - Pull latest changes (+ upstream sync if configured) for all skill repositories
 - init-plugins-docs    - Initialize Korean documentation directory structure
 - sync-plugins-structure - Create directory structure mirroring plugins organization
 

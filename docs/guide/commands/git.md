@@ -88,7 +88,7 @@
 - **gcp theirs** — gcp theirs <commit>... — Cherry-pick with -X theirs (incoming)
 - **gcp ours** — gcp ours <commit>... — Cherry-pick with -X ours (current)
 - **gcp author** — gcp author <range> [author] — Cherry-pick by author
-- **gcp scan** — gcp scan [base] [src] [--author=<name|all>] — Compare & pick missing (default: main <- upstream/main, author=dEitY719)
+- **gcp scan** — gcp scan [base] [src] — Compare & pick missing (default: main <- upstream/main)
 - **gcp -h** — gcp help [section] — Show gcp sub-command help
 
 ### special

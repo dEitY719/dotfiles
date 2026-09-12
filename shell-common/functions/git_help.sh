@@ -99,7 +99,7 @@ _git_help_rows_pick() {
     ux_table_row "gcp theirs" "gcp theirs <commit>..." "Cherry-pick with -X theirs (incoming)"
     ux_table_row "gcp ours" "gcp ours <commit>..." "Cherry-pick with -X ours (current)"
     ux_table_row "gcp author" "gcp author <range> [author]" "Cherry-pick by author"
-    ux_table_row "gcp scan" "gcp scan [base] [src] [--author=<name|all>]" "Compare & pick missing (default: main <- upstream/main, author=dEitY719)"
+    ux_table_row "gcp scan" "gcp scan [base] [src]" "Compare & pick missing (default: main <- upstream/main)"
     ux_table_row "gcp -h" "gcp help [section]" "Show gcp sub-command help"
 }
 
