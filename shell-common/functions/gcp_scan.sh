@@ -1075,6 +1075,94 @@ _gcp_scan_show_skip_paths() {
         "(file present but no paths registered)"
 }
 
+_gcp_scan_deferred_file() {
+    # Resolve the deferred cache file path (issue #1795). Honors the
+    # GCP_SCAN_DEFERRED_FILE override (absolute or cwd-relative); otherwise
+    # defaults to <repo-git-dir>/gcp-scan-deferred so it is a local-only cache
+    # not tracked in git. Prints the path (it may not exist yet).
+    if [ -n "${GCP_SCAN_DEFERRED_FILE-}" ]; then
+        printf '%s\n' "$GCP_SCAN_DEFERRED_FILE"
+        return 0
+    fi
+    local git_dir
+    git_dir=$(git rev-parse --git-dir 2>/dev/null) || git_dir=".git"
+    printf '%s/gcp-scan-deferred\n' "$git_dir"
+}
+
+_gcp_scan_load_deferred_cache() {
+    # Parse the deferred cache file (issue #1795) against the current base HEAD
+    # SHA $1. File format per line: `<cand_sha> <base_head_sha> <timestamp> [# reason]`.
+    # Emits `<cand_sha><TAB><timestamp>` for entries matching $1 (valid cache).
+    local base_head="$1" file line cand_sha head_sha ts rest
+    [ -z "$base_head" ] && return 0
+    file=$(_gcp_scan_deferred_file)
+    [ -f "$file" ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Strip inline comment and whitespace
+        line=$(_gcp_scan_clean_token "$line")
+        [ -z "$line" ] && continue
+        # Extract fields
+        cand_sha="" head_sha="" ts=""
+        read -r cand_sha head_sha ts rest <<EOF
+$line
+EOF
+        [ -z "$cand_sha" ] || [ -z "$head_sha" ] && continue
+        # Hex and prefix validation
+        case "$cand_sha" in
+            *[!0-9a-fA-F]*) continue ;;
+        esac
+        case "$cand_sha" in
+            ????*) ;;
+            *) continue ;;
+        esac
+        # Invalidation check: only match if head_sha matches base_head
+        case "$base_head" in
+            "$head_sha"*) ;;
+            *) continue ;;
+        esac
+        printf '%s\t%s\n' "$cand_sha" "${ts:-(unknown)}"
+    done <"$file"
+}
+
+_gcp_scan_record_deferred() {
+    # Record a deferred commit into the deferred cache file (issue #1795).
+    # $1=cand_sha $2=base_head_sha $3=conflict_files
+    local cand_sha="$1" base_head_sha="$2" conflict_files="$3"
+    local file now dir
+    [ -z "$cand_sha" ] || [ -z "$base_head_sha" ] && return 0
+    file=$(_gcp_scan_deferred_file)
+    dir=$(dirname "$file")
+    [ -d "$dir" ] || mkdir -p "$dir" 2>/dev/null || return 0
+    now=$(date -u +'%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date +'%Y-%m-%d')
+    printf '%s %s %s  # unpredicted conflict: %s\n' \
+        "$cand_sha" "$base_head_sha" "$now" "${conflict_files:-unknown}" >>"$file" 2>/dev/null || true
+}
+
+_gcp_scan_show_deferred() {
+    # Render the current deferred cache for `gcp scan --show-deferred` (issue #1795).
+    local file entries="" line cand_sha head_sha ts rest
+    file=$(_gcp_scan_deferred_file)
+    if [ -f "$file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line=$(_gcp_scan_clean_token "$line")
+            [ -z "$line" ] && continue
+            read -r cand_sha head_sha ts rest <<EOF
+$line
+EOF
+            [ -z "$cand_sha" ] && continue
+            if [ -n "$entries" ]; then
+                entries="${entries}
+${cand_sha} (base HEAD: ${head_sha}, at: ${ts})"
+            else
+                entries="${cand_sha} (base HEAD: ${head_sha}, at: ${ts})"
+            fi
+        done <"$file"
+    fi
+    _gcp_scan_show_skip_generic "Deferred commit cache" "$file" "$entries" \
+        "(no deferred cache file — nothing recorded)" \
+        "(file present but no deferred commits recorded)"
+}
+
 _gcp_scan() {
     # zsh compatibility: emulate POSIX sh to ensure consistent behavior
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -1091,6 +1179,7 @@ _gcp_scan() {
     local arg1="" arg2=""
     local show_skip_list=0
     local show_skip_paths=0
+    local show_deferred=0
     local stop_on_conflict=0
 
     # Check for incomplete cherry-pick
@@ -1117,6 +1206,9 @@ _gcp_scan() {
             ;;
         --show-skip-paths)
             show_skip_paths=1
+            ;;
+        --show-deferred)
+            show_deferred=1
             ;;
         --stop-on-conflict)
             stop_on_conflict=1
@@ -1164,6 +1256,16 @@ _gcp_scan() {
     # return without scanning. Mirrors --show-skip-list above.
     if [ "$show_skip_paths" -eq 1 ]; then
         _gcp_scan_show_skip_paths
+        if [ $_xtrace_set -eq 1 ]; then
+            set -x
+        fi
+        return 0
+    fi
+
+    # --show-deferred (issue #1795): print the deferred commit cache and
+    # return without scanning. Mirrors --show-skip-list above.
+    if [ "$show_deferred" -eq 1 ]; then
+        _gcp_scan_show_deferred
         if [ $_xtrace_set -eq 1 ]; then
             set -x
         fi
@@ -1382,6 +1484,58 @@ EOF
         count=$((count - path_excluded_count))
     fi
 
+    # Stage-1.4c: deferred commit cache (issue #1795). Commits that hit an
+    # unpredicted conflict and were rolled back in a prior scan against the SAME
+    # base HEAD are recorded in the deferred cache. When current base HEAD
+    # matches the recorded base_head_sha, re-attempting real cherry-pick is a
+    # guaranteed identical conflict. Filter them out here with a warning line so
+    # they are not re-attempted, while invalidating automatically if HEAD changes.
+    local deferred_cached_list="" deferred_cached_count=0 dc_survivor_list=""
+    local current_base_head="" deferred_cache=""
+    current_base_head=$(git rev-parse --verify "$base" 2>/dev/null)
+    if [ -n "$current_base_head" ]; then
+        deferred_cache=$(_gcp_scan_load_deferred_cache "$current_base_head")
+    fi
+    if [ -n "$deferred_cache" ]; then
+        while IFS= read -r sha; do
+            [ -z "$sha" ] && continue
+            local _dc_hit=0 _dc_entry="" _dc_sha="" _dc_ts=""
+            while IFS="$tab" read -r _dc_sha _dc_ts; do
+                case "$sha" in
+                    "$_dc_sha"*)
+                        _dc_hit=1
+                        break
+                        ;;
+                esac
+            done <<EOF
+$deferred_cache
+EOF
+            if [ "$_dc_hit" -eq 1 ]; then
+                deferred_cached_list="${deferred_cached_list}${sha}
+"
+                deferred_cached_count=$((deferred_cached_count + 1))
+                local _dc_short
+                _dc_short=$(git rev-parse --short "$sha" 2>/dev/null)
+                if type ux_warning >/dev/null 2>&1; then
+                    ux_warning "Skipping ${_dc_short} — still deferred from previous attempt (last attempt: ${_dc_ts}); resolve manually or re-run after HEAD changes."
+                else
+                    echo "⚠ Skipping ${_dc_short} — still deferred from previous attempt (last attempt: ${_dc_ts}); resolve manually or re-run after HEAD changes." >&2
+                fi
+            else
+                if [ -z "$dc_survivor_list" ]; then
+                    dc_survivor_list="$sha"
+                else
+                    dc_survivor_list="${dc_survivor_list}
+${sha}"
+                fi
+            fi
+        done <<EOF
+$final_selected_list
+EOF
+        final_selected_list="$dc_survivor_list"
+        count=$((count - deferred_cached_count))
+    fi
+
     # Stage-1.5: file-dependency pre-check (issue #1033). A candidate that
     # modifies/deletes a file absent from base — because the upstream commit
     # that creates it was filtered out (e.g. a non-author commit) and is not
@@ -1511,6 +1665,9 @@ EOF
             if [ "$path_excluded_count" -gt 0 ]; then
                 printf "%s  ◆ Path-excluded (skipped): %d%s\n" "${UX_MUTED-}" "$path_excluded_count" "${UX_RESET-}"
             fi
+            if [ "$deferred_cached_count" -gt 0 ]; then
+                printf "%s  ◆ Deferred-cached (skipped): %d%s\n" "${UX_MUTED-}" "$deferred_cached_count" "${UX_RESET-}"
+            fi
             if [ "$dep_missing_count" -gt 0 ]; then
                 printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
             fi
@@ -1529,6 +1686,9 @@ EOF
             fi
             if [ "$path_excluded_count" -gt 0 ]; then
                 echo "  Path-excluded (skipped): $path_excluded_count"
+            fi
+            if [ "$deferred_cached_count" -gt 0 ]; then
+                echo "  Deferred-cached (skipped): $deferred_cached_count"
             fi
             if [ "$dep_missing_count" -gt 0 ]; then
                 echo "  Dep-missing (skipped): $dep_missing_count"
@@ -1568,6 +1728,9 @@ EOF
         if [ "$path_excluded_count" -gt 0 ]; then
             printf "%s  ◆ Path-excluded (skipped): %d%s\n" "${UX_MUTED-}" "$path_excluded_count" "${UX_RESET-}"
         fi
+        if [ "$deferred_cached_count" -gt 0 ]; then
+            printf "%s  ◆ Deferred-cached (skipped): %d%s\n" "${UX_MUTED-}" "$deferred_cached_count" "${UX_RESET-}"
+        fi
         if [ "$dep_missing_count" -gt 0 ]; then
             printf "%s  ◆ Dep-missing (skipped): %d%s\n" "${UX_MUTED-}" "$dep_missing_count" "${UX_RESET-}"
         fi
@@ -1589,6 +1752,9 @@ EOF
         fi
         if [ "$path_excluded_count" -gt 0 ]; then
             echo "  Path-excluded (skipped): $path_excluded_count"
+        fi
+        if [ "$deferred_cached_count" -gt 0 ]; then
+            echo "  Deferred-cached (skipped): $deferred_cached_count"
         fi
         if [ "$dep_missing_count" -gt 0 ]; then
             echo "  Dep-missing (skipped): $dep_missing_count"
@@ -1683,6 +1849,7 @@ EOF
     local conflict_skipped=0
     local kr_skipped=0
     local pe_skipped=0
+    local dc_skipped=0
     local deferred_list="" deferred_count=0
     # Cache the .git dir BEFORE any cherry-pick runs, while config is still
     # readable (issue #1213). A real conflict in a tracked-and-[include]-d
@@ -1724,6 +1891,20 @@ $sha
         esac
         if [ "$_in_kr" -eq 1 ]; then
             kr_skipped=$((kr_skipped + 1))
+            continue
+        fi
+
+        # Stage-1.4c deferred commit cache (issue #1795): skip commits that were
+        # already identified as deferred in the Analysis phase.
+        local _in_dc=0
+        case "
+$deferred_cached_list" in
+            *"
+$sha
+"*) _in_dc=1 ;;
+        esac
+        if [ "$_in_dc" -eq 1 ]; then
+            dc_skipped=$((dc_skipped + 1))
             continue
         fi
 
@@ -1850,6 +2031,10 @@ $sha
             # on a tree with ANY pre-existing untracked file, so anything
             # untracked now present was created by this failed attempt.
             git clean -fd >/dev/null 2>&1
+            # Record into deferred cache (issue #1795)
+            local _head_at_defer
+            _head_at_defer=$(git rev-parse HEAD 2>/dev/null)
+            _gcp_scan_record_deferred "$sha" "$_head_at_defer" "$_conflict_files"
             deferred_list="${deferred_list}${sha}
 "
             deferred_count=$((deferred_count + 1))
@@ -1877,6 +2062,9 @@ EOF
         if [ "$pe_skipped" -gt 0 ]; then
             ux_info "($pe_skipped commit(s) skipped — path-excluded)"
         fi
+        if [ "$dc_skipped" -gt 0 ]; then
+            ux_info "($dc_skipped commit(s) skipped — still deferred from previous attempt)"
+        fi
         if [ "$dep_skipped" -gt 0 ]; then
             ux_info "($dep_skipped commit(s) skipped — file dependency missing in $base)"
         fi
@@ -1896,6 +2084,9 @@ EOF
         fi
         if [ "$pe_skipped" -gt 0 ]; then
             echo "  ($pe_skipped commit(s) skipped — path-excluded)"
+        fi
+        if [ "$dc_skipped" -gt 0 ]; then
+            echo "  ($dc_skipped commit(s) skipped — still deferred from previous attempt)"
         fi
         if [ "$dep_skipped" -gt 0 ]; then
             echo "  ($dep_skipped commit(s) skipped — file dependency missing in $base)"

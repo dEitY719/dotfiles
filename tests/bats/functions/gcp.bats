@@ -2893,3 +2893,92 @@ FIXTURE
     assert_success
     assert_output --partial "Already in HEAD (no-op):"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1795 — deferred (unpredicted conflict) commit cache
+# ---------------------------------------------------------------------------
+
+_gcp1795_make_repo() {
+    # Builds a repo where 'source' has a commit that merges cleanly on initial main,
+    # but conflicts unpredicted when cherry-picked, or we set up a commit that
+    # hits a deferred conflict directly without precedent C changing HEAD.
+    cat <<'FIXTURE'
+        repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp1795.XXXXXX")"
+        trap "rm -rf $repo" EXIT
+        cd "$repo" || exit 1
+        export GIT_EDITOR=true GIT_AUTHOR_NAME="Test" GIT_AUTHOR_EMAIL="t@t" \
+               GIT_COMMITTER_NAME="Test" GIT_COMMITTER_EMAIL="t@t"
+        git init -q -b main
+        printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > conf.txt
+        echo init > a.txt
+        git add conf.txt a.txt && git commit -qm "init"
+        git checkout -q -b source
+        printf 'A1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > conf.txt
+        git add conf.txt && git commit -qm "conf: top edit"
+        printf 'A1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nB10\n' > conf.txt
+        git add conf.txt && git commit -qm "conf: bottom edit"
+        git checkout -q main
+        printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nM10\n' > conf.txt
+        git add conf.txt && git commit -qm "main: bottom edit"
+FIXTURE
+}
+
+@test "scan #1795: deferred commit is recorded in deferred cache on unpredicted conflict" {
+    run_in_bash "
+        $(_gcp1795_make_repo)
+        cachef=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_def.XXXXXX\")
+        export GCP_SCAN_DEFERRED_FILE=\"\$cachef\"
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
+        head_sha=\$(git rev-parse HEAD)
+        cat \"\$cachef\"
+    "
+    assert_success
+    assert_output --partial "unpredicted conflict: conf.txt"
+}
+
+@test "scan #1795: 2nd scan with same HEAD skips deferred commit without retrying cherry-pick" {
+    run_in_bash "
+        $(_gcp1795_make_repo)
+        cachef=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_def.XXXXXX\")
+        export GCP_SCAN_DEFERRED_FILE=\"\$cachef\"
+        # 1st scan: top edit applies, bottom edit hits conflict, rolls back, recorded in cache
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
+        # 2nd scan: same HEAD, bottom edit is skipped in Analysis phase via deferred cache
+        printf 'y\n' | _gcp_scan main source
+    "
+    assert_output --partial "Deferred-cached (skipped): 1"
+    assert_output --partial "still deferred from previous attempt"
+    refute_output --partial "Deferred "
+}
+
+@test "scan #1795: advancing HEAD invalidates deferred cache, candidate is re-probed" {
+    run_in_bash "
+        $(_gcp1795_make_repo)
+        cachef=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_def.XXXXXX\")
+        export GCP_SCAN_DEFERRED_FILE=\"\$cachef\"
+        # 1st scan: top edit applies, bottom edit records deferral against post-top-edit HEAD
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
+        # Reset conf.txt bottom to L10 so bottom edit can be attempted against new HEAD
+        printf 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\n' > conf.txt
+        git add conf.txt && git commit -qm 'revert bottom to l10'
+        # 2nd scan: cache is invalidated because HEAD changed, candidate is attempted again
+        printf 'y\n' | _gcp_scan main source
+    "
+    refute_output --partial "Deferred-cached (skipped)"
+    refute_output --partial "still deferred from previous attempt"
+    assert_output --partial "Cherry-picking "
+}
+
+@test "scan #1795: --show-deferred displays recorded cache entries" {
+    run_in_bash "
+        $(_gcp1795_make_repo)
+        cachef=\$(mktemp \"\${TMPDIR:-/tmp}/gcp_def.XXXXXX\")
+        export GCP_SCAN_DEFERRED_FILE=\"\$cachef\"
+        printf 'y\n' | _gcp_scan main source >/dev/null 2>&1
+        _gcp_scan main source --show-deferred
+    "
+    assert_success
+    assert_output --partial "Deferred commit cache"
+    assert_output --partial "base HEAD:"
+}
+
