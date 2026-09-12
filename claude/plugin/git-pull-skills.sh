@@ -142,19 +142,18 @@ while IFS= read -r repo_dir; do
 	fi
 
 	if $has_upstream; then
-		# Fetch origin and upstream
-		if ! git -C "$repo_dir" fetch origin "$branch" >/dev/null 2>&1; then
+		# Fetch origin and upstream (without refspec to update tracking refs)
+		if ! git -C "$repo_dir" fetch origin >/dev/null 2>&1; then
 			ux_error "$repo_name: git fetch origin failed"
 			FAILED=$((FAILED + 1))
 			continue
 		fi
-		if ! git -C "$repo_dir" fetch upstream "$branch" >/dev/null 2>&1; then
+		if ! git -C "$repo_dir" fetch upstream >/dev/null 2>&1; then
 			ux_error "$repo_name: git fetch upstream failed"
 			FAILED=$((FAILED + 1))
 			continue
 		fi
 
-		local start_sha
 		start_sha="$(git -C "$repo_dir" rev-parse HEAD 2>/dev/null)"
 
 		# Check if local has incorporated both origin and upstream, and origin is at HEAD
