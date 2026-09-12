@@ -32,6 +32,8 @@
 - **skip list** — registered SHAs skipped silently
 - **--show-skip-paths** — print path-excluded paths — git/config/gcp-scan-skip-paths.conf
 - **skip paths** — commits touching only listed paths skipped
+- **--show-deferred** — print cached deferred commits — .git/gcp-scan-deferred (issue #1795)
+- **deferred cache** — commits deferred at current HEAD skipped — invalidated on HEAD change
 - **behavior** — unpredicted conflict -> rolled back, batch continues — reported under Needs manual resolution (issue #1647)
 - **--stop-on-conflict** — abort whole remaining batch on first conflict — legacy all-or-nothing behavior
 
