@@ -23,6 +23,7 @@ else
     ux_bullet() { echo "  • $*"; }
 fi
 unset _ux_lib_path
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 main() {
     local offline_file="${1:-}"
@@ -179,7 +180,7 @@ main() {
         echo ""
 
         # Attempt installation and capture error output
-        if curl -fsSL https://ollama.com/install.sh 2>"$install_log" | sh 2>>"$install_log"; then
+        if run_remote_installer https://ollama.com/install.sh 2>"$install_log"; then
             ux_success "Ollama installation completed"
             rm -f "$install_log"
         else
@@ -267,7 +268,11 @@ main() {
     fi
 
     local version
-    version=$(ollama --version)
+    if ! version=$(ollama --version 2>&1); then
+        ux_error "Ollama binary is not runnable: $(command -v ollama)"
+        printf '%s\n' "$version" | sed 's/^/  /'
+        return 1
+    fi
     ux_success "Ollama installed: $version"
 
     # Step 5: Environment configuration

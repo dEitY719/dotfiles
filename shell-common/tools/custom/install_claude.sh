@@ -8,6 +8,7 @@ set -e
 
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # Classify an OSTYPE string into the installer branch it selects.
 # Usage: install_claude_platform_branch "$OSTYPE"  ->  unix | windows | unsupported
@@ -65,7 +66,7 @@ main() {
             # macOS, Linux, WSL - use bash installer
             ux_info "Platform: ${OSTYPE} (using bash installer)"
             if ! ux_with_spinner "Installing Claude Code" \
-                bash -c 'curl -fsSL https://claude.ai/install.sh | bash'; then
+                run_remote_installer https://claude.ai/install.sh; then
                 ux_error "Claude Code CLI installation failed."
                 ux_info "Please check your internet connection and try again."
                 exit 1
@@ -92,24 +93,27 @@ main() {
     # Step 3: Verification
     # ========================================
     echo ""
-    ux_header "✅ Claude Code CLI Setup Complete!"
     ux_section "Verification"
 
-    if command -v claude &>/dev/null; then
-        claude --version
-        ux_success "Claude CLI is ready to use."
-        echo ""
-        ux_section "Next Steps"
-        ux_bullet "Start Claude Code: ${UX_INFO}claude${UX_RESET}"
-        ux_bullet "Check installation: ${UX_INFO}claude doctor${UX_RESET}"
-        ux_bullet "View settings: ${UX_INFO}claude /config${UX_RESET}"
+    local claude_bin="$HOME/.local/bin/claude" claude_version
+    if claude_version=$(verify_installed_binary "$claude_bin" 2>&1); then
+        ux_success "Claude CLI is working: $claude_version ($claude_bin)"
     else
-        ux_warning "Claude command not found after installation."
-        ux_info "Possible solutions:"
-        ux_bullet "Restart your terminal"
-        ux_bullet "Run: ${UX_INFO}source ~/.bashrc${UX_RESET} or ${UX_INFO}source ~/.zshrc${UX_RESET}"
-        ux_bullet "Check PATH includes: ${UX_INFO}~/.local/bin${UX_RESET}"
+        ux_error "Claude Code binary is not runnable: $claude_bin"
+        printf '%s\n' "$claude_version" | sed 's/^/  /'
+        exit 1
     fi
+    case ":$PATH:" in
+        *":$(dirname "$claude_bin"):"*) ;;
+        *) ux_info "Open a new terminal (or run 'rehash' in zsh) so $(dirname "$claude_bin") is on PATH." ;;
+    esac
+
+    echo ""
+    ux_header "✅ Claude Code CLI Setup Complete!"
+    ux_section "Next Steps"
+    ux_bullet "Start Claude Code: ${UX_INFO}claude${UX_RESET}"
+    ux_bullet "Check installation: ${UX_INFO}claude doctor${UX_RESET}"
+    ux_bullet "View settings: ${UX_INFO}claude /config${UX_RESET}"
     echo ""
 }
 

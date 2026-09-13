@@ -8,6 +8,7 @@ set -e
 # Initialize common tools environment
 
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 main() {
     clear
@@ -38,13 +39,20 @@ main() {
              ux_info "Skipping NVM installation."
         else
             ux_info "Running NVM installer from ${nvm_install_url}..."
-            # The installer has its own output, so we don't use a spinner
-            curl -o- "$nvm_install_url" | bash
+            # The installer has its own output, so we don't use a spinner.
+            # PROFILE=/dev/null: shell-common/tools/integrations/nvm.sh loads nvm.
+            if ! PROFILE=/dev/null run_remote_installer "$nvm_install_url"; then
+                ux_error "NVM installer failed."
+                exit 1
+            fi
             ux_success "NVM install/update script finished."
         fi
     else
         ux_info "Running NVM installer from ${nvm_install_url}..."
-        curl -o- "$nvm_install_url" | bash
+        if ! PROFILE=/dev/null run_remote_installer "$nvm_install_url"; then
+            ux_error "NVM installer failed."
+            exit 1
+        fi
         ux_success "NVM install script finished."
     fi
     echo ""
@@ -56,11 +64,17 @@ main() {
     if [ -s "$NVM_DIR/nvm.sh" ]; then
         # shellcheck source=/dev/null
         . "$NVM_DIR/nvm.sh"
-        ux_success "NVM loaded for the current session."
     else
         ux_error "Could not find nvm.sh to load. Installation may have failed."
         exit 1
     fi
+    local nvm_check
+    if ! nvm_check=$(nvm --version 2>&1); then
+        ux_error "nvm is not runnable: $NVM_DIR/nvm.sh"
+        printf '%s\n' "$nvm_check" | sed 's/^/  /'
+        exit 1
+    fi
+    ux_success "NVM $nvm_check loaded for the current session."
     echo ""
 
     # ========================================
