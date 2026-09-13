@@ -31,6 +31,7 @@ if ! source "$_INIT_PATH" 2>/dev/null; then
     echo "Error: Failed to source init.sh" >&2
     exit 1
 fi
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # ═══════════════════════════════════════════════════════════════
 # Helper Functions
@@ -81,20 +82,11 @@ opencode_install_method() {
     esac
 }
 
-# Official installer. Downloaded to a file first: `curl | bash` would report
-# success on a failed download because bash just reads empty input.
+# Official installer (downloaded to a file first, see lib/install_helpers.sh).
 # --no-modify-path: integrations/opencode.sh already prepends ~/.opencode/bin,
 # and ~/.zshrc is a dotfiles symlink that must not be edited in place.
 install_opencode_via_curl() {
-    local installer rc=0
-    installer=$(mktemp) || return 1
-    if ! curl -fsSL "$OPENCODE_INSTALL_URL" -o "$installer"; then
-        rm -f "$installer"
-        return 1
-    fi
-    bash "$installer" --no-modify-path || rc=$?
-    rm -f "$installer"
-    return "$rc"
+    run_remote_installer "$OPENCODE_INSTALL_URL" --no-modify-path
 }
 
 # npm 12 blocks dependency install scripts by default. opencode-ai's
@@ -114,11 +106,7 @@ opencode_binary_path() {
 
 # Succeeds (printing the version) only if the binary actually runs.
 verify_opencode_binary() {
-    local bin="$1"
-    if [ -z "$bin" ] || [ ! -x "$bin" ]; then
-        return 1
-    fi
-    "$bin" --version
+    verify_installed_binary "$1"
 }
 
 # A leftover npm install would shadow ~/.opencode/bin wherever it comes

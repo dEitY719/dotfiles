@@ -7,6 +7,7 @@ set -e
 
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 main() {
     clear
@@ -83,7 +84,15 @@ main() {
 
             # Download and run oh-my-zsh installer
             # The installer will handle creating .zshrc
-            sh -c "$(curl -fsSL $omz_install_url)" "" --keep-zshrc
+            # RUNZSH=no: otherwise it ends with `exec zsh`, replacing this script.
+            if ! RUNZSH=no run_remote_installer "$omz_install_url" --keep-zshrc; then
+                ux_error "oh-my-zsh installation failed."
+                exit 1
+            fi
+            if [ ! -f "$omz_dir/oh-my-zsh.sh" ]; then
+                ux_error "oh-my-zsh is not installed: $omz_dir/oh-my-zsh.sh"
+                exit 1
+            fi
             ux_success "oh-my-zsh installed successfully."
         else
             ux_info "Skipping oh-my-zsh installation."

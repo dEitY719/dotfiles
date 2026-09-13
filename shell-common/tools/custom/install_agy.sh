@@ -7,6 +7,7 @@ set -e
 
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 INSTALL_URL="https://antigravity.google/cli/install.sh"
 
@@ -86,7 +87,7 @@ main() {
     if ux_confirm "Run '${INSTALL_URL}' installer now?" "y"; then
         local rc_snapshot install_rc=0
         rc_snapshot="$(_agy_rc_snapshot)"
-        ux_with_spinner "Installing agy" bash -c "set -o pipefail; curl -fsSL '${INSTALL_URL}' | bash" || install_rc=$?
+        ux_with_spinner "Installing agy" run_remote_installer "$INSTALL_URL" || install_rc=$?
         _agy_restore_rc_files "$rc_snapshot"
         if [ "$install_rc" -ne 0 ]; then
             ux_error "Antigravity CLI installation failed."
@@ -103,13 +104,18 @@ main() {
     # Step 3: Verify installation
     # ========================================
     ux_step "3/3" "Verifying installation..."
-    if command -v agy >/dev/null 2>&1; then
-        ux_success "Antigravity CLI command found: $(command -v agy)"
-        agy --version || ux_warning "Could not determine agy version."
+    local agy_bin="$HOME/.local/bin/agy" agy_version
+    if agy_version=$(verify_installed_binary "$agy_bin" 2>&1); then
+        ux_success "Antigravity CLI is working: $agy_version ($agy_bin)"
     else
-        ux_error "agy command not found after installation."
-        ux_warning "Check your PATH and restart your terminal."
+        ux_error "Antigravity CLI binary is not runnable: $agy_bin"
+        printf '%s\n' "$agy_version" | sed 's/^/  /'
+        exit 1
     fi
+    case ":$PATH:" in
+        *":$(dirname "$agy_bin"):"*) ;;
+        *) ux_info "Open a new terminal (or run 'rehash' in zsh) so $(dirname "$agy_bin") is on PATH." ;;
+    esac
 
     # ========================================
     # Completion

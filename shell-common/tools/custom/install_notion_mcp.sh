@@ -6,6 +6,7 @@ set -e
 
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Pre-Flight Checks
@@ -91,11 +92,14 @@ _install_notion_mcp_server() {
         npm install -g @notionhq/notion-mcp-server
     fi
 
-    if npm list -g @notionhq/notion-mcp-server &>/dev/null; then
-        ux_success "Notion MCP server installed successfully"
+    # stdio MCP server: running it would block, so check the bin exists and is executable.
+    local notion_bin
+    notion_bin="$(npm prefix -g)/bin/notion-mcp-server"
+    if [ -x "$notion_bin" ]; then
+        ux_success "Notion MCP server installed successfully ($notion_bin)"
         return 0
     else
-        ux_error "Failed to verify Notion MCP server installation"
+        ux_error "Notion MCP server binary is not runnable: $notion_bin"
         return 1
     fi
 }

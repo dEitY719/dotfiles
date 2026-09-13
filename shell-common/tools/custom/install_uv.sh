@@ -8,6 +8,7 @@ set -e
 # Initialize common tools environment
 
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # Main script
 main() {
@@ -38,28 +39,27 @@ main() {
     
     local install_url="https://astral.sh/uv/install.sh"
     ux_info "Running installer from ${install_url}..."
-    # The installer has its own output, so we don't use a spinner
-    curl -LsSf "$install_url" | sh
-    
-    # The installer script gives its own success message and instructions.
-    # We just need to verify and add a final summary.
-    
-    echo ""
-    ux_section "Verification"
-    # The installer modifies the environment, so we need to source the cargo env script to find `uv`
-    # This might be in different places depending on how Rust was installed. Common paths:
-    if [ -f "$HOME/.cargo/env" ]; then
-        # shellcheck source=/dev/null
-        source "$HOME/.cargo/env"
+    # The installer has its own output, so we don't use a spinner.
+    # UV_NO_MODIFY_PATH: ~/.local/bin is on PATH via shell-common/env/path.sh.
+    if ! UV_NO_MODIFY_PATH=1 run_remote_installer "$install_url"; then
+        ux_error "uv installation failed."
+        exit 1
     fi
 
-    if command -v uv &>/dev/null; then
-        ux_success "uv command is now available in your PATH."
-        uv --version
+    echo ""
+    ux_section "Verification"
+    local uv_bin="$HOME/.local/bin/uv" uv_version
+    if uv_version=$(verify_installed_binary "$uv_bin" 2>&1); then
+        ux_success "uv is working: $uv_version ($uv_bin)"
     else
-        ux_error "uv command not found after installation."
-        ux_warning "Please check the output above. You may need to restart your shell or run 'source ~/.bashrc'."
+        ux_error "uv binary is not runnable: $uv_bin"
+        printf '%s\n' "$uv_version" | sed 's/^/  /'
+        exit 1
     fi
+    case ":$PATH:" in
+        *":$(dirname "$uv_bin"):"*) ;;
+        *) ux_info "Open a new terminal (or run 'rehash' in zsh) so $(dirname "$uv_bin") is on PATH." ;;
+    esac
 
     echo ""
     ux_header "✅ UV Installation Complete"
