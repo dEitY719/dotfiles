@@ -243,7 +243,7 @@ _herdr_install_tools() {
 	# HTTP 403 "rate limit exceeded", X-RateLimit-Remaining: 0). Nothing in
 	# setup.sh runs `gh auth login`, so on a fresh machine this is the normal
 	# first-run state — say what to do and move on.
-	if ! gh auth status >/dev/null 2>&1; then
+	if ! gh auth status --hostname github.com >/dev/null 2>&1; then
 		ux_warning "gh is not authenticated — external tool bootstrap skipped"
 		ux_bullet "Run: gh auth login"
 		ux_bullet "Then re-run: ./herdr/setup.sh"

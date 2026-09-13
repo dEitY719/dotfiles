@@ -116,6 +116,16 @@ install_zsh_autosuggestions() {
     bash "$script" "$@"
 }
 
+# herdr (terminal workspace manager) 설치 함수
+install_herdr() {
+    local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_herdr.sh"
+    if [ ! -f "$script" ]; then
+        ux_error "install-herdr script not found: $script"
+        return 2
+    fi
+    bash "$script" "$@"
+}
+
 # Dash-form aliases (command-design-pattern.md R1: user-facing = dash-form).
 # `srcpack` has no underscore, so it is already the dash-form entry point.
 alias get-hw-info='get_hw_info'
@@ -127,4 +137,5 @@ alias install-ripgrep='install_ripgrep'
 alias install-fd='install_fd'
 alias install-bat='install_bat'
 alias install-pet='install_pet'
+alias install-herdr='install_herdr'
 alias install-zsh-autosuggestions='install_zsh_autosuggestions'

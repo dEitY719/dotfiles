@@ -119,6 +119,7 @@
 
 ### install
 
+- 자동(모드 감지, 권장): install-herdr  (재설치/업그레이드: install-herdr --force)
 - 사외(표준, 전 OS): curl -fsSL https://herdr.dev/install.sh | sh  (또는 brew install herdr / mise use -g herdr)
 - 사내(프록시 차단 우회, Linux x86_64 전용): curl -fsSL -o ~/.local/bin/herdr https://github.com/ogulcancelik/herdr/releases/latest/download/herdr-linux-x86_64 && chmod +x ~/.local/bin/herdr
 - macOS/Apple Silicon 사내망: 위 바이너리는 Linux 전용 — 사외(표준) brew/mise 경로 사용 또는 releases 페이지에서 darwin 자산명 확인
