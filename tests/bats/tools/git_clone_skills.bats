@@ -78,22 +78,49 @@ EOF
     chmod +x "${STUB_BIN}/git"
 }
 
-# `gh repo view --repo <owner>/<repo> --json parent` stub.
+# `gh repo view <owner>/<repo> --json parent` stub.
 # Returns ${GH_PARENTS}/<repo>.json when present, else {"parent":null}.
 # Set GH_STUB_FAIL=1 in the child env to simulate an API/auth failure.
+#
+# The stub deliberately mirrors the real CLI's *flag contract*, not just its
+# output: `gh repo view` takes the repository as a POSITIONAL argument and
+# rejects `--repo` (that flag belongs to `gh pr` / `gh issue` / `gh api`).
+# An earlier permissive stub scraped the value after `--repo` and accepted
+# anything, so it passed against a script whose every real gh call died with
+# `unknown flag: --repo` — the warning path swallowed it and all 16 upstream
+# probes silently no-op'd. Rejecting unknown flags here is what makes this
+# suite able to catch that class of bug at all.
 _install_gh_stub() {
     cat >"${STUB_BIN}/gh" <<EOF
 #!/bin/bash
-printf 'gh %s\n' "\$*" >>"${GH_CALL_LOG}"
+printf 'gh %s [GH_HOST=%s]\n' "\$*" "\${GH_HOST:-}" >>"${GH_CALL_LOG}"
 if [ -n "\${GH_STUB_FAIL:-}" ]; then
     echo "gh: stubbed failure" >&2
     exit 1
 fi
+if [ "\${1:-}" != "repo" ] || [ "\${2:-}" != "view" ]; then
+    echo "gh: unsupported stub sub-command: \${1:-} \${2:-}" >&2
+    exit 1
+fi
+shift 2
 slug=""
-prev=""
-for a in "\$@"; do
-    [ "\$prev" = "--repo" ] && slug="\$a"
-    prev="\$a"
+while [ \$# -gt 0 ]; do
+    case "\$1" in
+    --json | -q | --jq | -t | --template | -b | --branch)
+        shift 2
+        ;;
+    -w | --web)
+        shift
+        ;;
+    -*)
+        printf 'unknown flag: %s\n' "\$1" >&2
+        exit 1
+        ;;
+    *)
+        slug="\$1"
+        shift
+        ;;
+    esac
 done
 repo="\${slug##*/}"
 if [ -f "${GH_PARENTS}/\${repo}.json" ]; then
@@ -353,7 +380,7 @@ JSON
     assert_failure
 }
 
-@test "git-clone-skills.sh pins GH_HOST and --repo on every gh call" {
+@test "git-clone-skills.sh pins GH_HOST and the repo slug on every gh call" {
     _write_manifest
     _setup_stub_path
     _install_gh_stub
@@ -365,13 +392,16 @@ JSON
         --manifest "$MANIFEST" --target "$target"
     assert_success
 
-    # The stub only ever sees the argv, so --repo is asserted from the log and
-    # GH_HOST from the environment the stub was invoked with.
-    grep -q -- "--repo dEitY719/alpha-skills" "$GH_CALL_LOG"
+    # Both halves of the #1403/#1407 contract, read off the stub's own log:
+    # the repository is pinned by the positional slug (gh repo view has no
+    # --repo flag) and the server by the GH_HOST the stub was invoked with.
+    grep -q -- "gh repo view dEitY719/alpha-skills" "$GH_CALL_LOG"
     grep -q -- "--json parent" "$GH_CALL_LOG"
+    grep -q -- "GH_HOST=github.com" "$GH_CALL_LOG"
 
-    # Source-level contract check (#1403/#1407): prefix and --repo together.
-    grep -q 'GH_HOST="\$GH_TARGET_HOST" gh repo view --repo' "$SCRIPT_UNDER_TEST"
+    # A bare `gh repo view --json ...` would read whatever repo the cwd points
+    # at, so the slug must never regress to being absent.
+    refute grep -q -E "gh repo view (--|-)" "$GH_CALL_LOG"
 }
 
 @test "git-clone-skills.sh succeeds with only a warning when gh is absent" {
