@@ -8,6 +8,7 @@ set -e
 # Initialize common tools environment
 
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # Main script
 main() {
@@ -76,13 +77,19 @@ main() {
     # ========================================
     ux_step "4/4" "Verifying installation..."
 
-    if command -v codex &> /dev/null; then
-        ux_success "Codex CLI command found."
-        codex --version || ux_warning "Could not determine codex version."
+    local codex_bin codex_version
+    codex_bin="$(npm prefix -g)/bin/codex"
+    if codex_version=$(verify_installed_binary "$codex_bin" 2>&1); then
+        ux_success "Codex CLI is working: $codex_version ($codex_bin)"
     else
-        ux_error "Codex CLI command not found after installation."
-        ux_warning "Check your PATH and restart your terminal."
+        ux_error "Codex CLI binary is not runnable: $codex_bin"
+        printf '%s\n' "$codex_version" | sed 's/^/  /'
+        exit 1
     fi
+    case ":$PATH:" in
+        *":$(dirname "$codex_bin"):"*) ;;
+        *) ux_info "Open a new terminal (or run 'rehash' in zsh) so $(dirname "$codex_bin") is on PATH." ;;
+    esac
 
     # ========================================
     # Completion
