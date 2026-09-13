@@ -196,8 +196,14 @@ FAILED=0
 # into a failure.
 #
 # Every gh call carries BOTH halves of the #1403/#1407 host-pinning contract:
-# the GH_HOST= prefix (pins the server) and --repo <owner>/<repo> (pins the
-# repository). Neither substitutes for the other.
+# the GH_HOST= prefix pins the server, and an explicit <owner>/<repo> pins the
+# repository. Neither substitutes for the other — a bare `gh repo view --json
+# parent` would answer for whatever repo the *current directory* resolves to.
+#
+# `gh repo view` takes that repository POSITIONALLY and has no --repo flag
+# (--repo belongs to gh pr / gh issue / gh api). Spelling it `--repo <slug>`
+# here made every call exit 1 with `unknown flag: --repo`, which this
+# function's own warning path then swallowed.
 _register_upstream() {
 	local owner="$1" repo="$2" dir="$3"
 	local gh_json parent_slug
@@ -212,7 +218,7 @@ _register_upstream() {
 		return 0
 	fi
 
-	if ! gh_json="$(GH_HOST="$GH_TARGET_HOST" gh repo view --repo "$owner/$repo" --json parent 2>/dev/null)" ||
+	if ! gh_json="$(GH_HOST="$GH_TARGET_HOST" gh repo view "$owner/$repo" --json parent 2>/dev/null)" ||
 		[ -z "$gh_json" ]; then
 		ux_warning "$repo: gh repo view failed (upstream detection skipped)"
 		return 0
