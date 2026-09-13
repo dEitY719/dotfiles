@@ -31,6 +31,9 @@ alias create-plugin-structure-ko='create_plugin_structure_ko'
 # Process plugin directory recursively
 alias process-plugin-ko='process_plugin_directory_ko'
 
+# Clone all skill repositories listed in the plugin manifest
+alias git-clone-skills='${HOME}/dotfiles/claude/plugin/git-clone-skills.sh'
+
 # Pull latest changes for all skills repositories
 alias git-pull-skills='${HOME}/dotfiles/claude/plugin/git-pull-skills.sh'
 
