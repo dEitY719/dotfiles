@@ -7,7 +7,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 _claude_plugins_help_summary() {
     ux_info "Usage: claude-plugins-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "commands: open_claude_plugins | list-plugins | claude-plugin-list | git-pull-skills | init-plugins-docs | sync-plugins-structure"
+    ux_bullet_sub "commands: open_claude_plugins | list-plugins | claude-plugin-list | git-clone-skills | git-pull-skills | init-plugins-docs | sync-plugins-structure"
     ux_bullet_sub "view: view-plugin-info | generate-plugin-doc-ko | create-plugin-structure-ko"
     ux_bullet_sub "examples: quick examples for create-plugin-ko"
     ux_bullet_sub "ai-tools: claude | agy | codex"
@@ -32,6 +32,7 @@ _claude_plugins_help_rows_commands() {
     ux_bullet "open_claude_plugins  - Open marketplace plugins directory in VSCode"
     ux_bullet "list-plugins         - List all available marketplaces and their skills"
     ux_bullet "claude-plugin-list   - List installed plugins grouped by marketplace (SSOT: installed_plugins.json)"
+    ux_bullet "git-clone-skills     - Clone all skill repositories from the plugin manifest into the workspace"
     ux_bullet "git-pull-skills      - Pull latest changes (+ upstream sync if configured) for all skill repositories"
     ux_bullet "init-plugins-docs    - Initialize Korean documentation directory structure"
     ux_bullet "sync-plugins-structure - Create directory structure mirroring plugins organization"
