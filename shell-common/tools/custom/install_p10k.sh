@@ -44,26 +44,6 @@ _install_powerlevel10k() {
     ux_success "powerlevel10k installed successfully."
 }
 
-# Update zshrc theme
-_update_zshrc() {
-    local zshrc="${HOME}/.zshrc"
-
-    if [ ! -f "$zshrc" ]; then
-        ux_error "zshrc not found at $zshrc"
-        return 1
-    fi
-
-    ux_info "Updating ZSH_THEME in zshrc..."
-
-    # Use sed to replace ZSH_THEME
-    if sed -i 's/^ZSH_THEME=.*/ZSH_THEME="powerlevel10k\/powerlevel10k"/' "$zshrc"; then
-        ux_success "ZSH_THEME updated successfully."
-    else
-        ux_error "Failed to update ZSH_THEME."
-        return 1
-    fi
-}
-
 # List available Nerd Fonts
 _list_nerd_fonts() {
     ux_section "Available Nerd Fonts"
@@ -185,7 +165,8 @@ install-p10k() {
         _install_powerlevel10k
     fi
 
-    _update_zshrc
+    # ZSH_THEME is set in zsh/zshrc; ~/.zshrc is a symlink to it, and
+    # `sed -i` on the link would replace it with a plain file (#1802).
 
     # Offer to install Nerd Font
     ux_info ""

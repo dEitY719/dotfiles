@@ -65,41 +65,6 @@ _install_fasd() {
     ux_success "fasd installed successfully."
 }
 
-# Configure fasd shell integration
-_configure_fasd() {
-    ux_info "Configuring fasd shell integration..."
-
-    # For bash
-    if [ -f "${HOME}/.bashrc" ]; then
-        if ! grep -q "eval.*fasd" "${HOME}/.bashrc"; then
-            ux_info "Adding fasd initialization to ~/.bashrc..."
-            cat >> "${HOME}/.bashrc" << 'EOF'
-
-# fasd initialization for fast access to directories and files
-if command -v fasd &>/dev/null; then
-    eval "$(fasd --init auto)"
-fi
-EOF
-            ux_success "fasd configuration added to ~/.bashrc"
-        fi
-    fi
-
-    # For zsh
-    if [ -f "${HOME}/.zshrc" ]; then
-        if ! grep -q "eval.*fasd" "${HOME}/.zshrc"; then
-            ux_info "Adding fasd initialization to ~/.zshrc..."
-            cat >> "${HOME}/.zshrc" << 'EOF'
-
-# fasd initialization for fast access to directories and files
-if command -v fasd &>/dev/null; then
-    eval "$(fasd --init auto)"
-fi
-EOF
-            ux_success "fasd configuration added to ~/.zshrc"
-        fi
-    fi
-}
-
 # Display fasd usage examples
 _show_usage() {
     ux_section "fasd Quick Reference"
@@ -134,7 +99,8 @@ install-fasd() {
     fi
 
     _install_fasd
-    _configure_fasd
+    # Loaded by bash/main.bash and zsh/zshrc; never append to the symlinked rc files (#1802)
+    ux_info "fasd init and aliases are loaded by bash/main.bash and zsh/zshrc."
 
     ux_success "fasd installation complete!"
     echo ""

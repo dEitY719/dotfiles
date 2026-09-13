@@ -56,7 +56,7 @@ _install_fzf() {
             ux_info "Installing fzf via Homebrew..."
             brew install fzf
             # Install shell integration
-            "$(brew --prefix)/opt/fzf/install" --all
+            "$(brew --prefix)/opt/fzf/install" --key-bindings --completion --no-update-rc
         else
             ux_error "Homebrew is required for macOS installation"
             ux_info "Install Homebrew from: https://brew.sh"
@@ -65,57 +65,6 @@ _install_fzf() {
     fi
 
     ux_success "fzf installed successfully."
-}
-
-# Configure fzf shell integration
-_configure_fzf() {
-    ux_info "Configuring fzf shell integration..."
-
-    # For bash
-    if [ -f "${HOME}/.bashrc" ]; then
-        if ! grep -q "source.*fzf" "${HOME}/.bashrc"; then
-            ux_info "Adding fzf key bindings to ~/.bashrc..."
-            cat >> "${HOME}/.bashrc" << 'EOF'
-
-# fzf key bindings and completion
-if command -v fzf &>/dev/null; then
-    # Source fzf key bindings
-    if [ -f /usr/share/doc/fzf/examples/key-bindings.bash ]; then
-        source /usr/share/doc/fzf/examples/key-bindings.bash
-    fi
-
-    # Source fzf completion
-    if [ -f /usr/share/bash-completion/completions/fzf ]; then
-        source /usr/share/bash-completion/completions/fzf
-    fi
-fi
-EOF
-            ux_success "fzf configuration added to ~/.bashrc"
-        fi
-    fi
-
-    # For zsh
-    if [ -f "${HOME}/.zshrc" ]; then
-        if ! grep -q "source.*fzf" "${HOME}/.zshrc"; then
-            ux_info "Adding fzf key bindings to ~/.zshrc..."
-            cat >> "${HOME}/.zshrc" << 'EOF'
-
-# fzf key bindings and completion
-if command -v fzf &>/dev/null; then
-    # Source fzf key bindings
-    if [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ]; then
-        source /usr/share/doc/fzf/examples/key-bindings.zsh
-    fi
-
-    # Source fzf completion
-    if [ -f /usr/share/doc/fzf/examples/completion.zsh ]; then
-        source /usr/share/doc/fzf/examples/completion.zsh
-    fi
-fi
-EOF
-            ux_success "fzf configuration added to ~/.zshrc"
-        fi
-    fi
 }
 
 # Display useful fzf key bindings
@@ -138,7 +87,8 @@ install-fzf() {
     fi
 
     _install_fzf
-    _configure_fzf
+    # Loaded by bash/main.bash and zsh/zshrc; never append to the symlinked rc files (#1802)
+    ux_info "fzf key bindings are loaded by bash/main.bash and zsh/zshrc."
 
     ux_success "fzf installation complete!"
     echo ""
