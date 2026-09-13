@@ -15,20 +15,13 @@ INSTALL_URL="https://antigravity.google/cli/install.sh"
 # ~/.zshrc are symlinks into dotfiles, so those edits land on tracked files
 # (#1802). Snapshot their git state before the install and revert after.
 
-# Resolve ~/.bashrc / ~/.zshrc to their dotfiles targets (symlinks only).
-_agy_tracked_rc_files() {
-    local rc
-    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-        if [ -L "$rc" ]; then
-            readlink -f "$rc"
-        fi
-    done
-}
-
-# Print "<clean|dirty> <file>" for each tracked rc file inside a git work tree.
+# Print "<clean|dirty> <file>" for each symlinked ~/.bashrc / ~/.zshrc whose
+# target is inside a git work tree.
 _agy_rc_snapshot() {
-    local f dir
-    _agy_tracked_rc_files | while IFS= read -r f; do
+    local rc f dir
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        [ -L "$rc" ] || continue
+        f="$(readlink -f "$rc")"
         dir="$(dirname "$f")"
         git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || continue
         if git -C "$dir" diff --quiet -- "$f"; then
