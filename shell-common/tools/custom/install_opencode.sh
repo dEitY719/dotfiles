@@ -1,7 +1,8 @@
 #!/bin/bash
 # shell-common/tools/custom/install_opencode.sh
 # OpenCode CLI Installation Script (Interactive)
-# Installs OpenCode using the official npm installation method
+# Installs OpenCode via the official installer (~/.opencode/bin) on
+# home/external PCs, or via npm on internal PCs where opencode.ai is blocked.
 # Reference: https://opencode.ai/
 #
 # Shell Compatibility:
@@ -65,6 +66,69 @@ show_environment_info() {
             ;;
     esac
     echo ""
+}
+
+OPENCODE_INSTALL_URL="${OPENCODE_INSTALL_URL:-https://opencode.ai/install}"
+
+# Pick the install method for an environment.
+# internal: opencode.ai is blocked (403) behind the corporate proxy, so use
+# the npm registry (~/.npmrc proxy settings apply). Everything else uses the
+# official installer, which ships the native binary to ~/.opencode/bin.
+opencode_install_method() {
+    case "$1" in
+        internal) echo "npm" ;;
+        *) echo "curl" ;;
+    esac
+}
+
+# Official installer. Downloaded to a file first: `curl | bash` would report
+# success on a failed download because bash just reads empty input.
+# --no-modify-path: integrations/opencode.sh already prepends ~/.opencode/bin,
+# and ~/.zshrc is a dotfiles symlink that must not be edited in place.
+install_opencode_via_curl() {
+    local installer rc=0
+    installer=$(mktemp) || return 1
+    if ! curl -fsSL "$OPENCODE_INSTALL_URL" -o "$installer"; then
+        rm -f "$installer"
+        return 1
+    fi
+    bash "$installer" --no-modify-path || rc=$?
+    rm -f "$installer"
+    return "$rc"
+}
+
+# npm 12 blocks dependency install scripts by default. opencode-ai's
+# postinstall is what replaces bin/opencode.exe (a placeholder that exits 1)
+# with the platform binary, so it must be allowed explicitly.
+install_opencode_via_npm() {
+    npm install -g --allow-scripts=opencode-ai opencode-ai
+}
+
+# Where the given install method puts the opencode binary.
+opencode_binary_path() {
+    case "$1" in
+        npm) printf '%s/bin/opencode\n' "$(npm prefix -g 2>/dev/null)" ;;
+        *) printf '%s\n' "$HOME/.opencode/bin/opencode" ;;
+    esac
+}
+
+# Succeeds (printing the version) only if the binary actually runs.
+verify_opencode_binary() {
+    local bin="$1"
+    if [ -z "$bin" ] || [ ! -x "$bin" ]; then
+        return 1
+    fi
+    "$bin" --version
+}
+
+# A leftover npm install would shadow ~/.opencode/bin wherever it comes
+# first in PATH, and after npm 12 it is likely the broken placeholder.
+remove_stale_npm_opencode() {
+    command -v npm >/dev/null 2>&1 || return 0
+    npm ls -g --depth=0 opencode-ai >/dev/null 2>&1 || return 0
+    ux_info "Removing legacy npm opencode-ai package (superseded by ~/.opencode/bin)..."
+    npm uninstall -g opencode-ai >/dev/null 2>&1 ||
+        ux_warning "Could not remove npm opencode-ai; keep ~/.opencode/bin first in PATH"
 }
 
 # Create OpenCode config directory
@@ -175,7 +239,7 @@ generate_internal_config() {
 main() {
     clear
     ux_header "OpenCode CLI Installer"
-    ux_info "This script installs the OpenCode global npm package"
+    ux_info "This script installs the OpenCode CLI (official installer, or npm on internal PCs)"
     ux_info "and configures it for your environment."
     echo ""
 
@@ -228,33 +292,34 @@ main() {
     echo ""
 
     # ========================================
-    # Step 2: Check for curl
+    # Step 2: Check install prerequisites
     # ========================================
-    ux_step "2/5" "Checking for curl..."
-    if ! ux_require "curl"; then
-        ux_error "curl is required for OpenCode installation"
+    local install_method
+    install_method=$(opencode_install_method "$environment")
+    ux_step "2/5" "Checking for $install_method..."
+    if ! ux_require "$install_method"; then
+        ux_error "$install_method is required for OpenCode installation"
         exit 1
     fi
-    ux_success "curl is installed: $(curl --version | head -1)"
+    ux_success "$install_method is available"
     echo ""
 
     # ========================================
-    # Step 3: Install OpenCode CLI via npm
+    # Step 3: Install OpenCode CLI
     # ========================================
-    ux_step "3/6" "Installing OpenCode CLI via npm..."
-
-    ux_info "Using npm registry (corporate proxy settings auto-applied)..."
+    ux_step "3/5" "Installing OpenCode CLI via $install_method..."
+    if [ "$install_method" = "npm" ]; then
+        ux_info "Using npm registry (corporate proxy settings auto-applied)..."
+    else
+        ux_info "Using the official installer: $OPENCODE_INSTALL_URL"
+    fi
     echo ""
 
     # Create temp file for error capture
     local install_log
     install_log=$(mktemp)
 
-    # Use npm directly instead of curl | bash:
-    # - Avoids NewGenAI domain blocking (opencode.ai → 403)
-    # - Uses configured npm registry (public or internal)
-    # - Proxy/no-proxy settings from ~/.npmrc apply automatically
-    if ux_with_spinner "Installing opencode-ai package..." npm install -g opencode-ai 2>"$install_log" >>"$install_log"; then
+    if ux_with_spinner "Installing OpenCode" "install_opencode_via_$install_method" 2>"$install_log" >>"$install_log"; then
         ux_success "OpenCode installed successfully"
         rm -f "$install_log"
     else
@@ -263,12 +328,20 @@ main() {
         sed 's/^/  /' "$install_log" 2>/dev/null || echo "  (No error details available)"
         echo ""
         ux_info "Troubleshooting:"
-        ux_bullet "Check proxy settings: npm-config"
-        ux_bullet "Verify registry: npm info opencode-ai"
-        ux_bullet "Check no-proxy: npm config get noproxy"
-        ux_bullet "For manual config: npm config set noproxy \"<value>\""
+        if [ "$install_method" = "npm" ]; then
+            ux_bullet "Check proxy settings: npm-config"
+            ux_bullet "Verify registry: npm info opencode-ai"
+            ux_bullet "Check no-proxy: npm config get noproxy"
+            ux_bullet "For manual config: npm config set noproxy \"<value>\""
+        else
+            ux_bullet "Check access: curl -fsSI $OPENCODE_INSTALL_URL"
+            ux_bullet "opencode.ai blocked? Re-run and select 3) Internal to use npm"
+        fi
         rm -f "$install_log"
         exit 1
+    fi
+    if [ "$install_method" = "curl" ]; then
+        remove_stale_npm_opencode
     fi
     echo ""
 
@@ -295,13 +368,19 @@ main() {
     # Step 5: Verify Installation
     # ========================================
     ux_step "5/5" "Verifying installation..."
-    if command -v opencode &>/dev/null; then
-        ux_success "OpenCode CLI is installed."
-        opencode --version || ux_warning "Could not determine OpenCode version."
+    local opencode_bin opencode_version
+    opencode_bin=$(opencode_binary_path "$install_method")
+    if opencode_version=$(verify_opencode_binary "$opencode_bin" 2>&1); then
+        ux_success "OpenCode CLI is working: $opencode_version ($opencode_bin)"
     else
-        ux_warning "OpenCode command not found after installation."
-        ux_info "Please restart your terminal or run 'source ~/.bashrc' to update your PATH."
+        ux_error "OpenCode binary is not runnable: $opencode_bin"
+        printf '%s\n' "$opencode_version" | sed 's/^/  /'
+        exit 1
     fi
+    case ":$PATH:" in
+        *":$(dirname "$opencode_bin"):"*) ;;
+        *) ux_info "Open a new terminal (or run 'rehash' in zsh) so $(dirname "$opencode_bin") is on PATH." ;;
+    esac
     echo ""
 
     # ========================================
