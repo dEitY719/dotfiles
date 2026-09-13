@@ -59,6 +59,7 @@
 - **install_fd** — Install and configure fd (fast file search tool)
 - **install_fzf** — Install and configure fzf (fuzzy finder) for bash and zsh
 - **install_git_lfs** — Install and initialize Git LFS (Ubuntu/Debian)
+- **install_herdr** — Install herdr (terminal workspace manager) into ~/.local/bin
 - **install_notion_mcp** — Install and configure Notion MCP (Model Context Protocol)...
 - **install_npm** — Node.js & npm 설치 스크립트 (대화형)
 - **install_nvm** — NVM (Node Version Manager) Install Script
@@ -93,7 +94,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 70 custom tools available
+- Total: 71 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage
