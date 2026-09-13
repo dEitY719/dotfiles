@@ -10,6 +10,53 @@ source "$(dirname "$0")/init.sh" || exit 1
 
 INSTALL_URL="https://antigravity.google/cli/install.sh"
 
+# The upstream installer ends with a bare `agy install`, which edits shell
+# profiles, and install.sh gives no way to pass --skip-path. ~/.bashrc and
+# ~/.zshrc are symlinks into dotfiles, so those edits land on tracked files
+# (#1802). Snapshot their git state before the install and revert after.
+
+# Resolve ~/.bashrc / ~/.zshrc to their dotfiles targets (symlinks only).
+_agy_tracked_rc_files() {
+    local rc
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        if [ -L "$rc" ]; then
+            readlink -f "$rc"
+        fi
+    done
+}
+
+# Print "<clean|dirty> <file>" for each tracked rc file inside a git work tree.
+_agy_rc_snapshot() {
+    local f dir
+    _agy_tracked_rc_files | while IFS= read -r f; do
+        dir="$(dirname "$f")"
+        git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1 || continue
+        if git -C "$dir" diff --quiet -- "$f"; then
+            echo "clean $f"
+        else
+            echo "dirty $f"
+        fi
+    done
+}
+
+# Revert edits to files that were clean before the install (every change is
+# the installer's). Files already dirty are only reported: they may hold the
+# user's own edits.
+_agy_restore_rc_files() {
+    local state f dir
+    printf '%s\n' "$1" | while read -r state f; do
+        [ -n "$f" ] || continue
+        dir="$(dirname "$f")"
+        if [ "$state" = "dirty" ]; then
+            ux_warning "$f had uncommitted changes before install; not reverting."
+            ux_info "Review installer edits: git -C $dir diff -- $f"
+        elif ! git -C "$dir" diff --quiet -- "$f"; then
+            git -C "$dir" checkout -- "$f" &&
+                ux_info "Reverted agy installer edits to $f (PATH is managed by shell-common/env/path.sh)"
+        fi
+    done
+}
+
 # Main script
 main() {
     clear
@@ -22,9 +69,8 @@ main() {
     ux_numbered 3 "Verify the installation."
     echo ""
 
-    ux_warning "The official installer may modify your shell profile (PATH/aliases)."
-    ux_info "dotfiles manages ~/.local/bin via shell-common/env/path.sh (PATH SSOT)."
-    ux_info "If PATH duplication appears afterward, remove the installer-added lines."
+    ux_info "The official installer edits your shell profile (PATH/aliases)."
+    ux_info "Edits to symlinked dotfiles rc files are reverted (PATH SSOT: shell-common/env/path.sh)."
     echo ""
 
     if ! ux_confirm "Do you want to proceed?" "y"; then
@@ -45,7 +91,11 @@ main() {
     # ========================================
     ux_step "2/3" "Installing Antigravity CLI..."
     if ux_confirm "Run '${INSTALL_URL}' installer now?" "y"; then
-        if ! ux_with_spinner "Installing agy" bash -c "set -o pipefail; curl -fsSL '${INSTALL_URL}' | bash"; then
+        local rc_snapshot install_rc=0
+        rc_snapshot="$(_agy_rc_snapshot)"
+        ux_with_spinner "Installing agy" bash -c "set -o pipefail; curl -fsSL '${INSTALL_URL}' | bash" || install_rc=$?
+        _agy_restore_rc_files "$rc_snapshot"
+        if [ "$install_rc" -ne 0 ]; then
             ux_error "Antigravity CLI installation failed."
             exit 1
         fi

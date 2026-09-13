@@ -17,7 +17,7 @@ main() {
 
     ux_section "Setup Process"
     ux_numbered 1 "Check for Node.js and npm."
-    ux_numbered 2 "Configure npm global path (optional)."
+    ux_numbered 2 "Check npm global prefix (set by ~/.npmrc)."
     ux_numbered 3 "Install the '@openai/codex' npm package."
     ux_numbered 4 "Verify the installation."
     echo ""
@@ -38,25 +38,19 @@ main() {
     echo ""
 
     # ========================================
-    # Step 2: Configure npm global path
+    # Step 2: Check npm global prefix
     # ========================================
-    ux_step "2/4" "Configuring npm global path..."
+    # ~/.npmrc is a symlink to the tracked npm/npmrc.*, which already pins
+    # prefix. `npm config set` would rewrite that file through the link (#1802).
+    ux_step "2/4" "Checking npm global prefix..."
     local npm_prefix="$HOME/.npm-global"
-    if ux_confirm "Set npm global prefix to '${npm_prefix}'?" "y"; then
-        mkdir -p "$npm_prefix"
-        if ! npm config set prefix "$npm_prefix"; then
-            ux_error "Failed to set npm global prefix."
-            exit 1
-        fi
-        ux_success "npm global prefix set to: $npm_prefix"
-
-        if ! echo "$PATH" | grep -q "$npm_prefix/bin"; then
-            ux_warning "Your PATH does not seem to include the npm global bin directory."
-            ux_info "Add the following to your ~/.bashrc or ~/.profile:"
-            echo "  ${UX_PRIMARY}export PATH=\"\$HOME/.npm-global/bin:\$PATH\"${UX_RESET}"
-        fi
+    local current_prefix
+    current_prefix="$(npm config get prefix 2>/dev/null || true)"
+    if [ "$current_prefix" = "$npm_prefix" ]; then
+        ux_success "npm global prefix: $npm_prefix"
     else
-        ux_info "Step 2 skipped by user."
+        ux_warning "npm global prefix is '${current_prefix}', expected '${npm_prefix}'."
+        ux_info "$HOME/.npmrc is a dotfiles symlink (npm/npmrc.*); re-run ./setup.sh to restore it."
     fi
     echo ""
 
