@@ -14,31 +14,30 @@
 set -e
 
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 HERDR_INSTALL_URL="${HERDR_INSTALL_URL:-https://herdr.dev/install.sh}"
 HERDR_RELEASE_BASE="https://github.com/ogulcancelik/herdr/releases"
 HERDR_BIN="${HOME}/.local/bin/herdr"
 
-# internal -> release binary; everything else (public/external/unset) -> installer.
+# Read ~/.dotfiles-setup-mode the way shell-common/tools/integrations/claude.sh
+# and shell-common/util/setup_mode.sh do: trim stray whitespace/newline, and
+# fall back to public when the file does not exist yet. Legacy numeric values
+# (1|2|3, written by pre-#571 setup.sh) are passed through for the case below.
+herdr_setup_mode() {
+    tr -d ' \t\n\r' 2>/dev/null < "$HOME/.dotfiles-setup-mode" || echo public
+}
+
+# internal (legacy 2) -> release binary; everything else -> installer.
 herdr_install_method() {
     case "$1" in
-        internal) echo "release" ;;
+        2|internal) echo "release" ;;
         *) echo "installer" ;;
     esac
 }
 
-# Downloaded to a file first: `curl | sh` reports success on a failed download
-# because sh just reads empty input.
 install_herdr_via_installer() {
-    local installer rc=0
-    installer=$(mktemp) || return 1
-    if ! curl -fsSL "$HERDR_INSTALL_URL" -o "$installer"; then
-        rm -f "$installer"
-        return 1
-    fi
-    sh "$installer" || rc=$?
-    rm -f "$installer"
-    return "$rc"
+    run_remote_installer "$HERDR_INSTALL_URL"
 }
 
 herdr_release_url() {
@@ -67,17 +66,19 @@ install_herdr_via_release() {
 }
 
 main() {
-    local mode method
+    local mode method version
 
     ux_header "herdr Installation"
 
-    if [ "${1:-}" != "--force" ] && command -v herdr >/dev/null 2>&1; then
-        ux_success "herdr already installed: $(herdr --version 2>&1)"
+    # ~/.local/bin may not be on this shell's PATH yet, and an older copy
+    # earlier in PATH must not pass for this one — check the file directly.
+    if [ "${1:-}" != "--force" ] && version=$(verify_installed_binary "$HERDR_BIN" 2>&1); then
+        ux_success "herdr already installed: $version"
         ux_info "Reinstall/upgrade: install-herdr --force"
         return 0
     fi
 
-    mode=$(cat "$HOME/.dotfiles-setup-mode" 2>/dev/null || echo public)
+    mode=$(herdr_setup_mode)
     method=$(herdr_install_method "$mode")
     ux_info "setup mode: ${mode} -> install via ${method}"
 
@@ -87,9 +88,9 @@ main() {
         return 1
     fi
 
-    # ~/.local/bin may not be on this shell's PATH yet; check the file directly.
-    if ! "$HERDR_BIN" --version; then
+    if ! version=$(verify_installed_binary "$HERDR_BIN" 2>&1); then
         ux_error "herdr installed but does not run: $HERDR_BIN"
+        printf '%s\n' "$version" | sed 's/^/  /'
         return 1
     fi
 

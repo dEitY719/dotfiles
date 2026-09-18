@@ -19,15 +19,51 @@ run_herdr_tool() {
     run_sourced_tool_script "$TOOLS_DIR" "$INSTALL_HERDR_SCRIPT" "$1"
 }
 
-@test "herdr_install_method: internal routes to release, others to installer" {
+@test "herdr_install_method: internal and legacy numeric 2 both route to release" {
     run_herdr_tool '
         herdr_install_method internal
-        herdr_install_method public
-        herdr_install_method external
+        herdr_install_method 2
     '
     assert_success
     assert_output "release
+release"
+}
+
+@test "herdr_install_method: public/external, their legacy numbers and empty route to installer" {
+    run_herdr_tool '
+        herdr_install_method public
+        herdr_install_method external
+        herdr_install_method 1
+        herdr_install_method 3
+        herdr_install_method ""
+    '
+    assert_success
+    assert_output "installer
 installer
+installer
+installer
+installer"
+}
+
+@test "herdr_setup_mode: trims stray whitespace and the trailing newline" {
+    printf ' 2 \n' > "$HOME/.dotfiles-setup-mode"
+    run_herdr_tool '
+        printf "[%s]\n" "$(herdr_setup_mode)"
+        herdr_install_method "$(herdr_setup_mode)"
+    '
+    assert_success
+    assert_output "[2]
+release"
+}
+
+@test "herdr_setup_mode: falls back to public when the mode file is missing" {
+    rm -f "$HOME/.dotfiles-setup-mode"
+    run_herdr_tool '
+        printf "[%s]\n" "$(herdr_setup_mode)"
+        herdr_install_method "$(herdr_setup_mode)"
+    '
+    assert_success
+    assert_output "[public]
 installer"
 }
 
@@ -44,11 +80,27 @@ https://github.com/ogulcancelik/herdr/releases/download/v0.9.0/herdr-linux-x86_6
 @test "install_herdr_via_installer: download failure fails without running an installer" {
     run_herdr_tool '
         curl() { return 22; }
-        sh() { echo "installer-ran"; }
+        bash() { echo "installer-ran"; }
         install_herdr_via_installer
     '
     assert_failure
     refute_output --partial "installer-ran"
+}
+
+@test "install_herdr_via_installer: delegates to the shared run_remote_installer helper" {
+    run grep -F 'run_remote_installer "$HERDR_INSTALL_URL"' "$INSTALL_HERDR_SCRIPT"
+    assert_success
+    run grep -F 'curl -fsSL "$HERDR_INSTALL_URL"' "$INSTALL_HERDR_SCRIPT"
+    assert_failure
+    run grep -F 'sh "$installer"' "$INSTALL_HERDR_SCRIPT"
+    assert_failure
+}
+
+@test "install_herdr.sh: verifies the install path, never command -v herdr" {
+    run grep -F 'command -v herdr' "$INSTALL_HERDR_SCRIPT"
+    assert_failure
+    run grep -F 'verify_installed_binary "$HERDR_BIN"' "$INSTALL_HERDR_SCRIPT"
+    assert_success
 }
 
 @test "install_herdr_via_release: installs the downloaded binary executable" {
