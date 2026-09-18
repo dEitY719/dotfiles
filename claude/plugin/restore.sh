@@ -45,6 +45,17 @@ fi
 # shell-common sibling (bats fixtures).
 # shellcheck disable=SC1091
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+# Setup-mode reader SSOT (#1810). Every shell-common convention is tried in
+# turn rather than $SHELL_COMMON alone: a stale/wrong SHELL_COMMON must not
+# silently demote an internal PC to public, which would skip the company/
+# manifest without saying a word.
+for _rsm_dir in "${SHELL_COMMON:-}" "${DOTFILES_ROOT:-}/shell-common" "$HOME/dotfiles/shell-common"; do
+	if [ -r "${_rsm_dir}/util/setup_mode_read.sh" ]; then
+		# shellcheck disable=SC1091
+		. "${_rsm_dir}/util/setup_mode_read.sh"
+		break
+	fi
+done
 
 # Bootstrap fallback, NOT a second implementation to maintain in parallel.
 # Until #1696 this script sourced nothing at all, precisely so that a
@@ -144,7 +155,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
 fi
 
 # --- setup-mode + company gating (computed once) --------------------------
-MODE=$(cat "$HOME/.dotfiles-setup-mode" 2>/dev/null || echo "")
+MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 PRIV="$SCRIPT_DIR/company"
 # COMPANY_ACTIVE gates BOTH the add pass and the --sync keep-set: the private
 # manifest counts as SSOT (so its entries aren't pruned) only when it's a real,
