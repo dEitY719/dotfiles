@@ -199,86 +199,18 @@ if [ -f "$WORK_LOG_SRC" ]; then
     fi
 fi
 
-# Cleanup: Remove broken plugin references from ~/.zshrc
-# Prevents "plugin not found" errors when zsh starts
-_cleanup_broken_zsh_plugins() {
-    local zshrc="${HOME}/.zshrc"
-    local omz_custom="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}"
-
-    if [ ! -f "$zshrc" ]; then
-        return 0
-    fi
-
-    # Check for plugins that are registered but not installed
-    local broken_plugins=""
-
-    # Common plugins to check
-    local plugins_to_check="zsh-autosuggestions zsh-syntax-highlighting zsh-history-substring-search"
-
-    for plugin in $plugins_to_check; do
-        # If plugin is registered in zshrc but not installed, mark for removal
-        if grep -q "$plugin" "$zshrc" && [ ! -d "$omz_custom/plugins/$plugin" ]; then
-            broken_plugins="$broken_plugins $plugin"
-        fi
-    done
-
-    if [ -z "$broken_plugins" ]; then
-        return 0
-    fi
-
-    # Create backup (latest-only fixed suffix — issue #806; no timestamp so
-    # repeated runs overwrite a single backup instead of accumulating).
-    local backup_file
-    backup_file="${zshrc}${DOTFILES_BACKUP_SUFFIX}"
-    cp "$zshrc" "$backup_file" || return 1
-
-    log_debug "정리: ~/.zshrc에서 설치되지 않은 플러그인 제거: $broken_plugins"
-
-    # Remove each broken plugin
-    local temp_zshrc="${zshrc}.tmp"
-    cp "$zshrc" "$temp_zshrc"
-
-    for plugin in $broken_plugins; do
-        # Remove plugin from plugins array
-        # Handles: "plugin" " plugin" "plugin " and variations
-        sed -i "s/ $plugin//g; s/$plugin //g; s/$plugin$//g" "$temp_zshrc" 2>/dev/null || true
-    done
-
-    # Verify the file is valid before replacing
-    if grep -q "plugins=(" "$temp_zshrc" 2>/dev/null; then
-        # `cat >`, not `mv`: ~/.zshrc is a dotfiles symlink and a rename would
-        # replace the link with a plain file (#1802). Redirection follows it
-        # and swaps only the contents.
-        # A failed write leaves ~/.zshrc truncated, so keep the backup and say
-        # where it is instead of dropping both copies (PR #1808 agy FOLLOW-UP).
-        if ! cat "$temp_zshrc" >"$zshrc"; then
-            rm -f "$temp_zshrc"
-            log_error "경고: ~/.zshrc 쓰기 실패 — 백업 보존: $backup_file"
-            return 1
-        fi
-        # Cleanup succeeded — drop the temp file and the safety backup.
-        rm -f "$temp_zshrc" "$backup_file"
-        log_dim "✓ ~/.zshrc에서 미설치 플러그인 제거 완료"
-        log_dim "  이제 zsh 시작 시 'plugin not found' 에러가 나타나지 않습니다"
-    else
-        # Nothing to restore: only "$temp_zshrc" was ever edited, so ~/.zshrc
-        # still holds the original bytes. Rewriting it from the backup would
-        # be the very write-through the symlink fix above removes (#1802).
-        rm -f "$backup_file" "$temp_zshrc"
-        log_error "경고: ~/.zshrc 정리 중 오류 발생, 원본은 변경되지 않음"
-        return 1
-    fi
-}
-
-# Run cleanup if zshrc exists
-_cleanup_broken_zsh_plugins
-
 # NOTE (issue #806): the former `_add_zshrc_auto_cleanup` runtime hook was
 # removed. It prepended cleanup code via `cat ... > .new && mv .new ~/.zshrc`,
 # which converted the dotfiles-managed ~/.zshrc symlink into a regular file.
 # The next ./setup.sh run then re-backed-up and re-linked it, accumulating one
-# backup per run. The hook was redundant anyway — `_cleanup_broken_zsh_plugins`
-# above already strips missing-plugin references at build time.
+# backup per run.
+#
+# NOTE (issue #1809): its sibling `_cleanup_broken_zsh_plugins` (build-time,
+# not a runtime hook) was removed too. `zsh/zshrc` already builds `plugins`
+# dynamically from directory existence, so a registered-but-uninstalled
+# plugin entry can't occur — the function's premise was false, and its
+# string-based `sed` removal corrupted `zsh/zshrc` content whenever it ran
+# (broke the `zsh-autosuggestions` system-fallback guard).
 
 ux_success "dotfiles setup 완료"
 
