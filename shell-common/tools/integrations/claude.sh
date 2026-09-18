@@ -458,26 +458,13 @@ alias claude-yolo='claude_yolo'
 # ═══════════════════════════════════════════════════════════════
 
 # _dotfiles_setup_mode — read ~/.dotfiles-setup-mode and canonicalise.
+# Moved to shell-common/util/setup_mode_read.sh (#1810) so the 16 callsites
+# that used to re-parse the file share one implementation.
 #
-# Returns one of: public | internal | external | "" (file missing).
-# Legacy numeric values ("1|2|3") written by older shell-common/setup.sh
-# (pre-#571) are translated to their symbolic equivalents, so users
-# don't hit a wedge after upgrading. Empty when the file doesn't exist
-# (fresh install before setup.sh has run).
-#
-# Used by claude_yolo (F-2) to bypass multi-account resolution and by
+# Used here by claude_yolo (F-2) to bypass multi-account resolution and by
 # claude_accounts_rollback (F-3) to confirm the rollback target.
-_dotfiles_setup_mode() {
-    _dsm_file="$HOME/.dotfiles-setup-mode"
-    [ -f "$_dsm_file" ] || { echo ""; return 0; }
-    _dsm_raw=$(tr -d ' \t\n\r' < "$_dsm_file" 2>/dev/null)
-    case "$_dsm_raw" in
-        1|public)   echo "public" ;;
-        2|internal) echo "internal" ;;
-        3|external) echo "external" ;;
-        *)          echo "$_dsm_raw" ;;
-    esac
-}
+# shellcheck disable=SC1091
+. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
 
 # _claude_resolve_account — 계정 매핑 SSOT (convention-based, issue #568).
 # Usage:

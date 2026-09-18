@@ -6,6 +6,11 @@
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
 source "$(dirname "$0")/init.sh" || exit 1
 
+# Setup-mode reader SSOT (#1810) — init.sh returns early under
+# DOTFILES_TEST_MODE=1 without setting SHELL_COMMON, hence the fallback.
+# shellcheck disable=SC1091
+source "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+
 # Shared target constant (SSOT: same default as check_network.sh)
 NETWORK_GIT_TARGET="${NETWORK_GIT_TARGET:-https://github.com/git/git.git}"
 
@@ -43,8 +48,9 @@ _format_env() {
 check_setup_mode() {
     ux_header "0. Setup Mode Status"
 
-    local setup_mode_file="$HOME/.dotfiles-setup-mode"
-    if [ ! -f "$setup_mode_file" ]; then
+    local mode
+    mode=$(get_setup_mode)
+    if [ -z "$mode" ]; then
         ux_warning "Setup mode not configured"
         ux_bullet "Run: ./setup.sh in ~/dotfiles to configure"
         record_warn
@@ -52,21 +58,18 @@ check_setup_mode() {
         return 0
     fi
 
-    local mode
-    mode=$(cat "$setup_mode_file" 2>/dev/null)
-
     case "$mode" in
-        1|public)
+        public)
             ux_success "Setup Mode: Public PC (Home environment)"
             ux_info "Expected behavior: NO proxy variables should be set"
             record_pass
             ;;
-        2|internal)
+        internal)
             ux_success "Setup Mode: Internal company PC (Direct connection)"
             ux_info "Expected behavior: Company proxy SHOULD be set (12.26.204.100:8080)"
             record_pass
             ;;
-        3|external)
+        external)
             ux_success "Setup Mode: External company PC (VPN)"
             ux_info "Expected behavior: NO proxy variables should be set"
             record_pass
@@ -79,11 +82,10 @@ check_setup_mode() {
     echo ""
 }
 
+# Canonical mode (public|internal|external|""), via the shell-common SSOT so
+# a legacy numeric or CRLF-saved file still matches (#1810).
 get_setup_mode() {
-    local setup_mode_file="$HOME/.dotfiles-setup-mode"
-    if [ -f "$setup_mode_file" ]; then
-        cat "$setup_mode_file" 2>/dev/null
-    fi
+    _dotfiles_setup_mode
 }
 
 check_proxy_env() {
@@ -104,7 +106,7 @@ check_proxy_env() {
     local mode
     mode="$(get_setup_mode)"
     case "$mode" in
-        1|3|public|external)
+        public|external)
             if [ "$has_proxy" -eq 1 ]; then
                 echo ""
                 ux_error "ISSUE DETECTED: Proxy is set but should not be (Mode $mode)"
@@ -115,7 +117,7 @@ check_proxy_env() {
                 record_pass
             fi
             ;;
-        2|internal)
+        internal)
             if [ "$has_proxy" -eq 0 ]; then
                 echo ""
                 ux_warning "No proxy set but internal mode expects proxy"
@@ -192,7 +194,7 @@ check_proxy_shell_loading() {
     local expected_proxy=0
 
     case "$mode" in
-        2|internal) expected_proxy=1 ;;
+        internal) expected_proxy=1 ;;
     esac
 
     ux_section "Bash"
@@ -238,7 +240,7 @@ check_proxy_connectivity() {
     mode="$(get_setup_mode)"
     if [ -z "${http_proxy:-}" ] && [ -z "${HTTP_PROXY:-}" ]; then
         case "$mode" in
-        2|internal)
+        internal)
             ux_warning "No proxy configured but internal mode expects one"
             ux_info "Check proxy.local.sh and shell loading diagnostics"
             record_warn

@@ -117,6 +117,17 @@ command -v jq >/dev/null 2>&1 || {
 # hook and restore.sh need, so it has a single home in shell-common (#1696).
 # shellcheck disable=SC1091
 . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+# Setup-mode reader SSOT (#1810). Every shell-common convention is tried in
+# turn rather than $SHELL_COMMON alone: a stale/wrong SHELL_COMMON must not
+# silently demote an internal PC to public, which would skip company/ — and
+# skip the --apply guard below — without saying a word.
+for _rsm_dir in "${SHELL_COMMON:-}" "${DOTFILES_ROOT:-}/shell-common" "$HOME/dotfiles/shell-common"; do
+	if [ -r "${_rsm_dir}/util/setup_mode_read.sh" ]; then
+		# shellcheck disable=SC1091
+		. "${_rsm_dir}/util/setup_mode_read.sh"
+		break
+	fi
+done
 
 # Bootstrap fallback, NOT a second implementation to maintain in parallel.
 # Unlike the commit title, the reader is on --check's path, and --check is
@@ -171,10 +182,7 @@ SYNC_MSG="chore(claude-plugin): sync manifest"
 # internal PC + cloned company/ repo → the private manifest is in scope.
 # `.git` is a *file* in a worktree, so probe with `git rev-parse --git-dir`
 # rather than `[ -d .git ]` (worktree-safe, matches the repo convention).
-MODE=""
-if [ -f "$HOME/.dotfiles-setup-mode" ]; then
-	MODE=$(cat "$HOME/.dotfiles-setup-mode")
-fi
+MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 COMPANY_ACTIVE=0
 if [ "$MODE" = "internal" ] && git -C "$PRIV_DIR" rev-parse --git-dir >/dev/null 2>&1; then
 	COMPANY_ACTIVE=1
