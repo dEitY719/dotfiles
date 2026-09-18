@@ -83,7 +83,10 @@ zsh_theme() {
     # replace the link with a plain file (#1802). Edit the resolved target
     # instead -- it is a real file, so no .bak copy is needed either.
     local target
-    target="$(readlink -f "$zshrc")"
+    # readlink -f is GNU/coreutils; fall back to the path itself where the
+    # BSD readlink has no -f (PR #1808 agy FOLLOW-UP). Matches the guarded
+    # form already used in hook_check.sh and skill_sources.sh.
+    target="$(readlink -f "$zshrc" 2>/dev/null || printf '%s' "$zshrc")"
 
     if sed -i "s/^ZSH_THEME=.*/ZSH_THEME=\"$theme_name\"/" "$target"; then
         ux_success "Theme changed to: ${UX_BOLD}$theme_name${UX_RESET}"
