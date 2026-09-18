@@ -135,10 +135,8 @@ _hermes_install_cli() {
 	ux_section "Hermes CLI"
 	ux_info "installing from ${HERMES_INSTALL_URL}"
 
-	# run_remote_installer downloads first, then runs the file with `bash`:
-	# piping to a shell reports the *shell's* exit code, so a failed download
-	# "succeeds" on empty input (#1801), and upstream's install.sh declares
-	# `#!/bin/bash` and uses bashisms ([[, arrays) that dash would choke on.
+	# run_remote_installer, not `curl | bash`: it downloads first and runs the
+	# file with bash -- see lib/install_helpers.sh for why both matter (#1801).
 	# This is also the one step that reaches the public internet, so a
 	# proxied/offline machine fails here too — say what to retry and move on.
 	if run_remote_installer "${HERMES_INSTALL_URL}"; then
