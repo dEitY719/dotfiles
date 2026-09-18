@@ -463,8 +463,11 @@ alias claude-yolo='claude_yolo'
 #
 # Used here by claude_yolo (F-2) to bypass multi-account resolution and by
 # claude_accounts_rollback (F-3) to confirm the rollback target.
-# shellcheck disable=SC1091
-. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+_ic_setup_mode_read_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+if [ -r "$_ic_setup_mode_read_lib" ]; then
+    # shellcheck disable=SC1091
+    . "$_ic_setup_mode_read_lib"
+fi
 
 # _claude_resolve_account — 계정 매핑 SSOT (convention-based, issue #568).
 # Usage:

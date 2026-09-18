@@ -8,8 +8,11 @@ source "$(dirname "$0")/init.sh" || exit 1
 
 # Setup-mode reader SSOT (#1810) — init.sh returns early under
 # DOTFILES_TEST_MODE=1 without setting SHELL_COMMON, hence the fallback.
-# shellcheck disable=SC1091
-source "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+_cp_setup_mode_read_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+if [ -r "$_cp_setup_mode_read_lib" ]; then
+    # shellcheck disable=SC1091
+    source "$_cp_setup_mode_read_lib"
+fi
 
 # Shared target constant (SSOT: same default as check_network.sh)
 NETWORK_GIT_TARGET="${NETWORK_GIT_TARGET:-https://github.com/git/git.git}"

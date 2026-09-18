@@ -5,10 +5,14 @@
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# shellcheck disable=SC1091
-. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+_setup_mode_read_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+if [ -r "$_setup_mode_read_lib" ]; then
+    # shellcheck disable=SC1091
+    . "$_setup_mode_read_lib"
+fi
 
 _apply_setup_mode_config() {
+    command -v _dotfiles_setup_mode >/dev/null 2>&1 || return 0
     local mode
     mode=$(_dotfiles_setup_mode)
 
