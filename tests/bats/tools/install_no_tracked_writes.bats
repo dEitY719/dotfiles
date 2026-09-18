@@ -32,8 +32,9 @@ teardown() {
 # Skipped because they are data rather than execution: tests/ (this file's own
 # patterns would match themselves), comments, `: <<'DOC'` help blocks,
 # arguments of the ux_*/echo/printf output functions (help text that documents
-# an upstream installer is intentional), and assignments holding a command
-# string for display.
+# an upstream installer is intentional), and quoted assignments holding a
+# command string for display (unquoted ones stay in scope, so a
+# `X=$(curl ... | bash)` still trips the guards).
 _repo_code_lines() {
     find "$DOTFILES_ROOT" -name '*.sh' \
         -not -path '*/.git/*' -not -path "${DOTFILES_ROOT}/tests/*" -print0 |
@@ -49,7 +50,7 @@ _repo_code_lines() {
         ' |
         grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' |
         grep -vE '^[^:]+:[0-9]+:[[:space:]]*(ux_(bullet(_sub)?|info|error|warning|success)|echo|printf)[[:space:]]' |
-        grep -vE '^[^:]+:[0-9]+:[[:space:]]*[A-Za-z_][A-Za-z0-9_]*='
+        grep -vE '^[^:]+:[0-9]+:[[:space:]]*[A-Za-z_][A-Za-z0-9_]*="'
 }
 
 # Fail, listing the offenders, if any executable line matches the ERE in $1.
@@ -84,7 +85,6 @@ _refute_code_pattern() {
     run _refute_code_pattern '(mv|cp)[[:space:]].*[[:space:]]"?(\$\{?HOME\}?|~)/\.(bashrc|zshrc|npmrc|bash_profile)"?[[:space:]]*$|(mv|cp)[[:space:]]+[^|]*[[:space:]]"\$\{?(zshrc|bashrc|npmrc)\}?"[[:space:]]*$'
     assert_success
 }
-
 
 @test "install_fzf: macOS shell integration does not update rc files" {
     run grep -c -- '--no-update-rc' "$TOOLS_DIR/install_fzf.sh"

@@ -20,10 +20,13 @@ HERDR_INSTALL_URL="${HERDR_INSTALL_URL:-https://herdr.dev/install.sh}"
 HERDR_RELEASE_BASE="https://github.com/ogulcancelik/herdr/releases"
 HERDR_BIN="${HOME}/.local/bin/herdr"
 
-# Read ~/.dotfiles-setup-mode the way shell-common/tools/integrations/claude.sh
-# and shell-common/util/setup_mode.sh do: trim stray whitespace/newline, and
-# fall back to public when the file does not exist yet. Legacy numeric values
-# (1|2|3, written by pre-#571 setup.sh) are passed through for the case below.
+# Read ~/.dotfiles-setup-mode: trim stray whitespace/newline, and fall back to
+# public when the file does not exist yet. Legacy numeric values (1|2|3,
+# written by pre-#571 setup.sh) are passed straight through to the case below.
+#
+# Same trim as claude.sh's _dotfiles_setup_mode, kept local rather than sourcing
+# that file for one function. The repo has ~9 such copies, so hoisting one
+# canonicaliser into a shared lib is its own change, not this one.
 herdr_setup_mode() {
     tr -d ' \t\n\r' 2>/dev/null < "$HOME/.dotfiles-setup-mode" || echo public
 }
