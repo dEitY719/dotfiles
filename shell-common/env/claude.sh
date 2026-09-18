@@ -31,9 +31,13 @@ export CLAUDE_SKILLS_PATH="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
 # we overwrite any stale value inherited from a prior shell-init cycle.
 # Per-PC overrides happen below via claude.local.sh, which is sourced
 # AFTER this block and can freely reassign these vars.
-# shellcheck disable=SC1091
-. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
-_claude_setup_mode="$(_dotfiles_setup_mode)"
+_claude_setup_mode=""
+_claude_setup_mode_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+if [ -r "$_claude_setup_mode_lib" ]; then
+    # shellcheck disable=SC1091
+    . "$_claude_setup_mode_lib"
+    _claude_setup_mode="$(_dotfiles_setup_mode)"
+fi
 case "$_claude_setup_mode" in
     internal)
         export CLAUDE_DEFAULT_ACCOUNT="work"
