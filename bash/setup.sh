@@ -249,7 +249,13 @@ _cleanup_broken_zsh_plugins() {
         # `cat >`, not `mv`: ~/.zshrc is a dotfiles symlink and a rename would
         # replace the link with a plain file (#1802). Redirection follows it
         # and swaps only the contents.
-        cat "$temp_zshrc" >"$zshrc"
+        # A failed write leaves ~/.zshrc truncated, so keep the backup and say
+        # where it is instead of dropping both copies (PR #1808 agy FOLLOW-UP).
+        if ! cat "$temp_zshrc" >"$zshrc"; then
+            rm -f "$temp_zshrc"
+            log_error "경고: ~/.zshrc 쓰기 실패 — 백업 보존: $backup_file"
+            return 1
+        fi
         # Cleanup succeeded — drop the temp file and the safety backup.
         rm -f "$temp_zshrc" "$backup_file"
         log_dim "✓ ~/.zshrc에서 미설치 플러그인 제거 완료"
