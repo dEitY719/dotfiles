@@ -49,6 +49,14 @@ if [ -r "${_sl_dir}/statusline-tokens.sh" ]; then
     . "${_sl_dir}/statusline-tokens.sh"
 fi
 
+# Setup-mode reader SSOT (#1810), resolved the same sibling way: this file
+# lives in <dotfiles>/claude/, so shell-common is one level up.
+_sl_setup_mode_lib="${_sl_dir}/../shell-common/util/setup_mode_read.sh"
+if [ -r "$_sl_setup_mode_lib" ]; then
+    # shellcheck disable=SC1090
+    . "$_sl_setup_mode_lib"
+fi
+
 # Read JSON input from stdin
 input=$(cat)
 
@@ -313,8 +321,7 @@ ttl_info="${CYAN}⏱️ ${ttl_label}${RESET}"
 usage_group="${usage_group:+${usage_group} }${ttl_info}"
 
 # Bedrock cost display (internal only)
-SETUP_MODE=""
-[ -f "$HOME/.dotfiles-setup-mode" ] && SETUP_MODE=$(cat "$HOME/.dotfiles-setup-mode")
+SETUP_MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 
 cost_info=""
 if [ "$SETUP_MODE" = "internal" ]; then

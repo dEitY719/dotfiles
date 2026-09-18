@@ -81,3 +81,110 @@ teardown() {
     assert_success
     assert_output "[]"
 }
+
+# --- _dotfiles_setup_mode SSOT (#1810) ---------------------------------------
+#
+# Issue #1810: ~/.dotfiles-setup-mode was parsed independently in 16 places.
+# Half of them compared against "internal" without translating the legacy
+# numeric values, and half read the file with a bare `cat`, so a CRLF-saved
+# file or a stray space silently failed every equality check. Both classes are
+# now one function in shell-common/util/setup_mode_read.sh.
+
+# Source ONLY the SSOT file (no shell init) and echo the canonical mode.
+_run_setup_mode_read() {
+    run bash --noprofile --norc -c "
+        export HOME='${HOME}'
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        _dotfiles_setup_mode
+    "
+}
+
+@test "_dotfiles_setup_mode: legacy numeric 2 maps to internal" {
+    printf '2\n' > "$HOME/.dotfiles-setup-mode"
+    _run_setup_mode_read
+    assert_success
+    assert_output "internal"
+}
+
+@test "_dotfiles_setup_mode: symbolic internal stays internal" {
+    printf 'internal\n' > "$HOME/.dotfiles-setup-mode"
+    _run_setup_mode_read
+    assert_success
+    assert_output "internal"
+}
+
+@test "_dotfiles_setup_mode: surrounding whitespace is stripped" {
+    printf '  internal  \n' > "$HOME/.dotfiles-setup-mode"
+    _run_setup_mode_read
+    assert_success
+    assert_output "internal"
+}
+
+@test "_dotfiles_setup_mode: CRLF line ending is stripped" {
+    printf 'internal\r\n' > "$HOME/.dotfiles-setup-mode"
+    _run_setup_mode_read
+    assert_success
+    assert_output "internal"
+}
+
+@test "_dotfiles_setup_mode: missing file yields empty string" {
+    rm -f "$HOME/.dotfiles-setup-mode"
+    _run_setup_mode_read
+    assert_success
+    assert_output ""
+}
+
+# --- static guard: nobody re-reads the file raw ------------------------------
+
+# Every repo *.sh line that actually executes something, prefixed file:line.
+# Same awk/grep approach as tests/bats/tools/install_no_tracked_writes.bats,
+# minus that file's `X="..."` filter: the #1810 bugs looked exactly like
+# `MODE="$(cat ~/.dotfiles-setup-mode)"`, so quoted assignments must stay in
+# scope here. tests/, comments, `: <<'DOC'` help blocks and ux_*/echo/printf
+# arguments are data rather than execution, so they are skipped.
+_setup_mode_code_lines() {
+    find "$DOTFILES_ROOT" -name '*.sh' \
+        -not -path '*/.git/*' -not -path "${DOTFILES_ROOT}/tests/*" -print0 |
+        xargs -0 awk '
+            FNR == 1 { doc = "" }
+            doc != "" { if ($0 == doc) doc = ""; next }
+            /^[[:space:]]*:[[:space:]]*<</ {
+                doc = $0
+                sub(/^[[:space:]]*:[[:space:]]*<<-?[[:space:]]*/, "", doc)
+                gsub(/["'"'"']/, "", doc)
+            }
+            { print FILENAME ":" FNR ":" $0 }
+        ' |
+        grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' |
+        grep -vE '^[^:]+:[0-9]+:[[:space:]]*(ux_(bullet(_sub)?|info|error|warning|success)|echo|printf)[[:space:]]'
+}
+
+# Raw (non-normalising) reads of ~/.dotfiles-setup-mode: a `cat` of the literal
+# path or of a *setup_mode_file*/*mode_file* variable, or a `<` redirect of the
+# literal path. Lines that strip CR/whitespace themselves are compliant, as are
+# the SSOT itself and the one documented exception below.
+_setup_mode_raw_reads() {
+    _setup_mode_code_lines |
+        grep -E "cat[^|]*\.dotfiles-setup-mode|cat[[:space:]]+\"?\\\$\{?[A-Za-z_]*(setup_)?mode_file|<[[:space:]]*\"?\\\$\{?HOME\}?/\.dotfiles-setup-mode" |
+        grep -v "tr -d" |
+        grep -v '/shell-common/util/setup_mode_read.sh:' |
+        grep -v '/shell-common/functions/setup_mode_help.sh:'
+}
+
+@test "guard: no script reads ~/.dotfiles-setup-mode without normalising it" {
+    local hits
+    hits="$(_setup_mode_raw_reads)" || return 0
+    if [ -n "$hits" ]; then
+        printf 'raw ~/.dotfiles-setup-mode reads (use _dotfiles_setup_mode):\n%s\n' "$hits"
+        return 1
+    fi
+}
+
+# get_setup_mode() in setup_mode_help.sh is a *diagnostic* that must echo the
+# file verbatim — showing the user what is actually on disk is its whole job.
+# It is the only allowlisted raw reader, so pin that it stays one file.
+@test "guard: setup_mode_help.sh is the only allowlisted raw reader" {
+    run grep -c 'cat "\$setup_mode_file"' "${DOTFILES_ROOT}/shell-common/functions/setup_mode_help.sh"
+    assert_success
+    assert_output "1"
+}
