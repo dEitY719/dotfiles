@@ -17,6 +17,7 @@ HOOK="${_BATS_REAL_DOTFILES_ROOT}/claude/hooks/plugin-sync-session.sh"
 SID="sess-1082"
 
 setup() {
+    unset DOTFILES_PLUGIN_SYNC_DISABLED
     setup_isolated_home
     MAIN_ROOT="$TEST_TEMP_HOME/dotfiles"
     mkdir -p "$MAIN_ROOT/claude/plugin" "$MAIN_ROOT/claude/hooks"
