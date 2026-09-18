@@ -38,6 +38,11 @@ setup_isolated_home() {
     # write to the live config. Suites that need the override set it themselves
     # (see tests/bats/skills/session_start_settings_drift_hook.bats).
     unset CLAUDE_CONFIG_DIR
+    # Same leak class: a developer's real DOTFILES_PLUGIN_SYNC_DISABLED=1
+    # override (see CLAUDE.md personal-overrides section) would silently
+    # short-circuit plugin-sync hook tests. Suites that need it set do so
+    # themselves.
+    unset DOTFILES_PLUGIN_SYNC_DISABLED
     export ZDOTDIR="$TEST_TEMP_HOME"
     export XDG_CONFIG_HOME="$TEST_TEMP_HOME"
     export XDG_CACHE_HOME="$TEST_TEMP_HOME"
