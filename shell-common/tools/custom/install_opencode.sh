@@ -99,7 +99,14 @@ install_opencode_via_npm() {
 # Where the given install method puts the opencode binary.
 opencode_binary_path() {
     case "$1" in
-        npm) printf '%s/bin/opencode\n' "$(npm prefix -g 2>/dev/null)" ;;
+        # Assignment, not a printf argument: errexit ignores a failed command
+        # substitution in an argument position, so a bare $(npm prefix -g) would
+        # still hand back "/bin/opencode" with rc 0.
+        npm)
+            local npm_prefix
+            npm_prefix=$(npm prefix -g)
+            printf '%s/bin/opencode\n' "$npm_prefix"
+            ;;
         *) printf '%s\n' "$HOME/.opencode/bin/opencode" ;;
     esac
 }

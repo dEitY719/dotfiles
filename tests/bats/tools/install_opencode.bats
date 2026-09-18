@@ -90,6 +90,26 @@ curl"
     assert_output "$HOME/.opencode/bin/opencode"
 }
 
+@test "opencode_binary_path: npm installs land under npm prefix -g" {
+    run_opencode_tool '
+        npm() { echo /fake/npm-prefix; }
+        opencode_binary_path npm
+    '
+    assert_success
+    assert_output "/fake/npm-prefix/bin/opencode"
+}
+
+# Swallowing npm's stderr left only the misleading "/bin/opencode" path behind.
+@test "opencode_binary_path: a failing npm prefix -g surfaces npm's own error" {
+    run_opencode_tool '
+        npm() { echo "npm ERR! cannot determine prefix" >&2; return 1; }
+        opencode_binary_path npm
+    '
+    assert_failure
+    assert_output --partial "npm ERR! cannot determine prefix"
+    refute_output --partial "/bin/opencode"
+}
+
 # --- verification --------------------------------------------------------------
 
 @test "verify_opencode_binary: rejects the npm postinstall placeholder" {

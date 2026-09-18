@@ -47,7 +47,18 @@ install_bun() {
     fi
 
     ux_info "공식 설치 스크립트 실행 중..."
-    curl -fsSL https://bun.sh/install | bash
+    # Piping into a shell reports the shell's exit code, so a failed download
+    # runs empty input and "succeeds" (#1801). Sourced lazily: install_bun is
+    # rarely called and this file is auto-sourced at every shell start.
+    if ! type run_remote_installer >/dev/null 2>&1; then
+        _bun_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+        . "${_bun_dir}/tools/custom/lib/install_helpers.sh"
+        unset _bun_dir
+    fi
+    if ! run_remote_installer https://bun.sh/install; then
+        ux_error "설치 스크립트 실행에 실패했습니다 (네트워크 또는 프록시 문제)"
+        return 1
+    fi
 
     # Reload PATH for current session
     export PATH="$HOME/.bun/bin:$PATH"
