@@ -7,6 +7,7 @@
 load '../test_helper'
 
 setup() {
+    unset BROWSER
     setup_isolated_home
     BROWSER_ENV="${SHELL_COMMON}/env/browser.sh"
     WRAPPER="${SHELL_COMMON}/tools/custom/open_in_windows_chrome.sh"
