@@ -32,6 +32,7 @@ DOTFILES_ROOT="${_SCRIPT_DIR%/hermes}"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+source "${SHELL_COMMON}/tools/custom/lib/install_helpers.sh"
 
 HERMES_CONFIG_SRC="${_SCRIPT_DIR}/config.yaml"
 HERMES_CONFIG_DIR="${HOME}/.hermes"
@@ -134,11 +135,13 @@ _hermes_install_cli() {
 	ux_section "Hermes CLI"
 	ux_info "installing from ${HERMES_INSTALL_URL}"
 
-	# Upstream's install.sh declares `#!/bin/bash` and uses bashisms ([[, arrays) —
-	# piping to `sh` silently invokes dash on Debian/Ubuntu and fails mid-script.
+	# run_remote_installer downloads first, then runs the file with `bash`:
+	# piping to a shell reports the *shell's* exit code, so a failed download
+	# "succeeds" on empty input (#1801), and upstream's install.sh declares
+	# `#!/bin/bash` and uses bashisms ([[, arrays) that dash would choke on.
 	# This is also the one step that reaches the public internet, so a
 	# proxied/offline machine fails here too — say what to retry and move on.
-	if curl -fsSL "${HERMES_INSTALL_URL}" | bash; then
+	if run_remote_installer "${HERMES_INSTALL_URL}"; then
 		if command -v hermes >/dev/null 2>&1; then
 			ux_success "installed: $(hermes --version 2>&1 | head -1)"
 		else

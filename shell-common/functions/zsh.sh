@@ -79,9 +79,20 @@ zsh_theme() {
         return 1
     fi
 
-    # Use sed to update the ZSH_THEME line
-    if sed -i.bak "s/^ZSH_THEME=.*/ZSH_THEME=\"$theme_name\"/" "$zshrc"; then
+    # ~/.zshrc is a dotfiles symlink and `sed -i` edits by rename, which would
+    # replace the link with a plain file (#1802). Edit the resolved target
+    # instead -- it is a real file, so no .bak copy is needed either.
+    local target
+    target="$(readlink -f "$zshrc")"
+
+    if sed -i "s/^ZSH_THEME=.*/ZSH_THEME=\"$theme_name\"/" "$target"; then
         ux_success "Theme changed to: ${UX_BOLD}$theme_name${UX_RESET}"
+        local target_dir
+        target_dir="$(dirname "$target")"
+        if git -C "$target_dir" ls-files --error-unmatch "$target" >/dev/null 2>&1; then
+            ux_warning "Edited a git-tracked file: $target"
+            ux_info "Review with: ${UX_BOLD}git -C $target_dir diff -- $target${UX_RESET}"
+        fi
         ux_info "Run ${UX_BOLD}zsh-reload${UX_RESET} or restart zsh to apply changes."
     else
         ux_error "Failed to change theme."

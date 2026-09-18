@@ -246,15 +246,19 @@ _cleanup_broken_zsh_plugins() {
 
     # Verify the file is valid before replacing
     if grep -q "plugins=(" "$temp_zshrc" 2>/dev/null; then
-        mv "$temp_zshrc" "$zshrc"
-        rm -f "${zshrc}.bak" 2>/dev/null
+        # `cat >`, not `mv`: ~/.zshrc is a dotfiles symlink and a rename would
+        # replace the link with a plain file (#1802). Redirection follows it
+        # and swaps only the contents.
+        cat "$temp_zshrc" >"$zshrc"
+        rm -f "$temp_zshrc" "${temp_zshrc}.bak" 2>/dev/null
         # Cleanup succeeded — drop the safety backup so it does not linger.
         rm -f "$backup_file" 2>/dev/null
         log_dim "✓ ~/.zshrc에서 미설치 플러그인 제거 완료"
         log_dim "  이제 zsh 시작 시 'plugin not found' 에러가 나타나지 않습니다"
     else
-        # Restore backup if something went wrong
-        mv "$backup_file" "$zshrc"
+        # Restore backup if something went wrong (same symlink caveat as above)
+        cat "$backup_file" >"$zshrc"
+        rm -f "$backup_file" "$temp_zshrc" "${temp_zshrc}.bak" 2>/dev/null
         log_error "경고: ~/.zshrc 정리 중 오류 발생, 백업에서 복구됨"
         return 1
     fi

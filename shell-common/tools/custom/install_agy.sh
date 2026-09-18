@@ -16,11 +16,13 @@ INSTALL_URL="https://antigravity.google/cli/install.sh"
 # ~/.zshrc are symlinks into dotfiles, so those edits land on tracked files
 # (#1802). Snapshot their git state before the install and revert after.
 
-# Print "<clean|dirty> <file>" for each symlinked ~/.bashrc / ~/.zshrc whose
-# target is inside a git work tree.
+# Print "<clean|dirty> <file>" for each symlinked rc file whose target is
+# inside a git work tree. ~/.bash_profile is in the list because setup.sh
+# symlinks it too and a login shell reads it first, so PATH-appending
+# installers often pick it over ~/.bashrc (#1807).
 _agy_rc_snapshot() {
     local rc f dir
-    for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+    for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.bash_profile"; do
         [ -L "$rc" ] || continue
         f="$(readlink -f "$rc")"
         dir="$(dirname "$f")"
