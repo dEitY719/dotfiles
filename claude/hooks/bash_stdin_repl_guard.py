@@ -75,7 +75,6 @@ _COMMAND_PREFIXES = frozenset({"{", "!", "then", "do", "else", "elif", "if", "wh
 _ASSIGNMENT_RE: re.Pattern[str] = re.compile(r"^[A-Za-z_]\w*=")
 # These end a simple command.
 _COMMAND_ENDERS = frozenset({";", "&&", "||", "|", "|&", "&", ")", "\n", "}"})
-_STDIN_REDIRECTS = frozenset({"<", "<<", "<<<", "<&", "<>"})
 _OUTPUT_REDIRECTS = frozenset({">", ">>", ">&", "&>", "&>>", ">|"})
 
 _REASON = (
@@ -134,14 +133,13 @@ def _tokens(command: str) -> list[str]:
     # gluing the next line onto this command. Comments are dropped below instead.
     lexer.commenters = ""
 
-    raw = list(lexer)
     tokens: list[str] = []
     in_comment = False
-    for tok in raw:
+    for tok in lexer:
         is_punct = bool(tok) and all(c in _PUNCT_CHARS for c in tok)
         if in_comment:
-            in_comment = tok != "\n"
-            if not in_comment:
+            if tok == "\n":
+                in_comment = False
                 tokens.append(tok)
             continue
         if not is_punct and tok.startswith("#"):
@@ -164,24 +162,24 @@ def _find_bare_interpreter(command: str) -> str | None:
             continue
         if i > 0 and tokens[i - 1] in ("|", "|&"):
             continue  # reads the pipe
-        j = i + 1
-        bare = True
-        while j < len(tokens) and tokens[j] not in _COMMAND_ENDERS:
-            tok = tokens[j]
-            if tok in _STDIN_REDIRECTS:
-                bare = False
-                break
-            if tok in _OUTPUT_REDIRECTS:
-                j += 2  # the redirect and its target
-                continue
-            if tok.isdigit() and j + 1 < len(tokens) and tokens[j + 1] in _OUTPUT_REDIRECTS:
-                j += 1  # fd number of `2>...`
-                continue
-            bare = False  # a real argument
-            break
-        if bare:
+        if _only_output_redirects(tokens, i + 1):
             return word
     return None
+
+
+def _only_output_redirects(tokens: list[str], j: int) -> bool:
+    """True if `tokens[j:]`, up to the end of the simple command, only redirect output.
+
+    A real argument or a stdin redirect (`<`, `0<`, `<<`, `<<<`) returns False.
+    """
+    while j < len(tokens) and tokens[j] not in _COMMAND_ENDERS:
+        if tokens[j] in _OUTPUT_REDIRECTS:
+            j += 2  # the redirect and its target
+        elif tokens[j].isdigit() and j + 1 < len(tokens) and tokens[j + 1] in _OUTPUT_REDIRECTS:
+            j += 1  # fd number of `2>...`
+        else:
+            return False
+    return True
 
 
 def _deny(reason: str) -> None:
