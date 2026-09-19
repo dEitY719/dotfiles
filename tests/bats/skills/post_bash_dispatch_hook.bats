@@ -66,6 +66,29 @@ teardown() {
     grep -q '^pr-create:' "$ROUTE_LOG"
 }
 
+@test "dispatch: gh pr create after a shell control char still routes (#1816)" {
+    for c in 'URL=$(gh pr create --draft)' 'a;gh pr create' '(gh pr create)' '`gh pr create`' 'x&&gh pr create' 'x|gh pr create'; do
+        : > "$ROUTE_LOG"
+        payload="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$c\"}}"
+        printf '%s' "$payload" | "$HOOK"
+        grep -q '^pr-create:' "$ROUTE_LOG" || { echo "not routed: $c"; return 1; }
+    done
+}
+
+@test "dispatch: gh pr create look-alikes do not route (#1816 NF-1)" {
+    for c in 'ghx pr create' 'echo \"gh pr create\"' 'gh pr created'; do
+        payload="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$c\"}}"
+        printf '%s' "$payload" | "$HOOK"
+    done
+    [ ! -s "$ROUTE_LOG" ]
+}
+
+@test "dispatch: claude plugin after a shell control char still routes (#1816)" {
+    payload='{"tool_name":"Bash","tool_input":{"command":"out=$(claude plugin install foo@bar)"}}'
+    printf '%s' "$payload" | "$HOOK"
+    grep -q '^plugin-sync:' "$ROUTE_LOG"
+}
+
 @test "dispatch: claude plugin install → only plugin-sync entered" {
     payload='{"tool_name":"Bash","tool_input":{"command":"claude plugin install foo@bar"}}'
     run bash -c "printf '%s' '$payload' | '$HOOK'"
