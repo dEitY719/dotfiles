@@ -71,6 +71,7 @@
 - **gset-dev** — set-upstream dev — Track origin/dev
 - **gset** — gset [branch] — Track origin/[branch]
 - **gb -D local** — git_branch -D local — Delete local branches (keeps: main/master + current + keywords)
+- **gb -D <branch>...** — git_branch -D <branch> — Delete the named local branch(es) — explicit names bypass keyword protection
 - **gb -D remote [<remote>]** — git_branch -D remote — Delete remote-tracking branches (default: origin, e.g. origin, upstream, keeps: main/master)
 - **gb -h** — git_branch --help — Show gb sub-command help
 

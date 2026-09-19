@@ -542,6 +542,85 @@ teardown() {
     refute_output --partial "unknown switch"
 }
 
+# --- gb -D <name>: explicit names bypass keyword protection; typos get hints ---
+
+@test "bash: gb -D <keyword-protected-branch> deletes it when named explicitly" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main "$tmp/w"; cd "$tmp/w"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git branch fix/symlink-backup-rollback
+        git_branch -D fix/symlink-backup-rollback
+        if git rev-parse --verify --quiet refs/heads/fix/symlink-backup-rollback >/dev/null; then echo STILL-THERE; fi
+    '
+    assert_success
+    assert_output --partial "Deleted branch fix/symlink-backup-rollback"
+    refute_output --partial "STILL-THERE"
+}
+
+@test "bash: gb -D <truncated-name> fails, suggests the full branch, deletes nothing" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main "$tmp/w"; cd "$tmp/w"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git branch fix/symlink-backup-rollback
+        gb_rc=0
+        git_branch -D fix/symlink-backup-rollbac || gb_rc=$?
+        git rev-parse --verify --quiet refs/heads/fix/symlink-backup-rollback >/dev/null && echo KEPT
+        exit "$gb_rc"
+    '
+    assert_failure
+    assert_output --partial "Did you mean"
+    assert_output --partial "gb -D fix/symlink-backup-rollback"
+    assert_output --partial "KEPT"
+}
+
+@test "bash: gb -D <unmatched-name> prints no suggestions" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main "$tmp/w"; cd "$tmp/w"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git_branch -D nope
+    '
+    assert_failure
+    refute_output --partial "Did you mean"
+}
+
+@test "bash: gb -D local hints how to delete keyword-protected branches" {
+    run_in_bash '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main "$tmp/w"; cd "$tmp/w"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git branch wip-thing
+        git_branch -D local
+    '
+    assert_success
+    assert_output --partial "No local branches to delete"
+    assert_output --partial "gb -D <branch>"
+}
+
+@test "zsh: gb -D <truncated-name> fails and suggests the full branch" {
+    run_in_zsh '
+        tmp=$(mktemp -d)
+        trap "rm -rf \"$tmp\"" EXIT INT TERM HUP
+        git init -q -b main "$tmp/w"; cd "$tmp/w"
+        git config user.email t@t; git config user.name t
+        git commit -q --allow-empty -m init
+        git branch fix/symlink-backup-rollback
+        git_branch -D fix/symlink-backup-rollbac
+    '
+    assert_failure
+    assert_output --partial "gb -D fix/symlink-backup-rollback"
+}
+
 # --- git worktree functions ---
 
 @test "bash: gwt function exists" {
