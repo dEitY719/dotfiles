@@ -93,6 +93,12 @@ def test_denies_incident_command_verbatim_with_remedy() -> None:
         "echo hi\npython3",
         "python3 2>/dev/null",
         "python3 >out.txt 2>&1",
+        # fd-number redirects, glued or spaced (PR #1817 review, agy).
+        "python3 2>out.txt",
+        "python3 2> out.txt",
+        "python3 2>&1 | tee log.txt",
+        # a bare call after two heredocs is still found once both bodies close
+        "cat <<A; cat <<B\nx\nA\ny\nB\npython3",
         "python3 | cat",
         # bash hands an async job /dev/null, but zsh -- which the Bash tool
         # may run -- keeps the open stdin: measured, it hangs.
@@ -113,6 +119,8 @@ def test_denies_bare_interpreter(command: str) -> None:
         "python file.py",
         "python - <<EOF\nprint(1)\nEOF",
         "python3 - <<'EOF'\npython3\nEOF",
+        # bodies of several heredocs on one line close in declaration order
+        "cat <<A; cat <<B\nx\nA\npython3\nB",
         "echo x | python",
         "echo x |& python3",
         "python < f",
