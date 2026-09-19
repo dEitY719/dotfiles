@@ -113,13 +113,12 @@ _pbd_route() {
 # makes the final call. Anchor on a word boundary so an env-var/`command`
 # prefix (`FOO=bar gh pr create`) still routes (#390), and so does a shell
 # control char around the command (`URL=$(gh pr create ...)`, `a;gh ...`, #1816);
-# both regexes use the same `(^|[[:space:];&|(`])…([[:space:];&|)`]|$)` shape for
-# symmetry. The gh-pr-create boundary classes MUST stay identical to the ones in
-# post-gh-pr-create.sh — the handler re-filters, so widening only one side is
-# a silent miss. `gh pr create` and `claude plugin ...` never co-occur in one
-# command, so exclusive routing is sufficient. Naming each handler exactly once
-# keeps the routing table, the `-x` guard and the timing label from drifting
-# apart.
+# both regexes share the same boundary classes. The gh-pr-create regex MUST stay
+# identical to post-gh-pr-create.sh's — the handler re-filters, so widening only
+# one side is a silent miss. `gh pr create` and `claude plugin ...` never
+# co-occur in one command, so exclusive routing is sufficient. Naming each
+# handler exactly once keeps the routing table, the `-x` guard and the timing
+# label from drifting apart.
 if printf '%s' "$cmd" | grep -qE '(^|[[:space:];&|(`])gh[[:space:]]+pr[[:space:]]+create([[:space:];&|)`]|$)'; then
 	_pbd_route post-gh-pr-create.sh
 elif printf '%s' "$cmd" | grep -qE '(^|[[:space:];&|(`])claude[[:space:]]+plugin([[:space:];&|)`]|$)'; then
