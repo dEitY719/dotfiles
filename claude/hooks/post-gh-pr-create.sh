@@ -44,8 +44,10 @@ tool_name=$(printf '%s' "$input" | jq -r '.tool_name // ""' 2>/dev/null) || exit
 
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""' 2>/dev/null) || exit 0
 # Match `gh pr create` even when prefixed by env-vars (`FOO=bar gh pr create`)
-# or `command gh pr create`. Plain prefix-match would miss those.
-printf '%s' "$cmd" | grep -qE '(^|[[:space:]])gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)' || exit 0
+# or `command gh pr create`, or wrapped in shell control chars
+# (`URL=$(gh pr create ...)`, `a;gh pr create`, #1816). Plain prefix-match would
+# miss those. Keep this regex identical to post-bash-dispatch.sh's route regex.
+printf '%s' "$cmd" | grep -qE '(^|[[:space:];&|(`])gh[[:space:]]+pr[[:space:]]+create([[:space:];&|)`]|$)' || exit 0
 
 # `output` is the gh-cli stdout; tool_response shape varies between Claude
 # Code versions, so fall back through a couple of plausible field names

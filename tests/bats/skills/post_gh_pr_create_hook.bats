@@ -122,6 +122,25 @@ teardown() {
     grep -q '^sync pr 7 In review$' "$CALL_LOG"
 }
 
+@test "post-gh-pr-create: gh pr create after a shell control char still matches (#1816)" {
+    # brokerdesk PR #78: `URL=$(gh pr create ...)` put `(` before `gh`, the
+    # whitespace-only anchor missed it, and the card stayed in Backlog.
+    for c in 'URL=$(gh pr create --draft)' 'a;gh pr create' '(gh pr create)' '`gh pr create`'; do
+        : > "$CALL_LOG"
+        payload="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$c\"},\"tool_response\":{\"output\":\"https://github.com/owner/repo/pull/78\"}}"
+        printf '%s' "$payload" | "$HOOK" >/dev/null
+        grep -q '^sync pr 78 In review$' "$CALL_LOG" || { echo "no sync: $c"; return 1; }
+    done
+}
+
+@test "post-gh-pr-create: gh pr create look-alikes do not match (#1816 NF-1)" {
+    for c in 'ghx pr create' 'echo \"gh pr create\"' 'gh pr created'; do
+        payload="{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$c\"},\"tool_response\":{\"output\":\"https://github.com/owner/repo/pull/78\"}}"
+        printf '%s' "$payload" | "$HOOK" >/dev/null
+    done
+    [ ! -s "$CALL_LOG" ]
+}
+
 # ---------------------------------------------------------------------------
 # Issue #703 — GHE host support
 # ---------------------------------------------------------------------------
