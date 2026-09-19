@@ -220,6 +220,7 @@ _gb_help() {
     ux_info "Usage: gb [-D local] [-D remote [-y] [--all] [<remote>]] [git-branch-flags...]"
     ux_bullet "sub-commands"
     ux_bullet_sub "gb -D local                              delete local branches (keeps: main + current + keywords)"
+    ux_bullet_sub "gb -D <branch>...                        delete the named local branch(es) — keyword protection does not apply to explicit names"
     ux_bullet_sub "gb -D remote [-y] [--all] [<remote>]     delete YOUR OWN branches on the remote SERVER (default: origin, e.g. origin, upstream, keeps: main/master; others' branches are listed but skipped unless --all)"
     ux_bullet_sub "gb -D [remotes/]<remote>/<branch> [-y]    delete ONE branch on that remote server (as printed by 'gb -a', keeps: main/master); falls back to local 'git branch -D' when the remote segment isn't a real remote or a local branch of that literal name exists"
     ux_bullet_sub "gb [flags]                               passthrough to git --no-pager branch"
@@ -284,6 +285,36 @@ _gb_delete_remote_single() {
     fi
 }
 
+# `git branch -D <name>` failed and <name> is no local branch: list local
+# branches containing it. Suggest only — never delete on a guess.
+_gb_suggest_similar() {
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local name="$1" matches b
+    git rev-parse --verify --quiet "refs/heads/$name" >/dev/null 2>&1 && return 0
+    matches=$(git for-each-ref --format='%(refname:short)' refs/heads | grep -F -e "$name")
+    [ -n "$matches" ] || return 0
+    ux_info "Did you mean:"
+    while IFS= read -r b; do
+        [ -n "$b" ] && ux_info "  gb -D $b"
+    done <<EOF
+$matches
+EOF
+}
+
+# Explicit `git branch -D <names>`: the user named the branch, so keyword
+# protection (a bulk-delete policy) never applies. A lone name that fails
+# gets did-you-mean hints instead of git's bare "not found".
+_gb_delete_named() {
+    local rc
+    git --no-pager branch "$@" && return 0
+    rc=$?
+    [ $# -eq 2 ] && _gb_suggest_similar "$2"
+    return "$rc"
+}
+
 git_branch() {
     case "${1:-}" in
         -D)
@@ -321,7 +352,7 @@ git_branch() {
                         *) return "$rc" ;;
                     esac
                     if [ -n "$fallback_target" ]; then
-                        git --no-pager branch -D "$fallback_target"
+                        _gb_delete_named -D "$fallback_target"
                     else
                         git --no-pager branch "$@"
                     fi
@@ -333,7 +364,7 @@ git_branch() {
                         ux_info "Try: gb -D remote $2"
                         return 1
                     fi
-                    git --no-pager branch "$@"
+                    _gb_delete_named "$@"
                     ;;
             esac
             ;;
@@ -430,6 +461,10 @@ EOF
     done <<EOF
 $protected_list
 EOF
+
+    if [ "$protected_count" -gt 0 ]; then
+        ux_info "Keyword-protected branches are skipped here. To delete one, name it: gb -D <branch>"
+    fi
 
     if [ "$delete_count" -eq 0 ]; then
         ux_info "No local branches to delete"
