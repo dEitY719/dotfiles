@@ -21,7 +21,7 @@ _claude_help_summary() {
     ux_bullet_sub "config: settings.json | autoAllow | block paths | block cmds"
     ux_bullet_sub "statusline: time | model | project | context | cost"
     ux_bullet_sub "skills: claude-skills"
-    ux_bullet_sub "plugin: claude plugin sync + restore.sh"
+    ux_bullet_sub "plugin: claude plugin sync + restore.sh | marketplace autoupdate"
     ux_bullet_sub "details: claude-help <section>  (example: claude-help mcp)"
 }
 
@@ -96,6 +96,9 @@ _claude_help_rows_plugin() {
     ux_table_row "./claude/plugin/reconcile.sh --check" "SSOT(installed_plugins) 대비 manifest drift 감지 (유령 엔트리 포함)" ""
     ux_table_row "./claude/plugin/reconcile.sh --apply" "manifest를 SSOT 기준으로 재빌드 + 커밋 (drift 복구)" ""
     ux_table_row "claude-plugin-list" "설치된 플러그인을 마켓플레이스별로 요약 출력" ""
+    ux_table_row "claude-marketplace-autoupdate" "모든 마켓플레이스에 autoUpdate=true 일괄 설정 (PC마다 1회)" ""
+    ux_table_row "claude-marketplace-autoupdate --dry-run" "바뀔 개수만 출력, 파일은 그대로" ""
+    ux_table_row "claude plugin marketplace update" "auto-update와 별개로, 지금 전체 마켓플레이스를 갱신" ""
 }
 
 _claude_help_render_section() {
