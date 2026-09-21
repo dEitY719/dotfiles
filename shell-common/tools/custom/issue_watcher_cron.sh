@@ -282,9 +282,9 @@ _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 # brought up was usable — and 2s was shorter than the 5s already measured to
 # fail. Its twins are _IW_SETTLE_SECONDS above, _PMT_SETTLE_SECONDS /
 # _PMT_START_RETRY_SLEEP in pr_merge_train_cron.sh, and PMV_SETTLE_SECONDS in
-# dEitY719/gh-verify-skills skills/post-merge-verify/references/dispatch.sh.md; all five
-# move together. The wait and this retry are complements, not substitutes — 13s
-# shrinks the race, the retry survives what is left of it.
+# dEitY719/gh-verify-skills skills/post-merge-verify/references/dispatch.sh.md;
+# all five move together. The wait and this retry are complements, not
+# substitutes — 13s shrinks the race, the retry survives what is left of it.
 _IW_START_ATTEMPT_MAX="3"
 _IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-13}"
 

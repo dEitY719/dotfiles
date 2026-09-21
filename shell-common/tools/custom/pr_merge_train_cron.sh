@@ -189,9 +189,9 @@ _PMT_PROMPT_ATTEMPT_MAX="3"
 # brought up was usable — and 2s was shorter than the 5s already measured to
 # fail. Its twins are _PMT_SETTLE_SECONDS above, _IW_SETTLE_SECONDS /
 # _IW_START_RETRY_SLEEP in issue_watcher_cron.sh, and PMV_SETTLE_SECONDS in
-# dEitY719/gh-verify-skills skills/post-merge-verify/references/dispatch.sh.md; all five
-# move together. The wait and this retry are complements, not substitutes — 13s
-# shrinks the race, the retry survives what is left of it.
+# dEitY719/gh-verify-skills skills/post-merge-verify/references/dispatch.sh.md;
+# all five move together. The wait and this retry are complements, not
+# substitutes — 13s shrinks the race, the retry survives what is left of it.
 _PMT_START_ATTEMPT_MAX="3"
 _PMT_START_RETRY_SLEEP="${PMT_START_RETRY_SLEEP:-13}"
 
