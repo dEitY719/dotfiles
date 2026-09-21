@@ -8,9 +8,9 @@
 #   shell-common/tools/custom/issue_watcher_cron.sh        _iw_live_agents
 #   dEitY719/gh-verify-skills  skills/post-merge-verify/
 #       references/dispatch.sh.md                          pmv_tab_for_cwd
-#   claude/skills/gh-pr-merge/references/
+#   dEitY719/gh-pr-skills  skills/merge/references/
 #       herdr-tab-notify.sh.md                             an inline jq block
-#   claude/skills/gh-pr-merge-train/references/
+#   dEitY719/gh-pr-skills  skills/merge-train/references/
 #       train-loop.md                                      an inline jq block
 #
 # They had already drifted into three different predicates. The newest copy —
