@@ -27,6 +27,7 @@ setup() {
     ln -s "$FAKE_WT/claude/docs"                   "$PERSONAL/docs"
     ln -s "$FAKE_WT/claude/global-memory"          "$PERSONAL/projects/GLOBAL/memory"
     ln -s "$FAKE_WT/claude/CLAUDE.md"              "$PERSONAL/CLAUDE.md"
+    ln -s "$FAKE_WT/claude/keybindings.json"       "$PERSONAL/keybindings.json"
 
     # Also stage a "canonical" symlink on ~/.claude-work to prove
     # `repair` leaves clean entries alone.
@@ -69,6 +70,12 @@ teardown() {
     run_in_bash 'claude_accounts_repair >/dev/null 2>&1; readlink "$HOME/.claude-personal/CLAUDE.md"'
     assert_success
     assert_output "$DOTFILES_ROOT/claude/CLAUDE.md"
+}
+
+@test "claude_accounts_repair: rebinds dangling keybindings.json" {
+    run_in_bash 'claude_accounts_repair >/dev/null 2>&1; readlink "$HOME/.claude-personal/keybindings.json"'
+    assert_success
+    assert_output "$DOTFILES_ROOT/claude/keybindings.json"
 }
 
 @test "claude_accounts_repair: converts even a canonical settings.json symlink (#940 legacy layout)" {
