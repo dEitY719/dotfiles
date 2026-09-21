@@ -1,15 +1,29 @@
 #!/usr/bin/env bash
 # tests/bats/skills/_fixtures/gh_pr_post_merge_verify.sh
 # Source-of-truth mirror for the dispatch block documented in
-#   claude/skills/gh-pr-post-merge-verify/SKILL.md  (issue #1511)
+#   dEitY719/gh-verify-skills  skills/post-merge-verify/SKILL.md  (issue #1511)
 # whose verbatim shell lives in
-#   claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md
+#   dEitY719/gh-verify-skills  skills/post-merge-verify/references/dispatch.sh.md
+# (the skill left this repo in #1659 / #1680; the pre-Phase-4
+# `claude/skills/gh-pr-post-merge-verify/...` path this header used to name is
+# gone, and following it is how two upstream changes landed on one side only —
+# #1820).
 #
 # The skill runs inside a Claude session, but everything it decides is a small
 # shell block: given watched-repos.json, `herdr agent list` and the state of
 # the main checkout, does it close a tab, rebase, open a verification session,
 # or silently do nothing? Keep this file in sync with dispatch.sh.md — if the
 # skill block changes, mirror the change here so bats catches the drift.
+#
+# NOT mirrored, deliberately: the skill block's plugin-root prologues — the
+# `$_SC` tier ladder, `export SHELL_COMMON` before the load, the
+# `[ "$(command -v <fn>)" = <fn> ]` load proofs and their `unalias` companions
+# (dEitY719/gh-verify-skills#39, dEitY719/harness-skills#35/#36/#37). This file
+# replaces those loaders wholesale with the stand-ins below, so there is no
+# plugin-root resolution here to drift against; mirroring them would mean
+# re-introducing the layer only to test a copy of it. Their own regression
+# suite is upstream's `tests/dispatch-fence.sh`, which runs the real prologues
+# under sh/bash/zsh/dash. Scope decided in #1820.
 #
 # Every function takes explicit arguments. No globals beyond the FAKE_* knobs
 # the stand-ins read, and no network.
@@ -171,8 +185,18 @@ pmv_error_code() {
 #       as it did before #1511, warning included (there is none).
 #   2 — the file exists but is not parseable JSON. That is a broken SSOT, not
 #       an opt-out, so the caller warns once and still skips.
+#   3 — the lookup key itself is empty, i.e. the caller never bound
+#       TARGET_REPO. `select(.repo == "")` matches nothing, so folding this
+#       into rc 1 would read a broken caller as "unwatched repo" and disable
+#       verification for every repo without a word
+#       (dEitY719/gh-verify-skills#33, #1820).
 pmv_gate() {
     local _file="$1" _repo="$2" _val _rc
+
+    # First, ahead of the jq and readability probes, exactly as the skill
+    # block's `[ -z "${TARGET_REPO:-}" ]` arm sits ahead of its own: a machine
+    # without jq must not turn the broken-caller signal back into a silent skip.
+    [ -n "$_repo" ] || return 3
 
     # No jq → the registry cannot be read, so the feature is unavailable. That
     # is rc 1 (skip silently), never rc 2: an absent tool is not a broken SSOT,
@@ -543,6 +567,12 @@ gh_pr_post_merge_verify() {
 
     _skill=$(pmv_gate "$_file" "$_repo")
     _rc=$?
+    if [ "$_rc" -eq 3 ]; then
+        # Distinct from "unwatched repo": Step 1 never bound TARGET_REPO, so
+        # every repo would silently lose verification (dEitY719/gh-verify-skills#33).
+        printf '[WARN] gh:pr-post-merge-verify: TARGET_REPO is unbound (Step 1) — post-merge verification skipped.\n'
+        return 0
+    fi
     if [ "$_rc" -eq 2 ]; then
         printf '[WARN] gh:pr-post-merge-verify: %s is not valid JSON — post-merge verification skipped.\n' "$_file"
         return 0
