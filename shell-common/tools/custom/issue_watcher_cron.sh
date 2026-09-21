@@ -217,8 +217,9 @@ _IW_IDLE_POLL_SLEEP="${IW_IDLE_POLL_SLEEP:-0.5}"
 # 13 is the repo-wide constant for "herdr just brought something up, wait
 # before touching it" (#1571). Its four twins are _IW_START_RETRY_SLEEP below,
 # _PMT_SETTLE_SECONDS / _PMT_START_RETRY_SLEEP in pr_merge_train_cron.sh, and
-# PMV_SETTLE_SECONDS in
-# claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md. Change one,
+# PMV_SETTLE_SECONDS in dEitY719/gh-verify-skills
+# skills/post-merge-verify/references/dispatch.sh.md (#1659 moved it out of
+# this repo; the old claude/skills/ path is gone). Change one,
 # change all five — #1530/#1549 and #1560/#1571 are both the same defect
 # recurring because only two of the three dispatchers were fixed. The *number*
 # is what those five share; since #1570 the two settle constants spend it as a
@@ -281,7 +282,7 @@ _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 # brought up was usable — and 2s was shorter than the 5s already measured to
 # fail. Its twins are _IW_SETTLE_SECONDS above, _PMT_SETTLE_SECONDS /
 # _PMT_START_RETRY_SLEEP in pr_merge_train_cron.sh, and PMV_SETTLE_SECONDS in
-# claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md; all five
+# dEitY719/gh-verify-skills skills/post-merge-verify/references/dispatch.sh.md; all five
 # move together. The wait and this retry are complements, not substitutes — 13s
 # shrinks the race, the retry survives what is left of it.
 _IW_START_ATTEMPT_MAX="3"

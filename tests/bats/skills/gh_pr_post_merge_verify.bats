@@ -136,6 +136,37 @@ _pmv_log_count() { grep -c -- "$1" "$FAKE_HERDR_LOG" || true; }
     [ "$status" -eq 2 ]
 }
 
+# --- #1820: an unbound registry key is a broken caller, not an opt-out ----
+#
+# `select(.repo == "")` matches nothing, so without this guard an empty key
+# lands on the same rc as an unregistered repo and the dispatch disables
+# verification for every repo without a word. The skill block
+# (gh-verify-skills, skills/post-merge-verify/references/dispatch.sh.md) splits
+# the two with a `[ -z "${TARGET_REPO:-}" ]` arm at the top of the gate; this
+# mirror splits them with rc 3 (dEitY719/gh-verify-skills#33).
+
+@test "1820: an unbound repo key is rc 3, distinct from an unregistered repo" {
+    run pmv_gate "$WATCHED" ""
+    [ "$status" -eq 3 ]
+    assert_output ""
+}
+
+@test "1820: rc 3 precedes the jq and readability probes" {
+    # The skill block warns before it ever looks at the registry, so a machine
+    # without jq — or a missing file — must not turn the broken-caller signal
+    # back into a silent skip.
+    FAKE_JQ_PRESENT=0 run pmv_gate "${TEST_TEMP_HOME}/nope.json" ""
+    [ "$status" -eq 3 ]
+}
+
+@test "1820: an unbound repo warns once and touches nothing" {
+    run gh_pr_post_merge_verify 77 "" github.com "$MAIN_ROOT" wt/issue-77/1 "$WATCHED"
+    assert_success
+    assert_output --partial "TARGET_REPO is unbound"
+    run cat "$FAKE_HERDR_LOG"
+    assert_output ""
+}
+
 @test "gate: an entry present but with no verify_skill is a silent no-op (#1555)" {
     # issue-watcher may track a repo gh:pr-post-merge-verify never verifies —
     # a bare {repo, path} entry with no verify_skill field at all.
