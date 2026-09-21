@@ -70,6 +70,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 ~/.claude-personal/plugins               -> ~/.claude-shared/plugins
 ~/.claude-personal/projects/GLOBAL/memory -> dotfiles/claude/global-memory
 ~/.claude-personal/CLAUDE.md             -> dotfiles/claude/CLAUDE.md       (글로벌 지침, #1115)
+~/.claude-personal/keybindings.json      -> dotfiles/claude/keybindings.json (Ctrl+J -> chat:sendNow; Ctrl+Enter 는 대부분 터미널에서 LF 로 도착해 ctrl+j 에 바인딩)
 
 # 사내 PC (옵션 2) — 단일 계정 (issue #571)
 ~/.claude/settings.json                  = gateway-cli setup 이 쓰는 실파일 (조직 LLM Gateway 도구 소유, 2026-08-18~)
@@ -79,6 +80,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 ~/.claude/plugins                        -> ~/.claude-shared/plugins
 ~/.claude/projects/GLOBAL/memory         -> dotfiles/claude/global-memory
 ~/.claude/CLAUDE.md                      -> dotfiles/claude/CLAUDE.md       (글로벌 지침, #1115)
+~/.claude/keybindings.json               -> dotfiles/claude/keybindings.json (Ctrl+J -> chat:sendNow; Ctrl+Enter 는 대부분 터미널에서 LF 로 도착해 ctrl+j 에 바인딩)
 
 # 모든 환경 공통 (issue #791 — CLI 모두 entry-level 합성)
 ~/.codex/skills/<name>                   -> <workspace>/<repo>/skills/<name> (entry symlink, #707 → #791)

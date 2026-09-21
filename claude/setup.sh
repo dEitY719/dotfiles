@@ -12,7 +12,8 @@
 #   4. Creates ~/.claude/docs symlink (custom docs directory)
 #   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
 #   6. Creates ~/.claude/CLAUDE.md symlink (global instructions, #1115)
-#   7. Verifies ~/.claude directory structure
+#   7. Creates ~/.claude/keybindings.json symlink (Ctrl+J → chat:sendNow)
+#   8. Verifies ~/.claude directory structure
 #
 # Internal mode 에서 ~/.claude/settings.json 은 (2026-08-18 부터) 조직 LLM
 # Gateway 전환 도구 `gateway-cli setup` 이 소유·작성한다 — dotfiles 는 이
@@ -64,6 +65,7 @@ HOME_DOCS="${HOME_CLAUDE}/docs"
 HOME_GLOBAL_MEMORY="${HOME_CLAUDE}/projects/GLOBAL/memory"
 HOME_WORKFLOWS="${HOME_CLAUDE}/workflows"
 HOME_CLAUDE_MD="${HOME_CLAUDE}/CLAUDE.md"
+HOME_KEYBINDINGS="${HOME_CLAUDE}/keybindings.json"
 
 # Dotfiles source locations
 CLAUDE_SETTINGS_SOURCE="${CLAUDE_DOTFILES}/settings.json"
@@ -72,6 +74,7 @@ CLAUDE_DOCS_SOURCE="${CLAUDE_DOTFILES}/docs"
 CLAUDE_GLOBAL_MEMORY_SOURCE="${CLAUDE_DOTFILES}/global-memory"
 CLAUDE_WORKFLOWS_SOURCE="${CLAUDE_DOTFILES}/workflows"
 CLAUDE_MD_SOURCE="${CLAUDE_DOTFILES}/CLAUDE.md"
+CLAUDE_KEYBINDINGS_SOURCE="${CLAUDE_DOTFILES}/keybindings.json"
 
 # Load UX library (unified library at shell-common/tools/ux_lib/)
 UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
@@ -533,6 +536,7 @@ _print_change_summary() {
 [ -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ] || log_error_and_exit "global-memory 없음: $CLAUDE_GLOBAL_MEMORY_SOURCE"
 [ -d "$CLAUDE_WORKFLOWS_SOURCE" ]    || log_error_and_exit "workflows 디렉토리 없음: $CLAUDE_WORKFLOWS_SOURCE"
 [ -f "$CLAUDE_MD_SOURCE" ]            || log_error_and_exit "CLAUDE.md 없음: $CLAUDE_MD_SOURCE"
+[ -f "$CLAUDE_KEYBINDINGS_SOURCE" ]   || log_error_and_exit "keybindings.json 없음: $CLAUDE_KEYBINDINGS_SOURCE"
 
 # Auto-migrate legacy statusLine.command in claude/settings.json before any
 # downstream symlink uses it (issue #300, item A). Idempotent — only acts
@@ -676,6 +680,9 @@ if [ "$_setup_mode" = "internal" ]; then
     _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
     _single_account_ensure_link "$CLAUDE_WORKFLOWS_SOURCE"              "$HOME_WORKFLOWS"
     _single_account_ensure_link "$CLAUDE_MD_SOURCE"                     "$HOME_CLAUDE_MD"
+    # Claude Code hot-reloads keybindings.json; ctrl+j → chat:sendNow
+    # because terminals send LF for Ctrl+Enter.
+    _single_account_ensure_link "$CLAUDE_KEYBINDINGS_SOURCE"            "$HOME_KEYBINDINGS"
 
     # --- Verify Links (single-account) ---
     # settings.json is intentionally absent from this list — gateway-cli
@@ -685,7 +692,7 @@ if [ "$_setup_mode" = "internal" ]; then
     # skills/ is a real directory of entry-level symlinks (#707, F-8), so
     # it is checked as `-d` (and `! -L`) rather than `-L`.
     ux_section "심볼릭 링크 확인 (internal/single-account)"
-    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md; do
+    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md keybindings.json; do
         if [ -L "$HOME/.claude/$link" ]; then
             log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
         else
@@ -787,7 +794,7 @@ for acct in $ENABLED_ACCOUNTS; do
     else
         log_error_and_exit "${acct}/settings.json 실파일 생성 실패"
     fi
-    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md; do
+    for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md keybindings.json; do
         if [ -L "${cdir}/${link}" ]; then
             log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
         else
