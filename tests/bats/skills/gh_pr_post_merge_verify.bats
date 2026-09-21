@@ -159,6 +159,17 @@ _pmv_log_count() { grep -c -- "$1" "$FAKE_HERDR_LOG" || true; }
     [ "$status" -eq 3 ]
 }
 
+@test "1820: a whitespace-only repo key is a lookup miss, not an unbound caller" {
+    # `[ -n "   " ]` is true, so the rc-3 arm deliberately lets it through to
+    # the registry lookup, where it matches nothing and lands on rc 1. That is
+    # the skill block's behaviour too — its guard is `[ -z "${TARGET_REPO:-}" ]`,
+    # which a whitespace string also passes. Pinning it keeps the mirror honest
+    # about where the boundary sits (agy review, PR #1823).
+    run pmv_gate "$WATCHED" "   "
+    [ "$status" -eq 1 ]
+    assert_output ""
+}
+
 @test "1820: an unbound repo warns once and touches nothing" {
     run gh_pr_post_merge_verify 77 "" github.com "$MAIN_ROOT" wt/issue-77/1 "$WATCHED"
     assert_success
