@@ -233,6 +233,9 @@ LOCAL
     # CLAUDE.md is a directory-entry symlink to the global-instructions SSOT (#1115).
     [ -L "$HOME/.claude-personal/CLAUDE.md" ]
     [ "$(readlink "$HOME/.claude-personal/CLAUDE.md")" = "${DOTFILES_ROOT}/claude/CLAUDE.md" ]
+    # keybindings.json rides the same SSOT-symlink lane (Ctrl+J → chat:sendNow).
+    [ -L "$HOME/.claude-personal/keybindings.json" ]
+    [ "$(readlink "$HOME/.claude-personal/keybindings.json")" = "${DOTFILES_ROOT}/claude/keybindings.json" ]
     # docs/ is still a single directory-level symlink (#575). skills/ was
     # promoted to a real directory of per-entry symlinks by #707, F-8 so
     # a private overlay can be layered into the same target dir.
@@ -473,6 +476,14 @@ SH
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
     assert_success
     assert_output --partial "CLAUDE.md: symlink ✓"
+}
+
+@test "bash: claude_accounts_status reports keybindings.json symlink" {
+    # Same hand-enumerated link set as the CLAUDE.md test above.
+    mkdir -p "${DOTFILES_ROOT}/claude/docs" "${DOTFILES_ROOT}/claude/workflows"
+    run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "keybindings.json: symlink ✓"
 }
 
 @test "bash: claude_accounts_status reports NOT logged in when no .credentials.json" {
@@ -816,6 +827,7 @@ _setup_sh_prereqs() {
     [ ! -L "$HOME/.claude-personal/settings.json" ]
     [ -L "$HOME/.claude-personal/projects/GLOBAL/memory" ]
     [ -L "$HOME/.claude-personal/CLAUDE.md" ]
+    [ -L "$HOME/.claude-personal/keybindings.json" ]
 }
 
 # ---------- Regression: issue #1701 ----------
@@ -895,6 +907,7 @@ _setup_sh_prereqs() {
     [ -d "$HOME/.claude" ]
     [ -L "$HOME/.claude/statusline-command.sh" ]
     [ -L "$HOME/.claude/CLAUDE.md" ]
+    [ -L "$HOME/.claude/keybindings.json" ]
 }
 
 @test "bash: claude/setup.sh is idempotent (second run)" {

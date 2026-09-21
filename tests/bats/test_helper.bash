@@ -101,6 +101,7 @@ setup_isolated_dotfiles_root() {
     mkdir -p "$iso_root/claude/docs" "$iso_root/claude/global-memory" \
         "$iso_root/claude/workflows"
     cp "$real_root/claude/CLAUDE.md" "$iso_root/claude/CLAUDE.md"
+    cp "$real_root/claude/keybindings.json" "$iso_root/claude/keybindings.json"
 
     if [ -f "$real_root/claude/settings.json" ]; then
         cp "$real_root/claude/settings.json" "$iso_root/claude/settings.json"
