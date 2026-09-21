@@ -6,8 +6,8 @@
 # hand-copied answer:
 #
 #   shell-common/tools/custom/issue_watcher_cron.sh        _iw_live_agents
-#   claude/skills/gh-pr-post-merge-verify/references/
-#       dispatch.sh.md                                     pmv_tab_for_cwd
+#   dEitY719/gh-verify-skills  skills/post-merge-verify/
+#       references/dispatch.sh.md                          pmv_tab_for_cwd
 #   claude/skills/gh-pr-merge/references/
 #       herdr-tab-notify.sh.md                             an inline jq block
 #   claude/skills/gh-pr-merge-train/references/

@@ -119,7 +119,7 @@ typo could sync a different repo's board.
 | Default | `900000` (15 min) |
 | Active when | set to a millisecond count |
 | Scope | `gh-verify:post-merge-verify` — the `herdr agent prompt --wait --until idle` cap |
-| Source SSOT | `claude/skills/gh-pr-post-merge-verify/references/dispatch.sh.md` |
+| Source SSOT | `dEitY719/gh-verify-skills` `skills/post-merge-verify/references/dispatch.sh.md` |
 | Issue | [#1511](https://github.com/dEitY719/dotfiles/issues/1511) |
 
 Caps how long the dispatch waits for the verification session to settle
