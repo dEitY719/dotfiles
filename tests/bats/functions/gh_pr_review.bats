@@ -996,8 +996,11 @@ EOF
     run cat "$out"
     assert_success
     assert_output --partial "AI Review · codex · --review=thorough"
-    assert_output --partial "<!-- ai-review:codex -->"
-    assert_output --partial "<!-- /ai-review:codex -->"
+    # A non-default preset names itself in the marker (gh-verify-skills#56) —
+    # without that field two presets of one AI write the same marker and the
+    # second review reads as a duplicate of the first.
+    assert_output --partial "<!-- ai-review:codex:thorough -->"
+    assert_output --partial "<!-- /ai-review:codex:thorough -->"
     assert_output --partial "<!-- ai-metrics:gh-pr-review -->"
     assert_output --partial "📊 ~2500 tokens · 👤 ~2.5 h · 🤖 ~7 min"
     assert_output --partial "[BLOCKER] foo.sh:1"
@@ -1015,8 +1018,54 @@ EOF
         0000111122223333
     run cat "$out"
     assert_success
+    assert_output --partial "<!-- ai-review:codex:thorough:0000111122223333 -->"
+    assert_output --partial "<!-- /ai-review:codex:thorough:0000111122223333 -->"
+}
+
+# gh-verify-skills#56: the `default` preset's marker is UNCHANGED, byte for
+# byte. This is the backward-compatibility claim the whole preset extension
+# rests on — every ai-review comment already on a live PR was written by a
+# default-preset run, and `devx_pr_review_all_lane_block <ai> <sha> <login>`
+# must keep resolving it.
+@test "build_comment_body (#56): the default preset keeps the 2-field marker" {
+    _source_module
+    local out="$TEST_TEMP_HOME/body.md"
+    local ai_out="$TEST_TEMP_HOME/ai-out.txt"
+    printf 'Verdict: LGTM\n' >"$ai_out"
+    _gh_pr_review_build_comment_body "$out" codex default "$ai_out" 2500 1.0 7 \
+        0000111122223333
+    run cat "$out"
+    assert_success
     assert_output --partial "<!-- ai-review:codex:0000111122223333 -->"
     assert_output --partial "<!-- /ai-review:codex:0000111122223333 -->"
+    refute_output --partial "<!-- ai-review:codex:default"
+}
+
+# The writer and the reader are one wire format: what gh:pr-review posts is
+# what devx:pr-review-all harvests. A test that only checks the string the
+# writer emits cannot catch the two drifting apart, which is the defect class
+# this marker has already produced once.
+@test "build_comment_body (#56): each preset's marker is harvested by its own lane" {
+    _source_module
+    # shellcheck disable=SC1090
+    source "${DOTFILES_ROOT:?}/shell-common/functions/devx_pr_review_all.sh"
+    local out="$TEST_TEMP_HOME/body.md"
+    local ai_out="$TEST_TEMP_HOME/ai-out.txt"
+    local bodies
+
+    printf 'Verdict: CONCERNS\n' >"$ai_out"
+    _gh_pr_review_build_comment_body "$out" opencode default "$ai_out" 2500 1.0 7 deadbeef
+    printf 'Verdict: BLOCKING\n' >"$ai_out"
+    _gh_pr_review_build_comment_body "$out.2" opencode thorough "$ai_out" 2500 2.5 7 deadbeef
+    bodies=$(cat "$out" "$out.2" | jq -Rs '[{user: {login: "pipeline-bot"}, body: .}]')
+
+    _harvest() {
+        printf '%s\n' "$bodies" |
+            devx_pr_review_all_lane_block opencode deadbeef pipeline-bot "$1" |
+            devx_pr_review_all_verdict
+    }
+    assert_equal "$(_harvest default)" "concerns"
+    assert_equal "$(_harvest thorough)" "blocking"
 }
 
 # An unreadable headRefOid must not produce a dangling `codex:` tag that
@@ -1029,8 +1078,8 @@ EOF
     _gh_pr_review_build_comment_body "$out" codex thorough "$ai_out" 2500 2.5 7 ""
     run cat "$out"
     assert_success
-    assert_output --partial "<!-- ai-review:codex -->"
-    refute_output --partial "<!-- ai-review:codex: -->"
+    assert_output --partial "<!-- ai-review:codex:thorough -->"
+    refute_output --partial "<!-- ai-review:codex:thorough: -->"
 }
 
 # The sha must actually reach the builder from the consolidated `gh pr view`

@@ -297,13 +297,16 @@ _as_comments() {
     jq -Rs --arg login "${1-}" '[{user: {login: $login}, body: .}]'
 }
 
-#   _lane_block_by <author-login> [<ai>] [<sha>]   # body text on stdin
+#   _lane_block_by <author-login> [<ai>] [<sha>] [<preset>]
+#       # body text on stdin
 # Harvests as TRUSTED_LOGIN regardless of who authored the comment, so a test
 # passing an author other than TRUSTED_LOGIN is exercising the forgery path.
+# <preset> is optional (gh-verify-skills#56); omitting it is the pre-#56
+# three-argument call, which must keep meaning `default`.
 _lane_block_by() {
-    local _author="${1-}" _ai="${2-}" _sha="${3-}"
+    local _author="${1-}" _ai="${2-}" _sha="${3-}" _preset="${4-}"
     _as_comments "$_author" |
-        devx_pr_review_all_lane_block "$_ai" "$_sha" "$TRUSTED_LOGIN"
+        devx_pr_review_all_lane_block "$_ai" "$_sha" "$TRUSTED_LOGIN" "$_preset"
 }
 
 # Step 3 dispatches each reviewer lane as a subagent, and `gh:pr-review`
@@ -1348,4 +1351,194 @@ _apply_stub() {
     assert_output --partial '[OK] PR #7: every lane non-blocking (2 lane(s))'
     assert_output --partial 'cleared'
     refute_output --partial '[WARN]'
+}
+
+# ── gh-verify-skills#56: one lane per <ai>:<preset> ──────────────────
+# The marker grew an optional preset field so two presets of the SAME AI are
+# two independent lanes. `default` keeps the unchanged 2-field marker, so
+# every comment already on a live PR still resolves; anything else carries
+# `<ai>:<preset>:<sha>`. Both halves are checked here, and the freshness rule
+# from BUG 2 has to keep holding inside each preset.
+
+@test "lane block (#56): the default lane does not harvest a thorough block" {
+    run _lane_block_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef default <<'EOF'
+<!-- ai-review:opencode:thorough:deadbeefdeadbeef -->
+Verdict: BLOCKING
+<!-- /ai-review:opencode:thorough:deadbeefdeadbeef -->
+EOF
+    assert_success
+    assert_output ""
+}
+
+@test "lane block (#56): the thorough lane does not harvest a default block" {
+    run _lane_block_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef thorough <<'EOF'
+<!-- ai-review:opencode:deadbeefdeadbeef -->
+Verdict: BLOCKING
+<!-- /ai-review:opencode:deadbeefdeadbeef -->
+EOF
+    assert_success
+    assert_output ""
+}
+
+@test "lane block (#56): each preset harvests its own block from the same comment" {
+    local body
+    body=$(cat <<'EOF'
+<!-- ai-review:opencode:deadbeefdeadbeef -->
+Verdict: CONCERNS
+<!-- /ai-review:opencode:deadbeefdeadbeef -->
+<!-- ai-review:opencode:thorough:deadbeefdeadbeef -->
+Verdict: BLOCKING
+<!-- /ai-review:opencode:thorough:deadbeefdeadbeef -->
+EOF
+    )
+    run _lane_block_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef default <<<"$body"
+    assert_success
+    assert_line "Verdict: CONCERNS"
+    refute_output --partial "BLOCKING"
+
+    run _lane_block_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef thorough <<<"$body"
+    assert_success
+    assert_line "Verdict: BLOCKING"
+    refute_output --partial "CONCERNS"
+}
+
+@test "lane block (#56): omitting the preset keeps the legacy marker match" {
+    # The pre-#56 three-argument call shape against the pre-#56 marker: this
+    # is the byte-for-byte backward-compatibility claim.
+    run _lane_block_by "$TRUSTED_LOGIN" agy deadbeefdeadbeef <<'EOF'
+<!-- ai-review:agy:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:agy:deadbeefdeadbeef -->
+EOF
+    assert_success
+    assert_line "Verdict: LGTM"
+}
+
+@test "lane block (#56): an explicit 'default' preset matches the same marker" {
+    run _lane_block_by "$TRUSTED_LOGIN" agy deadbeefdeadbeef default <<'EOF'
+<!-- ai-review:agy:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:agy:deadbeefdeadbeef -->
+EOF
+    assert_success
+    assert_line "Verdict: LGTM"
+}
+
+@test "lane block (#56): freshness still applies inside a preset" {
+    run _lane_block_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef thorough <<'EOF'
+<!-- ai-review:opencode:thorough:0000111122223333 -->
+Verdict: LGTM
+<!-- /ai-review:opencode:thorough:0000111122223333 -->
+EOF
+    assert_success
+    assert_output ""
+}
+
+@test "lane block (#56): a preset block whose close tag drops the preset is not harvested" {
+    run _lane_block_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef thorough <<'EOF'
+<!-- ai-review:opencode:thorough:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:opencode:deadbeefdeadbeef -->
+EOF
+    assert_success
+    assert_output ""
+}
+
+@test "aggregate (#56): the same AI's default CONCERNS + thorough BLOCKING -> review-blocked" {
+    # Each <ai>:<preset> lane is an independent verdict; a second preset of an
+    # AI that already passed must still be able to block the merge gate.
+    run devx_pr_review_all_aggregate <<'EOF'
+concerns
+blocking
+EOF
+    assert_success
+    assert_line "label=review-blocked"
+    assert_line "lanes=2"
+}
+
+@test "aggregate (#56): end-to-end — two presets of one AI produce two lanes" {
+    run bash -c '
+        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        BODIES=$(jq -nc --arg b "<!-- ai-review:opencode:deadbeef -->
+Verdict: CONCERNS
+<!-- /ai-review:opencode:deadbeef -->
+<!-- ai-review:opencode:thorough:deadbeef -->
+Verdict: BLOCKING
+<!-- /ai-review:opencode:thorough:deadbeef -->" "[{user: {login: \"pipeline-bot\"}, body: \$b}]")
+        for lane in opencode:default opencode:thorough; do
+            printf "%s\n" "$BODIES" |
+                devx_pr_review_all_lane_block "${lane%%:*}" deadbeef pipeline-bot "${lane#*:}" |
+                devx_pr_review_all_verdict
+        done | devx_pr_review_all_aggregate'
+    assert_success
+    assert_line "label=review-blocked"
+    assert_line "lanes=2"
+}
+
+# ── gh-verify-skills#56: $LANES rows ─────────────────────────────────
+# The skill's per-lane status variable grew a preset field
+# (`<ai>:<preset>:ok|skip|fail`). Rows written before #56 are 2-field and must
+# keep reading as the `default` preset — the same rule the marker grammar
+# follows, kept in one place instead of re-derived by every reader.
+
+@test "lane rows (#56): a legacy 2-field row reads as the default preset" {
+    run devx_pr_review_all_lane_rows <<'EOF'
+agy:ok
+codex:skip
+EOF
+    assert_success
+    assert_line "agy:default:ok"
+    assert_line "codex:default:skip"
+}
+
+@test "lane rows (#56): a 3-field row is passed through unchanged" {
+    run devx_pr_review_all_lane_rows <<'EOF'
+opencode:thorough:ok
+hermes:performance:fail
+EOF
+    assert_success
+    assert_line "opencode:thorough:ok"
+    assert_line "hermes:performance:fail"
+}
+
+@test "lane rows (#56): legacy and new rows mix in one stream" {
+    run devx_pr_review_all_lane_rows <<'EOF'
+agy:ok
+opencode:default:ok
+opencode:thorough:ok
+EOF
+    assert_success
+    assert_line "agy:default:ok"
+    assert_line "opencode:default:ok"
+    assert_line "opencode:thorough:ok"
+    assert_equal "${#lines[@]}" 3
+}
+
+@test "lane rows (#56): blank rows are dropped, never counted as a lane" {
+    run devx_pr_review_all_lane_rows <<'EOF'
+
+agy:ok
+
+EOF
+    assert_success
+    assert_equal "${#lines[@]}" 1
+    assert_line "agy:default:ok"
+}
+
+@test "lane rows (#56): a final row with no trailing newline still counts" {
+    run bash -c '
+        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        printf "agy:ok\nopencode:thorough:skip" | devx_pr_review_all_lane_rows'
+    assert_success
+    assert_line "agy:default:ok"
+    assert_line "opencode:thorough:skip"
+}
+
+@test "lane rows (#56): a row that is neither 2- nor 3-field is passed through verbatim" {
+    # Visible garbage in the report beats a silently reshaped fake lane.
+    run devx_pr_review_all_lane_rows <<'EOF'
+nonsense
+EOF
+    assert_success
+    assert_line "nonsense"
 }

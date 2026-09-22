@@ -555,12 +555,17 @@ _gh_pr_reply_history_has_review() {
     # the trusted login would be the bug this parameter exists to fix.
     _bodies=$(_gh_pr_reply_login_bodies "${1-}")
     if [ -n "$_sha" ]; then
-        # Marker shape is `<!-- ai-review:<ai>:<sha> -->`. The reviewer field
-        # is matched as "no colon" so the sha cannot be satisfied by a colon
-        # further left in the same comment. A sha is hex, so it carries no
+        # Marker shape is `<!-- ai-review:<ai>[:<preset>]:<sha> -->`. Each
+        # field is matched as "no colon, no space" so the sha cannot be
+        # satisfied by a colon further left in the same comment; the optional
+        # middle field is the preset a non-`default` reviewer lane carries
+        # (gh-verify-skills#56). Matching only the 2-field form here would
+        # have read a PR reviewed solely by, say, `opencode:thorough` as
+        # carrying no external review at all — and that is the exact evidence
+        # this probe gates `review-passed` on. A sha is hex, so it carries no
         # regex metacharacter of its own.
         printf '%s\n' "$_bodies" |
-            grep -q -e "<!-- ai-review:[^:]*:$_sha -->" || return 1
+            grep -q -e "<!-- ai-review:[^: ]*\(:[^: ]*\)\{0,1\}:$_sha -->" || return 1
         return 0
     fi
     case "$_bodies" in
