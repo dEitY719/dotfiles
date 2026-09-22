@@ -13,7 +13,7 @@
 
 load '../test_helper'
 
-FUNCS="devx_pr_review_all_parse devx_pr_review_all_verdict devx_pr_review_all_aggregate devx_pr_review_all_lane_block devx_pr_review_all_already_reviewed devx_pr_review_all_apply_label"
+FUNCS="devx_pr_review_all_parse devx_pr_review_all_verdict devx_pr_review_all_aggregate devx_pr_review_all_lane_block devx_pr_review_all_already_reviewed devx_pr_review_all_lane_rows devx_pr_review_all_apply_label"
 
 setup() {
     setup_isolated_home

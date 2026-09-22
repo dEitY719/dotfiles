@@ -860,7 +860,7 @@ _gh_pr_review_build_prompt() {
 # Section 4 — PR comment body builder + post
 # ============================================================================
 # Mirrors references/post-comment.md verbatim. The `<details>` wrappers
-# and the `<!-- ai-review:<ai>:<head-sha> -->` /
+# and the `<!-- ai-review:<ai>[:<preset>]:<head-sha> -->` /
 # `<!-- ai-metrics:gh-pr-review -->` markers are the SSOT for cross-skill
 # ai-metrics aggregation. The `:<head-sha>` suffix on the ai-review marker
 # is the freshness tag `devx:pr-review-all` gates its verdict label on
@@ -903,8 +903,10 @@ _gh_pr_review_estimate_tokens() {
 # Builds the PR comment body to the given output file. Args: $1 = output
 # file, $2 = AI name, $3 = preset, $4 = path to AI stdout, $5 = tokens,
 # $6 = human_h, $7 = elapsed_min, $8 = head sha (optional). The verbatim
-# AI stdout is inlined between `<!-- ai-review:<ai>:<head-sha> -->`
-# markers; the metrics footer follows the dotfiles SSOT
+# AI stdout is inlined between `<!-- ai-review:<ai>[:<preset>]:<head-sha> -->`
+# markers — the `<preset>` field appears only for a non-`default` preset
+# (gh-verify-skills#56), so a `default` review's marker is byte-for-byte what
+# it has always been; the metrics footer follows the dotfiles SSOT
 # (#317 / PR #320 / #367).
 #
 # The sha is what makes the marker a claim about ONE commit rather than
@@ -924,8 +926,15 @@ _gh_pr_review_build_comment_body() {
     local elapsed="$7"
     local head_sha="${8-}"
 
+    # `<ai>` for the default preset (the unchanged, pre-#56 wire format), and
+    # `<ai>:<preset>` for any other. Without the preset field two presets of
+    # the same AI write the SAME marker on the same head, and whichever lane
+    # posts second is read as a duplicate of the first — one verdict silently
+    # standing in for two. SSOT for the grammar's reader side:
+    # devx_pr_review_all_lane_block (gh-verify-skills#56).
     local tag="$ai"
-    [ -n "$head_sha" ] && tag="${ai}:${head_sha}"
+    [ -n "$preset" ] && [ "$preset" != "default" ] && tag="${ai}:${preset}"
+    [ -n "$head_sha" ] && tag="${tag}:${head_sha}"
 
     {
         printf '<details>\n'

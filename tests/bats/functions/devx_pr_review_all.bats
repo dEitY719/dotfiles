@@ -108,13 +108,107 @@ setup() {
     assert_output --partial "remote=upstream"
 }
 
+# ── gh-verify-skills#56: multi-preset review lanes (--lanes) ──────────
+# The flag names one `<ai>:<preset>` lane per comma-separated entry. Omitting
+# it must reproduce today's four-lane fan-out exactly — that is the whole
+# backward-compatibility claim — and a malformed value must fail loudly
+# instead of quietly dispatching fewer lanes than asked for.
+
+@test "--lanes omitted -> the legacy four default lanes" {
+    run devx_pr_review_all_parse 123
+    assert_success
+    assert_line "lanes=agy:default,codex:default,opencode:default,hermes:default"
+}
+
+@test "--lanes takes a two-preset fan-out of the same AI" {
+    run devx_pr_review_all_parse 123 --lanes "opencode:default,opencode:thorough"
+    assert_success
+    assert_line "lanes=opencode:default,opencode:thorough"
+}
+
+@test "--lanes= form is equivalent" {
+    run devx_pr_review_all_parse 123 --lanes=hermes:security
+    assert_success
+    assert_line "lanes=hermes:security"
+}
+
+@test "--lanes accepts agy/codex without special-casing them" {
+    # Multi-preset for these two is out of scope for cost reasons, but that is
+    # a policy the caller applies — the parser must not encode it.
+    run devx_pr_review_all_parse 123 --lanes "agy:thorough,codex:security"
+    assert_success
+    assert_line "lanes=agy:thorough,codex:security"
+}
+
+@test "--lanes with no value -> exit 2" {
+    run devx_pr_review_all_parse 123 --lanes
+    assert_failure 2
+}
+
+@test "--lanes entry without a preset -> exit 2 (never a silent default)" {
+    run devx_pr_review_all_parse 123 --lanes "opencode"
+    assert_failure 2
+    assert_output --partial "<ai>:<preset>"
+}
+
+@test "--lanes entry with a third field -> exit 2" {
+    run devx_pr_review_all_parse 123 --lanes "opencode:thorough:extra"
+    assert_failure 2
+}
+
+@test "--lanes empty value -> exit 2 (zero lanes is not a fan-out)" {
+    run devx_pr_review_all_parse 123 --lanes ""
+    assert_failure 2
+}
+
+@test "--lanes with an empty entry (trailing comma) -> exit 2" {
+    run devx_pr_review_all_parse 123 --lanes "opencode:default,"
+    assert_failure 2
+}
+
+@test "--lanes empty ai or empty preset -> exit 2" {
+    run devx_pr_review_all_parse 123 --lanes ":default"
+    assert_failure 2
+    run devx_pr_review_all_parse 123 --lanes "opencode:"
+    assert_failure 2
+}
+
+@test "--lanes repeated entry -> exit 2 (the dup would be deduped away)" {
+    # The #1613 guard would skip the second copy once the first posts, so
+    # accepting it would dispatch fewer lanes than the report claims.
+    run devx_pr_review_all_parse 123 --lanes "opencode:default,opencode:default"
+    assert_failure 2
+    assert_output --partial "repeated"
+}
+
+@test "--lanes rejects a Korean --review alias (it would break the marker)" {
+    # `gh-pr:review` normalizes 꼼꼼 -> thorough, so the lane would post a
+    # `thorough` marker this skill (still looking for 꼼꼼) could never find.
+    run devx_pr_review_all_parse 123 --lanes "opencode:꼼꼼"
+    assert_failure 2
+}
+
+@test "--lanes with a space in an entry -> exit 2" {
+    run devx_pr_review_all_parse 123 --lanes "opencode:thor ough"
+    assert_failure 2
+}
+
+@test "--lanes combines with the other flags" {
+    run devx_pr_review_all_parse 123 upstream --lanes "hermes:performance" --force-review --defer-reply 8
+    assert_success
+    assert_line "lanes=hermes:performance"
+    assert_line "force_review=1"
+    assert_output --partial "remote=upstream"
+    assert_output --partial "reply_mode=defer"
+}
+
 @test "help flag -> help_requested" {
     run devx_pr_review_all_parse --help
     assert_success
     assert_output --partial "help_requested=1"
 }
 
-@test "parse does not leak pr/remote/reply_mode/reply_delay/_no_reply/_remote_set/_force_review into the caller's shell" {
+@test "parse does not leak pr/remote/reply_mode/reply_delay/_no_reply/_remote_set/_force_review/lanes into the caller's shell" {
     pr="SENTINEL_PR"
     remote="SENTINEL_REMOTE"
     reply_mode="SENTINEL_REPLY_MODE"
@@ -122,7 +216,14 @@ setup() {
     _no_reply="SENTINEL_NO_REPLY"
     _remote_set="SENTINEL_REMOTE_SET"
     _force_review="SENTINEL_FORCE_REVIEW"
-    devx_pr_review_all_parse 123 upstream --defer-reply 8 --force-review >/dev/null
+    lanes="SENTINEL_LANES"
+    _lane_rest="SENTINEL_LANE_REST"
+    _lane_item="SENTINEL_LANE_ITEM"
+    _lane_ai="SENTINEL_LANE_AI"
+    _lane_preset="SENTINEL_LANE_PRESET"
+    _lane_seen="SENTINEL_LANE_SEEN"
+    devx_pr_review_all_parse 123 upstream --defer-reply 8 --force-review \
+        --lanes "opencode:default,opencode:thorough" >/dev/null
     _rc=$?
     [ "$_rc" -eq 0 ]
     [ "$pr" = "SENTINEL_PR" ]
@@ -132,6 +233,12 @@ setup() {
     [ "$_no_reply" = "SENTINEL_NO_REPLY" ]
     [ "$_remote_set" = "SENTINEL_REMOTE_SET" ]
     [ "$_force_review" = "SENTINEL_FORCE_REVIEW" ]
+    [ "$lanes" = "SENTINEL_LANES" ]
+    [ "$_lane_rest" = "SENTINEL_LANE_REST" ]
+    [ "$_lane_item" = "SENTINEL_LANE_ITEM" ]
+    [ "$_lane_ai" = "SENTINEL_LANE_AI" ]
+    [ "$_lane_preset" = "SENTINEL_LANE_PRESET" ]
+    [ "$_lane_seen" = "SENTINEL_LANE_SEEN" ]
 }
 
 # ---------------------------------------------------------------------------
