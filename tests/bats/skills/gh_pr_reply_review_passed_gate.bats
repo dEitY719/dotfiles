@@ -435,3 +435,50 @@ codex:BLOCKER:ACCEPT
     run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_head' <'$_json'"
     assert_failure
 }
+
+# ---------------------------------------------------------------------------
+# gh-verify-skills#56 — the marker grew an optional `<preset>` field, and this
+# probe is one of its three readers. Reading only the 2-field form would make
+# a PR reviewed solely by a non-default lane (say `opencode:thorough`) look
+# like a PR no external reviewer ever touched — the gate would then withhold
+# `review-passed` forever on exactly the fan-outs #56 exists to enable.
+# ---------------------------------------------------------------------------
+
+@test "has_review (#56): a preset-tagged marker is evidence for its head" {
+    local _head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    local _stale=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    local _login=dEitY719
+    local _json="${BATS_TEST_TMPDIR}/bodies.json"
+    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    jq -nc --arg l "$_login" --arg s "$_head" \
+        '[{user: {login: $l}, body: ("<!-- ai-review:opencode:thorough:" + $s + " -->")}]' >"$_json"
+
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_head' <'$_json'"
+    assert_success
+
+    # Freshness still gates it — the preset field must not become a way in for
+    # a stale review.
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_stale' <'$_json'"
+    assert_failure
+
+    # And authorship still gates it (#1639).
+    jq -nc --arg s "$_head" \
+        '[{user: {login: "someone-else"}, body: ("<!-- ai-review:opencode:thorough:" + $s + " -->")}]' >"$_json"
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_head' <'$_json'"
+    assert_failure
+}
+
+@test "has_review (#56): a sha alone cannot be satisfied by unrelated prose" {
+    # The relaxed pattern still anchors on the marker and forbids spaces in
+    # the reviewer/preset fields, so a comment merely MENTIONING the sha is
+    # not evidence.
+    local _head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    local _login=dEitY719
+    local _json="${BATS_TEST_TMPDIR}/bodies.json"
+    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    jq -nc --arg l "$_login" --arg s "$_head" \
+        '[{user: {login: $l}, body: ("<!-- ai-review: not a marker " + $s + " -->")}]' >"$_json"
+
+    run bash -c "DOTFILES_FORCE_INIT=1 . '$_fn'; _gh_pr_reply_history_has_review '$_login' '$_head' <'$_json'"
+    assert_failure
+}

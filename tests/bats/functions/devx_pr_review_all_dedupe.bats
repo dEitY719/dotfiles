@@ -33,13 +33,15 @@ _as_comments() {
     jq -Rs --arg login "${1-}" '[{user: {login: $login}, body: .}]'
 }
 
-#   _already_reviewed_by <author-login> [<ai>] [<sha>]   # body text on stdin
+#   _already_reviewed_by <author-login> [<ai>] [<sha>] [<preset>]
+#       # body text on stdin
 # Always asks as TRUSTED_LOGIN, so an author other than TRUSTED_LOGIN is the
-# forgery path.
+# forgery path. <preset> is optional (gh-verify-skills#56); omitting it is the
+# pre-#56 three-argument call, which must keep meaning `default`.
 _already_reviewed_by() {
-    local _author="${1-}" _ai="${2-}" _sha="${3-}"
+    local _author="${1-}" _ai="${2-}" _sha="${3-}" _preset="${4-}"
     _as_comments "$_author" |
-        devx_pr_review_all_already_reviewed "$_ai" "$_sha" "$TRUSTED_LOGIN"
+        devx_pr_review_all_already_reviewed "$_ai" "$_sha" "$TRUSTED_LOGIN" "$_preset"
 }
 
 @test "already_reviewed: a block for this ai+sha -> already reviewed (rc 0)" {
@@ -231,4 +233,81 @@ Verdict: LGTM
     '
     assert_success
     assert_output --partial "session_a=1 session_b=1"
+}
+
+# ── gh-verify-skills#56: preset-aware dedup ──────────────────────────
+# With several presets of one AI in the fan-out, a preset-blind guard reads
+# the FIRST preset's marker as evidence for the SECOND and skips it — every
+# run, forever. The same AI could then never contribute more than one lane.
+
+@test "already_reviewed (#56): a default block does not skip the thorough lane" {
+    run _already_reviewed_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef thorough <<'EOF'
+<!-- ai-review:opencode:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:opencode:deadbeefdeadbeef -->
+EOF
+    assert_failure 1
+}
+
+@test "already_reviewed (#56): a thorough block does not skip the default lane" {
+    run _already_reviewed_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef default <<'EOF'
+<!-- ai-review:opencode:thorough:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:opencode:thorough:deadbeefdeadbeef -->
+EOF
+    assert_failure 1
+}
+
+@test "already_reviewed (#56): a thorough block skips the thorough lane" {
+    # Positive control for the two tests above — the guard still works within
+    # a preset, it just no longer reaches across presets.
+    run _already_reviewed_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef thorough <<'EOF'
+<!-- ai-review:opencode:thorough:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:opencode:thorough:deadbeefdeadbeef -->
+EOF
+    assert_success
+}
+
+@test "already_reviewed (#56): omitting the preset is the legacy default lane" {
+    # The pre-#56 three-argument call shape must keep matching the unchanged
+    # `<!-- ai-review:<ai>:<sha> -->` marker byte for byte.
+    run _already_reviewed_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef <<'EOF'
+<!-- ai-review:opencode:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:opencode:deadbeefdeadbeef -->
+EOF
+    assert_success
+}
+
+@test "already_reviewed (#56): an explicit 'default' preset is the same lane" {
+    run _already_reviewed_by "$TRUSTED_LOGIN" opencode deadbeefdeadbeef default <<'EOF'
+<!-- ai-review:opencode:deadbeefdeadbeef -->
+Verdict: LGTM
+<!-- /ai-review:opencode:deadbeefdeadbeef -->
+EOF
+    assert_success
+}
+
+@test "already_reviewed (#56): a two-preset fan-out skips only the posted lane" {
+    # The Step 3 call shape with `--lanes "opencode:default,opencode:thorough"`:
+    # opencode:default already posted, opencode:thorough has not.
+    run bash -c '
+        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        BODIES=$(jq -nc --arg b "<!-- ai-review:opencode:deadbeef -->
+Verdict: LGTM
+<!-- /ai-review:opencode:deadbeef -->" "[{user: {login: \"pipeline-bot\"}, body: \$b}]")
+        for lane in opencode:default opencode:thorough; do
+            ai=${lane%%:*}
+            preset=${lane#*:}
+            if printf "%s\n" "$BODIES" |
+                devx_pr_review_all_already_reviewed "$ai" deadbeef pipeline-bot "$preset"; then
+                printf "SKIP %s\n" "$lane"
+            else
+                printf "RUN %s\n" "$lane"
+            fi
+        done'
+    assert_success
+    assert_line "SKIP opencode:default"
+    assert_line "RUN opencode:thorough"
 }
