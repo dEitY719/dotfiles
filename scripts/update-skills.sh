@@ -21,12 +21,12 @@ source "${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 ux_section "1/3 git-pull-skills"
 "${DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" "$@"
 
-for arg in "$@"; do
-    if [ "$arg" = "--dry-run" ]; then
-        ux_info "--dry-run: 합성 단계(claude/setup.sh, setup-skills-ssot.sh)를 건너뜁니다"
-        exit 0
-    fi
-done
+case " $* " in
+*' --dry-run '*)
+    ux_info "--dry-run: 합성 단계(claude/setup.sh, setup-skills-ssot.sh)를 건너뜁니다"
+    exit 0
+    ;;
+esac
 
 ux_section "2/3 claude/setup.sh"
 "${DOTFILES_ROOT}/claude/setup.sh"
