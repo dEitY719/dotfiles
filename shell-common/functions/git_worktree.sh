@@ -1728,6 +1728,14 @@ git_worktree_spawn() {
     ux_info "  Branch: $branch"
     ux_info "  Base:   $base"
 
+    # mise keys trust per config-file path, so a fresh worktree directory is
+    # untrusted even though its mise.toml is identical to the main repo's
+    # (already-trusted) copy. Without this, the first `mise` invocation in
+    # the new worktree (e.g. via --launch) errors out instead of running.
+    if [ -f "${wt_path}/mise.toml" ] && command -v mise >/dev/null 2>&1; then
+        mise trust "${wt_path}/mise.toml" >/dev/null 2>&1
+    fi
+
     # --- Optional tmux integration ---
     if [ "$use_tmux" = 1 ]; then
         # New 6-arg signature (#650): pass use_bg + prompt as a pair so the
