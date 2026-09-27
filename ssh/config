@@ -28,7 +28,15 @@ Host github.com
     ConnectTimeout 5
 
 # ==========================================
-# 3. SSAI Project Servers
+# 3. Local Aliases
+# ==========================================
+Host seraph-local
+    HostName localhost
+    User bwyoon
+    IdentityFile ~/.ssh/id_ed25519
+
+# ==========================================
+# 4. SSAI Project Servers
 # ==========================================
 # SSAI 프로젝트 공통 설정 (IdentityFile 통합 관리)
 Host ssai-* server-ssai-*
@@ -59,7 +67,7 @@ Host server-ssai-ops-bwyoon
     User bwyoon
 
 # ==========================================
-# 4. Global Settings (최하단 배치 - first match wins)
+# 5. Global Settings (최하단 배치 - first match wins)
 # ==========================================
 Host *
     PubkeyAcceptedKeyTypes +ssh-rsa
