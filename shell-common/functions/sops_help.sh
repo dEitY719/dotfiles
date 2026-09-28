@@ -5,17 +5,20 @@
 # 예시는 sops 3.13.3 / age 1.3.2 에서 임시 키로 실측한 형태만 싣는다.
 # 실측 결과: `.env.enc` 는 확장자로 dotenv 가 추론되지 않아 `sops -d .env.enc`
 # 와 `sops exec-env .env.enc` 가 "Could not unmarshal input data" 로 실패한다.
-# exec-env 에는 --input-type 플래그가 없으므로 `.enc.env` 이름을 쓴다.
+# exec-env 에는 --input-type 플래그가 없으므로 senv run 이 복호화 후 export 한다.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _sops_help_summary() {
     ux_info "Usage: sops-help [section|--list|--all]   (alias: age-help)"
+    ux_bullet "quick start (senv, 현재 디렉터리 기준)"
+    ux_bullet_sub "새 프로젝트: senv init -> senv enc -> git add .sops.yaml .env.enc"
+    ux_bullet_sub "새 PC: git pull -> senv dec  (또는 senv run make run)"
     ux_bullet "sections"
     ux_bullet_sub "overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .env.enc 커밋"
     ux_bullet_sub "setup: install-sops-age | age-keygen | sops-status"
-    ux_bullet_sub "newproject: .sops.yaml | .gitignore | 암호화 후 커밋"
-    ux_bullet_sub "usage: -e | -d | edit | exec-env (dotenv 타입 플래그 필수)"
+    ux_bullet_sub "newproject: senv init | senv enc | 커밋"
+    ux_bullet_sub "usage: senv init|enc|dec|edit|run + senv 가 실행하는 sops 명령"
     ux_bullet_sub "newpc: keys.txt 복사 | age -p 잠금 파일"
     ux_bullet_sub "risks: 분실=복구 불가 | 유출=원본 비밀값 교체"
     ux_bullet_sub "trouble: unmarshal 오류 | no master key | 권한"
@@ -55,26 +58,30 @@ _sops_help_rows_setup() {
 }
 
 _sops_help_rows_newproject() {
-    ux_bullet "1) 프로젝트 루트에 .sops.yaml 작성 (공개키만 들어가므로 커밋 OK)"
+    ux_bullet "프로젝트 루트에서 (개인키가 먼저 있어야 한다: sops-help setup)"
+    ux_bullet_sub "senv init   # .sops.yaml(공개키) 생성 + .gitignore 에 .env 추가"
+    ux_bullet_sub "senv enc    # .env -> .env.enc"
+    ux_bullet_sub "git add .sops.yaml .gitignore .env.enc && git commit"
+    ux_bullet "새 PC: git pull -> senv dec (파일 생성) 또는 senv run make run (파일 없음)"
+    ux_bullet "senv init 이 만드는 .sops.yaml (공개키만 들어가므로 커밋 OK)"
     ux_bullet_sub "creation_rules:"
-    ux_bullet_sub "  - path_regex: \\.env\$"
-    ux_bullet_sub "    age: age1xxxxxxxx...   # age-keygen -y 출력값, 여러 명이면 콤마로 구분"
-    ux_bullet "2) 평문은 커밋 금지: echo '.env' >> .gitignore"
-    ux_bullet "3) sops -e --input-type dotenv --output-type dotenv .env > .env.enc"
-    ux_bullet "4) git add .sops.yaml .gitignore .env.enc && git commit"
+    ux_bullet_sub "  - path_regex: '(^|/)\\.env(\\.enc)?\$'"
+    ux_bullet_sub "    age: age1xxxxxxxx...   # 여러 키면 콤마로 구분"
     ux_bullet "체크: git status 에 .env 가 안 보이는지, .env.enc 값이 ENC[AES256_GCM,...] 인지"
 }
 
 _sops_help_rows_usage() {
-    ux_bullet "암호화 (.env.enc 는 확장자 추론 불가 -> 타입 플래그 필수)"
+    ux_table_row "senv init" ".sops.yaml + .gitignore" "기존 .sops.yaml 은 덮어쓰지 않음"
+    ux_table_row "senv enc [file]" ".env -> .env.enc" "실패 시 기존 .env.enc 유지"
+    ux_table_row "senv dec [-f] [file]" ".env.enc -> .env (600)" "기존 .env 는 -f 없이 안 덮어씀"
+    ux_table_row "senv edit [file]" "\$EDITOR 로 편집" "저장 시 재암호화"
+    ux_table_row "senv run <cmd...>" "환경변수로 주입해 실행" "디스크에 평문 없음, eval 안 함"
+    ux_bullet "senv 가 실행하는 sops 명령 (.env.enc 는 확장자 추론 불가 -> 타입 플래그 필수)"
     ux_bullet_sub "sops -e --input-type dotenv --output-type dotenv .env > .env.enc"
-    ux_bullet "복호화"
     ux_bullet_sub "sops -d --input-type dotenv --output-type dotenv .env.enc > .env"
-    ux_bullet "제자리 편집 (\$EDITOR 로 열고 저장 시 재암호화)"
     ux_bullet_sub "sops edit --input-type dotenv --output-type dotenv .env.enc"
-    ux_bullet "파일 없이 환경변수로 주입해 실행 (exec-env 는 타입 플래그 미지원)"
-    ux_bullet_sub "sops -e .env > .enc.env   # 이름이 .env 로 끝나야 dotenv 로 추론됨"
-    ux_bullet_sub "sops exec-env .enc.env 'npm start'"
+    ux_bullet "sops exec-env 는 타입 플래그 미지원 -> .env.enc 불가 (senv run 이 대체)"
+    ux_bullet_sub "직접 쓰려면 이름이 .env 로 끝나야 함: sops exec-env .enc.env 'npm start'"
     ux_bullet "주의: 'sops -d .env.enc' (플래그 없음) 는 unmarshal 오류로 실패한다 (실측)"
 }
 
@@ -111,7 +118,7 @@ _sops_help_rows_more() {
     ux_bullet "sops: https://github.com/getsops/sops"
     ux_bullet "age:  https://github.com/FiloSottile/age"
     ux_bullet "설치 스크립트: shell-common/tools/custom/install_sops_age.sh"
-    ux_bullet "진단 함수: sops-status (shell-common/tools/integrations/sops.sh)"
+    ux_bullet "진단/워크플로 함수: sops-status, senv (shell-common/tools/integrations/sops.sh)"
 }
 
 _sops_help_render_section() {
