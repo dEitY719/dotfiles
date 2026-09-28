@@ -666,7 +666,8 @@ hermes_external_dirs_get() {
         return 1
     fi
     printf '%s\n' "$out" | sed -n "s/^[[:space:]]*- //p" \
-        | sed -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/'
+        | sed -e 's/[[:space:]]\{1,\}#.*$//' -e 's/[[:space:]]*$//' \
+              -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/'
 }
 
 # 같은 이름의 스킬이 두 external dir 에 있으면 Hermes 는 로드를 거부한다
@@ -734,7 +735,9 @@ hermes_sync_external_dirs() {
     if hermes config set skills.external_dirs "[${json}]" >/dev/null; then
         log_info "[hermes] skills.external_dirs 갱신: 워크스페이스 $(hermes_workspace_dirs | grep -c .)개"
     else
-        log_warning "[hermes] skills.external_dirs 저장 실패 — 다시 실행하세요"
+        # 링크는 이미 정리됐으므로 예전 합성을 되살려 스킬이 사라지지 않게 한다 (agy, PR #1830).
+        link_skills_compose "hermes" "$HERMES_LINK_DIR" >/dev/null
+        log_warning "[hermes] skills.external_dirs 저장 실패 — 이전 symlink 합성으로 복구했습니다. 다시 실행하세요"
     fi
 }
 
