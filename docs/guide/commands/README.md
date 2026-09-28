@@ -65,6 +65,7 @@ rg "fzf 피커" docs/guide/commands/
 - [ripgrep](./ripgrep.md)
 - [setup-mode](./setup-mode.md)
 - [show-doc](./show-doc.md)
+- [sops](./sops.md)
 - [ssh](./ssh.md)
 - [superpowers](./superpowers.md)
 - [sys](./sys.md)

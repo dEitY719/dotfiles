@@ -70,6 +70,7 @@
 - **install_python** — Pyenv & Python Install Script
 - **install_redis** — Redis server installer for WSL/Ubuntu (interactive)
 - **install_ripgrep** — Install and configure ripgrep (fast text search tool)
+- **install_sops_age** — Install sops + age globally (issue #1833). Explicit call ...
 - **install_uv** — UV Install Script
 - **install_zsh** — Zsh Install Script
 - **install_zsh_autosuggestions** — Install and configure zsh-autosuggestions
@@ -94,7 +95,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 71 custom tools available
+- Total: 72 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage
