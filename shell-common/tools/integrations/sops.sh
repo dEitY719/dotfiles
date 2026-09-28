@@ -55,7 +55,8 @@ sops_age_status() {
     if command -v age-keygen >/dev/null 2>&1; then
         # grep drops anything that is not a public key, so even a misbehaving
         # age-keygen cannot echo AGE-SECRET-KEY-1... here.
-        pub=$(age-keygen -y "$key" 2>/dev/null | grep '^age1' | grep -v 'AGE-SECRET-KEY')
+        # paste joins a multi-identity key file's recipients onto one line.
+        pub=$(age-keygen -y "$key" 2>/dev/null | grep '^age1' | grep -v 'AGE-SECRET-KEY' | paste -sd ' ' -)
         if [ -n "$pub" ]; then
             ux_success "public key: ${pub}"
         else
