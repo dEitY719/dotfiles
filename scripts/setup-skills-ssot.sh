@@ -656,12 +656,25 @@ hermes_workspace_dirs() {
     printf '%s\n' "$SKILL_SOURCE_LIST" | cut -f1 | sed 's|/[^/]*$||' | LC_ALL=C sort -u
 }
 
+# hermes 를 호출하되 stderr 는 실패(rc != 0)할 때만 내보낸다. 소스 설치가 덜 끝난
+# Hermes 는 호출마다 "finishing an interrupted source update" traceback 을
+# stderr 로 뿌리고도 rc 0 으로 끝나므로, 그대로 두면 정상 동작이 에러처럼 보인다.
+hermes_cli() {
+    local err out rc
+    err="$(mktemp)" || return 1
+    out="$(hermes "$@" 2>"$err")"; rc=$?
+    [ -z "$out" ] || printf '%s\n' "$out"
+    [ "$rc" -eq 0 ] || cat "$err" >&2
+    rm -f "$err"
+    return "$rc"
+}
+
 # 현재 external_dirs 를 한 줄씩 낸다. 값이 아직 없으면("Config key not set")
 # 빈 목록, 그 외 실패는 rc 1. stderr 경고줄(⚠ install out of sync 등)은
 # `- ` 줄만 골라내므로 섞여도 무방하다.
 hermes_external_dirs_get() {
     local out
-    if ! out="$(hermes config get skills.external_dirs 2>&1)"; then
+    if ! out="$(hermes_cli config get skills.external_dirs 2>&1)"; then
         case "$out" in *"Config key not set"*) return 0 ;; esac
         return 1
     fi
@@ -732,7 +745,7 @@ hermes_sync_external_dirs() {
         json="${json:+${json}, }\"${dir//\"/\\\"}\""
     done <<< "$dirs"
 
-    if hermes config set skills.external_dirs "[${json}]" >/dev/null; then
+    if hermes_cli config set skills.external_dirs "[${json}]" >/dev/null; then
         log_info "[hermes] skills.external_dirs 갱신: 워크스페이스 $(hermes_workspace_dirs | grep -c .)개"
     else
         # 링크는 이미 정리됐으므로 예전 합성을 되살려 스킬이 사라지지 않게 한다 (agy, PR #1830).
