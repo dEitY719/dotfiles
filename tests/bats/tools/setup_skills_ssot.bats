@@ -63,11 +63,33 @@ seed_opencode_home() {
 seed_gemini_home() {
     mkdir -p "${FIXTURE_HOME}/.gemini"
 }
-# Hermes (#1376) composes into the dedicated `skills/dotfiles` subdirectory
-# rather than the `skills/` root, because `~/.hermes/skills/` is an actively
-# managed hub (hub metadata + category dirs) owned by Hermes itself.
+# Hermes (#1829) is wired through `skills.external_dirs` via the `hermes`
+# CLI. The stub below stands in for it (the real one must never run under
+# test): it keeps the list as JSON in ~/.hermes/external_dirs.json, answers
+# `config get` in the real CLI's YAML shape with a stray stderr warning, and
+# logs how many links were left in skills/dotfiles at each `config set`.
 seed_hermes_home() {
-    mkdir -p "${FIXTURE_HOME}/.hermes"
+    mkdir -p "${FIXTURE_HOME}/.hermes" "${TEST_TEMP_HOME}/fake-bin"
+    cat > "${TEST_TEMP_HOME}/fake-bin/hermes" <<'STUB'
+#!/bin/bash
+store="$HOME/.hermes/external_dirs.json"
+[ "$1 $3" = "config skills.external_dirs" ] || exit 2
+case "$2" in
+    get)
+        echo "⚠ install out of sync (stub)" >&2
+        [ -f "$store" ] || { echo "Config key not set: $3" >&2; exit 1; }
+        python3 -c 'import json,sys; [print("  - " + p) for p in json.load(open(sys.argv[1]))]' "$store"
+        ;;
+    set)
+        [ -z "${HERMES_STUB_SET_FAIL:-}" ] || exit 1
+        find "$HOME/.hermes/skills/dotfiles" -type l 2>/dev/null | wc -l \
+            >> "$HOME/.hermes/set-calls.log"
+        printf '%s' "$4" > "$store"
+        ;;
+    *) exit 2 ;;
+esac
+STUB
+    chmod +x "${TEST_TEMP_HOME}/fake-bin/hermes"
 }
 # Portable per-file `stat` snapshot (GNU `-c` first, BSD `-f` fallback —
 # same try-GNU-then-BSD idiom as shell-common/functions/file_cleanup.sh).
@@ -90,7 +112,7 @@ teardown() {
 # fixture dotfiles tree. The worktree test (#1732) passes its linked
 # worktree instead of re-declaring the invocation.
 run_setup() {
-    HOME="$FIXTURE_HOME" run bash "${1:-$FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
+    HOME="$FIXTURE_HOME" PATH="${TEST_TEMP_HOME}/fake-bin:${PATH}" run bash "${1:-$FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
 }
 
 # --- Codex fan-out ---
@@ -240,79 +262,112 @@ run_setup() {
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/alpha" ]
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/gamma" ]
 }
-
 # ---------------------------------------------------------------------
-# issue #1376 — Hermes entry-level 합성
-# 다른 4개 CLI 와 달리 Hermes 는 skills/ 루트가 아니라 전용 네임스페이스
-# 서브디렉토리(skills/dotfiles/)에서 합성한다 — 루트는 Hermes 자체
-# hub/curator 메타데이터와 카테고리 디렉토리가 소유하기 때문 (NF-1).
+# issue #1829 — Hermes 는 symlink 합성 대신 skills.external_dirs 로 연결
+# `hermes` 는 stub 이다(seed_hermes_home): external_dirs 를 JSON 파일에 저장하고
+# `config get` 은 실제 CLI 처럼 YAML 리스트(`  - /path`) + stderr 경고를 낸다.
+# 값이 없으면 실제 CLI 와 같이 "Config key not set" + rc 1.
 # ---------------------------------------------------------------------
 
-@test "hermes: fresh install creates entry-level synthesis subdirectory (#1376)" {
+# stub 저장소의 external_dirs 를 한 줄씩 출력한다.
+hermes_dirs() {
+    python3 -c 'import json,sys; [print(p) for p in json.load(open(sys.argv[1]))]' \
+        "${FIXTURE_HOME}/.hermes/external_dirs.json"
+}
+
+@test "hermes: first run registers each workspace repo's skills/ in external_dirs (#1829)" {
     seed_hermes_home
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "delta"
 
     run_setup
     assert_success
 
-    local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
-    [ -d "$h_dir" ] && [ ! -L "$h_dir" ]
-    for s in alpha beta gamma; do
-        [ -L "${h_dir}/${s}" ]
-        [ "$(readlink -f "${h_dir}/${s}")" = "$(readlink -f "${BASE_REPO}/skills/${s}")" ]
-    done
-
-    # skills/ 루트에는 entry symlink 가 직접 생기지 않는다.
-    [ ! -L "${FIXTURE_HOME}/.hermes/skills/alpha" ]
+    run hermes_dirs
+    assert_output "${BASE_REPO}/skills
+$(default_workspace_root)/packaging-skills/skills"
+    # symlink 합성은 더 이상 하지 않는다.
+    [ ! -e "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
 }
 
-@test "hermes: legacy dir-symlink migrates to entry-level synthesis (#1376)" {
-    seed_hermes_home
-    mkdir -p "${FIXTURE_HOME}/.hermes/skills"
-    # Dangling — the #1680 cutover removed the target (see opencode twin).
-    ln -s "${FIXTURE_DOTFILES}/claude/skills" \
-        "${FIXTURE_HOME}/.hermes/skills/dotfiles"
-    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
-
-    run_setup
-    assert_success
-    assert_output --partial "[hermes] legacy dir-symlink"
-
-    local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
-    [ ! -L "$h_dir" ]
-    [ -d "$h_dir" ]
-    for s in alpha beta gamma; do
-        [ -L "${h_dir}/${s}" ]
-    done
-}
-
-@test "hermes: synthesis is idempotent on re-run (#1376)" {
+@test "hermes: re-run is idempotent (#1829)" {
     seed_hermes_home
 
     run_setup
     assert_success
     local before
-    before="$(ls -la "${FIXTURE_HOME}/.hermes/skills/dotfiles")"
+    before="$(cat "${FIXTURE_HOME}/.hermes/external_dirs.json")"
 
     run_setup
     assert_success
-    local after
-    after="$(ls -la "${FIXTURE_HOME}/.hermes/skills/dotfiles")"
-
-    [ "$before" = "$after" ]
+    [ "$before" = "$(cat "${FIXTURE_HOME}/.hermes/external_dirs.json")" ]
 }
 
-@test "hermes: user symlink to non-SSOT location is preserved + warned (#1376)" {
+@test "hermes: entries outside the workspace are preserved, stale workspace ones replaced (#1829)" {
+    seed_hermes_home
+    printf '["/opt/my-skills", "%s/gone-skills/skills"]' "$(default_workspace_root)" \
+        > "${FIXTURE_HOME}/.hermes/external_dirs.json"
+
+    run_setup
+    assert_success
+
+    run hermes_dirs
+    assert_output "/opt/my-skills
+${BASE_REPO}/skills"
+}
+
+@test "hermes: managed links are removed before config set; user link kept + warned (#1829)" {
+    seed_hermes_home
+    local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    mkdir -p "$h_dir" "${TEST_TEMP_HOME}/elsewhere/mine"
+    ln -s "${BASE_REPO}/skills/alpha" "${h_dir}/alpha"
+    ln -s "${BASE_REPO}/skills/alpha" "${h_dir}/base-skills__alpha"   # 찌꺼기
+    ln -s "$(default_workspace_root)/gone-skills/skills/x" "${h_dir}/x"   # 끊어진 관리 링크
+    ln -s "${TEST_TEMP_HOME}/elsewhere/mine" "${h_dir}/mine"
+
+    run_setup
+    assert_success
+    assert_output --partial "[hermes] 사용자 symlink 보존"
+
+    [ ! -L "${h_dir}/alpha" ]
+    [ ! -L "${h_dir}/base-skills__alpha" ]
+    [ ! -L "${h_dir}/x" ]
+    [ -L "${h_dir}/mine" ]
+    # config set 시점에 남아 있던 링크는 사용자 링크 1개뿐 (정리 → 등록 순서).
+    [ "$(cat "${FIXTURE_HOME}/.hermes/set-calls.log")" = "1" ]
+}
+
+@test "hermes: empty link dir is removed after cleanup (#1829)" {
+    seed_hermes_home
+    local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    mkdir -p "$h_dir"
+    ln -s "${BASE_REPO}/skills/alpha" "${h_dir}/alpha"
+
+    run_setup
+    assert_success
+    [ ! -e "$h_dir" ]
+    [ -d "${FIXTURE_HOME}/.hermes/skills" ]
+}
+
+@test "hermes: legacy dir-symlink is removed (#1376, #1829)" {
     seed_hermes_home
     mkdir -p "${FIXTURE_HOME}/.hermes/skills"
-    mkdir -p "${TEST_TEMP_HOME}/elsewhere-hermes/skills"
-    ln -s "${TEST_TEMP_HOME}/elsewhere-hermes/skills" \
-        "${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    # Dangling — the #1680 cutover removed the target.
+    ln -s "${FIXTURE_DOTFILES}/claude/skills" "${FIXTURE_HOME}/.hermes/skills/dotfiles"
+
+    run_setup
+    assert_success
+    [ ! -e "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
+    [ ! -L "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
+}
+
+@test "hermes: user dir-symlink is preserved + warned (#1376, #1829)" {
+    seed_hermes_home
+    mkdir -p "${FIXTURE_HOME}/.hermes/skills" "${TEST_TEMP_HOME}/elsewhere-hermes/skills"
+    ln -s "${TEST_TEMP_HOME}/elsewhere-hermes/skills" "${FIXTURE_HOME}/.hermes/skills/dotfiles"
 
     run_setup
     assert_success
     assert_output --partial "[hermes] 사용자 symlink"
-
-    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
     [ "$(readlink "${FIXTURE_HOME}/.hermes/skills/dotfiles")" \
         = "${TEST_TEMP_HOME}/elsewhere-hermes/skills" ]
 }
@@ -322,64 +377,49 @@ run_setup() {
     local hs="${FIXTURE_HOME}/.hermes/skills"
     mkdir -p "${hs}/.hub" "${hs}/github/gh-helper" "${hs}/productivity"
     printf 'gh-helper:deadbeef\n' > "${hs}/.bundled_manifest"
-    printf '{"last_run":0}\n' > "${hs}/.curator_state"
-    printf '{"gh-helper":3}\n' > "${hs}/.usage.json"
     printf 'audit\n' > "${hs}/.hub/audit.log"
     printf 'stub\n' > "${hs}/github/gh-helper/SKILL.md"
 
-    # Snapshot content + mtime of every Hermes-owned path.
-    local before_listing before_hashes
-    before_listing="$(cd "$hs" && ls -A | LC_ALL=C sort)"
-    before_hashes="$(cd "$hs" && find . -path ./dotfiles -prune -o -type f -print0 \
-        | LC_ALL=C sort -z | _stat_snapshot)"
+    local before
+    before="$(cd "$hs" && find . -print0 | LC_ALL=C sort -z | _stat_snapshot)"
 
     run_setup
     assert_success
-
-    local after_hashes
-    after_hashes="$(cd "$hs" && find . -path ./dotfiles -prune -o -type f -print0 \
-        | LC_ALL=C sort -z | _stat_snapshot)"
-    [ "$before_hashes" = "$after_hashes" ]
-
-    # Hermes-owned directories survive intact.
-    [ -d "${hs}/.hub" ]
-    [ -d "${hs}/github/gh-helper" ]
-    [ -d "${hs}/productivity" ]
-    [ ! -L "${hs}/github" ]
-    [ ! -L "${hs}/productivity" ]
-
-    # Exactly one new top-level entry was created: dotfiles/.
-    local after_listing
-    after_listing="$(cd "$hs" && ls -A | LC_ALL=C sort)"
-    local added
-    added="$(comm -13 <(printf '%s\n' "$before_listing") <(printf '%s\n' "$after_listing"))"
-    [ "$added" = "dotfiles" ]
-
-    # And the synthesis really happened inside it.
-    for s in alpha beta gamma; do
-        [ -L "${hs}/dotfiles/${s}" ]
-    done
+    [ "$before" = "$(cd "$hs" && find . -print0 | LC_ALL=C sort -z | _stat_snapshot)" ]
 }
 
-@test "hermes: stale entry whose source vanished gets pruned (#1376)" {
+@test "hermes: missing hermes binary is a non-fatal warn + skip (#1829)" {
+    seed_hermes_home
+    rm -f "${TEST_TEMP_HOME}/fake-bin/hermes"
+    mkdir -p "${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    ln -s "${BASE_REPO}/skills/alpha" "${FIXTURE_HOME}/.hermes/skills/dotfiles/alpha"
+
+    HOME="$FIXTURE_HOME" PATH="/usr/bin:/bin" \
+        run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
+    assert_success
+    assert_output --partial "[hermes] hermes 명령을 찾지 못했습니다"
+    # 등록할 수 없으면 기존 링크도 건드리지 않는다.
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/alpha" ]
+}
+
+@test "hermes: failing config set is a non-fatal warn (#1829)" {
     seed_hermes_home
 
+    HERMES_STUB_SET_FAIL=1 run_setup
+    assert_success
+    assert_output --partial "[hermes] skills.external_dirs 저장 실패"
+    [ ! -e "${FIXTURE_HOME}/.hermes/external_dirs.json" ]
+}
+
+@test "hermes: cross-repo duplicate skill name warns with both paths (#1829)" {
+    seed_hermes_home
+    seed_workspace_skill "$(default_workspace_root)" "packaging-skills" "alpha"
+
     run_setup
     assert_success
-    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/beta" ]
-
-    # Remove `beta` from the SSOT, then re-run. link_skills_compose's
-    # stale-entry pruning must also fire on the nested target dir
-    # (~/.hermes/skills/dotfiles), not just root-level compose targets
-    # like opencode/gemini (codex review, PR #1383).
-    rm -rf "${BASE_REPO}/skills/beta"
-
-    run_setup
-    assert_success
-    [ ! -e "${FIXTURE_HOME}/.hermes/skills/dotfiles/beta" ]
-    # Other skills still present; sibling hub dirs untouched.
-    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/alpha" ]
-    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/gamma" ]
+    assert_output --partial "[hermes] 스킬 이름 중복"
+    assert_output --partial "${BASE_REPO}/skills/alpha"
+    assert_output --partial "$(default_workspace_root)/packaging-skills/skills/alpha"
 }
 
 # ---------------------------------------------------------------------
@@ -413,7 +453,7 @@ default_workspace_root() {
 }
 
 run_setup_with_workspace() {
-    WORKSPACE_ROOT="$1" HOME="$FIXTURE_HOME" \
+    WORKSPACE_ROOT="$1" HOME="$FIXTURE_HOME" PATH="${TEST_TEMP_HOME}/fake-bin:${PATH}" \
         run bash "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
 }
 
@@ -460,7 +500,7 @@ run_setup_with_workspace() {
 
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/delta" ]
     [ -L "${FIXTURE_HOME}/.gemini/config/skills/delta" ]
-    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/delta" ]
+    grep -qF "packaging-skills/skills" "${FIXTURE_HOME}/.hermes/external_dirs.json"
     [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
 }
 
@@ -785,18 +825,18 @@ seed_legacy_entries() {
 
     local oc_dir="${FIXTURE_HOME}/.config/opencode/skills"
     local h_dir="${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    mkdir -p "$h_dir"
     seed_legacy_entries "$oc_dir"
     seed_legacy_entries "$h_dir"
 
     run_setup
     assert_success
 
-    local d
-    for d in "$oc_dir" "$h_dir"; do
-        [ -e "${d}/alpha" ]
-        [ "$(readlink -f "${d}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
-        [ ! -L "${d}/legacy-orphan" ]
-    done
+    [ -e "${oc_dir}/alpha" ]
+    [ "$(readlink -f "${oc_dir}/alpha")" = "$(readlink -f "${BASE_REPO}/skills/alpha")" ]
+    [ ! -L "${oc_dir}/legacy-orphan" ]
+    # Hermes 는 external_dirs 로 연결하므로 레거시 링크는 전부 정리된다 (#1829).
+    [ ! -e "$h_dir" ]
 }
 
 @test "codex: legacy entries are relinked and pruned (#1732)" {
