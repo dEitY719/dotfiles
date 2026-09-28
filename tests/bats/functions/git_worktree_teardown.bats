@@ -829,3 +829,178 @@ GH_EOF
 
     git -C "$CLONE" config --unset extensions.preciousObjects 2>/dev/null || true
 }
+
+# ---------------------------------------------------------------------------
+# Issue #1835: --all --recursive across sibling repos under $PWD
+# ---------------------------------------------------------------------------
+
+# Create bare origin + clone at "$MULTI/<name>" (name may contain spaces).
+_make_multi_repo() {
+    local name="$1"
+    git init -q --bare --initial-branch=main "$TEST_TEMP_HOME/origins/$name.git"
+    git clone -q "$TEST_TEMP_HOME/origins/$name.git" "$MULTI/$name" 2>/dev/null
+    (
+        cd "$MULTI/$name"
+        echo base > base.txt
+        git add base.txt
+        git commit -q -m "base"
+        git push -q origin main
+    )
+}
+
+# $MULTI layout:
+#   alpha/              main repo, 2 worktrees: sibling alpha-claude-1 + alpha-claude-2
+#   alpha-claude-1/     linked worktree (.git is a file)
+#   alpha-claude-2/     linked worktree
+#   repo b/             main repo (space in name), 1 worktree outside $MULTI
+#   gamma/              main repo, no worktrees
+_setup_multi() {
+    MULTI="$TEST_TEMP_HOME/multi"
+    mkdir -p "$MULTI" "$TEST_TEMP_HOME/origins"
+    _make_multi_repo alpha
+    _make_multi_repo "repo b"
+    _make_multi_repo gamma
+    git -C "$MULTI/alpha" worktree add -q -b wt/claude/1 "$MULTI/alpha-claude-1" origin/main
+    git -C "$MULTI/alpha" worktree add -q -b wt/claude/2 "$MULTI/alpha-claude-2" origin/main
+    git -C "$MULTI/repo b" worktree add -q -b wt/b/1 "$TEST_TEMP_HOME/repo b-wt" origin/main
+}
+
+_wt_count() {
+    git -C "$1" worktree list --porcelain | grep -c '^worktree '
+}
+
+@test "teardown -r: --force removes every linked worktree across repos, cwd unchanged" {
+    _setup_multi
+
+    run_in_bash "cd '$MULTI' && gwt teardown -r --force 2>&1; rc=\$?; echo \"CWD=\$(pwd)\"; exit \$rc"
+    assert_success
+    assert_output --partial "CWD=$MULTI"
+    [ "$(_wt_count "$MULTI/alpha")" -eq 1 ]
+    [ "$(_wt_count "$MULTI/repo b")" -eq 1 ]
+    [ ! -d "$MULTI/alpha-claude-1" ]
+    [ ! -d "$MULTI/alpha-claude-2" ]
+    [ ! -d "$TEST_TEMP_HOME/repo b-wt" ]
+    [ -d "$MULTI/gamma" ]
+}
+
+@test "teardown --all --recursive: long form works the same" {
+    _setup_multi
+
+    run_in_bash "cd '$MULTI' && gwt teardown --all --recursive --force 2>&1"
+    assert_success
+    [ ! -d "$MULTI/alpha-claude-1" ]
+    [ ! -d "$TEST_TEMP_HOME/repo b-wt" ]
+}
+
+@test "teardown -r: plan lists only repos with worktrees (not gamma, not linked dirs)" {
+    _setup_multi
+
+    run_in_bash "cd '$MULTI' && printf 'n\n' | gwt teardown -r 2>&1"
+    assert_failure
+    assert_output --partial "Repository: $MULTI/alpha"
+    assert_output --partial "Repository: $MULTI/repo b"
+    refute_output --partial "Repository: $MULTI/gamma"
+    refute_output --partial "Repository: $MULTI/alpha-claude-1"
+    assert_output --partial "$MULTI/alpha-claude-2"
+}
+
+@test "teardown -r: without --force prompts exactly once; 'n' removes nothing" {
+    _setup_multi
+
+    run_in_bash "cd '$MULTI' && printf 'n\n' | gwt teardown -r 2>&1"
+    assert_failure
+    assert_output --partial "Aborted."
+    [ "$(printf '%s\n' "$output" | grep -c 'Proceed with teardown?')" -eq 1 ]
+    [ -d "$MULTI/alpha-claude-1" ]
+    [ -d "$MULTI/alpha-claude-2" ]
+    [ -d "$TEST_TEMP_HOME/repo b-wt" ]
+}
+
+@test "teardown -r: without --force prompts exactly once; 'y' tears everything down" {
+    _setup_multi
+
+    run_in_bash "cd '$MULTI' && printf 'y\n' | gwt teardown -r 2>&1"
+    assert_success
+    [ "$(printf '%s\n' "$output" | grep -c 'Proceed with teardown?')" -eq 1 ]
+    [ ! -d "$MULTI/alpha-claude-1" ]
+    [ ! -d "$MULTI/alpha-claude-2" ]
+    [ ! -d "$TEST_TEMP_HOME/repo b-wt" ]
+}
+
+@test "teardown -r: dirty worktree fails only its repo; others cleaned; exit 1" {
+    _setup_multi
+    echo scratch > "$MULTI/alpha-claude-1/untracked.txt"
+
+    run_in_bash "cd '$MULTI' && printf 'y\n' | gwt teardown -r 2>&1"
+    assert_failure
+    assert_output --partial "Repositories succeeded: 1"
+    assert_output --partial "Repositories failed:    1"
+    assert_output --partial "Failed repositories:"
+    [ -d "$MULTI/alpha-claude-1" ]
+    [ ! -d "$TEST_TEMP_HOME/repo b-wt" ]
+}
+
+@test "teardown -r: no main repos under dir prints message and exits 0" {
+    mkdir -p "$TEST_TEMP_HOME/empty/plain"
+
+    run_in_bash "cd '$TEST_TEMP_HOME/empty' && gwt teardown -r 2>&1"
+    assert_success
+    assert_output --partial "No git repositories found under $TEST_TEMP_HOME/empty."
+}
+
+@test "teardown -r: repos without worktrees print 'No worktrees to tear down.'" {
+    MULTI="$TEST_TEMP_HOME/multi"
+    mkdir -p "$MULTI" "$TEST_TEMP_HOME/origins"
+    _make_multi_repo gamma
+
+    run_in_bash "cd '$MULTI' && gwt teardown -r 2>&1"
+    assert_success
+    assert_output --partial "No worktrees to tear down."
+}
+
+@test "teardown help: positional 'help' prints help and exits 0" {
+    run_in_bash "cd '$CLONE' && gwt teardown help 2>&1"
+    assert_success
+    assert_output --partial "Usage: gwt teardown"
+    assert_output --partial "--recursive"
+}
+
+@test "teardown --all outside a repo hints --recursive when subdirs hold repos" {
+    _setup_multi
+
+    run_in_bash "cd '$MULTI' && gwt teardown --all 2>&1"
+    assert_failure
+    assert_output --partial "Not inside a git repository"
+    assert_output --partial "gwt teardown --all --recursive"
+}
+
+@test "teardown --all outside a repo without subrepos gives no --recursive hint" {
+    mkdir -p "$TEST_TEMP_HOME/empty/plain"
+
+    run_in_bash "cd '$TEST_TEMP_HOME/empty' && gwt teardown --all 2>&1"
+    assert_failure
+    refute_output --partial "--recursive"
+}
+
+@test "teardown -r (zsh): --force removes every linked worktree" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    _setup_multi
+
+    run_in_zsh "cd '$MULTI' && gwt teardown -r --force 2>&1; rc=\$?; echo \"CWD=\$(pwd)\"; exit \$rc"
+    assert_success
+    assert_output --partial "CWD=$MULTI"
+    [ ! -d "$MULTI/alpha-claude-1" ]
+    [ ! -d "$MULTI/alpha-claude-2" ]
+    [ ! -d "$TEST_TEMP_HOME/repo b-wt" ]
+}
+
+@test "teardown -r (zsh): 'n' prompts once and removes nothing" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    _setup_multi
+
+    run_in_zsh "cd '$MULTI' && printf 'n\n' | gwt teardown -r 2>&1"
+    assert_failure
+    [ "$(printf '%s\n' "$output" | grep -c 'Proceed with teardown?')" -eq 1 ]
+    [ -d "$MULTI/alpha-claude-1" ]
+    refute_output --partial "Repository: $MULTI/gamma"
+}
