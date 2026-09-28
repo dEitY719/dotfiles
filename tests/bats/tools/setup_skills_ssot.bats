@@ -73,6 +73,8 @@ seed_hermes_home() {
     cat > "${TEST_TEMP_HOME}/fake-bin/hermes" <<'STUB'
 #!/bin/bash
 store="$HOME/.hermes/external_dirs.json"
+# Real hermes prints a source-update traceback on stderr per call yet exits 0.
+[ -z "${HERMES_STUB_NOISE:-}" ] || echo "Traceback (most recent call last): stub-noise" >&2
 [ "$1 $3" = "config skills.external_dirs" ] || exit 2
 case "$2" in
     get)
@@ -287,6 +289,16 @@ hermes_dirs() {
 $(default_workspace_root)/packaging-skills/skills"
     # symlink 합성은 더 이상 하지 않는다.
     [ ! -e "${FIXTURE_HOME}/.hermes/skills/dotfiles" ]
+}
+
+@test "hermes: stderr noise from a successful hermes call is not surfaced" {
+    seed_hermes_home
+
+    HERMES_STUB_NOISE=1 run_setup
+    assert_success
+    refute_output --partial "Traceback"
+    refute_output --partial "install out of sync"
+    assert_output --partial "[hermes] skills.external_dirs 갱신"
 }
 
 @test "hermes: re-run is idempotent (#1829)" {
