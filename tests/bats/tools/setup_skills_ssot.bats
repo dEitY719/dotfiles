@@ -409,6 +409,8 @@ ${BASE_REPO}/skills"
     assert_success
     assert_output --partial "[hermes] skills.external_dirs 저장 실패"
     [ ! -e "${FIXTURE_HOME}/.hermes/external_dirs.json" ]
+    # 정리된 링크는 되살아나 스킬이 사라지지 않는다 (agy, PR #1830).
+    [ -L "${FIXTURE_HOME}/.hermes/skills/dotfiles/alpha" ]
 }
 
 @test "hermes: cross-repo duplicate skill name warns with both paths (#1829)" {
