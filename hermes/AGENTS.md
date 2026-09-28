@@ -2,7 +2,7 @@
 
 - **Purpose**: [Hermes Agent](https://github.com/NousResearch/hermes-agent) 설치·설정을 이 저장소로 재현
 - **Scope**: 설치 + config SSOT + 커스텀 OpenAI-compatible 엔드포인트 연동. 에이전트 기능 자체는 upstream 소관
-- **Structure**: `setup.sh` · `config.yaml` (SSOT) · `llm_endpoint.local.example` (템플릿)
+- **Structure**: `setup.sh` · `sitecustomize.py` · `config.yaml` (SSOT) · `llm_endpoint.local.example` (템플릿)
 - **Dependencies**: `shell-common/tools/ux_lib` · (옵션) `npm`, `certutil`(libnss3-tools)
 - **대칭 모듈**: `herdr/` — 동일한 hard-fail/soft-fail 구조
 
@@ -13,7 +13,7 @@
 - **Verify**: `hermes --version` · `hermes doctor` (alias `hermes-doctor`)
 - **Syntax**: `bash -n hermes/setup.sh`
 
-# setup.sh 5단계
+# setup.sh 6단계
 
 | Part | 동작 | 실패 정책 |
 |---|---|---|
@@ -22,8 +22,9 @@
 | 3 | `llm_endpoint.local.sh` 읽어 `model.base_url`/`model.api_key` 주입 | soft-fail, 옵션 |
 | 4 | `agent-browser` npm 의존성 설치 | soft-fail, 옵션 |
 | 5 | root CA 를 Chromium NSS 저장소에 임포트 | soft-fail, 옵션 |
+| 6 | `sitecustomize.py` 를 Hermes 고정 Python(`~/.hermes/tools`) stdlib 에 설치 — 프록시 CA 의 `Missing Authority Key Identifier` 해소 | soft-fail, 옵션 (`SSL_CERT_FILE`/`CA_CERT` 있을 때만) |
 
-Part 2-5 는 네트워크/호스트 상태에 의존하므로 실패해도 경고만 남기고 계속한다 —
+Part 2-6 은 네트워크/호스트 상태에 의존하므로 실패해도 경고만 남기고 계속한다 —
 부모 `./setup.sh` 는 `set -e` 로 돌기 때문에 이 스크립트는 항상 `exit 0` 으로 끝난다.
 
 **환경변수 (전부 선택)**: `HERMES_SKIP_INSTALL` · `HERMES_SKIP_BROWSER` ·
@@ -60,7 +61,7 @@ hermes 자신이 그 파일을 다시 쓰기 때문이다(OAuth 설정, 모델 �
 Part 3 의 `hermes config set` 은 이미 실파일에 쓰므로 별도 detach 단계가 없다.
 심링크로 되돌아가지 않도록 `symlinks.conf` 에도 hermes 항목을 두지 않는다.
 
-# 3가지 함정 (`hermes-help pitfalls` 가 SSOT)
+# 4가지 함정 (`hermes-help pitfalls` 가 SSOT)
 
 1. **`model.provider: custom` 의 API 키는 `.env` 가 아니라 config** — hermes 는
    `OPENAI_API_KEY` 를 `openai.com` / `openai.azure.com` 호스트로만 전달하는
@@ -73,6 +74,12 @@ Part 3 의 `hermes config set` 은 이미 실파일에 쓰므로 별도 detach �
    번들이 아니라 자체 NSS 저장소(`~/.pki/nssdb`, snap 이면
    `~/snap/chromium/<rev>/.pki/nssdb`)를 본다. `certutil` 로 root CA 를 명시적으로
    임포트해야 한다.
+
+4. **Python 3.13+ 는 AKI 없는 프록시 CA 인증서를 거부** — `hermes` 가 매 호출마다
+   "finishing an interrupted source update" 로 node/npm 을 받다 `CERTIFICATE_VERIFY_FAILED:
+   Missing Authority Key Identifier` 로 실패한다 (curl 은 통과). PM worker 는 PYTHON* env 를
+   지우고 세대별 venv 로 도므로 고정 Python 의 stdlib 에 놓은 `sitecustomize.py`(Part 6)로만
+   `VERIFY_X509_STRICT` 를 끌 수 있다. Python 버전이 바뀌면 setup 재실행.
 
 # 검증되지 않은 부분
 
