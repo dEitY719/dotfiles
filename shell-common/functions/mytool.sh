@@ -126,6 +126,16 @@ install_herdr() {
     bash "$script" "$@"
 }
 
+# sops + age (secret encryption) 설치 함수
+install_sops_age() {
+    local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_sops_age.sh"
+    if [ ! -f "$script" ]; then
+        ux_error "install-sops-age script not found: $script"
+        return 2
+    fi
+    bash "$script" "$@"
+}
+
 # Dash-form aliases (command-design-pattern.md R1: user-facing = dash-form).
 # `srcpack` has no underscore, so it is already the dash-form entry point.
 alias get-hw-info='get_hw_info'
@@ -138,4 +148,5 @@ alias install-fd='install_fd'
 alias install-bat='install_bat'
 alias install-pet='install_pet'
 alias install-herdr='install_herdr'
+alias install-sops-age='install_sops_age'
 alias install-zsh-autosuggestions='install_zsh_autosuggestions'
