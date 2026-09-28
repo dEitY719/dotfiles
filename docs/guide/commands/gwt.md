@@ -19,7 +19,7 @@
     - prune    gwt prune                                    clean stale .git/worktrees/ refs (no path)
     - spawn    gwt spawn <name> [--task|--base|--tmux|...]  create named worktree (AI workflow)
     - status   gwt status [<name>]                          per-worktree diagnostic
-    - teardown gwt teardown [--force] [--keep-branch]       cleanup current/all worktree(s)
+    - teardown gwt teardown [--all [-r]] [--force] [...]    cleanup current/all worktree(s)
     - details: gwt-help <section>  (example: gwt-help spawn)
 
 ## 섹션
@@ -71,9 +71,10 @@
 
 ### teardown
 
-- **syntax** — gwt teardown [--all|-a|all] [--force] [--keep-branch] — Cleanup AI worktree(s)
+- **syntax** — gwt teardown [--all|-a|all] [--recursive|-r] [--force] [--keep-branch] — Cleanup AI worktree(s)
 - **context** — Single mode: run inside a worktree — Syncs main repo after cleanup
 - **all mode** — Run from main repo or any worktree — Tears down every non-main worktree
+- **recursive** — --all --recursive|-r from a parent dir — Every main repo directly under $PWD (one prompt)
 - **flags** — --force / --keep-branch — Discard changes / keep branch
 
 ## 엣지케이스 / 의도된 동작
