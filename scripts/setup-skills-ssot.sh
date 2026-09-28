@@ -12,21 +12,24 @@
 #
 #     ${WORKSPACE_ROOT:-$HOME/para/project/skills}/<repo>/skills/<skill>/SKILL.md
 #
-# 연결 전략 (issue #791 / #1376 — 아래 CLI 모두 entry-level 합성):
-#   - entry-level 합성 디렉토리 (#707 / #791 / #1376 / #1787):
+# 연결 전략 (issue #791 — Hermes 외 CLI 는 entry-level 합성):
+#   - entry-level 합성 디렉토리 (#707 / #791 / #1787):
 #     ~/.config/opencode/skills/<skill>     → <workspace>/<repo>/skills/<skill>
 #     ~/.gemini/config/skills/<skill>       → <workspace>/<repo>/skills/<skill>  (agy)
-#     ~/.hermes/skills/dotfiles/<skill>     → <workspace>/<repo>/skills/<skill>
 #
 #   - 순정 Gemini CLI 지원 제거 및 agy 단일화 (#1787):
 #     순정 gemini CLI 는 agy(Antigravity CLI)로 완전히 대체되었으며,
 #     ~/.gemini/skills 에 대한 합성은 중단되고 기존 잔여 링크는 정리된다.
 #
-#   - Hermes 예외 (#1376, NF-1): Hermes 는 다른 CLI 와 달리 ~/.hermes/skills/
-#     루트를 자체 hub/curator 가 능동적으로 관리한다 (.hub/, .bundled_manifest,
-#     .curator_state, .usage.json* 메타데이터 + apple/ github/ 등 카테고리
-#     디렉토리). 루트에 직접 합성하면 그 네임스페이스와 충돌하므로,
-#     전용 서브디렉토리 ~/.hermes/skills/dotfiles/ 안에서만 합성한다.
+#   - Hermes 예외 (#1829): symlink 합성 대신 ~/.hermes/config.yaml 의
+#     skills.external_dirs 에 <workspace>/<repo>/skills 를 repo 마다 한 줄씩
+#     등록한다 (`hermes config get/set` 으로만 수정, 워크스페이스 밖 항목은 유지).
+#     Hermes 는 신뢰 여부를 resolve 한 실제 경로로 판정하면서 skill_dir 은 symlink
+#     경로 그대로 돌려주므로, 예전 ~/.hermes/skills/dotfiles/<skill> 합성(#1376)은
+#     전 스킬이 "trusted skills directory 밖" 경고를 받고 `../../../lib` 같은 상대
+#     참조가 깨졌다. 그 디렉토리의 관리 링크는 등록 전에 정리한다 — 남아 있으면
+#     이름이 겹쳐 "Ambiguous skill name" 으로 로드에 실패한다. external_dirs 는
+#     이름을 바꿀 수 없어 repo 간 이름 충돌은 경고만 한다.
 #
 #   - Codex 전용 합성: .system 디렉토리는 로컬 보존
 #     ~/.codex/skills/.system                          ← local (codex managed)
@@ -37,7 +40,7 @@
 #     관리 대상 밖이면서 살아 있는 경우) 는 보존 + warn.
 #
 # ~/.claude*/skills 는 claude/setup.sh 가 entry-level 합성 디렉토리로 관리 (#707, F-8).
-# 모두 동일 layout (Hermes 만 서브디렉토리 — 위 예외 참고) 이므로 외부에서
+# 모두 동일 layout (Hermes 는 external_dirs — 위 예외 참고) 이므로 외부에서
 # 추가된 symlink 도 합성 대상 전부에 동일하게 적용된다.
 #
 # Antigravity CLI (agy) 는 자체 경로를 갖는다 (#1731, #1787). agy 의 Global
@@ -644,13 +647,101 @@ if [ -f "$NAMESPACE_SYNC_SCRIPT" ]; then
     bash "$NAMESPACE_SYNC_SCRIPT" || log_warning "네임스페이스 스킬 동기화 중 경고 발생"
 fi
 
-# 4. Hermes: 전용 네임스페이스 서브디렉토리에서 entry-level 합성 (issue #1376)
-#    루트를 직접 합성하지 않는 이유는 파일 상단 "Hermes 예외" 참고.
-HERMES_SKILLS="${HOME}/.hermes/skills/dotfiles"
+# 4. Hermes: skills.external_dirs 관리 (issue #1829) — 근거는 파일 상단 "Hermes 예외".
+#    예전 합성 디렉토리(#1376)는 정리 대상으로만 남는다.
+HERMES_LINK_DIR="${HOME}/.hermes/skills/dotfiles"
+
+# 워크스페이스 repo 의 skills/ 디렉토리 목록 — 소스 목록(SSOT 열거)에서 파생한다.
+hermes_workspace_dirs() {
+    printf '%s\n' "$SKILL_SOURCE_LIST" | cut -f1 | sed 's|/[^/]*$||' | LC_ALL=C sort -u
+}
+
+# 현재 external_dirs 를 한 줄씩 낸다. 값이 아직 없으면("Config key not set")
+# 빈 목록, 그 외 실패는 rc 1. stderr 경고줄(⚠ install out of sync 등)은
+# `- ` 줄만 골라내므로 섞여도 무방하다.
+hermes_external_dirs_get() {
+    local out
+    if ! out="$(hermes config get skills.external_dirs 2>&1)"; then
+        case "$out" in *"Config key not set"*) return 0 ;; esac
+        return 1
+    fi
+    printf '%s\n' "$out" | sed -n "s/^[[:space:]]*- //p" \
+        | sed -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/'
+}
+
+# 같은 이름의 스킬이 두 external dir 에 있으면 Hermes 는 로드를 거부한다
+# ("Ambiguous skill name"). compose 처럼 <repo>__<skill> 로 바꿀 수 없으니
+# collect_skill_sources 가 이름을 바꾼 항목마다 두 경로를 적어 경고만 한다.
+hermes_warn_duplicates() {
+    local skill_path entry_name
+    while IFS=$'\t' read -r skill_path entry_name; do
+        [ "$entry_name" = "${skill_path##*/}" ] && continue
+        log_warning "[hermes] 스킬 이름 중복 — Hermes 가 로드를 거부합니다: $(skill_source_path_for "${skill_path##*/}") ↔ ${skill_path}"
+    done <<< "$SKILL_SOURCE_LIST"
+}
+
+# 예전 합성 링크 정리 (#1829). external_dirs 와 이름이 겹치면 전부 Ambiguous 로
+# 실패하므로 반드시 config set 보다 먼저 한다. 관리 대상 밖 링크는 #791 규칙대로
+# 보존 + warn. 비면 디렉토리째 지운다.
+hermes_prune_links() {
+    local link
+    if [ -L "$HERMES_LINK_DIR" ]; then
+        if skill_source_is_managed "$(readlink -f "$HERMES_LINK_DIR" 2>/dev/null)" \
+            || _ssot_link_is_legacy_stale "$HERMES_LINK_DIR"; then
+            rm -f "$HERMES_LINK_DIR"
+        else
+            log_warning "[hermes] 사용자 symlink 보존: $HERMES_LINK_DIR"
+        fi
+        return 0
+    fi
+    [ -d "$HERMES_LINK_DIR" ] || return 0
+    for link in "$HERMES_LINK_DIR"/*; do
+        [ -L "$link" ] || continue
+        if skill_source_is_managed "$(readlink "$link")" || _ssot_link_is_legacy_stale "$link"; then
+            rm -f "$link"
+        else
+            log_warning "[hermes] 사용자 symlink 보존 (external_dirs 와 이름이 겹치면 로드 실패): $link"
+        fi
+    done
+    rmdir "$HERMES_LINK_DIR" 2>/dev/null || true
+}
+
+# 워크스페이스 밖 항목은 유지하고 워크스페이스 항목만 새 목록으로 교체한다.
+# config.yaml 은 Hermes 가 직접 고쳐 쓰는 파일이라 CLI 로만 쓴다 (#1373).
+hermes_sync_external_dirs() {
+    local current dir dirs json=""
+    if ! command -v hermes >/dev/null 2>&1; then
+        log_warning "[hermes] hermes 명령을 찾지 못했습니다. 건너뜁니다"
+        return 0
+    fi
+    if ! current="$(hermes_external_dirs_get)"; then
+        log_warning "[hermes] skills.external_dirs 읽기 실패 — 건너뜁니다"
+        return 0
+    fi
+    hermes_warn_duplicates
+    hermes_prune_links
+
+    # 워크스페이스 밖 기존 항목 + 새 워크스페이스 목록 → JSON 리스트 (\ 와 " 만 이스케이프).
+    dirs="$(while IFS= read -r dir; do
+            [ -n "$dir" ] && ! skill_source_is_managed "$dir" && printf '%s\n' "$dir"
+        done <<< "$current"; hermes_workspace_dirs)"
+    while IFS= read -r dir; do
+        [ -n "$dir" ] || continue
+        dir="${dir//\\/\\\\}"
+        json="${json:+${json}, }\"${dir//\"/\\\"}\""
+    done <<< "$dirs"
+
+    if hermes config set skills.external_dirs "[${json}]" >/dev/null; then
+        log_info "[hermes] skills.external_dirs 갱신: 워크스페이스 $(hermes_workspace_dirs | grep -c .)개"
+    else
+        log_warning "[hermes] skills.external_dirs 저장 실패 — 다시 실행하세요"
+    fi
+}
+
 if [ ! -d "${HOME}/.hermes" ]; then
     log_warning "Hermes 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.hermes"
 else
-    link_skills_compose "hermes" "$HERMES_SKILLS"
+    hermes_sync_external_dirs
 fi
 
 # --- Verify ---
@@ -692,6 +783,23 @@ if [ -n "${CODEX_HOME_LIST:-}" ]; then
     done <<< "$CODEX_HOME_LIST"
 fi
 _agy_is_installed && verify_link "agy" "$AGY_SKILLS" "compose"
-[ -d "${HOME}/.hermes" ] && verify_link "hermes" "$HERMES_SKILLS" "compose"
+
+# Hermes (#1829): external_dirs 에 워크스페이스 목록이 전부 있고 관리 링크가 남지 않았는지.
+hermes_verify() {
+    local current dir link missing=0 left=0
+    current="$(hermes_external_dirs_get)" || { log_warning "[hermes] skills.external_dirs 확인 실패"; return 0; }
+    while IFS= read -r dir; do
+        printf '%s\n' "$current" | grep -Fxq -- "$dir" && continue
+        log_warning "[hermes] external_dirs 누락: $dir"
+        missing=$((missing + 1))
+    done <<< "$(hermes_workspace_dirs)"
+    for link in "$HERMES_LINK_DIR"/*; do
+        [ -L "$link" ] && skill_source_is_managed "$(readlink "$link")" && left=$((left + 1))
+    done
+    [ "$left" -eq 0 ] || log_warning "[hermes] 관리 symlink 가 ${left}개 남아 있습니다: $HERMES_LINK_DIR"
+    [ "$missing" -eq 0 ] && [ "$left" -eq 0 ] \
+        && log_dim "✓ [hermes] skills.external_dirs (워크스페이스 $(hermes_workspace_dirs | grep -c .)개)"
+}
+[ -d "${HOME}/.hermes" ] && command -v hermes >/dev/null 2>&1 && hermes_verify
 
 ux_success "Skills 워크스페이스 연결 완료"
