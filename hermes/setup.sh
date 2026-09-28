@@ -12,7 +12,7 @@
 #       (gitignored — copy hermes/llm_endpoint.local.example to create it)
 #
 # Failure policy: Part 1 (config seed copy) hard-fails — without a local config
-# hermes silently reverts to its built-in defaults. Parts 2-5
+# hermes silently reverts to its built-in defaults. Parts 2-6
 # soft-fail: they reach the network (installer, npm registry) or depend on
 # host-specific state (a certificate path, certutil) that this script cannot
 # fix, and everything they provide degrades gracefully — no CLI means the help
@@ -359,8 +359,39 @@ _hermes_import_ca() {
 
 _hermes_import_ca
 
+# ============================================================================
+# Part 6: relax strict X509 in Hermes' pinned Python (soft-fail, optional)
+# ============================================================================
+
+# Python 3.13+ rejects certs without an Authority Key Identifier, which is what
+# a TLS-intercepting proxy hands out — Hermes' own downloads (node, npm, ...)
+# then die with "Missing Authority Key Identifier" on every invocation.
+#
+# Target is the stdlib dir of the pinned interpreter under ~/.hermes/tools, not
+# a venv: the package-manager worker runs from a per-generation venv that is
+# rebuilt on update, and PM strips every PYTHON* env var, so neither
+# site-packages nor PYTHONPATH survives. `sitecustomize` is found via the
+# stdlib dir. A new pinned Python needs a re-run of this script.
+# Only runs when a corporate CA is configured.
+_hermes_install_sitecustomize() {
+	{ [ -n "${SSL_CERT_FILE:-}" ] || _hermes_resolve_ca_cert >/dev/null; } || return 0
+
+	local lib_dir
+	for lib_dir in "${HERMES_CONFIG_DIR}"/tools/python-*/lib/python3.*; do
+		[ -d "${lib_dir}" ] || continue
+		if cp "${_SCRIPT_DIR}/sitecustomize.py" "${lib_dir}/sitecustomize.py"; then
+			ux_success "installed sitecustomize.py (non-strict X509) into ${lib_dir#${HOME}/}"
+		else
+			ux_warning "Could not install sitecustomize.py into ${lib_dir}"
+		fi
+	done
+	return 0
+}
+
+_hermes_install_sitecustomize
+
 ux_info "Details and pitfalls: hermes-help"
 
 # Install failures are warnings, never fatal — pin the status so the parent's
-# `set -e` cannot trip over Parts 2-5. See the header comment.
+# `set -e` cannot trip over Parts 2-6. See the header comment.
 exit 0

@@ -95,3 +95,18 @@ teardown() {
     [ ! -L "${HOME}/.hermes/config.yaml" ]
     [ "$(cat "${HOME}/.hermes/config.yaml")" = "$first_content" ]
 }
+
+@test "sitecustomize: installed into the hermes pinned python only when a corporate CA is set" {
+    lib="${HOME}/.hermes/tools/python-3.99.0-linux-x64/lib/python3.99"
+    mkdir -p "$lib"
+
+    # The dev shell may already export a corporate CA; the no-CA case needs it unset.
+    run env -u SSL_CERT_FILE bash "${HERMES_SETUP}"
+    assert_success
+    [ ! -e "${lib}/sitecustomize.py" ]
+
+    SSL_CERT_FILE=/dev/null run bash "${HERMES_SETUP}"
+    assert_success
+    assert_output --partial "installed sitecustomize.py"
+    cmp -s "${_BATS_REAL_DOTFILES_ROOT}/hermes/sitecustomize.py" "${lib}/sitecustomize.py"
+}
