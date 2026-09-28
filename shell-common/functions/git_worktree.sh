@@ -22,7 +22,7 @@ _gwt_help_summary() {
     ux_bullet_sub "prune    gwt prune                                    clean stale .git/worktrees/ refs (no path)"
     ux_bullet_sub "spawn    gwt spawn <name> [--task|--base|--tmux|...]  create named worktree (AI workflow)"
     ux_bullet_sub "status   gwt status [<name>]                          per-worktree diagnostic"
-    ux_bullet_sub "teardown gwt teardown [--force] [--keep-branch]       cleanup current/all worktree(s)"
+    ux_bullet_sub "teardown gwt teardown [--all [-r]] [--force] [...]    cleanup current/all worktree(s)"
     ux_bullet_sub "details: gwt-help <section>  (example: gwt-help spawn)"
 }
 
@@ -83,9 +83,10 @@ _gwt_help_rows_spawn() {
 }
 
 _gwt_help_rows_teardown() {
-    ux_table_row "syntax" "gwt teardown [--all|-a|all] [--force] [--keep-branch]" "Cleanup AI worktree(s)"
+    ux_table_row "syntax" "gwt teardown [--all|-a|all] [--recursive|-r] [--force] [--keep-branch]" "Cleanup AI worktree(s)"
     ux_table_row "context" "Single mode: run inside a worktree" "Syncs main repo after cleanup"
     ux_table_row "all mode" "Run from main repo or any worktree" "Tears down every non-main worktree"
+    ux_table_row "recursive" "--all --recursive|-r from a parent dir" "Every main repo directly under \$PWD (one prompt)"
     ux_table_row "flags" "--force / --keep-branch" "Discard changes / keep branch"
 }
 
@@ -1981,7 +1982,7 @@ _gwt_report_unpushed() {
 
 # ============================================================================
 # Worktree teardown — remove worktree, sync main, delete branch, log
-# Usage: git_worktree_teardown [--all|-a|all] [--force] [--keep-branch]
+# Usage: git_worktree_teardown [--all|-a|all] [--recursive|-r] [--force] [--keep-branch]
 # ============================================================================
 git_worktree_teardown() {
     # zsh compatibility
@@ -1989,22 +1990,25 @@ git_worktree_teardown() {
         emulate -L sh
     fi
 
-    local force=false keep_branch=false all_mode=false
+    local force=false keep_branch=false all_mode=false recursive=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
-            -h|--help)
+            -h|--help|help)
                 ux_header "gwt teardown - AI worktree cleanup"
-                ux_info "Usage: gwt teardown [--all|-a|all] [--force] [--keep-branch]"
+                ux_info "Usage: gwt teardown [--all|-a|all] [--recursive|-r] [--force] [--keep-branch]"
                 ux_info ""
                 ux_info "Options:"
                 ux_info "  --all, -a, all tear down every non-main worktree (run from main"
                 ux_info "                 repo or inside any worktree)"
+                ux_info "  --recursive,-r with --all (implied): tear down worktrees of every"
+                ux_info "                 main repo directly under \$PWD (one confirmation)"
                 ux_info "  --force        discard uncommitted changes and force remove"
                 ux_info "  --keep-branch  keep the branch after removing worktree"
                 return 0
                 ;;
             --all|-a|all) all_mode=true; shift ;;
+            --recursive|-r) recursive=true; all_mode=true; shift ;;
             --force) force=true; shift ;;
             --keep-branch) keep_branch=true; shift ;;
             -*)
@@ -2050,6 +2054,10 @@ git_worktree_teardown() {
     done
 
     # Batch mode: tear down every non-main worktree.
+    if [ "$recursive" = true ]; then
+        _gwt_teardown_recursive "$force" "$keep_branch"
+        return $?
+    fi
     if [ "$all_mode" = true ]; then
         _gwt_teardown_all "$force" "$keep_branch"
         return $?
@@ -2388,7 +2396,9 @@ EOF
 
 # ============================================================================
 # Internal: tear down every non-main worktree (best-effort).
-# Args: <force> <keep_branch>
+# Args: <force> <keep_branch> [skip_confirm]
+# skip_confirm=true suppresses ONLY the prompt (recursive mode already asked
+# once); it never implies --force.
 # Returns 0 if all teardowns succeed, 1 if any failed (or aborted, or no repo).
 # ============================================================================
 _gwt_teardown_all() {
@@ -2397,14 +2407,14 @@ _gwt_teardown_all() {
         emulate -L sh
     fi
 
-    local force="$1" keep_branch="$2"
+    local force="$1" keep_branch="$2" skip_confirm="${3:-false}"
 
     # Must be inside a git repo (main or any worktree).
     # Keep `|| { ...; }` on one line so the closing brace does not appear at
     # line-start; library_purity_check tracks brace depth via `^\s*\}` and
     # would otherwise treat this as the enclosing function's close, falsely
     # flagging the `read -r` below as top-level interactive code.
-    git rev-parse --git-common-dir >/dev/null 2>&1 || { _gwt_report_no_git; return 1; }
+    git rev-parse --git-common-dir >/dev/null 2>&1 || { _gwt_report_no_git; _gwt_hint_recursive; return 1; }
 
     # Resolve main worktree and collect non-main worktrees from a single
     # `git worktree list --porcelain` snapshot — one fork instead of two,
@@ -2444,7 +2454,7 @@ EOF
 $all_wts
 EOF
 
-    if [ "$force" != true ]; then
+    if [ "$force" != true ] && [ "$skip_confirm" != true ]; then
         if ! ux_confirm "Proceed with teardown?" "n"; then
             ux_info "Aborted."
             return 1
@@ -2497,6 +2507,120 @@ EOF
         return 1
     fi
     ux_success "All worktrees torn down."
+    return 0
+}
+
+# ============================================================================
+# Internal: print main repos (.git is a DIRECTORY) directly under $PWD, one
+# absolute path per line. Linked worktrees (.git is a file) are skipped —
+# their main repo covers them.
+# ============================================================================
+_gwt_find_main_repos() {
+    local d
+    for d in ./*/; do
+        [ -d "$d.git" ] || continue
+        d="${d#./}"
+        printf '%s\n' "$PWD/${d%/}"
+    done
+}
+
+# Hint for `gwt teardown --all` run outside a repo (issue #1835 F-8).
+_gwt_hint_recursive() {
+    local repos
+    repos=$(_gwt_find_main_repos)
+    [ -n "$repos" ] || return 0
+    ux_info "  Subdirectories contain git repositories. To tear them all down:"
+    ux_bullet "gwt teardown --all --recursive"
+}
+
+# ============================================================================
+# Internal: tear down every linked worktree of every main repo directly
+# under $PWD (issue #1835). Plans first, confirms once, then runs
+# _gwt_teardown_all per repo in a subshell (caller cwd preserved).
+# Args: <force> <keep_branch>
+# Returns 0 if every repo succeeds (or nothing to do), 1 otherwise.
+# ============================================================================
+_gwt_teardown_recursive() {
+    # zsh compatibility
+    if [ -n "${ZSH_VERSION-}" ]; then
+        emulate -L sh
+    fi
+
+    local force="$1" keep_branch="$2"
+    local all_repos repo wt wts plan_repos="" repo_count=0 wt_count=0
+
+    all_repos=$(_gwt_find_main_repos)
+    if [ -z "$all_repos" ]; then
+        ux_info "No git repositories found under $PWD."
+        return 0
+    fi
+
+    # Snapshot the plan BEFORE tearing anything down: sibling worktree dirs
+    # vanish while earlier repos are processed.
+    ux_warning "Worktrees to tear down:"
+    while IFS= read -r repo; do
+        [ -n "$repo" ] || continue
+        # First porcelain entry is the main worktree itself.
+        wts="$(git -C "$repo" worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p' | sed '1d')"
+        [ -n "$wts" ] || continue
+        plan_repos="${plan_repos}${repo}
+"
+        repo_count=$((repo_count + 1))
+        ux_info "  Repository: $repo"
+        while IFS= read -r wt; do
+            ux_info "    $wt"
+            wt_count=$((wt_count + 1))
+        done <<EOF
+$wts
+EOF
+    done <<EOF
+$all_repos
+EOF
+
+    if [ "$repo_count" -eq 0 ]; then
+        ux_info "No worktrees to tear down."
+        return 0
+    fi
+
+    ux_warning "About to tear down $wt_count worktree(s) across $repo_count repositories."
+    if [ "$force" != true ]; then
+        if ! ux_confirm "Proceed with teardown?" "n"; then
+            ux_info "Aborted."
+            return 1
+        fi
+    fi
+
+    local ok_repos=0 fail_repos=0 failed_list=""
+    while IFS= read -r repo; do
+        [ -n "$repo" ] || continue
+        ux_header "Repository: $repo"
+        # Split across lines for naming_check.sh (see _gwt_teardown_all).
+        if ( cd "$repo" \
+             && _gwt_teardown_all "$force" "$keep_branch" true ); then
+            ok_repos=$((ok_repos + 1))
+        else
+            fail_repos=$((fail_repos + 1))
+            failed_list="${failed_list}${repo}
+"
+        fi
+    done <<EOF
+$plan_repos
+EOF
+
+    ux_header "Recursive teardown summary"
+    ux_info "  Repositories succeeded: $ok_repos"
+    ux_info "  Repositories failed:    $fail_repos"
+    if [ "$fail_repos" -gt 0 ]; then
+        ux_info "  Failed repositories:"
+        while IFS= read -r repo; do
+            [ -n "$repo" ] || continue
+            ux_info "    $repo"
+        done <<EOF
+$failed_list
+EOF
+        return 1
+    fi
+    ux_success "All repositories torn down."
     return 0
 }
 
