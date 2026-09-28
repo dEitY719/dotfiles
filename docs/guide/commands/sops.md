@@ -12,11 +12,14 @@
 ## 요약 (sops-help)
 
 - Usage: sops-help [section|--list|--all]   (alias: age-help)
+- quick start (senv, 현재 디렉터리 기준)
+    - 새 프로젝트: senv init -> senv enc -> git add .sops.yaml .env.enc
+    - 새 PC: git pull -> senv dec  (또는 senv run make run)
 - sections
     - overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .env.enc 커밋
     - setup: install-sops-age | age-keygen | sops-status
-    - newproject: .sops.yaml | .gitignore | 암호화 후 커밋
-    - usage: -e | -d | edit | exec-env (dotenv 타입 플래그 필수)
+    - newproject: senv init | senv enc | 커밋
+    - usage: senv init|enc|dec|edit|run + senv 가 실행하는 sops 명령
     - newpc: keys.txt 복사 | age -p 잠금 파일
     - risks: 분실=복구 불가 | 유출=원본 비밀값 교체
     - trouble: unmarshal 오류 | no master key | 권한
@@ -46,26 +49,30 @@
 
 ### newproject
 
-- 1) 프로젝트 루트에 .sops.yaml 작성 (공개키만 들어가므로 커밋 OK)
+- 프로젝트 루트에서 (개인키가 먼저 있어야 한다: sops-help setup)
+    - senv init   # .sops.yaml(공개키) 생성 + .gitignore 에 .env 추가
+    - senv enc    # .env -> .env.enc
+    - git add .sops.yaml .gitignore .env.enc && git commit
+- 새 PC: git pull -> senv dec (파일 생성) 또는 senv run make run (파일 없음)
+- senv init 이 만드는 .sops.yaml (공개키만 들어가므로 커밋 OK)
     - creation_rules:
-    -   - path_regex: \.env$
-    -     age: age1xxxxxxxx...   # age-keygen -y 출력값, 여러 명이면 콤마로 구분
-- 2) 평문은 커밋 금지: echo '.env' >> .gitignore
-- 3) sops -e --input-type dotenv --output-type dotenv .env > .env.enc
-- 4) git add .sops.yaml .gitignore .env.enc && git commit
+    -   - path_regex: '(^|/)\.env(\.enc)?$'
+    -     age: age1xxxxxxxx...   # 여러 키면 콤마로 구분
 - 체크: git status 에 .env 가 안 보이는지, .env.enc 값이 ENC[AES256_GCM,...] 인지
 
 ### usage
 
-- 암호화 (.env.enc 는 확장자 추론 불가 -> 타입 플래그 필수)
+- **senv init** — .sops.yaml + .gitignore — 기존 .sops.yaml 은 덮어쓰지 않음
+- **senv enc [file]** — .env -> .env.enc — 실패 시 기존 .env.enc 유지
+- **senv dec [-f] [file]** — .env.enc -> .env (600) — 기존 .env 는 -f 없이 안 덮어씀
+- **senv edit [file]** — $EDITOR 로 편집 — 저장 시 재암호화
+- **senv run <cmd...>** — 환경변수로 주입해 실행 — 디스크에 평문 없음, eval 안 함
+- senv 가 실행하는 sops 명령 (.env.enc 는 확장자 추론 불가 -> 타입 플래그 필수)
     - sops -e --input-type dotenv --output-type dotenv .env > .env.enc
-- 복호화
     - sops -d --input-type dotenv --output-type dotenv .env.enc > .env
-- 제자리 편집 ($EDITOR 로 열고 저장 시 재암호화)
     - sops edit --input-type dotenv --output-type dotenv .env.enc
-- 파일 없이 환경변수로 주입해 실행 (exec-env 는 타입 플래그 미지원)
-    - sops -e .env > .enc.env   # 이름이 .env 로 끝나야 dotenv 로 추론됨
-    - sops exec-env .enc.env 'npm start'
+- sops exec-env 는 타입 플래그 미지원 -> .env.enc 불가 (senv run 이 대체)
+    - 직접 쓰려면 이름이 .env 로 끝나야 함: sops exec-env .enc.env 'npm start'
 - 주의: 'sops -d .env.enc' (플래그 없음) 는 unmarshal 오류로 실패한다 (실측)
 
 ### newpc
@@ -102,7 +109,7 @@
 - sops: https://github.com/getsops/sops
 - age:  https://github.com/FiloSottile/age
 - 설치 스크립트: shell-common/tools/custom/install_sops_age.sh
-- 진단 함수: sops-status (shell-common/tools/integrations/sops.sh)
+- 진단/워크플로 함수: sops-status, senv (shell-common/tools/integrations/sops.sh)
 
 ## 엣지케이스 / 의도된 동작
 
