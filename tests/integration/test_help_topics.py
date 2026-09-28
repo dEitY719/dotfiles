@@ -62,6 +62,7 @@ HELP_TOPICS = [
     "register_help",
     "ripgrep_help",
     "show_doc_help",
+    "sops_help",
     "ssl_help",
     "superpowers_help",
     "sys_help",
