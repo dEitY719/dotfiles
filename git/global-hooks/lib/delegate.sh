@@ -2,7 +2,8 @@
 # git/global-hooks/lib/delegate.sh
 #
 # Shared delegation body for the non-pre-commit global hook wrappers
-# (commit-msg, post-commit, pre-push, prepare-commit-msg — issue #1664).
+# (commit-msg, post-commit, post-merge, post-rewrite, pre-push,
+# prepare-commit-msg — issue #1664).
 # Each wrapper sets HOOK_NAME then sources this file; everything else in the
 # wrapper's own file is header documentation.
 #
@@ -12,6 +13,11 @@
 #   arguments, stdin and the exit code unchanged. In a repository that ships
 #   no hook of this type it is a silent no-op — repo-specific logic must
 #   never fire in unrelated repositories.
+#
+#   Single exception (issue #1838): post-merge / post-rewrite first run
+#   lib/graphify-refresh.sh, a background `graphify update .` opt-in by the
+#   repo shipping graphify-out/graph.json. It never prints, fails or exits,
+#   so the delegation contract below is unchanged.
 #
 # Requires HOOK_NAME to already be set by the caller. Uses "$0"/"$@" as
 # inherited from the sourcing wrapper's own invocation (source does not
