@@ -52,3 +52,18 @@ teardown() {
     assert_success
     assert_output --partial "gh workflow run <DEV_WORKFLOW> --repo <REPO_COORD>"
 }
+
+@test "bash: single tag keeps <PREV_TAG> placeholder" {
+    git -C "$REPO" tag -d v1.1.0 >/dev/null
+    run_in_bash "cd '${REPO}' && git_help rollback"
+    assert_success
+    assert_output --partial "-f ref=<PREV_TAG>"
+}
+
+@test "bash: sed metacharacters in detected value stay literal" {
+    rm "${REPO}/.github/workflows/prod-deploy.yml"
+    touch "${REPO}/.github/workflows/prod&deploy|x.yml"
+    run_in_bash "cd '${REPO}' && git_help release"
+    assert_success
+    assert_output --partial "gh workflow run prod&deploy|x.yml --repo"
+}
