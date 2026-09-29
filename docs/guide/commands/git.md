@@ -191,7 +191,7 @@
 
 - **<PROD_WORKFLOW>** — 예: prod-deploy.yml — prod 배포 workflow 파일
 - **<REPO_COORD>** — 예: github.example.net/org/repo — gh --repo 좌표
-- **<PREV_TAG>** — 예: v2.0.3 — 롤백 대상 이전 태그
+- **<PREV_TAG>** — 예: v2.0.3 — 롤백 대상 이전 태그 (최신 직전 태그)
 **[Step 1] 이전 태그 확인**
 
   git tag --sort=-v:refname | head
