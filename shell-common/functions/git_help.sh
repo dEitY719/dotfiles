@@ -171,16 +171,20 @@ _git_help_find_workflow() {
     unset _gh_matches
 }
 
+# Replaces <$2> with $3 in $1. The value is escaped so `\`, `&` and the `|`
+# delimiter (possible in remote URLs / workflow names) stay literal.
+_git_help_subst() {
+    [ -n "$3" ] || { printf '%s' "$1"; return 0; }
+    _gh_val=$(printf '%s\n' "$3" | sed 's/[\\&|]/\\&/g')
+    printf '%s\n' "$1" | sed "s|<$2>|$_gh_val|g"
+    unset _gh_val
+}
+
 _git_help_fill() {
-    _gh_line=$1
-    [ -n "${_GIT_HELP_REPO_COORD-}" ] &&
-        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<REPO_COORD>|$_GIT_HELP_REPO_COORD|g")
-    [ -n "${_GIT_HELP_DEV_WORKFLOW-}" ] &&
-        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<DEV_WORKFLOW>|$_GIT_HELP_DEV_WORKFLOW|g")
-    [ -n "${_GIT_HELP_PROD_WORKFLOW-}" ] &&
-        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<PROD_WORKFLOW>|$_GIT_HELP_PROD_WORKFLOW|g")
-    [ -n "${_GIT_HELP_PREV_TAG-}" ] &&
-        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<PREV_TAG>|$_GIT_HELP_PREV_TAG|g")
+    _gh_line=$(_git_help_subst "$1" REPO_COORD "${_GIT_HELP_REPO_COORD-}")
+    _gh_line=$(_git_help_subst "$_gh_line" DEV_WORKFLOW "${_GIT_HELP_DEV_WORKFLOW-}")
+    _gh_line=$(_git_help_subst "$_gh_line" PROD_WORKFLOW "${_GIT_HELP_PROD_WORKFLOW-}")
+    _gh_line=$(_git_help_subst "$_gh_line" PREV_TAG "${_GIT_HELP_PREV_TAG-}")
     printf '%s' "$_gh_line"
     unset _gh_line
 }
