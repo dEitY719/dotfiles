@@ -298,10 +298,21 @@ git_branch_teardown() {
         # S3 — best-effort PR lookup; also surfaces "#151 OPEN" in the blocked
         # message below. Silent on gh missing/unauthed. Use `.[]` (not `.[0]`) so
         # an empty array yields empty output, not "#null null  null".
+        #
+        # Pin --repo HOST/OWNER/REPO to the branch's own remote (#1842): with
+        # several remotes (origin=GHE review repo, upstream=github.com) bare
+        # `gh` picks its own favorite and silently returns `[]`.
         local pr_info=""
         if [ "$upstream_gone" != true ] && [ "$contained" != true ] \
             && command -v gh >/dev/null 2>&1; then
-            pr_info="$(gh pr list --head "$branch" --state all --limit 1 \
+            local remote_url pr_host pr_slug
+            set --
+            remote_url="$(git remote get-url "$fetch_remote" 2>/dev/null)"
+            if pr_host="$(_gh_host_from_url "$remote_url" 2>/dev/null)" \
+                && pr_slug="$(_gh_parse_owner_repo_url "$remote_url" 2>/dev/null)"; then
+                set -- --repo "$pr_host/$pr_slug"
+            fi
+            pr_info="$(gh pr list "$@" --head "$branch" --state all --limit 1 \
                 --json number,state,url \
                 --jq '.[] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
             case "$pr_info" in *' MERGED '*) pr_merged=true ;; esac
