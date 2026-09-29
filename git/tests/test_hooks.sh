@@ -632,7 +632,9 @@ test_graphify_ff_pull_on_default_branch() {
   local n
   setup_graphify_fixture graph
   advance_upstream ff
-  gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "ff pull failed"
+  local out
+  out=$(gfy_git pull -q --no-rebase --ff-only 2>&1) || die "ff pull failed"
+  case "$out" in *"graphify: update started"*) ;; *) die "Expected graphify start notice, got: $out" ;; esac
   n=$(graphify_calls 1)
   [ "$n" -eq 1 ] || die "Expected 1 graphify call on ff pull, got $n"
   grep -qx "update ." "$GFY_DIR/calls" || die "Expected 'graphify update .', got: $(cat "$GFY_DIR/calls")"
@@ -649,6 +651,48 @@ test_graphify_rebase_pull_on_default_branch() {
   gfy_git pull -q --rebase >/dev/null 2>&1 || die "rebase pull failed"
   n=$(graphify_calls 1)
   [ "$n" -eq 1 ] || die "Expected 1 graphify call on rebase pull, got $n"
+  rm -rf "$GFY_DIR"
+}
+
+# `git rebase origin/main` with nothing local to replay fires only
+# post-checkout (inside .git/rebase-merge/), never post-rewrite.
+test_graphify_ff_rebase_on_default_branch() {
+  local n
+  setup_graphify_fixture graph
+  advance_upstream ffrebase
+  git -C "$GFY_DIR/clone" fetch -q
+  gfy_git rebase -q origin/main >/dev/null 2>&1 || die "ff rebase failed"
+  n=$(graphify_calls 1)
+  [ "$n" -eq 1 ] || die "Expected 1 graphify call on ff rebase, got $n"
+  rm -rf "$GFY_DIR"
+}
+
+# A rebase that replays commits fires post-checkout AND post-rewrite; only
+# post-rewrite may refresh, so the graph is rebuilt once, not twice.
+test_graphify_replay_rebase_refreshes_once() {
+  local n
+  setup_graphify_fixture graph
+  advance_upstream replay
+  echo local >"$GFY_DIR/clone/local.txt"
+  git -C "$GFY_DIR/clone" add local.txt
+  git -C "$GFY_DIR/clone" -c core.hooksPath=/dev/null commit -q -m local
+  git -C "$GFY_DIR/clone" fetch -q
+  gfy_git rebase -q origin/main >/dev/null 2>&1 || die "replay rebase failed"
+  graphify_calls 1 >/dev/null
+  sleep 0.5
+  n=$(graphify_calls 1)
+  [ "$n" -eq 1 ] || die "Expected exactly 1 graphify call on replay rebase, got $n"
+  rm -rf "$GFY_DIR"
+}
+
+# A plain branch switch stays graphify's own post-checkout job.
+test_graphify_skips_branch_switch() {
+  local n
+  setup_graphify_fixture graph
+  git -C "$GFY_DIR/clone" switch -q -c feature
+  gfy_git switch -q main >/dev/null 2>&1 || die "switch failed"
+  n=$(graphify_calls 0)
+  [ "$n" -eq 0 ] || die "Expected no graphify call on branch switch, got $n"
   rm -rf "$GFY_DIR"
 }
 
@@ -755,6 +799,9 @@ main() {
   # Issue #1838 — graphify refresh on default-branch pulls
   test_graphify_ff_pull_on_default_branch
   test_graphify_rebase_pull_on_default_branch
+  test_graphify_ff_rebase_on_default_branch
+  test_graphify_replay_rebase_refreshes_once
+  test_graphify_skips_branch_switch
   test_graphify_skips_commit_amend
   test_graphify_skips_non_default_branch
   test_graphify_noop_without_graph_json
