@@ -88,3 +88,6 @@ claude/settings.local.json
 .understand-anything/.trash-*/
 .understand-anything/*.log
 .understand-anything/diff-overlay.json
+
+# graphify
+graphify-out/
