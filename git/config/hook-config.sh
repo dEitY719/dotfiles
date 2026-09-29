@@ -30,6 +30,7 @@ GIT_GLOBAL_HOOKS=(
   commit-msg
   prepare-commit-msg
   post-commit
+  post-checkout
   post-merge
   post-rewrite
 )
