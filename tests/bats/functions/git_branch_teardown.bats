@@ -306,3 +306,21 @@ GH
     run git -C "$CLONE5" rev-parse --verify --quiet feat/pr
     assert_failure
 }
+
+@test "teardown: fork workflow still finds the PR via gh's default repo (#1842 fallback)" {
+    _setup_dual_remote_merged_pr
+    # Fork layout: the branch's remote (origin) is the fork, the PR lives on
+    # upstream. Pinned query finds nothing; bare `gh` (which prefers upstream)
+    # does.
+    cat > "$FAKE_BIN/gh" <<'GH'
+#!/bin/sh
+case " $* " in
+    *" --repo "*) ;;
+    *) echo "#9 MERGED  https://github.com/dev-team/app/pull/9" ;;
+esac
+GH
+    run_in_bash "export PATH='$FAKE_BIN':\$PATH GIT_ALLOW_PROTOCOL=file; cd '$CLONE5' && gbr teardown 2>&1"
+    refute_output --partial "not merged yet"
+    run git -C "$CLONE5" rev-parse --verify --quiet feat/pr
+    assert_failure
+}
