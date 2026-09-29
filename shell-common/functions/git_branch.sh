@@ -299,22 +299,28 @@ git_branch_teardown() {
         # message below. Silent on gh missing/unauthed. Use `.[]` (not `.[0]`) so
         # an empty array yields empty output, not "#null null  null".
         #
-        # Pin --repo HOST/OWNER/REPO to the branch's own remote (#1842): with
-        # several remotes (origin=GHE review repo, upstream=github.com) bare
-        # `gh` picks its own favorite and silently returns `[]`.
+        # Ask the branch's own remote first, pinned as --repo HOST/OWNER/REPO
+        # (#1842): with origin=GHE review repo + upstream=github.com, bare `gh`
+        # picks upstream and silently returns `[]`. Then fall back to bare `gh`,
+        # whose upstream preference is right for a fork workflow (branch tracks
+        # the fork, PR lives on upstream).
         local pr_info=""
         if [ "$upstream_gone" != true ] && [ "$contained" != true ] \
             && command -v gh >/dev/null 2>&1; then
-            local remote_url pr_host pr_slug
-            set --
+            local remote_url pr_host pr_slug pinned_repo="" pr_repo
             remote_url="$(git remote get-url "$fetch_remote" 2>/dev/null)"
             if pr_host="$(_gh_host_from_url "$remote_url" 2>/dev/null)" \
                 && pr_slug="$(_gh_parse_owner_repo_url "$remote_url" 2>/dev/null)"; then
-                set -- --repo "$pr_host/$pr_slug"
+                pinned_repo="$pr_host/$pr_slug"
             fi
-            pr_info="$(gh pr list "$@" --head "$branch" --state all --limit 1 \
-                --json number,state,url \
-                --jq '.[] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
+            # Empty pr_repo = bare `gh` (no --repo).
+            for pr_repo in ${pinned_repo:+"$pinned_repo"} ""; do
+                pr_info="$(gh pr list ${pr_repo:+--repo "$pr_repo"} \
+                    --head "$branch" --state all --limit 1 \
+                    --json number,state,url \
+                    --jq '.[] | "#\(.number) \(.state)  \(.url)"' 2>/dev/null)"
+                [ -n "$pr_info" ] && break
+            done
             case "$pr_info" in *' MERGED '*) pr_merged=true ;; esac
         fi
 
