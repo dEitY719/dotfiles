@@ -38,6 +38,8 @@ SHELL_COMMON="${_SCRIPT_DIR%/tools/custom}"
 export SHELL_COMMON
 DOTFILES_ROOT="${SHELL_COMMON%/shell-common}"
 export DOTFILES_ROOT
+# Render help as static docs: skip cwd-dependent auto-fill (git_help placeholders).
+export DOTFILES_HELP_STATIC=1
 
 # shellcheck source=/dev/null
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
