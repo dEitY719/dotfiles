@@ -262,3 +262,47 @@ teardown() {
     # --force is now described as non-destructive.
     assert_output --partial "NON-destructive"
 }
+
+# Create: $CLONE5 on feat/pr, pushed to its own origin head (not gone, not in
+# main), then re-pointed at a dual-remote layout: origin = GHE review repo,
+# upstream = github.com canonical repo (#1842). A fake `gh` on PATH answers
+# MERGED only when --repo names the origin repo; anything else gets `[]`,
+# which is what real gh returned when it silently picked `upstream`.
+_setup_dual_remote_merged_pr() {
+    ORIGIN5="$TEST_TEMP_HOME/origin5.git"
+    CLONE5="$TEST_TEMP_HOME/clone5"
+    FAKE_BIN="$TEST_TEMP_HOME/fakebin"
+
+    export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@test \
+           GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
+
+    git init --bare --initial-branch=main "$ORIGIN5" >/dev/null
+    git clone -q "$ORIGIN5" "$CLONE5"
+    (
+        cd "$CLONE5"
+        echo base > base.txt && git add base.txt && git commit -q -m base
+        git push -q origin main
+        git checkout -q -b feat/pr
+        echo pr > pr.txt && git add pr.txt && git commit -q -m "feat: pr"
+        git push -q -u origin feat/pr
+        git remote set-url origin https://github.samsungds.net/aiagent/app.git
+        git remote add upstream https://github.com/dev-team/app.git
+    )
+
+    mkdir -p "$FAKE_BIN"
+    cat > "$FAKE_BIN/gh" <<'GH'
+#!/bin/sh
+case " $* " in
+    *" --repo github.samsungds.net/aiagent/app "*) echo "#7 MERGED  https://github.samsungds.net/aiagent/app/pull/7" ;;
+esac
+GH
+    chmod +x "$FAKE_BIN/gh"
+}
+
+@test "teardown: dual-remote repo queries the branch's own remote for the PR (#1842)" {
+    _setup_dual_remote_merged_pr
+    run_in_bash "export PATH='$FAKE_BIN':\$PATH GIT_ALLOW_PROTOCOL=file; cd '$CLONE5' && gbr teardown 2>&1"
+    refute_output --partial "not merged yet"
+    run git -C "$CLONE5" rev-parse --verify --quiet feat/pr
+    assert_failure
+}
