@@ -80,7 +80,8 @@ _run_hook_check() {
 # ---------------------------------------------------------------------------
 @test "global hooks: SSOT covers every hook the dotfiles rely on" {
     local expected name
-    for expected in pre-commit pre-push commit-msg prepare-commit-msg post-commit; do
+    for expected in pre-commit pre-push commit-msg prepare-commit-msg post-commit \
+        post-merge post-rewrite; do
         printf '%s\n' "${GIT_GLOBAL_HOOKS[@]}" | grep -qx "$expected" ||
             fail "GIT_GLOBAL_HOOKS is missing '$expected' — that hook would be dead code"
     done

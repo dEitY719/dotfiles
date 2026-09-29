@@ -499,7 +499,7 @@ EOF
 # Every wrapper forwards argv to the project hook of the current repo.
 test_global_wrappers_delegate_argv() {
   local hook_name repo_dir
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
     repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
     make_plain_repo "$repo_dir"
     install_recording_project_hook "$repo_dir" "$hook_name" 0
@@ -517,7 +517,7 @@ test_global_wrappers_delegate_argv() {
 # Every wrapper propagates the project hook's exit code verbatim.
 test_global_wrappers_propagate_exit_code() {
   local hook_name repo_dir rc
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
     repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
     make_plain_repo "$repo_dir"
     install_recording_project_hook "$repo_dir" "$hook_name" 42
@@ -535,7 +535,7 @@ test_global_wrappers_propagate_exit_code() {
 # No project hook of that type -> silent no-op for every wrapper.
 test_global_wrappers_are_noop_without_project_hook() {
   local hook_name repo_dir
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
     repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
     make_plain_repo "$repo_dir"
 
@@ -556,7 +556,7 @@ test_global_wrappers_are_noop_outside_git_repo() {
   # Detach from any enclosing repository (mktemp dirs live under /tmp).
   export GIT_CEILING_DIRECTORIES="$work_dir"
 
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit; do
+  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
     run_global_hook "$work_dir" "$hook_name" </dev/null ||
       die "Expected ${hook_name} wrapper to exit 0 outside a repo: $WRAPPER_OUT"
     [ -z "$WRAPPER_OUT" ] ||
@@ -565,6 +565,166 @@ test_global_wrappers_are_noop_outside_git_repo() {
 
   unset GIT_CEILING_DIRECTORIES
   rm -rf "$work_dir"
+}
+
+# ---------------------------------------------------------------------------
+# Issue #1838 — post-merge / post-rewrite graphify refresh
+# ---------------------------------------------------------------------------
+
+# Fixture: $GFY_DIR/upstream (branch main) cloned to $GFY_DIR/clone, a fake
+# `graphify` in $GFY_DIR/bin that appends its argv to $GFY_DIR/calls.
+# $1 = "graph" to create clone/graphify-out/graph.json (the opt-in signal).
+setup_graphify_fixture() {
+  GFY_DIR="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  mkdir -p "$GFY_DIR/bin"
+  cat >"$GFY_DIR/bin/graphify" <<EOF
+#!/bin/sh
+echo "\$*" >>"$GFY_DIR/calls"
+EOF
+  chmod +x "$GFY_DIR/bin/graphify"
+
+  git init -q -b main "$GFY_DIR/upstream"
+  git -C "$GFY_DIR/upstream" config user.email "hook-test@example.com"
+  git -C "$GFY_DIR/upstream" config user.name "hook-test"
+  echo "seed" >"$GFY_DIR/upstream/seed.txt"
+  git -C "$GFY_DIR/upstream" add seed.txt
+  git -C "$GFY_DIR/upstream" -c core.hooksPath=/dev/null commit -q -m "seed"
+
+  git clone -q "$GFY_DIR/upstream" "$GFY_DIR/clone"
+  git -C "$GFY_DIR/clone" config user.email "hook-test@example.com"
+  git -C "$GFY_DIR/clone" config user.name "hook-test"
+  git -C "$GFY_DIR/clone" config commit.gpgsign false
+  if [ "${1:-}" = graph ]; then
+    mkdir -p "$GFY_DIR/clone/graphify-out"
+    echo '{}' >"$GFY_DIR/clone/graphify-out/graph.json"
+  fi
+}
+
+# A new upstream commit for the clone to pull.
+advance_upstream() {
+  echo "$1" >"$GFY_DIR/upstream/$1.txt"
+  git -C "$GFY_DIR/upstream" add "$1.txt"
+  git -C "$GFY_DIR/upstream" -c core.hooksPath=/dev/null commit -q -m "$1"
+}
+
+# Run git in the clone with the global wrappers active and the fake graphify
+# first on PATH.
+gfy_git() {
+  PATH="$GFY_DIR/bin:$PATH" git -C "$GFY_DIR/clone" -c core.hooksPath="$GLOBAL_HOOKS_DIR" "$@"
+}
+
+# Count fake graphify calls. The call is backgrounded, so poll up to ~5s when
+# one is expected; otherwise give a stray call a moment to land.
+graphify_calls() {
+  local expected="$1" i
+  if [ "$expected" -gt 0 ]; then
+    for i in $(seq 50); do
+      [ -f "$GFY_DIR/calls" ] && break
+      sleep 0.1
+    done
+  else
+    sleep 0.5
+  fi
+  if [ -f "$GFY_DIR/calls" ]; then wc -l <"$GFY_DIR/calls" | tr -d ' '; else echo 0; fi
+}
+
+test_graphify_ff_pull_on_default_branch() {
+  local n
+  setup_graphify_fixture graph
+  advance_upstream ff
+  gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "ff pull failed"
+  n=$(graphify_calls 1)
+  [ "$n" -eq 1 ] || die "Expected 1 graphify call on ff pull, got $n"
+  grep -qx "update ." "$GFY_DIR/calls" || die "Expected 'graphify update .', got: $(cat "$GFY_DIR/calls")"
+  rm -rf "$GFY_DIR"
+}
+
+test_graphify_rebase_pull_on_default_branch() {
+  local n
+  setup_graphify_fixture graph
+  advance_upstream remote
+  echo local >"$GFY_DIR/clone/local.txt"
+  git -C "$GFY_DIR/clone" add local.txt
+  git -C "$GFY_DIR/clone" -c core.hooksPath=/dev/null commit -q -m local
+  gfy_git pull -q --rebase >/dev/null 2>&1 || die "rebase pull failed"
+  n=$(graphify_calls 1)
+  [ "$n" -eq 1 ] || die "Expected 1 graphify call on rebase pull, got $n"
+  rm -rf "$GFY_DIR"
+}
+
+test_graphify_skips_commit_amend() {
+  local n
+  setup_graphify_fixture graph
+  gfy_git commit -q --amend -m "amended" >/dev/null 2>&1 || die "amend failed"
+  n=$(graphify_calls 0)
+  [ "$n" -eq 0 ] || die "Expected no graphify call on commit --amend, got $n"
+  rm -rf "$GFY_DIR"
+}
+
+test_graphify_skips_non_default_branch() {
+  local n
+  setup_graphify_fixture graph
+  git -C "$GFY_DIR/clone" switch -q -c feature --track origin/main
+  advance_upstream feat
+  gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "feature pull failed"
+  n=$(graphify_calls 0)
+  [ "$n" -eq 0 ] || die "Expected no graphify call off the default branch, got $n"
+  rm -rf "$GFY_DIR"
+}
+
+test_graphify_noop_without_graph_json() {
+  local n
+  setup_graphify_fixture
+  advance_upstream nograph
+  gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "pull without graph.json failed"
+  PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null ||
+    die "Expected post-merge to exit 0 without graph.json: $WRAPPER_OUT"
+  [ -z "$WRAPPER_OUT" ] || die "Expected no output without graph.json, got: $WRAPPER_OUT"
+  n=$(graphify_calls 0)
+  [ "$n" -eq 0 ] || die "Expected no graphify call without graph.json, got $n"
+  [ ! -e "$GFY_DIR/clone/graphify-out" ] || die "Expected no graphify-out side effect"
+  rm -rf "$GFY_DIR"
+}
+
+test_graphify_absent_pull_succeeds() {
+  local dir no_gfy_path=""
+  setup_graphify_fixture graph
+  # Drop every PATH entry that provides a real graphify.
+  local IFS=:
+  for dir in $PATH; do
+    [ -x "$dir/graphify" ] || no_gfy_path="${no_gfy_path:+$no_gfy_path:}$dir"
+  done
+  unset IFS
+  advance_upstream absent
+  PATH="$no_gfy_path" git -C "$GFY_DIR/clone" -c core.hooksPath="$GLOBAL_HOOKS_DIR" pull -q --no-rebase --ff-only >/dev/null 2>&1 ||
+    die "Expected pull to succeed without graphify on PATH"
+  PATH="$no_gfy_path" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null ||
+    die "Expected post-merge to exit 0 without graphify: $WRAPPER_OUT"
+  [ ! -e "$GFY_DIR/clone/graphify-out/.hook-update.log" ] || die "Expected no graphify run"
+  rm -rf "$GFY_DIR"
+}
+
+# graphify refresh must not swallow delegation: exit code and post-rewrite's
+# stdin still reach the project hook.
+test_graphify_keeps_project_hook_delegation() {
+  local rc=0 n
+  setup_graphify_fixture graph
+  install_recording_project_hook "$GFY_DIR/clone" post-merge 7
+  PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null || rc=$?
+  [ "$rc" -eq 7 ] || die "Expected post-merge exit 7 from project hook, got $rc: $WRAPPER_OUT"
+  grep -q "^DELEGATED:0$" "$GFY_DIR/clone/.delegated" || die "Expected project post-merge to run"
+  n=$(graphify_calls 1)
+  [ "$n" -eq 1 ] || die "Expected 1 graphify call before delegation, got $n"
+
+  cat >"$GFY_DIR/clone/git/hooks/post-rewrite" <<EOF
+#!/bin/bash
+cat >"$GFY_DIR/clone/.stdin"
+EOF
+  chmod +x "$GFY_DIR/clone/git/hooks/post-rewrite"
+  PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-rewrite rebase \
+    < <(printf 'aaa bbb\n') || die "Expected post-rewrite delegation to succeed: $WRAPPER_OUT"
+  grep -qx "aaa bbb" "$GFY_DIR/clone/.stdin" || die "Expected post-rewrite stdin to reach the project hook"
+  rm -rf "$GFY_DIR"
 }
 
 main() {
@@ -591,6 +751,15 @@ main() {
   test_global_wrappers_propagate_exit_code
   test_global_wrappers_are_noop_without_project_hook
   test_global_wrappers_are_noop_outside_git_repo
+
+  # Issue #1838 — graphify refresh on default-branch pulls
+  test_graphify_ff_pull_on_default_branch
+  test_graphify_rebase_pull_on_default_branch
+  test_graphify_skips_commit_amend
+  test_graphify_skips_non_default_branch
+  test_graphify_noop_without_graph_json
+  test_graphify_absent_pull_succeeds
+  test_graphify_keeps_project_hook_delegation
 
   ux_success "All hook tests passed"
 }
