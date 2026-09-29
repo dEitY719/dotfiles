@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Global Git Post-merge Wrapper (issues #1664, #1838)
+#
+# Installed by git/setup.sh as ~/.config/git/hooks/post-merge and activated
+# by 'git config --global core.hooksPath'. core.hooksPath REPLACES .git/hooks
+# for EVERY repository, so without this wrapper a project-level post-merge
+# is dead code.
+#
+# WHAT IT DOES
+#   1. graphify refresh — the one exception to delegation-only, opt-in by
+#      graphify-out/graph.json. See lib/graphify-refresh.sh.
+#   2. Delegation to the project-level hook (.githooks/ -> git/hooks/ ->
+#      .git/hooks/), passing argv, stdin and the exit code through; a silent
+#      no-op when the repo ships none. See lib/delegate.sh.
+#
+# Hook protocol (git merge / git pull post-merge):
+#   $1 = 1 for a squash merge, else 0. git ignores the exit code; it is still
+#   propagated so a direct caller sees the delegate's status.
+#
+# To debug: export GIT_HOOKS_DEBUG=1
+
+set -u
+
+HOOK_NAME="post-merge"
+
+# Resolve this wrapper's real location (installed as a symlink).
+SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
+# shellcheck source=./lib/graphify-refresh.sh
+source "$(dirname "$SELF")/lib/graphify-refresh.sh"
+graphify_refresh "$@"
+# shellcheck source=./lib/delegate.sh
+source "$(dirname "$SELF")/lib/delegate.sh"

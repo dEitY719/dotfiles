@@ -33,14 +33,14 @@ name exists in the global dir. `git/setup.sh` links every name in
 dead code, not a fallback.
 
 `global-hooks/pre-commit` carries universal safety checks **and** delegates.
-The other wrappers (`pre-push`, `commit-msg`, `prepare-commit-msg`,
-`post-commit`) are delegation-only: they forward to the first of
+The other wrappers (`pre-push`, `commit-msg`, `prepare-commit-msg`, `post-commit`,
+`post-merge`, `post-rewrite`) are delegation-only: they forward to the first of
 `.githooks/<name>` → `git/hooks/<name>` → `.git/hooks/<name>` **relative to
 the repo being operated on**, passing argv, stdin and the exit code through,
-and are a silent no-op anywhere that path does not exist. That repo-relative
-search is what keeps this repo's `mise run test` / protected-branch / leak
-guard from firing in unrelated repos — never link `git/hooks/*` into the
-global dir directly.
+and are a silent no-op anywhere that path does not exist (never link
+`git/hooks/*` into the global dir directly). One exception (#1838):
+`post-merge`/`post-rewrite rebase` first run `lib/graphify-refresh.sh` — a
+background `graphify update .` on the default branch, opt-in by `graphify-out/graph.json`.
 
 Third-party installers also write here (git-lfs owns `pre-push`,
 `post-commit`, `post-checkout`, `post-merge`). setup.sh backs up a colliding

@@ -45,7 +45,7 @@ check_library_purity() {
                 line !~ /^[[:space:]]*(main|[a-z_][a-z0-9_]*_main)[[:space:]]*\(\)[[:space:]]*\{/) {
                 printf "MAIN_CALL:%d:%s\n", NR, line
             }
-            # Skip alias definitions — `alias foo='pip install ...'` is NOT
+            # Skip alias definitions — `alias foo="pip install ..."` is NOT
             # a top-level installation; it only runs when the alias is invoked.
             # Allow hyphens so dash-form aliases like `uv-install` match too.
             if (depth==0 && line ~ install_ere &&
