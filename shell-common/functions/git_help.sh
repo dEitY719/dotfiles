@@ -130,13 +130,75 @@ _git_help_notes_pick_strategy() {
 # _docker_help_recommend_print). Callers pass single-quoted literals so
 # the pre-commit naming_check never mis-reads them as function refs.
 _git_help_cmd() {
-    printf '  %s\n' "$1"
+    _gh_cmd_line=$(_git_help_fill "$1")
+    printf '  %s\n' "$_gh_cmd_line"
+    unset _gh_cmd_line
+}
+
+# Deploy placeholders auto-filled from the current git repo (cwd). Anything
+# undetectable stays as its literal <PLACEHOLDER>. DOTFILES_HELP_STATIC=1
+# (set by gen_command_docs.sh) skips detection so generated docs stay generic.
+_git_help_detect() {
+    _GIT_HELP_REPO_COORD=""
+    _GIT_HELP_DEV_WORKFLOW=""
+    _GIT_HELP_PROD_WORKFLOW=""
+    _GIT_HELP_PREV_TAG=""
+    [ -n "${DOTFILES_HELP_STATIC-}" ] && return 0
+    _gh_top=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+
+    # origin URL -> HOST/OWNER/REPO (scp-like, https://, ssh:// forms)
+    _gh_url=$(git config --get remote.origin.url 2>/dev/null)
+    if [ -n "$_gh_url" ]; then
+        _GIT_HELP_REPO_COORD=$(printf '%s\n' "$_gh_url" | sed -E \
+            -e 's#^[a-z+]+://##' -e 's#^[^@/]*@##' -e 's#^([^/:]+):[0-9]*/#\1/#' \
+            -e 's#^([^/:]+):#\1/#' -e 's#\.git/?$##' -e 's#/$##')
+    fi
+
+    # Filled only on exactly one match; zero or ambiguous keeps the placeholder.
+    _GIT_HELP_DEV_WORKFLOW=$(_git_help_find_workflow "$_gh_top" dev)
+    _GIT_HELP_PROD_WORKFLOW=$(_git_help_find_workflow "$_gh_top" prod)
+
+    # Rollback target = second-newest tag (newest is assumed to be live).
+    _GIT_HELP_PREV_TAG=$(git tag --sort=-v:refname 2>/dev/null | sed -n 2p)
+    unset _gh_top _gh_url
+}
+
+_git_help_find_workflow() {
+    # shellcheck disable=SC2010  # glob would abort zsh on no-match
+    _gh_matches=$(ls "$1/.github/workflows" 2>/dev/null | grep -iE "^[^/]*$2[^/]*deploy[^/]*\.ya?ml$")
+    [ -n "$_gh_matches" ] && [ "$(printf '%s\n' "$_gh_matches" | wc -l)" -eq 1 ] &&
+        printf '%s' "$_gh_matches"
+    unset _gh_matches
+}
+
+_git_help_fill() {
+    _gh_line=$1
+    [ -n "${_GIT_HELP_REPO_COORD-}" ] &&
+        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<REPO_COORD>|$_GIT_HELP_REPO_COORD|g")
+    [ -n "${_GIT_HELP_DEV_WORKFLOW-}" ] &&
+        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<DEV_WORKFLOW>|$_GIT_HELP_DEV_WORKFLOW|g")
+    [ -n "${_GIT_HELP_PROD_WORKFLOW-}" ] &&
+        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<PROD_WORKFLOW>|$_GIT_HELP_PROD_WORKFLOW|g")
+    [ -n "${_GIT_HELP_PREV_TAG-}" ] &&
+        _gh_line=$(printf '%s\n' "$_gh_line" | sed "s|<PREV_TAG>|$_GIT_HELP_PREV_TAG|g")
+    printf '%s' "$_gh_line"
+    unset _gh_line
+}
+
+# Placeholder table row: detected value replaces the example when present.
+_git_help_ph_row() {
+    if [ -n "$2" ]; then
+        ux_table_row "$1" "$2 (자동 감지)" "$4"
+    else
+        ux_table_row "$1" "$3" "$4"
+    fi
 }
 
 _git_help_rows_deploy() {
+    _git_help_detect
     ux_section "치환값 (placeholder)"
-    ux_table_row "<DEV_WORKFLOW>" "예: dev-deploy.yml" "dev 배포 workflow 파일"
-    ux_table_row "<REPO_COORD>" "예: github.example.net/org/repo" "gh --repo 좌표 <GHE_HOST>/<ORG>/<REPO>"
+    _git_help_ph_row "<DEV_WORKFLOW>" "$_GIT_HELP_DEV_WORKFLOW" "예: dev-deploy.yml" "dev 배포 workflow 파일"
+    _git_help_ph_row "<REPO_COORD>" "$_GIT_HELP_REPO_COORD" "예: github.example.net/org/repo" "gh --repo 좌표 <GHE_HOST>/<ORG>/<REPO>"
 
     ux_section "[Phase 0] Refresh origin/main"
     ux_bullet "fork repo (사내 fork <-> 공개 upstream):"
@@ -160,9 +222,10 @@ _git_help_rows_deploy() {
 }
 
 _git_help_rows_release() {
+    _git_help_detect
     ux_section "치환값 (placeholder)"
-    ux_table_row "<PROD_WORKFLOW>" "예: prod-deploy.yml" "prod 배포 workflow 파일"
-    ux_table_row "<REPO_COORD>" "예: github.example.net/org/repo" "gh --repo 좌표"
+    _git_help_ph_row "<PROD_WORKFLOW>" "$_GIT_HELP_PROD_WORKFLOW" "예: prod-deploy.yml" "prod 배포 workflow 파일"
+    _git_help_ph_row "<REPO_COORD>" "$_GIT_HELP_REPO_COORD" "예: github.example.net/org/repo" "gh --repo 좌표"
     ux_table_row "<TAG>" "예: v2.1.0" "릴리스 태그"
     ux_table_row "<DEPLOY_STRATEGY>" "rolling | recreate" "prod 배포 전략"
     ux_table_row "<TEST_CMD>" "예: uv run pytest -q" "릴리스 게이트 테스트"
@@ -211,10 +274,11 @@ _git_help_rows_release_artifacts() {
 }
 
 _git_help_rows_rollback() {
+    _git_help_detect
     ux_section "치환값 (placeholder)"
-    ux_table_row "<PROD_WORKFLOW>" "예: prod-deploy.yml" "prod 배포 workflow 파일"
-    ux_table_row "<REPO_COORD>" "예: github.example.net/org/repo" "gh --repo 좌표"
-    ux_table_row "<PREV_TAG>" "예: v2.0.3" "롤백 대상 이전 태그"
+    _git_help_ph_row "<PROD_WORKFLOW>" "$_GIT_HELP_PROD_WORKFLOW" "예: prod-deploy.yml" "prod 배포 workflow 파일"
+    _git_help_ph_row "<REPO_COORD>" "$_GIT_HELP_REPO_COORD" "예: github.example.net/org/repo" "gh --repo 좌표"
+    _git_help_ph_row "<PREV_TAG>" "$_GIT_HELP_PREV_TAG" "예: v2.0.3" "롤백 대상 이전 태그 (최신 직전 태그)"
 
     ux_section "[Step 1] 이전 태그 확인"
     _git_help_cmd 'git tag --sort=-v:refname | head'
