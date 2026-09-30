@@ -19,8 +19,8 @@
     - sandbox: /sandbox | Auto-allow | pytest, git, npm
     - config: settings.json | autoAllow | block paths | block cmds
     - statusline: time | model | project | context | cost
-    - skills: claude-skills
-    - plugin: claude plugin sync + restore.sh
+    - skills: claude-skills | claude-accounts link/unlink
+    - plugin: claude plugin sync + restore.sh | marketplace autoupdate
     - details: claude-help <section>  (example: claude-help mcp)
 
 ## 섹션
@@ -72,6 +72,10 @@
 ### skills
 
 - **claude-skills** — List available Claude Code skills
+- **claude-accounts link <path|name>** — Symlink an external skill into every ~/.claude-*/skills (--dry-run, --force, --name)
+- **claude-accounts link [--apply]** — Fan out all of ~/.claude/skills/* (dry-run unless --apply)
+- **claude-accounts link --list** — Show external skill links per account, BROKEN ones marked
+- **claude-accounts unlink <name>** — Remove that skill symlink from every account (never real dirs)
 - Skills location: ~/.claude/skills/
 
 ### plugin
@@ -85,6 +89,9 @@
 - **./claude/plugin/reconcile.sh --check** — SSOT(installed_plugins) 대비 manifest drift 감지 (유령 엔트리 포함)
 - **./claude/plugin/reconcile.sh --apply** — manifest를 SSOT 기준으로 재빌드 + 커밋 (drift 복구)
 - **claude-plugin-list** — 설치된 플러그인을 마켓플레이스별로 요약 출력
+- **claude-marketplace-autoupdate** — 모든 마켓플레이스에 autoUpdate=true 일괄 설정 (PC마다 1회)
+- **claude-marketplace-autoupdate --dry-run** — 바뀔 개수만 출력, 파일은 그대로
+- **claude plugin marketplace update** — auto-update와 별개로, 지금 전체 마켓플레이스를 갱신
 
 ## 엣지케이스 / 의도된 동작
 

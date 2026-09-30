@@ -1527,6 +1527,244 @@ EOF
     fi
 }
 
+# _claude_account_skill_dirs — print every account skills dir, one per line
+# (issue #1847 F-4): ~/.claude-*/skills minus -shared/-backups. Falls back to
+# ~/.claude/skills on a single-account PC. Enumerates real directories rather
+# than `_claude_resolve_account --list`, whose ENABLED default omits work1.
+# `find` instead of a glob: zsh `nomatch` aborts on an unmatched pattern.
+_claude_account_skill_dirs() {
+    _casd_found=0
+    _casd_dirs="$(find "$HOME" -mindepth 1 -maxdepth 1 -name '.claude-*' 2>/dev/null | sort)"
+    while IFS= read -r _casd_d; do
+        [ -n "$_casd_d" ] || continue
+        case "$_casd_d" in *-shared | *-backups) continue ;; esac
+        [ -d "$_casd_d/skills" ] || continue
+        printf '%s\n' "$_casd_d/skills"
+        _casd_found=1
+    done <<CASD_DIRS
+$_casd_dirs
+CASD_DIRS
+    if [ "$_casd_found" = "0" ] && [ -d "$HOME/.claude/skills" ]; then
+        printf '%s\n' "$HOME/.claude/skills"
+    fi
+    return 0
+}
+
+# _claude_under_workspace <path> — rc 0 when <path> lies inside the workspace
+# skill root (raw or resolved spelling). Those links belong to compose.
+_claude_under_workspace() {
+    command -v _skill_workspace_root >/dev/null 2>&1 || return 1
+    _cuw_root="$(_skill_workspace_root)" || return 1
+    _cuw_real=$(readlink -f "$_cuw_root" 2>/dev/null || printf '%s' "$_cuw_root")
+    case "${1:-}" in
+        "$_cuw_root"/* | "$_cuw_real"/*) return 0 ;;
+    esac
+    return 1
+}
+
+# _claude_link_one <src_real> <name> <dry> <force> <targets> — fan one source
+# out into every target dir. rc 1 only when an `ln -s` failed somewhere.
+_claude_link_one() {
+    _clo_src="$1"
+    _clo_name="$2"
+    _clo_dry="$3"
+    _clo_force="$4"
+    _clo_rc=0
+    while IFS= read -r _clo_tgt; do
+        [ -n "$_clo_tgt" ] || continue
+        _clo_link="$_clo_tgt/$_clo_name"
+        if [ -L "$_clo_link" ]; then
+            if [ "$(readlink -f "$_clo_link" 2>/dev/null)" = "$_clo_src" ]; then
+                ux_info "  already linked: $_clo_link"
+                continue
+            fi
+            if [ "$_clo_force" != "1" ]; then
+                ux_warning "  skip (symlink to $(readlink "$_clo_link")): $_clo_link — use --force to replace"
+                continue
+            fi
+            if [ "$_clo_dry" = "1" ]; then
+                ux_info "  would replace: $_clo_link -> $_clo_src"
+                continue
+            fi
+            rm -f "$_clo_link" || {
+                ux_error "  rm failed: $_clo_link"
+                _clo_rc=1
+                continue
+            }
+        elif [ -e "$_clo_link" ]; then
+            ux_warning "  skip (real file/dir, never replaced): $_clo_link"
+            continue
+        elif [ "$_clo_dry" = "1" ]; then
+            ux_info "  would link: $_clo_link -> $_clo_src"
+            continue
+        fi
+        if ln -s "$_clo_src" "$_clo_link"; then
+            ux_success "  linked: $_clo_link -> $_clo_src"
+        else
+            ux_error "  ln -s failed: $_clo_link -> $_clo_src"
+            _clo_rc=1
+        fi
+    done <<CLO_TGTS
+$5
+CLO_TGTS
+    return "$_clo_rc"
+}
+
+# _claude_link_list <targets> — per account, the symlinks pointing outside the
+# workspace root (issue #1847 F-3); dangling ones are marked BROKEN.
+_claude_link_list() {
+    while IFS= read -r _cll_tgt; do
+        [ -n "$_cll_tgt" ] || continue
+        ux_section "$_cll_tgt"
+        _cll_links="$(find "$_cll_tgt" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | sort)"
+        while IFS= read -r _cll_l; do
+            [ -n "$_cll_l" ] || continue
+            _cll_raw=$(readlink "$_cll_l")
+            _cll_real=$(readlink -f "$_cll_l" 2>/dev/null || printf '%s' "$_cll_raw")
+            if _claude_under_workspace "$_cll_raw" || _claude_under_workspace "$_cll_real"; then
+                continue
+            fi
+            if [ -e "$_cll_l" ]; then
+                ux_info "  ${_cll_l##*/} -> $_cll_raw"
+            else
+                ux_warning "  BROKEN ${_cll_l##*/} -> $_cll_raw"
+            fi
+        done <<CLL_LINKS
+$_cll_links
+CLL_LINKS
+    done <<CLL_TGTS
+$1
+CLL_TGTS
+}
+
+# claude_accounts_link — fan external skill symlinks out into every account
+# (issue #1847). Usage:
+#   claude-accounts link <path|name> [--name <n>] [--dry-run] [--force]
+#   claude-accounts link [--apply] [--force]   # all of ~/.claude/skills/*, dry-run unless --apply
+#   claude-accounts link --list
+claude_accounts_link() {
+    _cal_src=""
+    _cal_name=""
+    _cal_dry=0
+    _cal_apply=0
+    _cal_force=0
+    _cal_list=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --name)
+                [ $# -ge 2 ] || { ux_error "--name requires a value"; return 1; }
+                shift
+                _cal_name="$1"
+                ;;
+            --dry-run | -n) _cal_dry=1 ;;
+            --apply) _cal_apply=1 ;;
+            --force) _cal_force=1 ;;
+            --list) _cal_list=1 ;;
+            -*) ux_error "Unknown option: $1"; return 1 ;;
+            *) _cal_src="$1" ;;
+        esac
+        shift
+    done
+
+    ux_header "claude-accounts link — external skills into every account (issue #1847)"
+    _cal_tgts="$(_claude_account_skill_dirs)"
+    if [ -z "$_cal_tgts" ]; then
+        ux_warning "No account skills dir found (~/.claude-*/skills or ~/.claude/skills)"
+        ux_info "  Run: claude-accounts setup"
+        return 0
+    fi
+
+    if [ "$_cal_list" = "1" ]; then
+        _claude_link_list "$_cal_tgts"
+        return 0
+    fi
+
+    _cal_land="$HOME/.claude/skills"
+
+    # Explicit source: applied immediately (--dry-run previews).
+    if [ -n "$_cal_src" ]; then
+        case "$_cal_src" in
+            */*) ;;
+            *) _cal_src="$_cal_land/$_cal_src" ;;
+        esac
+        if [ ! -f "$_cal_src/SKILL.md" ]; then
+            ux_error "Not a skill directory (missing SKILL.md): $_cal_src"
+            return 1
+        fi
+        _cal_real=$(readlink -f "$_cal_src")
+        [ -n "$_cal_name" ] || _cal_name="${_cal_src%/}"
+        _cal_name="${_cal_name##*/}"
+        [ "$_cal_dry" = "1" ] && ux_info "Mode: dry-run (no files will be modified)"
+        _claude_link_one "$_cal_real" "$_cal_name" "$_cal_dry" "$_cal_force" "$_cal_tgts"
+        return $?
+    fi
+
+    # No source: every ~/.claude/skills entry, dry-run unless --apply.
+    _cal_dry=1
+    [ "$_cal_apply" = "1" ] && _cal_dry=0
+    _cal_entries="$(find "$_cal_land" -mindepth 1 -maxdepth 1 2>/dev/null | sort)"
+    if [ -z "$_cal_entries" ]; then
+        ux_info "Nothing to link: $_cal_land is missing or empty"
+        return 0
+    fi
+    [ "$_cal_dry" = "1" ] && ux_info "Mode: dry-run (no files will be modified) — add --apply to link"
+    _cal_rc=0
+    _cal_planned=0
+    while IFS= read -r _cal_e; do
+        [ -n "$_cal_e" ] || continue
+        [ -f "$_cal_e/SKILL.md" ] || continue
+        _cal_real=$(readlink -f "$_cal_e")
+        # Compose owns workspace-backed entries.
+        _claude_under_workspace "$_cal_real" && continue
+        _cal_n="${_cal_e##*/}"
+        # Already the same target in every account — nothing to plan.
+        _cal_todo=0
+        while IFS= read -r _cal_t; do
+            [ -n "$_cal_t" ] || continue
+            [ "$(readlink -f "$_cal_t/$_cal_n" 2>/dev/null)" = "$_cal_real" ] || _cal_todo=1
+        done <<CAL_TGTS
+$_cal_tgts
+CAL_TGTS
+        [ "$_cal_todo" = "1" ] || continue
+        _cal_planned=1
+        ux_info "$_cal_n -> $_cal_real"
+        _claude_link_one "$_cal_real" "$_cal_n" "$_cal_dry" "$_cal_force" "$_cal_tgts" || _cal_rc=1
+    done <<CAL_ENTRIES
+$_cal_entries
+CAL_ENTRIES
+    [ "$_cal_planned" = "1" ] || ux_info "Nothing to link: every external entry is already in all accounts"
+    return "$_cal_rc"
+}
+
+# claude_accounts_unlink <name> — remove <name> from every account skills dir,
+# symlinks only; real files/dirs are never deleted (issue #1847 F-2).
+claude_accounts_unlink() {
+    _cau_name="${1:-}"
+    case "$_cau_name" in
+        "" | */*) ux_error "Usage: claude-accounts unlink <name>"; return 1 ;;
+    esac
+    ux_header "claude-accounts unlink — $_cau_name"
+    _cau_tgts="$(_claude_account_skill_dirs)"
+    _cau_rc=0
+    while IFS= read -r _cau_t; do
+        [ -n "$_cau_t" ] || continue
+        _cau_link="$_cau_t/$_cau_name"
+        if [ -L "$_cau_link" ]; then
+            if rm -f "$_cau_link"; then
+                ux_success "  removed: $_cau_link"
+            else
+                ux_error "  rm failed: $_cau_link"
+                _cau_rc=1
+            fi
+        elif [ -e "$_cau_link" ]; then
+            ux_warning "  skip (not a symlink, left untouched): $_cau_link"
+        fi
+    done <<CAU_TGTS
+$_cau_tgts
+CAU_TGTS
+    return "$_cau_rc"
+}
+
 _claude_accounts_help() {
     ux_header "claude-accounts — Claude Code multi-account management"
     ux_info "Usage: claude-accounts [<subcommand>]"
@@ -1538,6 +1776,9 @@ _claude_accounts_help() {
     ux_info "  migrate       One-time migration: ~/.claude → ~/.claude-personal (Home-PC)"
     ux_info "  rollback [<acct>]  Reverse of migrate: ~/.claude-<acct> → ~/.claude (issue #571)"
     ux_info "  repair [--dry-run] Rebind dangling/worktree-tainted symlinks (issue #589)"
+    ux_info "  link [<src>] [--name <n>] [--dry-run|--apply] [--force] | link --list"
+    ux_info "                Symlink an external skill into every account (issue #1847)"
+    ux_info "  unlink <name> Remove that skill symlink from every account (symlinks only)"
     ux_info "  -h|--help     This help"
     ux_info ""
     ux_info "Env vars:"
@@ -1555,6 +1796,8 @@ claude_accounts() {
         migrate)        claude_accounts_migrate ;;
         rollback)       shift; claude_accounts_rollback "$@" ;;
         repair)         shift; claude_accounts_repair "$@" ;;
+        link)           shift; claude_accounts_link "$@" ;;
+        unlink)         shift; claude_accounts_unlink "$@" ;;
         -h|--help|help) _claude_accounts_help ;;
         *)              ux_error "Unknown subcommand: $1"; _claude_accounts_help; return 1 ;;
     esac
