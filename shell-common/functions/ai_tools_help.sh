@@ -20,7 +20,7 @@ _claude_help_summary() {
     ux_bullet_sub "sandbox: /sandbox | Auto-allow | pytest, git, npm"
     ux_bullet_sub "config: settings.json | autoAllow | block paths | block cmds"
     ux_bullet_sub "statusline: time | model | project | context | cost"
-    ux_bullet_sub "skills: claude-skills"
+    ux_bullet_sub "skills: claude-skills | claude-accounts link/unlink"
     ux_bullet_sub "plugin: claude plugin sync + restore.sh | marketplace autoupdate"
     ux_bullet_sub "details: claude-help <section>  (example: claude-help mcp)"
 }
@@ -83,6 +83,10 @@ _claude_help_rows_statusline() {
 
 _claude_help_rows_skills() {
     ux_table_row "claude-skills" "List available Claude Code skills" ""
+    ux_table_row "claude-accounts link <path|name>" "Symlink an external skill into every ~/.claude-*/skills (--dry-run, --force, --name)" ""
+    ux_table_row "claude-accounts link [--apply]" "Fan out all of ~/.claude/skills/* (dry-run unless --apply)" ""
+    ux_table_row "claude-accounts link --list" "Show external skill links per account, BROKEN ones marked" ""
+    ux_table_row "claude-accounts unlink <name>" "Remove that skill symlink from every account (never real dirs)" ""
     ux_info "Skills location: ${CLAUDE_SKILLS_PATH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills}/"
 }
 
