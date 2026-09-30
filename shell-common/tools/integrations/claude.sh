@@ -1661,7 +1661,10 @@ claude_accounts_link() {
             --force) _cal_force=1 ;;
             --list) _cal_list=1 ;;
             -*) ux_error "Unknown option: $1"; return 1 ;;
-            *) _cal_src="$1" ;;
+            *)
+                [ -z "$_cal_src" ] || { ux_error "Only one <src> allowed (got: $_cal_src, $1)"; return 1; }
+                _cal_src="$1"
+                ;;
         esac
         shift
     done
