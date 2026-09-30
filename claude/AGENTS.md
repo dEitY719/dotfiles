@@ -101,6 +101,8 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
 
 `~/.dotfiles-setup-mode` 가 `internal` 이면 `claude_yolo` 가 멀티-계정 해석을 우회하고 `~/.claude/` 를 강제 사용 (F-2). 잘못 migrate된 사내 PC 복구: `claude-accounts rollback` (F-3). 자세한 내용은 `docs/guide/internal-pc.md`.
 
+`claude-accounts link [<src>] / unlink <name> / link --list` (#1847) — 3rd-party 설치기(`npx skills add`, `graphify install`)가 `CLAUDE_CONFIG_DIR` 없이 `~/.claude/skills/` 로 떨어뜨린 스킬을 `~/.claude-*/skills` (`-shared`/`-backups` 제외, 없으면 `~/.claude/skills`) 전체에 절대경로 심링크로 fan-out. 인자 없는 `link` 는 dry-run 기본(`--apply` 로 적용), `--force` 는 심링크만 교체, `unlink` 는 심링크만 제거. 워크스페이스 밖을 가리키는 링크라 compose(`_claude_compose_workspace_skills`) 재실행에도 유지된다.
+
 `claude/hooks/session-start-pc-context.sh` — `SessionStart` hook, `settings.json`에 등록됨. `~/.dotfiles-setup-mode` + hostname을 매 세션 시작마다 `additionalContext`로 주입해 5대 PC 혼동을 방지한다(#1052). 모드 파일이 없으면 조용히 빈 컨텍스트를 반환하고 세션 시작을 막지 않는다.
 
 `claude/hooks/session-start-settings-drift.sh` — `SessionStart` hook, `settings.json`에 등록됨. 모든 모드에서 live `settings.json`은 SSOT의 **실파일**이라 SSOT에 훅을 추가/변경한 커밋 이후 재시드 전까지 새 훅이 발화하지 않는다(#1086). SSOT(`claude/settings.json`, 스크립트 경로 기준 상대 해석)와 live(`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json`)의 **`.hooks` + `.statusLine`** 두 필드를 jq로 비교한다 — dotfiles가 "동작"으로 배포하는 필드는 이 둘뿐이고, 나머지(auth/model)는 소유자가 다르다.
