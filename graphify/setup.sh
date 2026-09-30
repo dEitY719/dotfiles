@@ -47,10 +47,11 @@ for acct in $(_claude_resolve_account --list); do
 	fi
 	link="${cdir}/skills/graphify"
 	if [ -L "$link" ]; then
-		if [ "$(readlink "$link")" = "$GRAPHIFY_SKILL_SRC" ]; then
+		target=$(readlink "$link")
+		if [ "$target" = "$GRAPHIFY_SKILL_SRC" ]; then
 			ux_success "${acct}: link already correct"
 		else
-			ux_warning "${acct}: ${link} points to $(readlink "$link") — left alone"
+			ux_warning "${acct}: ${link} points to ${target} — left alone"
 		fi
 		continue
 	fi
