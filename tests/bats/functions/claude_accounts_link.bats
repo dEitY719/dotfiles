@@ -209,3 +209,17 @@ ca() {
     [ "$(readlink "$A1/find-skills")" = "$SRC_REAL" ]
     [ -L "$A1/wsk" ]
 }
+
+@test "link rejects a second positional <src> and touches nothing (PR #1848 review)" {
+    ca link "$SRC" other-skill
+    assert_failure
+    [ ! -e "$A1/find-skills" ]
+    [ ! -e "$A2/find-skills" ]
+}
+
+@test "a broken account skills symlink is skipped, not linked into (PR #1848 review)" {
+    rm -rf "$A2" && ln -s "$TEST_TEMP_HOME/gone" "$A2"
+    ca link "$SRC"
+    assert_success
+    [ "$(readlink "$A1/find-skills")" = "$SRC_REAL" ]
+}
