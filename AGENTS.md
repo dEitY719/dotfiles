@@ -62,6 +62,7 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 - **[Shell Common](./shell-common/AGENTS.md)** — POSIX-compatible shared utilities (env, aliases, functions, tools, projects)
 - **[Git Hooks & Config](./git/AGENTS.md)** — Hook system, git config, and hook documentation
 - **[Claude Code](./claude/AGENTS.md)** — Claude Code configuration, settings, skills, and automation
+- **[graphify](./graphify/AGENTS.md)** — graphify knowledge-graph skill install + per-account links (manual opt-in)
 - **[Python Tests](./tests/AGENTS.md)** — pytest suite and cross-shell compatibility checks
 - **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
 

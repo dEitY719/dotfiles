@@ -40,6 +40,7 @@ HELP_TOPICS = [
     "git_help",
     "gwt_help",
     "gpu_help",
+    "graphify_help",
     "herdr_help",
     "hermes_help",
     "litellm_help",
