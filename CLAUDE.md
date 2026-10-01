@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Commands
 
 ```bash
@@ -56,16 +54,7 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 
 **Skills no longer live in this repo (#1680)** — the 73 skills moved to 15 standalone marketplace repos, registered in `claude/plugin/{marketplaces,plugins}.json`. The only skill source is now the workspace: repos cloned side by side under `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`. `shell-common/functions/skill_sources.sh` (`_skill_workspace_root` / `_skill_workspace_dirs`) is the enumeration SSOT; `scripts/setup-skills-ssot.sh` entry-level symlink-composes them into Codex / OpenCode / Gemini / agy (its own `~/.gemini/config/skills` root — it does **not** inherit Gemini's, #1731) / Hermes, and `_claude_compose_workspace_skills` (via `claude/setup.sh`) does the same for each Claude Code account.
 
-**Personal overrides (model, env vars)** — `claude/settings.local.json` is gitignored (#924). Create `settings.local.json` in your active Claude config directory for machine-specific settings:
-
-- Single-account: `~/.claude/settings.local.json`
-- Multi-account: `~/.claude-personal/settings.local.json` (or whichever `$CLAUDE_CONFIG_DIR` is active)
-
-```json
-{ "model": "sonnet" }
-```
-
-Claude Code merges this with `settings.json` natively (local wins). Running `/model` writes into the per-account **real-file** `settings.json` copy — since #940 this no longer dirties the repo. Re-running `claude/setup.sh` refreshes the copy from the SSOT and auto-migrates any `/model`-written `model` key into `settings.local.json`. See `claude/AGENTS.md` → "Configuration Files" for the full merge/migration behavior.
+**Personal overrides (model, env vars)** — `settings.local.json` in your active Claude config dir, gitignored (#924). Merge/migration behavior: `claude/AGENTS.md` → "Configuration Files".
 
 ## Critical Rules
 
@@ -112,13 +101,3 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 - `mise run lint-docs` 에서도 `scripts/lint_changelog_fragments.sh` 호출을 뺐다 — 게이트 비활성.
 - 과거 규칙(파일명 `<YYYY-MM-DD>-<issue>.md`, `- 변경: **요약**` 포맷)과 스크립트/`tests/bats/lint/changelog_fragments.bats` 는 재개를 위해 그대로 남겨뒀다. 재개 시 my-share 토글(`changelog_toggle.py on`)과 `mise.toml` 의 `lint-docs` 를 함께 되돌린다.
 - **my-share 영향**: 일일/주간 보고 허브(`my-share`)의 수집기(`scripts/report_range.py`)는 `changelog.d/` 가 비어 있어도 에러 없이 빈 결과를 반환한다 — 이 기간 동안 dotfiles 항목은 보고서에서 조용히 빠진다(수집기 오작동이 아니라 fragment 부재의 정상 결과). 재개 전까지는 dotfiles 변경 사항을 daily/weekly 보고서에서 볼 수 없다는 뜻이다.
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
