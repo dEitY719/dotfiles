@@ -278,6 +278,9 @@ _issues_with_labels() {
 # comment, label or assignee change" a test rather than a claim.
 #
 #   GH_SEARCH_FAIL=1      `search issues` errors
+#   GH_NO_SEARCH=1        gh predates `search` (apt gh 2.4.0, #1849): every
+#                         `search ...` call, `--help` included, fails the way
+#                         that gh does
 #   GH_BLOCKED_BY         issue numbers whose blockedBy answer carries an OPEN
 #                         blocker, space-separated (default: none)
 #   GH_GRAPHQL_FAIL=1     `api graphql` errors (fail-open path)
@@ -290,8 +293,17 @@ _install_gh_stub() {
 #!/bin/sh
 printf 'gh %s\n' "$*" >>"${CALL_LOG}"
 
+if [ "$1" = "search" ] && [ "${GH_NO_SEARCH:-0}" = "1" ]; then
+    printf 'unknown command "search" for "gh"\n' >&2
+    exit 1
+fi
+
 case "$1 $2" in
 "search issues")
+    if [ "$3" = "--help" ]; then
+        printf '  --json fields   Output JSON with the specified fields\n'
+        exit 0
+    fi
     [ "${GH_SEARCH_FAIL:-0}" = "1" ] && exit 1
     cat "${GH_ISSUES_FILE}"
     exit 0
@@ -1322,6 +1334,12 @@ _assert_not_hung() {
     assert_success
     _assert_logged "gwt spawn --wt-name issue-12"
     _refute_logged "gwt spawn --wt-name issue-25"
+}
+
+@test "issue_watcher_cron: a gh without search names gh's own error in the warning (#1849)" {
+    _run_tick "GH_NO_SEARCH=1"
+    assert_success
+    assert_output --partial 'gh search issues failed on github.com: unknown command "search" for "gh"'
 }
 
 @test "issue_watcher_cron: a failing issue search leaves the tick a no-op" {
@@ -3712,7 +3730,19 @@ _two_repo_fixture() {
     assert_success
     assert_output --partial "Rate-limit gate open"
     _refute_logged "agent prompt"
-    _refute_logged "search issues"
+    _refute_logged "search issues repo:"
+}
+
+@test "issue_watcher_cron: --status reports gh search issues support" {
+    _run_tick -- --status
+    assert_success
+    assert_output --partial "gh supports 'gh search issues --json'"
+}
+
+@test "issue_watcher_cron: --status reports a gh without search (#1849)" {
+    _run_tick "GH_NO_SEARCH=1" -- --status
+    assert_success
+    assert_output --partial "gh lacks 'gh search issues --json'"
 }
 
 @test "issue_watcher_cron: --status names the state file it read" {

@@ -1105,7 +1105,17 @@ _iw_ensure_config_dir() {
 # joined by US (0x1f) — a label can contain a comma or a space, so neither is
 # usable as the separator.
 _iw_search_issues() {
-    local _host _json _qualifiers
+    local _host _json _qualifiers _errf _cause
+
+    # gh's stderr is kept, not discarded (#1849): on a gh too old to have
+    # `search` the only symptom was the bare warning below, every tick, with
+    # exit 0. Scratch beside the state file, named by pid, for the same reason
+    # the casualty scratch is — no second mktemp in the tick.
+    # An unwritable state dir must cost the cause, not the search: a failed
+    # `2>FILE` redirection would skip gh entirely.
+    _errf="$(_iw_state_dir)/search.err.$$"
+    mkdir -p "$(_iw_state_dir)" 2>/dev/null || true
+    { : >"${_errf}"; } 2>/dev/null || _errf="/dev/null"
 
     for _host in $(_iw_watch_hosts); do
         # `repo:` qualifiers, so the result window covers the watched repos and
@@ -1124,8 +1134,9 @@ _iw_search_issues() {
             --assignee @me --state open \
             --sort updated --order desc \
             --json number,repository,labels \
-            --limit "${_IW_SEARCH_LIMIT}" 2>/dev/null) || {
-            ux_warning "gh search issues failed on ${_host} — skipping that host this tick." >&2
+            --limit "${_IW_SEARCH_LIMIT}" 2>"${_errf}") || {
+            _cause=$(head -n 1 "${_errf}" 2>/dev/null)
+            ux_warning "gh search issues failed on ${_host}${_cause:+: ${_cause}} — skipping that host this tick." >&2
             continue
         }
 
@@ -1137,6 +1148,7 @@ _iw_search_issues() {
             | @tsv
         ' 2>/dev/null
     done
+    [ "${_errf}" = "/dev/null" ] || rm -f "${_errf}"
 }
 
 # 0 when any of the issue's labels ($1, US-joined) is on the exclude list.
@@ -3133,6 +3145,20 @@ _iw_status_report() {
     ux_header "issue-watcher status"
     _iw_limit_status_report
     _iw_saturation_status_report
+    _iw_gh_search_status_report
+}
+
+# The tick's whole intake is `gh search issues --json` (#1440). A gh without it
+# — Ubuntu 22.04's apt gh 2.4.0 has no `search` at all — turns every tick into
+# a silent no-op (#1849). Probed by feature, not version: `--help` is local and
+# free, and lists `--json` only where the flag exists.
+_iw_gh_search_status_report() {
+    ux_bullet "gh search issues"
+    if gh search issues --help 2>&1 | grep -q -- '--json'; then
+        ux_success "gh supports 'gh search issues --json'."
+    else
+        ux_warning "gh lacks 'gh search issues --json' — every tick will find no issue. Upgrade gh."
+    fi
 }
 
 _iw_limit_status_report() {
