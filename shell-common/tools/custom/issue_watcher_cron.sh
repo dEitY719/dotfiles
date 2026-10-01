@@ -3155,7 +3155,9 @@ _iw_status_report() {
 # free, and lists `--json` only where the flag exists.
 _iw_gh_search_status_report() {
     ux_bullet "gh search issues"
-    if gh search issues --help 2>&1 | grep -q -- '--json'; then
+    if ! command -v gh >/dev/null 2>&1; then
+        ux_warning "gh not found on PATH — every tick will find no issue. Install gh."
+    elif gh search issues --help 2>&1 | grep -q -- '--json'; then
         ux_success "gh supports 'gh search issues --json'."
     else
         ux_warning "gh lacks 'gh search issues --json' — every tick will find no issue. Upgrade gh."
