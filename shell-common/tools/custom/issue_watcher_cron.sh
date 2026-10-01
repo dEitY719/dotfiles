@@ -1113,8 +1113,9 @@ _iw_search_issues() {
     # the casualty scratch is — no second mktemp in the tick.
     # An unwritable state dir must cost the cause, not the search: a failed
     # `2>FILE` redirection would skip gh entirely.
-    _errf="$(_iw_state_dir)/search.err.$$"
-    mkdir -p "$(_iw_state_dir)" 2>/dev/null || true
+    _errf=$(_iw_state_dir)
+    mkdir -p "${_errf}" 2>/dev/null || true
+    _errf="${_errf}/search.err.$$"
     { : >"${_errf}"; } 2>/dev/null || _errf="/dev/null"
 
     for _host in $(_iw_watch_hosts); do
