@@ -3745,6 +3745,13 @@ _two_repo_fixture() {
     assert_output --partial "gh lacks 'gh search issues --json'"
 }
 
+@test "issue_watcher_cron: --status tells a missing gh from an outdated one" {
+    rm -f "${_BIN_DIR}/gh"
+    _run_tick "PATH=$(_path_without gh)" -- --status
+    assert_success
+    assert_output --partial "gh not found on PATH"
+}
+
 @test "issue_watcher_cron: --status names the state file it read" {
     _run_tick -- --status
     assert_success
