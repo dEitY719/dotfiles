@@ -668,6 +668,7 @@ if [ "$_setup_mode" = "internal" ]; then
 
     # settings.json 은 gateway-cli setup 이 소유한다 — 본 분기는 이 파일에
     # 손대지 않는다. dotfiles SSOT 변경은 session-start-settings-drift.sh 가 전파.
+    _claude_install_herdr_hook "$HOME/.claude"
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
     # skills/ uses entry-level composition (issue #707, F-8) so externally
     # added symlinks can be layered into the same target dir. Since #1680
