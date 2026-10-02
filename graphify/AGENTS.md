@@ -14,6 +14,7 @@ output directory, this is the setup module.
 | `lib.sh` | Shared bootstrap (ux_lib, `_claude_resolve_account`, `GRAPHIFY_SKILL_SRC`) — sourced, not run |
 
 Help: `graphify-help` (`shell-common/functions/graphify_help.sh`, category `ai`).
+Vault export: `graphify-vault` (`shell-common/functions/graphify_vault.sh`) writes `~/vaults/<repo>-graph` from the current repo's `graphify-out/`.
 Tests: `tests/bats/setup/graphify_setup.bats`.
 
 ## Why links
