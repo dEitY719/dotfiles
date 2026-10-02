@@ -930,6 +930,27 @@ CCWS_DIRS
     ux_success "  composed workspace skills: $_ccws_tgt (added=$_ccws_added root=$_ccws_root)"
 }
 
+# _claude_install_herdr_hook <config-dir> — herdr 상태 훅 스크립트를 계정 디렉터리에 설치.
+# SSOT claude/settings.json 의 SessionStart 훅이 ${CLAUDE_CONFIG_DIR}/hooks/
+# herdr-agent-state.sh 를 호출하므로 스크립트 파일이 있어야 한다. 파일은 herdr 가
+# 만든다 (`herdr integration install claude`) — dotfiles 가 배포하지 않는다.
+# 멱등: 스크립트가 이미 있거나 herdr 가 PATH 에 없으면 아무것도 안 한다. soft-fail.
+# herdr 가 settings.json 에 덧붙이는 훅 항목은 외부 PC 에서는 뒤따르는
+# _claude_ensure_settings_copy 가 SSOT 로 덮어써 정리한다 — 호출 순서 유지할 것.
+_claude_install_herdr_hook() {
+    _cih_dir="${1:-}"
+    [ -n "$_cih_dir" ] || return 0
+    command -v herdr >/dev/null 2>&1 || return 0
+    [ -x "$_cih_dir/hooks/herdr-agent-state.sh" ] && return 0
+    mkdir -p "$_cih_dir"
+    if CLAUDE_CONFIG_DIR="$_cih_dir" herdr integration install claude >/dev/null 2>&1; then
+        ux_success "  herdr hook installed: $_cih_dir/hooks/herdr-agent-state.sh"
+    else
+        ux_warning "  herdr integration install 실패 — 수동: CLAUDE_CONFIG_DIR=$_cih_dir herdr integration install claude"
+    fi
+    return 0
+}
+
 # _claude_account_setup_one — 단일 계정의 link 멱등 셋업.
 #
 # skills/ 와 docs/ 는 SSOT 디렉토리 자체로의 단일 symlink 다 (issue #575).
@@ -944,6 +965,9 @@ _claude_account_setup_one() {
 
     mkdir -p "$_caso_cdir"
     mkdir -p "$_caso_cdir/projects/GLOBAL"
+
+    # Must precede _claude_ensure_settings_copy (it overwrites herdr's settings edit).
+    _claude_install_herdr_hook "$_caso_cdir"
 
     # settings.json is a real-file copy, NOT a symlink (#940) — Claude Code's
     # /model persists into this file, and a symlink would write through into
