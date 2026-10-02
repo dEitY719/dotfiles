@@ -9,7 +9,7 @@ _graphify_help_summary() {
     ux_bullet_sub "concept: 2-pass 추출 | Leiden clustering | confidence 태그"
     ux_bullet_sub "install: pip install graphifyy | graphify install | claude install"
     ux_bullet_sub "uninstall: graphify claude uninstall | graphify uninstall [--purge]"
-    ux_bullet_sub "usage: /graphify . | update | query | path | explain | add"
+    ux_bullet_sub "usage: /graphify . | update | query | path | explain | add | graphify-vault"
     ux_bullet_sub "output: graphify-out/ (graph.html, GRAPH_REPORT.md, graph.json)"
     ux_bullet_sub "accounts: 멀티 계정에서 스킬이 안 보일 때"
     ux_bullet_sub "related"
@@ -65,6 +65,10 @@ _graphify_help_rows_usage() {
     ux_bullet "graphify path \"A\" \"B\"          # 두 노드 간 최단 경로"
     ux_bullet "graphify explain \"X\"           # 노드와 이웃 설명"
     ux_bullet "graphify add <url>             # URL 을 ./raw 에 저장 후 그래프 갱신"
+    ux_section "Obsidian 노드 단위 탐색"
+    ux_bullet "${UX_BOLD}graphify-vault${UX_RESET}                   # repo 루트에서 실행 -> ~/vaults/<repo>-graph 생성 (덮어쓰기)"
+    ux_bullet "GRAPHIFY_VAULT_ROOT=<dir>      # vault 상위 경로 변경 (기본 ~/vaults)"
+    ux_bullet "수동: graphify export obsidian --dir ~/vaults/<repo>-graph"
 }
 
 _graphify_help_rows_output() {
