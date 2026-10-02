@@ -15,7 +15,8 @@ output directory, this is the setup module.
 
 Help: `graphify-help` (`shell-common/functions/graphify_help.sh`, category `ai`).
 Vault export: `graphify-vault` (`shell-common/functions/graphify_vault.sh`) writes `~/vaults/<repo>-graph` from the current repo's `graphify-out/`.
-Tests: `tests/bats/setup/graphify_setup.bats`.
+Project onboarding: `graphify-setup [dir]` (`shell-common/tools/custom/graphify_setup.sh`, wrapper in `functions/`) — idempotent one-click: pip CLI, this `setup.sh`, `graphify-out/` in `.gitignore`, `graphify claude install`, first `graphify update .`.
+Tests: `tests/bats/setup/graphify_setup.bats`, `tests/bats/functions/graphify_setup.bats`.
 
 ## Why links
 
