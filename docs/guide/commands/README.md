@@ -42,6 +42,7 @@ rg "fzf 피커" docs/guide/commands/
 - [ghostty](./ghostty.md)
 - [git](./git.md)
 - [gpu](./gpu.md)
+- [graphify](./graphify.md)
 - [gwt](./gwt.md)
 - [herdr](./herdr.md)
 - [hermes](./hermes.md)
