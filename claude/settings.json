@@ -65,7 +65,7 @@
       {
         "hooks": [
           {
-            "command": "bash '/home/bwyoon/.claude/hooks/herdr-agent-state.sh' session",
+            "command": "f=\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/herdr-agent-state.sh\"; [ -x \"$f\" ] && bash \"$f\" session; exit 0",
             "timeout": 10,
             "type": "command"
           }
