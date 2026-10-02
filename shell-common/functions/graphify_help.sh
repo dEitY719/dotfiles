@@ -7,7 +7,7 @@ _graphify_help_summary() {
     ux_info "Usage: graphify-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "concept: 2-pass 추출 | Leiden clustering | confidence 태그"
-    ux_bullet_sub "install: pip install graphifyy | graphify install | claude install"
+    ux_bullet_sub "install: graphify-setup [dir] (one-click) | pip install graphifyy | graphify install | claude install"
     ux_bullet_sub "uninstall: graphify claude uninstall | graphify uninstall [--purge]"
     ux_bullet_sub "usage: /graphify . | update | query | path | explain | add | graphify-vault"
     ux_bullet_sub "output: graphify-out/ (graph.html, GRAPH_REPORT.md, graph.json)"
@@ -37,6 +37,7 @@ _graphify_help_rows_concept() {
 
 _graphify_help_rows_install() {
     ux_bullet "요구사항: Python 3.10+"
+    ux_bullet "one-click: ${UX_BOLD}graphify-setup [dir]${UX_RESET}  (멱등: CLI + 스킬/계정 링크 + .gitignore + claude install + 첫 그래프)"
     ux_bullet "pip install graphifyy          # 패키지명 graphifyy, CLI 이름은 graphify"
     ux_bullet "graphify install [--platform claude|codex|opencode|claw|gemini|...]   # SKILL.md 복사"
     ux_bullet "graphify claude install        # CLAUDE.md 섹션 + PreToolUse hook (always-on, 스킬은 설치 안 함)"

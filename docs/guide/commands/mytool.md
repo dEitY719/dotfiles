@@ -47,6 +47,7 @@
 - **gen_command_docs** — Generate one markdown reference doc per user-facing comma...
 - **get_hw_info** — Display comprehensive hardware information
 - **gpu_status** — 목적: WSL2 특성상 컨테이너 내 nvidia-smi 사용...
+- **graphify_setup** — One-click, idempotent graphify onboarding for a project d...
 - **hook_check** — Git Hook Configuration Diagnostic Tool
 - **init** — Centralized initialization for all custom tools scripts.
 - **install-ollama** — WSL Environment: Ollama Binary Installation Script
@@ -95,7 +96,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 72 custom tools available
+- Total: 73 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage
