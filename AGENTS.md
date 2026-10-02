@@ -2,7 +2,7 @@
 
 - **Objective**: Opinionated Bash dotfiles for reproducible terminal environments (WSL, Linux, macOS).
 - **Stack**: Bash 5.x+, Python 3.10+, mise, Ruff, Mypy.
-- **Structure**: Modular Bash (`bash/`), Zsh (`zsh/`), shared shell (`shell-common/`), Tests (`tests/`), Docs (`docs/`), Git hooks (`git/`), Claude Code (`claude/`).
+- **Structure**: Modular Bash (`bash/`), Zsh (`zsh/`), shared shell (`shell-common/`), Tests (`tests/`), Docs (`docs/`), Git hooks (`git/`), Claude Code (`claude/`), Windows Terminal Shift+Enter merge (`windows/setup.sh`, WSL only).
 
 # Package Manager Configuration
 
