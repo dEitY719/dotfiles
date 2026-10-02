@@ -80,12 +80,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 **No direct writes to `~/.bashrc`** — use symlinks via `setup.sh`.
 
-**One-click, idempotent setup on all 5 PCs (internal + external)** — the goal is that `./setup.sh` alone brings any PC to the common environment: new tool/config bootstrap belongs in the existing setup chain, not in a manual step or README instruction.
-- Idempotent: re-running changes nothing once converged (check state first, e.g. file exists / link correct). Soft-fail with a manual-retry hint for network or optional-binary steps; never abort the parent `set -e`.
-- Both modes: check `~/.dotfiles-setup-mode`. Internal PC is single-account and `~/.claude/settings.json` is gateway-cli owned (`claude/setup.sh` internal branch skips `_claude_account_setup_one`), so a step added to one path must be mirrored in the other.
-- Per-account work goes in `_claude_account_setup_one` (iterated by `claude-accounts` / `claude/setup.sh`); do not hand-roll an account loop.
-- No machine-specific absolute paths (`/home/<user>`) in tracked SSOT such as `claude/settings.json`; use `${HOME}` / `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` and guard on the target existing.
-- Tools that edit live config themselves (e.g. `herdr integration install`) drift it from the SSOT: order them before the SSOT copy so the copy wins, and add a bats test with a stub binary.
+**One-click idempotent setup (internal + external PCs)** — `./setup.sh` alone must converge every PC; setup/bootstrap 변경 전 `docs/.ssot/one-click-setup.md` 를 따른다.
 
 **After adding a module**: update the `AGENTS.md` in the module root.
 
