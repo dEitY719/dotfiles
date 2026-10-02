@@ -84,6 +84,7 @@ dotfiles_ensure_bats_submodules "$DOTFILES_DIR" \
 ./.vscode/sync-push.sh || ux_warning ".vscode/sync-push.sh 건너뜀 (VS Code 미설치 또는 환경 미감지). 필요 시 수동 실행."
 ./ssh/setup.sh
 ./gh/setup.sh
+./windows/setup.sh             # Windows Terminal Shift+Enter → Claude Code newline (WSL only, idempotent merge)
 
 # Post-setup integrity check (#594): JSON parse + NBSP/BOM/NUL scan on
 # every config file setup.sh activated via symlink. Fails loud if any
