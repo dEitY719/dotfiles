@@ -23,6 +23,7 @@
 | [`commit-message-standard.md`](./commit-message-standard.md) | 브랜치 명명·커밋 메시지·work_log 자동화 |
 | [`local-test-policy.md`](./local-test-policy.md) | 테스트 실행 위치 정책 — CI = lint only, 로컬 pre-push = `mise run test` (이슈 #754) |
 | [`pc-environment.md`](./pc-environment.md) | 5개 PC 환경(internal/external/public) 인벤토리, `~/.dotfiles-setup-mode` 모드 스위치, 모드별 동기화·AI 태깅 규칙 |
+| [`one-click-setup.md`](./one-click-setup.md) | `./setup.sh` 원클릭 멱등 수렴 원칙 — soft-fail, internal/external 양쪽 반영, 절대경로 금지 |
 
 ## 변경 절차
 
