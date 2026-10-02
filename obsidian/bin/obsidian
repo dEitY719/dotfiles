@@ -342,4 +342,15 @@ else
 	fi
 fi
 
+# WSLg GUI launch: no dbus/dconf daemon (GSettings warnings) and no /dev/dri
+# (WebGL1 blocklisted -> graph view stalls). Memory backend silences dconf;
+# Mesa d3d12 (GALLIUM_DRIVER) + ANGLE GL backend runs WebGL on the Windows GPU
+# via /dev/dxg (SwiftShader software GL pegged ~190% CPU on a 6k-node graph).
+# Flags go to the GUI only — CLI subcommands keep their args untouched.
+if _ob_is_wsl && [ $# -eq 0 ]; then
+	GSETTINGS_BACKEND=memory GALLIUM_DRIVER=d3d12 \
+		LD_LIBRARY_PATH="/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		exec "$_ob_bin" --use-gl=angle --use-angle=gl --ignore-gpu-blocklist
+fi
+
 exec "$_ob_bin" "$@"
