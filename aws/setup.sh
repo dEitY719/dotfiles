@@ -102,18 +102,7 @@ ux_section "AWS SSO/CLI seeding (internal mode)"
 # drift-heal hook's OWN .hooks.SessionStart registration, which nothing else
 # can restore once it is gone. Everything else about settings.json is a no-op.
 # ---------------------------------------------------------------------------
-ux_warning "DEPRECATED: aws/setup.sh 는 더 이상 ~/.claude/settings.json 을 머지하지 않습니다 (2026-08-18)."
-ux_bullet "사내 PC live settings.json 소유자: gateway-cli (조직 LLM Gateway 전환 도구)"
-ux_bullet "  재시드/점검: gateway-cli setup  /  gateway-cli verify"
-ux_bullet "dotfiles SSOT (claude/settings.json) 의 .hooks / .statusLine 변경은"
-ux_bullet "  SessionStart 훅 claude/hooks/session-start-settings-drift.sh 가"
-ux_bullet "  사내 모드에서 자동 복구합니다 — 평소엔 이 스크립트 재실행이 불필요합니다."
-ux_bullet "예외 하나 (#1364): 그 훅 '자신의 등록' 만은 이 스크립트가 책임집니다."
-ux_bullet "  live .hooks.SessionStart 에서 훅 항목이 사라지면 훅은 호출조차 되지"
-ux_bullet "  않아 스스로 복구 못 합니다 — 그때 그 한 항목만 여기서 되살립니다."
-ux_bullet "claude/settings.bedrock-overlay.example 도 함께 deprecated (참조용 보존)."
-ux_info "이 스크립트가 지금도 하는 일: aws/aws.local.sh + ~/.aws/config 시드,"
-ux_info "  그리고 위 SessionStart 훅 등록 1건 점검/복구 (#1364)."
+ux_warning "DEPRECATED: settings.json 머지는 gateway-cli 소유 (2026-08-18). 이 스크립트는 aws.local.sh + ~/.aws/config 시드 + SessionStart 훅 등록 1건만 담당 (#1364). 상세: aws/README.md"
 
 # ---------------------------------------------------------------------------
 # Helpers
