@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
 # tests/bats/skills/_fixtures/helper_fallback_nf1.sh
 # Source-of-truth mirror for the canonical F-2 helper-fallback pattern
-# documented in issue #644 and applied across (canonical pattern relocated
-# from SKILL.md bodies into references/ by #862 PR-NW-4 for progressive
-# disclosure; the owning SKILL.md Step points at the reference verbatim):
-#   claude/skills/gh-pr-merge/references/project-board-sync.md      (Step 4)
-#   claude/skills/gh-commit/SKILL.md                                (Step 5)
-#   claude/skills/gh-pr-reply/references/board-sync-in-review.sh.md (Step 6.5)
-#   claude/skills/gh-pr-approve/references/board-approved-sync.sh.md (Step 4.5)
-#   claude/skills/gh-pr/references/project-board-sync.md            (Step 7)
-#   claude/skills/gh-pr-merge-emergency/references/project-board-sync.md
+# documented in issue #644. The skills that carry it (gh-pr-merge, gh-commit,
+# gh-pr-reply, gh-pr-approve, gh-pr, gh-pr-merge-emergency) moved to external
+# marketplace repos in #1680; their drift check belongs there (#1892).
 #
 # Tests inject SHELL_COMMON pointing at a real fixture dir (helper present)
 # or a non-existent dir (helper missing). The wrapper must:
@@ -17,8 +11,7 @@
 #   - silently skip (no command-not-found) when helper is missing
 #   - never abort the calling skill on either branch (NF-1 guarantee)
 
-# Mirrors the canonical F-2 block. Keep this in sync with the SKILL.md
-# edits made for issue #644.
+# Mirrors the canonical F-2 block (issue #644).
 nf1_canonical_block() {
     local _PR="$1"
     local _STATE="$2"
