@@ -32,6 +32,8 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 - **Test**: `bash -i -c 'source main.bash && fn'` + `zsh -c 'source main.zsh && fn'`
 - **Skill 이 standalone `.` 하는 파일** (예: `gh_pr_review.sh`): #1454/#1505 foreign-checkout
   guard 필수 — 스니펫: cheatsheet → "Foreign-Checkout Guard Snippet"
+- **Interactive guard 위치/예외 (#1877)**: 출력 산출 파일은 첫 10줄 안(shebang·`# shellcheck` 직후). 예외(guard 없음, 헤더에 사유 주석) —
+  비대화형으로 source 되는 순수 함수 라이브러리(skill/hook/setup/test 소비, 예: `gh_host.sh`), 직접 실행 스크립트(`tools/custom/*.sh`). `mount.sh` 는 순수 함수를 의도적으로 guard 위에 둔다.
 
 ## Output Standards
 

@@ -1,4 +1,5 @@
 #!/bin/bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # ~/dotfiles/bash/env/bash_settings.bash
 # Essential Bash shell settings
@@ -7,16 +8,6 @@
 
 # Exit if not running in bash
 [ -n "$BASH" ] || return 0
-
-# =============================================================================
-# Interactive Shell Check
-# =============================================================================
-
-# Exit if not running interactively
-case $- in
-*i*) ;;
-*) return ;;
-esac
 
 # =============================================================================
 # History Settings

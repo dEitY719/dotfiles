@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/gcp.sh
 #
 # Type 2A dispatcher for the gcp_* cherry-pick family. See
@@ -17,8 +18,6 @@
 #   gcp_scan / gcp-scan / gcp_theirs / gcp_ours / gcp_author  → 'gcp <verb>'
 #   gcp <committish>                                          → 'gcp pick'
 #                                                              + ux_warning
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Override Oh My Zsh's gcp alias (zsh only) — mirrors git_worktree.sh:9.
 # Without this, OMZ's `alias gcp='git cherry-pick'` is still active when

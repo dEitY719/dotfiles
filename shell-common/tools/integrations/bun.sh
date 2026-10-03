@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/integrations/bun.sh
 # Bun JavaScript runtime - PATH setup, install helpers, and aliases
 #
@@ -9,8 +10,6 @@
 # ========================================
 # Load UX Library
 # ========================================
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if ! type ux_header >/dev/null 2>&1; then
     _bun_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"

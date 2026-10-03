@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/util/loader.sh
 # Module loader with configuration-based directory filtering
 # Centralizes module loading logic for both bash and zsh
@@ -10,8 +11,6 @@
 #   load_category "aliases" # Load all .sh in shell-common/aliases/
 
 # Direct-exec guard: This file should be sourced, not executed
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if [ "${0##*/}" != "loader.sh" ] && [ -n "${BASH_SOURCE[0]}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     echo "Error: This file should be sourced, not executed directly" >&2

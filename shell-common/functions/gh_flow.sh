@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/gh_flow.sh
 # gh-flow — fire-and-forget N-parallel GitHub issue → PR automation.
 # Design: docs/feature/gh-flow-automation/design.md
@@ -7,8 +8,6 @@
 # ============================================================================
 # State helpers
 # ============================================================================
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _gh_flow_state_root() {
     printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/gh-flow"

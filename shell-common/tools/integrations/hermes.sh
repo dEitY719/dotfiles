@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/integrations/hermes.sh
 # Hermes Agent convenience aliases
 #
@@ -8,8 +9,6 @@
 #
 # Setup:   ./hermes/setup.sh
 # Details: hermes-help
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # ========================================
 # Hermes Aliases

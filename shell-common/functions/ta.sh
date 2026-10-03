@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/ta.sh
 # Quick attach to the first tmux session.
 #
@@ -7,8 +8,6 @@
 # - Outside tmux: attaches to the first session
 # - Inside tmux: switches client to the first session
 # - No sessions: prints info and exits
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ta() {
     case "${1:-}" in

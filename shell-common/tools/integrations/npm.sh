@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/integrations/npm.sh
 # NPM aliases, helpers, and PATH setup
 #
@@ -9,8 +10,6 @@
 # ========================================
 # Load UX Library
 # ========================================
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if ! type ux_header >/dev/null 2>&1; then
     _npm_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"

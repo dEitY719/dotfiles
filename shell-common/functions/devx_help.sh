@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/devx_help.sh
 # Help for the `devx` Type 2A dispatcher (issue #726 / #722 PR 2).
 #
@@ -8,8 +9,6 @@
 # --help` as equivalent shortcuts). Keeping the dash-form alias out
 # prevents help-name conflicts with the standalone executable wrapper at
 # `shell-common/tools/custom/devx.sh`.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _devx_help_summary() {
     ux_info "Usage: devx help [section|--list|--all]"

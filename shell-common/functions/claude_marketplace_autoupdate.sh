@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/claude_marketplace_autoupdate.sh
 #
 # claude-marketplace-autoupdate — turn on auto-update for EVERY installed
@@ -20,8 +21,6 @@
 # every ~/.claude*/plugins. Several of those are commonly symlinks to one real
 # directory, so targets are de-duplicated by device:inode and each real file is
 # written once.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Inline help (`_<prefix>_help`) — Type 1 simple function, 0 sub-commands, so
 # help lives beside the dispatcher per command-design-pattern.md §7.

@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/ccusage.sh
 # Claude Code Usage (ccusage) - aliases, functions, and help
 # Shared between bash and zsh
@@ -19,8 +20,6 @@
 # ═══════════════════════════════════════════════════════════════
 # PATH Helper Function
 # ═══════════════════════════════════════════════════════════════
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ccusage_path_hint() {
     case ":$PATH:" in

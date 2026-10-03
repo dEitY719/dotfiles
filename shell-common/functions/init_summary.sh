@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/init_summary.sh
 #
 # Shared initialization summary function for bash and zsh
@@ -18,8 +19,6 @@
 #
 # Note: Uses UX library (ux_lib.sh) if available for consistent styling
 #
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 dotfiles_init_summary() {
     local file_count="${1:-0}"

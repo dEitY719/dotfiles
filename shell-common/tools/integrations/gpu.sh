@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/external/gpu.sh
 # Auto-generated from bash/app/gpu.bash
 
@@ -15,8 +16,6 @@
 # 전체 GPU 상태 진단 (5-part detailed diagnostic)
 # WSL2 환경에 최적화된 범용 GPU 진단 스크립트
 # 사용 예: gpustatus
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 gpustatus() {
     # dotfiles에서 gpu_status.sh 스크립트 경로

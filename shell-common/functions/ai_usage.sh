@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/ai_usage.sh
 # AI runner invocation wrapper that records per-call token usage and cost,
 # plus an aggregator that summarises a run's totals.
@@ -25,8 +26,6 @@
 # ---------------------------------------------------------------------------
 
 # Format an integer with thousand separators, sh/awk only (locale-independent).
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _ai_usage_fmt_int() {
     awk -v n="${1:-0}" 'BEGIN {

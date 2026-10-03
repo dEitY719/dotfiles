@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/tmux_spawn.sh
 # Create a tmux session with 3-pane layout.
 #
@@ -19,8 +20,6 @@
 #   |   LEFT   +----------+
 #   | (ai-yolo)| right-bot|
 #   +----------+----------+
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _ts_known_agent() {
     case "$1" in

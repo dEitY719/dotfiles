@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/ai_setup.sh
 # One-command AI workspace orchestrator.
 #
@@ -7,8 +8,6 @@
 # 3-pane windows for each. Run from the main repo directory.
 #
 # Usage: ai-setup
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ai_setup() {
     # zsh compatibility

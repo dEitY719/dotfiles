@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # shell-common/functions/marketplace.sh
 # Marketplace Skills Management System
@@ -9,8 +10,6 @@
 # =============================================================================
 # Constants
 # =============================================================================
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 MARKETPLACE_BASE_DIR="${HOME}/.claude/plugins/marketplaces"
 MANIFEST_CACHE_PATH="${HOME}/.claude/plugins/marketplaces/.skills-manifest.json"
