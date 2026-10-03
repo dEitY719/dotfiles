@@ -10,7 +10,7 @@
 # Download to a temp file first: `curl | sh` reports success on a failed
 # download because the shell just reads empty input. Env for the installer is
 # passed as a call prefix (UV_NO_MODIFY_PATH=1 run_remote_installer ...).
-# bash, not sh: claude's install.sh uses [[ =~ ]]; the POSIX ones run too.
+# bash, not sh: claude's install.sh uses the bash =~ test; the POSIX ones run too.
 run_remote_installer() {
     local url="$1" installer rc=0
     shift

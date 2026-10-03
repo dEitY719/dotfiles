@@ -47,11 +47,11 @@ clean_paths() {
             path_entry="${path_entry%/}"
 
             # 빈 항목 또는 디렉토리 없는 경로 건너뜀
-            [[ -n "$path_entry" ]] || continue
-            [[ -d "$path_entry" ]] || continue
+            [ -n "$path_entry" ] || continue
+            [ -d "$path_entry" ] || continue
 
             # 중복 방지: set -u에서도 안전
-            if [[ ! -v "seen[$path_entry]" ]]; then
+            if [ -z "${seen[$path_entry]-}" ]; then
                 seen["$path_entry"]=1
                 newpath+="${newpath:+:}${path_entry}"
             fi
@@ -71,11 +71,11 @@ clean_paths() {
             path_entry="${path_entry%/}"
 
             # 빈 항목 또는 디렉토리 없는 경로 건너뜀
-            [[ -n "$path_entry" ]] || continue
-            [[ -d "$path_entry" ]] || continue
+            [ -n "$path_entry" ] || continue
+            [ -d "$path_entry" ] || continue
 
             # 중복 방지
-            if [[ ! -v "seen[$path_entry]" ]]; then
+            if [ -z "${seen[$path_entry]-}" ]; then
                 seen[$path_entry]=1
                 newpath+="${newpath:+:}${path_entry}"
             fi

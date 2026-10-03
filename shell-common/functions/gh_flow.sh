@@ -315,7 +315,7 @@ _gh_flow_status_single() {
     _wt="$(cat "$_dir/worktree.path" 2>/dev/null || printf '')"
     _pr_num="$(cat "$_dir/pr.number" 2>/dev/null || printf '')"
 
-    # Worker liveness with elapsed time (etime= is "[[DD-]HH:]MM:SS" on Linux).
+    # Worker liveness with elapsed time (etime= is MM:SS, HH:MM:SS or DD-HH:MM:SS on Linux).
     if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
         _etime="$(ps -p "$_pid" -o etime= 2>/dev/null | tr -d ' ')"
         if [ -n "$_etime" ]; then
@@ -991,10 +991,7 @@ _gh_flow_worker() {
     fi
 
     _wt_after=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
-    _worktree=$(comm -13 \
-        <(printf '%s\n' "$_wt_before" | sort) \
-        <(printf '%s\n' "$_wt_after" | sort) |
-        head -n 1)
+    _worktree=$(printf '%s\n' "$_wt_after" | grep -vxF -- "$_wt_before" | head -n 1)
 
     if [ -z "$_worktree" ] || [ ! -d "$_worktree" ]; then
         _gh_flow_set_state "$_dir" "failed:spawning"

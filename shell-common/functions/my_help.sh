@@ -1287,10 +1287,12 @@ my_help_impl() {
                 ;;
         esac
     elif [ -n "$ZSH_VERSION" ]; then
-        if [[ -o xtrace ]]; then
-            _my_help_restore_xtrace=1
-            unsetopt xtrace
-        fi
+        case $- in
+            *x*)
+                _my_help_restore_xtrace=1
+                unsetopt xtrace
+                ;;
+        esac
     fi
 
     # Register default descriptions (the function is idempotent).

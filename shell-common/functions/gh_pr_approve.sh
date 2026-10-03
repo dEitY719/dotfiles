@@ -323,7 +323,7 @@ _gh_pr_approve_status_single() {
     _pid="$(cat "$_dir/pid" 2>/dev/null || printf '')"
     _wt="$(cat "$_dir/worktree.path" 2>/dev/null || printf '')"
 
-    # Worker liveness with elapsed time (etime= is "[[DD-]HH:]MM:SS" on Linux).
+    # Worker liveness with elapsed time (etime= is MM:SS, HH:MM:SS or DD-HH:MM:SS on Linux).
     if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
         _etime="$(ps -p "$_pid" -o etime= 2>/dev/null | tr -d ' ')"
         if [ -n "$_etime" ]; then
