@@ -363,9 +363,7 @@ else
             # the tool that owns it stops working until it is re-installed.
             # Back up + remove here (same .original as create_symlink) so the
             # replacements are reported once below instead of 3 lines per hook.
-            # git-lfs rewrites the same file on every LFS operation, so an
-            # identical .original means it is already backed up: replace
-            # quietly instead of re-warning on every setup.sh run (#1872).
+            # Identical .original = already backed up; replace quietly (#1872).
             if [ -f "$global_hook_target" ] && [ ! -L "$global_hook_target" ]; then
                 if ! cmp -s "$global_hook_target" "${global_hook_target}.original"; then
                     cp "$global_hook_target" "${global_hook_target}.original" \

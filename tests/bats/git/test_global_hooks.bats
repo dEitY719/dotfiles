@@ -161,7 +161,8 @@ git lfs post-commit "$@"
     assert_success
     refute_output --partial "백업 후 교체"
     [ -L "$hooks/post-commit" ] || fail "post-commit not replaced by symlink on re-run"
-    assert_equal "$(cat "$hooks/post-commit.original")" "$(printf '%s' "$lfs_hook")"
+    printf '%s' "$lfs_hook" | cmp -s - "$hooks/post-commit.original" ||
+        fail "post-commit.original no longer holds the git-lfs hook"
 
     # A different foreign hook is a new backup and warns again.
     rm -f "$hooks/post-commit"
