@@ -48,6 +48,7 @@ rg "fzf 피커" docs/guide/commands/
 - [hermes](./hermes.md)
 - [hook](./hook.md)
 - [litellm](./litellm.md)
+- [llm-wiki](./llm-wiki.md)
 - [mount](./mount.md)
 - [mysql](./mysql.md)
 - [mytool](./mytool.md)
