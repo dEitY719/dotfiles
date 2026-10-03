@@ -44,6 +44,7 @@ HELP_TOPICS = [
     "herdr_help",
     "hermes_help",
     "litellm_help",
+    "llm_wiki_help",
     "mytool_help",
     "mysql_help",
     "network_help",
