@@ -18,6 +18,9 @@
 
 - **DO**: `>/dev/null 2>&1`, `[ ]`, `#!/bin/sh`
 - **DON'T**: `&>/dev/null`, `[[ ]]` (shell-detected branch 외), bash array (detection 없이)
+- **Shebang exception**: `tools/custom/*.sh` 진입점(직접 실행, source 안 됨)은 `#!/bin/bash`.
+  그 하위 디렉터리(`tools/custom/lib/*.sh` 등 source 전용)는 `#!/bin/sh` 유지.
+  SSOT: `git/config/hook-config.sh` (`DOTFILES_HOOKS_SHEBANG_SHELL_COMMON_CUSTOM`), 강제: `git/hooks/checks/shebang_check.sh`
 
 ## Bash/Zsh Sourcing Rules
 
