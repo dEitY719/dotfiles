@@ -760,11 +760,17 @@ done
 # 막는다 (PR #1702 codex review BLOCKER). 심볼릭 링크·부재 상태는 잃을 실체가
 # 없으므로 백업 대상이 아니다 — _migrate_legacy_statusline_command 의
 # ${HOME}/.claude-backups/ latest-only 백업 관례(#919)를 그대로 따른다.
+#
+# 백업 파일이 이미 있으면 최초 인수 보호는 끝난 것으로 본다. 설치 후에도
+# _claude_ensure_settings_copy 가 model/enabledPlugins 를 보존하므로 이 파일은
+# 항상 SSOT 와 cmp 상 달라진다 — 백업 존재 여부로 게이트하지 않으면 매 실행
+# 경고+백업(덮어쓰기)이 반복돼 비멱등이 된다.
+_bare_claude_backup_dir="${HOME}/.claude-backups"
+_bare_claude_backup="${_bare_claude_backup_dir}/settings.json.pre-1701-bare-claude.backup"
 if [ -f "$HOME/.claude/settings.json" ] && [ ! -L "$HOME/.claude/settings.json" ] \
+    && [ ! -e "$_bare_claude_backup" ] \
     && ! cmp -s "$CLAUDE_SETTINGS_SOURCE" "$HOME/.claude/settings.json"; then
-    _bare_claude_backup_dir="${HOME}/.claude-backups"
     if mkdir -p "$_bare_claude_backup_dir"; then
-        _bare_claude_backup="${_bare_claude_backup_dir}/settings.json.pre-1701-bare-claude.backup"
         if cp "$HOME/.claude/settings.json" "$_bare_claude_backup"; then
             log_warning "\$HOME/.claude/settings.json 이 SSOT 와 다른 기존 실파일 — 백업 후 SSOT 로 교체:"
             log_warning "  backup: $_bare_claude_backup"
