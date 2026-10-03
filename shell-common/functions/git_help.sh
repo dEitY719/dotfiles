@@ -64,7 +64,7 @@ _git_help_rows_sync() {
 }
 
 _git_help_rows_logs() {
-    ux_table_row "gl" "git-log" "Graph log (default 11)"
+    ux_table_row "gl" "git-log" "Graph log (default 11; -a all, --author <name>)"
     ux_table_row "gl1" "log --oneline" "One-line graph log"
     ux_table_row "gl2" "git-log2" "Alternative log format"
     ux_table_row "glref" "log ref/main" "Ref log for main"
