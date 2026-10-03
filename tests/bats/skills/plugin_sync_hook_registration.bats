@@ -71,10 +71,17 @@ SETTINGS="${_BATS_REAL_DOTFILES_ROOT}/claude/settings.json"
 @test "path-normalize runs BEFORE plugin-sync-session in SessionStart (#1098)" {
     # The normalizer must re-stamp installLocation before plugin-sync-session
     # snapshots its baseline, else the baseline captures stale spellings.
+    # Only the group(s) holding plugin-sync-session are compared (#1893): other
+    # SessionStart groups (e.g. herdr's matcher "*") would yield null < null.
+    # A null normalizer index (missing or split into another group) fails,
+    # since jq orders null before every number.
     run jq -e '
-        .hooks.SessionStart[].hooks
-        | (map(.command | endswith("session-start-plugin-path-normalize.sh")) | index(true))
-          < (map(.command | endswith("plugin-sync-session.sh")) | index(true))
+        [.hooks.SessionStart[].hooks
+         | select(any(.command | endswith("plugin-sync-session.sh")))
+         | (map(.command | endswith("session-start-plugin-path-normalize.sh")) | index(true)) as $n
+         | (map(.command | endswith("plugin-sync-session.sh")) | index(true)) as $s
+         | $n != null and $n < $s]
+        | length > 0 and all
     ' "$SETTINGS"
     assert_success
 }
