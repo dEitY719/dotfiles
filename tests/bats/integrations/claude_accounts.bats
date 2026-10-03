@@ -890,6 +890,23 @@ _setup_sh_prereqs() {
     grep -q "hand-crafted" "$backup"
 }
 
+@test "bash: claude/setup.sh re-run does not re-warn or overwrite the #1701 bare backup (idempotent)" {
+    _setup_sh_prereqs
+    mkdir -p "$HOME/.claude"
+    printf '{ "hand-crafted": "user content, not SSOT" }\n' > "$HOME/.claude/settings.json"
+
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+
+    # Installed copy keeps model/enabledPlugins, so it still differs from SSOT
+    # by cmp — the backup's existence is what must gate the second warning.
+    printf '{ "model": "opus" }\n' > "$HOME/.claude/settings.json"
+    run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    refute_output --partial "SSOT 와 다른 기존 실파일"
+    grep -q "hand-crafted" "$HOME/.claude-backups/settings.json.pre-1701-bare-claude.backup"
+}
+
 @test "bash: claude/setup.sh respects Internal-PC mode via .dotfiles-setup-mode" {
     # Issue #571 (F-1) made Internal-PC mode key off the .dotfiles-setup-mode
     # SSOT (single source of truth, set by shell-common/setup.sh) instead of

@@ -351,6 +351,7 @@ else
     mkdir -p "$GLOBAL_HOOKS_DIR"
 
     linked_global_hooks=0
+    replaced_global_hooks=""
     for global_hook_name in "${GIT_GLOBAL_HOOKS[@]}"; do
         global_hook_source="${GLOBAL_HOOKS_SOURCE_DIR}/${global_hook_name}"
         global_hook_target="${GLOBAL_HOOKS_DIR}/${global_hook_name}"
@@ -360,9 +361,13 @@ else
             # (git-lfs writes pre-push / post-commit / post-checkout /
             # post-merge). create_symlink backs it up as <name>.original, but
             # the tool that owns it stops working until it is re-installed.
+            # Back up + remove here (same .original as create_symlink) so the
+            # replacements are reported once below instead of 3 lines per hook.
             if [ -f "$global_hook_target" ] && [ ! -L "$global_hook_target" ]; then
-                ux_warning "경고: 기존 ${global_hook_name} hook(타 도구 설치본)을 '${global_hook_target}.original' 로 백업하고 교체합니다."
-                ux_warning "      git-lfs 등 해당 도구가 설치한 hook 이면 재설치가 필요합니다 (예: git lfs install --force)."
+                cp "$global_hook_target" "${global_hook_target}.original" \
+                    || log_error_and_exit "백업 파일 생성 실패: $global_hook_target"
+                rm "$global_hook_target" || log_error_and_exit "기존 파일 제거 실패: $global_hook_target"
+                replaced_global_hooks="${replaced_global_hooks:+$replaced_global_hooks }${global_hook_name}"
             fi
 
             create_symlink "$global_hook_source" "$global_hook_target"
@@ -373,6 +378,11 @@ else
             ux_warning "경고: Global ${global_hook_name} hook 파일이 '${global_hook_source}' 경로에 없습니다."
         fi
     done
+
+    if [ -n "${replaced_global_hooks:-}" ]; then
+        ux_warning "경고: 타 도구가 설치한 global hook 을 <name>.original 로 백업 후 교체: ${replaced_global_hooks}"
+        ux_warning "      git-lfs 가 core.hooksPath 에 hook 을 다시 써서 setup.sh 재실행마다 반복됨 — LFS 가 필요한 repo 는 'git lfs install --local' 로 별도 확인."
+    fi
 
     if [ "$linked_global_hooks" -gt 0 ]; then
         # Configure git to use global hooks path (use ~ for portability across machines)
