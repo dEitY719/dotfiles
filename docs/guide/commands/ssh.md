@@ -36,6 +36,7 @@
 - github.samsungds.net
 - Replica-Gerrit
 - github.com
+- seraph-local
 - ssai-*
 - server-ssai-*
 - ssai-dev

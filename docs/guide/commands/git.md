@@ -53,7 +53,7 @@
 
 ### logs
 
-- **gl** — git-log — Graph log (default 11)
+- **gl** — git-log — Graph log (default 11; -a all, --author <name>)
 - **gl1** — log --oneline — One-line graph log
 - **gl2** — git-log2 — Alternative log format
 - **glref** — log ref/main — Ref log for main

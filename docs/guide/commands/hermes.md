@@ -14,9 +14,9 @@
 - Usage: hermes-help [section|--list|--all]
 - sections
     - concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트
-    - install: 공식 install.sh | ./hermes/setup.sh 가 하는 5단계
+    - install: 공식 install.sh | ./hermes/setup.sh 가 하는 6단계
     - config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT
-    - pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA
+    - pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA | Python 3.13 AKI
     - browser: agent-browser 설치 옵션
     - example | related
     - details: hermes-help <section>  (example: hermes-help pitfalls)
@@ -35,7 +35,7 @@
 - 공식 설치: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 - dotfiles 경유(권장): ./setup.sh 또는 ./hermes/setup.sh — 멱등, 이미 설치돼 있으면 스킵
 - 확인: hermes --version · hermes doctor (alias hermes-doctor)
-**./hermes/setup.sh 가 하는 일 (5단계)**
+**./hermes/setup.sh 가 하는 일 (6단계)**
 
 - **Part** — 동작 — 실패 정책
 - **1** — hermes/config.yaml → ~/.hermes/config.yaml 1회 복사 — hard-fail
@@ -43,7 +43,8 @@
 - **3** — llm_endpoint.local.sh 읽어 base_url/api_key 주입 — soft-fail, 옵션
 - **4** — agent-browser npm 의존성 설치 — soft-fail, 옵션
 - **5** — root CA 를 Chromium NSS 저장소에 임포트 — soft-fail, 옵션
-- Part 2-5 는 실패해도 경고만 — 부모 ./setup.sh 의 set -e 를 죽이지 않는다
+- **6** — sitecustomize.py 를 Hermes 고정 Python 에 설치 (프록시 CA AKI 오류) — soft-fail, 옵션
+- Part 2-6 은 실패해도 경고만 — 부모 ./setup.sh 의 set -e 를 죽이지 않는다
 **환경변수 (전부 선택)**
 
 - **Variable** — 효과
@@ -97,6 +98,11 @@
 - snap Chromium 이면 경로가 다르다: ~/snap/chromium/<rev>/.pki/nssdb
 - 해결: certutil (libnss3-tools) 로 회사 root CA 를 해당 NSS DB 에 임포트
 - certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n corp-root-ca -i <cert.crt>
+**4. hermes 호출마다 Missing Authority Key Identifier traceback**
+
+- 증상: 모든 hermes 명령 앞에 "finishing an interrupted source update" + CERTIFICATE_VERIFY_FAILED (curl 은 정상)
+- 원인: Python 3.13+ 가 AKI 없는 프록시 CA 인증서를 거부 (VERIFY_X509_STRICT)
+- 해결: ./hermes/setup.sh Part 6 이 sitecustomize.py 를 ~/.hermes/tools/python-*/lib 에 설치. Python 버전이 바뀌면 재실행
 - setup.sh Part 5 가 대신 해준다 — HERMES_CORP_CA_CERT 지정 시 (미지정이면 sudo 프롬프트 없이 완전 스킵)
 - HERMES_CORP_CA_CERT 미지정이면 shell-common/env/security.local.sh 의 $CA_CERT 를 폴백으로 쓴다
 
