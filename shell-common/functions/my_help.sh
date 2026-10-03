@@ -174,7 +174,7 @@ _register_default_help_categories() {
     # Category membership (space-separated topic keys)
     HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool ghes_mirror mirror_pages_activate}"
     HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check window sync_to_deploy}"
-    HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc agy codex graphify hermes litellm ollama claude_plugins claude_skills_marketplace superpowers}"
+    HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc agy codex graphify hermes litellm ollama claude_plugins claude_skills_marketplace superpowers llm_wiki}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux herdr del_file}"
     HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip ghostty sops}"
     HELP_CATEGORY_MEMBERS[docs]="${HELP_CATEGORY_MEMBERS[docs]:-dot show_doc notion work_log work}"
@@ -271,6 +271,7 @@ _register_default_help_descriptions() {
     HELP_DESCRIPTIONS[ollama_help]="${HELP_DESCRIPTIONS[ollama_help]:-[AI/LLM] Ollama local models}"
     HELP_DESCRIPTIONS[tmux_help]="${HELP_DESCRIPTIONS[tmux_help]:-[CLI] tmux terminal multiplexer}"
     HELP_DESCRIPTIONS[graphify_help]="${HELP_DESCRIPTIONS[graphify_help]:-[AI] graphify — 코드베이스 knowledge graph (설치/멀티 계정/usage)}"
+    HELP_DESCRIPTIONS[llm_wiki_help]="${HELP_DESCRIPTIONS[llm_wiki_help]:-[AI] llm-wiki — vault 커맨드 5종 + 클립 스킬 2종 치트시트}"
     HELP_DESCRIPTIONS[herdr_help]="${HELP_DESCRIPTIONS[herdr_help]:-[CLI] herdr agent multiplexer}"
     HELP_DESCRIPTIONS[hermes_help]="${HELP_DESCRIPTIONS[hermes_help]:-[AI] Hermes Agent — 코딩 에이전트, 커스텀 LLM 엔드포인트 지원}"
     HELP_DESCRIPTIONS[ghostty_help]="${HELP_DESCRIPTIONS[ghostty_help]:-[Config] Ghostty terminal config}"
