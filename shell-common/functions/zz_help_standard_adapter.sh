@@ -51,7 +51,10 @@ _help_std_func_to_alias() {
 }
 
 _help_std_strip_category_prefix() {
-    printf "%s\n" "$1" | sed "s/^\[[^]]*\][[:space:]]*//"
+    case $1 in
+        "["*"]"*) printf "%s\n" "${1#*]}" | sed "s/^[[:space:]]*//" ;;
+        *) printf "%s\n" "$1" ;;
+    esac
 }
 
 _help_std_get_description() {

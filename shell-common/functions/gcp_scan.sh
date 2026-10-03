@@ -420,7 +420,7 @@ _gcp_scan_json_leaves() {
     # comma/indentation noise disappears. Containers are recorded as the
     # literal (unquoted) empty-container values `{}`/`[]` — not the STRINGS
     # `"{}"`/`"[]"` — so adding an empty object or array is content, not a
-    # no-op. The leading `[[], ...]` record covers a top-level scalar, for
+    # no-op. The leading `[ [], ...]` record covers a top-level scalar, for
     # which `paths` is empty.
     #
     # Unquoted is load-bearing (codex BLOCKER, PR #1690 round-3): a JSON
@@ -442,7 +442,7 @@ _gcp_scan_json_leaves() {
     # array's own `[$p, []]` record still shows, so the array cannot vanish.
     jq -Sc --argjson drop "${2:-[]}" '
         def dropped($p): any($drop[]; . as $d | ($p | length) > ($d | length) and $p[0:($d | length)] == $d);
-        [[], (if type == "object" then {} elif type == "array" then [] else . end)],
+        [ [], (if type == "object" then {} elif type == "array" then [] else . end)],
         (paths as $p | select(dropped($p) | not) | [$p, (getpath($p) | if type == "object" then {} elif type == "array" then [] else . end)])
     ' "$1"
 }

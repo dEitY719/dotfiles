@@ -43,11 +43,10 @@ _check_manifest_staleness() {
     [ ! -f "$MANIFEST_CACHE_PATH" ] && return 1  # Missing = stale
 
     # Check age (macOS vs Linux compatible)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        age=$(( $(date +%s) - $(stat -f %m "$MANIFEST_CACHE_PATH") ))
-    else
-        age=$(( $(date +%s) - $(stat -c %Y "$MANIFEST_CACHE_PATH") ))
-    fi
+    case "${OSTYPE-}" in
+        darwin*) age=$(( $(date +%s) - $(stat -f %m "$MANIFEST_CACHE_PATH") )) ;;
+        *) age=$(( $(date +%s) - $(stat -c %Y "$MANIFEST_CACHE_PATH") )) ;;
+    esac
 
     [ "$age" -gt "$MANIFEST_CACHE_MAX_AGE" ] && return 1  # Too old = stale
     return 0  # Fresh
@@ -243,12 +242,10 @@ _claude_skills_marketplace_list() {
                 '.skills | map(select(.marketplace == $mp)) | group_by(.plugin) | .[] |
                  "Plugin: \(.[0].plugin)\n" + (.[] | "  • \(.name)")' "$MANIFEST_CACHE_PATH" | \
             while IFS= read -r line; do
-                if [[ "$line" == Plugin:* ]]; then
-                    echo ""
-                    echo "$line"
-                else
-                    echo "$line"
-                fi
+                case "$line" in
+                    Plugin:*) echo "" ;;
+                esac
+                echo "$line"
             done
             echo ""
         else
@@ -451,8 +448,9 @@ _claude_skills_marketplace_search() {
     ux_header "Search: '$query'"
 
     local results
-    results=$(jq -r --arg q "${query,,}" \
+    results=$(jq -r --arg q "$query" \
         '.skills |
+         ($q | ascii_downcase) as $q |
          map(select(
              (.name | ascii_downcase | contains($q)) or
              (.description | ascii_downcase | contains($q)) or
