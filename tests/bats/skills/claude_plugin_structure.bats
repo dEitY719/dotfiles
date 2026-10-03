@@ -89,8 +89,8 @@ build_perfect() {
 @test "mandatory missing (no marketplace/plugin json) -> verdict FAIL" {
     _seed_skill "$REPO"; _seed_docs_dirs "$REPO"
     _seed_readme "$REPO"; _seed_recommended_files "$REPO"
-    run cps_check_M1 "$REPO"; assert_output FAIL
-    run cps_check_M3 "$REPO"; assert_output FAIL
+    run cps_check_m1 "$REPO"; assert_output FAIL
+    run cps_check_m3 "$REPO"; assert_output FAIL
     run cps_verdict "$REPO"; assert_output FAIL
 }
 
@@ -99,8 +99,8 @@ build_perfect() {
     _seed_readme "$REPO"; _seed_recommended_files "$REPO"
     _seed_readme_links "$REPO" visualize    # recommended satisfied; only mandatory missing
     cps_refactor "$REPO" mp apply
-    run cps_check_M1 "$REPO"; assert_output PASS
-    run cps_check_M3 "$REPO"; assert_output PASS
+    run cps_check_m1 "$REPO"; assert_output PASS
+    run cps_check_m3 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -117,8 +117,8 @@ build_perfect() {
 @test "recommended missing (no guide/usage) -> verdict WARN" {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R1 "$REPO"; assert_output WARN
-    run cps_check_R2 "$REPO"; assert_output WARN
+    run cps_check_r1 "$REPO"; assert_output WARN
+    run cps_check_r2 "$REPO"; assert_output WARN
     run cps_verdict "$REPO"; assert_output WARN
 }
 
@@ -126,8 +126,8 @@ build_perfect() {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     cps_refactor "$REPO" op apply
-    run cps_check_R1 "$REPO"; assert_output PASS
-    run cps_check_R2 "$REPO"; assert_output PASS
+    run cps_check_r1 "$REPO"; assert_output PASS
+    run cps_check_r2 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -135,7 +135,7 @@ build_perfect() {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     cps_refactor "$REPO" mp apply
-    run cps_check_R1 "$REPO"; assert_output WARN
+    run cps_check_r1 "$REPO"; assert_output WARN
 }
 
 # ---- Scenario 4: dry-run idempotency ------------------------------------
@@ -156,8 +156,8 @@ build_perfect() {
 @test "plugin with 0 skills -> R1/R2 are N/A, not FAIL" {
     mkdir -p "$REPO/plugins/demo/skills"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R1 "$REPO"; assert_output "N/A"
-    run cps_check_R2 "$REPO"; assert_output "N/A"
+    run cps_check_r1 "$REPO"; assert_output "N/A"
+    run cps_check_r2 "$REPO"; assert_output "N/A"
 }
 
 # ---- R4 naming -----------------------------------------------------------
@@ -167,7 +167,7 @@ build_perfect() {
     printf 'name: structure:wrong\ndescription: x\n' \
         > "$REPO/plugins/demo/skills/structure-check/SKILL.md"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R4 "$REPO"; assert_output WARN
+    run cps_check_r4 "$REPO"; assert_output WARN
 }
 
 @test "R4 naming match (structure:check <-> structure-check) -> PASS" {
@@ -175,7 +175,7 @@ build_perfect() {
     printf 'name: structure:check\ndescription: x\n' \
         > "$REPO/plugins/demo/skills/structure-check/SKILL.md"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R4 "$REPO"; assert_output PASS
+    run cps_check_r4 "$REPO"; assert_output PASS
 }
 
 @test "R4 tolerates a quoted name: value (PR #894 gemini review)" {
@@ -183,29 +183,29 @@ build_perfect() {
     printf 'name: "structure:check"\ndescription: x\n' \
         > "$REPO/plugins/demo/skills/structure-check/SKILL.md"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R4 "$REPO"; assert_output PASS
+    run cps_check_r4 "$REPO"; assert_output PASS
 }
 
 # ---- R5 per-skill README links (#905) -----------------------------------
 
 @test "R5 PASS when README links both guide and usage for each skill" {
     build_perfect "$REPO"
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
 }
 
 @test "R5 WARN when README links the guide but not the usage" {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
     printf -- '- [guide](docs/skill-guides/visualize.html)\n' >> "$REPO/README.md"
-    run cps_check_R5 "$REPO"; assert_output WARN
+    run cps_check_r5 "$REPO"; assert_output WARN
     run cps_verdict "$REPO"; assert_output WARN
 }
 
 @test "R5 WARN when README has a docs/ link but no per-skill links (R3 PASS gap)" {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
-    run cps_check_R3 "$REPO"; assert_output PASS
-    run cps_check_R5 "$REPO"; assert_output WARN
+    run cps_check_r3 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output WARN
 }
 
 @test "R5 WARN when one of two skills is missing its links" {
@@ -214,21 +214,21 @@ build_perfect() {
     printf 'name: excalidraw\ndescription: x\n' > "$REPO/plugins/demo/skills/excalidraw/SKILL.md"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     _seed_readme_links "$REPO" visualize    # excalidraw links intentionally absent
-    run cps_check_R5 "$REPO"; assert_output WARN
+    run cps_check_r5 "$REPO"; assert_output WARN
 }
 
 @test "R5 is N/A when the plugin has 0 skills" {
     mkdir -p "$REPO/plugins/demo/skills"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R5 "$REPO"; assert_output "N/A"
+    run cps_check_r5 "$REPO"; assert_output "N/A"
 }
 
 @test "R5 missing -> refactor --apply --op backfills links -> recheck PASS" {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R5 "$REPO"; assert_output WARN
+    run cps_check_r5 "$REPO"; assert_output WARN
     cps_refactor "$REPO" op apply
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -248,7 +248,7 @@ build_perfect() {
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
     printf -- '- `visualize` ([visual guide](https://acme.github.io/repo/skill-guides/visualize.html))\n' >> "$REPO/README.md"
     printf -- '- [usage](docs/skill-output/visualize-usage.md)\n' >> "$REPO/README.md"
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
 }
 
 @test "R5 PASS when guide linked via GHE Pages URL (#911)" {
@@ -257,7 +257,7 @@ build_perfect() {
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
     printf -- '- `visualize` ([visual guide](https://github.samsungds.net/pages/owner/repo/skill-guides/visualize.html))\n' >> "$REPO/README.md"
     printf -- '- [usage](docs/skill-output/visualize-usage.md)\n' >> "$REPO/README.md"
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
 }
 
 @test "R5 backfill appends ONLY the missing link (no duplicate of present one)" {
@@ -265,12 +265,12 @@ build_perfect() {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     printf -- '- [guide](docs/skill-guides/visualize.html)\n' >> "$REPO/README.md"
-    run cps_check_R5 "$REPO"; assert_output WARN          # usage missing
+    run cps_check_r5 "$REPO"; assert_output WARN          # usage missing
     cps_refactor "$REPO" op apply
     # guide link still appears exactly once (not re-appended), usage now present
     [ "$(grep -c 'skill-guides/visualize.html' "$REPO/README.md")" = "1" ]
     [ "$(grep -c 'skill-output/visualize-usage.md' "$REPO/README.md")" = "1" ]
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
 }
 
 # ---- N/A for absent subject on mandatory checks (PR #894 gemini review) --
@@ -279,15 +279,15 @@ build_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [] }\n' > "$REPO/.claude-plugin/marketplace.json"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_M2 "$REPO"; assert_output FAIL
-    run cps_check_M3 "$REPO"; assert_output "N/A"
+    run cps_check_m2 "$REPO"; assert_output FAIL
+    run cps_check_m3 "$REPO"; assert_output "N/A"
     run cps_verdict "$REPO"; assert_output FAIL
 }
 
 @test "plugin with 0 skills -> M4 is N/A, not FAIL" {
     mkdir -p "$REPO/plugins/demo/skills"
     _seed_mandatory_json "$REPO"; _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_M4 "$REPO"; assert_output "N/A"
+    run cps_check_m4 "$REPO"; assert_output "N/A"
 }
 
 # ---- multi-plugin / multi-skill JSON skeletons (PR #894 gemini review) --
@@ -315,7 +315,7 @@ build_perfect() {
     cps_refactor "$REPO" mp apply
     run jq -e 'has("skills")' "$REPO/plugins/demo/.claude-plugin/plugin.json"
     assert_output false
-    run cps_check_M10 "$REPO"; assert_output PASS
+    run cps_check_m10 "$REPO"; assert_output PASS
 }
 
 # ---- single layout mode (#914) ------------------------------------------
@@ -391,17 +391,17 @@ build_single_perfect() {
     # The core regression: before mode support, a single repo (no plugins/)
     # falsely FAILed M2/M3/M4. With auto-detect they pass at the root.
     build_single_perfect "$REPO"
-    run cps_check_M2 "$REPO"; assert_output PASS
-    run cps_check_M3 "$REPO"; assert_output PASS
-    run cps_check_M4 "$REPO"; assert_output PASS
+    run cps_check_m2 "$REPO"; assert_output PASS
+    run cps_check_m3 "$REPO"; assert_output PASS
+    run cps_check_m4 "$REPO"; assert_output PASS
 }
 
 @test "single repo: M5/R1/R2/R5 apply mode-independently" {
     build_single_perfect "$REPO"
-    run cps_check_M5 "$REPO"; assert_output PASS
-    run cps_check_R1 "$REPO"; assert_output PASS
-    run cps_check_R2 "$REPO"; assert_output PASS
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_m5 "$REPO"; assert_output PASS
+    run cps_check_r1 "$REPO"; assert_output PASS
+    run cps_check_r2 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
 }
 
 @test "single repo missing root manifest -> M2 FAIL, M3 N/A (not double FAIL)" {
@@ -409,8 +409,8 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [{ "source": "./" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"   # marketplace only, no plugin.json
-    run cps_check_M2 "$REPO"; assert_output FAIL
-    run cps_check_M3 "$REPO"; assert_output "N/A"
+    run cps_check_m2 "$REPO"; assert_output FAIL
+    run cps_check_m3 "$REPO"; assert_output "N/A"
     run cps_verdict "$REPO"; assert_output FAIL
 }
 
@@ -420,12 +420,12 @@ build_single_perfect() {
     # override means 'score by THIS mode' — a wrong override surfaces as a
     # normal M2 FAIL (no plugins/ dir), never a silent skip.
     build_single_perfect "$REPO"
-    run cps_check_M2 "$REPO" mono; assert_output FAIL
+    run cps_check_m2 "$REPO" mono; assert_output FAIL
 }
 
 @test "forced --single on a mono repo -> M2 FAIL (no root manifest)" {
     build_perfect "$REPO"   # mono: manifest under plugins/demo, not root
-    run cps_check_M2 "$REPO" single; assert_output FAIL
+    run cps_check_m2 "$REPO" single; assert_output FAIL
 }
 
 @test "forced --single honored even when marketplace says mono" {
@@ -458,11 +458,11 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"   # single signal, root plugin.json missing
     printf '{ "$schema": "https://anthropic.com/claude-code/marketplace.schema.json", "name": "repo", "description": "demo", "plugins": [{ "source": "./", "homepage": "https://example.com/repo" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M2 "$REPO"; assert_output FAIL     # 0 plugin roots yet
+    run cps_check_m2 "$REPO"; assert_output FAIL     # 0 plugin roots yet
     run cps_verdict "$REPO"; assert_output FAIL
     cps_refactor "$REPO" mp apply
     [ ! -d "$REPO/plugins" ]                          # single fix never makes plugins/
-    run cps_check_M3 "$REPO"; assert_output PASS
+    run cps_check_m3 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -477,19 +477,19 @@ build_single_perfect() {
     assert_output "./"
     run jq -e 'has("skills")' "$REPO/.claude-plugin/plugin.json"   # no skills field (M10)
     assert_output false
-    run cps_check_M10 "$REPO"; assert_output PASS
+    run cps_check_m10 "$REPO"; assert_output PASS
     [ ! -d "$REPO/plugins" ]
 }
 
 @test "single missing recommended -> refactor op -> recheck PASS (root stubs+links)" {
     _seed_single_skill "$REPO"; _seed_single_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R1 "$REPO"; assert_output WARN
+    run cps_check_r1 "$REPO"; assert_output WARN
     cps_refactor "$REPO" op apply
     [ ! -d "$REPO/plugins" ]
-    run cps_check_R1 "$REPO"; assert_output PASS
-    run cps_check_R2 "$REPO"; assert_output PASS
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_r1 "$REPO"; assert_output PASS
+    run cps_check_r2 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -523,7 +523,7 @@ build_single_perfect() {
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
     run cps_refactor "$REPO" op apply single
     [ "$status" -eq 0 ]
-    run cps_check_R5 "$REPO"; assert_output PASS
+    run cps_check_r5 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -534,8 +534,8 @@ build_single_perfect() {
     _seed_recommended_files "$REPO"; _seed_readme_links "$REPO" visualize
     run cps_refactor "$REPO" mp apply mono
     [ "$status" -eq 0 ]
-    run cps_check_M1 "$REPO"; assert_output PASS
-    run cps_check_M3 "$REPO"; assert_output PASS
+    run cps_check_m1 "$REPO"; assert_output PASS
+    run cps_check_m3 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -548,14 +548,14 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "source": { "source": "url", "url": "https://x/y.git" }, "plugins": [{ "name": "demo" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M7 "$REPO"; assert_output FAIL
+    run cps_check_m7 "$REPO"; assert_output FAIL
     run cps_verdict "$REPO"; assert_output FAIL
 }
 
 @test "M7 PASS: string-form plugin element is the source (shorthand)" {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_M7 "$REPO"; assert_output PASS
+    run cps_check_m7 "$REPO"; assert_output PASS
 }
 
 @test "M7 PASS: object plugin with its own git-URL source (#61 post-fix / #63)" {
@@ -563,16 +563,16 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": "url", "url": "https://x/y.git" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M7 "$REPO"; assert_output PASS
-    run cps_check_M8 "$REPO"; assert_output PASS
+    run cps_check_m7 "$REPO"; assert_output PASS
+    run cps_check_m8 "$REPO"; assert_output PASS
 }
 
 @test "M7 N/A when marketplace lists 0 plugins (M2 owns the FAIL)" {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [] }\n' > "$REPO/.claude-plugin/marketplace.json"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_M7 "$REPO"; assert_output "N/A"
-    run cps_check_M8 "$REPO"; assert_output "N/A"
+    run cps_check_m7 "$REPO"; assert_output "N/A"
+    run cps_check_m8 "$REPO"; assert_output "N/A"
 }
 
 @test "M7 FAIL -> refactor mp apply injects source -> M7 PASS (auto-fix)" {
@@ -582,11 +582,11 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "description": "d", "$schema": "s", "plugins": [{ "name": "demo" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M7 "$REPO"; assert_output FAIL
+    run cps_check_m7 "$REPO"; assert_output FAIL
     cps_refactor "$REPO" mp apply
-    run cps_check_M7 "$REPO"; assert_output PASS
-    run cps_check_M8 "$REPO"; assert_output PASS    # injected ./plugins/demo is a valid shape
-    run cps_check_M9 "$REPO"; assert_output PASS    # plugins/demo/ exists on disk
+    run cps_check_m7 "$REPO"; assert_output PASS
+    run cps_check_m8 "$REPO"; assert_output PASS    # injected ./plugins/demo is a valid shape
+    run cps_check_m9 "$REPO"; assert_output PASS    # plugins/demo/ exists on disk
     run jq -e '.plugins[0].source' "$REPO/.claude-plugin/marketplace.json"; assert_success
 }
 
@@ -598,8 +598,8 @@ build_single_perfect() {
     cps_refactor "$REPO" mp apply
     run jq -r '.plugins[0].source' "$REPO/.claude-plugin/marketplace.json"; assert_output "url"
     run jq -r '.plugins[0].url' "$REPO/.claude-plugin/marketplace.json"; assert_output "https://x/y.git"
-    run cps_check_M7 "$REPO"; assert_output PASS
-    run cps_check_M8 "$REPO"; assert_output PASS
+    run cps_check_m7 "$REPO"; assert_output PASS
+    run cps_check_m8 "$REPO"; assert_output PASS
 }
 
 # ---- M8 plugins[].source shape validity (#1084) --------------------------
@@ -611,8 +611,8 @@ build_single_perfect() {
     # { source:"url", url:... } shape → invalid.
     printf '{ "name": "repo", "plugins": [{ "source": "https://x/y.git" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M7 "$REPO"; assert_output PASS     # source key present
-    run cps_check_M8 "$REPO"; assert_output FAIL     # but shape invalid
+    run cps_check_m7 "$REPO"; assert_output PASS     # source key present
+    run cps_check_m8 "$REPO"; assert_output FAIL     # but shape invalid
     run cps_verdict "$REPO"; assert_output FAIL
 }
 
@@ -620,7 +620,7 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": ["./plugins/demo"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M8 "$REPO"; assert_output PASS
+    run cps_check_m8 "$REPO"; assert_output PASS
 }
 
 @test "M8 FAIL: explicit null source is not skipped (#1085 gemini review)" {
@@ -629,15 +629,15 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": null }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M7 "$REPO"; assert_output PASS
-    run cps_check_M8 "$REPO"; assert_output FAIL
+    run cps_check_m7 "$REPO"; assert_output PASS
+    run cps_check_m8 "$REPO"; assert_output FAIL
 }
 
 @test "M8 FAIL: a null plugin element is collected, not skipped (#1085)" {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [null] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M8 "$REPO"; assert_output FAIL
+    run cps_check_m8 "$REPO"; assert_output FAIL
 }
 
 @test "M8 FAIL: nested mono path ./plugins/foo/bar is not a valid source (codex review)" {
@@ -646,14 +646,14 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": ["./plugins/foo/bar"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M8 "$REPO"; assert_output FAIL
+    run cps_check_m8 "$REPO"; assert_output FAIL
 }
 
 @test "M8 PASS: trailing-slash single-segment mono path ./plugins/demo/" {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": ["./plugins/demo/"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M8 "$REPO"; assert_output PASS
+    run cps_check_m8 "$REPO"; assert_output PASS
 }
 
 # ---- M9 pluginRoot ↔ on-disk consistency (mono only, #1084) --------------
@@ -663,13 +663,13 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin" "$REPO/plugins/demo"   # 'ghost' declared, not present
     printf '{ "name": "repo", "plugins": ["./plugins/demo", "./plugins/ghost"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M9 "$REPO"; assert_output FAIL
+    run cps_check_m9 "$REPO"; assert_output FAIL
     run cps_verdict "$REPO"; assert_output FAIL
 }
 
 @test "M9 PASS: every declared mono plugin dir exists on disk" {
     build_perfect "$REPO"
-    run cps_check_M9 "$REPO"; assert_output PASS
+    run cps_check_m9 "$REPO"; assert_output PASS
 }
 
 @test "M9 checks the EXACT declared path, not basename (codex review)" {
@@ -679,12 +679,12 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin" "$REPO/plugins/demo"
     printf '{ "name": "repo", "plugins": ["plugins/demo"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M9 "$REPO"; assert_output PASS
+    run cps_check_m9 "$REPO"; assert_output PASS
 }
 
 @test "M9 N/A in single mode (no plugins/ layout)" {
     build_single_perfect "$REPO"
-    run cps_check_M9 "$REPO"; assert_output "N/A"
+    run cps_check_m9 "$REPO"; assert_output "N/A"
 }
 
 @test "M9 N/A for a mono repo whose sources are all remote git URLs (#63)" {
@@ -692,7 +692,7 @@ build_single_perfect() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [{ "name": "demo", "source": "url", "url": "https://x/y.git" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_M9 "$REPO"; assert_output "N/A"    # nothing local to verify
+    run cps_check_m9 "$REPO"; assert_output "N/A"    # nothing local to verify
 }
 
 # ---- M10 plugin.json known-field whitelist (#1084 / claude-plugin-jira#65) --
@@ -711,8 +711,8 @@ _seed_plugin_json() {
     printf '{ "name": "repo", "plugins": ["./plugins/demo"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
     _seed_plugin_json "$REPO" '{ "name": "jira", "version": "0.2.0", "skills": ["skills/jira-core"] }'
-    run cps_check_M10 "$REPO"; assert_output FAIL
-    run cps_check_M3 "$REPO"; assert_output PASS      # JSON is valid — M3 doesn't catch it
+    run cps_check_m10 "$REPO"; assert_output FAIL
+    run cps_check_m3 "$REPO"; assert_output PASS      # JSON is valid — M3 doesn't catch it
     run cps_verdict "$REPO"; assert_output FAIL
 }
 
@@ -722,12 +722,12 @@ _seed_plugin_json() {
     printf '{ "name": "repo", "plugins": ["./plugins/demo"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
     _seed_plugin_json "$REPO" '{ "name": "demo", "version": "0.2.0", "description": "d", "homepage": "https://x", "keywords": ["a"] }'
-    run cps_check_M10 "$REPO"; assert_output PASS
+    run cps_check_m10 "$REPO"; assert_output PASS
 }
 
 @test "M10 PASS on the perfect fixture (skeleton is schema-clean)" {
     build_perfect "$REPO"
-    run cps_check_M10 "$REPO"; assert_output PASS
+    run cps_check_m10 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
 
@@ -735,7 +735,7 @@ _seed_plugin_json() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "name": "repo", "plugins": [] }\n' > "$REPO/.claude-plugin/marketplace.json"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_M10 "$REPO"; assert_output "N/A"
+    run cps_check_m10 "$REPO"; assert_output "N/A"
 }
 
 @test "M10 FAIL -> refactor mp apply strips unknown field + leaves .bak -> M10 PASS" {
@@ -746,9 +746,9 @@ _seed_plugin_json() {
     printf '{ "$schema": "s", "name": "repo", "description": "d", "plugins": ["./plugins/demo"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
     _seed_plugin_json "$REPO" '{ "name": "demo", "version": "0.2.0", "skills": ["skills/x"] }'
-    run cps_check_M10 "$REPO"; assert_output FAIL
+    run cps_check_m10 "$REPO"; assert_output FAIL
     cps_refactor "$REPO" mp apply
-    run cps_check_M10 "$REPO"; assert_output PASS
+    run cps_check_m10 "$REPO"; assert_output PASS
     run jq -e 'has("skills")' "$REPO/plugins/demo/.claude-plugin/plugin.json"; assert_output false
     run jq -r '.name' "$REPO/plugins/demo/.claude-plugin/plugin.json"; assert_output demo
     [ -f "$REPO/plugins/demo/.claude-plugin/plugin.json.bak" ]        # backup kept
@@ -768,14 +768,14 @@ _seed_plugin_json() {
     build_perfect "$REPO"                      # everything else clean
     printf '{ "name": "repo", "description": "d", "plugins": ["./plugins/demo"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"   # drop $schema only
-    run cps_check_R6 "$REPO"; assert_output WARN
+    run cps_check_r6 "$REPO"; assert_output WARN
     run cps_verdict "$REPO"; assert_output WARN
 }
 
 @test "R6 PASS when \$schema is declared" {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R6 "$REPO"; assert_output PASS
+    run cps_check_r6 "$REPO"; assert_output PASS
 }
 
 @test "R7 WARN when top-level description is missing" {
@@ -783,7 +783,7 @@ _seed_plugin_json() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "$schema": "s", "name": "repo", "plugins": ["./plugins/demo"] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_R7 "$REPO"; assert_output WARN
+    run cps_check_r7 "$REPO"; assert_output WARN
 }
 
 @test "R7 WARN when an object plugin lacks homepage" {
@@ -791,13 +791,13 @@ _seed_plugin_json() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "$schema": "s", "name": "repo", "description": "d", "plugins": [{ "source": "./plugins/demo" }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_R7 "$REPO"; assert_output WARN
+    run cps_check_r7 "$REPO"; assert_output WARN
 }
 
 @test "R7 PASS with description and (string plugins have no homepage req)" {
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"
-    run cps_check_R7 "$REPO"; assert_output PASS
+    run cps_check_r7 "$REPO"; assert_output PASS
 }
 
 @test "R7 WARN when metadata is a non-string type (no jq crash → false PASS) (#1085)" {
@@ -807,24 +807,24 @@ _seed_plugin_json() {
     mkdir -p "$REPO/.claude-plugin"
     printf '{ "$schema": "s", "name": "repo", "description": true, "plugins": [{ "source": "./plugins/demo", "homepage": 42 }] }\n' \
         > "$REPO/.claude-plugin/marketplace.json"
-    run cps_check_R7 "$REPO"; assert_output WARN
+    run cps_check_r7 "$REPO"; assert_output WARN
 }
 
 @test "R8 N/A when README has no /plugin marketplace add example" {
     build_perfect "$REPO"
-    run cps_check_R8 "$REPO"; assert_output "N/A"
+    run cps_check_r8 "$REPO"; assert_output "N/A"
 }
 
 @test "R8 WARN when the add example uses a .git clone URL" {
     build_perfect "$REPO"
     printf '\n`/plugin marketplace add https://github.com/o/repo.git`\n' >> "$REPO/README.md"
-    run cps_check_R8 "$REPO"; assert_output WARN
+    run cps_check_r8 "$REPO"; assert_output WARN
     run cps_verdict "$REPO"; assert_output WARN
 }
 
 @test "R8 PASS when the add example uses the raw marketplace.json URL" {
     build_perfect "$REPO"
     printf '\n`/plugin marketplace add https://raw.githubusercontent.com/o/repo/main/.claude-plugin/marketplace.json`\n' >> "$REPO/README.md"
-    run cps_check_R8 "$REPO"; assert_output PASS
+    run cps_check_r8 "$REPO"; assert_output PASS
     run cps_verdict "$REPO"; assert_output PASS
 }
