@@ -883,7 +883,7 @@ _my_help_func_registry() {
         "aicron	Scheduled AI job manager" \
         "gcp	gcloud / GCP helpers" \
         "wsl_check	WSL and Docker environment health check" \
-        "wcp	cp that accepts Windows paths (C:\\Users\\...)" \
+        "wcp	cp that accepts Windows paths (wcp --help)" \
         "del_file	Clean backup/original garbage files" \
         "psgrep	Grep the process table" \
         "srcpack	Pack source files for sharing" \
