@@ -667,6 +667,37 @@ teardown() {
     assert_success
 }
 
+# --- git_log --author (#1863) ---
+
+_author_repo_setup() {
+    R="${BATS_TEST_TMPDIR}/r"
+    git init -q "$R" && cd "$R" || return 1
+    git -c user.name="Alice A" -c user.email=a@x commit -q --allow-empty -m by-alice
+    git -c user.name="Bob B" -c user.email=b@x commit -q --allow-empty -m by-bob
+}
+
+@test "bash: gl --author filters to matching author" {
+    _author_repo_setup
+    run_in_bash "cd '$R' && git_log --author Alice"
+    assert_success
+    assert_output --partial "by-alice"
+    refute_output --partial "by-bob"
+}
+
+@test "bash: gl -a --author=<name> and spaced value work" {
+    _author_repo_setup
+    run_in_bash "cd '$R' && git_log -a --author='Bob B'"
+    assert_success
+    assert_output --partial "by-bob"
+    refute_output --partial "by-alice"
+}
+
+@test "bash: gl --author without value fails" {
+    run_in_bash "git_log --author"
+    assert_failure
+    assert_output --partial "requires a value"
+}
+
 # --- zsh parity ---
 
 @test "zsh: git_log function exists" {
