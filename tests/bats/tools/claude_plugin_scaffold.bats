@@ -85,6 +85,7 @@ gh-issue-skills|dEitY719/gh-issue-skills|gh-issue
 gh-pr-skills|dEitY719/gh-pr-skills|gh-pr
 gh-flow-skills|dEitY719/gh-flow-skills|gh-flow
 claudecode-skills|dEitY719/claudecode-skills|claudecode
+video-skills|dEitY719/video-skills|video
 TABLE
 }
 
