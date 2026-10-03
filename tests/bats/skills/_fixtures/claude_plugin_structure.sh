@@ -103,16 +103,16 @@ _cps_skills_in_root() {
 }
 
 # ---- mandatory checks (M1-M10) -- echo PASS|FAIL|N/A ---------------------
-cps_check_M1() { _cps_json_ok "$1/.claude-plugin/marketplace.json" && echo PASS || echo FAIL; }
+cps_check_m1() { _cps_json_ok "$1/.claude-plugin/marketplace.json" && echo PASS || echo FAIL; }
 
-cps_check_M2() {
+cps_check_m2() {
     # ≥1 plugin root. mono: plugins/<p>/ dirs; single: root manifest exists.
     local _mode
     _mode="$(_cps_detect_mode "$1" "${2:-}")"
     [ "$(_cps_plugin_roots "$1" "$_mode" | grep -c .)" -ge 1 ] && echo PASS || echo FAIL
 }
 
-cps_check_M3() {
+cps_check_m3() {
     # every plugin root must carry a valid plugin.json
     local _mode _root _any=0
     _mode="$(_cps_detect_mode "$1" "${2:-}")"
@@ -130,7 +130,7 @@ EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
-cps_check_M4() {
+cps_check_m4() {
     # every skill must have a SKILL.md with name: and description:
     local _mode _root _s _any=0 _sm
     _mode="$(_cps_detect_mode "$1" "${2:-}")"
@@ -158,11 +158,11 @@ EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
-cps_check_M5() {
+cps_check_m5() {
     [ -d "$1/docs/skill-guides" ] && [ -d "$1/docs/skill-output" ] && echo PASS || echo FAIL
 }
 
-cps_check_M6() { [ -f "$1/README.md" ] && echo PASS || echo FAIL; }
+cps_check_m6() { [ -f "$1/README.md" ] && echo PASS || echo FAIL; }
 
 # ---- M7-M9: marketplace.json plugins[].source integrity (#1084) ----------
 # Root cause (claude-plugin-jira#61): Claude Code 2.1.198 does NOT inherit a
@@ -170,7 +170,7 @@ cps_check_M6() { [ -f "$1/README.md" ] && echo PASS || echo FAIL; }
 # carry its own source, or /plugin install fails. structure-check PASS up to
 # M6 did not catch this, which misled diagnosis (#63). M7-M9 close that gap.
 
-cps_check_M7() {
+cps_check_m7() {
     # Each plugins[] element must resolve to a source. A bare STRING element IS
     # the source (shorthand); an OBJECT element MUST have its own .source key.
     # FAIL when any object element lacks source (the #61 shape). N/A when the
@@ -189,7 +189,7 @@ cps_check_M7() {
     [ "${_bad:-1}" -eq 0 ] && echo PASS || echo FAIL
 }
 
-cps_check_M8() {
+cps_check_m8() {
     # Shape validity of each resolvable source (mono/single common):
     #   local path : "." | "./" (single) | "[./]plugins/<name>" — exactly ONE
     #                segment after plugins/ (nested "./plugins/a/b" → FAIL, per
@@ -224,7 +224,7 @@ cps_check_M8() {
     [ "${_bad:-1}" -eq 0 ] && echo PASS || echo FAIL
 }
 
-cps_check_M9() {
+cps_check_m9() {
     # mono only: each declared LOCAL mono plugin path must exist on disk
     #   ./plugins/<name> (or plugins/<name>) → <repo>/plugins/<name>/ present.
     # single mode → N/A (no plugins/ layout). Remote (url-type) sources are
@@ -271,7 +271,7 @@ EOF
 # (claude-plugin-jira#65, #1084 comment 2026-07-02). Update on CC releases.
 _CPS_PLUGIN_JSON_KNOWN_FIELDS='["name","version","description","author","homepage","repository","license","keywords"]'
 
-cps_check_M10() {
+cps_check_m10() {
     # Every plugin.json top-level key must be in the known-field whitelist.
     # An unknown field (e.g. skills) → FAIL — install succeeds but Claude Code
     # rejects the manifest at load ("Validation errors: skills: Invalid input").
@@ -299,7 +299,7 @@ EOF
 
 # ---- recommended checks (R1-R5) -- echo PASS|WARN|N/A -------------------
 # (R6-R8 added below the R1-R5 block, same contract.)
-cps_check_R1() {
+cps_check_r1() {
     # per-skill docs/skill-guides/<skill>.html ; N/A if no skills. Docs paths
     # are repo-level (mode-independent); only skill discovery is plugin-root.
     local _mode _root _s _any=0
@@ -322,7 +322,7 @@ EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
-cps_check_R2() {
+cps_check_r2() {
     local _mode _root _s _any=0
     _mode="$(_cps_detect_mode "$1" "${2:-}")"
     while IFS= read -r _root; do
@@ -344,7 +344,7 @@ EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
-cps_check_R3() {
+cps_check_r3() {
     # README "Simple": links into docs/. N/A when README absent (M6 owns that).
     [ -f "$1/README.md" ] || {
         echo "N/A"
@@ -353,7 +353,7 @@ cps_check_R3() {
     grep -Eq '\]\(\.?/?docs/' "$1/README.md" && echo PASS || echo WARN
 }
 
-cps_check_R4() {
+cps_check_r4() {
     # naming: SKILL.md name: colon-namespace ↔ skill directory hyphen form.
     local _mode _root _s _any=0 _sm _name _expect
     _mode="$(_cps_detect_mode "$1" "${2:-}")"
@@ -380,7 +380,7 @@ EOF
     [ "$_any" -eq 1 ] && echo PASS || echo "N/A"
 }
 
-cps_check_R5() {
+cps_check_r5() {
     # per-skill README links: README must reference BOTH skill-guides/<s>.html
     # AND skill-output/<s>-usage.{html,md} for every skill. Matching is by
     # path-string presence (relative or Pages-absolute both count). N/A when
@@ -415,7 +415,7 @@ EOF
 }
 
 # ---- R6-R8: marketplace UI / registration quality (#1084) -- WARN|PASS|N/A
-cps_check_R6() {
+cps_check_r6() {
     # top-level "$schema" declaration in marketplace.json (LSP/IDE validation).
     local _mf="$1/.claude-plugin/marketplace.json"
     _cps_json_ok "$_mf" || {
@@ -425,7 +425,7 @@ cps_check_R6() {
     [ "$(jq -r 'has("$schema")' "$_mf" 2>/dev/null)" = "true" ] && echo PASS || echo WARN
 }
 
-cps_check_R7() {
+cps_check_r7() {
     # marketplace listing quality: top-level "description" + each OBJECT
     # plugin's "homepage". String-form plugins have nowhere for homepage → only
     # object plugins are checked. WARN when description missing or any object
@@ -446,7 +446,7 @@ cps_check_R7() {
     [ "${_missing:-0}" -eq 0 ] && echo PASS || echo WARN
 }
 
-cps_check_R8() {
+cps_check_r8() {
     # README /plugin marketplace add hint: prefer the raw marketplace.json URL
     # over a .git clone (raw avoids a local clone — the #61 success pattern).
     # Both are valid, so a .git example only WARNs. N/A when README absent or
@@ -473,14 +473,14 @@ cps_verdict() {
     # echo FAIL | WARN | PASS for repo $1 ; optional $2 forces single|mono.
     # M5/M6/R3 are mode-independent so the extra arg is harmless for them.
     local _r _mode="${2:-}"
-    for _c in M1 M2 M3 M4 M5 M6 M7 M8 M9 M10; do
+    for _c in m1 m2 m3 m4 m5 m6 m7 m8 m9 m10; do
         _r="$(cps_check_$_c "$1" "$_mode")"
         [ "$_r" = FAIL ] && {
             echo FAIL
             return
         }
     done
-    for _c in R1 R2 R3 R4 R5 R6 R7 R8; do
+    for _c in r1 r2 r3 r4 r5 r6 r7 r8; do
         _r="$(cps_check_$_c "$1" "$_mode")"
         [ "$_r" = WARN ] && {
             echo WARN
@@ -651,7 +651,7 @@ EOF
     # derived from `git remote` (github.com → https://<owner>.github.io/<repo>,
     # GHE → https://<host>/pages/<owner>/<repo>; see plan-and-report-templates.md
     # → "Pages host & URL derivation"). This hermetic fixture has no remote, so
-    # it writes the relative fallback form — both satisfy cps_check_R5, which
+    # it writes the relative fallback form — both satisfy cps_check_r5, which
     # matches by the `skill-guides/<s>.html` substring common to both forms.
     while IFS= read -r _p; do
         [ -n "$_p" ] || continue
