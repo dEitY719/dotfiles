@@ -1040,10 +1040,12 @@ _assert_not_hung() {
 }
 
 @test "issue_watcher_cron: --help documents the concurrency limits and the cursor" {
-    run bash "${SCRIPT}" --help
+    # Shipped defaults (5/3 since #1627); unset any operator override so the
+    # assertion pins the defaults, not the caller's environment.
+    run env -u IW_MAX_CONCURRENT -u IW_MAX_PER_REPO bash "${SCRIPT}" --help
     assert_success
-    assert_output --partial "17 running in total"
-    assert_output --partial "7 in one repo"
+    assert_output --partial "5 running in total"
+    assert_output --partial "3 in one repo"
     assert_output --partial "round-robin"
     assert_output --partial "select.json"
 }

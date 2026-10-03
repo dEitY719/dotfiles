@@ -367,16 +367,20 @@ STUB
 # narrow regex; the cheaper guard is a tripwire that fails when an entry stops
 # resolving, rather than widening the pattern for forms this repo does not use.
 @test "P20: every registry entry resolves to a real definition" {
+    # Compare the two counts to each other, not to a literal: a hard-coded
+    # size went stale the moment an entry was added (wcp, #1900).
     run_in_bash '
-        printf "registry=%s\n" "$(_my_help_func_registry | wc -l)"
-        printf "resolved=%s\n" "$(_my_help_function_index | cut -f1 | LC_ALL=C sort -u | wc -l)"
+        reg=$(_my_help_func_registry | wc -l)
+        res=$(_my_help_function_index | cut -f1 | LC_ALL=C sort -u | wc -l)
+        [ "$reg" -gt 0 ] && echo "registry=nonempty" || echo "registry=empty"
+        [ "$reg" -eq "$res" ] && echo "resolved=all" || echo "resolved=$res/$reg"
         printf "unresolved=%s\n" "$(comm -13 \
             <(_my_help_function_index | cut -f1 | LC_ALL=C sort -u) \
             <(_my_help_func_registry | cut -f1 | LC_ALL=C sort -u) | tr "\n" " ")"
     '
     assert_success
-    assert_line --index 0 "registry=33"
-    assert_line --index 1 "resolved=33"
+    assert_line --index 0 "registry=nonempty"
+    assert_line --index 1 "resolved=all"
     assert_line --index 2 "unresolved="
 }
 
