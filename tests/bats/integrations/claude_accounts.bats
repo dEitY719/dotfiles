@@ -6,6 +6,9 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
+    # The developer's own CLAUDE_ACCOUNT_EMAIL_<acct> exports would otherwise
+    # leak into run_in_bash and turn the "no mapping" cases into mismatches.
+    unset "${!CLAUDE_ACCOUNT_EMAIL_@}"
 }
 
 teardown() {
