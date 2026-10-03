@@ -96,6 +96,7 @@ _ai_usage_is_transient() {
 #   tracking:"unsupported" so the summary clearly says we have no
 #   numbers for those calls (rather than silently reporting 0 tokens).
 _ai_usage_run() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _ai="$1" _log="$2" _label="$3" _prompt="$4"
     local _tmp _tmp_msg _ec _is_error _now
 
@@ -384,6 +385,7 @@ _ai_usage_run() {
 # log file. Missing jq → we still print a one-liner pointing at the raw
 # log so a human can still investigate.
 _ai_usage_summary() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _log="$1" _label="${2:-Token Usage}"
 
     if [ ! -f "$_log" ] || [ ! -s "$_log" ]; then

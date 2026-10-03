@@ -18,6 +18,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # 사용 예: gpustatus
 
 gpustatus() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # dotfiles에서 gpu_status.sh 스크립트 경로
     local gpu_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/gpu_status.sh"
 
@@ -39,6 +40,7 @@ alias gpu-status='gpustatus'
 # GPU 간략 정보 (하드웨어 + 레이어 오프로드)
 # 사용 예: gpuinfo
 gpuinfo() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "GPU 하드웨어 정보"
 
     # 1. WSL2 호스트 GPU 정보

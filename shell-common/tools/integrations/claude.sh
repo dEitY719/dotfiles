@@ -51,6 +51,7 @@ delete_claude() {
 # ═══════════════════════════════════════════════════════════════
 
 claude_init() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local settings_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
     local settings_target="$HOME/.claude/settings.json"
     local statusline_source="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/statusline-command.sh"
@@ -144,6 +145,7 @@ claude_init() {
 # ═══════════════════════════════════════════════════════════════
 
 claude_edit_settings() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local settings_file="${DOTFILES_ROOT:-$HOME/dotfiles}/claude/settings.json"
 
     if [ ! -f "$settings_file" ]; then
@@ -167,6 +169,7 @@ claude_edit_settings() {
 # ═══════════════════════════════════════════════════════════════
 
 open_claude_plugins() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local plugins_dir="$HOME/.claude/plugins/marketplaces"
 
     if [ ! -d "$plugins_dir" ]; then
@@ -242,6 +245,7 @@ alias claude-skip='claude --dangerously-skip-permissions'
 # its contents are already trusted by Claude Code itself. `@sh` quoting on
 # the value handles embedded newlines and shell metacharacters.
 _claude_yolo_export_settings_env() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _cysee_dir="${1:-}"
     [ -n "$_cysee_dir" ] || return 0
     local _cysee_file="$_cysee_dir/settings.local.json"
@@ -646,6 +650,7 @@ _claude_ensure_symlink() {
 #     (jq 없으면 경고 후 SSOT 가 덮어씀)
 #   - dangling settings.local.json symlink (teardown 된 worktree 잔재) 제거
 _claude_ensure_settings_copy() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _cesc_src="$1"
     _cesc_tgt="$2"
     _cesc_local="$(dirname "$_cesc_tgt")/settings.local.json"
@@ -957,6 +962,7 @@ _claude_install_herdr_hook() {
 # (#287) 는 모두 이 함수 하나로 대체됐고, 새 skill 은 setup 재실행 없이
 # 즉시 반영된다.
 _claude_account_setup_one() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # ${VAR:-} for set -u safety (gemini review on PR #590).
     _caso_acct="${1:-}"
     _caso_cdir="${2:-}"

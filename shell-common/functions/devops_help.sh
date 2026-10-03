@@ -184,6 +184,7 @@ _docker_help_compose_variants_in_pwd() {
 }
 
 _docker_help_has_compose_in_pwd() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Assign-without-outer-quotes form so the pre-commit naming check
     # (`git/hooks/checks/naming_check.sh`) does not mis-flag these as
     # snake_case user-facing text inside quoted strings.
@@ -210,6 +211,7 @@ _docker_help_recommend_print() {
 }
 
 _docker_help_recommend() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local bases variants base variant fake_variant variant_count
 
     bases=$(_docker_help_compose_bases_in_pwd)
@@ -337,6 +339,7 @@ _docker_help_is_alias() {
 # Reverse lookup: alias -> raw command. Teaches what an alias actually runs
 # so the portable command can be verified and learned (#899 F-2).
 _docker_help_reverse() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local al raw desc sec found
     # Pure POSIX while-read over a here-doc (no awk/cut subprocesses, and no
     # `awk -v` backslash-escape interpretation of the input) — gemini PR #901.
@@ -368,6 +371,7 @@ EOF
 # ready surface, alias demoted to an annotation (#899 F-1). Optional
 # section filter reuses the catalog's section tags.
 _docker_help_raw() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local want_section printed al raw desc sec
     # Split guard onto its own lines: a one-line `[ -n "..." ] && x=$(fn "$1")`
     # form flanks the private-function call with quotes, which the pre-commit
@@ -600,6 +604,7 @@ proxy_help() {
 
 # Wrapper function for check_proxy.sh diagnostic
 proxy_check() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local check_proxy_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_proxy.sh"
     if [ -f "$check_proxy_script" ]; then
         bash "$check_proxy_script" "$@"

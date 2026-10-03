@@ -34,6 +34,8 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
   guard 필수 — 스니펫: cheatsheet → "Foreign-Checkout Guard Snippet"
 - **Interactive guard 위치/예외 (#1877)**: 출력 산출 파일은 첫 10줄 안(shebang·`# shellcheck` 직후). 예외(guard 없음, 헤더에 사유 주석) —
   비대화형으로 source 되는 순수 함수 라이브러리(skill/hook/setup/test 소비, 예: `gh_host.sh`), 직접 실행 스크립트(`tools/custom/*.sh`). `mount.sh` 는 순수 함수를 의도적으로 guard 위에 둔다.
+- **ZSH compat guard (#1879)**: `local`/배열/`set -x` 를 쓰는 함수 본문 첫 줄에 `[ -n "${ZSH_VERSION-}" ] && emulate -L sh`. 예외(guard 금지) —
+  `tools/custom/` (bash 로 실행됨, dead code), 파일을 source 하는 loader(`util/loader.sh`, `util/safe_source.sh`, `aliases/core.sh` `src`: setopt 원복·sh 모드 source), zsh 문법/옵션 의존(`env/path.sh` `clean_paths`, `util/path_resolver.sh` `${(%)…}`, `functions/my_help.sh` setopt+`command_not_found_handler`, `zz_help_standard_adapter.sh` assoc 배열), 프롬프트 헬퍼(`integrations/git.sh` `_short_pwd`/`_prompt_virtualenv`/`__git_ps1`), 첫 문장이 `$?` 캡처, 한 줄 함수.
 
 ## Output Standards
 

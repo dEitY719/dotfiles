@@ -6,6 +6,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 skill_loader() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Load UX library (unified library at shell-common/tools/ux_lib/) only if
     # it is not already available — avoid re-sourcing on every invocation.
     if ! type ux_header >/dev/null 2>&1; then

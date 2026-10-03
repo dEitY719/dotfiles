@@ -5,6 +5,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 install_ollama() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Try SHELL_COMMON first, then fallback to default location
     local script_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/install-ollama.sh"
 

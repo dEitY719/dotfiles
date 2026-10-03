@@ -13,6 +13,7 @@ unalias gl gd glum glog 2>/dev/null || true
 # Shared git log formatter
 # ============================================================================
 _git_log_formatter() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local branch="$1"
     shift
     local show_all=0 arg="" author="" has_author=0 n=$#
@@ -234,6 +235,7 @@ EOF
 }
 
 _gb_help() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_info "Usage: gb [-D local] [-D remote [-y] [--all] [<remote>]] [git-branch-flags...]"
     ux_bullet "sub-commands"
     ux_bullet_sub "gb -D local                              delete local branches (keeps: main + current + keywords)"
@@ -325,6 +327,7 @@ EOF
 # protection (a bulk-delete policy) never applies. A lone name that fails
 # gets did-you-mean hints instead of git's bare "not found".
 _gb_delete_named() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local rc
     git --no-pager branch "$@" && return 0
     rc=$?
@@ -333,6 +336,7 @@ _gb_delete_named() {
 }
 
 git_branch() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -D)
             case "${2:-}" in

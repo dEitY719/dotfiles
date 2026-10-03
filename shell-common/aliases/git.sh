@@ -53,6 +53,7 @@ alias gcps='git cherry-pick --skip'              # Cherry-pick 작업 건너뛰�
 
 # Git hook diagnostics
 hook_check() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Handle help option
     if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
         hook_help

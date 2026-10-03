@@ -12,6 +12,7 @@ if [ -r "$_setup_mode_read_lib" ]; then
 fi
 
 _apply_setup_mode_config() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     command -v _dotfiles_setup_mode >/dev/null 2>&1 || return 0
     local mode
     mode=$(_dotfiles_setup_mode)

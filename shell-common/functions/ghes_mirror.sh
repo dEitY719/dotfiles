@@ -7,6 +7,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ghes_mirror() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
         ghes_mirror_help
         return 0

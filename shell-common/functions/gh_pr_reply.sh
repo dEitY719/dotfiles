@@ -52,12 +52,14 @@ _gh_pr_reply_state_root() {
 }
 
 _gh_pr_reply_repo_name() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _top
     _top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
     basename "$_top"
 }
 
 _gh_pr_reply_pr_dir() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # $1 = PR number
     local _root _name
     _root=$(_gh_pr_reply_state_root)
@@ -76,6 +78,7 @@ _gh_pr_reply_set_state() {
 }
 
 _gh_pr_reply_get_state() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # $1 = PR number; prints state or "nonexistent"
     local _dir
     _dir=$(_gh_pr_reply_pr_dir "$1")
@@ -111,6 +114,7 @@ _gh_pr_reply_require_ai_cli() {
 # cost, duration) to <state-dir>/usage.jsonl, and the worker's tail-end
 # _ai_usage_summary prints the totals.
 _gh_pr_reply_run_ai_prompt() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _ai="$1" _usage_log="$2" _label="$3" _prompt="$4"
     _ai_usage_run "$_ai" "$_usage_log" "$_label" "$_prompt"
 }
@@ -433,6 +437,7 @@ _gh_pr_reply_spawn_worker() {
 # ============================================================================
 
 _gh_pr_reply_worker() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1"
     local _ai="${2:-claude}"
     local _dir _worktree _spawn_name _usage_log

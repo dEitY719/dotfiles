@@ -8,6 +8,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 get_hw_info() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/get_hw_info.sh"
     if [ ! -f "$script" ]; then
         ux_error "Hardware info script not found: $script"
@@ -18,6 +19,7 @@ get_hw_info() {
 
 # 소스 번들링 함수
 srcpack() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/srcpack.py"
     if [ ! -f "$script" ]; then
         ux_error "srcpack script not found: $script"
@@ -28,6 +30,7 @@ srcpack() {
 
 # AGENTS.md 생성 함수
 agents_init() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/run_agents_md_master_prompt.sh"
     if [ ! -f "$script" ]; then
         ux_error "AGENTS.md generation script not found: $script"
@@ -38,6 +41,7 @@ agents_init() {
 
 # Powerlevel10k 설치 함수
 install_p10k() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_p10k.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-p10k script not found: $script"
@@ -48,6 +52,7 @@ install_p10k() {
 
 # fzf (fuzzy finder) 설치 함수
 install_fzf() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fzf.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-fzf script not found: $script"
@@ -58,6 +63,7 @@ install_fzf() {
 
 # fasd (fast access to directories/files) 설치 함수
 install_fasd() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fasd.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-fasd script not found: $script"
@@ -68,6 +74,7 @@ install_fasd() {
 
 # ripgrep (fast text search) 설치 함수
 install_ripgrep() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_ripgrep.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-ripgrep script not found: $script"
@@ -78,6 +85,7 @@ install_ripgrep() {
 
 # fd (fast file finder) 설치 함수
 install_fd() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_fd.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-fd script not found: $script"
@@ -88,6 +96,7 @@ install_fd() {
 
 # bat (cat with syntax highlighting) 설치 함수
 install_bat() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_bat.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-bat script not found: $script"
@@ -98,6 +107,7 @@ install_bat() {
 
 # pet (command snippet manager) 설치 함수
 install_pet() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_pet.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-pet script not found: $script"
@@ -108,6 +118,7 @@ install_pet() {
 
 # zsh-autosuggestions (command history suggestions) 설치 함수
 install_zsh_autosuggestions() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_zsh_autosuggestions.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-zsh-autosuggestions script not found: $script"
@@ -118,6 +129,7 @@ install_zsh_autosuggestions() {
 
 # herdr (terminal workspace manager) 설치 함수
 install_herdr() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_herdr.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-herdr script not found: $script"
@@ -128,6 +140,7 @@ install_herdr() {
 
 # sops + age (secret encryption) 설치 함수
 install_sops_age() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_sops_age.sh"
     if [ ! -f "$script" ]; then
         ux_error "install-sops-age script not found: $script"

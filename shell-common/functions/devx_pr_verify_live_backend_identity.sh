@@ -30,6 +30,7 @@ fi
 unset _UX_LIB_PATH
 
 devx_pr_verify_live_backend_identity() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local repo_root=""
     local target_repo=""
     local target_sha=""

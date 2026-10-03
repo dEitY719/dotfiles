@@ -7,6 +7,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ollama_serve() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help)
             ux_usage "ollama-serve" "" "Start the WSL Ollama API server (127.0.0.1:11434)"
@@ -43,6 +44,7 @@ ollama_serve() {
 
 # Launch Claude Code or other tools with Ollama
 ollama_launch() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help)
             ux_usage "ollama-launch" "[tool]" "Launch a tool (default: claude) wired to Ollama"

@@ -27,6 +27,7 @@ _gbr_help_list_sections() {
 }
 
 _gbr_help_rows_teardown() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_table_row "syntax" "gbr teardown [--force] [--keep-branch] [--discard-changes]" "Cleanup merged feature branch"
     ux_table_row "context" "Run from the feature branch (not main, not worktree)" "Switches to main, pulls, deletes current branch"
     ux_table_row "signal" "Detects '[gone]' upstream as PR-merged" "Blocks otherwise; use --force to override"

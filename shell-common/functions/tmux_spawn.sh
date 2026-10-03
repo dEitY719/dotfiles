@@ -48,6 +48,7 @@ _ts_known_agent() {
 # only) it is appended as the first positional arg so claude TUI opens
 # with that text as the first message.
 _tmux_add_agent_window() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local session="$1" agent="$2" dir="$3" account="${4-}" use_bg="${5-0}" prompt="${6-}"
     local yolo win
     if [ "$agent" = "claude" ] && [ -n "$account" ]; then
@@ -219,6 +220,7 @@ tmux_spawn() {
 }
 
 tmux_teardown() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_require "tmux" || return 1
 
     local target="${1:-all}" sessions count s

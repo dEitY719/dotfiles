@@ -59,6 +59,7 @@ _notion_help_list_sections() {
 }
 
 _notion_help_rows_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [ -n "${NOTION_API_KEY:-}" ]; then
         # POSIX-safe first-10 / last-10 slicing (no ${var:offset:len}).
         # The length guard mirrors bash's "${var: -10}", which yields an empty
@@ -173,6 +174,7 @@ notion_help() {
 
 # Check if Notion API token is valid
 notion_check_token() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local api_key="${NOTION_API_KEY:-}"
 
     if [ -z "$api_key" ]; then

@@ -30,6 +30,7 @@ alias install-py='py_install'
 
 # 특정 Python 버전 제거
 py_uninstall() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local version="$1"
 
     if [ -z "$version" ]; then

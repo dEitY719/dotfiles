@@ -4,6 +4,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _git_help_summary() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_info "Usage: git-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "basic: gs | ga | gc | gca | gp | gpl | gco | gd | grs | gb | grmc"
@@ -78,6 +79,7 @@ _git_help_rows_upstream() {
 }
 
 _git_help_rows_branch() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_table_row "gset-main" "set-upstream main" "Track origin/main"
     ux_table_row "gset-dev" "set-upstream dev" "Track origin/dev"
     ux_table_row "gset" "gset [branch]" "Track origin/[branch]"

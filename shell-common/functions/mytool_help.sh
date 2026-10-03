@@ -8,6 +8,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _extract_tool_description() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script="$1"
     local tool_name="$2"
     local description=""
@@ -85,6 +86,7 @@ _mytool_help_list_sections() {
 }
 
 _mytool_help_rows_tools() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [ -z "$SHELL_COMMON" ]; then
         ux_warning "SHELL_COMMON environment variable not set"
         return 1

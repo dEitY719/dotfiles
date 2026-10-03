@@ -105,36 +105,42 @@ run_pbes() {
 # ═══════════════════════════════════════════════════════════════
 
 run_api_cli() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _need python
     local url="${1:-${DEV_API_URL}}"
     python src/backend/api_cli.py "${url}"
 }
 
 run_tapi_cli() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _need python
     local url="${1:-${TEST_API_URL}}"
     python src/backend/api_cli.py "${url}"
 }
 
 run_papi_cli() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _need python
     local url="${1:-${PROD_API_URL}}"
     python src/backend/api_cli.py "${url}"
 }
 
 run_db_cli() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _need python
     local url="${1:-${DEV_DB_URL}}"
     python src/database/db_cli.py "${url}"
 }
 
 run_tdb_cli() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _need python
     local url="${1:-${TEST_DB_URL}}"
     python src/database/db_cli.py "${url}"
 }
 
 run_pdb_cli() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _need python
     local url="${1:-${PROD_DB_URL}}"
     python src/database/db_cli.py "${url}"

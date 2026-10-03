@@ -45,6 +45,7 @@ fi
 unset _drg_self _drg_helper
 
 devx_pr_review_all_parse() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local pr=""
     local remote="origin"
     local reply_mode="inline"
@@ -280,6 +281,7 @@ devx_pr_review_all_parse() {
 # must never collapse into the same state (#1527 확정 사항).
 
 devx_pr_review_all_verdict() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _line _value _bracket_inner
 
     # Normalize before matching: fullwidth colon -> ASCII, strip the markdown
@@ -338,6 +340,7 @@ devx_pr_review_all_verdict() {
 }
 
 devx_pr_review_all_aggregate() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _lanes=0 _blocking=0 _unresolved=0 _v _label
 
     # `|| [ -n "$_v" ]` so a final line with no trailing newline still counts.
@@ -399,6 +402,7 @@ devx_pr_review_all_aggregate() {
 # on the accept branch `jq` reads stdin straight through to EOF itself, so
 # buffering it into a shell variable first would just be a wasted copy.
 _devx_pr_review_all_login_bodies() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _login="${1-}" _base
 
     _base="$_login"
@@ -583,6 +587,7 @@ devx_pr_review_all_lane_block() {
 #
 #   devx_pr_review_all_already_reviewed <ai> <head-sha> <expected-login> [<preset>]
 devx_pr_review_all_already_reviewed() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _ai="${1-}" _sha="${2-}" _login="${3-}" _preset="${4-}" _block
 
     [ -n "$_ai" ] || return 1
@@ -606,6 +611,7 @@ devx_pr_review_all_already_reviewed() {
 # passed through verbatim, so malformed input shows up in the report instead
 # of being silently reshaped into a plausible-looking lane.
 devx_pr_review_all_lane_rows() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _row
 
     # `|| [ -n "$_row" ]` so a final row with no trailing newline still counts.
@@ -647,6 +653,7 @@ devx_pr_review_all_lane_rows() {
 # discrimination has nothing to read. Same note, same reason, in
 # claude/skills/gh-pr-reply/references/reply-pending-label-removal.sh.md.
 _devx_pr_review_all_delete_label() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _err _rc=0
 
     # `|| _rc=$?` rather than a bare capture: this file is sourced into
@@ -710,6 +717,7 @@ _devx_pr_review_all_delete_label() {
 # misrepresented gh:pr-reply's judgment as a reviewer CLI's opinion in the
 # label-application code, which is the one thing #1636 rules out.
 devx_pr_review_all_write_label() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _label="${1-}" _pr="${2-}" _repo="${3-}" _host="${4-}" _head_sha="${5-}"
     local _opposite _rc _marker _drop
 
@@ -813,6 +821,7 @@ devx_pr_review_all_write_label() {
 # (so the marker WARN stopped firing entirely). A key-prefixed scan cannot
 # break that way again, and it does not care about line order.
 devx_pr_review_all_report_write_result() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _write="${1-}" _pr="${2-}" _repo="${3-}" _label="${4-}" _ok_line="${5-}" _fail_line="${6-}"
     local _add="" _marker="" _drop="" _line _opposite
 
@@ -898,6 +907,7 @@ EOF
 # argument stays in the signature so the Step 3.5 call site, the docs and the
 # merge-train's reader contract need no churn.
 devx_pr_review_all_apply_label() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1" _repo="$2" _host="${3-}" _head_sha="${4-}"
     local _agg _label _lanes _write _drop
 

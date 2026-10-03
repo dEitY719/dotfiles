@@ -21,6 +21,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 #
 
 dotfiles_init_summary() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local file_count="${1:-0}"
     local message="Dotfiles configuration loaded successfully. (Total files sourced: ${file_count})"
 

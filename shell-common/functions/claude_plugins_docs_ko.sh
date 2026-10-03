@@ -19,6 +19,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Korean documentation generation prompt template
 _generate_plugin_doc_ko_prompt() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local plugin_file="$1"
 
     cat <<'PROMPT_EOF'
@@ -42,6 +43,7 @@ PROMPT_EOF
 }
 
 generate_plugin_doc_ko() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local plugin_file="$1"
     local output_file="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
@@ -198,6 +200,7 @@ generate_plugin_doc_ko() {
 
 # Generate README.md summarizing plugin directory structure
 _generate_plugin_directory_readme_ko() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local plugin_dir="$1"
     local docs_dir="$2"
     local ai_tool="$3"
@@ -312,6 +315,7 @@ README_HEADER
 
 # Process plugin directory recursively and generate Korean docs for all files
 process_plugin_directory_ko() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"
@@ -442,6 +446,7 @@ process_plugin_directory_ko() {
 # ═══════════════════════════════════════════════════════════════
 
 create_plugin_structure_ko() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local marketplace="$1"
     local plugin_path="$2"
     local ai_tool="${CLAUDE_DOC_GENERATOR}"

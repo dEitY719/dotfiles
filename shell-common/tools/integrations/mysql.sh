@@ -181,6 +181,7 @@ mysql_dmc_test() {
 # 3) MySQL alias list
 # -------------------------------
 mysql_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local service_only="$1"
 
     if [[ "$service_only" == "true" ]]; then
@@ -210,6 +211,7 @@ mysql_list() {
 # 4) MySQL command helper
 # -------------------------------
 mysql_cmd() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local service="$1"
     shift
     local user_input_cmd="$1"
@@ -296,6 +298,7 @@ mysql_cmd() {
 # MySQL server 관리 함수
 # --------------------------------------
 mysql_server() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     declare -A cmd_list=(
         ["start"]="start the MySQL service"
         ["stop"]="stop the MySQL service"

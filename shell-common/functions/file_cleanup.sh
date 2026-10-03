@@ -12,6 +12,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # from zsh.
 
 _cleanup_set_default_patterns() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     CLEANUP_DEFAULT_PATTERNS=(
         '.*backup*'
         '.*.bak*'
@@ -23,6 +24,7 @@ _cleanup_set_default_patterns() {
 # so `clean-home` only targets the known dotfiles backup-accumulation
 # patterns plus the post-migration fixed-suffix files.
 _cleanup_set_home_patterns() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     CLEANUP_HOME_PATTERNS=(
         '.zshrc.original'
         '.zshrc-*-original'
@@ -44,6 +46,7 @@ _cleanup_set_home_patterns() {
 # CLEANUP_HOME_PATTERNS so it's an opt-in cleanup, not bundled into
 # clean-home's default sweep.
 _cleanup_set_cache_patterns() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     CLEANUP_CACHE_PATTERNS=(
         '.zcompdump'
         '.zcompdump-*'
@@ -53,6 +56,7 @@ _cleanup_set_cache_patterns() {
 # In home mode, offer to remove the legacy ~/dotfiles-backup/ directory.
 # Interactive (confirm); a decline or a missing directory is a no-op.
 _cleanup_offer_dotfiles_backup_dir() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local home_dir="$1"
     local backup_dir="${home_dir}/dotfiles-backup"
 
@@ -77,6 +81,7 @@ _cleanup_offer_dotfiles_backup_dir() {
 # they need their own confirm-and-remove step, same shape as the
 # dotfiles-backup offer above but glob-driven since the host suffix varies.
 _cleanup_offer_cache_lock_dirs() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local search_dir="$1"
     local lock_matches=""
     local lock_dirs=()
@@ -112,6 +117,7 @@ EOF
 }
 
 _cleanup_collect_matches() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local search_dir="$1"
     shift
 
@@ -132,11 +138,13 @@ _cleanup_collect_matches() {
 }
 
 _cleanup_file_size() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local file="$1"
     CLEANUP_FILE_SIZE="$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || printf '%s\n' '?')"
 }
 
 _cleanup_preview() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local search_dir="$1"
     shift
 
@@ -181,6 +189,7 @@ EOF
 }
 
 _cleanup_delete_one() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local file="$1"
     if rm -f -- "$file" 2>/dev/null; then
         ux_success "Deleted: $file"
@@ -192,6 +201,7 @@ _cleanup_delete_one() {
 }
 
 _cleanup_delete_all() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local files=("$@")
     local file=""
     local success_count=0
@@ -222,6 +232,7 @@ _cleanup_delete_all() {
 }
 
 _cleanup_delete_individually() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local files=("$@")
     local file=""
     local success_count=0

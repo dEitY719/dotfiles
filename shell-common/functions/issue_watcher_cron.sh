@@ -5,6 +5,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 issue_watcher_cron() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Script basename injected via ${_name} so the literal function name
     # never appears a second time inside a quoted string — keeps the repo's
     # naming check (git/hooks/checks/naming_check.sh) silent, same technique

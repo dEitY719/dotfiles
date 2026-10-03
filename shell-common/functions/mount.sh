@@ -15,6 +15,7 @@
 # Validate that required command exists
 # Single Responsibility: Check availability of a command
 _check_command() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local cmd="$1"
     if ! command -v "$cmd" >/dev/null 2>&1; then
         return 1
@@ -28,6 +29,7 @@ _check_command() {
 #   $1: mount path to check (required)
 # Returns: 0 if mounted, 1 if not mounted
 _is_mounted() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local mount_path="$1"
 
     # Validate input
@@ -232,6 +234,7 @@ HELP
 #   $2: target path (required)
 # Returns: 0 on success, 1 on failure
 mount_add() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local source="$1"
     local target="$2"
 
@@ -339,6 +342,7 @@ HELP
 #   $1: mount path to check (optional, defaults to all ~/.claude mounts)
 # Returns: 0 if mounted and displayed, 1 if command not available or error
 mount_show() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local mount_path="${1}"
 
     # Show help if requested with -h, --help, or help

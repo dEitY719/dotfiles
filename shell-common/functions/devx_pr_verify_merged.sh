@@ -67,6 +67,7 @@ _devx_pr_verify_merged_no_newline() {
 }
 
 devx_pr_verify_merged_parse() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local pr=""
     local remote="origin"
     local matrix="auto"

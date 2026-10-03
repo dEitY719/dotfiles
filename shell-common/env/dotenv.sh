@@ -13,6 +13,7 @@ fi
 
 # Check if file is encrypted by git-crypt (supports multiple detection methods)
 _is_gitcrypt_encrypted() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local file="$1"
 
     # Method 1: strings command (preferred)
