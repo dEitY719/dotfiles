@@ -15,30 +15,47 @@ unalias gl gd glum glog 2>/dev/null || true
 _git_log_formatter() {
     local branch="$1"
     shift
-    local show_all=0
+    local show_all=0 arg="" author="" has_author=0 n=$#
 
-    # Collect non-flag arguments via positional params
-    local saved_args=""
-    for arg in "$@"; do
-        if [ "$arg" = "-a" ] || [ "$arg" = "--all" ]; then
-            show_all=1
-        else
-            saved_args="$saved_args $arg"
-        fi
+    # Rotate "$@": consume wrapper flags, re-append everything else so git
+    # args keep their boundaries (a value like "Foo Bar" must stay one arg).
+    while [ "$n" -gt 0 ]; do
+        arg="$1"
+        shift
+        n=$((n - 1))
+        case "$arg" in
+            -a | --all) show_all=1 ;;
+            --author)
+                if [ "$n" -eq 0 ]; then
+                    ux_error "--author requires a value"
+                    return 1
+                fi
+                author="$1"
+                has_author=1
+                shift
+                n=$((n - 1))
+                ;;
+            --author=*)
+                author="${arg#--author=}"
+                has_author=1
+                ;;
+            *) set -- "$@" "$arg" ;;
+        esac
     done
+    [ "$has_author" -eq 1 ] && set -- --author="$author" "$@"
 
     local fmt='%Cred%h%Creset %s %C(dim white)(%ad %an)%Creset%C(blue)%d%Creset'
 
-    # $branch and $saved_args are deliberately unquoted: both hold
-    # space-separated argument lists that must split into separate git args.
+    # $branch is deliberately unquoted: it is "" or a single ref and must
+    # vanish entirely when empty.
     if [ $show_all -eq 1 ]; then
         # shellcheck disable=SC2086
         git log --graph --abbrev-commit --decorate=short --date=short \
-            --pretty=format:"$fmt" $branch $saved_args
+            --pretty=format:"$fmt" $branch "$@"
     else
         # shellcheck disable=SC2086
         git --no-pager log --graph --abbrev-commit --decorate=short --date=short \
-            --pretty=format:"$fmt" -n 11 $branch $saved_args
+            --pretty=format:"$fmt" -n 11 $branch "$@"
         echo
     fi
 }
