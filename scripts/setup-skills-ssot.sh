@@ -524,7 +524,7 @@ link_skills_individual_codex() {
                 continue
             fi
 
-            log_warning "[codex] stale skill symlink 보존(사용자 데이터 감지): $existing_skill_entry"
+            log_info "[codex] stale skill symlink 보존(사용자 데이터 감지): $existing_skill_entry"
             prune_skipped=$((prune_skipped + 1))
             continue
         fi
@@ -538,7 +538,7 @@ link_skills_individual_codex() {
             continue
         fi
 
-        log_warning "[codex] stale skill 보존(사용자 데이터 감지): $existing_skill_entry"
+        log_info "[codex] stale skill 보존(사용자 데이터 감지): $existing_skill_entry"
         prune_skipped=$((prune_skipped + 1))
     done
 
@@ -636,7 +636,7 @@ AGY_SKILLS="${HOME}/.gemini/config/skills"
 if _agy_is_installed; then
     link_skills_compose "agy" "$AGY_SKILLS"
 else
-    log_warning "Antigravity(agy) 를 찾지 못했습니다. 건너뜁니다: ${HOME}/.gemini/antigravity-cli / PATH"
+    log_info "Antigravity(agy) 를 찾지 못했습니다. 건너뜁니다: ${HOME}/.gemini/antigravity-cli / PATH"
 fi
 
 # 3c. Antigravity 네임스페이스(<namespace>:<skill>) 심볼릭 링크 동기화 (#1784, #1789)

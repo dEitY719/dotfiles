@@ -868,6 +868,19 @@ seed_legacy_entries() {
     [ ! -L "${c_dir}/legacy-orphan" ]
 }
 
+# Preserving user data is the intended path, so it reports at info level —
+# a warning there would mark every setup run as "needs attention" (#1874).
+@test "codex: user-owned stale dir is preserved with info, not warning (#1874)" {
+    local c_dir="${FIXTURE_HOME}/.codex/skills"
+    mkdir -p "${c_dir}/user-own"
+
+    run_setup
+    assert_success
+    [ -d "${c_dir}/user-own" ]
+    assert_output --partial "[codex] stale skill 보존(사용자 데이터 감지)"
+    refute_output --partial "⚠️  [codex] stale skill 보존"
+}
+
 # The counter-case that keeps the fix honest: a broken link pointing
 # somewhere that is NOT the deleted SSOT (a temporarily unmounted user
 # mount, say) still holds recoverable user intent — preserve it.
@@ -910,6 +923,9 @@ run_setup_without_agy() {
 
     run_setup_without_agy
     assert_success
+    # agy 는 optional — 미설치 스킵은 경고가 아닌 info (#1874).
+    assert_output --partial "Antigravity(agy) 를 찾지 못했습니다"
+    refute_output --partial "⚠️  Antigravity(agy)"
     [ ! -e "${FIXTURE_HOME}/.gemini/config/skills" ]
     # 순정 Gemini 경로는 더 이상 합성되지 않는다 (#1787).
     [ ! -e "${FIXTURE_HOME}/.gemini/skills" ]
