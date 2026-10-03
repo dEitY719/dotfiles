@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/file_cleanup.sh
 # Interactive cleanup for backup/original files in the current directory.
 #
@@ -9,8 +10,6 @@
 # are sourced by bash/zsh — never executed under pure dash. The zsh-compat
 # `emulate -L sh` hook inside `del_file` keeps the syntax legal when sourced
 # from zsh.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _cleanup_set_default_patterns() {
     CLEANUP_DEFAULT_PATTERNS=(

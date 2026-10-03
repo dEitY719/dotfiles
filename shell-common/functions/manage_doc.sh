@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/manage_doc.sh
 # Document management utilities for dotfiles
 # Provides functions to manage documentation files (clear, archive, etc.)
@@ -31,8 +32,6 @@
 # ═══════════════════════════════════════════════════════════════
 # UX Library Setup
 # ═══════════════════════════════════════════════════════════════
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _UX_LIB_PATH="${SHELL_COMMON:-${HOME}/.local/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
 

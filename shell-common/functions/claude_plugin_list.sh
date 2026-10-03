@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/claude_plugin_list.sh
 #
 # claude-plugin-list — human-readable summary of installed Claude Code plugins,
@@ -9,8 +10,6 @@
 # SSOT is ~/.claude-shared/plugins/installed_plugins.json (+ known_marketplaces
 # .json for the repo/url per marketplace). Path is overridable via
 # CLAUDE_SHARED_PLUGINS_DIR, then falls back to $CLAUDE_CONFIG_DIR/plugins.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Inline help (`_<prefix>_help`) — Type 1 simple function, 0 sub-commands, so
 # help lives beside the dispatcher per command-design-pattern.md §7.

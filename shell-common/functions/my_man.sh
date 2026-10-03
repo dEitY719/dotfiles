@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/my_man.sh
 # Project-level "manual" — pages through aliases/functions discovered by
 # analyze_bash_scripts.sh.
@@ -8,8 +9,6 @@
 # below intentionally uses bash/zsh features (`local`).
 # That's safe because shell-common files are sourced by bash/zsh — never
 # executed under pure dash.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # zsh-compat: this function uses `local`. Drop into POSIX-sh
 # emulation when running under zsh so the bash-style syntax stays legal.

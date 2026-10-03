@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/gh_pr_reply.sh
 # gh-pr-reply — fire-and-forget N-parallel GitHub PR review-reply runner.
 # Sibling of gh-pr-approve (shell-common/functions/gh_pr_approve.sh) and
@@ -16,8 +17,6 @@
 # ============================================================================
 # State helpers
 # ============================================================================
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Advisory only (issue #1454, propagated by #1505): warn once on stderr when
 # this file was sourced from a checkout that is a different git repo than

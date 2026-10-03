@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/devx.sh
 # Dev helper — Type 2A positional dispatcher (issue #726 / #722 PR 2).
 #
@@ -10,8 +11,6 @@
 #
 # Help lives in devx_help.sh (no `devx-help` alias — see §7.6.1 deviation
 # documented in devx_help.sh and PR body for #726).
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # ============================================================================
 # Internal helpers

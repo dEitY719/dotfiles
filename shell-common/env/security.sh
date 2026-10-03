@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/env/security.sh
 # Security-related environment variables (POSIX-compatible)
 #
@@ -8,8 +9,6 @@
 #   3. security.local.sh is automatically loaded (.gitignore excludes it)
 
 # SSH agent socket configuration
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if [ -n "${XDG_RUNTIME_DIR:-}" ]; then
     # Prevent double slashes: ${var%/} removes trailing slash

@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/ai_tools_help.sh
 # Bundle: AI/LLM tool help functions
 #
@@ -8,8 +9,6 @@
 #     Guarded by: command -v check (graceful fallback to docker mode)
 
 # --- claude_help (from claude_help.sh) ---
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _claude_help_summary() {
     ux_info "Usage: claude-help [section|--list|--all]"

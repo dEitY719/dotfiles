@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/claude_plugins_docs_ko.sh
 # Korean documentation generation for Claude plugins (split from claude_plugins.sh)
 
@@ -9,8 +10,6 @@
 
 # Default AI tool for documentation generation
 # Can be overridden by: CLAUDE_DOC_GENERATOR=agy, CLAUDE_DOC_GENERATOR=codex, etc.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 : "${CLAUDE_DOC_GENERATOR:=claude}"
 

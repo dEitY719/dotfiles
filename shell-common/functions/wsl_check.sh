@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/wsl_check.sh
 # WSL & Docker environment health check — a single source of truth for the
 # Windows host C: drive / WSL disk / memory / CPU / Docker reclaimable space.
@@ -7,8 +8,6 @@
 # Docker build was caused by the *Windows host C: drive* — not the WSL disk —
 # running out of space (the vhdx could not grow). So the host C: drive is the
 # primary risk indicator and is always shown first.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # --- thresholds (SSOT: function-internal defaults, env-overridable) ----------
 _wsl_check_thresholds() {

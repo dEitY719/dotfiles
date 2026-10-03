@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/env/browser.sh
 # WSL: point $BROWSER at the Windows-side Google Chrome (issue #1408).
 #
@@ -20,8 +21,6 @@
 #
 # Non-WSL machines (macOS, plain Linux) are a no-op: the WSL probe fails and
 # nothing is exported.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _browser_root="${SHELL_COMMON:-$HOME/dotfiles/shell-common}"
 _browser_helper="${_browser_root}/functions/windows_chrome.sh"

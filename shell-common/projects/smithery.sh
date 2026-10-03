@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/projects/smithery.sh
 # smithery-playground project utilities (FastAPI service)
 # Shared between bash and zsh
@@ -8,8 +9,6 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Development, Test, Production hosts
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 DEV_HOST="127.0.0.1"
 TEST_HOST="127.0.0.1"

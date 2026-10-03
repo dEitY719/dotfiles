@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/gcp_scan.sh
 #
 # Portable cherry-pick scanner - works in bash, zsh, and other POSIX shells
@@ -33,8 +34,6 @@
 # it is immune to context-drift failures (comment rewrites, refactors) that
 # broke earlier file-compare / reverse-patch heuristics.
 #
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _gcp_scan_is_empty_cherry_pick() {
     # True when cherry-pick is in progress, has no conflicts, and results in an empty commit

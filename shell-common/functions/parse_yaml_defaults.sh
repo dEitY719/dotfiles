@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/parse_yaml_defaults.sh
 # POSIX-compatible mini-parser for `.gh-issue-defaults.yml` consumed by
 # claude/skills/gh-issue-create Step 2.5. Avoids a hard `yq` dependency
@@ -17,8 +18,6 @@
 # Each helper exits 1 only on missing-file / empty-file argument errors.
 
 # Static labels under `default_labels.static: [a, b]` or block-list form.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _parse_yaml_defaults_static() {
     _yml="$1"

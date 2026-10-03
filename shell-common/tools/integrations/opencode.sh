@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/integrations/opencode.sh
 # OpenCode CLI - setup, utilities, and workflow helpers
 # Shared between bash and zsh
@@ -8,8 +9,6 @@
 #   dotfiles/opencode/opencode.json.external  → ~/.config/opencode/opencode.json
 #   (public/home: no symlink, uses OpenCode defaults)
 # Symlinks are created by setup.sh (setup_opencode_config)
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$OPENCODE_CONFIG_DIR/opencode.json}"
