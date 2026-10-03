@@ -137,6 +137,41 @@ _run_hook_check() {
     assert_output "0"
 }
 
+# Issue #1872 — git-lfs rewrites its real-file hooks into core.hooksPath, so
+# every setup.sh re-run found them again and re-warned. An identical
+# <name>.original from an earlier run means the backup already exists: still
+# replace with the symlink, but stay quiet.
+@test "git/setup.sh warns about a foreign global hook only on first backup" {
+    _stage_sandbox_dotfiles
+    local hooks="$HOME/.config/git/hooks" lfs_hook='#!/bin/sh
+git lfs post-commit "$@"
+'
+    mkdir -p "$hooks"
+    printf '%s' "$lfs_hook" >"$hooks/post-commit"
+
+    run bash "$SANDBOX/repo/git/setup.sh"
+    assert_success
+    assert_output --partial "백업 후 교체: post-commit"
+
+    # git-lfs writes the same hook back.
+    rm -f "$hooks/post-commit"
+    printf '%s' "$lfs_hook" >"$hooks/post-commit"
+
+    run bash "$SANDBOX/repo/git/setup.sh"
+    assert_success
+    refute_output --partial "백업 후 교체"
+    [ -L "$hooks/post-commit" ] || fail "post-commit not replaced by symlink on re-run"
+    assert_equal "$(cat "$hooks/post-commit.original")" "$(printf '%s' "$lfs_hook")"
+
+    # A different foreign hook is a new backup and warns again.
+    rm -f "$hooks/post-commit"
+    printf '#!/bin/sh\necho other\n' >"$hooks/post-commit"
+
+    run bash "$SANDBOX/repo/git/setup.sh"
+    assert_success
+    assert_output --partial "백업 후 교체: post-commit"
+}
+
 # ---------------------------------------------------------------------------
 # hook_check.sh diagnostic
 # ---------------------------------------------------------------------------

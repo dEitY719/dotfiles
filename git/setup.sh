@@ -363,11 +363,16 @@ else
             # the tool that owns it stops working until it is re-installed.
             # Back up + remove here (same .original as create_symlink) so the
             # replacements are reported once below instead of 3 lines per hook.
+            # git-lfs rewrites the same file on every LFS operation, so an
+            # identical .original means it is already backed up: replace
+            # quietly instead of re-warning on every setup.sh run (#1872).
             if [ -f "$global_hook_target" ] && [ ! -L "$global_hook_target" ]; then
-                cp "$global_hook_target" "${global_hook_target}.original" \
-                    || log_error_and_exit "백업 파일 생성 실패: $global_hook_target"
+                if ! cmp -s "$global_hook_target" "${global_hook_target}.original"; then
+                    cp "$global_hook_target" "${global_hook_target}.original" \
+                        || log_error_and_exit "백업 파일 생성 실패: $global_hook_target"
+                    replaced_global_hooks="${replaced_global_hooks:+$replaced_global_hooks }${global_hook_name}"
+                fi
                 rm "$global_hook_target" || log_error_and_exit "기존 파일 제거 실패: $global_hook_target"
-                replaced_global_hooks="${replaced_global_hooks:+$replaced_global_hooks }${global_hook_name}"
             fi
 
             create_symlink "$global_hook_source" "$global_hook_target"
@@ -381,7 +386,7 @@ else
 
     if [ -n "${replaced_global_hooks:-}" ]; then
         ux_warning "경고: 타 도구가 설치한 global hook 을 <name>.original 로 백업 후 교체: ${replaced_global_hooks}"
-        ux_warning "      git-lfs 가 core.hooksPath 에 hook 을 다시 써서 setup.sh 재실행마다 반복됨 — LFS 가 필요한 repo 는 'git lfs install --local' 로 별도 확인."
+        ux_warning "      git-lfs 가 같은 hook 을 다시 써도 이후 재실행은 경고 없이 교체 — LFS 가 필요한 repo 는 'git lfs install --local' 로 별도 확인."
     fi
 
     if [ "$linked_global_hooks" -gt 0 ]; then
