@@ -11,6 +11,9 @@ load '../test_helper'
 setup() {
     STATUSLINE="${DOTFILES_ROOT}/claude/statusline-command.sh"
     FAKE_BIN="$(mktemp -d)"
+    # A developer's ~/.zshrc.local may export CLAUDE_STATUSLINE_SKIP_FCITX=1
+    # (WSL consoles); inherited, it bypasses the stubbed fcitx-remote.
+    unset CLAUDE_STATUSLINE_SKIP_FCITX
 }
 
 teardown() {
