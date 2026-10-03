@@ -5,13 +5,13 @@
 # analyze_bash_scripts.sh.
 #
 # NOTE: shebang is POSIX /bin/sh per the shell-common policy, but the body
-# below intentionally uses bash/zsh features (`[[ ]]`, heredocs with `<<EOF`).
+# below intentionally uses bash/zsh features (`local`).
 # That's safe because shell-common files are sourced by bash/zsh — never
 # executed under pure dash.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# zsh-compat: this function uses [[ ]] and `local`. Drop into POSIX-sh
+# zsh-compat: this function uses `local`. Drop into POSIX-sh
 # emulation when running under zsh so the bash-style syntax stays legal.
 _myman_help() {
     if type ux_header >/dev/null 2>&1; then
@@ -50,7 +50,7 @@ myman() {
     local analyzer_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/analyze_bash_scripts.sh"
     local sh_config_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
 
-    if [[ ! -f "$analyzer_script" ]]; then
+    if [ ! -f "$analyzer_script" ]; then
         ux_error "스크립트를 찾을 수 없습니다: '$analyzer_script'"
         ux_info "스크립트 경로를 확인하거나, 스크립트가 실행 가능한지 확인하십시오."
         return 1
@@ -74,7 +74,7 @@ myman() {
     "$analyzer_script" "$sh_config_dir" >"$temp_output_file" 2>/dev/null
 
     local rc=0
-    if [[ "$type_to_show" == "alias" ]]; then
+    if [ "$type_to_show" = "alias" ]; then
         (
             ux_header "Alias 목록"
             # sed로 alias 목록만 추출하고 빈 줄 제거 후 less로 출력
@@ -83,7 +83,7 @@ myman() {
                 grep -v '### Function 목록' |
                 sed '/^$/d'
         ) | less
-    elif [[ "$type_to_show" == "function" ]]; then
+    elif [ "$type_to_show" = "function" ]; then
         (
             ux_header "Function 목록"
             # sed로 function 목록 추출 후 less로 출력

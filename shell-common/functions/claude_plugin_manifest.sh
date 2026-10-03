@@ -33,7 +33,7 @@
 # sourcing it non-interactively).
 #
 # POSIX only — shell-common/functions/*.sh is auto-sourced by both the bash
-# and the zsh loader, so no bashisms (no arrays, no `local`, no `[[ ]]`) may
+# and the zsh loader, so no bashisms (no arrays, no `local`, no double-bracket tests) may
 # appear here.
 #
 # Requires: jq.
