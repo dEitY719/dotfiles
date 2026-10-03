@@ -19,6 +19,7 @@ _wcp_help() {
 }
 
 wcp() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case ${1-} in -h | --help)
         _wcp_help
         return 0

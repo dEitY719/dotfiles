@@ -26,6 +26,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # return  0 for every verdict (a verdict is data); 2 on bad input.
 
 devx_pr_verify_live_serving_identity() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local line sha src state root url syms top head n behind body found missing s
 
     line=$(jq -r '

@@ -10,6 +10,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 cp_wdown() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Build the path with the script basename injected via ${_name} so the
     # literal function name never appears inside a quoted string — keeps the
     # repo's snake_case-vs-dash-form naming check (git/hooks/checks/naming_check.sh)

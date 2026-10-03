@@ -13,6 +13,7 @@
 # time, so it deliberately omits the interactive guard (mirrors dotfiles_backup.sh).
 
 dotfiles_ensure_bats_submodules() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local repo_root="$1"
     if [ ! -e "${repo_root}/.git" ]; then
         return 0

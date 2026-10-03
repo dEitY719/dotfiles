@@ -6,6 +6,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ensure_ollama_deps() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Try SHELL_COMMON first, then fallback to default location
     local script_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/ensure-ollama-deps.sh"
 

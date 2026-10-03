@@ -46,6 +46,7 @@ _gcp_scan_is_empty_cherry_pick() {
 }
 
 _gcp_scan_preflight_is_noop() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # True (0) when cherry-picking commit $1 onto HEAD would add nothing — the
     # commit is already absorbed in HEAD (issue #913). Probes with git's own
     # merge engine instead of textual heuristics, so it survives context drift:
@@ -228,6 +229,7 @@ EOF
 }
 
 _gcp_scan_dup_base_sha() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Look up the base-branch SHA that a duplicate source SHA matches.
     # $1 = candidate source SHA; $2 = duplicate map ("SRC_SHA BASE_SHA" lines).
     # Prints the matching base SHA (or nothing) — issue #811 F-3. Pure shell
@@ -245,6 +247,7 @@ EOF
 }
 
 _gcp_scan_report_conflict_stop() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Shared "Failed at $sha, resolve manually" message for the execution
     # loop's two abort-the-batch exits (--stop-on-conflict, and the rollback
     # itself failing to clear the sequencer) — issue #1647, defect B.
@@ -262,6 +265,7 @@ _gcp_scan_report_conflict_stop() {
 }
 
 _gcp_scan_cherry_pick_quiet() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # `git cherry-pick "$1"`, minus git's unactionable conflict-advice block
     # (issue #1753). On conflict git appends 5-6 `hint: ... --continue /
     # --skip / --abort` lines on STDERR, but the execution loop resolves the
@@ -303,6 +307,7 @@ _gcp_scan_cherry_pick_quiet() {
 }
 
 _gcp_scan_pick_list_prior() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Return the newline-joined pick_list entries strictly BEFORE $1 in $2's
     # order (issue #1647, defect A). pick_list ORDER matters: the execution
     # loop applies picks in order, so an entry AFTER $1 cannot have run yet
@@ -337,6 +342,7 @@ EOF
 }
 
 _gcp_scan_check_file_deps() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # File-dependency pre-check (issue #1033). Returns 1 when cherry-picking
     # commit $1 would hit a modify/delete conflict because a file it
     # modifies/deletes is ABSENT from $2 (base) and the upstream commit in $3
@@ -500,6 +506,7 @@ _gcp_scan_json_absorbed_array_paths() {
 }
 
 _gcp_scan_conflict_adds_new_content() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Context-drift discriminator (issue #913 regression, #1151, #1688). Returns 0
     # (true) when cherry-picking commit $1 introduces content to file $2 that
     # HEAD does NOT already contain — a GENUINE content conflict. Returns 1
@@ -615,6 +622,7 @@ _gcp_scan_conflict_adds_new_content() {
 }
 
 _gcp_scan_staged_is_duplicate_append() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # True (0) when the CURRENTLY STAGED tree (a `cherry-pick -n` that applied
     # CLEANLY) differs from HEAD only by re-inserting blocks HEAD's own copy of
     # the same file already contains — issue #1759.
@@ -757,6 +765,7 @@ EOF
 }
 
 _gcp_scan_predict_content_conflict() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Content-conflict pre-check (issue #1037, extends Stage-1.5 #1033). Returns
     # 1 when cherry-picking commit $1 onto HEAD is predicted to hit a 3-way
     # *content* conflict — HEAD and the commit change the same region of a file
@@ -872,6 +881,7 @@ EOF
 }
 
 _gcp_scan_skip_file() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Resolve the known-resolved skip-list file path (issue #1039). Honors the
     # GCP_SCAN_SKIP_FILE override (absolute or cwd-relative); otherwise defaults
     # to <repo-toplevel>/git/config/gcp-scan-skip.conf so the list is a tracked
@@ -887,6 +897,7 @@ _gcp_scan_skip_file() {
 }
 
 _gcp_scan_clean_token() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Shared line-cleaning for the skip-list parsers below: drop an inline
     # `#` comment, then trim leading/trailing whitespace. Pure
     # parameter-expansion (no awk/sed fork), matching this file's style.
@@ -897,6 +908,7 @@ _gcp_scan_clean_token() {
 }
 
 _gcp_scan_load_skip_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Parse the known-resolved skip-list file (issue #1039) into one cleaned
     # SHA token per line. Each line is `<sha> [# free-text reason]`; inline
     # comments, full-comment lines, and blank lines are stripped.
@@ -924,6 +936,7 @@ _gcp_scan_load_skip_list() {
 }
 
 _gcp_scan_in_skip_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # True (0) when candidate full SHA $1 is covered by the skip tokens in $2.
     # Tokens may be abbreviated, so a prefix match handles short SHAs while a
     # full token still matches exactly. Mirrors the no-fork here-doc read style.
@@ -940,6 +953,7 @@ EOF
 }
 
 _gcp_scan_show_skip_generic() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Shared renderer behind --show-skip-list (issue #1039) and
     # --show-skip-paths (issue #1215): section title, resolved file path, and
     # every registered entry. $1=title $2=file $3=entries $4=no-file-message
@@ -979,6 +993,7 @@ _gcp_scan_show_skip_generic() {
 }
 
 _gcp_scan_show_skip_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Render the current known-resolved skip list for `gcp scan --show-skip-list`
     # (issue #1039): the resolved file path plus every registered SHA token.
     local file entries
@@ -990,6 +1005,7 @@ _gcp_scan_show_skip_list() {
 }
 
 _gcp_scan_skip_paths_file() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Resolve the path-excluded skip-list file path (issue #1215). Honors the
     # GCP_SCAN_SKIP_PATHS_FILE override (absolute or cwd-relative); otherwise
     # defaults to <repo-toplevel>/git/config/gcp-scan-skip-paths.conf so the
@@ -1006,6 +1022,7 @@ _gcp_scan_skip_paths_file() {
 }
 
 _gcp_scan_load_skip_paths() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Parse the path-excluded skip-list file (issue #1215) into one cleaned
     # LITERAL path per line. Each line is `<path> [# free-text reason]`; inline
     # comments, full-comment lines, and blank lines are stripped. Shares
@@ -1025,6 +1042,7 @@ _gcp_scan_load_skip_paths() {
 }
 
 _gcp_scan_path_in_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # True (0) when candidate path $1 EXACTLY equals one of the allowlist paths
     # in $2 (newline-separated). Deliberately a string-equality test
     # ([ "$cand" = "$entry" ]), NEVER a `case` glob like the SHA matcher's
@@ -1045,6 +1063,7 @@ EOF
 }
 
 _gcp_scan_is_path_excluded() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # True (0) when commit $1's full changed-file set is NON-EMPTY and EVERY
     # changed path is in the allowlist $2 (issue #1215). A single miss (a file
     # not in the allowlist) disqualifies the whole commit, so a commit carrying
@@ -1064,6 +1083,7 @@ EOF
 }
 
 _gcp_scan_show_skip_paths() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Render the current path-excluded skip list for `gcp scan --show-skip-paths`
     # (issue #1215): the resolved file path plus every registered literal path.
     local file entries
@@ -1075,6 +1095,7 @@ _gcp_scan_show_skip_paths() {
 }
 
 _gcp_scan_deferred_file() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Resolve the deferred cache file path (issue #1795). Honors the
     # GCP_SCAN_DEFERRED_FILE override (absolute or cwd-relative); otherwise
     # defaults to <repo-git-dir>/gcp-scan-deferred so it is a local-only cache
@@ -1089,6 +1110,7 @@ _gcp_scan_deferred_file() {
 }
 
 _gcp_scan_load_deferred_cache() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Parse the deferred cache file (issue #1795) against the current base HEAD
     # SHA $1. File format per line: `<cand_sha> <base_head_sha> <timestamp> [# reason]`.
     # Emits `<cand_sha><TAB><timestamp>` for entries matching $1 (valid cache).
@@ -1124,6 +1146,7 @@ EOF
 }
 
 _gcp_scan_record_deferred() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Record a deferred commit into the deferred cache file (issue #1795).
     # $1=cand_sha $2=base_head_sha $3=conflict_files
     local cand_sha="$1" base_head_sha="$2" conflict_files="$3"
@@ -1138,6 +1161,7 @@ _gcp_scan_record_deferred() {
 }
 
 _gcp_scan_show_deferred() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Render the current deferred cache for `gcp scan --show-deferred` (issue #1795).
     local file entries="" line cand_sha head_sha ts rest
     file=$(_gcp_scan_deferred_file)

@@ -28,6 +28,7 @@ unset _ux_lib_path
 # Detect available backend (local or docker)
 # Returns: local | docker | unavailable
 ollama_backend_detect() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local forced_backend="${DOTFILES_OLLAMA_BACKEND:-}"
 
     # 1. Check for explicit environment variable override
@@ -56,6 +57,7 @@ ollama_backend_detect() {
 
 # Get current backend status with details
 ollama_backend_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local backend
     backend=$(ollama_backend_detect)
 
@@ -84,6 +86,7 @@ ollama_backend_status() {
 # Execute ollama command with automatic backend selection
 # Usage: ollama_cmd [--docker|--local|--auto] <ollama_args>
 ollama_cmd() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local backend_override=""
     # POSIX-safe arg filtering (no bash array): rotate each non-flag arg to
     # the end of "$@" and shift it out of the scan window, so after exactly
@@ -139,6 +142,7 @@ ollama_cmd() {
 
 # Get API base URL for current backend
 ollama_api_base_url() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local backend
     backend=$(ollama_backend_detect)
 
@@ -164,6 +168,7 @@ ollama_api_base_url() {
 
 # Get Ollama version
 ollama_version() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local backend
     backend=$(ollama_backend_detect)
     if [ "$backend" = "unavailable" ]; then
@@ -199,6 +204,7 @@ ollama_status_env() {
 
 # Get Ollama status
 ollama_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "Ollama Status"
 
     local backend
@@ -229,6 +235,7 @@ ollama_status() {
 
 # List installed models
 ollama_models() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local backend_arg=""
 
     # Check for explicit backend flag
@@ -241,6 +248,7 @@ ollama_models() {
 
 # Pull a model
 ollama_pull() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local model="${1:?Model name required}"
 
     ux_info "Pulling model: $model"
@@ -249,6 +257,7 @@ ollama_pull() {
 
 # Remove a model
 ollama_rm() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local model="${1:?Model name required}"
 
     ux_info "Removing model: $model"
@@ -257,6 +266,7 @@ ollama_rm() {
 
 # Show model details
 ollama_show() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local model="${1:?Model name required}"
 
     ollama_cmd --auto show "$model"
@@ -264,6 +274,7 @@ ollama_show() {
 
 # Run a model (interactive)
 ollama_run() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local model="${1:?Model name required}"
 
     ux_info "Starting interactive chat with: $model"
@@ -310,18 +321,21 @@ ollama_systemd_restart() {
 
 # Show Docker Ollama logs (docker only)
 ollama_logs() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local container_name="${DOTFILES_OLLAMA_DOCKER_CONTAINER:-ollama}"
     docker logs "$@" "$container_name"
 }
 
 # Show Docker Ollama resource stats (docker only)
 ollama_stats() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local container_name="${DOTFILES_OLLAMA_DOCKER_CONTAINER:-ollama}"
     docker stats "$container_name"
 }
 
 # Run single prompt (non-interactive)
 ollama_prompt() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local model="${1:?Model name required}"
     local prompt="${2:?Prompt text required}"
 

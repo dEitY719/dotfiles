@@ -209,6 +209,7 @@ _gh_pr_edit_safe__resolve_repo() {
 }
 
 _gh_pr_edit_safe_label() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1" _label="$2"
     [ "$#" -ge 2 ] && shift 2
 
@@ -278,6 +279,7 @@ _gh_pr_edit_safe_label() {
 }
 
 _gh_pr_edit_safe_body() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1" _body_file="$2"
     [ "$#" -ge 2 ] && shift 2
 
@@ -358,6 +360,7 @@ _gh_pr_edit_safe_body() {
 # UTF-8 labels encode one %XX per byte, as the RFC requires. bash/zsh only —
 # same as the `local` used throughout this file (see the shell=bash directive).
 _gh_pr_edit_safe__urlencode() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _s="$1" _out="" _c _i=0 _len
     local LC_ALL=C
     _len=${#_s}
@@ -373,6 +376,7 @@ _gh_pr_edit_safe__urlencode() {
 }
 
 _gh_pr_drop_label() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1" _label="$2" _repo="$3" _host="${4-}"
 
     if [ -z "$_pr" ] || [ -z "$_label" ] || [ -z "$_repo" ]; then

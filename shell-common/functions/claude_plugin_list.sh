@@ -23,6 +23,7 @@ _cpl_help() {
 # Resolve the plugins state dir: explicit override → default shared dir →
 # CLAUDE_CONFIG_DIR-derived. First one that actually holds the SSOT wins.
 _cpl_resolve_dir() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local cand
     for cand in \
         "${CLAUDE_SHARED_PLUGINS_DIR:-}" \
@@ -37,6 +38,7 @@ _cpl_resolve_dir() {
 }
 
 claude_plugin_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local shared_dir pl_src mp_src mp_json count
 
     case "${1:-}" in

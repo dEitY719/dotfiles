@@ -53,6 +53,7 @@ _devx_pr_verify_live_pos_int() {
 }
 
 devx_pr_verify_live_parse() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local pr=""
     local remote="origin"
     local url=""

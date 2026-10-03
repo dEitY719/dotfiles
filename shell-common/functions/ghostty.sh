@@ -38,6 +38,7 @@ _ghostty_help() {
 }
 
 ghostty_init() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help) _ghostty_help; return 0 ;;
     esac
@@ -91,6 +92,7 @@ ghostty_init() {
 }
 
 ghostty_edit_config() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help) _ghostty_help; return 0 ;;
     esac

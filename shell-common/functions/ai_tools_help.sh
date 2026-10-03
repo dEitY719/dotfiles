@@ -175,6 +175,7 @@ claude_help() {
 
 # Function to list Claude Code skills
 _extract_skill_field_fallback() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local skill_md="$1"
     local field="$2"
 
@@ -237,6 +238,7 @@ END {
 }
 
 _extract_skill_metadata() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local skill_md="$1"
     local parsed=""
 
@@ -268,6 +270,7 @@ puts desc
 }
 
 get_claude_skills() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # #1680: skills live in marketplace repos now; the composed harness
     # directory is the one place a shell can enumerate them.
     local skills_dir="${CLAUDE_SKILLS_PATH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills}"
@@ -611,6 +614,7 @@ ollama_help() {
 # Auto-detect and show appropriate help
 # Depends on: ollama_backend_detect() from tools/integrations/ollama.sh (auto-sourced)
 _ollama_help_auto() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if command -v ollama_backend_detect >/dev/null 2>&1; then
         local backend
         backend=$(ollama_backend_detect 2>/dev/null || echo "docker")
@@ -626,6 +630,7 @@ _ollama_help_auto() {
 
 # WSL Local Ollama Help
 _ollama_help_local() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Check if local ollama is available
     if ! command -v ollama >/dev/null 2>&1; then
         ux_header "WSL Ollama — Not Installed"

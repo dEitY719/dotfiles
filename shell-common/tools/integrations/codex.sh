@@ -39,6 +39,7 @@ _codex_skills_sync_script() {
 }
 
 _codex_home_dir() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local xdg_codex_home
 
     if [ -n "${CODEX_HOME:-}" ]; then
@@ -83,6 +84,7 @@ _codex_skills_state_version() {
 # shell-common/functions/skill_sources.sh so this cannot drift from what
 # scripts/setup-skills-ssot.sh actually links.
 _codex_skills_fingerprint() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local root skill_dir
 
     command -v _skill_workspace_dirs >/dev/null 2>&1 || return 1
@@ -99,6 +101,7 @@ _codex_skills_fingerprint() {
 }
 
 _codex_skills_state_signature() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local sync_script skills_fingerprint script_fingerprint codex_home
 
     skills_fingerprint="$(_codex_skills_fingerprint 2>/dev/null)" || return 1
@@ -116,6 +119,7 @@ _codex_skills_state_signature() {
 }
 
 _codex_skills_write_state() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local signature="$1"
     local state_file
     state_file="$(_codex_skills_state_file)"
@@ -124,6 +128,7 @@ _codex_skills_write_state() {
 }
 
 _codex_skills_read_state() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local state_file
     state_file="$(_codex_skills_state_file)"
     [ -f "$state_file" ] || return 1
@@ -131,6 +136,7 @@ _codex_skills_read_state() {
 }
 
 _codex_skills_has_legacy_layout() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local target_dir
     local src_root
     local legacy_link
@@ -183,6 +189,7 @@ _codex_skills_has_legacy_layout() {
 }
 
 _codex_skills_run_sync_script() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local quiet="${1:-0}"
     local sync_script
     sync_script="$(_codex_skills_sync_script)"
@@ -200,6 +207,7 @@ _codex_skills_run_sync_script() {
 }
 
 codex_skills_sync_if_needed() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local quiet="${1:-0}"
     local force="${2:-0}"
     local current_signature previous_signature sync_reason
@@ -248,6 +256,7 @@ _codex_auto_sync_quiet() {
 }
 
 _codex_auto_sync_interval_seconds() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local interval
     interval="${CODEX_SKILLS_AUTO_SYNC_INTERVAL:-5}"
     case "$interval" in
@@ -259,6 +268,7 @@ _codex_auto_sync_interval_seconds() {
 }
 
 _codex_should_run_periodic_sync() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local now last interval
     interval="$(_codex_auto_sync_interval_seconds)"
     now="$(date +%s 2>/dev/null || echo 0)"
@@ -322,6 +332,7 @@ _codex_register_auto_sync_hooks() {
 }
 
 _codex_maybe_auto_sync() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local prev_in_progress
     prev_in_progress="${CODEX_AUTO_SYNC_IN_PROGRESS:-0}"
     if [ "$prev_in_progress" = "1" ]; then

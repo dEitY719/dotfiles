@@ -38,6 +38,7 @@ LITELLM_DOC
 
 # 프로젝트 경로 자동 감지 (Makefile에서 export되지 않았을 경우)
 _init_litellm_env() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [[ "${_LITELLM_ENV_INITIALIZED:-}" == "1" ]]; then
         return 0
     fi
@@ -73,6 +74,7 @@ _init_litellm_env() {
 
 # 프로젝트 디렉토리 체크
 _check_litellm_project() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _init_litellm_env
     local project_path="${LITELLM_PROJECT_PATH:-}"
     if [[ -z "$project_path" ]] || [[ ! -d "$project_path" ]]; then
@@ -94,6 +96,7 @@ _check_litellm_health() {
 
 # litellm_settings.yml에 정의된 모델 목록 파싱
 _get_configured_models() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _init_litellm_env
 
     local project_path="${LITELLM_PROJECT_PATH:-}"
@@ -108,6 +111,7 @@ _get_configured_models() {
 
 # 실제 로드된 모델 목록 조회
 _get_loaded_models() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _init_litellm_env
 
     local url="${LITELLM_URL:-}"
@@ -123,6 +127,7 @@ _get_loaded_models() {
 
 # 모델 등록 상태 검증
 _verify_models_loaded() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if ! _check_litellm_health; then
         ux_warning "LiteLLM이 응답하지 않습니다"
         return 1
@@ -180,6 +185,7 @@ _verify_models_loaded() {
 
 # 1. LiteLLM 시작
 litellm_start() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "LiteLLM 스택 시작"
     _check_litellm_project || return 1
 
@@ -265,6 +271,7 @@ litellm_status() {
 
 # 5. 등록된 모델 목록 조회
 litellm_models() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "LiteLLM 모델 목록"
 
     if ! _check_litellm_health; then
@@ -293,6 +300,7 @@ litellm_models() {
 
 # 6. 모델 테스트
 litellm_test() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # 매개변수 검증
     if [[ $# -eq 0 ]]; then
         ux_header "LiteLLM 모델 테스트"

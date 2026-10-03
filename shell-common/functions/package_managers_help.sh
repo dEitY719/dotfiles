@@ -156,6 +156,7 @@ pip_help() {
 
 # Wrapper function for check_pip.sh diagnostic
 pip_check() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local check_pip_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_pip.sh"
     if [ -f "$check_pip_script" ]; then
         bash "$check_pip_script" "$@"
@@ -321,6 +322,7 @@ npm_help() {
 
 # Helper function to normalize npm config output
 _npm_config_get() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local value
     value="$(npm config get "$1" 2>/dev/null)"
     # Normalize null or empty values to "(not set)"

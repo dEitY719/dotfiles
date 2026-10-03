@@ -565,6 +565,7 @@ network_help() {
 }
 
 network_check() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local check_network_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_network.sh"
     if [ -f "$check_network_script" ]; then
         bash "$check_network_script" "$@"
