@@ -32,6 +32,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # carried no SUCCESS result (the exit code alone is NOT the success signal —
 # a non-SUCCESS result that still exited 0 would otherwise look like a pass).
 _agy_run_stream() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Named here rather than reported as a mysterious `jq: command not found`
     # attributed to agy (PR #1765 codex BLOCKER).
     command -v jq >/dev/null 2>&1 || {

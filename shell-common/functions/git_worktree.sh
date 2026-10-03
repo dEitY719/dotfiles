@@ -203,6 +203,7 @@ _gwt_read_gitdir_pointer() {
 # healthy worktree, a main repo (.git is a directory), or a non-git pwd.
 # ============================================================================
 _gwt_diagnose_orphan() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local pointer
     pointer=$(_gwt_read_gitdir_pointer .git) || return 1
     [ -n "$pointer" ] || return 1
@@ -217,6 +218,7 @@ _gwt_diagnose_orphan() {
 # `_gwt_report_no_git; return 1` to propagate.
 # ============================================================================
 _gwt_report_no_git() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local broken
     if broken=$(_gwt_diagnose_orphan); then
         ux_error "Worktree's parent repo is gone — .git points to: $broken"
@@ -242,6 +244,7 @@ _gwt_report_no_git() {
 # HEAD commit at <wt_path>. Echo "-" if path missing or no commits yet.
 # Args: <wt_path>
 _gwt_age() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _diff
     # Delegate timestamp+now+diff to _gwt_age_seconds — keeps a single
     # source of truth for "how do we measure commit age" (PR #286 review).
@@ -263,6 +266,7 @@ _gwt_age() {
 # Echo seconds since HEAD's commit time, or empty if unavailable.
 # Args: <wt_path>
 _gwt_age_seconds() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _wt="$1" _ts _now
     [ -d "$_wt" ] || return 1
     _ts="$(git -C "$_wt" log -1 --format=%ct HEAD 2>/dev/null)"
@@ -276,6 +280,7 @@ _gwt_age_seconds() {
 # the three-call pattern in _gwt_teardown_one_inplace.
 # Args: <wt_path>
 _gwt_signal_dirty() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _wt="$1" _porcelain
     [ -d "$_wt" ] || return 1
     _porcelain="$(git -C "$_wt" status --porcelain 2>/dev/null)"
@@ -299,6 +304,7 @@ _gwt_main_ref() {
 # Echo number of commits on <branch> not in <main_ref>. Empty on failure.
 # Args: <branch> <main_ref>
 _gwt_signal_ahead() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _branch="$1" _main_ref="$2"
     [ -n "$_branch" ] && [ -n "$_main_ref" ] || return 1
     git rev-list --count "$_main_ref..$_branch" 2>/dev/null
@@ -319,6 +325,7 @@ _gwt_remote_pr_states() {
 # list returns newest first, so the first hit is the freshest PR).
 # Args: <branch> <pr_states_text>
 _gwt_pr_lookup() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _branch="$1" _states="$2" _line _head _state _num
     [ -n "$_branch" ] && [ -n "$_states" ] || return 1
     while IFS= read -r _line; do
@@ -353,6 +360,7 @@ EOF
 #
 # Args: <wt_path> <branch> <is_main_repo:0|1> [<pr_state>] [<pr_num>]
 _gwt_compute_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _wt="$1" _branch="$2" _is_main="$3" _pr_state="${4:-}" _pr_num="${5:-}"
     local _age _main_ref _ahead _lock_pid _diff
 
@@ -502,6 +510,7 @@ git_worktree_list() {
 # Called from both `_gwt_list_quick` and `_gwt_list_status` so the warning
 # shows in either mode.
 _gwt_render_orphan_warnings() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Resolve this repo's admin dir so the foreign-repo check has a baseline.
     local git_common
     git_common="$(git rev-parse --git-common-dir 2>/dev/null)"
@@ -557,6 +566,7 @@ EOF
 # Legacy list output (preserved for `--quick`). Same shape as the v1
 # implementation: path/commit/branch with the remove hint when count > 1.
 _gwt_list_quick() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local wt_output wt_count
     wt_output="$(git worktree list)"
     wt_count=$(printf '%s\n' "$wt_output" | wc -l)
@@ -580,6 +590,7 @@ _gwt_list_quick() {
 # _gwt_compute_status, prints a single column-aligned table.
 # Args: <mode>  ("auto" — local only, or "remote" — also batch-fetch PR state)
 _gwt_list_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _mode="$1"
     local _porcelain _pr_states="" _main_wt=""
     local _path="" _branch="" _is_prunable=0 _is_locked=0
@@ -690,6 +701,7 @@ EOF
 # _gwt_compute_status for verdict + age + next-action, applies state color.
 # Args: <path> <branch> <main_wt> <is_prunable> <is_locked> <pr_states_text>
 _gwt_emit_row() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _path="$1" _branch="$2" _main_wt="$3"
     local _is_prunable="$4" _is_locked="$5" _pr_states="$6"
     local _is_main=0 _state="" _age="" _next="" _color=""
@@ -776,6 +788,7 @@ git_worktree_status() {
 # and return 1.
 # Args: <name-or-empty>
 _gwt_status_resolve() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _name="$1"
 
     if [ -z "$_name" ]; then
@@ -842,6 +855,7 @@ EOF
 # next action, in that order.
 # Args: <wt_path>
 _gwt_status_render() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _wt="$1"
     local _toplevel _branch _name _project _is_main=0
     local _head_short _head_subj _head_age _head_line
@@ -1266,6 +1280,7 @@ EOF
 
 # Internal: remove a single worktree + its branch
 _gwt_remove_one() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local wt_path="$1" force="$2"
 
     # Detect branch before removing worktree
@@ -1302,6 +1317,7 @@ _gwt_remove_one() {
 }
 
 git_worktree_add() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help)
             ux_header "gwt add - git-crypt safe worktree"
@@ -1811,6 +1827,7 @@ git_worktree_spawn() {
 # Usage: _gwt_pr_merged_into <branch> <main_ref>
 # ============================================================================
 _gwt_pr_merged_into() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local branch="$1" main_ref="$2"
     [ -n "$branch" ] && [ -n "$main_ref" ] || return 1
     command -v gh >/dev/null 2>&1 || return 1
@@ -1840,6 +1857,7 @@ _gwt_pr_merged_into() {
 # the branch's PR as MERGED with the merge_commit reachable from main_ref.
 # ============================================================================
 _gwt_commits_safe() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local local_rev remote_rev
     local_rev="$(git rev-parse HEAD)"
 
@@ -1908,6 +1926,7 @@ _gwt_commits_safe() {
 # Returns 0 if all patches in <branch> are already in <target>.
 # ============================================================================
 _gwt_branch_merged() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local branch="$1" target="$2"
     # Rebase merge: every commit is patch-id-equivalent to one already in target.
     if ! git cherry "$target" "$branch" 2>/dev/null | grep -q '^+'; then
@@ -1933,6 +1952,7 @@ _gwt_branch_merged() {
 # Usage: _gwt_merge_target <main_branch>
 # ============================================================================
 _gwt_merge_target() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local main_branch="$1"
     if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1; then
         printf '%s\n' "origin/$main_branch"
@@ -1946,6 +1966,7 @@ _gwt_merge_target() {
 # Usage: _gwt_report_unpushed <branch>
 # ============================================================================
 _gwt_report_unpushed() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local branch="$1"
     local main_ref="origin/main"
     git rev-parse --verify --quiet "$main_ref" >/dev/null 2>&1 || main_ref="origin/master"
@@ -2088,6 +2109,7 @@ git_worktree_teardown() {
 # Args: <force> <keep_branch>
 # ============================================================================
 _gwt_claude_lock_pid() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local wt_path="$1"
     local git_dir lock_file lock_reason pid
 
@@ -2516,6 +2538,7 @@ EOF
 # their main repo covers them.
 # ============================================================================
 _gwt_find_main_repos() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local d
     for d in ./*/; do
         [ -d "$d.git" ] || continue
@@ -2526,6 +2549,7 @@ _gwt_find_main_repos() {
 
 # Hint for `gwt teardown --all` run outside a repo (issue #1835 F-8).
 _gwt_hint_recursive() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local repos
     repos=$(_gwt_find_main_repos)
     [ -n "$repos" ] || return 0

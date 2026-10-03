@@ -19,6 +19,7 @@ _gh_pr_approve_repo_name() {
 }
 
 _gh_pr_approve_pr_dir() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # $1 = PR number
     local _root _name
     _root=$(_gh_pr_approve_state_root)
@@ -37,6 +38,7 @@ _gh_pr_approve_set_state() {
 }
 
 _gh_pr_approve_get_state() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # $1 = PR number; prints state or "nonexistent"
     local _dir
     _dir=$(_gh_pr_approve_pr_dir "$1")
@@ -160,6 +162,7 @@ _gh_pr_approve_check_ai_auth() {
 # previously invisible — every claude `-p` session on a 1M-context Opus
 # default model creates ~33k cache tokens (~$0.20) just to start.
 _gh_pr_approve_run_ai_prompt() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _ai="$1" _usage_log="$2" _label="$3" _prompt="$4"
     _ai_usage_run "$_ai" "$_usage_log" "$_label" "$_prompt"
 }
@@ -183,6 +186,7 @@ _gh_pr_approve_run_ai_prompt() {
 # from network state because the worker is single-shot: PR closure/merge
 # is unrelated to whether the local worker still has cleanup to do.
 _gh_pr_approve_pr_state() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _dir="$1"
     local _pr_num _json _rc _state _decision _merged _closed _date
     _pr_num="$(basename "$_dir")"
@@ -218,6 +222,7 @@ _gh_pr_approve_pr_state() {
 # whichever JSON parser is on PATH. Mirrors the helper pattern used by
 # gh_flow.sh and keeps the gh dependency soft (no jq required).
 _gh_pr_approve_jq_field() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _field="$1"
     if command -v jq >/dev/null 2>&1; then
         jq -r ".$_field? // empty" 2>/dev/null
@@ -235,6 +240,7 @@ _gh_pr_approve_jq_field() {
 # from the issue spec. gh-pr-approve's worker is single-shot (no polling,
 # no reply loop), so the matrix is strictly simpler than gh-flow's.
 _gh_pr_approve_verdict() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1"
     local _dir _state _wt _pid _pid_alive _verdict _action
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
@@ -290,6 +296,7 @@ _gh_pr_approve_verdict() {
 # Last log (+ tail -5) + Verdict / Next action (via _gh_pr_approve_verdict).
 # Input: <pr-num> with optional leading '#'.
 _gh_pr_approve_status_single() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _arg="$1"
     local _pr _dir _state _pid _wt _pid_state _wt_state _auto_prune _wt_removed_at _wt_absent
     local _pr_state_raw _pr_state _pr_decision _pr_date _pr_info
@@ -474,6 +481,7 @@ EOF
 # single PR if exactly one positional arg is given. Multiple positional args
 # are rejected (single-PR diagnostic only).
 _gh_pr_approve_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _auto_prune=0 _pr_arg=""
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -556,6 +564,7 @@ _gh_pr_approve_status() {
 # $1 = repo state dir, $2 = force flag (0|1), $3 = repo name (header),
 # remaining args = PR numbers.
 _gh_pr_approve_prune_scoped() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _repo_dir="$1" _force="$2" _name="$3"
     shift 3
 
@@ -623,6 +632,7 @@ _gh_pr_approve_prune_scoped() {
 # Flag: --force changes scoped behavior (kill alive pid) and full-scan
 # behavior (auto-teardown failed worktrees).
 _gh_pr_approve_prune() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _force=0
     local _scoped="" _arg _pr _parsing_flags=1
 
@@ -801,6 +811,7 @@ EOF
 # ============================================================================
 
 gh_pr_approve_help() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "gh-pr-approve - fire-and-forget GitHub PR approval runner"
     ux_info "Usage:"
     ux_bullet "gh-pr-approve <pr-number>... [--ai <agent>] [--user <account>] [--self-record|--admin-merge] [--squash|--rebase|--merge]"
@@ -1186,6 +1197,7 @@ _gh_pr_approve_worktree_paths() {
 # match so a re-spawn (idx 2, 3, …) wins over a stale idx 1.
 # Prints the resolved path to stdout; prints nothing on no match.
 _gh_pr_approve_locate_own_worktree() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _spawn_name="$1" _wt_before="$2"
     local _line _current_path _current_branch _branch_prefix
     local _candidate_path _candidate_idx _best_path="" _best_idx=-1
@@ -1254,6 +1266,7 @@ EOF
 #   $1 = repo state dir (e.g., ~/.local/state/gh-pr-approve/<repo>)
 # Output: one line per orphan as `<pr-number>\t<path>` (tab-separated).
 _gh_pr_approve_list_orphan_worktrees() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _repo_dir="$1"
     local _line _current_path _current_branch _claimed _pr_num _idx
 
@@ -1320,6 +1333,7 @@ EOF
 # ============================================================================
 
 _gh_pr_approve_worker() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1"
     local _ai="${2:-claude}"
     local _self_args="${3:-}"

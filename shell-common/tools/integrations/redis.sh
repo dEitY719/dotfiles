@@ -29,6 +29,7 @@ _redis_cli() {
 # 1) Server Management
 # -------------------------------
 redis_server() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local action="${1:-}"
 
     if [ -z "$action" ]; then
@@ -63,6 +64,7 @@ redis_server() {
 # 2) Quick Commands
 # -------------------------------
 redis_ping() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local host="${1:-$REDIS_DEFAULT_HOST}"
     local port="${2:-$REDIS_DEFAULT_PORT}"
     local result
@@ -79,6 +81,7 @@ redis_ping() {
 }
 
 redis_info() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local section="${1:-server}"
     _redis_cli INFO "$section"
 }
@@ -90,12 +93,14 @@ redis_monitor() {
 }
 
 redis_dbsize() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local result
     result=$(_redis_cli DBSIZE 2>/dev/null)
     ux_info "Database size: $result"
 }
 
 redis_keys() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local pattern="${1:-*}"
     local limit="${2:-20}"
     ux_info "Scanning keys matching '$pattern' (max: $limit results)"
@@ -103,6 +108,7 @@ redis_keys() {
 }
 
 redis_flush() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local target="${1:-}"
     if [ -z "$target" ]; then
         ux_usage "redis-flush" "<db|all>" "Flush Redis data"
@@ -136,6 +142,7 @@ redis_flush() {
 }
 
 redis_config_get() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local param="${1:-}"
     if [ -z "$param" ]; then
         ux_usage "redis-config-get" "<parameter>" "Get Redis config value"
@@ -146,6 +153,7 @@ redis_config_get() {
 }
 
 redis_slowlog() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local count="${1:-10}"
     ux_header "Redis Slow Log (last $count entries)"
     _redis_cli SLOWLOG GET "$count"

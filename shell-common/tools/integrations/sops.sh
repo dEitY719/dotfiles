@@ -16,6 +16,7 @@ _sops_file_mode() {
 }
 
 sops_age_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local tool ver missing="" key mode pub
 
     ux_header "sops + age status"
@@ -93,6 +94,7 @@ _senv_need_sops() {
 }
 
 _senv_init() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local key pub
     key="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
     if [ ! -f "$key" ]; then
@@ -134,6 +136,7 @@ _senv_init() {
 }
 
 _senv_enc() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local in="${1:-.env}" out tmp
     out="${in}.enc"
     if [ ! -f "$in" ]; then
@@ -156,6 +159,7 @@ _senv_enc() {
 }
 
 _senv_dec() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local force="" in="" out tmp
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -191,6 +195,7 @@ _senv_dec() {
 }
 
 _senv_edit() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local in="${1:-.env.enc}" rc
     if [ ! -f "$in" ]; then
         ux_error "input not found: ${in}"
@@ -207,6 +212,7 @@ _senv_edit() {
 }
 
 _senv_run() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _senv_plain
     if [ $# -eq 0 ]; then
         ux_error "senv run needs a command"
@@ -252,6 +258,7 @@ _senv_run() {
 }
 
 senv() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local cmd="${1:-}"
     case "$cmd" in
         "" | -h | --help | help)

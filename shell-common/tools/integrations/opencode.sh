@@ -20,6 +20,7 @@ install_opencode() {
 }
 
 opencode_verify() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "OpenCode Configuration Verification"
     echo ""
 
@@ -211,6 +212,7 @@ opencode_help() {
 }
 
 opencode_edit() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local config_file="$OPENCODE_CONFIG_FILE"
 
     if [ ! -f "$config_file" ]; then

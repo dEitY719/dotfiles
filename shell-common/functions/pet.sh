@@ -78,6 +78,7 @@ _pet_help_rows_search() {
 }
 
 _pet_help_rows_examples() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_info "File Operations:"
     ux_bullet "find large files: find . -size +100M"
     ux_bullet "recursive search: grep -r 'pattern' ."

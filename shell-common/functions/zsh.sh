@@ -39,6 +39,7 @@ zsh_version() {
 
 # List all available zsh themes
 zsh_themes() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -59,6 +60,7 @@ zsh_themes() {
 
 # Change zsh theme
 zsh_theme() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -104,6 +106,7 @@ zsh_theme() {
 
 # Get current zsh theme
 zsh_theme_current() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [ ! -f "${HOME}/.zshrc" ]; then
         ux_error "\$HOME/.zshrc not found."
         return 1
@@ -120,6 +123,7 @@ zsh_theme_current() {
 
 # List installed zsh plugins
 zsh_plugins() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -152,6 +156,7 @@ zsh_plugins() {
 
 # Update oh-my-zsh to latest version
 zsh_update() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -191,6 +196,7 @@ zsh_reload() {
 
 # Open zsh configuration in editor
 zsh_edit() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local zshrc="${HOME}/.zshrc"
     if [ ! -f "$zshrc" ]; then
         ux_error "\$HOME/.zshrc not found."
@@ -212,6 +218,7 @@ zsh_edit() {
 
 # Create/Edit zsh config snippet
 zsh_snippet() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [ -z "$1" ]; then
         ux_usage "zsh-snippet" "<snippet-name>" "Create or edit a config snippet"
         ux_bullet "Example: ${UX_BOLD}zsh-snippet aliases${UX_RESET}"
@@ -247,6 +254,7 @@ EOF
 
 # List zsh snippets
 zsh_snippets() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local snippets_dir="${HOME}/.zshrc.d"
 
     if [ ! -d "$snippets_dir" ]; then
@@ -283,6 +291,7 @@ zsh_snippets() {
 # replay a stale precmd snapshot, producing a frozen prompt that only
 # `exec zsh` recovered from.
 _zsh_clear_p10k_caches() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}"
     local removed=0
     local target
@@ -313,6 +322,7 @@ _zsh_clear_p10k_caches() {
 # User-facing wrapper: clears every p10k cache variant and reports what
 # happened. Reload zsh (`exec zsh`) or open a new terminal to verify.
 zsh_clear_p10k_caches() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local removed
     removed="$(_zsh_clear_p10k_caches)"
     # ${var:-0} guard: subshell could in theory yield an empty string under
@@ -329,6 +339,7 @@ zsh_clear_p10k_caches() {
 # Fix VS Code terminal prompt after VS Code update
 # Clears stale caches that cause default prompt (HOSTNAME%) instead of p10k
 zsh_fix_vscode() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local fixed=0
 
     # Remove stale .zcompdump from VS Code temp ZDOTDIR
@@ -359,6 +370,7 @@ zsh_fix_vscode() {
 # gitstatusd v1.5.4 treats repositoryformatversion=1 as "not a git repo",
 # breaking p10k's branch display. Run after `gwt teardown --all`.
 zsh_git_fix() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if ! git rev-parse --git-dir >/dev/null 2>&1; then
         ux_error "Not a git repository."
         return 1

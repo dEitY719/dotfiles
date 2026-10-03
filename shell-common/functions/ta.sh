@@ -10,6 +10,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # - No sessions: prints info and exits
 
 ta() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help)
             ux_usage "ta" "" "Attach (or switch) to the first tmux session"

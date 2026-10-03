@@ -303,6 +303,7 @@ _ssl_help_rows_commands() {
 }
 
 _ssl_help_rows_files() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local security_local="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/env/security.local.sh"
     if [ -f "$security_local" ]; then
         ux_success "security.local.sh: exists"
@@ -412,6 +413,7 @@ ssl_help() {
 
 # Wrapper function for future check_ssl.sh diagnostic (placeholder)
 ssl_check() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local check_ssl_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_ssl.sh"
     if [ -f "$check_ssl_script" ]; then
         bash "$check_ssl_script" "$@"
@@ -429,6 +431,7 @@ alias check-ssl='ssl_check'
 # --- ssh_check (WSL SSH key setup) ---
 
 ssh_check() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local check_ssh_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/check_ssh.sh"
     if [ -f "$check_ssh_script" ]; then
         bash "$check_ssh_script" "$@"

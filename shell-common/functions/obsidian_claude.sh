@@ -20,6 +20,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # ~200ms cmd.exe penalty on every shell start.
 # Override: export OBSIDIAN_VAULT_DIR before calling to skip auto-detection.
 _obsidian_vault_dir() {
+	[ -n "${ZSH_VERSION-}" ] && emulate -L sh
 	# 1) explicit override wins
 	[ -n "${OBSIDIAN_VAULT_DIR-}" ] && {
 		printf '%s\n' "$OBSIDIAN_VAULT_DIR"

@@ -41,6 +41,7 @@ _cma_fileid() {
 
 # Every known_marketplaces.json worth touching, one per line, de-duplicated.
 _cma_targets() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local cand f id seen
     seen=""
     for cand in "${CLAUDE_CONFIG_DIR:+$CLAUDE_CONFIG_DIR/plugins}" "$HOME"/.claude*/plugins; do
@@ -58,6 +59,7 @@ _cma_targets() {
 }
 
 claude_marketplace_autoupdate() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local dry f tmp bak total off rest_before rest_after rc touched
 
     dry=0

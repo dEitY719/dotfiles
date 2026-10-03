@@ -80,6 +80,7 @@ HELP
 # ---------------------------------------------------------------------------
 
 _gh_audit_builtin_workflows_resolve_repo() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _explicit="$1"
     local _spec=""
 
@@ -118,6 +119,7 @@ _gh_audit_builtin_workflows_is_forbidden() {
 # ---------------------------------------------------------------------------
 
 gh_audit_builtin_workflows() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _repo_flag=""
     while [ "$#" -gt 0 ]; do
         case "$1" in

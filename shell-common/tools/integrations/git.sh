@@ -107,6 +107,7 @@ fi
 # ============================================================
 
 gsw() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local remote_branch="$1"
     local local_branch="${remote_branch#*/}"
     git switch -c "$local_branch" "$remote_branch"
@@ -114,6 +115,7 @@ gsw() {
 
 unalias gf 2>/dev/null || true
 gf() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local remote="${1:-origin}"
     case "$remote" in
     u | upstream-shorthand)
@@ -154,6 +156,7 @@ gupa() {
 }
 
 gupdel() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [ $# -eq 0 ]; then
         ux_usage "gupdel" "<remote-name>" "Delete a git remote"
         ux_bullet "gupdel upstream"
@@ -179,6 +182,7 @@ gupdel() {
 # would shadow the dispatcher (integrations/ is sourced after functions/).
 
 glub() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local branch="${1:-main}"
     git log --oneline -n 20 "upstream/$branch"
 }
@@ -187,11 +191,13 @@ alias gset-main='git branch --set-upstream-to=origin/main main'
 alias gset-dev='git branch --set-upstream-to=origin/dev dev'
 
 gset() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local branch="${1:-$(git symbolic-ref --short HEAD)}"
     git branch --set-upstream-to=origin/"$branch" "$branch"
 }
 
 git_lfs_install() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local script_path
     script_path="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_git_lfs.sh"
 

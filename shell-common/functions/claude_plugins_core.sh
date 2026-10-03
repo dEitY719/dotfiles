@@ -28,6 +28,7 @@ _claude_plugins_core_help() {
 }
 
 init_plugins_docs() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help) _claude_plugins_core_help; return 0 ;;
     esac
@@ -73,6 +74,7 @@ init_plugins_docs() {
 # ═══════════════════════════════════════════════════════════════
 
 list_plugins() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help) _claude_plugins_core_help; return 0 ;;
     esac
@@ -183,6 +185,7 @@ list_plugins() {
 # ═══════════════════════════════════════════════════════════════
 
 sync_plugins_structure() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help) _claude_plugins_core_help; return 0 ;;
     esac
@@ -247,6 +250,7 @@ sync_plugins_structure() {
 # ═══════════════════════════════════════════════════════════════
 
 view_plugin_info() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help|help) _claude_plugins_core_help; return 0 ;;
     esac
@@ -300,6 +304,7 @@ view_plugin_info() {
 # defined inside _get_plugin_description, which made it less reusable and
 # tripped the sh:check W#4 "no nested function definitions" rule).
 _extract_yaml_field_fallback() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local yaml_file="$1"
     local field="$2"
 
@@ -363,6 +368,7 @@ END {
 
 # Extract brief description from plugin file (YAML or heading fallback).
 _get_plugin_description() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local file="$1"
 
     # 1. Try to extract description from YAML frontmatter

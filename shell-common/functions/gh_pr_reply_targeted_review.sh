@@ -131,6 +131,7 @@ _gh_pr_reply_reviewer_is_bot() {
 # recognisable. Reviewer and verdict are folded because they are compared
 # against closed enums; this field is compared against nothing.
 _gh_pr_reply_tracking_ref_is_valid() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _ref="${1-}" _owner _rest _repo _num
 
     case "$_ref" in
@@ -160,6 +161,7 @@ _gh_pr_reply_tracking_ref_is_valid() {
 # line hands back the VERDICT. That trap is why the readers below go through
 # here instead of each re-deriving it inline (PR #1764 review, codex BLOCKER).
 _gh_pr_reply_origin_ref() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _line="${1-}" _ref
     case "$_line" in
     *:*:*:*) ;;
@@ -178,6 +180,7 @@ _gh_pr_reply_malformed_origin_line() {
 }
 
 _gh_pr_reply_origin_line() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _reviewer _severity _verdict _ref
     _reviewer=$(printf '%s' "${1-}" | tr '[:upper:]' '[:lower:]')
     # Reviewers tag findings as `[BLOCKER]` / `[FOLLOW-UP]`; the brackets are
@@ -317,6 +320,7 @@ _gh_pr_reply_origin_tally() {
 # <head-sha> may be empty, in which case the unsuffixed marker form is emitted
 # — the same fallback `_gh_pr_review_build_comment_body`'s 8th argument makes.
 _gh_pr_reply_origins_block() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _sha="${1-}" _marker _origins _line _ref _out=""
 
     _origins=$(cat)
@@ -428,6 +432,7 @@ _gh_pr_reply_login_bodies() {
 # comment, and a human replying inside it (or GitHub reflowing it) must not be
 # able to turn the next pass's gate into a hard error.
 _gh_pr_reply_history_origins() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _line _ref _rest _tail
     _gh_pr_reply_login_bodies "${1-}" |
     awk '
@@ -548,6 +553,7 @@ _gh_pr_reply_history_origins() {
 # the PR UNLABELLED — the fail-closed direction, since downstream has always
 # read "no label" as "not verified".
 _gh_pr_reply_history_has_review() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _bodies _sha="${2-}"
     # Read whole rather than `grep -q`: an early exit would hand EPIPE to a
     # piped producer, and this reads a comment dump that is already in memory.
@@ -594,6 +600,7 @@ _gh_pr_reply_history_has_review() {
 # A malformed line in EITHER input is rc 2 — the same reason
 # `_gh_pr_reply_origins_block` refuses to write one.
 _gh_pr_reply_origins_merge() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _history="${1-}" _this _line _rev _revs=" " _keep="" _out=""
 
     _this=$(cat)
@@ -656,6 +663,7 @@ EOF
 # a shorter history) rather than this one — but never silently, since that
 # next pass then needs the reviewer to re-raise the item.
 _gh_pr_reply_post_origins_ledger() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="${1-}" _repo="${2-}" _host="${3-}" _sha="${4-}"
     local _block _brc=0 _rc=0
 
@@ -742,6 +750,7 @@ _gh_pr_reply_post_origins_ledger() {
 # awk only groups the ASCII spellings — counting MORE items as blocking is
 # the safe direction for a gate that authorizes `review-passed`.
 _gh_pr_reply_review_passed_gate() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _evidence="${1-}"
     local _origins _line _rev _rest _sev _tail _verd _ref _blocking=0
 
@@ -819,6 +828,7 @@ EOF
 # label is written by `_gh_pr_reply_apply_review_passed` below, which prints
 # this line only once the write actually succeeded.
 _gh_pr_reply_review_passed_report() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _token="${1-}" _who _rest _ref
     case "$_token" in
     pass=no-blocker)
@@ -876,6 +886,7 @@ _gh_pr_reply_review_passed_report() {
 # unlabelled PR reads downstream as "not verified", which is the same contract
 # as before. Only a usage error is rc 2.
 _gh_pr_reply_apply_review_passed() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="${1-}" _repo="${2-}" _host="${3-}" _head_sha="${4-}" _evidence="${5-}"
     local _token _write _ok_line _fail_line
 

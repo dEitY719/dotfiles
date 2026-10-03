@@ -17,6 +17,7 @@ fi
 # Get current setup mode
 # ============================================================
 get_setup_mode() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local setup_mode_file="$HOME/.dotfiles-setup-mode"
 
     if [ ! -f "$setup_mode_file" ]; then
@@ -31,6 +32,7 @@ get_setup_mode() {
 # Get setup mode name
 # ============================================================
 get_setup_mode_name() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local mode
     mode=$(get_setup_mode)
 
@@ -46,6 +48,7 @@ get_setup_mode_name() {
 # Show current setup mode
 # ============================================================
 show_setup_mode() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local mode
     mode=$(get_setup_mode)
 

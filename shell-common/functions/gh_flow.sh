@@ -18,6 +18,7 @@ _gh_flow_repo_name() {
 }
 
 _gh_flow_issue_dir() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # $1 = issue number
     local _root _name
     _root=$(_gh_flow_state_root)
@@ -36,6 +37,7 @@ _gh_flow_set_state() {
 }
 
 _gh_flow_get_state() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # $1 = issue; prints state or "nonexistent"
     local _dir
     _dir=$(_gh_flow_issue_dir "$1")
@@ -59,6 +61,7 @@ _gh_flow_has_work_for_commit() {
 # Returns 0 if the current branch has at least one commit ahead of
 # the upstream default branch (origin/HEAD). Used to verify /gh-pr:commit.
 _gh_flow_has_branch_commits() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _base _count
     _base="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null | sed 's|^refs/remotes/||')"
     if [ -z "$_base" ]; then
@@ -120,6 +123,7 @@ _gh_flow_check_gh_auth() {
 # the user sees the per-issue total — which was the missing signal
 # behind the "10-minute MAX quota burn" incident.
 _gh_flow_run_ai_prompt() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _ai="$1" _usage_log="$2" _label="$3" _prompt="$4"
     _ai_usage_run "$_ai" "$_usage_log" "$_label" "$_prompt"
 }
@@ -139,6 +143,7 @@ _gh_flow_run_ai_prompt() {
 # post-reply Approve-wait, so callers can render granular verdicts instead
 # of one ambiguous "active polling" message.
 _gh_flow_pr_view() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _dir="$1"
     local _pr_num _out _rc
     if [ ! -s "$_dir/pr.number" ]; then
@@ -167,6 +172,7 @@ _gh_flow_pr_view() {
 # matrix from the issue spec. Used by `gh-flow status <N>`; `gh-flow prune <N>`
 # can reuse the same source-of-truth in future iterations.
 _gh_flow_verdict() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _issue="$1"
     local _dir _state _wt _pid _pid_alive _pr_state _verdict _action
     local _pr_view _pr_decision
@@ -282,6 +288,7 @@ EOF
 #   + Verdict / Next action (via _gh_flow_verdict).
 # Input: <issue-num> with optional leading '#'.
 _gh_flow_status_single() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _arg="$1"
     local _issue _dir _state _pid _wt _pr_num _pid_state _wt_state
     local _pr_state _pr_date _pr_info _markers _log _log_mtime _etime
@@ -426,6 +433,7 @@ EOF
 # Output (no-arg): a table of issue / state / pid-liveness / worktree path.
 # Output (1 arg):  see _gh_flow_status_single.
 _gh_flow_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if [ $# -gt 1 ]; then
         ux_error "gh-flow status: only one issue number accepted (got $#)"
         return 1
@@ -487,6 +495,7 @@ _gh_flow_status() {
 # $1 = repo state dir, $2 = force flag (0|1), $3 = repo name (for header),
 # remaining args = issue numbers.
 _gh_flow_prune_scoped() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _repo_dir="$1" _force="$2" _name="$3"
     shift 3
 
@@ -554,6 +563,7 @@ _gh_flow_prune_scoped() {
 # Flag: --force changes scoped behavior (kill alive pid) and full-scan
 # behavior (auto-teardown failed worktrees).
 _gh_flow_prune() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _force=0
     local _scoped="" _arg _issue _parsing_flags=1
 
@@ -952,6 +962,7 @@ _gh_flow_spawn_worker() {
 # ============================================================================
 
 _gh_flow_worker() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _issue="$1"
     local _ai="${2:-claude}"
     local _dir _worktree _pr _spawn_name _decision _comments _usage_log

@@ -324,6 +324,7 @@ unset _drg_self _drg_helper
 # at multiple call sites (simplify pass, PR #1720 review) — a single point to
 # fix if that dispatch itself ever needs to change.
 _gh_pr_resolve_outdated_git() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _worktree="$1"
     shift
     if [ -n "$_worktree" ]; then
@@ -337,6 +338,7 @@ _gh_pr_resolve_outdated_git() {
 # for the context-free comparison the lenient mode below uses (#1704); empty
 # (the default) keeps `git diff`'s ordinary -U3 context-included hash.
 _gh_pr_resolve_outdated_patch_id() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _base="$1" _head="$2" _worktree="${3-}" _diff_flag="${4-}"
     if [ -z "$_base" ] || [ -z "$_head" ]; then
         printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_patch_id <base-sha> <head-sha> [worktree-path] [diff-flag]\n' >&2
@@ -387,6 +389,7 @@ _gh_pr_resolve_outdated_patch_id() {
 # directly, with no diff-line parsing to get wrong. Its `-` output for a binary
 # file is not "0", so binaries disqualify too, which is the right answer here.
 _gh_pr_resolve_outdated_base_pure_insertion() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _old_base="$1" _old_head="$2" _new_base="$3" _worktree="${4-}"
     if [ -z "$_old_base" ] || [ -z "$_old_head" ] || [ -z "$_new_base" ]; then
         printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_base_pure_insertion <old-base-sha> <old-head-sha> <new-base-sha> [worktree-path]\n' >&2
@@ -433,6 +436,7 @@ _gh_pr_resolve_outdated_base_pure_insertion() {
 # shape mirrors `_gh_pr_merge_train_review_passed_stale`'s four-state rc this
 # file already consumes, where 3 is likewise "undetermined".
 _gh_pr_resolve_outdated_has_label() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1" _repo="$2" _host="${3-}" _label="$4"
     if [ -z "$_pr" ] || [ -z "$_repo" ] || [ -z "$_label" ]; then
         printf '[gh-pr-resolve-outdated] usage: _gh_pr_resolve_outdated_has_label <pr> <repo> <host> <label>\n' >&2
@@ -454,6 +458,7 @@ _gh_pr_resolve_outdated_has_label() {
 # status — Step 4's push already succeeded, so this step must never turn that
 # into a failure.
 _gh_pr_resolve_outdated_reconcile_review_passed() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _pr="$1" _repo="$2" _host="$3"
     local _old_base="$4" _old_head="$5" _new_base="$6" _new_head="$7"
     local _worktree="${8-}"

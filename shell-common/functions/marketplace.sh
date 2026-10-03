@@ -59,6 +59,7 @@ _count_all_skills() {
 # Extract YAML frontmatter value
 # Usage: _get_yaml_value "field_name" < file.md
 _get_yaml_value() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local field="$1"
     sed -n '/^---$/,/^---$/p' | sed '1d;$d' | grep "^${field}:" | sed "s/^${field}: *//"
 }
@@ -66,6 +67,7 @@ _get_yaml_value() {
 # Parse a single SKILL.md file and output JSON object
 # Usage: _parse_skill_file "/path/to/skill/SKILL.md" "marketplace_name" "plugin_name"
 _parse_skill_file() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local skill_file="$1"
     local marketplace_name="$2"
     local plugin_name="$3"
@@ -108,6 +110,7 @@ _parse_skill_file() {
 # Generate manifest from filesystem scan
 # This is computationally expensive, so only run when cache is stale
 _generate_manifest() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local manifest_dir
     manifest_dir=$(dirname "$MANIFEST_CACHE_PATH")
 
@@ -188,6 +191,7 @@ _ensure_manifest_fresh() {
 
 # List all marketplace skills grouped by plugin (default) or all skills by marketplace (--all)
 _claude_skills_marketplace_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local show_all=false
     local marketplace_filter=""
 
@@ -272,6 +276,7 @@ _claude_skills_marketplace_list() {
 
 # Group skills by category/plugin (show headers only, or detailed list if filter provided)
 _claude_skills_marketplace_group() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local category_filter="${1:-}"
 
     _ensure_manifest_fresh || {
@@ -371,6 +376,7 @@ _claude_skills_marketplace_group() {
 
 # Show marketplace statistics
 _claude_skills_marketplace_stats() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _ensure_manifest_fresh || {
         ux_error "Failed to generate marketplace manifest"
         return 1
@@ -404,6 +410,7 @@ _claude_skills_marketplace_stats() {
 
 # Search marketplace skills — fzf fuzzy picker when interactive, jq substring otherwise
 _claude_skills_marketplace_search() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local query="$1"
 
     # Interactive fuzzy picker; skipped when fzf is missing or there is no TTY
@@ -482,6 +489,7 @@ _claude_skills_marketplace_search() {
 
 # Display detailed skill information
 _claude_skills_marketplace_info() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local skill_name="$1"
 
     [ -z "$skill_name" ] && {
@@ -526,6 +534,7 @@ _claude_skills_marketplace_info() {
 
 # Force rebuild of manifest cache
 _claude_skills_marketplace_refresh() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_section "Rebuilding Skill Manifest"
 
     rm -f "$MANIFEST_CACHE_PATH"
@@ -658,6 +667,7 @@ claude_skills_marketplace_help() {
 
 # Main router function
 claude_skills_marketplace() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local command="${1:-help}"
     shift || true
 

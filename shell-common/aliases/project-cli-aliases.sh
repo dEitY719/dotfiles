@@ -24,6 +24,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 #
 
 _run_project_cli() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local project_name="$1"
     local python_module="$2"
 
@@ -92,6 +93,7 @@ run_jiravis_cli() {
 #   jira-test help         # Show help
 #
 run_jiravis_test() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local project_dir="$HOME/para/project/jiravis"
 
     if [ ! -d "$project_dir" ]; then

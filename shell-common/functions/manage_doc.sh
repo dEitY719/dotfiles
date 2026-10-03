@@ -60,6 +60,7 @@ unset _UX_LIB_PATH
 # ═══════════════════════════════════════════════════════════════
 
 clear_doc() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Validate arguments
     if [ $# -eq 0 ]; then
         ux_error "Usage: clear-doc <file|pattern>"
@@ -155,6 +156,7 @@ clear_doc() {
 # ═══════════════════════════════════════════════════════════════
 
 delete_doc() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Validate arguments
     if [ $# -eq 0 ]; then
         ux_error "Usage: del-doc <file|pattern>"
