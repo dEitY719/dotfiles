@@ -105,3 +105,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 - **[UX Guidelines](./tools/ux_lib/UX_GUIDELINES.md)** — 출력 스타일 표준
 - **[Cheatsheet](../docs/guide/playbooks/shell-common-cheatsheet.md)** — 패턴 / 실수 예시
 - **[Command UX SSOT](../docs/.ssot/command-guidelines.md)** — 명령/help 인터페이스 정책
+
+## Vendoring to skill repos
+
+`functions/devx_pr_verify_live_*.sh` (and other files whose banner reads `# SSOT: dEitY719/dotfiles ...`) are vendored whole into the gh-* skill repos under `lib/vendor/shell-common/`. The sync tool is NOT in this repo: `scripts/sync-shell-common-vendor.sh` lives in `harness-skills` (`${WORKSPACE_ROOT:-~/para/project/skills}/harness-skills/`). Run `scripts/sync-shell-common-vendor.sh [--check] --ssot <this checkout> <repo>...` there. It only refreshes files a consumer already vendors; adding a new one (e.g. `devx_pr_verify_live_serving_identity.sh` in gh-verify-skills) is that repo's own copy-in.
