@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/zsh.sh
 # Zsh shell management functions
 # Shared between bash and zsh
@@ -9,8 +10,6 @@
 # ═══════════════════════════════════════════════════════════════
 
 # Check if zsh is installed
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _zsh_check_installed() {
     if ! command -v zsh >/dev/null 2>&1; then

@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/git_restore.sh
 # grs — friendly `git restore` wrapper (Verdict + Next-action preflight).
 #
@@ -24,8 +25,6 @@
 # wrapped — `grss` / `grst` (OMZ) and raw `git` are untouched, so the
 # `--staged` guidance can point at `grst` and we avoid wrapping raw git
 # (side-effect / performance risk).
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # git.sh already unaliases its own set; grs lives here, so drop it here too.
 unalias grs 2>/dev/null || true

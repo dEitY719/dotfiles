@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/claude_allow_clean.sh
 #
 # Removes accumulated junk from Claude Code's permissions.allow list in
@@ -7,8 +8,6 @@
 # (multi-line command artifacts), or should never be pre-approved (--no-verify).
 #
 # Usage: claude-allow-clean [--dry-run] [path/to/settings.local.json]
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _claude_allow_clean_usage() {
 	ux_info "Usage: claude-allow-clean [--dry-run] [path]"

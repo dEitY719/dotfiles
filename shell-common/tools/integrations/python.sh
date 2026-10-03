@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/integrations/python.sh
 # Python venv aliases (POSIX-compatible).
 # Help: `py-help` (defined in shell-common/functions/py_help.sh) lists the
@@ -8,8 +9,6 @@
 
 # Python Virtual Environment
 # pyenv-virtualenv: deactivate must be dot-sourced ('. deactivate')
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias create-venv='python -m venv .venv'
 alias act-venv='. .venv/bin/activate'

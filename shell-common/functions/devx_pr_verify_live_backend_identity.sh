@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/devx_pr_verify_live_backend_identity.sh
 # Shell function wrapper for container-backend identity verification.
 #
@@ -9,8 +10,6 @@
 # User-facing command: devx-pr-verify-live-backend-identity (dash-form)
 # Internal function: devx_pr_verify_live_backend_identity() (snake_case)
 # ═══════════════════════════════════════════════════════════════════════════════
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Source UX library
 _UX_LIB_PATH="${SHELL_COMMON:-${HOME}/.local/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"

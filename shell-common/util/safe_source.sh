@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/util/safe_source.sh
 # SSOT for safe file sourcing with counter tracking
 # Sourced by both bash/main.bash and zsh/main.zsh
@@ -7,8 +8,6 @@
 # Counter SOURCED_FILES_COUNT must be initialized by the caller:
 #   bash: declare -gi SOURCED_FILES_COUNT=0
 #   zsh:  typeset -gi SOURCED_FILES_COUNT=0
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 safe_source() {
     local file_path="$1"

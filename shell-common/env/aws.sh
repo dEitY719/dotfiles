@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/env/aws.sh
 # AWS env loader — sources aws/aws.local.sh when present.
 #
@@ -11,8 +12,6 @@
 # both main loaders already source shell-common/env/*.sh automatically, so
 # adding a new file here applies to both shells with zero loader changes
 # (SSOT — see issue #677).
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _aws_root="${DOTFILES_ROOT:-$HOME/dotfiles}/aws"
 if [ -f "$_aws_root/aws.local.sh" ]; then

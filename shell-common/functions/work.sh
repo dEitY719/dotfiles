@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/work.sh
 # Work management help function (make-jira, make-confluence, work-log)
 # Supports both bash and zsh
@@ -10,8 +11,6 @@
 # NOTE: Aliases are defined in shell-common/aliases/work-aliases.sh
 # This module provides only the help function for the work management system
 # ═════════════════════════════════════════════════════════════════════════════
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _work_help_load_ux() {
     if ! type ux_header >/dev/null 2>&1; then

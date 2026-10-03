@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/agy_run.sh
 # SSOT for the agy (Antigravity CLI) non-interactive transport.
 #
@@ -20,8 +21,6 @@
 #    rejects a bare `--print` with "flag needs an argument"). Issue #1767: a
 #    bare trailing `--print` meant the prompt piped on stdin was never read.
 #    So it is passed empty and the stdin message carries the prompt.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Run agy with the prompt on stdin; print its response text on stdout.
 #

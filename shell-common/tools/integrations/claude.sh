@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/claude.sh
 # Claude Code CLI - setup, utilities, and workflow helpers
 # Shared between bash and zsh
@@ -17,8 +18,6 @@
 # mount path (#287) and the interim per-skill symlink path (#342, #344)
 # were removed in favour of one symlink that mirrors the SSOT atomically
 # and survives reboot without sudoers entries.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # ═══════════════════════════════════════════════════════════════
 # Dependency Check: Ensure jq is installed

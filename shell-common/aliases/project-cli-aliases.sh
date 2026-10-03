@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/aliases/project-cli-aliases.sh
 # Project-specific CLI command aliases
 #
@@ -21,8 +22,6 @@
 # Each project must have:
 #   - backend/{PYTHON_MODULE}/__main__.py
 #
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _run_project_cli() {
     local project_name="$1"

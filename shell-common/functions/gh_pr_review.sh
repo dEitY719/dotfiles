@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/gh_pr_review.sh
 # gh-pr-review — synchronous PR review delegation to an external AI CLI.
 # Sibling of gh-pr-approve (gh_pr_approve.sh) and gh-pr-reply
@@ -14,8 +15,6 @@
 # Steps 1, 4 (PROMPT_FILE path allocation only), 5, and 6. The bats fixture
 # tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh sources this
 # file so the arg-parse contract has exactly one definition.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Advisory only (issue #1454): a stale copy of this file living in another
 # directory named `dotfiles` once got sourced instead of this one, surfacing

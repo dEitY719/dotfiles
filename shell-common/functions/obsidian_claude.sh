@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/obsidian_claude.sh
 # Launch Claude Code inside the Obsidian vault with a chosen account.
 #
@@ -14,8 +15,6 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 #
 # Usage: obsidian-claude [personal|work|work1] [extra claude args...]
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Derive the vault path lazily at call-time (not source-time) to avoid a
 # ~200ms cmd.exe penalty on every shell start.

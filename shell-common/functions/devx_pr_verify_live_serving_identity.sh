@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/devx_pr_verify_live_serving_identity.sh
 # gh-verify:live assertion 1: is the PR's target commit in the serving checkout?
 # Ported from dEitY719/gh-verify-skills skills/live/lib/serving-identity.sh (#1859).
@@ -23,8 +24,6 @@
 #                       source ("[WARN] SHA 불일치, 내용 일치"), or the root is
 #                       not a git checkout
 # return  0 for every verdict (a verdict is data); 2 on bad input.
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 devx_pr_verify_live_serving_identity() {
     local line sha src state root url syms top head n behind body found missing s

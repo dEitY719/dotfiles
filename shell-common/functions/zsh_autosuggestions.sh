@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/zsh_autosuggestions.sh
 # zsh-autosuggestions helper functions and documentation
 # ZSH only plugin - provides intelligent command suggestions
@@ -7,8 +8,6 @@
 # ═══════════════════════════════════════════════════════════════
 # Load UX Library (if not already loaded)
 # ═══════════════════════════════════════════════════════════════
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 if ! type ux_header >/dev/null 2>&1; then
     SHELL_COMMON="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"

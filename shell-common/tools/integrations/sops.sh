@@ -1,4 +1,5 @@
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/tools/integrations/sops.sh
 # sops + age status diagnostics (issue #1833)
 #
@@ -8,8 +9,6 @@
 #
 # Install: install-sops-age
 # Details: sops-help
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Octal mode of a file: GNU stat, then BSD/macOS stat.
 _sops_file_mode() {

@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/gh_pr_approve.sh
 # gh-pr-approve — fire-and-forget N-parallel GitHub PR approval runner.
 # Sibling of gh-flow (shell-common/functions/gh_flow.sh); single-shot
@@ -8,8 +9,6 @@
 # ============================================================================
 # State helpers
 # ============================================================================
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _gh_pr_approve_state_root() {
     printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/gh-pr-approve"

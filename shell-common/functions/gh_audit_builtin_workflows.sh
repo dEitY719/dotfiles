@@ -1,5 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/functions/gh_audit_builtin_workflows.sh
 # Audit projectV2 boards attached to the current repo for builtin workflow
 # policy violations.
@@ -34,8 +35,6 @@
 # ---------------------------------------------------------------------------
 # Help text
 # ---------------------------------------------------------------------------
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 gh_audit_builtin_workflows_help() {
     if type ux_header >/dev/null 2>&1; then
