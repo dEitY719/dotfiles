@@ -5,6 +5,7 @@
 # Verifies the canonical `[ -r ]` guard + `|| true` block applied to all
 # helper source points across:
 #   gh-pr-merge / gh-pr / gh-pr-reply / gh-pr-merge-emergency / gh-commit
+#   (external skill repos since #1680)
 # behaves correctly under both helper-present and helper-missing
 # (e.g. agent-toolbox / cross-project skill copy) environments.
 #
@@ -67,30 +68,17 @@ teardown() {
     assert_output --partial "BLOCK_COMPLETED"
 }
 
-@test "fixture mirrors the SKILL.md canonical pattern verbatim (drift guard)" {
-    # If this test fails, the F-2 canonical pattern in one of the SKILL.md
-    # files has drifted from the fixture in
-    # tests/bats/skills/_fixtures/helper_fallback_nf1.sh.  Re-sync both.
+@test "fixture's helper contract matches this repo's helper (drift guard)" {
+    # The canonical F-2 block lives in the external skill repos since #1680
+    # (workspace ${WORKSPACE_ROOT:-~/para/project/skills}); this repo must not
+    # read those files (#1892). What this repo still owns is the other half of
+    # the contract: the helper path and function name the block depends on.
     local fixture="${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/helper_fallback_nf1.sh"
+    local helper="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_project_status.sh"
     run grep -F 'if [ -r "$_HELPER" ]; then' "$fixture"
     assert_success
-
-    # Spot-check that each skill's canonical helper-fallback guard carries
-    # through. NOTE: #862 PR-NW-4 relocated these bash blocks out of the
-    # SKILL.md bodies into references/ for progressive disclosure (Check 1
-    # line-count ≤100). Each owning SKILL.md Step now points at the reference
-    # and the model pastes it verbatim, so the guard still executes — the
-    # drift check just follows it to its new home. (This reverses the #747
-    # inlining for gh-pr.)
-    local f
-    for f in \
-        "claude/skills/gh-pr-merge/references/project-board-sync.md" \
-        "claude/skills/gh-commit/SKILL.md" \
-        "claude/skills/gh-pr-reply/references/board-sync-in-review.sh.md" \
-        "claude/skills/gh-pr-approve/references/board-approved-sync.sh.md" \
-        "claude/skills/gh-pr/references/project-board-sync.md" \
-        "claude/skills/gh-pr-merge-emergency/references/project-board-sync.md"; do
-        run grep -F 'if [ -r "$_HELPER" ]; then' "${_BATS_REAL_DOTFILES_ROOT}/$f"
-        assert_success
-    done
+    run grep -F '/functions/gh_project_status.sh"' "$fixture"
+    assert_success
+    run grep -E '^_gh_project_status_sync\(\) \{' "$helper"
+    assert_success
 }
