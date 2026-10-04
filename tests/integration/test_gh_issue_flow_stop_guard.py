@@ -3037,3 +3037,69 @@ def test_hint_alias_table_is_consistent_with_the_chain(tmp_path: Path) -> None:
         assert result.returncode == 0
         reason = json.loads(result.stdout)["reason"]
         assert expected_hint in reason, f"{canonical}: {reason}"
+
+
+# ---------------------------------------------------------------------------
+# Bare skill names (#1907). Flat-symlink installs (`~/.claude*/skills/<name>`)
+# register only `implement` / `commit` / …, so the model can only invoke those.
+# The flow start on such an install is `Skill(issue)` followed by the expanded
+# SKILL.md whose H1 is surface (d) — measured on a live transcript; the base
+# dir line there (`…/skills/issue`) carries no `gh-flow` and matches nothing.
+# ---------------------------------------------------------------------------
+
+_ALL_SIX_SUB_SKILLS_BARE = ["implement", "commit", "create", "review-all", "conflict", "outdated"]
+
+
+def _bare_install_boundary() -> list[dict[str, Any]]:
+    return [
+        _assistant_skill("issue", "https://github.com/o/r/issues/464"),
+        _user_meta_text(
+            "Base directory for this skill: /home/u/.claude-work/skills/issue\n\n"
+            "# gh-flow:issue — Issue → PR composition\n\n## Role\n"
+        ),
+    ]
+
+
+def _trace_run(transcript: Path) -> subprocess.CompletedProcess[str]:
+    return _run_hook(_hook_event(transcript), env={"GH_ISSUE_FLOW_STOP_GUARD_TRACE": "1"})
+
+
+def test_bare_skill_names_after_boundary_count_all_six(tmp_path: Path) -> None:
+    transcript = _write_transcript(
+        tmp_path,
+        [*_bare_install_boundary(), *(_assistant_skill(n) for n in _ALL_SIX_SUB_SKILLS_BARE), _assistant_text("ok")],
+    )
+    result = _trace_run(transcript)
+    assert "sub_skills_seen=6/6" in result.stderr, result.stderr
+    assert "Step 3" in json.loads(result.stdout)["reason"]
+
+
+def test_mixed_namespaced_and_bare_names_count_each_slot_once(tmp_path: Path) -> None:
+    names = ["gh-issue:implement", "implement", "commit", "gh-pr-commit", "create", "gh-verify:review-all"]
+    transcript = _write_transcript(tmp_path, [_user_text("/gh-flow:issue 1907"), *(_assistant_skill(n) for n in names)])
+    result = _trace_run(transcript)
+    assert "sub_skills_seen=4/6" in result.stderr, result.stderr
+    assert "Step 2.5 — Skill(gh-resolve-conflict)" in json.loads(result.stdout)["reason"]
+
+
+def test_bare_commit_before_boundary_is_not_counted(tmp_path: Path) -> None:
+    transcript = _write_transcript(
+        tmp_path,
+        [_assistant_skill("commit"), _assistant_skill("create"), *_bare_install_boundary(), _assistant_text("ok")],
+    )
+    result = _trace_run(transcript)
+    assert "sub_skills_seen=0/6" in result.stderr, result.stderr
+
+
+def test_bare_issue_skill_alone_is_not_a_boundary(tmp_path: Path) -> None:
+    """A bare `Skill(issue)` could be any plugin's `issue` skill; only the
+    gh-flow:issue SKILL.md expansion that follows it arms the guard."""
+    transcript = _write_transcript(tmp_path, [_assistant_skill("issue", "42"), _assistant_skill("commit")])
+    result = _run_hook(_hook_event(transcript))
+    assert result.stdout.strip() == ""
+
+
+def test_next_step_hint_also_names_the_bare_skill(tmp_path: Path) -> None:
+    transcript = _write_transcript(tmp_path, [*_bare_install_boundary(), _assistant_skill("implement")])
+    reason = json.loads(_run_hook(_hook_event(transcript)).stdout)["reason"]
+    assert "Step 2.2 — Skill(gh-pr-commit) (or Skill(gh-pr:commit), or Skill(commit))" in reason, reason
