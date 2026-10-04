@@ -13,11 +13,23 @@ Dependencies: Claude Code CLI, jq (sudo는 #575 이후 불필요)
 marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭제됐다.
 등록은 `claude/plugin/{marketplaces,plugins}.json`.
 
-유일한 소스는 로컬에 나란히 clone 된 marketplace repo 다 — 소스 경로는
-`${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`.
+**Claude Code 는 플러그인 전용이다.** Claude Code 의 스킬 SSOT 는
+`claude/plugin/plugins.json` 에 선언되고 `claude/plugin/restore.sh` 가 설치하는
+플러그인 하나뿐이다 (예: `gh-flow@gh-flow-skills` → `/gh-flow:issue`).
+워크스페이스 스킬을 `~/.claude*/skills/` 에 flat 링크로 합성하지 **않는다** —
+같은 스킬이 네임스페이스 없는 명령(`/issue`)으로 한 번 더 등록돼 중복되기
+때문이다. `claude/setup.sh` 는 예전 합성이 남긴 워크스페이스 링크(dangling
+포함)를 `_claude_prune_workspace_skills()` 로 지우고, 워크스페이스 밖을 가리키는
+링크(graphify, `claude-accounts link` 결과)·실디렉토리·파일은 그대로 둔다.
+`skills/` 자체는 실디렉토리로 유지된다 (#707 F-8).
+
+아래의 flat 합성은 **플러그인 기반이 아닌 나머지 하네스**(OpenCode / Codex /
+agy / Hermes)에만 적용된다. 소스는 로컬에 나란히 clone 된 marketplace repo 다 —
+소스 경로는 `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`.
 
 - 판별·열거 규칙 SSOT: `shell-common/functions/skill_sources.sh`
-  (`_skill_workspace_root`, `_skill_workspace_dirs`) — 6개 하네스가 공유한다.
+  (`_skill_workspace_root`, `_skill_workspace_dirs`) — 하네스들이 공유한다
+  (Claude Code 쪽은 정리 대상 판정에만 `_skill_workspace_root` 를 쓴다).
 - repo 끼리 이름이 겹치면 정렬 순서상 앞선 repo 가 이긴다 (재현 가능한 결정).
   워크스페이스 밖을 가리키는 링크(마켓플레이스 오버레이 등)는 건드리지 않는다.
 - 자동 발견: repo 를 clone 하면 다음 setup 실행에서 그냥 잡힌다. `skills/` 가
@@ -31,21 +43,21 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 
 | 도구 | 담당 스크립트 / 함수 | 트리거 |
 |------|----------------------|--------|
-| Claude Code (각 계정) | `shell-common/tools/integrations/claude.sh` → `_claude_account_setup_one()` + `_claude_compose_workspace_skills()` (#707 F-8, #1680) | `./claude/setup.sh` |
+| Claude Code (각 계정) | 플러그인 전용 — `claude/plugin/plugins.json` + `claude/plugin/restore.sh`. `shell-common/tools/integrations/claude.sh` → `_claude_account_setup_one()` + `_claude_prune_workspace_skills()` 는 예전 flat 워크스페이스 링크를 **정리만** 한다 (합성 안 함) | `./claude/setup.sh` |
 | OpenCode / Gemini / agy / Hermes | `scripts/setup-skills-ssot.sh` → `link_skills_compose()` (#791, agy 는 #1731) | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
 | Codex | `scripts/setup-skills-ssot.sh` → `link_skills_individual_codex()` | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
-| 소스 열거 (#1652 / #1680) | `shell-common/functions/skill_sources.sh` + `_claude_compose_workspace_skills()` (Claude Code) / `collect_skill_sources()` (나머지) | 위와 동일 |
+| 소스 열거 (#1652 / #1680) | `shell-common/functions/skill_sources.sh` + `collect_skill_sources()` (Claude Code 외 하네스) | 위와 동일 |
 
 ### 신규 스킬 추가 후 동기화
 
 ```bash
-./claude/setup.sh                   # Claude Code 계정
 ./scripts/setup-skills-ssot.sh      # Codex / OpenCode / Gemini / agy / Hermes
 # 또는 한번에:
 ./setup.sh
 ```
 
-위 CLI 모두 entry-level symlink 합성이라 (#707, F-8 + #791) 새 스킬 디렉토리를 추가했을 때 위 명령으로 빠진 entry 만 추가된다. Idempotent.
+위 CLI 는 entry-level symlink 합성이라 (#791) 새 스킬 디렉토리를 추가했을 때 위 명령으로 빠진 entry 만 추가된다. Idempotent.
+Claude Code 는 해당 repo 가 `claude/plugin/plugins.json` 에 등록돼 있으면 플러그인으로 이미 로드된다 — 새 repo 는 거기에 추가하고 `claude/plugin/restore.sh` 로 설치한다.
 
 ### 연결 방식이 통일된 이유 (issue #791)
 
@@ -65,7 +77,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 # 외부 PC (옵션 1, 3) — 멀티-계정
 ~/.claude-personal/settings.json         = dotfiles/claude/settings.json 의 실파일 복사 (#940, symlink 아님)
 ~/.claude-personal/statusline-command.sh -> dotfiles/claude/statusline-command.sh
-~/.claude-personal/skills/<name>         -> <workspace>/<repo>/skills/<name> (entry symlink, #707/#1680)
+~/.claude-personal/skills/                실디렉토리 (#707) — 워크스페이스 스킬은 플러그인으로 로드, flat 링크 없음 (외부 링크만)
 ~/.claude-personal/docs                  -> dotfiles/claude/docs            (dir symlink, #575)
 ~/.claude-personal/plugins               -> ~/.claude-shared/plugins
 ~/.claude-personal/projects/GLOBAL/memory -> dotfiles/claude/global-memory
@@ -75,7 +87,7 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 # 사내 PC (옵션 2) — 단일 계정 (issue #571)
 ~/.claude/settings.json                  = gateway-cli setup 이 쓰는 실파일 (조직 LLM Gateway 도구 소유, 2026-08-18~)
 ~/.claude/statusline-command.sh          -> dotfiles/claude/statusline-command.sh
-~/.claude/skills/<name>                  -> <workspace>/<repo>/skills/<name> (entry symlink, #707/#1680)
+~/.claude/skills/                        실디렉토리 (#707) — 워크스페이스 스킬은 플러그인으로 로드, flat 링크 없음 (외부 링크만)
 ~/.claude/docs                           -> dotfiles/claude/docs            (dir symlink)
 ~/.claude/plugins                        -> ~/.claude-shared/plugins
 ~/.claude/projects/GLOBAL/memory         -> dotfiles/claude/global-memory
@@ -101,7 +113,7 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
 
 `~/.dotfiles-setup-mode` 가 `internal` 이면 `claude_yolo` 가 멀티-계정 해석을 우회하고 `~/.claude/` 를 강제 사용 (F-2). 잘못 migrate된 사내 PC 복구: `claude-accounts rollback` (F-3). 자세한 내용은 `docs/guide/internal-pc.md`.
 
-`claude-accounts link [<src>] / unlink <name> / link --list` (#1847) — 3rd-party 설치기(`npx skills add`, `graphify install`)가 `CLAUDE_CONFIG_DIR` 없이 `~/.claude/skills/` 로 떨어뜨린 스킬을 `~/.claude-*/skills` (`-shared`/`-backups` 제외, 없으면 `~/.claude/skills`) 전체에 절대경로 심링크로 fan-out. 인자 없는 `link` 는 dry-run 기본(`--apply` 로 적용), `--force` 는 심링크만 교체, `unlink` 는 심링크만 제거. 워크스페이스 밖을 가리키는 링크라 compose(`_claude_compose_workspace_skills`) 재실행에도 유지된다.
+`claude-accounts link [<src>] / unlink <name> / link --list` (#1847) — 3rd-party 설치기(`npx skills add`, `graphify install`)가 `CLAUDE_CONFIG_DIR` 없이 `~/.claude/skills/` 로 떨어뜨린 스킬을 `~/.claude-*/skills` (`-shared`/`-backups` 제외, 없으면 `~/.claude/skills`) 전체에 절대경로 심링크로 fan-out. 인자 없는 `link` 는 dry-run 기본(`--apply` 로 적용), `--force` 는 심링크만 교체, `unlink` 는 심링크만 제거. 워크스페이스 밖을 가리키는 링크라 `claude/setup.sh` 의 워크스페이스 링크 정리(`_claude_prune_workspace_skills`)에도 유지된다. 워크스페이스 안을 가리키는 entry 는 플러그인으로 로드되므로 fan-out 대상이 아니다 (setup 이 정리한다).
 
 `claude/hooks/session-start-pc-context.sh` — `SessionStart` hook, `settings.json`에 등록됨. `~/.dotfiles-setup-mode` + hostname을 매 세션 시작마다 `additionalContext`로 주입해 5대 PC 혼동을 방지한다(#1052). 모드 파일이 없으면 조용히 빈 컨텍스트를 반환하고 세션 시작을 막지 않는다.
 

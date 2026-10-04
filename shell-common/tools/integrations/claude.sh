@@ -105,11 +105,11 @@ claude_init() {
     fi
     echo ""
 
-    # Skills: composed from the locally cloned marketplace repos (#1652 /
-    # #1680). This used to link per-file from a dotfiles `claude/skills/`
-    # source, which no longer exists.
+    # Skills: Claude Code 는 워크스페이스 스킬을 플러그인으로만 로드한다
+    # (claude/plugin/plugins.json). 예전 flat 합성(#1652 / #1680)이 남긴
+    # 워크스페이스 링크만 정리하고 skills/ 는 실디렉토리로 유지한다.
     ux_section "Claude Code Skills"
-    _claude_compose_workspace_skills "$skills_target_dir"
+    _claude_prune_workspace_skills "$skills_target_dir"
     echo ""
 
     ux_header "Claude Code Initialization Complete"
@@ -123,8 +123,8 @@ claude_init() {
     done
     echo ""
 
-    # Entry-level composition (#707 F-8): each child is a directory symlink
-    # into a marketplace clone, not a bare `*.md` file.
+    # skills/ 는 실디렉토리 (#707 F-8) — 워크스페이스 스킬은 플러그인으로
+    # 로드되므로 여기 남는 건 외부에서 추가된 entry 뿐이다.
     ux_section "Skills"
     if [ -d "$skills_target_dir" ]; then
         linked_skill_found=0
@@ -838,100 +838,79 @@ _claude_prepare_skills_dir() {
     mkdir -p "$_cpsd_tgt"
 }
 
-# _claude_compose_workspace_skills <target_skills_dir>
+# _claude_prune_workspace_skills <target_skills_dir>
 #
-# issue #1652 (#1410 F-6, non-destructive half): layer the skills of
-# locally cloned marketplace repos into a <tgt> that
-# the only skill source there is (#1680).
-# Sources come from shell-common/functions/skill_sources.sh, which the
-# Codex / OpenCode / Gemini+agy / Hermes side (scripts/setup-skills-ssot.sh)
-# reads too — one definition of "what is a workspace skill" for all six
-# harnesses.
+# Claude Code 는 워크스페이스 스킬을 플러그인으로만 로드한다 — 플러그인이
+# Claude Code 스킬의 단일 SSOT 다. 각 marketplace repo 는
+# claude/plugin/plugins.json 에 선언되고 claude/plugin/restore.sh 가 설치하며
+# (예: gh-flow@gh-flow-skills → /gh-flow:issue), 같은 스킬을
+# <tgt>/<skill> → <workspace>/<repo>/skills/<skill> flat 링크로도 합성하면
+# 네임스페이스 없는 명령(/issue)으로 한 번 더 등록돼 중복된다. 그래서 예전의
+# workspace 합성(#1652 / #1680, _claude_compose_workspace_skills)은 Claude Code
+# 계정에서 폐지됐고, 이 함수는 그 합성이 남긴 링크를 정리하는 마이그레이션만
+# 맡는다. 다른 harness(OpenCode / Codex / agy / Hermes)는 플러그인 기반이
+# 아니므로 scripts/setup-skills-ssot.sh 의 flat 합성을 그대로 유지한다.
 #
-# Purely additive (NF-1): a name already taken — by a marketplace overlay,
-# by anything — is left exactly as it is. Stale workspace links (their repo
-# was removed) are pruned first, so a repo rename converges in one run
-# instead of two; links pointing outside the workspace root are never
-# touched.
+# 정리 대상: <tgt> 의 직계 symlink 중 target 이 워크스페이스 루트 안에 있는 것
+# (dangling 포함 — repo 가 사라진 링크도 지운다). 판정은 _claude_under_workspace
+# (raw / resolved 양쪽 철자)를 그대로 쓴다 — `claude-accounts link` 가
+# 워크스페이스 entry 로 보고 fan-out 에서 건너뛰는 기준과 같은 정의다. 워크스페이스 밖을 가리키는 링크
+# (graphify, `claude-accounts link` 결과 등), 실디렉토리(agentmemory-*,
+# synced/, .trash/), 일반 파일은 절대 건드리지 않는다.
 #
-# Since #1680 this is the only skill source, so it also normalizes <tgt>
-# into a real composition directory (_claude_prepare_skills_dir) — that
-# migration used to ride along on the now-deleted dotfiles pass.
+# <tgt> 자체는 계속 실디렉토리로 정규화한다 (_claude_prepare_skills_dir,
+# #707 F-8) — 외부에서 추가된 entry 가 계속 들어올 자리다.
 #
-# Every "nothing to do" path is silent and returns 0: no workspace root,
-# an empty one, a repo with no skills/, a skills/ entry with no SKILL.md.
-#
-# `find` replaces the glob loops used elsewhere in this file because an
-# empty workspace is the ordinary first-run state and zsh aborts the
-# enclosing function on an unmatched glob (`nomatch`).
-_claude_compose_workspace_skills() {
-    _ccws_tgt="${1:-}"
-    [ -n "$_ccws_tgt" ] || return 0
-    _claude_prepare_skills_dir "$_ccws_tgt" || return 1
+# 정리한 개수는 CLAUDE_WS_SKILLS_PRUNED 에 누적된다 (claude/setup.sh 의 변경
+# 요약 라인, #997). Idempotent: 두 번째 실행은 아무것도 지우지 않는다.
+# 워크스페이스 루트가 없거나 너무 넓으면(_skill_workspace_root 의 breadth
+# guard) 조용히 return 0 — 무엇이 "워크스페이스 링크" 인지 판정할 수 없을 때는
+# 지우지 않는 쪽이 안전하다.
+_claude_prune_workspace_skills() {
+    _cpws_tgt="${1:-}"
+    [ -n "$_cpws_tgt" ] || return 0
+    _claude_prepare_skills_dir "$_cpws_tgt" || return 1
 
     # Defense-in-depth (#724 lesson): a caller that sources this file but not
-    # functions/skill_sources.sh would hit `command not found` (rc 127), the
-    # `|| return 0` below would absorb it, and the whole workspace lane would
-    # silently no-op. Say so instead.
+    # functions/skill_sources.sh would make _claude_under_workspace reject
+    # every path, and the cleanup would silently no-op. Say so instead.
     if ! command -v _skill_workspace_root >/dev/null 2>&1; then
         ux_warning "  workspace skill sources unavailable — shell-common/functions/skill_sources.sh not sourced (#1652)"
         return 0
     fi
 
-    _ccws_root="$(_skill_workspace_root)" || return 0
+    _cpws_root="$(_skill_workspace_root)" || return 0
 
-    # Prune first: a workspace link whose source vanished has to free its
-    # name before the add loop below can claim it.
-    _ccws_links="$(find "$_ccws_tgt" -mindepth 1 -maxdepth 1 -type l 2>/dev/null)"
-    while IFS= read -r _ccws_existing; do
-        [ -n "$_ccws_existing" ] || continue
+    # `find` rather than a glob: zsh aborts the enclosing function on an
+    # unmatched glob (`nomatch`), and an empty skills/ is the normal state.
+    _cpws_links="$(find "$_cpws_tgt" -mindepth 1 -maxdepth 1 -type l 2>/dev/null)"
+    _cpws_pruned=0
+    while IFS= read -r _cpws_existing; do
+        [ -n "$_cpws_existing" ] || continue
         # `readlink` gives the raw target; a relative or non-normalized link
-        # would not match the resolved root, and the entry would silently
-        # escape the prune. Fall back to the raw value when resolution fails
-        # (a dangling link is exactly what this loop is looking for).
-        _ccws_target_path=$(readlink "$_ccws_existing")
-        _ccws_target_real=$(readlink -f "$_ccws_existing" 2>/dev/null || printf '%s' "$_ccws_target_path")
-        case "$_ccws_target_path$_ccws_target_real" in
-            "$_ccws_root"/*) ;;
-            *"$_ccws_root"/*) ;;
-            *) continue ;;
-        esac
-        [ -d "$_ccws_target_path" ] && continue
-        _ccws_stale_name="${_ccws_existing##*/}"
-        rm -f "$_ccws_existing" \
-            && ux_info "  removed stale workspace skill: $_ccws_stale_name"
-    done <<CCWS_LINKS
-$_ccws_links
-CCWS_LINKS
-
-    _ccws_dirs="$(_skill_workspace_dirs "$_ccws_root")"
-    [ -n "$_ccws_dirs" ] || return 0
-
-    _ccws_added=0
-    while IFS= read -r _ccws_want; do
-        [ -n "$_ccws_want" ] || continue
-        _ccws_name="${_ccws_want##*/}"
-        _ccws_link="${_ccws_tgt}/${_ccws_name}"
-
-        # Name already occupied — dotfiles SSOT, an overlay, or an earlier
-        # workspace repo won it. Leave it exactly as it is.
-        if [ -e "$_ccws_link" ] || [ -L "$_ccws_link" ]; then
+        # would not match the root, so test the resolved spelling too. Fall
+        # back to the raw value when resolution fails (a dangling link whose
+        # repo vanished is exactly what this loop is looking for).
+        _cpws_raw=$(readlink "$_cpws_existing")
+        _cpws_real=$(readlink -f "$_cpws_existing" 2>/dev/null || printf '%s' "$_cpws_raw")
+        if ! _claude_under_workspace "$_cpws_raw" && ! _claude_under_workspace "$_cpws_real"; then
             continue
         fi
+        if rm -f "$_cpws_existing"; then
+            _cpws_pruned=$((_cpws_pruned + 1))
+            ux_info "  removed workspace skill link (loaded via plugin): ${_cpws_existing##*/}"
+        else
+            ux_error "  rm failed: $_cpws_existing"
+        fi
+    done <<CPWS_LINKS
+$_cpws_links
+CPWS_LINKS
 
-        ln -s "$_ccws_want" "$_ccws_link" || {
-            # One bad entry must not cost the remaining workspace skills —
-            # A single bad entry is not worth aborting the whole lane for.
-            ux_error "  workspace symlink failed: $_ccws_link -> $_ccws_want"
-            continue
-        }
-        _ccws_added=$((_ccws_added + 1))
-        ux_info "  new workspace skill: $_ccws_name"
-    done <<CCWS_DIRS
-$_ccws_dirs
-CCWS_DIRS
-
-    ux_success "  composed workspace skills: $_ccws_tgt (added=$_ccws_added root=$_ccws_root)"
+    CLAUDE_WS_SKILLS_PRUNED=$((${CLAUDE_WS_SKILLS_PRUNED:-0} + _cpws_pruned))
+    if [ "$_cpws_pruned" -gt 0 ]; then
+        ux_success "  pruned workspace skill links: $_cpws_tgt (removed=$_cpws_pruned root=$_cpws_root)"
+    fi
+    return 0
 }
 
 # _claude_install_herdr_hook <config-dir> — herdr 상태 훅 스크립트를 계정 디렉터리에 설치.
@@ -984,10 +963,12 @@ _claude_account_setup_one() {
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
     _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
-    # skills/ is an entry-level composition (issue #707, F-8) of the
-    # locally cloned marketplace repos (#1652 / #1680) — the dotfiles
-    # SSOT is gone, and externally added symlinks still layer in.
-    _claude_compose_workspace_skills "$_caso_cdir/skills"
+    # skills/ 는 실디렉토리 (issue #707, F-8) 로 유지하되 워크스페이스 스킬은
+    # 합성하지 않는다 — Claude Code 는 그것들을 플러그인(claude/plugin/
+    # plugins.json, restore.sh 설치)으로 로드하고, flat 링크는 네임스페이스
+    # 없는 중복 명령이 된다. 예전 합성이 남긴 워크스페이스 링크만 정리한다.
+    # 외부에서 추가된 symlink(`claude-accounts link`, graphify 등)는 유지.
+    _claude_prune_workspace_skills "$_caso_cdir/skills"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/docs"                   "$_caso_cdir/docs"
     _claude_ensure_symlink "${DOTFILES_ROOT}/claude/workflows"               "$_caso_cdir/workflows"
     # Global instructions (Advisor/Worker) — SSOT symlink, all projects (#1115).
@@ -1104,10 +1085,9 @@ claude_accounts_status() {
                 # rather than missing (gemini review on PR #590).
                 echo "  $_cas_link: regular file ✓"
             elif [ "$_cas_link" = "skills" ] && [ -d "$_cas_cdir/$_cas_link" ]; then
-                # skills/ is an entry-level *composed directory* since #707
-                # (F-8), not a symlink — _claude_compose_workspace_skills fills it
-                # with per-skill links so externally added symlinks can
-                # layer in. Without this branch the diagnostic fell to
+                # skills/ is a real *directory* since #707 (F-8), not a
+                # symlink — externally added per-skill links layer into it
+                # (workspace skills come from plugins, not from here). Without this branch the diagnostic fell to
                 # the else arm and wrongly reported "✗ missing" even though
                 # setup.sh's own verify confirmed the dir (this loop never
                 # learned the #707 layout change).
@@ -1746,7 +1726,8 @@ claude_accounts_link() {
         [ -n "$_cal_e" ] || continue
         [ -f "$_cal_e/SKILL.md" ] || continue
         _cal_real=$(readlink -f "$_cal_e")
-        # Compose owns workspace-backed entries.
+        # Workspace-backed entries are plugin-loaded in Claude Code and
+        # setup prunes their flat links — never fan them out.
         _claude_under_workspace "$_cal_real" && continue
         _cal_n="${_cal_e##*/}"
         # Already the same target in every account — nothing to plan.

@@ -1,10 +1,27 @@
 {
   "autoUpdatesChannel": "latest",
   "enabledPlugins": {
+    "authoring@authoring-skills": true,
+    "claudecode@claudecode-skills": true,
     "codex@openai-codex": true,
+    "devenv@devenv-skills": true,
+    "gh-flow@gh-flow-skills": true,
+    "gh-issue@gh-issue-skills": true,
+    "gh-pr@gh-pr-skills": true,
+    "gh-resolve@gh-resolve-skills": true,
+    "gh-setup@gh-setup-skills": true,
+    "gh-verify@gh-verify-skills": true,
+    "harness@harness-skills": true,
+    "notes@notes-skills": true,
+    "packaging@packaging-skills": true,
+    "pkm@pkm-skills": true,
     "ralph-loop@claude-plugins-official": true,
+    "session@session-skills": true,
+    "spec-flow@spec-flow-skills": true,
     "superpowers@claude-plugins-official": true,
-    "understand-anything@understand-anything": true
+    "understand-anything@understand-anything": true,
+    "video@video-skills": true,
+    "visuals@visuals-skills": true
   },
   "env": {
     "CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS": "10000",
