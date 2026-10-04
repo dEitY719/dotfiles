@@ -22,3 +22,12 @@ skill이 메인 세션의 직접 실행을 명시한 단계(git/gh 명령 등)�
 
 계획 문서 기반 다중 작업 실행 시에는 superpowers:subagent-driven-development가 이 원칙의
 구체 절차다.
+
+## 슬래시 명령 안내 규칙
+
+사용자에게 `/명령`을 안내할 때는 SKILL.md description·README·스킬 출력에 적힌 이름
+(`/gh-flow:issue` 같은 plugin 네임스페이스형)을 그대로 옮기지 않는다. 그 이름은 plugin 으로
+설치됐을 때만 유효하다. 반드시 **현재 세션의 available skills 목록에 실제로 등록된 이름**을
+쓴다 — 목록에 `gh-flow:issue` 가 있으면 `/gh-flow:issue`, `issue` 만 있으면 `/issue`
+(`~/.claude*/skills/` 의 평면 심볼릭 링크는 네임스페이스가 붙지 않는다). 둘 다 없으면 없다고
+말한다. 목록 이름과 문서 이름이 다르면 그 불일치(plugin 미설치 drift)도 함께 알린다.
