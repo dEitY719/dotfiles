@@ -1,23 +1,25 @@
 #!/usr/bin/env bats
 # tests/bats/scripts/update_skills.bats
-# Validate scripts/update-skills.sh (#1825): runs git-pull-skills -> claude/setup.sh
-# -> setup-skills-ssot.sh in order, stops on pull failure, --dry-run pulls only.
+# Validate scripts/update-skills.sh (#1825): runs git-clone-skills -> git-pull-skills ->
+# claude/setup.sh -> setup-skills-ssot.sh in order (#1903), stops on clone/pull
+# failure, --dry-run clones/pulls in dry-run only.
 
 load '../test_helper'
 
 SCRIPT_UNDER_TEST="${DOTFILES_ROOT}/scripts/update-skills.sh"
 
-# Build a fake dotfiles tree: a copy of the wrapper plus 3 stub steps that
+# Build a fake dotfiles tree: a copy of the wrapper plus 4 stub steps that
 # append their name (and args) to $CALL_LOG. The wrapper resolves its root
 # from its own (realpath'd) location, so the copy drives the stubs.
 _make_fake_root() {
-    local pull_rc="$1"
+    local pull_rc="$1" clone_rc="${2:-0}"
     FAKE_ROOT="${TEST_TEMP_HOME}/fake-dotfiles"
     CALL_LOG="${TEST_TEMP_HOME}/calls.log"
     export CALL_LOG
     mkdir -p "$FAKE_ROOT/scripts" "$FAKE_ROOT/claude/plugin" "$FAKE_ROOT/shell-common/tools"
     cp "$SCRIPT_UNDER_TEST" "$FAKE_ROOT/scripts/update-skills.sh"
     ln -s "${DOTFILES_ROOT}/shell-common/tools/ux_lib" "$FAKE_ROOT/shell-common/tools/ux_lib"
+    _stub "$FAKE_ROOT/claude/plugin/git-clone-skills.sh" clone "$clone_rc"
     _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull "$pull_rc"
     _stub "$FAKE_ROOT/claude/setup.sh" claude-setup 0
     _stub "$FAKE_ROOT/scripts/setup-skills-ssot.sh" skills-ssot 0
@@ -45,13 +47,14 @@ teardown() {
     [ -x "$SCRIPT_UNDER_TEST" ]
 }
 
-@test "update-skills.sh runs the 3 steps in order, passing args to pull only" {
+@test "update-skills.sh runs the 4 steps in order, passing args to pull only" {
     _make_fake_root 0
     cd /
     run "$FAKE_ROOT/scripts/update-skills.sh" --all-branches
     assert_success
     run cat "$CALL_LOG"
-    assert_output "pull --all-branches
+    assert_output "clone
+pull --all-branches
 claude-setup
 skills-ssot"
 }
@@ -61,15 +64,25 @@ skills-ssot"
     run "$FAKE_ROOT/scripts/update-skills.sh"
     assert_failure
     run cat "$CALL_LOG"
-    assert_output "pull"
+    assert_output "clone
+pull"
 }
 
-@test "update-skills.sh --dry-run runs only the pull dry-run" {
+@test "update-skills.sh stops before pull when git-clone-skills fails" {
+    _make_fake_root 0 1
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure
+    run cat "$CALL_LOG"
+    assert_output "clone"
+}
+
+@test "update-skills.sh --dry-run runs only the clone and pull dry-runs" {
     _make_fake_root 0
     run "$FAKE_ROOT/scripts/update-skills.sh" --dry-run
     assert_success
     run cat "$CALL_LOG"
-    assert_output "pull --dry-run"
+    assert_output "clone --dry-run
+pull --dry-run"
 }
 
 @test "skills-sync alias points at update-skills.sh" {

@@ -6,8 +6,10 @@
 #
 # Companion to git-pull-skills.sh: that one refreshes repositories already
 # on disk, this one brings the missing ones down. Idempotent by design — a
-# destination directory that already exists is reported and left untouched,
-# never deleted or overwritten (refreshing it is git-pull-skills' job).
+# destination that is already a git repo is reported and left untouched,
+# never deleted or overwritten (refreshing it is git-pull-skills' job). A
+# destination that exists without .git (e.g. a clone interrupted by Ctrl+C)
+# is warned about and counted as a failure — still never deleted.
 #
 # The repository list is read from the manifest at run time; nothing is
 # hard-coded here, so adding a marketplace to marketplaces.json is the only
@@ -281,7 +283,13 @@ while IFS= read -r slug; do
 	dest_dir="$TARGET_DIR/$repo_name"
 	clone_url="https://$GH_TARGET_HOST/$repo_owner/$repo_name.git"
 
-	# Idempotency: an existing destination is reported and never modified.
+	# Idempotency: an existing git repo is reported and never modified. A
+	# non-repo directory is a broken leftover: fail loudly, never delete.
+	if [ -e "$dest_dir" ] && [ ! -e "$dest_dir/.git" ]; then
+		ux_warning "$repo_name: $dest_dir exists but is not a git repository (remove it manually and re-run)"
+		FAILED=$((FAILED + 1))
+		continue
+	fi
 	if [ -e "$dest_dir" ]; then
 		ux_info "$repo_name: already present (skipped)"
 		ALREADY=$((ALREADY + 1))
