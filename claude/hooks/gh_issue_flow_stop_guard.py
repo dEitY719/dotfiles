@@ -139,13 +139,20 @@ def _trace(message: str, *, layer: str | None = None) -> None:
 #
 # Element 0 is the CANONICAL name of the slot: it is what `seen` records and
 # what `_next_step_label` quotes back to the model.
+#
+# The last form of each slot is the BARE skill name (#1907). Installs that
+# compose skills as flat `~/.claude*/skills/<name>` symlink dirs register only
+# that name, so `Skill(gh-pr:commit)` fails with `Unknown skill` there and the
+# model has to call `Skill(commit)`. Bare names like `commit` / `create` are
+# generic, but they only count inside `_scan_after_boundary`, i.e. after a
+# gh-flow:issue boundary — a `commit` outside the flow is never looked at.
 EXPECTED_CHAIN: list[tuple[str, ...]] = [
-    ("gh-issue-implement", "gh-issue:implement"),
-    ("gh-pr-commit", "gh-pr:commit"),
-    ("gh-pr-create", "gh-pr:create"),
-    ("gh-verify-review-all", "gh-verify:review-all"),
-    ("gh-resolve-conflict", "gh-resolve:conflict"),
-    ("gh-resolve-outdated", "gh-resolve:outdated"),
+    ("gh-issue-implement", "gh-issue:implement", "implement"),
+    ("gh-pr-commit", "gh-pr:commit", "commit"),
+    ("gh-pr-create", "gh-pr:create", "create"),
+    ("gh-verify-review-all", "gh-verify:review-all", "review-all"),
+    ("gh-resolve-conflict", "gh-resolve:conflict", "conflict"),
+    ("gh-resolve-outdated", "gh-resolve:outdated", "outdated"),
 ]
 SUB_SKILL_NAMES: set[str] = {n for forms in EXPECTED_CHAIN for n in forms}
 
@@ -159,27 +166,28 @@ SUB_SKILL_NAMES: set[str] = {n for forms in EXPECTED_CHAIN for n in forms}
 # step instead of two.
 _SUB_SKILL_CANONICAL: dict[str, str] = {n: forms[0] for forms in EXPECTED_CHAIN for n in forms}
 
-# The one alias `_next_step_label` quotes alongside the canonical name, so a
+# The aliases `_next_step_label` quotes alongside the canonical name, so a
 # block names the slot in the colon form Claude Code's own slash-command
-# surface uses as well as the hyphen form. Spelled out per slot rather than
+# surface uses and in the bare form flat-symlink installs register (#1907),
+# as well as the hyphen form. Spelled out per slot rather than
 # taken positionally out of EXPECTED_CHAIN
 # (`forms[-1]`): those tuples are alias *sets* whose order carries no meaning
 # past element 0, so adding a form later would silently change which name the
 # model is told to invoke (agy review, PR #1693). `_assert_hint_aliases_known`
 # below turns any drift between the two into an import-time failure rather
 # than a wrong hint at block time.
-_SUB_SKILL_HINT_ALIAS: dict[str, str] = {
-    "gh-issue-implement": "gh-issue:implement",
-    "gh-pr-commit": "gh-pr:commit",
-    "gh-pr-create": "gh-pr:create",
-    "gh-verify-review-all": "gh-verify:review-all",
-    "gh-resolve-conflict": "gh-resolve:conflict",
-    "gh-resolve-outdated": "gh-resolve:outdated",
+_SUB_SKILL_HINT_ALIAS: dict[str, tuple[str, ...]] = {
+    "gh-issue-implement": ("gh-issue:implement", "implement"),
+    "gh-pr-commit": ("gh-pr:commit", "commit"),
+    "gh-pr-create": ("gh-pr:create", "create"),
+    "gh-verify-review-all": ("gh-verify:review-all", "review-all"),
+    "gh-resolve-conflict": ("gh-resolve:conflict", "conflict"),
+    "gh-resolve-outdated": ("gh-resolve:outdated", "outdated"),
 }
 
 
 def _assert_hint_aliases_known() -> None:
-    """Every slot has exactly one hint alias, and it addresses that same slot.
+    """Every slot has hint aliases, and each addresses that same slot.
 
     Runs at import. A hook that fails open on a malformed transcript must
     still refuse to ship an internally inconsistent chain table — a hint
@@ -187,11 +195,12 @@ def _assert_hint_aliases_known() -> None:
     """
     for forms in EXPECTED_CHAIN:
         canonical = forms[0]
-        alias = _SUB_SKILL_HINT_ALIAS.get(canonical)
-        if alias is None:
+        aliases = _SUB_SKILL_HINT_ALIAS.get(canonical)
+        if not aliases:
             raise AssertionError(f"_SUB_SKILL_HINT_ALIAS is missing a hint for slot {canonical!r}")
-        if alias not in forms:
-            raise AssertionError(f"hint alias {alias!r} does not address slot {canonical!r} ({forms!r})")
+        for alias in aliases:
+            if alias not in forms:
+                raise AssertionError(f"hint alias {alias!r} does not address slot {canonical!r} ({forms!r})")
 
 
 _assert_hint_aliases_known()
@@ -898,11 +907,11 @@ def _count_fresh_user_prompts(messages: list[dict[str, Any]], start: int) -> int
 def _next_step_label(seen: list[str]) -> str:
     """Map the highest-index sub-skill seen to a human label for the *next* one.
 
-    Both spellings of the slot are quoted: the hyphen form and the colon form
-    of the same `gh-flow-skills` skill. Claude Code accepts either, and which
-    one a transcript records depends on how the skill was invoked, so quoting
-    only one would answer a block with a name the session may never have
-    produced. The hyphen form stays first and unparenthesised, which is also
+    Every spelling of the slot is quoted: the hyphen form, the colon form and
+    the bare form (#1907) of the same skill. Which one is invocable depends on
+    how the install composes skills (a flat-symlink install knows only the
+    bare name), so quoting only one could point the model at an
+    `Unknown skill`. The hyphen form stays first and unparenthesised, which is also
     what keeps the existing `"Step 2.2 — Skill(gh-pr-commit)"` substring
     assertions matching.
 
@@ -916,8 +925,8 @@ def _next_step_label(seen: list[str]) -> str:
             next_idx = i + 1
     if next_idx >= len(canonical):
         return "Step 3 — emit the final 'gh-flow:issue complete (#N)' report"
-    alias = _SUB_SKILL_HINT_ALIAS[canonical[next_idx]]
-    return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]}) (or Skill({alias}))"
+    aliases = ", or ".join(f"Skill({a})" for a in _SUB_SKILL_HINT_ALIAS[canonical[next_idx]])
+    return f"{STEP_LABELS[next_idx]} — Skill({canonical[next_idx]}) (or {aliases})"
 
 
 def _resolve_transcript_path(event: dict[str, Any]) -> tuple[str | None, str]:
