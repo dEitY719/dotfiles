@@ -1078,6 +1078,30 @@ _gh_pr_review_ensure_host() {
     fi
 }
 
+# _gh_pr_review_require_auth — fail unless gh is authenticated for the host of
+# <remote>'s URL. A bare `gh auth status` checks EVERY host in hosts.yml, so a
+# dead login for an unrelated host (e.g. a stale internal-GHES stub on a public
+# PC) fails the gate although the target host is fine (#1905). Falls back to the
+# unscoped check when the host cannot be derived from the remote.
+_gh_pr_review_require_auth() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local _remote="${1:-origin}" _url _host
+    _url=$(git remote get-url "$_remote" 2>/dev/null) || _url=""
+    # shellcheck disable=SC1091
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null || :
+    _host=$(_gh_host_from_url "$_url" 2>/dev/null) || _host=""
+    if [ -n "$_host" ]; then
+        if ! gh auth status --hostname "$_host" >/dev/null 2>&1; then
+            echo "gh CLI not authenticated for $_host; run 'gh auth login -h $_host'" >&2
+            return 1
+        fi
+    elif ! gh auth status >/dev/null 2>&1; then
+        echo "gh CLI not authenticated; run 'gh auth login'" >&2
+        return 1
+    fi
+    return 0
+}
+
 _gh_pr_review_resolve_pr_number() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Echoes the PR number; non-zero exit if neither arg nor branch resolves.
@@ -1298,8 +1322,7 @@ EOF
     if [ "$_ai_cli_rc" -ne 0 ]; then
         return "$_ai_cli_rc"
     fi
-    if ! gh auth status >/dev/null 2>&1; then
-        echo "gh CLI not authenticated; run 'gh auth login'" >&2
+    if ! _gh_pr_review_require_auth "$remote"; then
         return 1
     fi
 
