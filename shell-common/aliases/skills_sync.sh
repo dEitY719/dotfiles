@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Skills Sync Alias
-# One-shot skills update: git-pull-skills -> claude/setup.sh -> setup-skills-ssot.sh (#1825)
+# One-shot skills update: git-clone-skills -> git-pull-skills -> claude/setup.sh -> setup-skills-ssot.sh (#1825, #1903)
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 

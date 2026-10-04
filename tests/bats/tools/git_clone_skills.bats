@@ -499,3 +499,20 @@ JSON
     grep -q "alias git-clone-skills=" "${DOTFILES_ROOT}/shell-common/aliases/claude_plugins.sh"
     grep -q "git-clone-skills" "${DOTFILES_ROOT}/shell-common/functions/claude_plugins_help.sh"
 }
+
+@test "git-clone-skills.sh warns and fails on an existing non-git directory, never deleting it" {
+    _write_manifest
+    _setup_stub_path
+    _make_fake_remote "gamma-skills"
+    local target="${TEST_TEMP_HOME}/skills"
+    mkdir -p "${target}/alpha-skills"
+    echo "partial" >"${target}/alpha-skills/LEFTOVER"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_failure
+    assert_output --partial "alpha-skills: ${target}/alpha-skills exists but is not a git repository"
+    assert_output --partial "Failed: 1"
+    assert_output --partial "Cloned: 1"
+    [ -f "${target}/alpha-skills/LEFTOVER" ]
+}
