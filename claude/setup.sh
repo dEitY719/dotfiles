@@ -124,10 +124,12 @@ if ! declare -f _is_mounted >/dev/null 2>&1; then
 fi
 
 # Load workspace skill-source helpers (issue #1652), used by
-# _claude_compose_workspace_skills to layer locally cloned marketplace repos
-# on top of the dotfiles entries. Same interactive-guard reasoning as
-# mount.sh above. The declare-f assertion is the #724 lesson: without it a
-# missing definition makes the workspace lane silently no-op rather than fail.
+# _claude_prune_workspace_skills to recognize (and remove) flat workspace
+# skill links in the Claude Code skills dirs — Claude Code loads those skills
+# via plugins (claude/plugin/plugins.json), not via flat links. Same
+# interactive-guard reasoning as mount.sh above. The declare-f assertion is
+# the #724 lesson: without it a missing definition makes the cleanup silently
+# no-op rather than fail.
 SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 if [ -f "$SKILL_SOURCES_LIB" ]; then
     DOTFILES_FORCE_INIT=1 . "$SKILL_SOURCES_LIB"
@@ -518,14 +520,14 @@ SETUP_MIGRATIONS=0
 
 # _print_change_summary — 완료 메시지 직전 "이번 실행에서 바뀐 것" 한 줄
 # 롤업 (#997). 사용자가 로그 전체를 훑지 않고도 변경 규모를 파악하게 한다.
-# 최소 집계 원칙(#997 비범위): 마이그레이션 건수 + 합성된 스킬 수.
-# 스킬은 #1680 이후 워크스페이스 clone 이 유일한 소스이므로 소스 트리가 아니라
-# 합성 결과 디렉토리(HOME_SKILLS)의 entry 를 센다.
+# 최소 집계 원칙(#997 비범위): 마이그레이션 건수 + 정리한 워크스페이스 스킬
+# 링크 수. Claude Code 스킬은 플러그인(claude/plugin/plugins.json)이 단일
+# SSOT 라 더 이상 합성하지 않는다 — 대신 _claude_prune_workspace_skills 가
+# 예전 합성이 남긴 flat 링크를 지우며 CLAUDE_WS_SKILLS_PRUNED 에 누적한다
+# (계정 루프의 최상위 셸에서 호출되므로 서브셸 없이 값이 전파된다).
 # 인자 $1 이 있으면 뒤에 추가(예: 다중 계정 분기의 활성 계정 수).
 _print_change_summary() {
-    local skills
-    skills=$(find "$HOME_SKILLS" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-    ux_info "요약: 마이그레이션 ${SETUP_MIGRATIONS}건 · 합성 스킬 ${skills}개${1:+ · $1}"
+    ux_info "요약: 마이그레이션 ${SETUP_MIGRATIONS}건 · 워크스페이스 스킬 링크 정리 ${CLAUDE_WS_SKILLS_PRUNED:-0}개 (스킬은 플러그인으로 로드)${1:+ · $1}"
 }
 
 # 필수 dotfiles source 검증
@@ -670,12 +672,14 @@ if [ "$_setup_mode" = "internal" ]; then
     # 손대지 않는다. dotfiles SSOT 변경은 session-start-settings-drift.sh 가 전파.
     _claude_install_herdr_hook "$HOME/.claude"
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
-    # skills/ uses entry-level composition (issue #707, F-8) so externally
-    # added symlinks can be layered into the same target dir. Since #1680
-    # the locally cloned marketplace repos are the only source. This branch
-    # does not go through _claude_account_setup_one, so the call has to be
+    # skills/ stays a real directory (issue #707, F-8) so externally added
+    # symlinks can be layered into it, but workspace skills are NOT composed:
+    # Claude Code loads them via plugins (claude/plugin/plugins.json,
+    # restore.sh), and flat links would duplicate them as un-namespaced
+    # commands. Only the stale workspace links are pruned. This branch does
+    # not go through _claude_account_setup_one, so the call has to be
     # repeated here — internal PCs are single-account by design.
-    _claude_compose_workspace_skills "$HOME_SKILLS"
+    _claude_prune_workspace_skills "$HOME_SKILLS"
     _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
     _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"
     _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
@@ -690,8 +694,8 @@ if [ "$_setup_mode" = "internal" ]; then
     # setup writes it as a regular file (2026-08-18~, aws/setup.sh's #687
     # merge is deprecated). settings.local.json is also absent — it is the
     # personal-override slot (#924) and never a dotfiles symlink (#584).
-    # skills/ is a real directory of entry-level symlinks (#707, F-8), so
-    # it is checked as `-d` (and `! -L`) rather than `-L`.
+    # skills/ is a real directory (#707, F-8) — workspace skills come from
+    # plugins, so it may well be empty — checked as `-d` (and `! -L`).
     ux_section "심볼릭 링크 확인 (internal/single-account)"
     for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md keybindings.json; do
         if [ -L "$HOME/.claude/$link" ]; then
@@ -701,9 +705,9 @@ if [ "$_setup_mode" = "internal" ]; then
         fi
     done
     if [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]; then
-        log_dim "✓ ~/.claude/skills entry-level 합성 디렉토리 확인됨"
+        log_dim "✓ ~/.claude/skills 실디렉토리 확인됨 (스킬은 플러그인으로 로드)"
     else
-        log_error_and_exit "$HOME/.claude/skills entry-level 합성 실패 (디렉토리 아님)"
+        log_error_and_exit "$HOME/.claude/skills 실디렉토리 생성 실패 (디렉토리 아님)"
     fi
 
     # OpenCode / Codex / Gemini / agy / Hermes entry-level 합성은
@@ -789,8 +793,8 @@ if [ "${_bare_claude_backup_failed:-0}" != "1" ]; then
 fi
 
 # --- Verify Links (모든 활성 계정 + 접두사 없는 \$HOME/.claude) ---
-# skills/ is a real directory of entry-level symlinks (#707, F-8), so it
-# is checked as `-d` (and `! -L`) rather than `-L`.
+# skills/ is a real directory (#707, F-8) — workspace skills come from
+# plugins, so it may well be empty — checked as `-d` (and `! -L`).
 # settings.json is a real-file copy since #940 (not a symlink) — the
 # write-through symlink let /model pollute the tracked SSOT (#924).
 ux_section "심볼릭 링크 확인"
@@ -809,9 +813,9 @@ for acct in $ENABLED_ACCOUNTS; do
         fi
     done
     if [ -d "${cdir}/skills" ] && [ ! -L "${cdir}/skills" ]; then
-        log_dim "✓ ${acct}/skills entry-level 합성 디렉토리 확인됨"
+        log_dim "✓ ${acct}/skills 실디렉토리 확인됨 (스킬은 플러그인으로 로드)"
     else
-        log_error_and_exit "${acct}/skills entry-level 합성 실패 (디렉토리 아님)"
+        log_error_and_exit "${acct}/skills 실디렉토리 생성 실패 (디렉토리 아님)"
     fi
 done
 # 접두사 없는 \$HOME/.claude/settings.json 도 실파일이어야 한다 (#1701) —
@@ -824,7 +828,8 @@ else
 fi
 
 # OpenCode / Codex / Gemini / agy / Hermes entry-level 합성은
-# scripts/setup-skills-ssot.sh 가 책임짐 (#791, #1376, #1731). agy 는 Gemini 런타임을
+# scripts/setup-skills-ssot.sh 가 책임짐 (#791, #1376, #1731) — 플러그인 기반이
+# 아닌 이 harness 들만 flat 합성을 쓴다 (Claude Code 는 플러그인 전용). agy 는 Gemini 런타임을
 # 공유하지만 skill 검색 경로는 상속하지 않아 ~/.gemini/config/skills 에 따로 합성한다
 # (agy/AGENTS.md 참고).
 # 이전엔 본 분기에서 _setup_gemini_skills_symlink 를 호출했지만, #791 에서

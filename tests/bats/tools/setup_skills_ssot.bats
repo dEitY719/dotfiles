@@ -441,7 +441,8 @@ ${BASE_REPO}/skills"
 # 로컬에 clone 된 marketplace repo 들
 # (${WORKSPACE_ROOT}/<repo>/skills/<skill>/SKILL.md) 이 소스 전부다.
 # 열거 규칙 자체의 SSOT 는 shell-common/functions/skill_sources.sh 이고,
-# Claude Code 계정 쪽 커버리지는 claude_compose_workspace_skills.bats.
+# Claude Code 계정은 플러그인 전용이라 합성하지 않는다 — 예전 flat 링크
+# 정리 커버리지는 claude_prune_workspace_skills.bats.
 # ---------------------------------------------------------------------
 
 # Seed a workspace repo under the given root.

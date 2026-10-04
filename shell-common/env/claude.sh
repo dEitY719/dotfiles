@@ -14,10 +14,11 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 export CLAUDE_DOC_GENERATOR=claude
 
 # Skills directory path (used by skill_loader and other tools).
-# Points at the composed harness directory, not a dotfiles source: #1680
-# moved every skill into its own marketplace repo, and the composition of
-# those clones into "<config dir>/skills/<name>" is what a shell actually
-# has on hand (scripts/setup-skills-ssot.sh / _claude_compose_workspace_skills).
+# Points at the Claude Code config dir's skills/, not a dotfiles source: #1680
+# moved every skill into its own marketplace repo. Claude Code loads those
+# repos as plugins (claude/plugin/plugins.json), so this dir only holds
+# externally added entries — workspace skills are no longer flat-composed
+# here (_claude_prune_workspace_skills removes the old links).
 export CLAUDE_SKILLS_PATH="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
 
 # ═══════════════════════════════════════════════════════════════
