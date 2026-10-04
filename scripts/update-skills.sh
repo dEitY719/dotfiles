@@ -26,7 +26,7 @@ case " $* " in
 esac
 
 ux_section "1/4 git-clone-skills"
-"${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" "${clone_args[@]}"
+"${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" ${clone_args[@]+"${clone_args[@]}"}
 
 ux_section "2/4 git-pull-skills"
 "${DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" "$@"
