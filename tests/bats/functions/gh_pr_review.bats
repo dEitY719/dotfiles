@@ -144,6 +144,52 @@ _source_module() {
 }
 
 # ---------------------------------------------------------------------------
+# _gh_pr_review_require_auth — host-scoped `gh auth status` gate (#1905)
+# ---------------------------------------------------------------------------
+
+# Stub `gh` whose `auth status` fails unless pinned to github.com via
+# --hostname, mimicking a hosts.yml that carries a dead second host.
+_stub_gh_dead_other_host() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/gh" <<'EOF'
+#!/bin/sh
+if [ "$1 $2" = "auth status" ]; then
+    [ "$3" = "--hostname" ] && [ "$4" = "github.com" ] && exit 0
+    exit 1
+fi
+exit 0
+EOF
+    chmod +x "$stub_dir/gh"
+    export PATH="$stub_dir:$PATH"
+}
+
+_fake_repo_with_origin() {
+    cd "$TEST_TEMP_HOME" && git init -q repo && cd repo &&
+        git remote add origin "$1"
+}
+
+@test "require_auth: dead unrelated host does not fail the gate (#1905)" {
+    _source_module
+    _stub_gh_dead_other_host
+    _fake_repo_with_origin git@github.com:owner/repo.git
+    run _gh_pr_review_require_auth origin
+    assert_success
+}
+
+@test "require_auth: unauthenticated target host still fails, naming the host (#1905)" {
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\nexit 1\n' >"$stub_dir/gh"
+    chmod +x "$stub_dir/gh"
+    _fake_repo_with_origin git@github.com:owner/repo.git
+    PATH="$stub_dir:$PATH" run _gh_pr_review_require_auth origin
+    assert_failure 1
+    assert_output --partial "gh CLI not authenticated for github.com"
+}
+
+# ---------------------------------------------------------------------------
 # _gh_pr_review_require_ai_cli — PATH pre-flight
 # ---------------------------------------------------------------------------
 
