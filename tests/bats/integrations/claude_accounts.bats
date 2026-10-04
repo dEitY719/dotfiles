@@ -1230,11 +1230,13 @@ JSON
 # docs/ retained the #575 single directory-symlink design.
 #
 # #1680 deleted the dotfiles `claude/skills/` SSOT and retired
-# _claude_compose_skills_dir: _claude_account_setup_one now composes
-# skills only from the workspace, via _claude_compose_workspace_skills,
-# so every source below is `${WORKSPACE_ROOT}/<repo>/skills/<skill>/`.
-# The composed-target contract (real dir, per-entry symlinks, user data
-# untouched) is unchanged — only where the entries come from moved.
+# _claude_compose_skills_dir; the workspace composer that replaced it
+# (_claude_compose_workspace_skills) is retired too: Claude Code loads the
+# workspace marketplace repos as plugins (claude/plugin/plugins.json — the
+# single SSOT for Claude Code skills), and flat links duplicated every skill
+# as an un-namespaced command. _claude_account_setup_one now only keeps
+# skills/ a real directory (#707 F-8) and prunes leftover workspace links via
+# _claude_prune_workspace_skills; external links and user data stay.
 
 # Stage a FAKE_DOTFILES_ROOT under $HOME (docs/ and the other dotfiles-owned
 # symlink sources) plus a fake WORKSPACE_ROOT holding marketplace-repo skill
@@ -1275,7 +1277,7 @@ run_with_fake_ssot() {
     run_in_bash "export DOTFILES_ROOT='$FAKE_DOTFILES_ROOT' WORKSPACE_ROOT='$FAKE_WORKSPACE_ROOT'; $1"
 }
 
-@test "issue #575 → #1680: claude_accounts_init composes workspace skills and dir-symlinks docs/" {
+@test "claude_accounts_init does NOT compose workspace skills (plugins are the SSOT) and dir-symlinks docs/" {
     _seed_ssot_skills packaging-skills alpha beta
     mkdir -p "$HOME/.claude-shared/plugins"
 
@@ -1285,46 +1287,42 @@ run_with_fake_ssot() {
     # docs/ remains a single directory-level symlink (#575).
     [ -L "$HOME/.claude-personal/docs" ]
     [ "$(readlink "$HOME/.claude-personal/docs")" = "$FAKE_DOTFILES_ROOT/claude/docs" ]
-    # skills/ is a real composed directory of per-entry symlinks (#707, F-8)
-    # sourced from the workspace marketplace clones (#1680).
+    # skills/ is still a real directory (#707, F-8) ...
     [ -d "$HOME/.claude-personal/skills" ]
     [ ! -L "$HOME/.claude-personal/skills" ]
-    [ -L "$HOME/.claude-personal/skills/alpha" ]
-    [ "$(readlink "$HOME/.claude-personal/skills/alpha")" = "$FAKE_WORKSPACE_ROOT/packaging-skills/skills/alpha" ]
-    [ -L "$HOME/.claude-personal/skills/beta" ]
-    [ -f "$HOME/.claude-personal/skills/alpha/SKILL.md" ]
+    # ... but workspace skills are loaded via plugins, never flat-linked.
+    [ ! -e "$HOME/.claude-personal/skills/alpha" ] && [ ! -L "$HOME/.claude-personal/skills/alpha" ]
+    [ ! -e "$HOME/.claude-personal/skills/beta" ] && [ ! -L "$HOME/.claude-personal/skills/beta" ]
 }
 
-@test "issue #707, F-8: re-running setup picks up newly added workspace skill entries" {
-    # #575's instant-visibility property (a new SSOT entry visible without
-    # re-running setup) was intentionally traded by #707, F-8 for overlay
-    # support: skills/ is now a real directory of per-entry symlinks, so a
-    # new entry is wired in only on the next compose call. This test pins
-    # the new contract — visible after re-run, not before.
+@test "claude_accounts_init prunes leftover workspace links (incl. dangling) and keeps everything else" {
     _seed_ssot_skills packaging-skills alpha
-    mkdir -p "$HOME/.claude-shared/plugins"
+    mkdir -p "$HOME/.claude-shared/plugins" "$HOME/elsewhere/graphify"
+    _sk="$HOME/.claude-personal/skills"
+    mkdir -p "$_sk/agentmemory-recall" "$_sk/synced" "$_sk/.trash"
+    # Left behind by the old flat composition.
+    ln -s "$FAKE_WORKSPACE_ROOT/packaging-skills/skills/alpha" "$_sk/alpha"
+    ln -s "$FAKE_WORKSPACE_ROOT/removed-skills/skills/old" "$_sk/old"
+    # Not ours: external link, dangling external link, file.
+    ln -s "$HOME/elsewhere/graphify" "$_sk/graphify"
+    ln -s "$HOME/elsewhere/vanished" "$_sk/vanished"
+    echo "note" > "$_sk/README.txt"
 
     run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
     assert_success
+    assert_output --partial "removed workspace skill link (loaded via plugin): alpha"
 
-    _seed_ws_skills packaging-skills just-added
-
-    # Pre-rerun: the new workspace entry is NOT yet wired into the composed dir.
-    [ ! -e "$HOME/.claude-personal/skills/just-added" ]
-
-    # Re-run is idempotent for existing entries and wires the new one in.
-    run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
-    assert_success
-    [ -L "$HOME/.claude-personal/skills/just-added" ]
-    [ -f "$HOME/.claude-personal/skills/just-added/SKILL.md" ]
+    [ ! -e "$_sk/alpha" ] && [ ! -L "$_sk/alpha" ]
+    [ ! -e "$_sk/old" ] && [ ! -L "$_sk/old" ]
+    [ "$(readlink "$_sk/graphify")" = "$HOME/elsewhere/graphify" ]
+    [ -L "$_sk/vanished" ]
+    [ -d "$_sk/agentmemory-recall" ] && [ -d "$_sk/synced" ] && [ -d "$_sk/.trash" ]
+    grep -q "note" "$_sk/README.txt"
 }
 
-@test "issue #707, F-8: user data in skills/ coexists with workspace per-entry symlinks" {
-    # #575 backed up the entire skills/ directory on real-dir collision.
-    # #707, F-8 dropped that path: the composed-directory model treats a
-    # pre-existing real skills/ as the target itself, lays per-entry
-    # symlinks alongside user data, and refuses to overwrite non-symlink
-    # children (logs `skill entry blocked by non-symlink — skipped`).
+@test "issue #707, F-8: user data in skills/ is preserved and no workspace links are added" {
+    # The real skills/ dir is the target itself — no top-level backup — and
+    # its non-symlink children are never touched.
     _seed_ssot_skills packaging-skills alpha
     mkdir -p "$HOME/.claude-shared/plugins"
     mkdir -p "$HOME/.claude-personal/skills/leftover"
@@ -1333,34 +1331,60 @@ run_with_fake_ssot() {
     run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
     assert_success
 
-    # skills/ stays a real composed directory — no top-level backup of user data.
     [ -d "$HOME/.claude-personal/skills" ]
     [ ! -L "$HOME/.claude-personal/skills" ]
     [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
-    # User data preserved in place; workspace entry wired alongside.
     grep -q "user-data" "$HOME/.claude-personal/skills/leftover/notes.md"
-    [ -L "$HOME/.claude-personal/skills/alpha" ]
+    [ ! -e "$HOME/.claude-personal/skills/alpha" ] && [ ! -L "$HOME/.claude-personal/skills/alpha" ]
 }
 
 @test "issue #575 → #707: second _claude_account_setup_one is idempotent for skills/docs" {
     _seed_ssot_skills packaging-skills alpha
-    mkdir -p "$HOME/.claude-shared/plugins"
+    mkdir -p "$HOME/.claude-shared/plugins" "$HOME/elsewhere/graphify"
+    mkdir -p "$HOME/.claude-personal/skills"
+    ln -s "$FAKE_WORKSPACE_ROOT/packaging-skills/skills/alpha" "$HOME/.claude-personal/skills/alpha"
+    ln -s "$HOME/elsewhere/graphify" "$HOME/.claude-personal/skills/graphify"
 
     run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
     assert_success
+    before="$(ls -la "$HOME/.claude-personal/skills")"
 
     run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
     assert_success
     assert_output --partial "already linked"
+    refute_output --partial "removed workspace skill link"
+    after="$(ls -la "$HOME/.claude-personal/skills")"
+    [ "$before" = "$after" ]
 
-    # docs/ remains a symlink; skills/ remains a composed real directory.
+    # docs/ remains a symlink; skills/ remains a real directory.
     [ -L "$HOME/.claude-personal/docs" ]
     [ -d "$HOME/.claude-personal/skills" ]
     [ ! -L "$HOME/.claude-personal/skills" ]
-    [ -L "$HOME/.claude-personal/skills/alpha" ]
+    [ ! -L "$HOME/.claude-personal/skills/alpha" ]
+    [ -L "$HOME/.claude-personal/skills/graphify" ]
     # No backups created on the second run — state was already correct.
     [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
     [ -z "$(ls -d "$HOME/.claude-personal/docs-"*-original 2>/dev/null)" ]
+}
+
+@test "claude/setup.sh prunes workspace links in every account and reports the count" {
+    _setup_sh_prereqs
+    _ws="$HOME/ws-root"
+    mkdir -p "$_ws/packaging-skills/skills/alpha" "$_ws/packaging-skills/.git"
+    : > "$_ws/packaging-skills/skills/alpha/SKILL.md"
+    mkdir -p "$HOME/.claude-personal/skills"
+    ln -s "$_ws/packaging-skills/skills/alpha" "$HOME/.claude-personal/skills/alpha"
+
+    run_in_bash "export WORKSPACE_ROOT='$_ws' CLAUDE_ENABLED_ACCOUNTS=personal; CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    assert_output --partial "워크스페이스 스킬 링크 정리 1개"
+    [ ! -e "$HOME/.claude-personal/skills/alpha" ] && [ ! -L "$HOME/.claude-personal/skills/alpha" ]
+    [ -d "$HOME/.claude-personal/skills" ] && [ ! -L "$HOME/.claude-personal/skills" ]
+
+    # Second run: nothing left to prune.
+    run_in_bash "export WORKSPACE_ROOT='$_ws' CLAUDE_ENABLED_ACCOUNTS=personal; CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    assert_output --partial "워크스페이스 스킬 링크 정리 0개"
 }
 
 @test "issue #575: claude-accounts no longer exposes the skills-sync subcommand" {

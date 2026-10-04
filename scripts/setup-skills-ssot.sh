@@ -39,9 +39,14 @@
 #     entry-level 합성으로 변환된다. 사용자가 직접 만든 symlink (target 이
 #     관리 대상 밖이면서 살아 있는 경우) 는 보존 + warn.
 #
-# ~/.claude*/skills 는 claude/setup.sh 가 entry-level 합성 디렉토리로 관리 (#707, F-8).
-# 모두 동일 layout (Hermes 는 external_dirs — 위 예외 참고) 이므로 외부에서
-# 추가된 symlink 도 합성 대상 전부에 동일하게 적용된다.
+# Claude Code(~/.claude*/skills)는 이 스크립트의 대상이 아니다 — Claude Code 는
+# 워크스페이스 스킬을 플러그인(claude/plugin/plugins.json, restore.sh 설치)으로만
+# 로드하므로 flat 합성하지 않는다 (flat 링크는 네임스페이스 없는 중복 명령이 됨).
+# claude/setup.sh 는 그 디렉토리를 실디렉토리로 유지하며 예전 합성이 남긴
+# 워크스페이스 링크만 정리한다 (_claude_prune_workspace_skills). flat 합성은
+# 플러그인 기반이 아닌 위 harness 들에만 적용되며, 모두 동일 layout (Hermes 는
+# external_dirs — 위 예외 참고) 이므로 외부에서 추가된 symlink 도 합성 대상
+# 전부에 동일하게 적용된다.
 #
 # Antigravity CLI (agy) 는 자체 경로를 갖는다 (#1731, #1787). agy 의 Global
 # Customizations Root 는 ~/.gemini/config/ 이고 skill 은 그 아래 skills/ 에서만 발견된다.

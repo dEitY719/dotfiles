@@ -31,8 +31,8 @@ source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/mount.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
-if [ "\$1" = "--compose" ]; then
-    _claude_compose_workspace_skills "\$2"
+if [ "\$1" = "--prune" ]; then
+    _claude_prune_workspace_skills "\$2"
 else
     claude_accounts "\$@"
 fi
@@ -199,15 +199,18 @@ ca() {
     refute_output --partial "wsk"
 }
 
-@test "workspace compose afterwards keeps the external link (AC-9)" {
+@test "setup's workspace-link prune afterwards keeps the external link (AC-9)" {
+    # Claude Code loads workspace skills via plugins, so setup prunes flat
+    # workspace links — but a `link`-created external entry must survive.
     mkdir -p "$WS/repo/skills/wsk" "$WS/repo/.git"
     : > "$WS/repo/skills/wsk/SKILL.md"
+    ln -s "$WS/repo/skills/wsk" "$A1/wsk"
     ca link "$SRC"
 
-    ca --compose "$A1"
+    ca --prune "$A1"
     assert_success
     [ "$(readlink "$A1/find-skills")" = "$SRC_REAL" ]
-    [ -L "$A1/wsk" ]
+    [ ! -e "$A1/wsk" ] && [ ! -L "$A1/wsk" ]
 }
 
 @test "link rejects a second positional <src> and touches nothing (PR #1848 review)" {

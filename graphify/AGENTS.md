@@ -39,5 +39,5 @@ install the skill — it is a separate step and not run by `setup.sh`.
   `~/.claude`, so the link step is skipped.
 - Account list comes from `_claude_resolve_account --list`
   (`shell-common/tools/integrations/claude.sh`); missing account dirs are skipped.
-- The links survive `claude/setup.sh`: `_claude_compose_workspace_skills` only
+- The links survive `claude/setup.sh`: `_claude_prune_workspace_skills` only
   prunes links into the skills workspace root.

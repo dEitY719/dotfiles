@@ -8,14 +8,17 @@
 #
 #     ${WORKSPACE_ROOT:-$HOME/para/project/skills}/<repo>/skills/<skill>/SKILL.md
 #
-# and every harness links them as entry-level symlinks. This workspace is
-# now the *only* source: #1680 deleted the dotfiles `claude/skills/` tree
+# and every non-plugin harness links them as entry-level symlinks (Claude
+# Code loads the same repos as plugins instead — claude/plugin/plugins.json —
+# and does not compose them). This workspace is now the *only* source:
+# #1680 deleted the dotfiles `claude/skills/` tree
 # after #1410 copied all 73 skills out into 15 marketplace repos.
 #
 # Two consumers share these helpers so their notion of "what counts as a
 # workspace skill" cannot drift apart:
 #   - scripts/setup-skills-ssot.sh              (Codex / OpenCode / Gemini / agy / Hermes)
-#   - shell-common/tools/integrations/claude.sh (Claude Code accounts)
+#   - shell-common/tools/integrations/claude.sh (Claude Code accounts — only
+#     to recognize and prune stale flat workspace links; plugins load the skills)
 #
 # No interactive guard — this file only defines functions and prints
 # nothing when sourced (same posture as functions/gh_host.sh, PR #704).
