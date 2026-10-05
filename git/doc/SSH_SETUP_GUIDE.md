@@ -1,7 +1,7 @@
 # Git SSH 설정하는 방법 (Enterprise GitHub 기준)
 
 이 문서는 **HTTPS 인증 오류(403 등)**를 해결하고,  
-안전하게 SSH 키를 이용해 GitHub Enterprise(`github.samsungds.net`)에 연결하는 방법을 정리한 가이드입니다.
+안전하게 SSH 키를 이용해 GitHub Enterprise(`github.example.invalid`)에 연결하는 방법을 정리한 가이드입니다.
 
 ---
 
@@ -65,7 +65,7 @@ Identity added: ~/.ssh/id_ed25519 (bwyoon@KORCO158847)
    ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJnidzs5YvRjaPSdQl4OtG8uXNtoaHQL8yWi/hW9Ht5t bwyoon@KORCO158847
    ```
 
-2. 브라우저에서 [https://github.samsungds.net](https://github.samsungds.net) 접속
+2. 브라우저에서 [https://github.example.invalid](https://github.example.invalid) 접속
 
 3. 다음 순서로 등록:
 
@@ -88,7 +88,7 @@ Identity added: ~/.ssh/id_ed25519 (bwyoon@KORCO158847)
 SSH 인증이 정상인지 확인합니다.
 
 ```bash
-ssh -T git@github.samsungds.net
+ssh -T git@github.example.invalid
 ```
 
 ### 성공 시 출력 예시
@@ -107,7 +107,7 @@ Hi byoungwoo-yoon! You've successfully authenticated, but GitHub does not provid
 
 ```bash
 cd ~/dotfiles
-git remote set-url origin git@github.samsungds.net:byoungwoo-yoon/dotfiles.git
+git remote set-url origin git@github.example.invalid:your-user/dotfiles.git
 ```
 
 ### 확인
@@ -119,8 +119,8 @@ git remote -v
 출력 예시:
 
 ```
-origin  git@github.samsungds.net:byoungwoo-yoon/dotfiles.git (fetch)
-origin  git@github.samsungds.net:byoungwoo-yoon/dotfiles.git (push)
+origin  git@github.example.invalid:your-user/dotfiles.git (fetch)
+origin  git@github.example.invalid:your-user/dotfiles.git (push)
 ```
 
 ---
@@ -138,7 +138,7 @@ Enumerating objects: 42, done.
 Counting objects: 100% (42/42), done.
 Writing objects: 100% (42/42), done.
 Total 42 (delta 0), reused 0 (delta 0)
-To github.samsungds.net:byoungwoo-yoon/dotfiles.git
+To github.example.invalid:your-user/dotfiles.git
  * [new branch]      main -> main
 ```
 

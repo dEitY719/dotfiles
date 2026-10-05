@@ -47,8 +47,8 @@ packages = []
 
 
 # [[tool.uv.index]]
-# name = "samsung"
-# url = "http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
+# name = "internal"
+# url = "https://registry.example.invalid/repository/pypi/simple"
 # default = true
 
 

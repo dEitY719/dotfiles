@@ -85,6 +85,8 @@ check_rpm_config_files() {
 
         # Compare with dotfiles source
         local source_file="${DOTFILES_ROOT}/rpm/ds.repo.internal"
+        # setup.sh deploys the gitignored real-value sibling when present (#1968)
+        [ -f "${source_file}.local" ] && source_file="${source_file}.local"
         if [ -f "$source_file" ]; then
             ux_section "Drift Check"
             if diff -q "$_REPO_TARGET" "$source_file" >/dev/null 2>&1; then

@@ -81,6 +81,19 @@ _prepare_config_target() {
     fi
 }
 
+# Resolve the deploy source for a tracked internal-mode config (#1968).
+# Prefers the gitignored real-value sibling "<file>.local" when present and
+# falls back to the tracked file, so behavior is unchanged without one.
+# Seed the siblings with scripts/internal-config-migrate.sh.
+# Usage: _internal_src npm/npmrc.internal
+_internal_src() {
+    if [ -f "${DOTFILES_ROOT}/$1.local" ]; then
+        printf '%s\n' "${DOTFILES_ROOT}/$1.local"
+    else
+        printf '%s\n' "${DOTFILES_ROOT}/$1"
+    fi
+}
+
 # Restore a config target from the latest backup after removing a dotfiles symlink.
 # Usage: _restore_config_from_backup "/path/to/config"
 _restore_config_from_backup() {
@@ -340,7 +353,7 @@ setup_npm_symlink() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${DOTFILES_ROOT}/npm/npmrc.internal" "$npmrc_target"
+            ln -s "$(_internal_src npm/npmrc.internal)" "$npmrc_target"
             ux_success "Created symlink: ~/.npmrc → npm/npmrc.internal"
             ux_info "Using: internal Nexus repository + proxy"
             ;;
@@ -369,7 +382,7 @@ setup_bun_config() {
     case "$environment" in
         internal)
             _prepare_config_target "$bunfig_target"
-            ln -s "${DOTFILES_ROOT}/bun/bunfig.toml.internal" "$bunfig_target"
+            ln -s "$(_internal_src bun/bunfig.toml.internal)" "$bunfig_target"
             ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.internal"
             ux_info "Using: internal Nexus registry for npm packages"
             ;;
@@ -578,7 +591,7 @@ setup_uv_config() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${DOTFILES_ROOT}/uv/uv.toml.internal" "$uv_conf"
+            ln -s "$(_internal_src uv/uv.toml.internal)" "$uv_conf"
             ux_success "Created symlink: ~/.config/uv/uv.toml → uv/uv.toml.internal"
             ux_info "Using: internal repositories + proxy"
             ;;
@@ -604,7 +617,7 @@ setup_pip_config() {
     # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "${DOTFILES_ROOT}/pip/pip.conf.internal" "$pip_conf"
+            ln -s "$(_internal_src pip/pip.conf.internal)" "$pip_conf"
             ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.internal"
             ux_info "Using: internal repositories"
             ;;
@@ -629,7 +642,7 @@ setup_cargo_config() {
     case "$environment" in
         internal)
             _prepare_config_target "$cargo_conf"
-            ln -s "${DOTFILES_ROOT}/cargo/config.toml.internal" "$cargo_conf"
+            ln -s "$(_internal_src cargo/config.toml.internal)" "$cargo_conf"
             ux_success "Created symlink: ~/.cargo/config.toml → cargo/config.toml.internal"
             ux_info "Using: internal Nexus proxy for crates.io"
             ;;
@@ -652,7 +665,7 @@ setup_nuget_config() {
             for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
                 mkdir -p "$(dirname "$_nuget_conf")"
                 _prepare_config_target "$_nuget_conf"
-                ln -s "${DOTFILES_ROOT}/nuget/NuGet.Config.internal" "$_nuget_conf"
+                ln -s "$(_internal_src nuget/NuGet.Config.internal)" "$_nuget_conf"
             done
             ux_success "Created symlinks: NuGet.Config → nuget/NuGet.Config.internal"
             ux_info "  ~/.nuget/NuGet/ (dotnet CLI) + ~/.config/NuGet/ (mono)"
@@ -729,7 +742,7 @@ setup_rpm_repo() {
             fi
 
             # Copy (not symlink) since this is a system-level config in /etc/
-            $_rpm_run_privileged cp "${DOTFILES_ROOT}/rpm/ds.repo.internal" "$repo_target"
+            $_rpm_run_privileged cp "$(_internal_src rpm/ds.repo.internal)" "$repo_target"
             ux_success "Copied: rpm/ds.repo.internal → $repo_target"
             ux_info "Using: internal repositories (RHEL 8.6)"
             ;;
@@ -791,7 +804,7 @@ setup_apt_sources() {
                 # Listing repo-tracked `apt/sources.list.*` names — all
                 # alphanumeric, so `ls` is fine here (SC2012).
                 # shellcheck disable=SC2012
-                ux_info "Skipped: no apt config for '${_apt_codename:-unknown}' (available: $(ls "${DOTFILES_ROOT}"/apt/sources.list.* 2>/dev/null | sed 's/.*sources\.list\.//' | grep -v '\.internal$' | tr '\n' ' ' || echo 'none'))"
+                ux_info "Skipped: no apt config for '${_apt_codename:-unknown}' (available: $(ls "${DOTFILES_ROOT}"/apt/sources.list.* 2>/dev/null | sed 's/.*sources\.list\.//' | grep -v '\.internal' | tr '\n' ' ' || echo 'none'))"
                 return 0
             fi
 
@@ -880,6 +893,10 @@ main() {
             ux_info "Selected: Internal company PC (direct connection)"
             cleanup_local_files
             setup_local_files "internal"
+            # Seed gitignored *.internal.local real-value siblings before the
+            # links are made (#1968). Never overwrites; skips placeholders.
+            bash "${DOTFILES_ROOT}/scripts/internal-config-migrate.sh" --apply \
+                || ux_warning "internal-config-migrate.sh failed; links fall back to tracked *.internal"
             setup_npm_symlink "internal"
             setup_bun_config "internal"
             setup_opencode_config "internal"
