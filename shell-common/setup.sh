@@ -933,6 +933,9 @@ main() {
             # links are made (#1968). Never overwrites; skips placeholders.
             bash "${DOTFILES_ROOT}/scripts/internal-config-migrate.sh" --apply \
                 || ux_warning "internal-config-migrate.sh failed; links fall back to tracked *.internal"
+            # ~/.ssh/config.internal.local + ~/.gitconfig.internal.local (#2006)
+            bash "${DOTFILES_ROOT}/scripts/internal-ssh-git-migrate.sh" --apply \
+                || ux_warning "internal-ssh-git-migrate.sh failed; internal SSH/GHES hosts may be unresolved"
             setup_npm_symlink "internal"
             setup_bun_config "internal"
             setup_opencode_config "internal"

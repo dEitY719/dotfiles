@@ -30,7 +30,8 @@
 	helper =
 	useHttpPath = true
 	helper = !${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/gh-credential-helper.sh
-[credential "https://github.samsungds.net"]
-	helper =
-	useHttpPath = true
-	helper = !${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/gh-credential-helper.sh
+# Machine-local overrides (gitignored, #2006): the internal GHES credential
+# section lives here on internal PCs, seeded by
+# scripts/internal-ssh-git-migrate.sh. A missing file is ignored by git.
+[include]
+	path = ~/.gitconfig.internal.local
