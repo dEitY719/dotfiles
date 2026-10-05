@@ -212,10 +212,23 @@ EOF
 # Main function with sub-command handling
 # ============================================================
 
+check_apt_help() {
+    ux_usage "check_apt" "[config|files|env|connectivity|all]" "Comprehensive APT sources configuration diagnostic script"
+    ux_bullet "config - Show APT version and OS info"
+    ux_bullet "files - Check sources.list and markers"
+    ux_bullet "env - Show environment variables"
+    ux_bullet "connectivity - Test repository connectivity"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     local cmd="${1:-all}"
 
     case "$cmd" in
+        -h | --help)
+            check_apt_help
+            return 0
+            ;;
         config)
             check_apt_config
             ;;
@@ -235,14 +248,7 @@ main() {
             check_apt_connectivity
             ;;
         *)
-            echo "Usage: check_apt [config|files|env|connectivity|all]"
-            echo ""
-            echo "  config        - Show APT version and OS info"
-            echo "  files         - Check sources.list and markers"
-            echo "  env           - Show environment variables"
-            echo "  connectivity  - Test repository connectivity"
-            echo "  all           - Run all checks (default)"
-            echo ""
+            check_apt_help
             exit 1
             ;;
     esac

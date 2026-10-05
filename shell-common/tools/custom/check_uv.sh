@@ -183,10 +183,23 @@ EOF
 # Main function with sub-command handling
 # ============================================================
 
+check_uv_help() {
+    ux_usage "check_uv" "[config|files|env|connectivity|all]" "Comprehensive uv configuration diagnostic script"
+    ux_bullet "config - Show uv version and settings"
+    ux_bullet "files - Check uv config files"
+    ux_bullet "env - Show environment variables"
+    ux_bullet "connectivity - Test repository connectivity"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     local cmd="${1:-all}"
 
     case "$cmd" in
+        -h | --help)
+            check_uv_help
+            return 0
+            ;;
         config)
             check_uv_config
             ;;
@@ -206,14 +219,7 @@ main() {
             check_uv_connectivity
             ;;
         *)
-            echo "Usage: check_uv [config|files|env|connectivity|all]"
-            echo ""
-            echo "  config        - Show uv version and settings"
-            echo "  files         - Check uv config files"
-            echo "  env           - Show environment variables"
-            echo "  connectivity  - Test repository connectivity"
-            echo "  all           - Run all checks (default)"
-            echo ""
+            check_uv_help
             exit 1
             ;;
     esac

@@ -183,10 +183,24 @@ check_npm_packages() {
 # Main function with sub-command handling
 # ============================================================
 
+check_npm_help() {
+    ux_usage "check_npm" "[config|files|env|registry|packages|all]" "Comprehensive npm configuration diagnostic script"
+    ux_bullet "config - Show npm configuration"
+    ux_bullet "files - Check npm config files"
+    ux_bullet "env - Show environment variables"
+    ux_bullet "registry - Test registry connectivity"
+    ux_bullet "packages - Show installed global packages"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     local cmd="${1:-all}"
 
     case "$cmd" in
+        -h | --help)
+            check_npm_help
+            return 0
+            ;;
         config)
             check_npm_config
             ;;
@@ -210,15 +224,7 @@ main() {
             check_npm_packages
             ;;
         *)
-            echo "Usage: check_npm [config|files|env|registry|packages|all]"
-            echo ""
-            echo "  config    - Show npm configuration"
-            echo "  files     - Check npm config files"
-            echo "  env       - Show environment variables"
-            echo "  registry  - Test registry connectivity"
-            echo "  packages  - Show installed global packages"
-            echo "  all       - Run all checks (default)"
-            echo ""
+            check_npm_help
             exit 1
             ;;
     esac
