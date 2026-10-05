@@ -28,6 +28,12 @@
 
 ---
 
+### [LEAK_GUARD.md](./LEAK_GUARD.md)
+
+**사내 식별값 leak guard (pre-commit + pre-push) PC별 활성화 / dry run / 우회 (#1970)**
+
+---
+
 ### 🔄 [HOOK_WORKFLOW.md](./HOOK_WORKFLOW.md)
 
 **User-level과 Project-level Hook의 완전한 가이드**

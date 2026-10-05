@@ -18,6 +18,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${SCRIPT_DIR}/config/pre-push-rules.sh"
 
 HOOK="${SCRIPT_DIR}/hooks/pre-push"
+# Layer 0 (`mise run test`, #754) would run inside each throwaway fixture
+# repo and fail there; these cases exercise layers 1-2 only.
+export SKIP_LOCAL_PYTEST=1
 ZERO_SHA="0000000000000000000000000000000000000000"
 
 # ============================================

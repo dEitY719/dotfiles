@@ -292,6 +292,52 @@ EOF
   rm -rf "$repo_dir"
 }
 
+# Issue #1970 — commit-time leak guard. Fake patterns only.
+LEAK_TEST_UPSTREAM='github\.com[:/]example-owner/example-repo(\.git)?$'
+LEAK_TEST_PATTERNS='corp-internal\.example\.invalid|EMP[0-9]{5}'
+
+make_leak_repo() {
+  make_repo "$1"
+  git -C "$1" remote add upstream "$2"
+  echo "host = corp-internal.example.invalid" >"$1/leak.txt"
+  git -C "$1" add leak.txt
+}
+
+test_leak_guard_blocks_without_echoing_match() {
+  local repo_dir out code
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+
+  set +e
+  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS" \
+    git -C "$repo_dir" commit -m "leak" 2>&1)
+  code=$?
+  set -e
+  [ $code -ne 0 ] || die "Expected leak guard to block the commit"
+  echo "$out" | grep -q "leak.txt:1" || die "Expected file:line in output, got: $out"
+  if echo "$out" | grep -q "corp-internal.example.invalid"; then
+    die "Leak guard echoed the matched text: $out"
+  fi
+
+  rm -rf "$repo_dir"
+}
+
+test_leak_guard_inert_without_upstream_remote() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_leak_repo "$repo_dir" "git@private-mirror.example.invalid:team/dotfiles.git"
+  assert_success "UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"private only\""
+  rm -rf "$repo_dir"
+}
+
+test_leak_guard_skip_escape_hatch() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_leak_repo "$repo_dir" "https://github.com/example-owner/example-repo.git"
+  assert_success "SKIP_LEAK_GUARD=1 UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"skip\""
+  rm -rf "$repo_dir"
+}
+
 # ---------------------------------------------------------------------------
 # Issue #1664 — global wrappers for the non-pre-commit hooks.
 #
@@ -785,6 +831,11 @@ main() {
   test_allows_hardcoded_home_path_with_marker
   test_allows_home_var_reference
   test_allows_preexisting_abs_home_on_unrelated_edit
+
+  # Issue #1970 — commit-time leak guard
+  test_leak_guard_blocks_without_echoing_match
+  test_leak_guard_inert_without_upstream_remote
+  test_leak_guard_skip_escape_hatch
 
   # Issue #1664 — global wrapper delegation for pre-push & friends
   test_global_hook_set_matches_ssot
