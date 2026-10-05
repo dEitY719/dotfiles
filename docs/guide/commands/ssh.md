@@ -33,19 +33,7 @@
 
 ### hosts
 
-- github.samsungds.net
-- Replica-Gerrit
-- github.com
-- seraph-local
-- ssai-*
-- server-ssai-*
-- ssai-dev
-- ssai-ops
-- server-ssai-ops-*
-- ssai-ops
-- server-ssai-ops-devops
-- server-ssai-ops-jiravis
-- server-ssai-ops-bwyoon
+- ~/.ssh/config not found. Run ./setup.sh to create symlink.
 
 ### config
 

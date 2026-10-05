@@ -25,13 +25,19 @@ CSM_TOPIC = "claude_skills_marketplace"
 CSM_DOC = "csm.md"
 
 
-def run_generator(*args: str) -> subprocess.CompletedProcess:
+def run_generator(*args: str, **env: str) -> subprocess.CompletedProcess:
     """Invoke the generator with ANSI colouring disabled."""
     return subprocess.run(
         [str(GENERATOR), *args],
         capture_output=True,
         text=True,
-        env={"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": str(Path.home()), "NO_COLOR": "1", "TERM": "dumb"},
+        env={
+            "PATH": "/usr/bin:/bin:/usr/local/bin",
+            "HOME": str(Path.home()),
+            "NO_COLOR": "1",
+            "TERM": "dumb",
+            **env,
+        },
     )
 
 
@@ -208,6 +214,22 @@ class TestCommittedDocs:
             f"stale docs (row functions changed without regenerating): {stale}. "
             f"Fix: ./shell-common/tools/custom/gen_command_docs.sh --force"
         )
+
+    def test_render_ignores_host_home_and_claude_config(self, tmp_path: Path):
+        """#1951: a host ~/.ssh/config or $CLAUDE_CONFIG_DIR must not leak into docs."""
+        home = tmp_path / "home"
+        (home / ".ssh").mkdir(parents=True)
+        (home / ".ssh" / "config").write_text("Host leak-canary-host\n", encoding="utf-8")
+        fresh = tmp_path / "commands"
+        fresh.mkdir()
+        shutil.copytree(DOCS_DIR / NOTES_DIRNAME, fresh / NOTES_DIRNAME)
+
+        result = run_generator("--force", "--out-dir", str(fresh), HOME=str(home), CLAUDE_CONFIG_DIR="/leak-canary-ccd")
+        assert result.returncode == 0, result.stderr
+        for name in ("ssh.md", "claude.md"):
+            text = (fresh / name).read_text(encoding="utf-8")
+            assert "leak-canary" not in text, name
+            assert text == (DOCS_DIR / name).read_text(encoding="utf-8"), name
 
     @pytest.mark.parametrize("denied", ["ssl", "crt"])
     def test_host_state_topics_are_never_documented(self, denied: str):
