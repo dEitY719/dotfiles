@@ -315,9 +315,11 @@ psql_del() {
             ux_info "[DRY RUN] Would DROP DATABASE '$db_name'"
             ux_info "[DRY RUN] Would DROP ROLE '$db_user'"
         else
+            # Names come from the services file and are interpolated into SQL.
+            _validate_identifier "$db_name" "Database Name" || return 1
+            _validate_identifier "$db_user" "Username" || return 1
             # Drop DB
             ux_bullet_sub "Terminating connections..."
-            # Use safe parameter passing for query
             _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db_name' AND pid <> pg_backend_pid();"
             ux_bullet_sub "Dropping Database '$db_name'..."
             _admin_sql "postgres" "DROP DATABASE IF EXISTS \"$db_name\";"
@@ -527,7 +529,7 @@ psql_db() {
 
         if ux_confirm "Drop database '$db_name'?" "n"; then
             ux_bullet_sub "Terminating connections..."
-            _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \ AND pid <> pg_backend_pid();" -v 1="$db_name"
+            _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db_name' AND pid <> pg_backend_pid();"
             _admin_sql "postgres" "DROP DATABASE \"$db_name\";" && ux_success "Deleted."
         fi
         ;;
