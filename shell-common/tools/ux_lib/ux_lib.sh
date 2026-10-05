@@ -225,6 +225,9 @@ ux_spinner() {
     local delay=0.1
     local frames='⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏'
     local i=0
+    # Declared once, outside the loop: re-running `local` on an existing
+    # local makes zsh print `frame_char=...` every iteration (#1983).
+    local frame_char
 
     # Hide cursor
     tput civis 2>/dev/null || true
@@ -233,25 +236,10 @@ ux_spinner() {
     trap 'tput cnorm 2>/dev/null || true' EXIT INT TERM
 
     while kill -0 "$pid" 2>/dev/null; do
-        # Get frame character for current index
-        local frame_char
-        if $_UX_IS_BASH; then
-            frame_char=$(echo "$frames" | cut -d' ' -f$((i+1)))
-        elif $_UX_IS_ZSH; then
-            frame_char=$(echo "$frames" | cut -d' ' -f$((i+2)))
-        else
-            frame_char=$(echo "$frames" | cut -d' ' -f$((i+1)))
-        fi
-
+        # cut is external, so the field number is shell-independent (#1983)
+        frame_char=$(echo "$frames" | cut -d' ' -f$((i + 1)))
         printf "\r%s%s%s %s..." "${UX_INFO}" "$frame_char" "${UX_RESET}" "$message"
-
-        if $_UX_IS_BASH; then
-            i=$(((i + 1) % 10))
-        elif $_UX_IS_ZSH; then
-            i=$(( (i + 1) % 10 ))
-        else
-            i=$(((i + 1) % 10))
-        fi
+        i=$(((i + 1) % 10))
 
         sleep "$delay"
     done
@@ -393,17 +381,16 @@ ux_input() {
 ux_menu() {
     local title="$1"
     shift
-    local options="$*"
     local menu_script="${UX_LIB_DIR}/ux_menu.py"
 
     # Check if Python + rich is available
     if command -v python3 &>/dev/null && python3 -c "import rich" &>/dev/null && command -v jq &>/dev/null; then
         # Use rich Python menu
         local config
-        # shellcheck disable=SC2086  # intentional word split: one menu option per printf line
+        # "$@" (not a word-split string): plain zsh does not split unquoted vars (#1983)
         config=$(jq -n \
             --arg title "$title" \
-            --argjson options "$(printf '%s\n' $options | jq -R . | jq -s .)" \
+            --argjson options "$(printf '%s\n' "$@" | jq -R . | jq -s .)" \
             '{title: $title, options: $options, allow_cancel: true}')
 
         local result
@@ -424,7 +411,7 @@ ux_menu() {
         echo ""
         ux_section "$title"
         local i=1
-        for opt in $options; do
+        for opt in "$@"; do
             echo "  ${UX_PRIMARY}$i)${UX_RESET} $opt"
             i=$((i + 1))
         done
@@ -433,7 +420,7 @@ ux_menu() {
         printf "%s❯%s Select: " "${UX_INFO}" "${UX_RESET}"
         read -r choice
 
-        if [ -n "$choice" ] && [ "$choice" -ge 1 ] && [ "$choice" -le $i ]; then
+        if [ -n "$choice" ] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
             echo $((choice - 1))
         else
             ux_info "Cancelled."
