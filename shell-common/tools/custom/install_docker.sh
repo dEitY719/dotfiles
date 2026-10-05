@@ -37,7 +37,7 @@ main() {
         exit 1
     fi
     # Keep the sudo session alive in the background
-    while true; do sudo -n true; sleep 60; kill -0 "$" || exit; done &> /dev/null &
+    while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done &> /dev/null &
     local sudo_keep_alive_pid=$!
     trap 'kill "$sudo_keep_alive_pid"' EXIT
     
