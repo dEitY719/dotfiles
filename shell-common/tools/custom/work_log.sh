@@ -196,8 +196,7 @@ work_log_add_interactive() {
 
     # Prompt for Jira key
     while [ -z "$jira_key" ]; do
-        printf "%s❓%s Jira key (e.g., SWINNOTEAM-903): " "${UX_WARNING}" "${UX_RESET}"
-        read -r jira_input
+        jira_input=$(ux_input "Jira key (e.g., SWINNOTEAM-903):")
         if [ -z "$jira_input" ]; then
             ux_error "Jira key cannot be empty"
             continue
@@ -208,24 +207,21 @@ work_log_add_interactive() {
 
     # Prompt for type
     while [ -z "$type" ]; do
-        printf "%s❓%s Type (coordination/assessment/approval/meeting): " "${UX_WARNING}" "${UX_RESET}"
-        read -r type_input
+        type_input=$(ux_input "Type (coordination/assessment/approval/meeting):")
         work_log_prompt_validate type validate_type "$type_input" \
             "Type: " "Invalid type. Choose: coordination, assessment, approval, or meeting" || continue
     done
 
     # Prompt for category
     while [ -z "$category" ]; do
-        printf "%s❓%s Category (Testing/Infrastructure/Documentation/Communication/Training/Other): " "${UX_WARNING}" "${UX_RESET}"
-        read -r cat_input
+        cat_input=$(ux_input "Category (Testing/Infrastructure/Documentation/Communication/Training/Other):")
         work_log_prompt_validate category validate_category "$cat_input" \
             "Category: " "Invalid category" || continue
     done
 
     # Prompt for time
     while [ -z "$time_spent" ]; do
-        printf "%s❓%s Time spent (e.g., 2.5h or 2.5): " "${UX_WARNING}" "${UX_RESET}"
-        read -r time_input
+        time_input=$(ux_input "Time spent (e.g., 2.5h or 2.5):")
         work_log_prompt_validate time_spent validate_time "$time_input" \
             "Time: " "Invalid time format. Use numeric format: 2.5, 2.5h, or 4h" "h" || continue
     done
@@ -233,8 +229,8 @@ work_log_add_interactive() {
     # Record the entry
     if work_log_record "$jira_key" "$type" "$category" "$time_spent"; then
         ux_success "Work log entry recorded"
-        printf "\n%s[%s] [$jira_key] | $type | $category | ${time_spent}h | manual%s\n" \
-            "${UX_MUTED}" "$(date '+%Y-%m-%d %H:%M:%S')" "${UX_RESET}"
+        ux_info ""
+        ux_bullet "[$(date '+%Y-%m-%d %H:%M:%S')] [$jira_key] | $type | $category | ${time_spent}h | manual"
     else
         ux_error "Failed to write to $WORK_LOG_FILE"
         return 1
@@ -306,8 +302,8 @@ work_log_add_args() {
     # Record the entry
     if work_log_record "$jira_key" "$type" "$category" "$time_spent"; then
         ux_success "Work log entry recorded"
-        printf "\n%s[%s] [$jira_key] | $type | $category | ${time_spent}h | manual%s\n" \
-            "${UX_MUTED}" "$(date '+%Y-%m-%d %H:%M:%S')" "${UX_RESET}"
+        ux_info ""
+        ux_bullet "[$(date '+%Y-%m-%d %H:%M:%S')] [$jira_key] | $type | $category | ${time_spent}h | manual"
     else
         ux_error "Failed to write to $WORK_LOG_FILE"
         return 1
@@ -336,16 +332,16 @@ work_log_list_help() {
     ux_bullet "Example: work-log list --today"
 
     ux_section "Examples"
-    echo "  ${UX_SUCCESS}work-log list${UX_RESET}                    # Last 10 entries"
-    echo "  ${UX_SUCCESS}work-log list --count 5${UX_RESET}          # Last 5 entries"
-    echo "  ${UX_SUCCESS}work-log list --today${UX_RESET}            # Today's entries"
-    echo "  ${UX_SUCCESS}work-log list --count 20 --today${UX_RESET} # Last 20 today's entries"
+    ux_bullet "work-log list - Last 10 entries"
+    ux_bullet "work-log list --count 5 - Last 5 entries"
+    ux_bullet "work-log list --today - Today's entries"
+    ux_bullet "work-log list --count 20 --today - Last 20 today's entries"
 
     ux_section "Output Format"
     ux_bullet "[YYYY-MM-DD HH:MM:SS] [JIRA-KEY] | type | category | time | source"
     ux_bullet "└─ Category: CategoryName"
 
-    echo ""
+    ux_info ""
     ux_info "Log file: $WORK_LOG_FILE"
 }
 
@@ -412,7 +408,7 @@ work_log_list() {
                 ;;
             *)
                 ux_error "Unknown option: $1"
-                echo ""
+                ux_info ""
                 work_log_list_help
                 return 1
                 ;;
@@ -442,7 +438,7 @@ work_log_list() {
         done
     fi
 
-    echo ""
+    ux_info ""
     ux_info "Log file: $WORK_LOG_FILE"
 }
 
@@ -472,9 +468,9 @@ work_log_help() {
     ux_bullet "-c, --category CATEGORY  (Testing|Infrastructure|Documentation|Communication|Training|Other)"
     ux_bullet "-T, --time TIME          (numeric: 2.5 or 2.5h)"
 
-    echo ""
+    ux_info ""
     ux_step "Example" "Coordination meeting on testing strategy"
-    echo "  ${UX_SUCCESS}work-log add SWINNOTEAM-903${UX_RESET} ${UX_MUTED}-t coordination${UX_RESET} ${UX_MUTED}-c Communication${UX_RESET} ${UX_MUTED}-T 2.5h${UX_RESET}"
+    ux_bullet "work-log add SWINNOTEAM-903 -t coordination -c Communication -T 2.5h"
 
     ux_section "List Command"
     ux_numbered 1 "work-log list              - Show last 10 entries"
@@ -535,7 +531,7 @@ main() {
             ;;
         *)
             ux_error "Unknown command: $command"
-            echo ""
+            ux_info ""
             work_log_help
             return 1
             ;;
