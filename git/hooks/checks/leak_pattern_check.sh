@@ -19,32 +19,11 @@
 # do not echo into terminals, CI logs or screen shares. A file name that
 # itself matches is printed as `<redacted path: N chars ...>` (#1997).
 
-# leak_guard_active — the activation condition above. The env checks come
-# first, so an inactive PC never even runs `git config`.
-leak_guard_active() {
-    [ "${SKIP_LEAK_GUARD:-0}" = "1" ] && return 1
-    [ -n "${LEAK_PATTERNS_ERE:-}" ] || return 1
-    [ -n "${UPSTREAM_REMOTES_ERE:-}" ] || return 1
-    git config --get-regexp '^remote\..*\.url$' 2>/dev/null \
-        | cut -d' ' -f2- | grep -qE -- "${UPSTREAM_REMOTES_ERE}"
-}
-
-# leak_redact — stdin to stdout, every LEAK_PATTERNS_ERE match replaced by
-# `<redacted>` (#2002). Bash's own ERE engine, so the pattern is never
-# interpolated into a sed/awk program and needs no escaping; a match that
-# is empty ends the loop instead of spinning.
-leak_redact() {
-    local line out m
-    while IFS= read -r line || [ -n "$line" ]; do
-        out=""
-        while [[ $line =~ $LEAK_PATTERNS_ERE ]] && [ -n "${BASH_REMATCH[0]}" ]; do
-            m=${BASH_REMATCH[0]}
-            out+="${line%%"$m"*}<redacted>"
-            line=${line#*"$m"}
-        done
-        printf '%s\n' "$out$line"
-    done
-}
+# leak_guard_active / leak_redact: one implementation shared with the global
+# pre-commit hook (#2008). A missing lib fails this source, so the project
+# hook blocks instead of silently running with the guard off.
+# shellcheck source=../../global-hooks/lib/leak_guard.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../../global-hooks/lib/leak_guard.sh" || return 1
 
 # check_leak_patterns OUTPUT_FILE
 # Returns 0 when inactive or clean, 1 when a staged added line matches.

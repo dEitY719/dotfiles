@@ -65,6 +65,11 @@ make_repo() {
   cp "${DOTFILES_ROOT}/git/global-hooks/pre-commit" "$repo_dir/.hooks/pre-commit"
   chmod +x "$repo_dir/.hooks/pre-commit"
   git -C "$repo_dir" config core.hooksPath "$repo_dir/.hooks"
+  # Shared leak guard lib (#2008): next to the global hook, and at the path
+  # the project hook's checks/leak_pattern_check.sh sources it from.
+  mkdir -p "$repo_dir/.hooks/lib" "$repo_dir/git/global-hooks/lib"
+  cp "${DOTFILES_ROOT}/git/global-hooks/lib/leak_guard.sh" "$repo_dir/.hooks/lib/"
+  cp "${DOTFILES_ROOT}/git/global-hooks/lib/leak_guard.sh" "$repo_dir/git/global-hooks/lib/"
 
   mkdir -p "$repo_dir/git/hooks"
   cp "${DOTFILES_ROOT}/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit"
@@ -379,6 +384,70 @@ test_leak_guard_redacts_other_check_reports() {
   set -e
   echo "$inactive" | grep -q "shell-common/qx9FAKETOKEN78.sh:1" \
     || die "Expected the unfiltered path when inactive, got: $inactive"
+
+  rm -rf "$repo_dir"
+}
+
+# Issue #2008 — the global hook (Layer 1) prints its own check results
+# (here: debug code warning) BEFORE delegating; with the guard active the
+# whole commit output, global + project hook, is filtered exactly once.
+test_leak_guard_redacts_global_and_project_output() {
+  local repo_dir out code
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+  mkdir -p "$repo_dir/d"
+  printf 'breakpoint()\n' >"$repo_dir/d/qx9FAKETOKEN79.py"
+  git -C "$repo_dir" add d/qx9FAKETOKEN79.py
+
+  set +e
+  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
+    git -C "$repo_dir" commit -m "global leak" 2>&1)
+  code=$?
+  set -e
+  [ $code -ne 0 ] || die "Expected the project leak guard to block"
+  echo "$out" | grep -q "Debug code detected" || die "Expected the global debug warning, got: $out"
+  echo "$out" | grep -q "   - d/<redacted>.py" || die "Expected a redacted global path, got: $out"
+  echo "$out" | grep -q "Delegating to project hook" || die "Expected delegation, got: $out"
+  echo "$out" | grep -q "matches LEAK_PATTERNS_ERE" || die "Expected the project leak report, got: $out"
+  if echo "$out" | grep -q "qx9FAKE"; then
+    die "The commit output echoed a matching path: $out"
+  fi
+
+  rm -rf "$repo_dir"
+}
+
+# Issue #2008 — a repo with none of this repo's files, using the real global
+# hook directory: trailing whitespace in a matching path is redacted when
+# active, printed verbatim when inactive, and a clean commit still succeeds.
+test_global_hook_leak_guard_in_unrelated_repo() {
+  local repo_dir out code inactive
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_plain_repo "$repo_dir"
+  git -C "$repo_dir" config core.hooksPath "$GLOBAL_HOOKS_DIR"
+  git -C "$repo_dir" remote add upstream "git@github.com:example-owner/example-repo.git"
+  mkdir -p "$repo_dir/d"
+  printf 'x   \n' >"$repo_dir/d/qx9FAKETOKEN77.txt"
+  git -C "$repo_dir" add d/qx9FAKETOKEN77.txt
+
+  set +e
+  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" \
+    git -C "$repo_dir" commit -m "ws" 2>&1)
+  code=$?
+  set -e
+  [ $code -ne 0 ] || die "Expected the trailing whitespace check to block"
+  echo "$out" | grep -q "Trailing whitespace detected" || die "Expected the whitespace report, got: $out"
+  echo "$out" | grep -q "d/<redacted>.txt:1" || die "Expected a redacted whitespace path, got: $out"
+  [ "$(echo "$out" | grep -c "qx9FAKE")" -eq 0 ] || die "The global hook echoed a matching path: $out"
+
+  set +e
+  inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "ws" 2>&1)
+  set -e
+  echo "$inactive" | grep -q "d/qx9FAKETOKEN77.txt:1" \
+    || die "Expected the unfiltered path when inactive, got: $inactive"
+
+  printf 'x\n' >"$repo_dir/d/qx9FAKETOKEN77.txt"
+  git -C "$repo_dir" add d/qx9FAKETOKEN77.txt
+  assert_success "UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='qx9FAKE[A-Z]+[0-9]+' git -C \"$repo_dir\" commit -q -m clean"
 
   rm -rf "$repo_dir"
 }
@@ -897,6 +966,8 @@ main() {
   test_leak_guard_blocks_without_echoing_match
   test_leak_guard_redacts_matching_path
   test_leak_guard_redacts_other_check_reports
+  test_leak_guard_redacts_global_and_project_output
+  test_global_hook_leak_guard_in_unrelated_repo
   test_leak_guard_inert_without_upstream_remote
   test_leak_guard_skip_escape_hatch
 

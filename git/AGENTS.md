@@ -72,7 +72,9 @@ Opt-in guard against internal identifiers reaching the public upstream, in
 two stages reading the same env (SSOT `config/pre-push-rules.sh`, empty =
 inert): `UPSTREAM_REMOTES_ERE` + `LEAK_PATTERNS_ERE`. `hooks/pre-push`
 Layer 2 scans the push range; `hooks/checks/leak_pattern_check.sh` blocks
-staged added lines at commit time, printing `file:line` only. Escape hatch:
+staged added lines at commit time, printing `file:line` only. When active,
+the whole pre-commit output (global + project hook) is redacted via the
+shared `global-hooks/lib/leak_guard.sh`. Escape hatch:
 `SKIP_LEAK_GUARD=1` (both stages). Per-PC activation (fake patterns only),
 dry-run check and tests: [doc/LEAK_GUARD.md](./doc/LEAK_GUARD.md).
 
