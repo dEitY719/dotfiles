@@ -10,5 +10,6 @@
 [install]
 # Public npm registry (default)
 registry = "https://registry.npmjs.org/"
-# Corporate CA certificate for SSL verification
-cafile = "/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+# System CA bundle: includes the corporate CA once setup_crt.sh has run
+# update-ca-certificates (the CA file name itself lives in security.local.sh)
+cafile = "/etc/ssl/certs/ca-certificates.crt"

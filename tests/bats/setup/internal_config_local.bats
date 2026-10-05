@@ -118,3 +118,61 @@ run_setup_fn() {
     [ ! -e "$FX/pip/pip.conf.internal.local" ]
     [ -f "$FX/npm/npmrc.internal.local" ]
 }
+
+# --- #1986: tracked *.internal files now hold placeholders only -------------
+
+# Copy the repo's real tracked package-manager configs into the fixture.
+use_tracked_internal_files() {
+    mkdir -p "$FX/nuget" "$FX/rpm" "$FX/apt"
+    for f in npm/npmrc.internal pip/pip.conf.internal uv/uv.toml.internal \
+        cargo/config.toml.internal bun/bunfig.toml.internal \
+        nuget/NuGet.Config.internal rpm/ds.repo.internal \
+        apt/sources.list.jammy.internal; do
+        cp "$_BATS_REAL_DOTFILES_ROOT/$f" "$FX/$f"
+    done
+}
+
+@test "tracked: every package-manager *.internal holds placeholders, migrate skips all" {
+    use_tracked_internal_files
+    run bash "$MIGRATE" --apply
+    assert_success
+    refute_output --partial "Copied"
+    assert_output --partial "Skipped (tracked file holds placeholders): rpm/ds.repo.internal"
+    [ -z "$(find "$FX" -name '*.internal.local')" ]
+}
+
+@test "swap: a PC with *.internal.local keeps real values through the links" {
+    run bash "$MIGRATE" --apply
+    assert_success
+    run_setup_fn "setup_npm_symlink internal; setup_pip_config internal; setup_cargo_config internal"
+    assert_success
+    before="$(readlink "$HOME/.npmrc") $(readlink "$HOME/.config/pip/pip.conf") $(readlink "$HOME/.cargo/config.toml")"
+    # The swap lands via git pull: tracked files become placeholders.
+    use_tracked_internal_files
+    run_setup_fn "setup_npm_symlink internal; setup_pip_config internal; setup_cargo_config internal"
+    assert_success
+    refute_output --partial "holds placeholder values"
+    after="$(readlink "$HOME/.npmrc") $(readlink "$HOME/.config/pip/pip.conf") $(readlink "$HOME/.cargo/config.toml")"
+    [ "$before" = "$after" ]
+    [ "$(readlink "$HOME/.npmrc")" = "$FX/npm/npmrc.internal.local" ]
+    grep -q 'registry.corp-fake.test/npm/npmrc.internal' "$HOME/.npmrc"
+    grep -q 'registry.corp-fake.test/cargo/config.toml.internal' "$HOME/.cargo/config.toml"
+    run grep -q 'example.invalid' "$HOME/.config/pip/pip.conf"
+    assert_failure
+}
+
+@test "swap: a PC without *.internal.local gets placeholders and a clear warning" {
+    use_tracked_internal_files
+    run_setup_fn "setup_npm_symlink internal; setup_uv_config internal"
+    assert_success
+    assert_output --partial "npm/npmrc.internal holds placeholder values and npm/npmrc.internal.local is missing"
+    assert_output --partial "uv/uv.toml.internal holds placeholder values"
+    [ "$(readlink "$HOME/.npmrc")" = "$FX/npm/npmrc.internal" ]
+    grep -q 'example.invalid' "$HOME/.npmrc"
+}
+
+@test "external: npm/bun cafile is the system CA bundle (no CA file name in git)" {
+    run grep -h '^cafile' "$_BATS_REAL_DOTFILES_ROOT/npm/npmrc.external" "$_BATS_REAL_DOTFILES_ROOT/bun/bunfig.toml.external"
+    assert_success
+    [ "$(printf '%s\n' "$output" | grep -c '/etc/ssl/certs/ca-certificates.crt')" -eq 2 ]
+}
