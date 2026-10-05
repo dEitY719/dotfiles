@@ -71,8 +71,7 @@ create_symlink() {
     local link_name="$2"
 
     if [ -L "$link_name" ]; then
-        # ux_dim does not exist, use muted style or echo with UX_MUTED
-        echo "${UX_MUTED}기존 심볼릭 링크 제거: $link_name${UX_RESET}"
+        ux_bullet_sub "기존 심볼릭 링크 제거: $link_name"
         rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
     elif [ -f "$link_name" ]; then
         ux_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
@@ -82,7 +81,7 @@ create_symlink() {
         rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
     fi
 
-    echo "${UX_MUTED}심볼릭 링크 생성: $link_name -> $target${UX_RESET}"
+    ux_bullet_sub "심볼릭 링크 생성: $link_name -> $target"
     ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
 }
 
@@ -103,7 +102,7 @@ ensure_gitconfig_include() {
 
     # 레거시 symlink 제거 (SSOT 는 repo 에 안전하게 있으므로 백업 불필요)
     if [ -L "$target" ]; then
-        echo "${UX_MUTED}레거시 symlink 제거 (include 모델로 전환): $target${UX_RESET}"
+        ux_bullet_sub "레거시 symlink 제거 (include 모델로 전환): $target"
         rm "$target" || log_error_and_exit "기존 symlink 제거 실패: $target"
     fi
 
@@ -274,7 +273,7 @@ ux_header "Git dotfiles setup 시작"
 
 # SSH 설정 자동화 (선택적, 실패해도 진행)
 setup_ssh_auto || ux_warning "SSH 설정 중 일부 작업이 실패했습니다. 수동으로 구성하세요."
-echo ""
+ux_info ""
 
 
 # .gitconfig: 실파일 + [include] SSOT 모델 (symlink 아님 — 함수 주석 참고)
@@ -399,6 +398,6 @@ fi
 
 
 ux_success "Git dotfiles setup 완료"
-echo "${UX_MUTED}Git 설정이 적용되었습니다.${UX_RESET}"
+ux_info "Git 설정이 적용되었습니다."
 
 exit 0
