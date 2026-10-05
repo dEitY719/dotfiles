@@ -1,18 +1,22 @@
 # config.toml.internal
-# Samsung internal Cargo registry configuration
+# Internal Cargo registry configuration
+#
+# PLACEHOLDER: tracked values are fakes (*.example.invalid). The real ones live
+# in the gitignored cargo/config.toml.internal.local, which shell-common/setup.sh
+# prefers (seeded by scripts/internal-config-migrate.sh, #1968).
 #
 # Usage:
 #   Symlinked to ~/.cargo/config.toml by shell-common/setup.sh
 #   Choose "Internal company PC" option when running setup
 #
-# Note: Uses Samsung internal Nexus proxy for crates.io
+# Note: Uses the internal Nexus proxy for crates.io
 
 # Makes internal Nexus the default registry
 [registry]
 default = "cargo-proxy"
 
 [registries.cargo-proxy]
-index = "sparse+http://repository.samsungds.net/repository/proxy-cargo-index.crates.io/"
+index = "sparse+http://registry.example.invalid/repository/proxy-cargo-index/"
 
 [source.crates-io]
 replace-with = "cargo-proxy"

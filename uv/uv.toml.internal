@@ -1,5 +1,9 @@
 # uv.toml.internal
-# Samsung internal repository configuration for corporate PC
+# Internal repository configuration for corporate PC
+#
+# PLACEHOLDER: tracked values are fakes (*.example.invalid). The real ones live
+# in the gitignored uv/uv.toml.internal.local, which shell-common/setup.sh
+# prefers (seeded by scripts/internal-config-migrate.sh, #1968).
 #
 # Usage:
 #   Symlinked to ~/.config/uv/uv.toml by shell-common/setup.sh
@@ -11,4 +15,4 @@
 # Note: native-tls required for corporate CA certificates (uv uses own TLS by default)
 
 native-tls = true
-extra-index-url = ["http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"]
+extra-index-url = ["http://registry.example.invalid/repository/proxy-pypi/simple"]

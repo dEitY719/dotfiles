@@ -89,12 +89,17 @@ _prepare_config_target() {
 # Resolve the deploy source for a tracked internal-mode config (#1968).
 # Prefers the gitignored real-value sibling "<file>.local" when present and
 # falls back to the tracked file, so behavior is unchanged without one.
-# Seed the siblings with scripts/internal-config-migrate.sh.
+# Seed the siblings with scripts/internal-config-migrate.sh. The tracked files
+# hold placeholders only (#1986), so falling back to one warns on stderr
+# (stdout is the captured path).
 # Usage: _internal_src npm/npmrc.internal
 _internal_src() {
     if [ -f "${DOTFILES_ROOT}/$1.local" ]; then
         printf '%s\n' "${DOTFILES_ROOT}/$1.local"
     else
+        if grep -Eq "$LOCAL_PLACEHOLDER_ERE" "${DOTFILES_ROOT}/$1" 2>/dev/null; then
+            ux_warning "$1 holds placeholder values and $1.local is missing — create $1.local with the real values and re-run setup" >&2
+        fi
         printf '%s\n' "${DOTFILES_ROOT}/$1"
     fi
 }
@@ -751,6 +756,14 @@ setup_rpm_repo() {
 
     case "$environment" in
         internal)
+            _rpm_src="$(_internal_src rpm/ds.repo.internal)"
+            # A placeholder repo in /etc would break dnf/yum: keep the
+            # existing system file instead (_internal_src already warned).
+            if grep -Eq "$LOCAL_PLACEHOLDER_ERE" "$_rpm_src" 2>/dev/null; then
+                ux_info "Skipped: $repo_target left untouched (placeholder source)"
+                return 0
+            fi
+
             # Ensure target directory exists
             if [ ! -d "/etc/yum.repos.d" ]; then
                 $_rpm_run_privileged mkdir -p "/etc/yum.repos.d"
@@ -765,7 +778,7 @@ setup_rpm_repo() {
             fi
 
             # Copy (not symlink) since this is a system-level config in /etc/
-            $_rpm_run_privileged cp "$(_internal_src rpm/ds.repo.internal)" "$repo_target"
+            $_rpm_run_privileged cp "$_rpm_src" "$repo_target"
             ux_success "Copied: rpm/ds.repo.internal → $repo_target"
             ux_info "Using: internal repositories (RHEL 8.6)"
             ;;
