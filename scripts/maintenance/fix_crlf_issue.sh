@@ -11,6 +11,12 @@
 #  1. Fixes git configuration (sets core.autocrlf=false)
 #  2. Converts CRLF line endings to LF in shell scripts
 #  3. Ensures ~/.config directory exists with correct permissions
+#
+# WHY NO ux_lib (#1972): this script repairs CRLF damage, and on such a PC
+# shell-common/tools/ux_lib/ux_lib.sh may itself be CRLF-damaged, so sourcing
+# it before the repair would kill the script before it starts. Output stays on
+# the local log_* helpers below -- the "before ux_lib can load" exclusion in
+# shell-common/AGENTS.md "변환 범위 (#1881)".
 
 set -e
 
@@ -130,7 +136,9 @@ if echo "$SHELL_FILES" | xargs grep -l $'\r' 2>/dev/null | wc -l > /dev/null; th
         if grep -q $'\r' "$file"; then
             # Convert CRLF to LF using sed
             sed -i 's/\r$//' "$file"
-            ((CONVERTED_COUNT++))
+            # Not ((CONVERTED_COUNT++)): it returns 1 when the count is 0 and
+            # set -e would abort after the first conversion (#1972).
+            CONVERTED_COUNT=$((CONVERTED_COUNT + 1))
         fi
     done <<< "$SHELL_FILES"
 
