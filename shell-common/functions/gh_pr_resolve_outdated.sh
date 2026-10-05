@@ -371,15 +371,14 @@ _gh_pr_resolve_outdated_patch_id() {
 # modifies an existing line in a file the PR touches is exactly the shape that
 # can, so it disqualifies the rescue.
 #
-# One `git diff --numstat` call over ALL touched files (`-- "${_files[@]}"`),
-# not one per file (PR #1720 review, agy + codex + simplify-pass findings):
-# this file's sibling `_gh_pr_resolve_outdated_patch_id` already does one call
-# per whole range, never per-file, and per-file forking here would repeat the
-# same `old_base..new_base` tree walk N times for N touched files. The touched
-# list itself is read NUL-delimited (`git diff --name-only -z`), never
-# newline-split, so a path containing a literal newline or tab cannot be
-# mis-parsed into two entries or truncated (PR #1720 review, agy + codex
-# BLOCKER — both independently flagged the newline-unsafe reader).
+# One `git diff --numstat` call over the whole `old_base..new_base` range,
+# filtered to the touched files in awk, not one call per file (PR #1720
+# review, agy + codex + simplify-pass findings): per-file forking would repeat
+# the same tree walk N times for N touched files. Both lists are git's own
+# non-`-z` output, in which a path holding a newline, tab, quote or backslash
+# is always C-quoted onto one line — so such a path can neither split into two
+# entries (the PR #1720 BLOCKER) nor fail to match, since both sides quote it
+# identically. POSIX sh, no array or process substitution (#1889).
 #
 # `git diff --numstat` (`<added>\t<deleted>\t<path>`), NOT a `grep '^-[^-]'`
 # over the raw diff: that pattern is fail-OPEN, and measurably so. It cannot
@@ -397,8 +396,7 @@ _gh_pr_resolve_outdated_base_pure_insertion() {
     fi
     # Validate both shas resolve BEFORE trusting an empty touched-file list as
     # vacuous truth. `git diff --name-only` on a bogus sha also prints
-    # nothing, and process substitution below cannot surface that command's
-    # own exit status to this function's `$?` — an unreadable sha would
+    # nothing, and its exit status alone is not trusted for that — an unreadable sha would
     # otherwise read identically to "old-base == old-head, nothing touched"
     # and pass as vacuously safe instead of failing closed.
     _gh_pr_resolve_outdated_git "$_worktree" rev-parse --verify --quiet "${_old_base}^{commit}" >/dev/null 2>&1 &&
@@ -406,18 +404,19 @@ _gh_pr_resolve_outdated_base_pure_insertion() {
         _gh_pr_resolve_outdated_git "$_worktree" rev-parse --verify --quiet "${_new_base}^{commit}" >/dev/null 2>&1 ||
         return 1
 
-    local _files=() _f
-    while IFS= read -r -d '' _f; do
-        _files+=("$_f")
-    done < <(_gh_pr_resolve_outdated_git "$_worktree" diff --name-only -z "$_old_base".."$_old_head" 2>/dev/null)
+    local _touched _stat
+    _touched=$(_gh_pr_resolve_outdated_git "$_worktree" diff --name-only "$_old_base".."$_old_head" 2>/dev/null) || return 1
+    [ -z "$_touched" ] && return 0
 
-    [ "${#_files[@]}" -eq 0 ] && return 0
-
-    local _stat
-    _stat=$(_gh_pr_resolve_outdated_git "$_worktree" diff --numstat "$_old_base".."$_new_base" -- "${_files[@]}" 2>/dev/null) || return 1
-    # No line at all == the base never touched any of these files == pure
-    # insertion vacuously. Otherwise every deleted column must be a literal 0.
-    printf '%s\n' "$_stat" | awk -F'\t' 'NF > 1 && $2 != "0" { exit 1 }'
+    # --no-renames: a base rename of a touched file must surface as a deletion
+    # under the touched path, not as an `old => new` row the filter misses.
+    _stat=$(_gh_pr_resolve_outdated_git "$_worktree" diff --numstat --no-renames "$_old_base".."$_new_base" 2>/dev/null) || return 1
+    # Keep only rows whose path is a touched one; any such row with a deleted
+    # column other than a literal 0 disqualifies. No such row == the base never
+    # touched these files == pure insertion vacuously.
+    printf '%s\n' "$_stat" | _GH_PRO_TOUCHED="$_touched" awk -F'\t' '
+        BEGIN { n = split(ENVIRON["_GH_PRO_TOUCHED"], t, "\n"); for (i = 1; i <= n; i++) touched[t[i]] = 1 }
+        NF > 2 && ($3 in touched) && $2 != "0" { exit 1 }'
 }
 
 # Three-state, because "absent" and "could not tell" are different answers

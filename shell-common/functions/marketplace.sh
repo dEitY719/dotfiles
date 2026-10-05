@@ -131,10 +131,12 @@ _generate_manifest() {
                 skill_obj=$(_parse_skill_file "$skill_md" "anthropic-agent-skills" "$(basename "$skill_dir")")
                 if [ -n "$skill_obj" ]; then
                     skills_array=$(echo "$skills_array" | jq --argjson obj "$skill_obj" '. += [$obj]')
-                    ((total_count++))
+                    total_count=$((total_count + 1))
                 fi
             fi
-        done < <(find "${mp_path}/skills" -maxdepth 1 -type d ! -name "skills")
+        done <<EOF
+$(find "${mp_path}/skills" -maxdepth 1 -type d ! -name "skills")
+EOF
     fi
 
     # Scan claude-code-workflows (plugins/*/skills/ directory structure)
@@ -152,12 +154,16 @@ _generate_manifest() {
                         skill_obj=$(_parse_skill_file "$skill_md" "claude-code-workflows" "$plugin_name")
                         if [ -n "$skill_obj" ]; then
                             skills_array=$(echo "$skills_array" | jq --argjson obj "$skill_obj" '. += [$obj]')
-                            ((total_count++))
+                            total_count=$((total_count + 1))
                         fi
                     fi
-                done < <(find "${plugin_dir}/skills" -maxdepth 1 -type d ! -name "skills")
+                done <<EOF
+$(find "${plugin_dir}/skills" -maxdepth 1 -type d ! -name "skills")
+EOF
             fi
-        done < <(find "${ccw_path}/plugins" -maxdepth 1 -type d ! -name "plugins")
+        done <<EOF
+$(find "${ccw_path}/plugins" -maxdepth 1 -type d ! -name "plugins")
+EOF
     fi
 
     # Build final manifest
@@ -366,7 +372,9 @@ _claude_skills_marketplace_group() {
                 "$MANIFEST_CACHE_PATH")
 
             printf "  ${UX_PRIMARY}•${UX_RESET} %-35s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$plugin" "$count"
-        done <<< "$categories"
+        done <<EOF
+$categories
+EOF
         echo ""
 
         ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
@@ -471,18 +479,25 @@ _claude_skills_marketplace_search() {
         return 0
     }
 
-    local count=0
+    local count=0 _desc_tail
     # Field 1 is the jq index, discarded via `_`; $count is what gets displayed.
     while IFS='|' read -r _ name desc plugin; do
-        ((count++))
-        desc_short="${desc:0:60}"
-        [ ${#desc} -gt 60 ] && desc_short="${desc_short}..."
+        count=$((count + 1))
+        # First 60 chars without ${desc:0:60}: strip a 60-`?` prefix to get
+        # the tail, then drop that tail from desc.
+        desc_short=$desc
+        if [ ${#desc} -gt 60 ]; then
+            _desc_tail=${desc#????????????????????????????????????????????????????????????}
+            desc_short="${desc%"$_desc_tail"}..."
+        fi
 
         ux_section "$count. $name"
         ux_table_row "Plugin" "$plugin" ""
         ux_table_row "Description" "$desc_short" ""
         echo ""
-    done <<< "$results"
+    done <<EOF
+$results
+EOF
 
     ux_info "Found $count matching skill(s)"
 }
