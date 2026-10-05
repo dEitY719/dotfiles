@@ -465,6 +465,20 @@ _add_extra_worktrees() {
     assert_failure
 }
 
+# Issue #2023: zsh chpwd hooks (e.g. `mise activate`) fire on the subshell's
+# `cd "$wt"` and print "not trusted" for every untrusted worktree mise.toml.
+# The hook runs AT cd time, so MISE_NO_CONFIG must already be exported then.
+# The `cd` wrapper stands in for the hook and logs what it would see.
+@test "teardown --all: MISE_NO_CONFIG is exported before cd into each worktree (#2023)" {
+    local log="$TEST_TEMP_HOME/cd-env.log"
+    run_in_bash "cd() { case \"\$1\" in '$TEST_TEMP_HOME'/clone-*) printf '%s\n' \"\${MISE_NO_CONFIG-unset}\" >> '$log' ;; esac; builtin cd \"\$@\"; }
+        cd '$CLONE' && gwt teardown --all --force 2>&1"
+    assert_success
+    [ "$(grep -c . "$log")" -ge 1 ]
+    run grep -v '^1$' "$log"
+    assert_failure
+}
+
 @test "teardown --all: short alias -a works the same as --all" {
     _add_extra_worktrees 1
 

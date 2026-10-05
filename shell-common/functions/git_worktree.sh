@@ -2500,7 +2500,10 @@ EOF
         # Split across lines: naming_check.sh greedy-matches `".*<func>.*"` on
         # a single line, so keeping `"$wt"` and `"$force"` from sandwiching the
         # helper name on one physical line avoids a false-positive flag.
-        if ( cd "$wt" \
+        # MISE_NO_CONFIG is exported BEFORE cd: zsh chpwd hooks (mise activate)
+        # fire during cd itself and would print "not trusted" for every
+        # worktree mise.toml that `gwt spawn` never trusted (#2023).
+        if ( export MISE_NO_CONFIG=1; cd "$wt" \
              && _gwt_teardown_one_inplace "$force" "$keep_branch" ); then
             ok_count=$((ok_count + 1))
         else
