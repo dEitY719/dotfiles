@@ -148,11 +148,11 @@ teardown() {
 @test "T9 (#703): Bash + gh pr create + GHE URL → pr_num extracted, sync called" {
     # Regression for issue #703 — the original hook had a hard-coded
     # `https://github.com/...` regex, so PR #8 on the `internal` PC
-    # (`github.samsungds.net`) silently failed to sync. The fallback
+    # (`ghes.example.invalid`) silently failed to sync. The fallback
     # regex inside the hook must match the GHE host even when the
     # SSOT helper (gh_host.sh) is absent from this fake shell-common.
-    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://github.samsungds.net/byoungwoo-yoon/dotfiles/pull/8"}}'
-    run bash -c "printf '%s' '$payload' | '$HOOK'"
+    payload='{"tool_name":"Bash","tool_input":{"command":"gh pr create"},"tool_response":{"output":"https://ghes.example.invalid/owner/dotfiles/pull/8"}}'
+    DOTFILES_GHES_HOST=ghes.example.invalid run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
     assert_output --partial 'PR #8 → "In review"'
     grep -q '^sync pr 8 In review$' "$CALL_LOG"
@@ -208,8 +208,9 @@ EOF
     # `BASH_ENV` is honoured by `bash` when started non-interactively.
     BASH_ENV="$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" \
     DOTFILES_FORCE_INIT=1 \
+    DOTFILES_GHES_HOST=ghes.example.invalid \
     SHELL_COMMON="$HYBRID_SHELL_COMMON" \
-        bash -c "printf '%s' '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr create\"},\"tool_response\":{\"output\":\"https://github.samsungds.net/byoungwoo-yoon/dotfiles/pull/8\"}}' | '$HOOK'"
+        bash -c "printf '%s' '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"gh pr create\"},\"tool_response\":{\"output\":\"https://ghes.example.invalid/owner/dotfiles/pull/8\"}}' | '$HOOK'"
     grep -q '^sync pr 8 In review$' "$CALL_LOG"
 }
 
