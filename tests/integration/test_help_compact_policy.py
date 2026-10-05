@@ -193,10 +193,17 @@ class TestGwtHelpCanonicalEntrypoint:
         assert result.exit_code == 0, f"{shell}: '{cmd}' failed"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
-    @pytest.mark.parametrize("cmd", ["gwt help", "gwt spawn help", "gwt teardown help"])
+    @pytest.mark.parametrize("cmd", ["gwt help", "gwt spawn help"])
     def test_legacy_gwt_help_forms_rejected(self, shell_runner, shell, cmd):
         result = shell_runner(shell, cmd)
         assert result.exit_code != 0, f"{shell}: legacy command should fail: {cmd}"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_gwt_teardown_positional_help_accepted(self, shell_runner, shell):
+        # #1835 (89c27632) intentionally made `gwt teardown help` show help.
+        result = shell_runner(shell, "gwt teardown help")
+        assert result.exit_code == 0, f"{shell}: gwt teardown help should succeed"
+        assert "Usage: gwt teardown" in result.stdout
 
 
 class TestGwtHelpSotInterface:
