@@ -58,11 +58,11 @@ show_environment_info() {
             ;;
         internal)
             ux_section "Internal Environment"
-            ux_bullet "Internal corporate PC (Samsung DS Network)"
+            ux_bullet "Internal corporate PC"
             ux_bullet "Proxy enabled (required)"
             ux_bullet "SSL verification disabled"
             ux_bullet "CA certificate may be required"
-            ux_bullet "Gateway: a2g.samsungds.net (S/W혁신팀)"
+            ux_bullet "Gateway: DOTFILES_OPENCODE_BASE_URL (shell-common/env/internal.local.sh)"
             ux_bullet "Available models: Qwen3.6-27B"
             ;;
     esac
@@ -188,43 +188,16 @@ EOF
     ux_success "External environment configured: $config_file"
 }
 
-# Generate opencode.json for internal environment by copying the SSOT template.
-# The template lives at opencode/opencode.json.internal in this repo and is the
-# single source of truth for the Samsung internal (a2g) gateway config.
-# Users hand-edit "your-knox-id" in the copied file to set their Samsung Knox ID.
+# Generate opencode.json for internal environment. Delegates to setup.sh's
+# setup_opencode_config so both entry points share one SSOT (#1967): the
+# template's placeholder gateway URL is rendered from internal.local.sh, an
+# existing deployed config is never replaced by placeholders, and the Knox ID
+# is filled from $DOTFILES_KNOX_ID / ~/.dotfiles-knox-id.
 generate_internal_config() {
-    local config_file="$HOME/.config/opencode/opencode.json"
-    local template="${DOTFILES_ROOT:-$HOME/dotfiles}/opencode/opencode.json.internal"
+    local shell_common="${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common"
 
     ux_info "Setting up internal environment from SSOT template..."
-
-    if [ ! -f "$template" ]; then
-        ux_error "Template not found: $template"
-        return 1
-    fi
-
-    # Preserve user-customised config: once `your-knox-id` has been replaced
-    # with the real Knox ID, never overwrite + never back up (issue #792).
-    if [ ! -L "$config_file" ] && [ -f "$config_file" ] \
-        && ! grep -q 'your-knox-id' "$config_file"; then
-        ux_info "Preserved customised OpenCode config: $config_file"
-        return 0
-    fi
-
-    # Back up an existing placeholder-state config or stray symlink before
-    # overwriting. The customised-file guard above already returned for the
-    # case we actually need to protect.
-    if [ -f "$config_file" ] || [ -L "$config_file" ]; then
-        local backup
-        backup="${config_file}.backup.$(date +%Y%m%d%H%M%S)"
-        mv "$config_file" "$backup"
-        ux_info "Backed up existing config: $backup"
-    fi
-
-    cp "$template" "$config_file"
-    chmod 600 "$config_file"
-    ux_success "Internal environment configured: $config_file"
-    ux_warning "Edit $config_file and replace 'your-knox-id' with your Samsung Knox ID"
+    (cd "$shell_common" && sh -c '. ./setup.sh && setup_opencode_config internal')
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -259,7 +232,7 @@ main() {
     # Display environment options
     printf "  %s1)%s 📱 Home - Personal PC (local development, SSL verified)\n" "$UX_PRIMARY" "$UX_RESET"
     printf "  %s2)%s 🌐 External - Public network (GitHub accessible)\n" "$UX_PRIMARY" "$UX_RESET"
-    printf "  %s3)%s 🏢 Internal - Corporate network (Samsung DS proxy)\n" "$UX_PRIMARY" "$UX_RESET"
+    printf "  %s3)%s 🏢 Internal - Corporate network (proxy)\n" "$UX_PRIMARY" "$UX_RESET"
     echo ""
 
     # Simple read-based selection (stable, no external dependencies)

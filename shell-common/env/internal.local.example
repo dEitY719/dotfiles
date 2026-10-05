@@ -32,3 +32,6 @@ export DOTFILES_EXTRA_CA_FINGERPRINTS=""
 # OTel collector 호스트와 managed-settings 의 NO_PROXY 에 넣을 사내 도메인(콤마 구분)
 export DOTFILES_OTEL_ENDPOINT_HOST="otel.example.invalid"
 export DOTFILES_OTEL_NO_PROXY_DOMAINS=".corp.example.invalid"
+
+# 사내 LLM gateway URL (setup.sh 가 opencode/opencode.json.internal 렌더링에 사용, #1967)
+export DOTFILES_OPENCODE_BASE_URL="http://llm-gateway.example.invalid/v1"

@@ -150,3 +150,12 @@ curl"
     run grep -c 'npm install -g opencode-ai 2>' "$INSTALL_OPENCODE_SCRIPT"
     assert_failure
 }
+
+# --- internal config (#1967) ----------------------------------------------------
+
+@test "generate_internal_config: delegates to setup.sh and writes the config" {
+    run_opencode_tool 'ux_info() { :; }; generate_internal_config'
+    assert_success
+    assert_output --partial "Setting up OpenCode configuration for: internal"
+    [ -f "$HOME/.config/opencode/opencode.json" ]
+}
