@@ -44,7 +44,14 @@ if [ -t 1 ] && [ -r "$UX_LIB" ]; then
 	# shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
 	source "$UX_LIB"
 else
-	UX_SUCCESS="" UX_ERROR="" UX_WARNING="" UX_MUTED="" UX_RESET=""
+	UX_SUCCESS="" UX_ERROR="" UX_WARNING="" UX_RESET=""
+	# Plain fallbacks print the bare message, byte-identical to the pre-#1937
+	# raw echo output, so piped/automation consumers and bats see no change.
+	ux_section() { printf '== %s ==\n' "$1"; }
+	ux_success() { printf '%s\n' "$1"; }
+	ux_error() { printf '%s\n' "$1" >&2; }
+	ux_warning() { printf '%s\n' "$1"; }
+	ux_info() { printf '%s\n' "$1"; }
 fi
 
 # Color one `_diff_marketplaces`/`_diff_plugins` output line by its leading
@@ -92,7 +99,7 @@ for arg in "$@"; do
 		exit 0
 		;;
 	*)
-		echo "${UX_ERROR}알 수 없는 인자: $arg${UX_RESET}" >&2
+		ux_error "알 수 없는 인자: $arg"
 		_usage >&2
 		exit 2
 		;;
@@ -100,7 +107,7 @@ for arg in "$@"; do
 done
 
 command -v jq >/dev/null 2>&1 || {
-	echo "${UX_ERROR}jq가 필요합니다.${UX_RESET}" >&2
+	ux_error "jq가 필요합니다."
 	exit 1
 }
 
@@ -190,8 +197,8 @@ fi
 
 for f in "$MP_SRC" "$PL_SRC"; do
 	if [ ! -f "$f" ]; then
-		echo "${UX_ERROR}SSOT 파일이 없습니다: $f${UX_RESET}" >&2
-		echo "${UX_ERROR}  → ~/.claude-shared/plugins 를 확인하거나 CLAUDE_SHARED_PLUGINS_DIR 를 설정하세요.${UX_RESET}" >&2
+		ux_error "SSOT 파일이 없습니다: $f"
+		ux_error "  → ~/.claude-shared/plugins 를 확인하거나 CLAUDE_SHARED_PLUGINS_DIR 를 설정하세요."
 		exit 1
 	fi
 done
@@ -273,39 +280,39 @@ _diff_plugins() {
 _run_check() {
 	local drift=0 out
 
-	echo "${UX_MUTED}== 공용(github) 매니페스트 — 로컬 오버레이 ==${UX_RESET}"
+	ux_section "공용(github) 매니페스트 — 로컬 오버레이"
 	if ! out=$(_diff_marketplaces "$PUB_LOCAL_MP" "$overlay_common"); then
 		drift=1
-		echo "${UX_MUTED}marketplaces.local.json:${UX_RESET}"
+		ux_info "marketplaces.local.json:"
 		while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 	fi
 	if ! out=$(_diff_plugins "$PUB_LOCAL_PL" "$overlay_plugins_common"); then
 		drift=1
-		echo "${UX_MUTED}plugins.local.json:${UX_RESET}"
+		ux_info "plugins.local.json:"
 		while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 	fi
 
 	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
-		echo "${UX_MUTED}== 사내(company) 매니페스트 ==${UX_RESET}"
+		ux_section "사내(company) 매니페스트"
 		if ! out=$(_diff_marketplaces "$PRIV_DIR/marketplaces.json" "$target_private"); then
 			drift=1
-			echo "${UX_MUTED}company/marketplaces.json:${UX_RESET}"
+			ux_info "company/marketplaces.json:"
 			while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 		fi
 		if ! out=$(_diff_plugins "$PRIV_DIR/plugins.json" "$plugins_private"); then
 			drift=1
-			echo "${UX_MUTED}company/plugins.json:${UX_RESET}"
+			ux_info "company/plugins.json:"
 			while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 		fi
 	else
-		echo "${UX_MUTED}(company/ 건너뜀 — 모드: ${MODE:-미설정})${UX_RESET}"
+		ux_info "(company/ 건너뜀 — 모드: ${MODE:-미설정})"
 	fi
 
 	if [ "$drift" -eq 0 ]; then
-		echo "${UX_SUCCESS}no drift — SSOT 와 매니페스트가 일치합니다.${UX_RESET}"
+		ux_success "no drift — SSOT 와 매니페스트가 일치합니다."
 		return 0
 	fi
-	echo "${UX_ERROR}drift 감지 — 복구하려면: reconcile.sh --apply${UX_RESET}"
+	ux_error "drift 감지 — 복구하려면: reconcile.sh --apply" 2>&1
 	return 1
 }
 
@@ -343,9 +350,9 @@ _commit_if_changed() {
 	git -C "$repo_dir" diff --cached --quiet -- "$@" 2>/dev/null && return 0
 	if ! ALLOW_MAIN_COMMIT=1 git -C "$repo_dir" commit -m "$msg" --quiet 2>/dev/null; then
 		if git -C "$repo_dir" reset -q -- "$@" 2>/dev/null; then
-			echo "${UX_ERROR}reconcile: manifest commit failed in $repo_dir; changes left unstaged${UX_RESET}" >&2
+			ux_error "reconcile: manifest commit failed in $repo_dir; changes left unstaged"
 		else
-			echo "${UX_ERROR}reconcile: manifest commit failed in $repo_dir; failed to unstage changes${UX_RESET}" >&2
+			ux_error "reconcile: manifest commit failed in $repo_dir; failed to unstage changes"
 		fi
 	fi
 }
@@ -356,8 +363,8 @@ _run_apply() {
 	# Only the company/ scope still commits (#1685) — the public scope writes
 	# an untracked overlay — so the guard is scoped to that branch.
 	if [ "$COMPANY_ACTIVE" -eq 1 ] && ! command -v _plugin_sync_title >/dev/null 2>&1; then
-		echo "${UX_ERROR}shell-common/functions/plugin_sync_title.sh 를 불러오지 못했습니다.${UX_RESET}" >&2
-		echo "${UX_ERROR}  → dotfiles 설치를 확인하거나 SHELL_COMMON 을 설정하세요.${UX_RESET}" >&2
+		ux_error "shell-common/functions/plugin_sync_title.sh 를 불러오지 못했습니다."
+		ux_error "  → dotfiles 설치를 확인하거나 SHELL_COMMON 을 설정하세요."
 		exit 1
 	fi
 
@@ -397,7 +404,7 @@ _run_apply() {
 			"$PRIV_DIR/marketplaces.json" "$PRIV_DIR/plugins.json"
 	fi
 
-	echo "${UX_SUCCESS}apply 완료. 확인: reconcile.sh --check${UX_RESET}"
+	ux_success "apply 완료. 확인: reconcile.sh --check"
 }
 
 case "$MODE_ACTION" in
