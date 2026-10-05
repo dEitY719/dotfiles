@@ -154,7 +154,7 @@ _t3_upstream_push_pattern_in_commit_message_blocks() {
     dir=$(_setup_repo)
     echo "harmless line" >>"$dir/seed.txt"
     git -C "$dir" -c core.hooksPath=/dev/null commit -aq \
-        -m "wip: probe example.internal endpoint"
+        -m "wip: probe example.internal zq7canary-msg"
 
     set +e
     UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" \
@@ -167,17 +167,19 @@ _t3_upstream_push_pattern_in_commit_message_blocks() {
     if [ "$rc" -eq 1 ] \
         && printf '%s' "$LEAK_OUT" | grep -q "Upstream push blocked" \
         && printf '%s' "$LEAK_OUT" | grep -q "<commit message>" \
-        && printf '%s' "$LEAK_OUT" | grep -q "example.internal"; then
+        && printf '%s' "$LEAK_OUT" | grep -q "lines:  1 " \
+        && ! printf '%s' "$LEAK_OUT" | grep -q "zq7canary" \
+        && ! printf '%s' "$LEAK_OUT" | grep -q "example.internal"; then
         rc_ok=1
     fi
     rm -rf "$dir"
-    _assert_eq "T-3 pattern in commit message -> exit 1 + diagnostic" 1 "$rc_ok"
+    _assert_eq "T-3 pattern in commit message -> exit 1 + location only, no matched text" 1 "$rc_ok"
 }
 
 _t4_upstream_push_pattern_in_diff_blocks() {
     local dir
     dir=$(_setup_repo)
-    echo "OVERLAY_PATH=/home/user/private-overlay/skills" >>"$dir/seed.txt"
+    echo "OVERLAY_PATH=/home/user/private-overlay/zq7canary-file" >>"$dir/seed.txt"
     git -C "$dir" -c core.hooksPath=/dev/null commit -aq -m "ordinary subject"
 
     set +e
@@ -190,12 +192,14 @@ _t4_upstream_push_pattern_in_diff_blocks() {
     local rc_ok=0
     if [ "$rc" -eq 1 ] \
         && printf '%s' "$LEAK_OUT" | grep -q "Upstream push blocked" \
-        && printf '%s' "$LEAK_OUT" | grep -q "seed.txt" \
-        && printf '%s' "$LEAK_OUT" | grep -q "/private-overlay/"; then
+        && printf '%s' "$LEAK_OUT" | grep -q "source: seed.txt" \
+        && printf '%s' "$LEAK_OUT" | grep -q "lines:  [0-9]" \
+        && ! printf '%s' "$LEAK_OUT" | grep -q "zq7canary" \
+        && ! printf '%s' "$LEAK_OUT" | grep -q "private-overlay"; then
         rc_ok=1
     fi
     rm -rf "$dir"
-    _assert_eq "T-4 pattern in file diff -> exit 1 + diagnostic" 1 "$rc_ok"
+    _assert_eq "T-4 pattern in file diff -> exit 1 + location only, no matched text" 1 "$rc_ok"
 }
 
 _t5_skip_leak_guard_escape_hatch() {

@@ -132,7 +132,8 @@ _resolve_scan_range() {
 }
 
 # Scan a commit range for leak patterns. Returns 0 if clean, 1 if a match
-# was reported. Failures of git plumbing are treated fail-open (with stderr
+# was reported — commit + source + line numbers only, never the matched
+# text (#1975), so logs and screen shares stay clean. Failures of git plumbing are treated fail-open (with stderr
 # warning) so a guard bug never blocks a legitimate push.
 _leak_scan_range() {
     local range="$1"
@@ -161,9 +162,8 @@ _leak_scan_range() {
             echo "${MSG_LEAK_BLOCKED}"
             echo "  commit: ${commit_hash}"
             echo "  source: <commit message>"
-            printf '%s\n' "${msg_match}" | while IFS= read -r line; do
-                echo "    ${line}"
-            done
+            # Line numbers only (#1975): never echo matched text into logs.
+            echo "  lines:  $(printf '%s\n' "${msg_match}" | cut -d: -f1 | paste -sd, -)  (matches LEAK_PATTERNS_ERE)"
             violated=1
         fi
 
@@ -183,9 +183,7 @@ _leak_scan_range() {
                 echo "${MSG_LEAK_BLOCKED}"
                 echo "  commit: ${commit_hash}"
                 echo "  source: ${file}"
-                printf '%s\n' "${file_match}" | while IFS= read -r line; do
-                    echo "    ${line}"
-                done
+                echo "  lines:  $(printf '%s\n' "${file_match}" | cut -d: -f1 | paste -sd, -)  (matches LEAK_PATTERNS_ERE)"
                 violated=1
             fi
         done <<<"${files}"
