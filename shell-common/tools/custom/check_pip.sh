@@ -125,11 +125,9 @@ check_pip_repository() {
     fi
     echo ""
 
-    # Additional info about Samsung internal repos (for reference only)
-    ux_section "Samsung Internal Repositories (Reference - requires internal network)"
-    ux_info "These URLs are only accessible from internal company network or with proper proxy:"
-    ux_bullet "Primary: http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
-    ux_bullet "DataService: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
+    # Internal repos (reference only): URLs live in the internal pip.conf, not here
+    ux_section "Internal Repositories (Reference - requires internal network)"
+    ux_info "On an internal PC, run 'pip config list' to see the configured index URL"
     echo ""
 }
 

@@ -34,6 +34,7 @@
 |------|------|------|
 | Claude Code 인증 | `gateway-cli setup` (조직 LLM Gateway) | `internal` → 2026-08-18~ `gateway-cli` 소유; 상세: `docs/guide/internal-pc.md` |
 | Claude 계정 활성화 | `shell-common/env/claude.sh` | `internal` → work 계정만; 그 외 → personal/work/work1 |
+| 사내 식별값 | `shell-common/env/internal.local.sh` (gitignored) | `internal` PC 는 `internal.local.example` 을 복사해 실제 값 입력 (예: `DOTFILES_GHES_HOST`) — #1944 |
 | Git host 라우팅 | `shell-common/functions/gh_host.sh` | `internal` → GHES, 그 외 → github.com |
 | 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지 (레거시 숫자값만 매칭, 문자열 값 미지원 — issue #1051) |
 | Bedrock 비용 위젯 | `claude/statusline-command.sh` | `internal` 에서만 표시 (레거시 숫자값 `2`는 미지원 — 별도 확인 필요) |

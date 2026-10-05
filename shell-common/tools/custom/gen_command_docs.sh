@@ -346,8 +346,10 @@ render_all_bodies() {
     # LC_ALL=C pins collation and byte-wise truncation. Without it a row that
     # does `find | sort` or `cut -c1-57` over multibyte text renders
     # differently depending on the generating machine's locale, and the
-    # committed docs stop being reproducible.
-    env -u CLAUDE_CONFIG_DIR -u CLAUDE_SKILLS_PATH HOME="$neutral_home" \
+    # committed docs stop being reproducible. Help rows that echo internal-PC
+    # values (proxy, CA paths, GHES host; #1944) must not bake them in either.
+    env -u CLAUDE_CONFIG_DIR -u CLAUDE_SKILLS_PATH -u http_proxy -u CA_CERT \
+        -u SSL_CERT_FILE -u DOTFILES_GHES_HOST HOME="$neutral_home" \
         DOTFILES_FORCE_INIT=1 NO_COLOR=1 TERM=dumb DOTFILES_TEST_MODE=1 LC_ALL=C \
         SHELL_COMMON="$SHELL_COMMON" DOTFILES_ROOT="$DOTFILES_ROOT" \
         FUNCTIONS_DIR="$FUNCTIONS_DIR" GCD_DELIM="$GCD_DELIM" \

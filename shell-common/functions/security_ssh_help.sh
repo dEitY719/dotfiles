@@ -38,7 +38,7 @@ _crt_help_rows_overview() {
 
 _crt_help_rows_options() {
     ux_bullet "Option 1: Custom Certificate (External Company PC - VPN)"
-    ux_bullet " • Certificate path: ${UX_MUTED}/usr/local/share/ca-certificates/samsungsemi-prx.com.crt${UX_RESET}"
+    ux_bullet " • Certificate path: ${UX_MUTED}${CA_CERT:-<proxy CA .crt> (CA_CERT in security.local.sh)}${UX_RESET}"
     ux_bullet " • Install with: ${UX_SUCCESS}crtsetup${UX_RESET}"
     ux_bullet "Option 2: System CA Bundle (Internal Company PC)"
     ux_bullet " • Certificate path: ${UX_MUTED}/etc/ssl/certs/ca-certificates.crt${UX_RESET}"
@@ -148,8 +148,8 @@ _ssh_help_list_sections() {
 }
 
 _ssh_help_rows_ssh() {
-    ux_table_row "ssh <host>" "ssh ssai-dev" "Connect to server"
-    ux_table_row "ssh <host> <cmd>" "ssh ssai-dev 'ls /home'" "Run remote command"
+    ux_table_row "ssh <host>" "ssh my-server" "Connect to server"
+    ux_table_row "ssh <host> <cmd>" "ssh my-server 'ls /home'" "Run remote command"
 }
 
 _ssh_help_rows_scp() {
@@ -314,8 +314,8 @@ _ssl_help_rows_files() {
 }
 
 _ssl_help_rows_paths() {
-    ux_bullet "Internal PC:  /usr/share/ca-certificates/extra/McAfee_Certificate.crt"
-    ux_bullet "External PC:  /usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+    ux_bullet "Internal PC:  <proxy CA .crt> (SSL_CERT_FILE in security.local.sh)"
+    ux_bullet "External PC:  <VPN proxy CA .crt> (CA_CERT in security.local.sh)"
     ux_bullet "System CA:    /etc/ssl/certs/ca-certificates.crt"
 }
 

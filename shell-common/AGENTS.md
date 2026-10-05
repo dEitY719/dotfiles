@@ -55,7 +55,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 # Decision Tree (새 파일을 어디에 둘지)
 
 1. 단순 alias? → `aliases/*.sh`
-2. env 변수 export? → `env/*.sh`
+2. env 변수 export? → `env/*.sh` — 사내 식별값(호스트·URL·경로)은 tracked 금지: `env/<topic>.local.sh`(gitignored, `env/<topic>.sh` 가 source) + `.local.example`(가짜 placeholder), 미설정 시 경고/skip (#1944)
 3. help 함수 (apt_help, git_help)? → `functions/*_help.sh`
 4. 셸에서 호출하는 유틸 함수? → `functions/*.sh`
 5. 3rd-party 도구 wrapper (npm, docker)? → `tools/integrations/*.sh`

@@ -124,7 +124,7 @@
 - 사내(프록시 차단 우회, Linux x86_64 전용): curl -fsSL -o ~/.local/bin/herdr https://github.com/ogulcancelik/herdr/releases/latest/download/herdr-linux-x86_64 && chmod +x ~/.local/bin/herdr
 - macOS/Apple Silicon 사내망: 위 바이너리는 Linux 전용 — 사외(표준) brew/mise 경로 사용 또는 releases 페이지에서 darwin 자산명 확인
 - 사내(버전 고정): 위 URL의 latest/download 대신 download/v0.7.5 로 태그 지정
-- 근본 해결: 프록시 예외 신청 — GSAMS https://gsams.samsungds.net
+- 근본 해결: 사내 프록시 예외 신청 포털에서 herdr 다운로드 경로 예외 신청
 
 ## 엣지케이스 / 의도된 동작
 
