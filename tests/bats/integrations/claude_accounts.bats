@@ -1295,7 +1295,7 @@ run_with_fake_ssot() {
     [ ! -e "$HOME/.claude-personal/skills/beta" ] && [ ! -L "$HOME/.claude-personal/skills/beta" ]
 }
 
-@test "claude_accounts_init prunes leftover workspace links (incl. dangling) and keeps everything else" {
+@test "claude_accounts_init prunes leftover workspace links and dangling links (even external) and keeps everything else" {
     _seed_ssot_skills packaging-skills alpha
     mkdir -p "$HOME/.claude-shared/plugins" "$HOME/elsewhere/graphify"
     _sk="$HOME/.claude-personal/skills"
@@ -1303,19 +1303,20 @@ run_with_fake_ssot() {
     # Left behind by the old flat composition.
     ln -s "$FAKE_WORKSPACE_ROOT/packaging-skills/skills/alpha" "$_sk/alpha"
     ln -s "$FAKE_WORKSPACE_ROOT/removed-skills/skills/old" "$_sk/old"
-    # Not ours: external link, dangling external link, file.
-    ln -s "$HOME/elsewhere/graphify" "$_sk/graphify"
+    # Dangling external link (#2018): no skill to provide, so it goes too.
     ln -s "$HOME/elsewhere/vanished" "$_sk/vanished"
+    # Not ours: live external link, file.
+    ln -s "$HOME/elsewhere/graphify" "$_sk/graphify"
     echo "note" > "$_sk/README.txt"
 
     run_with_fake_ssot 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init'
     assert_success
-    assert_output --partial "removed workspace skill link (loaded via plugin): alpha"
+    assert_output --partial "removed stale skill link: alpha"
 
     [ ! -e "$_sk/alpha" ] && [ ! -L "$_sk/alpha" ]
     [ ! -e "$_sk/old" ] && [ ! -L "$_sk/old" ]
     [ "$(readlink "$_sk/graphify")" = "$HOME/elsewhere/graphify" ]
-    [ -L "$_sk/vanished" ]
+    [ ! -e "$_sk/vanished" ] && [ ! -L "$_sk/vanished" ]
     [ -d "$_sk/agentmemory-recall" ] && [ -d "$_sk/synced" ] && [ -d "$_sk/.trash" ]
     grep -q "note" "$_sk/README.txt"
 }

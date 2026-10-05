@@ -18,9 +18,10 @@ marketplace repo 로 분리됐고, `claude/skills/` 원본은 Phase 4 에서 삭
 플러그인 하나뿐이다 (예: `gh-flow@gh-flow-skills` → `/gh-flow:issue`).
 워크스페이스 스킬을 `~/.claude*/skills/` 에 flat 링크로 합성하지 **않는다** —
 같은 스킬이 네임스페이스 없는 명령(`/issue`)으로 한 번 더 등록돼 중복되기
-때문이다. `claude/setup.sh` 는 예전 합성이 남긴 워크스페이스 링크(dangling
-포함)를 `_claude_prune_workspace_skills()` 로 지우고, 워크스페이스 밖을 가리키는
-링크(graphify, `claude-accounts link` 결과)·실디렉토리·파일은 그대로 둔다.
+때문이다. `claude/setup.sh` 는 예전 합성이 남긴 워크스페이스 링크와
+dangling 링크(워크스페이스 밖 포함, #2018)를 `_claude_prune_workspace_skills()` 로
+지우고, 워크스페이스 밖을 가리키는 정상 링크(graphify, `claude-accounts link`
+결과)·실디렉토리·파일은 그대로 둔다.
 `skills/` 자체는 실디렉토리로 유지된다 (#707 F-8).
 
 아래의 flat 합성은 **플러그인 기반이 아닌 나머지 하네스**(OpenCode / Codex /

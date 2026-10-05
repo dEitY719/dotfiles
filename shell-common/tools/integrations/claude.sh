@@ -855,12 +855,16 @@ _claude_prepare_skills_dir() {
 # 맡는다. 다른 harness(OpenCode / Codex / agy / Hermes)는 플러그인 기반이
 # 아니므로 scripts/setup-skills-ssot.sh 의 flat 합성을 그대로 유지한다.
 #
-# 정리 대상: <tgt> 의 직계 symlink 중 target 이 워크스페이스 루트 안에 있는 것
-# (dangling 포함 — repo 가 사라진 링크도 지운다). 판정은 _claude_under_workspace
-# (raw / resolved 양쪽 철자)를 그대로 쓴다 — `claude-accounts link` 가
-# 워크스페이스 entry 로 보고 fan-out 에서 건너뛰는 기준과 같은 정의다. 워크스페이스 밖을 가리키는 링크
-# (graphify, `claude-accounts link` 결과 등), 실디렉토리(agentmemory-*,
-# synced/, .trash/), 일반 파일은 절대 건드리지 않는다.
+# 정리 대상 (<tgt> 의 직계 symlink):
+#   1. target 이 존재하지 않는 dangling 링크 — 어디를 가리키든(워크스페이스 밖
+#      포함: #1680 이전 ~/dotfiles/claude/skills/*, 사라진 company-skills 등)
+#      스킬을 제공하지 못하므로 지워도 잃는 것이 없다 (#2018). 워크스페이스
+#      루트를 판정할 수 없어도 동작한다.
+#   2. target 이 워크스페이스 루트 안에 있는 링크. 판정은 _claude_under_workspace
+#      (raw / resolved 양쪽 철자)를 그대로 쓴다 — `claude-accounts link` 가
+#      워크스페이스 entry 로 보고 fan-out 에서 건너뛰는 기준과 같은 정의다.
+# 워크스페이스 밖을 가리키는 정상 링크(graphify, `claude-accounts link` 결과 등),
+# 실디렉토리(agentmemory-*, synced/, .trash/), 일반 파일은 절대 건드리지 않는다.
 #
 # <tgt> 자체는 계속 실디렉토리로 정규화한다 (_claude_prepare_skills_dir,
 # #707 F-8) — 외부에서 추가된 entry 가 계속 들어올 자리다.
@@ -868,8 +872,8 @@ _claude_prepare_skills_dir() {
 # 정리한 개수는 CLAUDE_WS_SKILLS_PRUNED 에 누적된다 (claude/setup.sh 의 변경
 # 요약 라인, #997). Idempotent: 두 번째 실행은 아무것도 지우지 않는다.
 # 워크스페이스 루트가 없거나 너무 넓으면(_skill_workspace_root 의 breadth
-# guard) 조용히 return 0 — 무엇이 "워크스페이스 링크" 인지 판정할 수 없을 때는
-# 지우지 않는 쪽이 안전하다.
+# guard) 2번(워크스페이스 링크) 판정은 건너뛴다 — 무엇이 "워크스페이스 링크"
+# 인지 판정할 수 없을 때는 지우지 않는 쪽이 안전하다. 1번(dangling)은 그대로 처리.
 _claude_prune_workspace_skills() {
     _cpws_tgt="${1:-}"
     [ -n "$_cpws_tgt" ] || return 0
@@ -877,13 +881,14 @@ _claude_prune_workspace_skills() {
 
     # Defense-in-depth (#724 lesson): a caller that sources this file but not
     # functions/skill_sources.sh would make _claude_under_workspace reject
-    # every path, and the cleanup would silently no-op. Say so instead.
-    if ! command -v _skill_workspace_root >/dev/null 2>&1; then
+    # every path, and the workspace cleanup would silently no-op. Say so
+    # instead. Dangling links are still pruned (they need no root).
+    _cpws_root=""
+    if command -v _skill_workspace_root >/dev/null 2>&1; then
+        _cpws_root="$(_skill_workspace_root)" || _cpws_root=""
+    else
         ux_warning "  workspace skill sources unavailable — shell-common/functions/skill_sources.sh not sourced (#1652)"
-        return 0
     fi
-
-    _cpws_root="$(_skill_workspace_root)" || return 0
 
     # `find` rather than a glob: zsh aborts the enclosing function on an
     # unmatched glob (`nomatch`), and an empty skills/ is the normal state.
@@ -891,18 +896,22 @@ _claude_prune_workspace_skills() {
     _cpws_pruned=0
     while IFS= read -r _cpws_existing; do
         [ -n "$_cpws_existing" ] || continue
-        # `readlink` gives the raw target; a relative or non-normalized link
-        # would not match the root, so test the resolved spelling too. Fall
-        # back to the raw value when resolution fails (a dangling link whose
-        # repo vanished is exactly what this loop is looking for).
-        _cpws_raw=$(readlink "$_cpws_existing")
-        _cpws_real=$(readlink -f "$_cpws_existing" 2>/dev/null || printf '%s' "$_cpws_raw")
-        if ! _claude_under_workspace "$_cpws_raw" && ! _claude_under_workspace "$_cpws_real"; then
-            continue
+        # Dangling (#2018): `-e` follows the link, so false == target missing.
+        if [ -e "$_cpws_existing" ]; then
+            # Live link: only ours when it points into the workspace. Without
+            # a usable root we cannot tell, so keep it.
+            [ -n "$_cpws_root" ] || continue
+            # `readlink` gives the raw target; a relative or non-normalized
+            # link would not match the root, so test the resolved spelling too.
+            _cpws_raw=$(readlink "$_cpws_existing")
+            _cpws_real=$(readlink -f "$_cpws_existing" 2>/dev/null || printf '%s' "$_cpws_raw")
+            if ! _claude_under_workspace "$_cpws_raw" && ! _claude_under_workspace "$_cpws_real"; then
+                continue
+            fi
         fi
         if rm -f "$_cpws_existing"; then
             _cpws_pruned=$((_cpws_pruned + 1))
-            ux_info "  removed workspace skill link (loaded via plugin): ${_cpws_existing##*/}"
+            ux_info "  removed stale skill link: ${_cpws_existing##*/}"
         else
             ux_error "  rm failed: $_cpws_existing"
         fi
@@ -912,7 +921,7 @@ CPWS_LINKS
 
     CLAUDE_WS_SKILLS_PRUNED=$((${CLAUDE_WS_SKILLS_PRUNED:-0} + _cpws_pruned))
     if [ "$_cpws_pruned" -gt 0 ]; then
-        ux_success "  pruned workspace skill links: $_cpws_tgt (removed=$_cpws_pruned root=$_cpws_root)"
+        ux_success "  pruned stale skill links: $_cpws_tgt (removed=$_cpws_pruned root=${_cpws_root:-none})"
     fi
     return 0
 }
