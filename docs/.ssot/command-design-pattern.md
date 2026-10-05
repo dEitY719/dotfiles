@@ -105,10 +105,13 @@ alias <alias>='<topic>'
 ```
 
 `-h|--help|help|""` invokes `<topic>_help` directly (no `return 1`) so users
-discover help through the natural entry point (`gwt`, `gwt -h`, `gwt help
+discover help through the natural entry point (`gwt`, `gwt -h`, `gwt -h
 spawn`) instead of being told to learn a separate `<alias>-help` form. Passing
-`"$@"` forwards a section name (`<alias> help spawn` → `<topic>_help spawn`).
+`"$@"` forwards a section name (`<alias> -h spawn` → `<topic>_help spawn`).
 The `<alias>-help` alias is preserved as a backward-compatible shortcut.
+Exception: `gwt` rejects the positional `help` form and points to the
+canonical `gwt-help` (see the reference implementation below and
+[`command-guidelines.md`](./command-guidelines.md) §멀티 커맨드 함수형 CLI).
 
 ### 참조 구현: `gwt`
 
@@ -121,12 +124,16 @@ gwt() {
         list|ls)  shift; git_worktree_list "$@" ;;
         spawn)    shift; git_worktree_spawn "$@" ;;
         teardown) shift; git_worktree_teardown "$@" ;;
-        -h|--help|help|"")
+        help)
+            ux_error "Use canonical entrypoint: gwt-help (not 'gwt help')"
+            ux_info "Try: gwt-help"
+            return 1 ;;
+        -h|--help|"")
             [ $# -gt 0 ] && shift
             gwt_help "$@" ;;
         *)
             ux_error "Unknown command: $1"
-            ux_info "Run: gwt help"
+            ux_info "Run: gwt-help"
             return 1 ;;
     esac
 }
@@ -222,7 +229,7 @@ alias gb='git_branch'
 
 [`command-guidelines.md`](./command-guidelines.md)의 help 표준(15줄 이내, `ux_bullet`/`ux_bullet_sub`, `--all`/`<section>` 분리)은 standalone help에 완전 적용된다.
 
-Type 2A 의 `-h|--help|help|""` 케이스는 `<topic>_help "$@"` 를 직접 호출한다. `<alias>-help` alias 는 backward-compat 단축형으로 동시 제공한다 (예: `gwt help spawn` ≡ `gwt-help spawn`).
+Type 2A 의 `-h|--help|help|""` 케이스는 `<topic>_help "$@"` 를 직접 호출한다. `<alias>-help` alias 는 backward-compat 단축형으로 동시 제공한다 (예: `gwt -h spawn` ≡ `gwt-help spawn`; `gwt` 는 위치 인자 `help` 를 거부한다).
 
 ## 8. Deprecated Alias 전략
 
