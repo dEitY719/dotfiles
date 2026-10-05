@@ -16,7 +16,18 @@ DEFAULT_PYTHON_VERSIONS=(
     "3.13.5"
 )
 
+install_python_help() {
+    if command -v py_help >/dev/null 2>&1; then
+        py_help setup
+        return 0
+    fi
+    ux_usage "install-py" "[version...]" "Install pyenv, Python build deps (sudo) and Python versions"
+    ux_bullet "Default versions: ${DEFAULT_PYTHON_VERSIONS[*]}"
+    ux_bullet "Example: install-py 3.12.11 3.13.5"
+}
+
 main() {
+    case "${1:-}" in -h | --help) install_python_help; return 0 ;; esac
     clear
     ux_header "Pyenv & Python Installer"
     ux_info "This script installs pyenv, Python build dependencies, and common Python versions."
