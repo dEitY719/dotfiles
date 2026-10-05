@@ -10,7 +10,7 @@
 | 단계 | 파일 | 검사 범위 | 차단 시 출력 |
 |------|------|-----------|--------------|
 | pre-commit | `hooks/checks/leak_pattern_check.sh` | staged 의 추가된 줄만 | `file:line` 만 (매칭 텍스트 미출력) |
-| pre-push (Layer 2) | `hooks/pre-push` | push 범위의 커밋 메시지 + 변경 파일 | 매칭 줄 (로컬 터미널) |
+| pre-push (Layer 2) | `hooks/pre-push` | push 범위의 커밋 메시지 + 변경 파일 | commit + source + 줄 번호만 (매칭 텍스트 미출력) |
 
 두 단계 모두 같은 변수 두 개를 읽는다 (SSOT: `config/pre-push-rules.sh`, 기본값 빈
 문자열 = 비활성):
@@ -68,4 +68,6 @@ bash git/tests/test_hooks.sh     # pre-commit leak guard 3 케이스 포함
 | `SKIP_PRE_PUSH=1` | pre-push 훅 전체를 끈다 |
 
 diff 를 직접 확인한 경우에만 쓴다. 매칭 위치 확인:
-`git diff --cached -U0 | grep -nE "$LEAK_PATTERNS_ERE"`.
+`git diff --cached -U0 | grep -nE "$LEAK_PATTERNS_ERE"` (pre-commit),
+`git show <commit>:<source> | grep -nE "$LEAK_PATTERNS_ERE"` (pre-push,
+커밋 메시지는 `git log -1 --format=%B <commit> | grep -nE ...`).

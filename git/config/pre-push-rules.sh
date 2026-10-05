@@ -64,7 +64,9 @@ LEAK_PATTERNS_ERE="${LEAK_PATTERNS_ERE-}"
 MSG_LEAK_BLOCKED="Upstream push blocked: internal-pattern match detected"
 MSG_LEAK_HINT="
 To fix this:
-   1. Inspect: git log <range> -p | grep -nE \"\${LEAK_PATTERNS_ERE}\"
+   1. Inspect locally (matched text is not printed above):
+        message: git log -1 --format=%B <commit> | grep -nE \"\${LEAK_PATTERNS_ERE}\"
+        file:    git show <commit>:<source> | grep -nE \"\${LEAK_PATTERNS_ERE}\"
    2. Squash / amend / drop the offending commit, then re-push.
    3. (Emergency) SKIP_LEAK_GUARD=1 git push <remote> <branch>
       Use only when you have manually verified the diff is safe.
