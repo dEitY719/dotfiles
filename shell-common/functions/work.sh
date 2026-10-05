@@ -53,33 +53,33 @@ _work_help_rows_overview() {
 _work_help_rows_commands() {
     ux_step "1. Record Work (Manual Log Entry)" "work-log"
     ux_bullet "Add non-development work to weekly log"
-    echo "  ${UX_MUTED}work-log add SWINNOTEAM-903 -t coordination -c Communication -T 2.5h${UX_RESET}"
-    echo "  ${UX_MUTED}work-log list --today${UX_RESET}"
+    ux_bullet_sub "work-log add SWINNOTEAM-903 -t coordination -c Communication -T 2.5h"
+    ux_bullet_sub "work-log list --today"
 
     ux_step "2. Generate Weekly Report" "make-jira"
     ux_bullet "Create Jira-formatted weekly report from work_log.txt"
-    echo "  ${UX_MUTED}make-jira${UX_RESET}                    # Current week"
-    echo "  ${UX_MUTED}make-jira --week 2026-W05${UX_RESET}    # Specific week"
-    echo "  ${UX_MUTED}make-jira SWINNOTEAM-906${UX_RESET}     # Filter by key"
+    ux_table_row "make-jira" "Current week"
+    ux_table_row "make-jira --week 2026-W05" "Specific week"
+    ux_table_row "make-jira SWINNOTEAM-906" "Filter by key"
     ux_bullet "Output: playbook/docs/jira-records/YYYY-W##-report.md"
 
     ux_step "3. Transform Docs to Confluence Guides" "make-confluence"
     ux_bullet "Convert markdown technical docs to Confluence format"
-    echo "  ${UX_MUTED}make-confluence docs/guide/technic/file.md${UX_RESET}                        # Auto-detect category"
-    echo "  ${UX_MUTED}make-confluence docs/analysis/file.md --category testing${UX_RESET}  # Explicit category"
+    ux_table_row "make-confluence docs/guide/technic/file.md" "Auto-detect category"
+    ux_table_row "make-confluence docs/analysis/file.md --category testing" "Explicit category"
     ux_bullet "Output: playbook/docs/confluence-guides/{category}/YYYY-MM-DD-{title}.md"
 }
 
 _work_help_rows_workflow() {
-    echo "${UX_HEADER}Daily Workflow:${UX_RESET}"
-    echo "  1. Work happens → git commits (auto-tracked)"
-    echo "  2. Manual non-dev work → work-log add"
-    echo "  3. Friday: make-jira → Weekly Jira report"
-    echo "  4. As needed: make-confluence → Technical guides"
-    echo "${UX_HEADER}Weekly Cycle:${UX_RESET}"
-    echo "  Mon-Fri: Regular work + work-log entries"
-    echo "  Friday:  make-jira 2026-W05 → Jira report"
-    echo "  Anytime: make-confluence → Knowledge base"
+    ux_info "Daily Workflow:"
+    ux_numbered 1 "Work happens → git commits (auto-tracked)"
+    ux_numbered 2 "Manual non-dev work → work-log add"
+    ux_numbered 3 "Friday: make-jira → Weekly Jira report"
+    ux_numbered 4 "As needed: make-confluence → Technical guides"
+    ux_info "Weekly Cycle:"
+    ux_table_row "Mon-Fri" "Regular work + work-log entries"
+    ux_table_row "Friday" "make-jira 2026-W05 → Jira report"
+    ux_table_row "Anytime" "make-confluence → Knowledge base"
 }
 
 _work_help_rows_dataflow() {
@@ -109,16 +109,16 @@ _work_help_rows_files() {
 
 _work_help_rows_integration() {
     ux_info "All commands are git-tracked:"
-    echo "  ${UX_SUCCESS}dotfiles${UX_RESET}:                CLI tools + alias definitions"
-    echo "  ${UX_SUCCESS}playbook${UX_RESET}:           Reports and guides"
-    echo "  ${UX_SUCCESS}Multi-PC sync${UX_RESET}:           Symlink abstraction (automatic)"
+    ux_table_row "dotfiles" "CLI tools + alias definitions"
+    ux_table_row "playbook" "Reports and guides"
+    ux_table_row "Multi-PC sync" "Symlink abstraction (automatic)"
 }
 
 _work_help_rows_more() {
     ux_info "For detailed help on individual commands:"
-    echo "  ${UX_SUCCESS}work-log help${UX_RESET}              # work-log manual"
-    echo "  ${UX_SUCCESS}make-jira --help${UX_RESET}           # make-jira manual (if implemented)"
-    echo "  ${UX_SUCCESS}make-confluence --help${UX_RESET}     # make-confluence manual (if implemented)"
+    ux_table_row "work-log help" "work-log manual"
+    ux_table_row "make-jira --help" "make-jira manual (if implemented)"
+    ux_table_row "make-confluence --help" "make-confluence manual (if implemented)"
 }
 
 _work_help_render_section() {

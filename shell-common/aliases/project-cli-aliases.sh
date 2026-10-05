@@ -29,7 +29,7 @@ _run_project_cli() {
     local python_module="$2"
 
     if [ -z "$project_name" ] || [ -z "$python_module" ]; then
-        echo "Error: _run_project_cli requires project_name and python_module arguments"
+        ux_error "_run_project_cli requires project_name and python_module arguments"
         return 1
     fi
 
@@ -37,7 +37,7 @@ _run_project_cli() {
 
     # Validate project directory exists
     if [ ! -d "$project_dir" ]; then
-        echo "Error: Project directory not found: $project_dir"
+        ux_error "Project directory not found: $project_dir"
         return 1
     fi
 
@@ -48,7 +48,7 @@ _run_project_cli() {
     local module_path
     module_path=$(printf '%s' "$python_module" | tr '.' '/')
     if [ ! -f "backend/$module_path/__main__.py" ]; then
-        echo "Error: Python module not found: backend/$module_path/__main__.py"
+        ux_error "Python module not found: backend/$module_path/__main__.py"
         return 1
     fi
 
@@ -97,7 +97,7 @@ run_jiravis_test() {
     local project_dir="$HOME/para/project/jiravis"
 
     if [ ! -d "$project_dir" ]; then
-        echo "Error: Project directory not found: $project_dir"
+        ux_error "Project directory not found: $project_dir"
         return 1
     fi
 
