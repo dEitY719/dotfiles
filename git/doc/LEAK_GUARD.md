@@ -22,20 +22,27 @@ ref 이름) 자체가 `LEAK_PATTERNS_ERE` 에 매칭되면 그 경로 대신 길
 - pre-push: `source: <redacted path: N chars, matches LEAK_PATTERNS_ERE>` +
   `lines:  (file name)`, ref 이름은 `source: <redacted ref name: N chars, ...>`
 
-**pre-commit 전체 출력 (#2002)**: 가드가 활성이면 `hooks/pre-commit` 은 자신을 한 번
-더 실행해 출력 전체(stdout + stderr: 보호 브랜치 안내, shebang/naming/shellcheck 등 모든
-검사 리포트)를 `leak_redact` 필터에 통과시킨다 — `LEAK_PATTERNS_ERE` 매칭 부분은 모두
-`<redacted>` 로 바뀐다 (예: `shell-common/<redacted>.sh:1: Expected: ...`). 비활성이면
-필터를 거치지 않으며 출력은 이전과 바이트 단위로 같다.
+**pre-commit 전체 출력 (#2002, #2008)**: 가드가 활성이면 global hook
+(`global-hooks/pre-commit`, Layer 1) 이 자신을 한 번 더 실행해 출력 전체(stdout +
+stderr)를 `leak_redact` 필터에 통과시킨다 — 자체 검사 리포트(trailing whitespace, debug
+code, forbidden filename, large file 의 경로 목록)와, 위임받은 프로젝트 hook
+(`hooks/pre-commit`: 보호 브랜치 안내, shebang/naming/shellcheck 등 모든 검사 리포트)의
+출력까지 `LEAK_PATTERNS_ERE` 매칭 부분이 모두 `<redacted>` 로 바뀐다 (예:
+`shell-common/<redacted>.sh:1: Expected: ...`). 프로젝트 hook 은 `LEAK_REDACT_PIPED` 를
+상속받아 다시 필터링하지 않으며, global hook 없이 직접 실행되면 스스로 같은 필터를 건다.
+활성 판정(`leak_guard_active`)과 필터(`leak_redact`)는 `global-hooks/lib/leak_guard.sh`
+하나를 두 hook 이 공유한다. global hook 은 이 repo 의 다른 파일에 의존하지 않으므로
+이 repo 파일이 없는 다른 repo 에서도 같은 조건으로 동작하고, 두 env 가 비어 있으면
+`git config` 호출 없이 바로 넘어간다. 비활성이면 필터를 거치지 않으며 출력은 이전과
+바이트 단위로 같다.
 
-가리지 못하는 출력 (hook 밖이거나 hook 이전):
+가리지 못하는 출력 (hook 밖):
 
-- global hook (`global-hooks/pre-commit`, Layer 1) 이 프로젝트 hook 으로 위임하기
-  **전에** 찍는 자체 검사 출력 (trailing whitespace, debug code, forbidden filename 등의
-  경로 목록). 이 repo 의 가드와 무관한 범용 hook 이다.
 - git 자체 출력. 가드가 경로 매칭으로 막으면 커밋이 안 되므로 git 은 경로를 찍지 않지만,
   `SKIP_LEAK_GUARD=1` 이나 `--no-verify` 로 통과시킨 커밋의 요약(`create mode ... <path>`),
   `git status`, `git add` 경고 등은 hook 이 제어할 수 없다.
+- global hook 파일만 `global-hooks/` 밖으로 복사해 옆에 `lib/` 가 없는 설치: global hook
+  자체 출력은 필터 없이 나간다 (`setup.sh` 의 symlink 설치는 해당 없음).
 
 식별값을 파일 이름에 두지 않는 것이 여전히 우선이다.
 
@@ -84,7 +91,7 @@ git rm -q --cached leak-probe.txt && rm leak-probe.txt
 
 # 3) 메커니즘 회귀 테스트 (가짜 패턴 fixture)
 bash git/test/test-pre-push.sh   # pre-push T-1..T-10
-bash git/tests/test_hooks.sh     # pre-commit leak guard 4 케이스 포함
+bash git/tests/test_hooks.sh     # pre-commit leak guard 케이스 (global hook 출력 포함)
 ```
 
 ## 우회 (escape hatch)

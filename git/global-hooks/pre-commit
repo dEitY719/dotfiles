@@ -83,6 +83,25 @@ if [ -f "$HOOK_CONFIG_PATH" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Leak guard output redaction (#2008)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# The checks below print staged paths verbatim. When the leak guard is active
+# (same conditions as the project hook: lib/leak_guard.sh), run this hook once
+# more with its whole output — including the delegated project hook, which
+# inherits LEAK_REDACT_PIPED and so does not filter a second time — through
+# leak_redact. Env vars unset: a no-op before any git call. A lib missing
+# next to this script (a hand-copied hook): no guard, as before.
+if [ -z "${LEAK_REDACT_PIPED:-}" ] && [ -r "$SCRIPT_DIR/lib/leak_guard.sh" ]; then
+    # shellcheck source=./lib/leak_guard.sh
+    . "$SCRIPT_DIR/lib/leak_guard.sh"
+    if leak_guard_active; then
+        LEAK_REDACT_PIPED=1 "$0" "$@" 2>&1 | leak_redact
+        exit "${PIPESTATUS[0]}"
+    fi
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CONFIGURATION: Forbidden Filenames (P0 Security - SSOT)
 # ═══════════════════════════════════════════════════════════════════════════
 
