@@ -257,7 +257,9 @@ README_HEADER
                     ux_info "- **$filename**: $description" >>"$readme_file"
                     processed=$((processed + 1))
                 fi
-            done < <(find "$category_dir" -maxdepth 1 -type f -name "*.md")
+            done <<EOF
+$(find "$category_dir" -maxdepth 1 -type f -name "*.md")
+EOF
 
             # Process nested directories (like skills/category/SKILL.md or agents/category/AGENT.md)
             while IFS= read -r nested_dir; do
@@ -288,7 +290,9 @@ README_HEADER
                         processed=$((processed + 1))
                     fi
                 fi
-            done < <(find "$category_dir" -maxdepth 1 -type d ! -name "$(basename "$category_dir")")
+            done <<EOF
+$(find "$category_dir" -maxdepth 1 -type d ! -name "$(basename "$category_dir")")
+EOF
 
 
         fi
@@ -372,25 +376,35 @@ process_plugin_directory_ko() {
     mkdir -p "$docs_dir"
 
     # Find all .md files recursively
-    local md_files=()
-    while IFS= read -r -d '' file; do
-        md_files+=("$file")
-    done < <(find "$source_dir" -type f -name "*.md" -print0)
+    # Newline-split into "$@" (args were consumed above), so the loop body's
+    # AI-tool calls keep the caller's stdin. ponytail: a .md path containing a
+    # newline splits in two; switch to find -exec if that ever appears.
+    local md_list md_total _ifs
+    md_list=$(find "$source_dir" -type f -name "*.md")
 
-    if [ ${#md_files[@]} -eq 0 ]; then
+    if [ -z "$md_list" ]; then
         ux_error "No markdown files found in: $source_dir"
         return 1
     fi
 
     ux_section "Found Files"
-    ux_info "Total markdown files: ${#md_files[@]}"
+    md_total=$(printf '%s\n' "$md_list" | wc -l | tr -d ' ')
+    ux_info "Total markdown files: $md_total"
 
 
     # Process each markdown file
     local success_count=0
     local skipped_count=0
     local failed_count=0
-    for source_file in "${md_files[@]}"; do
+    _ifs=$IFS
+    IFS='
+'
+    set -f
+    # shellcheck disable=SC2086  # intentional newline split, globbing off
+    set -- $md_list
+    set +f
+    IFS=$_ifs
+    for source_file in "$@"; do
         # Get relative path
         local relative_path="${source_file#"$source_dir"/}"
         local output_file="$docs_dir/${relative_path%.md}_KO.md"
@@ -427,7 +441,7 @@ process_plugin_directory_ko() {
 
 
     ux_section "Summary"
-    ux_bullet "Total files: ${#md_files[@]}"
+    ux_bullet "Total files: $md_total"
     ux_bullet "Generated: $success_count"
     ux_bullet "Skipped (exists): $skipped_count"
     ux_bullet "Failed: $failed_count"
