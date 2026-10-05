@@ -23,8 +23,8 @@
 
 ### ssh
 
-- **ssh <host>** — ssh ssai-dev — Connect to server
-- **ssh <host> <cmd>** — ssh ssai-dev 'ls /home' — Run remote command
+- **ssh <host>** — ssh my-server — Connect to server
+- **ssh <host> <cmd>** — ssh my-server 'ls /home' — Run remote command
 
 ### scp
 

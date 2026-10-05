@@ -86,9 +86,8 @@ _pip_help_rows_setup() {
 }
 
 _pip_help_rows_repos() {
-    ux_bullet "Proxy:            http://12.26.204.100:8080"
-    ux_bullet "Internal Repo:    http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple"
-    ux_bullet "DataService Repo: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple"
+    ux_bullet "Proxy:            ${http_proxy:-not set (internal PC: shell-common/env/proxy.local.sh)}"
+    ux_bullet "Internal Repo:    run 'pip config list' (internal mode deploys pip.conf)"
 }
 
 _pip_help_rows_notes() {
@@ -517,7 +516,7 @@ _bun_help_rows_examples() {
 
 _bun_help_rows_config() {
     ux_bullet "Config file  : ${UX_INFO}~/.bunfig.toml${UX_RESET} (dotfiles symlink)"
-    ux_bullet "Environments : internal (Samsung registry), external (default)"
+    ux_bullet "Environments : internal (company registry), external (default)"
 }
 
 _bun_help_rows_troubleshoot() {

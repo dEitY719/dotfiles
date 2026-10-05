@@ -94,7 +94,7 @@ main() {
 
     if ! "install_herdr_via_${method}"; then
         ux_error "herdr install failed (${method})"
-        [ "$method" = "release" ] && ux_bullet "Proxy blocked? Request an exception: https://gsams.samsungds.net"
+        [ "$method" = "release" ] && ux_bullet "Proxy blocked? Request a proxy exception via the internal portal"
         return 1
     fi
 

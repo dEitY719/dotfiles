@@ -46,9 +46,8 @@
 
 ### repos
 
-- Proxy:            http://12.26.204.100:8080
-- Internal Repo:    http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple
-- DataService Repo: http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple
+- Proxy:            not set (internal PC: shell-common/env/proxy.local.sh)
+- Internal Repo:    run 'pip config list' (internal mode deploys pip.conf)
 
 ### notes
 
