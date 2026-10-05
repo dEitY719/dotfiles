@@ -38,7 +38,7 @@ devx_pr_verify_live_serving_identity() {
     IFS='	' read -r sha src state <<EOF
 $line
 EOF
-    echo "TARGET_SHA=$sha (source=$src, state=$state)"
+    printf '%s\n' "TARGET_SHA=$sha (source=$src, state=$state)"
     [ $# -gt 0 ] || return 0
 
     root=$1; shift
@@ -71,7 +71,7 @@ EOF
     else
         behind="target commit not in this checkout — fetch, then retry"
     fi
-    echo "serving    $top @ $head ($behind)"
+    printf '%s\n' "serving    $top @ $head ($behind)"
 
     # One independent look at the served source before stopping.
     if [ -z "$url" ] || [ -z "$syms" ]; then
