@@ -155,12 +155,6 @@ check_ssh_agent_running() {
 }
 
 
-# GitHub SSH 연결 가능 여부 확인
-check_github_ssh_access() {
-    ssh -T git@github.samsungds.net >/dev/null 2>&1
-}
-
-
 # SSH 에이전트 시작
 start_ssh_agent() {
     eval "$(ssh-agent -s)" >/dev/null 2>&1
@@ -208,6 +202,18 @@ generate_ssh_key() {
 }
 
 
+# 사내 GHES 호스트 해석: shell-common/functions/gh_host.sh 의 _gh_ghes_host 재사용.
+# 파일이 없는 최소 체크아웃에서는 환경변수만 본다.
+_git_setup_ghes_host() {
+    local helper="${DOTFILES_REPO_ROOT}/shell-common/functions/gh_host.sh"
+    if [ -r "$helper" ]; then
+        (SHELL_COMMON="${DOTFILES_REPO_ROOT}/shell-common" && . "$helper" 2>/dev/null && _gh_ghes_host)
+    else
+        printf '%s' "${DOTFILES_GHES_HOST-}"
+    fi
+}
+
+
 # Git 리모트를 SSH로 변경
 configure_git_remote_ssh() {
     local repo_root="$1"
@@ -225,10 +231,17 @@ configure_git_remote_ssh() {
         return 0
     fi
 
+    # 사내 GHES 호스트는 공개 저장소에 두지 않는다 (#1965/#2006):
+    # $DOTFILES_GHES_HOST → gitignored internal.local.sh 순으로 해석 (gh_host.sh SSOT).
+    # 미설정(공개 PC)이면 변환하지 않는다.
+    local ghes
+    ghes=$(_git_setup_ghes_host)
+    [ -n "$ghes" ] || return 0
+
     # HTTPS -> SSH 변환 필요 여부 확인
-    if [[ "$current_remote" == https://github.samsungds.net/* ]]; then
-        # https://github.samsungds.net/org/repo.git -> git@github.samsungds.net:org/repo.git
-        new_remote=$(echo "$current_remote" | sed 's|https://github\.samsungds\.net/|git@github.samsungds.net:|')
+    if [[ "$current_remote" == "https://${ghes}/"* ]]; then
+        # https://<ghes>/org/repo.git -> git@<ghes>:org/repo.git
+        new_remote="git@${ghes}:${current_remote#"https://${ghes}/"}"
         git -C "$repo_root" remote set-url origin "$new_remote" 2>/dev/null
         ux_success "Git 리모트가 SSH로 변경되었습니다"
         ux_info "  기존: $current_remote"

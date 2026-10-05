@@ -11,7 +11,7 @@ export const meta = {
   ],
 }
 
-const HOME = (typeof process !== 'undefined' && process.env?.HOME) || '/home/deity719'
+const HOME = (typeof process !== 'undefined' && process.env?.HOME) || '~'
 
 // ─── Phase 1: Inventory ───────────────────────────────────────────────────
 phase('Inventory')

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/bwyoon/.pyenv/versions/3.13.5/bin/graphify hook-check"
+            "command": "\"$HOME/.pyenv/versions/3.13.5/bin/graphify\" hook-check"
           }
         ]
       }

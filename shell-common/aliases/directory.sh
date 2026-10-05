@@ -19,14 +19,15 @@ dotfiles() {
     cd "${DOTFILES_ROOT:-$HOME/dotfiles}" || return 1
 }
 
-# Windows directory paths (WSL) — /mnt/c/Users/... are Windows-side mounts
-# with no $HOME equivalent, so the abs-home guard is explicitly allowed here.
-alias cd-wdocu='cd /mnt/c/Users/bwyoon/Documents'                          # allow-abs-home
-alias cd-wobsidian='cd /mnt/c/Users/bwyoon/Documents/.obsidian'            # allow-abs-home
-alias cd-wdown='cd /mnt/c/Users/bwyoon/Downloads'                          # allow-abs-home
-alias cd-wpicture='cd /mnt/c/Users/bwyoon/Pictures'                        # allow-abs-home
-alias cd-tilnote='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote'  # allow-abs-home
-alias cd-obsidian='cd /mnt/c/Users/bwyoon/Documents/ObsidianVault-TilNote' # allow-abs-home
+# Windows directory paths (WSL). The Windows profile dir is resolved at call
+# time: $WIN_HOME when set (e.g. in a gitignored *.local.sh), else
+# /mnt/c/Users/$USER (Windows and WSL user names match on these PCs).
+alias cd-wdocu='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents"'
+alias cd-wobsidian='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents/.obsidian"'
+alias cd-wdown='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Downloads"'
+alias cd-wpicture='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Pictures"'
+alias cd-tilnote='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents/ObsidianVault-TilNote"'
+alias cd-obsidian='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents/ObsidianVault-TilNote"'
 
 # PARA structure
 alias mk-para='mkdir -p para/{archive,area,project,resource}'
