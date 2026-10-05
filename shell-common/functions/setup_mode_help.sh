@@ -70,7 +70,7 @@ show_setup_mode() {
             ;;
         2|internal)
             ux_success "Mode 2: $mode_name"
-            ux_info "Expected: Company proxy enabled (12.26.204.100:8080)"
+            ux_info "Expected: Company proxy enabled (http_proxy from shell-common/env/proxy.local.sh)"
             ux_info "Expected: All company configurations (.local.sh files) enabled"
             ;;
         3|external)

@@ -51,7 +51,7 @@
 ### config
 
 - Config file  : ~/.bunfig.toml (dotfiles symlink)
-- Environments : internal (Samsung registry), external (default)
+- Environments : internal (company registry), external (default)
 
 ### troubleshoot
 

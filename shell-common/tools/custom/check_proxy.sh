@@ -69,7 +69,7 @@ check_setup_mode() {
             ;;
         internal)
             ux_success "Setup Mode: Internal company PC (Direct connection)"
-            ux_info "Expected behavior: Company proxy SHOULD be set (12.26.204.100:8080)"
+            ux_info "Expected behavior: Company proxy SHOULD be set (http_proxy from shell-common/env/proxy.local.sh)"
             record_pass
             ;;
         external)

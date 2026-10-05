@@ -43,9 +43,14 @@ git_ssh_check() {
     fi
     echo ""
 
-    # 4. Test GitHub SSH connection
+    # 4. Test GitHub SSH connection (host: DOTFILES_GHES_HOST, #1944)
+    if [ -z "${DOTFILES_GHES_HOST-}" ]; then
+        ux_warning "DOTFILES_GHES_HOST not set — skipping GHES SSH test"
+        ux_info "Internal PC: cp shell-common/env/internal.local.example shell-common/env/internal.local.sh"
+        return 1
+    fi
     ux_info "Testing GitHub SSH connection..."
-    if ssh -T git@github.samsungds.net >/dev/null 2>&1; then
+    if ssh -T "git@${DOTFILES_GHES_HOST}" >/dev/null 2>&1; then
         ux_success "GitHub SSH connection successful"
         echo ""
     else
@@ -53,12 +58,12 @@ git_ssh_check() {
         ux_info ""
         ux_info "Troubleshooting steps:"
         ux_bullet "1. Verify public key is registered in GitHub:"
-        ux_bullet_sub "Go to: https://github.samsungds.net/settings/keys"
+        ux_bullet_sub "Go to: https://${DOTFILES_GHES_HOST}/settings/keys"
         ux_bullet_sub "Your public key: $(cat "${HOME}/.ssh/id_ed25519.pub")"
         ux_bullet "2. Check SSH config:"
         ux_bullet_sub "cat ~/.ssh/config"
         ux_bullet "3. Test SSH manually:"
-        ux_bullet_sub "ssh -vvv git@github.samsungds.net"
+        ux_bullet_sub "ssh -vvv git@${DOTFILES_GHES_HOST}"
         ux_bullet "4. SSH Setup Guide: git/doc/SSH_SETUP_GUIDE.md"
         echo ""
         return 1

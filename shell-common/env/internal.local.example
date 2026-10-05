@@ -1,0 +1,11 @@
+#!/bin/sh
+# internal.local.sh (template) — internal-PC identifiers (#1944)
+#
+# 사용 방법 (internal / external 모드 PC 만):
+#   cp shell-common/env/internal.local.example shell-common/env/internal.local.sh
+#   # 아래 placeholder 를 실제 값으로 바꾼다 (internal.local.sh 는 gitignored)
+#
+# 실제 값은 공개 repo 의 어떤 tracked 파일에도 적지 않는다.
+
+# 사내 GHES 호스트명 (ghes_mirror, git_ssh_check 가 사용)
+export DOTFILES_GHES_HOST="ghes.example.invalid"
