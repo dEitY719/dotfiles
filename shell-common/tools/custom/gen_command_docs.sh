@@ -336,18 +336,26 @@ topic_alias_list() {
 # this every clone would regenerate a diff).
 render_all_bodies() {
     local manifest="$1" stream="$2"
+    # Empty neutral HOME (#1951): rows that read host state (`ssh` lists the
+    # Host entries of ~/.ssh/config, `claude` resolves $CLAUDE_CONFIG_DIR)
+    # otherwise bake the generating machine into committed docs. Runtime
+    # `<topic>-help` is untouched and still shows the real values.
+    local neutral_home="${_WORK_DIR}/home"
+    mkdir -p "$neutral_home"
 
     # LC_ALL=C pins collation and byte-wise truncation. Without it a row that
     # does `find | sort` or `cut -c1-57` over multibyte text renders
     # differently depending on the generating machine's locale, and the
     # committed docs stop being reproducible.
-    DOTFILES_FORCE_INIT=1 NO_COLOR=1 TERM=dumb DOTFILES_TEST_MODE=1 LC_ALL=C \
+    env -u CLAUDE_CONFIG_DIR -u CLAUDE_SKILLS_PATH HOME="$neutral_home" \
+        DOTFILES_FORCE_INIT=1 NO_COLOR=1 TERM=dumb DOTFILES_TEST_MODE=1 LC_ALL=C \
         SHELL_COMMON="$SHELL_COMMON" DOTFILES_ROOT="$DOTFILES_ROOT" \
         FUNCTIONS_DIR="$FUNCTIONS_DIR" GCD_DELIM="$GCD_DELIM" \
         bash --noprofile --norc "$_RENDER_FILE" "$_STUB_FILE" "$manifest" 2>/dev/null |
         LC_ALL=C sed \
             -e 's/\x1b\[[0-9;]*[A-Za-z]//g' \
             -e "s|${DOTFILES_ROOT}|~/dotfiles|g" \
+            -e "s|${neutral_home}|~|g" \
             -e "s|${HOME}|~|g" >"$stream"
 }
 
