@@ -156,10 +156,22 @@ check_ssh_link() {
 # Main function with sub-command handling
 # ============================================================
 
+check_ssh_help() {
+    ux_usage "check_ssh" "[key|copy|link|all]" "SSH key setup and diagnostics for SSAI project (WSL environment)"
+    ux_bullet "key - Check/generate WSL SSH key"
+    ux_bullet "copy - Copy key to Windows .ssh directory"
+    ux_bullet "link - Check ~/.ssh/config symlink"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     local cmd="${1:-all}"
 
     case "$cmd" in
+        -h | --help)
+            check_ssh_help
+            return 0
+            ;;
         key)
             check_ssh_key
             ;;
@@ -175,13 +187,7 @@ main() {
             check_ssh_link
             ;;
         *)
-            echo "Usage: check_ssh [key|copy|link|all]"
-            echo ""
-            echo "  key     - Check/generate WSL SSH key"
-            echo "  copy    - Copy key to Windows .ssh directory"
-            echo "  link    - Check ~/.ssh/config symlink"
-            echo "  all     - Run all checks (default)"
-            echo ""
+            check_ssh_help
             exit 1
             ;;
     esac

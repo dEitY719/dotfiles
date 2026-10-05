@@ -169,10 +169,23 @@ check_cargo_connectivity() {
 # Main function with sub-command handling
 # ============================================================
 
+check_cargo_help() {
+    ux_usage "check_cargo" "[config|files|env|connectivity|all]" "Comprehensive Cargo configuration diagnostic script"
+    ux_bullet "config - Show Cargo version and settings"
+    ux_bullet "files - Check Cargo config files"
+    ux_bullet "env - Show environment variables"
+    ux_bullet "connectivity - Test registry connectivity"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     local cmd="${1:-all}"
 
     case "$cmd" in
+        -h | --help)
+            check_cargo_help
+            return 0
+            ;;
         config)
             check_cargo_config
             ;;
@@ -192,14 +205,7 @@ main() {
             check_cargo_connectivity
             ;;
         *)
-            echo "Usage: check_cargo [config|files|env|connectivity|all]"
-            echo ""
-            echo "  config        - Show Cargo version and settings"
-            echo "  files         - Check Cargo config files"
-            echo "  env           - Show environment variables"
-            echo "  connectivity  - Test registry connectivity"
-            echo "  all           - Run all checks (default)"
-            echo ""
+            check_cargo_help
             exit 1
             ;;
     esac

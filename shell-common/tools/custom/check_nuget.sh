@@ -206,10 +206,23 @@ EOF
 # Main function with sub-command handling
 # ============================================================
 
+check_nuget_help() {
+    ux_usage "check_nuget" "[config|files|env|connectivity|all]" "Comprehensive NuGet configuration diagnostic script"
+    ux_bullet "config - Show NuGet version and sources"
+    ux_bullet "files - Check NuGet config files (dual-path)"
+    ux_bullet "env - Show environment variables"
+    ux_bullet "connectivity - Test source connectivity"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     local cmd="${1:-all}"
 
     case "$cmd" in
+        -h | --help)
+            check_nuget_help
+            return 0
+            ;;
         config)
             check_nuget_config
             ;;
@@ -229,14 +242,7 @@ main() {
             check_nuget_connectivity
             ;;
         *)
-            echo "Usage: check_nuget [config|files|env|connectivity|all]"
-            echo ""
-            echo "  config        - Show NuGet version and sources"
-            echo "  files         - Check NuGet config files (dual-path)"
-            echo "  env           - Show environment variables"
-            echo "  connectivity  - Test source connectivity"
-            echo "  all           - Run all checks (default)"
-            echo ""
+            check_nuget_help
             exit 1
             ;;
     esac
