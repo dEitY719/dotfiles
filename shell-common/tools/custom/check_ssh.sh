@@ -1,6 +1,6 @@
 #!/bin/bash
 # shell-common/tools/custom/check_ssh.sh
-# SSH key setup and diagnostics for SSAI project (WSL environment)
+# SSH key setup and diagnostics for the dev-server key (WSL environment)
 # Usage: check_ssh [key|copy|link|all]
 
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
@@ -10,7 +10,9 @@ source "$(dirname "$0")/init.sh" || exit 1
 # Configuration
 # ============================================================
 
-KEY_NAME="id_rsa_ssai_bwyoon"
+# Key file name: set DOTFILES_SSH_KEY_NAME in shell-common/env/internal.local.sh
+# (real key names stay out of the public repo, #1969).
+KEY_NAME="${DOTFILES_SSH_KEY_NAME:-id_rsa_dev}"
 WSL_SSH_DIR="$HOME/.ssh"
 
 # Detect Windows username from WSL
@@ -157,7 +159,7 @@ check_ssh_link() {
 # ============================================================
 
 check_ssh_help() {
-    ux_usage "check_ssh" "[key|copy|link|all]" "SSH key setup and diagnostics for SSAI project (WSL environment)"
+    ux_usage "check_ssh" "[key|copy|link|all]" "SSH key setup and diagnostics for the dev-server key (WSL environment)"
     ux_bullet "key - Check/generate WSL SSH key"
     ux_bullet "copy - Copy key to Windows .ssh directory"
     ux_bullet "link - Check ~/.ssh/config symlink"

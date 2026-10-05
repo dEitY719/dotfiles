@@ -57,7 +57,7 @@ _ai_usage_now() {
 # received" arrive together when the proxy-gateway SSE keepalive drops
 # mid-stream — same transient class, different signature. Both halves of
 # that message are listed so a future format tweak on either side still
-# matches. All are routinely seen on the Samsung internal LLM gateway
+# matches. All are routinely seen on the internal LLM gateway
 # and clear on a 2-4 s backoff. Permanent errors (auth, 4xx, model not
 # found) do NOT match — the caller stays fail-closed on those, matching
 # pre-retry behaviour.

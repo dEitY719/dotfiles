@@ -68,11 +68,11 @@ teardown() {
     REPO="$TEST_TEMP_HOME/repo"
     mkdir -p "$REPO"
     git -C "$REPO" init -q
-    git -C "$REPO" remote add origin "https://github.samsungds.net/byoungwoo-yoon/claude-plugin-jira.git"
+    git -C "$REPO" remote add origin "https://ghes.example.invalid/example-owner/claude-plugin-jira.git"
 
     run _repo_target "$REPO"
     assert_success
-    assert_output "byoungwoo-yoon/claude-plugin-jira"
+    assert_output "example-owner/claude-plugin-jira"
 }
 
 @test "_repo_target fails when origin remote is missing" {

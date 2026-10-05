@@ -246,7 +246,7 @@ _gh_pr_review_require_ai_cli() {
 # _gh_pr_review_require_internal_cli — fail closed unless the dotfiles
 # setup-mode SSOT says this is an internal PC. Shared gate for AI CLIs
 # that only reach their provider from inside the corporate network:
-# opencode (Code Mate) and hermes (Samsung DS internal AI coding CLI). A
+# opencode and hermes (internal AI coding CLI). A
 # personal/public install of either binary is not enough on its own.
 # Args: $1 = ai name, used only to build the error message.
 _gh_pr_review_require_internal_cli() {
@@ -1212,7 +1212,7 @@ OpenCode:
                                isolated temporary directory
 
 Hermes:
-  --ai hermes                  internal-PC only; Samsung DS internal CLI;
+  --ai hermes                  internal-PC only; internal AI coding CLI;
                                prompt is attached with --file (invocation
                                shape unverified — see ai-cli-invocation.md)
 
