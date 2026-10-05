@@ -568,16 +568,20 @@ _public_publish_allowed() {
 	[ "$mode" != "internal" ]
 }
 
+publish_sync_help() {
+	echo "usage: publish-sync.sh [--dry-run]"
+	echo "  Publishes claude/plugin manifest changes to origin (and the"
+	echo "  internal company/ repo when present) via branch + PR + admin-merge."
+	echo "  --dry-run  show the diff that would be published; no push/PR/merge."
+}
+
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	DRY_RUN=0
 	case "${1:-}" in
 	"") ;;
 	--dry-run) DRY_RUN=1 ;;
 	-h | --help | help)
-		echo "usage: publish-sync.sh [--dry-run]"
-		echo "  Publishes claude/plugin manifest changes to origin (and the"
-		echo "  internal company/ repo when present) via branch + PR + admin-merge."
-		echo "  --dry-run  show the diff that would be published; no push/PR/merge."
+		publish_sync_help
 		exit 0
 		;;
 	*)

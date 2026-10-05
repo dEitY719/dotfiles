@@ -14,12 +14,20 @@ set -u
 # Parameters
 # ═══════════════════════════════════════════════════════════════════════════
 
-if [ $# -lt 1 ]; then
+install_hooks_help() {
     echo "Usage: $(basename "$0") <project-path> [--force]"
     echo ""
     echo "Examples:"
     echo "  $(basename "$0") ~/workspace/project-a"
     echo "  $(basename "$0") . --force"
+}
+
+case "${1:-}" in
+    -h|--help) install_hooks_help; exit 0 ;;
+esac
+
+if [ $# -lt 1 ]; then
+    install_hooks_help
     exit 1
 fi
 
