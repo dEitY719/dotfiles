@@ -335,6 +335,36 @@ test_shellcheck_passes_clean_and_ignores_non_shell() {
   rm -rf "$repo_dir"
 }
 
+# Issue #2016 — wrapper_check matches the literal text "$@" (it used to expand
+# its own args into the regex, SC2199, so `foo "$@"` wrappers were missed).
+test_wrapper_check_flags_delegating_wrappers() {
+  local dir out
+  dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  # shellcheck disable=SC2016
+  printf '%s\n' \
+    'args_fwd() {' '    bar "$@"' '}' \
+    'bare_call() {' '    qux' '}' \
+    'one_line() { y "$@"; }' \
+    'var_call() {' '    $cmd "$@"' '}' \
+    'real_logic() {' '    echo hi' '    other' '}' \
+    'positional() {' '    z "$1"' '}' >"$dir/w.sh"
+
+  out=$(
+    # shellcheck source=/dev/null
+    . "${DOTFILES_ROOT}/git/hooks/checks/wrapper_check.sh"
+    check_wrapper_function "$dir/w.sh" "$dir/out.txt" || true
+    cat "$dir/out.txt"
+  )
+  local want
+  for want in "args_fwd() { bar" "bare_call() { qux" "one_line() { y" "var_call() { cmd"; do
+    echo "$out" | grep -qF "'$want ... }'" || die "Expected wrapper warning '$want', got: $out"
+  done
+  for want in real_logic positional; do
+    echo "$out" | grep -qF "'$want()" && die "Unexpected wrapper warning for $want: $out"
+  done
+  rm -rf "$dir"
+}
+
 # Issue #1970 — commit-time leak guard. Fake patterns only.
 LEAK_TEST_UPSTREAM='github\.com[:/]example-owner/example-repo(\.git)?$'
 LEAK_TEST_PATTERNS='corp-internal\.example\.invalid|EMP[0-9]{5}'
@@ -1006,6 +1036,7 @@ main() {
   # Issue #2014 — ShellCheck step runs on staged files
   test_shellcheck_blocks_staged_violation
   test_shellcheck_passes_clean_and_ignores_non_shell
+  test_wrapper_check_flags_delegating_wrappers
 
   # Issue #1970 — commit-time leak guard
   test_leak_guard_blocks_without_echoing_match
