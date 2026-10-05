@@ -1,5 +1,5 @@
 # 현재 상황
-(.venv) bwyoon@SERAPH:~/dotfiles(backup/sso-feature)$ gb -a
+(.venv) user@host:~/dotfiles(backup/sso-feature)$ gb -a
 * backup/sso-feature
   fix/gcp-scan-duplicate-handling
   main

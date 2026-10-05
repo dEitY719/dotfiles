@@ -274,7 +274,7 @@ npx tsx packages/cli/src/index.ts help git
 
 ### Step 1: 프로젝트 초기화
 ```bash
-cd /home/bwyoon/dotfiles/packages
+cd ~/dotfiles/packages
 
 # 새 프로젝트 디렉토리
 mkdir my-cli

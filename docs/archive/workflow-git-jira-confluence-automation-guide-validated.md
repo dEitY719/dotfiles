@@ -409,7 +409,7 @@ if __name__ == '__main__':
 
 - [x] **P1-1**: rca-knowledge 디렉토리 구조 생성 ✅
   ```bash
-  /home/bwyoon/para/archive/rca-knowledge/
+  ~/para/archive/rca-knowledge/
   ├── docs/analysis/
   ├── docs/worklog-templates/
   ├── docs/jira-records/
@@ -449,8 +449,8 @@ if __name__ == '__main__':
 
 - [x] **P2-3**: Bash 스크립트로 구현 ✅
   ```bash
-  bash /home/bwyoon/dotfiles/shell-common/tools/custom/make_jira.sh current
-  bash /home/bwyoon/dotfiles/shell-common/tools/custom/make_confluence.sh {file} --category {cat}
+  bash ~/dotfiles/shell-common/tools/custom/make_jira.sh current
+  bash ~/dotfiles/shell-common/tools/custom/make_confluence.sh {file} --category {cat}
   ```
 
 **완료 기준**: ✓ 수동 작업 제거 + End-to-End 테스트 성공
@@ -465,7 +465,7 @@ if __name__ == '__main__':
 
 - [ ] **P3-1**: team-knowledge 저장소 설계
   ```bash
-  mkdir -p /home/bwyoon/para/archive/team-knowledge
+  mkdir -p ~/para/archive/team-knowledge
   ```
 - [ ] **P3-2**: 자동화 스크립트 작성
   - scripts/update_index.py
@@ -557,7 +557,7 @@ Date:   Mon Feb 2 18:27:19 2026
 ```
 
 #### 3. make-jira 실행 결과
-**파일**: `/home/bwyoon/para/archive/rca-knowledge/docs/jira-records/2026-W06-report.md`
+**파일**: `~/para/archive/rca-knowledge/docs/jira-records/2026-W06-report.md`
 ```markdown
 # [주간보고] 2026-W06 (2026-02-02 ~ 2026-02-08)
 
@@ -577,7 +577,7 @@ Date:   Mon Feb 2 18:27:19 2026
 ```
 
 #### 4. make-confluence 실행 결과
-**파일**: `/home/bwyoon/para/archive/rca-knowledge/docs/confluence-guides/infrastructure/2026-02-02-posix-safe-devx-shell-refactoring.md`
+**파일**: `~/para/archive/rca-knowledge/docs/confluence-guides/infrastructure/2026-02-02-posix-safe-devx-shell-refactoring.md`
 ```markdown
 # POSIX-Safe devx Shell Refactoring
 
@@ -668,7 +668,7 @@ chmod +x .git/hooks/post-commit
 Project A (Claude Code)
     └─ make-jira/make-confluence 실행
          ↓
-    /home/bwyoon/para/archive/{SSOT}  ← 여기에 저장!
+    ~/para/archive/{SSOT}  ← 여기에 저장!
          ↑
 Project B (Claude Code)
     └─ make-jira/make-confluence 실행
@@ -680,7 +680,7 @@ Project B (Claude Code)
 
 ### 1️⃣ rca-knowledge (현재 추천)
 
-**경로**: `/home/bwyoon/para/archive/rca-knowledge`
+**경로**: `~/para/archive/rca-knowledge`
 
 **구조**:
 ```
@@ -701,7 +701,7 @@ rca-knowledge/
 
 ### 2️⃣ til (비추천)
 
-**경로**: `/home/bwyoon/para/archive/til`
+**경로**: `~/para/archive/til`
 
 **구조**:
 ```
@@ -729,20 +729,20 @@ til/ (Jekyll 블로그)
 **설정**:
 ```bash
 # make-jira output
-/home/bwyoon/para/archive/rca-knowledge/docs/analysis/
+~/para/archive/rca-knowledge/docs/analysis/
 ├── testing/
 │   └── 2026-01-27-parallel-testing-xdist.md
 ├── infrastructure/
 └── documentation/
 
 # make-confluence output (동일 위치)
-/home/bwyoon/para/archive/rca-knowledge/docs/analysis/
+~/para/archive/rca-knowledge/docs/analysis/
 ├── testing/
 │   └── 2026-01-27-confluence-parallel-testing-guide.md
 └── ...
 
 # 메타데이터 자동 업데이트
-/home/bwyoon/para/archive/rca-knowledge/_index.json
+~/para/archive/rca-knowledge/_index.json
 ```
 
 **효과**:
@@ -755,7 +755,7 @@ til/ (Jekyll 블로그)
 
 **생성**:
 ```bash
-mkdir -p /home/bwyoon/para/archive/team-knowledge
+mkdir -p ~/para/archive/team-knowledge
 ```
 
 **구조** (권장):
@@ -811,17 +811,17 @@ team-knowledge/
 
 output_path: |
   rca-knowledge 사용 (단기):
-  /home/bwyoon/para/archive/rca-knowledge/docs/analysis/{category}/{date}-{jira_key}-{title}.md
+  ~/para/archive/rca-knowledge/docs/analysis/{category}/{date}-{jira_key}-{title}.md
 
   team-knowledge 사용 (장기):
-  /home/bwyoon/para/archive/team-knowledge/docs/jira-records/{year}-{month}/{jira_key}-{title}.md
+  ~/para/archive/team-knowledge/docs/jira-records/{year}-{month}/{jira_key}-{title}.md
 
 metadata_location: |
   rca-knowledge:
-  /home/bwyoon/para/archive/rca-knowledge/_index.json
+  ~/para/archive/rca-knowledge/_index.json
 
   team-knowledge:
-  /home/bwyoon/para/archive/team-knowledge/metadata/_index.json
+  ~/para/archive/team-knowledge/metadata/_index.json
 ```
 
 ### make-confluence 스킬 (수정)
@@ -829,10 +829,10 @@ metadata_location: |
 ```yaml
 output_path: |
   rca-knowledge 사용 (단기):
-  /home/bwyoon/para/archive/rca-knowledge/docs/analysis/{category}/{date}-{title}.md
+  ~/para/archive/rca-knowledge/docs/analysis/{category}/{date}-{title}.md
 
   team-knowledge 사용 (장기):
-  /home/bwyoon/para/archive/team-knowledge/docs/confluence-guides/{category}/{title}.md
+  ~/para/archive/team-knowledge/docs/confluence-guides/{category}/{title}.md
 
 structure: |
   team-knowledge/
@@ -870,16 +870,16 @@ structure: |
 
 ```bash
 # 1. 디렉토리 구조 생성
-mkdir -p /home/bwyoon/para/archive/rca-knowledge/docs/analysis/{testing,infrastructure,documentation}
+mkdir -p ~/para/archive/rca-knowledge/docs/analysis/{testing,infrastructure,documentation}
 
 # 2. make-jira 설정
-# output: /home/bwyoon/para/archive/rca-knowledge/docs/analysis/testing/2026-01-27-PROJ-245-parallel-testing.md
+# output: ~/para/archive/rca-knowledge/docs/analysis/testing/2026-01-27-PROJ-245-parallel-testing.md
 
 # 3. make-confluence 설정
-# output: /home/bwyoon/para/archive/rca-knowledge/docs/analysis/testing/2026-01-27-parallel-testing-guide.md
+# output: ~/para/archive/rca-knowledge/docs/analysis/testing/2026-01-27-parallel-testing-guide.md
 
 # 4. _index.json 자동 업데이트
-cat > /home/bwyoon/para/archive/rca-knowledge/_index.json << 'EOF'
+cat > ~/para/archive/rca-knowledge/_index.json << 'EOF'
 {
   "version": "1.0",
   "last_updated": "2026-01-27",
@@ -903,8 +903,8 @@ EOF
 
 ```bash
 # 1. 새 저장소 생성
-mkdir -p /home/bwyoon/para/archive/team-knowledge
-cd /home/bwyoon/para/archive/team-knowledge
+mkdir -p ~/para/archive/team-knowledge
+cd ~/para/archive/team-knowledge
 git init
 
 # 2. 폴더 구조 생성

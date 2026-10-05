@@ -55,9 +55,9 @@ $ git rev-parse --git-common-dir
 # worktree 안
 $ cd ~/dotfiles-claude-2
 $ git rev-parse --git-dir
-/home/bwyoon/dotfiles/.git/worktrees/dotfiles-claude-2
+~/dotfiles/.git/worktrees/dotfiles-claude-2
 $ git rev-parse --git-common-dir
-/home/bwyoon/dotfiles/.git
+~/dotfiles/.git
 # → 다름 → worktree
 ```
 

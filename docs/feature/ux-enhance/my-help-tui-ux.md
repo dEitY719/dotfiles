@@ -58,7 +58,7 @@
 2. **미리보기(preview)가 없다.** 현재 fzf 호출에 `--preview` 가 없어서, 후보를 고르기 전에 그 토픽/alias 가 무엇인지 볼 수 없다. 고르고 나서야 내용이 뜬다 → 잘못 고르면 다시 처음부터.
 3. **스코프 전환 수단이 없다.** 토픽과 alias 가 한 스트림에 섞여 들어간다. "지금은 alias 만 보고 싶다"를 표현할 방법이 없다.
 4. **shell function 은 인덱싱되지 않는다.** 인덱서는 `^alias name=` 만 스캔한다. `_my_help_*` 같은 내부 함수는 물론 제외해야 하지만, 사용자가 실제로 쓰는 공개 함수들(`gh_*`, `devx_*` 등)도 함께 빠져 있다.
-5. **`packages/my-cli` 가 고아 상태다.** Ink(React) 기반 TUI 3화면(`Home`/`Topics`/`TopicDetail`)이 구현돼 있지만 — 2026-02-20 이후 6개월 이상 정지 — 빌드 산출물이 없고, 어떤 셸 스크립트도 이것을 호출하지 않는다(`setup.sh`, `install.sh`, `mise.toml`, `shell-common/` 전부 무참조). 게다가 `App.tsx` 를 비롯해 CLI 커맨드·테스트에도 `/home/bwyoon/dotfiles/shell-common/functions/my_help.sh` 절대경로가 하드코딩돼 있어 워크트리에서 깨진다.
+5. **`packages/my-cli` 가 고아 상태다.** Ink(React) 기반 TUI 3화면(`Home`/`Topics`/`TopicDetail`)이 구현돼 있지만 — 2026-02-20 이후 6개월 이상 정지 — 빌드 산출물이 없고, 어떤 셸 스크립트도 이것을 호출하지 않는다(`setup.sh`, `install.sh`, `mise.toml`, `shell-common/` 전부 무참조). 게다가 `App.tsx` 를 비롯해 CLI 커맨드·테스트에도 `~/dotfiles/shell-common/functions/my_help.sh` 절대경로가 하드코딩돼 있어 워크트리에서 깨진다.
 
 > 5번이 이번 결정의 핵심 변수다. "TUI 를 만들자"가 아니라 "이미 만들다 만 TUI 를 되살릴 것인가, 접을 것인가"가 실제 질문이다. 그리고 되살리는 일은 UX 작업이 아니라 **별도의 부채 정리 작업**이다.
 

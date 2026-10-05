@@ -108,4 +108,4 @@ LLM을 프로덕션에서 안정적으로 운영하기 위해, **프롬프트를
 - 템플릿 라이브러리 검토 → few-shot 실험 → 버전관리/A-B 테스트 구축 → 자동 평가 파이프라인 → 의사결정 문서화
 
 ## [원본 파일]
-- `/home/bwyoon/.codex/skills/prompt-engineering-patterns/SKILL.md`
+- `~/.codex/skills/prompt-engineering-patterns/SKILL.md`

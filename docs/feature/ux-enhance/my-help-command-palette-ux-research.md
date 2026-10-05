@@ -45,7 +45,7 @@ status: draft
 | `packages/my-cli` | 2026-02-20 이후 변경 없음, `dist/` 없음 | 현재 엔트리포인트와 연결되지 않은 실험 코드로 취급한다. |
 
 `packages/my-cli`에는 `App.tsx`뿐 아니라 CLI command와 tests에도
-`/home/bwyoon/dotfiles/.../my_help.sh` 절대경로가 남아 있다. 따라서 이를 TUI의
+`~/dotfiles/.../my_help.sh` 절대경로가 남아 있다. 따라서 이를 TUI의
 기반으로 되살리는 작업은 단순 UX 변경이 아니라 별도 부채 정리 작업이다.
 
 ## 조사 결과

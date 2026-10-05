@@ -19,7 +19,7 @@
 
 ## 2. Antigravity CLI (agy) 내부 동작 실측 및 검증 (Verification)
 
-Antigravity CLI 바이너리(`/home/bwyoon/.local/bin/agy`) 및 실제 실행 세션의 시스템 프롬프트 주입 방식을 역공학 및 실측 분석하였습니다.
+Antigravity CLI 바이너리(`~/.local/bin/agy`) 및 실제 실행 세션의 시스템 프롬프트 주입 방식을 역공학 및 실측 분석하였습니다.
 
 ### 2.1 agy 의 스킬 탐색 (Discovery) 메커니즘
 - agy 바이너리는 `~/.gemini/config/skills/<entry>/SKILL.md` 경로를 탐색합니다.
