@@ -1,5 +1,9 @@
 # bunfig.toml.internal
-# Samsung internal PC configuration (direct connection, requires proxy)
+# Internal company PC configuration (direct connection, requires proxy)
+#
+# PLACEHOLDER: tracked values are fakes (*.example.invalid). The real ones live
+# in the gitignored bun/bunfig.toml.internal.local, which shell-common/setup.sh
+# prefers (seeded by scripts/internal-config-migrate.sh, #1968).
 #
 # Usage:
 #   This file is symlinked to ~/.bunfig.toml by shell-common/setup.sh
@@ -11,7 +15,7 @@
 # Note: bun uses system SSL by default, so cafile points to system CA bundle.
 
 [install]
-# Samsung internal Nexus proxy for npm registry
-registry = "http://repository.samsungds.net/repository/proxy-npm-registry.npmjs.org/"
+# Internal Nexus proxy for npm registry
+registry = "http://registry.example.invalid/repository/proxy-npm-registry/"
 # System CA bundle (same as npmrc.internal)
 cafile = "/etc/ssl/certs/ca-certificates.crt"

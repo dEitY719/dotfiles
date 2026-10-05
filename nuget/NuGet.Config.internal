@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- NuGet.Config.internal
-     Samsung internal NuGet repository configuration
+     Internal NuGet repository configuration
+
+     PLACEHOLDER: tracked values are fakes (*.example.invalid). The real
+     ones live in the gitignored nuget/NuGet.Config.internal.local, which
+     shell-common/setup.sh prefers (scripts/internal-config-migrate.sh, #1968).
 
      Usage:
        Symlinked to ~/.nuget/NuGet/NuGet.Config and
@@ -17,7 +21,7 @@
 <configuration>
   <packageSources>
     <clear />
-    <add key="DSNuget" value="https://repository.samsungds.net/repository/proxy-nuget-www.nuget.org/index.json" protocolVersion="3" />
+    <add key="DSNuget" value="https://registry.example.invalid/repository/proxy-nuget/index.json" protocolVersion="3" />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
   </packageSources>
 </configuration>

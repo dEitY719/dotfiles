@@ -9,5 +9,5 @@
 
 registry=https://registry.npmjs.org/
 strict-ssl=true
-cafile=/usr/local/share/ca-certificates/samsungsemi-prx.com.crt
+cafile=/etc/ssl/certs/ca-certificates.crt
 prefix=${HOME}/.npm-global

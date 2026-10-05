@@ -1,5 +1,9 @@
 # pip.conf.internal
-# Samsung internal repository configuration for corporate PC
+# Internal repository configuration for corporate PC
+#
+# PLACEHOLDER: tracked values are fakes (*.example.invalid). The real ones live
+# in the gitignored pip/pip.conf.internal.local, which shell-common/setup.sh
+# prefers (seeded by scripts/internal-config-migrate.sh, #1968).
 #
 # Usage:
 #   Symlinked to ~/.config/pip/pip.conf by shell-common/setup.sh
@@ -10,21 +14,21 @@
 
 [global]
 # Minimal configuration - matches company standard
-# Primary Samsung internal PyPI repository
-index-url = http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/simple
+# Primary internal PyPI repository
+index-url = http://registry.example.invalid/repository/proxy-pypi/simple
 
 # Trust the repository host (disable SSL verification if needed)
-trusted-host = repository.samsungds.net
+trusted-host = registry.example.invalid
 
 # ============================================================
 # Commented out - managed by other configuration files
 # ============================================================
 # no-cache-dir = true
 # Proxy settings: Use shell-common/env/proxy.local.sh instead
-# proxy = http://12.26.204.100:8080
+# proxy = http://proxy.example.invalid:8080
 
 # Extra repositories (commented - not used in current setup)
-# extra-index-url = http://nexus.adpaas.cloud.samsungds.net/repository/dataservice-pypi/simple
+# extra-index-url = http://registry.example.invalid/repository/extra-pypi/simple
 
 # PyTorch wheels (commented - install via dedicated channel if needed)
-# find-links = http://repository.samsungds.net/repository/proxy-pypi-files.pythonhosted.org/torch_stable.html
+# find-links = http://registry.example.invalid/repository/proxy-pypi/torch_stable.html
