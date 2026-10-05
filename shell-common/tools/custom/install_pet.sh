@@ -169,18 +169,18 @@ _install_pet() {
 # Display pet usage examples
 _show_usage() {
     ux_section "pet Quick Reference"
-    echo ""
+    ux_info ""
     ux_info "Basic commands:"
     ux_bullet "pet new - Create a new snippet"
     ux_bullet "pet search - Search and execute snippet (interactive)"
     ux_bullet "pet list - List all snippets"
     ux_bullet "pet edit - Edit snippets in editor"
-    echo ""
+    ux_info ""
     ux_info "Common usage:"
     ux_bullet "Store frequently used commands as snippets"
     ux_bullet "Search by description or command pattern"
     ux_bullet "Snippets stored in ~/.config/pet/snippets.toml"
-    echo ""
+    ux_info ""
 }
 
 # Main installation flow
@@ -196,11 +196,11 @@ install-pet() {
     _install_pet
 
     ux_success "pet installation complete!"
-    echo ""
+    ux_info ""
     ux_info "Start using pet now:"
-    echo "  ${UX_BOLD}pet new${UX_RESET} - Create your first snippet"
-    echo "  ${UX_BOLD}pet search${UX_RESET} - Search existing snippets"
-    echo ""
+    ux_bullet "pet new - Create your first snippet"
+    ux_bullet "pet search - Search existing snippets"
+    ux_info ""
     _show_usage
 }
 

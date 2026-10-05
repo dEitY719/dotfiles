@@ -12,7 +12,7 @@ source "$(dirname "$0")/init.sh" || exit 1
 main() {
 
 ux_header "GPU Status Monitor (for WSL2)"
-echo ""
+ux_info ""
 
 # =============================================================================
 # [섹션 1/5] WSL2 호스트 GPU 하드웨어
@@ -25,7 +25,7 @@ if [ -x /usr/lib/wsl/lib/nvidia-smi ]; then
 
     if [ -n "$GPU_INFO" ]; then
         ux_success "Host GPU detected successfully."
-        echo ""
+        ux_info ""
         # ux_table_row is not suitable for this 6-column layout, so we format manually
         printf "  ${UX_BOLD}%-9s │ %-30s │ %-8s │ %-10s │ %-9s │ %s${UX_RESET}\n" "Index" "GPU Name" "Driver" "Total VRAM" "Free VRAM" "Used VRAM"
         printf "  %s\n" "${UX_MUTED}──────────────────────────────────────────────────────────────────────────────────────────────────${UX_RESET}"
@@ -33,15 +33,15 @@ if [ -x /usr/lib/wsl/lib/nvidia-smi ]; then
             printf "  %-9s │ %-30s │ %-8s │ %-10s │ %-9s │ %s\n" \
                 "$index" "${name:0:30}" "$driver" "$total" "$free" "$used"
         done
-        echo ""
+        ux_info ""
     else
         ux_error "Failed to query GPU information from host nvidia-smi."
-        echo ""
+        ux_info ""
     fi
 else
     ux_warning "Host nvidia-smi not found at /usr/lib/wsl/lib/nvidia-smi."
     ux_info "This is the expected path for nvidia-smi in a WSL2 environment."
-    echo ""
+    ux_info ""
 fi
 
 # =============================================================================
@@ -69,7 +69,7 @@ else
         ux_info "Check the deploy.resources.reservations.devices section in your docker-compose.yml."
     fi
 fi
-echo ""
+ux_info ""
 
 # =============================================================================
 # [섹션 3/5] Ollama GPU 사용 현황 (핵심!)
@@ -108,7 +108,7 @@ else
         ux_info "Try running a model through Ollama to trigger offloading."
     fi
 fi
-echo ""
+ux_info ""
 
 # =============================================================================
 # [섹션 4/5] Ollama 환경변수
@@ -121,10 +121,9 @@ else
     OLLAMA_ENVS=$(docker exec ollama env 2>/dev/null | grep -E "OLLAMA_|CUDA_" | sort)
     if [ -n "$OLLAMA_ENVS" ]; then
         ux_info "Found relevant environment variables:"
-        echo "${UX_MUTED}"
-        # shellcheck disable=SC2001  # per-line '^' anchored indent; ${var//} cannot express it
-        echo "$OLLAMA_ENVS" | sed 's/^/  /'
-        echo "${UX_RESET}"
+        while IFS= read -r env_line; do
+            ux_bullet_sub "$env_line"
+        done <<< "$OLLAMA_ENVS"
         
         if ! echo "$OLLAMA_ENVS" | grep -q "OLLAMA_GPU_OVERHEAD"; then
             ux_warning "OLLAMA_GPU_OVERHEAD is not set. (Recommended)"
@@ -136,7 +135,7 @@ else
         ux_info "No specific OLLAMA_* or CUDA_* environment variables set (using defaults)."
     fi
 fi
-echo ""
+ux_info ""
 
 
 # =============================================================================
@@ -148,7 +147,8 @@ if [[ -n "$LAYERS_OFFLOADED" && "$LAYERS_OFFLOADED" == "0/"* ]]; then
     ux_section "Priority: Fix GPU Layer Offload"
     ux_numbered 1 "Restart Ollama: ${UX_PRIMARY}docker compose restart ollama${UX_RESET}"
     ux_numbered 2 "Set env vars in docker-compose.yml and rebuild:"
-    echo -e "   ${UX_MUTED}ollama:\n     environment:\n       OLLAMA_GPU_OVERHEAD: \"1073741824\"  # 1GB\n       OLLAMA_NUM_GPU: \"25\"${UX_RESET}"
+    ux_bullet_sub "ollama.environment.OLLAMA_GPU_OVERHEAD: \"1073741824\" (1GB)"
+    ux_bullet_sub "ollama.environment.OLLAMA_NUM_GPU: \"25\""
     ux_numbered 3 "Check for CUDA compatibility issues: ${UX_PRIMARY}docker logs ollama 2>&1 | grep -i 'cuda'${UX_RESET}"
     ux_numbered 4 "Ensure Windows NVIDIA drivers are up to date."
 else
@@ -169,7 +169,7 @@ else
         ux_bullet "Adjust max loaded models: ${UX_PRIMARY}OLLAMA_MAX_LOADED_MODELS: \"2\"${UX_RESET}"
     fi
 fi
-echo ""
+ux_info ""
 
 # =============================================================================
 # WSL2 환경 참고사항
@@ -180,13 +180,13 @@ ux_info "It's normal that 'nvidia-smi' does not work inside the container."
 ux_bullet "The host's nvidia-smi is at ${UX_PRIMARY}/usr/lib/wsl/lib/nvidia-smi${UX_RESET}"
 ux_bullet "This does not mean the GPU is unused; CUDA runtime works correctly."
 ux_bullet "Ollama's logs are the best source of truth for GPU usage."
-echo ""
+ux_info ""
 ux_section "Recommended Commands"
 ux_table_header "Command" "Description"
 ux_table_row "make gpu-info" "Simple GPU hardware info"
 ux_table_row "make gpu-status" "This detailed diagnostic script"
 ux_table_row "make health" "Full stack health check"
-echo ""
+ux_info ""
 
 }
 

@@ -100,34 +100,33 @@ _install_git_method() {
         git clone https://github.com/zsh-users/zsh-autosuggestions \
             "$HOME/.zsh/zsh-autosuggestions"
         ux_info "Add the following line to your ~/.zshrc:"
-        echo "  source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh"
+        ux_bullet "source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh"
     fi
 }
 
 # Display usage examples
 _show_usage() {
     ux_section "zsh-autosuggestions Quick Reference"
-    echo ""
+    ux_info ""
     ux_info "How it works:"
     ux_bullet "Start typing a command - suggestions appear in gray"
     ux_bullet "Press RIGHT ARROW or END to accept suggestion"
     ux_bullet "Press CTRL+F to accept suggestion (alternative)"
     ux_bullet "Press ALT+F to accept first word only"
-    echo ""
+    ux_info ""
     ux_info "Configuration (~/.zshrc):"
     ux_bullet "For Oh My Zsh users:"
-    echo "    plugins=(git zsh-autosuggestions ...)"
-    echo ""
+    ux_bullet_sub "plugins=(git zsh-autosuggestions ...)"
+    ux_info ""
     ux_bullet "For manual installation:"
-    echo "    source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
-    echo "    # or"
-    echo "    source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh"
-    echo ""
+    ux_bullet_sub "source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh (system package)"
+    ux_bullet_sub "source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh (manual clone)"
+    ux_info ""
     ux_info "Tips:"
     ux_bullet "Suggestions based on command history"
     ux_bullet "Works with any zsh theme"
     ux_bullet "Combine with zsh-syntax-highlighting for best experience"
-    echo ""
+    ux_info ""
 }
 
 # Main installation flow
@@ -151,11 +150,11 @@ install-zsh-autosuggestions() {
     _install_zsh_autosuggestions
 
     ux_success "zsh-autosuggestions installation complete!"
-    echo ""
+    ux_info ""
     ux_info "Next steps:"
     ux_bullet "Add zsh-autosuggestions to your ~/.zshrc configuration"
     ux_bullet "Run: source ~/.zshrc  (or restart your terminal)"
-    echo ""
+    ux_info ""
     _show_usage
 }
 

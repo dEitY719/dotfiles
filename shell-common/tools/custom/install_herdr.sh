@@ -54,7 +54,7 @@ herdr_release_url() {
 install_herdr_via_release() {
     local tmp rc=0
     if [ "$(uname -s)/$(uname -m)" != "Linux/x86_64" ]; then
-        echo "release binary is Linux x86_64 only (this host: $(uname -s)/$(uname -m))" >&2
+        ux_error "release binary is Linux x86_64 only (this host: $(uname -s)/$(uname -m))"
         return 1
     fi
     tmp=$(mktemp) || return 1
