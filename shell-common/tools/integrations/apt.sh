@@ -52,6 +52,7 @@ alias asize='du -sh /var/cache/apt/archives/' # Check cache size
 
 # Show package dependencies
 adep() {
+    case "${1:-}" in -h | --help) apt_help deps; return 0 ;; esac
     if [ $# -eq 0 ]; then
         ux_usage "adep" "<package-name>" "Show package dependencies"
         ux_bullet "adep firefox"
@@ -62,6 +63,7 @@ adep() {
 
 # Show reverse dependencies (which packages need this)
 ardep() {
+    case "${1:-}" in -h | --help) apt_help deps; return 0 ;; esac
     if [ $# -eq 0 ]; then
         ux_usage "ardep" "<package-name>" "Show reverse dependencies"
         ux_bullet "ardep libc6"
@@ -72,6 +74,7 @@ ardep() {
 
 # List all files installed by a package
 afiles() {
+    case "${1:-}" in -h | --help) apt_help deps; return 0 ;; esac
     if [ $# -eq 0 ]; then
         ux_usage "afiles" "<package-name>" "List files installed by package"
         ux_bullet "afiles curl"
@@ -82,6 +85,7 @@ afiles() {
 
 # Find which package owns a file
 awhich() {
+    case "${1:-}" in -h | --help) apt_help deps; return 0 ;; esac
     if [ $# -eq 0 ]; then
         ux_usage "awhich" "<file-path>" "Find which package owns a file"
         ux_bullet "awhich /usr/bin/curl"
@@ -121,6 +125,7 @@ aclean_kernel() {
 
 # PPA Management
 appa_add() {
+    case "${1:-}" in -h | --help) apt_help ppa; return 0 ;; esac
     if [ $# -eq 0 ]; then
         echo "Usage: appa_add ppa:username/ppa-name"
         echo "Example: appa_add ppa:obsproject/obs-studio"
@@ -135,6 +140,7 @@ appa_list() {
 }
 
 appa_remove() {
+    case "${1:-}" in -h | --help) apt_help ppa; return 0 ;; esac
     if [ $# -eq 0 ]; then
         echo "Usage: appa_remove ppa:username/ppa-name"
         echo "Example: appa_remove ppa:obsproject/obs-studio"
@@ -155,6 +161,7 @@ astat() {
 
 # Show package info with dependencies
 ainfo() {
+    case "${1:-}" in -h | --help) apt_help search; return 0 ;; esac
     if [ $# -eq 0 ]; then
         echo "Usage: ainfo <package-name>"
         return 1
