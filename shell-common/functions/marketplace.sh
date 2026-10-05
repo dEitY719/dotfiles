@@ -252,9 +252,9 @@ _claude_skills_marketplace_list() {
                  "Plugin: \(.[0].plugin)\n" + (.[] | "  • \(.name)")' "$MANIFEST_CACHE_PATH" | \
             while IFS= read -r line; do
                 case "$line" in
-                    Plugin:*) echo "" ;;
+                    Plugin:*) ux_section "$line" ;;
+                    *) ux_bullet "${line#  • }" ;;
                 esac
-                echo "$line"
             done
             echo ""
         else
@@ -269,7 +269,7 @@ _claude_skills_marketplace_list() {
             # List marketplaces with counts
             jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
             while IFS='|' read -r mp_name count; do
-                printf "  ${UX_PRIMARY}•${UX_RESET} %-30s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$mp_name" "$count"
+                ux_table_row "$mp_name" "$count skills" ""
             done
             echo ""
             ux_info "Run: ${UX_SUCCESS}csm list --all <marketplace>${UX_RESET} to see skills"
@@ -328,7 +328,7 @@ _claude_skills_marketplace_group() {
                     count=$(jq -r --arg plugin "$plugin" \
                         '.skills | map(select(.plugin == $plugin)) | length' \
                         "$MANIFEST_CACHE_PATH")
-                    printf "  ${UX_PRIMARY}•${UX_RESET} %-40s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$plugin" "$count"
+                    ux_table_row "$plugin" "$count skills" ""
                 done
                 echo ""
             fi
@@ -356,7 +356,7 @@ _claude_skills_marketplace_group() {
             '.skills | map(select(.plugin == $plugin)) | .[] | .name' \
             "$MANIFEST_CACHE_PATH" | \
         while IFS= read -r skill_name; do
-            printf "  ${UX_PRIMARY}•${UX_RESET} %s\n" "$skill_name"
+            ux_bullet "$skill_name"
         done
         echo ""
         ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
@@ -371,7 +371,7 @@ _claude_skills_marketplace_group() {
                 '.skills | map(select(.plugin == $plugin)) | length' \
                 "$MANIFEST_CACHE_PATH")
 
-            printf "  ${UX_PRIMARY}•${UX_RESET} %-35s ${UX_MUTED}(%d skills)${UX_RESET}\n" "$plugin" "$count"
+            ux_table_row "$plugin" "$count skills" ""
         done <<EOF
 $categories
 EOF
@@ -543,7 +543,7 @@ _claude_skills_marketplace_info() {
     echo ""
 
     ux_section "Location"
-    echo "  $(echo "$skill_json" | jq -r '.path')"
+    ux_bullet "$(echo "$skill_json" | jq -r '.path')"
     echo ""
 }
 

@@ -102,10 +102,10 @@ _zsh_autosuggestions_help_rows_customize() {
 _zsh_autosuggestions_help_rows_status() {
     if [ -d "${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions" ]; then
         ux_success "zsh-autosuggestions is installed"
-        echo "  Location: ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
+        ux_bullet "Location: ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions"
     else
         ux_warning "zsh-autosuggestions is not installed"
-        echo "  Run: install-zsh-autosuggestions"
+        ux_bullet "Run: install-zsh-autosuggestions"
     fi
 }
 
@@ -186,17 +186,14 @@ zsh_autosuggestions_help() {
 zsh_autosuggestions_install_help() {
     ux_header "zsh-autosuggestions Installation"
     ux_info "Installing command history suggestions for zsh"
-    echo ""
     ux_section "Installation"
     ux_bullet "Step 1: Clone plugin from GitHub"
     ux_bullet "Step 2: Register in Oh-My-Zsh plugins array"
     ux_bullet "Step 3: Configure key bindings"
-    echo ""
     ux_section "During Installation"
     ux_bullet "You will see step-by-step progress indicators"
     ux_bullet "Any existing plugin references will be cleaned up"
     ux_bullet "Automatic backups are created if needed"
-    echo ""
 }
 
 # ═══════════════════════════════════════════════════════════════

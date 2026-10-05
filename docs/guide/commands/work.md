@@ -34,31 +34,31 @@
 
 - 1. Record Work (Manual Log Entry) work-log
 - Add non-development work to weekly log
-  work-log add SWINNOTEAM-903 -t coordination -c Communication -T 2.5h
-  work-log list --today
+    - work-log add SWINNOTEAM-903 -t coordination -c Communication -T 2.5h
+    - work-log list --today
 - 2. Generate Weekly Report make-jira
 - Create Jira-formatted weekly report from work_log.txt
-  make-jira                    # Current week
-  make-jira --week 2026-W05    # Specific week
-  make-jira SWINNOTEAM-906     # Filter by key
+- **make-jira** — Current week
+- **make-jira --week 2026-W05** — Specific week
+- **make-jira SWINNOTEAM-906** — Filter by key
 - Output: playbook/docs/jira-records/YYYY-W##-report.md
 - 3. Transform Docs to Confluence Guides make-confluence
 - Convert markdown technical docs to Confluence format
-  make-confluence docs/guide/technic/file.md                        # Auto-detect category
-  make-confluence docs/analysis/file.md --category testing  # Explicit category
+- **make-confluence docs/guide/technic/file.md** — Auto-detect category
+- **make-confluence docs/analysis/file.md --category testing** — Explicit category
 - Output: playbook/docs/confluence-guides/{category}/YYYY-MM-DD-{title}.md
 
 ### workflow
 
-Daily Workflow:
-  1. Work happens → git commits (auto-tracked)
-  2. Manual non-dev work → work-log add
-  3. Friday: make-jira → Weekly Jira report
-  4. As needed: make-confluence → Technical guides
-Weekly Cycle:
-  Mon-Fri: Regular work + work-log entries
-  Friday:  make-jira 2026-W05 → Jira report
-  Anytime: make-confluence → Knowledge base
+- Daily Workflow:
+1. Work happens → git commits (auto-tracked)
+2. Manual non-dev work → work-log add
+3. Friday: make-jira → Weekly Jira report
+4. As needed: make-confluence → Technical guides
+- Weekly Cycle:
+- **Mon-Fri** — Regular work + work-log entries
+- **Friday** — make-jira 2026-W05 → Jira report
+- **Anytime** — make-confluence → Knowledge base
 
 ### dataflow
 
@@ -86,16 +86,16 @@ Output
 ### integration
 
 - All commands are git-tracked:
-  dotfiles:                CLI tools + alias definitions
-  playbook:           Reports and guides
-  Multi-PC sync:           Symlink abstraction (automatic)
+- **dotfiles** — CLI tools + alias definitions
+- **playbook** — Reports and guides
+- **Multi-PC sync** — Symlink abstraction (automatic)
 
 ### more
 
 - For detailed help on individual commands:
-  work-log help              # work-log manual
-  make-jira --help           # make-jira manual (if implemented)
-  make-confluence --help     # make-confluence manual (if implemented)
+- **work-log help** — work-log manual
+- **make-jira --help** — make-jira manual (if implemented)
+- **make-confluence --help** — make-confluence manual (if implemented)
 
 ## 엣지케이스 / 의도된 동작
 
