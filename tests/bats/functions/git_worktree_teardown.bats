@@ -1004,3 +1004,36 @@ _wt_count() {
     [ -d "$MULTI/alpha-claude-1" ]
     refute_output --partial "Repository: $MULTI/gamma"
 }
+
+# ---------------------------------------------------------------------------
+# Issue #2022: detached HEAD worktree must not report a phantom "HEAD" branch
+# delete, and a failed `git branch -D` must not print a success line.
+# ---------------------------------------------------------------------------
+
+@test "teardown: detached HEAD worktree — no phantom branch delete (#2022)" {
+    local detached="$TEST_TEMP_HOME/clone-detached"
+    git -C "$CLONE" worktree add -q --detach "$detached" origin/main
+    local before
+    before="$(git -C "$CLONE" branch --format='%(refname:short)' | sort)"
+
+    run_in_bash "cd '$detached' && gwt teardown 2>&1"
+    assert_success
+    assert_output --partial "Detached HEAD"
+    refute_output --partial "Branch deleted"
+    refute_output --partial "force-deleted"
+    refute_output --partial "not fully merged"
+    [ ! -d "$detached" ]
+    [ "$(git -C "$CLONE" branch --format='%(refname:short)' | sort)" = "$before" ]
+    grep -q 'branch=(detached)' "$CLONE/.git/ai-worktree-spawn.log"
+}
+
+@test "teardown: failed branch -D does not print a success line (#2022)" {
+    # A second worktree holding the same branch makes `git branch -D` refuse.
+    git -C "$CLONE" worktree add -q -f "$TEST_TEMP_HOME/clone-twin" wt/test/1
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    refute_output --partial "Branch deleted"
+    refute_output --partial "Branch force-deleted"
+    assert_output --partial "wt/test/1"
+    git -C "$CLONE" rev-parse --verify --quiet refs/heads/wt/test/1 >/dev/null
+}
