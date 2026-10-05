@@ -36,6 +36,7 @@ alias npm-ung='npm uninstall -g'
 
 # NPM Info Function (with usage)
 npm_info() {
+    case "${1:-}" in -h | --help) npm_help info; return 0 ;; esac
     if [ -z "$1" ]; then
         echo "사용법: npm-info <package-name>"
         echo ""
@@ -51,6 +52,7 @@ alias npm-info='npm_info'
 
 # NPM Search Function (with usage)
 npm_search() {
+    case "${1:-}" in -h | --help) npm_help info; return 0 ;; esac
     if [ -z "$1" ]; then
         echo "사용법: npm-search <keyword>"
         echo ""

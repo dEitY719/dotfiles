@@ -24,6 +24,7 @@ fi
 
 # Python 설치 (대화형 스크립트)
 py_install() {
+    case "${1:-}" in -h | --help) py_help setup; return 0 ;; esac
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_python.sh" "$@"
 }
 alias install-py='py_install'
@@ -31,6 +32,7 @@ alias install-py='py_install'
 # 특정 Python 버전 제거
 py_uninstall() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) py_help setup; return 0 ;; esac
     local version="$1"
 
     if [ -z "$version" ]; then

@@ -301,6 +301,7 @@ litellm_models() {
 # 6. 모델 테스트
 litellm_test() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) litellm_help basic; return 0 ;; esac
     # 매개변수 검증
     if [[ $# -eq 0 ]]; then
         ux_header "LiteLLM 모델 테스트"
