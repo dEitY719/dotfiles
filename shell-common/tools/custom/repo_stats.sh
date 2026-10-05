@@ -24,7 +24,13 @@ format_number() {
     printf '%s%s' "$sign" "$formatted"
 }
 
+repo_stats_help() {
+    ux_usage "devx stat" "[dir]" "Show git commit, test and LOC statistics for a repository"
+    ux_bullet "dir defaults to the current directory"
+}
+
 main() {
+    case "${1:-}" in -h | --help) repo_stats_help; return 0 ;; esac
 TARGET_DIR=${1:-.}
 if [[ ! -d $TARGET_DIR ]]; then
     ux_error "'${TARGET_DIR}' is not a directory" >&2

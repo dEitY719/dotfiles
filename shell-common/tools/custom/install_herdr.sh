@@ -68,7 +68,14 @@ install_herdr_via_release() {
     return "$rc"
 }
 
+install_herdr_help() {
+    ux_usage "install-herdr" "[--force]" "Install the herdr binary into ~/.local/bin"
+    ux_bullet "--force: reinstall/upgrade even if herdr is already installed"
+    ux_bullet "HERDR_VERSION=v0.9.0 pins the release (internal mode)"
+}
+
 main() {
+    case "${1:-}" in -h | --help) install_herdr_help; return 0 ;; esac
     local mode method version
 
     ux_header "herdr Installation"

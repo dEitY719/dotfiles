@@ -228,7 +228,12 @@ _show_usage() {
 # Main Installation Function
 # ─────────────────────────────────────────────────────────────────────────────
 
+install_notion_mcp_help() {
+    _show_usage
+}
+
 install_notion_mcp() {
+    case "${1:-}" in -h | --help) install_notion_mcp_help; return 0 ;; esac
     local action="${1:-install}"
 
     case "$action" in
