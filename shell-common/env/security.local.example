@@ -6,14 +6,19 @@
 #   1. 이 파일을 security.local.sh로 복사
 #      cp security.local.example security.local.sh
 #   2. 환경에 맞는 CA 설정 선택 (아래 옵션 중 하나)
-#   3. security.local.sh는 자동으로 로드됨 (.gitignore에 의해 제외됨)
+#   3. placeholder 인증서 파일명(example-*.crt)을 실제 파일명으로 교체
+#   4. security.local.sh는 자동으로 로드됨 (.gitignore에 의해 제외됨)
+#
+# 실제 인증서 파일명 / 배포 URL 은 공개 repo 의 tracked 파일에 적지 않는다
+# (#1969). 경로 prefix(/usr/local/share/..., /etc/ssl/certs/...,
+# /usr/share/ca-certificates/...)는 shell-common/setup.sh 의 옵션 토글 sed 가
+# 기대하므로 그대로 둔다.
 
 
 # WARNING: Choose CA certificate path (enable only ONE option)
-# Option 1: Corporate external PC (VPN) - installed by setup_crt.sh2
-# 인증서 파일은 아래 링크에서 Download
-# http://12.53.3.52:5465/apc/AgentInstall/list_agent.htm
-CA_CERT="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+# Option 1: Corporate external PC (VPN) - installed by setup_crt.sh
+# 인증서 파일은 사내 배포 페이지에서 받는다 (사내 가이드 참조)
+CA_CERT="/usr/local/share/ca-certificates/example-ca.crt"
 
 # Option 2: Corporate internal PC (direct connection) - system CA bundle
 #CA_CERT="/etc/ssl/certs/ca-certificates.crt"
@@ -31,10 +36,10 @@ fi
 # ========================================
 # Used by: curl, wget, git, and other command-line tools
 # Option 1: Corporate external PC - Custom certificate
-#SSL_CERT_FILE="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+#SSL_CERT_FILE="/usr/local/share/ca-certificates/example-ca.crt"
 
-# Option 2: Corporate internal PC - McAfee proxy certificate
-SSL_CERT_FILE="/usr/share/ca-certificates/extra/McAfee_Certificate.crt"
+# Option 2: Corporate internal PC - proxy inspection certificate
+SSL_CERT_FILE="/usr/share/ca-certificates/extra/example-proxy-ca.crt"
 
 # Export only if file exists
 if [ -f "$SSL_CERT_FILE" ]; then
@@ -45,7 +50,7 @@ fi
 # Notes
 # ========================================
 # - Corporate external PC: Use option 1 after installing certificate with setup_crt.sh
-# - Corporate internal PC: Use option 2 (McAfee Certificate - default)
+# - Corporate internal PC: Use option 2 (proxy inspection certificate - default)
 #   - NODE_EXTRA_CA_CERTS + REQUESTS_CA_BUNDLE: uses system CA bundle
-#   - SSL_CERT_FILE: uses McAfee proxy certificate for curl, wget, git
+#   - SSL_CERT_FILE: uses the proxy inspection certificate for curl, wget, git
 # - Home environment: Do not create security.local.sh (CA setup not needed)

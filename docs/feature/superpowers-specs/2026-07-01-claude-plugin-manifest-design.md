@@ -359,7 +359,7 @@ echo "완료. 새 Claude Code 세션을 시작해 스킬이 로드됐는지 확�
 - ~~`source.source == "github"` 축약형이 항상 github.com만 가리킨다는 가정 —
   실제 사내 마켓플레이스를 처음 추가할 때 검증 필요 (위 "분류 가정" 참조).~~
   **검증 완료 (2026-07-02)**: 사내 GHES에서 `claude plugin marketplace add
-  https://github.samsungds.net/<owner>/<repo>.git`(전체 git URL)로 추가한
+  https://ghes.example.invalid/<owner>/<repo>.git`(전체 git URL)로 추가한
   실제 마켓플레이스의 `known_marketplaces.json` 항목은
   `source.source == "git"`로 기록됨(`"github"`도 `"directory"`도 아님) —
   가정대로 사내 전용(`mp_internal`) 분류로 정확히 떨어진다. 유출 위험 없음.

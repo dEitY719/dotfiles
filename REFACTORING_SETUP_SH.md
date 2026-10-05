@@ -5,7 +5,7 @@
 > - `environments.conf` was **deleted** in PR #24 — config values now live in
 >   tracked files: `npm/npmrc.*`, `pip/pip.conf.*`, `uv/uv.toml.*`
 > - Repository URLs migrated from Artifactory to **Nexus** in PR #25
->   (`repo.samsungds.net` → `repository.samsungds.net`)
+>   (`repo.example.invalid` → `repository.example.invalid`)
 > - Do NOT use the URLs or file paths below for current configuration.
 
 ## Overview
@@ -31,13 +31,13 @@ Comprehensive refactoring of `shell-common/setup.sh` to improve code maintainabi
 
 ```bash
 declare -A SECURITY_CONFIG=(
-    [external]="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+    [external]="/usr/local/share/ca-certificates/example-ca.crt"
     [internal]="/etc/ssl/certs/ca-certificates.crt"
 )
 
 declare -A NPM_REGISTRY=(
     [external]="https://registry.npmjs.org/"
-    [internal]="http://repo.samsungds.net:8081/artifactory/api/npm/npm/"
+    [internal]="http://registry.example.invalid:8081/artifactory/api/npm/npm/"
 )
 # ... similar for NPM_CAFILE, NPM_STRICT_SSL, NPM_PROXY, etc.
 ```
@@ -84,7 +84,7 @@ setup_local_files()         # Orchestrate: Call above functions in sequence
 **Example output**:
 ```
 === Verifying configuration for: internal ===
-ℹ npm registry: http://repo.samsungds.net:8081/artifactory/api/npm/npm/
+ℹ npm registry: http://registry.example.invalid:8081/artifactory/api/npm/npm/
 ℹ npm cafile: /etc/ssl/certs/ca-certificates.crt
 ✓ CA Certificate accessible: /etc/ssl/certs/ca-certificates.crt
 ```

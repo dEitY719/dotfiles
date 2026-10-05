@@ -9,3 +9,6 @@
 
 # 사내 GHES 호스트명 (ghes_mirror, git_ssh_check 가 사용)
 export DOTFILES_GHES_HOST="ghes.example.invalid"
+
+# 개발 서버용 SSH 키 파일명 (check_ssh 가 사용, 미설정 시 id_rsa_dev)
+export DOTFILES_SSH_KEY_NAME="id_rsa_example"

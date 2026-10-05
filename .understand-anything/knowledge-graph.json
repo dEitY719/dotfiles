@@ -327,7 +327,7 @@
       "type": "file",
       "name": "install-otel-managed-settings.sh",
       "filePath": "aws/install-otel-managed-settings.sh",
-      "summary": "Installer that writes /etc/claude-code/managed-settings.json with the internal Samsung OTLP telemetry endpoint and a dynamic user.id derived from `aws sts get-caller-identity`; requires internal-PC mode, AWS CLI, prior SSO login, and sudo, and is idempotent across re-runs.",
+      "summary": "Installer that writes /etc/claude-code/managed-settings.json with the internal OTLP telemetry endpoint and a dynamic user.id derived from `aws sts get-caller-identity`; requires internal-PC mode, AWS CLI, prior SSO login, and sudo, and is idempotent across re-runs.",
       "tags": [
         "installer",
         "aws",
@@ -2585,7 +2585,7 @@
       "type": "document",
       "name": "internal-pc.md",
       "filePath": "docs/guide/internal-pc.md",
-      "summary": "Setup guide for the Samsung internal PC environment: single-account rationale, the internal gateway env block, how it reaches the claude process, security warnings, and recovery steps for a wrongly migrated internal PC.",
+      "summary": "Setup guide for the internal PC environment: single-account rationale, the internal gateway env block, how it reaches the claude process, security warnings, and recovery steps for a wrongly migrated internal PC.",
       "tags": [
         "documentation",
         "setup",
@@ -20448,7 +20448,7 @@
       "type": "config",
       "name": "bunfig.toml.external",
       "filePath": "bun/bunfig.toml.external",
-      "summary": "Bun package manager config for Samsung external PCs with direct VPN internet access: uses the public npm registry with a corporate CA cafile and no proxy. Symlinked to ~/.bunfig.toml by shell-common/setup.sh.",
+      "summary": "Bun package manager config for external PCs with direct VPN internet access: uses the public npm registry with a corporate CA cafile and no proxy. Symlinked to ~/.bunfig.toml by shell-common/setup.sh.",
       "tags": [
         "configuration",
         "bun",
@@ -20463,7 +20463,7 @@
       "type": "config",
       "name": "bunfig.toml.internal",
       "filePath": "bun/bunfig.toml.internal",
-      "summary": "Bun package manager config for Samsung internal-network PCs: routes npm installs through the internal Nexus proxy registry and uses the system CA bundle, relying on proxy env vars set elsewhere (proxy.local.sh) since bunfig.toml has no proxy fields.",
+      "summary": "Bun package manager config for internal-network PCs: routes npm installs through the internal Nexus proxy registry and uses the system CA bundle, relying on proxy env vars set elsewhere (proxy.local.sh) since bunfig.toml has no proxy fields.",
       "tags": [
         "configuration",
         "bun",
@@ -20478,7 +20478,7 @@
       "type": "config",
       "name": "config.toml.internal",
       "filePath": "cargo/config.toml.internal",
-      "summary": "Cargo registry configuration for Samsung internal PCs, replacing crates.io with an internal Nexus sparse-index proxy as the default registry. Symlinked to ~/.cargo/config.toml during internal-mode setup.",
+      "summary": "Cargo registry configuration for internal PCs, replacing crates.io with an internal Nexus sparse-index proxy as the default registry. Symlinked to ~/.cargo/config.toml during internal-mode setup.",
       "tags": [
         "configuration",
         "cargo",
@@ -22648,7 +22648,7 @@
       "type": "file",
       "name": ".gitconfig",
       "filePath": "git/.gitconfig",
-      "summary": "Tracked SSOT for global git configuration \u2014 user identity, git-lfs filters, pull/push/fetch defaults, and a portable credential helper wired for github.com, gist.github.com, and github.samsungds.net via git/scripts/gh-credential-helper.sh. Included (never symlinked) into the machine-local ~/.gitconfig by git/setup.sh.",
+      "summary": "Tracked SSOT for global git configuration \u2014 user identity, git-lfs filters, pull/push/fetch defaults, and a portable credential helper wired for github.com, gist.github.com, and ghes.example.invalid via git/scripts/gh-credential-helper.sh. Included (never symlinked) into the machine-local ~/.gitconfig by git/setup.sh.",
       "tags": [
         "configuration",
         "git",
@@ -22807,7 +22807,7 @@
       "type": "config",
       "name": "npmrc.external",
       "filePath": "npm/npmrc.external",
-      "summary": "npm registry configuration variant for Samsung external/VPN PCs \u2014 direct internet access via VPN, no proxy, with the corporate CA cert and a user-owned global prefix.",
+      "summary": "npm registry configuration variant for external/VPN PCs \u2014 direct internet access via VPN, no proxy, with the corporate CA cert and a user-owned global prefix.",
       "tags": [
         "configuration",
         "npm",
@@ -22821,7 +22821,7 @@
       "type": "config",
       "name": "npmrc.internal",
       "filePath": "npm/npmrc.internal",
-      "summary": "npm registry configuration variant for Samsung internal-network PCs \u2014 routes through the corporate proxy and Samsung DS mirrored npm registry.",
+      "summary": "npm registry configuration variant for internal-network PCs \u2014 routes through the corporate proxy and mirrored npm registry.",
       "tags": [
         "configuration",
         "npm",
@@ -22849,7 +22849,7 @@
       "type": "config",
       "name": "NuGet.Config.internal",
       "filePath": "nuget/NuGet.Config.internal",
-      "summary": "NuGet package source configuration for Samsung internal PCs, clearing machine-level sources and preferring the internal DSNuget mirror ahead of nuget.org.",
+      "summary": "NuGet package source configuration for internal PCs, clearing machine-level sources and preferring the internal DSNuget mirror ahead of nuget.org.",
       "tags": [
         "configuration",
         "nuget",
@@ -22966,7 +22966,7 @@
       "type": "config",
       "name": "opencode.json.internal",
       "filePath": "opencode/opencode.json.internal",
-      "summary": "OpenCode configuration variant for Samsung internal PCs, wiring the Qwen3.6-27B model through the internal a2g.samsungds.net gateway with a Knox-ID header placeholder substituted by setup.sh.",
+      "summary": "OpenCode configuration variant for internal PCs, wiring the Qwen3.6-27B model through the internal llm-gateway.example.invalid gateway with a Knox-ID header placeholder substituted by setup.sh.",
       "tags": [
         "configuration",
         "opencode",
@@ -22994,7 +22994,7 @@
       "type": "config",
       "name": "pip.conf.internal",
       "filePath": "pip/pip.conf.internal",
-      "summary": "pip configuration variant for Samsung internal PCs, routing package installs through the internal PyPI mirror with a trusted host and referencing companion proxy/security .local.sh overrides for CA and proxy env vars.",
+      "summary": "pip configuration variant for internal PCs, routing package installs through the internal PyPI mirror with a trusted host and referencing companion proxy/security .local.sh overrides for CA and proxy env vars.",
       "tags": [
         "configuration",
         "pip",
@@ -23008,7 +23008,7 @@
       "type": "config",
       "name": "ds.repo.internal",
       "filePath": "rpm/ds.repo.internal",
-      "summary": "YUM/DNF repo definition for Samsung internal RHEL 8.6 PCs, pointing baseos/appstream/codeready-builder channels at the internal repository mirror; deployed by setup.sh as a MANAGED_BY_DOTFILES file.",
+      "summary": "YUM/DNF repo definition for internal RHEL 8.6 PCs, pointing baseos/appstream/codeready-builder channels at the internal repository mirror; deployed by setup.sh as a MANAGED_BY_DOTFILES file.",
       "tags": [
         "configuration",
         "rpm",
@@ -23398,7 +23398,7 @@
       "type": "config",
       "name": "proxy.local.example",
       "filePath": "shell-common/env/proxy.local.example",
-      "summary": "Template for the gitignored proxy.local.sh override, providing the Samsung corporate proxy host/port and no_proxy exception list for machines behind the company proxy.",
+      "summary": "Template for the gitignored proxy.local.sh override, providing the corporate proxy host/port and no_proxy exception list for machines behind the company proxy.",
       "tags": [
         "configuration",
         "template",
@@ -25568,7 +25568,7 @@
       "type": "file",
       "name": "uv.toml.internal",
       "filePath": "uv/uv.toml.internal",
-      "summary": "uv package manager configuration variant for use on corporate (Samsung internal) PCs: enables native-tls for corporate CA certificates and points at the internal PyPI proxy index.",
+      "summary": "uv package manager configuration variant for use on corporate (internal) PCs: enables native-tls for corporate CA certificates and points at the internal PyPI proxy index.",
       "tags": [
         "configuration",
         "uv",

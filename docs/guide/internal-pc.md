@@ -1,4 +1,4 @@
-# Internal-PC Setup Guide (Samsung 사내 PC)
+# Internal-PC Setup Guide (사내 PC)
 
 `setup.sh` 옵션 `2) Internal company PC (direct connection)` 선택 시 적용되는 단일-계정 흐름. 사외 PC의 멀티-계정(`personal` + `work`) 구조와 의도적으로 다르다. 도입 배경: issue #571.
 
@@ -53,16 +53,16 @@ $EDITOR claude/settings.local.json
 ```json
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "http://a2g.samsungds.net:8090",
+    "ANTHROPIC_BASE_URL": "http://llm-gateway.example.invalid:8090",
     "ANTHROPIC_AUTH_TOKEN": "",
     "ANTHROPIC_MODEL": "Qwen3.6-27B",
     "NODE_TLS_REJECT_UNAUTHORIZED": 0,
-    "ANTHROPIC_CUSTOM_HEADERS": "x-user-id: <EMPLOYEE_ID>\nx-service-id: coding-agent-model-service"
+    "ANTHROPIC_CUSTOM_HEADERS": "x-user-id: <EMPLOYEE_ID>\nx-service-id: <SERVICE_ID>"
   }
 }
 ```
 
-`<EMPLOYEE_ID>` 자리에 본인 사번을 채운다.
+`<EMPLOYEE_ID>` 자리에 본인 사번을, `llm-gateway.example.invalid` / `<SERVICE_ID>` 자리에는 사내 가이드의 실제 값을 채운다.
 
 ## env 블록은 어떻게 claude 프로세스에 도달하는가
 
