@@ -49,7 +49,7 @@ opencode_verify() {
         echo ""
         if command -v jq >/dev/null 2>&1; then
             # Resolve the first provider key dynamically — the internal SSOT uses
-            # a Korean provider name (S/W혁신팀), not "litellm", so hardcoding the
+            # a site-specific provider name, not "litellm", so hardcoding the
             # path breaks parsing across environments.
             local first_provider
             first_provider=$(jq -r '.provider | keys[0]? // empty' "$OPENCODE_CONFIG_FILE" 2>/dev/null)
@@ -143,7 +143,7 @@ _opencode_help_rows_utils() {
 _opencode_help_rows_env() {
     ux_bullet "home/public             : OpenCode defaults (no symlink)"
     ux_bullet "external                : localhost:4444 LiteLLM proxy"
-    ux_bullet "internal                : Samsung internal gateway (a2g.samsungds.net)"
+    ux_bullet "internal                : internal LLM gateway (URL: DOTFILES_OPENCODE_BASE_URL)"
 }
 
 _opencode_help_rows_config() {

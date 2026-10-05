@@ -45,6 +45,10 @@ fi
 # fake hosts end in `.example.invalid`, fake cert files are `example-*.crt`.
 LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt'
 
+# Fake gateway URL of opencode/opencode.json.internal, replaced at setup time
+# with DOTFILES_OPENCODE_BASE_URL from env/internal.local.sh (#1967).
+OPENCODE_URL_PLACEHOLDER='http://llm-gateway.example.invalid/v1'
+
 # Tool-specific configurations are managed via tracked files at project root
 # and symlinked to their respective locations:
 #   npm/   → ~/.npmrc
@@ -108,7 +112,7 @@ _restore_config_from_backup() {
 # (empty when the file or line is missing). Usage: _local_value NAME FILE
 _local_value() {
     [ -f "$2" ] || return 0
-    grep -m1 "^$1=" "$2" | cut -d'"' -f2
+    grep -m1 -E "^(export )?$1=" "$2" | cut -d'"' -f2
 }
 
 # Warn when a *.local.sh still carries template placeholders (#1969): the
@@ -381,6 +385,12 @@ setup_bun_config() {
     esac
 }
 
+# Escape sed replacement metacharacters (\ / | &) so unusual values cannot
+# corrupt a substitution. Usage: sed "s|x|$(_sed_escape "$val")|"
+_sed_escape() {
+    printf '%s' "$1" | sed -e 's/[\\/|&]/\\&/g'
+}
+
 # Resolve the internal account ID (Knox ID) for OpenCode's internal-mode config (issue #1121).
 # Lookup order (first non-empty wins):
 #   1. $DOTFILES_KNOX_ID env var  — reuse the shell-sourced SSOT
@@ -435,33 +445,56 @@ setup_opencode_config() {
     case "$environment" in
         internal)
             mkdir -p "$(dirname "$opencode_target")"
-            # Preserve user-customised config: once `your-knox-id` has been
-            # replaced with the real Knox ID, never overwrite + never back up
-            # (issue #792). Symlinks are skipped — a leftover external-mode
-            # symlink must still be replaced by the template copy.
-            if [ ! -L "$opencode_target" ] && [ -f "$opencode_target" ] \
-                && ! grep -q 'your-knox-id' "$opencode_target"; then
-                ux_info "Preserved customised OpenCode config: $opencode_target"
-                return 0
+            # The tracked template holds a fake gateway URL (#1967); the real
+            # one comes from DOTFILES_OPENCODE_BASE_URL in the gitignored
+            # env/internal.local.sh (empty while it is still the placeholder).
+            _oc_url="$(_local_value DOTFILES_OPENCODE_BASE_URL "${SHELL_COMMON_DIR}/env/internal.local.sh")"
+            if printf '%s' "$_oc_url" | grep -Eq "$LOCAL_PLACEHOLDER_ERE"; then
+                _oc_url=""
             fi
-            _prepare_config_target "$opencode_target"
-            cp "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
-            chmod 600 "$opencode_target"
-            ux_success "Copied template: opencode/opencode.json.internal → ~/.config/opencode/opencode.json"
-            ux_info "Using: internal LLM gateway"
+            _oc_render=1
+            if [ ! -L "$opencode_target" ] && [ -f "$opencode_target" ]; then
+                # Preserve a fully customised config: never overwrite + never
+                # back up (issue #792).
+                if ! grep -q 'your-knox-id' "$opencode_target" \
+                    && ! grep -Eq "$LOCAL_PLACEHOLDER_ERE" "$opencode_target"; then
+                    ux_info "Preserved customised OpenCode config: $opencode_target"
+                    return 0
+                fi
+                # Without the real URL a re-render would replace a deployed
+                # config's real values with placeholders: keep it (#1967).
+                if [ -z "$_oc_url" ]; then
+                    _oc_render=0
+                    ux_warning "Kept existing $opencode_target (DOTFILES_OPENCODE_BASE_URL not set in shell-common/env/internal.local.sh)"
+                fi
+            fi
+            if [ "$_oc_render" -eq 1 ]; then
+                _prepare_config_target "$opencode_target"
+                if [ -n "$_oc_url" ]; then
+                    sed "s|${OPENCODE_URL_PLACEHOLDER}|$(_sed_escape "$_oc_url")|g" \
+                        "${DOTFILES_ROOT}/opencode/opencode.json.internal" >"$opencode_target"
+                    ux_success "Rendered opencode/opencode.json.internal → ~/.config/opencode/opencode.json"
+                else
+                    cp "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
+                    ux_success "Copied template: opencode/opencode.json.internal → ~/.config/opencode/opencode.json"
+                    ux_warning "Gateway URL is a placeholder: set DOTFILES_OPENCODE_BASE_URL in shell-common/env/internal.local.sh and re-run setup"
+                fi
+                chmod 600 "$opencode_target"
+                ux_info "Using: internal LLM gateway"
+            fi
             # Fill in the Knox ID from the SSOT (env → ~/.dotfiles-knox-id →
             # one-time prompt) so the placeholder warning no longer recurs on
             # every setup (issue #1121). Falls back to the manual-edit warning
             # only when nothing is available and setup is non-interactive.
+            if ! grep -q 'your-knox-id' "$opencode_target"; then
+                return 0
+            fi
             _knox_id="$(_resolve_knox_id)" || _knox_id=""
             if [ -n "$_knox_id" ]; then
-                # Escape sed replacement metacharacters (\ / &) so unusual IDs
-                # cannot corrupt the substitution. Use the portable temp-file
-                # rewrite instead of `sed -i` — GNU and BSD (macOS) disagree on
-                # the -i argument syntax (PR #1123 review). `mv` drops the 600
-                # perms, so re-apply chmod afterwards.
-                _knox_esc="$(printf '%s' "$_knox_id" | sed -e 's/[\\/&]/\\&/g')"
-                sed "s/your-knox-id/${_knox_esc}/g" "$opencode_target" >"${opencode_target}.tmp"
+                # Portable temp-file rewrite instead of `sed -i` — GNU and BSD
+                # (macOS) disagree on the -i argument syntax (PR #1123 review).
+                # `mv` drops the 600 perms, so re-apply chmod afterwards.
+                sed "s/your-knox-id/$(_sed_escape "$_knox_id")/g" "$opencode_target" >"${opencode_target}.tmp"
                 mv "${opencode_target}.tmp" "$opencode_target"
                 chmod 600 "$opencode_target"
                 ux_success "Applied Knox ID to OpenCode config (SSOT: \$DOTFILES_KNOX_ID or ~/.dotfiles-knox-id)"
@@ -866,7 +899,7 @@ main() {
             ux_info "  - Proxy: company proxy from env/proxy.local.sh"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
-            ux_info "  - OpenCode: opencode/opencode.json.internal with Knox ID from SSOT (\$DOTFILES_KNOX_ID / ~/.dotfiles-knox-id, else 1-time prompt)"
+            ux_info "  - OpenCode: opencode/opencode.json.internal rendered with DOTFILES_OPENCODE_BASE_URL (env/internal.local.sh) + Knox ID from SSOT (\$DOTFILES_KNOX_ID / ~/.dotfiles-knox-id, else 1-time prompt)"
             ux_info "  - Pip: internal repository configured"
             ux_info "  - uv: internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
