@@ -39,31 +39,24 @@ dcl() {
     if [ -z "$1" ]; then
         ux_header "Docker Compose Logs (dcl)"
 
-        ux_section "Usage"
-        echo "  ${UX_SUCCESS}dcl${UX_RESET} ${UX_MUTED}<service_name_or_container> [options]${UX_RESET}"
-        echo ""
+        ux_usage "dcl" "<service_name_or_container> [options]"
 
         ux_section "Examples"
-        echo "  ${UX_MUTED}#${UX_RESET} View logs for a service or container"
-        echo "  ${UX_INFO}dcl slea-backend${UX_RESET}"
-        echo ""
-        echo "  ${UX_MUTED}#${UX_RESET} Follow last 50 lines"
-        echo "  ${UX_INFO}dcl slea-backend --tail 50${UX_RESET}"
-        echo ""
-        echo "  ${UX_MUTED}#${UX_RESET} Follow logs in real-time with timestamps"
-        echo "  ${UX_INFO}dcl slea-backend -f --timestamps${UX_RESET}"
-        echo ""
+        ux_bullet "dcl slea-backend                    # View logs for a service or container"
+        ux_bullet "dcl slea-backend --tail 50          # Follow last 50 lines"
+        ux_bullet "dcl slea-backend -f --timestamps    # Follow logs in real-time with timestamps"
+        ux_info ""
 
         ux_section "Currently Running Containers"
         if docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null | tail -n +2 | head -20; then
-            echo ""
+            ux_info ""
         else
             ux_warning "No running containers found"
-            echo ""
+            ux_info ""
         fi
 
         ux_info "Run ${UX_BOLD}docker-help${UX_RESET} for more Docker commands"
-        echo ""
+        ux_info ""
         return 0
     fi
 
@@ -85,7 +78,7 @@ dcl() {
     fi
 
     ux_error "Service or container '${service}' not found"
-    echo ""
+    ux_info ""
     ux_info "Run ${UX_BOLD}dcl${UX_RESET} without arguments to see available containers"
     return 1
 }
@@ -241,10 +234,10 @@ dbash() {
     # UX library is already loaded globally in main.bash/main.zsh
     if [ -z "$1" ]; then
         ux_usage "dbash" "<container_name_or_id>" "Access container shell (tries bash, falls back to sh)"
-        echo ""
+        ux_info ""
         ux_section "Running Containers"
         docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null || ux_error "Docker is not running"
-        echo ""
+        ux_info ""
         return 1
     fi
 
@@ -262,6 +255,13 @@ dbash() {
     fi
 }
 
+# ID 목록(줄 단위)을 사람용 bullet 으로 출력
+_docker_bullet_ids() {
+    printf '%s\n' "$1" | while IFS= read -r _dbi_id; do
+        ux_bullet "$_dbi_id"
+    done
+}
+
 # 실행 중인 모든 컨테이너 정지
 dstopall() {
     ids=$(docker ps -q)
@@ -269,8 +269,8 @@ dstopall() {
         ux_warning "실행 중인 컨테이너가 없습니다."
         return 0
     fi
-    echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} 모든 실행 중 컨테이너 정지:"
-    echo "${UX_SUCCESS}$ids${UX_RESET}"
+    ux_info "모든 실행 중 컨테이너 정지:"
+    _docker_bullet_ids "$ids"
     # shellcheck disable=SC2086  # intentional split: each container ID must be a separate arg
     docker stop $ids
 }
@@ -282,8 +282,8 @@ drmall() {
         ux_warning "삭제할 컨테이너가 없습니다."
         return 0
     fi
-    echo "${UX_BOLD}${UX_ERROR}[Docker]${UX_RESET} 모든 컨테이너 삭제:"
-    echo "${UX_SUCCESS}$ids${UX_RESET}"
+    ux_warning "모든 컨테이너 삭제:"
+    _docker_bullet_ids "$ids"
     # shellcheck disable=SC2086  # intentional split: each container ID must be a separate arg
     docker rm $ids
 }
@@ -295,8 +295,8 @@ drm_dangling() {
         ux_warning "삭제할 dangling 이미지가 없습니다."
         return 0
     fi
-    echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} dangling 이미지 삭제:"
-    echo "${UX_SUCCESS}$ids${UX_RESET}"
+    ux_info "dangling 이미지 삭제:"
+    _docker_bullet_ids "$ids"
     # shellcheck disable=SC2086  # intentional split: each image ID must be a separate arg
     docker rmi $ids
 }
@@ -310,19 +310,19 @@ dprune() {
 dprune_full() {
     ux_header "Docker Full System Prune"
     ux_warning "주의: Docker 전체 강력 청소를 수행합니다."
-    echo ""
+    ux_info ""
     ux_section "삭제 대상"
     ux_bullet "중지된 컨테이너"
     ux_bullet "사용되지 않는 이미지(모든 태그)"
     ux_bullet "사용되지 않는 네트워크"
     ux_bullet "사용되지 않는 볼륨"
-    echo ""
+    ux_info ""
     ux_section "실행 명령어"
     ux_info "docker system prune -a --volumes -f"
-    echo ""
+    ux_info ""
 
     if ux_confirm "정말 실행하시겠습니까?" "n"; then
-        echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} docker system prune -a --volumes -f 실행..."
+        ux_info "docker system prune -a --volumes -f 실행..."
         docker system prune -a --volumes -f
         ux_success "Docker 강력 청소 완료"
     else
@@ -349,7 +349,7 @@ dvols() {
 dvol_rm() {
     case "${1:-}" in -h | --help) docker_help resources; return 0 ;; esac
     if [ -z "$1" ]; then
-        echo "사용법: dvol_rm <volume_name>"
+        ux_usage "dvol_rm" "<volume_name>" "특정 볼륨 삭제"
         return 1
     fi
     docker volume rm "$1"
@@ -362,8 +362,8 @@ dvol_rm_dangling() {
         ux_warning "삭제할 dangling 볼륨이 없습니다."
         return 0
     fi
-    echo "${UX_BOLD}${UX_PRIMARY}[Docker]${UX_RESET} dangling 볼륨 삭제:"
-    echo "${UX_SUCCESS}$ids${UX_RESET}"
+    ux_info "dangling 볼륨 삭제:"
+    _docker_bullet_ids "$ids"
     # shellcheck disable=SC2086  # intentional split: each volume name must be a separate arg
     docker volume rm $ids
     ux_success "dangling 볼륨 삭제 완료"
@@ -427,13 +427,13 @@ dinspect_env() {
 
 # 사용되지 않는 네트워크 정리
 dnetwork_prune() {
-    echo "${UX_BOLD}${UX_SUCCESS}🧹 Docker network prune -f 실행 중...${UX_RESET}"
+    ux_info "Docker network prune -f 실행 중..."
     docker network prune -f
 }
 
 # 빌드 캐시 정리
 dbuild_prune() {
-    echo "${UX_BOLD}${UX_SUCCESS}🧹 Docker builder prune -f 실행 중...${UX_RESET}"
+    ux_info "Docker builder prune -f 실행 중..."
     docker builder prune -f
 }
 
@@ -447,7 +447,7 @@ dlog_last() {
     fi
     container="$1"
     lines="${2:-200}"
-    echo "${UX_BOLD}${UX_WARNING}[Docker]${UX_RESET} $container (최근 $lines줄):"
+    ux_section "$container (최근 ${lines}줄)"
     docker logs --tail "$lines" "$container"
 }
 
@@ -469,7 +469,7 @@ dexport() {
     fi
 
     ux_section "컨테이너 백업 시작"
-    echo ""
+    ux_info ""
 
     # 각 컨테이너 export
     for name in $containers; do
@@ -482,7 +482,7 @@ dexport() {
         fi
     done
 
-    echo ""
+    ux_info ""
     if [ "$failed_containers" -eq 0 ]; then
         ux_success "모든 백업 작업이 완료되었습니다."
     else
@@ -527,18 +527,18 @@ dproxy_show() {
 
     if [ -f "$proxy_conf" ]; then
         ux_success "Proxy Config File Exists"
-        echo ""
+        ux_info ""
         ux_section "File Location"
-        echo "  ${UX_WARNING}${proxy_conf}${UX_RESET}"
-        echo ""
+        ux_bullet "$proxy_conf"
+        ux_info ""
         ux_section "Content"
         sed 's/^/  /' <"$proxy_conf"
-        echo ""
+        ux_info ""
         ux_section "Current Docker Environment"
         systemctl show --property=Environment docker | sed 's/^/  /'
     else
         ux_warning "No Proxy Config File Found"
-        echo ""
+        ux_info ""
         ux_info "To set up proxy, run: ${UX_SUCCESS}dproxy_setup${UX_RESET}"
     fi
 }

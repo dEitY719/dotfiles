@@ -392,10 +392,10 @@ codex_status() {
         return 1
     fi
 
-    echo ""
+    ux_info ""
     ux_section "npm Global Packages"
     if ! npm list -g --depth=0 | grep -i codex > /dev/null 2>&1; then
-        echo "  (No codex packages found)"
+        ux_info "No codex packages found"
     fi
 }
 
