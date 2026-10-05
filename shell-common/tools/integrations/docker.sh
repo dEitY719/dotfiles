@@ -264,6 +264,7 @@ _docker_bullet_ids() {
 
 # 실행 중인 모든 컨테이너 정지
 dstopall() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh # zsh: split unquoted $ids like sh (#1952)
     ids=$(docker ps -q)
     if [ -z "$ids" ]; then
         ux_warning "실행 중인 컨테이너가 없습니다."
@@ -277,6 +278,7 @@ dstopall() {
 
 # 중지된 컨테이너 일괄 삭제
 drmall() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh # zsh: split unquoted $ids like sh (#1952)
     ids=$(docker ps -aq)
     if [ -z "$ids" ]; then
         ux_warning "삭제할 컨테이너가 없습니다."
@@ -290,6 +292,7 @@ drmall() {
 
 # dangling(태그 없는) 이미지 삭제
 drm_dangling() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh # zsh: split unquoted $ids like sh (#1952)
     ids=$(docker images -f "dangling=true" -q)
     if [ -z "$ids" ]; then
         ux_warning "삭제할 dangling 이미지가 없습니다."
@@ -357,6 +360,7 @@ dvol_rm() {
 
 # 모든 dangling 볼륨 일괄 삭제
 dvol_rm_dangling() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh # zsh: split unquoted $ids like sh (#1952)
     ids=$(docker volume ls -f dangling=true -q)
     if [ -z "$ids" ]; then
         ux_warning "삭제할 dangling 볼륨이 없습니다."

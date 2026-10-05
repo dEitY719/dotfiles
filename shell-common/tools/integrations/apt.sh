@@ -135,8 +135,10 @@ appa_add() {
 }
 
 appa_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh # zsh: unmatched glob stays literal like sh
     ux_section "Installed PPAs"
-    grep -h '^deb-src' /etc/apt/sources.list.d/*.list 2>/dev/null || grep -h '^deb ' /etc/apt/sources.list.d/*.list 2>/dev/null | sort -u
+    # deb and deb-src lines from every .list, deduplicated as one result (#1952)
+    grep -hE '^deb(-src)? ' "${APT_SOURCES_LIST_DIR:-/etc/apt/sources.list.d}"/*.list 2>/dev/null | sort -u
 }
 
 appa_remove() {
