@@ -84,7 +84,7 @@ dry-run check and tests: [doc/LEAK_GUARD.md](./doc/LEAK_GUARD.md).
 - **[Global Hooks](./global-hooks)** — User-level wrappers installed at `core.hooksPath`; `pre-commit` also runs universal checks, the rest delegate only
 - **[Project Hook](./hooks/pre-commit)** — Project-level runner that delegates to checks
 - **[Pre-push Hook](./hooks/pre-push)** — Protected-branch + upstream leak-guard layers
-- **[Hook Checks](./hooks/checks)** — Modular checks executed by the project hook
+- **[Hook Checks](./hooks/checks)** — Modular checks executed by the project hook; `shellcheck_check.sh` mirrors `mise run lint-sh` (bash/, shell-common/: CI flags; other shell files: `-S error`; zsh skipped) so it is never stricter than CI (#2014)
 - **[Hook Configuration](./config/hook-config.sh)** — Regex patterns, thresholds, and shared constants
 - **[Pre-push Rules](./config/pre-push-rules.sh)** — Protected branches + leak-guard SSOT
 - **[gcp-scan Skip List](./config/gcp-scan-skip.conf)** — Known-resolved SHAs `gcp scan` skips silently (issue #1039; `gcp scan --show-skip-list`, override `GCP_SCAN_SKIP_FILE`)

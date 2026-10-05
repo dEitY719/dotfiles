@@ -297,6 +297,44 @@ EOF
   rm -rf "$repo_dir"
 }
 
+# Issue #2014 — the ShellCheck step must actually run on staged files (the
+# call site used to pass the file on stdin while check_shellcheck reads $2).
+test_shellcheck_blocks_staged_violation() {
+  local repo_dir out code
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+  mkdir -p "$repo_dir/d"
+  # shellcheck disable=SC2016
+  printf '#!/bin/bash\nfor f in $(ls); do echo "$f"; done\n' >"$repo_dir/d/probe.sh"
+  git -C "$repo_dir" add d/probe.sh
+
+  set +e
+  out=$(git -C "$repo_dir" commit -m "probe" 2>&1)
+  code=$?
+  set -e
+  [ $code -ne 0 ] || die "Expected ShellCheck to block d/probe.sh, got: $out"
+  echo "$out" | grep -q "BLOCKING.*ShellCheck" || die "Expected a ShellCheck section, got: $out"
+  echo "$out" | grep -q "d/probe.sh: .*SC2045" || die "Expected SC2045 for d/probe.sh, got: $out"
+
+  rm -rf "$repo_dir"
+}
+
+test_shellcheck_passes_clean_and_ignores_non_shell() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_repo "$repo_dir"
+  mkdir -p "$repo_dir/d"
+  printf '#!/bin/bash\necho "clean"\n' >"$repo_dir/d/clean.sh"
+  # Would be SC2045 if shellcheck ran on it: not a shell file, so it must not.
+  # shellcheck disable=SC2016
+  printf 'for f in $(ls); do echo $f; done\n' >"$repo_dir/d/notes.txt"
+  git -C "$repo_dir" add d/clean.sh d/notes.txt
+
+  assert_success "git -C \"$repo_dir\" commit -m clean"
+
+  rm -rf "$repo_dir"
+}
+
 # Issue #1970 — commit-time leak guard. Fake patterns only.
 LEAK_TEST_UPSTREAM='github\.com[:/]example-owner/example-repo(\.git)?$'
 LEAK_TEST_PATTERNS='corp-internal\.example\.invalid|EMP[0-9]{5}'
@@ -362,7 +400,8 @@ test_leak_guard_redacts_other_check_reports() {
   repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
   make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
   mkdir -p "$repo_dir/d" "$repo_dir/shell-common"
-  printf '#!/bin/bash\necho hi\n' >"$repo_dir/d/qx9FAKETOKEN77.sh"
+  # shellcheck disable=SC2016
+  printf '#!/bin/bash\nfor f in $(ls); do echo "$f"; done\n' >"$repo_dir/d/qx9FAKETOKEN77.sh"
   printf '#!/bin/zsh\necho hi\n' >"$repo_dir/shell-common/qx9FAKETOKEN78.sh"
   git -C "$repo_dir" add -A
 
@@ -374,6 +413,8 @@ test_leak_guard_redacts_other_check_reports() {
   [ $code -ne 0 ] || die "Expected the commit to be blocked"
   echo "$out" | grep -q "Shebang violations" || die "Expected the shebang report, got: $out"
   echo "$out" | grep -q "shell-common/<redacted>.sh:1" || die "Expected a redacted shebang path, got: $out"
+  # #2014: the ShellCheck report names the path too, and must be redacted.
+  echo "$out" | grep -q "d/<redacted>.sh: .*SC2045" || die "Expected a redacted ShellCheck path, got: $out"
   if echo "$out" | grep -q "qx9FAKE"; then
     die "A check report echoed a matching path: $out"
   fi
@@ -961,6 +1002,10 @@ main() {
   test_allows_hardcoded_home_path_with_marker
   test_allows_home_var_reference
   test_allows_preexisting_abs_home_on_unrelated_edit
+
+  # Issue #2014 — ShellCheck step runs on staged files
+  test_shellcheck_blocks_staged_violation
+  test_shellcheck_passes_clean_and_ignores_non_shell
 
   # Issue #1970 — commit-time leak guard
   test_leak_guard_blocks_without_echoing_match

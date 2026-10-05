@@ -8,63 +8,55 @@
 # - Variable expansion issues
 # - Best practice violations
 
-# Skip if shellcheck not available
-if ! command -v shellcheck &>/dev/null; then
-    return 0
-fi
-
+# check_shellcheck VIOLATIONS_FILE STAGED_FILES
+# STAGED_FILES is an ARGUMENT (newline-separated repo-relative paths), never
+# stdin (#2014: a here-string call silently checked nothing). Appends
+# "<file>: <shellcheck line>" to VIOLATIONS_FILE and returns 1 when THIS call
+# found something, so per-file callers count only their own file.
+#
+# Options mirror `mise run lint-sh` (mise.toml, the CI gate) so the hook is
+# never stricter than CI (#2014):
+# - bash/ and shell-common/ (CI scope): exactly CI's `-x -e SC1090,SC1091`.
+# - anything else CI does not lint: `-S error` only (definite bugs, e.g.
+#   SC2045), so touching an old script is not blocked by style debt.
+# - zsh (*.zsh or a zsh shebang) is skipped: shellcheck cannot parse it
+#   (SC1071) and CI does not lint it either.
 check_shellcheck() {
     local shellcheck_violations_file="$1"
     local staged_files="$2"
+    local before after file line
+    local -a shellcheck_args
 
-    local total_violations=0
+    # No shellcheck installed: pass. (Guarded here, not by an early `return`
+    # at source time, which left the function undefined and made the
+    # caller's `! check_shellcheck` count a 127 as a violation.)
+    command -v shellcheck >/dev/null 2>&1 || return 0
 
-    # Run shellcheck on all bash/sh files
+    before=$(wc -l <"$shellcheck_violations_file" 2>/dev/null || echo 0)
+
     while IFS= read -r file; do
-        # Skip non-shell files
+        [ -f "$file" ] || continue
         case "$file" in
-            *.sh | *.bash | *.zsh)
-                ;;
-            *)
-                # Check shebang for shell scripts
-                if head -1 "$file" 2>/dev/null | grep -qE '^#!.*\b(bash|sh|zsh)'; then
-                    :  # Continue checking
-                else
-                    continue
-                fi
-                ;;
+            *.zsh) continue ;;
+            *.sh | *.bash) ;;
+            *) head -1 "$file" 2>/dev/null | grep -qE '^#!.*\b(bash|sh)\b' || continue ;;
+        esac
+        head -1 "$file" 2>/dev/null | grep -qE '^#!.*\bzsh\b' && continue
+
+        case "$file" in
+            bash/* | shell-common/*) shellcheck_args=(-x -e "SC1090,SC1091") ;;
+            *) shellcheck_args=(-S error) ;;
         esac
 
-        # Run shellcheck with strict rules for shell-common (portable sh)
-        # and default rules for others
-        local shellcheck_args="-S warning"
-        if [[ "$file" == shell-common/* ]]; then
-            # Stricter for shell-common: enforce sh compatibility
-            shellcheck_args="-S info -x"  # -x enables sourceability check
-        fi
+        # Non-zero exit just means findings; the appended lines decide.
+        shellcheck "${shellcheck_args[@]}" "$file" 2>&1 | grep -v '^$' |
+            while IFS= read -r line; do
+                printf '%s: %s\n' "$file" "$line"
+            done >>"$shellcheck_violations_file"
+    done <<<"$staged_files"
 
-        if ! shellcheck $shellcheck_args "$file" 2>&1 | grep -v "^$" | while read -r line; do
-            echo "$file: $line" >> "$shellcheck_violations_file"
-        done; then
-            :  # shellcheck can return non-zero, that's ok
-        fi
-
-    done <<< "$staged_files"
-
-    # Report violations if any exist
-    if [ -f "$shellcheck_violations_file" ] && [ -s "$shellcheck_violations_file" ]; then
-        echo -e "${YELLOW}[ShellCheck] Found potential issues:${NC}"
-        head -20 "$shellcheck_violations_file" | sed 's/^/  /'
-        total_violations=$(wc -l < "$shellcheck_violations_file")
-
-        if [ "$total_violations" -gt 20 ]; then
-            echo "  ... and $((total_violations - 20)) more"
-        fi
-
-        return 1
-    fi
-
-    return 0
+    after=$(wc -l <"$shellcheck_violations_file" 2>/dev/null || echo 0)
+    [ "$after" -eq "$before" ]
 }
 
 # Run the check if this script is sourced
