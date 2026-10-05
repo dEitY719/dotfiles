@@ -30,6 +30,7 @@ _redis_cli() {
 # -------------------------------
 redis_server() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) redis_help commands; return 0 ;; esac
     local action="${1:-}"
 
     if [ -z "$action" ]; then
@@ -65,6 +66,7 @@ redis_server() {
 # -------------------------------
 redis_ping() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) redis_help commands; return 0 ;; esac
     local host="${1:-$REDIS_DEFAULT_HOST}"
     local port="${2:-$REDIS_DEFAULT_PORT}"
     local result
@@ -82,6 +84,7 @@ redis_ping() {
 
 redis_info() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) redis_help commands; return 0 ;; esac
     local section="${1:-server}"
     _redis_cli INFO "$section"
 }
@@ -101,6 +104,7 @@ redis_dbsize() {
 
 redis_keys() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) redis_help commands; return 0 ;; esac
     local pattern="${1:-*}"
     local limit="${2:-20}"
     ux_info "Scanning keys matching '$pattern' (max: $limit results)"
@@ -109,6 +113,7 @@ redis_keys() {
 
 redis_flush() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) redis_help commands; return 0 ;; esac
     local target="${1:-}"
     if [ -z "$target" ]; then
         ux_usage "redis-flush" "<db|all>" "Flush Redis data"
@@ -143,6 +148,7 @@ redis_flush() {
 
 redis_config_get() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) redis_help commands; return 0 ;; esac
     local param="${1:-}"
     if [ -z "$param" ]; then
         ux_usage "redis-config-get" "<parameter>" "Get Redis config value"
@@ -154,6 +160,7 @@ redis_config_get() {
 
 redis_slowlog() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) redis_help commands; return 0 ;; esac
     local count="${1:-10}"
     ux_header "Redis Slow Log (last $count entries)"
     _redis_cli SLOWLOG GET "$count"

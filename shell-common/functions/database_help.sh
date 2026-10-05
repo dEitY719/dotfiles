@@ -75,7 +75,7 @@ _psql_help_summary() {
     ux_info "Usage: psql-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "primary: psql_list | psql_bootstrap | psql_sync | psql_add | psql_del"
-    ux_bullet_sub "lowlevel: psql_db | psql_user"
+    ux_bullet_sub "lowlevel: psql_db | psql_user | psql_server"
     ux_bullet_sub "details: psql-help <section>  (example: psql-help primary)"
 }
 
@@ -96,6 +96,7 @@ _psql_help_rows_primary() {
 _psql_help_rows_lowlevel() {
     ux_table_row "psql_db" "DB Ops" "list, create, delete, grant"
     ux_table_row "psql_user" "User Ops" "list, create, attr, passwd, delete"
+    ux_table_row "psql_server [action]" "Service Ctl" "start, stop, restart, status (default)"
 }
 
 _psql_help_render_section() {

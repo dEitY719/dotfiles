@@ -34,6 +34,7 @@ alias dcstart='docker compose start' # 정지된 컨테이너 시작
 unalias dcl 2>/dev/null # 기존 alias 제거 (함수 정의 전)
 unalias dcr 2>/dev/null # 기존 alias 제거 (함수 정의 전)
 dcl() {
+    case "${1:-}" in -h | --help) docker_help compose; return 0 ;; esac
     # UX library is already loaded globally in main.bash/main.zsh
     if [ -z "$1" ]; then
         ux_header "Docker Compose Logs (dcl)"
@@ -95,6 +96,7 @@ dcl() {
 # - Falls back to LITELLM_PROJECT_PATH or ~/para/project/litellm-stack
 # - If no compose file found, falls back to docker restart on the container
 dcr() {
+    case "${1:-}" in -h | --help) docker_help compose-extra; return 0 ;; esac
     if [ -z "$1" ]; then
         ux_usage "dcr" "<service_name> [options]" "Restart service (compose-aware, auto path detect)"
         ux_bullet "Search order: ./compose.yml → \$LITELLM_PROJECT_PATH → ~/para/project/litellm-stack"
@@ -202,6 +204,7 @@ dcr() {
 # Filter dcl logs for errors
 # Usage: dcl_errors <service_name_or_container>
 dcl_errors() {
+    case "${1:-}" in -h | --help) docker_help compose; return 0 ;; esac
     service="$1"
     if [ -z "$service" ]; then
         ux_usage "dcl_errors" "<service_name_or_container>" "Filter dcl logs for ERROR/WARN/INFO"
@@ -234,6 +237,7 @@ alias dinspect='docker inspect' # 컨테이너/이미지 상세 정보
 # 사용법: dbash <container_name_or_id>
 # Now uses central UX library for consistent styling
 dbash() {
+    case "${1:-}" in -h | --help) docker_help utilities; return 0 ;; esac
     # UX library is already loaded globally in main.bash/main.zsh
     if [ -z "$1" ]; then
         ux_usage "dbash" "<container_name_or_id>" "Access container shell (tries bash, falls back to sh)"
@@ -343,6 +347,7 @@ dvols() {
 
 # 특정 볼륨 삭제
 dvol_rm() {
+    case "${1:-}" in -h | --help) docker_help resources; return 0 ;; esac
     if [ -z "$1" ]; then
         echo "사용법: dvol_rm <volume_name>"
         return 1
@@ -367,6 +372,7 @@ dvol_rm_dangling() {
 # 컨테이너 환경변수 확인 (정렬)
 # 사용법: denv <container_name_or_id> (interactive if no args)
 denv() {
+    case "${1:-}" in -h | --help) docker_help utilities; return 0 ;; esac
     container_name="$1"
 
     if [ -z "$container_name" ]; then
@@ -411,6 +417,7 @@ denv() {
 # docker inspect에서 Env 섹션 확인
 # 사용법: dinspect_env <container_name_or_id>
 dinspect_env() {
+    case "${1:-}" in -h | --help) docker_help utilities; return 0 ;; esac
     if [ -z "$1" ]; then
         ux_usage "dinspect_env" "<container_name_or_id>" "docker inspect에서 Env 섹션 확인"
         return 1
@@ -433,6 +440,7 @@ dbuild_prune() {
 # 최근 N줄 로그만 보기 (기본 200줄)
 # 사용법: dlog_last <container_name> [줄수]
 dlog_last() {
+    case "${1:-}" in -h | --help) docker_help utilities; return 0 ;; esac
     if [ -z "$1" ]; then
         ux_usage "dlog_last" "<container_name> [줄수]" "컨테이너 최근 N줄 로그 조회"
         return 1

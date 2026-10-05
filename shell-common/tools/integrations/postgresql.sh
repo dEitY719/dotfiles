@@ -265,6 +265,7 @@ psql_list() {
 # [Interactive] Delete a service
 psql_del() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) psql_help primary; return 0 ;; esac
     local svc_name
     local selection
     local dry_run=false
@@ -367,12 +368,13 @@ _psql_user_help() {
 
 psql_user() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) _psql_user_help; return 0 ;; esac
     if [[ $# -eq 0 ]]; then
         _psql_user_help
         return 0
     fi
 
-    local action=""
+    local action="$1"
     shift
 
     case "$action" in
@@ -483,12 +485,13 @@ _psql_db_help() {
 
 psql_db() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) _psql_db_help; return 0 ;; esac
     if [[ $# -eq 0 ]]; then
         _psql_db_help
         return 0
     fi
 
-    local action=""
+    local action="$1"
     shift
 
     case "$action" in
@@ -559,6 +562,7 @@ psql_db() {
 # [Action] Create DB, User, Grant, AND Save to Config
 psql_bootstrap() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) psql_help primary; return 0 ;; esac
     local db_name="${1:-}"
     local user_name="${2:-}"
     local password="${3:-}"
@@ -733,6 +737,7 @@ psql_sync() {
 # Server control wrapper (Legacy support)
 psql_server() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) psql_help lowlevel; return 0 ;; esac
     local action="${1:-status}"
     if command -v systemctl >/dev/null 2>&1; then
         sudo systemctl "$action" postgresql
