@@ -70,3 +70,11 @@ _spinner_frames() {
     [ "$(_run_ux zsh "$call")" = "$ref" ]
     [ "$(_run_ux zsh-emulate "$call")" = "$ref" ]
 }
+
+@test "ux_menu fallback prints only the 0-based index on stdout (#1990)" {
+    local call='command() { return 1; }
+        printf "2\n" | ux_menu "Pick" "a b" "c" 2>/dev/null' _sh
+    for _sh in bash zsh zsh-emulate; do
+        [ "$(_run_ux "$_sh" "$call")" = "1" ]
+    done
+}
