@@ -387,15 +387,6 @@ process_plugin_directory_ko() {
         return 1
     fi
 
-    ux_section "Found Files"
-    md_total=$(printf '%s\n' "$md_list" | wc -l | tr -d ' ')
-    ux_info "Total markdown files: $md_total"
-
-
-    # Process each markdown file
-    local success_count=0
-    local skipped_count=0
-    local failed_count=0
     _ifs=$IFS
     IFS='
 '
@@ -404,6 +395,16 @@ process_plugin_directory_ko() {
     set -- $md_list
     set +f
     IFS=$_ifs
+    md_total=$#
+
+    ux_section "Found Files"
+    ux_info "Total markdown files: $md_total"
+
+
+    # Process each markdown file
+    local success_count=0
+    local skipped_count=0
+    local failed_count=0
     for source_file in "$@"; do
         # Get relative path
         local relative_path="${source_file#"$source_dir"/}"
