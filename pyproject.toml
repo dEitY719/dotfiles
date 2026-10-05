@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 version = "0.1.0"
 name = "dotfiles"
 description = "Opinionated Bash dotfiles for reproducible terminal environments across WSL, Linux, and macOS."
-authors = [{ name = "BW-Yoon", email = "byoungwoo.yoon@samsung.com" }]
+authors = [{ name = "BW-Yoon", email = "dEitY719@users.noreply.github.com" }]
 dependencies = [
     "rich>=14.1.0",
     "pyyaml>=6.0",  # skill_completion_guard 훅이 런타임에 import (uv venv 에 필요, #1035)

@@ -1,23 +1,15 @@
 # ==========================================
-# 1. Corporate Gerrit & Git (삼성 내부 및 Gerrit)
+# 0. Machine-local hosts (gitignored, #2006)
 # ==========================================
-Host github.samsungds.net
-    User git
-    IdentityFile ~/.ssh/id_ed25519
-    IdentitiesOnly yes
-    ControlMaster auto
-    ControlPath ~/.ssh/control-%h-%p-%r
-    ControlPersist 600
-
-Host Replica-Gerrit
-    HostName 10.166.101.44
-    Port 29418
-    User byoungwoo.yoon
-    PreferredAuthentications publickey
-    HostkeyAlgorithms +ssh-rsa
+# Internal / per-PC Host blocks (corporate GHES, Gerrit, project servers)
+# live in ~/.ssh/config.internal.local, never in this public file. Seed it on
+# an internal PC with scripts/internal-ssh-git-migrate.sh --apply (./setup.sh
+# runs it in internal mode). Included first so its entries win (first match
+# wins); a missing file is ignored, so public PCs are unaffected.
+Include ~/.ssh/config.internal.local
 
 # ==========================================
-# 2. Public GitHub (HTTPS over SSH)
+# 1. Public GitHub (HTTPS over SSH)
 # ==========================================
 Host github.com
     Hostname ssh.github.com
@@ -28,46 +20,7 @@ Host github.com
     ConnectTimeout 5
 
 # ==========================================
-# 3. Local Aliases
-# ==========================================
-Host seraph-local
-    HostName localhost
-    User bwyoon
-    IdentityFile ~/.ssh/id_ed25519
-
-# ==========================================
-# 4. SSAI Project Servers
-# ==========================================
-# SSAI 프로젝트 공통 설정 (IdentityFile 통합 관리)
-Host ssai-* server-ssai-*
-    IdentityFile ~/.ssh/id_rsa_ssai_bwyoon
-    IdentitiesOnly yes
-
-# SSAI 개발 서버
-Host ssai-dev
-    HostName 12.81.221.129
-    User bwyoon
-
-# SSAI 운영 서버 공통 설정
-Host ssai-ops server-ssai-ops-*
-    HostName 12.81.221.140
-
-# SSAI 운영 서버 (개인 계정)
-Host ssai-ops
-    User bwyoon
-
-# SSAI 운영 서버 (공유 및 역할 계정)
-Host server-ssai-ops-devops
-    User devops
-
-Host server-ssai-ops-jiravis
-    User jiravis
-
-Host server-ssai-ops-bwyoon
-    User bwyoon
-
-# ==========================================
-# 5. Global Settings (최하단 배치 - first match wins)
+# 2. Global Settings (최하단 배치 - first match wins)
 # ==========================================
 Host *
     PubkeyAcceptedKeyTypes +ssh-rsa
