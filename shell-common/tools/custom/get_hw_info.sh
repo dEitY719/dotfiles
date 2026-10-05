@@ -25,7 +25,7 @@ source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
 show_cpu_info() {
     ux_section "🖥️  CPU Information"
-    echo ""
+    ux_info ""
 
     local cpu_model cpu_cores cpu_threads cpu_freq
     cpu_model=$(lscpu | grep "Model name:" | sed 's/Model name: *//')
@@ -33,10 +33,10 @@ show_cpu_info() {
     cpu_threads=$(lscpu | grep "^CPU(s):" | head -1 | awk '{print $2}')
     cpu_freq=$(lscpu | grep "^BogoMIPS:" | awk '{print $2}')
 
-    echo "  ${UX_BOLD}Model:${UX_RESET}    $cpu_model"
-    echo "  ${UX_BOLD}Cores:${UX_RESET}    $cpu_cores"
-    echo "  ${UX_BOLD}Threads:${UX_RESET}  $cpu_threads"
-    echo "  ${UX_BOLD}BogoMIPS:${UX_RESET} $cpu_freq"
+    ux_table_row "Model" "$cpu_model"
+    ux_table_row "Cores" "$cpu_cores"
+    ux_table_row "Threads" "$cpu_threads"
+    ux_table_row "BogoMIPS" "$cpu_freq"
 
     # Cache info
     local l1d l1i l2 l3
@@ -45,51 +45,50 @@ show_cpu_info() {
     l2=$(lscpu | grep "L2 cache:" | awk '{print $3, $4}')
     l3=$(lscpu | grep "L3 cache:" | awk '{print $3, $4}')
 
-    echo ""
-    echo "  ${UX_DIM}Cache:${UX_RESET}"
-    echo "    L1d: $l1d"
-    echo "    L1i: $l1i"
-    echo "    L2:  $l2"
-    echo "    L3:  $l3"
-    echo ""
+    ux_info ""
+    ux_table_row "L1d cache" "$l1d"
+    ux_table_row "L1i cache" "$l1i"
+    ux_table_row "L2 cache" "$l2"
+    ux_table_row "L3 cache" "$l3"
+    ux_info ""
 }
 
 show_memory_info() {
     ux_section "💾 Memory Information"
-    echo ""
+    ux_info ""
 
     local total used free available swap_total swap_used
     read -r total used free _ _ available < <(free -h | awk 'NR==2 {print $2, $3, $4, $5, $6, $7}')
     read -r swap_total swap_used _ < <(free -h | awk 'NR==3 {print $2, $3, $4}')
 
-    echo "  ${UX_BOLD}Total RAM:${UX_RESET}     $total"
-    echo "  ${UX_BOLD}Used:${UX_RESET}          $used"
-    echo "  ${UX_BOLD}Free:${UX_RESET}          $free"
-    echo "  ${UX_BOLD}Available:${UX_RESET}     $available"
-    echo ""
-    echo "  ${UX_BOLD}Swap Total:${UX_RESET}    $swap_total"
-    echo "  ${UX_BOLD}Swap Used:${UX_RESET}     $swap_used"
-    echo ""
+    ux_table_row "Total RAM" "$total"
+    ux_table_row "Used" "$used"
+    ux_table_row "Free" "$free"
+    ux_table_row "Available" "$available"
+    ux_info ""
+    ux_table_row "Swap Total" "$swap_total"
+    ux_table_row "Swap Used" "$swap_used"
+    ux_info ""
 }
 
 show_disk_info() {
     ux_section "💿 Disk Information"
-    echo ""
+    ux_info ""
 
     local filesystem size used avail use_pct
     read -r filesystem size used avail use_pct _ < <(df -h / | awk 'NR==2 {print $1, $2, $3, $4, $5, $6}')
 
-    echo "  ${UX_BOLD}Filesystem:${UX_RESET}    $filesystem"
-    echo "  ${UX_BOLD}Total Size:${UX_RESET}    $size"
-    echo "  ${UX_BOLD}Used:${UX_RESET}          $used"
-    echo "  ${UX_BOLD}Available:${UX_RESET}     $avail"
-    echo "  ${UX_BOLD}Usage:${UX_RESET}         $use_pct"
-    echo ""
+    ux_table_row "Filesystem" "$filesystem"
+    ux_table_row "Total Size" "$size"
+    ux_table_row "Used" "$used"
+    ux_table_row "Available" "$avail"
+    ux_table_row "Usage" "$use_pct"
+    ux_info ""
 }
 
 show_gpu_info() {
     ux_section "🎮 GPU Information"
-    echo ""
+    ux_info ""
 
     if command -v nvidia-smi &>/dev/null; then
         local gpu_name driver_version cuda_version
@@ -127,55 +126,55 @@ show_gpu_info() {
         # Calculate VRAM used
         vram_used=$((vram_total - vram_free))
 
-        echo "  ${UX_BOLD}Model:${UX_RESET}         $gpu_name"
-        echo "  ${UX_BOLD}Driver:${UX_RESET}        $driver_version"
-        echo "  ${UX_BOLD}CUDA:${UX_RESET}          $cuda_version"
-        echo "  ${UX_BOLD}Compute Cap:${UX_RESET}   $compute_cap"
-        echo ""
-        echo "  ${UX_BOLD}VRAM Total:${UX_RESET}    ${vram_total} MiB"
-        echo "  ${UX_BOLD}VRAM Used:${UX_RESET}     ${vram_used} MiB"
-        echo "  ${UX_BOLD}VRAM Free:${UX_RESET}     ${vram_free} MiB"
-        echo ""
-        echo "  ${UX_BOLD}Temperature:${UX_RESET}   ${temp}°C"
-        echo "  ${UX_BOLD}Power Usage:${UX_RESET}   ${power_usage}W / ${power_cap}W"
-        echo "  ${UX_BOLD}GPU Util:${UX_RESET}      ${gpu_util}%"
+        ux_table_row "Model" "$gpu_name"
+        ux_table_row "Driver" "$driver_version"
+        ux_table_row "CUDA" "$cuda_version"
+        ux_table_row "Compute Cap" "$compute_cap"
+        ux_info ""
+        ux_table_row "VRAM Total" "${vram_total} MiB"
+        ux_table_row "VRAM Used" "${vram_used} MiB"
+        ux_table_row "VRAM Free" "${vram_free} MiB"
+        ux_info ""
+        ux_table_row "Temperature" "${temp}°C"
+        ux_table_row "Power Usage" "${power_usage}W / ${power_cap}W"
+        ux_table_row "GPU Util" "${gpu_util}%"
 
         # Check for DirectX device (WSL2)
         if [ -e /dev/dxg ]; then
-            echo ""
+            ux_info ""
             ux_success "  WSL2 DirectX support enabled"
         fi
     else
         ux_warning "  nvidia-smi not found - No NVIDIA GPU detected"
     fi
-    echo ""
+    ux_info ""
 }
 
 show_system_info() {
     ux_section "⚙️  System Information"
-    echo ""
+    ux_info ""
 
     local hostname kernel arch
     hostname=$(uname -n)
     kernel=$(uname -r)
     arch=$(uname -m)
 
-    echo "  ${UX_BOLD}Hostname:${UX_RESET}      $hostname"
-    echo "  ${UX_BOLD}Kernel:${UX_RESET}        $kernel"
-    echo "  ${UX_BOLD}Architecture:${UX_RESET}  $arch"
+    ux_table_row "Hostname" "$hostname"
+    ux_table_row "Kernel" "$kernel"
+    ux_table_row "Architecture" "$arch"
 
     # Check for WSL
     if grep -qi microsoft /proc/version; then
         local wsl_version
         wsl_version=$(grep -oP 'WSL\d+' /proc/version || echo "WSL")
-        echo "  ${UX_BOLD}Environment:${UX_RESET}   $wsl_version (Windows Subsystem for Linux)"
+        ux_table_row "Environment" "$wsl_version (Windows Subsystem for Linux)"
     fi
 
     # Uptime
     local uptime_info
     uptime_info=$(uptime -p | sed 's/up //')
-    echo "  ${UX_BOLD}Uptime:${UX_RESET}        $uptime_info"
-    echo ""
+    ux_table_row "Uptime" "$uptime_info"
+    ux_info ""
 }
 
 # =============================================================================
@@ -184,7 +183,7 @@ show_system_info() {
 
 main() {
     ux_header "Hardware Information Report"
-    echo ""
+    ux_info ""
 
     show_system_info
     show_cpu_info
@@ -193,8 +192,8 @@ main() {
     show_gpu_info
 
     ux_section "📅 Report Generated"
-    echo "  $(date '+%Y-%m-%d %H:%M:%S %Z')"
-    echo ""
+    ux_info "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    ux_info ""
 }
 
 # ═══════════════════════════════════════════════════════════════

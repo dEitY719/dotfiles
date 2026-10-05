@@ -10,23 +10,23 @@ source "$(dirname "$0")/init.sh" || exit 1
 
 delete_claude() {
     ux_header "Claude Code CLI Uninstaller"
-    echo ""
+    ux_info ""
     ux_info "This will remove Claude Code binary and clean cached/session data."
     ux_warning "Important: Your projects, downloads, and configuration will be preserved"
-    echo ""
+    ux_info ""
 
     ux_section "What will be removed:"
     ux_bullet "Binary: \$HOME/.local/bin/claude"
     ux_bullet "Cache/Runtime: \$HOME/.local/share/claude"
     ux_bullet "Session data (cache, history, debug logs)"
-    echo ""
+    ux_info ""
 
     ux_section "What will be preserved:"
     ux_bullet "Projects: \$HOME/.claude/projects/ ✅"
     ux_bullet "Downloads: \$HOME/.claude/downloads/ ✅"
     ux_bullet "Settings: \$HOME/.claude/settings.json (symlink) ✅"
     ux_bullet "Skills/Docs: Configured via dotfiles ✅"
-    echo ""
+    ux_info ""
 
     if ! ux_confirm "Do you want to continue?" "n"; then
         ux_info "Uninstallation cancelled."
@@ -139,14 +139,14 @@ delete_claude() {
     # ========================================
     # Verification
     # ========================================
-    echo ""
+    ux_info ""
     ux_header "✅ Claude Code Uninstallation Complete"
     ux_section "Summary"
-    echo "Successfully removed: $removed_count item(s)"
+    ux_table_row "Removed" "$removed_count item(s)"
     if [ "$failed_count" -gt 0 ]; then
-        echo "Failed to remove: $failed_count item(s)"
+        ux_table_row "Failed" "$failed_count item(s)"
     fi
-    echo ""
+    ux_info ""
 
     if command -v claude &>/dev/null; then
         ux_warning "Claude command still found in PATH"
@@ -155,22 +155,22 @@ delete_claude() {
         ux_success "Claude command not found (clean removal) ✅"
     fi
 
-    echo ""
+    ux_info ""
     ux_section "Preserved Data"
-    echo "Your data is safe:"
+    ux_info "Your data is safe:"
     if [ -d "$HOME/.claude/projects" ]; then
         ux_bullet "Projects directory: $(du -sh "$HOME/.claude/projects" 2>/dev/null | cut -f1)"
     fi
     if [ -d "$HOME/.claude/downloads" ]; then
         ux_bullet "Downloads: $(du -sh "$HOME/.claude/downloads" 2>/dev/null | cut -f1)"
     fi
-    echo ""
+    ux_info ""
 
     ux_section "Next Steps"
     ux_info "To reinstall Claude Code and restore settings:"
     ux_bullet "Run: ${UX_INFO}clinstall${UX_RESET}"
     ux_bullet "Then: ${UX_INFO}claude_init${UX_RESET} (to restore symlinks)"
-    echo ""
+    ux_info ""
 }
 
 # Execute only if run directly (not sourced)

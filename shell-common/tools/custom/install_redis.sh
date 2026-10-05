@@ -48,9 +48,9 @@ main() {
     ux_numbered 3 "Start and enable Redis service"
     ux_numbered 4 "Configure Redis (optional)"
     ux_numbered 5 "Verify installation"
-    echo ""
+    ux_info ""
     ux_warning "This script requires sudo privileges."
-    echo ""
+    ux_info ""
 
     if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
         ux_warning "Installation cancelled."
@@ -97,12 +97,12 @@ main() {
             ux_success "Redis service started."
         fi
         ux_info "systemd not detected. To auto-start Redis, enable systemd in /etc/wsl.conf:"
-        echo "  [boot]"
-        echo "  systemd=true"
-        echo ""
+        ux_bullet_sub "[boot]"
+        ux_bullet_sub "systemd=true"
+        ux_info ""
         ux_info "Then restart WSL: ${UX_PRIMARY}wsl --shutdown${UX_RESET}"
     fi
-    echo ""
+    ux_info ""
 
     ux_step "4/5" "Configuring Redis (optional)..."
 
@@ -132,7 +132,7 @@ main() {
         if ux_confirm "Set a password for Redis? (recommended for security)" "n"; then
             printf "%s> %sEnter Redis password: " "${UX_PRIMARY}" "${UX_RESET}"
             read -r -s redis_pass
-            echo ""
+            ux_info ""
             if [[ -n "$redis_pass" ]]; then
                 _installer_set_requirepass "$redis_conf" "$redis_pass"
                 password_was_set=true
@@ -143,7 +143,7 @@ main() {
     else
         ux_warning "Redis config file not found at $redis_conf"
     fi
-    echo ""
+    ux_info ""
 
     ux_step "5/5" "Verifying installation..."
 
@@ -176,14 +176,14 @@ main() {
     kill "$sudo_keep_alive_pid" 2>/dev/null || true
     trap - EXIT
 
-    echo ""
+    ux_info ""
     ux_header "Redis Installation Complete!"
 
     if [[ "$password_was_set" = "true" ]]; then
         ux_section "Authentication"
         ux_info "Password was configured. Add this to your shell profile:"
-        echo "  ${UX_PRIMARY}export REDISCLI_AUTH=\"<your-password>\"${UX_RESET}"
-        echo ""
+        ux_bullet "export REDISCLI_AUTH=\"<your-password>\""
+        ux_info ""
         ux_info "All redis-* helper commands will authenticate automatically via REDISCLI_AUTH."
     fi
 
@@ -191,7 +191,7 @@ main() {
     ux_numbered 1 "Check status: ${UX_PRIMARY}redis-server-ctl status${UX_RESET}"
     ux_numbered 2 "Test connection: ${UX_PRIMARY}redis-ping${UX_RESET}"
     ux_numbered 3 "View all helpers: ${UX_PRIMARY}redis-help${UX_RESET}"
-    echo ""
+    ux_info ""
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
