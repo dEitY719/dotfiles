@@ -14,8 +14,8 @@ Home, External, and Internal PCs. `./setup.sh` symlinks it to
 
 ### Internal PC — one-time env block
 
-The shared SSOT cannot carry the Samsung internal `ANTHROPIC_*` env vars
-because those values point at `cloud.dtgpt.samsungds.net` and would break
+The shared SSOT cannot carry the corporate-internal `ANTHROPIC_*` env vars
+because those values point at the internal LLM gateway and would break
 Claude Code on External / Home. Internal-PC users create a separate
 per-machine override file (gitignored, out-of-repo) once:
 
@@ -23,7 +23,7 @@ per-machine override file (gitignored, out-of-repo) once:
 mkdir -p ~/.claude && cat > ~/.claude/settings.local.json <<'JSON'
 {
   "env": {
-    "ANTHROPIC_BASE_URL": "http://cloud.dtgpt.samsungds.net/llm",
+    "ANTHROPIC_BASE_URL": "https://llm-gateway.example.invalid/llm",
     "ANTHROPIC_AUTH_TOKEN": "your-dt-api-key",
     "ANTHROPIC_MODEL": "Qwen3.6-27B"
   }
@@ -31,8 +31,8 @@ mkdir -p ~/.claude && cat > ~/.claude/settings.local.json <<'JSON'
 JSON
 ```
 
-Then replace `your-dt-api-key` with the real token issued by the internal LLM
-gateway team. Claude Code merges `~/.claude/settings.local.json` with
+Then replace the placeholder URL with the internal gateway URL and
+`your-dt-api-key` with the real token issued by the internal LLM gateway team. Claude Code merges `~/.claude/settings.local.json` with
 `~/.claude/settings.json` on every launch.
 
 `claude/setup.sh` prints the same snippet at the end of Internal-mode setup
@@ -63,7 +63,7 @@ Edit `claude/settings.json` to change behavior across all PCs:
 
 - `claude/settings.json` **IS** version controlled (this changed in #584).
   Hand-edits land in git history — keep it free of PII / tokens.
-- Per-PC secrets (Knox ID, internal API tokens, machine-specific paths) go
+- Per-PC secrets (employee ID, internal API tokens, machine-specific paths) go
   in `~/.claude/settings.local.json` — a regular file outside the repo,
   gitignored as defense-in-depth.
 

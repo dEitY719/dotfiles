@@ -7,11 +7,13 @@
 #      setup.sh 가 example 대신 .local 을 source 로 사용합니다.
 #   3. 복사 후 `aws sso login` 으로 브라우저 OAuth 1회.
 #
-# 본 파일은 사내 SSO 진입점만 담고 있어 외부 침투 가치가 낮아 커밋 안전.
+# 실제 SSO 진입점 / account / role 은 공개 repo 에 적지 않는다 (#1966):
+# 사내 PC 는 aws/aws-config.local (gitignored) 에 실제 값을 두면 setup.sh 가
+# 이 템플릿 대신 그 파일을 시드한다.
 
 [default]
-sso_start_url = https://dspublic.awsapps.com/start
+sso_start_url = https://sso.example.invalid/start
 sso_region = ap-northeast-2
-sso_account_id = 518692946118
-sso_role_name = AWSPS-AICoding-SLSI
+sso_account_id = 000000000000
+sso_role_name = ExampleRole
 region = ap-northeast-2

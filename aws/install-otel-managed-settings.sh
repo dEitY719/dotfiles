@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # aws/install-otel-managed-settings.sh — Claude Code OTel telemetry installer.
 #
-# Writes /etc/claude-code/managed-settings.json with internal Samsung OTLP
+# Writes /etc/claude-code/managed-settings.json with the internal OTLP
 # endpoint + dynamic user.id (from `aws sts get-caller-identity`). Required
 # preconditions:
 #   1. ~/.dotfiles-setup-mode == internal   (external PCs are refused)
 #   2. AWS CLI v2 installed
 #   3. `aws sso login` already completed (this script does NOT log you in)
 #   4. sudo authority on this machine
+#   5. DOTFILES_OTEL_ENDPOINT_HOST / DOTFILES_OTEL_NO_PROXY_DOMAINS set in the
+#      gitignored shell-common/env/internal.local.sh (#1966)
 #
 # Idempotent: identical inputs produce identical output. Re-run any time.
 #
@@ -21,19 +23,26 @@ set -euo pipefail
 MANAGED_DIR="/etc/claude-code"
 MANAGED_FILE="${MANAGED_DIR}/managed-settings.json"
 
-OTEL_ENDPOINT_HOST="10.172.25.203"
+# Internal collector host + domains come from the gitignored internal.local.sh
+# (#1966; template shell-common/env/internal.local.example).
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_INTERNAL_LOCAL="${_SCRIPT_DIR}/../shell-common/env/internal.local.sh"
+if [ -f "$_INTERNAL_LOCAL" ]; then
+    # shellcheck source=/dev/null
+    . "$_INTERNAL_LOCAL"
+fi
+OTEL_ENDPOINT_HOST="${DOTFILES_OTEL_ENDPOINT_HOST:-}"
 OTEL_ENDPOINT="http://${OTEL_ENDPOINT_HOST}:80"
 OTEL_LOGS_ENDPOINT="${OTEL_ENDPOINT}/v1/logs"
 OTEL_METRICS_ENDPOINT="${OTEL_ENDPOINT}/v1/metrics"
 
 BASE_RESOURCE_ATTRS="service.name=claude-code,llm.provider=bedrock,environment=prod"
 
-NO_PROXY_VALUE="${OTEL_ENDPOINT_HOST},.samsung.com,.samsungds.net,12.0.0.0/8,10.0.0.0/8,192.0.0.0/8,172.0.0.0/8"
+NO_PROXY_VALUE="${OTEL_ENDPOINT_HOST},${DOTFILES_OTEL_NO_PROXY_DOMAINS:-},12.0.0.0/8,10.0.0.0/8,192.0.0.0/8,172.0.0.0/8"
 
 # ---------------------------------------------------------------------------
 # ux_lib (best-effort — fall back to plain stderr when sourcing fails)
 # ---------------------------------------------------------------------------
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _UX_LIB="${_SCRIPT_DIR}/../shell-common/tools/ux_lib/ux_lib.sh"
 if [ -f "$_UX_LIB" ]; then
     # shellcheck source=/dev/null
@@ -65,6 +74,10 @@ case "$_mode" in
 esac
 
 ux_section "Claude Code OTel installer (internal mode)"
+
+if [ -z "$OTEL_ENDPOINT_HOST" ] || [ -z "${DOTFILES_OTEL_NO_PROXY_DOMAINS:-}" ]; then
+    die "DOTFILES_OTEL_ENDPOINT_HOST / DOTFILES_OTEL_NO_PROXY_DOMAINS 미설정 → shell-common/env/internal.local.sh 에 설정하세요 (템플릿: internal.local.example)."
+fi
 
 # ---------------------------------------------------------------------------
 # Tool prerequisites
