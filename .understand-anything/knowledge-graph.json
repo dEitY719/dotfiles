@@ -5051,7 +5051,7 @@
       "type": "file",
       "name": "setup.sh",
       "filePath": "shell-common/setup.sh",
-      "summary": "Environment-specific setup script that symlinks tool configuration files (pip, uv, cargo, nuget, npm, bun, opencode) into their canonical locations, applies security cert configuration, resolves per-account settings (e.g. Knox ID for opencode), and verifies the resulting config after installation.",
+      "summary": "Environment-specific setup script that symlinks tool configuration files (pip, uv, cargo, nuget, npm, bun, opencode) into their canonical locations, applies security cert configuration, resolves per-account settings (e.g. account ID for opencode), and verifies the resulting config after installation.",
       "tags": [
         "setup-automation",
         "symlink-management",
@@ -5213,7 +5213,7 @@
         343,
         376
       ],
-      "summary": "Resolves the current machine/account's Knox ID, used to select the correct OpenCode config variant.",
+      "summary": "Resolves the current machine/account's account ID, used to select the correct OpenCode config variant.",
       "tags": [
         "account-resolution",
         "opencode"
@@ -5229,7 +5229,7 @@
         378,
         448
       ],
-      "summary": "Symlinks and configures the OpenCode config file, selecting the variant appropriate to the resolved Knox ID.",
+      "summary": "Symlinks and configures the OpenCode config file, selecting the variant appropriate to the resolved account ID.",
       "tags": [
         "symlink-management",
         "opencode",
@@ -22622,7 +22622,7 @@
       "type": "config",
       "name": "opencode.json.internal",
       "filePath": "opencode/opencode.json.internal",
-      "summary": "OpenCode configuration variant for internal PCs, wiring the Qwen3.6-27B model through the internal llm-gateway.example.invalid gateway with a Knox-ID header placeholder substituted by setup.sh.",
+      "summary": "OpenCode configuration variant for internal PCs, wiring the Qwen3.6-27B model through the internal llm-gateway.example.invalid gateway with a account-ID header placeholder substituted by setup.sh.",
       "tags": [
         "configuration",
         "opencode",
@@ -23040,7 +23040,7 @@
       "type": "config",
       "name": "development.local.example",
       "filePath": "shell-common/env/development.local.example",
-      "summary": "Template for the gitignored development.local.sh override, showing per-machine dev env examples like PYTEST_ADDOPTS worker limits and the DOTFILES_KNOX_ID substitution variable for opencode.json; auto-sourced by development.sh.",
+      "summary": "Template for the gitignored development.local.sh override, showing per-machine dev env examples like PYTEST_ADDOPTS worker limits and the DOTFILES_ACCOUNT_ID substitution variable for opencode.json; auto-sourced by development.sh.",
       "tags": [
         "configuration",
         "template",
@@ -38302,7 +38302,7 @@
     {
       "order": 6,
       "title": "Environment-Specific Configuration",
-      "description": "shell-common/setup.sh (called from step 2's root setup.sh) symlinks per-tool configuration files — pip, uv, cargo, nuget, npm, bun, opencode — into their canonical locations and resolves per-account settings like a Knox ID. proxy.local.example is a template for the gitignored override file it produces: a machine-specific proxy config that never gets committed. This is the README's 'Environment-Specific Setup' feature in action — the same setup.sh call produces different results depending on whether you're on a Public, Internal, or External machine.",
+      "description": "shell-common/setup.sh (called from step 2's root setup.sh) symlinks per-tool configuration files — pip, uv, cargo, nuget, npm, bun, opencode — into their canonical locations and resolves per-account settings like a account ID. proxy.local.example is a template for the gitignored override file it produces: a machine-specific proxy config that never gets committed. This is the README's 'Environment-Specific Setup' feature in action — the same setup.sh call produces different results depending on whether you're on a Public, Internal, or External machine.",
       "nodeIds": [
         "file:shell-common/setup.sh",
         "config:shell-common/env/proxy.local.example"

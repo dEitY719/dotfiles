@@ -201,7 +201,7 @@ main() {
     fi
 
     # Verbose without DOTFILES_SETUP_CHOICE keeps the original interactive menu
-    # (and shell-common's tty-only Knox ID / account e-mail prompts).
+    # (and shell-common's tty-only account ID / account e-mail prompts).
     local sc_step=(_setup_run_shell_common) sc_label="shell-common"
     if [ "$SETUP_VERBOSE" = 1 ] && [ -z "${DOTFILES_SETUP_CHOICE:-}" ]; then
         sc_step=(./shell-common/setup.sh)

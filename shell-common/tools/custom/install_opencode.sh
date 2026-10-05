@@ -191,8 +191,8 @@ EOF
 # Generate opencode.json for internal environment. Delegates to setup.sh's
 # setup_opencode_config so both entry points share one SSOT (#1967): the
 # template's placeholder gateway URL is rendered from internal.local.sh, an
-# existing deployed config is never replaced by placeholders, and the Knox ID
-# is filled from $DOTFILES_KNOX_ID / ~/.dotfiles-knox-id.
+# existing deployed config is never replaced by placeholders, and the account
+# ID is filled from $DOTFILES_ACCOUNT_ID / ~/.dotfiles-account-id.
 generate_internal_config() {
     local shell_common="${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common"
 

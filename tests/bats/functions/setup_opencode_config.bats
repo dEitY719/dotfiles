@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 # tests/bats/functions/setup_opencode_config.bats
-# Verify setup_opencode_config preserves user-edited Knox ID across re-runs
+# Verify setup_opencode_config preserves user-edited account ID across re-runs
 # (issue #792). Three scenarios mirror the issue's acceptance criteria:
 #   1. fresh install (no target)        — cp template, no backup
 #   2. re-run with placeholder unchanged — cp template again (current behavior)
-#   3. re-run with Knox ID customised   — preserve, no backup spam
+#   3. re-run with account ID customised — preserve, no backup spam
 
 load '../test_helper'
 
@@ -58,7 +58,7 @@ count_backups() {
     run_setup_opencode
     assert_success
     [ -f "$TARGET" ]
-    grep -q 'your-knox-id' "$TARGET"
+    grep -q 'your-account-id' "$TARGET"
     [ "$(count_backups)" -eq 0 ]
 }
 
@@ -69,18 +69,18 @@ count_backups() {
     run_setup_opencode
     assert_success
     [ -f "$TARGET" ]
-    grep -q 'your-knox-id' "$TARGET"
+    grep -q 'your-account-id' "$TARGET"
 }
 
-@test "re-run with Knox ID customised: preserves file, creates no backup" {
+@test "re-run with account ID customised: preserves file, creates no backup" {
     write_local_url
     run_setup_opencode
     assert_success
 
-    # User replaces the placeholder with a real Knox ID. Use a temp-file
+    # User replaces the placeholder with a real account ID. Use a temp-file
     # rewrite (not `sed -i`) — GNU sed and BSD sed disagree on the `-i`
     # argument syntax, so the in-place form breaks on macOS dev machines.
-    sed 's/your-knox-id/abc123knox/' "$TARGET" > "${TARGET}.tmp" \
+    sed 's/your-account-id/abc123acct/' "$TARGET" > "${TARGET}.tmp" \
         && mv "${TARGET}.tmp" "$TARGET"
     customised_content="$(cat "$TARGET")"
 
@@ -103,54 +103,61 @@ count_backups() {
 
     [ -f "$TARGET" ]
     [ ! -L "$TARGET" ]
-    grep -q 'your-knox-id' "$TARGET"
+    grep -q 'your-account-id' "$TARGET"
 }
 
-# --- Knox ID SSOT auto-fill (issue #1121) -----------------------------------
+# --- Account ID SSOT auto-fill (issue #1121, #1982) -----------------------------------
 # The four scenarios below mirror the issue's acceptance criteria: fill from
 # each SSOT, suppress the warning, and stay idempotent across re-runs.
 
-# Same as run_setup_opencode but with DOTFILES_KNOX_ID exported into the child.
+# Legacy account-ID names, read via setup.sh's read-only fallback (#1982).
+LEGACY_TERM=knox
+LEGACY_ENV="DOTFILES_$(printf '%s' "$LEGACY_TERM" | tr '[:lower:]' '[:upper:]')_ID"
+LEGACY_FILE=".dotfiles-${LEGACY_TERM}-id"
+LEGACY_TOKEN="your-${LEGACY_TERM}-id"
+
+# Same as run_setup_opencode but with env var $2 (default DOTFILES_ACCOUNT_ID)
+# set to $1 in the child.
 run_setup_opencode_env() {
     run bash --noprofile --norc -c "
         set -e
-        export DOTFILES_KNOX_ID='$1'
+        export ${2:-DOTFILES_ACCOUNT_ID}='$1'
         cd '$FIXTURE_DOTFILES/shell-common'
         . './setup.sh'
         setup_opencode_config internal
     "
 }
 
-@test "env SSOT: DOTFILES_KNOX_ID substitutes placeholder, no warning" {
-    run_setup_opencode_env "envknox42"
+@test "env SSOT: DOTFILES_ACCOUNT_ID substitutes placeholder, no warning" {
+    run_setup_opencode_env "envacct42"
     assert_success
     [ -f "$TARGET" ]
-    grep -q 'envknox42' "$TARGET"
-    refute grep -q 'your-knox-id' "$TARGET"
-    refute_output --partial "replace 'your-knox-id'"
+    grep -q 'envacct42' "$TARGET"
+    refute grep -q 'your-account-id' "$TARGET"
+    refute_output --partial "replace 'your-account-id'"
 }
 
-@test "file SSOT: ~/.dotfiles-knox-id substitutes placeholder, no warning" {
-    printf 'fileknox99\n' >"$HOME/.dotfiles-knox-id"
+@test "file SSOT: ~/.dotfiles-account-id substitutes placeholder, no warning" {
+    printf 'fileacct99\n' >"$HOME/.dotfiles-account-id"
 
     run_setup_opencode
     assert_success
-    grep -q 'fileknox99' "$TARGET"
-    refute grep -q 'your-knox-id' "$TARGET"
-    refute_output --partial "replace 'your-knox-id'"
+    grep -q 'fileacct99' "$TARGET"
+    refute grep -q 'your-account-id' "$TARGET"
+    refute_output --partial "replace 'your-account-id'"
 }
 
 @test "env SSOT takes precedence over file SSOT" {
-    printf 'fileknox99\n' >"$HOME/.dotfiles-knox-id"
+    printf 'fileacct99\n' >"$HOME/.dotfiles-account-id"
 
-    run_setup_opencode_env "envknox42"
+    run_setup_opencode_env "envacct42"
     assert_success
-    grep -q 'envknox42' "$TARGET"
-    ! grep -q 'fileknox99' "$TARGET"
+    grep -q 'envacct42' "$TARGET"
+    refute grep -q 'fileacct99' "$TARGET"
 }
 
 @test "file SSOT: re-run is idempotent (preserve, no warning, no backup)" {
-    printf 'fileknox99\n' >"$HOME/.dotfiles-knox-id"
+    printf 'fileacct99\n' >"$HOME/.dotfiles-account-id"
     write_local_url
 
     run_setup_opencode
@@ -169,8 +176,8 @@ run_setup_opencode_env() {
     # No env var, no file, no tty (bash -c) — must degrade gracefully.
     run_setup_opencode
     assert_success
-    grep -q 'your-knox-id' "$TARGET"
-    assert_output --partial "replace 'your-knox-id'"
+    grep -q 'your-account-id' "$TARGET"
+    assert_output --partial "replace 'your-account-id'"
 }
 
 # --- Gateway URL from internal.local.sh (issue #1967) -----------------------
@@ -188,7 +195,7 @@ run_setup_opencode_env() {
     # The tracked template itself is never rewritten (no value leaks into it).
     cmp -s "$FIXTURE_DOTFILES/opencode/opencode.json.internal" \
         "$_BATS_REAL_DOTFILES_ROOT/opencode/opencode.json.internal"
-    ! grep -qF "$FAKE_REAL_URL" "$FIXTURE_DOTFILES/opencode/opencode.json.internal"
+    refute grep -qF "$FAKE_REAL_URL" "$FIXTURE_DOTFILES/opencode/opencode.json.internal"
 }
 
 @test "#1967 deployed config kept untouched when no URL is available" {
@@ -222,12 +229,82 @@ run_setup_opencode_env() {
     assert_output --partial "DOTFILES_OPENCODE_BASE_URL"
 }
 
-@test "#1967 knox fill on a kept deployed config changes only the placeholder" {
+@test "#1967 account-ID fill on a kept deployed config changes only the placeholder" {
     sed "s|http://llm-gateway.example.invalid/v1|$FAKE_REAL_URL|" \
         "$FIXTURE_DOTFILES/opencode/opencode.json.internal" >"$TARGET"
 
-    run_setup_opencode_env "envknox42"
+    run_setup_opencode_env "envacct42"
     assert_success
     grep -qF "$FAKE_REAL_URL" "$TARGET"
-    grep -q 'envknox42' "$TARGET"
+    grep -q 'envacct42' "$TARGET"
+}
+
+# --- Legacy-name fallback (#1982) --------------------------------------------
+# Internal PCs set up before the rename keep working without any manual step.
+
+@test "#1982 legacy env var alone fills the placeholder" {
+    run_setup_opencode_env "legacyenv7" "$LEGACY_ENV"
+    assert_success
+    grep -q 'legacyenv7' "$TARGET"
+    refute grep -q 'your-account-id' "$TARGET"
+}
+
+@test "#1982 legacy file alone fills and is copied to the new name, old kept" {
+    printf 'legacyfile8\n' >"$HOME/$LEGACY_FILE"
+
+    run_setup_opencode
+    assert_success
+    grep -q 'legacyfile8' "$TARGET"
+    [ "$(cat "$HOME/.dotfiles-account-id")" = "legacyfile8" ]
+    [ -f "$HOME/$LEGACY_FILE" ]
+
+    # Idempotent: a re-run never overwrites the new file.
+    printf 'newfile9\n' >"$HOME/.dotfiles-account-id"
+    run_setup_opencode
+    assert_success
+    [ "$(cat "$HOME/.dotfiles-account-id")" = "newfile9" ]
+}
+
+@test "#1982 new names win over legacy names" {
+    printf 'legacyfile8\n' >"$HOME/$LEGACY_FILE"
+    printf 'newfile9\n' >"$HOME/.dotfiles-account-id"
+
+    run bash --noprofile --norc -c "
+        set -e
+        export $LEGACY_ENV='legacyenv7' DOTFILES_ACCOUNT_ID='envacct42'
+        cd '$FIXTURE_DOTFILES/shell-common'
+        . './setup.sh'
+        setup_opencode_config internal
+    "
+    assert_success
+    grep -q 'envacct42' "$TARGET"
+
+    rm -f "$TARGET"
+    run_setup_opencode
+    assert_success
+    grep -q 'newfile9' "$TARGET"
+}
+
+@test "#1982 deployed config with the legacy token is still substituted" {
+    sed -e "s|http://llm-gateway.example.invalid/v1|$FAKE_REAL_URL|" \
+        -e "s|your-account-id|$LEGACY_TOKEN|" \
+        "$FIXTURE_DOTFILES/opencode/opencode.json.internal" >"$TARGET"
+
+    run_setup_opencode_env "envacct42"
+    assert_success
+    grep -qF "$FAKE_REAL_URL" "$TARGET"
+    grep -q 'envacct42' "$TARGET"
+    refute grep -q "$LEGACY_TOKEN" "$TARGET"
+}
+
+@test "#1982 legacy token without any ID: kept, neutral warning" {
+    sed -e "s|http://llm-gateway.example.invalid/v1|$FAKE_REAL_URL|" \
+        -e "s|your-account-id|$LEGACY_TOKEN|" \
+        "$FIXTURE_DOTFILES/opencode/opencode.json.internal" >"$TARGET"
+    deployed="$(cat "$TARGET")"
+
+    run_setup_opencode
+    assert_success
+    [ "$(cat "$TARGET")" = "$deployed" ]
+    assert_output --partial "replace 'your-account-id'"
 }

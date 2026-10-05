@@ -39,7 +39,7 @@ setup 체인에 편입한다.
 - `DOTFILES_SETUP_CHOICE=1|2|3`: 환경 메뉴(public/internal/external)를 묻지 않는다.
   미지정이면 러너가 묻고 `~/.dotfiles-setup-mode` 를 Enter 기본값으로 제시한다
   (비대화형이면 저장된 모드 사용, 없으면 실패). 요약 모드에서는 선택값을 stdin
-  으로 주입하므로 shell-common 의 tty 전용 프롬프트(Knox ID, 계정 이메일)는
+  으로 주입하므로 shell-common 의 tty 전용 프롬프트(사내 계정 ID, 계정 이메일)는
   건너뛴다 — 최초 internal/external 셋업은 `./setup.sh -v` 로 실행한다.
 
 ## 사례
