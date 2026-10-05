@@ -1017,8 +1017,8 @@ JSON
 
     # No backup spawned for a no-op run — check both the legacy in-tree
     # location and the new $HOME/.claude-backups location (issue #554).
-    ! ls "${DOTFILES_ROOT}/claude/" 2>/dev/null | grep -qE 'settings\.json\.pre-statusline-fix-'
-    ! ls "$HOME/.claude-backups/" 2>/dev/null | grep -qE 'settings\.json\.pre-statusline-fix-'
+    [ -z "$(ls "${DOTFILES_ROOT}/claude/" 2>/dev/null | grep -E 'settings\.json\.pre-statusline-fix-')" ]
+    [ -z "$(ls "$HOME/.claude-backups/" 2>/dev/null | grep -E 'settings\.json\.pre-statusline-fix-')" ]
 }
 
 @test "issue #300-A: setup.sh preserves user-customised statusLine.command" {
