@@ -318,6 +318,27 @@ fi
 ttl_label="5m"
 [ "${ENABLE_PROMPT_CACHING_1H:-}" = "1" ] && ttl_label="1h"
 ttl_info="${CYAN}⏱️ ${ttl_label}${RESET}"
+
+# Remaining prompt-cache lifetime (#2026), from the file the cache-watch mod
+# (claude/mods/cache-watch) writes on every cache-touching response:
+# "<lastTouchEpochSec> <ttlSec>". Hot path — `read` builtin, printf's %(%s)T
+# and arithmetic only, no fork. Missing/corrupt file or no session => omitted.
+_cw_file="${HOME}/.cache/claude-cache-watch/${session_id}"
+if [ -n "$session_id" ] && [ -f "$_cw_file" ] && read -r _cw_t _cw_ttl _ <"$_cw_file" 2>/dev/null &&
+    [[ "$_cw_t" =~ ^[0-9]+$ && "$_cw_ttl" =~ ^[0-9]+$ ]]; then
+    printf -v _cw_now '%(%s)T' -1
+    _cw_left=$((_cw_t + _cw_ttl - _cw_now))
+    [ "$_cw_left" -gt "$_cw_ttl" ] && _cw_left=$_cw_ttl # clock went backwards
+    if [ "$_cw_left" -le 0 ]; then
+        ttl_info="${ttl_info} ${RED}cache expired${RESET}"
+    elif [ "$_cw_left" -lt 60 ]; then
+        ttl_info="${ttl_info} ${ORANGE}cache <1m${RESET}"
+    else
+        _cw_color="$CYAN"
+        [ "$_cw_left" -le 600 ] && _cw_color="$ORANGE"
+        ttl_info="${ttl_info} ${_cw_color}cache $(((_cw_left + 59) / 60))m${RESET}"
+    fi
+fi
 usage_group="${usage_group:+${usage_group} }${ttl_info}"
 
 # Bedrock cost display (internal only)

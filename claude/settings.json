@@ -126,6 +126,7 @@
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
     "command": "${HOME}/dotfiles/claude/statusline-command.sh",
+    "refreshInterval": 60,
     "type": "command"
   },
   "telemetry": {

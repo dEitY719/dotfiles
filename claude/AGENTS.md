@@ -103,6 +103,8 @@ Claude Code 는 해당 repo 가 `claude/plugin/plugins.json` 에 등록돼 있�
 
 `statusline-tokens.sh` (#1380) 은 계정 dir 로 링크하지 **않는다** — `statusline-command.sh` 가 자기 경로의 symlink 를 따라간 뒤 형제 파일로 source 하므로 SSOT 한 곳에만 있으면 직접 실행/symlink 경로 양쪽에서 해석된다. 없으면 세션 누적 토큰 세그먼트만 빠지고 나머지는 정상 렌더된다.
 
+`claude/mods/cache-watch/` (#2026) — Claude Code mod(함수 훅 플러그인, 2.1.287+). 메인 스레드 `turn.step` 응답의 cache read+creation 토큰 > 0 이면 `~/.cache/claude-cache-watch/<session_id>` 에 `<lastTouchEpochSec> <ttlSec>` 한 줄을 쓴다(TTL 은 `session.start` 의 `ENABLE_PROMPT_CACHING_1H`). `statusline-command.sh` 가 이를 읽어 `⏱️ 1h` 옆에 `cache 57m` / `cache <1m` / `cache expired` 를 붙이고, 파일이 없으면 생략한다. 로드: `claude --plugin-dir <repo>/claude/mods/cache-watch` 또는 `CLAUDE_CODE_PLUGIN_DIRS`. 유휴 중 분 단위 갱신은 `settings.json` 의 `statusLine.refreshInterval: 60`. 검증: `claude plugin validate|test claude/mods/cache-watch`. 오래된 파일 정리는 없음(이 빌드의 `$.fs` 에 delete 부재).
+
 기존 PC 에 남아 있는 `/etc/sudoers.d/claude-{skills,docs}-mount-*` 파일은 #575 이후로 사용처가 없다. `claude/setup.sh` 실행 시 잔존 파일이 감지되면 수동 삭제 명령을 안내한다.
 
 `settings.json` — **tracked SSOT** (#584). 모든 모드에서 config dir 의 `settings.json` 은 symlink 가 아닌 **실파일**이다. 다만 그 실파일을 *쓰는 주체*가 모드별로 다르다:
