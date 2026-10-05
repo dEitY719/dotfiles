@@ -195,26 +195,30 @@ alias clplan='claude'
 
 # Test writing helper
 cltest() {
-    if [ -z "$1" ]; then
+    case "${1:-}" in "" | -h | --help)
         ux_header "cltest"
         ux_usage "cltest" "\"request\"" "Run Claude with prompt for test writing"
         ux_bullet "Example: ${UX_INFO}cltest \"Write authentication tests\"${UX_RESET}"
-        return 1
-    fi
+        [ -n "${1:-}" ] # -h/--help -> 0, no argument -> 1
+        return
+        ;;
+    esac
     claude -p "$1"
 }
 
 # Skip permissions mode (use with caution)
 clskip() {
-    if [ -z "$1" ]; then
+    case "${1:-}" in "" | -h | --help)
         ux_header "clskip"
         ux_usage "clskip" "\"request\"" "Run Claude skipping permission prompts (caution)"
         ux_bullet "Example: ${UX_INFO}clskip \"Refactor this module\"${UX_RESET}"
         echo ""
         ux_warning "This will skip all permission prompts"
         ux_bullet "Start with small scopes and use carefully"
-        return 1
-    fi
+        [ -n "${1:-}" ] # -h/--help -> 0, no argument -> 1
+        return
+        ;;
+    esac
 
     ux_warning "Running in skip permissions mode"
     ux_info "Request: $1"
@@ -1285,6 +1289,7 @@ claude_accounts_rollback() {
     if [ -n "${ZSH_VERSION:-}" ]; then
         emulate -L sh
     fi
+    case "${1:-}" in -h | --help) _claude_accounts_help; return 0 ;; esac
 
     # Auto-detect the active account when not passed explicitly.
     if [ -z "$_car_active" ]; then
@@ -1410,6 +1415,7 @@ claude_accounts_rollback() {
 #   claude-accounts repair          # actually fix
 #   claude-accounts repair --dry-run  # report only, no mutation
 claude_accounts_repair() {
+    case "${1:-}" in -h | --help) _claude_accounts_help; return 0 ;; esac
     _car_dry=0
     if [ "${1:-}" = "--dry-run" ] || [ "${1:-}" = "-n" ]; then
         _car_dry=1
@@ -1669,6 +1675,7 @@ claude_accounts_link() {
             --apply) _cal_apply=1 ;;
             --force) _cal_force=1 ;;
             --list) _cal_list=1 ;;
+            -h | --help) _claude_accounts_help; return 0 ;;
             -*) ux_error "Unknown option: $1"; return 1 ;;
             *)
                 [ -z "$_cal_src" ] || { ux_error "Only one <src> allowed (got: $_cal_src, $1)"; return 1; }
@@ -1752,6 +1759,7 @@ CAL_ENTRIES
 # claude_accounts_unlink <name> — remove <name> from every account skills dir,
 # symlinks only; real files/dirs are never deleted (issue #1847 F-2).
 claude_accounts_unlink() {
+    case "${1:-}" in -h | --help) _claude_accounts_help; return 0 ;; esac
     _cau_name="${1:-}"
     case "$_cau_name" in
         "" | */*) ux_error "Usage: claude-accounts unlink <name>"; return 1 ;;
