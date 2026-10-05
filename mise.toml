@@ -46,8 +46,12 @@ description = "Shell lint (shellcheck + shfmt diff)"
 # pins shell=bash so its bash/zsh-branching files don't get flagged with POSIX-sh
 # false positives (SC3xxx). shfmt stays bash/-only — shell-common/'s formatting
 # conventions diverge widely and reformatting it is a separate effort.
+# Bats files get one check only (#2000): SC2314 at error severity = a `! cmd`
+# that is not the test's last command, which bats' set -e never fails on.
+# git ls-files keeps the bats-core submodule's own .bats files out.
 run = [
     'find bash shell-common -type f \( -name "*.sh" -o -name "*.bash" \) -exec shellcheck -x -e SC1090,SC1091 {} +',
+    "git ls-files -z '*.bats' | xargs -0 shellcheck -i SC2314 -S error",
     "shfmt -d -i 4 bash/",
 ]
 
