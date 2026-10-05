@@ -61,6 +61,7 @@ zsh_themes() {
 # Change zsh theme
 zsh_theme() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) zsh_help theme; return 0 ;; esac
     if ! _zsh_check_omz; then
         return 1
     fi
@@ -219,6 +220,7 @@ zsh_edit() {
 # Create/Edit zsh config snippet
 zsh_snippet() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) zsh_help config; return 0 ;; esac
     if [ -z "$1" ]; then
         ux_usage "zsh-snippet" "<snippet-name>" "Create or edit a config snippet"
         ux_bullet "Example: ${UX_BOLD}zsh-snippet aliases${UX_RESET}"
