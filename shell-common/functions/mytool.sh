@@ -28,17 +28,6 @@ srcpack() {
     python "$script" "$@"
 }
 
-# AGENTS.md 생성 함수
-agents_init() {
-    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/run_agents_md_master_prompt.sh"
-    if [ ! -f "$script" ]; then
-        ux_error "AGENTS.md generation script not found: $script"
-        return 2
-    fi
-    bash "$script" "$@"
-}
-
 # Powerlevel10k 설치 함수
 install_p10k() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
@@ -152,7 +141,6 @@ install_sops_age() {
 # Dash-form aliases (command-design-pattern.md R1: user-facing = dash-form).
 # `srcpack` has no underscore, so it is already the dash-form entry point.
 alias get-hw-info='get_hw_info'
-alias agents-init='agents_init'
 alias install-p10k='install_p10k'
 alias install-fzf='install_fzf'
 alias install-fasd='install_fasd'
