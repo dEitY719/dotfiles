@@ -182,6 +182,7 @@ mysql_dmc_test() {
 # -------------------------------
 mysql_list() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) mysql_help service; return 0 ;; esac
     local service_only="$1"
 
     if [[ "$service_only" == "true" ]]; then
@@ -212,6 +213,7 @@ mysql_list() {
 # -------------------------------
 mysql_cmd() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) mysql_help service; return 0 ;; esac
     local service="$1"
     shift
     local user_input_cmd="$1"
@@ -299,6 +301,7 @@ mysql_cmd() {
 # --------------------------------------
 mysql_server() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) mysql_help service; return 0 ;; esac
     declare -A cmd_list=(
         ["start"]="start the MySQL service"
         ["stop"]="stop the MySQL service"

@@ -14,7 +14,7 @@
 - Usage: psql-help [section|--list|--all]
 - sections
     - primary: psql_list | psql_bootstrap | psql_sync | psql_add | psql_del
-    - lowlevel: psql_db | psql_user
+    - lowlevel: psql_db | psql_user | psql_server
     - details: psql-help <section>  (example: psql-help primary)
 
 ## 섹션
@@ -31,6 +31,7 @@
 
 - **psql_db** — DB Ops — list, create, delete, grant
 - **psql_user** — User Ops — list, create, attr, passwd, delete
+- **psql_server [action]** — Service Ctl — start, stop, restart, status (default)
 
 ## 엣지케이스 / 의도된 동작
 
