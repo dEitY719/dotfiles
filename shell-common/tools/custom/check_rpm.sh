@@ -190,10 +190,23 @@ EOF
 # Main function with sub-command handling
 # ============================================================
 
+check_rpm_help() {
+    ux_usage "check_rpm" "[config|files|env|connectivity|all]" "Comprehensive RPM/YUM repository configuration diagnostic script"
+    ux_bullet "config - Show RPM/YUM version and repo list"
+    ux_bullet "files - Check repo files and markers"
+    ux_bullet "env - Show environment variables"
+    ux_bullet "connectivity - Test repository connectivity"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     local cmd="${1:-all}"
 
     case "$cmd" in
+        -h | --help)
+            check_rpm_help
+            return 0
+            ;;
         config)
             check_rpm_config
             ;;
@@ -213,14 +226,7 @@ main() {
             check_rpm_connectivity
             ;;
         *)
-            echo "Usage: check_rpm [config|files|env|connectivity|all]"
-            echo ""
-            echo "  config        - Show RPM/YUM version and repo list"
-            echo "  files         - Check repo files and markers"
-            echo "  env           - Show environment variables"
-            echo "  connectivity  - Test repository connectivity"
-            echo "  all           - Run all checks (default)"
-            echo ""
+            check_rpm_help
             exit 1
             ;;
     esac

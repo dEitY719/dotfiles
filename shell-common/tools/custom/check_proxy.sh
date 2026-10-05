@@ -311,10 +311,25 @@ show_summary() {
 # Main function
 # ============================================================
 
+check_proxy_help() {
+    ux_usage "check_proxy" "[mode|env|file|shell|conn|git|all]" "Proxy configuration diagnostics"
+    ux_bullet "mode - Show setup mode"
+    ux_bullet "env - Check proxy environment variables"
+    ux_bullet "file - Check proxy.local.sh"
+    ux_bullet "shell - Check proxy loading in the shell"
+    ux_bullet "conn|test - Test proxy connectivity"
+    ux_bullet "git - Check git proxy config"
+    ux_bullet "all - Run all checks (default)"
+}
+
 check_proxy() {
     local mode="${1:-all}"
 
     case "$mode" in
+        -h | --help)
+            check_proxy_help
+            return 0
+            ;;
         mode)
             check_setup_mode
             ;;
@@ -346,7 +361,7 @@ check_proxy() {
             ;;
         *)
             ux_error "Unknown mode: $mode"
-            ux_info "Usage: check_proxy [mode|env|file|shell|conn|git|all]"
+            check_proxy_help
             record_fail
             ;;
     esac

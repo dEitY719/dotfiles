@@ -166,8 +166,21 @@ check_all() {
 # Main
 # ============================================================
 
+check_pip_help() {
+    ux_usage "check_pip" "[config|file|repo|env|all]" "Comprehensive pip configuration diagnostic script"
+    ux_bullet "config - Show pip configuration"
+    ux_bullet "file - Check pip config files"
+    ux_bullet "repo - Test configured repository connectivity"
+    ux_bullet "env - Show environment variables"
+    ux_bullet "all - Run all checks (default)"
+}
+
 main() {
     case "${1:-all}" in
+        -h | --help)
+            check_pip_help
+            return 0
+            ;;
         config)
             check_pip_config
             ;;
