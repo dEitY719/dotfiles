@@ -66,26 +66,15 @@ Skip mechanisms:
 Regression: `tests/bats/git/test_pre_push_pytest.bats` (4 cases — skip,
 missing, success, failure).
 
-# Upstream Push Leak Guard
+# Upstream Leak Guard (#708, #1970)
 
-`hooks/pre-push` Layer 2 runs after the protected-branch check: when the
-push target URL matches `UPSTREAM_REMOTES_ERE`, it scans the push range
-(commit messages + added/modified file contents) against `LEAK_PATTERNS_ERE`
-and blocks the push on any match.
-
-Both variables default to the empty string, so the mechanism is inert until
-the user opts in. Activate by exporting in your shell rc or a gitignored
-local file:
-
-```sh
-export UPSTREAM_REMOTES_ERE='github\.com[:/]<owner>/<repo>(\.git)?$'
-export LEAK_PATTERNS_ERE='<your-private-host>\.example\.com|/your-private-overlay/'
-```
-
-Escape hatches: `SKIP_PRE_PUSH=1` (whole hook), `SKIP_LEAK_GUARD=1` (this
-layer only — protected-branch check still runs). SSOT lives in
-`config/pre-push-rules.sh`; regression tests in `test/test-pre-push.sh`
-(T-1..T-7).
+Opt-in guard against internal identifiers reaching the public upstream, in
+two stages reading the same env (SSOT `config/pre-push-rules.sh`, empty =
+inert): `UPSTREAM_REMOTES_ERE` + `LEAK_PATTERNS_ERE`. `hooks/pre-push`
+Layer 2 scans the push range; `hooks/checks/leak_pattern_check.sh` blocks
+staged added lines at commit time, printing `file:line` only. Escape hatch:
+`SKIP_LEAK_GUARD=1` (both stages). Per-PC activation (fake patterns only),
+dry-run check and tests: [doc/LEAK_GUARD.md](./doc/LEAK_GUARD.md).
 
 # Context Map
 
