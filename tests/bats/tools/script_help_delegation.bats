@@ -51,7 +51,7 @@ Read-only 진단. ./aws/setup.sh 와 ./aws/install-otel-managed-settings.sh
 부트스트랩이 정상 완료되었는지 PASS / FAIL / WARN 으로 보고한다.
 
 체크 항목 (가이드 절 번호):
-  1-1) 프록시 인증서 (NODE_EXTRA_CA_CERTS, samsungsemi-prx.com.crt)
+  1-1) 프록시 인증서 (NODE_EXTRA_CA_CERTS, 사내 프록시 CA 포함 여부)
   1-2) Claude Code 설치 & PATH
   2-2) AWS CLI 설치
   2-3) AWS 인증서/Bedrock env (AWS_CA_BUNDLE, CLAUDE_CODE_USE_BEDROCK,

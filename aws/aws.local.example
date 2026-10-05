@@ -4,18 +4,18 @@
 # 사용 방법
 #   1. ./setup.sh 를 internal 모드로 실행하면 aws/setup.sh 가 이 파일을
 #      aws/aws.local.sh 로 복사합니다 (없을 때만, 멱등).
-#   2. 호스트별 VPC endpoint 가 다르면 aws.local.sh 만 수정하세요.
+#   2. aws.local.sh 의 placeholder(*.example.invalid)를 사내 실제 값으로
+#      바꾸세요. 남아 있으면 aws/setup.sh 가 경고합니다.
 #   3. aws.local.sh 는 *.local.sh 글로벌 패턴으로 자동 gitignore.
 #
-# 본 파일은 placeholder 가 아닌 실제 값을 담고 있어 그대로 쓸 수 있습니다.
-# 사번·STS UserId 같은 식별 정보는 들어 있지 않으므로 커밋되어도 안전.
+# 실제 사내 endpoint 는 공개 repo 의 tracked 파일에 적지 않는다 (#1966).
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # 사내 SSL CA bundle. Ubuntu 의 update-ca-certificates 가
-# /usr/local/share/ca-certificates/samsungsemi-prx.com.crt 등 사내 사설 CA 를
+# /usr/local/share/ca-certificates/ 의 사내 사설 CA 를
 # /etc/ssl/certs/ca-certificates.crt 에 자동 머지하므로 시스템 번들을 가리키면
-# 충분하고 더 포터블하다. 호스트가 samsungsemi 인증서를 다른 경로에 두는 경우
+# 충분하고 더 포터블하다. 호스트가 사내 프록시 인증서를 다른 경로에 두는 경우
 # 그 경로로 교체하면 된다. 이 값은 NODE_EXTRA_CA_CERTS 와 같은 파일을 가리키는
 # 것이 가장 안전하다.
 export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
@@ -25,4 +25,4 @@ export CLAUDE_CODE_USE_BEDROCK=1
 export AWS_REGION=ap-northeast-2
 
 # Bedrock VPC endpoint (사내망 전용)
-export ANTHROPIC_BEDROCK_BASE_URL=https://vpce-0dd86dfd31388ddeb-tgk37vc6.bedrock-runtime.ap-northeast-2.vpce.amazonaws.com
+export ANTHROPIC_BEDROCK_BASE_URL=https://bedrock.example.invalid

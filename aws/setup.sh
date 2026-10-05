@@ -140,7 +140,7 @@ _seed_file \
     0600
 
 # Sanity: AWS_CA_BUNDLE 가 가리키는 파일이 실제로 존재하는지. 기존 사용자가
-# 옛 템플릿 경로(/usr/local/share/ca-certificates/samsungsemi-prx.com.crt)를
+# 옛 템플릿 경로(/usr/local/share/ca-certificates/ 의 사내 프록시 인증서)를
 # 그대로 들고 있고 호스트엔 그 파일이 없는 경우, aws CLI TLS 자체가 실패한다.
 # _seed_file 는 사용자 편집을 보존하므로 자동 교체 대신 경고만 띄운다.
 _aws_local="${DOTFILES_DIR}/aws/aws.local.sh"
@@ -178,6 +178,14 @@ else
         "$HOME/.aws/config" \
         0600
 fi
+
+# The tracked templates carry fake placeholders only (#1966) — flag any seeded
+# file that still holds one so the internal values get filled in by hand.
+for _aws_seeded in "$_aws_local" "$HOME/.aws/config"; do
+    if [ -f "$_aws_seeded" ] && grep -q 'example\.invalid' "$_aws_seeded"; then
+        ux_warning "placeholder(example.invalid) 남음: $_aws_seeded → 사내 실제 값으로 교체 (aws/aws-config.local 이 있으면 그 내용이 ~/.aws/config 로 시드됨)"
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # F-7 (REMOVED 2026-08-18): ~/.claude/settings.json base + Bedrock overlay

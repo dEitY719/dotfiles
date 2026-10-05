@@ -237,7 +237,7 @@ alias claude-skip='claude --dangerously-skip-permissions'
 # Claude Code releases do not apply the settings.local.json env block to the
 # spawned child, so the gateway URL / auth headers configured there silently
 # never reach the request layer (symptom: `Failed to connect to
-# api.anthropic.com` on a Samsung-internal PC even with a fully-correct
+# api.anthropic.com` on a corporate-internal PC even with a fully-correct
 # settings.local.json). This helper is the belt-and-suspenders fix: jq-read
 # the env block and `export` each key. Idempotent, silent, no-op when jq or
 # the file is missing.
@@ -1278,7 +1278,7 @@ claude_accounts_migrate() {
 #   - mv ~/.claude-<other>       → ~/.claude-<other>-rollback-<TS>-original
 #   - mv ~/.claude (if non-empty)→ ~/.claude-pre-rollback-<TS>-original
 #
-# The Samsung internal PC use-case driving #571: a user ran
+# The corporate-internal PC use-case driving #571: a user ran
 # `claude-accounts migrate` by mistake on an internal box (where the
 # multi-account layout is structurally wrong), then `claude-yolo`
 # hard-failed on the missing ~/.claude-personal check. Rollback gives

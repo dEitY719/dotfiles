@@ -35,7 +35,7 @@ Read-only 진단. ./aws/setup.sh 와 ./aws/install-otel-managed-settings.sh
 부트스트랩이 정상 완료되었는지 PASS / FAIL / WARN 으로 보고한다.
 
 체크 항목 (가이드 절 번호):
-  1-1) 프록시 인증서 (NODE_EXTRA_CA_CERTS, samsungsemi-prx.com.crt)
+  1-1) 프록시 인증서 (NODE_EXTRA_CA_CERTS, 사내 프록시 CA 포함 여부)
   1-2) Claude Code 설치 & PATH
   2-2) AWS CLI 설치
   2-3) AWS 인증서/Bedrock env (AWS_CA_BUNDLE, CLAUDE_CODE_USE_BEDROCK,
@@ -113,16 +113,22 @@ _env_registered() {
     return 1
 }
 
-EXPECTED_PROXY_CERT_FINGERPRINT="MIIERTCCAy2gAwIBAgIJAPirWAe96NTFMA0GCSqGSIb3DQEBCwUA"
-EXPECTED_SECDS_ROOT_FINGERPRINT="MIID8TCCAtmgAwIBAgIQeU+juUDmhZpLkbkVoaIKdDANBgkqhki"
-EXPECTED_SECDS_T2ROOT_FINGERPRINT="MIID8zCCAqegAwIBAgIQNeZUTiLsarJADGKa+6XaEjBBBgkqhki"
-EXPECTED_SECDS_T2ISSUING_FINGERPRINT="MIIFBzCCA7ugAwIBAgITFwAAAAeli5W0Sszy3QABAAAABzBBBgkq"
-
-EXPECTED_CERT_PATH="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-EXPECTED_BEDROCK_URL="https://vpce-0dd86dfd31388ddeb-tgk37vc6.bedrock-runtime.ap-northeast-2.vpce.amazonaws.com"
-EXPECTED_SSO_START_URL="https://dspublic.awsapps.com/start"
+# 사내 기대값(Bedrock URL, SSO, 도메인, CA 지문)은 공개 repo 에 두지 않고
+# gitignored shell-common/env/internal.local.sh 에서 읽는다 (#1966, 템플릿
+# internal.local.example). 값이 없으면 해당 비교만 WARN 으로 건너뛴다.
+INTERNAL_LOCAL_SH="${DOTFILES_DIR}/shell-common/env/internal.local.sh"
+if [ -f "$INTERNAL_LOCAL_SH" ]; then
+    # shellcheck source=/dev/null
+    . "$INTERNAL_LOCAL_SH"
+fi
+EXPECTED_PROXY_CERT_FINGERPRINT="${DOTFILES_PROXY_CA_FINGERPRINT:-}"
+EXPECTED_EXTRA_CA_FINGERPRINTS="${DOTFILES_EXTRA_CA_FINGERPRINTS:-}"
+EXPECTED_BEDROCK_URL="${DOTFILES_AWS_BEDROCK_URL:-}"
+EXPECTED_SSO_START_URL="${DOTFILES_AWS_SSO_START_URL:-}"
+EXPECTED_SSO_ACCOUNT_ID="${DOTFILES_AWS_SSO_ACCOUNT_ID:-}"
+EXPECTED_INTERNAL_DOMAIN="${DOTFILES_INTERNAL_DOMAIN:-}"
+_unset_hint="internal.local.sh 미설정 → 비교 생략"
 EXPECTED_SSO_REGION="ap-northeast-2"
-EXPECTED_SSO_ACCOUNT_ID="518692946118"
 EXPECTED_REGION="ap-northeast-2"
 
 # ============================================================
@@ -161,7 +167,7 @@ fi
 
 # 인증서 파일 내용 점검 (NODE_EXTRA_CA_CERTS가 가리키는 파일 또는 기본 경로)
 # 파일이 클 수 있으므로 변수에 캡처하지 않고 grep 을 직접 파일에 수행한다.
-CHECK_CERT="${CERT_FILE:-$EXPECTED_CERT_PATH}"
+CHECK_CERT="${CERT_FILE:-${SSL_CERT_FILE:-}}"
 if [ -f "$CHECK_CERT" ]; then
   # BEGIN CERTIFICATE 첫 줄 깨짐 여부 확인 (vim 붙여넣기 버그). PEM 파일 끝에
   # 우연히 공백이 붙는 경우도 허용하도록 [[:space:]]*$ 로 lenient 매칭.
@@ -173,29 +179,23 @@ if [ -f "$CHECK_CERT" ]; then
   fi
 
   # 각 인증서 포함 여부 — 파일 직접 grep (스트리밍)
-  if grep -q "$EXPECTED_PROXY_CERT_FINGERPRINT" "$CHECK_CERT"; then
-    pass "반도체 프록시 인증서 (samsungsemi-prx.com) 포함됨"
+  if [ -z "$EXPECTED_PROXY_CERT_FINGERPRINT" ]; then
+    warn "사내 프록시 인증서 포함 여부: ${_unset_hint}"
+  elif grep -q "$EXPECTED_PROXY_CERT_FINGERPRINT" "$CHECK_CERT"; then
+    pass "사내 프록시 인증서 포함됨"
   else
-    fail "반도체 프록시 인증서 (samsungsemi-prx.com) 미포함"
+    fail "사내 프록시 인증서 미포함"
   fi
 
-  if grep -q "$EXPECTED_SECDS_ROOT_FINGERPRINT" "$CHECK_CERT"; then
-    pass "DS 1 Tier 루트인증서 (SECDS_ROOT_CA) 포함됨"
-  else
-    warn "DS 1 Tier 루트인증서 (SECDS_ROOT_CA) 미포함 (Case 2에서만 필요)"
-  fi
-
-  if grep -q "$EXPECTED_SECDS_T2ROOT_FINGERPRINT" "$CHECK_CERT"; then
-    pass "DS 2 Tier 루트인증서 (SECDS-T2ROOTCA) 포함됨"
-  else
-    warn "DS 2 Tier 루트인증서 (SECDS-T2ROOTCA) 미포함 (Case 2에서만 필요)"
-  fi
-
-  if grep -q "$EXPECTED_SECDS_T2ISSUING_FINGERPRINT" "$CHECK_CERT"; then
-    pass "DS 2 Tier 중간기관 인증서 (SECDS-T2IssuingCA) 포함됨"
-  else
-    warn "DS 2 Tier 중간기관 인증서 (SECDS-T2IssuingCA) 미포함 (Case 2에서만 필요)"
-  fi
+  _ca_n=0
+  for _fp in $EXPECTED_EXTRA_CA_FINGERPRINTS; do
+    _ca_n=$((_ca_n + 1))
+    if grep -q "$_fp" "$CHECK_CERT"; then
+      pass "추가 사내 CA 인증서 #${_ca_n} 포함됨"
+    else
+      warn "추가 사내 CA 인증서 #${_ca_n} 미포함 (Case 2에서만 필요)"
+    fi
+  done
 else
   fail "인증서 파일을 찾을 수 없음: ${CHECK_CERT}"
 fi
@@ -264,7 +264,9 @@ else
 fi
 
 # ANTHROPIC_BEDROCK_BASE_URL
-if [ "${ANTHROPIC_BEDROCK_BASE_URL:-}" = "$EXPECTED_BEDROCK_URL" ]; then
+if [ -z "$EXPECTED_BEDROCK_URL" ]; then
+  warn "ANTHROPIC_BEDROCK_BASE_URL 기대값: ${_unset_hint}"
+elif [ "${ANTHROPIC_BEDROCK_BASE_URL:-}" = "$EXPECTED_BEDROCK_URL" ]; then
   pass "ANTHROPIC_BEDROCK_BASE_URL 올바르게 설정됨"
 elif [ -n "${ANTHROPIC_BEDROCK_BASE_URL:-}" ]; then
   fail "ANTHROPIC_BEDROCK_BASE_URL 값이 다름"
@@ -293,15 +295,19 @@ if [ -n "${no_proxy:-}${NO_PROXY:-}" ]; then
   NO_PROXY_VAL="${no_proxy:-${NO_PROXY:-}}"
   pass "no_proxy 설정됨"
 
-  # samsungds.net 포함 및 와일드카드 여부 확인
-  if echo "$NO_PROXY_VAL" | grep -q 'samsungds\.net'; then
-    if echo "$NO_PROXY_VAL" | grep -qE '\*\.?samsungds\.net'; then
-      fail "no_proxy에 와일드카드(*.samsungds.net) 사용됨 → '*' 제거하고 .samsungds.net 으로 변경 필요"
+  # 사내 도메인 포함 및 와일드카드 여부 확인
+  _dom="$EXPECTED_INTERNAL_DOMAIN"
+  _dom_re=$(printf '%s' "$_dom" | sed 's/\./\\./g')
+  if [ -z "$_dom" ]; then
+    warn "no_proxy 사내 도메인: ${_unset_hint}"
+  elif echo "$NO_PROXY_VAL" | grep -q "$_dom_re"; then
+    if echo "$NO_PROXY_VAL" | grep -qE "\\*\\.?${_dom_re}"; then
+      fail "no_proxy에 와일드카드(*.${_dom}) 사용됨 → '*' 제거하고 .${_dom} 으로 변경 필요"
     else
-      pass "no_proxy에 samsungds.net 정상 포함됨"
+      pass "no_proxy에 ${_dom} 정상 포함됨"
     fi
   else
-    fail "no_proxy에 samsungds.net 미포함 → .samsungds.net 추가 필요"
+    fail "no_proxy에 ${_dom} 미포함 → .${_dom} 추가 필요"
   fi
 else
   warn "no_proxy / NO_PROXY 미설정"
@@ -333,7 +339,9 @@ if [ -f "$AWS_CONFIG" ]; then
   fi
 
   # sso_start_url
-  if grep -q "sso_start_url.*=.*${EXPECTED_SSO_START_URL}" "$AWS_CONFIG"; then
+  if [ -z "$EXPECTED_SSO_START_URL" ]; then
+    warn "sso_start_url 기대값: ${_unset_hint}"
+  elif grep -q "sso_start_url.*=.*${EXPECTED_SSO_START_URL}" "$AWS_CONFIG"; then
     pass "sso_start_url 올바름"
   else
     ACTUAL=$(grep 'sso_start_url' "$AWS_CONFIG" | head -1 | awk -F= '{print $2}' | xargs)
@@ -352,7 +360,9 @@ if [ -f "$AWS_CONFIG" ]; then
   fi
 
   # sso_account_id
-  if grep -q "sso_account_id.*=.*${EXPECTED_SSO_ACCOUNT_ID}" "$AWS_CONFIG"; then
+  if [ -z "$EXPECTED_SSO_ACCOUNT_ID" ]; then
+    warn "sso_account_id 기대값: ${_unset_hint}"
+  elif grep -q "sso_account_id.*=.*${EXPECTED_SSO_ACCOUNT_ID}" "$AWS_CONFIG"; then
     pass "sso_account_id 올바름"
   else
     fail "sso_account_id 미설정 또는 값이 다름 (기대: ${EXPECTED_SSO_ACCOUNT_ID})"
@@ -362,12 +372,12 @@ if [ -f "$AWS_CONFIG" ]; then
   SSO_ROLE=$(grep 'sso_role_name' "$AWS_CONFIG" | head -1 | awk -F= '{print $2}' | xargs)
   if [ -n "$SSO_ROLE" ]; then
     if [ "$SSO_ROLE" = "여기에 안내 받은 값을 붙여넣으세요 (대소문자도 구분 필수)" ]; then
-      fail "sso_role_name이 가이드 예시 그대로임 → AICM 메일로 안내 받은 실제 role name으로 변경 필요"
+      fail "sso_role_name이 가이드 예시 그대로임 → 사내 안내 메일로 받은 실제 role name으로 변경 필요"
     else
       pass "sso_role_name 설정됨: ${SSO_ROLE}"
     fi
   else
-    fail "sso_role_name 미설정 → AICM 메일에서 안내 받은 role name 입력 필요"
+    fail "sso_role_name 미설정 → 사내 안내 메일에서 받은 role name 입력 필요"
   fi
 
   # region

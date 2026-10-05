@@ -323,13 +323,24 @@ usage_group="${usage_group:+${usage_group} }${ttl_info}"
 # Bedrock cost display (internal only)
 SETUP_MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 
+# Usage-API URL and employee ID live in the gitignored internal.local.sh
+# (#1966; template shell-common/env/internal.local.example). Sourced directly
+# — not via the shell-common loader — because Claude Code runs this script
+# with its own environment on every render. Either value missing => the cost
+# segment is simply omitted.
+_sl_internal_local="${_sl_dir}/../shell-common/env/internal.local.sh"
+if [ "$SETUP_MODE" = "internal" ] && [ -r "$_sl_internal_local" ]; then
+    # shellcheck disable=SC1090
+    . "$_sl_internal_local" >/dev/null 2>&1
+fi
+
 cost_info=""
-if [ "$SETUP_MODE" = "internal" ]; then
-    _KNOX_ID="byoungwoo.yoon"
+if [ "$SETUP_MODE" = "internal" ] && [ -n "${DOTFILES_CLAUDE_USAGE_ID:-}" ] &&
+    [ -n "${DOTFILES_CLAUDE_USAGE_API_URL:-}" ]; then
     _BUDGET=175
-    _CACHE_FILE="/tmp/.claude_bedrock_cost_cache"
+    _CACHE_FILE="${TMPDIR:-/tmp}/.claude_bedrock_cost_cache"
     _CACHE_TTL=300
-    _API_URL="https://claude-usage-api-dscloud-mchat-bot-swe.svc01.stg.dss.samsungds.net/?id=${_KNOX_ID}"
+    _API_URL="${DOTFILES_CLAUDE_USAGE_API_URL}?id=${DOTFILES_CLAUDE_USAGE_ID}"
     _now=$(date +%s)
     _cache_ts=""
     _cost=""
