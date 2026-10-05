@@ -150,7 +150,7 @@ _verify_models_loaded() {
         return 1
     fi
 
-    echo ""
+    ux_info ""
     ux_section "모델 로드 상태"
 
     local all_loaded=true
@@ -171,7 +171,7 @@ _verify_models_loaded() {
         fi
     done
 
-    echo ""
+    ux_info ""
     if [[ "$all_loaded" == true ]]; then
         ux_success "모든 모델이 정상적으로 로드되었습니다!"
         return 0
@@ -199,7 +199,7 @@ litellm_start() {
         return 1
     fi
 
-    echo ""
+    ux_info ""
     ux_info "LiteLLM 초기화 대기 중... (최대 30초)"
     local max_attempts=15
     local attempt=0
@@ -208,20 +208,20 @@ litellm_start() {
         sleep 2
         if _check_litellm_health; then
             ux_success "LiteLLM 응답 확인"
-            echo ""
+            ux_info ""
             _verify_models_loaded
             return $?
         fi
         attempt=$((attempt + 1))
-        echo -ne "  시도: $((attempt))/$max_attempts\r"
+        printf '  시도: %s/%s\r' "$attempt" "$max_attempts"
     done
 
-    echo ""
+    ux_info ""
     ux_error "LiteLLM이 응답하지 않습니다"
-    echo ""
+    ux_info ""
     ux_section "디버깅 정보"
     docker compose ps
-    echo ""
+    ux_info ""
     docker compose logs litellm | tail -20
     return 1
 }
@@ -255,7 +255,7 @@ litellm_status() {
     ux_section "Docker 서비스 상태"
     docker compose ps
 
-    echo ""
+    ux_info ""
 
     # API 연결 상태
     if _check_litellm_health; then
@@ -265,7 +265,7 @@ litellm_status() {
         return 1
     fi
 
-    echo ""
+    ux_info ""
     _verify_models_loaded
 }
 
@@ -294,7 +294,7 @@ litellm_models() {
         ux_bullet "$model"
     done
 
-    echo ""
+    ux_info ""
     ux_info "총 모델 수: $(echo "$models" | grep -o '"id":"[^"]*"' | wc -l)"
 }
 
@@ -306,20 +306,20 @@ litellm_test() {
     if [[ $# -eq 0 ]]; then
         ux_header "LiteLLM 모델 테스트"
         ux_section "사용법"
-        echo ""
+        ux_info ""
         ux_bullet "기본 사용법:"
-        echo "  llm-test <model> [prompt] [max-tokens]"
-        echo ""
+        ux_bullet_sub "llm-test <model> [prompt] [max-tokens]"
+        ux_info ""
         ux_bullet "매개변수:"
-        echo "  model       : 사용할 모델명 (필수)"
-        echo "  prompt      : 질문 (선택, 기본값: What is 2+2?)"
-        echo "  max-tokens  : 최대 토큰 (선택, 기본값: 100)"
-        echo ""
+        ux_bullet_sub "model       : 사용할 모델명 (필수)"
+        ux_bullet_sub "prompt      : 질문 (선택, 기본값: What is 2+2?)"
+        ux_bullet_sub "max-tokens  : 최대 토큰 (선택, 기본값: 100)"
+        ux_info ""
         ux_bullet "예시:"
-        echo "  llm-test gpt-oss-20b                                  # 기본 프롬프트"
-        echo "  llm-test gpt-oss-20b \"What is 3+4?\"                 # 프롬프트 지정"
-        echo "  llm-test gpt-oss-20b \"Explain AI\" 200               # 토큰 지정"
-        echo ""
+        ux_bullet_sub "llm-test gpt-oss-20b                                  # 기본 프롬프트"
+        ux_bullet_sub "llm-test gpt-oss-20b \"What is 3+4?\"                 # 프롬프트 지정"
+        ux_bullet_sub "llm-test gpt-oss-20b \"Explain AI\" 200               # 토큰 지정"
+        ux_info ""
         ux_section "사용 가능한 모델"
         litellm_models
         return 0
@@ -341,16 +341,16 @@ litellm_test() {
     available_models=$(_get_loaded_models)
     if ! echo "$available_models" | grep -q "^${model_name}$"; then
         ux_error "모델을 찾을 수 없습니다: $model_name"
-        echo ""
-        ux_section "💡 사용법"
-        echo ""
+        ux_info ""
+        ux_section "사용법"
+        ux_info ""
         ux_bullet "올바른 사용법:"
-        echo "  llm-test <model> <prompt> [max-tokens]"
-        echo ""
+        ux_bullet_sub "llm-test <model> <prompt> [max-tokens]"
+        ux_info ""
         ux_bullet "예시:"
-        echo "  llm-test gpt-oss-20b \"What is 3+4?\""
-        echo "  llm-test gpt-oss-20b \"Your question\" 200"
-        echo ""
+        ux_bullet_sub "llm-test gpt-oss-20b \"What is 3+4?\""
+        ux_bullet_sub "llm-test gpt-oss-20b \"Your question\" 200"
+        ux_info ""
         ux_section "사용 가능한 모델:"
         litellm_models
         return 1
@@ -360,7 +360,7 @@ litellm_test() {
     ux_bullet "Model: ${UX_SUCCESS}$model_name${UX_RESET}"
     ux_bullet "Prompt: $prompt"
     ux_bullet "Max tokens: $max_tokens"
-    echo ""
+    ux_info ""
 
     # JSON 요청 생성 (proper escaping)
     local request_json
@@ -390,9 +390,9 @@ EOF
         local error_msg
         error_msg=$(echo "$response" | jq -r '.error.message // .error' 2>/dev/null)
         ux_error "요청 실패"
-        echo "  에러: $error_msg"
-        echo ""
-        echo "DEBUG: Full response:"
+        ux_bullet_sub "에러: $error_msg"
+        ux_info ""
+        ux_section "DEBUG: Full response"
         echo "$response" | jq . 2>/dev/null || echo "$response"
         return 1
     fi
@@ -403,14 +403,14 @@ EOF
 
     if [[ -z "$content" ]]; then
         ux_warning "응답을 수신했지만 내용이 비어있습니다"
-        echo ""
-        echo "원본 응답:"
+        ux_info ""
+        ux_section "원본 응답"
         echo "$response" | jq . 2>/dev/null || echo "$response"
         return 0
     fi
 
     ux_success "성공"
-    echo ""
+    ux_info ""
     ux_section "응답"
     echo "$content"
     return 0

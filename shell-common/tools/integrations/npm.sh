@@ -38,12 +38,11 @@ alias npm-ung='npm uninstall -g'
 npm_info() {
     case "${1:-}" in -h | --help) npm_help info; return 0 ;; esac
     if [ -z "$1" ]; then
-        echo "사용법: npm-info <package-name>"
-        echo ""
-        echo "예시:"
-        echo "  npm-info react"
-        echo "  npm-info lodash"
-        echo "  npm-info express"
+        ux_error "사용법: npm-info <package-name>"
+        ux_section "예시"
+        ux_bullet "npm-info react"
+        ux_bullet "npm-info lodash"
+        ux_bullet "npm-info express"
         return 1
     fi
     npm info "$@"
@@ -54,12 +53,11 @@ alias npm-info='npm_info'
 npm_search() {
     case "${1:-}" in -h | --help) npm_help info; return 0 ;; esac
     if [ -z "$1" ]; then
-        echo "사용법: npm-search <keyword>"
-        echo ""
-        echo "예시:"
-        echo "  npm-search react"
-        echo "  npm-search testing"
-        echo "  npm-search animation"
+        ux_error "사용법: npm-search <keyword>"
+        ux_section "예시"
+        ux_bullet "npm-search react"
+        ux_bullet "npm-search testing"
+        ux_bullet "npm-search animation"
         return 1
     fi
     npm search "$@"
@@ -72,7 +70,7 @@ npm_list() {
 
     ux_section "System Global NPM (/usr/lib)"
     npm list -g --depth=0 2>/dev/null | head -10 || ux_info "No global npm packages"
-    echo ""
+    ux_info ""
 
     ux_section "User Global (~/.npm-global/bin)"
     if [ -d "$HOME/.npm-global/bin" ]; then
@@ -85,7 +83,7 @@ npm_list() {
     else
         ux_warning "Directory not found: ~/.npm-global/bin"
     fi
-    echo ""
+    ux_info ""
 }
 alias npm-list='npm_list'
 

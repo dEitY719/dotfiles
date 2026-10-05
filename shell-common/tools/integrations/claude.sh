@@ -59,7 +59,7 @@ claude_init() {
     local skills_target_dir="$HOME/.claude/skills"
 
     ux_info "Initializing Claude Code configuration..."
-    echo ""
+    ux_info ""
 
     # Create ~/.claude directory if not exists
     if [ ! -d "$HOME/.claude" ]; then
@@ -87,7 +87,7 @@ claude_init() {
         ln -s "$settings_source" "$settings_target"
         ux_success "Created symbolic link for settings.json"
     fi
-    echo ""
+    ux_info ""
 
     # Handle statusline-command.sh
     ux_section "Statusline Configuration"
@@ -103,17 +103,17 @@ claude_init() {
         ln -s "$statusline_source" "$statusline_target"
         ux_success "Created symbolic link for statusline-command.sh"
     fi
-    echo ""
+    ux_info ""
 
     # Skills: Claude Code 는 워크스페이스 스킬을 플러그인으로만 로드한다
     # (claude/plugin/plugins.json). 예전 flat 합성(#1652 / #1680)이 남긴
     # 워크스페이스 링크만 정리하고 skills/ 는 실디렉토리로 유지한다.
     ux_section "Claude Code Skills"
     _claude_prune_workspace_skills "$skills_target_dir"
-    echo ""
+    ux_info ""
 
     ux_header "Claude Code Initialization Complete"
-    echo ""
+    ux_info ""
 
     ux_section "Configuration Files"
     for config_target in "$settings_target" "$statusline_target"; do
@@ -121,7 +121,7 @@ claude_init() {
             ls -la -- "$config_target"
         fi
     done
-    echo ""
+    ux_info ""
 
     # skills/ 는 실디렉토리 (#707 F-8) — 워크스페이스 스킬은 플러그인으로
     # 로드되므로 여기 남는 건 외부에서 추가된 entry 뿐이다.
@@ -155,11 +155,11 @@ claude_edit_settings() {
 
     ux_header "Claude Code Settings"
     ux_info "File: $settings_file"
-    echo ""
+    ux_info ""
 
     ${EDITOR:-vim} "$settings_file"
 
-    echo ""
+    ux_info ""
     ux_success "Settings file edited"
     ux_info "Changes will take effect immediately (settings.json is symlinked)"
 }
@@ -180,7 +180,7 @@ open_claude_plugins() {
 
     ux_header "Opening Claude Marketplace Plugins"
     ux_info "Location: $plugins_dir"
-    echo ""
+    ux_info ""
 
     # Open in VSCode
     code "$plugins_dir"
@@ -212,7 +212,7 @@ clskip() {
         ux_header "clskip"
         ux_usage "clskip" "\"request\"" "Run Claude skipping permission prompts (caution)"
         ux_bullet "Example: ${UX_INFO}clskip \"Refactor this module\"${UX_RESET}"
-        echo ""
+        ux_info ""
         ux_warning "This will skip all permission prompts"
         ux_bullet "Start with small scopes and use carefully"
         [ -n "${1:-}" ] # -h/--help -> 0, no argument -> 1
@@ -222,7 +222,7 @@ clskip() {
 
     ux_warning "Running in skip permissions mode"
     ux_info "Request: $1"
-    echo ""
+    ux_info ""
     claude --dangerously-skip-permissions -p "$1"
 }
 
@@ -1020,12 +1020,12 @@ EOF
         _csso_marker=" ⚠️  expected $_csso_expected"
     fi
 
-    echo "    └─ Email: $_csso_email$_csso_marker"
+    ux_bullet_sub "Email: $_csso_email$_csso_marker"
     if [ -n "$_csso_org" ]; then
         if [ -n "$_csso_type" ]; then
-            echo "    └─ Org:   $_csso_org ($_csso_type)"
+            ux_bullet_sub "Org:   $_csso_org ($_csso_type)"
         else
-            echo "    └─ Org:   $_csso_org"
+            ux_bullet_sub "Org:   $_csso_org"
         fi
     fi
 }
@@ -1040,7 +1040,7 @@ claude_accounts_status() {
     else
         ux_warning "Shared:  $HOME/.claude-shared/plugins ✗ missing"
     fi
-    echo ""
+    ux_info ""
 
     # zsh word-splitting parity
     if [ -n "${ZSH_VERSION:-}" ]; then
@@ -1051,17 +1051,17 @@ claude_accounts_status() {
         _cas_cdir=$(_claude_resolve_account "$_cas_acct")
         ux_section "Account: $_cas_acct"
         if [ -d "$_cas_cdir" ]; then
-            echo "  Path:        $_cas_cdir ✓ exists"
+            ux_bullet "Path:        $_cas_cdir ✓ exists"
         else
-            echo "  Path:        $_cas_cdir ✗ missing"
+            ux_bullet "Path:        $_cas_cdir ✗ missing"
         fi
 
         if [ -f "$_cas_cdir/.credentials.json" ]; then
-            echo "  Credentials: .credentials.json ✓ logged in"
+            ux_bullet "Credentials: .credentials.json ✓ logged in"
             _claude_status_show_oauth "$_cas_cdir" "$_cas_acct"
         else
-            echo "  Credentials: .credentials.json ✗ NOT logged in"
-            echo "                → Run: claude-yolo --user $_cas_acct"
+            ux_bullet "Credentials: .credentials.json ✗ NOT logged in"
+            ux_bullet_sub "Run: claude-yolo --user $_cas_acct"
         fi
 
         for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs workflows CLAUDE.md keybindings.json; do
@@ -1070,24 +1070,24 @@ claude_accounts_status() {
                 # symlink) — a symlink here is the legacy write-through
                 # layout that lets /model pollute the tracked SSOT (#924).
                 if [ -L "$_cas_cdir/$_cas_link" ]; then
-                    echo "  $_cas_link: symlink ✗ legacy layout (#940) — run: claude-accounts repair"
+                    ux_bullet "$_cas_link: symlink ✗ legacy layout (#940) — run: claude-accounts repair"
                 elif [ -f "$_cas_cdir/$_cas_link" ]; then
-                    echo "  $_cas_link: regular file ✓"
+                    ux_bullet "$_cas_link: regular file ✓"
                 else
-                    echo "  $_cas_link: ✗ missing"
+                    ux_bullet "$_cas_link: ✗ missing"
                 fi
             elif [ -L "$_cas_cdir/$_cas_link" ] && [ ! -e "$_cas_cdir/$_cas_link" ]; then
                 # Dangling symlink — e.g. settings.local.json left pointing
                 # into a torn-down worktree (#940). Reporting it as
                 # "symlink ✓" hid the breakage at diagnosis time.
-                echo "  $_cas_link: broken symlink ✗ — target missing"
+                ux_bullet "$_cas_link: broken symlink ✗ — target missing"
             elif [ -L "$_cas_cdir/$_cas_link" ]; then
-                echo "  $_cas_link: symlink ✓"
+                ux_bullet "$_cas_link: symlink ✓"
             elif [ "$_cas_link" = "settings.local.json" ] && [ -f "$_cas_cdir/$_cas_link" ]; then
                 # settings.local.json is a per-PC hand-created regular
                 # file (#584), never a symlink — report it as present
                 # rather than missing (gemini review on PR #590).
-                echo "  $_cas_link: regular file ✓"
+                ux_bullet "$_cas_link: regular file ✓"
             elif [ "$_cas_link" = "skills" ] && [ -d "$_cas_cdir/$_cas_link" ]; then
                 # skills/ is a real *directory* since #707 (F-8), not a
                 # symlink — externally added per-skill links layer into it
@@ -1095,12 +1095,12 @@ claude_accounts_status() {
                 # the else arm and wrongly reported "✗ missing" even though
                 # setup.sh's own verify confirmed the dir (this loop never
                 # learned the #707 layout change).
-                echo "  $_cas_link: composed dir ✓"
+                ux_bullet "$_cas_link: composed dir ✓"
             else
-                echo "  $_cas_link: ✗ missing"
+                ux_bullet "$_cas_link: ✗ missing"
             fi
         done
-        echo ""
+        ux_info ""
     done
 }
 
