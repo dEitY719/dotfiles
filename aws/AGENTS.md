@@ -11,7 +11,7 @@
 | 파일 | 책임 |
 |---|---|
 | `aws.local.example` | 쉘 env 템플릿 (`AWS_CA_BUNDLE`, `AWS_REGION`, `CLAUDE_CODE_USE_BEDROCK`, `ANTHROPIC_BEDROCK_BASE_URL`) |
-| `aws-config.example` | `~/.aws/config` 템플릿 (dspublic SSO + role + region) |
+| `aws-config.example` | `~/.aws/config` 템플릿 (SSO + role + region, placeholder 만 — 실제 값은 gitignored `aws-config.local`, #1966) |
 | `setup.sh` | internal 모드일 때만: `aws.local.sh` / `~/.aws/config` 시드 + live `.hooks.SessionStart` 의 drift-heal 훅 등록 1건 복구 (F-7b, #1364). settings.json **머지**는 deprecated (2026-08-18) — 실행 시 deprecation notice 출력 후 그 부분 skip |
 | `install-otel-managed-settings.sh` | `aws sso login` 선행 후 사용자가 명시 실행. `/etc/claude-code/managed-settings.json` 생성 (sudo) |
 | `diagnose.sh` | Read-only 진단. 5 단계 부트스트랩이 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 보고. 파일 수정 없음 |

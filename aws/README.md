@@ -18,14 +18,15 @@ claude                                     # Step 5
 ./aws/diagnose.sh                          # (선택) read-only 점검
 ```
 
-Step 2 (`aws/aws.local.sh` 편집) 는 보통 건너뜁니다.
+Step 2 (`aws/aws.local.sh` 편집) 는 PC 당 1회 — 공개 repo 템플릿은 placeholder 만 담습니다 (#1966).
 
 ## 사전 준비 체크리스트
 
 - [ ] `cat ~/.dotfiles-setup-mode` 결과가 `internal`
 - [ ] `aws --version` 이 AWS CLI v2 를 반환 (v1 은 SSO 미지원)
 - [ ] 현재 사용자에게 `sudo` 권한 있음
-- [ ] `/usr/local/share/ca-certificates/samsungsemi-prx.com.crt` 존재
+- [ ] `/usr/local/share/ca-certificates/` 에 사내 프록시 CA 인증서 존재
+- [ ] `shell-common/env/internal.local.sh` 에 사내 기대값(`DOTFILES_AWS_*`, `DOTFILES_OTEL_*` 등, 템플릿 `internal.local.example`) 채움
 
 미충족 항목이 있으면 사내 위키로 가서 채운 다음 돌아오세요.
 
@@ -40,16 +41,17 @@ Step 2 (`aws/aws.local.sh` 편집) 는 보통 건너뜁니다.
 | 생성 파일 | 역할 |
 |---|---|
 | `aws/aws.local.sh` | 쉘 env (`AWS_CA_BUNDLE`, `AWS_REGION`, `CLAUDE_CODE_USE_BEDROCK`, `ANTHROPIC_BEDROCK_BASE_URL`) |
-| `~/.aws/config` | AWS SSO 진입점 (account 518692946118, role AWSPS-AICoding-SLSI) |
+| `~/.aws/config` | AWS SSO 진입점 (account, role). `aws/aws-config.local` (gitignored, 실제 값) 이 있으면 그것을, 없으면 placeholder 템플릿을 시드 |
 
 `~/.claude/settings.json` 은 **여기서 만들어지지 않습니다** (2026-08-18~) — Step 3.5 의 `gateway-cli` 몫이고, `./aws/setup.sh` 가 실행 시 deprecation notice 로 알립니다. (파일이 **이미 있을 때** 그 안의 SessionStart 훅 등록 1건만 점검/복구합니다 — #1364. 파일을 새로 만들지는 않습니다.) 이 단계에서 사용자가 직접 copy-paste 할 내용은 **없습니다**.
 
-## Step 2 — `aws/aws.local.sh` 편집 (보통 불필요)
+## Step 2 — `aws/aws.local.sh` 편집 (PC 당 1회)
 
-기본값으로 모든 사내 PC 에서 동작합니다. 다음 경우에만 편집:
+템플릿은 `*.example.invalid` placeholder 만 담습니다 — 남아 있으면 `./aws/setup.sh` 가 경고합니다:
 
-- 다른 VPC endpoint 를 쓰는 호스트 → `ANTHROPIC_BEDROCK_BASE_URL` 한 줄만 교체
+- `ANTHROPIC_BEDROCK_BASE_URL` → 사내 Bedrock VPC endpoint
 - 사내 CA bundle 경로가 다른 배포 → `AWS_CA_BUNDLE` 한 줄만 교체
+- `~/.aws/config` 의 SSO 값은 `aws/aws-config.local` 에 두면 시드 시 그쪽이 쓰입니다
 
 ```sh
 vi aws/aws.local.sh
@@ -61,7 +63,7 @@ vi aws/aws.local.sh
 aws sso login
 ```
 
-브라우저가 열려 dspublic AWS SSO 화면이 뜹니다. 사번 로그인 1회 → 토큰 발급. 이후 일정 시간 (보통 8시간) 동안 재로그인 불필요.
+브라우저가 열려 사내 AWS SSO 화면이 뜹니다. 사번 로그인 1회 → 토큰 발급. 이후 일정 시간 (보통 8시간) 동안 재로그인 불필요.
 
 ## Step 3.5 — `gateway-cli setup` (2026-08-18~)
 
@@ -141,13 +143,13 @@ Read-only. 위 단계가 빠짐없이 적용됐는지 PASS/FAIL/WARN 으로 보�
 | `cat ~/.dotfiles-setup-mode` 가 `internal` 인데도 skip | 파일에 공백/개행 섞임 | `echo internal > ~/.dotfiles-setup-mode` |
 | `availableModels` 에 opus 가 안 보임 | `gateway-cli` 가 쓴 모델 목록 문제 (2026-08-18~). ~~settings.json 머지 실패 (#687)~~ 는 더 이상 원인이 아님 | `gateway-cli setup` → `gateway-cli verify`. 개인적으로만 추가하려면 `~/.claude/settings.local.json` |
 | `400 The provided model identifier is invalid` | live settings.json 의 `env.ANTHROPIC_DEFAULT_*_MODEL` 이 잘못됐거나 비어 있음 | `gateway-cli setup` → `gateway-cli verify`. (~~`./aws/setup.sh` 재실행~~ 은 2026-08-18 부터 이 증상엔 무효 — 그 스크립트는 모델/env 키를 쓰지 않는다. #1364 의 훅 등록 복구는 별개 증상) |
-| OTel collector 도달 실패 | `10.172.25.203:80` 비도달 (VPN/방화벽) | 사내망 연결 확인. installer 자체는 성공 — 런타임 별 문제. |
+| OTel collector 도달 실패 | `$DOTFILES_OTEL_ENDPOINT_HOST:80` 비도달 (VPN/방화벽) | 사내망 연결 확인. installer 자체는 성공 — 런타임 별 문제. |
 | Claude Code 가 "not login" 으로 떨어짐 | live settings.json 의 auth 키(`apiKeyHelper` / `awsCredentialExport` / `env.ANTHROPIC_*`) 가 깨졌거나 SSO 토큰 만료. **주의**: 2026-08-18 부터 `env.ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN` 은 gateway 정상 구성의 일부이므로 더 이상 "제거 대상 레거시 키"가 아니다 (~~#677 O-1 의 strip 정책 폐기~~) | `aws sso login` → `gateway-cli setup` → `gateway-cli verify` |
-| `[FAIL] AWS_CA_BUNDLE 파일 없음: /usr/local/share/ca-certificates/samsungsemi-prx.com.crt` | 옛 템플릿이 가리키던 경로에 cert 가 없음 (Ubuntu 가 `update-ca-certificates` 로 `/etc/ssl/certs/ca-certificates.crt` 에만 머지한 경우) | 한 줄로 교체: `sed -i 's\|^export AWS_CA_BUNDLE=.*\|export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\|' aws/aws.local.sh` 후 새 쉘. `./aws/setup.sh` 가 재실행 시 동일 경고를 띄운다 (이 경고는 계속 유효 — CA bundle 은 여전히 dotfiles 소유). |
+| `[FAIL] AWS_CA_BUNDLE 파일 없음: /usr/local/share/ca-certificates/<사내 프록시 인증서>.crt` | 옛 템플릿이 가리키던 경로에 cert 가 없음 (Ubuntu 가 `update-ca-certificates` 로 `/etc/ssl/certs/ca-certificates.crt` 에만 머지한 경우) | 한 줄로 교체: `sed -i 's\|^export AWS_CA_BUNDLE=.*\|export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\|' aws/aws.local.sh` 후 새 쉘. `./aws/setup.sh` 가 재실행 시 동일 경고를 띄운다 (이 경고는 계속 유효 — CA bundle 은 여전히 dotfiles 소유). |
 
 ## 참고
 
 - 설계 이슈: [#677](https://github.com/dEitY719/dotfiles/issues/677) (settings.json 머지 부분은 2026-08-18 종료)
 - settings.json 소유권 이관 (2026-08-18): `claude/AGENTS.md` → Configuration Files, `docs/public/changelog.d/2026-08-18-806.md`
 - AGENTS.md (자동화·리뷰어용 SSOT): `aws/AGENTS.md`
-- 메모리: `samsung-internal-llm-gateway`, `user-dual-pc-workflow`
+- 메모리: `internal-llm-gateway`, `user-dual-pc-workflow`
