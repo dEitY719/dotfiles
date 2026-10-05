@@ -130,9 +130,9 @@ _run_closing_issues_bash() {
 
 @test "host: GH_HOST unset + internal mode -> resolves to GHE host" {
     echo "internal" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash 'unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
+    run_in_bash 'export DOTFILES_GHES_HOST=ghes.example.invalid; unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
     assert_success
-    assert_output --partial "GH_HOST=github.samsungds.net"
+    assert_output --partial "GH_HOST=ghes.example.invalid"
 }
 
 @test "host: GH_HOST unset + external mode -> resolves to github.com" {

@@ -108,7 +108,7 @@ fi
 unset _drg_self _drg_helper
 
 # Ensure GH_HOST is set before any `gh` call so requests route to the
-# correct host. On the internal PC (GHE = github.samsungds.net) a caller
+# correct host. On the internal PC (GHE = $DOTFILES_GHES_HOST) a caller
 # that does not export GH_HOST would otherwise let `gh` default to
 # github.com, silently failing every ProjectV2 lookup and skipping the
 # board sync (issue #804). We source the gh_host.sh SSOT and resolve the

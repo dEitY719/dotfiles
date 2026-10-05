@@ -60,7 +60,7 @@ output=$(printf '%s' "$input" |
 # number out of the first such URL we see.
 #
 # Issue #703 — host must be derived from `_dotfiles_setup_mode` so the
-# `internal` PC (where the real target is `github.samsungds.net`) is
+# `internal` PC (where the real target is the GHES host) is
 # matched correctly. Source the SSOT helper; on failure fall back to
 # matching either host so a stale install can still extract the PR
 # number for the common `github.com` case.
@@ -83,7 +83,10 @@ if command -v _gh_resolve_host >/dev/null 2>&1; then
     export GH_HOST
     unset _gh_resolved _gh_host
 else
-    _gh_host_regex='(github\.com|github\.samsungds\.net)'
+    _gh_host_regex='github\.com'
+    if [ -n "${DOTFILES_GHES_HOST-}" ]; then
+        _gh_host_regex="(github\\.com|${DOTFILES_GHES_HOST//./\\.})"
+    fi
 fi
 pr_num=$(printf '%s' "$output" |
     grep -oE "https://${_gh_host_regex}/[^/]+/[^/]+/pull/[0-9]+" |

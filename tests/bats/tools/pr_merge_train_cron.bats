@@ -1510,17 +1510,18 @@ $(_pr_json 12 30)]"
     # review, agy).
     assert_equal "$(_pmt_logged_label)" "mt-dotfiles"
 
+    export DOTFILES_GHES_HOST="ghes.example.invalid"
     local _ghe="${_WORK_DIR}/ghe-dotfiles"
     mkdir -p "${_ghe}"
     git -C "${_ghe}" init -q
-    git -C "${_ghe}" remote add origin "https://github.samsungds.net/acme/dotfiles.git"
+    git -C "${_ghe}" remote add origin "https://ghes.example.invalid/acme/dotfiles.git"
     _REPO_DIR="${_ghe}"
     : >"${_LOG}"
 
     _run_tick
     assert_success
     _assert_logged "--label mt-dotfiles"
-    _refute_logged "--label mt-github.samsungds.net-acme-dotfiles"
+    _refute_logged "--label mt-ghes.example.invalid-acme-dotfiles"
     assert_equal "$(_pmt_logged_label)" "mt-dotfiles"
 }
 

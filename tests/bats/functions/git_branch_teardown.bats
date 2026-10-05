@@ -285,7 +285,7 @@ _setup_dual_remote_merged_pr() {
         git checkout -q -b feat/pr
         echo pr > pr.txt && git add pr.txt && git commit -q -m "feat: pr"
         git push -q -u origin feat/pr
-        git remote set-url origin https://github.samsungds.net/aiagent/app.git
+        git remote set-url origin https://ghes.example.invalid/aiagent/app.git
         git remote add upstream https://github.com/dev-team/app.git
     )
 
@@ -293,7 +293,7 @@ _setup_dual_remote_merged_pr() {
     cat > "$FAKE_BIN/gh" <<'GH'
 #!/bin/sh
 case " $* " in
-    *" --repo github.samsungds.net/aiagent/app "*) echo "#7 MERGED  https://github.samsungds.net/aiagent/app/pull/7" ;;
+    *" --repo ghes.example.invalid/aiagent/app "*) echo "#7 MERGED  https://ghes.example.invalid/aiagent/app/pull/7" ;;
 esac
 GH
     chmod +x "$FAKE_BIN/gh"
@@ -301,7 +301,7 @@ GH
 
 @test "teardown: dual-remote repo queries the branch's own remote for the PR (#1842)" {
     _setup_dual_remote_merged_pr
-    run_in_bash "export PATH='$FAKE_BIN':\$PATH GIT_ALLOW_PROTOCOL=file; cd '$CLONE5' && gbr teardown 2>&1"
+    run_in_bash "export PATH='$FAKE_BIN':\$PATH GIT_ALLOW_PROTOCOL=file DOTFILES_GHES_HOST=ghes.example.invalid; cd '$CLONE5' && gbr teardown 2>&1"
     refute_output --partial "not merged yet"
     run git -C "$CLONE5" rev-parse --verify --quiet feat/pr
     assert_failure
@@ -319,7 +319,7 @@ case " $* " in
     *) echo "#9 MERGED  https://github.com/dev-team/app/pull/9" ;;
 esac
 GH
-    run_in_bash "export PATH='$FAKE_BIN':\$PATH GIT_ALLOW_PROTOCOL=file; cd '$CLONE5' && gbr teardown 2>&1"
+    run_in_bash "export PATH='$FAKE_BIN':\$PATH GIT_ALLOW_PROTOCOL=file DOTFILES_GHES_HOST=ghes.example.invalid; cd '$CLONE5' && gbr teardown 2>&1"
     refute_output --partial "not merged yet"
     run git -C "$CLONE5" rev-parse --verify --quiet feat/pr
     assert_failure
