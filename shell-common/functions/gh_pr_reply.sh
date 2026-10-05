@@ -464,10 +464,7 @@ _gh_pr_reply_worker() {
     fi
 
     _wt_after=$(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
-    _worktree=$(comm -13 \
-        <(printf '%s\n' "$_wt_before" | sort) \
-        <(printf '%s\n' "$_wt_after" | sort) \
-        | head -n 1)
+    _worktree=$(printf '%s\n' "$_wt_after" | grep -vxF -- "$_wt_before" | head -n 1)
 
     if [ -z "$_worktree" ] || [ ! -d "$_worktree" ]; then
         _gh_pr_reply_set_state "$_dir" "failed:spawning"
