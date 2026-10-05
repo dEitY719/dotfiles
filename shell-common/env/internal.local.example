@@ -35,3 +35,7 @@ export DOTFILES_OTEL_NO_PROXY_DOMAINS=".corp.example.invalid"
 
 # 사내 LLM gateway URL (setup.sh 가 opencode/opencode.json.internal 렌더링에 사용, #1967)
 export DOTFILES_OPENCODE_BASE_URL="http://llm-gateway.example.invalid/v1"
+
+# opencode 리뷰 모델 id (gh_pr_review.sh 의 --ai opencode lane, #2007).
+# 미설정이면 opencode lane 은 경고 후 건너뛴다.
+export DOTFILES_OPENCODE_REVIEW_MODEL="example-corp/example-model"
