@@ -8,10 +8,12 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ghes_mirror() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    case "${1-}" in
+    -h | --help)
         ghes_mirror_help
         return 0
-    fi
+        ;;
+    esac
 
     ux_header "GHES Mirror Wizard"
     ux_info "Mirrors a public GitHub repo into your internal GHES instance."
