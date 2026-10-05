@@ -165,7 +165,7 @@ gupdel() {
     if [ $# -eq 0 ]; then
         ux_usage "gupdel" "<remote-name>" "Delete a git remote"
         ux_bullet "gupdel upstream"
-        echo ""
+        ux_info ""
         ux_section "Registered remotes"
         git remote -v
         return 1

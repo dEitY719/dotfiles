@@ -99,13 +99,13 @@ aclean_kernel() {
     ux_header "Cleaning Old Kernels"
 
     current_kernel=$(uname -r)
-    echo "Current kernel: ${UX_SUCCESS}$current_kernel${UX_RESET}"
+    ux_table_row "Current kernel" "$current_kernel"
 
-    echo ""
+    ux_info ""
     ux_section "Installed kernels"
     dpkg -l | grep linux-image
 
-    echo ""
+    ux_info ""
     if ux_confirm "WARNING: This will remove all kernels except the current one. Continue?" "n"; then
         _tmp_kernels=$(mktemp)
         dpkg -l | grep linux-image | grep -v "$current_kernel" | awk '{print $2}' > "$_tmp_kernels"
@@ -127,23 +127,23 @@ aclean_kernel() {
 appa_add() {
     case "${1:-}" in -h | --help) apt_help ppa; return 0 ;; esac
     if [ $# -eq 0 ]; then
-        echo "Usage: appa_add ppa:username/ppa-name"
-        echo "Example: appa_add ppa:obsproject/obs-studio"
+        ux_usage "appa_add" "ppa:username/ppa-name" "Add a PPA and update package lists"
+        ux_bullet "appa_add ppa:obsproject/obs-studio"
         return 1
     fi
     sudo add-apt-repository "$1" && sudo apt-get update
 }
 
 appa_list() {
-    echo "Installed PPAs:"
+    ux_section "Installed PPAs"
     grep -h '^deb-src' /etc/apt/sources.list.d/*.list 2>/dev/null || grep -h '^deb ' /etc/apt/sources.list.d/*.list 2>/dev/null | sort -u
 }
 
 appa_remove() {
     case "${1:-}" in -h | --help) apt_help ppa; return 0 ;; esac
     if [ $# -eq 0 ]; then
-        echo "Usage: appa_remove ppa:username/ppa-name"
-        echo "Example: appa_remove ppa:obsproject/obs-studio"
+        ux_usage "appa_remove" "ppa:username/ppa-name" "Remove a PPA and update package lists"
+        ux_bullet "appa_remove ppa:obsproject/obs-studio"
         return 1
     fi
     sudo add-apt-repository --remove "$1" && sudo apt-get update
@@ -156,23 +156,23 @@ astat() {
     ux_table_row "Upgradable" "$(apt list --upgradable 2>/dev/null | grep -v -c 'WARNING\|Listing')" ""
     ux_table_row "Cache Size" "$(du -sh /var/cache/apt/archives/ 2>/dev/null | cut -f1)" ""
     ux_table_row "Held Packages" "$(apt-mark showhold | wc -l)" ""
-    echo ""
+    ux_info ""
 }
 
 # Show package info with dependencies
 ainfo() {
     case "${1:-}" in -h | --help) apt_help search; return 0 ;; esac
     if [ $# -eq 0 ]; then
-        echo "Usage: ainfo <package-name>"
+        ux_usage "ainfo" "<package-name>" "Show package info with dependencies"
         return 1
     fi
 
     ux_header "Package Info: $1"
     apt-cache show "$1" | head -20
-    echo ""
+    ux_info ""
     ux_section "Dependencies"
     apt-cache depends "$1" | head -10
-    echo ""
+    ux_info ""
 }
 
 # ═══════════════════════════════════════════════════════════════

@@ -175,9 +175,9 @@ psql_add() {
     ux_header "Add PostgreSQL Service (Link Existing)"
     ux_info "This command creates a shortcut (alias) for an EXISTING database."
     ux_info "To create a NEW database and user from scratch, use 'psql_bootstrap'."
-    echo ""
+    ux_info ""
     ux_divider
-    echo ""
+    ux_info ""
 
     # 1. Get Service Name
     ux_section "Step 1: Service Alias"
@@ -198,7 +198,7 @@ psql_add() {
         fi
         break
     done
-    echo ""
+    ux_info ""
 
     # 2. Get Database Name
     ux_section "Step 2: Database Name"
@@ -206,7 +206,7 @@ psql_add() {
     read -r db_name
     db_name=${db_name:-$svc_name}
     _validate_identifier "$db_name" "Database Name" || return 1
-    echo ""
+    ux_info ""
 
     # 3. Get User Name
     ux_section "Step 3: Database User"
@@ -214,21 +214,21 @@ psql_add() {
     read -r db_user
     db_user=${db_user:-$USER}
     _validate_identifier "$db_user" "User Name" || return 1
-    echo ""
+    ux_info ""
 
     # 4. Get Password
     ux_section "Step 4: Password"
     while true; do
         printf "%s❯%s Enter Password: " "${UX_PRIMARY}" "${UX_RESET}"
         read -r -s db_pass
-        echo ""
+        ux_info ""
         if [[ -z "$db_pass" ]]; then
             ux_error "Password is required."
             continue
         fi
         break
     done
-    echo ""
+    ux_info ""
 
     # 6. Save
     printf "%s  %s  %s  %s\n" "$svc_name" "$db_name" "$db_user" "$db_pass" >>"$PG_SERVICES_FILE"
@@ -240,7 +240,8 @@ psql_add() {
     _register_aliases
 
     ux_success "Service '$svc_name' added!"
-    printf "  %s💡 psql_%s%s\n\n" "${UX_SUCCESS}" "$svc_name" "${UX_RESET}"
+    ux_bullet "Connect using: psql_$svc_name"
+    ux_info ""
 }
 
 # List all configured services
@@ -251,14 +252,13 @@ psql_list() {
         return 0
     fi
 
-    printf "${UX_BOLD}%-25s %-25s %-20s${UX_RESET}\n" "ALIAS" "DATABASE" "USER"
-    printf "${UX_BOLD}%-25s %-25s %-20s${UX_RESET}\n" "─────" "────────" "────"
+    ux_table_header "ALIAS" "DATABASE" "USER"
 
     for entry in "${services[@]}"; do
         read -r svc db user _ <<<"$entry"
-        printf "%-25s %-25s %-20s\n" "psql_$svc" "$db" "$user"
+        ux_table_row "psql_$svc" "$db" "$user"
     done
-    echo ""
+    ux_info ""
     ux_info "Config File: $PG_SERVICES_FILE"
 }
 
@@ -289,10 +289,10 @@ psql_del() {
     local i=0
     for entry in "${services[@]}"; do
         read -r svc db user _ <<<"$entry"
-        echo "  ${UX_PRIMARY}[$i]${UX_RESET} $svc (DB: $db, User: $user)"
+        ux_numbered "$i" "$svc (DB: $db, User: $user)"
         ((i++))
     done
-    echo ""
+    ux_info ""
 
     printf "%s❯%s Select number to delete (or 'q' to quit): " "${UX_WARNING}" "${UX_RESET}"
     read -r selection
@@ -306,7 +306,7 @@ psql_del() {
     # Get details
     read -r svc_name db_name db_user _ <<<"${services[$selection]}"
 
-    echo ""
+    ux_info ""
     ux_info "Selected: ${UX_BOLD}$svc_name${UX_RESET}"
 
     if ux_confirm "Also DROP DATABASE '$db_name' and USER '$db_user' from PostgreSQL?" "n"; then
@@ -316,18 +316,18 @@ psql_del() {
             ux_info "[DRY RUN] Would DROP ROLE '$db_user'"
         else
             # Drop DB
-            echo " -> Terminating connections..."
+            ux_bullet_sub "Terminating connections..."
             # Use safe parameter passing for query
             _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$db_name' AND pid <> pg_backend_pid();"
-            echo " -> Dropping Database '$db_name'..."
+            ux_bullet_sub "Dropping Database '$db_name'..."
             _admin_sql "postgres" "DROP DATABASE IF EXISTS \"$db_name\";"
 
             # Drop User (Optional check)
-            echo " -> Attempting to drop User '$db_user'..."
+            ux_bullet_sub "Attempting to drop User '$db_user'..."
             if ! _admin_sql "postgres" "DROP ROLE \"$db_user\";" 2>/dev/null; then
                 ux_warning "User not deleted. Likely used by other DBs or dependent objects"
             else
-                echo "    User deleted."
+                ux_success "User deleted."
             fi
         fi
     fi
@@ -394,7 +394,7 @@ psql_user() {
 
         printf "%s❯%s Enter password for '%s': " "${UX_INFO}" "${UX_RESET}" "$arg1"
         read -r -s arg2
-        echo ""
+        ux_info ""
         _check_password_strength "$arg2"
         # Secure password passing
         _admin_sql "postgres" "CREATE USER \"$arg1\" WITH PASSWORD '$arg2';" && ux_success "Success."
@@ -432,7 +432,7 @@ psql_user() {
 
         printf "%s❯%s Enter NEW password: " "${UX_INFO}" "${UX_RESET}"
         read -r -s arg2
-        echo ""
+        ux_info ""
         _check_password_strength "$arg2"
         _admin_sql "postgres" "ALTER USER \"$arg1\" WITH PASSWORD '$arg2';" && ux_success "Password updated."
         ;;
@@ -509,7 +509,7 @@ psql_db() {
         if [[ -z "$db_name" ]]; then return 1; fi
         _validate_identifier "$db_name" "Database Name" || return 1
 
-        echo "Creating database '$db_name'..."
+        ux_info "Creating database '$db_name'..."
         if [[ -n "$owner_name" ]]; then
             _admin_sql "postgres" "CREATE DATABASE \"$db_name\" OWNER \"$owner_name\";" && ux_success "Success."
         else
@@ -526,7 +526,7 @@ psql_db() {
         _validate_identifier "$db_name" "Database Name" || return 1
 
         if ux_confirm "Drop database '$db_name'?" "n"; then
-            echo " -> Terminating connections..."
+            ux_bullet_sub "Terminating connections..."
             _admin_sql "postgres" "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = \ AND pid <> pg_backend_pid();" -v 1="$db_name"
             _admin_sql "postgres" "DROP DATABASE \"$db_name\";" && ux_success "Deleted."
         fi
@@ -652,10 +652,10 @@ psql_bootstrap() {
         _register_aliases
     fi
 
-    echo ""
+    ux_info ""
     ux_success "Bootstrap Complete!"
-    echo "  → Connect using: psql_$alias_name"
-    echo ""
+    ux_bullet "Connect using: psql_$alias_name"
+    ux_info ""
 }
 
 # [Action] Scan for DBs not in config and add them
@@ -663,7 +663,7 @@ psql_sync() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "Sync PostgreSQL Databases"
     ux_info "Scanning for databases not listed in $PG_SERVICES_FILE..."
-    echo ""
+    ux_info ""
 
     # Get list of all DBs (excluding templates and postgres core)
     local all_dbs=()
@@ -702,7 +702,7 @@ psql_sync() {
             ux_info "Owner: $owner"
             printf "%s❯%s Enter Password for user '%s': " "${UX_PRIMARY}" "${UX_RESET}" "$owner"
             read -r -s db_pass
-            echo ""
+            ux_info ""
 
             if [[ -n "$db_pass" ]]; then
                 printf "%s  %s  %s  %s\n" "$db" "$db" "$owner" "$db_pass" >>"$PG_SERVICES_FILE"
@@ -716,7 +716,7 @@ psql_sync() {
         else
             ux_info "Skipped."
         fi
-        echo ""
+        ux_info ""
     done
 
     if [[ "$found_new" == "false" ]]; then

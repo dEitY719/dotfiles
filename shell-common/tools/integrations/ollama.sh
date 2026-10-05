@@ -181,25 +181,25 @@ ollama_version() {
 # Check environment variables configuration
 ollama_status_env() {
     ux_header "Ollama Environment Configuration"
-    echo ""
+    ux_info ""
 
     ux_section "Environment Variables"
     ux_bullet "OLLAMA_NUM_CTX=$OLLAMA_NUM_CTX (context length)"
     ux_bullet "OLLAMA_NUM_GPU=$OLLAMA_NUM_GPU (GPU selection)"
     ux_bullet "OLLAMA_KEEP_ALIVE=$OLLAMA_KEEP_ALIVE (cache timeout)"
     ux_bullet "DOTFILES_OLLAMA_BACKEND=$DOTFILES_OLLAMA_BACKEND (backend mode)"
-    echo ""
+    ux_info ""
 
     ux_section "Configuration Source"
     ux_info "File: ~/dotfiles/shell-common/env/ollama.sh"
     ux_info "Auto-loaded: Yes (via shell initialization)"
-    echo ""
+    ux_info ""
 
     ux_section "Customization"
     ux_info "To change settings:"
     ux_info "  1. Edit: ~/dotfiles/shell-common/env/ollama.sh"
     ux_info "  2. Reload shell: exec \$SHELL"
-    echo ""
+    ux_info ""
 }
 
 # Get Ollama status
@@ -211,15 +211,14 @@ ollama_status() {
     backend=$(ollama_backend_detect)
     if [ "$backend" = "unavailable" ]; then
         ux_error "Ollama is not available"
-        echo ""
-        echo "Install options:"
-        echo "  1. WSL: bash shell-common/tools/custom/install_ollama.sh"
-        echo "  2. Docker: docker start ollama"
+        ux_section "Install options"
+        ux_numbered 1 "WSL: bash shell-common/tools/custom/install_ollama.sh"
+        ux_numbered 2 "Docker: docker start ollama"
         return 1
     fi
 
     ollama_backend_status
-    echo ""
+    ux_info ""
 
     # Check if service is responding
     local api_url
@@ -293,29 +292,29 @@ ollama_run() {
 # Restart Ollama systemd service and verify
 ollama_systemd_restart() {
     ux_header "Ollama Systemd Service Management"
-    echo ""
+    ux_info ""
 
     ux_section "1. Reloading systemd configuration"
     sudo systemctl daemon-reload
     ux_success "Configuration reloaded"
-    echo ""
+    ux_info ""
 
     ux_section "2. Restarting Ollama service"
     sudo systemctl restart ollama
     ux_success "Service restarted"
-    echo ""
+    ux_info ""
 
     ux_section "3. Checking service status"
     sudo systemctl status ollama --no-pager | grep -E "Active|Main PID"
-    echo ""
+    ux_info ""
 
     ux_section "4. Verifying port binding"
     sudo ss -lntp | grep ollama || ux_error "Ollama not listening"
-    echo ""
+    ux_info ""
 
     ux_section "5. Testing version"
     ollama --version
-    echo ""
+    ux_info ""
 
     ux_success "All checks complete!"
 }
