@@ -170,15 +170,8 @@ ux_section() {
     echo ""
     printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$title" "${UX_RESET}"
 
-    if $_UX_IS_BASH; then
-        printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$(printf '─%.0s' $(seq 1 ${#title}))" "${UX_RESET}"
-    elif $_UX_IS_ZSH; then
-        # shellcheck disable=SC2051  # zsh expands variables in brace ranges; branch is zsh-only
-        printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$(printf '─%.0s' {1..${#title}})" "${UX_RESET}"
-    else
-        # POSIX fallback using awk
-        printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$(printf '─%.0s' $(seq 1 ${#title}))" "${UX_RESET}"
-    fi
+    # seq, not zsh `{1..N}`: see ux_header (brace ranges die under emulate -L sh).
+    printf "%s%s%s%s\n" "${UX_BOLD}" "${UX_PRIMARY}" "$(printf '─%.0s' $(seq 1 ${#title}))" "${UX_RESET}"
 }
 
 # Display a success message with checkmark
@@ -491,23 +484,11 @@ ux_table_header() {
     if [ -n "$col3" ]; then
         printf "  ${UX_BOLD}%-20s${UX_RESET} ${UX_MUTED}│${UX_RESET} ${UX_BOLD}%-30s${UX_RESET} ${UX_MUTED}│${UX_RESET} ${UX_BOLD}%s${UX_RESET}\n" "$col1" "$col2" "$col3"
 
-        if $_UX_IS_BASH; then
-            printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' {1..80})"
-        elif $_UX_IS_ZSH; then
-            printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' {1..80})"
-        else
-            printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 80))"
-        fi
+        printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 80))"
     else
         printf "  ${UX_BOLD}%-20s${UX_RESET}   ${UX_BOLD}%s${UX_RESET}\n" "$col1" "$col2"
 
-        if $_UX_IS_BASH; then
-            printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' {1..60})"
-        elif $_UX_IS_ZSH; then
-            printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' {1..60})"
-        else
-            printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 60))"
-        fi
+        printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 60))"
     fi
 }
 
@@ -545,12 +526,7 @@ ux_numbered() {
 ux_divider() {
     local width="${1:-60}"
 
-    if $_UX_IS_ZSH; then
-        # shellcheck disable=SC2051,SC2086  # zsh expands variables in brace ranges; branch is zsh-only
-        printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' {1..$width})"
-    else
-        printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 "$width"))"
-    fi
+    printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 "$width"))"
 }
 
 # Print a thick divider
@@ -558,12 +534,7 @@ ux_divider() {
 ux_divider_thick() {
     local width="${1:-60}"
 
-    if $_UX_IS_ZSH; then
-        # shellcheck disable=SC2051,SC2086  # zsh expands variables in brace ranges; branch is zsh-only
-        printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' {1..$width})"
-    else
-        printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' $(seq 1 "$width"))"
-    fi
+    printf "${UX_MUTED}%s${UX_RESET}\n" "$(printf '═%.0s' $(seq 1 "$width"))"
 }
 
 # =============================================================================
