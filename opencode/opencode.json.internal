@@ -8,7 +8,7 @@
                 "baseURL": "http://llm-gateway.example.invalid/v1",
                 "headers": {
                     "x-service-id": "coding-agent-model-service",
-                    "x-user-id": "your-knox-id"
+                    "x-user-id": "your-account-id"
                 }
             },
             "models": {
