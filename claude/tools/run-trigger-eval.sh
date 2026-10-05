@@ -142,6 +142,19 @@
 
 set -u
 
+# Decorative banners/notes only (#1945): ux_lib styles them on an interactive
+# TTY; piped/redirected/sourced-by-bats runs get plain fallbacks that are
+# byte-identical to the previous printf output. Report tables, verdict lines
+# and stderr contracts stay raw printf on purpose.
+UX_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../shell-common/tools/ux_lib/ux_lib.sh"
+if [ -t 1 ] && [ -r "$UX_LIB" ]; then
+    # shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
+    source "$UX_LIB"
+else
+    ux_header() { printf '=== %s ===\n' "$1"; }
+    ux_info() { printf '%s\n' "$1"; }
+fi
+
 # --- defaults ---------------------------------------------------------------
 
 # The commit that shrank the descriptions (#1411). Its parent is the "before"
@@ -516,7 +529,8 @@ _verdict() {
         done
     fi
 
-    printf '\n=== contract: after >= before - %s%%p ===\n' "$CONTRACT_MARGIN"
+    printf '\n'
+    ux_header "contract: after >= before - ${CONTRACT_MARGIN}%p"
 
     if [ "$rows" -eq 0 ]; then
         printf '  HARNESS FAILURE: no measurement produced a data row.\n'
@@ -571,7 +585,7 @@ main() {
     _resolve_paths
     _make_workspace
 
-    printf '=== SKILL.md description trigger eval (#1417) ===\n'
+    ux_header 'SKILL.md description trigger eval (#1417)'
     printf 'repo        : %s\n' "$REPO_ROOT"
     printf 'arm(s)      : %s\n' "$ARM"
     printf 'before ref  : %s\n' "$BEFORE_REF"

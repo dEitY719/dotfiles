@@ -33,6 +33,19 @@
 
 set -u
 
+# Decorative banners/notes only (#1945): ux_lib styles them on an interactive
+# TTY; piped/redirected/sourced-by-bats runs get plain fallbacks that are
+# byte-identical to the previous printf output. Report tables, verdict lines
+# and stderr contracts stay raw printf on purpose.
+UX_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../shell-common/tools/ux_lib/ux_lib.sh"
+if [ -t 1 ] && [ -r "$UX_LIB" ]; then
+    # shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
+    source "$UX_LIB"
+else
+    ux_header() { printf '=== %s ===\n' "$1"; }
+    ux_info() { printf '%s\n' "$1"; }
+fi
+
 TARGET_MEDIAN_MS=2000
 TARGET_P99_MS=5000
 
@@ -157,7 +170,7 @@ _hook_perf_main() {
         esac
     done
 
-    printf '=== PostToolUse hook latency (#1258) ===\n'
+    ux_header 'PostToolUse hook latency (#1258)'
     printf 'hook match : %s\n' "$HOOK_MATCH"
     printf 'transcripts: %s\n' "$TRANSCRIPT_ROOTS"
     printf 'stage log  : %s%s\n' "$TIMING_LOG" \
@@ -168,7 +181,7 @@ _hook_perf_main() {
     if command -v jq >/dev/null 2>&1; then
         total_stats=$(_transcript_durations | hook_perf_stats)
     else
-        printf 'note: jq not found — transcript source skipped.\n'
+        ux_info 'note: jq not found — transcript source skipped.'
     fi
     printf 'Transcript durationMs (what the user waited)\n'
     _print_stats "total" "$total_stats"
