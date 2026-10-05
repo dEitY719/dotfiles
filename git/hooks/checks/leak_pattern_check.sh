@@ -16,7 +16,8 @@
 #     a private mirror remote is never blocked)
 #
 # Output: `file:line` only, never the matched text, so the pattern values
-# do not echo into terminals, CI logs or screen shares.
+# do not echo into terminals, CI logs or screen shares. A file name that
+# itself matches is printed as `<redacted path: N chars ...>` (#1997).
 
 # check_leak_patterns OUTPUT_FILE
 # Returns 0 when inactive or clean, 1 when a staged added line matches.
@@ -29,18 +30,37 @@ check_leak_patterns() {
     git config --get-regexp '^remote\..*\.url$' 2>/dev/null \
         | cut -d' ' -f2- | grep -qE -- "${UPSTREAM_REMOTES_ERE}" || return 0
 
-    # Emit "<file>:<line>\t<added text>" per staged added line, grep the
-    # whole record (a matching path is a leak too), print only field 1.
-    local hits
-    hits=$(git -c core.quotePath=false diff --cached -U0 --no-color --no-ext-diff \
+    # Records "<file>\t<line>\t<added text>" per staged added line. Only the
+    # text field is grepped for content hits; file names are scanned on
+    # their own (#1997) so a matching path is caught even with no added
+    # line (pure rename, empty file) and is never printed verbatim.
+    local records bad idx
+    records=$(git -c core.quotePath=false diff --cached -U0 --no-color --no-ext-diff \
         --diff-filter=ACMR 2>/dev/null | awk '
         /^diff --git / { hdr = 1; next }
         hdr && /^\+\+\+ / { f = substr($0, 7); next }
         /^@@ / { hdr = 0; s = $3; sub(/^\+/, "", s); split(s, a, ","); n = a[1]; next }
-        !hdr && /^\+/ { printf "%s:%d\t%s\n", f, n, substr($0, 2); n++ }
-    ' | grep -E -- "${LEAK_PATTERNS_ERE}" | cut -f1)
+        !hdr && /^\+/ { printf "%s\t%d\t%s\n", f, n, substr($0, 2); n++ }
+    ')
+    bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR 2>/dev/null \
+        | grep -E -- "${LEAK_PATTERNS_ERE}" || true)
+    idx=$(printf '%s\n' "$records" | cut -f3- | grep -nE -- "${LEAK_PATTERNS_ERE}" | cut -d: -f1)
 
-    [ -z "$hits" ] && return 0
-    printf '%s\n' "$hits" | sed 's/$/  (matches LEAK_PATTERNS_ERE)/' >>"$output_file"
+    [ -z "$bad$idx" ] && return 0
+    # A matching path is replaced by its length, never printed.
+    # shellcheck disable=SC2016 # literal ${LEAK_PATTERNS_ERE} in the hint, never its value
+    printf '%s\n' "$records" | BAD="$bad" IDX="$idx" awk -F'\t' '
+        BEGIN {
+            split(ENVIRON["IDX"], t, "\n"); for (i in t) want[t[i]] = 1
+            n = split(ENVIRON["BAD"], b, "\n")
+            for (i = 1; i <= n; i++) {
+                bad[b[i]] = 1
+                printf "<redacted path: %d chars, matches LEAK_PATTERNS_ERE>  (use: git diff --cached --name-only | grep -nE \"${LEAK_PATTERNS_ERE}\")\n", length(b[i])
+            }
+        }
+        NR in want {
+            loc = ($1 in bad) ? sprintf("<redacted path: %d chars>", length($1)) : $1
+            printf "%s:%s  (matches LEAK_PATTERNS_ERE)\n", loc, $2
+        }' >>"$output_file"
     return 1
 }

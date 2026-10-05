@@ -9,8 +9,22 @@
 
 | 단계 | 파일 | 검사 범위 | 차단 시 출력 |
 |------|------|-----------|--------------|
-| pre-commit | `hooks/checks/leak_pattern_check.sh` | staged 의 추가된 줄만 | `file:line` 만 (매칭 텍스트 미출력) |
-| pre-push (Layer 2) | `hooks/pre-push` | push 범위의 커밋 메시지 + 변경 파일 | commit + source + 줄 번호만 (매칭 텍스트 미출력) |
+| pre-commit | `hooks/checks/leak_pattern_check.sh` | staged 의 추가된 줄 + staged 파일 이름 (ACMR) | `file:line` 만 |
+| pre-push (Layer 2) | `hooks/pre-push` | push 범위의 커밋 메시지 + 변경 파일 내용 + 변경 파일 이름 + push 대상 ref 이름 | commit + source + 줄 번호만 |
+
+**출력 보장 (#1975, #1997)**: leak guard 가 출력하는 행에는 매칭된 텍스트가 나오지
+않는다. 줄 내용은 위치(줄 번호)로만, 커밋 메시지는 줄 번호로만 표시한다. 경로(또는
+ref 이름) 자체가 `LEAK_PATTERNS_ERE` 에 매칭되면 그 경로 대신 길이만 가린 표식을
+출력한다 — 매칭되지 않는 경로는 평소처럼 그대로 출력한다.
+
+- pre-commit: `<redacted path: N chars, matches LEAK_PATTERNS_ERE>  (use: git diff --cached --name-only | grep -nE "${LEAK_PATTERNS_ERE}")`,
+  그 파일의 내용 매칭은 `<redacted path: N chars>:<line>`
+- pre-push: `source: <redacted path: N chars, matches LEAK_PATTERNS_ERE>` +
+  `lines:  (file name)`, ref 이름은 `source: <redacted ref name: N chars, ...>`
+
+보장 범위는 leak guard 자신의 출력이다. 같은 pre-commit 의 다른 검사(shellcheck 등)나
+git 자체 출력은 staged 경로를 그대로 찍을 수 있다 — 식별값을 파일 이름에 두지 않는 것이
+우선이다.
 
 두 단계 모두 같은 변수 두 개를 읽는다 (SSOT: `config/pre-push-rules.sh`, 기본값 빈
 문자열 = 비활성):
@@ -56,8 +70,8 @@ ALLOW_MAIN_COMMIT=1 git/hooks/pre-commit; echo "exit=$?"   # exit=1 + leak-probe
 git rm -q --cached leak-probe.txt && rm leak-probe.txt
 
 # 3) 메커니즘 회귀 테스트 (가짜 패턴 fixture)
-bash git/test/test-pre-push.sh   # pre-push T-1..T-7
-bash git/tests/test_hooks.sh     # pre-commit leak guard 3 케이스 포함
+bash git/test/test-pre-push.sh   # pre-push T-1..T-10
+bash git/tests/test_hooks.sh     # pre-commit leak guard 4 케이스 포함
 ```
 
 ## 우회 (escape hatch)
@@ -71,3 +85,5 @@ diff 를 직접 확인한 경우에만 쓴다. 매칭 위치 확인:
 `git diff --cached -U0 | grep -nE "$LEAK_PATTERNS_ERE"` (pre-commit),
 `git show <commit>:<source> | grep -nE "$LEAK_PATTERNS_ERE"` (pre-push,
 커밋 메시지는 `git log -1 --format=%B <commit> | grep -nE ...`).
+가린 경로는 `git diff --cached --name-only | grep -nE "$LEAK_PATTERNS_ERE"` (pre-commit),
+`git diff-tree --no-commit-id --name-only -r <commit> | grep -nE "$LEAK_PATTERNS_ERE"` (pre-push).
