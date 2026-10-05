@@ -1,6 +1,9 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/functions/gh_pr_reply_targeted_review.sh
+# NOTE: This file intentionally has NO interactive guard: pure function
+# definitions with no output at file scope, sourced non-interactively by
+# gh:pr-reply skill's Bash tool calls (see below).
 # gh:pr-reply's severity gate: the per-item origin tokens (#1616) and the
 # `review-passed` decision they now feed (#1636).
 #

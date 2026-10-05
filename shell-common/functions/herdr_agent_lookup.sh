@@ -1,5 +1,8 @@
 #!/bin/sh
 # shell-common/functions/herdr_agent_lookup.sh
+# NOTE: This file intentionally has NO interactive guard: pure function
+# definitions with no output at file scope, sourced non-interactively by
+# issue_watcher_cron.sh, schedule_agent_prompt.sh and skill blocks (see below).
 # SSOT for "is a herdr agent sitting on this worktree?" (issue #1569).
 #
 # Four call sites ask that question and, before this file, each carried its own
