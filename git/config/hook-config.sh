@@ -69,6 +69,9 @@ GIT_HOOKS_LARGE_FILE_BYTES="${GIT_HOOKS_LARGE_FILE_BYTES:-10485760}" # 10MB
 # Project hook (git/hooks/pre-commit) / modules
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Leak guard (checks/leak_pattern_check.sh, #1970) reads UPSTREAM_REMOTES_ERE /
+# LEAK_PATTERNS_ERE from the user env; SSOT and defaults: config/pre-push-rules.sh.
+
 # Shebang expectations by directory
 DOTFILES_HOOKS_SHEBANG_SHELL_COMMON="${DOTFILES_HOOKS_SHEBANG_SHELL_COMMON:-#!/bin/sh}"
 DOTFILES_HOOKS_SHEBANG_SHELL_COMMON_CUSTOM="${DOTFILES_HOOKS_SHEBANG_SHELL_COMMON_CUSTOM:-#!/bin/bash}"
