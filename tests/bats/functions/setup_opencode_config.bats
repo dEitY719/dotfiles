@@ -15,6 +15,7 @@ setup() {
     FIXTURE_DOTFILES="$TEST_TEMP_HOME/dotfiles"
     mkdir -p \
         "$FIXTURE_DOTFILES/opencode" \
+        "$FIXTURE_DOTFILES/shell-common/env" \
         "$FIXTURE_DOTFILES/shell-common/tools/ux_lib"
     cp "$_BATS_REAL_DOTFILES_ROOT/opencode/opencode.json.internal" \
        "$FIXTURE_DOTFILES/opencode/opencode.json.internal"
@@ -42,6 +43,13 @@ run_setup_opencode() {
     "
 }
 
+# Fake (non-placeholder) gateway URL standing in for the real one (#1967).
+FAKE_REAL_URL='http://gw.corp-fake.test:9999/v1'
+LOCAL_SH() { printf '%s\n' "$FIXTURE_DOTFILES/shell-common/env/internal.local.sh"; }
+write_local_url() {
+    printf 'export DOTFILES_OPENCODE_BASE_URL="%s"\n' "$FAKE_REAL_URL" >"$(LOCAL_SH)"
+}
+
 count_backups() {
     ls "${TARGET}.backup."* 2>/dev/null | wc -l
 }
@@ -54,7 +62,7 @@ count_backups() {
     [ "$(count_backups)" -eq 0 ]
 }
 
-@test "re-run with placeholder unchanged: re-copies template" {
+@test "re-run with placeholder unchanged: keeps the existing file" {
     run_setup_opencode
     assert_success
 
@@ -65,6 +73,7 @@ count_backups() {
 }
 
 @test "re-run with Knox ID customised: preserves file, creates no backup" {
+    write_local_url
     run_setup_opencode
     assert_success
 
@@ -142,6 +151,7 @@ run_setup_opencode_env() {
 
 @test "file SSOT: re-run is idempotent (preserve, no warning, no backup)" {
     printf 'fileknox99\n' >"$HOME/.dotfiles-knox-id"
+    write_local_url
 
     run_setup_opencode
     assert_success
@@ -161,4 +171,63 @@ run_setup_opencode_env() {
     assert_success
     grep -q 'your-knox-id' "$TARGET"
     assert_output --partial "replace 'your-knox-id'"
+}
+
+# --- Gateway URL from internal.local.sh (issue #1967) -----------------------
+# The tracked template carries a fake URL; setup renders the real one from the
+# gitignored env/internal.local.sh and never downgrades a deployed config.
+
+
+@test "#1967 render: internal.local.sh URL replaces the template placeholder" {
+    write_local_url
+
+    run_setup_opencode
+    assert_success
+    grep -qF "\"baseURL\": \"$FAKE_REAL_URL\"" "$TARGET"
+    ! grep -q 'example.invalid' "$TARGET"
+    # The tracked template itself is never rewritten (no value leaks into it).
+    cmp -s "$FIXTURE_DOTFILES/opencode/opencode.json.internal" \
+        "$_BATS_REAL_DOTFILES_ROOT/opencode/opencode.json.internal"
+    ! grep -qF "$FAKE_REAL_URL" "$FIXTURE_DOTFILES/opencode/opencode.json.internal"
+}
+
+@test "#1967 deployed config kept untouched when no URL is available" {
+    # A deployed config with real (here: fake-but-non-placeholder) values.
+    sed "s|http://llm-gateway.example.invalid/v1|$FAKE_REAL_URL|" \
+        "$FIXTURE_DOTFILES/opencode/opencode.json.internal" >"$TARGET"
+    deployed="$(cat "$TARGET")"
+
+    run_setup_opencode
+    assert_success
+    assert_output --partial "Kept existing"
+    [ "$(cat "$TARGET")" = "$deployed" ]
+    [ "$(count_backups)" -eq 0 ]
+}
+
+@test "#1967 placeholder URL in internal.local.sh counts as unavailable" {
+    cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/env/internal.local.example" "$(LOCAL_SH)"
+    sed "s|http://llm-gateway.example.invalid/v1|$FAKE_REAL_URL|" \
+        "$FIXTURE_DOTFILES/opencode/opencode.json.internal" >"$TARGET"
+    deployed="$(cat "$TARGET")"
+
+    run_setup_opencode
+    assert_success
+    [ "$(cat "$TARGET")" = "$deployed" ]
+}
+
+@test "#1967 fresh install without URL: writes placeholder template and warns" {
+    run_setup_opencode
+    assert_success
+    grep -q 'llm-gateway.example.invalid' "$TARGET"
+    assert_output --partial "DOTFILES_OPENCODE_BASE_URL"
+}
+
+@test "#1967 knox fill on a kept deployed config changes only the placeholder" {
+    sed "s|http://llm-gateway.example.invalid/v1|$FAKE_REAL_URL|" \
+        "$FIXTURE_DOTFILES/opencode/opencode.json.internal" >"$TARGET"
+
+    run_setup_opencode_env "envknox42"
+    assert_success
+    grep -qF "$FAKE_REAL_URL" "$TARGET"
+    grep -q 'envknox42' "$TARGET"
 }
