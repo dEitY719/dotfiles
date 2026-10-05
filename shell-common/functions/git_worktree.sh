@@ -2379,18 +2379,29 @@ EOF
     local merge_target
     merge_target=$(_gwt_merge_target "$main_branch")
 
-    # Delete branch
-    if [ "$keep_branch" = true ]; then
+    # Delete branch. A detached worktree has no branch: `rev-parse --abbrev-ref`
+    # returned the literal "HEAD", which here (cwd = main repo) would resolve
+    # to main's own HEAD and look "merged" (#2022).
+    if [ "$branch" = HEAD ]; then
+        branch="(detached)"
+        ux_info "Detached HEAD — no branch to delete"
+    elif [ "$keep_branch" = true ]; then
         ux_info "Branch kept: $branch (--keep-branch)"
     elif git branch -d "$branch" 2>/dev/null; then
         : # deleted successfully (fast-forward or true merge)
     elif _gwt_branch_merged "$branch" "$merge_target"; then
         # Rebase/squash merge: commits are in main_ref but SHAs differ.
-        git branch -D "$branch" 2>/dev/null
-        ux_success "Branch deleted (rebase-merged): $branch"
+        if git branch -D "$branch" 2>/dev/null; then
+            ux_success "Branch deleted (rebase-merged): $branch"
+        else
+            ux_warning "Branch '$branch' is merged but could not be deleted (git branch -D failed)."
+        fi
     elif [ "$force" = true ]; then
-        git branch -D "$branch" 2>/dev/null
-        ux_success "Branch force-deleted: $branch"
+        if git branch -D "$branch" 2>/dev/null; then
+            ux_success "Branch force-deleted: $branch"
+        else
+            ux_warning "Branch '$branch' could not be force-deleted (git branch -D failed)."
+        fi
     else
         ux_warning "Branch '$branch' not fully merged. Use --force or --keep-branch."
     fi
