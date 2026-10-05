@@ -36,9 +36,14 @@ fi
 # If values change, update only here (not in sed patterns)
 # Note: Using sh-compatible variable naming (no associative arrays)
 
-# Security configuration
-SECURITY_CONFIG_external="/usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
-SECURITY_CONFIG_internal="/etc/ssl/certs/ca-certificates.crt"
+# Security configuration: the CA / SSL certificate paths are NOT kept here.
+# Their SSOT is env/security.local.sh (gitignored; template
+# env/security.local.example carries placeholders only, #1969) — read back
+# via _local_value below, the same way tools/custom/setup_crt.sh does.
+
+# Placeholder marker of the tracked *.local.example templates (#1944/#1969):
+# fake hosts end in `.example.invalid`, fake cert files are `example-*.crt`.
+LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt'
 
 # Tool-specific configurations are managed via tracked files at project root
 # and symlinked to their respective locations:
@@ -99,20 +104,55 @@ _restore_config_from_backup() {
     fi
 }
 
+# Print the double-quoted value of the first `^NAME="..."` line in a file
+# (empty when the file or line is missing). Usage: _local_value NAME FILE
+_local_value() {
+    [ -f "$2" ] || return 0
+    grep -m1 "^$1=" "$2" | cut -d'"' -f2
+}
+
+# Warn when a *.local.sh still carries template placeholders (#1969): the
+# tracked templates hold fake values only, real ones must be typed in once.
+_warn_if_placeholder() {
+    if grep -Eq "$LOCAL_PLACEHOLDER_ERE" "$1" 2>/dev/null; then
+        ux_warning "${1#"$SHELL_COMMON_DIR"/} still has placeholder values — fill in the real ones (see the template comments)"
+    fi
+}
+
+# Backup name of a generated local file: foo.local.sh -> foo.backup.local.sh
+# (still matched by the `*.local.sh` gitignore rule).
+_local_backup_path() {
+    printf '%s\n' "${1%.local.sh}.backup.local.sh"
+}
+
 cleanup_local_files() {
-    # Find all .local.sh files
     ux_header "Cleaning up environment-specific files"
 
-    # Delete all .local.sh files (sh-compatible approach)
-    if find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f >/dev/null 2>&1; then
-        find "$SHELL_COMMON_DIR" -name "*.local.sh" -type f | while IFS= read -r local_file; do
-            rm -f "$local_file"
-            ux_success "Removed: ${local_file#"$SHELL_COMMON_DIR"/}"
-        done
+    # Move (never delete) every live .local.sh aside (#1969): since the
+    # tracked templates only carry placeholders, a deleted file's real values
+    # could not be regenerated. copy_local_files restores these backups.
+    find "$SHELL_COMMON_DIR" -name "*.local.sh" ! -name "*.backup.local.sh" -type f | while IFS= read -r local_file; do
+        mv -f "$local_file" "$(_local_backup_path "$local_file")"
+        ux_success "Moved aside: ${local_file#"$SHELL_COMMON_DIR"/} (restored on internal/external setup)"
+    done
+}
+
+# Install one generated local file without ever clobbering real values:
+# keep an existing file, else restore its backup, else copy the template.
+_install_local_file() {
+    _ilf_example="$1"
+    _ilf_local="$2"
+    _ilf_backup="$(_local_backup_path "$_ilf_local")"
+    if [ -f "$_ilf_local" ]; then
+        ux_info "Kept existing: ${_ilf_local#"$SHELL_COMMON_DIR"/}"
+    elif [ -f "$_ilf_backup" ]; then
+        mv "$_ilf_backup" "$_ilf_local"
+        ux_success "Restored: ${_ilf_local#"$SHELL_COMMON_DIR"/}"
     else
-        ux_info "No .local.sh files found"
-        return 0
+        cp "$_ilf_example" "$_ilf_local"
+        ux_success "Created: ${_ilf_local#"$SHELL_COMMON_DIR"/}"
     fi
+    _warn_if_placeholder "$_ilf_local"
 }
 
 copy_local_files() {
@@ -130,7 +170,16 @@ copy_local_files() {
     # a subshell — anything assigned inside it is lost once `done` returns).
     _ext_accounts="personal work work1"
 
-    # Copy .local.example files to .local.sh (sh-compatible approach)
+    # Decided before the pipe for the same reason: the email prompt below
+    # runs only when claude.local.sh is about to be created from the template
+    # (a kept / restored file already has its email lines, #1969).
+    _claude_local_file="${SHELL_COMMON_DIR}/env/claude.local.sh"
+    _claude_fresh=1
+    if [ -f "$_claude_local_file" ] || [ -f "$(_local_backup_path "$_claude_local_file")" ]; then
+        _claude_fresh=0
+    fi
+
+    # Install .local.example files as .local.sh (sh-compatible approach) to .local.sh (sh-compatible approach)
     find "$SHELL_COMMON_DIR" -name "*.local.example" -type f | while IFS= read -r example_file; do
         dir="$(dirname "$example_file")"
         filename="$(basename "$example_file" .example)"
@@ -140,26 +189,29 @@ copy_local_files() {
         # Environment-specific handling
         case "$environment" in
             internal)
-                # Internal company PC: copy ALL .local.example files.
+                # Internal company PC: install ALL .local.example files.
                 # Bedrock 으로 통일된 #677 이후, claude.local.sh 에 사내 게이트웨이
                 # ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL 을 inject 하지 않는다 (#683 F-1).
                 # CLAUDE_ENABLED_ACCOUNTS 도 shell-common/env/claude.sh 가 setup-mode
                 # 기준으로 "work" (single-account) 를 SSOT 로 export 하므로 여기서
                 # 덮어쓰지 않는다.
-                cp "$example_file" "$local_file"
-                ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
+                _install_local_file "$example_file" "$local_file"
                 ;;
             external)
                 # External company PC (VPN): skip proxy.local.example
                 # Reason: proxy.local.sh is only valid for internal environment
+                # (a backup moved aside by cleanup_local_files stays put).
                 if [ "$basename_file" = "proxy.local.example" ]; then
                     ux_info "Skipped (not needed for VPN): ${basename_file}"
                 else
-                    cp "$example_file" "$local_file"
-                    ux_success "Created: ${local_file#"$SHELL_COMMON_DIR"/}"
+                    _ilf_fresh=0
+                    [ -f "$local_file" ] || [ -f "$(_local_backup_path "$local_file")" ] || _ilf_fresh=1
+                    _install_local_file "$example_file" "$local_file"
 
-                    # External-specific: Auto-enable work1 for multi-account setup.
-                    if [ "$basename_file" = "claude.local.example" ]; then
+                    # External-specific: Auto-enable work1 for multi-account
+                    # setup — only on a fresh template copy, so a kept or
+                    # restored file never gets the block appended twice.
+                    if [ "$basename_file" = "claude.local.example" ] && [ "$_ilf_fresh" = 1 ]; then
                         cat >> "$local_file" <<EOF
 
 # ─── External PC: Multi-account setup ────────────────────────────────────
@@ -180,9 +232,8 @@ EOF
     # tools/integrations/claude.sh works without hand-editing the file on
     # every new PC. Guarded on the file actually having been created above
     # (skipped e.g. if claude.local.example is ever removed from the repo).
-    if [ "$environment" = "external" ]; then
-        _claude_local_file="${SHELL_COMMON_DIR}/env/claude.local.sh"
-        [ -f "$_claude_local_file" ] && _prompt_claude_account_emails "$_ext_accounts" "$_claude_local_file"
+    if [ "$environment" = "external" ] && [ "$_claude_fresh" = 1 ] && [ -f "$_claude_local_file" ]; then
+        _prompt_claude_account_emails "$_ext_accounts" "$_claude_local_file"
     fi
 }
 
@@ -238,44 +289,40 @@ setup_security_config() {
     environment="$1"
     security_local="${SHELL_COMMON_DIR}/env/security.local.sh"
 
-    # Get CA_CERT path from predefined variables
-    case "$environment" in
-        internal) ca_cert="$SECURITY_CONFIG_internal" ;;
-        external) ca_cert="$SECURITY_CONFIG_external" ;;
-        *) ca_cert="" ;;
-    esac
-
-    if [ -z "$ca_cert" ]; then
-        ux_error "Unknown environment: $environment"
-        return 1
-    fi
-
+    # The sed toggles below key on the option path prefixes kept by
+    # env/security.local.example (/usr/local/share/..., /etc/ssl/certs/...,
+    # /usr/share/ca-certificates/...); the file names themselves live only in
+    # each PC's security.local.sh (#1969).
     case "$environment" in
         internal)
             ux_info "Configuring security for internal company PC (System CA)"
-            # Comment out Option 1, Uncomment Option 2
+            # CA_CERT: comment out Option 1, uncomment Option 2.
+            # SSL_CERT_FILE: Option 2 (proxy inspection CA) — reverted here too
+            # in case a restored file was last toggled for external.
             if [ -f "$security_local" ]; then
                 sed -i 's/^CA_CERT="\/usr\/local\/share/#CA_CERT="\/usr\/local\/share/' "$security_local"
                 sed -i 's/^#CA_CERT="\/etc\/ssl\/certs/CA_CERT="\/etc\/ssl\/certs/' "$security_local"
-                # SSL_CERT_FILE: Option 2 (McAfee) is already active - verify it
-                # (no sed needed: McAfee cert is default in security.local.example)
+                sed -i 's/^SSL_CERT_FILE="\/usr\/local\/share/#SSL_CERT_FILE="\/usr\/local\/share/' "$security_local"
+                sed -i 's/^#SSL_CERT_FILE="\/usr\/share\/ca-certificates/SSL_CERT_FILE="\/usr\/share\/ca-certificates/' "$security_local"
             fi
-            ux_success "CA Certificate: ${ca_cert}"
-            ux_success "SSL Certificate: /usr/share/ca-certificates/extra/McAfee_Certificate.crt"
             ;;
         external)
             ux_info "Configuring security for external company PC (Custom Certificate)"
             if [ -f "$security_local" ]; then
                 sed -i 's/^#CA_CERT="\/usr\/local\/share/CA_CERT="\/usr\/local\/share/' "$security_local"
                 sed -i 's/^CA_CERT="\/etc\/ssl\/certs/#CA_CERT="\/etc\/ssl\/certs/' "$security_local"
-                # SSL_CERT_FILE: Comment out McAfee (Option 2), Uncomment samsungsemi (Option 1)
+                # SSL_CERT_FILE: comment out Option 2, uncomment Option 1
                 sed -i 's/^SSL_CERT_FILE="\/usr\/share\/ca-certificates/#SSL_CERT_FILE="\/usr\/share\/ca-certificates/' "$security_local"
                 sed -i 's/^#SSL_CERT_FILE="\/usr\/local\/share/SSL_CERT_FILE="\/usr\/local\/share/' "$security_local"
             fi
-            ux_success "CA Certificate: ${ca_cert}"
-            ux_success "SSL Certificate: /usr/local/share/ca-certificates/samsungsemi-prx.com.crt"
+            ;;
+        *)
+            ux_error "Unknown environment: $environment"
+            return 1
             ;;
     esac
+    ux_success "CA Certificate: $(_local_value CA_CERT "$security_local")"
+    ux_success "SSL Certificate: $(_local_value SSL_CERT_FILE "$security_local")"
 }
 
 setup_npm_symlink() {
@@ -291,7 +338,7 @@ setup_npm_symlink() {
         internal)
             ln -s "${DOTFILES_ROOT}/npm/npmrc.internal" "$npmrc_target"
             ux_success "Created symlink: ~/.npmrc → npm/npmrc.internal"
-            ux_info "Using: Samsung internal Nexus repository + proxy"
+            ux_info "Using: internal Nexus repository + proxy"
             ;;
         external)
             ln -s "${DOTFILES_ROOT}/npm/npmrc.external" "$npmrc_target"
@@ -320,7 +367,7 @@ setup_bun_config() {
             _prepare_config_target "$bunfig_target"
             ln -s "${DOTFILES_ROOT}/bun/bunfig.toml.internal" "$bunfig_target"
             ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.internal"
-            ux_info "Using: Samsung internal Nexus registry for npm packages"
+            ux_info "Using: internal Nexus registry for npm packages"
             ;;
         external)
             _prepare_config_target "$bunfig_target"
@@ -334,7 +381,7 @@ setup_bun_config() {
     esac
 }
 
-# Resolve the Samsung Knox ID for OpenCode's internal-mode config (issue #1121).
+# Resolve the internal account ID (Knox ID) for OpenCode's internal-mode config (issue #1121).
 # Lookup order (first non-empty wins):
 #   1. $DOTFILES_KNOX_ID env var  — reuse the shell-sourced SSOT
 #      (see shell-common/env/development.local.example).
@@ -365,7 +412,7 @@ _resolve_knox_id() {
     # 3. One-time prompt (interactive shells only). Persist to the file SSOT so
     #    subsequent runs resolve via step 2 without prompting again.
     if [ -t 0 ]; then
-        printf 'Enter your Samsung Knox ID (saved to %s): ' "$_knox_file" >&2
+        printf 'Enter your internal account ID (Knox ID) (saved to %s): ' "$_knox_file" >&2
         read -r _knox_val || _knox_val=""
         _knox_val="$(printf '%s' "$_knox_val" | tr -d '[:space:]')"
         if [ -n "$_knox_val" ]; then
@@ -401,7 +448,7 @@ setup_opencode_config() {
             cp "${DOTFILES_ROOT}/opencode/opencode.json.internal" "$opencode_target"
             chmod 600 "$opencode_target"
             ux_success "Copied template: opencode/opencode.json.internal → ~/.config/opencode/opencode.json"
-            ux_info "Using: Samsung internal gateway (a2g.samsungds.net)"
+            ux_info "Using: internal LLM gateway"
             # Fill in the Knox ID from the SSOT (env → ~/.dotfiles-knox-id →
             # one-time prompt) so the placeholder warning no longer recurs on
             # every setup (issue #1121). Falls back to the manual-edit warning
@@ -419,7 +466,7 @@ setup_opencode_config() {
                 chmod 600 "$opencode_target"
                 ux_success "Applied Knox ID to OpenCode config (SSOT: \$DOTFILES_KNOX_ID or ~/.dotfiles-knox-id)"
             else
-                ux_warning "Edit $opencode_target and replace 'your-knox-id' with your Samsung Knox ID"
+                ux_warning "Edit $opencode_target and replace 'your-knox-id' with your internal account ID (Knox ID)"
                 ux_info "Tip: save it once to ~/.dotfiles-knox-id (or export DOTFILES_KNOX_ID) to auto-fill next time"
             fi
             ;;
@@ -459,12 +506,8 @@ verify_config() {
 
     ux_header "Verifying configuration for: $environment"
 
-    # Verify CA cert is accessible if configured
-    case "$environment" in
-        internal) ca_cert="$SECURITY_CONFIG_internal" ;;
-        external) ca_cert="$SECURITY_CONFIG_external" ;;
-        *) ca_cert="" ;;
-    esac
+    # Verify CA cert is accessible if configured (SSOT: security.local.sh)
+    ca_cert="$(_local_value CA_CERT "${SHELL_COMMON_DIR}/env/security.local.sh")"
     if [ -n "$ca_cert" ] && [ -f "$ca_cert" ]; then
         ux_success "CA Certificate accessible: $ca_cert"
     elif [ -n "$ca_cert" ]; then
@@ -504,7 +547,7 @@ setup_uv_config() {
         internal)
             ln -s "${DOTFILES_ROOT}/uv/uv.toml.internal" "$uv_conf"
             ux_success "Created symlink: ~/.config/uv/uv.toml → uv/uv.toml.internal"
-            ux_info "Using: Samsung internal repositories + proxy"
+            ux_info "Using: internal repositories + proxy"
             ;;
         external|public)
             # External/Public: no uv.toml needed (defaults to public PyPI)
@@ -530,7 +573,7 @@ setup_pip_config() {
         internal)
             ln -s "${DOTFILES_ROOT}/pip/pip.conf.internal" "$pip_conf"
             ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.internal"
-            ux_info "Using: Samsung internal repositories"
+            ux_info "Using: internal repositories"
             ;;
         external|public)
             ln -s "${DOTFILES_ROOT}/pip/pip.conf.external" "$pip_conf"
@@ -555,7 +598,7 @@ setup_cargo_config() {
             _prepare_config_target "$cargo_conf"
             ln -s "${DOTFILES_ROOT}/cargo/config.toml.internal" "$cargo_conf"
             ux_success "Created symlink: ~/.cargo/config.toml → cargo/config.toml.internal"
-            ux_info "Using: Samsung internal Nexus proxy for crates.io"
+            ux_info "Using: internal Nexus proxy for crates.io"
             ;;
         external|public)
             _restore_config_from_backup "$cargo_conf"
@@ -580,7 +623,7 @@ setup_nuget_config() {
             done
             ux_success "Created symlinks: NuGet.Config → nuget/NuGet.Config.internal"
             ux_info "  ~/.nuget/NuGet/ (dotnet CLI) + ~/.config/NuGet/ (mono)"
-            ux_info "Using: Samsung internal Nexus proxy for NuGet"
+            ux_info "Using: internal Nexus proxy for NuGet"
             ;;
         external|public)
             for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
@@ -655,7 +698,7 @@ setup_rpm_repo() {
             # Copy (not symlink) since this is a system-level config in /etc/
             $_rpm_run_privileged cp "${DOTFILES_ROOT}/rpm/ds.repo.internal" "$repo_target"
             ux_success "Copied: rpm/ds.repo.internal → $repo_target"
-            ux_info "Using: Samsung DS internal repositories (RHEL 8.6)"
+            ux_info "Using: internal repositories (RHEL 8.6)"
             ;;
         external|public)
             # Only remove if the file was deployed by dotfiles (has marker)
@@ -817,15 +860,15 @@ main() {
             echo ""
             ux_success "Setup complete for internal company PC"
             ux_info "Changes made:"
-            ux_info "  - Copied all .local.example files to .local.sh"
+            ux_info "  - Installed all .local.example files as .local.sh (existing files kept)"
             ux_info "  - Security: System CA Bundle (Option 2) activated"
-            ux_info "  - SSL Certificate: McAfee (/usr/share/ca-certificates/extra/McAfee_Certificate.crt)"
-            ux_info "  - Proxy: Company proxy (12.26.204.100:8080) configured"
+            ux_info "  - SSL Certificate: proxy inspection CA (path from env/security.local.sh)"
+            ux_info "  - Proxy: company proxy from env/proxy.local.sh"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
             ux_info "  - OpenCode: opencode/opencode.json.internal with Knox ID from SSOT (\$DOTFILES_KNOX_ID / ~/.dotfiles-knox-id, else 1-time prompt)"
-            ux_info "  - Pip: Samsung internal repository configured"
-            ux_info "  - uv: Samsung internal repository + proxy configured"
+            ux_info "  - Pip: internal repository configured"
+            ux_info "  - uv: internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
             ux_info "  - NuGet: ~/.nuget/NuGet/NuGet.Config (Nexus proxy for nuget.org)"
             ux_info "  - RPM: /etc/yum.repos.d/ds.repo (if yum/dnf available)"
@@ -855,9 +898,9 @@ main() {
             echo ""
             ux_success "Setup complete for external company PC"
             ux_info "Changes made:"
-            ux_info "  - Copied .local.example files to .local.sh (except proxy)"
+            ux_info "  - Installed .local.example files as .local.sh (except proxy; existing files kept)"
             ux_info "  - Security: Custom Certificate (Option 1) activated"
-            ux_info "  - SSL Certificate: samsungsemi (/usr/local/share/ca-certificates/samsungsemi-prx.com.crt)"
+            ux_info "  - SSL Certificate: custom CA (path from env/security.local.sh)"
             ux_info "  - Proxy: Skipped (not needed for VPN - direct connection)"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.external (npmjs + no proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.external (public registry)"
