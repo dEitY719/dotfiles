@@ -234,7 +234,7 @@ run_han() {
     assert_success
     assert_output "mt-dotfiles"
 
-    run_han 'herdr_agent_name mt github.samsungds.net/acme/dotfiles'
+    run_han 'herdr_agent_name mt ghes.example.invalid/acme/dotfiles'
     assert_success
     assert_output "mt-dotfiles"
 }

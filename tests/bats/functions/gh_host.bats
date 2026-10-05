@@ -20,6 +20,12 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
+    # The real GHES host never appears in this public repo (#1965): every
+    # GHE case runs against a fake host. It is re-exported inside each
+    # command (after main.bash/main.zsh loaded) so a developer's own
+    # env/internal.local.sh cannot override it mid-test.
+    export DOTFILES_GHES_HOST="ghes.example.invalid"
+    G='export DOTFILES_GHES_HOST=ghes.example.invalid; '
 }
 
 teardown() {
@@ -30,30 +36,30 @@ teardown() {
 # T1-T4: _gh_resolve_host — mode-to-host mapping
 # ---------------------------------------------------------------------------
 
-@test "T1: _dotfiles_setup_mode=internal -> github.samsungds.net" {
+@test "T1: _dotfiles_setup_mode=internal -> ghes.example.invalid" {
     echo "internal" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash '_gh_resolve_host'
+    run_in_bash "$G"'_gh_resolve_host'
     assert_success
-    assert_output "github.samsungds.net"
+    assert_output "ghes.example.invalid"
 }
 
 @test "T2: _dotfiles_setup_mode=external -> github.com" {
     echo "external" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash '_gh_resolve_host'
+    run_in_bash "$G"'_gh_resolve_host'
     assert_success
     assert_output "github.com"
 }
 
 @test "T3: _dotfiles_setup_mode=public -> github.com" {
     echo "public" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash '_gh_resolve_host'
+    run_in_bash "$G"'_gh_resolve_host'
     assert_success
     assert_output "github.com"
 }
 
 @test "T4: setup-mode file missing -> github.com (fallback)" {
     # No setup-mode file in $HOME — fresh install.
-    run_in_bash '_gh_resolve_host'
+    run_in_bash "$G"'_gh_resolve_host'
     assert_success
     assert_output "github.com"
 }
@@ -63,25 +69,25 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "T5: https github.com URL -> owner/repo" {
-    run_in_bash '_gh_parse_owner_repo_url "https://github.com/dEitY719/dotfiles.git"'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "https://github.com/dEitY719/dotfiles.git"'
     assert_success
     assert_output "dEitY719/dotfiles"
 }
 
 @test "T6: https GHE URL -> owner/repo" {
-    run_in_bash '_gh_parse_owner_repo_url "https://github.samsungds.net/byoungwoo-yoon/dotfiles.git"'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "https://ghes.example.invalid/owner/dotfiles.git"'
     assert_success
-    assert_output "byoungwoo-yoon/dotfiles"
+    assert_output "owner/dotfiles"
 }
 
 @test "T7: git@host: GHE URL -> owner/repo" {
-    run_in_bash '_gh_parse_owner_repo_url "git@github.samsungds.net:byoungwoo-yoon/dotfiles.git"'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "git@ghes.example.invalid:owner/dotfiles.git"'
     assert_success
-    assert_output "byoungwoo-yoon/dotfiles"
+    assert_output "owner/dotfiles"
 }
 
 @test "T8: non-github URL is rejected with exit 1" {
-    run_in_bash '_gh_parse_owner_repo_url "https://gitlab.com/owner/repo" 2>&1'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "https://gitlab.com/owner/repo" 2>&1'
     assert_failure
     assert_output --partial "not a github remote"
 }
@@ -91,25 +97,25 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "T5b: ssh:// github.com URL -> owner/repo" {
-    run_in_bash '_gh_parse_owner_repo_url "ssh://git@github.com/dEitY719/dotfiles.git"'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "ssh://git@github.com/dEitY719/dotfiles.git"'
     assert_success
     assert_output "dEitY719/dotfiles"
 }
 
 @test "T6b: git@github.com: URL -> owner/repo" {
-    run_in_bash '_gh_parse_owner_repo_url "git@github.com:dEitY719/dotfiles.git"'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "git@github.com:dEitY719/dotfiles.git"'
     assert_success
     assert_output "dEitY719/dotfiles"
 }
 
 @test "empty URL is rejected with exit 1" {
-    run_in_bash '_gh_parse_owner_repo_url "" 2>&1'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "" 2>&1'
     assert_failure
     assert_output --partial "empty remote URL"
 }
 
 @test "github URL without owner/repo suffix is rejected" {
-    run_in_bash '_gh_parse_owner_repo_url "https://github.com/" 2>&1'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "https://github.com/" 2>&1'
     assert_failure
     assert_output --partial "Could not parse owner/repo"
 }
@@ -126,31 +132,31 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "T9: https github.com URL -> github.com" {
-    run_in_bash '_gh_host_from_url "https://github.com/dEitY719/dotfiles.git"'
+    run_in_bash "$G"'_gh_host_from_url "https://github.com/dEitY719/dotfiles.git"'
     assert_success
     assert_output "github.com"
 }
 
-@test "T10: git@ GHE URL -> github.samsungds.net" {
-    run_in_bash '_gh_host_from_url "git@github.samsungds.net:byoungwoo-yoon/dotfiles.git"'
+@test "T10: git@ GHE URL -> ghes.example.invalid" {
+    run_in_bash "$G"'_gh_host_from_url "git@ghes.example.invalid:owner/dotfiles.git"'
     assert_success
-    assert_output "github.samsungds.net"
+    assert_output "ghes.example.invalid"
 }
 
-@test "T11: ssh:// GHE URL -> github.samsungds.net" {
-    run_in_bash '_gh_host_from_url "ssh://git@github.samsungds.net/owner/repo.git"'
+@test "T11: ssh:// GHE URL -> ghes.example.invalid" {
+    run_in_bash "$G"'_gh_host_from_url "ssh://git@ghes.example.invalid/owner/repo.git"'
     assert_success
-    assert_output "github.samsungds.net"
+    assert_output "ghes.example.invalid"
 }
 
 @test "T12: non-github URL is rejected with exit 1" {
-    run_in_bash '_gh_host_from_url "https://gitlab.com/owner/repo" 2>&1'
+    run_in_bash "$G"'_gh_host_from_url "https://gitlab.com/owner/repo" 2>&1'
     assert_failure
     assert_output --partial "not a github remote"
 }
 
 @test "T13: empty URL is rejected with exit 1" {
-    run_in_bash '_gh_host_from_url "" 2>&1'
+    run_in_bash "$G"'_gh_host_from_url "" 2>&1'
     assert_failure
     assert_output --partial "empty remote URL"
 }
@@ -160,9 +166,9 @@ teardown() {
     # upstream: _gh_resolve_host says GHE, but the remote URL says
     # github.com and the URL is what `gh` must be pointed at.
     echo "internal" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash '_gh_resolve_host; _gh_host_from_url "https://github.com/dEitY719/dotfiles.git"'
+    run_in_bash "$G"'_gh_resolve_host; _gh_host_from_url "https://github.com/dEitY719/dotfiles.git"'
     assert_success
-    assert_line --index 0 "github.samsungds.net"
+    assert_line --index 0 "ghes.example.invalid"
     assert_line --index 1 "github.com"
 }
 
@@ -173,19 +179,19 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "T15: notgithub.com (substring near-miss) is rejected, not misread as github.com" {
-    run_in_bash '_gh_host_from_url "https://notgithub.com/owner/repo.git" 2>&1'
+    run_in_bash "$G"'_gh_host_from_url "https://notgithub.com/owner/repo.git" 2>&1'
     assert_failure
     assert_output --partial "not a github remote"
 }
 
 @test "T16: github.com.evil.net (suffix near-miss) is rejected" {
-    run_in_bash '_gh_host_from_url "https://github.com.evil.net/owner/repo.git" 2>&1'
+    run_in_bash "$G"'_gh_host_from_url "https://github.com.evil.net/owner/repo.git" 2>&1'
     assert_failure
     assert_output --partial "not a github remote"
 }
 
 @test "T17: notgithub.com is also rejected by _gh_parse_owner_repo_url" {
-    run_in_bash '_gh_parse_owner_repo_url "https://notgithub.com/owner/repo.git" 2>&1'
+    run_in_bash "$G"'_gh_parse_owner_repo_url "https://notgithub.com/owner/repo.git" 2>&1'
     assert_failure
     assert_output --partial "not a github remote"
 }
@@ -195,32 +201,32 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "zsh: _gh_resolve_host returns github.com by default" {
-    run_in_zsh '_gh_resolve_host'
+    run_in_zsh "$G"'_gh_resolve_host'
     assert_success
     assert_output "github.com"
 }
 
 @test "zsh: _gh_resolve_host respects internal mode" {
     echo "internal" > "$HOME/.dotfiles-setup-mode"
-    run_in_zsh '_gh_resolve_host'
+    run_in_zsh "$G"'_gh_resolve_host'
     assert_success
-    assert_output "github.samsungds.net"
+    assert_output "ghes.example.invalid"
 }
 
 @test "zsh: _gh_parse_owner_repo_url handles GHE https" {
-    run_in_zsh '_gh_parse_owner_repo_url "https://github.samsungds.net/owner/repo.git"'
+    run_in_zsh "$G"'_gh_parse_owner_repo_url "https://ghes.example.invalid/owner/repo.git"'
     assert_success
     assert_output "owner/repo"
 }
 
 @test "zsh: _gh_host_from_url handles GHE https" {
-    run_in_zsh '_gh_host_from_url "https://github.samsungds.net/owner/repo.git"'
+    run_in_zsh "$G"'_gh_host_from_url "https://ghes.example.invalid/owner/repo.git"'
     assert_success
-    assert_output "github.samsungds.net"
+    assert_output "ghes.example.invalid"
 }
 
 @test "zsh: _gh_host_from_url handles git@ github.com" {
-    run_in_zsh '_gh_host_from_url "git@github.com:dEitY719/dotfiles.git"'
+    run_in_zsh "$G"'_gh_host_from_url "git@github.com:dEitY719/dotfiles.git"'
     assert_success
     assert_output "github.com"
 }
@@ -274,7 +280,7 @@ teardown() {
         _gh_resolve_host
     "
     assert_success
-    assert_output "github.samsungds.net"
+    assert_output "ghes.example.invalid"
 }
 
 @test "#718: function absent + setup-mode=internal on disk -> GHE (hook context)" {
@@ -285,12 +291,65 @@ teardown() {
     # diagnostic (dotfiles_root.sh unreachable) fires on stderr — swallow it
     # with `2>/dev/null` exactly as the real caller does (claude/hooks/
     # post-gh-pr-create.sh:66), so this test only asserts #718 behavior.
-    run env -i "HOME=$HOME" "PATH=$PATH" bash --noprofile --norc -c "
+    run env -i "HOME=$HOME" "PATH=$PATH" "DOTFILES_GHES_HOST=ghes.example.invalid" \
+        bash --noprofile --norc -c "
         . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
         _gh_resolve_host
     "
     assert_success
-    assert_output "github.samsungds.net"
+    assert_output "ghes.example.invalid"
+}
+
+# ---------------------------------------------------------------------------
+# #1965 — GHES host comes from DOTFILES_GHES_HOST, never a tracked literal.
+# Hooks source gh_host.sh without env/internal.sh, so an unexported
+# variable falls back to parsing (not sourcing) internal.local.sh.
+# ---------------------------------------------------------------------------
+
+@test "#1965: hook context, var unset -> host parsed from internal.local.sh" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/sc/env"
+    printf '%s\n' '# comment' 'export DOTFILES_GHES_HOST="ghes-other.example.invalid"' \
+        'echo SOURCED' > "$HOME/sc/env/internal.local.sh"
+    run env -i "HOME=$HOME" "PATH=$PATH" "SHELL_COMMON=$HOME/sc" bash --noprofile --norc -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        _gh_resolve_host
+        _gh_parse_owner_repo_url 'git@ghes-other.example.invalid:o/r.git'
+    "
+    assert_success
+    assert_line --index 0 "ghes-other.example.invalid"
+    assert_line --index 1 "o/r"
+    refute_output --partial "SOURCED"
+}
+
+@test "#1965: internal mode, host unknown -> stderr warning + github.com (no hard-fail)" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/sc"
+    run env -i "HOME=$HOME" "PATH=$PATH" "SHELL_COMMON=$HOME/sc" bash --noprofile --norc -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        _gh_resolve_host 2>'$HOME/err'
+    "
+    assert_success
+    assert_output "github.com"
+    run cat "$HOME/err"
+    assert_output --partial "DOTFILES_GHES_HOST is unset"
+}
+
+@test "#1965: public mode ignores DOTFILES_GHES_HOST and stays silent" {
+    echo "public" > "$HOME/.dotfiles-setup-mode"
+    run env -i "HOME=$HOME" "PATH=$PATH" "DOTFILES_GHES_HOST=ghes.example.invalid" \
+        bash --noprofile --norc -c "
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        _gh_resolve_host 2>&1
+    "
+    assert_success
+    assert_output "github.com"
+}
+
+@test "#1965: GHE host is matched literally (dots are not wildcards)" {
+    run_in_bash "$G"'_gh_host_from_url "https://ghesXexample.invalid/o/r.git" 2>&1'
+    assert_failure
+    assert_output --partial "not a github remote"
 }
 
 @test "#718: function absent + setup-mode file absent -> github.com" {
@@ -320,7 +379,7 @@ teardown() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_zsh '. "$SHELL_COMMON/functions/gh_host.sh"'
+    run_in_zsh "$G"'. "$SHELL_COMMON/functions/gh_host.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
     assert_output --partial "shell-common/functions/gh_host.sh"
@@ -330,7 +389,7 @@ teardown() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_bash '. "$SHELL_COMMON/functions/gh_host.sh"'
+    run_in_bash "$G"'. "$SHELL_COMMON/functions/gh_host.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
     assert_output --partial "shell-common/functions/gh_host.sh"

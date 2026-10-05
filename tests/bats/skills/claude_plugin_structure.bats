@@ -255,7 +255,7 @@ build_perfect() {
     # GHE Pages pattern: https://<host>/pages/<owner>/<repo>/skill-guides/<s>.html
     _seed_skill "$REPO"; _seed_mandatory_json "$REPO"
     _seed_docs_dirs "$REPO"; _seed_readme "$REPO"; _seed_recommended_files "$REPO"
-    printf -- '- `visualize` ([visual guide](https://github.samsungds.net/pages/owner/repo/skill-guides/visualize.html))\n' >> "$REPO/README.md"
+    printf -- '- `visualize` ([visual guide](https://ghes.example.invalid/pages/owner/repo/skill-guides/visualize.html))\n' >> "$REPO/README.md"
     printf -- '- [usage](docs/skill-output/visualize-usage.md)\n' >> "$REPO/README.md"
     run cps_check_r5 "$REPO"; assert_output PASS
 }
