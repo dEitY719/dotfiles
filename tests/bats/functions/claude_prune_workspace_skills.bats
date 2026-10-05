@@ -97,8 +97,6 @@ run_prune() {
     ln -s "$WS/packaging-skills/skills/create" "$TGT/create"
     # Symlink outside the workspace (graphify / claude-accounts link).
     ln -s "$TEST_TEMP_HOME/elsewhere/graphify" "$TGT/graphify"
-    # Dangling symlink outside the workspace — not ours to clean.
-    ln -s "$TEST_TEMP_HOME/elsewhere/vanished" "$TGT/vanished"
     # Real directories and a plain file.
     mkdir -p "$TGT/agentmemory-recall" "$TGT/synced" "$TGT/.trash"
     printf 'user data\n' > "$TGT/agentmemory-recall/SKILL.md"
@@ -110,11 +108,43 @@ run_prune() {
 
     [ ! -L "$TGT/create" ]
     [ "$(readlink "$TGT/graphify")" = "$TEST_TEMP_HOME/elsewhere/graphify" ]
-    [ "$(readlink "$TGT/vanished")" = "$TEST_TEMP_HOME/elsewhere/vanished" ]
     [ -d "$TGT/agentmemory-recall" ] && [ ! -L "$TGT/agentmemory-recall" ]
     grep -q "user data" "$TGT/agentmemory-recall/SKILL.md"
     [ -d "$TGT/synced" ] && [ -d "$TGT/.trash" ]
     grep -q "note" "$TGT/README.txt"
+}
+
+@test "dangling symlinks outside the workspace are pruned too (#2018)" {
+    seed_ws_repo "packaging-skills" "create"
+    mkdir -p "$TGT" "$TEST_TEMP_HOME/elsewhere/graphify"
+    # Pre-#1680 dotfiles layout and a vanished company-skills path.
+    ln -s "$TEST_TEMP_HOME/dotfiles/claude/skills/old" "$TGT/old"
+    ln -s "$TEST_TEMP_HOME/para/project/company-skills/jira-x" "$TGT/jira-x"
+    # Live external link stays.
+    ln -s "$TEST_TEMP_HOME/elsewhere/graphify" "$TGT/graphify"
+
+    run_prune
+    assert_success
+    assert_output --partial "PRUNED_TOTAL=2"
+
+    [ ! -e "$TGT/old" ] && [ ! -L "$TGT/old" ]
+    [ ! -e "$TGT/jira-x" ] && [ ! -L "$TGT/jira-x" ]
+    [ -L "$TGT/graphify" ]
+
+    run_prune
+    assert_success
+    assert_output --partial "PRUNED_TOTAL=0"
+}
+
+@test "dangling external links are pruned even when the workspace root is absent (#2018)" {
+    [ ! -d "$WS" ]
+    mkdir -p "$TGT"
+    ln -s "$TEST_TEMP_HOME/dotfiles/claude/skills/old" "$TGT/old"
+
+    run_prune
+    assert_success
+    assert_output --partial "PRUNED_TOTAL=1"
+    [ ! -L "$TGT/old" ]
 }
 
 @test "a real directory named like a workspace skill is never removed" {
