@@ -45,3 +45,30 @@ teardown() {
     [ "$(git config core.autocrlf)" = "false" ]
     [ "$(stat -c %a "$HOME/.config")" = "700" ]
 }
+
+@test "fix_crlf_issue: reports 10 leftover CR files as remaining, not clean (#1988)" {
+    case "$(pwd -P)" in "$(cd "$FIXTURE" && pwd -P)"/*) ;; *) false ;; esac
+    # A bare CR mid-line survives the `s/\r$//` conversion, so these 10 files
+    # are still flagged by the verification step.
+    for i in 1 2 3 4 5 6 7 8 9 10; do printf 'a\rb\n' >"mid$i.sh"; done
+    git -c core.autocrlf=false add -A
+    git -c core.hooksPath="$FIXTURE/nohooks" -c user.name=t -c user.email=t@t \
+        commit -qm mid
+
+    run bash -c 'echo y | bash scripts/maintenance/fix_crlf_issue.sh'
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"10 files still have CRLF endings"* ]]
+    [[ "$output" != *"No CRLF found"* ]]
+}
+
+@test "fix_crlf_issue: clean run reports no CRLF and no hardcoded home path (#1988)" {
+    case "$(pwd -P)" in "$(cd "$FIXTURE" && pwd -P)"/*) ;; *) false ;; esac
+
+    run bash -c 'echo y | bash scripts/maintenance/fix_crlf_issue.sh'
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"No CRLF found"* ]]
+    [[ "$output" == *"file $FIXTURE/repo/shell-common/aliases/core.sh"* ]] ||
+        [[ "$output" == *"file $(cd "$FIXTURE/repo" && pwd -P)/shell-common/aliases/core.sh"* ]]
+}
