@@ -17,7 +17,16 @@ OUTPUT_DIR="${HOME}/para/archive/playbook/docs/jira-records"
 # Main Logic
 # ═══════════════════════════════════════════════════════════════════════════
 
+make_jira_help() {
+    # ux_lib is loaded only here: the report path keeps its plain output.
+    . "$(dirname "$0")/init.sh" || return 1
+    ux_usage "make-jira" "[current|YYYY-W##] [KEY]" "Generate a weekly Jira report from ~/work_log.txt"
+    ux_bullet "Week defaults to current; optional KEY filters one Jira task"
+    ux_bullet "Output: ${OUTPUT_DIR}"
+}
+
 main() {
+    case "${1:-}" in -h | --help) make_jira_help; return 0 ;; esac
     local target_week="${1:-current}"
     local target_key="${2:-}"
 

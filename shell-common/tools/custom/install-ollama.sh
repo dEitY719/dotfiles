@@ -21,11 +21,19 @@ else
     ux_info() { echo "ℹ️  $*"; }
     ux_success() { echo "✅ $*"; }
     ux_bullet() { echo "  • $*"; }
+    ux_usage() { echo "Usage: $1 $2"; [ -z "${3:-}" ] || echo "  $3"; }
 fi
 unset _ux_lib_path
 . "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
+install_ollama_help() {
+    ux_usage "install-ollama" "[--offline <file>|<file>]" "Install the Ollama binary on WSL (online or offline)"
+    ux_bullet "No args: auto-detect ollama*.tar.zst in the current dir, else download from GitHub"
+    ux_bullet "--offline <file>: install from a local ollama*.tar.zst"
+}
+
 main() {
+    case "${1:-}" in -h | --help) install_ollama_help; return 0 ;; esac
     local offline_file="${1:-}"
 
     # Check for --offline flag or auto-detect ollama*.tar.zst in current directory
