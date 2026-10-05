@@ -4,13 +4,9 @@
 
 set -euo pipefail
 
-# Color definitions
-RED=$(tput setaf 1 2>/dev/null || echo "")
-GREEN=$(tput setaf 2 2>/dev/null || echo "")
-YELLOW=$(tput setaf 3 2>/dev/null || echo "")
-BLUE=$(tput setaf 4 2>/dev/null || echo "")
-BOLD=$(tput bold 2>/dev/null || echo "")
-RESET=$(tput sgr0 2>/dev/null || echo "")
+DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=/dev/null
+. "$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh"
 
 # Bash-specific feature patterns
 declare -A BASH_FEATURES=(
@@ -80,9 +76,9 @@ is_executable() {
 # Analyze a single file
 analyze_file() {
     local file="$1"
-    local rel_path="${file#./}"
+    local rel_path="${file#"$DOTFILES_ROOT"/}"
 
-    ((stats[total]++))
+    ((++stats[total]))
 
     local shebang=$(get_shebang "$file")
     local bash_features=$(detect_bash_features "$file")
@@ -98,16 +94,16 @@ analyze_file() {
         category="BASH_REQUIRED"
         recommended_shebang="#!/bin/bash"
         reason="Uses: $bash_features"
-        ((stats[bash_required]++))
+        ((++stats[bash_required]))
 
         if [[ "$shebang" == "#!/bin/bash"* || "$shebang" == "#!/usr/bin/env bash"* ]]; then
-            ((stats[correct]++))
+            ((++stats[correct]))
             correct_files+=("$rel_path|$shebang|$reason")
         elif [[ "$shebang" == "NONE" ]]; then
-            ((stats[missing_shebang]++))
+            ((++stats[missing_shebang]))
             missing_shebang_files+=("$rel_path|$recommended_shebang|$reason")
         else
-            ((stats[wrong_shebang]++))
+            ((++stats[wrong_shebang]))
             wrong_shebang_files+=("$rel_path|$shebang|$recommended_shebang|$reason")
         fi
 
@@ -117,24 +113,24 @@ analyze_file() {
         category="POSIX_OK"
         recommended_shebang="#!/bin/sh"
         reason="POSIX-compatible, no bash features"
-        ((stats[posix_ok]++))
+        ((++stats[posix_ok]))
 
         if [[ "$shebang" == "#!/bin/sh"* || "$shebang" == "#!/usr/bin/env sh"* ]]; then
-            ((stats[correct]++))
+            ((++stats[correct]))
             correct_files+=("$rel_path|$shebang|$reason")
         elif [[ "$shebang" == "NONE" ]]; then
             if [[ "$is_exec" == "no" ]]; then
-                ((stats[source_only]++))
+                ((++stats[source_only]))
                 source_only_files+=("$rel_path|optional|$reason")
             else
-                ((stats[missing_shebang]++))
+                ((++stats[missing_shebang]))
                 missing_shebang_files+=("$rel_path|$recommended_shebang|$reason")
             fi
         elif [[ "$shebang" == "#!/bin/bash"* || "$shebang" == "#!/usr/bin/env bash"* ]]; then
-            ((stats[wrong_shebang]++))
+            ((++stats[wrong_shebang]))
             wrong_shebang_files+=("$rel_path|$shebang|$recommended_shebang|$reason")
         else
-            ((stats[correct]++))
+            ((++stats[correct]))
             correct_files+=("$rel_path|$shebang|$reason")
         fi
 
@@ -142,156 +138,131 @@ analyze_file() {
     fi
 }
 
-# Print section header
-print_section() {
-    local title="$1"
-    echo ""
-    echo "${BOLD}${BLUE}═══════════════════════════════════════════════════════════════${RESET}"
-    echo "${BOLD}${BLUE}  $title${RESET}"
-    echo "${BOLD}${BLUE}═══════════════════════════════════════════════════════════════${RESET}"
-    echo ""
+# Print one file entry: file, current shebang, recommended shebang, reason
+print_entry() {
+    ux_bullet "$1"
+    ux_table_row "Current" "$2"
+    ux_table_row "Recommended" "$3"
+    ux_table_row "Reason" "$4"
 }
 
 # Print statistics
 print_stats() {
-    print_section "STATISTICS"
+    ux_header "STATISTICS"
 
-    echo "${BOLD}Total files analyzed:${RESET} ${stats[total]}"
-    echo ""
-    echo "${BOLD}By features:${RESET}"
-    echo "  ${YELLOW}Bash-required:${RESET}    ${stats[bash_required]} (need #!/bin/bash)"
-    echo "  ${GREEN}POSIX-compatible:${RESET} ${stats[posix_ok]} (can use #!/bin/sh)"
-    echo ""
-    echo "${BOLD}By shebang status:${RESET}"
-    echo "  ${GREEN}Correct shebang:${RESET}  ${stats[correct]}"
-    echo "  ${RED}Wrong shebang:${RESET}    ${stats[wrong_shebang]}"
-    echo "  ${YELLOW}Missing shebang:${RESET}  ${stats[missing_shebang]}"
-    echo "  ${BLUE}Source-only:${RESET}      ${stats[source_only]} (shebang optional)"
+    ux_table_row "Total files" "${stats[total]}"
+    ux_section "By features"
+    ux_table_row "Bash-required" "${stats[bash_required]} (need #!/bin/bash)"
+    ux_table_row "POSIX-compatible" "${stats[posix_ok]} (can use #!/bin/sh)"
+    ux_section "By shebang status"
+    ux_table_row "Correct shebang" "${stats[correct]}"
+    ux_table_row "Wrong shebang" "${stats[wrong_shebang]}"
+    ux_table_row "Missing shebang" "${stats[missing_shebang]}"
+    ux_table_row "Source-only" "${stats[source_only]} (shebang optional)"
 }
 
 # Print priority files (shell-common/env/ and shell-common/functions/)
 print_priority_files() {
-    print_section "PRIORITY FILES (shell-common/env/ and shell-common/functions/)"
+    ux_header "PRIORITY FILES (shell-common/env/ and shell-common/functions/)"
 
     local priority_count=0
 
-    # Check wrong shebang in priority directories
-    echo "${BOLD}${RED}Files needing shebang changes:${RESET}"
+    ux_section "Files needing shebang changes"
     for entry in "${wrong_shebang_files[@]}"; do
         IFS='|' read -r file current recommended reason <<< "$entry"
         if [[ "$file" =~ ^shell-common/(env|functions)/ ]]; then
-            ((priority_count++))
-            echo ""
-            echo "  ${YELLOW}File:${RESET}        $file"
-            echo "  ${RED}Current:${RESET}     $current"
-            echo "  ${GREEN}Recommended:${RESET} $recommended"
-            echo "  ${BLUE}Reason:${RESET}      $reason"
+            ((++priority_count))
+            print_entry "$file" "$current" "$recommended" "$reason"
         fi
     done
 
-    # Check missing shebang in priority directories
     for entry in "${missing_shebang_files[@]}"; do
         IFS='|' read -r file recommended reason <<< "$entry"
         if [[ "$file" =~ ^shell-common/(env|functions)/ ]]; then
-            ((priority_count++))
-            echo ""
-            echo "  ${YELLOW}File:${RESET}        $file"
-            echo "  ${RED}Current:${RESET}     NONE"
-            echo "  ${GREEN}Recommended:${RESET} $recommended"
-            echo "  ${BLUE}Reason:${RESET}      $reason"
+            ((++priority_count))
+            print_entry "$file" "NONE" "$recommended" "$reason"
         fi
     done
 
     if [[ $priority_count -eq 0 ]]; then
-        echo "  ${GREEN}✓ All priority files have correct shebangs!${RESET}"
+        ux_success "All priority files have correct shebangs!"
     fi
 }
 
 # Print detailed findings
 print_findings() {
-    print_section "FILES NEEDING SHEBANG CHANGES"
+    ux_header "FILES NEEDING SHEBANG CHANGES"
 
     if [[ ${#wrong_shebang_files[@]} -eq 0 ]] && [[ ${#missing_shebang_files[@]} -eq 0 ]]; then
-        echo "${GREEN}✓ No files need shebang changes!${RESET}"
+        ux_success "No files need shebang changes!"
         return
     fi
 
     if [[ ${#wrong_shebang_files[@]} -gt 0 ]]; then
-        echo "${BOLD}${RED}Wrong Shebang (${#wrong_shebang_files[@]} files):${RESET}"
+        ux_section "Wrong Shebang (${#wrong_shebang_files[@]} files)"
         for entry in "${wrong_shebang_files[@]}"; do
             IFS='|' read -r file current recommended reason <<< "$entry"
-            echo ""
-            echo "  ${YELLOW}File:${RESET}        $file"
-            echo "  ${RED}Current:${RESET}     $current"
-            echo "  ${GREEN}Recommended:${RESET} $recommended"
-            echo "  ${BLUE}Reason:${RESET}      $reason"
+            print_entry "$file" "$current" "$recommended" "$reason"
         done
-        echo ""
     fi
 
     if [[ ${#missing_shebang_files[@]} -gt 0 ]]; then
-        echo "${BOLD}${YELLOW}Missing Shebang (${#missing_shebang_files[@]} files):${RESET}"
+        ux_section "Missing Shebang (${#missing_shebang_files[@]} files)"
         for entry in "${missing_shebang_files[@]}"; do
             IFS='|' read -r file recommended reason <<< "$entry"
-            echo ""
-            echo "  ${YELLOW}File:${RESET}        $file"
-            echo "  ${RED}Current:${RESET}     NONE"
-            echo "  ${GREEN}Recommended:${RESET} $recommended"
-            echo "  ${BLUE}Reason:${RESET}      $reason"
+            print_entry "$file" "NONE" "$recommended" "$reason"
         done
     fi
 }
 
 # Print source-only files
 print_source_only() {
-    print_section "SOURCE-ONLY FILES (Shebang Optional)"
+    ux_header "SOURCE-ONLY FILES (Shebang Optional)"
 
     if [[ ${#source_only_files[@]} -eq 0 ]]; then
-        echo "None"
+        ux_info "None"
         return
     fi
 
     for entry in "${source_only_files[@]}"; do
         IFS='|' read -r file shebang reason <<< "$entry"
-        echo "  ${BLUE}$file${RESET} - $reason"
+        ux_bullet "$file - $reason"
     done
 }
 
 # Print bash-required files
 print_bash_required() {
-    print_section "BASH-REQUIRED FILES (${#bash_required_files[@]} files)"
+    ux_header "BASH-REQUIRED FILES (${#bash_required_files[@]} files)"
 
     for entry in "${bash_required_files[@]}"; do
         IFS='|' read -r file shebang features is_exec <<< "$entry"
-        echo ""
-        echo "  ${YELLOW}File:${RESET}     $file"
-        echo "  ${BLUE}Shebang:${RESET}  $shebang"
-        echo "  ${GREEN}Features:${RESET} $features"
-        echo "  ${BLUE}Exec:${RESET}     $is_exec"
+        ux_bullet "$file"
+        ux_table_row "Shebang" "$shebang"
+        ux_table_row "Features" "$features"
+        ux_table_row "Exec" "$is_exec"
     done
 }
 
 # Print POSIX-OK files
 print_posix_ok() {
-    print_section "POSIX-COMPATIBLE FILES (${#posix_ok_files[@]} files)"
+    ux_header "POSIX-COMPATIBLE FILES (${#posix_ok_files[@]} files)"
 
     for entry in "${posix_ok_files[@]}"; do
         IFS='|' read -r file shebang is_exec <<< "$entry"
-        echo "  ${GREEN}$file${RESET} - Shebang: $shebang, Exec: $is_exec"
+        ux_bullet "$file - Shebang: $shebang, Exec: $is_exec"
     done
 }
 
 # Main execution
 main() {
-    print_section "SHEBANG CONSISTENCY ANALYSIS"
+    ux_header "SHEBANG CONSISTENCY ANALYSIS"
 
-    echo "Analyzing all .sh and .bash files in /home/bwyoon/dotfiles..."
-    echo ""
+    ux_info "Analyzing all .sh and .bash files in $DOTFILES_ROOT..."
 
     # Find and analyze all files
     while IFS= read -r file; do
         analyze_file "$file"
-    done < <(find /home/bwyoon/dotfiles -type f \( -name "*.sh" -o -name "*.bash" \) | sort)
+    done < <(find "$DOTFILES_ROOT" -type f \( -name "*.sh" -o -name "*.bash" \) | sort)
 
     # Print results
     print_stats
@@ -303,15 +274,13 @@ main() {
     # print_bash_required
     # print_posix_ok
 
-    print_section "SUMMARY"
-    echo "Analysis complete. Check the sections above for detailed findings."
-    echo ""
-    echo "${BOLD}Next steps:${RESET}"
-    echo "  1. Review priority files (shell-common/env/ and shell-common/functions/)"
-    echo "  2. Fix wrong shebangs in bash-required files"
-    echo "  3. Add shebangs to executable files missing them"
-    echo "  4. Consider whether source-only files need shebangs"
-    echo ""
+    ux_header "SUMMARY"
+    ux_info "Analysis complete. Check the sections above for detailed findings."
+    ux_section "Next steps"
+    ux_numbered 1 "Review priority files (shell-common/env/ and shell-common/functions/)"
+    ux_numbered 2 "Fix wrong shebangs in bash-required files"
+    ux_numbered 3 "Add shebangs to executable files missing them"
+    ux_numbered 4 "Consider whether source-only files need shebangs"
 }
 
 main "$@"

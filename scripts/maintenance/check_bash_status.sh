@@ -4,23 +4,23 @@
 
 set -Eeuo pipefail
 
+DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=/dev/null
+. "$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh"
+
 show_help() {
-  cat <<'EOF'
-Usage: ./check_bash_status.sh [ROOT_DIR(default: ./bash)] [--mode isolated|chain] [--logdir ./bash_check_logs]
-
-Options:
-  ROOT_DIR        Directory to search for .bash files (default: ./bash)
-  --mode MODE     Run mode: isolated (default) or chain
-                  isolated : each file in a fresh shell
-                  chain    : all files sourced in one shell sequentially
-  --logdir DIR    Directory to store logs (default: ./bash_check_logs)
-  --help          Show this help message
-
-Examples:
-  ./check_bash_status.sh
-  ./check_bash_status.sh ./bash --mode isolated
-  ./check_bash_status.sh ./bash --mode chain --logdir ./logs
-EOF
+  ux_usage "./check_bash_status.sh" "[ROOT_DIR(default: ./bash)] [--mode isolated|chain] [--logdir ./bash_check_logs]" \
+    "Inspect .bash files one by one in clean shells with tracing."
+  ux_section "Options"
+  ux_table_row "ROOT_DIR" "Directory to search for .bash files (default: ./bash)"
+  ux_table_row "--mode MODE" "isolated (default): each file in a fresh shell"
+  ux_table_row "" "chain: all files sourced in one shell sequentially"
+  ux_table_row "--logdir DIR" "Directory to store logs (default: ./bash_check_logs)"
+  ux_table_row "--help" "Show this help message"
+  ux_section "Examples"
+  ux_bullet "./check_bash_status.sh"
+  ux_bullet "./check_bash_status.sh ./bash --mode isolated"
+  ux_bullet "./check_bash_status.sh ./bash --mode chain --logdir ./logs"
 }
 
 # defaults
@@ -37,11 +37,11 @@ while [[ $# -gt 0 ]]; do
       exit 0
       ;;
     --mode)
-      [[ $# -ge 2 ]] || { echo "[ERR] --mode requires a value" >&2; exit 2; }
+      [[ $# -ge 2 ]] || { ux_error "--mode requires a value"; exit 2; }
       MODE="$2"; shift 2
       ;;
     --logdir)
-      [[ $# -ge 2 ]] || { echo "[ERR] --logdir requires a value" >&2; exit 2; }
+      [[ $# -ge 2 ]] || { ux_error "--logdir requires a value"; exit 2; }
       LOG_DIR="$2"; shift 2
       ;;
     --) # end of options
@@ -49,7 +49,7 @@ while [[ $# -gt 0 ]]; do
       break
       ;;
     -*)
-      echo "[ERR] unknown option: $1" >&2
+      ux_error "unknown option: $1"
       exit 2
       ;;
     *)
@@ -58,7 +58,7 @@ while [[ $# -gt 0 ]]; do
         ROOT_DIR_SET=1
         shift
       else
-        echo "[ERR] multiple ROOT_DIR values supplied (already have '$ROOT_DIR', extra '$1')" >&2
+        ux_error "multiple ROOT_DIR values supplied (already have '$ROOT_DIR', extra '$1')"
         exit 2
       fi
       ;;
@@ -67,17 +67,9 @@ done
 
 mkdir -p "$LOG_DIR"
 
-# colors
-if command -v tput >/dev/null 2>&1; then
-  BOLD="$(tput bold)"; NORMAL="$(tput sgr0)"
-  RED="$(tput setaf 1)"; GREEN="$(tput setaf 2)"; YELLOW="$(tput setaf 3)"; BLUE="$(tput setaf 4)"
-else
-  BOLD=""; NORMAL=""; RED=""; GREEN=""; YELLOW=""; BLUE=""
-fi
-
 # sanity checks
 if [[ ! -d "$ROOT_DIR" ]]; then
-  echo "${RED}[ERR]${NORMAL} ROOT_DIR does not exist or is not a directory: ${ROOT_DIR}" >&2
+  ux_error "ROOT_DIR does not exist or is not a directory: ${ROOT_DIR}"
   exit 2
 fi
 
@@ -85,14 +77,14 @@ fi
 mapfile -t FILES < <(find "$ROOT_DIR" -type f -name '*.bash' | sort)
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
-  echo "${YELLOW}[WARN]${NORMAL} No .bash files under ${ROOT_DIR}"
+  ux_warning "No .bash files under ${ROOT_DIR}"
   exit 0
 fi
 
-echo "${BOLD}Checking .bash files under: ${ROOT_DIR}${NORMAL}"
-echo "Mode: ${BOLD}${MODE}${NORMAL}"
-echo "Log dir: ${BOLD}${LOG_DIR}${NORMAL}"
-echo
+ux_header "Checking .bash files under: ${ROOT_DIR}"
+ux_table_row "Mode" "${MODE}"
+ux_table_row "Log dir" "${LOG_DIR}"
+ux_info ""
 
 run_isolated() {
   for f in "${FILES[@]}"; do
@@ -102,7 +94,7 @@ run_isolated() {
     [[ "$rel" == "$f" ]] && rel="$(realpath --relative-to="$ROOT_DIR" "$f" 2>/dev/null || echo "$f")"
     log="${LOG_DIR}/isolated_${rel//\//_}.log"
 
-    echo "${BLUE}[*]${NORMAL} ${rel}"
+    ux_step "*" "${rel}"
 
     tmp_script="$(mktemp)"
 {
@@ -126,14 +118,14 @@ EOS
 
     # 깨끗한 셸에서 실행 (여기서는 3> 리다이렉션 붙이지 않음)
     if ! bash --noprofile --norc "$tmp_script"; then
-      echo "    ${RED}[FAIL]${NORMAL} ${rel}"
-      echo "    Trace: ${log}"
-      echo
+      ux_error "${rel}"
+      ux_info "Trace: ${log}"
+      ux_info ""
       tail -n 30 "$log" | sed 's/^/    /'
       rm -f "$tmp_script"
       exit 1
     else
-      echo "    ${GREEN}[OK]${NORMAL} ${rel}  (trace: ${log})"
+      ux_success "${rel}  (trace: ${log})"
     fi
     rm -f "$tmp_script"
   done
@@ -162,26 +154,23 @@ EOS
   } > "$tmp_script"
 
   if ! bash --noprofile --norc "$tmp_script"; then
-    echo "${RED}[FAIL]${NORMAL} chain mode"
-    echo "Trace: ${log}"
-    echo
+    ux_error "chain mode"
+    ux_info "Trace: ${log}"
+    ux_info ""
     tail -n 80 "$log" | sed 's/^/    /'
     rm -f "$tmp_script"
     exit 1
   else
-    echo "${GREEN}[OK]${NORMAL} chain mode (trace: ${log})"
+    ux_success "chain mode (trace: ${log})"
   fi
   rm -f "$tmp_script"
-  # 헤더/exec 3>.../루프는 그대로 유지하고, 맨 끝 메시지 2줄만 교체
-  printf 'echo ">>> LOAD OK: chained %d files"\n' "${#FILES[@]}"
-  printf 'echo "체크한 결과, 정상입니다. (chain, %d files)" >&3\n' "${#FILES[@]}"
 }
 
 case "$MODE" in
   isolated) run_isolated ;;
   chain) run_chain ;;
-  *) echo "[ERR] invalid --mode: $MODE" >&2; exit 2 ;;
+  *) ux_error "invalid --mode: $MODE"; exit 2 ;;
 esac
 
-echo
-echo "${GREEN}${BOLD}All good!${NORMAL}"
+ux_info ""
+ux_success "All good!"
