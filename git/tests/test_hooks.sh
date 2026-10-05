@@ -322,6 +322,34 @@ test_leak_guard_blocks_without_echoing_match() {
   rm -rf "$repo_dir"
 }
 
+# Issue #1997 — a file NAME that matches is caught and never printed.
+test_leak_guard_redacts_matching_path() {
+  local repo_dir out code
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+  mkdir "$repo_dir/d"
+  echo clean >"$repo_dir/d/qx9FAKETOKEN77.conf"
+  echo "qx9FAKETOKEN88 again" >"$repo_dir/d/qx9FAKETOKEN99.txt"
+  git -C "$repo_dir" add -A
+
+  set +e
+  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
+    git -C "$repo_dir" commit -m "path leak" 2>&1)
+  code=$?
+  set -e
+  [ $code -ne 0 ] || die "Expected leak guard to block a matching path"
+  if echo "$out" | grep -q "qx9FAKE"; then
+    die "Leak guard echoed a matching path or text: $out"
+  fi
+  [ "$(echo "$out" | grep -cE "<redacted path: [0-9]+ chars, matches LEAK_PATTERNS_ERE>  \(use: git diff --cached --name-only")" -eq 2 ] \
+    || die "Expected one redacted-path hint per matching path, got: $out"
+  echo "$out" | grep -q "<redacted path: 20 chars>:1  (matches LEAK_PATTERNS_ERE)" \
+    || die "Expected redacted path:line for content hit, got: $out"
+  echo "$out" | grep -q "leak.txt:1" || die "Expected ordinary path to print normally, got: $out"
+
+  rm -rf "$repo_dir"
+}
+
 test_leak_guard_inert_without_upstream_remote() {
   local repo_dir
   repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
@@ -834,6 +862,7 @@ main() {
 
   # Issue #1970 — commit-time leak guard
   test_leak_guard_blocks_without_echoing_match
+  test_leak_guard_redacts_matching_path
   test_leak_guard_inert_without_upstream_remote
   test_leak_guard_skip_escape_hatch
 

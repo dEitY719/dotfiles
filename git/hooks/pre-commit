@@ -482,7 +482,7 @@ if [ $abs_home_violations -gt 0 ] && [ -s "$ABS_HOME_VIOLATIONS_FILE" ]; then
 fi
 
 if [ $leak_pattern_violations -gt 0 ] && [ -s "$LEAK_PATTERN_FILE" ]; then
-    echo -e "${RED}[BLOCKING] Internal-identifier leak pattern in staged lines ($leak_pattern_violations):${NC}"
+    echo -e "${RED}[BLOCKING] Internal-identifier leak pattern in staged lines or file names ($leak_pattern_violations):${NC}"
     head -n 10 "$LEAK_PATTERN_FILE" | sed 's/^/  /'
     [ "$(wc -l <"$LEAK_PATTERN_FILE")" -gt 10 ] && echo "  ... and more"
     echo "  Matched text is not shown. Inspect: git diff --cached -U0 | grep -nE \"\$LEAK_PATTERNS_ERE\""

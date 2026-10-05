@@ -63,7 +63,7 @@ run_test() {
 }
 
 # ============================================
-# LAYER 2 — LEAK GUARD (T-1 .. T-7)
+# LAYER 2 — LEAK GUARD (T-1 .. T-10)
 # ============================================
 
 # Fixture: tiny git repo with one commit. Caller mutates from there.
@@ -268,6 +268,87 @@ _t7_protected_branch_takes_priority() {
     _assert_eq "T-7 protected-branch wins over leak guard" 1 "$rc_ok"
 }
 
+# Issue #1997 — a matching file NAME (or pushed ref name) is caught and
+# never printed. Fake token only.
+_FAKE_PAT='qx9FAKE[A-Z]+[0-9]+'
+
+_t8_matching_path_redacted() {
+    local dir
+    dir=$(_setup_repo)
+    mkdir "$dir/d"
+    echo "endpoint qx9FAKETOKEN88" >"$dir/d/qx9FAKETOKEN77.conf"
+    echo "endpoint example.internal" >>"$dir/seed.txt"
+    git -C "$dir" add -A
+    git -C "$dir" -c core.hooksPath=/dev/null commit -q -m "ordinary subject"
+
+    set +e
+    UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" \
+        LEAK_PATTERNS_ERE="$_LEAK_PATTERNS_ERE|$_FAKE_PAT" \
+        _invoke_hook "$dir" upstream "https://github.com/owner/repo.git"
+    local rc=$?
+    set -e
+
+    local rc_ok=0
+    if [ "$rc" -eq 1 ] \
+        && [ "$(printf '%s\n' "$LEAK_OUT" | grep -c "source: <redacted path: 21 chars, matches LEAK_PATTERNS_ERE>")" -eq 2 ] \
+        && printf '%s' "$LEAK_OUT" | grep -q "lines:  (file name)" \
+        && printf '%s' "$LEAK_OUT" | grep -q "path:    git diff-tree" \
+        && printf '%s' "$LEAK_OUT" | grep -q "source: seed.txt" \
+        && ! printf '%s' "$LEAK_OUT" | grep -q "qx9FAKE"; then
+        rc_ok=1
+    fi
+    rm -rf "$dir"
+    _assert_eq "T-8 matching path -> exit 1 + redacted path, ordinary path kept" 1 "$rc_ok"
+}
+
+_t9_matching_path_clean_content_blocks() {
+    local dir
+    dir=$(_setup_repo)
+    mkdir "$dir/d"
+    echo clean >"$dir/d/qx9FAKETOKEN77.conf"
+    git -C "$dir" add -A
+    git -C "$dir" -c core.hooksPath=/dev/null commit -q -m "ordinary subject"
+
+    set +e
+    UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" LEAK_PATTERNS_ERE="$_FAKE_PAT" \
+        _invoke_hook "$dir" upstream "https://github.com/owner/repo.git"
+    local rc=$?
+    set -e
+
+    local rc_ok=0
+    if [ "$rc" -eq 1 ] \
+        && printf '%s' "$LEAK_OUT" | grep -q "source: <redacted path:" \
+        && ! printf '%s' "$LEAK_OUT" | grep -q "qx9FAKE"; then
+        rc_ok=1
+    fi
+    rm -rf "$dir"
+    _assert_eq "T-9 matching path, clean content -> exit 1, no token" 1 "$rc_ok"
+}
+
+_t10_matching_ref_name_redacted() {
+    local dir local_sha rc out
+    dir=$(_setup_repo)
+    local_sha=$(git -C "$dir" rev-parse HEAD)
+
+    set +e
+    out=$(cd "$dir" \
+        && printf 'refs/heads/f %s refs/heads/feat/qx9FAKETOKEN77 %s\n' "$local_sha" "$ZERO_SHA" \
+        | UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" LEAK_PATTERNS_ERE="$_FAKE_PAT" \
+            "$HOOK" upstream "https://github.com/owner/repo.git" 2>&1)
+    rc=$?
+    set -e
+
+    local rc_ok=0
+    if [ "$rc" -eq 1 ] \
+        && printf '%s' "$out" | grep -q "source: <redacted ref name:" \
+        && ! printf '%s' "$out" | grep -q "qx9FAKE"; then
+        rc_ok=1
+    fi
+    rm -rf "$dir"
+    LEAK_OUT="$out"
+    _assert_eq "T-10 matching pushed ref name -> exit 1, no token" 1 "$rc_ok"
+}
+
 # ============================================
 # RUN TESTS
 # ============================================
@@ -296,7 +377,7 @@ run_test "hotfix/security" "ALLOWED" || all_passed=0
 run_test "test/experiment" "ALLOWED" || all_passed=0
 
 echo ""
-echo "Testing leak guard (T-1 .. T-7):"
+echo "Testing leak guard (T-1 .. T-10):"
 _t1_origin_push_with_pattern_passes || all_passed=0
 _t2_upstream_push_no_pattern_passes || all_passed=0
 _t3_upstream_push_pattern_in_commit_message_blocks || all_passed=0
@@ -304,6 +385,9 @@ _t4_upstream_push_pattern_in_diff_blocks || all_passed=0
 _t5_skip_leak_guard_escape_hatch || all_passed=0
 _t6_skip_pre_push_escape_hatch || all_passed=0
 _t7_protected_branch_takes_priority || all_passed=0
+_t8_matching_path_redacted || all_passed=0
+_t9_matching_path_clean_content_blocks || all_passed=0
+_t10_matching_ref_name_redacted || all_passed=0
 
 echo ""
 if [ $all_passed -eq 1 ]; then
