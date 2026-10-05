@@ -350,6 +350,39 @@ test_leak_guard_redacts_matching_path() {
   rm -rf "$repo_dir"
 }
 
+# Issue #2002 — the OTHER checks' reports (shebang, shellcheck, ...) print
+# staged paths too; with the guard active the whole hook output is redacted.
+test_leak_guard_redacts_other_check_reports() {
+  local repo_dir out code inactive
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+  mkdir -p "$repo_dir/d" "$repo_dir/shell-common"
+  printf '#!/bin/bash\necho hi\n' >"$repo_dir/d/qx9FAKETOKEN77.sh"
+  printf '#!/bin/zsh\necho hi\n' >"$repo_dir/shell-common/qx9FAKETOKEN78.sh"
+  git -C "$repo_dir" add -A
+
+  set +e
+  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
+    git -C "$repo_dir" commit -m "path leak" 2>&1)
+  code=$?
+  set -e
+  [ $code -ne 0 ] || die "Expected the commit to be blocked"
+  echo "$out" | grep -q "Shebang violations" || die "Expected the shebang report, got: $out"
+  echo "$out" | grep -q "shell-common/<redacted>.sh:1" || die "Expected a redacted shebang path, got: $out"
+  if echo "$out" | grep -q "qx9FAKE"; then
+    die "A check report echoed a matching path: $out"
+  fi
+
+  # Inactive (no upstream remote matches): the filter is skipped entirely.
+  set +e
+  inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "inactive" 2>&1)
+  set -e
+  echo "$inactive" | grep -q "shell-common/qx9FAKETOKEN78.sh:1" \
+    || die "Expected the unfiltered path when inactive, got: $inactive"
+
+  rm -rf "$repo_dir"
+}
+
 test_leak_guard_inert_without_upstream_remote() {
   local repo_dir
   repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
@@ -863,6 +896,7 @@ main() {
   # Issue #1970 — commit-time leak guard
   test_leak_guard_blocks_without_echoing_match
   test_leak_guard_redacts_matching_path
+  test_leak_guard_redacts_other_check_reports
   test_leak_guard_inert_without_upstream_remote
   test_leak_guard_skip_escape_hatch
 

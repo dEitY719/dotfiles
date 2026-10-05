@@ -22,9 +22,22 @@ ref 이름) 자체가 `LEAK_PATTERNS_ERE` 에 매칭되면 그 경로 대신 길
 - pre-push: `source: <redacted path: N chars, matches LEAK_PATTERNS_ERE>` +
   `lines:  (file name)`, ref 이름은 `source: <redacted ref name: N chars, ...>`
 
-보장 범위는 leak guard 자신의 출력이다. 같은 pre-commit 의 다른 검사(shellcheck 등)나
-git 자체 출력은 staged 경로를 그대로 찍을 수 있다 — 식별값을 파일 이름에 두지 않는 것이
-우선이다.
+**pre-commit 전체 출력 (#2002)**: 가드가 활성이면 `hooks/pre-commit` 은 자신을 한 번
+더 실행해 출력 전체(stdout + stderr: 보호 브랜치 안내, shebang/naming/shellcheck 등 모든
+검사 리포트)를 `leak_redact` 필터에 통과시킨다 — `LEAK_PATTERNS_ERE` 매칭 부분은 모두
+`<redacted>` 로 바뀐다 (예: `shell-common/<redacted>.sh:1: Expected: ...`). 비활성이면
+필터를 거치지 않으며 출력은 이전과 바이트 단위로 같다.
+
+가리지 못하는 출력 (hook 밖이거나 hook 이전):
+
+- global hook (`global-hooks/pre-commit`, Layer 1) 이 프로젝트 hook 으로 위임하기
+  **전에** 찍는 자체 검사 출력 (trailing whitespace, debug code, forbidden filename 등의
+  경로 목록). 이 repo 의 가드와 무관한 범용 hook 이다.
+- git 자체 출력. 가드가 경로 매칭으로 막으면 커밋이 안 되므로 git 은 경로를 찍지 않지만,
+  `SKIP_LEAK_GUARD=1` 이나 `--no-verify` 로 통과시킨 커밋의 요약(`create mode ... <path>`),
+  `git status`, `git add` 경고 등은 hook 이 제어할 수 없다.
+
+식별값을 파일 이름에 두지 않는 것이 여전히 우선이다.
 
 두 단계 모두 같은 변수 두 개를 읽는다 (SSOT: `config/pre-push-rules.sh`, 기본값 빈
 문자열 = 비활성):

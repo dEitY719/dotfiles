@@ -104,6 +104,15 @@ source_check_or_exit "${CHECKS_DIR}/main_branch_guard.sh"
 source_check_or_exit "${CHECKS_DIR}/command_docs_staleness_check.sh"
 source_check_or_exit "${CHECKS_DIR}/leak_pattern_check.sh"
 
+# Leak guard active (#2002): every check below prints staged paths (the
+# ShellCheck report even prints code), so run this hook once more with its whole output
+# through one filter that replaces each LEAK_PATTERNS_ERE match. Inactive:
+# leak_guard_active fails on the env checks and nothing changes.
+if [ -z "${LEAK_REDACT_PIPED:-}" ] && leak_guard_active; then
+    LEAK_REDACT_PIPED=1 "$0" "$@" 2>&1 | leak_redact
+    exit "${PIPESTATUS[0]}"
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Protected-branch guard (fail fast, before any file scanning)
 # ═══════════════════════════════════════════════════════════════════════════
