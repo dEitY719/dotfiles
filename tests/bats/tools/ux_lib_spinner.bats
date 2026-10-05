@@ -45,7 +45,7 @@ _spinner_frames() {
     [ "$(printf '%s\n' "$ref" | sed -n 1p)" = "⠋" ]
     [ "$(printf '%s\n' "$ref" | sed -n 10p)" = "⠏" ]
     [ "$(printf '%s\n' "$ref" | sed -n 11p)" = "⠋" ]
-    ! printf '%s\n' "$ref" | grep -qx ''
+    refute grep -qx '' <<<"$ref"
     [ "$(_spinner_frames zsh)" = "$ref" ]
     [ "$(_spinner_frames zsh-emulate)" = "$ref" ]
 }

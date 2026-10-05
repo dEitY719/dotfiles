@@ -314,7 +314,7 @@ EOF
     run bash -c "printf '%s' '$payload' | '$HOOK'"
     assert_success
     [ "$(grep -c '^sync pr 77 In review$' "$CALL_LOG")" -eq 2 ]
-    ! echo "$output" | grep -q 'still not'
+    refute_output --partial 'still not'
     # Counterpart to T18: with the normalizer PRESENT the hook must take the
     # helper path, so the #724 fallback warning stays silent. Without this the
     # stub could quietly rot back to "undefined" and T15 would still pass on

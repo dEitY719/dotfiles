@@ -6,6 +6,8 @@
 
 load '../test_helper'
 
+bats_require_minimum_version 1.5.0  # run !
+
 SCRIPT_UNDER_TEST="${DOTFILES_ROOT}/scripts/maintenance/fix_crlf_issue.sh"
 
 setup() {
@@ -41,7 +43,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Converted 2 files from CRLF to LF"* ]]
     [[ "$output" == *"Repair Complete"* ]]
-    ! grep -q $'\r' shell-common/tools/ux_lib/ux_lib.sh b.bash c.sh
+    run ! grep -q $'\r' shell-common/tools/ux_lib/ux_lib.sh b.bash c.sh
     [ "$(git config core.autocrlf)" = "false" ]
     [ "$(stat -c %a "$HOME/.config")" = "700" ]
 }

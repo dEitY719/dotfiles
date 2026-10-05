@@ -126,7 +126,7 @@ run_setup_opencode_env() {
     assert_success
     [ -f "$TARGET" ]
     grep -q 'envknox42' "$TARGET"
-    ! grep -q 'your-knox-id' "$TARGET"
+    refute grep -q 'your-knox-id' "$TARGET"
     refute_output --partial "replace 'your-knox-id'"
 }
 
@@ -136,7 +136,7 @@ run_setup_opencode_env() {
     run_setup_opencode
     assert_success
     grep -q 'fileknox99' "$TARGET"
-    ! grep -q 'your-knox-id' "$TARGET"
+    refute grep -q 'your-knox-id' "$TARGET"
     refute_output --partial "replace 'your-knox-id'"
 }
 
@@ -184,7 +184,7 @@ run_setup_opencode_env() {
     run_setup_opencode
     assert_success
     grep -qF "\"baseURL\": \"$FAKE_REAL_URL\"" "$TARGET"
-    ! grep -q 'example.invalid' "$TARGET"
+    refute grep -q 'example.invalid' "$TARGET"
     # The tracked template itself is never rewritten (no value leaks into it).
     cmp -s "$FIXTURE_DOTFILES/opencode/opencode.json.internal" \
         "$_BATS_REAL_DOTFILES_ROOT/opencode/opencode.json.internal"
