@@ -61,7 +61,11 @@ _gcp_scan_preflight_is_noop() {
     # popped at the end, and the index/tree are restored with `git reset --hard`
     # (a `cherry-pick -n` never records sequencer state, so no --abort needed).
     if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        echo "Error: Not in a git repository" >&2
+        if type ux_error >/dev/null 2>&1; then
+            ux_error "Not in a git repository"
+        else
+            echo "Error: Not in a git repository" >&2
+        fi
         return 1
     fi
     local sha="$1" result=1 had_stash=0 conflicted f real_content_conflict=0
@@ -1811,7 +1815,11 @@ EOF
         local line
         line=$(git log --no-walk --format="%C(auto)%h %C(green)%ad %C(blue)%an%C(auto)%d %s" --date=short "$sha")
 
-        printf " %d. %s\n" "$line_num" "$line"
+        if type ux_numbered >/dev/null 2>&1; then
+            ux_numbered "$line_num" "$line"
+        else
+            printf " %d. %s\n" "$line_num" "$line"
+        fi
     done <<EOF
 $final_selected_list
 EOF

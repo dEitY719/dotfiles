@@ -79,7 +79,7 @@
 ### status
 
 - zsh-autosuggestions is not installed
-  Run: install-zsh-autosuggestions
+- Run: install-zsh-autosuggestions
 
 ## 엣지케이스 / 의도된 동작
 

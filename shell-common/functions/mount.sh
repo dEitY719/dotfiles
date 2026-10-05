@@ -403,7 +403,7 @@ mount_show() {
             if type ux_info >/dev/null 2>&1; then
                 ux_info "No mounts found under ~/.claude"
             else
-                ux_bullet "(no mounts under ~/.claude)" >&2
+                echo "(no mounts under ~/.claude)" >&2
             fi
             return 1
         fi

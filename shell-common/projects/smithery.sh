@@ -43,7 +43,7 @@ _have() {
 # Require a command or exit with error
 _need() {
     if ! _have "$1"; then
-        echo "[ERR] Cannot find command '$1'. Please install it and try again." >&2
+        ux_error "Cannot find command '$1'. Please install it and try again."
         return 127
     fi
 }
