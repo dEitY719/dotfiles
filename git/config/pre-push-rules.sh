@@ -67,6 +67,7 @@ To fix this:
    1. Inspect locally (matched text is not printed above):
         message: git log -1 --format=%B <commit> | grep -nE \"\${LEAK_PATTERNS_ERE}\"
         file:    git show <commit>:<source> | grep -nE \"\${LEAK_PATTERNS_ERE}\"
+        path:    git diff-tree --no-commit-id --name-only -r <commit> | grep -nE \"\${LEAK_PATTERNS_ERE}\"
    2. Squash / amend / drop the offending commit, then re-push.
    3. (Emergency) SKIP_LEAK_GUARD=1 git push <remote> <branch>
       Use only when you have manually verified the diff is safe.

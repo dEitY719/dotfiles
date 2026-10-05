@@ -133,12 +133,13 @@ _resolve_scan_range() {
 
 # Scan a commit range for leak patterns. Returns 0 if clean, 1 if a match
 # was reported — commit + source + line numbers only, never the matched
-# text (#1975), so logs and screen shares stay clean. Failures of git plumbing are treated fail-open (with stderr
+# text (#1975); a source path that matches is redacted to its length
+# (#1997), so logs and screen shares stay clean. Failures of git plumbing are treated fail-open (with stderr
 # warning) so a guard bug never blocks a legitimate push.
 _leak_scan_range() {
     local range="$1"
     local commits commit_count violated=0
-    local commit_hash msg_match file files file_match
+    local commit_hash msg_match file files file_match bad_paths src
 
     # Single `git log` call — fetch the SHA list and derive the count from it
     # (review #710 nit: avoid the second `git log | wc -l` fork).
@@ -171,8 +172,20 @@ _leak_scan_range() {
         if ! files=$(git diff-tree --no-commit-id --name-only --diff-filter=ACMRT -r "${commit_hash}" 2>/dev/null); then
             files=""
         fi
+        # File-name scan (#1997): a path that matches is itself the leak, so
+        # it is checked even when the content is clean, and never printed.
+        bad_paths=$(printf '%s\n' "${files}" | grep -E -- "${LEAK_PATTERNS_ERE}" || true)
         while IFS= read -r file; do
             [ -z "${file}" ] && continue
+            src="${file}"
+            if [ -n "${bad_paths}" ] && printf '%s\n' "${bad_paths}" | grep -qxF -- "${file}"; then
+                src="<redacted path: ${#file} chars, matches LEAK_PATTERNS_ERE>"
+                echo "${MSG_LEAK_BLOCKED}"
+                echo "  commit: ${commit_hash}"
+                echo "  source: ${src}"
+                echo "  lines:  (file name)  (matches LEAK_PATTERNS_ERE)"
+                violated=1
+            fi
             # `git grep -h -I` performs the search in-process and strips both
             # the tree prefix and the path prefix from the output, leaving
             # the same `<line>:<content>` shape grep -n produced. `-I` skips
@@ -182,7 +195,7 @@ _leak_scan_range() {
             if [ -n "${file_match}" ]; then
                 echo "${MSG_LEAK_BLOCKED}"
                 echo "  commit: ${commit_hash}"
-                echo "  source: ${file}"
+                echo "  source: ${src}"
                 echo "  lines:  $(printf '%s\n' "${file_match}" | cut -d: -f1 | paste -sd, -)  (matches LEAK_PATTERNS_ERE)"
                 violated=1
             fi
@@ -242,6 +255,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         # No-op push: already-pushed sha, no new commits to scan.
         if [ "${local_sha}" = "${remote_sha}" ]; then
             continue
+        fi
+
+        # Ref-name scan (#1997): the pushed branch/tag name lands upstream
+        # verbatim, so it is checked too — and redacted, never printed.
+        if printf '%s\n' "${remote_ref}" | grep -qE -- "${LEAK_PATTERNS_ERE}"; then
+            echo "${MSG_LEAK_BLOCKED}"
+            echo "  source: <redacted ref name: ${#remote_ref} chars, matches LEAK_PATTERNS_ERE>"
+            exit_code=1
         fi
 
         range=$(_resolve_scan_range "${local_sha}" "${remote_sha}")
