@@ -50,3 +50,16 @@ teardown() {
         refute_output --partial "dotfiles setup"
     done
 }
+
+@test "ghes-mirror -h|--help: help only, no wizard prompt or clone (bash + zsh)" {
+    local runner flag
+    for runner in run_in_bash run_in_zsh; do
+        for flag in -h --help; do
+            "$runner" "cd '$HOME' && ghes_mirror $flag </dev/null"
+            assert_success
+            assert_output --partial "Resulting remotes"
+            refute_output --partial "GHES Mirror Wizard"
+        done
+    done
+    [ -z "$(ls -A "$HOME" | grep -v '^\.')" ]
+}
