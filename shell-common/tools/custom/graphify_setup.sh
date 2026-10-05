@@ -10,7 +10,15 @@
 SHELL_COMMON="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../.." && pwd)"
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
+graphify_setup_help() {
+    ux_usage "graphify-setup" "[dir]" "One-click, idempotent graphify onboarding for [dir] (default: .)"
+    ux_bullet "Machine-wide (skipped once done): graphify CLI, skill + per-account links"
+    ux_bullet "Per-project: .gitignore entry, CLAUDE.md + hook, first AST-only graph"
+    ux_bullet "More: graphify-help install"
+}
+
 main() {
+    case "${1:-}" in -h | --help) graphify_setup_help; return 0 ;; esac
     local _gs_dir
     _gs_dir=$(cd "${1:-.}" 2>/dev/null && pwd) || {
         ux_error "No such directory: $1"

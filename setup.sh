@@ -163,9 +163,19 @@ _setup_run_shell_common() {
     printf '%s\n' "$SETUP_CHOICE" | ./shell-common/setup.sh
 }
 
+setup_help() {
+    ux_usage "./setup.sh" "[-v|--verbose] [-h|--help]" "Converge this PC's dotfiles: symlinks + per-tool setup (idempotent)"
+    ux_bullet "-v, --verbose: stream full sub-script output (default: one line per step, log under \$TMPDIR)"
+    ux_bullet "DOTFILES_SETUP_VERBOSE=1: same as -v"
+    ux_bullet "DOTFILES_SETUP_CHOICE=1|2|3: answer the environment menu (public/internal/external) non-interactively"
+}
+
 main() {
     local canonical=""
-    case "${1:-}" in -v | --verbose) SETUP_VERBOSE=1 ;; esac
+    case "${1:-}" in
+    -h | --help) setup_help; return 0 ;;
+    -v | --verbose) SETUP_VERBOSE=1 ;;
+    esac
 
     # Canonicalize to the main worktree (issue #589). Running ./setup.sh from a
     # linked worktree would otherwise bake the worktree path into every
