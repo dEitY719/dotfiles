@@ -1,6 +1,9 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/functions/gh_pr_resolve_outdated.sh
+# NOTE: This file intentionally has NO interactive guard: pure function
+# definitions with no output at file scope, sourced non-interactively by
+# gh:pr-resolve-outdated / -conflict skills' Bash tool calls.
 # Step 5 `review-passed` reconciliation for BOTH rebase+force-push skills —
 # gh:pr-resolve-outdated and gh:pr-resolve-conflict (issues #1698, #1700).
 #
