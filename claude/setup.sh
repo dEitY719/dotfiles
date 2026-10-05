@@ -469,15 +469,15 @@ _print_stale_bind_mount_sudoers_hint() {
 
     [ -n "$found" ] || return 0
 
-    echo ""
+    ux_info ""
     ux_section "Stale bind-mount sudoers (issue #575)"
     ux_info "Issue #575 retired bind-mount for Claude skills/docs in favour of"
     ux_info "a single directory symlink. The sudoers files below were created"
     ux_info "by an earlier dotfiles version and no longer have a matching"
     ux_info "consumer — they only widen the sudoers surface."
-    echo ""
+    ux_info ""
     printf '%s' "$found"
-    echo ""
+    ux_info ""
 
     if [ -t 0 ] && [ -t 1 ] && [ "${DOTFILES_NONINTERACTIVE:-0}" != "1" ]; then
         if ux_confirm "Stale sudoers files detected (${count}). 자동 정리하시겠습니까?" "n"; then
@@ -716,14 +716,14 @@ if [ "$_setup_mode" = "internal" ]; then
 
     _print_change_summary  # 변경 요약 한 줄 (#997)
     ux_success "Claude Code dotfiles setup 완료 (internal/single-account)"
-    echo ""
+    ux_info ""
     ux_success "Claude Code 단일 계정 설정 완료 (internal PC mode)"
     ux_info "Config dir: $HOME/.claude"
-    echo ""
+    ux_info ""
     ux_section "다음 단계"
     ux_bullet "쉘 재시작: ${UX_BOLD}exec zsh${UX_RESET} 또는 ${UX_BOLD}exec bash${UX_RESET}"
     ux_bullet "실행: ${UX_BOLD}claude-yolo${UX_RESET} (멀티 계정 우회됨)"
-    echo ""
+    ux_info ""
 
     # settings.json 의 auth/env/모델 설정은 (2026-08-18 부터) gateway-cli setup
     # 이 책임진다 — dotfiles 는 관여하지 않는다 (구 #677 F-7 Bedrock jq-머지
@@ -843,11 +843,11 @@ fi
 _caccts=($ENABLED_ACCOUNTS)
 _print_change_summary "활성 계정 ${#_caccts[@]}개"  # 변경 요약 한 줄 (#997)
 ux_success "Claude Code dotfiles setup 완료"
-echo ""
+ux_info ""
 ux_success "Claude Code 다중 계정 설정 완료!"
 ux_info "활성 계정: $(echo "$ENABLED_ACCOUNTS" | tr '\n' ' ')"
 ux_info "Default: $CLAUDE_DEFAULT_ACCOUNT"
-echo ""
+ux_info ""
 ux_section "다음 단계"
 ux_bullet "쉘 재시작 후 진단: ${UX_BOLD}claude-accounts status${UX_RESET}"
 ux_bullet "처음 사용: ${UX_BOLD}claude-yolo${UX_RESET} (브라우저로 ${CLAUDE_DEFAULT_ACCOUNT} 로그인)"
@@ -858,6 +858,6 @@ ux_bullet "다른 계정: ${UX_BOLD}claude-yolo --user <name>${UX_RESET} 또는 
 # purpose so setup.sh never has to prompt for sudo.
 _print_stale_bind_mount_sudoers_hint
 
-echo ""
+ux_info ""
 
 exit 0

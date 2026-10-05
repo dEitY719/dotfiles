@@ -35,7 +35,13 @@ if [ -t 1 ] && [ -r "$UX_LIB" ]; then
 	# shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
 	source "$UX_LIB"
 else
-	UX_SUCCESS="" UX_ERROR="" UX_WARNING="" UX_MUTED="" UX_RESET=""
+	# Plain fallbacks print the bare message, byte-identical to the pre-#1937
+	# raw echo output, so piped/automation consumers and bats see no change.
+	ux_section() { printf '== %s ==\n' "$1"; }
+	ux_success() { printf '%s\n' "$1"; }
+	ux_error() { printf '%s\n' "$1" >&2; }
+	ux_warning() { printf '%s\n' "$1"; }
+	ux_info() { printf '%s\n' "$1"; }
 fi
 
 # The manifest reader (_claude_plugin_read_json_or) is shared with
@@ -120,7 +126,7 @@ while [ $# -gt 0 ]; do
 	--user)
 		shift
 		[ $# -gt 0 ] || {
-			echo "${UX_ERROR}--user 다음에 계정 이름이 필요합니다.${UX_RESET}" >&2
+			ux_error "--user 다음에 계정 이름이 필요합니다."
 			_usage >&2
 			exit 2
 		}
@@ -132,7 +138,7 @@ while [ $# -gt 0 ]; do
 		exit 0
 		;;
 	*)
-		echo "${UX_ERROR}알 수 없는 인자: $1${UX_RESET}" >&2
+		ux_error "알 수 없는 인자: $1"
 		_usage >&2
 		exit 2
 		;;
@@ -141,7 +147,7 @@ while [ $# -gt 0 ]; do
 done
 
 command -v jq >/dev/null 2>&1 || {
-	echo "${UX_ERROR}jq가 필요합니다.${UX_RESET}" >&2
+	ux_error "jq가 필요합니다."
 	exit 1
 }
 # --dry-run only prints the plan — don't require the claude CLI for that,
@@ -149,7 +155,7 @@ command -v jq >/dev/null 2>&1 || {
 # no claude binary) can exercise --dry-run in tests without it.
 if [ "$DRY_RUN" -eq 0 ]; then
 	command -v claude >/dev/null 2>&1 || {
-		echo "${UX_ERROR}claude CLI가 없습니다. 먼저 clinstall 하세요.${UX_RESET}" >&2
+		ux_error "claude CLI가 없습니다. 먼저 clinstall 하세요."
 		exit 1
 	}
 fi
@@ -210,14 +216,14 @@ _target_config_dirs() {
 		if [ "$_tcd_n" -gt 0 ]; then
 			return 0
 		fi
-		echo "${UX_WARNING}경고: --all-accounts 이나 CLAUDE_ENABLED_ACCOUNTS 가 비어 있음 — 기본 계정으로 폴백${UX_RESET}" >&2
+		ux_warning "경고: --all-accounts 이나 CLAUDE_ENABLED_ACCOUNTS 가 비어 있음 — 기본 계정으로 폴백" >&2
 	fi
 	_tcd_acct="${USER_ACCOUNT:-${CLAUDE_DEFAULT_ACCOUNT:-personal}}"
 	if _valid_acct "$_tcd_acct"; then
 		echo "$HOME/.claude-$_tcd_acct"
 		return 0
 	fi
-	echo "${UX_WARNING}경고: 계정 이름 '$_tcd_acct' 이 유효하지 않음 — ~/.claude 로 폴백 (#1103 주의)${UX_RESET}" >&2
+	ux_warning "경고: 계정 이름 '$_tcd_acct' 이 유효하지 않음 — ~/.claude 로 폴백 (#1103 주의)" >&2
 	echo "$HOME/.claude"
 	return 0
 }
@@ -280,25 +286,25 @@ PRIV_PL_JSON=$(_merged_plugins "$PRIV/plugins.json" "$PRIV/plugins.local.json" "
 _restore_from() {
 	local mp_json="$1" pl_json="$2" label="$3" name repo plugin
 	if [ -z "$mp_json" ] || [ -z "$pl_json" ]; then
-		echo "${UX_MUTED}  (${label} manifest 없음 — 건너뜀)${UX_RESET}"
+		ux_info "  (${label} manifest 없음 — 건너뜀)"
 		return 0
 	fi
-	echo "${UX_MUTED}== ${label} marketplaces ==${UX_RESET}"
+	ux_section "${label} marketplaces"
 	# `</dev/null` on the CLI calls: without it, `claude` reading stdin would
 	# drain the `jq | while read` pipe and cut the loop short.
 	printf '%s' "$mp_json" | jq -r 'to_entries[] | "\(.key)\t\(.value)"' |
 		while IFS=$'\t' read -r name repo; do
-			echo "${UX_SUCCESS}  add: ${name} (${repo})${UX_RESET}"
+			ux_success "  add: ${name} (${repo})"
 			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin marketplace add "$repo" </dev/null || echo "${UX_ERROR}    실패 — 계속 진행${UX_RESET}" >&2
+				claude plugin marketplace add "$repo" </dev/null || ux_error "    실패 — 계속 진행"
 			fi
 		done
-	echo "${UX_MUTED}== ${label} plugins ==${UX_RESET}"
+	ux_section "${label} plugins"
 	printf '%s' "$pl_json" | jq -r '(.plugins // [])[]' |
 		while read -r plugin; do
-			echo "${UX_SUCCESS}  install: ${plugin}${UX_RESET}"
+			ux_success "  install: ${plugin}"
 			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin install "$plugin" </dev/null || echo "${UX_ERROR}    실패 — 계속 진행${UX_RESET}" >&2
+				claude plugin install "$plugin" </dev/null || ux_error "    실패 — 계속 진행"
 			fi
 		done
 }
@@ -363,13 +369,13 @@ _prune_pass() {
 	PL_LOCAL="$SHARED_DIR/installed_plugins.json"
 	WHITELIST="$SCRIPT_DIR/.local-marketplaces.json"
 
-	echo "${UX_MUTED}== sync: 잉여 항목 정리 (SSOT 에 없는 로컬 항목) ==${UX_RESET}"
+	ux_section "sync: 잉여 항목 정리 (SSOT 에 없는 로컬 항목)"
 	local surplus_pl surplus_mp
 	surplus_pl=$(comm -23 <(_local_plugins | sort -u) <(_keep_plugins | sort -u))
 	surplus_mp=$(comm -23 <(_local_marketplaces | sort -u) <(_keep_marketplaces | sort -u))
 
 	if [ -z "$surplus_pl" ] && [ -z "$surplus_mp" ]; then
-		echo "${UX_MUTED}  (제거할 잉여 항목 없음 — SSOT 와 로컬이 일치)${UX_RESET}"
+		ux_info "  (제거할 잉여 항목 없음 — SSOT 와 로컬이 일치)"
 	fi
 
 	# Uninstall plugins BEFORE removing their marketplaces so a plugin is never
@@ -377,26 +383,26 @@ _prune_pass() {
 	printf '%s\n' "$surplus_pl" |
 		while read -r plugin; do
 			[ -n "$plugin" ] || continue
-			echo "${UX_ERROR}  uninstall: ${plugin}${UX_RESET}"
+			ux_warning "  uninstall: ${plugin}"
 			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin uninstall "$plugin" </dev/null || echo "${UX_ERROR}    실패 — 계속 진행${UX_RESET}" >&2
+				claude plugin uninstall "$plugin" </dev/null || ux_error "    실패 — 계속 진행"
 			fi
 		done
 	printf '%s\n' "$surplus_mp" |
 		while read -r name; do
 			[ -n "$name" ] || continue
-			echo "${UX_ERROR}  remove: ${name}${UX_RESET}"
+			ux_warning "  remove: ${name}"
 			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin marketplace remove "$name" </dev/null || echo "${UX_ERROR}    실패 — 계속 진행${UX_RESET}" >&2
+				claude plugin marketplace remove "$name" </dev/null || ux_error "    실패 — 계속 진행"
 			fi
 		done
 }
 
 # _run_for_config_dir — one full restore against the exported CLAUDE_CONFIG_DIR.
 _run_for_config_dir() {
-	echo "${UX_MUTED}== 대상 config dir: ${CLAUDE_CONFIG_DIR} ==${UX_RESET}"
+	ux_section "대상 config dir: ${CLAUDE_CONFIG_DIR}"
 	if [ "$DRY_RUN" -eq 0 ] && [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
-		echo "${UX_MUTED}  (참고: 대상 dir 없음 — claude CLI 가 첫 실행 시 생성)${UX_RESET}"
+		ux_info "  (참고: 대상 dir 없음 — claude CLI 가 첫 실행 시 생성)"
 	fi
 
 	_restore_from "$PUB_MP_JSON" "$PUB_PL_JSON" "공용"
@@ -405,10 +411,10 @@ _run_for_config_dir() {
 		if [ "$COMPANY_ACTIVE" -eq 1 ]; then
 			_restore_from "$PRIV_MP_JSON" "$PRIV_PL_JSON" "사내 전용"
 		else
-			echo "${UX_MUTED}(사내 전용 레포 미설정 — 먼저 실행: git clone <GHES private repo url> $PRIV)${UX_RESET}"
+			ux_info "(사내 전용 레포 미설정 — 먼저 실행: git clone <GHES private repo url> $PRIV)"
 		fi
 	else
-		echo "${UX_MUTED}(모드: ${MODE:-미설정} — 사내 전용 manifest는 internal에서만 복원)${UX_RESET}"
+		ux_info "(모드: ${MODE:-미설정} — 사내 전용 manifest는 internal에서만 복원)"
 	fi
 
 	if [ "$SYNC" -eq 1 ]; then
@@ -423,4 +429,4 @@ while IFS= read -r _cfg; do
 	_run_for_config_dir
 done < <(_target_config_dirs)
 
-echo "${UX_SUCCESS}완료. 새 Claude Code 세션을 시작해 스킬이 로드됐는지 확인하세요.${UX_RESET}"
+ux_success "완료. 새 Claude Code 세션을 시작해 스킬이 로드됐는지 확인하세요."

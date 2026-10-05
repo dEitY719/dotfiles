@@ -94,7 +94,7 @@ while [ $# -gt 0 ]; do
 		;;
 	--owner)
 		if [ -z "${2:-}" ]; then
-			echo "${UX_ERROR}Error: --owner requires an owner argument.${UX_RESET}" >&2
+			ux_error "--owner requires an owner argument."
 			exit 2
 		fi
 		OWNER_FILTER="$2"
@@ -106,7 +106,7 @@ while [ $# -gt 0 ]; do
 		;;
 	--manifest)
 		if [ -z "${2:-}" ]; then
-			echo "${UX_ERROR}Error: --manifest requires a path argument.${UX_RESET}" >&2
+			ux_error "--manifest requires a path argument."
 			exit 2
 		fi
 		MANIFEST="$2"
@@ -118,7 +118,7 @@ while [ $# -gt 0 ]; do
 		;;
 	--target)
 		if [ -z "${2:-}" ]; then
-			echo "${UX_ERROR}Error: --target requires a directory argument.${UX_RESET}" >&2
+			ux_error "--target requires a directory argument."
 			exit 2
 		fi
 		TARGET_DIR="$2"
@@ -133,7 +133,7 @@ while [ $# -gt 0 ]; do
 		exit 0
 		;;
 	*)
-		echo "${UX_ERROR}Unknown argument: $1${UX_RESET}" >&2
+		ux_error "Unknown argument: $1"
 		_usage >&2
 		exit 2
 		;;
