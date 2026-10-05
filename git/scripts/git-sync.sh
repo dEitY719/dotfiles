@@ -30,6 +30,13 @@
 #   git sync                       # 전역 alias (git/.gitconfig SSOT)
 #   bash "${DOTFILES_ROOT:-$HOME/dotfiles}/git/scripts/git-sync.sh"
 #   git sync -h                    # 도움말
+#
+# 출력 헬퍼(log_*)는 ux_lib 를 쓰지 않는 의도적 예외다 (#1958):
+#   - self-contained 이식 스크립트라 shell-common 없이도 돌아야 하고, ux_lib 를
+#     쓰려면 같은 헬퍼의 plain fallback 을 또 둬야 해 코드만 늘어난다.
+#   - tests/bats/git/test_git_sync.bats 가 log_step 줄('  $ git merge --no-edit <ref>')
+#     을 sed 로 파싱해 merge 순서를 단언한다 — 형식이 테스트 계약이다.
+#   - ux_info 는 아이콘을 앞에 붙여 log_info 의 들여쓴 재개 안내 목록 형태를 깨뜨린다.
 set -euo pipefail
 
 BOLD=$'\033[1m'
