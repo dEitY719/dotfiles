@@ -38,3 +38,14 @@
 | Git host 라우팅 | `shell-common/functions/gh_host.sh` | `internal` → GHES, 그 외 → github.com |
 | 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지 (레거시 숫자값만 매칭, 문자열 값 미지원 — issue #1051) |
 | Bedrock 비용 위젯 | `claude/statusline-command.sh` | `internal` 에서만 표시 (레거시 숫자값 `2`는 미지원 — 별도 확인 필요) |
+| 패키지 레지스트리 설정 | `shell-common/setup.sh` `_internal_src` | `internal` → npm/bun/uv/pip/cargo/nuget symlink · rpm 복사의 소스로 gitignored `<file>.internal.local` 이 있으면 우선, 없으면 tracked `*.internal` — #1968 (아래 §5) |
+
+## 5. internal PC: `*.internal` 실값 이관 순서 (#1968)
+
+tracked `*.internal` 은 internal PC 에서 `~/.npmrc` 등이 직접 가리키는 **live symlink 소스**다. 이 파일들은 나중에 placeholder 로 교체될 예정이므로, 그 교체가 pull 되기 **전에** 각 internal PC 에서 한 번 (internal 모드 `./setup.sh` 가 2단계를 `--apply` 로 자동 호출하므로 1→3 만 해도 수렴한다):
+
+1. `git pull` (이 메커니즘이 포함된 main — placeholder 교체 커밋 이전)
+2. `scripts/internal-config-migrate.sh` (dry-run 으로 대상 확인) → `scripts/internal-config-migrate.sh --apply` — 각 `*.internal` 을 gitignored `*.internal.local` 로 복사(기존 파일은 절대 덮어쓰지 않음, 내용 출력 없음, `cmp` 검증, 멱등)
+3. `./setup.sh` — symlink 가 `*.internal.local` 로 재지정된다
+
+검증: `readlink ~/.npmrc ~/.config/pip/pip.conf ~/.config/uv/uv.toml ~/.cargo/config.toml` 가 모두 `*.internal.local` 로 끝나는지, `check-npm` 등 진단 명령이 Internal 로 표시되는지 확인. 이미 placeholder 로 바뀐 tracked 파일은 helper 가 건너뛰므로(경고) 그 경우 실값을 `*.internal.local` 에 직접 넣는다.

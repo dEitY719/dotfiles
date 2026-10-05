@@ -19,6 +19,9 @@ shell-common/config/pg_services.list
 # *.local.sh already covers aws/aws.local.sh; aws-config.local has no .sh
 # extension so it needs an explicit rule.
 aws/aws-config.local
+# Real-value siblings of tracked internal-mode configs (#1968), e.g.
+# npm/npmrc.internal.local; seeded by scripts/internal-config-migrate.sh.
+*.internal.local
 # Note: pip.conf is symlinked to ~/.config/pip/pip.conf (outside this repo, not version controlled)
 
 # Build artifacts (generated during setup in some environments)
