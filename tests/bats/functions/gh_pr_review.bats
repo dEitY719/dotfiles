@@ -14,6 +14,9 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
+    # Fake model so lanes reaching the opencode stub run; the #2007 tests
+    # unset it to cover the fallback and the unconfigured skip.
+    export DOTFILES_OPENCODE_REVIEW_MODEL="example-corp/example-model"
 }
 
 teardown() {
@@ -1364,19 +1367,58 @@ EOF
     export PATH="$stub_dir:$PATH"
 }
 
-@test "run_ai opencode: internal mode uses CodeLLMPro and attaches prompt file" {
+@test "run_ai opencode: model from env is passed with --model (issue #2007)" {
     _source_module
     _dotfiles_setup_mode() { echo internal; }
     _stub_opencode_echo
+    export DOTFILES_OPENCODE_REVIEW_MODEL="example-corp/example-model"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
     run _gh_pr_review_run_ai opencode "$f"
     assert_success
     assert_output --partial "opencode args: [run]"
-    assert_output --partial "[--model] [codemate/CodeLLMPro]"
+    assert_output --partial "[--model] [example-corp/example-model]"
     assert_output --partial "[--dir]"
     refute_output --partial "[--file] [$f]"
+}
+
+@test "run_ai opencode: model falls back to internal.local.sh parse (issue #2007)" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    _stub_opencode_echo
+    unset DOTFILES_OPENCODE_REVIEW_MODEL
+    mkdir -p "$TEST_TEMP_HOME/sc/env"
+    printf 'export DOTFILES_OPENCODE_REVIEW_MODEL="example-corp/example-model"\n' \
+        >"$TEST_TEMP_HOME/sc/env/internal.local.sh"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    SHELL_COMMON="$TEST_TEMP_HOME/sc" run _gh_pr_review_run_ai opencode "$f"
+    assert_success
+    assert_output --partial "[--model] [example-corp/example-model]"
+}
+
+@test "run_ai opencode: no model configured skips with a warning (issue #2007)" {
+    _source_module
+    _dotfiles_setup_mode() { echo internal; }
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir" "$TEST_TEMP_HOME/sc/env"
+    cat >"$stub_dir/opencode" <<'EOF'
+#!/bin/sh
+echo "SHOULD_NOT_RUN"
+exit 0
+EOF
+    chmod +x "$stub_dir/opencode"
+    export PATH="$stub_dir:$PATH"
+    unset DOTFILES_OPENCODE_REVIEW_MODEL
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+
+    SHELL_COMMON="$TEST_TEMP_HOME/sc" run _gh_pr_review_run_ai opencode "$f"
+    assert_failure 1
+    assert_output --partial "DOTFILES_OPENCODE_REVIEW_MODEL is not set"
+    refute_output --partial "SHOULD_NOT_RUN"
 }
 
 @test "run_ai opencode: --file prompt path lives inside --dir (issue #1763)" {
