@@ -27,9 +27,8 @@ set -uo pipefail
 # ---------------------------------------------------------------------------
 # Help
 # ---------------------------------------------------------------------------
-case "${1:-}" in
-    -h|--help|help)
-        cat <<'USAGE'
+diagnose_help() {
+    cat <<'USAGE'
 Usage: ./aws/diagnose.sh [-h|--help]
 
 Read-only 진단. ./aws/setup.sh 와 ./aws/install-otel-managed-settings.sh
@@ -49,8 +48,10 @@ Read-only 진단. ./aws/setup.sh 와 ./aws/install-otel-managed-settings.sh
 
 본 스크립트는 read-only — 환경을 수정하지 않는다.
 USAGE
-        exit 0
-        ;;
+}
+
+case "${1:-}" in
+    -h|--help|help) diagnose_help; exit 0 ;;
 esac
 
 RED=$'\033[0;31m'
