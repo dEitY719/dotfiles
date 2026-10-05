@@ -6,6 +6,8 @@ set -u
 
 DOTFILES_ROOT="${DOTFILES_ROOT:-${HOME}/dotfiles}"
 SYMLINKS_CONF="${SHELL_COMMON_ROOT:-${DOTFILES_ROOT}/shell-common}/config/symlinks.conf"
+# shellcheck source=init.sh
+. "$(dirname "${BASH_SOURCE[0]}")/init.sh" || exit 1
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper Functions
@@ -30,7 +32,7 @@ parse_symlink_entry() {
     target="${target//\$\{HOME\}/$HOME}"
     source="${source//\$\{HOME\}/$HOME}"
 
-    echo "$target|$source|$description"
+    printf '%s\n' "$target|$source|$description"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -39,11 +41,10 @@ parse_symlink_entry() {
 
 # Initialize all symlinks
 symlink_init() {
-    echo "=== Initializing Dotfiles Symlinks ==="
-    echo ""
+    ux_header "Initializing Dotfiles Symlinks"
 
     if [[ ! -f "$SYMLINKS_CONF" ]]; then
-        echo "Error: Configuration file not found: $SYMLINKS_CONF"
+        ux_error "Configuration file not found: $SYMLINKS_CONF"
         return 1
     fi
 
@@ -62,15 +63,15 @@ symlink_init() {
         IFS='|' read -r target source description <<< "$parsed"
 
         ((count++))
-        echo "[${count}] $description"
-        echo "    Target: $target"
-        echo "    Source: $source"
+        ux_info "[${count}] $description"
+        ux_bullet_sub "Target: $target"
+        ux_bullet_sub "Source: $source"
 
         # Create parent directory if needed
         local target_dir
         target_dir=$(dirname "$target")
         if [[ ! -d "$target_dir" ]]; then
-            echo "    Creating directory: $target_dir"
+            ux_bullet_sub "Creating directory: $target_dir"
             mkdir -p "$target_dir"
         fi
 
@@ -79,23 +80,23 @@ symlink_init() {
             local current_target
             current_target=$(readlink "$target")
             if [[ "$current_target" == "$source" ]]; then
-                echo "    ✓ Symlink already correct"
+                ux_success "Symlink already correct"
                 ((success++))
             else
-                echo "    ⚠ Updating symlink (was: $current_target)"
+                ux_warning "Updating symlink (was: $current_target)"
                 rm "$target"
                 ln -s "$source" "$target"
                 ((success++))
             fi
         elif [[ -f "$target" ]]; then
-            echo "    ⚠ File exists, backing up to ${target}.backup"
+            ux_warning "File exists, backing up to ${target}.backup"
             mv "$target" "${target}.backup"
             ln -s "$source" "$target"
             ((success++))
         elif [[ -e "$target" ]]; then
-            echo "    ✗ Path exists but is not a regular file or symlink"
+            ux_error "Path exists but is not a regular file or symlink"
         else
-            echo "    Creating symlink..."
+            ux_bullet_sub "Creating symlink..."
             ln -s "$source" "$target"
             ((success++))
         fi
@@ -103,27 +104,25 @@ symlink_init() {
         # Verify
         if [[ -L "$target" ]] && [[ -e "$target" ]]; then
             # shellcheck disable=SC2012  # ls -la on a single known file to read its symlink arrow
-            echo "    ✓ Verified: $(ls -la "$target" | awk '{print $(NF-1), $NF}')"
+            ux_success "Verified: $(ls -la "$target" | awk '{print $(NF-1), $NF}')"
         else
-            echo "    ✗ Verification failed"
+            ux_error "Verification failed"
         fi
-        echo ""
+        ux_info ""
 
     done < "$SYMLINKS_CONF"
 
-    echo "=== Summary ==="
-    echo "Total symlinks: $count"
-    echo "Initialized: $success"
-    echo ""
+    ux_section "Summary"
+    ux_table_row "Total symlinks" "$count"
+    ux_table_row "Initialized" "$success"
 }
 
 # Check symlink status
 symlink_check() {
-    echo "=== Checking Dotfiles Symlinks Status ==="
-    echo ""
+    ux_header "Checking Dotfiles Symlinks Status"
 
     if [[ ! -f "$SYMLINKS_CONF" ]]; then
-        echo "Error: Configuration file not found: $SYMLINKS_CONF"
+        ux_error "Configuration file not found: $SYMLINKS_CONF"
         return 1
     fi
 
@@ -146,44 +145,41 @@ symlink_check() {
 
         if [[ -L "$target" ]]; then
             if [[ -e "$target" ]]; then
-                echo "[✓] $description"
-                echo "    Target: $target"
-                echo "    → $(readlink "$target")"
+                ux_success "$description"
+                ux_bullet_sub "Target: $target"
+                ux_bullet_sub "-> $(readlink "$target")"
                 ((ok++))
             else
-                echo "[✗] BROKEN: $description"
-                echo "    Target: $target"
-                echo "    → $(readlink "$target") (target not found)"
+                ux_error "BROKEN: $description"
+                ux_bullet_sub "Target: $target"
+                ux_bullet_sub "-> $(readlink "$target") (target not found)"
                 ((broken++))
             fi
         elif [[ -f "$target" ]]; then
-            echo "[!] NOT A SYMLINK: $description"
-            echo "    Target: $target (regular file)"
+            ux_warning "NOT A SYMLINK: $description"
+            ux_bullet_sub "Target: $target (regular file)"
             ((broken++))
         else
-            echo "[?] MISSING: $description"
-            echo "    Target: $target (not found)"
+            ux_warning "MISSING: $description"
+            ux_bullet_sub "Target: $target (not found)"
             ((broken++))
         fi
-        echo ""
+        ux_info ""
 
     done < "$SYMLINKS_CONF"
 
-    echo "=== Summary ==="
-    echo "Total configured: $count"
-    echo "OK: $ok"
-    echo "Issues: $((broken))"
-    echo ""
+    ux_section "Summary"
+    ux_table_row "Total configured" "$count"
+    ux_table_row "OK" "$ok"
+    ux_table_row "Issues" "$broken"
 }
 
 # Show configuration
 symlink_config() {
-    echo "=== Dotfiles Symlinks Configuration ==="
-    echo ""
-    echo "Configuration file: $SYMLINKS_CONF"
-    echo ""
+    ux_header "Dotfiles Symlinks Configuration"
+    ux_info "Configuration file: $SYMLINKS_CONF"
+    ux_info ""
     cat "$SYMLINKS_CONF"
-    echo ""
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -224,8 +220,8 @@ Example:
 EOF
             ;;
         *)
-            echo "Unknown command: $command"
-            echo "Run 'symlink-manager help' for usage"
+            ux_error "Unknown command: $command"
+            ux_info "Run 'symlink-manager help' for usage"
             return 1
             ;;
     esac

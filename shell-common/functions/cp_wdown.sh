@@ -18,7 +18,7 @@ cp_wdown() {
     local _name=cp_wdown
     local _script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/${_name}.sh"
     if [ ! -f "$_script" ]; then
-        echo "Error: ${_name} script not found: $_script" >&2
+        ux_error "${_name} script not found: $_script"
         return 2
     fi
     bash "$_script" "$@"

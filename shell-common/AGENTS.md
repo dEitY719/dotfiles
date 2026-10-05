@@ -43,6 +43,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 - **DO**: `ux_lib` 함수 (`ux_header`, `ux_success`, `ux_error`)
 - **DON'T**: raw `echo`/`printf`
 - **Exception**: ux_lib 미로드 시 단순 에러는 `echo ... >&2`
+- **변환 범위 (#1881)**: 사람이 읽는 장식/상태/usage 출력만 ux_lib 로 바꾼다. 제외 — 호출자가 파싱하는 출력(`$(...)` 캡처·eval·`key=value`·JSON·경로·`TARGET_SHA=` 류, skill/cron/hook 이 읽는 stdout·stderr 계약 → 필요 시 `echo` 대신 `printf '%s\n'`, 바이트 동일), git hook·check 모듈, 테스트·fixture, ux_lib 로드 전 단계(bootstrap·`install.sh`), bats 가 바이트 단위로 단언하는 출력(같은 PR 에서 테스트를 고치지 않는 한).
 - **`-h|--help` (#1880)**: 인자를 받는 사용자 명령(함수·`tools/custom` 진입점·`./setup.sh`)만 대상 — 부작용 전에 `*_help` 로 위임 후 `return 0`.
   N/A — 인자 없는 명령, `_` private 함수만 있는 source 라이브러리, `env/`·`aliases/`·`util/`·`ux_lib`, git hook check 모듈, test fixture, `./setup.sh` 가 호출하는 하위 `*/setup.sh`. `"$@"` 를 help 가진 스크립트로 넘기는 래퍼는 충족, 외부 CLI 패스스루 래퍼(`codex`, `pycharm`)는 `-h` 를 원본 도구로 넘긴다.
 

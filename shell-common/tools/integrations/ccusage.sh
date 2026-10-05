@@ -25,8 +25,8 @@ ccusage_path_hint() {
     case ":$PATH:" in
     *":$HOME/.npm-global/bin:"*) ;;
     *)
-        echo "Note: If $HOME/.npm-global/bin is not in PATH, run:"
-        echo "  export PATH='$HOME/.npm-global/bin:\$PATH'"
+        ux_info "If $HOME/.npm-global/bin is not in PATH, run:"
+        ux_bullet "export PATH='$HOME/.npm-global/bin:\$PATH'"
         ;;
     esac
 }
