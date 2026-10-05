@@ -4,7 +4,7 @@
 # mappings interactively (issue #1173) while staying safe non-interactively.
 #
 # Scope note: like tests/bats/functions/setup_opencode_config.bats (the
-# _resolve_knox_id precedent), the interactive *prompt loop* itself (tty
+# _resolve_account_id precedent), the interactive *prompt loop* itself (tty
 # read via `_prompt_claude_account_emails`) has no pty/expect harness in this
 # suite, so it stays manually verified only. But the escaping/export-writing
 # logic it calls — `_pcae_write_email_export` — was deliberately extracted

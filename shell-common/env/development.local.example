@@ -13,7 +13,8 @@
 # 예: 회사PC — 전체 코어 사용 (기본값과 동일하므로 설정 불필요)
 # export PYTEST_ADDOPTS="-n auto"
 
-# 예: OpenCode internal 모드 — 사내 계정 ID(Knox ID) SSOT (issue #1121)
-# 여기서 export 하면 setup.sh 가 opencode.json 의 your-knox-id 를 자동 치환한다.
-# 설정하지 않으면 ~/.dotfiles-knox-id 파일 또는 setup 중 1회 프롬프트로 대체된다.
-# export DOTFILES_KNOX_ID="your-knox-id"
+# 예: OpenCode internal 모드 — 사내 계정 ID SSOT (issue #1121, #1982)
+# 여기서 export 하면 setup.sh 가 opencode.json 의 your-account-id 를 자동 치환한다.
+# 설정하지 않으면 ~/.dotfiles-account-id 파일 또는 setup 중 1회 프롬프트로 대체된다.
+# (기존 PC 의 이전 변수/파일 이름도 setup 이 그대로 읽는다.)
+# export DOTFILES_ACCOUNT_ID="your-account-id"

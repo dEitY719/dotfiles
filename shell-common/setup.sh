@@ -49,6 +49,11 @@ LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt'
 # with DOTFILES_OPENCODE_BASE_URL from env/internal.local.sh (#1967).
 OPENCODE_URL_PLACEHOLDER='http://llm-gateway.example.invalid/v1'
 
+# Account-ID placeholder of opencode/opencode.json.internal (#1982). The second
+# alternative is the legacy token, read-only fallback: configs deployed before
+# the rename may still carry it unsubstituted.
+OPENCODE_ACCOUNT_ID_ERE='your-(account|knox)-id'
+
 # Tool-specific configurations are managed via tracked files at project root
 # and symlinked to their respective locations:
 #   npm/   → ~/.npmrc
@@ -282,7 +287,7 @@ _pcae_write_email_export() {
 
 # Interactively populate CLAUDE_ACCOUNT_EMAIL_<account> for each account in
 # $1 (space-separated), appending export lines to file $2 (issue #1173).
-# Mirrors _resolve_knox_id's tty-guard pattern: skip silently when stdin is
+# Mirrors _resolve_account_id's tty-guard pattern: skip silently when stdin is
 # not a tty (CI / test harness / `bash -c`) so non-interactive setup falls
 # back to the current behavior (F-4). Caller must invoke this outside any
 # pipe (see copy_local_files) so `[ -t 0 ]` reflects the real terminal.
@@ -404,30 +409,34 @@ _sed_escape() {
     printf '%s' "$1" | sed -e 's/[\\/|&]/\\&/g'
 }
 
-# Resolve the internal account ID (Knox ID) for OpenCode's internal-mode config (issue #1121).
+# Resolve the internal account ID for OpenCode's internal-mode config (#1121, #1982).
 # Lookup order (first non-empty wins):
-#   1. $DOTFILES_KNOX_ID env var  — reuse the shell-sourced SSOT
-#      (see shell-common/env/development.local.example).
-#   2. ~/.dotfiles-knox-id file   — persistent file SSOT, mirrors the
-#      ~/.dotfiles-setup-mode convention.
+#   1. $DOTFILES_ACCOUNT_ID env var (legacy env name as read-only fallback)
+#      — reuse the shell-sourced SSOT (see env/development.local.example).
+#   2. ~/.dotfiles-account-id file — persistent file SSOT, mirrors the
+#      ~/.dotfiles-setup-mode convention (legacy file copied over by
+#      _migrate_account_id_file).
 #   3. one-time interactive prompt (tty only) — the entered value is saved to
-#      ~/.dotfiles-knox-id so later runs are non-interactive and idempotent.
-# Prints the resolved Knox ID on stdout; returns 1 (no output) when nothing is
+#      ~/.dotfiles-account-id so later runs are non-interactive and idempotent.
+# Prints the resolved ID on stdout; returns 1 (no output) when nothing is
 # available and stdin is not a tty — keeping non-interactive setup / CI safe.
-_resolve_knox_id() {
-    _knox_file="$HOME/.dotfiles-knox-id"
+_resolve_account_id() {
+    _acct_file="$HOME/.dotfiles-account-id"
+    # Legacy env name, read-only fallback.
+    _acct_val="${DOTFILES_ACCOUNT_ID:-${DOTFILES_KNOX_ID:-}}"
 
     # 1. Environment variable SSOT.
-    if [ -n "${DOTFILES_KNOX_ID:-}" ]; then
-        printf '%s\n' "$DOTFILES_KNOX_ID"
+    if [ -n "$_acct_val" ]; then
+        printf '%s\n' "$_acct_val"
         return 0
     fi
 
     # 2. File SSOT.
-    if [ -f "$_knox_file" ]; then
-        _knox_val="$(head -n 1 "$_knox_file" | tr -d '[:space:]')"
-        if [ -n "$_knox_val" ]; then
-            printf '%s\n' "$_knox_val"
+    _migrate_account_id_file
+    if [ -f "$_acct_file" ]; then
+        _acct_val="$(head -n 1 "$_acct_file" | tr -d '[:space:]')"
+        if [ -n "$_acct_val" ]; then
+            printf '%s\n' "$_acct_val"
             return 0
         fi
     fi
@@ -435,18 +444,31 @@ _resolve_knox_id() {
     # 3. One-time prompt (interactive shells only). Persist to the file SSOT so
     #    subsequent runs resolve via step 2 without prompting again.
     if [ -t 0 ]; then
-        printf 'Enter your internal account ID (Knox ID) (saved to %s): ' "$_knox_file" >&2
-        read -r _knox_val || _knox_val=""
-        _knox_val="$(printf '%s' "$_knox_val" | tr -d '[:space:]')"
-        if [ -n "$_knox_val" ]; then
-            printf '%s\n' "$_knox_val" >"$_knox_file"
-            chmod 600 "$_knox_file" 2>/dev/null || true
-            printf '%s\n' "$_knox_val"
+        printf 'Enter your internal account ID (saved to %s): ' "$_acct_file" >&2
+        read -r _acct_val || _acct_val=""
+        _acct_val="$(printf '%s' "$_acct_val" | tr -d '[:space:]')"
+        if [ -n "$_acct_val" ]; then
+            printf '%s\n' "$_acct_val" >"$_acct_file"
+            chmod 600 "$_acct_file" 2>/dev/null || true
+            printf '%s\n' "$_acct_val"
             return 0
         fi
     fi
 
     return 1
+}
+
+# Copy the legacy account-ID file to ~/.dotfiles-account-id (#1982). Keeps the
+# old file (older checkouts may still read it) and never overwrites an existing
+# new file, so re-runs are no-ops.
+_migrate_account_id_file() {
+    # Legacy file name, read-only fallback.
+    _acct_legacy="$HOME/.dotfiles-knox-id"
+    [ -f "$_acct_legacy" ] || return 0
+    [ -e "$HOME/.dotfiles-account-id" ] && return 0
+    cp "$_acct_legacy" "$HOME/.dotfiles-account-id" \
+        && chmod 600 "$HOME/.dotfiles-account-id" 2>/dev/null
+    return 0
 }
 
 setup_opencode_config() {
@@ -469,7 +491,7 @@ setup_opencode_config() {
             if [ ! -L "$opencode_target" ] && [ -f "$opencode_target" ]; then
                 # Preserve a fully customised config: never overwrite + never
                 # back up (issue #792).
-                if ! grep -q 'your-knox-id' "$opencode_target" \
+                if ! grep -Eq "$OPENCODE_ACCOUNT_ID_ERE" "$opencode_target" \
                     && ! grep -Eq "$LOCAL_PLACEHOLDER_ERE" "$opencode_target"; then
                     ux_info "Preserved customised OpenCode config: $opencode_target"
                     return 0
@@ -495,25 +517,26 @@ setup_opencode_config() {
                 chmod 600 "$opencode_target"
                 ux_info "Using: internal LLM gateway"
             fi
-            # Fill in the Knox ID from the SSOT (env → ~/.dotfiles-knox-id →
+            # Fill in the account ID from the SSOT (env → ~/.dotfiles-account-id →
             # one-time prompt) so the placeholder warning no longer recurs on
             # every setup (issue #1121). Falls back to the manual-edit warning
             # only when nothing is available and setup is non-interactive.
-            if ! grep -q 'your-knox-id' "$opencode_target"; then
+            _migrate_account_id_file
+            if ! grep -Eq "$OPENCODE_ACCOUNT_ID_ERE" "$opencode_target"; then
                 return 0
             fi
-            _knox_id="$(_resolve_knox_id)" || _knox_id=""
-            if [ -n "$_knox_id" ]; then
+            _acct_id="$(_resolve_account_id)" || _acct_id=""
+            if [ -n "$_acct_id" ]; then
                 # Portable temp-file rewrite instead of `sed -i` — GNU and BSD
                 # (macOS) disagree on the -i argument syntax (PR #1123 review).
                 # `mv` drops the 600 perms, so re-apply chmod afterwards.
-                sed "s/your-knox-id/$(_sed_escape "$_knox_id")/g" "$opencode_target" >"${opencode_target}.tmp"
+                sed -E "s/${OPENCODE_ACCOUNT_ID_ERE}/$(_sed_escape "$_acct_id")/g" "$opencode_target" >"${opencode_target}.tmp"
                 mv "${opencode_target}.tmp" "$opencode_target"
                 chmod 600 "$opencode_target"
-                ux_success "Applied Knox ID to OpenCode config (SSOT: \$DOTFILES_KNOX_ID or ~/.dotfiles-knox-id)"
+                ux_success "Applied account ID to OpenCode config (SSOT: \$DOTFILES_ACCOUNT_ID or ~/.dotfiles-account-id)"
             else
-                ux_warning "Edit $opencode_target and replace 'your-knox-id' with your internal account ID (Knox ID)"
-                ux_info "Tip: save it once to ~/.dotfiles-knox-id (or export DOTFILES_KNOX_ID) to auto-fill next time"
+                ux_warning "Edit $opencode_target and replace 'your-account-id' with your internal account ID"
+                ux_info "Tip: save it once to ~/.dotfiles-account-id (or export DOTFILES_ACCOUNT_ID) to auto-fill next time"
             fi
             ;;
         external)
@@ -916,7 +939,7 @@ main() {
             ux_info "  - Proxy: company proxy from env/proxy.local.sh"
             ux_info "  - NPM: ~/.npmrc → npm/npmrc.internal (Nexus + proxy)"
             ux_info "  - Bun: ~/.bunfig.toml → bun/bunfig.toml.internal (Nexus registry)"
-            ux_info "  - OpenCode: opencode/opencode.json.internal rendered with DOTFILES_OPENCODE_BASE_URL (env/internal.local.sh) + Knox ID from SSOT (\$DOTFILES_KNOX_ID / ~/.dotfiles-knox-id, else 1-time prompt)"
+            ux_info "  - OpenCode: opencode/opencode.json.internal rendered with DOTFILES_OPENCODE_BASE_URL (env/internal.local.sh) + account ID from SSOT (\$DOTFILES_ACCOUNT_ID / ~/.dotfiles-account-id, else 1-time prompt)"
             ux_info "  - Pip: internal repository configured"
             ux_info "  - uv: internal repository + proxy configured"
             ux_info "  - Cargo: ~/.cargo/config.toml (Nexus proxy for crates.io)"
