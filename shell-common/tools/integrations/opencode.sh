@@ -233,6 +233,7 @@ opencode_edit() {
 alias openplan='opencode'
 
 opentest() {
+    case "${1:-}" in -h | --help) opencode_help usage; return 0 ;; esac
     if [ -z "$1" ]; then
         ux_usage "opentest" "\"request\"" "Run OpenCode for test writing"
         ux_bullet "Example: ${UX_INFO}opentest \"Write authentication tests\"${UX_RESET}"

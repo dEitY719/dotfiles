@@ -236,6 +236,7 @@ ollama_status() {
 # List installed models
 ollama_models() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) ollama_help docker; return 0 ;; esac
     local backend_arg=""
 
     # Check for explicit backend flag
@@ -249,6 +250,7 @@ ollama_models() {
 # Pull a model
 ollama_pull() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) ollama_help docker; return 0 ;; esac
     local model="${1:?Model name required}"
 
     ux_info "Pulling model: $model"
@@ -258,6 +260,7 @@ ollama_pull() {
 # Remove a model
 ollama_rm() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) ollama_help docker; return 0 ;; esac
     local model="${1:?Model name required}"
 
     ux_info "Removing model: $model"
@@ -267,6 +270,7 @@ ollama_rm() {
 # Show model details
 ollama_show() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) ollama_help docker; return 0 ;; esac
     local model="${1:?Model name required}"
 
     ollama_cmd --auto show "$model"
@@ -275,6 +279,7 @@ ollama_show() {
 # Run a model (interactive)
 ollama_run() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) ollama_help docker; return 0 ;; esac
     local model="${1:?Model name required}"
 
     ux_info "Starting interactive chat with: $model"
@@ -336,6 +341,7 @@ ollama_stats() {
 # Run single prompt (non-interactive)
 ollama_prompt() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    case "${1:-}" in -h | --help) ollama_help docker; return 0 ;; esac
     local model="${1:?Model name required}"
     local prompt="${2:?Prompt text required}"
 
