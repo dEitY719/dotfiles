@@ -178,7 +178,7 @@ _leak_scan_range() {
         while IFS= read -r file; do
             [ -z "${file}" ] && continue
             src="${file}"
-            if [ -n "${bad_paths}" ] && printf '%s\n' "${bad_paths}" | grep -qxF -- "${file}"; then
+            if [ -n "${bad_paths}" ] && grep -qxF -- "${file}" <<<"${bad_paths}"; then
                 src="<redacted path: ${#file} chars, matches LEAK_PATTERNS_ERE>"
                 echo "${MSG_LEAK_BLOCKED}"
                 echo "  commit: ${commit_hash}"
@@ -259,7 +259,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
         # Ref-name scan (#1997): the pushed branch/tag name lands upstream
         # verbatim, so it is checked too — and redacted, never printed.
-        if printf '%s\n' "${remote_ref}" | grep -qE -- "${LEAK_PATTERNS_ERE}"; then
+        if grep -qE -- "${LEAK_PATTERNS_ERE}" <<<"${remote_ref}"; then
             echo "${MSG_LEAK_BLOCKED}"
             echo "  source: <redacted ref name: ${#remote_ref} chars, matches LEAK_PATTERNS_ERE>"
             exit_code=1
