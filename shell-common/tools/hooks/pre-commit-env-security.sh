@@ -71,8 +71,8 @@ if [ "$DUPLICATE_FOUND" -eq 1 ]; then
     echo "해결 방법:"
     echo "  1) shell-common/tools/ux_lib/ux_lib.sh에서 함수가 정의됨"
     echo "  2) 다른 파일의 fallback 정의 제거"
-    echo "  3) 대신 절대 경로로 ux_lib.sh 로드:"
-    echo "     source /home/bwyoon/dotfiles/shell-common/tools/ux_lib/ux_lib.sh"
+    echo "  3) 대신 \$SHELL_COMMON 기준 경로로 ux_lib.sh 로드:"
+    echo "     source \"\${SHELL_COMMON}/tools/ux_lib/ux_lib.sh\""
     exit 1
 fi
 

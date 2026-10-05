@@ -191,7 +191,7 @@ def print_entry(entry, show_features=False):
 
 
 def main():
-    root_dir = Path("/home/bwyoon/dotfiles")
+    root_dir = Path(__file__).resolve().parents[2]
 
     print_section("SHEBANG CONSISTENCY ANALYSIS")
     print(f"Analyzing all .sh and .bash files in {root_dir}...")
