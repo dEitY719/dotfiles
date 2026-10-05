@@ -5205,9 +5205,9 @@
       "complexity": "moderate"
     },
     {
-      "id": "function:shell-common/setup.sh:_resolve_knox_id",
+      "id": "function:shell-common/setup.sh:_resolve_account_id",
       "type": "function",
-      "name": "_resolve_knox_id",
+      "name": "_resolve_account_id",
       "filePath": "shell-common/setup.sh",
       "lineRange": [
         343,
@@ -28280,7 +28280,7 @@
     },
     {
       "source": "file:shell-common/setup.sh",
-      "target": "function:shell-common/setup.sh:_resolve_knox_id",
+      "target": "function:shell-common/setup.sh:_resolve_account_id",
       "type": "contains",
       "direction": "forward",
       "weight": 1.0
@@ -28406,7 +28406,7 @@
     },
     {
       "source": "function:shell-common/setup.sh:setup_opencode_config",
-      "target": "function:shell-common/setup.sh:_resolve_knox_id",
+      "target": "function:shell-common/setup.sh:_resolve_account_id",
       "type": "calls",
       "direction": "forward",
       "weight": 0.8
