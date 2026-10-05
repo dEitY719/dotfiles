@@ -17,27 +17,30 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
+# shellcheck source=/dev/null
+. "$ROOT/shell-common/tools/ux_lib/ux_lib.sh"
+
 TRANSFER_DIR="transfer"
 
 # 가드: git 저장소 안인지
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "✗ git 저장소가 아닙니다: $ROOT" >&2
+    ux_error "git 저장소가 아닙니다: $ROOT"
     exit 1
 fi
 
 # 가드: transfer/ 가 존재하고 추적 파일이 있는지
 if [ ! -d "$TRANSFER_DIR" ] || [ -z "$(git ls-files "$TRANSFER_DIR")" ]; then
-    echo "✓ 지울 전달물이 없습니다 ($TRANSFER_DIR/ 비었거나 없음). 종료."
+    ux_success "지울 전달물이 없습니다 ($TRANSFER_DIR/ 비었거나 없음). 종료."
     exit 0
 fi
 
 BRANCH="$(git branch --show-current)"
 if [ -z "$BRANCH" ]; then
-    echo "✗ 현재 detached HEAD 상태이거나 브랜치 이름을 가져올 수 없습니다." >&2
+    ux_error "현재 detached HEAD 상태이거나 브랜치 이름을 가져올 수 없습니다."
     exit 1
 fi
-echo "▶ 브랜치 '$BRANCH' 에서 $TRANSFER_DIR/ 전달물을 비웁니다:"
-git ls-files "$TRANSFER_DIR" | sed 's/^/    - /'
+ux_info "브랜치 '$BRANCH' 에서 $TRANSFER_DIR/ 전달물을 비웁니다:"
+git ls-files "$TRANSFER_DIR" | while IFS= read -r f; do ux_bullet "$f"; done
 
 # 1) 삭제 (디렉토리째 추적 해제)
 git rm -r --quiet "$TRANSFER_DIR"
@@ -46,8 +49,8 @@ git rm -r --quiet "$TRANSFER_DIR"
 git commit -m "chore(transfer): $TRANSFER_DIR/ 전달물 비우기 (참고 완료)" -- "$TRANSFER_DIR"
 
 # 3) push (현재 브랜치 upstream)
-echo "▶ push: origin/$BRANCH"
+ux_info "push: origin/$BRANCH"
 git push origin "HEAD:$BRANCH"
 
-echo "✓ 완료 — $TRANSFER_DIR/ 제거·커밋·push 됨."
-echo "  (전달 브랜치 자체를 지우려면: git switch main && git branch -D $BRANCH && git push origin --delete $BRANCH)"
+ux_success "완료 — $TRANSFER_DIR/ 제거·커밋·push 됨."
+ux_info "전달 브랜치 자체를 지우려면: git switch main && git branch -D $BRANCH && git push origin --delete $BRANCH"

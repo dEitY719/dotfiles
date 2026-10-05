@@ -76,7 +76,7 @@ DOTFILES_ROOT_LIB="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
 if [ -f "$DOTFILES_ROOT_LIB" ]; then
     source "$DOTFILES_ROOT_LIB"
 else
-    echo "Error: dotfiles root library not found at $DOTFILES_ROOT_LIB"
+    ux_error "dotfiles root library not found at $DOTFILES_ROOT_LIB"
     exit 1
 fi
 DOTFILES_MAIN_ROOT="$(_resolve_dotfiles_root_canonical "$DOTFILES_ROOT")"
@@ -88,7 +88,7 @@ SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 if [ -f "$SKILL_SOURCES_LIB" ]; then
     source "$SKILL_SOURCES_LIB"
 else
-    echo "Error: skill sources library not found at $SKILL_SOURCES_LIB"
+    ux_error "skill sources library not found at $SKILL_SOURCES_LIB"
     exit 1
 fi
 
