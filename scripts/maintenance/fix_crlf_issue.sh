@@ -189,11 +189,13 @@ else
 fi
 
 # Verify no CRLF remains
-if find "$DOTFILES_DIR" \( -name "*.sh" -o -name "*.bash" -o -name "*.zsh" \) \
-    -type f -exec grep -l $'\r' {} \; 2>/dev/null | wc -l | grep -q 0; then
+# Numeric compare, not `wc -l | grep -q 0` (that matched 10, 20, 100; #1988).
+REMAINING_CR=$(find "$DOTFILES_DIR" \( -name "*.sh" -o -name "*.bash" -o -name "*.zsh" \) \
+    -type f -exec grep -l $'\r' {} \; 2>/dev/null | wc -l | tr -d ' ')
+if [ "$REMAINING_CR" -eq 0 ]; then
     log_info "Line ending verification: No CRLF found"
 else
-    log_warn "Some files still have CRLF endings"
+    log_warn "$REMAINING_CR files still have CRLF endings"
 fi
 
 # Verify .config permissions
@@ -218,6 +220,6 @@ echo "  2. Try: src  (to test the shell-common/aliases/core.sh function)"
 echo "  3. If issues persist, check: locale"
 echo ""
 echo "For troubleshooting, check:"
-echo "  - file /home/bwyoon/dotfiles/shell-common/aliases/core.sh"
+echo "  - file $DOTFILES_DIR/shell-common/aliases/core.sh"
 echo "  - bash --version"
 echo "  - locale"
