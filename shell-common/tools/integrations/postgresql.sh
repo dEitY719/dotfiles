@@ -96,6 +96,12 @@ _validate_identifier() {
     return 0
 }
 
+# Quote a value as an SQL string literal ('' escapes '); for passwords and
+# catalog lookups, which can legitimately contain quotes.
+_sql_literal() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/''/g")"
+}
+
 _check_password_strength() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local pwd="$1"
@@ -399,7 +405,7 @@ psql_user() {
         ux_info ""
         _check_password_strength "$arg2"
         # Secure password passing
-        _admin_sql "postgres" "CREATE USER \"$arg1\" WITH PASSWORD '$arg2';" && ux_success "Success."
+        _admin_sql "postgres" "CREATE USER \"$arg1\" WITH PASSWORD $(_sql_literal "$arg2");" && ux_success "Success."
         ;;
     delete)
         local arg1="${1:-}"
@@ -421,6 +427,8 @@ psql_user() {
             ux_info "Usage: psql_user rename <old_name> <new_name>"
             return 1
         fi
+        _validate_identifier "$arg1" "Username" || return 1
+        _validate_identifier "$arg2" "Username" || return 1
         _admin_sql "postgres" "ALTER USER \"$arg1\" RENAME TO \"$arg2\";" && ux_success "Success."
         ;;
     passwd)
@@ -436,7 +444,7 @@ psql_user() {
         read -r -s arg2
         ux_info ""
         _check_password_strength "$arg2"
-        _admin_sql "postgres" "ALTER USER \"$arg1\" WITH PASSWORD '$arg2';" && ux_success "Password updated."
+        _admin_sql "postgres" "ALTER USER \"$arg1\" WITH PASSWORD $(_sql_literal "$arg2");" && ux_success "Password updated."
         ;;
     attr)
         local arg1="${1:-}"
@@ -510,6 +518,9 @@ psql_db() {
         fi
         if [[ -z "$db_name" ]]; then return 1; fi
         _validate_identifier "$db_name" "Database Name" || return 1
+        if [[ -n "$owner_name" ]]; then
+            _validate_identifier "$owner_name" "Owner" || return 1
+        fi
 
         ux_info "Creating database '$db_name'..."
         if [[ -n "$owner_name" ]]; then
@@ -540,6 +551,8 @@ psql_db() {
             ux_info "Usage: psql_db grant <db_name> <user_name>"
             return 1
         fi
+        _validate_identifier "$db_name" "Database Name" || return 1
+        _validate_identifier "$user_name" "Username" || return 1
         ux_header "Granting privileges on '$db_name' to '$user_name'"
         _admin_sql "$db_name" "GRANT CONNECT ON DATABASE \"$db_name\" TO \"$user_name\";"
         _admin_sql "$db_name" "GRANT ALL PRIVILEGES ON DATABASE \"$db_name\" TO \"$user_name\";"
@@ -592,8 +605,8 @@ psql_bootstrap() {
     user_exists=$(_admin_sql "postgres" "SELECT 1 FROM pg_roles WHERE rolname='$user_name'" -tA)
 
     if [[ "$user_exists" != "1" ]]; then
-        # Use dollar-quoting for password to handle special chars safely
-        if _admin_sql "postgres" "CREATE USER \"$user_name\" WITH PASSWORD \$\$$password\$\$;"; then
+        # _sql_literal escapes quotes; dollar-quoting broke on a password containing $$
+        if _admin_sql "postgres" "CREATE USER \"$user_name\" WITH PASSWORD $(_sql_literal "$password");"; then
             user_created=true
         else
             ux_error "Failed to create user."
@@ -601,7 +614,7 @@ psql_bootstrap() {
         fi
     else
         ux_info "User exists. Updating password..."
-        _admin_sql "postgres" "ALTER USER \"$user_name\" WITH PASSWORD \$\$$password\$\$;"
+        _admin_sql "postgres" "ALTER USER \"$user_name\" WITH PASSWORD $(_sql_literal "$password");"
     fi
 
     # Default roles - Explicitly grant CREATEDB, prompt for CREATEROLE
@@ -698,8 +711,8 @@ psql_sync() {
         if ux_confirm "Add '$db' to your service list?" "y"; then
             # Try to guess owner
             local owner
-            # Direct interpolation safe here as $db comes from pg_database listing
-            owner=$(_admin_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '$db';" -tA)
+            # $db comes from pg_database but may still contain quotes: escape it
+            owner=$(_admin_sql "postgres" "SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = $(_sql_literal "$db");" -tA)
 
             ux_info "Owner: $owner"
             printf "%s❯%s Enter Password for user '%s': " "${UX_PRIMARY}" "${UX_RESET}" "$owner"
