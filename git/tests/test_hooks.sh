@@ -228,7 +228,7 @@ test_blocks_hardcoded_home_path_in_zshrc() {
 
   # Simulate the bun installer re-appending a resolved /home/<user> path.
   cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
-[ -s "/home/deity719/.bun/_bun" ] && source "/home/deity719/.bun/_bun"
+[ -s "/home/example-user/.bun/_bun" ] && source "/home/example-user/.bun/_bun"
 EOF
   git -C "$repo_dir" add zsh/main.zsh
   assert_failure "git -C \"$repo_dir\" commit -m \"hardcoded bun path\""
@@ -243,7 +243,7 @@ test_allows_hardcoded_home_path_with_marker() {
 
   cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
 # allow-abs-home — example only, this PC's owner asked for a fixed path
-[ -s "/home/deity719/.bun/_bun" ] && source "/home/deity719/.bun/_bun" # allow-abs-home
+[ -s "/home/example-user/.bun/_bun" ] && source "/home/example-user/.bun/_bun" # allow-abs-home
 EOF
   git -C "$repo_dir" add zsh/main.zsh
   assert_success "git -C \"$repo_dir\" commit -m \"allow-listed path\""
@@ -277,7 +277,7 @@ test_allows_preexisting_abs_home_on_unrelated_edit() {
   # simulating a path that landed before the guard existed.
   cat >"$repo_dir/zsh/legacy.zsh" <<'EOF'
 #!/bin/zsh
-[ -s "/home/deity719/.bun/_bun" ] && source "/home/deity719/.bun/_bun"
+[ -s "/home/example-user/.bun/_bun" ] && source "/home/example-user/.bun/_bun"
 EOF
   git -C "$repo_dir" add zsh/legacy.zsh
   git -C "$repo_dir" commit -q --no-verify -m "legacy debt (pre-guard)"

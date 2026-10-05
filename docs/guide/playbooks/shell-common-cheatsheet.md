@@ -73,7 +73,7 @@ tools/custom/setup_dev.sh
 
 ```sh
 # WRONG
-script_path="/home/bwyoon/dotfiles/shell-common/tools/custom/setup.sh"
+script_path="~/dotfiles/shell-common/tools/custom/setup.sh"
 
 # RIGHT
 script_path="${SHELL_COMMON}/tools/custom/setup.sh"

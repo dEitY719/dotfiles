@@ -105,7 +105,7 @@ git pull
 
 ### Windows (회사 PC)
 - VS Code 설정: `$APPDATA\Code\User\settings.json`
-  - 예: `C:\Users\bwyoon\AppData\Roaming\Code\User\settings.json`
+  - 예: `C:\Users\<user>\AppData\Roaming\Code\User\settings.json`
 
 ### Linux/macOS
 - Linux: `~/.config/Code/User/settings.json`

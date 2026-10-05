@@ -10,7 +10,7 @@
 이미 SSH 키(`~/.ssh/id_ed25519`)가 있다면 생략해도 됩니다.
 
 ```bash
-[ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -C "bwyoon@KORCO158847"
+[ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -C "user@example-host"
 ```
 
 * `-t ed25519`: 최신 보안 알고리즘
@@ -19,7 +19,7 @@
 ### 실행 예제
 
 ```bash
-bwyoon@KORCO158847:~/dotfiles(main)$ [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -C "bwyoon@KORCO158847"
+user@example-host:~/dotfiles(main)$ [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519 -C "user@example-host"
 Generating public/private ed25519 key pair.
 Enter file in which to save the key (~/.ssh/id_ed25519):
 Enter passphrase (empty for no passphrase):
@@ -27,7 +27,7 @@ Enter same passphrase again:
 Your identification has been saved in ~/.ssh/id_ed25519
 Your public key has been saved in ~/.ssh/id_ed25519.pub
 The key fingerprint is:
-SHA256:wxbLTGnBFE4bAdRuueX3pwRjO1Uf57wGn/8au2G4IOU bwyoon@KORCO158847
+SHA256:<fingerprint> user@example-host
 ```
 
 ---
@@ -44,9 +44,9 @@ ssh-add ~/.ssh/id_ed25519
 ### 실행 예제
 
 ```bash
-bwyoon@KORCO158847:~/dotfiles(main)$ eval "$(ssh-agent -s)"
+user@example-host:~/dotfiles(main)$ eval "$(ssh-agent -s)"
 Agent pid 172432
-Identity added: ~/.ssh/id_ed25519 (bwyoon@KORCO158847)
+Identity added: ~/.ssh/id_ed25519 (user@example-host)
 ```
 
 ---
@@ -62,7 +62,7 @@ Identity added: ~/.ssh/id_ed25519 (bwyoon@KORCO158847)
    예시 출력:
 
    ```
-   ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJnidzs5YvRjaPSdQl4OtG8uXNtoaHQL8yWi/hW9Ht5t bwyoon@KORCO158847
+   ssh-ed25519 AAAAC3Nza...<public-key> user@example-host
    ```
 
 2. 브라우저에서 [https://github.example.invalid](https://github.example.invalid) 접속
@@ -74,7 +74,7 @@ Identity added: ~/.ssh/id_ed25519 (bwyoon@KORCO158847)
    * **New SSH key** 버튼 클릭
    * 아래 항목 입력:
 
-     * **Title:** 예) `KORCO158847 (laptop)`
+     * **Title:** 예) `example-host (laptop)`
      * **Key type:** `Authentication Key` (기본값)
      * **Key:** 위에서 복사한 공개키 (`ssh-ed25519 ...`)
    * **Add SSH key** 클릭

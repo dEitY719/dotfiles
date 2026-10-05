@@ -363,6 +363,6 @@ Unchanged:
 
 ## Related Documents
 
-- `/home/bwyoon/dotfiles/docs/abc-review-C.md` - Original analysis
+- `~/dotfiles/docs/abc-review-C.md` - Original analysis
 - Setup instructions in shell-common/README
 - Configuration details in environments.conf comments

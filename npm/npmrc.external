@@ -1,5 +1,5 @@
 # npmrc.external
-# Samsung external PC configuration (VPN, direct internet access)
+# External PC configuration (VPN, direct internet access)
 #
 # Usage:
 #   This file is symlinked to ~/.npmrc by shell-common/setup.sh
