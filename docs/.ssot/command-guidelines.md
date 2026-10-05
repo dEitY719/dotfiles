@@ -87,8 +87,9 @@ row 함수는 화면 출력뿐 아니라 **커맨드 레퍼런스 문서의 데�
 
 `gwt` 같은 멀티 커맨드 함수의 dispatcher 구조 자체는 [`command-design-pattern.md`](./command-design-pattern.md) §4–§7가 정의한다. 이 문서는 그 위에서 help 출력 규칙만 다룬다:
 
-- 사용자 안내는 `gwt help [section]`을 canonical로 사용하고, `gwt-help` alias 는 backward-compat 단축형으로 동등 제공한다.
-- `<alias> -h|--help|help|""` 는 canonical `<topic>-help` 와 동등한 진입점이며 두 형태 모두 테스트로 고정한다 (예: `gwt`, `gwt -h`, `gwt --help`, `gwt help`, `gwt help <section>`).
+- 사용자 안내는 `gwt-help [section]`을 canonical로 사용한다. `gwt`, `gwt -h [section]`, `gwt --help [section]` 은 `gwt_help` 로 위임되는 동등 진입점이다.
+- `gwt help` (위치 인자 `help`) 는 dispatcher 가 거부한다 (exit 1, "Use canonical entrypoint: gwt-help") — `tests/integration/test_help_compact_policy.py::test_legacy_gwt_help_forms_rejected` 가 고정한다.
+- 서브커맨드 위치 인자 `help` 정책: `gwt teardown help` 는 허용(#1835), `gwt spawn help` 는 거부 — 서브커맨드 help 는 `gwt <sub> -h|--help` 를 사용한다.
 
 ## 테스트 체크리스트
 
