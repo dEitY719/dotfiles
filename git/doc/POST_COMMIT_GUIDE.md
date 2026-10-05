@@ -221,11 +221,11 @@ git status
 ~/dotfiles/git/hooks/install-hooks.sh ~/para/project/litellm
 
 # 출력 예:
-# Installing hooks to: /home/bwyoon/para/project/litellm/.git/hooks
+# Installing hooks to: ~/para/project/litellm/.git/hooks
 #
 # ✓ Created symlink:
-#   Target: /home/bwyoon/para/project/litellm/.git/hooks/post-commit
-#   Source: /home/bwyoon/dotfiles/git/hooks/post-commit.generic
+#   Target: ~/para/project/litellm/.git/hooks/post-commit
+#   Source: ~/dotfiles/git/hooks/post-commit.generic
 #
 # Installation complete!
 ```
@@ -237,13 +237,13 @@ git status
 ls -la ~/para/project/litellm/.git/hooks/post-commit
 
 # 출력 예:
-# lrwxrwxrwx 1 user group 51 Feb  3 12:30 post-commit -> /home/bwyoon/dotfiles/git/hooks/post-commit.generic
+# lrwxrwxrwx 1 user group 51 Feb  3 12:30 post-commit -> ~/dotfiles/git/hooks/post-commit.generic
 
 # Symlink 대상 확인
 readlink ~/para/project/litellm/.git/hooks/post-commit
 
 # 출력 예:
-# /home/bwyoon/dotfiles/git/hooks/post-commit.generic
+# ~/dotfiles/git/hooks/post-commit.generic
 
 # 실행 권한 확인
 test -x ~/para/project/litellm/.git/hooks/post-commit && echo "✓ Executable" || echo "✗ Not executable"

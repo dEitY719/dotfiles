@@ -356,7 +356,7 @@ git commit -m "Update bat_help function"
 #### PHASE 2: Project-level Hook 실행
 
 ```
-[Global Hook] Delegating to project hook: /home/bwyoon/dotfiles/git/hooks/pre-commit
+[Global Hook] Delegating to project hook: ~/dotfiles/git/hooks/pre-commit
 
 Pre-commit validation (staged files only)
 
@@ -407,9 +407,9 @@ GIT_HOOKS_DEBUG=1 git commit -m "test"
 # [Debug] Checking for conflict markers...
 # ...
 # [Debug] Searching for project-level hooks...
-# [Debug] Checking: /home/bwyoon/dotfiles/.githooks/pre-commit
-# [Debug] Checking: /home/bwyoon/dotfiles/git/hooks/pre-commit
-# [Debug] Found executable hook: /home/bwyoon/dotfiles/git/hooks/pre-commit
+# [Debug] Checking: ~/dotfiles/.githooks/pre-commit
+# [Debug] Checking: ~/dotfiles/git/hooks/pre-commit
+# [Debug] Found executable hook: ~/dotfiles/git/hooks/pre-commit
 ```
 
 ### 🧪 테스트 2: 전역 체크만 실행

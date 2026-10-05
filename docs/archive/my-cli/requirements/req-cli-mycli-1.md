@@ -6,7 +6,7 @@
 |------|------|------|
 | **TUI 라이브러리** | ✅ **ink** | v0.1부터 프로페셔널 UX (chalk 스킵) |
 | **학습 경로** | 📖 병렬 학습 | 2주간 TypeScript/React/ink 동시 학습 |
-| **프로젝트 위치** | 📁 dotfiles 내부 | `/home/bwyoon/dotfiles/packages/my-cli` |
+| **프로젝트 위치** | 📁 dotfiles 내부 | `~/dotfiles/packages/my-cli` |
 | **일정** | ⏱️ 8주 | v0.1.0 릴리스 목표 |
 
 **주의**: TypeScript 초보자이므로 학습 가이드 (`req-cli-mycli-1-learning-guide.md`)를 반드시 참고하세요.
@@ -51,10 +51,10 @@
 
 ### 2.1 Project Location & Integration
 
-**위치**: `/home/bwyoon/dotfiles/packages/my-cli`
+**위치**: `~/dotfiles/packages/my-cli`
 
 ```
-/home/bwyoon/dotfiles/
+~/dotfiles/
 ├── shell-common/
 │   └── functions/
 │       ├── my_help.sh              # 현재: Shell 버전 (유지)
@@ -90,7 +90,7 @@ gemini-cli의 모범 사례:
 ### 2.3 Project Structure
 
 ```
-/home/bwyoon/dotfiles/packages/my-cli/
+~/dotfiles/packages/my-cli/
 ├── packages/
 │   ├── core/                        # Core 라이브러리
 │   │   ├── src/
@@ -142,11 +142,11 @@ gemini-cli의 모범 사례:
 
 **Shell과의 브릿지**:
 ```bash
-# /home/bwyoon/dotfiles/shell-common/functions/my_cli_bridge.sh
+# ~/dotfiles/shell-common/functions/my_cli_bridge.sh
 my-cli() {
   if command -v node >/dev/null 2>&1; then
     # dotfiles/packages/my-cli 실행
-    node /home/bwyoon/dotfiles/packages/my-cli/dist/bin/my-cli.js "$@"
+    node ~/dotfiles/packages/my-cli/dist/bin/my-cli.js "$@"
   else
     # Fallback: 기존 my-help 함수 사용
     my-help "$@"
@@ -866,15 +866,15 @@ describe('HelpRegistry', () => {
   - 패키지 구조: `packages/*/package.json`
   - CLI 설계: `packages/cli/src/main.ts`
 
-- **Current my-help**: `/home/bwyoon/dotfiles/shell-common/functions/my_help.sh`
+- **Current my-help**: `~/dotfiles/shell-common/functions/my_help.sh`
   - 라인 1-120: 초기화 및 등록 시스템
   - 라인 215-380: 카테고리 및 토픽 표시
   - 라인 509-637: 메인 로직
 
 ### 16.2 Documentation Templates
 
-- REQ format: `/home/bwyoon/dotfiles/claude/skills/req-define/README.md`
-- Phase template: `/home/bwyoon/dotfiles/claude/skills/req-phases/phase1-spec.md`
+- REQ format: `~/dotfiles/claude/skills/req-define/README.md`
+- Phase template: `~/dotfiles/claude/skills/req-phases/phase1-spec.md`
 
 ---
 
@@ -926,7 +926,7 @@ describe('HelpRegistry', () => {
 #### 2️⃣ 프로젝트 초기화 (병렬)
 ```bash
 # 주 2: 프로젝트 구조 생성
-cd /home/bwyoon/dotfiles
+cd ~/dotfiles
 
 mkdir -p packages/my-cli/{packages/{core,cli},scripts}
 cd packages/my-cli
@@ -1174,7 +1174,7 @@ Week 8: 버퍼 (오버런 대비)
 **개발 시작 명령어** (Week 1 학습 완료 후):
 ```bash
 # 학습 가이드 완독 후 시작
-cd /home/bwyoon/dotfiles
+cd ~/dotfiles
 mkdir -p packages/my-cli && cd packages/my-cli
 
 # 초기 구조 생성 스크립트 (추후 제공)

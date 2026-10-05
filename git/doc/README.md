@@ -262,7 +262,7 @@ docs/abc-review-CX.md                        # CX 리뷰
 
 ```bash
 # ~/.bashrc 또는 ~/.zshrc에 추가
-alias git-doc='cat /home/bwyoon/dotfiles/git/doc/HOOK_WORKFLOW.md | less'
+alias git-doc='cat ~/dotfiles/git/doc/HOOK_WORKFLOW.md | less'
 
 # 사용
 git-doc

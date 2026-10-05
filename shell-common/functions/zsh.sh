@@ -311,7 +311,7 @@ _zsh_clear_p10k_caches() {
         fi
     done
 
-    # Per-user scratch dir (e.g. ~/.cache/p10k-bwyoon/) — p10k creates it
+    # Per-user scratch dir (e.g. ~/.cache/p10k-<user>/) — p10k creates it
     # on first prompt and may stash transient state there.
     local p10k_user_dir="${cache_dir}/p10k-${USER}"
     if [ -d "$p10k_user_dir" ]; then

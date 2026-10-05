@@ -3,7 +3,7 @@
 #
 # Blocks staged shell config files that contain a hardcoded absolute home
 # path like `/home/<user>/...` or `/Users/<user>/...`. Triggered by issue
-# #737 — bun installer re-appends `/home/deity719/.bun/_bun` to `zsh/zshrc`
+# #737 — bun installer re-appends `/home/example-user/.bun/_bun` to `zsh/zshrc`
 # on every run, silently breaking multi-PC portability after PR #736's
 # one-shot normalization.
 #
