@@ -380,28 +380,28 @@ denv() {
     container_name="$1"
 
     if [ -z "$container_name" ]; then
-        # Show menu of running containers - use temporary file for container list
-        _tmp_containers=$(mktemp)
-        docker ps --format '{{.Names}}' 2>/dev/null >"$_tmp_containers"
-
-        if [ ! -s "$_tmp_containers" ]; then
+        # ux_menu takes the options as arguments (not stdin, #1990): rebuild
+        # "$@" one line per name (no word splitting, same in bash and zsh).
+        _denv_names=$(docker ps --format '{{.Names}}' 2>/dev/null)
+        set --
+        while IFS= read -r _denv_n; do
+            [ -n "$_denv_n" ] && set -- "$@" "$_denv_n"
+        done <<EOF
+$_denv_names
+EOF
+        if [ $# -eq 0 ]; then
             ux_warning "No running containers found."
-            rm -f "$_tmp_containers"
             return 1
         fi
 
-        # Call ux_menu with temp file contents
-        selection_idx=$(ux_menu "Select container to inspect:" < "$_tmp_containers")
-
+        # ux_menu prints a 0-based index on stdout, nothing on cancel
+        selection_idx=$(ux_menu "Select container to inspect:" "$@")
         if [ -z "$selection_idx" ]; then
             ux_info "Operation cancelled."
-            rm -f "$_tmp_containers"
             return 0
         fi
-
-        # Get the selected container name
-        container_name=$(sed -n "${selection_idx}p" "$_tmp_containers")
-        rm -f "$_tmp_containers"
+        shift "$selection_idx"
+        container_name="$1"
     fi
 
     if [ -z "$container_name" ]; then

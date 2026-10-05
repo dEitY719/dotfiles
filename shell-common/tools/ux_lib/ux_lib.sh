@@ -406,24 +406,28 @@ ux_menu() {
             return 1
         fi
     else
-        # Fallback to basic menu
-        ux_warning "Python 'rich' or 'jq' not found. Falling back to basic menu."
-        echo ""
-        ux_section "$title"
-        local i=1
-        for opt in "$@"; do
-            echo "  ${UX_PRIMARY}$i)${UX_RESET} $opt"
-            i=$((i + 1))
-        done
-        echo "  ${UX_MUTED}0) Cancel${UX_RESET}"
-        echo ""
-        printf "%s❯%s Select: " "${UX_INFO}" "${UX_RESET}"
+        # Fallback to basic menu. UI goes to stderr so callers capturing
+        # $(ux_menu ...) get only the index, as with the Python path (#1990).
+        local i=1 opt choice
+        {
+            ux_warning "Python 'rich' or 'jq' not found. Falling back to basic menu."
+            echo ""
+            ux_section "$title"
+            for opt in "$@"; do
+                echo "  ${UX_PRIMARY}$i)${UX_RESET} $opt"
+                i=$((i + 1))
+            done
+            echo "  ${UX_MUTED}0) Cancel${UX_RESET}"
+            echo ""
+            printf "%s❯%s Select: " "${UX_INFO}" "${UX_RESET}"
+        } >&2
         read -r choice
 
-        if [ -n "$choice" ] && [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
+        case "$choice" in '' | *[!0-9]*) choice=0 ;; esac
+        if [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
             echo $((choice - 1))
         else
-            ux_info "Cancelled."
+            ux_info "Cancelled." >&2
             return 1
         fi
     fi
