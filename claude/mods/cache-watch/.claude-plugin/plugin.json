@@ -1,0 +1,5 @@
+{
+  "name": "cache-watch",
+  "version": "0.1.0",
+  "description": "Records the last prompt-cache touch per session for the dotfiles statusline (#2026)."
+}
