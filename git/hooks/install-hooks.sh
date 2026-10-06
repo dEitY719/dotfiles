@@ -88,10 +88,10 @@ fi
 ux_success "Installation complete!"
 ux_info "To verify: ls -la \"$POST_COMMIT_TARGET\""
 
-ux_section "Pre-push policy (this repo only, since issue #754)"
-ux_bullet "The dotfiles repo itself runs the full pytest suite via the pre-push hook (\"mise run test\") instead of GitHub Actions."
+ux_section "Pre-push policy (this repo only, issues #754, #2046)"
+ux_bullet "The dotfiles repo runs a <60s smoke via the pre-push hook (\"mise run test-smoke\"); the full suite runs in CI (non-blocking). PRE_PUSH_FULL_TEST=1 git push runs it locally."
 ux_bullet "This install script only wires post-commit for downstream projects — the pre-push hook here is managed via core.hooksPath set by ./setup.sh."
 ux_bullet "Opt-out for the local pytest layer: SKIP_LOCAL_PYTEST=1 git push   # WIP push, intentional fail"
-ux_warning "--no-verify bypasses ALL hook layers (protected-branch, leak guard, AND mise run test)."
+ux_warning "--no-verify bypasses ALL hook layers (protected-branch, leak guard, AND the test smoke)."
 ux_bullet_sub "Do NOT use --no-verify as a habit; prefer SKIP_LOCAL_PYTEST=1 (narrow opt-out) and fix the underlying test failure."
 ux_bullet_sub "SSOT: docs/.ssot/local-test-policy.md"

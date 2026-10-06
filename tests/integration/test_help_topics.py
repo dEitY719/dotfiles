@@ -80,6 +80,7 @@ HELP_TOPICS = [
 class TestHelpTopicsBasic:
     """Basic help topic tests."""
 
+    @pytest.mark.smoke
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_my_help_function_exists(self, shell_runner, shell):
         """Verify that my_help_impl is callable."""
@@ -119,6 +120,7 @@ class TestHelpTopicsBasic:
         assert result.exit_code == 0
         assert "sections" in result.stdout.lower()
 
+    @pytest.mark.smoke
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     @pytest.mark.parametrize("arg", ["--list", "list", "--all", "all", "categories", "popular", "navigation"])
     def test_my_help_standard_section_interface(self, shell_runner, shell, arg):
