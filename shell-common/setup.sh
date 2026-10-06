@@ -42,8 +42,10 @@ fi
 # via _local_value below, the same way tools/custom/setup_crt.sh does.
 
 # Placeholder marker of the tracked *.local.example templates (#1944/#1969):
-# fake hosts end in `.example.invalid`, fake cert files are `example-*.crt`.
-LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt'
+# fake hosts end in `.example.invalid`, fake cert files are `example-*.crt`;
+# non-domain fakes (SSH key name, usage id, CA fingerprint, AWS account id,
+# review model id) are listed one by one — keep in sync with the templates (#2021).
+LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt|id_rsa_example|"EMP00000"|"000000000000"|EXAMPLEPROXYCAFINGERPRINT|example-corp/example-model'
 
 # Fake gateway URL of opencode/opencode.json.internal, replaced at setup time
 # with DOTFILES_OPENCODE_BASE_URL from env/internal.local.sh (#1967).
@@ -142,7 +144,11 @@ _local_value() {
 # tracked templates hold fake values only, real ones must be typed in once.
 _warn_if_placeholder() {
     if grep -Eq "$LOCAL_PLACEHOLDER_ERE" "$1" 2>/dev/null; then
-        ux_warning "${1#"$SHELL_COMMON_DIR"/} still has placeholder values — fill in the real ones (see the template comments)"
+        # Names only, never values (#2021).
+        _wip_vars="$(grep -E "$LOCAL_PLACEHOLDER_ERE" "$1" \
+            | sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}\([A-Za-z_][A-Za-z0-9_]*\)=.*/\2/p' \
+            | paste -sd, - | sed 's/,/, /g')"
+        ux_warning "${1#"$SHELL_COMMON_DIR"/} still has placeholder values${_wip_vars:+ ($_wip_vars)} — fill in the real ones (see the template comments)"
     fi
 }
 
