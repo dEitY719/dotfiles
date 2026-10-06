@@ -30,10 +30,8 @@ teardown() {
     # concurrent run's in-flight prompt file — sweeping either from here
     # failed that run's SIGINT precondition / PROMPT_FILE read (#2047).
     # Litter from an aborted assertion is swept by a later run once stale.
-    local f
-    for f in $(find /tmp -maxdepth 1 -name 'gh-pr-review-prompt.*' -mmin +10 2>/dev/null); do
-        case "${f##*.}" in *[!0-9]*) rm -f "$f" ;; esac
-    done
+    find /tmp -maxdepth 1 -name 'gh-pr-review-prompt.*' -mmin +10 \
+        ! -regex '.*\.[0-9]*' -delete 2>/dev/null
     # Same reason for the #1283 fallback-path tests, scoped to this
     # process's own PID so a concurrent run is never touched.
     rm -f "/tmp/gh-pr-review-out.$$" "/tmp/gh-pr-review-body.$$"
