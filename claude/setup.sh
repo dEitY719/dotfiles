@@ -827,6 +827,27 @@ else
     log_error_and_exit "\$HOME/.claude/settings.json 실파일 생성 실패"
 fi
 
+# cache-watch mod (#2026) 로드 연결 — SSOT settings.json 의 env.CLAUDE_CODE_PLUGIN_DIRS
+# 가 위 _claude_ensure_settings_copy 로 각 계정에 복사돼 매 세션 mod 를 로드한다
+# (--plugin-dir 수동 지정 불필요). 경로는 statusLine 과 같은 ~/dotfiles 기준.
+# soft-fail: 복사 누락이나 mod 디렉토리 부재는 경고만 한다.
+_cw_mod_dir="${HOME}/dotfiles/claude/mods/cache-watch"
+if ! command -v jq >/dev/null 2>&1; then
+    log_warning "jq 미설치 — cache-watch mod 로드 설정 확인 건너뜀"
+elif [ -d "$_cw_mod_dir/.claude-plugin" ]; then
+    for acct in $ENABLED_ACCOUNTS; do
+        _cw_live="$(_claude_resolve_account "$acct")/settings.json"
+        if jq -e '.env.CLAUDE_CODE_PLUGIN_DIRS // empty' "$_cw_live" >/dev/null 2>&1; then
+            log_dim "✓ ${acct} cache-watch mod 로드 설정 확인됨 (env.CLAUDE_CODE_PLUGIN_DIRS)"
+        else
+            log_warning "${acct}/settings.json 에 env.CLAUDE_CODE_PLUGIN_DIRS 없음 — cache-watch mod 미로드"
+        fi
+    done
+else
+    log_warning "cache-watch mod 디렉토리 없음: $_cw_mod_dir — ~/dotfiles 가 이 체크아웃이 아니면 mod 가 로드되지 않는다"
+fi
+unset _cw_mod_dir _cw_live
+
 # OpenCode / Codex / Gemini / agy / Hermes entry-level 합성은
 # scripts/setup-skills-ssot.sh 가 책임짐 (#791, #1376, #1731) — 플러그인 기반이
 # 아닌 이 harness 들만 flat 합성을 쓴다 (Claude Code 는 플러그인 전용). agy 는 Gemini 런타임을
