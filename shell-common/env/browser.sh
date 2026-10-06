@@ -54,7 +54,7 @@ unset _browser_helper _browser_wrapper
 # BROWSER here wins — that is the supported way to keep a different browser
 # on one machine without an "only export if unset" guard here (such a guard
 # would make a stale value sticky across `src` reloads).
-if [ -f "$_browser_root/env/browser.local.sh" ]; then
+if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_browser_root/env/browser.local.sh" ]; then
     # shellcheck source=/dev/null
     . "$_browser_root/env/browser.local.sh"
 fi

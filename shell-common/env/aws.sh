@@ -14,7 +14,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # (SSOT — see issue #677).
 
 _aws_root="${DOTFILES_ROOT:-$HOME/dotfiles}/aws"
-if [ -f "$_aws_root/aws.local.sh" ]; then
+if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_aws_root/aws.local.sh" ]; then
     # shellcheck source=/dev/null
     . "$_aws_root/aws.local.sh"
 fi

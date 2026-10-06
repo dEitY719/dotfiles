@@ -1181,6 +1181,7 @@ $(_pr_json 12 30)]"
 @test "pr_merge_train_cron: a pathologically small poll interval is still bounded" {
     # See issue_watcher_cron.bats's twin test — agy, PR #1611 review, 4th
     # pass.
+    _install_frozen_clock_stub # count-bound only: no 13s deadline under load
     _run_tick PMT_SETTLE_POLL_SLEEP=0.001 "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
     [ "$(_log_count '^sleep 0.001$')" -eq 999 ]

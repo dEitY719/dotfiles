@@ -32,7 +32,7 @@ fi
 # Load environment-specific settings from security.local.sh (if present).
 # NOTE: $0 is unreliable in sourced context, so prefer predefined variables.
 _security_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-if [ -f "$_security_root/env/security.local.sh" ]; then
+if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_security_root/env/security.local.sh" ]; then
     . "$_security_root/env/security.local.sh"
 fi
 unset _security_root

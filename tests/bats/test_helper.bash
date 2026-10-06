@@ -22,6 +22,11 @@ _BATS_REAL_SHELL_COMMON="$SHELL_COMMON"
 # Test isolation
 export DOTFILES_TEST_MODE=1
 export DOTFILES_FORCE_INIT=1
+# Hermetic against gitignored machine-local overrides (#2031): the env/*.sh
+# loaders and hermes/setup.sh skip their *.local.sh files when this is set, so
+# an internal PC's real proxy/CA values cannot leak into tests. Tests that
+# exercise a fixture *.local.sh unset it themselves.
+export DOTFILES_SKIP_LOCAL_ENV=1
 
 setup_isolated_home() {
     # Restore real DOTFILES_ROOT first — the previous test may have pointed
@@ -284,4 +289,17 @@ printf 'sleep %s\n' "$*" >>"${CALL_LOG}"
 exit 0
 EOF
     chmod +x "${_BIN_DIR}/sleep"
+}
+
+# date: freezes `date +%s` at install time; every other form runs the real
+# date. A settle loop bounded by both a poll count and a wall-clock deadline
+# would otherwise stop on the deadline under load, making an exact poll-count
+# assertion flaky (#2031). Same `${_BIN_DIR}` convention as _install_sleep_stub.
+_install_frozen_clock_stub() {
+    cat >"${_BIN_DIR}/date" <<EOF2
+#!/bin/sh
+[ "\$*" = "+%s" ] && { echo $(date +%s); exit 0; }
+exec $(command -v date) "\$@"
+EOF2
+    chmod +x "${_BIN_DIR}/date"
 }

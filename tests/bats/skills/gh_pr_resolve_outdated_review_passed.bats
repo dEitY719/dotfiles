@@ -593,6 +593,13 @@ _1712_make_repo() {
     # Hashes independently reverified against this checkout before use; run
     # straight against $_BATS_REAL_DOTFILES_ROOT (ordinary ancestors of main),
     # so no synthetic repo can drift away from the case that motivated #1704.
+    # A checkout without those commits (shallow clone, rewritten mirror) skips
+    # rather than fails; the synthetic _1704_make_repo cases above still run (#2031).
+    local _c
+    for _c in 23e7295a01da1202010a89463387ddf1898236c1 2759fc13 25835c39 dc614bcc; do
+        git -C "$_BATS_REAL_DOTFILES_ROOT" cat-file -e "${_c}^{commit}" 2>/dev/null ||
+            skip "commit ${_c} is not in this checkout's history"
+    done
     cd "${BATS_TEST_TMPDIR}" || fail "cd failed"
     STUB_COMMENTS_JSON=$(jq -nc --argjson c "$(_marker_comment "$STUB_ME_LOGIN" "2759fc13")" '[$c]')
     run resolve_outdated_step5_reconcile 1695 acme/widget ghe.example.com \

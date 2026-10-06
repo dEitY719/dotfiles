@@ -53,7 +53,7 @@ unset _claude_setup_mode
 
 # Load PC-local overrides (gitignored, see claude.local.example).
 _claude_env_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-if [ -f "$_claude_env_root/env/claude.local.sh" ]; then
+if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_claude_env_root/env/claude.local.sh" ]; then
     . "$_claude_env_root/env/claude.local.sh"
 fi
 unset _claude_env_root

@@ -171,7 +171,7 @@ _hermes_install_cli
 # openai.azure.com, so a .env key is silently dropped for a custom base_url and
 # the request comes back 401. See hermes-help pitfalls.
 _hermes_configure_endpoint() {
-	if [ ! -f "${HERMES_ENDPOINT_LOCAL}" ]; then
+	if [ -n "${DOTFILES_SKIP_LOCAL_ENV-}" ] || [ ! -f "${HERMES_ENDPOINT_LOCAL}" ]; then
 		ux_info "No custom LLM endpoint configured — skipping"
 		ux_bullet "To wire one up: cp hermes/llm_endpoint.local.example hermes/llm_endpoint.local.sh"
 		ux_bullet "Fill in HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY, then re-run ./hermes/setup.sh"
@@ -310,7 +310,7 @@ _hermes_resolve_ca_cert() {
 	fi
 
 	local security_local="${SHELL_COMMON}/env/security.local.sh"
-	[ -f "${security_local}" ] || return 1
+	[ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "${security_local}" ] || return 1
 
 	local from_security
 	# shellcheck source=/dev/null

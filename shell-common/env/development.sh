@@ -18,7 +18,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 
 # Machine-specific overrides (gitignored, see development.local.example)
 _dev_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-if [ -f "$_dev_root/env/development.local.sh" ]; then
+if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_dev_root/env/development.local.sh" ]; then
     . "$_dev_root/env/development.local.sh"
 fi
 unset _dev_root
