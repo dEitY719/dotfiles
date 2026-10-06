@@ -24,7 +24,14 @@ teardown() {
     # assertions abort mid-body before its own `rm -f` runs (agy review,
     # PR #1282 / issue #1276) — teardown_isolated_home only cleans
     # $TEST_TEMP_HOME, not real /tmp.
-    rm -f /tmp/gh-pr-review-prompt.*
+    # Only the mktemp-random names (a non-digit in the suffix). The
+    # fallback form `...<pr>.<PID>` is PID-derived and belongs to whichever
+    # run is alive — sweeping it from here deleted a concurrent run's
+    # in-flight prompt file and failed its SIGINT precondition (#2047).
+    local f
+    for f in /tmp/gh-pr-review-prompt.*; do
+        case "${f##*.}" in *[!0-9]*) rm -f "$f" ;; esac
+    done
     # Same reason for the #1283 fallback-path tests, scoped to this
     # process's own PID so a concurrent run is never touched.
     rm -f "/tmp/gh-pr-review-out.$$" "/tmp/gh-pr-review-body.$$"
@@ -38,7 +45,8 @@ teardown() {
     # any survivor of an aborted assertion and sweep its litter.
     if [ -n "${_HARNESS_PID-}" ]; then
         kill -9 "-$_HARNESS_PID" 2>/dev/null || true
-        rm -f "/tmp/gh-pr-review-out.$_HARNESS_PID" \
+        rm -f "$_HARNESS_PROMPT_FB" \
+            "/tmp/gh-pr-review-out.$_HARNESS_PID" \
             "/tmp/gh-pr-review-body.$_HARNESS_PID" \
             "/tmp/gh-pr-review-stderr.codex.$_HARNESS_PID"
     fi
