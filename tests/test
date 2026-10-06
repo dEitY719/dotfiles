@@ -351,6 +351,28 @@ bats_fail_closed() {
     return 1
 }
 
+# Progress ticker for run_bats()'s parallel phase (#2043). xargs workers are
+# silent for minutes, so a waiting `git push` looks hung. Every
+# BATS_PROGRESS_INTERVAL seconds it counts finished files (<idx>.status) in
+# $outdir. TTY: one line rewritten in place (default 5s). Non-TTY (CI/log
+# file): one plain line per tick (default 30s) so logs do not balloon.
+# Caller runs it in the background and kills it once xargs returns.
+_bats_progress_ticker() {
+    local outdir="$1" total="$2" interval="${BATS_PROGRESS_INTERVAL:-}" tty=0 done_n
+    [ -t 1 ] && tty=1
+    if [ -z "$interval" ]; then
+        if [ "$tty" = "1" ]; then interval=5; else interval=30; fi
+    fi
+    while sleep "$interval"; do
+        done_n=$(find "$outdir" -maxdepth 1 -name '*.status' 2>/dev/null | wc -l)
+        if [ "$tty" = "1" ]; then
+            printf '\r  [%s/%s files]' "$done_n" "$total"
+        else
+            printf '  [%s/%s files]\n' "$done_n" "$total"
+        fi
+    done
+}
+
 # Run bats tests
 #
 # bats-core's own `--jobs` needs GNU parallel (or shenwei356/rush), which we
@@ -415,7 +437,9 @@ run_bats() {
     # Emit "index\npath" pairs; -n 2 hands each (idx, path) to one worker.
     # Keying outputs by array index (not a path-derived name) gives the
     # producer and the aggregation loop below one shared, collision-free map.
-    local i=0 f
+    local i=0 f ticker_pid
+    _bats_progress_ticker "$outdir" "${#bats_files[@]}" &
+    ticker_pid=$!
     for f in "${bats_files[@]}"; do
         printf '%s\n%s\n' "$i" "$f"
         i=$((i + 1))
@@ -428,6 +452,9 @@ run_bats() {
                 printf "1" >"$out/$idx.status"
             fi
           ' _ "$bats_bin" "$outdir"
+    kill "$ticker_pid" 2>/dev/null
+    wait "$ticker_pid" 2>/dev/null
+    [ -t 1 ] && printf '\r\033[K'
 
     # Aggregate: count tests, print per-file failures with their full log.
     # Iterate the same indices the producer used, so outputs line up exactly.
