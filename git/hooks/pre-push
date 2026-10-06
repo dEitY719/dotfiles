@@ -216,30 +216,31 @@ _leak_scan_range() {
 exit_code=0
 
 while read -r local_ref local_sha remote_ref remote_sha; do
-    # Extract branch name from local_ref (refs/heads/main -> main)
+    # Extract branch names (refs/heads/main -> main)
     local_branch="${local_ref#refs/heads/}"
+    remote_branch="${remote_ref#refs/heads/}"
 
-    # ----- Layer 1: PROTECTED_BRANCHES (unchanged) -----
-    is_protected=0
-    for protected in "${PROTECTED_BRANCHES[@]}"; do
-        # Handle wildcard patterns (e.g., release/*)
-        if [[ "$protected" == *"*" ]]; then
-            pattern="${protected//\*/.*}"
-            if [[ "$local_branch" =~ ^${pattern}$ ]]; then
-                is_protected=1
-                break
+    # ----- Layer 1: PROTECTED_BRANCHES -----
+    # Judge the push destination (remote_ref) as well as the local name: a
+    # differently-named local branch can still land on remote main via
+    # upstream tracking or `x:main` (#2032). Either side protected -> block.
+    blocked_branch=""
+    for candidate in "$local_branch" "$remote_branch"; do
+        for protected in "${PROTECTED_BRANCHES[@]}"; do
+            # Handle wildcard patterns (e.g., release/*)
+            if [[ "$protected" == *"*" ]]; then
+                pattern="${protected//\*/.*}"
+                [[ "$candidate" =~ ^${pattern}$ ]] && blocked_branch="$candidate"
+            else
+                [ "$candidate" = "$protected" ] && blocked_branch="$candidate"
             fi
-        else
-            if [ "$local_branch" = "$protected" ]; then
-                is_protected=1
-                break
-            fi
-        fi
+            [ -n "$blocked_branch" ] && break 2
+        done
     done
 
-    if [ $is_protected -eq 1 ]; then
+    if [ -n "$blocked_branch" ]; then
         echo ""
-        echo "🚫 $MSG_PROTECTED_BRANCH: '$local_branch'"
+        echo "🚫 $MSG_PROTECTED_BRANCH: '$blocked_branch'"
         echo "   $MSG_USE_PR"
         echo "   $MSG_MERGE_VIA_PR"
         echo "$MSG_HINT_FIX"
