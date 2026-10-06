@@ -74,9 +74,7 @@ def run_command(
     # would resolve to git's own binary instead of the dotfiles function (#2031).
     git_exec = run_env.pop("GIT_EXEC_PATH", None)
     if git_exec:
-        run_env["PATH"] = os.pathsep.join(
-            p for p in run_env.get("PATH", "").split(os.pathsep) if p != git_exec
-        )
+        run_env["PATH"] = os.pathsep.join(p for p in run_env.get("PATH", "").split(os.pathsep) if p != git_exec)
 
     # Construct shell invocation
     if shell == "bash":
