@@ -1,0 +1,4 @@
+# Global uv tools synced by global-packages/setup.sh (one spec per line).
+# Installed with `uv tool install --native-tls <spec>`; never uninstalled.
+markitdown[all]
+browser-use
