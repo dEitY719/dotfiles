@@ -24,12 +24,14 @@ teardown() {
     # assertions abort mid-body before its own `rm -f` runs (agy review,
     # PR #1282 / issue #1276) — teardown_isolated_home only cleans
     # $TEST_TEMP_HOME, not real /tmp.
-    # Only the mktemp-random names (a non-digit in the suffix). The
-    # fallback form `...<pr>.<PID>` is PID-derived and belongs to whichever
-    # run is alive — sweeping it from here deleted a concurrent run's
-    # in-flight prompt file and failed its SIGINT precondition (#2047).
+    # Only the mktemp-random names (a non-digit in the suffix), and only
+    # stale ones. The fallback form `...<pr>.<PID>` is PID-derived and
+    # belongs to whichever run is alive, and a young random name may be a
+    # concurrent run's in-flight prompt file — sweeping either from here
+    # failed that run's SIGINT precondition / PROMPT_FILE read (#2047).
+    # Litter from an aborted assertion is swept by a later run once stale.
     local f
-    for f in /tmp/gh-pr-review-prompt.*; do
+    for f in $(find /tmp -maxdepth 1 -name 'gh-pr-review-prompt.*' -mmin +10 2>/dev/null); do
         case "${f##*.}" in *[!0-9]*) rm -f "$f" ;; esac
     done
     # Same reason for the #1283 fallback-path tests, scoped to this
