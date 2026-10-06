@@ -25,6 +25,7 @@
   },
   "env": {
     "CLAUDE_CODE_SESSIONEND_HOOKS_TIMEOUT_MS": "10000",
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/dotfiles/claude/mods/cache-watch",
     "ENABLE_PROMPT_CACHING_1H": "1"
   },
   "hooks": {
