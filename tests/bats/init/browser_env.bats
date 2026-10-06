@@ -154,6 +154,7 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
     local root
     root="$(_fake_shell_common)"
     printf 'export BROWSER=/usr/bin/firefox\n' > "${root}/env/browser.local.sh"
+    unset DOTFILES_SKIP_LOCAL_ENV # fixture tree: the local file is the subject
     WINDOWS_CHROME_EXE="$CHROME" _source_bash "$root"
     assert_success
     assert_output "/usr/bin/firefox"

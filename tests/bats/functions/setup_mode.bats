@@ -82,6 +82,22 @@ teardown() {
     assert_output "[]"
 }
 
+# --- hermetic guard (#2031) --------------------------------------------------
+#
+# The leaks above came from a gitignored proxy.local.sh on an internal PC.
+# test_helper exports DOTFILES_SKIP_LOCAL_ENV=1; pin that the loader honours it
+# against a fixture local file, so a CI box without one still catches a
+# regression.
+@test "#2031: DOTFILES_SKIP_LOCAL_ENV keeps env/*.local.sh out, unset loads it" {
+    mkdir -p "$HOME/sc/env"
+    printf 'export http_proxy=http://corp-proxy:3128\n' > "$HOME/sc/env/proxy.local.sh"
+    local cmd=". '${DOTFILES_ROOT}/shell-common/env/proxy.sh'; echo \"[\$http_proxy]\""
+    run env SHELL_COMMON="$HOME/sc" bash --noprofile --norc -c "$cmd"
+    assert_output "[http://127.0.0.1:8080]"
+    run env -u DOTFILES_SKIP_LOCAL_ENV SHELL_COMMON="$HOME/sc" bash --noprofile --norc -c "$cmd"
+    assert_output "[http://corp-proxy:3128]"
+}
+
 # --- _dotfiles_setup_mode SSOT (#1810) ---------------------------------------
 #
 # Issue #1810: ~/.dotfiles-setup-mode was parsed independently in 16 places.

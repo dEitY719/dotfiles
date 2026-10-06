@@ -39,6 +39,7 @@ tests/
 # Golden Rules
 
 - **Hermetic Tests**: Tests must not write to user dotfiles; rely on temporary HOME/ZDOTDIR.
+- **No machine-local leaks**: `test_helper.bash` exports `DOTFILES_SKIP_LOCAL_ENV=1`, so `env/*.sh` and `hermes/setup.sh` skip gitignored `*.local.sh`; a test exercising a fixture local file unsets it (#2031).
 - **Cross-Shell**: If behavior is intended for both shells, parametrize over `bash` and `zsh`.
 - **No Network/Installs**: Tests must not require network access or package installation.
 - **Stable Output**: Assert on stable substrings, not full banners.

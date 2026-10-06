@@ -70,6 +70,13 @@ def run_command(
     run_env = os.environ.copy()
     if env:
         run_env.update(env)
+    # Inside a git hook git prepends its exec-path to PATH, so `git-help`
+    # would resolve to git's own binary instead of the dotfiles function (#2031).
+    git_exec = run_env.pop("GIT_EXEC_PATH", None)
+    if git_exec:
+        run_env["PATH"] = os.pathsep.join(
+            p for p in run_env.get("PATH", "").split(os.pathsep) if p != git_exec
+        )
 
     # Construct shell invocation
     if shell == "bash":
