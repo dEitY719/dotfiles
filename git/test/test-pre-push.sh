@@ -238,13 +238,13 @@ _t6_skip_pre_push_escape_hatch() {
 
 _t7_protected_branch_takes_priority() {
     # Protected-branch check runs before the leak guard within the same ref
-    # iteration. Pushing `main` with a leak should be blocked by layer 1
+    # iteration. Pushing `master` with a leak should be blocked by layer 1
     # (exit 1) with the protected-branch message, not the leak message.
     local dir
     dir=$(_setup_repo)
-    git -C "$dir" branch -m main 2>/dev/null || git -C "$dir" checkout -qb main
+    git -C "$dir" branch -m master 2>/dev/null || git -C "$dir" checkout -qb master
     echo "leak: example.internal" >>"$dir/seed.txt"
-    git -C "$dir" -c core.hooksPath=/dev/null commit -aq -m "main with leak"
+    git -C "$dir" -c core.hooksPath=/dev/null commit -aq -m "master with leak"
 
     local local_sha rc out
     local_sha=$(git -C "$dir" rev-parse HEAD)
@@ -253,7 +253,7 @@ _t7_protected_branch_takes_priority() {
     out=$(cd "$dir" \
         && UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" \
         LEAK_PATTERNS_ERE="$_LEAK_PATTERNS_ERE" \
-        printf 'refs/heads/main %s refs/heads/main %s\n' "$local_sha" "$ZERO_SHA" \
+        printf 'refs/heads/master %s refs/heads/master %s\n' "$local_sha" "$ZERO_SHA" \
         | "$HOOK" upstream "https://github.com/owner/repo.git" 2>&1)
     rc=$?
     set -e
@@ -363,11 +363,11 @@ _push_line_rc() {
     rm -rf "$dir"
 }
 
-_t11_renamed_local_to_remote_main_blocks() {
-    _push_line_rc refs/heads/sync/foo refs/heads/main
+_t11_renamed_local_to_remote_master_blocks() {
+    _push_line_rc refs/heads/sync/foo refs/heads/master
     local ok=0
     [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
-    _assert_eq "T-11 sync/foo -> remote main is BLOCKED" 1 "$ok"
+    _assert_eq "T-11 sync/foo -> remote master is BLOCKED" 1 "$ok"
 }
 
 _t12_same_name_feature_push_passes() {
@@ -375,11 +375,11 @@ _t12_same_name_feature_push_passes() {
     _assert_eq "T-12 feature/x -> feature/x is ALLOWED" 0 "$PUSH_RC"
 }
 
-_t13_delete_remote_main_blocks() {
-    _push_line_rc "(delete)" refs/heads/main
+_t13_delete_remote_master_blocks() {
+    _push_line_rc "(delete)" refs/heads/master
     local ok=0
     [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
-    _assert_eq "T-13 delete remote main is BLOCKED" 1 "$ok"
+    _assert_eq "T-13 delete remote master is BLOCKED" 1 "$ok"
 }
 
 # ============================================
@@ -394,7 +394,6 @@ echo ""
 all_passed=1
 
 echo "Testing protected branches (should be BLOCKED):"
-run_test "main" "BLOCKED" || all_passed=0
 run_test "master" "BLOCKED" || all_passed=0
 run_test "release/1.0" "BLOCKED" || all_passed=0
 run_test "release/2.5.3" "BLOCKED" || all_passed=0
@@ -402,6 +401,7 @@ run_test "release/v1.0.0" "BLOCKED" || all_passed=0
 
 echo ""
 echo "Testing feature branches (should be ALLOWED):"
+run_test "main" "ALLOWED" || all_passed=0
 run_test "feature/my-feature" "ALLOWED" || all_passed=0
 run_test "feature/auth-token" "ALLOWED" || all_passed=0
 run_test "develop" "ALLOWED" || all_passed=0
@@ -421,9 +421,9 @@ _t7_protected_branch_takes_priority || all_passed=0
 _t8_matching_path_redacted || all_passed=0
 _t9_matching_path_clean_content_blocks || all_passed=0
 _t10_matching_ref_name_redacted || all_passed=0
-_t11_renamed_local_to_remote_main_blocks || all_passed=0
+_t11_renamed_local_to_remote_master_blocks || all_passed=0
 _t12_same_name_feature_push_passes || all_passed=0
-_t13_delete_remote_main_blocks || all_passed=0
+_t13_delete_remote_master_blocks || all_passed=0
 
 echo ""
 if [ $all_passed -eq 1 ]; then

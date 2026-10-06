@@ -67,6 +67,13 @@ Skip mechanisms:
 Regression: `tests/bats/git/test_pre_push_pytest.bats` (4 cases — skip,
 missing, success, failure).
 
+# Protected Branches (#2033)
+
+`config/pre-push-rules.sh` `PROTECTED_BRANCHES` = `master`, `release/*`. `main` is
+excluded on purpose: `git sync` (merge upstream, then `git push origin main`)
+is the standard sync path. `gcp scan` is the fallback for widely diverged
+history. Pre-commit `main_branch_guard` is unchanged.
+
 # Upstream Leak Guard (#708, #1970)
 
 Opt-in guard against internal identifiers reaching the public upstream, in
@@ -84,7 +91,7 @@ dry-run check and tests: [doc/LEAK_GUARD.md](./doc/LEAK_GUARD.md).
 - **[Hook Setup Script](./setup.sh)** — Symlinks and hook installation logic (called by root `./setup.sh`)
 - **[Global Hooks](./global-hooks)** — User-level wrappers installed at `core.hooksPath`; `pre-commit` also runs universal checks, the rest delegate only
 - **[Project Hook](./hooks/pre-commit)** — Project-level runner that delegates to checks
-- **[Pre-push Hook](./hooks/pre-push)** — Protected-branch + upstream leak-guard layers
+- **[Pre-push Hook](./hooks/pre-push)** — Protected-branch (master, release/*) + upstream leak-guard layers
 - **[Hook Checks](./hooks/checks)** — Modular checks executed by the project hook; `shellcheck_check.sh` mirrors `mise run lint-sh` (bash/, shell-common/: CI flags; other shell files: `-S error`; zsh skipped) so it is never stricter than CI (#2014)
 - **[Hook Configuration](./config/hook-config.sh)** — Regex patterns, thresholds, and shared constants
 - **[Pre-push Rules](./config/pre-push-rules.sh)** — Protected branches + leak-guard SSOT

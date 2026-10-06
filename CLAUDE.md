@@ -48,7 +48,7 @@ All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `
 
 `git/` manages a 2-tier hook system. Config SSOT is `git/config/hook-config.sh`. Debug with `GIT_HOOKS_DEBUG=1 git commit -m "msg"`. Test with `bash git/tests/test_hooks.sh`.
 
-`git/hooks/pre-push` runs a protected-branch check plus an upstream leak guard (SSOT: `git/config/pre-push-rules.sh`). The leak guard is inert until you export `UPSTREAM_REMOTES_ERE` and `LEAK_PATTERNS_ERE`; see `git/AGENTS.md` for the activation snippet and escape hatches.
+`git/hooks/pre-push` runs a protected-branch check (`master`, `release/*` — `main` is intentionally NOT protected so `git sync` can push it directly, #2033) plus an upstream leak guard (SSOT: `git/config/pre-push-rules.sh`). Upstream sync standard is `git sync`; `gcp scan` is the fallback only when history diverges widely again. The leak guard is inert until you export `UPSTREAM_REMOTES_ERE` and `LEAK_PATTERNS_ERE`; see `git/AGENTS.md` for the activation snippet and escape hatches.
 
 ### Claude Code Integration
 

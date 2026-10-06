@@ -249,7 +249,7 @@ user-level 설정이라 모든 프로젝트/세션에서 전역으로 동작한�
 체크아웃) 고정 — 현재 세션의 `$DOTFILES_ROOT`나 cwd는 사용하지 않는다
 (worktree에서 세션을 띄우는 게 일상적이라, 그 worktree의 브랜치가 아니라
 canonical 경로를 직접 타겟해야 항상 main에 쌓인다). **push는 하지 않는다** —
-이 레포의 `git/hooks/pre-push`가 `main`을 `PROTECTED_BRANCHES`로 막고 있어서
+이 레포의 `git/hooks/pre-push`가 `main`을 `PROTECTED_BRANCHES`로 막고 있어서 (#2033 이후 main 은 제외됨 — 이 서술은 당시 기준)
 (레포 소유자 본인 포함), 자동 push를 넣으면 매번 실패하거나 그 가드를 우회해야
 한다. 로컬 커밋은 되돌리기 쉽고 눈에 보이지만, push는 공유 상태라 되돌리기
 번거로우므로 push 여부/시점은 사용자가 직접 결정한다.
