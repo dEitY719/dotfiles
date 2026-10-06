@@ -47,6 +47,13 @@ if [ -z "$COMMIT_MSG" ]; then
     exit 0
 fi
 
+# git-generated merge messages ("Merge branch ...", "Merge remote-tracking
+# branch ...") are not authored Conventional Commits; `git sync` (#2033)
+# produces them on every run, so validating them blocks the sync (#2041).
+case "$COMMIT_MSG" in
+    "Merge "*) exit 0 ;;
+esac
+
 # Validate message
 VALIDATION_RESULT=$(validate_commit_message "$COMMIT_MSG" 2>&1) || true
 
