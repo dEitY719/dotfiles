@@ -282,6 +282,7 @@ _gh_pr_merge_train_filter_targets() {
 # Name is deliberately short: the naming hook flags long function names that
 # appear inside any double-quoted string on the same line.
 _je() {
+    local _je_in
     _je_in=$(cat)
     [ -n "$_je_in" ] || return 1
     printf '%s' "$_je_in" | jq -e "$@"
