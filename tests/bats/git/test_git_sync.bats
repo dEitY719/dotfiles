@@ -233,6 +233,26 @@ _commit_local() {
     [ ! -f "${WORK_DIR}/repo/.git/MERGE_HEAD" ]
 }
 
+# ── 회귀: 충돌 없는 merge 가 훅에 거부되면 "시작도 못함" 이 아니라 훅 거부로 안내한다 (#2041) ──
+@test "git-sync.sh: merge 커밋이 훅에 거부되면 훅 거부로 안내한다" {
+    _seed_remotes
+    _commit_local l.txt local-side
+    _commit_to_remote "${WORK_DIR}/origin.git" o.txt origin-side
+    mkdir -p "${WORK_DIR}/rej-hooks"
+    printf '#!/bin/sh\necho "commit rejected by hook" >&2\nexit 1\n' >"${WORK_DIR}/rej-hooks/commit-msg"
+    chmod +x "${WORK_DIR}/rej-hooks/commit-msg"
+    _repo config core.hooksPath "${WORK_DIR}/rej-hooks"
+
+    run _git_in_repo sync
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"merge 커밋 거부"* ]]
+    [[ "$output" == *"git commit"* ]]
+    # 작업 트리를 비우라는 안내가 나오면 병합 결과를 잃는다.
+    [[ "$output" != *"병합이 시작되지도 못했습니다"* ]]
+    [[ "$output" != *"작업 트리를 비우기"* ]]
+    [ -f "${WORK_DIR}/repo/.git/MERGE_HEAD" ]
+}
+
 # ── 회귀: url 이 여러 개인 리모트를 "없음"으로 오판하지 않는다 (Fix 4) ──
 @test "git-sync.sh: upstream 에 url 이 여러 개여도 존재로 인식한다" {
     _seed_remotes

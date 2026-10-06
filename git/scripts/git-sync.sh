@@ -126,6 +126,19 @@ merge_or_guide() {
         return 0
     fi
 
+    # 충돌 없이 병합은 끝났는데 훅(commit-msg/pre-commit)이 merge 커밋만 거부하면
+    # .git/MERGE_HEAD 가 남는다. "시작도 못함" 안내대로 작업 트리를 비우면 병합
+    # 결과를 잃으므로 먼저 이 경우를 가른다 (#2041).
+    if [[ -z "$(git ls-files --unmerged)" ]] && git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+        printf '%s\n' "$out"
+        log_fail "merge 커밋 거부 (지점 $point) — '$ref' 병합은 충돌 없이 끝났지만 커밋이 훅에 거부됐습니다."
+        log_info "해결 후 재개:"
+        log_info "  1) 위 훅 메시지를 확인하고 원인을 해결"
+        log_info "  2) git commit  (병합 결과가 스테이징돼 있습니다 — 작업 트리를 비우지 마세요)"
+        log_info "  3) git sync 재실행"
+        exit 1
+    fi
+
     if [[ -z "$(git ls-files --unmerged)" ]]; then
         log_fail "merge 실패 (지점 $point) — '$ref' 병합이 시작되지도 못했습니다."
         log_info "git 출력:"
