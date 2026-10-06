@@ -352,11 +352,11 @@ _t10_matching_ref_name_redacted() {
 # Issue #2032 — Layer 1 judges the push destination (remote_ref), not just
 # the local branch name. Feeds one pre-push stdin line, returns the hook rc.
 _push_line_rc() {
-    local local_ref="$1" local_sha="$2" remote_ref="$3" dir
+    local local_ref="$1" remote_ref="$2" dir
     dir=$(_setup_repo)
     set +e
     LEAK_OUT=$(cd "$dir" \
-        && printf '%s %s %s %s\n' "$local_ref" "$local_sha" "$remote_ref" "$ZERO_SHA" \
+        && printf '%s %s %s %s\n' "$local_ref" "$ZERO_SHA" "$remote_ref" "$ZERO_SHA" \
         | "$HOOK" origin "git@example.com:owner/repo.git" 2>&1)
     PUSH_RC=$?
     set -e
@@ -364,19 +364,19 @@ _push_line_rc() {
 }
 
 _t11_renamed_local_to_remote_main_blocks() {
-    _push_line_rc refs/heads/sync/foo "$ZERO_SHA" refs/heads/main
+    _push_line_rc refs/heads/sync/foo refs/heads/main
     local ok=0
     [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
     _assert_eq "T-11 sync/foo -> remote main is BLOCKED" 1 "$ok"
 }
 
 _t12_same_name_feature_push_passes() {
-    _push_line_rc refs/heads/feature/x "$ZERO_SHA" refs/heads/feature/x
+    _push_line_rc refs/heads/feature/x refs/heads/feature/x
     _assert_eq "T-12 feature/x -> feature/x is ALLOWED" 0 "$PUSH_RC"
 }
 
 _t13_delete_remote_main_blocks() {
-    _push_line_rc "(delete)" "$ZERO_SHA" refs/heads/main
+    _push_line_rc "(delete)" refs/heads/main
     local ok=0
     [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
     _assert_eq "T-13 delete remote main is BLOCKED" 1 "$ok"
