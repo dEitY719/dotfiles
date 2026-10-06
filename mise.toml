@@ -10,7 +10,8 @@
 #
 # Daily use:
 #   mise run lint   # ruff + mypy + shellcheck + shfmt -d   (read-only)
-#   mise run test   # ./tests/test (bats + pytest + golden rules)
+#   mise run test   # ./tests/test (bats + pytest + golden rules) — CI, ~15 min
+#   mise run test-smoke  # pre-push smoke over the push range (<60s, #2046)
 #   mise run fix    # ruff --fix + ruff format + shfmt -w   (mutating)
 #
 # References:
@@ -75,6 +76,12 @@ description = "전체 테스트 (bats + pytest + golden rules)"
 # + pexpect resolve without a separate activation step (CI parity —
 # see #727 / .github/workflows/ci.yml).
 run = "uv run ./tests/test"
+
+[tasks.test-smoke]
+description = "pre-push smoke (<60s): 변경 셸 문법 + 매핑된 bats + pytest -m smoke"
+# git/hooks/pre-push Layer 0 (#2046). Range: args, else PRE_PUSH_SMOKE_RANGES
+# (set by the hook), else @{upstream}..HEAD. Rules: scripts/test_smoke.sh header.
+run = "sh scripts/test_smoke.sh"
 
 # ─── Auto-fix (mutating) ─────────────────────────────────────────────
 [tasks.fix]
