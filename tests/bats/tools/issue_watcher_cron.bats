@@ -1692,6 +1692,7 @@ _assert_not_hung() {
     # but a real self-inflicted resource risk (agy, PR #1611 review, 4th
     # pass). The poll count now ceilings at 1000 regardless of how small the
     # gap gets.
+    _install_frozen_clock_stub # count-bound only: no 13s deadline under load
     _run_tick "IW_SETTLE_POLL_SLEEP=0.001" "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
     [ "$(_log_count '^sleep 0.001$')" -eq 999 ]
