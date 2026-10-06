@@ -644,7 +644,7 @@ test_global_pre_push_delegates_to_project_hook() {
 
   if SKIP_LOCAL_PYTEST=1 run_global_hook "$repo_dir" pre-push \
     origin "https://github.com/owner/repo.git" \
-    < <(printf 'refs/heads/main %s refs/heads/main %s\n' "$sha" "$ZERO_SHA"); then
+    < <(printf 'refs/heads/master %s refs/heads/master %s\n' "$sha" "$ZERO_SHA"); then
     die "Expected the delegated pre-push to block a protected branch: $WRAPPER_OUT"
   fi
 
@@ -675,11 +675,11 @@ exit 0
 EOF
   chmod +x "$stub_dir/mise"
 
-  # "main" is a PROTECTED_BRANCH for this repo — in an unrelated repo that
+  # "master" is a PROTECTED_BRANCH for this repo — in an unrelated repo that
   # rule must not apply either.
   if ! PATH="${stub_dir}:${PATH}" run_global_hook "$repo_dir" pre-push \
     origin "https://github.com/owner/repo.git" \
-    < <(printf 'refs/heads/main %s refs/heads/main %s\n' "$sha" "$ZERO_SHA"); then
+    < <(printf 'refs/heads/master %s refs/heads/master %s\n' "$sha" "$ZERO_SHA"); then
     die "Global pre-push wrapper must be a no-op without a project hook: $WRAPPER_OUT"
   fi
 

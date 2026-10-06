@@ -13,7 +13,6 @@
 # PROTECTED BRANCHES (cannot push directly)
 # ============================================
 PROTECTED_BRANCHES=(
-    "main"
     "master"
     "release/*"
 )
