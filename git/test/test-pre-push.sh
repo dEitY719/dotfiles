@@ -349,6 +349,39 @@ _t10_matching_ref_name_redacted() {
     _assert_eq "T-10 matching pushed ref name -> exit 1, no token" 1 "$rc_ok"
 }
 
+# Issue #2032 — Layer 1 judges the push destination (remote_ref), not just
+# the local branch name. Feeds one pre-push stdin line, returns the hook rc.
+_push_line_rc() {
+    local local_ref="$1" local_sha="$2" remote_ref="$3" dir
+    dir=$(_setup_repo)
+    set +e
+    LEAK_OUT=$(cd "$dir" \
+        && printf '%s %s %s %s\n' "$local_ref" "$local_sha" "$remote_ref" "$ZERO_SHA" \
+        | "$HOOK" origin "git@example.com:owner/repo.git" 2>&1)
+    PUSH_RC=$?
+    set -e
+    rm -rf "$dir"
+}
+
+_t11_renamed_local_to_remote_main_blocks() {
+    _push_line_rc refs/heads/sync/foo "$ZERO_SHA" refs/heads/main
+    local ok=0
+    [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
+    _assert_eq "T-11 sync/foo -> remote main is BLOCKED" 1 "$ok"
+}
+
+_t12_same_name_feature_push_passes() {
+    _push_line_rc refs/heads/feature/x "$ZERO_SHA" refs/heads/feature/x
+    _assert_eq "T-12 feature/x -> feature/x is ALLOWED" 0 "$PUSH_RC"
+}
+
+_t13_delete_remote_main_blocks() {
+    _push_line_rc "(delete)" "$ZERO_SHA" refs/heads/main
+    local ok=0
+    [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
+    _assert_eq "T-13 delete remote main is BLOCKED" 1 "$ok"
+}
+
 # ============================================
 # RUN TESTS
 # ============================================
@@ -377,7 +410,7 @@ run_test "hotfix/security" "ALLOWED" || all_passed=0
 run_test "test/experiment" "ALLOWED" || all_passed=0
 
 echo ""
-echo "Testing leak guard (T-1 .. T-10):"
+echo "Testing leak guard (T-1 .. T-10) and remote_ref protection (T-11 .. T-13):"
 _t1_origin_push_with_pattern_passes || all_passed=0
 _t2_upstream_push_no_pattern_passes || all_passed=0
 _t3_upstream_push_pattern_in_commit_message_blocks || all_passed=0
@@ -388,6 +421,9 @@ _t7_protected_branch_takes_priority || all_passed=0
 _t8_matching_path_redacted || all_passed=0
 _t9_matching_path_clean_content_blocks || all_passed=0
 _t10_matching_ref_name_redacted || all_passed=0
+_t11_renamed_local_to_remote_main_blocks || all_passed=0
+_t12_same_name_feature_push_passes || all_passed=0
+_t13_delete_remote_main_blocks || all_passed=0
 
 echo ""
 if [ $all_passed -eq 1 ]; then
