@@ -6,6 +6,8 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
+    # Loopback requests must not route through an inherited proxy (#2052).
+    unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy
     # Create bin directory for fake executables
     mkdir -p "$TEST_TEMP_HOME/bin"
     export PATH="$TEST_TEMP_HOME/bin:$PATH"

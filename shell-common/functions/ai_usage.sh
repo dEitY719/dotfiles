@@ -181,11 +181,11 @@ _ai_usage_run() {
             # nested so per-model cost can be broken out later if needed.
             jq -c \
                 --arg ts "$_now" \
-                --arg label "$_label" \
+                --arg lbl "$_label" \
                 '{
                     ai: "claude",
                     ts: $ts,
-                    label: $label,
+                    "label": $lbl,
                     session_id: .session_id,
                     is_error: (.is_error // false),
                     num_turns: (.num_turns // 0),
@@ -249,12 +249,12 @@ _ai_usage_run() {
         if jq -e 'select(.type == "turn.completed" and (.usage | type == "object"))' <"$_tmp" >/dev/null 2>&1; then
             jq -cs \
                 --arg ts "$_now" \
-                --arg label "$_label" \
+                --arg lbl "$_label" \
                 'map(select(.type == "turn.completed" and (.usage | type == "object"))) | last as $done
                 | {
                     ai: "codex",
                     ts: $ts,
-                    label: $label,
+                    "label": $lbl,
                     exit_code: 0,
                     tracking: "usage",
                     usage: {
@@ -311,11 +311,11 @@ _ai_usage_run() {
         if jq -e '(.stats.models | type) == "object"' <"$_tmp" >/dev/null 2>&1; then
             jq -c \
                 --arg ts "$_now" \
-                --arg label "$_label" \
+                --arg lbl "$_label" \
                 '{
                     ai: "gemini",
                     ts: $ts,
-                    label: $label,
+                    "label": $lbl,
                     exit_code: 0,
                     tracking: "usage",
                     usage: (
