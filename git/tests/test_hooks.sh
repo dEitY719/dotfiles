@@ -1018,6 +1018,38 @@ EOF
   rm -rf "$GFY_DIR"
 }
 
+# Issue #2041 — git-generated merge messages bypass commit-msg validation,
+# authored messages are still validated.
+test_commit_msg_skips_git_merge_message() {
+  local msg_file out
+  msg_file="$(mktemp /tmp/dotfiles-hook-test.XXXXXX)"
+  printf "Merge remote-tracking branch 'upstream/main'\n" >"$msg_file"
+  "${DOTFILES_ROOT}/git/hooks/commit-msg" "$msg_file" >/dev/null 2>&1 ||
+    die "Expected git-generated merge message to pass commit-msg"
+  printf 'bogus message without type\n' >"$msg_file"
+  if out=$("${DOTFILES_ROOT}/git/hooks/commit-msg" "$msg_file" 2>&1); then
+    die "Expected non-conventional message to be rejected: $out"
+  fi
+  rm -f "$msg_file"
+}
+
+# Issue #2041 — main_branch_guard lets an in-progress merge commit through.
+test_main_branch_guard_allows_merge_in_progress() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_plain_repo "$repo_dir"
+  git -C "$repo_dir" checkout -q -b main
+  (
+    cd "$repo_dir"
+    # shellcheck source=/dev/null
+    . "${DOTFILES_ROOT}/git/hooks/checks/main_branch_guard.sh"
+    ! check_main_branch_guard || exit 1   # plain commit on main stays blocked
+    git rev-parse HEAD >.git/MERGE_HEAD
+    check_main_branch_guard               # merge in progress is allowed
+  ) || die "main_branch_guard merge-in-progress behavior wrong"
+  rm -rf "$repo_dir"
+}
+
 main() {
   ux_header "Hook integration tests"
   test_allows_spaces_in_filename
@@ -1068,6 +1100,10 @@ main() {
   test_graphify_noop_without_graph_json
   test_graphify_absent_pull_succeeds
   test_graphify_keeps_project_hook_delegation
+
+  # Issue #2041 — git sync merge commits pass the hooks
+  test_commit_msg_skips_git_merge_message
+  test_main_branch_guard_allows_merge_in_progress
 
   ux_success "All hook tests passed"
 }

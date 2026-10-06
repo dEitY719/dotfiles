@@ -13,7 +13,9 @@
 # check_main_branch_guard
 #
 # No arguments. Reads HEAD via `git symbolic-ref` to find current branch.
-# Honors env var ALLOW_MAIN_COMMIT=1 as an escape hatch.
+# Honors env var ALLOW_MAIN_COMMIT=1 as an escape hatch, and lets an in-progress
+# merge (.git/MERGE_HEAD) through: `git sync` (#2033) lands merge commits on
+# main by design (#2041).
 #
 # Side effect: exports MAIN_BRANCH_GUARD_CURRENT so callers can display
 # the branch name in error messages without re-forking `git symbolic-ref`.
@@ -22,6 +24,11 @@ check_main_branch_guard() {
     # Escape hatch: user explicitly opted in.
     MAIN_BRANCH_GUARD_CURRENT=""
     if [ "${ALLOW_MAIN_COMMIT:-0}" = "1" ]; then
+        return 0
+    fi
+
+    # In-progress merge: this commit completes `git merge`, not a hand-made commit.
+    if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
         return 0
     fi
 
