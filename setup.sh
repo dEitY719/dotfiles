@@ -11,6 +11,7 @@
 #   - zsh/setup.sh: Provides user feedback and guidance
 #   - git/setup.sh: Sets up git configuration
 #   - claude/setup.sh: Manages Claude Code settings via symlinks
+#   - global-packages/setup.sh: Installs missing global uv tools (uv-tools.txt)
 #
 # See SETUP_GUIDE.md for detailed information
 #
@@ -232,6 +233,7 @@ main() {
     run_step vscode-extensions optional ./vscode-extensions/setup.sh
     # .vscode/base.json → live VS Code settings (#586); exits 1 without VS Code.
     run_step vscode-settings optional ./.vscode/sync-push.sh
+    run_step global-packages optional ./global-packages/setup.sh # global uv tools 동기화, 삭제 안 함
     run_step ssh optional ./ssh/setup.sh
     run_step gh optional ./gh/setup.sh
     run_step windows optional ./windows/setup.sh # WSL only
