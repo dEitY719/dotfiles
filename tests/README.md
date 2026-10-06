@@ -189,7 +189,8 @@ def test_my_feature(self, shell_runner, shell):
 ## mise 통합
 
 ```bash
-mise run test      # 전체 테스트 (bats + pytest + golden rules)
+mise run test      # 전체 테스트 (bats + pytest + golden rules) — CI 비차단 실행 (#2046)
+mise run test-smoke # pre-push smoke: 변경 셸 문법 + 매핑된 bats + pytest -m smoke (<60s)
 mise run lint      # 전체 lint (ruff + mypy + shellcheck + shfmt -d)
 mise run fix       # 전체 auto-fix (ruff --fix + ruff format + shfmt -w)
 ```

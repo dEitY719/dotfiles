@@ -14,6 +14,8 @@ name: CI
 #   (see `git/hooks/pre-push` and `docs/.ssot/local-test-policy.md`).
 #   Roll back: `git revert` this commit and re-add the job. Branch
 #   protection's required-check list must drop `Test (mise)` to match.
+#   Since #2046 pre-push runs only `mise run test-smoke`; the full suite
+#   runs non-blocking in test.yml (main push / nightly / dispatch).
 
 on:
   push:

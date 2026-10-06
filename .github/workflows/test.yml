@@ -4,12 +4,19 @@ name: Test Suite
 # Issue #722 PR 3 (#727): single SSOT for tool versions + tasks lives
 # in mise.toml. The previous inline shellcheck loop had `|| true`,
 # silently swallowing failures; `mise run lint-sh` is a real gate.
+#
+# Full suite (#2046): the pre-push hook runs only `mise run test-smoke`
+# (<60s); the full `mise run test` (~15-35 min) runs here after a main push,
+# nightly and on demand — never on pull_request, so it is not a merge gate
+# and must not be a required check. SSOT: docs/.ssot/local-test-policy.md.
 
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 18 * * *" # 03:00 KST nightly
   workflow_dispatch:
 
 # Do not cancel in-progress runs: GitHub marks pre-start cancelled jobs as
@@ -36,3 +43,30 @@ jobs:
 
       - name: Run mise lint-sh
         run: mise run lint-sh
+
+  test:
+    name: Test (mise, non-blocking)
+    if: github.event_name != 'pull_request' && (github.event_name != 'push' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    # pexpect spawns bash + zsh per integration case; ~35 min on a 4-core runner (#727).
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive # bats-core / bats-assert / bats-support
+
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Install Python deps
+        run: uv sync --group dev
+
+      - name: Run mise test
+        run: mise run test

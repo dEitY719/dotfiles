@@ -2,8 +2,9 @@
 # Git pre-push hook
 #
 # Three layers, evaluated in order:
-#   0. Local pytest (issue #754) — `mise run test` once per push. Replaces
-#      the GitHub Actions `Test (mise)` job; SSOT in
+#   0. Local smoke (issue #754, #2046) — `mise run test-smoke` once per
+#      push over the push range (<60s budget); the full suite runs in CI
+#      (non-blocking) or here with PRE_PUSH_FULL_TEST=1. SSOT in
 #      `docs/.ssot/local-test-policy.md`.
 #   1. Protected-branch block (PROTECTED_BRANCHES from pre-push-rules.sh).
 #   2. Upstream leak guard — when the push target's URL matches
@@ -15,6 +16,7 @@
 # Skip flags (each is one off-switch — usable independently):
 #   SKIP_PRE_PUSH=1       bypass the entire hook (all three layers)
 #   SKIP_LOCAL_PYTEST=1   bypass only layer #0 (WIP push opt-out)
+#   PRE_PUSH_FULL_TEST=1  layer #0 runs the full `mise run test` instead
 #   SKIP_LEAK_GUARD=1     bypass only layer #2 (PROTECTED_BRANCHES still runs)
 #
 # Hook protocol (git push pre-push):
@@ -42,64 +44,9 @@ source "${HOOK_DIR}/../config/pre-push-rules.sh" || exit 0
 
 ZERO_SHA="0000000000000000000000000000000000000000"
 
-# ============================================
-# Layer 0: local pytest (issue #754)
-# ============================================
-# Replaces the GitHub Actions `Test (mise)` job. Runs the full mise
-# test target once per push (not per ref) so regressions are caught
-# locally before the push lands. CI now runs lint only.
-#
-# Three escape paths, all logged:
-#   SKIP_LOCAL_PYTEST=1   opt-out for WIP / intentional-failure pushes.
-#   mise missing          silent skip with one stderr note for external
-#                         contributors and bare-metal environments.
-#   SKIP_PRE_PUSH=1       handled at the top of the script and bypasses
-#                         this layer too.
-#
-# stdin is redirected from /dev/null so a test command that touches
-# stdin cannot consume the ref list the per-ref loop below reads.
-# SSOT: docs/.ssot/local-test-policy.md.
-case "${SKIP_LOCAL_PYTEST:-0}" in
-1)
-    printf '[pre-push] SKIP_LOCAL_PYTEST=1 — skip mise run test\n' >&2
-    ;;
-*)
-    if command -v mise >/dev/null 2>&1; then
-        printf '[pre-push] mise run test (set SKIP_LOCAL_PYTEST=1 to bypass)\n' >&2
-        if ! mise run test </dev/null; then
-            printf '[pre-push] mise run test FAIL — push aborted\n' >&2
-            exit 1
-        fi
-    else
-        printf '[pre-push] mise unavailable — skip mise run test (CI fallback / external contributor)\n' >&2
-    fi
-    ;;
-esac
-
-# ============================================
-# Leak guard activation decision (F-1)
-# ============================================
-# Active only when ALL of these are true:
-#   - SKIP_LEAK_GUARD is not set to 1.
-#   - UPSTREAM_REMOTES_ERE is non-empty (someone has declared an upstream).
-#   - LEAK_PATTERNS_ERE is non-empty   (someone has declared what is sensitive).
-#   - The push target URL matches UPSTREAM_REMOTES_ERE.
-# If any is false, the guard is inert — no scanning, no overhead. This is
-# the "Error Cases" behaviour spelt out in the issue: empty pattern or no
-# matching URL silently disables the guard.
-LEAK_GUARD_ACTIVE=0
-if [ "${SKIP_LEAK_GUARD:-0}" != "1" ] \
-    && [ -n "${UPSTREAM_REMOTES_ERE}" ] \
-    && [ -n "${LEAK_PATTERNS_ERE}" ] \
-    && [ -n "${REMOTE_URL}" ]; then
-    if printf '%s' "${REMOTE_URL}" | grep -qE "${UPSTREAM_REMOTES_ERE}"; then
-        LEAK_GUARD_ACTIVE=1
-    fi
-fi
-
-# ============================================
-# Helpers
-# ============================================
+# Read the ref list once: Layer 0 needs the push range, and the per-ref
+# loop below reads it again from this variable.
+PUSH_REFS="$(cat)"
 
 # Resolve the commit range to scan for a single ref entry.
 # When pushing a fresh branch (remote_sha = ZERO_SHA) we fall back to the
@@ -130,6 +77,76 @@ _resolve_scan_range() {
     # `<sha>^!` is git shorthand for "just this commit, exclude parents".
     printf '%s' "${local_sha}^!"
 }
+
+# ============================================
+# Layer 0: local smoke (issue #754, #2046)
+# ============================================
+# Runs `mise run test-smoke` once per push (not per ref) over the pushed
+# ranges: syntax check of changed shell files, the bats files mapped from
+# them, and `pytest -m smoke`, under a 60s budget (PRE_PUSH_SMOKE_BUDGET).
+# The full suite runs in CI (.github/workflows/test.yml, non-blocking);
+# PRE_PUSH_FULL_TEST=1 runs it here instead.
+#
+# Three escape paths, all logged:
+#   SKIP_LOCAL_PYTEST=1   opt-out for WIP / intentional-failure pushes.
+#   mise missing          silent skip with one stderr note for external
+#                         contributors and bare-metal environments.
+#   SKIP_PRE_PUSH=1       handled at the top of the script and bypasses
+#                         this layer too.
+#
+# stdin is redirected from /dev/null so a test command never blocks on it.
+# SSOT: docs/.ssot/local-test-policy.md.
+smoke_ranges=""
+while read -r _ local_sha _ remote_sha; do
+    [ -z "${local_sha}" ] && continue
+    [ "${local_sha}" = "${ZERO_SHA}" ] && continue
+    [ "${local_sha}" = "${remote_sha}" ] && continue
+    smoke_ranges="${smoke_ranges:+${smoke_ranges} }$(_resolve_scan_range "${local_sha}" "${remote_sha}")"
+done <<<"${PUSH_REFS}"
+
+test_task="test-smoke"
+[ "${PRE_PUSH_FULL_TEST:-0}" = "1" ] && test_task="test"
+case "${SKIP_LOCAL_PYTEST:-0}" in
+1)
+    printf '[pre-push] SKIP_LOCAL_PYTEST=1 — skip mise run %s\n' "${test_task}" >&2
+    ;;
+*)
+    if command -v mise >/dev/null 2>&1; then
+        printf '[pre-push] mise run %s (PRE_PUSH_FULL_TEST=1 for the full suite, SKIP_LOCAL_PYTEST=1 to bypass)\n' "${test_task}" >&2
+        if ! PRE_PUSH_SMOKE_RANGES="${smoke_ranges}" mise run "${test_task}" </dev/null; then
+            printf '[pre-push] mise run %s FAIL — push aborted\n' "${test_task}" >&2
+            exit 1
+        fi
+    else
+        printf '[pre-push] mise unavailable — skip mise run %s (CI fallback / external contributor)\n' "${test_task}" >&2
+    fi
+    ;;
+esac
+
+# ============================================
+# Leak guard activation decision (F-1)
+# ============================================
+# Active only when ALL of these are true:
+#   - SKIP_LEAK_GUARD is not set to 1.
+#   - UPSTREAM_REMOTES_ERE is non-empty (someone has declared an upstream).
+#   - LEAK_PATTERNS_ERE is non-empty   (someone has declared what is sensitive).
+#   - The push target URL matches UPSTREAM_REMOTES_ERE.
+# If any is false, the guard is inert — no scanning, no overhead. This is
+# the "Error Cases" behaviour spelt out in the issue: empty pattern or no
+# matching URL silently disables the guard.
+LEAK_GUARD_ACTIVE=0
+if [ "${SKIP_LEAK_GUARD:-0}" != "1" ] \
+    && [ -n "${UPSTREAM_REMOTES_ERE}" ] \
+    && [ -n "${LEAK_PATTERNS_ERE}" ] \
+    && [ -n "${REMOTE_URL}" ]; then
+    if printf '%s' "${REMOTE_URL}" | grep -qE "${UPSTREAM_REMOTES_ERE}"; then
+        LEAK_GUARD_ACTIVE=1
+    fi
+fi
+
+# ============================================
+# Helpers
+# ============================================
 
 # Scan a commit range for leak patterns. Returns 0 if clean, 1 if a match
 # was reported — commit + source + line numbers only, never the matched
@@ -216,6 +233,7 @@ _leak_scan_range() {
 exit_code=0
 
 while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "${local_ref}" ] && continue
     # Extract branch names (refs/heads/main -> main)
     local_branch="${local_ref#refs/heads/}"
     remote_branch="${remote_ref#refs/heads/}"
@@ -271,6 +289,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
             exit_code=1
         fi
     fi
-done
+done <<<"${PUSH_REFS}"
 
 exit ${exit_code}

@@ -69,6 +69,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "bash: marks tests that run in bash shell",
     "zsh: marks tests that run in zsh shell",
+    "smoke: fast pre-push subset run by `mise run test-smoke` (#2046)",
 ]
 
 
