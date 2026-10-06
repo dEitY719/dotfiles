@@ -48,6 +48,9 @@ claude/settings.json.backup.*
 # GitHub. Internal-PC users hand-create ~/.claude/settings.local.json once;
 # claude/setup.sh prints the exact heredoc on Internal mode (#584).
 claude/settings.local.json
+# mod 을 로드할 때마다 Claude Code 가 mod 루트에 생성하는 tsconfig (#2026 후속).
+# .claude-plugin/types/ 는 자체 .gitignore(*) 가 처리한다.
+/claude/mods/*/tsconfig.json
 .claude/
 
 # Claude Code plugin manifest — 사내 전용 분류는 별도 private nested repo로
