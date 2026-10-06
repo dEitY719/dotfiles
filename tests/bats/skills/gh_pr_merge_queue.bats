@@ -726,3 +726,25 @@ _run_json() {
     assert_success
     assert_output '[]'
 }
+
+# jq 1.6 exits 0 for `jq -e` on EMPTY input (1.7 exits 4), so an unreadable
+# body used to read as "label present" / "shortcut allowed" (#2052).
+_feed() { printf '%s' "$1" | "$2"; }
+
+@test "jq-e predicates: empty stdin is rc 1 on every jq version (#2052)" {
+    for fn in _gh_pr_merge_train_has_reply_pending_label \
+              _gh_pr_merge_train_has_review_blocked_label \
+              _gh_pr_merge_train_has_review_passed_label \
+              _gh_pr_merge_train_behind_may_merge_directly \
+              _gh_pr_merge_train_base_strict_confirmed; do
+        run _feed '' "$fn"
+        [ "$status" -ne 0 ] || { echo "$fn returned 0 on empty input"; return 1; }
+    done
+}
+
+@test "jq-e helper: non-empty input still honours the jq -e verdict (#2052)" {
+    run _feed '{"labels":[{"name":"review-passed"}]}' _gh_pr_merge_train_has_review_passed_label
+    assert_success
+    run _feed '{"labels":[]}' _gh_pr_merge_train_has_review_passed_label
+    assert_failure
+}

@@ -26,6 +26,8 @@ setup() {
     # clear the env vars so each test states its own backend explicitly.
     TEST_HOME="$(mktemp -d)"
     export HOME="$TEST_HOME"
+    # Loopback requests must not route through an inherited proxy (#2052).
+    unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy
     unset OBSIDIAN_REST_API_KEY OBSIDIAN_REST_API_URL
 
     export OB_STUB_DIR="${BATS_TEST_TMPDIR}/stub"

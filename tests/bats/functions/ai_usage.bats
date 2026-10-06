@@ -425,3 +425,10 @@ STUB
     assert_output --partial "rc=2"
     assert_output --partial "invalid ai runner: bogus"
 }
+
+# jq 1.6 treats `label` as a keyword: `--arg label` / `$label` is a compile
+# error that `2>/dev/null` swallows, leaving usage.jsonl empty (#2052).
+@test "ai_usage.sh never binds a jq variable named label (jq 1.6 keyword)" {
+    run grep -nE -e '--arg label|\$label\b' "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/ai_usage.sh"
+    assert_failure
+}
