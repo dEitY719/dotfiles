@@ -13,14 +13,15 @@
 
 - Usage: sops-help [section|--list|--all]   (alias: age-help)
 - quick start (senv, 현재 디렉터리 기준)
-    - 새 프로젝트: senv init -> senv enc -> git add .sops.yaml .env.enc
-    - 새 PC: git pull -> senv dec  (또는 senv run make run)
+    - 키가 있는 PC: senv init -> senv enc -> git commit -> senv key export
+    - 새 PC: git pull -> senv key import -> senv dec  (또는 senv run make run)
+    - 점검: senv check
 - sections
     - overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .env.enc 커밋
     - setup: install-sops-age | age-keygen | sops-status
     - newproject: senv init | senv enc | 커밋
-    - usage: senv init|enc|dec|edit|run + senv 가 실행하는 sops 명령
-    - newpc: keys.txt 복사 | age -p 잠금 파일
+    - usage: senv init|enc|dec|edit|run|check|key + senv 가 실행하는 sops 명령
+    - newpc: senv key export -> senv key import -> senv check
     - risks: 분실=복구 불가 | 유출=원본 비밀값 교체
     - trouble: unmarshal 오류 | no master key | 권한
     - more: 공식 문서 | 관련 명령
@@ -53,7 +54,8 @@
     - senv init   # .sops.yaml(공개키) 생성 + .gitignore 에 .env 추가
     - senv enc    # .env -> .env.enc
     - git add .sops.yaml .gitignore .env.enc && git commit
-- 새 PC: git pull -> senv dec (파일 생성) 또는 senv run make run (파일 없음)
+- 개인키 내보내기: senv key export  (~/senv-key.age, sops-help newpc)
+- 새 PC: git pull -> senv key import -> senv dec (파일 생성) 또는 senv run make run (파일 없음)
 - senv init 이 만드는 .sops.yaml (공개키만 들어가므로 커밋 OK)
     - creation_rules:
     -   - path_regex: '(^|/)\.env(\.enc)?$'
@@ -64,9 +66,14 @@
 
 - **senv init** — .sops.yaml + .gitignore — 기존 .sops.yaml 은 덮어쓰지 않음
 - **senv enc [file]** — .env -> .env.enc — 실패 시 기존 .env.enc 유지
-- **senv dec [-f] [file]** — .env.enc -> .env (600) — 기존 .env 는 -f 없이 안 덮어씀
+- **senv dec [-f] [file]** — .env.enc 또는 .enc.env -> .env (600) — 기존 .env 는 -f 없이 안 덮어씀
 - **senv edit [file]** — $EDITOR 로 편집 — 저장 시 재암호화
 - **senv run <cmd...>** — 환경변수로 주입해 실행 — 디스크에 평문 없음, eval 안 함
+- **senv check** — 키/권한 600/공개키 일치/복호화 점검 — 평문 미출력, 실패마다 다음 행동
+- **senv key show** — 공개키 + .sops.yaml 일치 여부 — 비밀 출력 없음
+- **senv key export [-o f] [-f]** — 개인키를 비밀번호로 잠금 (~/senv-key.age) — git 작업트리 안 거절, 되풀어 검증
+- **senv key import [f] [-f]** — 잠금 파일 -> keys.txt (600) — 기존 keys.txt 는 -f 없이 안 덮어씀
+- 암호문 파일: 인자 [file] 우선, 없으면 .env.enc, 그것도 없으면 .enc.env
 - senv 가 실행하는 sops 명령 (.env.enc 는 확장자 추론 불가 -> 타입 플래그 필수)
     - sops -e --input-type dotenv --output-type dotenv .env > .env.enc
     - sops -d --input-type dotenv --output-type dotenv .env.enc > .env
@@ -77,9 +84,12 @@
 
 ### newpc
 
-- 방법 A: 기존 PC 의 keys.txt 를 안전한 경로(scp, USB)로 복사
+- 권장: senv 로 옮긴다 (age 가 터미널에서 비밀번호를 직접 묻는다)
+    - 키가 있는 PC: senv key export   # ~/senv-key.age (git 작업트리 밖에만 쓴다)
+    - 새 PC: senv key import ~/senv-key.age -> senv dec -> senv check
+- 수동 방법 A: 기존 PC 의 keys.txt 를 안전한 경로(scp, USB)로 복사
     - 복사 위치: ~/.config/sops/age/keys.txt  ->  chmod 600 ~/.config/sops/age/keys.txt
-- 방법 B: 비밀번호로 잠근 키 파일을 개인 저장소에 두고 새 PC 에서 1회 해제
+- 수동 방법 B: 비밀번호로 잠근 키 파일을 개인 저장소에 두고 새 PC 에서 1회 해제
     - 잠금 (기존 PC): age -p -o keys.txt.age ~/.config/sops/age/keys.txt
     - 해제 (새 PC):   age -d keys.txt.age > ~/.config/sops/age/keys.txt
     - 해제 후 반드시: chmod 600 ~/.config/sops/age/keys.txt  (기본 644 로 생성됨)
