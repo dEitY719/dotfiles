@@ -11,7 +11,8 @@
 # Daily use:
 #   mise run lint   # ruff + mypy + shellcheck + shfmt -d   (read-only)
 #   mise run test   # ./tests/test (bats + pytest + golden rules) — CI, ~15 min
-#   mise run test-smoke  # pre-push smoke over the push range (<60s, #2046)
+#   mise run pr-gate     # PR-creation gate = full test (gh_pr_lint.sh, #2054)
+#   mise run test-smoke  # opt-in pre-push smoke (PRE_PUSH_TEST=1, <60s, #2046)
 #   mise run fix    # ruff --fix + ruff format + shfmt -w   (mutating)
 #
 # References:
@@ -77,9 +78,15 @@ description = "전체 테스트 (bats + pytest + golden rules)"
 # see #727 / .github/workflows/ci.yml).
 run = "uv run ./tests/test"
 
+[tasks.pr-gate]
+description = "PR 생성 게이트: 전체 테스트 (gh-pr:create lint guard 가 호출)"
+# shell-common/functions/gh_pr_lint.sh runs this after lint when the task
+# exists (#2054); failure blocks PR creation, GH_PR_TEST_BYPASS=1 skips it.
+depends = ["test"]
+
 [tasks.test-smoke]
-description = "pre-push smoke (<60s): 변경 셸 문법 + 매핑된 bats + pytest -m smoke"
-# git/hooks/pre-push Layer 0 (#2046). Range: args, else PRE_PUSH_SMOKE_RANGES
+description = "pre-push smoke (<60s, opt-in PRE_PUSH_TEST=1): 변경 셸 문법 + 매핑된 bats + pytest -m smoke"
+# git/hooks/pre-push Layer 0 (#2046, opt-in since #2054). Range: args, else PRE_PUSH_SMOKE_RANGES
 # (set by the hook), else @{upstream}..HEAD. Rules: scripts/test_smoke.sh header.
 run = "sh scripts/test_smoke.sh"
 

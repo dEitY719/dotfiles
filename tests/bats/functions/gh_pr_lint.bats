@@ -23,7 +23,8 @@ setup() {
 teardown() {
     teardown_isolated_home
     unset FAKE_TOX_RC FAKE_SHELLCHECK_RC FAKE_ACTIONLINT_RC FAKE_PRECOMMIT_RC
-    unset GH_PR_LINT_BYPASS GH_PR_LINT_TOOLS
+    unset FAKE_MISE_RC FAKE_MISE_HAS_PR_GATE MISE_PATH
+    unset GH_PR_LINT_BYPASS GH_PR_LINT_TOOLS GH_PR_TEST_BYPASS
 }
 
 # ---------------------------------------------------------------------------
@@ -108,6 +109,28 @@ STUB
             && mv "$STUB_BIN/$tool.tmp" "$STUB_BIN/$tool"
         chmod +x "$STUB_BIN/$tool"
     done
+
+    # mise lives in its own dir so a test can expose it without the lint
+    # tools (the "no lint tools, pr-gate still runs" case). Opt in with
+    # MISE_PATH="$MISE_BIN". `task info pr-gate` honours
+    # FAKE_MISE_HAS_PR_GATE (default 1); `run` returns FAKE_MISE_RC.
+    MISE_BIN="$TEST_TEMP_HOME/mise-bin"
+    mkdir -p "$MISE_BIN"
+    cat >"$MISE_BIN/mise" <<'STUB'
+#!/usr/bin/env bash
+{
+    printf 'mise'
+    for a in "$@"; do printf ' [%s]' "$a"; done
+    printf '\n'
+} >> '__LOG__'
+case "$1" in
+    task) [ "${FAKE_MISE_HAS_PR_GATE:-1}" = "1" ] ;;
+    run)  exit "${FAKE_MISE_RC:-0}" ;;
+esac
+STUB
+    sed -e "s|__LOG__|$TOOL_LOG|" "$MISE_BIN/mise" >"$MISE_BIN/mise.tmp" \
+        && mv "$MISE_BIN/mise.tmp" "$MISE_BIN/mise"
+    chmod +x "$MISE_BIN/mise"
 }
 
 # Env-export lines shared by _run_helper (bash) and _run_helper_zsh —
@@ -127,7 +150,10 @@ _run_helper_env_lines() {
         "export DOTFILES_TEST_MODE=1" \
         "export HOME='${HOME}'" \
         "export TERM=dumb" \
-        "export PATH='${extra_path}/usr/local/bin:/usr/bin:/bin'" \
+        "export PATH='${MISE_PATH:+${MISE_PATH}:}${extra_path}/usr/local/bin:/usr/bin:/bin'" \
+        "export FAKE_MISE_RC='${FAKE_MISE_RC:-0}'" \
+        "export FAKE_MISE_HAS_PR_GATE='${FAKE_MISE_HAS_PR_GATE:-1}'" \
+        "${GH_PR_TEST_BYPASS:+export GH_PR_TEST_BYPASS='${GH_PR_TEST_BYPASS}'}" \
         "export FAKE_TOX_RC='${FAKE_TOX_RC:-0}'" \
         "export FAKE_SHELLCHECK_RC='${FAKE_SHELLCHECK_RC:-0}'" \
         "export FAKE_ACTIONLINT_RC='${FAKE_ACTIONLINT_RC:-0}'" \
@@ -439,6 +465,91 @@ TOX
     assert_output --partial "rc=1"
     assert_output --partial "shellcheck FAILED"
     assert_output --partial "GH_PR_LINT_BYPASS=1"
+}
+
+# ---------------------------------------------------------------------------
+# #2054 — PR-creation test gate: after lint, `mise run pr-gate` runs when the
+# repo defines that task. Exit != 0 blocks the PR. GH_PR_TEST_BYPASS=1 skips
+# only this gate; GH_PR_LINT_BYPASS=1 still skips everything.
+# ---------------------------------------------------------------------------
+
+@test "pr-gate (#2054): task present + passes → runs after lint, rc=0" {
+    _stage_changes "foo.sh:echo hi"
+    MISE_PATH="$MISE_BIN" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    assert_output --partial "shellcheck passed"
+    assert_output --partial "mise run pr-gate"
+    run grep -cxF 'mise [run] [pr-gate]' "$TOOL_LOG"
+    assert_output "1"
+}
+
+@test "pr-gate (#2054): task present + fails → rc=1 naming GH_PR_TEST_BYPASS" {
+    _stage_changes "foo.sh:echo hi"
+    FAKE_MISE_RC=1 MISE_PATH="$MISE_BIN" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=1"
+    assert_output --partial "pr-gate FAILED"
+    assert_output --partial "GH_PR_TEST_BYPASS=1"
+}
+
+@test "pr-gate (#2054): task absent → not run, lint result unchanged" {
+    _stage_changes "foo.sh:echo hi"
+    FAKE_MISE_HAS_PR_GATE=0 MISE_PATH="$MISE_BIN" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    refute_output --partial "pr-gate"
+    run grep -c '^mise \[run\]' "$TOOL_LOG"
+    assert_output "0"
+}
+
+@test "pr-gate (#2054): untrusted config (mise task info fails) still detected via mise.toml" {
+    printf '[tasks.pr-gate]\nrun = "true"\n' >"$REPO_DIR/mise.toml"
+    _stage_changes "mise.toml:" "foo.sh:echo hi"
+    FAKE_MISE_HAS_PR_GATE=0 MISE_PATH="$MISE_BIN" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    run grep -cxF 'mise [run] [pr-gate]' "$TOOL_LOG"
+    assert_output "1"
+}
+
+@test "pr-gate (#2054): GH_PR_TEST_BYPASS=1 → lint runs, gate skipped" {
+    _stage_changes "foo.sh:echo hi"
+    GH_PR_TEST_BYPASS=1 FAKE_MISE_RC=1 MISE_PATH="$MISE_BIN" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    assert_output --partial "shellcheck passed"
+    assert_output --partial "GH_PR_TEST_BYPASS=1"
+    run grep -c '^mise \[run\]' "$TOOL_LOG"
+    assert_output "0"
+}
+
+@test "pr-gate (#2054): GH_PR_LINT_BYPASS=1 → gate skipped too" {
+    _stage_changes "foo.sh:echo hi"
+    GH_PR_LINT_BYPASS=1 FAKE_MISE_RC=1 MISE_PATH="$MISE_BIN" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=0"
+    run grep -c '^mise' "$TOOL_LOG"
+    assert_output "0"
+}
+
+@test "pr-gate (#2054): no lint tools detected → gate still runs" {
+    _stage_changes "README.md:doc"
+    FAKE_MISE_RC=1 MISE_PATH="$MISE_BIN" _run_helper no-stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "no lint tools detected"
+    assert_output --partial "rc=1"
+    run grep -cxF 'mise [run] [pr-gate]' "$TOOL_LOG"
+    assert_output "1"
+}
+
+@test "pr-gate (#2054): lint failure → gate not run (rc=1 from lint)" {
+    _stage_changes "foo.sh:echo hi"
+    FAKE_SHELLCHECK_RC=1 MISE_PATH="$MISE_BIN" _run_helper stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=1"
+    assert_output --partial "shellcheck FAILED"
+    run grep -c '^mise \[run\]' "$TOOL_LOG"
+    assert_output "0"
+}
+
+@test "zsh pr-gate (#2054): task present + fails → rc=1" {
+    _stage_changes "README.md:doc"
+    FAKE_MISE_RC=1 MISE_PATH="$MISE_BIN" _run_helper_zsh no-stubs '_gh_pr_lint_run main 2>&1'
+    assert_output --partial "rc=1"
+    assert_output --partial "pr-gate FAILED"
 }
 
 # ---------------------------------------------------------------------------

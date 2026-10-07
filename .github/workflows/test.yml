@@ -5,10 +5,12 @@ name: Test Suite
 # in mise.toml. The previous inline shellcheck loop had `|| true`,
 # silently swallowing failures; `mise run lint-sh` is a real gate.
 #
-# Full suite (#2046): the pre-push hook runs only `mise run test-smoke`
-# (<60s); the full `mise run test` (~15-35 min) runs here after a main push,
-# nightly and on demand — never on pull_request, so it is not a merge gate
-# and must not be a required check. SSOT: docs/.ssot/local-test-policy.md.
+# Full suite (#2046, #2054): `git push` runs no tests by default (opt-in
+# PRE_PUSH_TEST=1 / PRE_PUSH_FULL_TEST=1); the full suite gates PR creation
+# locally (`mise run pr-gate` via gh_pr_lint.sh). Here the full
+# `mise run test` (~15-35 min) runs after a main push, nightly and on
+# demand — never on pull_request, so it is not a merge gate and must not be
+# a required check. SSOT: docs/.ssot/local-test-policy.md.
 
 on:
   push:
