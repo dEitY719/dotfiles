@@ -187,3 +187,56 @@ setup() {
     assert_success
     assert_output "0"
 }
+
+# ---------------------------------------------------------------------------
+# _bats_run_file — per-file wall clock cap (#2054)
+#
+# BATS_TEST_TIMEOUT bounds one test, but not a file whose bats process never
+# exits after its last test (a daemon a test spawned holding bats' pipe —
+# observed: gh_flow.bats stuck 30+ min with all 53 tests passed). The worker
+# wraps each file in `timeout`, so any such hang becomes a bounded, visible
+# failure instead of a run that never finishes.
+# ---------------------------------------------------------------------------
+
+_fake_bats() {
+    FAKE_BATS="${BATS_TEST_TMPDIR}/fake-bats"
+    OUT="${BATS_TEST_TMPDIR}/out"
+    mkdir -p "$OUT"
+    printf '#!/bin/sh\necho "1..1"\necho "ok 1 fake"\n%s\n' "$1" >"$FAKE_BATS"
+    chmod +x "$FAKE_BATS"
+}
+
+@test "_bats_run_file: a file past BATS_FILE_TIMEOUT is killed and marked timed out" {
+    command -v timeout >/dev/null 2>&1 || skip "needs timeout(1)"
+    _fake_bats 'exec sleep 30'
+    SECONDS=0
+    BATS_FILE_TIMEOUT=1 run _bats_run_file "$FAKE_BATS" "$OUT" 0 some.bats
+    ((SECONDS < 20)) || false
+    assert_equal "$(cat "$OUT/0.status")" "124"
+    run cat "$OUT/0.log"
+    assert_output --partial "ok 1 fake"
+    assert_output --partial "killed after BATS_FILE_TIMEOUT=1s"
+}
+
+@test "_bats_run_file: a passing file records status 0" {
+    _fake_bats 'exit 0'
+    run _bats_run_file "$FAKE_BATS" "$OUT" 3 some.bats
+    assert_equal "$(cat "$OUT/3.status")" "0"
+}
+
+@test "_bats_run_file: a failing file records status 1" {
+    _fake_bats 'exit 1'
+    run _bats_run_file "$FAKE_BATS" "$OUT" 0 some.bats
+    assert_equal "$(cat "$OUT/0.status")" "1"
+}
+
+@test "_resolve_bats_file_timeout: unset defaults to 900, bogus falls back, valid passes" {
+    unset BATS_FILE_TIMEOUT
+    assert_equal "$(_resolve_bats_file_timeout)" "900"
+    BATS_FILE_TIMEOUT=0
+    assert_equal "$(_resolve_bats_file_timeout)" "900"
+    BATS_FILE_TIMEOUT=15m
+    assert_equal "$(_resolve_bats_file_timeout)" "900"
+    BATS_FILE_TIMEOUT=060
+    assert_equal "$(_resolve_bats_file_timeout)" "60"
+}
