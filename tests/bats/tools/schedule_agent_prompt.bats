@@ -575,6 +575,10 @@ _prompt_calls() {
     local id f
     id="$(_job_field '.id')"
     f="$(_job_file)"
+    # Stop the waiter first (as A6e does): it rewrites the job file with its
+    # own pid on start-up, and a late start under load restored the deleted
+    # status after this edit, so --cancel then succeeded (#2054 flake).
+    kill "$(jq -r '.pid' "$f")" 2>/dev/null || true
     jq 'del(.status)' "$f" >"${f}.t" && mv "${f}.t" "$f"
 
     sap --cancel "${id}"
