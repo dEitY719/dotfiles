@@ -72,8 +72,8 @@ _write_key() {
 
 @test "usage section carries the verified dotenv forms" {
     run_in_bash "sops_help usage"
-    assert_output --partial "sops -e --input-type dotenv --output-type dotenv .env > .env.enc"
-    assert_output --partial "sops -d --input-type dotenv --output-type dotenv .env.enc > .env"
+    assert_output --partial "sops -e --input-type dotenv --output-type dotenv .env > .enc.env"
+    assert_output --partial "sops -d --input-type dotenv --output-type dotenv .enc.env > .env"
     assert_output --partial "sops exec-env .enc.env"
 }
 
