@@ -549,7 +549,7 @@ _prompt_fallback_path() {
     local race_dir="$TEST_TEMP_HOME/race"
     mkdir -p "$race_dir"
 
-    local i
+    local i racers=()
     for i in 1 2; do
         (
             if p=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
@@ -561,8 +561,11 @@ _prompt_fallback_path() {
                 echo 1 >"$race_dir/$i.rc"
             fi
         ) &
+        racers+=("$!")
     done
-    wait
+    # Only the racers: a bare `wait` would also wait on bats' own timeout
+    # watchdog and burn the full 300s (#2054).
+    wait "${racers[@]}"
 
     local rc1 rc2
     rc1=$(cat "$race_dir/1.rc")

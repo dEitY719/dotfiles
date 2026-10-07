@@ -84,6 +84,9 @@ ENVIRONMENT VARIABLES:
     BATS_TEST_TIMEOUT=N   Per-test timeout in seconds (default: 300). A test
                            exceeding it is killed and reported as
                            "# timeout after Ns" instead of hanging the run.
+    BATS_FILE_TIMEOUT=N   Per-file wall clock cap in seconds (default: 900).
+                           A bats file still running after it is killed and
+                           reported as "FAILED (file timeout ...)".
 
 EXAMPLES:
     ./tests/test                  # Run all tests (parallel)
@@ -286,13 +289,55 @@ _resolve_bats_jobs() {
 # nobody sets a sane timeout that large, and forcing base 10 on one risks
 # overflowing bash's own 64-bit arithmetic before it ever reaches bats-core.
 _resolve_bats_timeout() {
-    local timeout="${BATS_TEST_TIMEOUT:-300}"
-    case "$timeout" in
-    '' | *[!0-9]* | ??????????*) timeout=300 ;;
+    _resolve_positive_int "${BATS_TEST_TIMEOUT:-}" 300
+}
+
+# Shared sanitizer behind every seconds/count knob: $1 if it is a positive
+# base-10 integer of at most 9 digits, else $2 (see the octal/overflow notes
+# above for why each guard exists).
+_resolve_positive_int() {
+    local value="$1"
+    case "$value" in
+    '' | *[!0-9]* | ??????????*) value="$2" ;;
     esac
-    timeout=$((10#$timeout))
-    [ "$timeout" -lt 1 ] && timeout=300
-    printf '%s\n' "$timeout"
+    value=$((10#$value))
+    [ "$value" -lt 1 ] && value="$2"
+    printf '%s\n' "$value"
+}
+
+# Resolve the per-FILE wall clock cap (#2054): unset → 900s. BATS_TEST_TIMEOUT
+# bounds a single test but not a bats process that never exits after its last
+# test — a daemon spawned by a test (fcitx-autostart) kept bats' pipe open and
+# gh_flow.bats sat for 30+ min with all 53 tests passed. 900s is ~3x the
+# slowest file seen on an 8-CPU PC, so only a genuine hang ever reaches it.
+_resolve_bats_file_timeout() {
+    _resolve_positive_int "${BATS_FILE_TIMEOUT:-}" 900
+}
+
+# One xargs worker: run bats on one file, its output to <out>/<idx>.log and
+# its verdict to <out>/<idx>.status (0 pass, 1 fail, 124 file timeout).
+# Exported (export -f) so `xargs ... bash -c` can call it. `timeout
+# --foreground` keeps bats in the runner's process group — plain `timeout`
+# moves itself into a new one, which the interrupt cleanup could not reach.
+_bats_run_file() {
+    local bats="$1" out="$2" idx="$3" f="$4" limit rc
+    limit="$(_resolve_bats_file_timeout)"
+    if command -v timeout >/dev/null 2>&1; then
+        timeout --foreground -k 10 "$limit" "$bats" "$f" >"$out/$idx.log" 2>&1
+    else
+        "$bats" "$f" >"$out/$idx.log" 2>&1
+    fi
+    rc=$?
+    case "$rc" in
+    0) ;;
+    124 | 137)
+        rc=124
+        printf '# bats file killed after BATS_FILE_TIMEOUT=%ss (the bats process never exited)\n' \
+            "$limit" >>"$out/$idx.log"
+        ;;
+    *) rc=1 ;;
+    esac
+    printf '%s' "$rc" >"$out/$idx.status"
 }
 
 # Discover the .bats files run_bats() executes, ordered by @test count
@@ -399,6 +444,7 @@ run_bats() {
     # shell locals.
     BATS_TEST_TIMEOUT="$(_resolve_bats_timeout)"
     export BATS_TEST_TIMEOUT
+    export -f _bats_run_file _resolve_bats_file_timeout _resolve_positive_int
 
     local bats_files=()
     while IFS= read -r f; do
@@ -444,14 +490,7 @@ run_bats() {
         printf '%s\n%s\n' "$i" "$f"
         i=$((i + 1))
     done \
-        | xargs -P "$jobs" -n 2 bash -c '
-            bats="$1"; out="$2"; idx="$3"; f="$4"
-            if "$bats" "$f" >"$out/$idx.log" 2>&1; then
-                printf "0" >"$out/$idx.status"
-            else
-                printf "1" >"$out/$idx.status"
-            fi
-          ' _ "$bats_bin" "$outdir"
+        | xargs -P "$jobs" -n 2 bash -c '_bats_run_file "$@"' _ "$bats_bin" "$outdir"
     kill "$ticker_pid" 2>/dev/null
     wait "$ticker_pid" 2>/dev/null
     [ -t 1 ] && printf '\r\033[K'
@@ -474,7 +513,11 @@ run_bats() {
         if [ "$status_val" != "0" ]; then
             failed_files=$((failed_files + 1))
             rc=1
-            print_error "FAILED: ${f#"${SCRIPT_DIR}/"}"
+            if [ "$status_val" = "124" ]; then
+                print_error "FAILED (file timeout, BATS_FILE_TIMEOUT): ${f#"${SCRIPT_DIR}/"}"
+            else
+                print_error "FAILED: ${f#"${SCRIPT_DIR}/"}"
+            fi
             [ -f "$log_file" ] && cat "$log_file"
         elif [ "$VERBOSE" = "1" ] && [ -f "$log_file" ]; then
             cat "$log_file"

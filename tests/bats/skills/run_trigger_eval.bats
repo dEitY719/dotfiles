@@ -296,7 +296,9 @@ STUB
     _run_job() { :; }
 
     _spawn gh-commit before 'a description'
-    wait
+    # $! = the _run_job job _spawn just launched. A bare `wait` would also
+    # wait on bats' own timeout watchdog and burn the full 300s (#2054).
+    wait "$!"
 
     [ ! -e "${OUT_DIR}/gh-commit.before.tsv" ]
     [ "${#JOB_TSVS[@]}" -eq 1 ]
