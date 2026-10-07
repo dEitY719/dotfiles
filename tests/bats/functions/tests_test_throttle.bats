@@ -35,7 +35,9 @@ setup() {
     source "$RUNNER"
     REGISTRY="$(_test_run_registry_dir)"
     PEER_PIDS=()
-    unset TEST_RUN_STALE_SEC
+    # The runner's tuning knobs must not leak in from the caller's env (a
+    # TEST_JOBS_FACTOR sweep would otherwise change every expected figure).
+    unset BATS_JOBS TEST_JOBS_FACTOR PYTEST_JOBS_FACTOR TEST_WORKER_MB TEST_JOBS_MAX TEST_RUN_STALE_SEC
 }
 
 teardown() {
@@ -273,4 +275,82 @@ register_peer_with() {
     run _resolve_bats_jobs
     assert_success
     assert_output "$expected"
+}
+
+# ---------------------------------------------------------------------------
+# _test_job_budget — PC-sized job count shared by bats and pytest (#2054)
+#
+# budget = max(1, min(cpu * factor, MemAvailable / TEST_WORKER_MB,
+#                     TEST_JOBS_MAX)) / (peers + 1)
+# Output: "<jobs> <reason>" — the reason is what run_bats/run_pytest print.
+# CPU and memory probes are stubbed so the arithmetic is host-independent.
+# ---------------------------------------------------------------------------
+
+_stub_host() {
+    eval "_test_cpu_count() { echo $1; }"
+    eval "_test_mem_available_mb() { echo $2; }"
+}
+
+@test "_test_job_budget: scales the CPU count by the factor" {
+    _stub_host 20 ""
+    run _test_job_budget 2 0
+    assert_output "40 (20 cpu x2, mem cap n/a, 0 peers)"
+}
+
+@test "_test_job_budget: accepts a fractional factor" {
+    _stub_host 8 ""
+    run _test_job_budget 1.5 0
+    assert_output --regexp '^12 '
+}
+
+@test "_test_job_budget: TEST_JOBS_FACTOR overrides the phase default" {
+    _stub_host 8 ""
+    TEST_JOBS_FACTOR=3 run _test_job_budget 1 0
+    assert_output --regexp '^24 \(8 cpu x3,'
+}
+
+@test "_test_job_budget: a bogus factor falls back to the phase default" {
+    _stub_host 8 ""
+    TEST_JOBS_FACTOR=fast run _test_job_budget 2 0
+    assert_output --regexp '^16 '
+}
+
+@test "_test_job_budget: MemAvailable / TEST_WORKER_MB caps the CPU figure" {
+    _stub_host 20 1000
+    TEST_WORKER_MB=100 run _test_job_budget 2 0
+    assert_output "10 (20 cpu x2, mem cap 10, 0 peers)"
+}
+
+@test "_test_job_budget: no /proc/meminfo means no memory cap" {
+    _stub_host 20 ""
+    TEST_WORKER_MB=100 run _test_job_budget 2 0
+    assert_output --regexp '^40 .*mem cap n/a'
+}
+
+@test "_test_job_budget: TEST_JOBS_MAX caps the result" {
+    _stub_host 20 100000
+    TEST_JOBS_MAX=12 run _test_job_budget 2 0
+    assert_output --regexp '^12 .*max 12'
+}
+
+@test "_test_job_budget: divides among peers and floors at 1" {
+    _stub_host 20 ""
+    run _test_job_budget 2 1
+    assert_output --regexp '^20 .*1 peers'
+    _stub_host 1 ""
+    run _test_job_budget 1 3
+    assert_output --regexp '^1 '
+}
+
+@test "_test_mem_available_mb: reads MemAvailable from /proc/meminfo in MiB" {
+    [ -r /proc/meminfo ] || skip "needs /proc/meminfo"
+    run _test_mem_available_mb
+    assert_output --regexp '^[0-9]+$'
+}
+
+@test "_resolve_bats_jobs: BATS_JOBS still bypasses the budget entirely" {
+    _stub_host 20 10
+    export BATS_JOBS=50
+    run _resolve_bats_jobs
+    assert_output "50"
 }
