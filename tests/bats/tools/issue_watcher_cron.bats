@@ -983,8 +983,13 @@ _run_child_suite() {
 
     mkfifo "${_dir}/stdin"
     exec 8<>"${_dir}/stdin"
-    run _bounded_bats "${DOTFILES_ROOT}/tests/bats/lib/bats-core/bin/bats" \
-        "${_file}" <&8
+    # The child must not inherit the runner's BATS_TEST_TIMEOUT (#2054): its
+    # per-test countdown hung the child under this never-EOF stdin (all three
+    # red-assertion cases "hung" only when tests/test exported it), and the
+    # orphaned countdown then held this file's own TAP pipe for the full 300s.
+    # _bounded_bats' own watchdog already bounds the child.
+    run _bounded_bats env -u BATS_TEST_TIMEOUT \
+        "${DOTFILES_ROOT}/tests/bats/lib/bats-core/bin/bats" "${_file}" <&8
     exec 8>&-
 }
 
