@@ -19,6 +19,7 @@ RUNNER="${BATS_TEST_DIRNAME}/../../test"
 BATS_BIN="${BATS_TEST_DIRNAME}/../lib/bats-core/bin/bats"
 HANG_FIXTURE="${BATS_TEST_DIRNAME}/../_fixtures/hang_timeout.bats"
 TAP_FIXTURE="${BATS_TEST_DIRNAME}/../_fixtures/timeout_aggregate.tap"
+FAIL_FIXTURE="${BATS_TEST_DIRNAME}/../_fixtures/fail_with_timeout.bats"
 
 setup() {
     # shellcheck source=/dev/null
@@ -45,6 +46,20 @@ setup() {
     # The whole point: killed near the timeout, nowhere near HANG_SLEEP.
     # Bound is generous (not close to the 2s timeout) to tolerate process-
     # spawn overhead on loaded/constrained CI runners (agy review, PR #1492).
+    ((SECONDS < 20)) || false
+}
+
+# bats-core 1.13 loses the timeout watchdog's PID on a FAILING test, so the
+# watchdog outlived the test holding bats' TAP pipe and every red file sat
+# idle for the full BATS_TEST_TIMEOUT (300s per failing file in a real run).
+# test_helper.bash reaps it (#2054); a red file must end promptly.
+@test "a failing test does not stall its file for BATS_TEST_TIMEOUT" {
+    [ -x "$BATS_BIN" ]
+    SECONDS=0
+    run env BATS_TEST_TIMEOUT=60 "$BATS_BIN" "$FAIL_FIXTURE"
+    assert_failure
+    assert_output --partial "not ok 1 deliberately fails"
+    assert_output --partial "ok 2 passes after the failure"
     ((SECONDS < 20)) || false
 }
 
