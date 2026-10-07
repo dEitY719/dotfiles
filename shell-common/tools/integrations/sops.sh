@@ -70,8 +70,11 @@ alias sops-status='sops_age_status'
 # ---------------------------------------------------------------------------
 # senv: encrypt/decrypt/run a project's .env with sops + age, in $PWD.
 #
-# `.env.enc` is not auto-detected as dotenv, so every sops call passes
-# --input-type/--output-type dotenv. `sops exec-env` takes no type flags, so
+# The default ciphertext is `.enc.env` (#2062): sops infers dotenv from the
+# extension and the global pre-commit hook blocks `.env.enc`. `.env.enc` is
+# still read as a fallback. It is not auto-detected as dotenv, so every sops
+# call passes --input-type/--output-type dotenv. `sops exec-env` takes no type
+# flags, so
 # `senv run` decrypts to a shell variable and exports line by line instead.
 # The decrypted text is never eval'ed and never written to disk.
 #
@@ -87,8 +90,8 @@ _senv_usage() {
     ux_bullet_sub "새 PC: git pull -> senv key import -> senv dec"
     ux_bullet_sub "점검: senv check"
     ux_bullet "init              write .sops.yaml (your age public key) + ignore .env"
-    ux_bullet "enc [file]        encrypt .env -> .env.enc"
-    ux_bullet "dec [-f] [file]   decrypt .env.enc (or .enc.env) -> .env (-f overwrites)"
+    ux_bullet "enc [file]        encrypt .env -> .enc.env ([file] -> [file].enc)"
+    ux_bullet "dec [-f] [file]   decrypt .enc.env (or legacy .env.enc) -> .env (-f overwrites)"
     ux_bullet "edit [file]       edit the encrypted file in \$EDITOR, re-encrypt on save"
     ux_bullet "run <cmd...>      run cmd with the encrypted values as env vars (no file)"
     ux_bullet "check             key present / mode 600 / matches .sops.yaml / decrypts"
@@ -109,15 +112,15 @@ _senv_key_file() {
     printf '%s' "${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
 }
 
-# Encrypted file to act on: the argument, else .env.enc, else .enc.env.
-# Falls back to .env.enc so "not found" messages name the usual file.
+# Encrypted file to act on: the argument, else .enc.env, else legacy .env.enc.
+# Falls back to .enc.env so "not found" messages name the standard file.
 _senv_enc_file() {
     if [ -n "${1-}" ]; then
         printf '%s' "$1"
-    elif [ ! -f .env.enc ] && [ -f .enc.env ]; then
-        printf '.enc.env'
-    else
+    elif [ ! -f .enc.env ] && [ -f .env.enc ]; then
         printf '.env.enc'
+    else
+        printf '.enc.env'
     fi
 }
 
@@ -174,7 +177,7 @@ _senv_init() {
     if [ -e .sops.yaml ]; then
         ux_warning ".sops.yaml already exists, left unchanged"
     else
-        printf "creation_rules:\n  - path_regex: '(^|/)\\.env(\\.enc)?\$'\n    age: %s\n" "$pub" >.sops.yaml
+        printf "creation_rules:\n  - path_regex: '(^|/)\\.(enc\\.)?env(\\.enc)?\$'\n    age: %s\n" "$pub" >.sops.yaml
         ux_success "wrote .sops.yaml"
     fi
 
@@ -189,13 +192,13 @@ _senv_init() {
         ux_success "added .env to .gitignore"
     fi
 
-    ux_info "Next: senv enc && git add .sops.yaml .gitignore .env.enc"
+    ux_info "Next: senv enc && git add .sops.yaml .gitignore .enc.env"
 }
 
 _senv_enc() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local in="${1:-.env}" out tmp
-    out="${in}.enc"
+    if [ -n "${1-}" ]; then out="${in}.enc"; else out=".enc.env"; fi
     if [ ! -f "$in" ]; then
         ux_error "input not found: ${in}"
         return 1
@@ -282,7 +285,7 @@ _senv_run() {
     fi
     _senv_in=$(_senv_enc_file)
     if [ ! -f "$_senv_in" ]; then
-        ux_error ".env.enc (or .enc.env) not found in $(pwd)"
+        ux_error ".enc.env (or legacy .env.enc) not found in $(pwd)"
         return 1
     fi
     if ! _senv_plain=$(sops -d --input-type dotenv --output-type dotenv "$_senv_in"); then
@@ -354,7 +357,7 @@ _senv_check() {
 
     in=$(_senv_enc_file)
     if [ ! -f "$in" ]; then
-        ux_warning "no .env.enc or .enc.env in $(pwd); decryption not checked"
+        ux_warning "no .enc.env (or legacy .env.enc) in $(pwd); decryption not checked"
     elif sops -d --input-type dotenv --output-type dotenv "$in" >/dev/null 2>&1; then
         ux_success "decrypts: ${in}"
     else

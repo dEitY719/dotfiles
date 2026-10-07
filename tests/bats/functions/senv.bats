@@ -52,11 +52,15 @@ _senv() {
 @test "init writes .sops.yaml + .gitignore and is idempotent" {
     _senv "senv init"
     assert_success
-    grep -qF "path_regex: '(^|/)\\.env(\\.enc)?\$'" "$PROJ/.sops.yaml"
+    grep -qF "path_regex: '(^|/)\\.(enc\\.)?env(\\.enc)?\$'" "$PROJ/.sops.yaml"
+    # The written regex matches .env, .enc.env and legacy .env.enc only.
+    re=$(sed -n "s/.*path_regex: '\(.*\)'/\1/p" "$PROJ/.sops.yaml")
+    for f in .env .enc.env .env.enc sub/.enc.env; do echo "$f" | grep -qE "$re"; done
+    [ -z "$(echo ".env.local" | grep -E "$re")" ]
     grep -qx "    age: age1first,age1second" "$PROJ/.sops.yaml"
     [ "$(grep -c SECRET "$PROJ/.sops.yaml")" -eq 0 ]
     [ "$(cat "$PROJ/.gitignore")" = ".env" ]
-    assert_output --partial "senv enc"
+    assert_output --partial "git add .sops.yaml .gitignore .enc.env"
 
     echo "# edited" >>"$PROJ/.sops.yaml"
     _senv "senv init"
@@ -81,31 +85,42 @@ _senv() {
     [ ! -e "$PROJ/.sops.yaml" ]
 }
 
-@test "enc calls sops with dotenv flags and writes .env.enc" {
+@test "enc calls sops with dotenv flags and writes .enc.env by default" {
     printf 'FOO=1\n' >"$PROJ/.env"
     : >"$PROJ/.sops.yaml"
     _senv "senv enc"
     assert_success
+    assert_output --partial ".env -> .enc.env"
     grep -qx -- "-e --input-type dotenv --output-type dotenv .env" "$SOPS_LOG"
-    [ "$(cat "$PROJ/.env.enc")" = "FOO=1" ]
+    [ "$(cat "$PROJ/.enc.env")" = "FOO=1" ]
+    [ ! -e "$PROJ/.env.enc" ]
 }
 
-@test "enc without .sops.yaml hints senv init; failed sops keeps old .env.enc" {
+@test "enc with an explicit file keeps the <file>.enc name" {
+    printf 'FOO=2\n' >"$PROJ/prod.env"
+    : >"$PROJ/.sops.yaml"
+    _senv "senv enc prod.env"
+    assert_success
+    [ "$(cat "$PROJ/prod.env.enc")" = "FOO=2" ]
+    [ ! -e "$PROJ/.enc.env" ]
+}
+
+@test "enc without .sops.yaml hints senv init; failed sops keeps old .enc.env" {
     printf 'FOO=1\n' >"$PROJ/.env"
     _senv "senv enc"
     assert_failure
     assert_output --partial "senv init"
 
     : >"$PROJ/.sops.yaml"
-    echo "OLD" >"$PROJ/.env.enc"
+    echo "OLD" >"$PROJ/.enc.env"
     _senv "SOPS_STUB_FAIL=1 senv enc"
     assert_failure
-    [ "$(cat "$PROJ/.env.enc")" = "OLD" ]
-    [ "$(find "$PROJ" -name '.env.enc.*' | wc -l)" -eq 0 ]
+    [ "$(cat "$PROJ/.enc.env")" = "OLD" ]
+    [ "$(find "$PROJ" -name '.enc.env.*' | wc -l)" -eq 0 ]
 }
 
 @test "dec refuses to overwrite without -f; -f works and sets mode 600" {
-    printf 'FOO=new\n' >"$PROJ/.env.enc"
+    printf 'FOO=new\n' >"$PROJ/.enc.env"
     echo "FOO=old" >"$PROJ/.env"
     _senv "senv dec"
     assert_failure
@@ -116,18 +131,18 @@ _senv() {
     assert_success
     [ "$(cat "$PROJ/.env")" = "FOO=new" ]
     [ "$(stat -c '%a' "$PROJ/.env")" = "600" ]
-    grep -qx -- "-d --input-type dotenv --output-type dotenv .env.enc" "$SOPS_LOG"
+    grep -qx -- "-d --input-type dotenv --output-type dotenv .enc.env" "$SOPS_LOG"
 }
 
 @test "edit passes dotenv flags" {
-    printf 'FOO=1\n' >"$PROJ/.env.enc"
+    printf 'FOO=1\n' >"$PROJ/.enc.env"
     _senv "senv edit"
     assert_success
-    grep -qx -- "edit --input-type dotenv --output-type dotenv .env.enc" "$SOPS_LOG"
+    grep -qx -- "edit --input-type dotenv --output-type dotenv .enc.env" "$SOPS_LOG"
 }
 
 @test "run exports vars literally and never evals" {
-    printf '# c\n\nFOO=hello world\nBAR=$(touch pwned)\nbad-key=x\n' >"$PROJ/.env.enc"
+    printf '# c\n\nFOO=hello world\nBAR=$(touch pwned)\nbad-key=x\n' >"$PROJ/.enc.env"
     _senv "senv run sh -c 'printf \"%s|%s\\n\" \"\$FOO\" \"\$BAR\"'"
     assert_success
     assert_output 'hello world|$(touch pwned)'
@@ -135,13 +150,13 @@ _senv() {
 }
 
 @test "run propagates the command exit code" {
-    printf 'FOO=1\n' >"$PROJ/.env.enc"
+    printf 'FOO=1\n' >"$PROJ/.enc.env"
     _senv "senv run sh -c 'exit 7'"
     [ "$status" -eq 7 ]
 }
 
 @test "run does not execute the command when decryption fails" {
-    printf 'FOO=1\n' >"$PROJ/.env.enc"
+    printf 'FOO=1\n' >"$PROJ/.enc.env"
     _senv "SOPS_STUB_FAIL=1 senv run touch ran"
     assert_failure
     assert_output --partial "command not run"
@@ -169,7 +184,7 @@ _senv() {
 
 @test "zsh: run exports literally and propagates exit code" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
-    printf 'FOO=a b\nBAR=$(touch pwned)\n' >"$PROJ/.env.enc"
+    printf 'FOO=a b\nBAR=$(touch pwned)\n' >"$PROJ/.enc.env"
     run_in_zsh "PATH='$STUB_BIN:/usr/bin:/bin'; cd '$PROJ' && senv run sh -c 'echo \"\$FOO|\$BAR\"; exit 5'"
     [ "$status" -eq 5 ]
     assert_output 'a b|$(touch pwned)'
@@ -181,40 +196,61 @@ _senv() {
 # Stand-in for an interactive terminal: age (stubbed) needs no passphrase.
 TTY_OK='_senv_has_tty() { return 0; };'
 
-@test "dec/run/edit fall back to .enc.env when .env.enc is absent" {
-    printf 'FOO=1\n' >"$PROJ/.enc.env"
+@test "dec/run/edit/check fall back to legacy .env.enc when .enc.env is absent" {
+    printf 'FOO=1\n' >"$PROJ/.env.enc"
     _senv "senv dec"
     assert_success
     [ "$(cat "$PROJ/.env")" = "FOO=1" ]
-    grep -qx -- "-d --input-type dotenv --output-type dotenv .enc.env" "$SOPS_LOG"
+    grep -qx -- "-d --input-type dotenv --output-type dotenv .env.enc" "$SOPS_LOG"
     _senv "senv run sh -c 'echo \$FOO'"
     assert_output "1"
     _senv "senv edit"
-    grep -qx -- "edit --input-type dotenv --output-type dotenv .enc.env" "$SOPS_LOG"
+    grep -qx -- "edit --input-type dotenv --output-type dotenv .env.enc" "$SOPS_LOG"
+    _senv "senv check"
+    assert_output --partial "decrypts: .env.enc"
 }
 
-@test "dec prefers .env.enc over .enc.env; an explicit file wins" {
+@test "dec prefers .enc.env over .env.enc; an explicit file wins" {
     printf 'FOO=a\n' >"$PROJ/.env.enc"
     printf 'FOO=b\n' >"$PROJ/.enc.env"
     _senv "senv dec"
-    [ "$(cat "$PROJ/.env")" = "FOO=a" ]
-    _senv "senv dec -f .enc.env"
     [ "$(cat "$PROJ/.env")" = "FOO=b" ]
+    _senv "senv dec -f .env.enc"
+    [ "$(cat "$PROJ/.env")" = "FOO=a" ]
+}
+
+@test "missing ciphertext errors name the standard .enc.env" {
+    _senv "senv run true"
+    assert_failure
+    assert_output --partial ".enc.env (or legacy .env.enc) not found"
+    _senv "senv dec"
+    assert_failure
+    assert_output --partial "input not found: .enc.env"
+}
+
+@test "senv help and sops-help workflow use .enc.env" {
+    _senv "senv"
+    assert_output --partial "encrypt .env -> .enc.env"
+    _senv "sops_help newproject; sops_help usage"
+    assert_success
+    assert_output --partial "senv enc    # .env -> .enc.env"
+    assert_output --partial "git add .sops.yaml .gitignore .enc.env"
+    refute_output --partial "git add .sops.yaml .gitignore .env.enc"
 }
 
 @test "check passes and never prints plaintext" {
     printf 'creation_rules:\n  - age: age1first\n' >"$PROJ/.sops.yaml"
-    printf 'FOO=topsecret\n' >"$PROJ/.env.enc"
+    printf 'FOO=topsecret\n' >"$PROJ/.enc.env"
     _senv "senv check"
     assert_success
-    assert_output --partial "decrypts: .env.enc"
+    assert_output --partial "decrypts: .enc.env"
     refute_output --partial "topsecret"
     refute_output --partial "AGE-SECRET-KEY"
 }
 
 @test "check reports each failure with a next step" {
     printf 'creation_rules:\n  - age: age1other\n' >"$PROJ/.sops.yaml"
-    printf 'FOO=topsecret\n' >"$PROJ/.env.enc"
+    printf 'FOO=topsecret\n' >"$PROJ/.enc.env"
     chmod 644 "$KEY_FILE"
     _senv "SOPS_STUB_FAIL=1 senv check"
     assert_failure
