@@ -28,8 +28,15 @@
 load '../test_helper'
 
 setup() {
+    # Isolate $HOME so the #1454 foreign-checkout guard is a no-op when this
+    # file runs from a clone other than ~/dotfiles (#2057).
+    setup_isolated_home
     # shellcheck disable=SC1090
     source "${DOTFILES_ROOT:?}/shell-common/functions/devx_pr_review_all.sh"
+}
+
+teardown() {
+    teardown_isolated_home
 }
 
 # ── devx_pr_review_all_verdict: Korean verdicts ──────────────────────
