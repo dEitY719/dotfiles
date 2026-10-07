@@ -214,6 +214,38 @@ JSON
     [ -f "$HOME/.claude-backups/settings.json.pre-drift-heal.backup" ]
 }
 
+@test "settings-drift: internal mode + env.CLAUDE_CODE_PLUGIN_DIRS missing → only that env sub-key healed (#2029)" {
+    printf 'internal' >"$HOME/.dotfiles-setup-mode"
+    cat >"$SSOT" <<'JSON'
+{ "hooks": { "SessionStart": [ { "hooks": [
+  { "type": "command", "command": "a.sh" },
+  { "type": "command", "command": "b.sh" }
+] } ] },
+  "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/dotfiles/claude/mods/cache-watch", "ENABLE_PROMPT_CACHING_1H": "1" } }
+JSON
+    cat >"$LIVE_DIR/settings.json" <<'JSON'
+{ "env": { "ANTHROPIC_BASE_URL": "https://gateway.internal" },
+  "hooks": { "SessionStart": [ { "hooks": [
+  { "type": "command", "command": "a.sh" },
+  { "type": "command", "command": "b.sh" }
+] } ] } }
+JSON
+    _run_hook
+    assert_success
+
+    ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+    [[ "$ctx" == *"auto-corrected"* ]]
+    [[ "$ctx" == *"CLAUDE_CODE_PLUGIN_DIRS"* ]]
+
+    run jq -r '.env.CLAUDE_CODE_PLUGIN_DIRS' "$LIVE_DIR/settings.json"
+    [ "$output" = "~/dotfiles/claude/mods/cache-watch" ]
+    run jq -r '.env.ANTHROPIC_BASE_URL' "$LIVE_DIR/settings.json"
+    [ "$output" = "https://gateway.internal" ]
+    # Other SSOT env keys are NOT claimed.
+    run jq -r '.env.ENABLE_PROMPT_CACHING_1H // "absent"' "$LIVE_DIR/settings.json"
+    [ "$output" = "absent" ]
+}
+
 @test "settings-drift: internal mode + .statusLine drift but SSOT defines none → only .hooks healed, message doesn't overclaim" {
     printf 'internal' >"$HOME/.dotfiles-setup-mode"
     # SSOT has NO .statusLine at all — the heal has nothing to put back.

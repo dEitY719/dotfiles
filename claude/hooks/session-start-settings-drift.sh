@@ -26,8 +26,9 @@
 # it is invisible without this hook. Hence: internal mode patches the two
 # dotfiles-owned keys back in place, every session, automatically.
 #
-# Scope of the write is deliberately tiny — ONLY `.hooks` and `.statusLine`
-# are assigned, via jq, into the existing document. Every other key's VALUE
+# Scope of the write is deliberately tiny — ONLY `.hooks`, `.statusLine` and
+# the single sub-key `.env.CLAUDE_CODE_PLUGIN_DIRS` (#2029, cache-watch mod
+# load; internal PCs get no other path for it) are assigned, via jq, into the existing document. Every other key's VALUE
 # is left alone: gateway-cli's (apiKeyHelper, awsCredentialExport,
 # awsAuthRefresh, cleanupPeriodDays, env, model, availableModels), Claude
 # Code's own (enabledPlugins, extraKnownMarketplaces), and anything a user or
@@ -103,18 +104,26 @@ ssot_hooks=$(jq -S -c '.hooks // {}' "$SSOT" 2>/dev/null) || exit 0
 live_hooks=$(jq -S -c '.hooks // {}' "$LIVE" 2>/dev/null) || exit 0
 ssot_statusline=$(jq -S -c '.statusLine // null' "$SSOT" 2>/dev/null) || exit 0
 live_statusline=$(jq -S -c '.statusLine // null' "$LIVE" 2>/dev/null) || exit 0
+# `.env.CLAUDE_CODE_PLUGIN_DIRS` (cache-watch mod load, #2029): the one env
+# sub-key dotfiles owns. gateway-cli owns the rest of `.env`, so only this
+# single key is compared/healed, never the `.env` object.
+ssot_plugdirs=$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS // null' "$SSOT" 2>/dev/null) || exit 0
+live_plugdirs=$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS // null' "$LIVE" 2>/dev/null) || exit 0
 
 _drift_hooks=0
 _drift_statusline=0
+_drift_plugdirs=0
+[ "$ssot_plugdirs" = "$live_plugdirs" ] || _drift_plugdirs=1
 [ "$ssot_hooks" = "$live_hooks" ] || _drift_hooks=1
 [ "$ssot_statusline" = "$live_statusline" ] || _drift_statusline=1
 
 # Fast path: nothing dotfiles owns has drifted.
-[ "$_drift_hooks" -eq 1 ] || [ "$_drift_statusline" -eq 1 ] || exit 0
+[ "$_drift_hooks" -eq 1 ] || [ "$_drift_statusline" -eq 1 ] || [ "$_drift_plugdirs" -eq 1 ] || exit 0
 
 _drift_keys=""
 [ "$_drift_hooks" -eq 1 ] && _drift_keys=".hooks"
 [ "$_drift_statusline" -eq 1 ] && _drift_keys="${_drift_keys:+${_drift_keys}, }.statusLine"
+[ "$_drift_plugdirs" -eq 1 ] && _drift_keys="${_drift_keys:+${_drift_keys}, }.env.CLAUDE_CODE_PLUGIN_DIRS"
 
 # --- Mode detection (same canonicalisation the rest of the repo uses) -------
 _mode=""
@@ -151,6 +160,11 @@ if [ "$_mode" = "internal" ] && [ ! -L "$LIVE" ]; then
 		_healed_statusline=1
 	fi
 
+	if [ "$_drift_plugdirs" -eq 1 ] && [ "$ssot_plugdirs" != "null" ]; then
+		_prog="${_prog:+${_prog} | }.env.CLAUDE_CODE_PLUGIN_DIRS = \$ssot_plugdirs"
+		_healed_keys="${_healed_keys:+${_healed_keys}, }.env.CLAUDE_CODE_PLUGIN_DIRS"
+	fi
+
 	if [ -n "$_prog" ]; then
 		_backup_dir="${HOME}/.claude-backups"
 		# Latest-only backup (#919); the glob sweeps pre-#919 timestamped
@@ -163,6 +177,7 @@ if [ "$_mode" = "internal" ] && [ ! -L "$LIVE" ]; then
 			_tmp=$(mktemp "${LIVE}.XXXXXX" 2>/dev/null) &&
 			jq --argjson ssot_hooks "$ssot_hooks" \
 				--argjson ssot_statusline "$ssot_statusline" \
+				--argjson ssot_plugdirs "$ssot_plugdirs" \
 				"$_prog" "$LIVE" >"$_tmp" 2>/dev/null &&
 			[ -s "$_tmp" ] &&
 			chmod 0600 "$_tmp" 2>/dev/null &&
@@ -189,7 +204,7 @@ if [ "$_healed" -eq 1 ]; then
 	if [ "$_drift_statusline" -eq 1 ] && [ "$_healed_statusline" -ne 1 ]; then
 		_leftover=".statusLine (SSOT 값 없음 — 자동 복구 불가, 수동 확인 필요)"
 	fi
-	_msg="[dotfiles #1086] Claude settings.json hook drift auto-corrected: the live config (${LIVE}) had drifted from the dotfiles SSOT (claude/settings.json) in: ${_healed_keys}. Internal-PC mode patched ONLY those keys back in place — gateway-cli-owned keys (apiKeyHelper / awsCredentialExport / awsAuthRefresh / cleanupPeriodDays / env / model) were not touched. No action needed; restart Claude Code if you want the restored hooks/statusLine active in THIS session. Backup: ${_backup}${_leftover:+ | NOT auto-corrected: ${_leftover}}"
+	_msg="[dotfiles #1086] Claude settings.json hook drift auto-corrected: the live config (${LIVE}) had drifted from the dotfiles SSOT (claude/settings.json) in: ${_healed_keys}. Internal-PC mode patched ONLY those keys back in place — gateway-cli-owned keys (apiKeyHelper / awsCredentialExport / awsAuthRefresh / cleanupPeriodDays / env (except CLAUDE_CODE_PLUGIN_DIRS) / model) were not touched. No action needed; restart Claude Code if you want the restored hooks/statusLine active in THIS session. Backup: ${_backup}${_leftover:+ | NOT auto-corrected: ${_leftover}}"
 else
 	# Non-internal PCs (and the internal fallbacks: symlinked live file, SSOT
 	# does not define the drifted key, or a failed patch) re-seed by hand.
