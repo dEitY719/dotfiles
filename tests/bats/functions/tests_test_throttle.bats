@@ -35,6 +35,7 @@ setup() {
     source "$RUNNER"
     REGISTRY="$(_test_run_registry_dir)"
     PEER_PIDS=()
+    unset TEST_RUN_STALE_SEC
 }
 
 teardown() {
@@ -47,7 +48,8 @@ teardown() {
 
 # Register N fabricated peers whose PIDs belong to genuinely running
 # processes. stdio is redirected and fd 3 closed so a background job can
-# never hold bats' output pipes open.
+# never hold bats' output pipes open. Entries are left empty (the pre-#2054
+# format), which must still count as live peers.
 register_live_peers() {
     local n="$1" i pid
     mkdir -p "$REGISTRY"
@@ -57,6 +59,14 @@ register_live_peers() {
         PEER_PIDS+=("$pid")
         : >"$REGISTRY/$pid"
     done
+}
+
+# One live peer whose entry carries "<start time> <epoch>" ($1, $2); the
+# peer's PID is left in LAST_PEER.
+register_peer_with() {
+    register_live_peers 1
+    LAST_PEER="${PEER_PIDS[${#PEER_PIDS[@]} - 1]}"
+    printf '%s %s\n' "$1" "$2" >"$REGISTRY/$LAST_PEER"
 }
 
 # ---------------------------------------------------------------------------
@@ -113,8 +123,65 @@ register_live_peers() {
 }
 
 # ---------------------------------------------------------------------------
+# Registry hardening (#2054): an orphaned run (its `uv run` parent killed by
+# Ctrl+C) stayed alive for hours and kept halving every later run's jobs.
+# ---------------------------------------------------------------------------
+
+@test "_concurrent_test_run_count: counts a peer whose recorded start time matches" {
+    [ -r /proc/self/stat ] || skip "needs /proc"
+    register_peer_with - "$(date +%s)"
+    printf '%s %s\n' "$(_proc_start_time "$LAST_PEER")" "$(date +%s)" >"$REGISTRY/$LAST_PEER"
+    run _concurrent_test_run_count
+    assert_output "1"
+}
+
+@test "_concurrent_test_run_count: drops an entry whose PID was reused (start time differs)" {
+    [ -r /proc/self/stat ] || skip "needs /proc"
+    register_peer_with 12345 "$(date +%s)"
+    run _concurrent_test_run_count
+    assert_output "0"
+    [ ! -e "$REGISTRY/$LAST_PEER" ]
+}
+
+@test "_concurrent_test_run_count: ignores a run older than TEST_RUN_STALE_SEC" {
+    register_peer_with - "$(($(date +%s) - 7300))"
+    run _concurrent_test_run_count
+    assert_output "0"
+    export TEST_RUN_STALE_SEC=8000
+    run _concurrent_test_run_count
+    assert_output "1"
+}
+
+@test "_concurrent_test_run_count: ignores an orphaned run (parent is init)" {
+    register_live_peers 1
+    _is_orphan_pid() { return 0; }
+    run _concurrent_test_run_count
+    assert_output "0"
+}
+
+@test "_is_orphan_pid: a process with a live non-init parent is not an orphan" {
+    run _is_orphan_pid "$$"
+    assert_failure
+}
+
+@test "_proc_start_time: prints nothing for a PID that does not exist" {
+    run _proc_start_time "$DEAD_PID"
+    assert_success
+    assert_output ""
+}
+
+# ---------------------------------------------------------------------------
 # _register_test_run
 # ---------------------------------------------------------------------------
+
+@test "_register_test_run: records this run's start time and epoch" {
+    [ -r /proc/self/stat ] || skip "needs /proc"
+    _register_test_run
+    local st epoch
+    read -r st epoch <"$REGISTRY/$$"
+    assert_equal "$st" "$(_proc_start_time "$$")"
+    [ "$(($(date +%s) - epoch))" -le 5 ]
+}
 
 @test "_register_test_run: creates this PID's entry without self-counting" {
     run _register_test_run

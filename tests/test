@@ -182,13 +182,41 @@ _test_run_registry_dir() {
 
 # Register this process ($$) in the registry. Best-effort: if the dir can't
 # be created (e.g. read-only /tmp), silently no-op — throttling degrades to
-# "no throttling", never to a hard failure.
+# "no throttling", never to a hard failure. The entry holds
+# "<kernel start time> <epoch>" (#2054) so a reader can tell a reused PID and
+# an hours-old orphan from a genuine peer. "-" = start time unknown (no
+# /proc); an empty file (pre-#2054 runner) skips both checks.
 _register_test_run() {
-    local dir
+    local dir st
     dir="$(_test_run_registry_dir)"
     mkdir -p "$dir" 2>/dev/null || return 0
-    : >"$dir/$$" 2>/dev/null
+    st="$(_proc_start_time "$$")"
+    printf '%s %s\n' "${st:--}" "$(date +%s)" >"$dir/$$" 2>/dev/null
     return 0
+}
+
+# Kernel start time of PID $1 (/proc/<pid>/stat field 22, clock ticks since
+# boot) — fixed for a process's lifetime, so a mismatch proves PID reuse.
+# Prints nothing where /proc is absent (macOS). comm (field 2) may contain
+# spaces or ')', so fields are counted from after its last ')'.
+_proc_start_time() {
+    local stat
+    stat="$(cat "/proc/$1/stat" 2>/dev/null)" || return 0
+    stat="${stat##*) }"
+    # shellcheck disable=SC2086 # deliberate field split
+    set -- $stat
+    printf '%s\n' "${20:-}"
+}
+
+# True when PID $1 was re-parented to init: PPID 1, or WSL's per-session
+# "/init" subreaper (observed PPID 373). Such a run lost the `uv run` /
+# terminal that started it and is nobody's work anymore (#2054).
+_is_orphan_pid() {
+    local ppid
+    ppid="$(ps -o ppid= -p "$1" 2>/dev/null | tr -d ' ')"
+    [ -n "$ppid" ] || return 1
+    [ "$ppid" = "1" ] && return 0
+    [ "$(ps -o comm= -p "$ppid" 2>/dev/null)" = "init" ]
 }
 
 # Count OTHER currently-running ./tests/test invocations (excludes $$).
@@ -198,22 +226,44 @@ _register_test_run() {
 # runs — this also shrinks the (nonzero but very unlikely) window for a
 # stale entry's PID to later be reused by an unrelated live process and get
 # miscounted as a peer (codex/agy review, PR #1416).
+#
+# #2054 hardening: an orphaned run (its `uv run` parent killed) lived for 2+
+# hours and halved every later run's jobs. So a live PID is also dropped when
+# its recorded start time no longer matches (PID reused — entry removed), and
+# skipped when the entry is older than TEST_RUN_STALE_SEC (default 7200) or
+# the run has been re-parented to init (_is_orphan_pid).
 _concurrent_test_run_count() {
-    local dir count=0 f pid
+    local dir count=0 f pid st epoch cur stale now
     dir="$(_test_run_registry_dir)"
     [ -d "$dir" ] || {
         printf '0\n'
         return 0
     }
+    stale="$(_resolve_positive_int "${TEST_RUN_STALE_SEC:-}" 7200)"
+    now="$(date +%s)"
     for f in "$dir"/*; do
         [ -e "$f" ] || continue
         pid="${f##*/}"
         [ "$pid" = "$$" ] && continue
-        if kill -0 "$pid" 2>/dev/null; then
-            count=$((count + 1))
-        else
+        if ! kill -0 "$pid" 2>/dev/null; then
             rm -f "$f" 2>/dev/null
+            continue
         fi
+        st="" epoch=""
+        read -r st epoch <"$f" 2>/dev/null
+        if [ -n "$st" ] && [ "$st" != "-" ]; then
+            cur="$(_proc_start_time "$pid")"
+            if [ -n "$cur" ] && [ "$cur" != "$st" ]; then
+                rm -f "$f" 2>/dev/null
+                continue
+            fi
+        fi
+        case "$epoch" in
+        '' | *[!0-9]*) ;;
+        *) [ $((now - epoch)) -gt "$stale" ] && continue ;;
+        esac
+        _is_orphan_pid "$pid" && continue
+        count=$((count + 1))
     done
     printf '%s\n' "$count"
 }
@@ -418,6 +468,109 @@ _bats_progress_ticker() {
     done
 }
 
+# Feed "index\npath" pairs to `xargs -P $1`; -n 2 hands each (idx, path) to
+# one _bats_run_file worker. Keying outputs by array index (not a
+# path-derived name) gives the producer and run_bats' aggregation loop one
+# shared, collision-free map. $2 = bats binary, $3 = outdir, rest = files.
+_bats_feed_xargs() {
+    local jobs="$1" bats_bin="$2" outdir="$3" i=0 f
+    shift 3
+    for f in "$@"; do
+        printf '%s\n%s\n' "$i" "$f"
+        i=$((i + 1))
+    done | xargs -P "$jobs" -n 2 bash -c '_bats_run_file "$@"' _ "$bats_bin" "$outdir"
+}
+
+# ---------------------------------------------------------------------------
+# Interrupt handling (#2054)
+#
+# bash runs a trap only after the current foreground command returns, so a
+# runner blocked in `... | xargs -P` ignored TERM until every bats file was
+# done — and Ctrl+C on `git push` left `uv run ./tests/test` alive for 2+
+# hours. Long phases therefore run as background jobs in their own process
+# group (_spawn_group) and the runner `wait`s on them: `wait` returns as soon
+# as a trapped signal arrives, and the trap kills each group whole.
+# ---------------------------------------------------------------------------
+
+_TEST_GROUPS=""    # pgids of live phase groups, killed on interrupt/exit
+_TEST_TMP_PATHS="" # scratch dirs removed on exit
+_SPAWNED_PID=""
+
+# Run "$@" in the background as the leader of a new process group (set -m),
+# stdin from /dev/null so a background group can never stop on a TTY read.
+# Nested calls (already inside a spawned group) stay in the outer group so a
+# single group kill still reaches everything. Sets _SPAWNED_PID.
+_spawn_group() {
+    if [ -n "${_IN_TEST_GROUP:-}" ]; then
+        "$@" </dev/null &
+        _SPAWNED_PID=$!
+        return 0
+    fi
+    set -m
+    (
+        _IN_TEST_GROUP=1
+        "$@"
+    ) </dev/null &
+    _SPAWNED_PID=$!
+    set +m
+    _TEST_GROUPS="$_TEST_GROUPS $_SPAWNED_PID"
+}
+
+# Wait for a _spawn_group job and forget its group; returns its exit status.
+_wait_group() {
+    local rc=0 g rest=""
+    wait "$1" || rc=$?
+    for g in $_TEST_GROUPS; do
+        [ "$g" = "$1" ] || rest="$rest $g"
+    done
+    _TEST_GROUPS="$rest"
+    return "$rc"
+}
+
+# Run "$@" in its own group and wait for it: a foreground command whose
+# interrupt is not deferred until it finishes.
+_run_in_group() {
+    _spawn_group "$@"
+    _wait_group "$_SPAWNED_PID"
+}
+
+# TERM every live phase group, then KILL whatever is left after a 1s grace.
+_kill_test_groups() {
+    local g alive=0
+    for g in $_TEST_GROUPS; do
+        kill -TERM -- "-$g" 2>/dev/null && alive=1
+    done
+    if [ "$alive" = "1" ]; then
+        sleep 1
+        for g in $_TEST_GROUPS; do
+            kill -KILL -- "-$g" 2>/dev/null
+        done
+    fi
+    _TEST_GROUPS=""
+}
+
+_on_test_exit() {
+    _kill_test_groups
+    # shellcheck disable=SC2086 # space-separated mktemp paths
+    [ -n "$_TEST_TMP_PATHS" ] && rm -rf $_TEST_TMP_PATHS
+    rm -f "$(_test_run_registry_dir)/$$" 2>/dev/null
+}
+
+# $1 = exit code (128 + signal number). The EXIT trap does the cleanup.
+_on_test_signal() {
+    trap - INT TERM HUP
+    [ -t 1 ] && printf '\r\033[K'
+    print_warning "Interrupted — stopping all test workers"
+    exit "$1"
+}
+
+_install_test_traps() {
+    trap _on_test_exit EXIT
+    trap '_on_test_signal 130' INT
+    trap '_on_test_signal 143' TERM
+    trap '_on_test_signal 129' HUP
+}
+
 # Run bats tests
 #
 # bats-core's own `--jobs` needs GNU parallel (or shenwei356/rush), which we
@@ -458,7 +611,7 @@ run_bats() {
 
     # Serial: single bats invocation over all files (deterministic order).
     if [ "$SERIAL" = "1" ]; then
-        "$bats_bin" "${bats_files[@]}"
+        _run_in_group "$bats_bin" "${bats_files[@]}"
         return $?
     fi
 
@@ -473,26 +626,18 @@ run_bats() {
     jobs="$(_resolve_bats_jobs "$others")"
     local outdir
     outdir="$(mktemp -d)"
-    # Clean the temp dir on normal exit and on interrupt so an aborted run
-    # never leaks it; the signal handler also exits so Ctrl+C stops the
-    # runner instead of continuing on a deleted outdir (gemini review).
-    trap 'rm -rf "$outdir"' EXIT
-    trap 'rm -rf "$outdir"; trap - EXIT; exit 130' INT TERM HUP
+    # Removed by _on_test_exit if the run is interrupted (#2054).
+    _TEST_TMP_PATHS="$_TEST_TMP_PATHS $outdir"
     print_info "Parallel: ${#bats_files[@]} files across ${jobs} jobs (override with BATS_JOBS=N, or -s for serial)${throttle_note}"
 
-    # Emit "index\npath" pairs; -n 2 hands each (idx, path) to one worker.
-    # Keying outputs by array index (not a path-derived name) gives the
-    # producer and the aggregation loop below one shared, collision-free map.
-    local i=0 f ticker_pid
-    _bats_progress_ticker "$outdir" "${#bats_files[@]}" &
-    ticker_pid=$!
-    for f in "${bats_files[@]}"; do
-        printf '%s\n%s\n' "$i" "$f"
-        i=$((i + 1))
-    done \
-        | xargs -P "$jobs" -n 2 bash -c '_bats_run_file "$@"' _ "$bats_bin" "$outdir"
-    kill "$ticker_pid" 2>/dev/null
-    wait "$ticker_pid" 2>/dev/null
+    local i f ticker_pid workers_pid
+    _spawn_group _bats_progress_ticker "$outdir" "${#bats_files[@]}"
+    ticker_pid=$_SPAWNED_PID
+    _spawn_group _bats_feed_xargs "$jobs" "$bats_bin" "$outdir" "${bats_files[@]}"
+    workers_pid=$_SPAWNED_PID
+    _wait_group "$workers_pid"
+    kill -TERM -- "-$ticker_pid" 2>/dev/null || kill "$ticker_pid" 2>/dev/null
+    _wait_group "$ticker_pid" 2>/dev/null
     [ -t 1 ] && printf '\r\033[K'
 
     # Aggregate: count tests, print per-file failures with their full log.
@@ -525,7 +670,6 @@ run_bats() {
     done
 
     rm -rf "$outdir"
-    trap - EXIT INT TERM HUP
 
     if [ "$rc" -eq 0 ]; then
         print_success "bats: ${total_tests} tests in ${#bats_files[@]} files passed"
@@ -540,7 +684,7 @@ run_golden_rules() {
     local gr_script="${SCRIPT_DIR}/golden_rules/test_golden_rules.sh"
     if [ -f "$gr_script" ]; then
         print_header "Running Golden Rules"
-        bash "$gr_script"
+        _run_in_group bash "$gr_script"
         return $?
     fi
     return 0
@@ -557,7 +701,7 @@ run_pytest() {
     print_header "Running Pytest Integration Tests"
     if [ "$SERIAL" = "1" ] || [ "$HAS_XDIST" = "0" ]; then
         # Serial: override addopts to remove xdist options
-        python3 -m pytest tests/integration/ \
+        _run_in_group python3 -m pytest tests/integration/ \
             $verbose_flag \
             --tb=short \
             -o addopts="-v --strict-markers" \
@@ -574,7 +718,7 @@ run_pytest() {
             base_jobs="$(_test_cpu_count)"
             pytest_env=("PYTEST_XDIST_AUTO_NUM_WORKERS=$(_effective_parallel_jobs "$base_jobs")")
         fi
-        env "${pytest_env[@]}" python3 -m pytest tests/integration/ $verbose_flag --tb=short
+        _run_in_group env "${pytest_env[@]}" python3 -m pytest tests/integration/ $verbose_flag --tb=short
     fi
     return $?
 }
@@ -589,15 +733,6 @@ run_tests() {
     run_bats || exit_code=1
     run_golden_rules || exit_code=1
     run_pytest || exit_code=1
-
-    # Unconditional, not trap-based: run_bats() sets and then clears its own
-    # EXIT trap around $outdir, which silently clobbers (and never restores)
-    # whatever trap main() registered before calling into here — so on every
-    # normal, complete run the registry entry was never actually being
-    # removed (agy review, PR #1416). This line is what performs the real
-    # cleanup; main()'s trap is a secondary net for the early-return paths
-    # (e.g. check_requirements failure) that occur before run_bats ever runs.
-    rm -f "$(_test_run_registry_dir)/$$" 2>/dev/null
 
     return $exit_code
 }
@@ -635,15 +770,12 @@ main() {
 
     # Announce this run so concurrent ./tests/test invocations on this host
     # can detect each other and split the CPU pool (#1413). After arg parsing
-    # so -h/--help never registers. This trap only covers an early return
-    # before run_tests() (e.g. check_requirements failing below) — run_bats()
-    # sets its own EXIT trap and clears it when done, which silently
-    # supersedes this one for every run that reaches it. run_tests() performs
-    # the actual cleanup unconditionally on its own return for that reason
-    # (agy review, PR #1416); an interrupted run still self-heals via
-    # _concurrent_test_run_count's kill -0 + prune-on-read.
+    # so -h/--help never registers. The traps are the single cleanup path for
+    # every exit — normal, early return, or signal: the registry entry, the
+    # scratch dirs and every worker group (#2054). No phase installs traps of
+    # its own anymore, so nothing clobbers them (the PR #1416 caveat).
     _register_test_run
-    trap 'rm -f "$(_test_run_registry_dir)/$$" 2>/dev/null' EXIT
+    _install_test_traps
 
     # Check requirements
     if ! check_requirements; then
