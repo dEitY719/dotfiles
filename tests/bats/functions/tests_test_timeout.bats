@@ -89,16 +89,24 @@ setup() {
 # unbounded hang #1483 exists to prevent (codex review, PR #1492).
 # ---------------------------------------------------------------------------
 
-@test "_resolve_bats_timeout: unset BATS_TEST_TIMEOUT defaults to 300" {
+# Never clear BATS_TEST_TIMEOUT in the test shell itself: bats-exec-test
+# reaps a test's timeout watchdog only if the variable is still non-empty when
+# the test ends, so the orphaned watchdog then held bats' output pipe and
+# stalled this whole file for the full 300s (#2054). `run` executes in a
+# subshell, so clearing it inside the command under test is safe.
+_resolve_with_timeout_unset() {
     unset BATS_TEST_TIMEOUT
-    run _resolve_bats_timeout
+    _resolve_bats_timeout
+}
+
+@test "_resolve_bats_timeout: unset BATS_TEST_TIMEOUT defaults to 300" {
+    run _resolve_with_timeout_unset
     assert_success
     assert_output "300"
 }
 
 @test "_resolve_bats_timeout: an empty BATS_TEST_TIMEOUT falls back to 300" {
-    export BATS_TEST_TIMEOUT=""
-    run _resolve_bats_timeout
+    BATS_TEST_TIMEOUT="" run _resolve_bats_timeout
     assert_success
     assert_output "300"
 }
