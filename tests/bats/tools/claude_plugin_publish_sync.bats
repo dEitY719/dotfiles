@@ -54,6 +54,11 @@ _seed_repo_with_origin() {
     # can freely diverge repo_dir from origin/main.
     local repo_dir="$1"
     local bare="$TEST_TEMP_HOME/origin.git"
+    # A second seed in the same test (dotfiles + company/) gets its own bare:
+    # sharing one only worked while both "seed" commits landed in the same
+    # second and hashed identically — under load the second push was
+    # rejected as non-fast-forward (#2054).
+    [ -e "$bare" ] && bare="$(mktemp -d "$TEST_TEMP_HOME/origin-XXXXXX")"
     git init -q --bare "$bare"
 
     mkdir -p "$repo_dir/claude/plugin"
