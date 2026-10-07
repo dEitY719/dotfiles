@@ -8,6 +8,22 @@ _BATS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
 load "${_BATS_LIB_DIR}/bats-support/load"
 load "${_BATS_LIB_DIR}/bats-assert/load"
 
+# bats-core 1.13.0 workaround (#2054). bats_perform_test keeps the
+# BATS_TEST_TIMEOUT watchdog's PID in a function-local that is already gone
+# when a FAILING test's EXIT trap calls this, so `kill ""` misses and the
+# watchdog — a subshell still holding the file's TAP pipe — idles out the
+# full timeout: every red .bats file stalled 300s in a tests/test run. Fall
+# back to reaping this test process's own bats-exec-test subshells (the test
+# body and teardown are finished by now). Every suite file loads this helper,
+# which is sourced after bats defines the original, so this one wins.
+bats_abort_timeout_countdown() {
+    if [ -n "${BATS_killer_pid:-}" ]; then
+        kill "$BATS_killer_pid" >/dev/null 2>&1 || true
+        return 0
+    fi
+    pkill -TERM -P "$$" -f 'bats-exec-test' >/dev/null 2>&1 || true
+}
+
 # Project paths
 export DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
