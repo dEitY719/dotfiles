@@ -17,7 +17,7 @@
     - 새 PC: git pull -> senv key import -> senv dec  (또는 senv run make run)
     - 점검: senv check
 - sections
-    - overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .env.enc 커밋
+    - overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .enc.env 커밋
     - setup: install-sops-age | age-keygen | sops-status
     - newproject: senv init | senv enc | 커밋
     - usage: senv init|enc|dec|edit|run|check|key + senv 가 실행하는 sops 명령
@@ -33,7 +33,7 @@
 
 - age: 키 쌍 생성/암호화 도구. 공개키(age1...)=자물쇠, 개인키(AGE-SECRET-KEY-1...)=열쇠
 - sops: 파일의 값만 암호화 (키 이름은 평문) -> git diff 로 변경 항목 확인 가능
-- 흐름: .sops.yaml 에 공개키 기재 -> .env 를 .env.enc 로 암호화해 커밋
+- 흐름: .sops.yaml 에 공개키 기재 -> .env 를 .enc.env 로 암호화해 커밋
 - 복호화: 각 PC 의 개인키 ~/.config/sops/age/keys.txt 로 해제 (sops 기본 경로)
 - 개인키는 외울 수 없는 약 74자 문자열 -> PC 마다 파일로 배치해야 한다 (sops-help newpc)
 
@@ -52,32 +52,32 @@
 
 - 프로젝트 루트에서 (개인키가 먼저 있어야 한다: sops-help setup)
     - senv init   # .sops.yaml(공개키) 생성 + .gitignore 에 .env 추가
-    - senv enc    # .env -> .env.enc
-    - git add .sops.yaml .gitignore .env.enc && git commit
+    - senv enc    # .env -> .enc.env
+    - git add .sops.yaml .gitignore .enc.env && git commit
 - 개인키 내보내기: senv key export  (~/senv-key.age, sops-help newpc)
 - 새 PC: git pull -> senv key import -> senv dec (파일 생성) 또는 senv run make run (파일 없음)
 - senv init 이 만드는 .sops.yaml (공개키만 들어가므로 커밋 OK)
     - creation_rules:
-    -   - path_regex: '(^|/)\.env(\.enc)?$'
+    -   - path_regex: '(^|/)\.(enc\.)?env(\.enc)?$'
     -     age: age1xxxxxxxx...   # 여러 키면 콤마로 구분
-- 체크: git status 에 .env 가 안 보이는지, .env.enc 값이 ENC[AES256_GCM,...] 인지
+- 체크: git status 에 .env 가 안 보이는지, .enc.env 값이 ENC[AES256_GCM,...] 인지
 
 ### usage
 
 - **senv init** — .sops.yaml + .gitignore — 기존 .sops.yaml 은 덮어쓰지 않음
-- **senv enc [file]** — .env -> .env.enc — 실패 시 기존 .env.enc 유지
-- **senv dec [-f] [file]** — .env.enc 또는 .enc.env -> .env (600) — 기존 .env 는 -f 없이 안 덮어씀
+- **senv enc [file]** — .env -> .enc.env ([file] -> [file].enc) — 실패 시 기존 암호문 유지
+- **senv dec [-f] [file]** — .enc.env 또는 .env.enc -> .env (600) — 기존 .env 는 -f 없이 안 덮어씀
 - **senv edit [file]** — $EDITOR 로 편집 — 저장 시 재암호화
 - **senv run <cmd...>** — 환경변수로 주입해 실행 — 디스크에 평문 없음, eval 안 함
 - **senv check** — 키/권한 600/공개키 일치/복호화 점검 — 평문 미출력, 실패마다 다음 행동
 - **senv key show** — 공개키 + .sops.yaml 일치 여부 — 비밀 출력 없음
 - **senv key export [-o f] [-f]** — 개인키를 비밀번호로 잠금 (~/senv-key.age) — git 작업트리 안 거절, 되풀어 검증
 - **senv key import [f] [-f]** — 잠금 파일 -> keys.txt (600) — 기존 keys.txt 는 -f 없이 안 덮어씀
-- 암호문 파일: 인자 [file] 우선, 없으면 .env.enc, 그것도 없으면 .enc.env
-- senv 가 실행하는 sops 명령 (.env.enc 는 확장자 추론 불가 -> 타입 플래그 필수)
-    - sops -e --input-type dotenv --output-type dotenv .env > .env.enc
-    - sops -d --input-type dotenv --output-type dotenv .env.enc > .env
-    - sops edit --input-type dotenv --output-type dotenv .env.enc
+- 암호문 파일: 인자 [file] 우선, 없으면 .enc.env, 그것도 없으면 옛 이름 .env.enc
+- senv 가 실행하는 sops 명령 (옛 이름 .env.enc 도 열도록 타입 플래그를 늘 붙인다)
+    - sops -e --input-type dotenv --output-type dotenv .env > .enc.env
+    - sops -d --input-type dotenv --output-type dotenv .enc.env > .env
+    - sops edit --input-type dotenv --output-type dotenv .enc.env
 - sops exec-env 는 타입 플래그 미지원 -> .env.enc 불가 (senv run 이 대체)
     - 직접 쓰려면 이름이 .env 로 끝나야 함: sops exec-env .enc.env 'npm start'
 - 주의: 'sops -d .env.enc' (플래그 없음) 는 unmarshal 오류로 실패한다 (실측)
@@ -101,7 +101,7 @@
 - **개인키 분실** — 복구 불가 — keys.txt 백업 필수 (잠금 파일/오프라인 보관)
 - **개인키 유출** — 재암호화만으로 부족 — 원본 비밀값(DB 암호, API 키) 자체를 교체
 - 유출 대응: 새 키 생성 -> .sops.yaml 공개키 교체 -> 비밀값 교체 -> 재암호화
-    - sops updatekeys 는 수신자만 바꾼다. 옛 키로 git 이력의 .env.enc 는 여전히 열린다
+    - sops updatekeys 는 수신자만 바꾼다. 옛 키로 git 이력의 .enc.env 는 여전히 열린다
 - 평문 .env 커밋 사고: .gitignore 확인, 이미 push 했다면 비밀값 교체
 - keys.txt 권한은 600 유지 (sops-status 로 점검)
 
