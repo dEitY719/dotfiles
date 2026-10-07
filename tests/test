@@ -95,12 +95,22 @@ EXAMPLES:
     ./tests/test --verbose --serial # Verbose + sequential
 
 PERFORMANCE:
-    Default: bats + pytest both run parallel across all CPU cores (~4-5 min)
+    Default: bats (one process per file) and pytest (xdist) run at the same
+             time, each sized to this PC; slowest bats files start first
+             (durations cached in ~/.cache/dotfiles/bats-durations.tsv)
     Serial:  Sequential execution, single bats process (~15+ min)
-    Tune:    BATS_JOBS=N overrides bats job count (default: nproc)
-    Throttle: detects other concurrent ./tests/test runs on this host and
-             divides the job count among them (BATS_JOBS /
-             PYTEST_XDIST_AUTO_NUM_WORKERS overrides are never throttled)
+    Jobs:    min(nproc x factor, MemAvailable / TEST_WORKER_MB, TEST_JOBS_MAX)
+             divided among concurrent ./tests/test runs on this host. The
+             "Parallel:" line prints the figures behind the number.
+    Tune:    BATS_JOBS=N / PYTEST_XDIST_AUTO_NUM_WORKERS=N  exact counts
+                                               (never throttled)
+             TEST_JOBS_FACTOR=F    bats factor   (default: ${_BATS_JOBS_FACTOR})
+             PYTEST_JOBS_FACTOR=F  pytest factor (default: ${_PYTEST_JOBS_FACTOR})
+             TEST_WORKER_MB=N      memory per job (default: ${_TEST_WORKER_MB_DEFAULT})
+             TEST_JOBS_MAX=N       hard cap on either phase
+             TEST_RUN_STALE_SEC=N  ignore peer runs older than this (7200)
+             TEST_PHASES_SEQUENTIAL=1  run pytest after bats, not alongside
+    Ctrl+C:  stops every worker (bats, xargs, pytest) and exits 130
 
 REQUIREMENTS:
     - Python 3.10+
@@ -268,10 +278,66 @@ _concurrent_test_run_count() {
     printf '%s\n' "$count"
 }
 
+# Budget defaults (#2054), from a one-run-each sweep (x1/x1.5/x2/x3) on a
+# 20-CPU and an 8-CPU (taskset) PC, wall seconds per phase alone:
+#   bats   20 cpu: 192 / 177 / 181 / 219     8 cpu: 238 / 218 / 228 / 243
+#   pytest 20 cpu: 191 / 167 / 150 / 140     8 cpu: 366 / 299 / 254 / 212
+# bats bottoms out at x1.5 on both (its tail is one long file, extra jobs
+# only add contention); pytest's subprocess-heavy tests keep gaining to x3.
+# Peak RSS per job at x3 was 66 MB (bats) and 84-95 MB (pytest), so 100 MB
+# per job keeps the memory cap honest without binding on a normal PC.
+_BATS_JOBS_FACTOR=1.5
+_PYTEST_JOBS_FACTOR=3
+_TEST_WORKER_MB_DEFAULT=100
+
 # CPU count: nproc (Linux) → getconf (macOS/BSD) → 4. Shared by the bats and
 # pytest throttling paths so the fallback chain lives in exactly one place.
 _test_cpu_count() {
     nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4
+}
+
+# MemAvailable in MiB, or nothing where /proc/meminfo is absent (macOS) —
+# the caller then skips the memory cap.
+_test_mem_available_mb() {
+    awk '/^MemAvailable:/ { print int($2 / 1024); exit }' /proc/meminfo 2>/dev/null
+}
+
+# PC-sized job count (#2054), shared by the bats and pytest phases:
+#   max(1, min(cpu * factor, MemAvailable / TEST_WORKER_MB, TEST_JOBS_MAX))
+#   divided among this run and its peers (_effective_parallel_jobs).
+# $1 = the phase's default factor, $2 = peer count, $3 = factor override
+# (default $TEST_JOBS_FACTOR). A factor is N or N.D; anything else falls back
+# to $1. Prints "<jobs> (<reason>)" — the reason is the one-line answer to
+# "why this many jobs" that the Parallel: banner shows.
+_test_job_budget() {
+    local factor="${3-${TEST_JOBS_FACTOR:-}}" peers="${2:-0}" cpu mem worker max
+    local whole tenth jobs mem_note="n/a" max_note=""
+    case "$factor" in
+    [0-9] | [0-9][0-9] | [0-9].[0-9] | [0-9][0-9].[0-9]) ;;
+    *) factor="$1" ;;
+    esac
+    whole="${factor%.*}"
+    tenth=0
+    case "$factor" in *.*) tenth="${factor#*.}" ;; esac
+    cpu="$(_test_cpu_count)"
+    jobs=$((cpu * (10#$whole * 10 + 10#$tenth) / 10))
+    mem="$(_test_mem_available_mb)"
+    case "$mem" in
+    '' | *[!0-9]*) ;;
+    *)
+        worker="$(_resolve_positive_int "${TEST_WORKER_MB:-}" "$_TEST_WORKER_MB_DEFAULT")"
+        mem_note=$((mem / worker))
+        [ "$mem_note" -lt "$jobs" ] && jobs="$mem_note"
+        ;;
+    esac
+    if [ -n "${TEST_JOBS_MAX:-}" ]; then
+        max="$(_resolve_positive_int "$TEST_JOBS_MAX" "$jobs")"
+        max_note=", max $max"
+        [ "$max" -lt "$jobs" ] && jobs="$max"
+    fi
+    [ "$jobs" -lt 1 ] && jobs=1
+    printf '%s (%s cpu x%s, mem cap %s%s, %s peers)\n' \
+        "$(_effective_parallel_jobs "$jobs" "$peers")" "$cpu" "$factor" "$mem_note" "$max_note" "$peers"
 }
 
 # Divide a base job count among this run and its detected peers.
@@ -300,25 +366,25 @@ _effective_parallel_jobs() {
 # Resolve run_bats()'s parallel job count.
 #   BATS_JOBS set    → honored verbatim (never throttled), 4 if not a
 #                      positive integer (guards a bogus override).
-#   BATS_JOBS unset  → CPU count (nproc → getconf → 4), divided among this
-#                      run and any concurrent ./tests/test runs.
+#   BATS_JOBS unset  → _test_job_budget with the bats factor, divided among
+#                      this run and any concurrent ./tests/test runs.
 #
-# $1 (optional) is a precomputed peer count, forwarded to
-# _effective_parallel_jobs to avoid a second registry scan (run_bats already
-# has one to build its throttle_note). Omit it to compute internally.
+# $1 (optional) is a precomputed peer count. Omit it to compute internally.
 _resolve_bats_jobs() {
     local others="${1:-}" jobs
-    jobs="${BATS_JOBS:-$(_test_cpu_count)}"
-    # Guard a non-positive-integer BATS_JOBS override (gemini review).
-    case "$jobs" in
-    '' | *[!0-9]*) jobs=4 ;;
-    esac
-    [ "$jobs" -lt 1 ] && jobs=1
     if [ -n "${BATS_JOBS:-}" ]; then
+        jobs="$BATS_JOBS"
+        # Guard a non-positive-integer BATS_JOBS override (gemini review).
+        case "$jobs" in
+        '' | *[!0-9]*) jobs=4 ;;
+        esac
+        [ "$jobs" -lt 1 ] && jobs=1
         printf '%s\n' "$jobs"
         return 0
     fi
-    _effective_parallel_jobs "$jobs" "$others"
+    [ -n "$others" ] || others="$(_concurrent_test_run_count)"
+    jobs="$(_test_job_budget "$_BATS_JOBS_FACTOR" "$others")"
+    printf '%s\n' "${jobs%% *}"
 }
 
 # Resolve run_bats()'s per-test timeout (issue #1483): unset → 300, a file's
@@ -370,7 +436,7 @@ _resolve_bats_file_timeout() {
 # --foreground` keeps bats in the runner's process group — plain `timeout`
 # moves itself into a new one, which the interrupt cleanup could not reach.
 _bats_run_file() {
-    local bats="$1" out="$2" idx="$3" f="$4" limit rc
+    local bats="$1" out="$2" idx="$3" f="$4" limit rc start=$SECONDS
     limit="$(_resolve_bats_file_timeout)"
     if command -v timeout >/dev/null 2>&1; then
         timeout --foreground -k 10 "$limit" "$bats" "$f" >"$out/$idx.log" 2>&1
@@ -387,12 +453,15 @@ _bats_run_file() {
         ;;
     *) rc=1 ;;
     esac
+    # Wall seconds for the longest-first cache; written before .status so
+    # the progress ticker never counts a file whose timing is missing.
+    printf '%s' "$((SECONDS - start))" >"$out/$idx.secs"
     printf '%s' "$rc" >"$out/$idx.status"
 }
 
 # Discover the .bats files run_bats() executes, ordered by @test count
-# descending (Longest-Processing-Time scheduling) so the long-pole file starts
-# first and the parallel makespan approaches its floor.
+# descending — the cold-cache fallback for _order_bats_by_duration, which
+# reorders by measured wall time once a run has recorded it (#2054).
 #
 # lib/ is the vendored bats-core submodule (its own test suite). _fixtures/ is
 # deliberately-broken input invoked directly by tests — notably
@@ -403,6 +472,57 @@ _discover_bats_files() {
         -not -path '*/lib/*' -not -path '*/_fixtures/*' \
         -exec sh -c 'printf "%s\t%s\n" "$(grep -c "^@test" "$1")" "$1"' _ {} \; \
         | sort -rn | cut -f2-
+}
+
+# Longest-first scheduling from measured durations (#2054). @test count is
+# a poor proxy for runtime: on an 8-CPU PC only 22 of 194 files had finished
+# after 2 minutes, and the run still ended on a long tail. Each parallel run
+# records every file's wall seconds here; the next run starts the slowest
+# first, so the tail is made of the shortest files.
+_bats_durations_file() {
+    printf '%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles/bats-durations.tsv"
+}
+
+# Reorder stdin's file paths (discovery order) by recorded duration,
+# slowest first. Files with no record go ahead of all — a new file's cost is
+# unknown, and starting it early is the safe guess. Keys are paths relative
+# to $SCRIPT_DIR so every worktree shares one cache. Rows that are not
+# "<digits>\t<path>" are ignored, so a missing or corrupt cache degrades to
+# the discovery order (the sort is stable on the input line number).
+_order_bats_by_duration() {
+    awk -v root="${SCRIPT_DIR}/" -v cache="$(_bats_durations_file)" '
+        BEGIN {
+            while ((getline row < cache) > 0)
+                if (row ~ /^[0-9]+\t[^\t]+$/) {
+                    split(row, f, "\t")
+                    secs[f[2]] = f[1]
+                }
+        }
+        {
+            rel = (index($0, root) == 1) ? substr($0, length(root) + 1) : $0
+            printf "%d\t%d\t%s\n", ((rel in secs) ? secs[rel] : 999999999), NR, $0
+        }' | sort -t "$(printf '\t')" -k1,1nr -k2,2n | cut -f3-
+}
+
+# Write this run's per-file seconds (<outdir>/<idx>.secs, by the same index
+# as the file list "$@") to the durations cache, atomically via rename so a
+# concurrent run never reads half a file. Best-effort: never fails the run.
+_save_bats_durations() {
+    local outdir="$1" cache i=0 f secs
+    shift
+    cache="$(_bats_durations_file)"
+    mkdir -p "${cache%/*}" 2>/dev/null || return 0
+    for f in "$@"; do
+        secs=""
+        read -r secs <"$outdir/$i.secs" 2>/dev/null
+        case "$secs" in
+        '' | *[!0-9]*) ;;
+        *) printf '%s\t%s\n' "$secs" "${f#"${SCRIPT_DIR}/"}" ;;
+        esac
+        i=$((i + 1))
+    done >"$cache.$$" 2>/dev/null && mv -f "$cache.$$" "$cache" 2>/dev/null
+    rm -f "$cache.$$" 2>/dev/null
+    return 0
 }
 
 # Build run_bats()'s failure summary line. The ", N timed out" clause appears
@@ -602,7 +722,7 @@ run_bats() {
     local bats_files=()
     while IFS= read -r f; do
         bats_files+=("$f")
-    done < <(_discover_bats_files)
+    done < <(_discover_bats_files | _order_bats_by_duration)
     if [ ${#bats_files[@]} -eq 0 ]; then
         print_warning "No bats test files found"
         bats_fail_closed
@@ -615,20 +735,22 @@ run_bats() {
         return $?
     fi
 
-    # Parallel: one bats process per file, bounded by CPU count.
-    # CPU count: nproc (Linux) → getconf (macOS/BSD) → 4, then divided among
-    # any concurrent ./tests/test runs (#1413). BATS_JOBS overrides both.
-    local jobs others=0 throttle_note=""
+    # Parallel: one bats process per file, sized to this PC by
+    # _test_job_budget and divided among concurrent ./tests/test runs
+    # (#1413, #2054). BATS_JOBS overrides all of it.
+    local jobs budget reason="(BATS_JOBS override)"
     if [ -z "${BATS_JOBS:-}" ]; then
-        others="$(_concurrent_test_run_count)"
-        [ "$others" -gt 0 ] && throttle_note=" (throttled: ${others} other ./tests/test run(s) detected)"
+        budget="$(_test_job_budget "$_BATS_JOBS_FACTOR" "$(_concurrent_test_run_count)")"
+        jobs="${budget%% *}"
+        reason="${budget#* }"
+    else
+        jobs="$(_resolve_bats_jobs)"
     fi
-    jobs="$(_resolve_bats_jobs "$others")"
     local outdir
     outdir="$(mktemp -d)"
     # Removed by _on_test_exit if the run is interrupted (#2054).
     _TEST_TMP_PATHS="$_TEST_TMP_PATHS $outdir"
-    print_info "Parallel: ${#bats_files[@]} files across ${jobs} jobs (override with BATS_JOBS=N, or -s for serial)${throttle_note}"
+    print_info "Parallel: ${#bats_files[@]} files, ${jobs} jobs ${reason} — BATS_JOBS=N to override, -s for serial"
 
     local i f ticker_pid workers_pid
     _spawn_group _bats_progress_ticker "$outdir" "${#bats_files[@]}"
@@ -669,6 +791,7 @@ run_bats() {
         fi
     done
 
+    _save_bats_durations "$outdir" "${bats_files[@]}"
     rm -rf "$outdir"
 
     if [ "$rc" -eq 0 ]; then
@@ -707,16 +830,16 @@ run_pytest() {
             -o addopts="-v --strict-markers" \
             -p no:xdist
     else
-        # Throttle xdist's `-n auto` (from pyproject's addopts) the same way
-        # run_bats throttles xargs -P: PYTEST_XDIST_AUTO_NUM_WORKERS is the
-        # supported knob for what `auto` resolves to, so the CPU count can be
-        # divided among concurrent ./tests/test runs without touching addopts.
-        # An override the caller already set wins untouched (#1413).
-        local pytest_env=()
+        # Size xdist's `-n auto` (from pyproject's addopts) the same way
+        # run_bats sizes xargs -P: PYTEST_XDIST_AUTO_NUM_WORKERS is the
+        # supported knob for what `auto` resolves to, so _test_job_budget
+        # (pytest factor, PYTEST_JOBS_FACTOR) applies without touching
+        # addopts. An override the caller already set wins untouched (#1413).
+        local pytest_env=() budget
         if [ -z "${PYTEST_XDIST_AUTO_NUM_WORKERS:-}" ]; then
-            local base_jobs
-            base_jobs="$(_test_cpu_count)"
-            pytest_env=("PYTEST_XDIST_AUTO_NUM_WORKERS=$(_effective_parallel_jobs "$base_jobs")")
+            budget="$(_test_job_budget "$_PYTEST_JOBS_FACTOR" "$(_concurrent_test_run_count)" "${PYTEST_JOBS_FACTOR:-}")"
+            pytest_env=("PYTEST_XDIST_AUTO_NUM_WORKERS=${budget%% *}")
+            print_info "Parallel: ${budget%% *} pytest workers ${budget#* } — PYTEST_XDIST_AUTO_NUM_WORKERS=N to override"
         fi
         _run_in_group env "${pytest_env[@]}" python3 -m pytest tests/integration/ $verbose_flag --tb=short
     fi
@@ -730,9 +853,32 @@ run_tests() {
 
     local exit_code=0
 
+    # Serial (-s): fully sequential, as before.
+    if [ "$SERIAL" = "1" ] || [ "${TEST_PHASES_SEQUENTIAL:-0}" = "1" ]; then
+        run_bats || exit_code=1
+        run_golden_rules || exit_code=1
+        run_pytest || exit_code=1
+        return $exit_code
+    fi
+
+    # Parallel (#2054): bats and pytest are independent, so pytest runs in
+    # the background while bats runs here — wall time becomes max(bats,
+    # pytest) instead of their sum. pytest's output is buffered and printed
+    # after bats + golden rules so the logs never interleave; its group is
+    # killed with everything else on Ctrl+C. TEST_PHASES_SEQUENTIAL=1 restores
+    # the old order without forcing serial bats.
+    local pytest_out pytest_pid
+    pytest_out="$(mktemp)"
+    _TEST_TMP_PATHS="$_TEST_TMP_PATHS $pytest_out"
+    [ -t 1 ] && export PY_COLORS=1
+    _spawn_group run_pytest >"$pytest_out" 2>&1
+    pytest_pid=$_SPAWNED_PID
+
     run_bats || exit_code=1
     run_golden_rules || exit_code=1
-    run_pytest || exit_code=1
+    _wait_group "$pytest_pid" || exit_code=1
+    cat "$pytest_out"
+    rm -f "$pytest_out"
 
     return $exit_code
 }
