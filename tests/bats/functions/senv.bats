@@ -20,12 +20,24 @@ echo "\$*" >>"$SOPS_LOG"
 for last in "\$@"; do :; done
 case "\$1" in -e | -d) cat "\$last" ;; esac
 STUB
+    # Derives "public keys" only from a file that looks like a private key.
     cat >"$STUB_BIN/age-keygen" <<'STUB'
 #!/bin/sh
-[ "$1" = "-y" ] && { echo "age1first"; echo "age1second"; echo "AGE-SECRET-KEY-1LEAK"; }
+[ "$1" = "-y" ] && grep -q AGE-SECRET-KEY "$2" && { echo "age1first"; echo "age1second"; echo "AGE-SECRET-KEY-1LEAK"; }
 STUB
-    chmod +x "$STUB_BIN/sops" "$STUB_BIN/age-keygen"
+    # age -p / -d stand-in: the "locked" file is a plain copy.
+    cat >"$STUB_BIN/age" <<'STUB'
+#!/bin/sh
+out=""
+while [ $# -gt 1 ]; do
+    case "$1" in -o) out="$2"; shift ;; esac
+    shift
+done
+if [ -n "$out" ]; then cat "$1" >"$out"; else cat "$1"; fi
+STUB
+    chmod +x "$STUB_BIN/sops" "$STUB_BIN/age-keygen" "$STUB_BIN/age"
     printf 'AGE-SECRET-KEY-1LEAK\n' >"$KEY_FILE"
+    chmod 600 "$KEY_FILE"
 }
 
 teardown() {
@@ -142,7 +154,10 @@ _senv() {
     assert_output --partial "unknown senv command: bogus"
     _senv "senv"
     assert_success
-    [ "$(printf '%s\n' "$output" | wc -l)" -le 12 ]
+    [ "$(printf '%s\n' "$output" | wc -l)" -le 20 ]
+    assert_output --partial "senv init -> senv enc -> git commit -> senv key export"
+    assert_output --partial "git pull -> senv key import -> senv dec"
+    assert_output --partial "senv check"
 }
 
 @test "missing sops hints install-sops-age" {
@@ -159,4 +174,135 @@ _senv() {
     [ "$status" -eq 5 ]
     assert_output 'a b|$(touch pwned)'
     [ ! -e "$PROJ/pwned" ]
+}
+
+# --- #2058: .enc.env detection, check, key show/import/export -------------
+
+# Stand-in for an interactive terminal: age (stubbed) needs no passphrase.
+TTY_OK='_senv_has_tty() { return 0; };'
+
+@test "dec/run/edit fall back to .enc.env when .env.enc is absent" {
+    printf 'FOO=1\n' >"$PROJ/.enc.env"
+    _senv "senv dec"
+    assert_success
+    [ "$(cat "$PROJ/.env")" = "FOO=1" ]
+    grep -qx -- "-d --input-type dotenv --output-type dotenv .enc.env" "$SOPS_LOG"
+    _senv "senv run sh -c 'echo \$FOO'"
+    assert_output "1"
+    _senv "senv edit"
+    grep -qx -- "edit --input-type dotenv --output-type dotenv .enc.env" "$SOPS_LOG"
+}
+
+@test "dec prefers .env.enc over .enc.env; an explicit file wins" {
+    printf 'FOO=a\n' >"$PROJ/.env.enc"
+    printf 'FOO=b\n' >"$PROJ/.enc.env"
+    _senv "senv dec"
+    [ "$(cat "$PROJ/.env")" = "FOO=a" ]
+    _senv "senv dec -f .enc.env"
+    [ "$(cat "$PROJ/.env")" = "FOO=b" ]
+}
+
+@test "check passes and never prints plaintext" {
+    printf 'creation_rules:\n  - age: age1first\n' >"$PROJ/.sops.yaml"
+    printf 'FOO=topsecret\n' >"$PROJ/.env.enc"
+    _senv "senv check"
+    assert_success
+    assert_output --partial "decrypts: .env.enc"
+    refute_output --partial "topsecret"
+    refute_output --partial "AGE-SECRET-KEY"
+}
+
+@test "check reports each failure with a next step" {
+    printf 'creation_rules:\n  - age: age1other\n' >"$PROJ/.sops.yaml"
+    printf 'FOO=topsecret\n' >"$PROJ/.env.enc"
+    chmod 644 "$KEY_FILE"
+    _senv "SOPS_STUB_FAIL=1 senv check"
+    assert_failure
+    assert_output --partial "chmod 600"
+    assert_output --partial "not a recipient"
+    assert_output --partial "cannot decrypt"
+    refute_output --partial "topsecret"
+
+    rm "$KEY_FILE"
+    _senv "senv check"
+    assert_failure
+    assert_output --partial "senv key import"
+}
+
+@test "key show prints only the public key and the match result" {
+    printf 'creation_rules:\n  - age: age1second\n' >"$PROJ/.sops.yaml"
+    _senv "senv key show"
+    assert_success
+    assert_output --partial "age1first age1second"
+    assert_output --partial "matches .sops.yaml"
+    refute_output --partial "AGE-SECRET-KEY"
+
+    printf 'creation_rules:\n  - age: age1other\n' >"$PROJ/.sops.yaml"
+    _senv "senv key show"
+    assert_failure
+    assert_output --partial "not a recipient"
+}
+
+@test "key import refuses without a tty and over an existing key without -f" {
+    cp "$KEY_FILE" "$TEST_TEMP_HOME/senv-key.age"
+    _senv "senv key import </dev/null"
+    assert_failure
+    assert_output --partial "already exists"
+
+    rm "$KEY_FILE"
+    _senv "senv key import </dev/null"
+    assert_failure
+    assert_output --partial "no terminal"
+    [ ! -e "$KEY_FILE" ]
+}
+
+@test "key import installs the key with mode 600 and checks .sops.yaml" {
+    printf 'AGE-SECRET-KEY-1NEW\n' >"$TEST_TEMP_HOME/senv-key.age"
+    rm -r "$(dirname "$KEY_FILE")"
+    printf 'creation_rules:\n  - age: age1first\n' >"$PROJ/.sops.yaml"
+    _senv "$TTY_OK senv key import"
+    assert_success
+    assert_output --partial "matches .sops.yaml"
+    [ "$(cat "$KEY_FILE")" = "AGE-SECRET-KEY-1NEW" ]
+    [ "$(stat -c '%a' "$KEY_FILE")" = "600" ]
+
+    printf 'creation_rules:\n  - age: age1other\n' >"$PROJ/.sops.yaml"
+    _senv "$TTY_OK senv key import -f"
+    assert_success
+    assert_output --partial "not a recipient"
+}
+
+@test "key import rejects a file that is not an age key and leaves no key" {
+    printf 'garbage\n' >"$PROJ/k.age"
+    rm "$KEY_FILE"
+    _senv "$TTY_OK senv key import k.age"
+    assert_failure
+    [ ! -e "$KEY_FILE" ]
+    [ "$(find "$(dirname "$KEY_FILE")" -type f | wc -l)" -eq 0 ]
+}
+
+@test "key export guards: git work tree, existing file, no tty" {
+    git -C "$PROJ" init -q
+    _senv "senv key export -o '$PROJ/k.age' </dev/null"
+    assert_failure
+    assert_output --partial "git work tree"
+    [ ! -e "$PROJ/k.age" ]
+
+    echo old >"$TEST_TEMP_HOME/senv-key.age"
+    _senv "senv key export </dev/null"
+    assert_failure
+    assert_output --partial "already exists"
+    [ "$(cat "$TEST_TEMP_HOME/senv-key.age")" = "old" ]
+
+    _senv "senv key export -f </dev/null"
+    assert_failure
+    assert_output --partial "no terminal"
+    [ "$(cat "$TEST_TEMP_HOME/senv-key.age")" = "old" ]
+}
+
+@test "key export writes a verified locked copy (stubbed age)" {
+    _senv "$TTY_OK senv key export"
+    assert_success
+    cmp -s "$TEST_TEMP_HOME/senv-key.age" "$KEY_FILE"
+    [ "$(stat -c '%a' "$TEST_TEMP_HOME/senv-key.age")" = "600" ]
 }
