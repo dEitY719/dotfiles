@@ -71,7 +71,10 @@ _write_mock_gh() {
 # Stub: pages GET -> 404 (inactive); pages POST -> success
 if [[ "$*" == *"/pages"* ]]; then
     case "$*" in
-        *"--method POST"*) exit 0 ;;
+        # Drain the JSON body like real `gh api --input -`: exiting unread
+        # races the script's `printf | gh` into SIGPIPE (exit 141) under
+        # pipefail — a load-dependent flake seen in full runs (#2054).
+        *"--method POST"*) cat >/dev/null; exit 0 ;;
         *) exit 1 ;;
     esac
 fi
@@ -245,6 +248,7 @@ EOF
 #!/bin/bash
 # GET pages -> 404 (inactive); POST -> success (#955)
 if [[ "$*" == *"--method POST"* ]]; then
+    cat >/dev/null # drain --input - (see _write_mock_gh)
     exit 0
 fi
 exit 1
@@ -267,6 +271,7 @@ EOF
 # GET pages -> 404 (inactive); POST -> failure with an API error message on
 # stderr, mirroring a real GHE rejection (#957).
 if [[ "$*" == *"--method POST"* ]]; then
+    cat >/dev/null # drain --input - (see _write_mock_gh)
     printf 'HTTP 422: Unprocessable Entity\n' >&2
     exit 1
 fi
