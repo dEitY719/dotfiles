@@ -2,10 +2,11 @@
 # Git pre-push hook
 #
 # Three layers, evaluated in order:
-#   0. Local smoke (issue #754, #2046) — `mise run test-smoke` once per
-#      push over the push range (<60s budget); the full suite runs in CI
-#      (non-blocking) or here with PRE_PUSH_FULL_TEST=1. SSOT in
-#      `docs/.ssot/local-test-policy.md`.
+#   0. Opt-in local tests (issue #754, #2046, #2054) — off by default;
+#      the full suite gates PR creation (`mise run pr-gate`) and runs in
+#      CI (non-blocking). PRE_PUSH_TEST=1 runs `mise run test-smoke` over
+#      the push range (<60s budget), PRE_PUSH_FULL_TEST=1 the full
+#      `mise run test`. SSOT in `docs/.ssot/local-test-policy.md`.
 #   1. Protected-branch block (PROTECTED_BRANCHES from pre-push-rules.sh).
 #   2. Upstream leak guard — when the push target's URL matches
 #      UPSTREAM_REMOTES_ERE, scan commit messages + added/modified file
@@ -15,8 +16,9 @@
 #
 # Skip flags (each is one off-switch — usable independently):
 #   SKIP_PRE_PUSH=1       bypass the entire hook (all three layers)
-#   SKIP_LOCAL_PYTEST=1   bypass only layer #0 (WIP push opt-out)
-#   PRE_PUSH_FULL_TEST=1  layer #0 runs the full `mise run test` instead
+#   SKIP_LOCAL_PYTEST=1   bypass only layer #0 even when opted in
+#   PRE_PUSH_TEST=1       opt layer #0 in: `mise run test-smoke`
+#   PRE_PUSH_FULL_TEST=1  opt layer #0 in: the full `mise run test`
 #   SKIP_LEAK_GUARD=1     bypass only layer #2 (PROTECTED_BRANCHES still runs)
 #
 # Hook protocol (git push pre-push):
@@ -79,15 +81,20 @@ _resolve_scan_range() {
 }
 
 # ============================================
-# Layer 0: local smoke (issue #754, #2046)
+# Layer 0: opt-in local tests (issue #754, #2046, #2054)
 # ============================================
-# Runs `mise run test-smoke` once per push (not per ref) over the pushed
-# ranges: syntax check of changed shell files, the bats files mapped from
-# them, and `pytest -m smoke`, under a 60s budget (PRE_PUSH_SMOKE_BUDGET).
-# The full suite runs in CI (.github/workflows/test.yml, non-blocking);
-# PRE_PUSH_FULL_TEST=1 runs it here instead.
+# Off by default (#2054): `git push` / `git sync` run no tests. The full
+# suite gates PR creation instead (`mise run pr-gate`, called from
+# shell-common/functions/gh_pr_lint.sh) and runs non-blocking in CI
+# (.github/workflows/test.yml). Opt in per push:
+#   PRE_PUSH_TEST=1       `mise run test-smoke` over the pushed ranges:
+#                         syntax check of changed shell files, the bats
+#                         files mapped from them, and `pytest -m smoke`,
+#                         under a 60s budget (PRE_PUSH_SMOKE_BUDGET).
+#   PRE_PUSH_FULL_TEST=1  the full `mise run test` (wins over the above).
+# Once opted in it runs once per push (not per ref); failure aborts it.
 #
-# Three escape paths, all logged:
+# Escape paths once opted in, all logged:
 #   SKIP_LOCAL_PYTEST=1   opt-out for WIP / intentional-failure pushes.
 #   mise missing          silent skip with one stderr note for external
 #                         contributors and bare-metal environments.
@@ -104,24 +111,23 @@ while read -r _ local_sha _ remote_sha; do
     smoke_ranges="${smoke_ranges:+${smoke_ranges} }$(_resolve_scan_range "${local_sha}" "${remote_sha}")"
 done <<<"${PUSH_REFS}"
 
-test_task="test-smoke"
+test_task=""
+[ "${PRE_PUSH_TEST:-0}" = "1" ] && test_task="test-smoke"
 [ "${PRE_PUSH_FULL_TEST:-0}" = "1" ] && test_task="test"
-case "${SKIP_LOCAL_PYTEST:-0}" in
-1)
+
+if [ -z "${test_task}" ]; then
+    printf '[pre-push] tests skipped (run at PR creation; PRE_PUSH_TEST=1 smoke / PRE_PUSH_FULL_TEST=1 full)\n' >&2
+elif [ "${SKIP_LOCAL_PYTEST:-0}" = "1" ]; then
     printf '[pre-push] SKIP_LOCAL_PYTEST=1 — skip mise run %s\n' "${test_task}" >&2
-    ;;
-*)
-    if command -v mise >/dev/null 2>&1; then
-        printf '[pre-push] mise run %s (PRE_PUSH_FULL_TEST=1 for the full suite, SKIP_LOCAL_PYTEST=1 to bypass)\n' "${test_task}" >&2
-        if ! PRE_PUSH_SMOKE_RANGES="${smoke_ranges}" mise run "${test_task}" </dev/null; then
-            printf '[pre-push] mise run %s FAIL — push aborted\n' "${test_task}" >&2
-            exit 1
-        fi
-    else
-        printf '[pre-push] mise unavailable — skip mise run %s (CI fallback / external contributor)\n' "${test_task}" >&2
+elif ! command -v mise >/dev/null 2>&1; then
+    printf '[pre-push] mise unavailable — skip mise run %s (CI fallback / external contributor)\n' "${test_task}" >&2
+else
+    printf '[pre-push] mise run %s (SKIP_LOCAL_PYTEST=1 to bypass)\n' "${test_task}" >&2
+    if ! PRE_PUSH_SMOKE_RANGES="${smoke_ranges}" mise run "${test_task}" </dev/null; then
+        printf '[pre-push] mise run %s FAIL — push aborted\n' "${test_task}" >&2
+        exit 1
     fi
-    ;;
-esac
+fi
 
 # ============================================
 # Leak guard activation decision (F-1)

@@ -52,13 +52,15 @@ real file as `<name>.original` and warns; re-install that tool afterwards
 Regression: `git/tests/test_hooks.sh` (delegation + no-op) and
 `tests/bats/git/test_global_hooks.bats` (SSOT, setup.sh linking, hook_check).
 
-# Local Smoke (issues #754, #2046)
+# Local Tests (issues #754, #2046, #2054)
 
-`hooks/pre-push` Layer 0 runs `mise run test-smoke` (`scripts/test_smoke.sh`)
-once per push over the push range: changed-shell `bash -n`/`zsh -n`, the bats
-files mapped from changed paths, `pytest -m smoke`, under a 60s budget
-(overrun = warn, not fail; `not ok` seen before the cut still fails). Full `mise run test` runs non-blocking in CI
-(`.github/workflows/test.yml`) or locally with `PRE_PUSH_FULL_TEST=1`.
+`hooks/pre-push` Layer 0 is off by default: push / `git sync` run no tests.
+The full suite gates PR creation (`mise run pr-gate`, called from
+`shell-common/functions/gh_pr_lint.sh`; bypass `GH_PR_TEST_BYPASS=1`) and
+runs non-blocking in CI (`.github/workflows/test.yml`). Opt in per push:
+`PRE_PUSH_TEST=1` runs `mise run test-smoke` (`scripts/test_smoke.sh`) over
+the push range — changed-shell `bash -n`/`zsh -n`, mapped bats,
+`pytest -m smoke`, 60s budget; `PRE_PUSH_FULL_TEST=1` runs `mise run test`.
 Bypass: `SKIP_LOCAL_PYTEST=1`; mise missing = silent skip. SSOT:
 `docs/.ssot/local-test-policy.md`. Regression:
 `tests/bats/git/test_pre_push_pytest.bats`, `tests/bats/scripts/test_smoke.bats`.
@@ -87,7 +89,7 @@ dry-run check and tests: [doc/LEAK_GUARD.md](./doc/LEAK_GUARD.md).
 - **[Hook Setup Script](./setup.sh)** — Symlinks and hook installation logic (called by root `./setup.sh`)
 - **[Global Hooks](./global-hooks)** — User-level wrappers installed at `core.hooksPath`; `pre-commit` also runs universal checks, the rest delegate only
 - **[Project Hook](./hooks/pre-commit)** — Project-level runner that delegates to checks
-- **[Pre-push Hook](./hooks/pre-push)** — Test smoke + protected-branch (master, release/*) + upstream leak-guard layers
+- **[Pre-push Hook](./hooks/pre-push)** — Opt-in test smoke (off by default, #2054) + protected-branch (master, release/*) + upstream leak-guard layers
 - **[Hook Checks](./hooks/checks)** — Modular checks executed by the project hook; `shellcheck_check.sh` mirrors `mise run lint-sh` (bash/, shell-common/: CI flags; other shell files: `-S error`; zsh skipped) so it is never stricter than CI (#2014)
 - **[Hook Configuration](./config/hook-config.sh)** — Regex patterns, thresholds, and shared constants
 - **[Pre-push Rules](./config/pre-push-rules.sh)** — Protected branches + leak-guard SSOT
