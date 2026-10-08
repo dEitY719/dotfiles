@@ -39,6 +39,7 @@ rg "fzf 피커" docs/guide/commands/
 - [gbr](./gbr.md)
 - [gc](./gc.md)
 - [gcp](./gcp.md)
+- [gh-project-pat](./gh-project-pat.md)
 - [ghostty](./ghostty.md)
 - [git](./git.md)
 - [gpu](./gpu.md)
