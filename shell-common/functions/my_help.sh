@@ -171,7 +171,7 @@ _register_default_help_categories() {
     HELP_CATEGORIES[system]="${HELP_CATEGORIES[system]:-System tools (directory navigation, opencode)}"
 
     # Category membership (space-separated topic keys)
-    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool ghes_mirror mirror_pages_activate}"
+    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool ghes_mirror mirror_pages_activate gh_project_pat}"
     HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check window sync_to_deploy}"
     HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc agy codex graphify hermes litellm ollama claude_plugins claude_skills_marketplace superpowers llm_wiki}"
     HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux herdr del_file}"
@@ -287,6 +287,7 @@ _register_default_help_descriptions() {
     # that previously slipped through the registry.
     HELP_DESCRIPTIONS[ghes_mirror_help]="${HELP_DESCRIPTIONS[ghes_mirror_help]:-[Development] Mirror public GitHub repo to internal GHES instance}"
     HELP_DESCRIPTIONS[mirror_pages_activate_help]="${HELP_DESCRIPTIONS[mirror_pages_activate_help]:-[Development] Activate GHE Pages + replace upstream URLs in README}"
+    HELP_DESCRIPTIONS[gh_project_pat_help]="${HELP_DESCRIPTIONS[gh_project_pat_help]:-[Development] PROJECT_BOARD_PAT guide + multi-repo secret set/status}"
     HELP_DESCRIPTIONS[gh_flow_help]="${HELP_DESCRIPTIONS[gh_flow_help]:-[Development] gh-flow issue/PR worker pipeline}"
     HELP_DESCRIPTIONS[gh_pr_review_help]="${HELP_DESCRIPTIONS[gh_pr_review_help]:-[Development] gh-pr-review external-AI review delegation}"
     HELP_DESCRIPTIONS[gh_pr_reply_help]="${HELP_DESCRIPTIONS[gh_pr_reply_help]:-[Development] gh-pr-reply review-comment handler}"
@@ -878,6 +879,7 @@ _my_help_func_registry() {
         "gh_audit_builtin_workflows	Audit built-in GitHub workflows" \
         "ghes_mirror	Mirror a public repo to an internal GHES instance" \
         "mirror_pages_activate	Activate GHE Pages and rewrite upstream URLs" \
+        "gh_project_pat	PROJECT_BOARD_PAT guide + multi-repo secret set/status" \
         "claude_skills_marketplace	Claude skills marketplace manager" \
         "skill_loader	Load skills into an agent harness" \
         "aicron	Scheduled AI job manager" \
