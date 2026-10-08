@@ -16,10 +16,7 @@ _gh_project_pat_render() {
     tab=$(printf '\t')
     while IFS="$tab" read -r kind a b c; do
         case "$kind" in
-            host) ux_info "host: $a" ;;
-            owner) ux_info "owner: $a" ;;
-            secret) ux_info "secret: $a" ;;
-            mode) ux_info "mode: $a" ;;
+            host | owner | secret | mode) ux_info "$kind: $a" ;;
             target) ux_bullet "$a" ;;
             count) ux_info "대상 저장소: $a 개" ;;
             result)
@@ -45,18 +42,6 @@ $1
 EOF
 }
 
-# Succeed when "$@" already carries --host (else the caller resolves one).
-_gh_project_pat_has_host() {
-    while [ $# -gt 0 ]; do
-        case "$1" in
-            --host) return 0 ;;
-            --host=*) return 0 ;;
-        esac
-        shift
-    done
-    return 1
-}
-
 # Print field 2 of every record of kind $1 in helper output $2.
 _gh_project_pat_field() {
     printf '%s\n' "$2" | awk -F '\t' -v k="$1" '$1 == k { print $2 }'
@@ -65,18 +50,15 @@ _gh_project_pat_field() {
 _gh_project_pat_guide() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local host=""
-    local host_set=0
     while [ $# -gt 0 ]; do
         case "$1" in
             --host)
                 [ $# -ge 2 ] || { ux_error "--host 값이 필요합니다"; return 2; }
                 host="$2"
-                host_set=1
                 shift 2
                 ;;
             --host=*)
                 host="${1#--host=}"
-                host_set=1
                 shift
                 ;;
             *)
@@ -84,11 +66,8 @@ _gh_project_pat_guide() {
                 return 2
                 ;;
         esac
+        [ -n "$host" ] || { ux_error "--host 값이 비어 있습니다"; return 2; }
     done
-    if [ "$host_set" = 1 ] && [ -z "$host" ]; then
-        ux_error "--host 값이 비어 있습니다"
-        return 2
-    fi
     [ -n "$host" ] || host=$(_gh_resolve_host)
     ux_header "PROJECT_BOARD_PAT 생성 (classic PAT, $host)"
     _gh_project_pat_help_rows_guide "$host"
@@ -125,11 +104,9 @@ gh_project_pat() {
         return $?
     }
 
-    command -v python3 >/dev/null 2>&1 || {
-        ux_error "python3 not found"
-        return 1
-    }
-    _gh_project_pat_has_host "$@" || set -- --host "$(_gh_resolve_host)" "$@"
+    ux_require python3 "python3 not found" || return 1
+    # argparse keeps the last --host, so a user-given one overrides this default.
+    set -- --host "$(_gh_resolve_host)" "$@"
     out=$(python3 "$helper" "$sub" "$@")
     rc=$?
     _gh_project_pat_render "$out"
