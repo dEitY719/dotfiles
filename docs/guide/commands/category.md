@@ -27,7 +27,7 @@
 - **AI/LLM (12)** — claude, cc, agy, codex, graphify, +7 more
 - **CLI Utilities (12)** — fzf, fd, fasd, ripgrep, pet, +7 more
 - **Configuration (6)** — p10k, crt, apt, pip, ghostty, +1 more
-- **Development (17)** — git, gwt, gbr, devx, uv, +12 more
+- **Development (18)** — git, gwt, gbr, devx, uv, +13 more
 - **DevOps/Infra (13)** — docker, dproxy, sys, proxy, ssl, +8 more
 - **Documentation (5)** — dot, show_doc, notion, work_log, work
 - **Meta/Help (2)** — category, register

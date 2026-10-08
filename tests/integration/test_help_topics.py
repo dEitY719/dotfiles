@@ -37,6 +37,7 @@ HELP_TOPICS = [
     "fd_help",
     "fzf_help",
     "gc_help",
+    "gh_project_pat_help",
     "git_help",
     "gwt_help",
     "gpu_help",
