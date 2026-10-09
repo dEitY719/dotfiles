@@ -263,8 +263,8 @@ teardown() {
 # only `gh_host.sh` (NOT the integrations layer that defines
 # `_dotfiles_setup_mode`). Before #718 this path always returned
 # `github.com`, masking `internal` PCs' GHE host and breaking the post-PR
-# board-sync regex. The fix adds a `~/.dotfiles-setup-mode` file fallback,
-# tested here with a clean `env -i` bash so neither the function nor any
+# board-sync regex. gh_host.sh now sources util/setup_mode_read.sh from its
+# own shell-common (#1810 F1), tested here with a clean `env -i` bash so neither the function nor any
 # parent-shell env can leak in.
 # ---------------------------------------------------------------------------
 

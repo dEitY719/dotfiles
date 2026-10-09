@@ -196,11 +196,56 @@ _setup_mode_raw_reads() {
     fi
 }
 
-# get_setup_mode() in setup_mode_help.sh is a *diagnostic* that must echo the
-# file verbatim — showing the user what is actually on disk is its whole job.
-# It is the only allowlisted raw reader, so pin that it stays one file.
+# show_setup_mode() in setup_mode_help.sh prints the file verbatim next to the
+# canonical mode — showing the user what is actually on disk is the point of
+# that one line. It is the only allowlisted raw reader, so pin that it stays one.
 @test "guard: setup_mode_help.sh is the only allowlisted raw reader" {
     run grep -c 'cat "\$setup_mode_file"' "${DOTFILES_ROOT}/shell-common/functions/setup_mode_help.sh"
     assert_success
     assert_output "1"
+}
+
+# Every code line that names ~/.dotfiles-setup-mode outside the SSOT. The
+# writer (shell-common/setup.sh, an `echo ... >` line) and messages are
+# filtered by _setup_mode_code_lines; what is left would be a reader copy.
+@test "guard: only the SSOT (and the show_setup_mode display) names the mode file" {
+    local hits
+    hits="$(_setup_mode_code_lines | grep -E '[$][{]?HOME[}]?/[.]dotfiles-setup-mode' |
+        grep -v '/shell-common/util/setup_mode_read.sh:' |
+        grep -v '/shell-common/functions/setup_mode_help.sh:')" || true
+    if [ -n "$hits" ]; then
+        printf 'inline ~/.dotfiles-setup-mode readers (source util/setup_mode_read.sh):\n%s\n' "$hits"
+        return 1
+    fi
+}
+
+# --- setup_mode_help.sh: show-setup-mode uses the SSOT ----------------------
+#
+# get_setup_mode used a raw `cat`, so a CRLF or trailing-space file showed
+# "Not configured" while every other reader said internal.
+
+@test "get_setup_mode_name: CRLF + trailing space file is still internal" {
+    printf 'internal \r\n' > "$HOME/.dotfiles-setup-mode"
+    run_in_bash 'get_setup_mode; get_setup_mode_name'
+    assert_success
+    assert_output "internal
+Internal company PC (Direct connection)"
+}
+
+@test "get_setup_mode: legacy numeric 3 is canonicalised; missing file is none" {
+    printf '3\n' > "$HOME/.dotfiles-setup-mode"
+    run_in_bash 'get_setup_mode'
+    assert_output "external"
+    rm -f "$HOME/.dotfiles-setup-mode"
+    run_in_bash 'get_setup_mode'
+    assert_failure
+    assert_output "none"
+}
+
+@test "zsh: get_setup_mode_name on a CRLF file is internal" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh is not installed"
+    printf 'internal\r\n' > "$HOME/.dotfiles-setup-mode"
+    run_in_zsh 'get_setup_mode_name'
+    assert_success
+    assert_output "Internal company PC (Direct connection)"
 }

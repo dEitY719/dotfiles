@@ -31,6 +31,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # runs stay byte-plain for grep/snapshot consumers (#1116); a missing lib
 # also falls back to plain. ux_lib.sh self-disables on
 # NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE as well.
+# Setup-mode reader SSOT (#1810); guard-free pure lib, see _public_publish_allowed.
+# shellcheck source=../../shell-common/util/setup_mode_read.sh
+[ -r "$SCRIPT_DIR/../../shell-common/util/setup_mode_read.sh" ] &&
+	. "$SCRIPT_DIR/../../shell-common/util/setup_mode_read.sh"
+
 UX_LIB="$SCRIPT_DIR/../../shell-common/tools/ux_lib/ux_lib.sh"
 if [ -t 1 ] && [ -r "$UX_LIB" ]; then
 	# shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
@@ -550,27 +555,13 @@ _cleanup_local_main_if_pure_sync() {
 # repo from an internal PC (#1080). The company/ GHES repo is unaffected
 # (its own `[ -d "$PRIV_DIR/.git" ]` gate already scopes it to internal).
 #
-# Reads ~/.dotfiles-setup-mode directly (like restore.sh — this is a
-# stand-alone script, not sourced with the shell-common integration layer),
-# canonicalizing the legacy numeric values 1/2/3 exactly as
-# shell-common/functions/gh_host.sh does so the two agree. A missing/unknown
-# mode falls through to "allowed" (github.com), matching gh_host.sh's
-# regression-zero fail-safe.
+# Mode comes from the reader SSOT (shell-common/util/setup_mode_read.sh,
+# sourced at the top of this file), the same canonicalisation gh_host.sh uses.
+# A missing/unknown mode — or an unreachable lib — falls through to
+# "allowed" (github.com), matching gh_host.sh's regression-zero fail-safe.
 _public_publish_allowed() {
 	local mode=""
-	# Guard the read with `[ -f ]` (like gh_host.sh): a bare `<missing-file`
-	# redirection leaks "bash: …: No such file or directory" to the real
-	# stderr even with `2>/dev/null` on the command, since the redirection
-	# failure is reported by the shell, not `tr`. A missing file means "no
-	# mode set" → github.com default (allowed).
-	if [ -f "$HOME/.dotfiles-setup-mode" ]; then
-		mode=$(tr -d ' \t\n\r' <"$HOME/.dotfiles-setup-mode" 2>/dev/null || echo "")
-	fi
-	case "$mode" in
-	1) mode="public" ;;
-	2) mode="internal" ;;
-	3) mode="external" ;;
-	esac
+	command -v _dotfiles_setup_mode >/dev/null 2>&1 && mode=$(_dotfiles_setup_mode)
 	[ "$mode" != "internal" ]
 }
 

@@ -20,18 +20,16 @@ HERDR_INSTALL_URL="${HERDR_INSTALL_URL:-https://herdr.dev/install.sh}"
 HERDR_RELEASE_BASE="https://github.com/ogulcancelik/herdr/releases"
 HERDR_BIN="${HOME}/.local/bin/herdr"
 
-# Read ~/.dotfiles-setup-mode: trim stray whitespace/newline, and fall back to
-# public when the file does not exist yet. Legacy numeric values (1|2|3,
-# written by pre-#571 setup.sh) are passed straight through to the case below.
-#
-# Same trim as claude.sh's _dotfiles_setup_mode, kept local rather than sourcing
-# that file for one function. The repo has ~9 such copies, so hoisting one
-# canonicaliser into a shared lib is its own change, not this one.
+# Setup-mode reader SSOT (#1810): canonical public|internal|external.
+. "$(dirname "$0")/../../util/setup_mode_read.sh" || exit 1
+
+# Current mode, defaulting to public before setup.sh has written one.
 herdr_setup_mode() {
-    tr -d ' \t\n\r' 2>/dev/null < "$HOME/.dotfiles-setup-mode" || echo public
+    _hsm=$(_dotfiles_setup_mode)
+    echo "${_hsm:-public}"
 }
 
-# internal (legacy 2) -> release binary; everything else -> installer.
+# internal (or legacy 2) -> release binary; everything else -> installer.
 herdr_install_method() {
     case "$1" in
         2|internal) echo "release" ;;

@@ -14,18 +14,25 @@ if ! type ux_header >/dev/null 2>&1; then
 fi
 
 # ============================================================
-# Get current setup mode
+# Get current setup mode (canonical public|internal|external, or the raw
+# unknown value). "none" + rc 1 when the file is missing.
 # ============================================================
+if ! command -v _dotfiles_setup_mode >/dev/null 2>&1; then
+    _smh_read_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
+    # shellcheck disable=SC1090
+    [ -r "$_smh_read_lib" ] && . "$_smh_read_lib"
+    unset _smh_read_lib
+fi
+
 get_setup_mode() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local setup_mode_file="$HOME/.dotfiles-setup-mode"
-
-    if [ ! -f "$setup_mode_file" ]; then
+    local mode
+    mode=$(_dotfiles_setup_mode 2>/dev/null)
+    if [ -z "$mode" ]; then
         echo "none"
         return 1
     fi
-
-    cat "$setup_mode_file" 2>/dev/null || echo "none"
+    echo "$mode"
 }
 
 # ============================================================
@@ -37,9 +44,9 @@ get_setup_mode_name() {
     mode=$(get_setup_mode)
 
     case "$mode" in
-        1|public) echo "Public PC (Home environment)" ;;
-        2|internal) echo "Internal company PC (Direct connection)" ;;
-        3|external) echo "External company PC (VPN)" ;;
+        public) echo "Public PC (Home environment)" ;;
+        internal) echo "Internal company PC (Direct connection)" ;;
+        external) echo "External company PC (VPN)" ;;
         *) echo "Not configured" ;;
     esac
 }
@@ -64,24 +71,26 @@ show_setup_mode() {
     mode_name=$(get_setup_mode_name)
 
     case "$mode" in
-        1|public)
+        public)
             ux_success "Mode 1: $mode_name"
             ux_info "Expected: No proxy, No company configurations"
             ;;
-        2|internal)
+        internal)
             ux_success "Mode 2: $mode_name"
             ux_info "Expected: Company proxy enabled (http_proxy from shell-common/env/proxy.local.sh)"
             ux_info "Expected: All company configurations (.local.sh files) enabled"
             ;;
-        3|external)
+        external)
             ux_success "Mode 3: $mode_name"
             ux_info "Expected: No proxy, Only VPN certificate configurations"
             ;;
     esac
 
+    local setup_mode_file="$HOME/.dotfiles-setup-mode"
     ux_section "Setup Mode File"
     ux_bullet "Path: ~/.dotfiles-setup-mode"
-    ux_bullet "Content: $mode"
+    # Raw bytes on purpose: this line exists to show what is really on disk.
+    ux_bullet "Content: $(cat "$setup_mode_file" 2>/dev/null)"
 }
 
 # ============================================================

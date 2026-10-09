@@ -125,14 +125,20 @@ _drift_keys=""
 [ "$_drift_statusline" -eq 1 ] && _drift_keys="${_drift_keys:+${_drift_keys}, }.statusLine"
 [ "$_drift_plugdirs" -eq 1 ] && _drift_keys="${_drift_keys:+${_drift_keys}, }.env.CLAUDE_CODE_PLUGIN_DIRS"
 
-# --- Mode detection (same canonicalisation the rest of the repo uses) -------
+# --- Mode detection via the reader SSOT (#1810) ------------------------------
+# Same resolution order as session-start-pc-context.sh: this hook's real
+# location first, then the shell-common conventions. No lib → mode stays ""
+# and the hook degrades to advisory-only.
 _mode=""
-if [ -f "$HOME/.dotfiles-setup-mode" ]; then
-	_raw=$(tr -d ' \t\n\r' <"$HOME/.dotfiles-setup-mode" 2>/dev/null)
-	case "$_raw" in
-	2 | internal) _mode="internal" ;;
-	esac
-fi
+_self=$(readlink -f "$0" 2>/dev/null) || _self="$0"
+for _sc in "${_self%/*}/../../shell-common" "${SHELL_COMMON:-}" "${DOTFILES_ROOT:-}/shell-common" "$HOME/dotfiles/shell-common"; do
+	if [ -r "$_sc/util/setup_mode_read.sh" ]; then
+		# shellcheck disable=SC1091
+		. "$_sc/util/setup_mode_read.sh"
+		_mode=$(_dotfiles_setup_mode)
+		break
+	fi
+done
 
 # --- Internal mode: auto-heal the two dotfiles-owned keys in place ---------
 _healed=0
