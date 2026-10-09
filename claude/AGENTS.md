@@ -139,6 +139,8 @@ symlink 였던 구 레이아웃은 Claude Code `/model` 이 tracked SSOT 를 wri
 
 `claude/hooks/bash_stdin_repl_guard.py` — 같은 `PreToolUse:Bash` 항목의 두 번째 훅(#1815). **인자 없는 인터프리터 호출**(`python`/`python3`/`python3.X`/경로형, `node`, `ruby`, `irb`, `lua`)을 명령어 위치에서, stdin 리다이렉트(`<` `<<` `<<<`) 없이, 파이프 오른쪽이 아닐 때만 거절한다 — Bash 도구는 stdin 을 열어 두므로 EOF 가 오지 않아 영원히 대기한다(brokerdesk PR #78 실측 64분). 뒤따르는 출력 리다이렉트(`2>/dev/null`)만으로는 인자로 치지 않는다. 끝의 `&` 도 면제가 아니다: bash 는 async job 에 `/dev/null` 을 주지만 zsh 는 열린 stdin 을 그대로 물려준다(실측). 따옴표·주석·heredoc 본문은 명령으로 보지 않는다. `bun`/`deno` 는 v1 제외. **규칙을 넓히지 말 것** — 오탐 신고는 `tests/integration/test_bash_stdin_repl_guard.py` 의 ALLOWED 표에 추가하고 규칙을 좁힌다. 재작성(`updatedInput`)이 아니라 deny 인 이유: 재작성은 `permissionDecision:"allow"` 를 동반해 모든 Bash 권한 확인을 건너뛴다. 탈출구 `BASH_STDIN_REPL_GUARD_BYPASS=1`, 트레이스 `BASH_STDIN_REPL_GUARD_TRACE=1`. fail-open, 항상 exit 0.
 
+`claude/hooks/_hook_common.py` — Stop 가드 3종(`gh_issue_flow_stop_guard.py` / `devx_autopilot_stop_guard.py` / `skill_completion_guard.py`)이 공유하는 stdlib 전용 헬퍼(`load_transcript`, `message_payload`, `line_anchored_alternation`). 훅은 settings.json 의 `${HOME}/dotfiles/...` 경로(symlink 일 수 있음)로 실행되므로 각 훅이 `sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))` 로 **실제 위치**에서 import 한다 — 계정 디렉터리에 개별 링크가 없으니 매니페스트 갱신은 불필요. import 실패 시 `sys.exit(0)` 로 fail-open. 테스트: `tests/integration/test_hook_common.py`, `test_hook_symlink_invocation.py`.
+
 ---
 
 ## Plugin Manifest (claude/plugin/)

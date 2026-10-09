@@ -48,6 +48,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Shared helpers live next to this file's *real* location: settings.json may
+# run it through a symlinked checkout. Missing helpers fail open (exit 0 =
+# allow the stop) — a Stop hook must never trap the session.
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+try:
+    import _hook_common  # noqa: E402
+except ImportError:
+    sys.exit(0)
+
+_load_transcript = _hook_common.load_transcript
+_message_payload = _hook_common.message_payload
+
 try:
     import yaml  # type: ignore[import-untyped]
 except ImportError:  # pragma: no cover — PyYAML is in dev deps; this is a defensive fallback
@@ -284,32 +296,6 @@ def _iter_skill_uses(message: dict[str, Any]) -> list[str]:
         if isinstance(skill, str):
             out.append(skill)
     return out
-
-
-def _load_transcript(path: Path) -> list[dict[str, Any]]:
-    """Best-effort JSONL load. Skips malformed lines, never raises."""
-    out: list[dict[str, Any]] = []
-    try:
-        with path.open(encoding="utf-8", errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(obj, dict):
-                    out.append(obj)
-    except OSError:
-        return []
-    return out
-
-
-def _message_payload(entry: dict[str, Any]) -> dict[str, Any]:
-    """Return the inner `message` dict if present, else the entry itself."""
-    inner = entry.get("message")
-    return inner if isinstance(inner, dict) else entry
 
 
 def _normalize_skill(name: str) -> str:
