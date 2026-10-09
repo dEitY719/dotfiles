@@ -114,7 +114,8 @@ check_ssh_copy() {
 check_ssh_link() {
     ux_header "3. SSH Config Symlink"
 
-    local dotfiles_config="${DOTFILES_ROOT}/ssh/config"
+    local dotfiles_config
+    dotfiles_config="$(cd "$DOTFILES_ROOT" && pwd -P)/ssh/config" # same physical path ssh/setup.sh links
     local ssh_config_link="${WSL_SSH_DIR}/config"
 
     ux_section "Status"
