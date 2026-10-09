@@ -45,14 +45,14 @@ installer
 installer"
 }
 
-@test "herdr_setup_mode: trims stray whitespace and the trailing newline" {
-    printf ' 2 \n' > "$HOME/.dotfiles-setup-mode"
+@test "herdr_setup_mode: trims whitespace and canonicalises legacy 2 to internal" {
+    printf ' 2 \r\n' > "$HOME/.dotfiles-setup-mode"
     run_herdr_tool '
         printf "[%s]\n" "$(herdr_setup_mode)"
         herdr_install_method "$(herdr_setup_mode)"
     '
     assert_success
-    assert_output "[2]
+    assert_output "[internal]
 release"
 }
 

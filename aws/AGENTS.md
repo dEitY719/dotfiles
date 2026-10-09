@@ -70,6 +70,6 @@
 ## 관련
 
 - 이슈: #677
-- SSOT 모드 헬퍼: `_dotfiles_setup_mode` (정의 위치: `shell-common/tools/integrations/claude.sh`)
+- SSOT 모드 헬퍼: `_dotfiles_setup_mode` (정의 위치: `shell-common/util/setup_mode_read.sh`, aws 스크립트 3종이 직접 source)
 - 유사 패턴: `shell-common/env/proxy.local.example` → `proxy.local.sh`
 - CLAUDE.md 정책: POSIX 호환, 인터랙티브 가드, `bash/main.bash` 직접 수정 금지

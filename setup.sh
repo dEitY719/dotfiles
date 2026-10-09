@@ -140,11 +140,13 @@ _setup_resolve_choice() {
     "") ;;
     *) ux_error "DOTFILES_SETUP_CHOICE 는 1|2|3 이어야 합니다 (현재: ${DOTFILES_SETUP_CHOICE})" && return 1 ;;
     esac
-    [ -f "$HOME/.dotfiles-setup-mode" ] && saved=$(tr -d ' \t\r\n' <"$HOME/.dotfiles-setup-mode")
+    # shellcheck source=shell-common/util/setup_mode_read.sh
+    . "${DOTFILES_DIR}/shell-common/util/setup_mode_read.sh"
+    saved=$(_dotfiles_setup_mode)
     case "$saved" in
-    1 | public) def=1 ;;
-    2 | internal) def=2 ;;
-    3 | external) def=3 ;;
+    public) def=1 ;;
+    internal) def=2 ;;
+    external) def=3 ;;
     esac
     if [ ! -t 0 ]; then
         [ -n "$def" ] && SETUP_CHOICE="$def" && return 0

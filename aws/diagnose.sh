@@ -77,16 +77,14 @@ header(){ printf "\n${CYAN}${BOLD}── %s ──${NC}\n" "$1"; }
 # ---------------------------------------------------------------------------
 # Setup-mode warning (diagnose 는 read-only 이므로 강제 차단 대신 경고만)
 # ---------------------------------------------------------------------------
-_mode_file="$HOME/.dotfiles-setup-mode"
-if [ -f "$_mode_file" ]; then
-    _mode_raw=$(tr -d ' \t\n\r' < "$_mode_file" 2>/dev/null || echo "")
-    case "$_mode_raw" in
-        2|internal) ;;
-        *) printf '\n%s%sNOTE%s: setup-mode='\''%s'\'' — internal 전용 항목 일부가 FAIL 로 보고될 수 있습니다.\n' "$YELLOW" "$BOLD" "$NC" "$_mode_raw" ;;
-    esac
-else
-    printf '\n%s%sNOTE%s: ~/.dotfiles-setup-mode 없음 — '\''./setup.sh'\'' 미수행 가능성.\n' "$YELLOW" "$BOLD" "$NC"
-fi
+# shellcheck source=../shell-common/util/setup_mode_read.sh
+. "$(cd "$(dirname "$0")" && pwd)/../shell-common/util/setup_mode_read.sh" 2>/dev/null
+_mode=$(_dotfiles_setup_mode 2>/dev/null)
+case "$_mode" in
+    internal) ;;
+    "") printf '\n%s%sNOTE%s: ~/.dotfiles-setup-mode 없음 — '\''./setup.sh'\'' 미수행 가능성.\n' "$YELLOW" "$BOLD" "$NC" ;;
+    *) printf '\n%s%sNOTE%s: setup-mode='\''%s'\'' — internal 전용 항목 일부가 FAIL 로 보고될 수 있습니다.\n' "$YELLOW" "$BOLD" "$NC" "$_mode" ;;
+esac
 
 # ---------------------------------------------------------------------------
 # Dotfiles env file paths — 본 dotfiles 는 ~/.bashrc 가 아닌 별도 로컬

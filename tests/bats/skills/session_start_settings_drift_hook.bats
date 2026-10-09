@@ -350,3 +350,36 @@ JSON
     assert_success
     [ ! -e "$HOME/.claude-backups/settings.json.pre-drift-heal.backup" ]
 }
+
+# --- reader SSOT resolution (#1810 F1) ----------------------------------------
+# Mode comes from shell-common/util/setup_mode_read.sh. Legacy numeric "2" with
+# CRLF must still heal; an unreachable lib degrades to advisory, never a failure.
+
+@test "settings-drift: legacy '2' + CRLF mode file is internal (heals)" {
+    printf '2\r\n' >"$HOME/.dotfiles-setup-mode"
+    cat >"$LIVE_DIR/settings.json" <<'JSON'
+{ "hooks": { "SessionStart": [ { "hooks": [
+  { "type": "command", "command": "a.sh" }
+] } ] } }
+JSON
+    _run_hook
+    assert_success
+    ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+    [[ "$ctx" == *"auto-corrected"* ]]
+}
+
+@test "settings-drift: lib unreachable (copied hook, no SHELL_COMMON) → advisory only, exit 0" {
+    printf 'internal' >"$HOME/.dotfiles-setup-mode"
+    cat >"$LIVE_DIR/settings.json" <<'JSON'
+{ "hooks": { "SessionStart": [ { "hooks": [
+  { "type": "command", "command": "a.sh" }
+] } ] } }
+JSON
+    run env -i HOME="$HOME" PATH="$PATH" CLAUDE_CONFIG_DIR="$LIVE_DIR" bash -c \
+        "printf '{\"hook_event_name\":\"SessionStart\"}' | '$HOOK' 2>/dev/null"
+    assert_success
+    ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+    [[ "$ctx" == *"./setup.sh"* ]]
+    run jq -r '[.hooks.SessionStart[0].hooks[].command] | join(",")' "$LIVE_DIR/settings.json"
+    [ "$output" = "a.sh" ]
+}

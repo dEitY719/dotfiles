@@ -19,20 +19,23 @@
 
 set -u
 
-# Canonicalize the same way `_dotfiles_setup_mode()` does
-# (shell-common/tools/integrations/claude.sh) — legacy numeric values 1/2/3
-# from pre-#571 setup.sh map to public/internal/external. Duplicated inline
-# rather than sourced: shell-common files carry the interactive guard
-# (`case $- in *i*) ;; *) return 0 ;; esac`) that would make sourcing them
-# here a no-op, since this hook always runs non-interactively.
-_mode_file="$HOME/.dotfiles-setup-mode"
-[ -f "$_mode_file" ] || exit 0
-
-_raw=$(tr -d ' \t\n\r' <"$_mode_file" 2>/dev/null)
-case "$_raw" in
-1 | public) _mode="public" ;;
-2 | internal) _mode="internal" ;;
-3 | external) _mode="external" ;;
+# Setup-mode reader SSOT (#1810). Resolved from this hook's real location
+# (settings.json registers ~/dotfiles/claude/hooks/..., which may be a symlink
+# or a different checkout), then the usual shell-common conventions. The lib
+# has no interactive guard, so sourcing it here defines the function. No lib
+# or an unrecognized mode → silently no context.
+_self=$(readlink -f "$0" 2>/dev/null) || _self="$0"
+for _sc in "${_self%/*}/../../shell-common" "${SHELL_COMMON:-}" "${DOTFILES_ROOT:-}/shell-common" "$HOME/dotfiles/shell-common"; do
+    if [ -r "$_sc/util/setup_mode_read.sh" ]; then
+        # shellcheck disable=SC1091
+        . "$_sc/util/setup_mode_read.sh"
+        break
+    fi
+done
+command -v _dotfiles_setup_mode >/dev/null 2>&1 || exit 0
+_mode=$(_dotfiles_setup_mode)
+case "$_mode" in
+public | internal | external) ;;
 *) exit 0 ;;
 esac
 

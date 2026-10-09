@@ -73,3 +73,35 @@ teardown() {
     assert_output --partial "Dotfiles PC setup-mode: public"
     [[ "$output" != *"hookSpecificOutput"* ]]
 }
+
+# --- reader SSOT resolution (#1810 F1) ----------------------------------------
+# The hook sources shell-common/util/setup_mode_read.sh instead of carrying its
+# own parser. Claude Code runs it with a minimal env (no SHELL_COMMON, not via
+# the interactive loader), so the lib must resolve from the hook's own path.
+
+@test "session-start-pc-context: minimal env (no SHELL_COMMON) still reads CRLF mode" {
+    command -v jq >/dev/null 2>&1 || skip "jq not available"
+    printf 'internal\r\n' >"$HOME/.dotfiles-setup-mode"
+    run env -i HOME="$HOME" PATH="$PATH" "$HOOK"
+    assert_success
+    assert_output --partial 'Dotfiles PC setup-mode: internal'
+}
+
+@test "session-start-pc-context: invoked through a symlink resolves the lib from the real path" {
+    command -v jq >/dev/null 2>&1 || skip "jq not available"
+    printf '2\n' >"$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/linkdir"
+    ln -s "$HOOK" "$HOME/linkdir/pc-context.sh"
+    run env -i HOME="$HOME" PATH="$PATH" "$HOME/linkdir/pc-context.sh"
+    assert_success
+    assert_output --partial 'Dotfiles PC setup-mode: internal'
+}
+
+@test "session-start-pc-context: lib unreachable → silent exit 0, never fails the session" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/iso/claude/hooks"
+    cp "$HOOK" "$HOME/iso/claude/hooks/pc-context.sh"
+    run env -i HOME="$HOME" PATH="$PATH" "$HOME/iso/claude/hooks/pc-context.sh"
+    assert_success
+    [ -z "$output" ]
+}

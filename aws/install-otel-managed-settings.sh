@@ -61,17 +61,15 @@ die() { ux_error "$*"; exit 1; }
 # ---------------------------------------------------------------------------
 # Setup-mode gate — refuse on external/public PCs
 # ---------------------------------------------------------------------------
-_mode_file="$HOME/.dotfiles-setup-mode"
-if [ ! -f "$_mode_file" ]; then
-    die "$_mode_file 없음. 먼저 ./setup.sh 로 internal 모드를 선택하세요."
+# shellcheck source=../shell-common/util/setup_mode_read.sh
+. "${_SCRIPT_DIR}/../shell-common/util/setup_mode_read.sh" ||
+    die "shell-common/util/setup_mode_read.sh 를 읽을 수 없습니다."
+_mode=$(_dotfiles_setup_mode)
+if [ -z "$_mode" ]; then
+    die "setup-mode 파일(~/.dotfiles-setup-mode) 없음. 먼저 ./setup.sh 로 internal 모드를 선택하세요."
 fi
-_mode=$(tr -d ' \t\n\r' < "$_mode_file" 2>/dev/null || echo "")
-case "$_mode" in
-    2|internal) ;;
-    *)
-        die "setup-mode='${_mode:-unset}' — install-otel-managed-settings.sh 는 internal 전용입니다."
-        ;;
-esac
+[ "$_mode" = "internal" ] ||
+    die "setup-mode='${_mode}' — install-otel-managed-settings.sh 는 internal 전용입니다."
 
 ux_section "Claude Code OTel installer (internal mode)"
 

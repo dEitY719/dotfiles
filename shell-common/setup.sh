@@ -905,6 +905,24 @@ main() {
     read -r choice
     echo ""
 
+    # Persist the symbolic mode (not the numeric choice) right after the
+    # selection, before any step can fail under `set -e`: a mid-run failure
+    # used to leave the OLD mode on disk, so the next shell and setup run
+    # defaulted to the wrong environment. Every step below re-runs on the next
+    # ./setup.sh, so writing first keeps setup idempotent. Readers canonicalise
+    # legacy "1|2|3" files (util/setup_mode_read.sh).
+
+    case "$choice" in
+        1) setup_mode="public" ;;
+        2) setup_mode="internal" ;;
+        3) setup_mode="external" ;;
+        *)
+            ux_error "Invalid choice. Please run again and select 1, 2, or 3."
+            exit 1
+            ;;
+    esac
+    echo "$setup_mode" >"$HOME/.dotfiles-setup-mode"
+
     case "$choice" in
         1)
             ux_info "Selected: Public PC"
@@ -918,12 +936,6 @@ main() {
             setup_nuget_config "public"
             setup_rpm_repo "public"
             setup_apt_sources "public"
-            # Persist the symbolic mode (not the numeric choice). Downstream
-            # consumers — claude/setup.sh and claude_yolo (issue #571) —
-            # branch on `public|internal|external`. Legacy "1|2|3" files
-            # are auto-canonicalised by the readers, so the upgrade is
-            # backward-compatible.
-            echo "public" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for public PC (home environment)"
             ux_info "All environment-specific configuration removed"
@@ -951,7 +963,6 @@ main() {
             setup_nuget_config "internal"
             setup_rpm_repo "internal"
             setup_apt_sources "internal"
-            echo "internal" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for internal company PC"
             ux_info "Changes made:"
@@ -989,7 +1000,6 @@ main() {
             setup_nuget_config "external"
             setup_rpm_repo "external"
             setup_apt_sources "external"
-            echo "external" > "$HOME/.dotfiles-setup-mode"
             echo ""
             ux_success "Setup complete for external company PC"
             ux_info "Changes made:"
@@ -1009,10 +1019,6 @@ main() {
             ux_bullet "Option 2 (New shell): exec bash  or  exec zsh"
             ux_bullet "Verify: ssl-help  (or: echo \$SSL_CERT_FILE)"
             echo ""
-            ;;
-        *)
-            ux_error "Invalid choice. Please run again and select 1, 2, or 3."
-            exit 1
             ;;
     esac
 }

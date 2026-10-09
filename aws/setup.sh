@@ -66,25 +66,10 @@ DOTFILES_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=../shell-common/functions/dotfiles_backup.sh
 . "${DOTFILES_DIR}/shell-common/functions/dotfiles_backup.sh"
 
-# ---------------------------------------------------------------------------
-# Setup-mode gate. _dotfiles_setup_mode is defined inside the heavy
-# shell-common/tools/integrations/claude.sh file; inlining the minimal
-# canonicalisation here keeps aws/setup.sh standalone and avoids pulling
-# in unrelated Claude account-resolver code (issue #677 O-3 deferred).
-# ---------------------------------------------------------------------------
-_aws_setup_mode() {
-    _f="$HOME/.dotfiles-setup-mode"
-    [ -f "$_f" ] || { echo ""; return 0; }
-    _raw=$(tr -d ' \t\n\r' < "$_f" 2>/dev/null)
-    case "$_raw" in
-        1|public)   echo "public" ;;
-        2|internal) echo "internal" ;;
-        3|external) echo "external" ;;
-        *)          echo "$_raw" ;;
-    esac
-}
-
-_mode=$(_aws_setup_mode)
+# Setup-mode gate via the reader SSOT (#1810).
+# shellcheck source=../shell-common/util/setup_mode_read.sh
+. "${DOTFILES_DIR}/shell-common/util/setup_mode_read.sh"
+_mode=$(_dotfiles_setup_mode)
 if [ "$_mode" != "internal" ]; then
     ux_info "aws/setup.sh: setup-mode='${_mode:-unset}' — skip (internal-only)"
     exit 0
