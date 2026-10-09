@@ -3103,3 +3103,59 @@ def test_next_step_hint_also_names_the_bare_skill(tmp_path: Path) -> None:
     transcript = _write_transcript(tmp_path, [*_bare_install_boundary(), _assistant_skill("implement")])
     reason = json.loads(_run_hook(_hook_event(transcript)).stdout)["reason"]
     assert "Step 2.2 — Skill(gh-pr-commit) (or Skill(gh-pr:commit), or Skill(commit))" in reason, reason
+
+
+# ---------------------------------------------------------------------------
+# Issue #2066 — the Step 1.5 origin-gate BLOCK report is a terminal marker.
+# The chain never started (0/6 sub-skills), so the hook must not re-prompt
+# Step 2.1 and force the spec the gate just refused.
+# ---------------------------------------------------------------------------
+
+_BLOCK_REPORT = (
+    "gh-flow:issue blocked at Step 1.5 (#143) - origin gate\n"
+    "  origin: Harness(opencode) - untrusted\n"
+    "  violated:\n"
+    "    2. scope - spec edits unrelated files\n"
+    "  no files edited, no commit, no PR.\n"
+)
+
+
+def test_origin_gate_block_report_in_assistant_text_allows_stop(tmp_path: Path) -> None:
+    transcript = _write_transcript(
+        tmp_path,
+        [_user_text("/gh-flow:issue 143"), _assistant_text(_BLOCK_REPORT)],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"Hook blocked a Step 1.5 BLOCK report. stdout={result.stdout!r}"
+
+
+def test_origin_gate_block_report_via_bash_allows_stop(tmp_path: Path) -> None:
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 143"),
+            _assistant_bash("printf 'gh-flow:issue blocked at Step 1.5 (#143) - origin gate\\n'", "toolu_block"),
+            _user_tool_result(_BLOCK_REPORT, "toolu_block"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == "", f"Hook blocked a Bash-emitted BLOCK report. stdout={result.stdout!r}"
+
+
+def test_bash_grep_of_block_marker_does_not_terminate(tmp_path: Path) -> None:
+    """Template-only mention (`<N>` placeholder) or a bare grep echo stays non-terminal."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-flow:issue 143"),
+            _assistant_bash('grep "gh-flow:issue blocked at Step 1.5 (#<N>)" report-template.md', "toolu_g1"),
+            _user_tool_result("gh-flow:issue blocked at Step 1.5 (#<N>) - origin gate\n", "toolu_g1"),
+            _assistant_bash('grep "gh-flow:issue blocked at Step 1.5 (#143)" some.log', "toolu_g2"),
+            _user_tool_result("gh-flow:issue blocked at Step 1.5 (#143) - origin gate\n", "toolu_g2"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["decision"] == "block"
