@@ -121,7 +121,8 @@ _devx_stat() {
 }
 
 # Audit shell-common/functions/*.sh for public *help functions that are
-# missing from HELP_DESCRIPTIONS in my_help.sh. Mirrors the legacy
+# missing from HELP_DESCRIPTIONS in my_help.sh (a HELP_DESCRIPTIONS[...] line or
+# a _register_help row). Mirrors the legacy
 # _check_help_integrity from the deleted tools/dev.sh, ported to POSIX.
 _devx_lint_helpfunc() {
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -159,7 +160,7 @@ _devx_lint_helpfunc() {
             _devx_dash=$(printf '%s' "${_devx_func}" | tr '_' '-')
             _devx_underscore=$(printf '%s' "${_devx_func}" | tr '-' '_')
 
-            if ! grep -Eq "HELP_DESCRIPTIONS\[\"?(${_devx_func}|${_devx_dash}|${_devx_underscore})\"?\]" "${_devx_my_help}" 2>/dev/null; then
+            if ! grep -Eq "(HELP_DESCRIPTIONS\[\"?|_register_help[[:space:]]+)(${_devx_func}|${_devx_dash}|${_devx_underscore})(\"?\]|[[:space:]])" "${_devx_my_help}" 2>/dev/null; then
                 _devx_rel="${_devx_file#"${_devx_root}/"}"
                 _devx_violations="${_devx_violations}  - ${_devx_rel}: '${_devx_func}' not registered in HELP_DESCRIPTIONS
 "

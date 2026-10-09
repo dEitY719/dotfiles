@@ -96,12 +96,25 @@ fi
 # Help Registry Functions
 # ═══════════════════════════════════════════════════════════════
 
-# Register a help function
-# Usage: _register_help "function_name" "Description of function"
+# Register a help topic in one call: description plus optional category.
+# Usage: _register_help <topic>_help "<description>" [category]
+# The first description registered wins (a module's own value beats the
+# defaults). The category appends <topic> to HELP_CATEGORY_MEMBERS[category]
+# once and fills the HELP_COMMAND_TO_CATEGORY reverse map.
 _register_help() {
     local func_name="$1"
     local description="$2"
-    HELP_DESCRIPTIONS["$func_name"]="$description"
+    local category="${3-}"
+    local topic="${func_name%_help}"
+    if [ -z "${HELP_DESCRIPTIONS[$func_name]-}" ]; then
+        HELP_DESCRIPTIONS[$func_name]="$description"
+    fi
+    [ -n "$category" ] || return 0
+    case " ${HELP_CATEGORY_MEMBERS[$category]-} " in
+        *" $topic "*) ;;
+        *) HELP_CATEGORY_MEMBERS[$category]="${HELP_CATEGORY_MEMBERS[$category]:+${HELP_CATEGORY_MEMBERS[$category]} }$topic" ;;
+    esac
+    HELP_COMMAND_TO_CATEGORY[$topic]="$category"
 }
 
 # Get help description
@@ -169,35 +182,6 @@ _register_default_help_categories() {
     HELP_CATEGORIES[docs]="${HELP_CATEGORIES[docs]:-Documentation and knowledge (dotfiles docs, notes, work logs)}"
     HELP_CATEGORIES[meta]="${HELP_CATEGORIES[meta]:-Help system utilities (category browsing, registration)}"
     HELP_CATEGORIES[system]="${HELP_CATEGORIES[system]:-System tools (directory navigation, opencode)}"
-
-    # Category membership (space-separated topic keys)
-    HELP_CATEGORY_MEMBERS[development]="${HELP_CATEGORY_MEMBERS[development]:-git gwt gbr devx uv py nvm npm bun pp cli ux du psql mytool ghes_mirror mirror_pages_activate gh_project_pat}"
-    HELP_CATEGORY_MEMBERS[devops]="${HELP_CATEGORY_MEMBERS[devops]:-docker dproxy sys proxy ssl mount mysql redis gpu network wsl_check window sync_to_deploy}"
-    HELP_CATEGORY_MEMBERS[ai]="${HELP_CATEGORY_MEMBERS[ai]:-claude cc agy codex graphify hermes litellm ollama claude_plugins claude_skills_marketplace superpowers llm_wiki}"
-    HELP_CATEGORY_MEMBERS[cli]="${HELP_CATEGORY_MEMBERS[cli]:-fzf fd fasd ripgrep pet bat zsh zsh_autosuggestions gc tmux herdr del_file}"
-    HELP_CATEGORY_MEMBERS[config]="${HELP_CATEGORY_MEMBERS[config]:-p10k crt apt pip ghostty sops}"
-    HELP_CATEGORY_MEMBERS[docs]="${HELP_CATEGORY_MEMBERS[docs]:-dot show_doc notion work_log work}"
-    HELP_CATEGORY_MEMBERS[system]="${HELP_CATEGORY_MEMBERS[system]:-dir opencode}"
-    HELP_CATEGORY_MEMBERS[meta]="${HELP_CATEGORY_MEMBERS[meta]:-category register}"
-
-    # Reverse lookup map: topic -> category
-    if [ -z "${_HELP_CATEGORY_MAP_BUILT:-}" ]; then
-        _HELP_CATEGORY_MAP_BUILT=1
-
-        # Clear any existing mapping to avoid stale entries.
-        if [ -n "$BASH_VERSION" ] || [ -n "$ZSH_VERSION" ]; then
-            HELP_COMMAND_TO_CATEGORY=()
-        fi
-
-        local category
-        for category in $(_my_help_get_category_keys 2>/dev/null); do
-            local members="${HELP_CATEGORY_MEMBERS[$category]}"
-            # FIX: Don't declare topic separately - declare it in the for loop
-            for topic in $(_my_help_split_members "$members"); do
-                HELP_COMMAND_TO_CATEGORY["$topic"]="$category"
-            done
-        done
-    fi
 }
 
 _register_default_help_descriptions() {
@@ -210,94 +194,110 @@ _register_default_help_descriptions() {
     _register_default_help_categories
     _register_default_help_content
 
-    # Only set if not already registered by the module itself
-    # Use simple unconditional assignment (modules load first, so they take precedence)
-    # This approach works in both bash and zsh
-    HELP_DESCRIPTIONS[uv_help]="${HELP_DESCRIPTIONS[uv_help]:-[Development] UV packages and environments}"
-    HELP_DESCRIPTIONS[git_help]="${HELP_DESCRIPTIONS[git_help]:-[Development] Git version control shortcuts}"
-    HELP_DESCRIPTIONS[gc_help]="${HELP_DESCRIPTIONS[gc_help]:-[CLI] Git commit shortcuts (gc, gca)}"
-    HELP_DESCRIPTIONS[gwt_help]="${HELP_DESCRIPTIONS[gwt_help]:-[Development] Git worktree command guide}"
-    HELP_DESCRIPTIONS[gbr_help]="${HELP_DESCRIPTIONS[gbr_help]:-[Development] Git feature-branch teardown guide}"
-    HELP_DESCRIPTIONS[devx_help]="${HELP_DESCRIPTIONS[devx_help]:-[Development] Dev helper — mise wrapper + repo checks}"
-    HELP_DESCRIPTIONS[show_devx_pr_verify_live_backend_identity_help]="${HELP_DESCRIPTIONS[show_devx_pr_verify_live_backend_identity_help]:-[Development] Backend container identity verification helper}"
-    HELP_DESCRIPTIONS[py_help]="${HELP_DESCRIPTIONS[py_help]:-[Development] Python environments and tooling}"
-    HELP_DESCRIPTIONS[dir_help]="${HELP_DESCRIPTIONS[dir_help]:-[System] Directory navigation shortcuts}"
-    HELP_DESCRIPTIONS[sys_help]="${HELP_DESCRIPTIONS[sys_help]:-[DevOps] System management helpers}"
-    HELP_DESCRIPTIONS[ssh_help]="${HELP_DESCRIPTIONS[ssh_help]:-[DevOps] SSH hosts and file transfer}"
-    HELP_DESCRIPTIONS[pp_help]="${HELP_DESCRIPTIONS[pp_help]:-[Development] Python quality tools}"
-    HELP_DESCRIPTIONS[cli_help]="${HELP_DESCRIPTIONS[cli_help]:-[Development] Custom project CLIs}"
-    HELP_DESCRIPTIONS[du_help]="${HELP_DESCRIPTIONS[du_help]:-[Development] Disk usage analysis}"
-    HELP_DESCRIPTIONS[psql_help]="${HELP_DESCRIPTIONS[psql_help]:-[Development] PostgreSQL helpers}"
-    HELP_DESCRIPTIONS[cc_help]="${HELP_DESCRIPTIONS[cc_help]:-[AI/LLM] Claude Code CLI basics}"
-    HELP_DESCRIPTIONS[claude_help]="${HELP_DESCRIPTIONS[claude_help]:-[AI/LLM] Claude Code + MCP integration}"
-    HELP_DESCRIPTIONS[docker_help]="${HELP_DESCRIPTIONS[docker_help]:-[DevOps] Docker commands and aliases}"
-    HELP_DESCRIPTIONS[apt_help]="${HELP_DESCRIPTIONS[apt_help]:-[Config] APT package manager}"
-    HELP_DESCRIPTIONS[agy_help]="${HELP_DESCRIPTIONS[agy_help]:-[AI/LLM] Antigravity CLI commands}"
-    HELP_DESCRIPTIONS[codex_help]="${HELP_DESCRIPTIONS[codex_help]:-[AI/LLM] Codex CLI commands}"
-    HELP_DESCRIPTIONS[dproxy_help]="${HELP_DESCRIPTIONS[dproxy_help]:-[DevOps] Docker corporate proxy}"
-    HELP_DESCRIPTIONS[npm_help]="${HELP_DESCRIPTIONS[npm_help]:-[Development] npm package manager}"
-    HELP_DESCRIPTIONS[bun_help]="${HELP_DESCRIPTIONS[bun_help]:-[Development] Bun runtime and bunx}"
-    HELP_DESCRIPTIONS[nvm_help]="${HELP_DESCRIPTIONS[nvm_help]:-[Development] nvm node versions}"
-    HELP_DESCRIPTIONS[litellm_help]="${HELP_DESCRIPTIONS[litellm_help]:-[AI/LLM] LiteLLM proxy and routing}"
-    HELP_DESCRIPTIONS[gpu_help]="${HELP_DESCRIPTIONS[gpu_help]:-[DevOps] GPU monitoring (WSL)}"
-    HELP_DESCRIPTIONS[wsl_check_help]="${HELP_DESCRIPTIONS[wsl_check_help]:-[DevOps] WSL & Docker environment health (disk/mem/docker)}"
-    HELP_DESCRIPTIONS[window_help]="${HELP_DESCRIPTIONS[window_help]:-[DevOps] Windows host PowerShell one-liners (Compact-WSL vhdx)}"
-    HELP_DESCRIPTIONS[ux_help]="${HELP_DESCRIPTIONS[ux_help]:-[Development] UX library usage}"
-    HELP_DESCRIPTIONS[mytool_help]="${HELP_DESCRIPTIONS[mytool_help]:-[Development] Custom tools and scripts}"
-    HELP_DESCRIPTIONS[mysql_help]="${HELP_DESCRIPTIONS[mysql_help]:-[DevOps] MySQL service management}"
-    HELP_DESCRIPTIONS[redis_help]="${HELP_DESCRIPTIONS[redis_help]:-[DevOps] Redis service management}"
-    HELP_DESCRIPTIONS[zsh_help]="${HELP_DESCRIPTIONS[zsh_help]:-[CLI] Zsh shell management}"
-    HELP_DESCRIPTIONS[del_file_help]="${HELP_DESCRIPTIONS[del_file_help]:-[CLI] Clean backup/original garbage files (del-file, clean-home)}"
-    HELP_DESCRIPTIONS[zsh_autosuggestions_help]="${HELP_DESCRIPTIONS[zsh_autosuggestions_help]:-[CLI] zsh-autosuggestions plugin}"
-    HELP_DESCRIPTIONS[bat_help]="${HELP_DESCRIPTIONS[bat_help]:-[CLI] bat file viewer}"
-    HELP_DESCRIPTIONS[dot_help]="${HELP_DESCRIPTIONS[dot_help]:-[Docs] Dotfiles overview and setup}"
-    HELP_DESCRIPTIONS[proxy_help]="${HELP_DESCRIPTIONS[proxy_help]:-[DevOps] Proxy config and diagnostics}"
-    HELP_DESCRIPTIONS[network_help]="${HELP_DESCRIPTIONS[network_help]:-[DevOps] Internet connectivity diagnostics}"
-    HELP_DESCRIPTIONS[ssl_help]="${HELP_DESCRIPTIONS[ssl_help]:-[DevOps] SSL certificate config and diagnostics}"
-    HELP_DESCRIPTIONS[fasd_help]="${HELP_DESCRIPTIONS[fasd_help]:-[CLI] fasd directory jump}"
-    HELP_DESCRIPTIONS[fd_help]="${HELP_DESCRIPTIONS[fd_help]:-[CLI] fd file finder}"
-    HELP_DESCRIPTIONS[fzf_help]="${HELP_DESCRIPTIONS[fzf_help]:-[CLI] fzf keybindings and usage}"
-    HELP_DESCRIPTIONS[pet_help]="${HELP_DESCRIPTIONS[pet_help]:-[CLI] pet snippet manager}"
-    HELP_DESCRIPTIONS[ripgrep_help]="${HELP_DESCRIPTIONS[ripgrep_help]:-[CLI] rg (ripgrep) search}"
-    HELP_DESCRIPTIONS[p10k_help]="${HELP_DESCRIPTIONS[p10k_help]:-[Config] Powerlevel10k prompt}"
-    HELP_DESCRIPTIONS[crt_help]="${HELP_DESCRIPTIONS[crt_help]:-[Config] CA certificate management}"
-    HELP_DESCRIPTIONS[pip_help]="${HELP_DESCRIPTIONS[pip_help]:-[Config] pip config and diagnostics}"
-    HELP_DESCRIPTIONS[mount_help]="${HELP_DESCRIPTIONS[mount_help]:-[DevOps] Mount helpers}"
-    HELP_DESCRIPTIONS[claude_plugins_help]="${HELP_DESCRIPTIONS[claude_plugins_help]:-[AI/LLM] Claude plugins setup}"
-    HELP_DESCRIPTIONS[claude_skills_marketplace_help]="${HELP_DESCRIPTIONS[claude_skills_marketplace_help]:-[AI/LLM] Skills marketplace system}"
-    HELP_DESCRIPTIONS[superpowers_help]="${HELP_DESCRIPTIONS[superpowers_help]:-[AI/LLM] Superpowers plugin skills reference}"
-    HELP_DESCRIPTIONS[notion_help]="${HELP_DESCRIPTIONS[notion_help]:-[Docs] Notion integration}"
-    HELP_DESCRIPTIONS[ollama_help]="${HELP_DESCRIPTIONS[ollama_help]:-[AI/LLM] Ollama local models}"
-    HELP_DESCRIPTIONS[tmux_help]="${HELP_DESCRIPTIONS[tmux_help]:-[CLI] tmux terminal multiplexer}"
-    HELP_DESCRIPTIONS[graphify_help]="${HELP_DESCRIPTIONS[graphify_help]:-[AI] graphify — 코드베이스 knowledge graph (설치/멀티 계정/usage)}"
-    HELP_DESCRIPTIONS[llm_wiki_help]="${HELP_DESCRIPTIONS[llm_wiki_help]:-[AI] llm-wiki — vault 커맨드 5종 + 클립 스킬 2종 치트시트}"
-    HELP_DESCRIPTIONS[herdr_help]="${HELP_DESCRIPTIONS[herdr_help]:-[CLI] herdr agent multiplexer}"
-    HELP_DESCRIPTIONS[hermes_help]="${HELP_DESCRIPTIONS[hermes_help]:-[AI] Hermes Agent — 코딩 에이전트, 커스텀 LLM 엔드포인트 지원}"
-    HELP_DESCRIPTIONS[ghostty_help]="${HELP_DESCRIPTIONS[ghostty_help]:-[Config] Ghostty terminal config}"
-    HELP_DESCRIPTIONS[sops_help]="${HELP_DESCRIPTIONS[sops_help]:-[Config] sops + age secret encryption}"
-    HELP_DESCRIPTIONS[opencode_help]="${HELP_DESCRIPTIONS[opencode_help]:-[System] OpenCode CLI setup}"
-    HELP_DESCRIPTIONS[show_doc_help]="${HELP_DESCRIPTIONS[show_doc_help]:-[Docs] Documentation viewer}"
-    HELP_DESCRIPTIONS[category_help]="${HELP_DESCRIPTIONS[category_help]:-[Meta] Browse help categories}"
-    HELP_DESCRIPTIONS[register_help]="${HELP_DESCRIPTIONS[register_help]:-[Meta] Register help descriptions}"
-    HELP_DESCRIPTIONS[work_log_help]="${HELP_DESCRIPTIONS[work_log_help]:-[Docs] Work log tracking}"
-    HELP_DESCRIPTIONS[work_help]="${HELP_DESCRIPTIONS[work_help]:-[Docs] Work management}"
+    # One row per topic: _register_help <topic>_help "<description>" [category].
+    # Rows are grouped by category; row order is the order topics are listed
+    # on that category page. Modules load first, so a description they set
+    # themselves wins over the default here.
 
-    # Registrations to keep `devx lint-helpfunc` clean (#726 AC). Each entry
-    # mirrors an existing public `<topic>_help` function in shell-common/functions/
-    # that previously slipped through the registry.
-    HELP_DESCRIPTIONS[ghes_mirror_help]="${HELP_DESCRIPTIONS[ghes_mirror_help]:-[Development] Mirror public GitHub repo to internal GHES instance}"
-    HELP_DESCRIPTIONS[mirror_pages_activate_help]="${HELP_DESCRIPTIONS[mirror_pages_activate_help]:-[Development] Activate GHE Pages + replace upstream URLs in README}"
-    HELP_DESCRIPTIONS[gh_project_pat_help]="${HELP_DESCRIPTIONS[gh_project_pat_help]:-[Development] PROJECT_BOARD_PAT guide + multi-repo secret set/status}"
-    HELP_DESCRIPTIONS[gh_flow_help]="${HELP_DESCRIPTIONS[gh_flow_help]:-[Development] gh-flow issue/PR worker pipeline}"
-    HELP_DESCRIPTIONS[gh_pr_review_help]="${HELP_DESCRIPTIONS[gh_pr_review_help]:-[Development] gh-pr-review external-AI review delegation}"
-    HELP_DESCRIPTIONS[gh_pr_reply_help]="${HELP_DESCRIPTIONS[gh_pr_reply_help]:-[Development] gh-pr-reply review-comment handler}"
-    HELP_DESCRIPTIONS[gh_pr_approve_help]="${HELP_DESCRIPTIONS[gh_pr_approve_help]:-[Development] gh-pr-approve PR approval workflow}"
-    HELP_DESCRIPTIONS[gh_audit_builtin_workflows_help]="${HELP_DESCRIPTIONS[gh_audit_builtin_workflows_help]:-[Development] gh audit-builtin-workflows scan}"
-    HELP_DESCRIPTIONS[hook_help]="${HELP_DESCRIPTIONS[hook_help]:-[Development] Git hook management}"
-    HELP_DESCRIPTIONS[gcp_help]="${HELP_DESCRIPTIONS[gcp_help]:-[DevOps] gcloud / GCP helpers}"
-    HELP_DESCRIPTIONS[setup_mode_help]="${HELP_DESCRIPTIONS[setup_mode_help]:-[Meta] setup.sh mode flags}"
-    HELP_DESCRIPTIONS[zsh_autosuggestions_install_help]="${HELP_DESCRIPTIONS[zsh_autosuggestions_install_help]:-[CLI] zsh-autosuggestions installer}"
-    HELP_DESCRIPTIONS[sync_to_deploy_help]="${HELP_DESCRIPTIONS[sync_to_deploy_help]:-[DevOps] Merge internal/external main branches and push a deploy branch}"
+    # development
+    _register_help git_help "[Development] Git version control shortcuts" development
+    _register_help gwt_help "[Development] Git worktree command guide" development
+    _register_help gbr_help "[Development] Git feature-branch teardown guide" development
+    _register_help devx_help "[Development] Dev helper — mise wrapper + repo checks" development
+    _register_help uv_help "[Development] UV packages and environments" development
+    _register_help py_help "[Development] Python environments and tooling" development
+    _register_help nvm_help "[Development] nvm node versions" development
+    _register_help npm_help "[Development] npm package manager" development
+    _register_help bun_help "[Development] Bun runtime and bunx" development
+    _register_help pp_help "[Development] Python quality tools" development
+    _register_help cli_help "[Development] Custom project CLIs" development
+    _register_help ux_help "[Development] UX library usage" development
+    _register_help du_help "[Development] Disk usage analysis" development
+    _register_help psql_help "[Development] PostgreSQL helpers" development
+    _register_help mytool_help "[Development] Custom tools and scripts" development
+    _register_help ghes_mirror_help "[Development] Mirror public GitHub repo to internal GHES instance" development
+    _register_help mirror_pages_activate_help "[Development] Activate GHE Pages + replace upstream URLs in README" development
+    _register_help gh_project_pat_help "[Development] PROJECT_BOARD_PAT guide + multi-repo secret set/status" development
+
+    # devops
+    _register_help docker_help "[DevOps] Docker commands and aliases" devops
+    _register_help dproxy_help "[DevOps] Docker corporate proxy" devops
+    _register_help sys_help "[DevOps] System management helpers" devops
+    _register_help proxy_help "[DevOps] Proxy config and diagnostics" devops
+    _register_help ssl_help "[DevOps] SSL certificate config and diagnostics" devops
+    _register_help mount_help "[DevOps] Mount helpers" devops
+    _register_help mysql_help "[DevOps] MySQL service management" devops
+    _register_help redis_help "[DevOps] Redis service management" devops
+    _register_help gpu_help "[DevOps] GPU monitoring (WSL)" devops
+    _register_help network_help "[DevOps] Internet connectivity diagnostics" devops
+    _register_help wsl_check_help "[DevOps] WSL & Docker environment health (disk/mem/docker)" devops
+    _register_help window_help "[DevOps] Windows host PowerShell one-liners (Compact-WSL vhdx)" devops
+    _register_help sync_to_deploy_help "[DevOps] Merge internal/external main branches and push a deploy branch" devops
+
+    # ai
+    _register_help claude_help "[AI/LLM] Claude Code + MCP integration" ai
+    _register_help cc_help "[AI/LLM] Claude Code CLI basics" ai
+    _register_help agy_help "[AI/LLM] Antigravity CLI commands" ai
+    _register_help codex_help "[AI/LLM] Codex CLI commands" ai
+    _register_help graphify_help "[AI] graphify — 코드베이스 knowledge graph (설치/멀티 계정/usage)" ai
+    _register_help hermes_help "[AI] Hermes Agent — 코딩 에이전트, 커스텀 LLM 엔드포인트 지원" ai
+    _register_help litellm_help "[AI/LLM] LiteLLM proxy and routing" ai
+    _register_help ollama_help "[AI/LLM] Ollama local models" ai
+    _register_help claude_plugins_help "[AI/LLM] Claude plugins setup" ai
+    _register_help claude_skills_marketplace_help "[AI/LLM] Skills marketplace system" ai
+    _register_help superpowers_help "[AI/LLM] Superpowers plugin skills reference" ai
+    _register_help llm_wiki_help "[AI] llm-wiki — vault 커맨드 5종 + 클립 스킬 2종 치트시트" ai
+
+    # cli
+    _register_help fzf_help "[CLI] fzf keybindings and usage" cli
+    _register_help fd_help "[CLI] fd file finder" cli
+    _register_help fasd_help "[CLI] fasd directory jump" cli
+    _register_help ripgrep_help "[CLI] rg (ripgrep) search" cli
+    _register_help pet_help "[CLI] pet snippet manager" cli
+    _register_help bat_help "[CLI] bat file viewer" cli
+    _register_help zsh_help "[CLI] Zsh shell management" cli
+    _register_help zsh_autosuggestions_help "[CLI] zsh-autosuggestions plugin" cli
+    _register_help gc_help "[CLI] Git commit shortcuts (gc, gca)" cli
+    _register_help tmux_help "[CLI] tmux terminal multiplexer" cli
+    _register_help herdr_help "[CLI] herdr agent multiplexer" cli
+    _register_help del_file_help "[CLI] Clean backup/original garbage files (del-file, clean-home)" cli
+
+    # config
+    _register_help p10k_help "[Config] Powerlevel10k prompt" config
+    _register_help crt_help "[Config] CA certificate management" config
+    _register_help apt_help "[Config] APT package manager" config
+    _register_help pip_help "[Config] pip config and diagnostics" config
+    _register_help ghostty_help "[Config] Ghostty terminal config" config
+    _register_help sops_help "[Config] sops + age secret encryption" config
+
+    # docs
+    _register_help dot_help "[Docs] Dotfiles overview and setup" docs
+    _register_help show_doc_help "[Docs] Documentation viewer" docs
+    _register_help notion_help "[Docs] Notion integration" docs
+    _register_help work_log_help "[Docs] Work log tracking" docs
+    _register_help work_help "[Docs] Work management" docs
+
+    # system
+    _register_help dir_help "[System] Directory navigation shortcuts" system
+    _register_help opencode_help "[System] OpenCode CLI setup" system
+
+    # meta
+    _register_help category_help "[Meta] Browse help categories" meta
+    _register_help register_help "[Meta] Register help descriptions" meta
+
+    # No category yet: reachable via my-help <topic> and the func registry,
+    # hidden from category pages (#726 kept these registered for lint-helpfunc).
+    _register_help show_devx_pr_verify_live_backend_identity_help "[Development] Backend container identity verification helper"
+    _register_help ssh_help "[DevOps] SSH hosts and file transfer"
+    _register_help gh_flow_help "[Development] gh-flow issue/PR worker pipeline"
+    _register_help gh_pr_review_help "[Development] gh-pr-review external-AI review delegation"
+    _register_help gh_pr_reply_help "[Development] gh-pr-reply review-comment handler"
+    _register_help gh_pr_approve_help "[Development] gh-pr-approve PR approval workflow"
+    _register_help gh_audit_builtin_workflows_help "[Development] gh audit-builtin-workflows scan"
+    _register_help hook_help "[Development] Git hook management"
+    _register_help gcp_help "[DevOps] gcloud / GCP helpers"
+    _register_help setup_mode_help "[Meta] setup.sh mode flags"
+    _register_help zsh_autosuggestions_install_help "[CLI] zsh-autosuggestions installer"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -584,7 +584,7 @@ _my_help_show_all() {
 
     if [ "$uncategorized_count" -gt 0 ]; then
         ux_warning "Uncategorized help topics detected (${uncategorized_count})"
-        ux_bullet "Add them to HELP_CATEGORY_MEMBERS[...] in my_help.sh"
+        ux_bullet "Give them a category (3rd arg of _register_help) in my_help.sh"
         ux_bullet "Examples: ${uncategorized}"
     fi
 

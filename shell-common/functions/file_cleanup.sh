@@ -285,7 +285,7 @@ _cleanup_select_mode() {
 }
 
 # Public help topic for my-help integration. Registered in
-# shell-common/functions/my_help.sh (HELP_DESCRIPTIONS + HELP_CATEGORY_MEMBERS[cli]).
+# shell-common/functions/my_help.sh (a `_register_help ... cli` row).
 del_file_help() {
     ux_header "del-file"
     ux_usage "del-file" "[--home|--cache] [pattern...]" "Interactively delete backup/original/cache files"

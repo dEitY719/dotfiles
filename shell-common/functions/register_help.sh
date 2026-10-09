@@ -8,8 +8,8 @@ _register_help_summary() {
     ux_info "Usage: register-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "topic: function ending with _help"
-    ux_bullet_sub "description: HELP_DESCRIPTIONS[<name>_help]"
-    ux_bullet_sub "category: HELP_CATEGORY_MEMBERS[<category>]"
+    ux_bullet_sub "description: _register_help <name>_help \"<desc>\" [category]"
+    ux_bullet_sub "category: 3rd argument of the same _register_help row"
     ux_bullet_sub "details: register-help <section>  (example: register-help topic)"
 }
 
@@ -26,11 +26,11 @@ _register_help_rows_topic() {
 }
 
 _register_help_rows_description() {
-    ux_bullet "Set: HELP_DESCRIPTIONS[mytool_help]=\"[Development] ...\""
+    ux_bullet "Add a row in my_help.sh: _register_help mytool_help \"[Development] ...\" development"
 }
 
 _register_help_rows_category() {
-    ux_bullet "Edit: HELP_CATEGORY_MEMBERS[development]=\"... mytool\""
+    ux_bullet "The row's 3rd argument appends mytool to that category (omit it to stay uncategorized)"
     ux_bullet "Then reload your shell (source ~/.bashrc or ~/.zshrc)"
 }
 
