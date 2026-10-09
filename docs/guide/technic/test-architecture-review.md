@@ -66,15 +66,11 @@ tests/
 │  └─ xdist-aware 임시 홈 디렉토리
 │     (각 Worker마다 고유한 디렉토리)
 │
-├─ shell_runner fixture
-│  └─ 테스트에서 사용하는 메인 fixture
-│     - bash/zsh 모두 지원
-│     - 격리된 환경에서 명령 실행
-│     - 결과 캡슐화
-│
-└─ dotfiles_state fixture
-   └─ 초기화 상태 검증
-      (SHELL_COMMON, SOURCED_FILES_COUNT 등)
+└─ shell_runner fixture
+   └─ 테스트에서 사용하는 메인 fixture
+      - bash/zsh 모두 지원
+      - 격리된 환경에서 명령 실행
+      - 결과 캡슐화
 ```
 
 **중요 특징:**

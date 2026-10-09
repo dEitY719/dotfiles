@@ -13,7 +13,7 @@
 #   - claude/setup.sh: Manages Claude Code settings via symlinks
 #   - global-packages/setup.sh: Installs missing global uv tools (uv-tools.txt)
 #
-# See SETUP_GUIDE.md for detailed information
+# See docs/.ssot/one-click-setup.md for the full step list and idempotency rules
 #
 # ⚠️  IMPORTANT: Do NOT delete bash/setup.sh, zsh/setup.sh, git/setup.sh, claude/setup.sh, or gh/setup.sh
 #     They perform special initialization beyond simple symlink creation

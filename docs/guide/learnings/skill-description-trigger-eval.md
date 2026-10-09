@@ -9,7 +9,7 @@
 상태인데, `skill:check` Check 16 은 길이만 재므로 그 상태를 그대로 통과시킨다.
 본 문서는 그 갭을 실측으로 메운 결과와, 측정하면서 드러난 하네스 함정을 남긴다.
 
-산출물:
+산출물 (아래 `claude/` 경로는 #1680 이후 저장소에서 빠졌다. 하네스는 git 이력에만 남아 있다):
 
 - `claude/skills/<skill>/evals/trigger-eval.json` — 표본 16종 × 20쿼리
 - `claude/tools/run-trigger-eval.sh` — 격리 하네스 (수동, API 예산 소모)

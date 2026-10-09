@@ -90,7 +90,7 @@ Examples:
     local s
     for s in claude/plugin/git-clone-skills.sh claude/plugin/git-pull-skills.sh \
         claude/plugin/reconcile.sh claude/plugin/restore.sh \
-        claude/tools/hook-perf-report.sh claude/tools/run-trigger-eval.sh; do
+        claude/tools/hook-perf-report.sh; do
         _assert_help "$s"
     done
 }

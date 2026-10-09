@@ -2,8 +2,7 @@
 - **Purpose**: Core Bash configuration hub. Manages environment, aliases, and shared utilities.
 - **Entry Point**: `main.bash` (Sources all modules including shell-common/).
 - **Structure**:
-    - `bash/env/`: Bash-specific environment variables
-    - `bash/util/`: Bash-specific utilities
+    - `bash/env/`: Bash-specific environment (`*.bash` only — `main.bash` globs `env/*.bash`)
     - `shell-common/env/`: Shared environment (PATH, LOCALE, etc.)
     - `shell-common/aliases/`: Shared command shortcuts
     - `shell-common/functions/`: Shared functions and help systems

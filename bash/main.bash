@@ -90,24 +90,6 @@ source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 declare -gi SOURCED_FILES_COUNT=0
 
 # ------------------------------------------------------------------
-# --- DEFENSE: Safe script name extraction (prevents $0 flag injection attacks) ---
-# This function safely extracts the filename from $0 using parameter expansion
-# instead of the external basename command, which was vulnerable to flag injection.
-# Problem: When sourcing scripts with "bash -i -l", $0 could be "-i" or "-l"
-# causing: basename "-i" → error: invalid option
-# Solution: Use shell parameter expansion + validation
-# ------------------------------------------------------------------
-_get_safe_script_name() {
-    local _fname="${0##*/}"
-
-    # Validation: if filename starts with -, it's a flag (sourced context)
-    # In that case, return empty string (means: don't treat as direct execution)
-    if [ "${_fname#-}" = "$_fname" ]; then
-        echo "$_fname"
-    fi
-}
-
-# ------------------------------------------------------------------
 # --- Helper function to get all *help() functions ---
 # Used by both cleanup and my_help display
 _get_help_functions() {
@@ -127,11 +109,6 @@ done < <(_get_help_functions)
 # ------------------------------------------------------------------
 # Safe source function (SSOT: shell-common/util/safe_source.sh)
 . "${SHELL_COMMON}/util/safe_source.sh"
-
-# ------------------------------------------------------------------
-# NOTE: WSL default bashrc has been replaced by env/bash_settings.bash
-# The old default_wsl_bashrc.bash has been deprecated
-# Essential settings are now loaded via env/bash_settings.bash
 
 # ------------------------------------------------------------------
 # 글롭이 비었을 때 '*.bash' 리터럴이 루프에 들어가지 않도록 nullglob 사용

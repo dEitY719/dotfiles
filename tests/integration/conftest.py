@@ -194,45 +194,6 @@ def shell_runner(temp_home):
     return runner
 
 
-@pytest.fixture
-def dotfiles_state(shell_runner):
-    """
-    Fixture providing function to check dotfiles initialization state.
-
-    Useful for verifying that environment variables and sourced files
-    are correctly initialized.
-
-    Returns:
-        Function: check_state(shell) -> dict with state info
-    """
-
-    def check_state(shell: str) -> dict:
-        """Check dotfiles initialization state."""
-        checks = {}
-
-        # Check SOURCED_FILES_COUNT
-        result = shell_runner(shell, "echo $SOURCED_FILES_COUNT")
-        checks["sourced_files_count"] = result.stdout.strip()
-        checks["sourced_files_count_exit"] = result.exit_code
-
-        # Check SHELL_COMMON variable
-        result = shell_runner(shell, "echo $SHELL_COMMON")
-        checks["shell_common_path"] = result.stdout.strip()
-        checks["shell_common_path_exit"] = result.exit_code
-
-        # Check if my_help_impl function exists
-        result = shell_runner(shell, "declare -f my_help_impl | head -1")
-        checks["my_help_impl_exists"] = result.exit_code == 0
-
-        # Check if my-help alias exists
-        result = shell_runner(shell, "alias my-help")
-        checks["my_help_alias_exists"] = result.exit_code == 0
-
-        return checks
-
-    return check_state
-
-
 # Pytest hooks for better output
 
 

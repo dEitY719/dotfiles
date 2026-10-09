@@ -739,19 +739,4 @@ _ollama_help_status() {
     fi
 }
 
-# Show usage information
-_ollama_help_usage() {
-    ux_header "ollama-help — Ollama Command Reference"
-
-    ux_section "Usage"
-    ux_info "ollama-help [OPTION]"
-
-    ux_section "Options"
-    ux_table_row "--auto" "Auto-detect backend (default)"
-    ux_table_row "--docker" "Show Docker-specific commands"
-    ux_table_row "--local" "Show WSL-specific commands"
-    ux_table_row "--status" "Display current Ollama status"
-    ux_table_row "-h, --help" "Show this help"
-}
-
 alias ollama-help='ollama_help'

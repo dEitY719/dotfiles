@@ -15,6 +15,8 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 | uv | `uv/` | `~/.config/uv/uv.toml` | symlink | -- |
 | Cargo | `cargo/` | `~/.cargo/config.toml` | symlink | -- |
 | NuGet | `nuget/` | `~/.nuget/NuGet/` + `~/.config/NuGet/` | symlink (dual) | -- |
+| Bun | `bun/` | `~/.bunfig.toml` | symlink (internal/external) | -- |
+| OpenCode | `opencode/` | `~/.config/opencode/opencode.json` | internal: rendered copy; external: symlink | -- |
 | RPM | `rpm/` | `/etc/yum.repos.d/ds.repo` | sudo copy | RHEL 8.x + yum/dnf |
 | APT | `apt/` | `/etc/apt/sources.list` | sudo copy | Ubuntu + codename match |
 
