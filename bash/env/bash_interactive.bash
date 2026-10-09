@@ -1,10 +1,11 @@
 #!/bin/bash
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-# ~/dotfiles/bash/env/bash_settings.bash
-# Essential Bash shell settings
-# Extracted from default_wsl_bashrc.bash with duplicates removed
-# Note: This file uses bash-specific features (shopt, etc.)
+# bash/env/bash_interactive.bash
+# Essential interactive Bash settings (the Ubuntu default ~/.bashrc block).
+# ~/.bashrc is a symlink to bash/main.bash, so nothing else sets these.
+# Loaded by the env/*.bash glob in bash/main.bash; ~/.bashrc.local is
+# sourced later, so per-PC overrides (e.g. a larger HISTSIZE) still win.
 
 # Exit if not running in bash
 [ -n "$BASH" ] || return 0
@@ -58,16 +59,16 @@ if [ -x /usr/bin/dircolors ]; then
         eval "$(dircolors -b)"
     fi
 
-    # Note: ls/grep color aliases are defined in bash/alias/core_aliases.bash
-    # to avoid duplication
+    # Note: color aliases live in shell-common/aliases/core.sh
 fi
 
 # =============================================================================
 # Bash Completion
 # =============================================================================
 
-# Enable programmable completion features
-if ! shopt -oq posix; then
+# Enable programmable completion features. Skip when /etc/bash.bashrc (or a
+# previous reload) already loaded it: re-sourcing costs ~100ms per reload.
+if ! shopt -oq posix && [ -z "${BASH_COMPLETION_VERSINFO-}" ]; then
     if [ -f /usr/share/bash-completion/bash_completion ]; then
         # shellcheck source=/usr/share/bash-completion/bash_completion
         . /usr/share/bash-completion/bash_completion
