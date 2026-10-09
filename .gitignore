@@ -97,3 +97,7 @@ claude/settings.local.json
 
 # graphify
 graphify-out/
+
+# 내부 자료·PC 간 전달물은 public 저장소에 두지 않는다 (refactor wave 1)
+/docs/archive/company/
+/transfer/
