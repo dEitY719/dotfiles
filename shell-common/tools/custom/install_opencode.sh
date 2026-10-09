@@ -2,7 +2,7 @@
 # shell-common/tools/custom/install_opencode.sh
 # OpenCode CLI Installation Script (Interactive)
 # Installs OpenCode via the official installer (~/.opencode/bin) on
-# home/external PCs, or via npm on internal PCs where opencode.ai is blocked.
+# public/external PCs, or via npm on internal PCs where opencode.ai is blocked.
 # Reference: https://opencode.ai/
 #
 # Shell Compatibility:
@@ -32,6 +32,8 @@ if ! source "$_INIT_PATH" 2>/dev/null; then
     exit 1
 fi
 . "$(dirname "$0")/lib/install_helpers.sh" || exit 1
+# Setup-mode reader SSOT (#1810): the menu defaults to the current mode.
+. "$(dirname "$0")/../../util/setup_mode_read.sh" || exit 1
 
 # ═══════════════════════════════════════════════════════════════
 # Helper Functions
@@ -42,8 +44,8 @@ show_environment_info() {
     local env=$1
     echo ""
     case "$env" in
-        home)
-            ux_section "Home Environment"
+        public)
+            ux_section "Public Environment"
             ux_bullet "Personal PC with local development"
             ux_bullet "SSL verification enabled"
             ux_bullet "Uses OpenCode's default LLM"
@@ -67,6 +69,36 @@ show_environment_info() {
             ;;
     esac
     echo ""
+}
+
+# Ask for the environment and print public|internal|external on stdout. Same
+# numbering and names as ./setup.sh; Enter keeps the current setup mode. The
+# menu goes to stderr so callers can capture the answer with $(...).
+opencode_select_environment() {
+    local current def="" choice
+    current=$(_dotfiles_setup_mode)
+    case "$current" in
+        public) def=1 ;;
+        internal) def=2 ;;
+        external) def=3 ;;
+    esac
+    {
+        ux_section "Available Environments"
+        ux_bullet "1) Public PC"
+        ux_bullet "2) Internal company PC"
+        ux_bullet "3) External company PC (VPN)"
+    } >&2
+    if [ -n "$def" ]; then
+        choice=$(ux_input "Select (1-3, Enter=current: $current):" '^[1-3]?$')
+        choice="${choice:-$def}"
+    else
+        choice=$(ux_input "Select (1-3):" '^[1-3]$')
+    fi
+    case "$choice" in
+        2) echo "internal" ;;
+        3) echo "external" ;;
+        *) echo "public" ;;
+    esac
 }
 
 OPENCODE_INSTALL_URL="${OPENCODE_INSTALL_URL:-https://opencode.ai/install}"
@@ -137,13 +169,13 @@ create_config_dir() {
     fi
 }
 
-# Generate opencode.json for home environment (no custom config)
-generate_home_config() {
+# Generate opencode.json for the public environment (no custom config)
+generate_public_config() {
     local config_file="$HOME/.config/opencode/opencode.json"
 
-    ux_info "Setting up home environment (using default LLM)..."
+    ux_info "Setting up public environment (using default LLM)..."
 
-    # Create a minimal config for home environment using OpenCode defaults
+    # Create a minimal config using OpenCode defaults
     cat > "$config_file" << 'EOF'
 {
   "$schema": "https://opencode.ai/config.json",
@@ -155,7 +187,7 @@ generate_home_config() {
 }
 EOF
     chmod 600 "$config_file"
-    ux_success "Home environment configured: $config_file"
+    ux_success "Public environment configured: $config_file"
 }
 
 # Generate opencode.json for external environment
@@ -211,9 +243,9 @@ main() {
     ux_info "and configures it for your environment."
     echo ""
 
-    # Simple confirmation without ux_confirm to avoid segfault
-    printf "Do you want to proceed with the installation? (Y/n): "
-    read -r proceed
+    # ux_input rather than ux_confirm, which segfaulted here
+    local proceed
+    proceed=$(ux_input "Do you want to proceed with the installation? (Y/n):" '^[YyNn]?$')
     if [ -n "$proceed" ] && [ "$proceed" != "Y" ] && [ "$proceed" != "y" ]; then
         ux_warning "Installation cancelled."
         exit 0
@@ -225,38 +257,9 @@ main() {
     # ========================================
     ux_step "1/5" "Select your environment"
     echo ""
-    ux_section "Available Environments"
-
     local environment
-
-    # Display environment options
-    printf "  %s1)%s 📱 Home - Personal PC (local development, SSL verified)\n" "$UX_PRIMARY" "$UX_RESET"
-    printf "  %s2)%s 🌐 External - Public network (GitHub accessible)\n" "$UX_PRIMARY" "$UX_RESET"
-    printf "  %s3)%s 🏢 Internal - Corporate network (proxy)\n" "$UX_PRIMARY" "$UX_RESET"
-    echo ""
-
-    # Simple read-based selection (stable, no external dependencies)
-    local choice
-    printf "%sSelect (1-3):%s " "$UX_PRIMARY" "$UX_RESET"
-    read -r choice
-    case "$choice" in
-        1) environment="home" ;;
-        2) environment="external" ;;
-        3) environment="internal" ;;
-        *) environment="home" ;;
-    esac
-
-    # Validate environment selection
-    case "$environment" in
-        home|external|internal)
-            show_environment_info "$environment"
-            ;;
-        *)
-            ux_warning "Invalid selection. Using 'home' environment."
-            environment="home"
-            show_environment_info "$environment"
-            ;;
-    esac
+    environment=$(opencode_select_environment)
+    show_environment_info "$environment"
     echo ""
 
     # ========================================
@@ -303,7 +306,7 @@ main() {
             ux_bullet "For manual config: npm config set noproxy \"<value>\""
         else
             ux_bullet "Check access: curl -fsSI $OPENCODE_INSTALL_URL"
-            ux_bullet "opencode.ai blocked? Re-run and select 3) Internal to use npm"
+            ux_bullet "opencode.ai blocked? Re-run and select 2) Internal company PC to use npm"
         fi
         rm -f "$install_log"
         exit 1
@@ -320,8 +323,8 @@ main() {
     create_config_dir
 
     case "$environment" in
-        home)
-            generate_home_config
+        public)
+            generate_public_config
             ;;
         external)
             generate_external_config
@@ -354,7 +357,7 @@ main() {
     # ========================================
     # Completion
     # ========================================
-    ux_header "✅ OpenCode Setup Complete!"
+    ux_header "OpenCode Setup Complete"
     echo ""
 
     ux_section "Configuration Summary"
@@ -369,7 +372,7 @@ main() {
     ux_section "Next Steps"
     ux_bullet "View help: ${UX_PRIMARY}opencode-help${UX_RESET}"
     ux_bullet "Start coding: ${UX_PRIMARY}opencode${UX_RESET}"
-    if [ "$environment" != "home" ]; then
+    if [ "$environment" != "public" ]; then
         ux_bullet "Verify LLM config: ${UX_PRIMARY}opencode-verify${UX_RESET}"
     fi
     echo ""

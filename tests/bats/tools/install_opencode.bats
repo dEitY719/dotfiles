@@ -35,14 +35,64 @@ run_opencode_tool() {
     assert_output "npm"
 }
 
-@test "opencode_install_method: home and external route to curl" {
+@test "opencode_install_method: public, external and legacy home route to curl" {
     run_opencode_tool '
-        opencode_install_method home
+        opencode_install_method public
         opencode_install_method external
+        opencode_install_method home
     '
     assert_success
     assert_output "curl
+curl
 curl"
+}
+
+# --- environment selection (F4) -----------------------------------------------
+# Same numbering/value names as ./setup.sh (1=public 2=internal 3=external);
+# Enter keeps the current setup mode read via util/setup_mode_read.sh.
+# ux_* are stubbed: DOTFILES_TEST_MODE makes init.sh skip ux_lib.
+
+_select_env() {
+    run_opencode_tool "
+        ux_section() { printf '%s\n' \"\$*\"; }
+        ux_bullet() { printf '%s\n' \"\$*\"; }
+        ux_error() { printf '%s\n' \"\$*\" >&2; }
+        ux_input() { printf '%s\n' \"\$1\" >&2; read -r r; printf '%s\n' \"\$r\"; }
+        printf '%s\n' '$1' | opencode_select_environment 2>'$HOME/menu'
+    "
+}
+
+@test "opencode_select_environment: 2 is internal and 3 is external (setup.sh order)" {
+    rm -f "$HOME/.dotfiles-setup-mode"
+    _select_env 2
+    assert_success
+    assert_output "internal"
+    _select_env 3
+    assert_output "external"
+    _select_env 1
+    assert_output "public"
+}
+
+@test "opencode_select_environment: Enter keeps the current setup mode (CRLF, legacy numeric)" {
+    printf '2\r\n' >"$HOME/.dotfiles-setup-mode"
+    _select_env ""
+    assert_success
+    assert_output "internal"
+    run cat "$HOME/menu"
+    assert_output --partial "Enter=current: internal"
+}
+
+@test "opencode_select_environment: menu has public/internal/external and no emoji" {
+    printf 'external\n' >"$HOME/.dotfiles-setup-mode"
+    _select_env ""
+    assert_output "external"
+    run cat "$HOME/menu"
+    assert_output --partial "1) Public PC"
+    assert_output --partial "2) Internal company PC"
+    assert_output --partial "3) External company PC (VPN)"
+    refute_output --partial "Home"
+    run bash -c "LC_ALL=C grep -c '[^[:print:][:space:]]' '$HOME/menu'"
+    assert_output "0"
 }
 
 # --- npm path ------------------------------------------------------------------
