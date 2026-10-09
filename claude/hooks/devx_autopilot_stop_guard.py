@@ -48,6 +48,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
+# Shared helpers live next to this file's *real* location: settings.json may
+# run it through a symlinked checkout. Missing helpers fail open (exit 0 =
+# allow the stop) — a Stop hook must never trap the session.
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+try:
+    import _hook_common  # noqa: E402
+except ImportError:
+    sys.exit(0)
+
+_line_anchored_alternation = _hook_common.line_anchored_alternation
+_load_transcript = _hook_common.load_transcript
+_message_payload = _hook_common.message_payload
+
 # Opt-in stderr trace to diagnose "hook is registered but never blocks"
 # cases. Default off so production runs stay silent. Enable with
 # `DEVX_AUTOPILOT_STOP_GUARD_TRACE=1`.
@@ -133,23 +146,6 @@ _SYSTEM_REMINDER_RE: re.Pattern[str] = re.compile(
     r"<system-reminder>.*?</system-reminder>",
     re.DOTALL,
 )
-
-
-def _line_anchored_alternation(markers: tuple[str, ...], shapes: tuple[str, ...] = ()) -> re.Pattern[str]:
-    """Compile markers into one `(?m)^`-anchored alternation (#1281).
-
-    An unanchored `marker in text` test fired on any occurrence, so a human
-    asking "what does 'Stop hook feedback:' mean?" had that whole turn
-    discarded from the fresh-prompt count. Real harness injections always
-    open a line with their marker (same reasoning as `_USER_BOUNDARY_RE`),
-    so line-start anchoring keeps every genuine injection matched while
-    letting a quoted marker mid-sentence stay a human turn.
-
-    `markers` are literals (escaped — they carry `<`, `>`, `[`, `]`).
-    `shapes` are already-regex fragments, for injections whose literal
-    prefix is variable and so cannot be expressed as a fixed marker.
-    """
-    return re.compile(r"(?m)^(?:" + "|".join([re.escape(m) for m in markers] + list(shapes)) + r")")
 
 
 # Issue #1275 — markers proving a `role=user` message is a skill expansion
@@ -318,32 +314,6 @@ def _iter_skill_uses(message: dict[str, Any]) -> list[str]:
         if isinstance(skill, str):
             out.append(skill)
     return out
-
-
-def _load_transcript(path: Path) -> list[dict[str, Any]]:
-    """Best-effort JSONL load. Skips malformed lines, never raises."""
-    out: list[dict[str, Any]] = []
-    try:
-        with path.open(encoding="utf-8", errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if isinstance(obj, dict):
-                    out.append(obj)
-    except OSError:
-        return []
-    return out
-
-
-def _message_payload(entry: dict[str, Any]) -> dict[str, Any]:
-    """Return the inner `message` dict if present, else the entry itself."""
-    inner = entry.get("message")
-    return inner if isinstance(inner, dict) else entry
 
 
 def _find_flow_boundary(messages: list[dict[str, Any]]) -> int:
