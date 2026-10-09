@@ -358,60 +358,63 @@ setup_security_config() {
     ux_success "SSL Certificate: $(_local_value SSL_CERT_FILE "$security_local")"
 }
 
-setup_npm_symlink() {
+# Mode-switched package-registry config: one row per tool, as positional args
+#   $1 mode  $2 header label  $3 target  $4 internal source (repo-relative,
+#   resolved via _internal_src for the #1968 *.local preference)
+#   $5 internal info line  $6 external action  $7 public action
+# An action is "restore" (put the pre-dotfiles backup back), "skip|<info>"
+# (clear the target, deploy nothing) or "link|<repo-relative file>|<info>".
+_setup_mode_config() {
     environment="$1"
-    npmrc_target="$HOME/.npmrc"
+    _mc_target="$3"
+    mkdir -p "$(dirname "$_mc_target")"
 
-    ux_header "Setting up npm configuration for: $environment"
+    ux_header "Setting up $2 configuration for: $environment"
 
-    _prepare_config_target "$npmrc_target"
-
-    # Create symlink based on environment
     case "$environment" in
         internal)
-            ln -s "$(_internal_src npm/npmrc.internal)" "$npmrc_target"
-            ux_success "Created symlink: ~/.npmrc → npm/npmrc.internal"
-            ux_info "Using: internal Nexus repository + proxy"
+            _prepare_config_target "$_mc_target"
+            ln -s "$(_internal_src "$4")" "$_mc_target"
+            ux_success "Created symlink: ~${_mc_target#"$HOME"} → $4"
+            ux_info "$5"
+            return 0
             ;;
-        external)
-            ln -s "${DOTFILES_ROOT}/npm/npmrc.external" "$npmrc_target"
-            ux_success "Created symlink: ~/.npmrc → npm/npmrc.external"
-            ux_info "Using: Public npmjs registry (no proxy)"
+        external) _mc_action="$6" ;;
+        public) _mc_action="$7" ;;
+        *) return 0 ;;
+    esac
+    case "$_mc_action" in
+        restore)
+            _restore_config_from_backup "$_mc_target"
             ;;
-        public)
-            # Public PC: pin npm prefix to a user-owned dir so `claude`
-            # auto-update does not fail against the root-owned /usr default.
-            ln -s "${DOTFILES_ROOT}/npm/npmrc.public" "$npmrc_target"
-            ux_success "Created symlink: ~/.npmrc → npm/npmrc.public"
-            ux_info "Using: Public npmjs registry (prefix pinned to ~/.npm-global)"
+        skip\|*)
+            _prepare_config_target "$_mc_target"
+            ux_info "${_mc_action#skip|}"
+            ;;
+        link\|*)
+            _mc_rest="${_mc_action#link|}"
+            _prepare_config_target "$_mc_target"
+            ln -s "${DOTFILES_ROOT}/${_mc_rest%%|*}" "$_mc_target"
+            ux_success "Created symlink: ~${_mc_target#"$HOME"} → ${_mc_rest%%|*}"
+            ux_info "${_mc_rest#*|}"
             ;;
     esac
 }
 
+# Public PC npmrc pins the npm prefix to a user-owned dir so `claude`
+# auto-update does not fail against the root-owned /usr default.
+setup_npm_symlink() {
+    _setup_mode_config "$1" npm "$HOME/.npmrc" npm/npmrc.internal \
+        "Using: internal Nexus repository + proxy" \
+        "link|npm/npmrc.external|Using: Public npmjs registry (no proxy)" \
+        "link|npm/npmrc.public|Using: Public npmjs registry (prefix pinned to ~/.npm-global)"
+}
+
 setup_bun_config() {
-    environment="$1"
-    bunfig_target="$HOME/.bunfig.toml"
-
-    ux_header "Setting up Bun configuration for: $environment"
-
-    # Create symlink based on environment
-    case "$environment" in
-        internal)
-            _prepare_config_target "$bunfig_target"
-            ln -s "$(_internal_src bun/bunfig.toml.internal)" "$bunfig_target"
-            ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.internal"
-            ux_info "Using: internal Nexus registry for npm packages"
-            ;;
-        external)
-            _prepare_config_target "$bunfig_target"
-            ln -s "${DOTFILES_ROOT}/bun/bunfig.toml.external" "$bunfig_target"
-            ux_success "Created symlink: ~/.bunfig.toml → bun/bunfig.toml.external"
-            ux_info "Using: Public npmjs registry (no proxy)"
-            ;;
-        public)
-            _restore_config_from_backup "$bunfig_target"
-            ;;
-    esac
+    _setup_mode_config "$1" Bun "$HOME/.bunfig.toml" bun/bunfig.toml.internal \
+        "Using: internal Nexus registry for npm packages" \
+        "link|bun/bunfig.toml.external|Using: Public npmjs registry (no proxy)" \
+        restore
 }
 
 # Escape sed replacement metacharacters (\ / | &) so unusual values cannot
@@ -610,82 +613,28 @@ setup_local_files() {
     verify_config "$environment"
 }
 
+# External/Public need no uv.toml (defaults to public PyPI).
 setup_uv_config() {
-    environment="$1"
-    uv_config_dir="${HOME}/.config/uv"
-    uv_conf="${uv_config_dir}/uv.toml"
-
-    # Ensure ~/.config/uv directory exists
-    mkdir -p "$uv_config_dir"
-
-    ux_header "Setting up uv configuration for: $environment"
-
-    _prepare_config_target "$uv_conf"
-
-    # Create symlink based on environment
-    case "$environment" in
-        internal)
-            ln -s "$(_internal_src uv/uv.toml.internal)" "$uv_conf"
-            ux_success "Created symlink: ~/.config/uv/uv.toml → uv/uv.toml.internal"
-            ux_info "Using: internal repositories + proxy"
-            ;;
-        external|public)
-            # External/Public: no uv.toml needed (defaults to public PyPI)
-            ux_info "No uv.toml needed (using default public PyPI)"
-            ;;
-    esac
+    _setup_mode_config "$1" uv "${HOME}/.config/uv/uv.toml" uv/uv.toml.internal \
+        "Using: internal repositories + proxy" \
+        "skip|No uv.toml needed (using default public PyPI)" \
+        "skip|No uv.toml needed (using default public PyPI)"
 }
 
 setup_pip_config() {
-    environment="$1"
-    pip_config_dir="${HOME}/.config/pip"
-    pip_conf="${pip_config_dir}/pip.conf"
-
-    # Ensure ~/.config/pip directory exists
-    mkdir -p "$pip_config_dir"
-
-    ux_header "Setting up pip configuration for: $environment"
-
-    _prepare_config_target "$pip_conf"
-
-    # Create symlink based on environment
-    case "$environment" in
-        internal)
-            ln -s "$(_internal_src pip/pip.conf.internal)" "$pip_conf"
-            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.internal"
-            ux_info "Using: internal repositories"
-            ;;
-        external|public)
-            ln -s "${DOTFILES_ROOT}/pip/pip.conf.external" "$pip_conf"
-            ux_success "Created symlink: ~/.config/pip/pip.conf → pip/pip.conf.external"
-            ux_info "Using: Public PyPI"
-            ;;
-    esac
+    _setup_mode_config "$1" pip "${HOME}/.config/pip/pip.conf" pip/pip.conf.internal \
+        "Using: internal repositories" \
+        "link|pip/pip.conf.external|Using: Public PyPI" \
+        "link|pip/pip.conf.external|Using: Public PyPI"
 }
 
 setup_cargo_config() {
-    environment="$1"
-    cargo_config_dir="${HOME}/.cargo"
-    cargo_conf="${cargo_config_dir}/config.toml"
-
-    # Ensure ~/.cargo directory exists
-    mkdir -p "$cargo_config_dir"
-
-    ux_header "Setting up Cargo configuration for: $environment"
-
-    case "$environment" in
-        internal)
-            _prepare_config_target "$cargo_conf"
-            ln -s "$(_internal_src cargo/config.toml.internal)" "$cargo_conf"
-            ux_success "Created symlink: ~/.cargo/config.toml → cargo/config.toml.internal"
-            ux_info "Using: internal Nexus proxy for crates.io"
-            ;;
-        external|public)
-            _restore_config_from_backup "$cargo_conf"
-            ;;
-    esac
+    _setup_mode_config "$1" Cargo "${HOME}/.cargo/config.toml" cargo/config.toml.internal \
+        "Using: internal Nexus proxy for crates.io" restore restore
 }
 
+# NuGet stays bespoke: two targets share one message and external/public
+# must not create the config dirs.
 setup_nuget_config() {
     environment="$1"
     # NuGet config can be read from two paths depending on tooling
