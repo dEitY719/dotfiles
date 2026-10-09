@@ -41,20 +41,6 @@
       "languageNotes": "Tool versions are pinned once in mise.toml, the same SSOT used by local `mise run lint`, so CI and dev machines cannot drift."
     },
     {
-      "id": "pipeline:.github/workflows/cli-package.yml",
-      "type": "pipeline",
-      "name": "cli-package.yml",
-      "filePath": ".github/workflows/cli-package.yml",
-      "summary": "Node.js CI/CD pipeline scoped to packages/my-cli — runs test/coverage, lint/typecheck, bundle size check, e2e tests, and a release job that publishes on tag/version bump.",
-      "tags": [
-        "ci-cd",
-        "deployment",
-        "release",
-        "nodejs"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "pipeline:.github/workflows/project-board-sync.yml",
       "type": "pipeline",
       "name": "project-board-sync.yml",
@@ -165,19 +151,6 @@
       "complexity": "complex"
     },
     {
-      "id": "document:REFACTORING_SETUP_SH.md",
-      "type": "document",
-      "name": "REFACTORING_SETUP_SH.md",
-      "filePath": "REFACTORING_SETUP_SH.md",
-      "summary": "Historical design document recording the SOLID-principle refactor of setup.sh — config extraction, function separation, an environments.conf SSOT, before/after metrics, and a migration path for future phases.",
-      "tags": [
-        "documentation",
-        "refactoring",
-        "design-notes"
-      ],
-      "complexity": "complex"
-    },
-    {
       "id": "file:install.sh",
       "type": "file",
       "name": "install.sh",
@@ -234,19 +207,6 @@
         "linting"
       ],
       "complexity": "moderate"
-    },
-    {
-      "id": "document:requirements.txt",
-      "type": "document",
-      "name": "requirements.txt",
-      "filePath": "requirements.txt",
-      "summary": "Auto-generated pinned dependency lockfile (via `uv pip compile`) covering rich, markdown-it-py, mdurl, and pygments used by the repo's Python tooling.",
-      "tags": [
-        "dependencies",
-        "lockfile",
-        "python"
-      ],
-      "complexity": "simple"
     },
     {
       "id": "file:setup.sh",
@@ -1924,193 +1884,6 @@
       ],
       "complexity": "moderate",
       "languageNotes": "Written as a structured feature-requirement scratch doc with a diff-tracking table showing which reviewer feedback items were incorporated."
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "type": "document",
-      "name": "legacy-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/legacy-analysis.md",
-      "summary": "Overview analysis of the legacy my-help shell help system (34 help files across 8 categories, ~2000 lines) as part of the my-cli migration Discovery phase; defines a 4-tier usage-frequency classification and a phased migration plan (CL-7.1 through CL-7.9).",
-      "tags": [
-        "documentation",
-        "analysis",
-        "migration",
-        "planning"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-      "type": "document",
-      "name": "ai-llm-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-      "summary": "Per-topic migration analysis for the AI/LLM help category (claude, cc, gemini, codex, litellm, ollama, claude_plugins, claude_skills_marketplace), rating each legacy help file's usage frequency and proposing Quick/Full mode content splits for the my-cli rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "cli-tools",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-      "type": "document",
-      "name": "cli-tools-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-      "summary": "Per-topic migration analysis for the CLI Tools help category (fzf, fd, fasd, ripgrep, pet, bat, zsh, zsh_autosuggestions, gc), documenting each legacy help file's size and usage tier for the my-cli content rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "cli-tools",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-      "type": "document",
-      "name": "config-system-meta-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-      "summary": "Combined migration analysis for the Config, System, Meta, and Docs help categories (p10k, crt, apt, pip, dir, opencode, category, register, dot, show_doc, notion, work_log, work), ranking each topic by tier and priority for the my-cli rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "configuration",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/development-category-analysis.md",
-      "type": "document",
-      "name": "development-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/development-category-analysis.md",
-      "summary": "Per-topic migration analysis for the Development help category (git, uv, py, nvm, npm, pp, cli, ux, du, psql, mytool) — the largest and highest-priority category — with a detailed section-by-section breakdown of the git help content and Quick/Full mode recommendations.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "development",
-        "migration"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/devops-category-analysis.md",
-      "type": "document",
-      "name": "devops-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/devops-category-analysis.md",
-      "summary": "Per-topic migration analysis for the DevOps help category (docker, dproxy, sys, proxy, mount, mysql, gpu), documenting expected sections and Quick Mode command shortlists for the my-cli rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "devops",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "document",
-      "name": "implementation-roadmap.md",
-      "filePath": "docs/feature/my-cli/planning/implementation-roadmap.md",
-      "summary": "Implementation roadmap for migrating the legacy my-help shell system to my-cli, redefining the tier classification and laying out a 4-phase plan (Foundation, Tier 1 optimization, Tier 2 optimization, Polish & Release) with a timeline, data-model example, and data-format strategy options.",
-      "tags": [
-        "documentation",
-        "planning",
-        "roadmap",
-        "migration"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/phase-1-detail.md",
-      "type": "document",
-      "name": "phase-1-detail.md",
-      "filePath": "docs/feature/my-cli/planning/phase-1-detail.md",
-      "summary": "Detailed task-level implementation plan for Phase 1 (CL-7.1 UI improvements and CL-7.2 data model extension) of the my-cli migration, covering TopicDetail.tsx refactoring, ShellFunctionAdapter.ts changes, HelpTopic type extension, and unit/E2E test tasks.",
-      "tags": [
-        "documentation",
-        "planning",
-        "implementation-plan",
-        "migration"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/progress-checklist.md",
-      "type": "document",
-      "name": "progress-checklist.md",
-      "filePath": "docs/feature/my-cli/planning/progress-checklist.md",
-      "summary": "Progress-tracking checklist for the full my-cli migration (CL-7.0 through CL-7.9), recording task completion status, current status notes, and milestones per phase.",
-      "tags": [
-        "documentation",
-        "planning",
-        "progress-tracking",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/quick-start.md",
-      "type": "document",
-      "name": "quick-start.md",
-      "filePath": "docs/feature/my-cli/planning/quick-start.md",
-      "summary": "Quick-resume checklist for restarting work on the my-cli migration after a break: verify git state, re-review the analysis and roadmap docs, confirm the packages/my-cli build/test environment, and jump into the next phase.",
-      "tags": [
-        "documentation",
-        "onboarding",
-        "checklist",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/requirements/req-abc-c.md",
-      "type": "document",
-      "name": "req-abc-c.md",
-      "filePath": "docs/feature/my-cli/requirements/req-abc-c.md",
-      "summary": "Comprehensive, consolidated design document for `my-cli`, a TypeScript/ink rewrite of the shell-based help system — covering architecture, security (input sanitization, shell-call safety, pager strategy), registry loading strategies, CLI interface (interactive TUI and non-interactive JSON/text modes), an 18-CL (change-list) phased implementation plan spanning 11-12 weeks, test strategy, acceptance criteria, a peer-review checklist, dependencies, and a shell-to-TypeScript migration map.",
-      "tags": [
-        "requirements",
-        "design-doc",
-        "cli",
-        "typescript",
-        "planning"
-      ],
-      "complexity": "complex",
-      "languageNotes": "Korean-language technical spec with English CL identifiers and code identifiers (e.g. packages/core/src/sanitize.ts); structured as a formal consolidated PRD/TRD hybrid with 88 headings across architecture, security, and phased delivery sections."
-    },
-    {
-      "id": "document:docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-      "type": "document",
-      "name": "req-cli-mycli-1-learning-guide.md",
-      "filePath": "docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-      "summary": "Two-week self-study learning guide for ink + TypeScript + React + yargs, structured as a day-by-day plan with environment setup steps, common pitfalls, curated resources, daily checklists, and an FAQ, intended to prepare the developer for implementing the my-cli requirements.",
-      "tags": [
-        "documentation",
-        "learning-guide",
-        "typescript",
-        "onboarding",
-        "planning"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "type": "document",
-      "name": "req-cli-mycli-1.md",
-      "filePath": "docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "summary": "Original requirements document for the my-cli Personal CLI Tool Suite — a TypeScript/ink rewrite of the shell my-help system modeled on the gemini-cli reference architecture, defining the help registry, plugin architecture, command system, UI design, data model, API, configuration, backwards-compatibility strategy with existing shell functions, testing strategy, acceptance criteria, risks, and a 5-phase (Week 1-7) implementation timeline.",
-      "tags": [
-        "requirements",
-        "design-doc",
-        "cli",
-        "typescript",
-        "help-system"
-      ],
-      "complexity": "complex",
-      "languageNotes": "Bilingual (Korean headings, English technical terms); documents backwards-compatibility with the existing shell my-help function suite this project would eventually replace."
     },
     {
       "id": "document:docs/feature/superpowers-plans/2026-04-22-gh-skills-expansion.md",
@@ -4560,20 +4333,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:scripts/flush-transfer.sh",
-      "type": "file",
-      "name": "flush-transfer.sh",
-      "filePath": "scripts/flush-transfer.sh",
-      "summary": "One-shot cleanup script that removes all tracked files under transfer/, commits the removal, and pushes — used to erase a one-time PC-to-PC transfer payload after it has been consumed.",
-      "tags": [
-        "git-automation",
-        "cleanup",
-        "one-shot",
-        "transfer"
-      ],
-      "complexity": "simple"
-    },
-    {
       "id": "file:scripts/lint_docs_filenames.sh",
       "type": "file",
       "name": "lint_docs_filenames.sh",
@@ -4788,159 +4547,6 @@
         "overview"
       ],
       "complexity": "simple"
-    },
-    {
-      "id": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "type": "file",
-      "name": "analyze_shebang_report.sh",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "summary": "Comprehensive shebang-consistency analyzer that scans .sh/.bash files for bash-specific feature usage (arrays, [[ ]], parameter expansion, etc.), classifies each file as posix-ok/bash-required/wrong-shebang/missing-shebang, and prints a colorized findings report with prioritized fix recommendations.",
-      "tags": [
-        "static-analysis",
-        "shebang-linting",
-        "bash-detection",
-        "reporting"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:detect_bash_features",
-      "type": "function",
-      "name": "detect_bash_features",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        47,
-        59
-      ],
-      "summary": "Scans a file against a table of bash-specific regex patterns (arrays, [[ ]], BASH_SOURCE, parameter expansion, etc.) and returns the names of features found.",
-      "tags": [
-        "pattern-matching",
-        "bash-detection"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:get_shebang",
-      "type": "function",
-      "name": "get_shebang",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        62,
-        72
-      ],
-      "summary": "Extracts and normalizes a file's shebang line for comparison against its detected feature requirements.",
-      "tags": [
-        "shebang-parsing"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "type": "function",
-      "name": "analyze_file",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        81,
-        143
-      ],
-      "summary": "Core per-file analysis routine that combines shebang inspection and bash-feature detection to classify a file into one of the report categories and update running statistics.",
-      "tags": [
-        "file-analysis",
-        "classification"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_stats",
-      "type": "function",
-      "name": "print_stats",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        156,
-        170
-      ],
-      "summary": "Prints the summary statistics table (counts per classification category) for the analyzed file set.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_priority_files",
-      "type": "function",
-      "name": "print_priority_files",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        173,
-        208
-      ],
-      "summary": "Prints the highest-priority files needing a shebang fix, ranked by severity.",
-      "tags": [
-        "reporting",
-        "prioritization"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_findings",
-      "type": "function",
-      "name": "print_findings",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        211,
-        243
-      ],
-      "summary": "Prints the detailed per-category findings section of the shebang analysis report.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_source_only",
-      "type": "function",
-      "name": "print_source_only",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        246,
-        258
-      ],
-      "summary": "Prints the list of files that are source-only (not directly executable) along with their shebang status.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_bash_required",
-      "type": "function",
-      "name": "print_bash_required",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        261,
-        272
-      ],
-      "summary": "Prints the list of files detected as requiring bash-specific features.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "type": "function",
-      "name": "main",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        285,
-        315
-      ],
-      "summary": "Orchestrates the full scan — walks the target files, calls analyze_file on each, then renders all report sections in order.",
-      "tags": [
-        "entry-point",
-        "orchestration"
-      ],
-      "complexity": "moderate"
     },
     {
       "id": "file:scripts/maintenance/check_bash_status.sh",
@@ -15523,38 +15129,6 @@
       "complexity": "moderate"
     },
     {
-      "id": "file:shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "type": "file",
-      "name": "run_agents_md_master_prompt.sh",
-      "filePath": "shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "summary": "Non-interactively invokes Claude Code with the repo's AGENTS.md master prompt to (re)generate module-level AGENTS.md documentation.",
-      "tags": [
-        "automation",
-        "claude-code",
-        "documentation",
-        "cli-tool",
-        "non-interactive"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:shell-common/tools/custom/run_agents_md_master_prompt.sh:main",
-      "type": "function",
-      "name": "main",
-      "filePath": "shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "lineRange": [
-        21,
-        68
-      ],
-      "summary": "Resolves the master prompt file path and dispatches it to Claude Code in non-interactive mode.",
-      "tags": [
-        "automation",
-        "claude-code",
-        "cli-tool"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:shell-common/tools/custom/set_locale.sh",
       "type": "file",
       "name": "set_locale.sh",
@@ -18564,88 +18138,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "type": "file",
-      "name": "gh_pr_merge_board_gate.sh",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "summary": "Bats test fixture mirroring the Step 4-B project-board approval gate snippet in the gh-pr-merge skill, verifying merges are refused unless the board Status is 'Approved' (or the check is skipped).",
-      "tags": [
-        "test",
-        "fixture",
-        "bats",
-        "mock",
-        "board-gate"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh:gh_pr_merge_board_gate",
-      "type": "function",
-      "name": "gh_pr_merge_board_gate",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "lineRange": [
-        25,
-        50
-      ],
-      "summary": "Gates a PR merge on the project board Status field, refusing (rc=2) unless the card is 'Approved', empty (no board), or the GH_PR_MERGE_SKIP_BOARD_CHECK escape hatch is set.",
-      "tags": [
-        "test",
-        "fixture",
-        "board-gate"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "type": "file",
-      "name": "gh_pr_reply_auto_approve.sh",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "summary": "Bats test fixture mirroring the gh-pr-reply skill's Step 8 solo-repo auto-approve gating logic — four guard checks (allowlist, PR state/draft, reviewDecision) that decide whether to bypass the fail-closed approval guard.",
-      "tags": [
-        "test",
-        "fixture",
-        "bats",
-        "mock",
-        "auto-approve"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_auto_approve_step8",
-      "type": "function",
-      "name": "gh_pr_reply_auto_approve_step8",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "lineRange": [
-        42,
-        122
-      ],
-      "summary": "Evaluates four guards (comment count, repo allowlist membership, PR state/draft, reviewDecision) and, if all pass, calls the board-sync helper to auto-approve, recording the outcome in STEP8_OUTCOME.",
-      "tags": [
-        "test",
-        "fixture",
-        "auto-approve",
-        "gating-logic"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_render_step8_row",
-      "type": "function",
-      "name": "gh_pr_reply_render_step8_row",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "lineRange": [
-        127,
-        161
-      ],
-      "summary": "Maps a STEP8_OUTCOME value to its user-visible report row (OK/SKIP/WARN/FAIL) for the gh-pr-reply final summary.",
-      "tags": [
-        "test",
-        "fixture",
-        "reporting"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh",
       "type": "file",
       "name": "gh_pr_reply_board_sync.sh",
@@ -19885,20 +19377,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:.debug/test_install_opencode.sh",
-      "type": "file",
-      "name": "test_install_opencode.sh",
-      "filePath": ".debug/test_install_opencode.sh",
-      "summary": "Ad-hoc validation script that checks install_opencode.sh for known segfault triggers (echo -e, ux_confirm), verifies its dependencies exist, and confirms the opencode-ai npm package is reachable, without performing an actual installation.",
-      "tags": [
-        "test",
-        "debug",
-        "shell-script",
-        "installer-validation"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "config:.gitattributes",
       "type": "config",
       "name": ".gitattributes",
@@ -20051,51 +19529,6 @@
         "bedrock",
         "example-template",
         "environment-variables"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "file:bash/env/bash_interactive.sh",
-      "type": "file",
-      "name": "bash_interactive.sh",
-      "filePath": "bash/env/bash_interactive.sh",
-      "summary": "Bash-only interactive shell settings (history dedup/size, histappend, checkwinsize, less/lesspipe config, debian_chroot detection, dircolors, and bash-completion sourcing), guarded to no-op outside bash and non-interactive shells.",
-      "tags": [
-        "shell-config",
-        "bash",
-        "interactive-shell",
-        "environment"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:bash/util/init.bash",
-      "type": "file",
-      "name": "init.bash",
-      "filePath": "bash/util/init.bash",
-      "summary": "Utility providing init_dotfiles_bash_dir, which resolves the dotfiles bash/ directory from any script's location (direct match or upward search), exported for use by other bash entry-point scripts.",
-      "tags": [
-        "utility",
-        "bash",
-        "path-resolution",
-        "bootstrap"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:bash/util/init.bash:init_dotfiles_bash_dir",
-      "type": "function",
-      "name": "init_dotfiles_bash_dir",
-      "filePath": "bash/util/init.bash",
-      "lineRange": [
-        9,
-        35
-      ],
-      "summary": "Resolves and prints the dotfiles bash/ directory given a script path: returns immediately if the script's real directory ends in /bash, otherwise walks up the directory tree looking for a bash/ subdirectory, erroring if none is found.",
-      "tags": [
-        "utility",
-        "path-resolution",
-        "exported-function"
       ],
       "complexity": "simple"
     },
@@ -21270,20 +20703,6 @@
         "feature-design",
         "cli-design",
         "github-automation"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/README.md",
-      "type": "document",
-      "name": "README.md",
-      "filePath": "docs/feature/my-cli/README.md",
-      "summary": "Entry-point overview for the my-cli legacy migration analysis bundle, indexing per-category analysis documents and a phased implementation roadmap, plus key decisions on data format and quick-mode/UI behavior.",
-      "tags": [
-        "feature-design",
-        "entry-point",
-        "migration",
-        "roadmap"
       ],
       "complexity": "moderate"
     },
@@ -22604,20 +22023,6 @@
       "complexity": "simple"
     },
     {
-      "id": "config:opencode/opencode.json.home",
-      "type": "config",
-      "name": "opencode.json.home",
-      "filePath": "opencode/opencode.json.home",
-      "summary": "OpenCode configuration variant for the home environment — entirely commented out, documenting that no custom config is needed there and showing an example LiteLLM override for reference.",
-      "tags": [
-        "configuration",
-        "opencode",
-        "environment-variant",
-        "home"
-      ],
-      "complexity": "simple"
-    },
-    {
       "id": "config:opencode/opencode.json.internal",
       "type": "config",
       "name": "opencode.json.internal",
@@ -23468,20 +22873,6 @@
       "complexity": "complex"
     },
     {
-      "id": "file:tests/bats/functions/claude_compose_skills_dir.bats",
-      "type": "file",
-      "name": "claude_compose_skills_dir.bats",
-      "filePath": "tests/bats/functions/claude_compose_skills_dir.bats",
-      "summary": "Bats tests for _claude_compose_skills_dir, the F-8/issue #707 helper that converts the legacy directory-level Claude skills symlink into a real composed directory.",
-      "tags": [
-        "test",
-        "bats",
-        "symlink",
-        "claude-integration"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:tests/bats/functions/claude_help_plugin.bats",
       "type": "file",
       "name": "claude_help_plugin.bats",
@@ -24194,21 +23585,6 @@
       "complexity": "moderate"
     },
     {
-      "id": "file:tests/bats/skills/devx_docs_bootstrap_scaffold.bats",
-      "type": "file",
-      "name": "devx_docs_bootstrap_scaffold.bats",
-      "filePath": "tests/bats/skills/devx_docs_bootstrap_scaffold.bats",
-      "summary": "Offline coverage (issue #1028) for claude/skills/devx-docs-bootstrap/lib/scaffold.sh, testing --help, default dry-run planning, --apply directory/README scaffolding, --check gating, idempotent re-runs, and --force overwrite behavior.",
-      "tags": [
-        "test",
-        "docs-bootstrap",
-        "scaffold",
-        "dry-run",
-        "idempotency"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:tests/bats/skills/gh_add_ai_metrics_date.bats",
       "type": "file",
       "name": "gh_add_ai_metrics_date.bats",
@@ -24307,50 +23683,6 @@
         "markdown-headings"
       ],
       "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/gh_kanban_bootstrap_setup.bats",
-      "type": "file",
-      "name": "gh_kanban_bootstrap_setup.bats",
-      "filePath": "tests/bats/skills/gh_kanban_bootstrap_setup.bats",
-      "summary": "Large offline coverage suite for claude/skills/gh-kanban-bootstrap/lib/setup.sh, covering project-scope detection, org workflow checklist dry-runs, owner/repo auto-detection from git context, workflow #3 disable messaging (issue #699), and the GH_PR_REPLY_AUTO_APPROVE_REPOS ~/.zshrc.local wiring (issue #743).",
-      "tags": [
-        "test",
-        "gh-kanban-bootstrap",
-        "project-scope",
-        "auto-detect",
-        "auto-approve-env"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "file:tests/bats/skills/gh_pr_merge_board_gate.bats",
-      "type": "file",
-      "name": "gh_pr_merge_board_gate.bats",
-      "filePath": "tests/bats/skills/gh_pr_merge_board_gate.bats",
-      "summary": "Verifies the Step 4-B board-approval gate for gh-pr-merge (issue #397) across five cases: Approved proceeds, any non-Approved status refuses with redirect (rc=2), no board silently skips, and GH_PR_MERGE_SKIP_BOARD_CHECK=1 bypasses entirely.",
-      "tags": [
-        "test",
-        "gh-pr-merge",
-        "board-gate",
-        "project-status"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/gh_pr_reply_auto_approve.bats",
-      "type": "file",
-      "name": "gh_pr_reply_auto_approve.bats",
-      "filePath": "tests/bats/skills/gh_pr_reply_auto_approve.bats",
-      "summary": "Verifies the Step 8 solo-repo auto-approve gate for gh-pr-reply (issue #410) across seven acceptance cases: allowlist matching, draft/CHANGES_REQUESTED/REVIEW_REQUIRED skip guards, zero-comment defensive skip, helper-failure soft-fail handling, and bypass-env-var scope leakage prevention.",
-      "tags": [
-        "test",
-        "gh-pr-reply",
-        "auto-approve",
-        "allowlist",
-        "review-decision"
-      ],
-      "complexity": "complex"
     },
     {
       "id": "file:tests/bats/skills/gh_pr_reply_board_sync.bats",
@@ -24562,76 +23894,6 @@
         "session-start"
       ],
       "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-      "type": "file",
-      "name": "test_add_defects_1132.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-      "summary": "Bats regression suite for issue #1132 covering three devx:ssh-delegate `add` defects: shadowing IdentityFile detection/adoption, fail-fast on non-interactive ssh-copy-id, and the --key-only flag skipping config regeneration.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "regression"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_audit_append.bats",
-      "type": "file",
-      "name": "test_audit_append.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_audit_append.bats",
-      "summary": "Bats suite for the ssh-delegate audit.sh log helper, verifying its JSONL append-only log writes one escaped, valid JSON line per event and honors the DEVX_SSH_AUDIT_LOG override.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "audit-log"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-      "type": "file",
-      "name": "test_install_dry_run.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-      "summary": "Bats suite asserting the ssh-delegate ssh_delegate.sh --dry-run guard mutates nothing (no manifest, config, or audit log) while still rendering the intended ssh-copy-id command and default alias.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "dry-run"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-      "type": "file",
-      "name": "test_manifest_parse.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-      "summary": "Unit test suite for the dependency-free ssh-delegate manifest.sh engine, covering YAML parsing, defaults, membership checks, and idempotent upsert/field-mutation round-trips.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "manifest"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
-      "type": "file",
-      "name": "test_verify_batchmode.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
-      "summary": "Bats suite for the ssh-delegate verify.sh helper, asserting ssh_verify_alias always passes BatchMode=yes (never prompts for a password) and only refreshes last_verified_at on success, using a mocked ssh binary.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "verify"
-      ],
-      "complexity": "simple"
     },
     {
       "id": "file:tests/bats/test_helper.bash",
@@ -26137,20 +25399,6 @@
       "weight": 0.5
     },
     {
-      "source": "document:REFACTORING_SETUP_SH.md",
-      "target": "file:setup.sh",
-      "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "config:pyproject.toml",
-      "target": "document:requirements.txt",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
       "source": "file:setup.sh",
       "target": "file:install.sh",
       "type": "related",
@@ -26875,97 +26123,6 @@
       "source": "document:docs/feature/enhance-git-clean-local-command/enhance-git-clean-local.md",
       "target": "file:shell-common/functions/git.sh",
       "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/development-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/devops-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "target": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/phase-1-detail.md",
-      "target": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/progress-checklist.md",
-      "target": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/quick-start.md",
-      "target": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/quick-start.md",
-      "target": "document:docs/feature/my-cli/planning/phase-1-detail.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/quick-start.md",
-      "target": "document:docs/feature/my-cli/README.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "target": "document:docs/feature/my-cli/requirements/req-abc-c.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-      "target": "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "type": "related",
       "direction": "forward",
       "weight": 0.5
     },
@@ -28025,118 +27182,6 @@
       "type": "documents",
       "direction": "forward",
       "weight": 0.5
-    },
-    {
-      "source": "document:scripts/maintenance/README.md",
-      "target": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:detect_bash_features",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:get_shebang",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_stats",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_priority_files",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_findings",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_source_only",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_bash_required",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_stats",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_priority_files",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_findings",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:detect_bash_features",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:get_shebang",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
     },
     {
       "source": "file:scripts/maintenance/check_bash_status.sh",
@@ -33004,13 +32049,6 @@
       "weight": 0.8
     },
     {
-      "source": "file:shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "target": "function:shell-common/tools/custom/run_agents_md_master_prompt.sh:main",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
       "source": "file:shell-common/tools/custom/set_locale.sh",
       "target": "function:shell-common/tools/custom/set_locale.sh:main",
       "type": "contains",
@@ -34194,27 +33232,6 @@
       "weight": 0.6
     },
     {
-      "source": "file:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "target": "function:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh:gh_pr_merge_board_gate",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "target": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_auto_approve_step8",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "target": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_render_step8_row",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
       "source": "file:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh",
       "target": "function:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh:gh_pr_reply_board_sync_step65",
       "type": "contains",
@@ -34803,27 +33820,6 @@
       "weight": 0.6
     },
     {
-      "source": "file:bash/util/init.bash",
-      "target": "function:bash/util/init.bash:init_dotfiles_bash_dir",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:bash/util/init.bash",
-      "target": "function:bash/util/init.bash:init_dotfiles_bash_dir",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:.debug/test_install_opencode.sh",
-      "target": "file:shell-common/tools/custom/install_opencode.sh",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
       "source": "config:apt/sources.list.jammy",
       "target": "config:apt/sources.list.jammy.internal",
       "type": "related",
@@ -34895,34 +33891,6 @@
     },
     {
       "source": "config:.shellcheckrc",
-      "target": "file:.debug/test_install_opencode.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.shellcheckrc",
-      "target": "file:agy/setup.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.shellcheckrc",
-      "target": "file:bash/env/bash_interactive.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.shellcheckrc",
-      "target": "file:bash/util/init.bash",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.gitattributes",
       "target": "file:agy/setup.sh",
       "type": "configures",
       "direction": "forward",
@@ -34930,21 +33898,7 @@
     },
     {
       "source": "config:.gitattributes",
-      "target": "file:bash/env/bash_interactive.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.gitattributes",
-      "target": "file:bash/util/init.bash",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.gitattributes",
-      "target": "file:.debug/test_install_opencode.sh",
+      "target": "file:agy/setup.sh",
       "type": "configures",
       "direction": "forward",
       "weight": 0.6
@@ -36112,13 +35066,6 @@
       "weight": 0.5
     },
     {
-      "source": "config:opencode/opencode.json.external",
-      "target": "config:opencode/opencode.json.home",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
       "source": "config:opencode/opencode.json.internal",
       "target": "config:shell-common/env/development.local.example",
       "type": "depends_on",
@@ -36694,41 +35641,6 @@
     },
     {
       "source": "file:tests/bats/skills/session_start_settings_drift_hook.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_audit_append.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
       "target": "file:tests/bats/test_helper.bash",
       "type": "depends_on",
       "direction": "forward",
@@ -37473,8 +36385,6 @@
         "file:bash/main.bash",
         "file:bash/profile.bash",
         "file:bash/setup.sh",
-        "file:bash/env/bash_interactive.sh",
-        "file:bash/util/init.bash",
         "document:zsh/AGENTS.md",
         "file:zsh/main.zsh",
         "file:zsh/setup.sh",
@@ -37659,7 +36569,6 @@
         "file:shell-common/tools/custom/make_jira.sh",
         "file:shell-common/tools/custom/mirror-pages-activate.sh",
         "file:shell-common/tools/custom/repo_stats.sh",
-        "file:shell-common/tools/custom/run_agents_md_master_prompt.sh",
         "file:shell-common/tools/custom/set_locale.sh",
         "file:shell-common/tools/custom/setup_crt.sh",
         "file:shell-common/tools/custom/setup_gpg_cache.sh",
@@ -37739,19 +36648,6 @@
         "document:docs/feature/enhance-git-clean-local-command/input.txt",
         "document:docs/feature/enhance-git-clean-local-command/enhance-git-clean-local-CX.md",
         "document:docs/feature/enhance-git-clean-local-command/enhance-git-clean-local.md",
-        "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-        "document:docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/development-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/devops-category-analysis.md",
-        "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-        "document:docs/feature/my-cli/planning/phase-1-detail.md",
-        "document:docs/feature/my-cli/planning/progress-checklist.md",
-        "document:docs/feature/my-cli/planning/quick-start.md",
-        "document:docs/feature/my-cli/requirements/req-abc-c.md",
-        "document:docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-        "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
         "document:docs/feature/superpowers-plans/2026-04-22-gh-skills-expansion.md",
         "document:docs/feature/superpowers-plans/2026-05-04-claude-multi-account.md",
         "document:docs/feature/superpowers-plans/2026-07-01-claude-plugin-manifest.md",
@@ -37880,7 +36776,6 @@
         "document:docs/feature/gh-pr-approve-ai-option/design.md",
         "document:docs/feature/gh-pr-approve-status-prune/design.md",
         "document:docs/feature/gh-pr-reply-ai-option/design.md",
-        "document:docs/feature/my-cli/README.md",
         "document:docs/feature/skill-ai-worktree-teardown/design-G.md",
         "document:docs/feature/skill-git-worktree-create/design-C.md",
         "document:docs/feature/skill-write-task-history/design.md",
@@ -37897,8 +36792,6 @@
       "name": "Test Suite",
       "description": "The bats shell-test suite, pytest integration tests, and golden-rule checks that verify the shell config and hook system behave as expected.",
       "nodeIds": [
-        "file:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-        "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
         "file:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh",
         "file:tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh",
         "file:tests/bats/skills/_fixtures/gh_pr_stacked_detect.sh",
@@ -37914,7 +36807,6 @@
         "document:tests/AGENTS.md",
         "file:tests/bats/functions/ai_setup.bats",
         "file:tests/bats/functions/ai_usage.bats",
-        "file:tests/bats/functions/claude_compose_skills_dir.bats",
         "file:tests/bats/functions/claude_help_plugin.bats",
         "file:tests/bats/functions/claude_local_email_prompt.bats",
         "file:tests/bats/functions/claude_plugin_list.bats",
@@ -37965,7 +36857,6 @@
         "file:tests/bats/setup/test_no_backup_accumulation.bats",
         "file:tests/bats/skills/claude_plugin_structure.bats",
         "file:tests/bats/skills/closing_keyword_policy.bats",
-        "file:tests/bats/skills/devx_docs_bootstrap_scaffold.bats",
         "file:tests/bats/skills/gh_add_ai_metrics_date.bats",
         "file:tests/bats/skills/gh_add_ai_metrics_pace.bats",
         "file:tests/bats/skills/gh_disable_ai_metrics.bats",
@@ -37973,9 +36864,6 @@
         "file:tests/bats/skills/gh_issue_implement_claim.bats",
         "file:tests/bats/skills/gh_issue_proceed_safety.bats",
         "file:tests/bats/skills/gh_issue_proceed_schema.bats",
-        "file:tests/bats/skills/gh_kanban_bootstrap_setup.bats",
-        "file:tests/bats/skills/gh_pr_merge_board_gate.bats",
-        "file:tests/bats/skills/gh_pr_reply_auto_approve.bats",
         "file:tests/bats/skills/gh_pr_reply_board_sync.bats",
         "file:tests/bats/skills/gh_pr_reply_remote.bats",
         "file:tests/bats/skills/gh_pr_review_arg_parse.bats",
@@ -37991,11 +36879,6 @@
         "file:tests/bats/skills/post_gh_pr_create_hook.bats",
         "file:tests/bats/skills/session_start_pc_context_hook.bats",
         "file:tests/bats/skills/session_start_settings_drift_hook.bats",
-        "file:tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-        "file:tests/bats/skills/ssh_delegate/test_audit_append.bats",
-        "file:tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-        "file:tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-        "file:tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
         "file:tests/bats/test_helper.bash",
         "file:tests/bats/tools/claude_plugin_publish_sync.bats",
         "file:tests/bats/tools/claude_plugin_reconcile.bats",
@@ -38173,11 +37056,9 @@
         "document:CLAUDE.md",
         "document:PORTS.md",
         "document:README.md",
-        "document:REFACTORING_SETUP_SH.md",
         "file:install.sh",
         "config:mise.toml",
         "config:pyproject.toml",
-        "document:requirements.txt",
         "file:setup.sh",
         "config:.gitattributes",
         "config:.gitmessage",
@@ -38186,19 +37067,16 @@
         "file:scripts/check_port_registry.sh",
         "file:scripts/debug_pip_config.sh",
         "file:scripts/disable-git-crypt-local.sh",
-        "file:scripts/flush-transfer.sh",
         "file:scripts/lint_docs_filenames.sh",
         "file:scripts/setup-skills-ssot.sh",
         "file:scripts/verify-config-files.sh",
         "document:scripts/maintenance/README.md",
-        "file:scripts/maintenance/analyze_shebang_report.sh",
         "file:scripts/maintenance/check_bash_status.sh",
         "file:scripts/maintenance/fix_crlf_issue.sh",
         "file:scripts/maintenance/analyze_shebangs.py",
         "file:scripts/maintenance/check_bash_status.py",
         "file:scripts/maintenance/check_codex_skills_budget.py",
-        "document:.ai/postmortems/2026-04-11-gwt-help-format-mismatch.md",
-        "file:.debug/test_install_opencode.sh"
+        "document:.ai/postmortems/2026-04-11-gwt-help-format-mismatch.md"
       ]
     },
     {
@@ -38214,7 +37092,6 @@
         "config:aws/aws-config.example",
         "config:aws/aws.local.example",
         "pipeline:.github/workflows/ci.yml",
-        "pipeline:.github/workflows/cli-package.yml",
         "pipeline:.github/workflows/project-board-sync.yml",
         "pipeline:.github/workflows/test.yml",
         "document:.github/pull_request_template.md",
@@ -38225,7 +37102,6 @@
         "file:obsidian/bin/obsidian",
         "file:script:obsidian/setup.sh",
         "config:opencode/opencode.json.external",
-        "config:opencode/opencode.json.home",
         "config:opencode/opencode.json.internal",
         "document:agy/AGENTS.md",
         "file:agy/setup.sh",
@@ -38368,7 +37244,6 @@
       "title": "Design History and Conventions",
       "description": "REFACTORING_SETUP_SH.md is the project's own record of refactoring setup.sh (step 2) toward SOLID principles — config extraction, function separation, an environments.conf SSOT — showing this codebase treats its own architecture as documented, evolving history rather than static code. command-design-pattern.md closes the loop from the other direction: it's the SSOT new shell commands must follow (naming, dispatcher types, help integration), the same convention discipline you've now seen enforced by the UX library, the git hooks, and the test suite throughout this tour.",
       "nodeIds": [
-        "document:REFACTORING_SETUP_SH.md",
         "document:docs/.ssot/command-design-pattern.md"
       ]
     }
