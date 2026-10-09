@@ -62,6 +62,16 @@ fi
 # shellcheck source=/dev/null
 . "${_PMT_SHELL_COMMON}/tools/custom/lib/aicron_state.sh" || exit 1
 
+# herdr pane helpers shared with issue_watcher_cron.sh (lock, settle, idle
+# wait, workspace, account routing). Hard failure: without them there is no
+# lock and no way to open the train's pane.
+if [ ! -f "${_PMT_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" ]; then
+    ux_error "herdr_pane.sh not found under ${_PMT_SHELL_COMMON}/tools/custom/lib — cannot open the train's pane."
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "${_PMT_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" || exit 1
+
 # ============================================================
 # Constants (SSOT for the dispatcher)
 # ============================================================
@@ -204,7 +214,7 @@ _PMT_CONFIG_DIR=""
 # _PMT_HOST, _PMT_CONFIG_DIR). The tab id is what orphan cleanup closes (#1512).
 _PMT_PANE_ID=""
 _PMT_TAB_ID=""
-# The stderr capture file handed to _pmt_agent_start. Global, not local, so the
+# The stderr capture file handed to _hp_agent_start. Global, not local, so the
 # EXIT/INT/TERM trap that removes it can still name it after the function that
 # created it has returned — a `local` would be unset by then and `set -u` would
 # turn the cleanup into its own error (PR #1517 review, agy).
@@ -224,13 +234,9 @@ _PMT_AICRON_JOB="merge-train"
 # Helpers — state paths and JSON
 # ============================================================
 
-# Nested defaults on purpose: under `set -u`, `${XDG_STATE_HOME:-$HOME/...}`
-# still aborts with "HOME: unbound variable" when HOME itself is unset (a cron
-# environment can be that bare), so HOME is never referenced unguarded.
+# State dir for this dispatcher (lib/herdr_pane.sh _hp_state_dir).
 _pmt_state_dir() {
-    printf '%s/%s' \
-        "${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}" \
-        "${_PMT_STATE_SUBDIR}"
+    _hp_state_dir "${_PMT_STATE_SUBDIR}"
 }
 
 # The backoff state file for *this tick's target*, not for the machine.
@@ -251,40 +257,6 @@ _pmt_state_dir() {
 _pmt_backoff_file() {
     printf '%s/%s-%s' "$(_pmt_state_dir)" "${_PMT_BACKOFF_BASENAME}" \
         "$(printf '%s/%s' "${_PMT_HOST}" "${_PMT_REPO}" | tr -c 'A-Za-z0-9._-' '-')"
-}
-
-# Extract one string field from JSON on stdin.
-#   $1 = jq filter, e.g. '.result.agent.agent_status'.
-#
-# jq-only, and deliberately so: main() refuses to run without jq (the PR list
-# is an array of objects, which no flat-key text scanner can walk), so every
-# caller here is downstream of that check. Always returns 0 — a malformed
-# document reads as "no such field", which is what every caller treats it as.
-_pmt_json_value() {
-    jq -r "${1} // empty" 2>/dev/null || return 0
-}
-
-# First string value of a flat key anywhere in the document. `herdr tab create`
-# and `herdr workspace create` both answer with a pane but nest it under
-# different parents (`.result.pane` vs `.result.root_pane`), and the CLI is
-# free to add another. Keying on the leaf name rather than the path keeps this
-# working across both shapes.
-#
-# The key travels as a jq *argument*, never as interpolated program text.
-_pmt_json_first() {
-    jq -r --arg k "$1" \
-        '[.. | objects | .[$k]? // empty] | map(select(type == "string")) | first // empty' \
-        2>/dev/null || return 0
-}
-
-# Echo epoch seconds, or nothing when the clock is unreadable.
-_pmt_now() {
-    local _now
-    _now=$(date +%s 2>/dev/null) || return 0
-    case "${_now}" in
-    '' | *[!0-9]*) return 0 ;;
-    esac
-    printf '%s' "${_now}"
 }
 
 # ============================================================
@@ -367,7 +339,7 @@ _pmt_target_count() {
         --json number,updatedAt,isDraft,labels,headRefOid,mergeStateStatus,mergeable 2>/dev/null) || return 1
     [ -n "${_json}" ] || return 1
 
-    _now=$(_pmt_now)
+    _now=$(_hp_now)
     # No clock means no defensible cutoff. Counting every PR as a target would
     # merge inside the quiet window; counting none would wedge the train
     # permanently. Refusing the tick is the only answer that does neither.
@@ -590,42 +562,7 @@ _pmt_pause_job() {
 # which outlives the tick that started it — that is _pmt_train_state's job.
 # Why neither layer subsumes the other: `references/cron-dispatcher.md`.
 _pmt_acquire_lock() {
-    local _dir _lock
-    _dir=$(_pmt_state_dir)
-    _lock="${_dir}/${_PMT_LOCK_BASENAME}"
-
-    if ! command -v flock >/dev/null 2>&1; then
-        ux_warning "flock not found — running without single-instance protection"
-        return 0
-    fi
-
-    if ! mkdir -p "${_dir}" 2>/dev/null; then
-        ux_warning "Cannot create state directory (${_dir}) — running without single-instance protection"
-        return 0
-    fi
-
-    # The 2>/dev/null must be scoped to the group, not attached to `exec`:
-    # `exec 9>FILE 2>/dev/null` applies *both* redirections permanently, muting
-    # the whole script's stderr — every later ux_error would vanish from the
-    # cron log. The group restores fd 2 on exit while fd 9 persists.
-    if ! { exec 9>"${_lock}"; } 2>/dev/null; then
-        ux_warning "Cannot open lock file (${_lock}) — running without single-instance protection"
-        return 0
-    fi
-
-    if ! flock -n 9; then
-        ux_warning "another pr_merge_train_cron tick is already running — skip"
-        return 1
-    fi
-}
-
-# Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
-# when herdr itself rejects the query — agent missing, or pane closed.
-_pmt_agent_status() {
-    local _json _rc=0
-    _json=$(herdr agent get "$1" 2>/dev/null) || _rc=$?
-    [ "${_rc}" -eq 0 ] || return 1
-    printf '%s' "${_json}" | _pmt_json_value '.result.agent.agent_status'
+    _hp_acquire_lock "$(_pmt_state_dir)" "${_PMT_LOCK_BASENAME}" pr_merge_train_cron
 }
 
 # Classify the previously started train session. Echoes one of:
@@ -652,7 +589,7 @@ _pmt_agent_status() {
 _pmt_train_state() {
     local _status
 
-    _status=$(_pmt_agent_status "$1") || {
+    _status=$(_hp_agent_status "$1") || {
         printf 'fresh'
         return 0
     }
@@ -667,69 +604,10 @@ _pmt_train_state() {
 # Launch — herdr pane -> claude -> prompt (D-8)
 # ============================================================
 
-# CLAUDE_CONFIG_DIR for the train's pane (issue #571 / #1393). Same account
-# routing as issue_watcher_cron.sh's `_iw_resolve_config_dir`, which carries the
-# per-branch rationale in full; only the error wording differs here. Returns 2
-# when HOME is unset (the caller degrades to no routing), 1 on a real failure.
+# CLAUDE_CONFIG_DIR for this dispatcher's panes — account routing, exit codes
+# and rationale live in lib/herdr_pane.sh _hp_resolve_config_dir.
 _pmt_resolve_config_dir() {
-    [ -n "${HOME:-}" ] || return 2
-
-    (
-        # Captured before claude.sh is sourced: the *caller's* environment is
-        # what says whether the single-account fallback applies. A set-but-empty
-        # CLAUDE_DEFAULT_ACCOUNT counts as explicitly set.
-        _enabled="${CLAUDE_ENABLED_ACCOUNTS:-}"
-        _default_set=0
-        [ -z "${CLAUDE_DEFAULT_ACCOUNT+x}" ] || _default_set=1
-
-        DOTFILES_FORCE_INIT=1
-        export DOTFILES_FORCE_INIT
-
-        # shellcheck source=/dev/null
-        . "${_PMT_SHELL_COMMON}/tools/integrations/claude.sh" >&2 || {
-            ux_error "Cannot load ${_PMT_SHELL_COMMON}/tools/integrations/claude.sh — CLAUDE_CONFIG_DIR unresolvable."
-            exit 1
-        }
-
-        # Internal-PC single-account override: must run before account
-        # resolution — an empty CLAUDE_ENABLED_ACCOUNTS must not fail the tick.
-        if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
-            _cfg_dir="$HOME/.claude"
-        else
-            _account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
-            _cfg_dir=$(_claude_resolve_account "${_account}") || {
-                # Pre-#1393 single-account user. ux_* is redirected because
-                # this subshell reserves stdout for the resolved path.
-                if [ -z "${_enabled}" ] && [ "${_default_set}" -eq 0 ] &&
-                    [ -d "$HOME/.claude" ]; then
-                    ux_warning "CLAUDE_ENABLED_ACCOUNTS not configured — falling back to \$HOME/.claude (single-account mode)." >&2
-                    ux_info "Run 'claude-accounts setup' to opt into multi-account routing." >&2
-                    printf '%s' "$HOME/.claude"
-                    exit 0
-                fi
-                ux_error "Unknown claude account: ${_account} — cannot set CLAUDE_CONFIG_DIR for the merge-train pane."
-                ux_info "Available: $(_claude_resolve_account --list | tr '\n' ' ')" >&2
-                exit 1
-            }
-        fi
-
-        if [ ! -d "${_cfg_dir}" ]; then
-            ux_error "Claude account directory missing: ${_cfg_dir} — cannot bootstrap the merge-train pane."
-            ux_info "Run: claude-accounts setup" >&2
-            exit 1
-        fi
-
-        # A directory that exists is not an account that is logged in
-        # (issue #1561) — `_claude_account_logged_in` in claude.sh, sourced
-        # above, carries the rationale in full and owns the rule.
-        if ! _claude_account_logged_in "${_cfg_dir}"; then
-            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing, empty, or not valid JSON — the pane would open on 'Not logged in' and every prompt would stall."
-            ux_info "Run: claude-accounts status   (then log that account in)" >&2
-            exit 1
-        fi
-
-        printf '%s' "${_cfg_dir}"
-    )
+    _hp_resolve_config_dir "${_PMT_SHELL_COMMON}" merge-train stderr
 }
 
 # Set _PMT_CONFIG_DIR for this tick's pane. Returns non-zero only for a real
@@ -748,36 +626,17 @@ _pmt_bind_config_dir() {
     return 1
 }
 
+# herdr *create* with the shared flags, routed at this tick's account
+# (lib/herdr_pane.sh _hp_herdr_create). Read at call time: _PMT_CONFIG_DIR is
+# resolved after the file is sourced.
 _pmt_herdr_create() {
-    local _cwd="$1" _label="$2"
-    shift 2
-
-    set -- "$@" --cwd "${_cwd}" --label "${_label}" --no-focus
-    [ -z "${_PMT_CONFIG_DIR}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${_PMT_CONFIG_DIR}"
-
-    herdr "$@" 2>/dev/null
+    _hp_herdr_create "${_PMT_CONFIG_DIR}" "$@"
 }
 
-# Echo the workspace id whose label is <1>, creating it against cwd <2> when no
-# such workspace exists. Label-matched rather than persisted: the herdr server
-# is the SSOT for what is open, and a state file would only drift from it.
+# Workspace id for label <1>, created against cwd <2> when missing
+# (lib/herdr_pane.sh _hp_workspace_for_label).
 _pmt_workspace_for_label() {
-    local _label="$1" _cwd="$2" _json _ws
-
-    _json=$(herdr workspace list 2>/dev/null) || _json=""
-    _ws=$(printf '%s' "${_json}" | jq -r --arg l "${_label}" '
-        [ .result.workspaces[]? | select(.label == $l) | .workspace_id ] | first // empty
-    ' 2>/dev/null) || _ws=""
-
-    if [ -n "${_ws}" ]; then
-        printf '%s' "${_ws}"
-        return 0
-    fi
-
-    _json=$(_pmt_herdr_create "${_cwd}" "${_label}" workspace create) || _json=""
-    _ws=$(printf '%s' "${_json}" | _pmt_json_first workspace_id)
-    [ -n "${_ws}" ] || return 1
-    printf '%s' "${_ws}"
+    _hp_workspace_for_label "${_PMT_CONFIG_DIR}" "$@"
 }
 
 # Open the train's tab, binding _PMT_PANE_ID and _PMT_TAB_ID. Nothing here used
@@ -794,9 +653,9 @@ _pmt_tab_create() {
 
     _json=$(_pmt_herdr_create "${_cwd}" "${_label}" tab create --workspace "${_ws}") || return 1
 
-    _PMT_PANE_ID=$(printf '%s' "${_json}" | _pmt_json_first pane_id)
+    _PMT_PANE_ID=$(printf '%s' "${_json}" | _hp_json_first pane_id)
     [ -n "${_PMT_PANE_ID}" ] || return 1
-    _PMT_TAB_ID=$(printf '%s' "${_json}" | _pmt_json_first tab_id)
+    _PMT_TAB_ID=$(printf '%s' "${_json}" | _hp_json_first tab_id)
 }
 
 # Best-effort close of a tab this tick opened but could never put an agent on.
@@ -822,46 +681,6 @@ _pmt_tab_close() {
     return 0
 }
 
-# `-- ARG...` is passed through to the pane's claude invocation. Echoes herdr's
-# response so the caller can read `.error.code`; returns herdr's exit status.
-#
-# `--dangerously-skip-permissions` is required, not a convenience: nobody is at
-# the keyboard of a cron pane, so a single permission prompt would park the
-# train forever instead of failing it (same reason issue_watcher_cron.sh passes
-# it, #1393). What it grants *here* is broader than there, and worth stating:
-# this session merges PRs, so the flag lets it run `gh pr merge` and the
-# rebase/CI-fix atoms without stopping to ask. Two things bound it — NF-2
-# forbids the train from ever calling `gh:pr-merge-emergency`, so the platform's
-# own protections stay in force, and the approval gate (D-5, `approval-gate.md`)
-# is fail-closed, so an unreadable policy skips the PR rather than merging it.
-#
-# stderr goes to the file named by $3 rather than /dev/null (#1512, same defect
-# class as #1458): herdr is free to answer on either stream and in cron it
-# answers on stderr, so discarding it threw away the one sentence that named
-# the failure — `agent_pane_busy`. stdout stays on the pipe because the caller
-# reads `.error.code` off it, which is why this is a file and not a `2>&1`.
-_pmt_agent_start() {
-    herdr agent start "$1" --kind claude --pane "$2" \
-        -- --dangerously-skip-permissions 2>"$3"
-}
-
-# Echo the herdr error code behind a failed call: <1> is herdr's stdout, <2>
-# the file its stderr was captured to. stdout first, stderr as the fallback.
-# Both are consulted because the stream herdr picks is not ours to choose — and
-# in production it picked the one nobody was reading, which is why even the
-# `agent_name_taken` branch below could never fire. Nothing here is specific to
-# `agent start`; the next call site that captures stderr can use it as is.
-# Echoes nothing when neither stream carried a parsable error document.
-_pmt_herdr_error_code() {
-    local _json="$1" _errfile="$2" _code
-
-    _code=$(printf '%s' "${_json}" | _pmt_json_value '.error.code')
-    if [ -z "${_code}" ] && [ -s "${_errfile}" ]; then
-        _code=$(_pmt_json_value '.error.code' <"${_errfile}")
-    fi
-    printf '%s' "${_code}"
-}
-
 # The human half of the same document: herdr's own sentence about the failure,
 # from the stderr file <1>. `.error.message` first, because what herdr writes
 # to stderr is a JSON document and dumping it raw into a cron log buries the
@@ -873,7 +692,7 @@ _pmt_herdr_error_message() {
     local _errfile="$1" _msg
 
     [ -s "${_errfile}" ] || return 0
-    _msg=$(_pmt_json_value '.error.message' <"${_errfile}")
+    _msg=$(_hp_json_value '.error.message' <"${_errfile}")
     [ -n "${_msg}" ] || _msg=$(head -n 1 "${_errfile}" 2>/dev/null)
     printf '%s' "${_msg}"
 }
@@ -894,8 +713,8 @@ _pmt_start_agent_retrying() {
 
     _PMT_START_CODE=""
     while :; do
-        _json=$(_pmt_agent_start "${_agent}" "${_pane}" "${_errf}") && return 0
-        _PMT_START_CODE=$(_pmt_herdr_error_code "${_json}" "${_errf}")
+        _json=$(_hp_agent_start "${_agent}" "${_pane}" "${_errf}") && return 0
+        _PMT_START_CODE=$(_hp_herdr_error_code "${_json}" "${_errf}")
 
         # The one failure worth another attempt (#1512): the pane was created
         # moments ago and its shell is not interactive yet. Only this code —
@@ -912,132 +731,15 @@ _pmt_start_agent_retrying() {
     done
 }
 
-# Wait for a freshly started agent to report idle before prompting it.
-# `herdr agent start` only confirms the pane looks interactive — a claude
-# process can have drawn its prompt box before its key-input loop accepts
-# Enter, so the command is typed but never submitted (issue #1399).
-#
-# This is a *health* check, not the settle wait. A live agent answers `idle` on
-# the first poll, so the normal path leaves here in ~0s — the poll budget only
-# bounds how long a missing agent or a closed pane can hold the tick, and
-# hitting it still prompts, because a stalled prompt is reported rather than
-# silently booked as a started train. The wait that actually makes the prompt
-# land is _pmt_settle, which runs after this (issue #1560).
+# Post-start health check (lib/herdr_pane.sh _hp_wait_for_idle).
 _pmt_wait_for_idle() {
-    local _agent="$1" _i=0 _status _get_failed=0 _detail=""
-
-    while [ "${_i}" -lt "${_PMT_IDLE_POLL_MAX}" ]; do
-        if _status=$(_pmt_agent_status "${_agent}"); then
-            [ "${_status}" != "idle" ] || return 0
-        else
-            _get_failed=$((_get_failed + 1))
-        fi
-        _i=$((_i + 1))
-        [ "${_i}" -lt "${_PMT_IDLE_POLL_MAX}" ] || break
-        [ "${_PMT_IDLE_POLL_SLEEP}" = "0" ] || sleep "${_PMT_IDLE_POLL_SLEEP}"
-    done
-
-    # Counted in checks, not seconds: the gap between them is overridable, so a
-    # wall-clock figure here would be wrong in exactly the runs that read it.
-    [ "${_get_failed}" -eq 0 ] ||
-        _detail=" (${_get_failed}/${_PMT_IDLE_POLL_MAX} health-check failures)"
-    ux_warning "Agent ${_agent} never reported idle in ${_PMT_IDLE_POLL_MAX} checks${_detail} — prompting anyway."
+    _hp_wait_for_idle "$1" "${_PMT_IDLE_POLL_MAX}" "${_PMT_IDLE_POLL_SLEEP}" prompting
 }
 
-# Echo the tail of an agent's pane, or nothing when it cannot be read.
-#   $1 = agent name
-#
-# `--format text` gives the pane as plain lines. herdr answers its error
-# document as JSON on *stdout* with exit 0 when the target is gone, so an
-# unreadable pane is recognised by parsing, not by the exit code. Always
-# returns 0: "no text" is "nothing to conclude", never a failure.
-_pmt_pane_text() {
-    local _text
-    _text=$(herdr agent read "$1" --lines "${_PMT_SETTLE_READ_LINES}" \
-        --format text 2>/dev/null) || return 0
-    [ -z "$(printf '%s' "${_text}" | _pmt_json_value '.error.code')" ] || return 0
-    printf '%s' "${_text}"
-}
-
-# True when three consecutive pane reads say the agent is listening.
-#   $1 = this read, $2 = the previous one, $3 = the one before that
-#
-# The twin of _iw_pane_settled, whose comment carries the reasoning for all
-# four conditions — non-empty, identical across all three, not the login
-# banner, and why three-in-a-row (not two) since PR #1611's 5th review pass.
-_pmt_pane_settled() {
-    [ -n "$1" ] || return 1
-    [ "$1" = "$2" ] && [ "$2" = "$3" ] || return 1
-    case "$1" in
-    *"${_PMT_SETTLE_NOT_READY_MARK}"*) return 1 ;;
-    esac
-    return 0
-}
-
-# Echo how many settle polls fit in _PMT_SETTLE_SECONDS at _PMT_SETTLE_POLL_SLEEP
-# apart — the twin of _iw_settle_max_polls; see it for the full rationale
-# (agy + codex, PR #1611 review, both passes).
-_pmt_settle_max_polls() {
-    local _seconds="$1" _gap="$2"
-    LC_ALL=C awk -v s="${_seconds}" -v g="${_gap}" \
-        'BEGIN {
-            if (g <= 0) { print s; exit }
-            n = s / g; i = int(n); if (i < n) i++
-            if (i < 2) i = 2
-            # See _iw_settle_max_polls — agy, PR #1611 review, 4th pass.
-            if (i > 1000) i = 1000
-            print i
-        }'
-}
-
-# Wait for a freshly launched pane to look ready before typing into it
-# (issue #1560; polled since #1570). Separate from _pmt_wait_for_idle on
-# purpose: that one asks herdr for the agent's *status*, which reports "not
-# working" and says nothing about the key-input loop. This one reads the pane's
-# own text. The twin of _iw_settle — see it for the full rationale.
-#
-# Always succeeds and always ends in a prompt attempt: reaching the cap with no
-# ready signal warns and proceeds, exactly the pre-#1570 behaviour. The poll
-# can only make the wait shorter, never introduce a new failure mode.
+# Pane-readiness poll before the prompt (lib/herdr_pane.sh _hp_settle).
 _pmt_settle() {
-    local _agent="$1" _i=0 _prev="" _prev2="" _text _now _deadline="" _max_polls
-
-    [ "${_PMT_SETTLE_SECONDS}" = "0" ] && return 0
-    # A fractional cap cannot bound a poll count; it still means the flat wait
-    # it meant before #1570.
-    case "${_PMT_SETTLE_SECONDS}" in
-    *[!0-9]*)
-        sleep "${_PMT_SETTLE_SECONDS}"
-        return 0
-        ;;
-    esac
-
-    _max_polls=$(_pmt_settle_max_polls "${_PMT_SETTLE_SECONDS}" "${_PMT_SETTLE_POLL_SLEEP}")
-
-    _now=$(_pmt_now)
-    # `10#` forces base 10 — see _iw_settle for the full rationale (codex,
-    # PR #1611 review, second pass).
-    [ -z "${_now}" ] || _deadline=$((_now + 10#${_PMT_SETTLE_SECONDS}))
-
-    while [ "${_i}" -lt "${_max_polls}" ]; do
-        # Before the read, not after the sleep — see _iw_settle: a poll gap
-        # wider than expected would otherwise let the last read land past the
-        # cap.
-        if [ -n "${_deadline}" ]; then
-            _now=$(_pmt_now)
-            [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
-        fi
-        _text=$(_pmt_pane_text "${_agent}")
-        ! _pmt_pane_settled "${_text}" "${_prev}" "${_prev2}" || return 0
-        _prev2="${_prev}"
-        _prev="${_text}"
-        _i=$((_i + 1))
-        [ "${_i}" -lt "${_max_polls}" ] || break
-        [ "${_PMT_SETTLE_POLL_SLEEP}" = "0" ] || sleep "${_PMT_SETTLE_POLL_SLEEP}"
-    done
-
-    ux_warning "Agent ${_agent} pane never settled within ${_PMT_SETTLE_SECONDS}s — prompting anyway."
-    return 0
+    _hp_settle "$1" "${_PMT_SETTLE_SECONDS}" "${_PMT_SETTLE_POLL_SLEEP}" \
+        "${_PMT_SETTLE_READ_LINES}" "${_PMT_SETTLE_NOT_READY_MARK}"
 }
 
 _pmt_prompt_retryable() {
@@ -1075,7 +777,7 @@ _pmt_escalate_prompt_stall() {
 # #1512/#1458): herdr answers `agent prompt`'s error document on stderr too,
 # and discarding it is what turned a real timeout into an unexplained
 # "(unknown)" reason with no `Tick complete` ever logged. A file rather than
-# `2>&1` for the same reason `_pmt_agent_start` uses one (line ~543) — stdout
+# `2>&1` for the same reason `_hp_agent_start` uses one (lib/herdr_pane.sh) — stdout
 # stays on its own pipe because `.error.code` is read off it first.
 _pmt_prompt_train() {
     local _agent="$1" _prompt _json _rc=0 _errf _code="" _cause="" _msg _attempt=1
@@ -1097,7 +799,7 @@ _pmt_prompt_train() {
         # Read both halves of herdr's answer before a retry truncates the
         # capture file, so each attempt classifies only its own result.
         if [ "${_rc}" -ne 0 ]; then
-            _code=$(_pmt_herdr_error_code "${_json}" "${_errf}")
+            _code=$(_hp_herdr_error_code "${_json}" "${_errf}")
             _cause=$(_pmt_herdr_error_message "${_errf}")
         else
             _code=""
@@ -1329,7 +1031,7 @@ main() {
     fi
 
     # jq is not optional on this path: `gh pr list --json` answers with an
-    # array of objects, and the flat-key fallback _pmt_json_value uses for the
+    # array of objects, and the flat-key fallback _hp_json_value uses for the
     # single-value herdr responses cannot walk that.
     if ! command -v jq >/dev/null 2>&1; then
         ux_error "jq not found in PATH — cannot parse the PR list."

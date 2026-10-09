@@ -66,6 +66,16 @@ fi
 # shellcheck source=/dev/null
 . "${_IW_SHELL_COMMON}/functions/herdr_agent_lookup.sh" || exit 1
 
+# herdr pane helpers shared with pr_merge_train_cron.sh (lock, settle, idle
+# wait, workspace, account routing). Hard failure: without them there is no
+# lock and no way to open a dispatch pane.
+if [ ! -f "${_IW_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" ]; then
+    ux_error "herdr_pane.sh not found under ${_IW_SHELL_COMMON}/tools/custom/lib — cannot open dispatch panes."
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "${_IW_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" || exit 1
+
 # ============================================================
 # Constants (SSOT for the watch cycle)
 # ============================================================
@@ -383,50 +393,9 @@ _IW_CONFIG_DIR_RESOLVED=0
 # Helpers — state paths and JSON
 # ============================================================
 
-# Nested defaults on purpose: under `set -u`, `${XDG_STATE_HOME:-$HOME/...}`
-# still aborts with "HOME: unbound variable" when HOME itself is unset (a cron
-# environment can be that bare), so HOME is never referenced unguarded.
+# State dir for this dispatcher (lib/herdr_pane.sh _hp_state_dir).
 _iw_state_dir() {
-    printf '%s/%s' \
-        "${XDG_STATE_HOME:-${HOME:-${TMPDIR:-/tmp}}/.local/state}" \
-        "${_IW_STATE_SUBDIR}"
-}
-
-# Extract one string field from JSON on stdin.
-#   $1 = jq filter, e.g. '.result.pane.pane_id'.
-#
-# jq-only, and deliberately so: main() refuses to run without jq (the watch
-# list and the search result are arrays of objects, which no flat-key text
-# scanner can walk), so every caller here is downstream of that check. A
-# hand-rolled awk/sed fallback would be unreachable code pretending to be a
-# safety net. Always returns 0 — a malformed document reads as "no such field",
-# which is what every caller already treats it as.
-_iw_json_value() {
-    jq -r "${1} // empty" 2>/dev/null || return 0
-}
-
-# First string value of a flat key anywhere in the document. `herdr tab create`
-# and `herdr workspace create` both answer with a pane, but nest it under
-# different parents (`.result.pane` vs `.result.root_pane`), and the CLI is
-# free to add another. Keying on the leaf name rather than the path keeps this
-# working across both shapes without a per-command filter table.
-# The key travels as a jq *argument*, never as interpolated program text: a
-# caller-supplied string spliced into the filter would be a jq syntax error at
-# best and arbitrary jq at worst (PR #1447 agy review).
-_iw_json_first() {
-    jq -r --arg k "$1" \
-        '[.. | objects | .[$k]? // empty] | map(select(type == "string")) | first // empty' \
-        2>/dev/null || return 0
-}
-
-# Echo epoch seconds, or nothing when the clock is unreadable.
-_iw_now() {
-    local _now
-    _now=$(date +%s 2>/dev/null) || return 0
-    case "${_now}" in
-    '' | *[!0-9]*) return 0 ;;
-    esac
-    printf '%s' "${_now}"
+    _hp_state_dir "${_IW_STATE_SUBDIR}"
 }
 
 # ============================================================
@@ -928,7 +897,7 @@ _iw_last_repo() {
     local _file
     _file=$(_iw_select_state_file)
     [ -f "${_file}" ] || return 0
-    _iw_json_value '.last_repo' <"${_file}"
+    _hp_json_value '.last_repo' <"${_file}"
 }
 
 # Persist the cursor. Failure costs round-robin fairness for one tick and
@@ -975,98 +944,10 @@ _iw_repo_order() {
 # Helpers — claude account routing
 # ============================================================
 
-# Echo the CLAUDE_CONFIG_DIR the dispatched panes must run `claude` with — the
-# same account routing `claude_yolo` applies (issue #1393). herdr's `--kind`
-# enum has no `claude-yolo`, so the two effects of that wrapper are reproduced
-# here instead: this env var, plus the `-- --dangerously-skip-permissions` tail
-# on `herdr agent start`.
-#
-# Returns:
-#   0  directory echoed on stdout
-#   1  unknown account / missing directory (fail-fast, message already printed)
-#   2  HOME unset — nothing to route against; caller degrades to no --env
-#
-# One narrow exception to the fail-fast (PR #1395 review): a user who never ran
-# `claude-accounts setup` has no CLAUDE_ENABLED_ACCOUNTS whitelist at all and
-# never named an account, so `_claude_resolve_account` rejects even the implicit
-# `personal` default. Before #1393 the pane ran bare `claude` and worked for
-# them; routing must not turn that into a hard failure, so ~/.claude is used
-# when it exists. Every other resolution failure still fails fast — an explicit
-# CLAUDE_DEFAULT_ACCOUNT whose dir is missing, or a non-empty whitelist that
-# does not list the account, are real misconfigurations and silently switching
-# accounts there would route the pane at the wrong credentials.
-#
-# claude.sh is sourced inside a subshell on purpose:
-#   - its interactive guard (`case $- in *i*`) defines nothing at all in a
-#     non-interactive cron run unless DOTFILES_FORCE_INIT is exported first;
-#   - the subshell keeps its ~40 functions and aliases out of this script.
-# ux_* diagnostics go to stderr (ux_error) or are suppressed, so only the
-# resolved directory ever reaches stdout.
+# CLAUDE_CONFIG_DIR for this dispatcher's panes — account routing, exit codes
+# and rationale live in lib/herdr_pane.sh _hp_resolve_config_dir.
 _iw_resolve_config_dir() {
-    [ -n "${HOME:-}" ] || return 2
-
-    (
-        # Captured before claude.sh is sourced: the *caller's* environment is
-        # what says whether the single-account fallback below applies.
-        # set-but-empty CLAUDE_DEFAULT_ACCOUNT counts as explicitly set.
-        _enabled="${CLAUDE_ENABLED_ACCOUNTS:-}"
-        _default_set=0
-        [ -z "${CLAUDE_DEFAULT_ACCOUNT+x}" ] || _default_set=1
-
-        DOTFILES_FORCE_INIT=1
-        export DOTFILES_FORCE_INIT
-
-        # shellcheck source=/dev/null
-        . "${_IW_SHELL_COMMON}/tools/integrations/claude.sh" >&2 || {
-            ux_error "Cannot load ${_IW_SHELL_COMMON}/tools/integrations/claude.sh — CLAUDE_CONFIG_DIR unresolvable."
-            exit 1
-        }
-
-        # Internal-PC single-account override (issue #571): the multi-account
-        # layout is off there, so this branch must run before account
-        # resolution — an empty CLAUDE_ENABLED_ACCOUNTS must not fail the tick.
-        if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
-            _cfg_dir="$HOME/.claude"
-        else
-            _account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
-            _cfg_dir=$(_claude_resolve_account "${_account}") || {
-                # No multi-account opt-in at all *and* no account was asked
-                # for — the pre-#1393 single-account user. ux_* writes to
-                # stdout, which this subshell reserves for the resolved path.
-                if [ -z "${_enabled}" ] && [ "${_default_set}" -eq 0 ] &&
-                    [ -d "$HOME/.claude" ]; then
-                    ux_warning "CLAUDE_ENABLED_ACCOUNTS not configured — falling back to \$HOME/.claude (single-account mode)." >&2
-                    ux_info "Run 'claude-accounts setup' to opt into multi-account routing." >&2
-                    printf '%s' "$HOME/.claude"
-                    exit 0
-                fi
-                ux_error "Unknown claude account: ${_account} — cannot set CLAUDE_CONFIG_DIR for the watcher pane."
-                ux_info "Available: $(_claude_resolve_account --list | tr '\n' ' ')"
-                exit 1
-            }
-        fi
-
-        if [ ! -d "${_cfg_dir}" ]; then
-            ux_error "Claude account directory missing: ${_cfg_dir} — cannot bootstrap the watcher pane."
-            ux_info "Run: claude-accounts setup"
-            exit 1
-        fi
-
-        # A directory that exists is not an account that is logged in
-        # (issue #1561) — a logged-out pane opens on `Not logged in · Run
-        # /login` and drops every keystroke, which the dispatcher then reports
-        # as `agent_prompt_stalled`, a symptom that names neither the account
-        # nor the cause. Fail here instead, where the account is still in hand.
-        # The rule for what counts as "logged in" lives in claude.sh, sourced
-        # above; only the wording of the failure is this script's business.
-        if ! _claude_account_logged_in "${_cfg_dir}"; then
-            ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing, empty, or not valid JSON — the pane would open on 'Not logged in' and every prompt would stall."
-            ux_info "Run: claude-accounts status   (then log that account in)" >&2
-            exit 1
-        fi
-
-        printf '%s' "${_cfg_dir}"
-    )
+    _hp_resolve_config_dir "${_IW_SHELL_COMMON}" watcher stdout
 }
 
 # Resolve _IW_CONFIG_DIR once per tick, wherever the tick first needs it.
@@ -1521,22 +1402,11 @@ _iw_cleanup_attempt() {
     [ -z "${_wt}" ] || (cd "${_path}" && _iw_gwt remove "${_wt}" --force) >/dev/null 2>&1 || true
 }
 
-# Run a herdr *create* command with the flags every such call shares:
-#   _iw_herdr_create <cwd> <label> <herdr-subcommand-word>...
-# e.g. `_iw_herdr_create "$_cwd" "$_label" tab create --workspace ws-1`.
-#
-# One owner on purpose. The `--env CLAUDE_CONFIG_DIR=` tail is the invariant
-# the rate-limit gate's soundness rests on — one account, one quota (see the
-# gate's header comment) — so a new creation call site must not be able to
-# quietly omit it. herdr's own JSON goes to stdout; the exit code is herdr's.
+# herdr *create* with the shared flags, routed at this tick's account
+# (lib/herdr_pane.sh _hp_herdr_create). Read at call time: _IW_CONFIG_DIR is
+# resolved after the file is sourced.
 _iw_herdr_create() {
-    local _cwd="$1" _label="$2"
-    shift 2
-
-    set -- "$@" --cwd "${_cwd}" --label "${_label}" --no-focus
-    [ -z "${_IW_CONFIG_DIR}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${_IW_CONFIG_DIR}"
-
-    herdr "$@" 2>/dev/null
+    _hp_herdr_create "${_IW_CONFIG_DIR}" "$@"
 }
 
 # Echo the herdr workspace label for <repo> at <path>.
@@ -1564,26 +1434,10 @@ _iw_workspace_label() {
     fi
 }
 
-# Echo the workspace id whose label is <1>, creating it against cwd <2> when no
-# such workspace exists. Label-matched rather than persisted: the herdr server
-# is the SSOT for what is open, and a state file would only drift from it.
+# Workspace id for label <1>, created against cwd <2> when missing
+# (lib/herdr_pane.sh _hp_workspace_for_label).
 _iw_workspace_for_label() {
-    local _label="$1" _cwd="$2" _json _ws
-
-    _json=$(herdr workspace list 2>/dev/null) || _json=""
-    _ws=$(printf '%s' "${_json}" | jq -r --arg l "${_label}" '
-        [ .result.workspaces[]? | select(.label == $l) | .workspace_id ] | first // empty
-    ' 2>/dev/null) || _ws=""
-
-    if [ -n "${_ws}" ]; then
-        printf '%s' "${_ws}"
-        return 0
-    fi
-
-    _json=$(_iw_herdr_create "${_cwd}" "${_label}" workspace create) || _json=""
-    _ws=$(printf '%s' "${_json}" | _iw_json_first workspace_id)
-    [ -n "${_ws}" ] || return 1
-    printf '%s' "${_ws}"
+    _hp_workspace_for_label "${_IW_CONFIG_DIR}" "$@"
 }
 
 # Open the issue's tab and echo `<pane_id><TAB><tab_id>`.
@@ -1592,8 +1446,8 @@ _iw_tab_create() {
 
     _json=$(_iw_herdr_create "${_cwd}" "${_label}" tab create --workspace "${_ws}") || return 1
 
-    _pane=$(printf '%s' "${_json}" | _iw_json_first pane_id)
-    _tab=$(printf '%s' "${_json}" | _iw_json_first tab_id)
+    _pane=$(printf '%s' "${_json}" | _hp_json_first pane_id)
+    _tab=$(printf '%s' "${_json}" | _hp_json_first tab_id)
     [ -n "${_pane}" ] || return 1
     printf '%s\t%s' "${_pane}" "${_tab}"
 }
@@ -1607,15 +1461,6 @@ _iw_tab_create() {
 # starting an agent with a malformed one.
 _iw_agent_name() {
     herdr_agent_name "${_IW_AGENT_PREFIX}" "$1" "issue-$2"
-}
-
-# Echo the agent status (idle|working|blocked|done|unknown). Returns non-zero
-# when herdr itself rejects the query (agent missing / pane closed).
-_iw_agent_status() {
-    local _json _rc=0
-    _json=$(herdr agent get "$1" 2>/dev/null) || _rc=$?
-    [ "${_rc}" -eq 0 ] || return 1
-    printf '%s' "${_json}" | _iw_json_value '.result.agent.agent_status'
 }
 
 # Echo the agent's `state_change_seq` — a counter herdr bumps on every
@@ -1632,39 +1477,11 @@ _iw_agent_seq() {
     local _json _rc=0
     _json=$(herdr agent get "$1" 2>/dev/null) || _rc=$?
     [ "${_rc}" -eq 0 ] || return 1
-    printf '%s' "${_json}" | _iw_json_value '.result.agent.state_change_seq'
-}
-
-# `-- ARG...` is passed through to the pane's claude invocation. Unattended
-# cron ticks must never stop on a permission-approval prompt (issue #1393).
-#
-# stderr goes to the file named by $3 rather than /dev/null (#1525, the same
-# defect class as #1445/#1458): herdr is free to answer on either stream and in
-# cron it answers on stderr, so discarding it threw away the one sentence that
-# named the failure — `agent_pane_busy`. stdout stays on the pipe because the
-# caller reads `.error.code` off it, which is why this is a file and not `2>&1`.
-_iw_agent_start() {
-    herdr agent start "$1" --kind claude --pane "$2" \
-        -- --dangerously-skip-permissions 2>"$3"
-}
-
-# Echo the herdr error code behind a failed call: <1> is herdr's stdout, <2> the
-# file its stderr was captured to. stdout first, stderr as the fallback. Both
-# are consulted because the stream herdr picks is not ours to choose — and in
-# production it picked the one nobody was reading. Echoes nothing when neither
-# stream carried a parsable error document.
-_iw_herdr_error_code() {
-    local _json="$1" _errfile="$2" _code
-
-    _code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
-    if [ -z "${_code}" ] && [ -s "${_errfile}" ]; then
-        _code=$(_iw_json_value '.error.code' <"${_errfile}")
-    fi
-    printf '%s' "${_code}"
+    printf '%s' "${_json}" | _hp_json_value '.result.agent.state_change_seq'
 }
 
 # The human half of the same document: herdr's own sentence about the failure.
-# Same two inputs and the same stdout-first order as _iw_herdr_error_code —
+# Same two inputs and the same stdout-first order as _hp_herdr_error_code —
 # herdr picks the stream, not us, so a helper that read only one of them would
 # hand back a code with no sentence for every failure answered on the other.
 # `agent_name_taken` is exactly that shape (PR #1528 review, codex).
@@ -1677,9 +1494,9 @@ _iw_herdr_error_code() {
 _iw_herdr_error_message() {
     local _json="$1" _errfile="$2" _msg
 
-    _msg=$(printf '%s' "${_json}" | _iw_json_value '.error.message')
+    _msg=$(printf '%s' "${_json}" | _hp_json_value '.error.message')
     if [ -z "${_msg}" ] && [ -s "${_errfile}" ]; then
-        _msg=$(_iw_json_value '.error.message' <"${_errfile}")
+        _msg=$(_hp_json_value '.error.message' <"${_errfile}")
         [ -n "${_msg}" ] || _msg=$(head -n 1 "${_errfile}" 2>/dev/null)
     fi
     printf '%s' "${_msg}"
@@ -1712,11 +1529,11 @@ _iw_start_agent_retrying() {
     fi
 
     while :; do
-        if _json=$(_iw_agent_start "${_agent}" "${_pane}" "${_IW_ERRF}"); then
+        if _json=$(_hp_agent_start "${_agent}" "${_pane}" "${_IW_ERRF}"); then
             _rc=0
             break
         fi
-        _IW_START_CODE=$(_iw_herdr_error_code "${_json}" "${_IW_ERRF}")
+        _IW_START_CODE=$(_hp_herdr_error_code "${_json}" "${_IW_ERRF}")
 
         # The one failure worth another attempt (#1525): the pane was created
         # moments ago and its shell is not interactive yet. Only this code — a
@@ -1745,220 +1562,15 @@ _iw_start_agent_retrying() {
     return "${_rc}"
 }
 
-# Wait for a freshly started agent to report idle before prompting it.
-# `herdr agent start` only confirms the pane looks interactive — a claude
-# process can have drawn its prompt box before its key-input loop accepts
-# Enter, so the command is typed but never submitted and herdr's fixed 5s stall
-# check fires `agent_prompt_stalled` (issue #1399). Pre-#1440 the resident
-# watcher pane got this grace; every dispatched pane needs it now, because each
-# one is cold (PR #1447 codex review).
-#
-# This is a *health* check, not the settle wait. A live agent answers `idle` on
-# the first poll, so the normal path leaves here in ~0s — the poll budget only
-# bounds how long a missing agent or a closed pane can hold the tick, and
-# hitting that budget still dispatches because the stall recovery in
-# _iw_prompt_issue is the second line of defence. The wait that actually makes
-# the prompt land is _iw_settle, which runs after this (issue #1560).
+# Post-start health check (lib/herdr_pane.sh _hp_wait_for_idle).
 _iw_wait_for_idle() {
-    local _agent="$1" _i=0 _status _get_failed=0 _detail=""
-
-    while [ "${_i}" -lt "${_IW_IDLE_POLL_MAX}" ]; do
-        if _status=$(_iw_agent_status "${_agent}"); then
-            [ "${_status}" != "idle" ] || return 0
-        else
-            _get_failed=$((_get_failed + 1))
-        fi
-        _i=$((_i + 1))
-        [ "${_i}" -lt "${_IW_IDLE_POLL_MAX}" ] || break
-        [ "${_IW_IDLE_POLL_SLEEP}" = "0" ] || sleep "${_IW_IDLE_POLL_SLEEP}"
-    done
-
-    # Health-check failures (agent missing / pane closed) and a merely slow
-    # `starting` pane both land here — surface the failure count so a genuinely
-    # gone agent does not read as "just slow" (PR #1400 codex review).
-    # Counted in checks, not seconds: the gap between them is overridable, so a
-    # wall-clock figure here would be wrong in exactly the runs that read it.
-    [ "${_get_failed}" -eq 0 ] ||
-        _detail=" (${_get_failed}/${_IW_IDLE_POLL_MAX} health-check failures)"
-    ux_warning "Agent ${_agent} never reported idle in ${_IW_IDLE_POLL_MAX} checks${_detail} — dispatching anyway."
+    _hp_wait_for_idle "$1" "${_IW_IDLE_POLL_MAX}" "${_IW_IDLE_POLL_SLEEP}" dispatching
 }
 
-# Echo the tail of an agent's pane, or nothing when it cannot be read.
-#   $1 = agent name, $2 = lines to read (default _IW_SETTLE_READ_LINES)
-#
-# `--format text` gives the pane as plain lines. herdr answers its error
-# document as JSON on *stdout* with exit 0 when the target is gone (#1444), so
-# an unreadable pane has to be recognised by parsing rather than by the exit
-# code. Shared by the settle poll and _iw_limit_evidence (#1444) — the two
-# callers differ only in how many lines they need.
-#
-# Always returns 0 and simply echoes nothing when there is no text: every
-# caller reads "no text" as "nothing to conclude", never as a failure.
-_iw_pane_text() {
-    local _text
-    _text=$(herdr agent read "$1" --lines "${2:-${_IW_SETTLE_READ_LINES}}" \
-        --format text 2>/dev/null) || return 0
-    [ -z "$(printf '%s' "${_text}" | _iw_json_value '.error.code')" ] || return 0
-    printf '%s' "${_text}"
-}
-
-# True when three consecutive pane reads say the agent is listening.
-#   $1 = this read, $2 = the previous one, $3 = the one before that
-#
-# Three-in-a-row, not two (PR #1611 review, codex, 5th pass): two identical
-# reads only proves the *render* stopped changing between one poll gap, and
-# the render settling is not evidence the key-input loop has too — that gap
-# is exactly what #1560 exists to describe, and an active probe to prove
-# input-readiness directly turned out not to be viable (state_change_seq did
-# not move for typed-but-unsubmitted keystrokes in a live herdr 0.7.5 test —
-# it tracks submission-level events, not raw terminal content, so there is no
-# cheap corroborating signal available pre-prompt). A third agreeing frame
-# does not *prove* input-readiness either, but it does raise the bar past a
-# single lucky poll gap, cutting the odds of firing into a merely-rendered,
-# not-yet-listening pane without adding an unverified new mechanism.
-#
-# Four conditions, each earning its place. Non-empty: a pane that has drawn
-# nothing yet reads empty, and so does one herdr refused to read, so "empty
-# three times" is the opposite of evidence. Identical across all three: a TUI
-# still painting changes somewhere in that window. Not the login banner: that
-# frame is perfectly stable and means claude is up and unusable (#1561) — the
-# case a state_change_seq comparison cannot see at all, which is why the pane
-# text is the signal here and the counter stays with _iw_stall_recover_via_enter.
-#
-# Known gap (PR #1611 review, codex, 2nd/3rd pass): "any stable, non-empty,
-# non-`Not logged in` text" is still not *proven* ready — only proven not to
-# be that one banner, and not proven to be the input loop rather than the
-# render loop. A different steady pre-ready or error frame could still
-# false-positive. Not fixed here: the only evidence available is what herdr
-# 0.7.5 has actually been observed to show (#1560's measurement, and this
-# PR's own live probing), and this repo has no fixture for a second
-# stable-but-unready frame to design against. The cap (13s) is the backstop
-# either way — a false-positive settle is not a new failure mode, just a
-# prompt sent slightly earlier than warranted.
-_iw_pane_settled() {
-    [ -n "$1" ] || return 1
-    [ "$1" = "$2" ] && [ "$2" = "$3" ] || return 1
-    case "$1" in
-    *"${_IW_SETTLE_NOT_READY_MARK}"*) return 1 ;;
-    esac
-    return 0
-}
-
-# Echo how many settle polls fit in _IW_SETTLE_SECONDS at _IW_SETTLE_POLL_SLEEP
-# apart — ceil(seconds / gap), floored at 2 whenever the gap is real. The
-# pre-#1611-review shape hardcoded this to `_IW_SETTLE_SECONDS` itself,
-# silently assuming a 1s gap: IW_SETTLE_POLL_SLEEP=0.5 then hit the count
-# bound at 6.5s of real sleeping, cutting the wait short of the cap it was
-# supposed to honour, while a gap *above* 1s (e.g. 4) overshot it several
-# times over — agy and codex both flagged the same root cause from opposite
-# sides in the PR #1611 review.
-#
-# The zero/negative check lives inside awk, not a shell `case`, so it catches
-# every numeral spelling of "no delay" (`0`, `00`, `.0`, `0.000`, a stray
-# `-1`) — a `case 0 | 0.0 | 0.00)` pattern missed `.0`/`0.000` and fell
-# through to a fatal awk division-by-zero, leaving `_max_polls` empty and the
-# caller's `[ -lt ]` broken (agy, PR #1611 review, second pass). `LC_ALL=C`
-# pins `.` as the decimal point regardless of the caller's locale — a
-# comma-decimal locale would otherwise mis-parse a fractional gap.
-# `0` itself keeps the pre-scaling answer (the seconds themselves): division
-# by zero has no answer, and a `0` gap already means "no real delay", so
-# "poll up to N times" is the only sense left to give the cap — and it is
-# also the shape the bats suite's stubbed `sleep` relies on to stay fast (a
-# wall-clock-only bound would make a "never settles" fixture actually wait
-# out real seconds, timeout stub or not).
-#
-# The floor at 2 (once the gap is real) is what keeps a gap at or above the
-# cap itself (IW_SETTLE_POLL_SLEEP=13, say) from producing exactly one read
-# and zero sleeps — ceil(13/13)=1 alone would give up instantly instead of
-# waiting the one real gap the override asked for (agy, PR #1611 review,
-# second pass).
-_iw_settle_max_polls() {
-    local _seconds="$1" _gap="$2"
-    LC_ALL=C awk -v s="${_seconds}" -v g="${_gap}" \
-        'BEGIN {
-            if (g <= 0) { print s; exit }
-            n = s / g; i = int(n); if (i < n) i++
-            if (i < 2) i = 2
-            # A gap far below 1s (a fat-fingered override, e.g. 0.001) would
-            # otherwise scale into thousands of herdr round trips for one
-            # dispatch — a self-inflicted but real resource-exhaustion risk
-            # (agy, PR #1611 review, 4th pass). 1000 is far above any gap this
-            # repo ships or documents (default 1, the widest override tested
-            # is 13) and still bounds the worst case to a fixed, small budget.
-            if (i > 1000) i = 1000
-            print i
-        }'
-}
-
-# Wait for a freshly launched pane to look ready before typing into it
-# (issue #1560; polled since #1570). Separate from _iw_wait_for_idle on
-# purpose: that one asks herdr for the agent's *status*, which reports "not
-# working" and says nothing about the key-input loop. This one reads the pane's
-# own text, which does tell a claude still coming up from one sitting at a
-# settled prompt.
-#
-# Always succeeds and always ends in a prompt attempt — a settle that could
-# fail would skip the prompt it exists to protect, which is a worse outcome
-# than a prompt sent slightly too early. Reaching the cap with no ready signal
-# therefore warns and proceeds, which is exactly the pre-#1570 behaviour: this
-# poll can only make the wait *shorter*, never turn it into a new failure mode.
-#
-# Bounded twice over, both against _IW_SETTLE_SECONDS: by a poll count scaled
-# to the poll gap (_iw_settle_max_polls, above — the primary bound in
-# practice), and by wall clock, which is what keeps a poll gap that runs
-# slower than expected (a loaded herdr, a slow read) from overrunning the cap
-# even when the count has not yet been exhausted.
-#
-# Like any poll, the cap holds to within one gap — no *read* happens past the
-# deadline, but a sleep already under way can carry the return up to one gap
-# beyond it. At the default 1s gap that is 13s becoming at most ~14s, still
-# bounded and still no worse than the unconditional 13s this replaced.
+# Pane-readiness poll before the prompt (lib/herdr_pane.sh _hp_settle).
 _iw_settle() {
-    local _agent="$1" _i=0 _prev="" _prev2="" _text _now _deadline="" _max_polls
-
-    [ "${_IW_SETTLE_SECONDS}" = "0" ] && return 0
-    # A fractional cap cannot bound a poll count. It predates #1570 and still
-    # means the flat wait it always meant rather than being refused.
-    case "${_IW_SETTLE_SECONDS}" in
-    *[!0-9]*)
-        sleep "${_IW_SETTLE_SECONDS}"
-        return 0
-        ;;
-    esac
-
-    _max_polls=$(_iw_settle_max_polls "${_IW_SETTLE_SECONDS}" "${_IW_SETTLE_POLL_SLEEP}")
-
-    _now=$(_iw_now)
-    # `10#` forces base 10: bash arithmetic otherwise reads a leading-zero
-    # numeral as octal, so IW_SETTLE_SECONDS=08/09 aborted the whole tick with
-    # "value too great for base" and 01-07 silently computed the (here
-    # harmless, but wrong) octal value instead of the decimal one someone
-    # typed (codex, PR #1611 review, second pass — a genuine regression: the
-    # pre-#1611-review code only ever passed this value to `sleep`, which has
-    # no such reading).
-    [ -z "${_now}" ] || _deadline=$((_now + 10#${_IW_SETTLE_SECONDS}))
-
-    while [ "${_i}" -lt "${_max_polls}" ]; do
-        # Checked before the read, not after the sleep: a poll gap wider than
-        # the cap would otherwise let the last read land past the cap it is
-        # capped by. A clock that stopped being readable mid-wait leaves the
-        # (now correctly-scaled) count as the only bound, which is what it is
-        # there for.
-        if [ -n "${_deadline}" ]; then
-            _now=$(_iw_now)
-            [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
-        fi
-        _text=$(_iw_pane_text "${_agent}")
-        ! _iw_pane_settled "${_text}" "${_prev}" "${_prev2}" || return 0
-        _prev2="${_prev}"
-        _prev="${_text}"
-        _i=$((_i + 1))
-        [ "${_i}" -lt "${_max_polls}" ] || break
-        [ "${_IW_SETTLE_POLL_SLEEP}" = "0" ] || sleep "${_IW_SETTLE_POLL_SLEEP}"
-    done
-
-    ux_warning "Agent ${_agent} pane never settled within ${_IW_SETTLE_SECONDS}s — prompting anyway."
-    return 0
+    _hp_settle "$1" "${_IW_SETTLE_SECONDS}" "${_IW_SETTLE_POLL_SLEEP}" \
+        "${_IW_SETTLE_READ_LINES}" "${_IW_SETTLE_NOT_READY_MARK}"
 }
 
 # Echo herdr's JSON response on stdout; the exit code is herdr's own.
@@ -1967,7 +1579,7 @@ _iw_settle() {
 # the two must be merged here — dropping stderr leaves `.error.code` unreadable
 # and every recovery branch below unreachable (#1559, the same defect class as
 # #1445/#1458/#1525). Merged rather than split into a capture file the way
-# _iw_agent_start does: the only reader is `_iw_json_value '.error.code'`, which
+# _hp_agent_start does: the only reader is `_hp_json_value '.error.code'`, which
 # already fails silently on non-JSON noise, and the success path never reaches
 # it — rc 0 short-circuits ahead of the parse.
 _iw_prompt_once() {
@@ -2022,7 +1634,7 @@ _iw_stall_recover_via_enter() {
                 return 0
             fi
         else
-            _status=$(_iw_agent_status "${_agent}") || _status=""
+            _status=$(_hp_agent_status "${_agent}") || _status=""
             if [ "${_status}" = "working" ]; then
                 ux_warning "Stalled prompt submitted by Enter on attempt ${_i}/${_IW_STALL_RECOVER_ATTEMPTS} (${_agent} is working; no seq baseline)."
                 return 0
@@ -2103,13 +1715,13 @@ _iw_prompt_issue() {
     # Every other error is a real failure — and note nothing here ever re-sends
     # the prompt, so a duplicate flow on the same issue is not reachable.
     if [ "${_rc}" -ne 0 ]; then
-        _code=$(printf '%s' "${_json}" | _iw_json_value '.error.code')
+        _code=$(printf '%s' "${_json}" | _hp_json_value '.error.code')
         if [ "${_code}" = "agent_prompt_stalled" ]; then
             # `agent_prompt_stalled` only proves herdr saw no state change
             # within its fixed 5s window — it does NOT prove the prompt was
             # never submitted (PR #1400 codex review). `working` is positive
             # evidence the call *did* land, so there is nothing to recover.
-            _post_stall_status=$(_iw_agent_status "${_agent}") || _post_stall_status=""
+            _post_stall_status=$(_hp_agent_status "${_agent}") || _post_stall_status=""
             if [ "${_post_stall_status}" = "working" ]; then
                 ux_warning "herdr reported agent_prompt_stalled but ${_agent} is already working — treating as delivered, not retrying."
                 _rc=0
@@ -2196,7 +1808,7 @@ EOF
                 if _iw_prompt_issue "${_agent}" "${_number}" "${_tab}" "${_attempt}"; then
                     ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
                     return 0
-                elif [ "$(_iw_agent_status "${_agent}")" = "working" ]; then
+                elif [ "$(_hp_agent_status "${_agent}")" = "working" ]; then
                     # A `working` agent is never torn down, whatever the dispatch
                     # reported (#1559). One tick killed a session that was doing
                     # real work three times over, because a failed attempt ran
@@ -2309,7 +1921,7 @@ _iw_limit_read() {
     local _file
     _file=$(_iw_limit_state_file)
     [ -f "${_file}" ] || return 0
-    _iw_json_value ".$1" <"${_file}" 2>/dev/null
+    _hp_json_value ".$1" <"${_file}" 2>/dev/null
 }
 
 # Persist strikes + backoff deadline. Both are written as JSON *strings*. The
@@ -2354,7 +1966,7 @@ _iw_limit_clear() {
 #   unreadable  `backoff_until` present but not a number
 #   open        deadline is 0, the resting value written while strikes
 #               accumulate: evidence on record, gate still open
-#   no-clock    _iw_now failed
+#   no-clock    _hp_now failed
 #   expired     deadline passed, or sits further out than twice its own length
 #               — the latter cannot have been written by this script, so a
 #               clock jump or a hand edit did it, and expiring beats stalling
@@ -2388,7 +2000,7 @@ _iw_limit_gate_state() {
         return 0
     fi
 
-    _now=$(_iw_now)
+    _now=$(_hp_now)
     if [ -z "${_now}" ]; then
         printf 'no-clock 0\n'
         return 0
@@ -2457,7 +2069,7 @@ EOF
 #
 # $2 is optional — a file the deciding poll's *readably failed* dispatches are
 # written to, as `<repo><TAB><number>` rows. "Readably" is the whole point:
-# `_iw_agent_status` reports both of its failure modes as an empty string, so a
+# `_hp_agent_status` reports both of its failure modes as an empty string, so a
 # dispatch herdr would not talk about has no evidence against it and must not be
 # booked as a casualty, even on a tick that earns a strike for its neighbours.
 # The file is rewritten from scratch every poll and only ever read after this
@@ -2477,7 +2089,7 @@ EOF
 #         `herdr agent get` errored, or answered without the field). No
 #         evidence either way — the caller leaves the gate untouched.
 #
-# `_iw_agent_status` reports both of its failure modes as an empty string, so
+# `_hp_agent_status` reports both of its failure modes as an empty string, so
 # emptiness is the absence of evidence, never evidence of idleness. A strike
 # needs a status we actually read.
 #
@@ -2504,7 +2116,7 @@ _iw_limit_observe() {
         # observation to its first entry (PR #1447 agy review).
         while IFS="${_IW_TAB}" read -r _agent _repo _number <&3; do
             [ -n "${_agent}" ] || continue
-            _status=$(_iw_agent_status "${_agent}") || _status=""
+            _status=$(_hp_agent_status "${_agent}") || _status=""
             [ -z "${_status}" ] || _readable=1
             case "${_status}" in
             working | blocked)
@@ -2543,7 +2155,7 @@ EOF
 # Copy the tail of each dispatched pane into the cron log when a strike is
 # booked (issue #1444). Evidence for a human reading the log afterwards — the
 # gate has already decided by the time this runs, and nothing here can change
-# that decision. The read-and-filter itself is _iw_pane_text's (#1570) — this
+# that decision. The read-and-filter itself is _hp_pane_text's (#1570) — this
 # just asks for 40 lines instead of the settle poll's 3.
 _iw_limit_evidence() {
     local _agents="$1" _agent _rest _text _line
@@ -2553,7 +2165,7 @@ _iw_limit_evidence() {
     # only the name addresses a pane, so the rest is read off and dropped.
     while IFS="${_IW_TAB}" read -r _agent _rest <&3; do
         [ -n "${_agent}" ] || continue
-        _text=$(_iw_pane_text "${_agent}" "${_IW_LIMIT_EVIDENCE_LINES}")
+        _text=$(_hp_pane_text "${_agent}" "${_IW_LIMIT_EVIDENCE_LINES}")
         if [ -z "${_text}" ]; then
             ux_info "No pane output captured for ${_agent}."
             continue
@@ -2656,7 +2268,7 @@ _iw_limit_casualty_book() {
     local _file="$1" _now _repo _number _attempts
 
     [ -s "${_file}" ] || return 0
-    _now=$(_iw_now)
+    _now=$(_hp_now)
     [ -n "${_now}" ] || return 0
 
     while IFS="${_IW_TAB}" read -r _repo _number; do
@@ -2742,7 +2354,7 @@ _iw_limit_retry_casualties() {
             continue
         fi
 
-        if [ -n "$(_iw_agent_status "${_agent}")" ]; then
+        if [ -n "$(_hp_agent_status "${_agent}")" ]; then
             ux_info "Re-prompting ${_repo}#${_number} in its surviving pane (${_agent})."
             if ! _iw_prompt_issue "${_agent}" "${_number}"; then
                 # A prompt that never landed is a transport or input-loop
@@ -2800,7 +2412,7 @@ EOF
         fi
 
         ux_warning "${_repo}#${_number} failed to hold 'working' with the quota recovered (${_attempts}/${_IW_MAX_ATTEMPTS}) — retrying on the next reopen."
-        _line=$(_iw_now)
+        _line=$(_hp_now)
         [ -z "${_line}" ] ||
             _iw_limit_casualty_mark "${_repo}" "${_number}" "${_line}" "${_attempts}" || true
     done <<EOF
@@ -2880,7 +2492,7 @@ _iw_limit_record() {
         return 0
     fi
 
-    _now=$(_iw_now)
+    _now=$(_hp_now)
     if [ -z "${_now}" ]; then
         ux_warning "Cannot read the clock — rate-limit gate left open despite ${_strikes} unproductive ticks."
         return 0
@@ -2937,7 +2549,7 @@ _iw_saturation_read() {
     local _file
     _file=$(_iw_saturation_state_file)
     [ -f "${_file}" ] || return 0
-    _iw_json_value ".$1" <"${_file}" 2>/dev/null
+    _hp_json_value ".$1" <"${_file}" 2>/dev/null
 }
 
 # Persist the consecutive-tick count plus the epoch of the last alert. Both are
@@ -2975,14 +2587,14 @@ _iw_saturation_clear() {
 _iw_saturation_notify() {
     local _repo _number _agent _status _body=""
 
-    # fd 3, not stdin: `_iw_agent_status` shells out to herdr, which reads stdin
+    # fd 3, not stdin: `_hp_agent_status` shells out to herdr, which reads stdin
     # and would otherwise swallow the rest of the occupied list — the same
     # hazard main()'s dispatch loop documents.
     while IFS="${_IW_TAB}" read -r _repo _number <&3; do
         [ -n "${_repo}" ] || continue
         _status=""
         if _agent=$(_iw_agent_name "${_repo}" "${_number}") && [ -n "${_agent}" ]; then
-            _status=$(_iw_agent_status "${_agent}") || _status=""
+            _status=$(_hp_agent_status "${_agent}") || _status=""
         fi
         _body="${_body}${_repo}#${_number}: ${_status:-unknown}
 "
@@ -3027,7 +2639,7 @@ _iw_saturation_tick() {
     esac
 
     if [ "${_ticks}" -ge "${_IW_SATURATION_ALERT_TICKS}" ]; then
-        _now=$(_iw_now)
+        _now=$(_hp_now)
         if [ -z "${_now}" ]; then
             # No clock, no cooldown arithmetic — and an alert that cannot record
             # when it fired would re-fire every tick from here on. The count
@@ -3097,7 +2709,7 @@ _iw_saturation_status_report() {
         return 0
     fi
 
-    _now=$(_iw_now)
+    _now=$(_hp_now)
     if [ -z "${_now}" ]; then
         ux_warning "Slots saturated — an alert was sent for this episode; cannot read the clock to say when."
         return 0
@@ -3233,33 +2845,7 @@ EOF
 # Returns non-zero only when another tick holds the lock; a missing flock or an
 # unusable state dir soft-degrades to "no protection" rather than failing.
 _iw_acquire_lock() {
-    local _dir _lock
-    _dir=$(_iw_state_dir)
-    _lock="${_dir}/${_IW_LOCK_BASENAME}"
-
-    if ! command -v flock >/dev/null 2>&1; then
-        ux_warning "flock not found — running without single-instance protection"
-        return 0
-    fi
-
-    if ! mkdir -p "${_dir}" 2>/dev/null; then
-        ux_warning "Cannot create state directory (${_dir}) — running without single-instance protection"
-        return 0
-    fi
-
-    # The 2>/dev/null must be scoped to the group, not attached to `exec`:
-    # `exec 9>FILE 2>/dev/null` applies *both* redirections permanently, muting
-    # the whole script's stderr — every later ux_error would vanish from the
-    # cron log. The group restores fd 2 on exit while fd 9 persists.
-    if ! { exec 9>"${_lock}"; } 2>/dev/null; then
-        ux_warning "Cannot open lock file (${_lock}) — running without single-instance protection"
-        return 0
-    fi
-
-    if ! flock -n 9; then
-        ux_warning "another issue_watcher_cron tick is already running — skip"
-        return 1
-    fi
+    _hp_acquire_lock "$(_iw_state_dir)" "${_IW_LOCK_BASENAME}" issue_watcher_cron
 }
 
 # ============================================================
@@ -3389,7 +2975,7 @@ main() {
     fi
 
     # jq is not optional on this path. The watch list and the search result are
-    # arrays of objects, and the flat-key fallback _iw_json_value uses for the
+    # arrays of objects, and the flat-key fallback _hp_json_value uses for the
     # single-value herdr responses cannot walk those. Refusing loudly beats
     # dispatching against a half-parsed candidate set.
     if ! command -v jq >/dev/null 2>&1; then

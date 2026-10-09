@@ -1337,7 +1337,7 @@ $(_pr_json 12 30)]"
 # The #1458 regression guard. herdr names this race precisely, on stderr; the
 # dispatcher used to throw that stream away and report a generic failure, so
 # the log said only "start failed" for weeks. Restoring `2>/dev/null` to
-# _pmt_agent_start must make this test red.
+# _hp_agent_start must make this test red.
 @test "pr_merge_train_cron: a failed start reports the cause herdr gave on stderr" {
     _run_tick HERDR_START_PANE_BUSY=99
     assert_failure

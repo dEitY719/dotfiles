@@ -2555,7 +2555,7 @@ _two_repo_fixture() {
 }
 
 # The #1445/#1458 regression guard. herdr names this race precisely, on stderr;
-# `_iw_agent_start` used to throw that stream away, so 21 failures in the cron
+# `_hp_agent_start` (lib/herdr_pane.sh) used to throw that stream away, so 21 failures in the cron
 # log said only "start failed". Restoring `2>&1 >/dev/null` must make this red.
 @test "issue_watcher_cron: a failed start reports the cause herdr gave on stderr" {
     _run_tick "HERDR_START_PANE_BUSY=99"
@@ -2591,7 +2591,7 @@ _two_repo_fixture() {
 }
 
 # PR #1528 review (codex, FOLLOW-UP). herdr picks the stream, not us — that is
-# why _iw_herdr_error_code reads stdout first and stderr second. The *message*
+# why _hp_herdr_error_code reads stdout first and stderr second. The *message*
 # helper read only stderr, so a failure herdr answered on stdout arrived with
 # its code but no sentence. `agent_name_taken` is exactly that shape.
 #
@@ -3170,7 +3170,7 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: an unreadable agent status is not booked as idle" {
-    # Regression (PR #1468 codex review, BLOCKER): `_iw_agent_status` reports a
+    # Regression (PR #1468 codex review, BLOCKER): `_hp_agent_status` reports a
     # failed `herdr agent get` as an empty string, and the gate used to fall
     # through that into the strike branch — so one transient herdr blip during
     # the window read as a spent quota. Absence of evidence is not evidence of

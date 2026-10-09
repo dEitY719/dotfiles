@@ -158,8 +158,8 @@ _pmv_git_worktree_add() {
 # `herdr tab create` and `herdr workspace create` both answer with a pane but
 # nest it under different parents (`.result.pane` vs `.result.root_pane`), and
 # the CLI is free to add another — keying on the leaf name rather than the path
-# keeps this working across both shapes (same helper as _pmt_json_first in
-# shell-common/tools/custom/pr_merge_train_cron.sh). The key travels as a jq
+# keeps this working across both shapes (same helper as _hp_json_first in
+# shell-common/tools/custom/lib/herdr_pane.sh). The key travels as a jq
 # *argument*, never as interpolated program text.
 pmv_json_first() {
     jq -r --arg k "$1" \
