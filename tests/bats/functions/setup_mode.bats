@@ -219,6 +219,34 @@ _setup_mode_raw_reads() {
     fi
 }
 
+# --- _dotfiles_setup_mode_proxy (proxy rule SSOT) ----------------------------
+
+@test "_dotfiles_setup_mode_proxy: internal required, public/external forbidden, else empty" {
+    run bash --noprofile --norc -c "
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        for m in internal public external '' bogus; do
+            printf '%s=[%s]\n' \"\$m\" \"\$(_dotfiles_setup_mode_proxy \"\$m\")\"
+        done
+    "
+    assert_success
+    assert_output "internal=[required]
+public=[forbidden]
+external=[forbidden]
+=[]
+bogus=[]"
+}
+
+@test "_dotfiles_setup_mode_proxy: no argument reads the current mode file" {
+    printf '3\r\n' > "$HOME/.dotfiles-setup-mode"
+    run bash --noprofile --norc -c "
+        export HOME='${HOME}'
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        _dotfiles_setup_mode_proxy
+    "
+    assert_success
+    assert_output "forbidden"
+}
+
 # --- setup_mode_help.sh: show-setup-mode uses the SSOT ----------------------
 #
 # get_setup_mode used a raw `cat`, so a CRLF or trailing-space file showed

@@ -13,22 +13,12 @@ fi
 
 _apply_setup_mode_config() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    command -v _dotfiles_setup_mode >/dev/null 2>&1 || return 0
-    local mode
-    mode=$(_dotfiles_setup_mode)
+    command -v _dotfiles_setup_mode_proxy >/dev/null 2>&1 || return 0
 
-    case "$mode" in
-        external|public)
-            # Public PC/Home or External PC/VPN (legacy 1/3 are canonicalised
-            # by _dotfiles_setup_mode before we get here).
-            # These modes should NOT have corporate proxy settings
-            # Auto-clean proxy variables to prevent inherited settings
-            # (common in WSL2 where Windows proxy is auto-inherited)
-            unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy all_proxy ALL_PROXY
-            ;;
-        internal)
-            # Internal PC - proxy configured via proxy.local.sh
-            # Do nothing here, let proxy.local.sh handle it
-            ;;
-    esac
+    # public/external must not carry a corporate proxy: clean what WSL2 or the
+    # parent environment inherited. internal is configured by proxy.local.sh,
+    # and an unset/unknown mode is left alone.
+    if [ "$(_dotfiles_setup_mode_proxy)" = "forbidden" ]; then
+        unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY no_proxy all_proxy ALL_PROXY
+    fi
 }

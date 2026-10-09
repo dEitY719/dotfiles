@@ -36,7 +36,7 @@
 | Claude 계정 활성화 | `shell-common/env/claude.sh` | `internal` → work 계정만; 그 외 → personal/work/work1 |
 | 사내 식별값 | `shell-common/env/internal.local.sh` (gitignored) | `internal` PC 는 `internal.local.example` 을 복사해 실제 값 입력 (예: `DOTFILES_GHES_HOST`) — #1944. `proxy`/`security` 템플릿도 가짜 placeholder 이며 `shell-common/setup.sh` 는 기존 `*.local.sh` 를 덮어쓰지 않는다(모드 재선택 시 `*.backup.local.sh` 로 옮겼다 복원) — #1969 |
 | Git host 라우팅 | `shell-common/functions/gh_host.sh` | `internal` → GHES, 그 외 → github.com |
-| 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지. `_dotfiles_setup_mode` (`shell-common/util/setup_mode_read.sh`) 로 읽으므로 문자열·레거시 숫자값 모두 지원 (#1810) |
+| 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지. 모드별 프록시 규칙(`internal`=required, `public`/`external`=forbidden)은 `_dotfiles_setup_mode_proxy` (`shell-common/util/setup_mode_read.sh`) 한 곳 — `check_proxy.sh` 도 같은 함수를 쓴다 (#1810) |
 | Bedrock 비용 위젯 | `claude/statusline-command.sh` | `internal` 에서만 표시. `_dotfiles_setup_mode` 가 레거시 `2` 를 `internal` 로 정규화한다 (#1810) |
 | 패키지 레지스트리 설정 | `shell-common/setup.sh` `_internal_src` | `internal` → npm/bun/uv/pip/cargo/nuget symlink · rpm 복사의 소스로 gitignored `<file>.internal.local` 이 있으면 우선, 없으면 tracked `*.internal` — #1968 (아래 §5) |
 
