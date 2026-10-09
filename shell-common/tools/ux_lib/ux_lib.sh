@@ -345,7 +345,15 @@ ux_input() {
 
     while true; do
         printf "%s❯%s %s " "${UX_INFO}" "${UX_RESET}" "$prompt" >&2
-        read -r response
+        # EOF (closed/piped stdin): accept the empty answer if the pattern
+        # allows it (default), else fail instead of re-prompting forever.
+        if ! read -r response && [ -z "$response" ]; then
+            if echo "" | grep -qE "$pattern"; then
+                echo ""
+                return 0
+            fi
+            return 1
+        fi
 
         if echo "$response" | grep -qE "$pattern"; then
             echo "$response"

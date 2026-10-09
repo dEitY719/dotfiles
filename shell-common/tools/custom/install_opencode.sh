@@ -89,10 +89,10 @@ opencode_select_environment() {
         ux_bullet "3) External company PC (VPN)"
     } >&2
     if [ -n "$def" ]; then
-        choice=$(ux_input "Select (1-3, Enter=current: $current):" '^[1-3]?$')
+        choice=$(ux_input "Select (1-3, Enter=current: $current):" '^[1-3]?$') || choice=""
         choice="${choice:-$def}"
     else
-        choice=$(ux_input "Select (1-3):" '^[1-3]$')
+        choice=$(ux_input "Select (1-3):" '^[1-3]$') || choice=""  # EOF: default public
     fi
     case "$choice" in
         2) echo "internal" ;;

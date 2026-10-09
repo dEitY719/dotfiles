@@ -19,7 +19,7 @@
 #
 # Opt out of the install halves with HERDR_SKIP_PLUGINS=1 / HERDR_SKIP_TOOLS=1.
 
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 DOTFILES_ROOT="${_SCRIPT_DIR%/herdr}"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 

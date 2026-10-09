@@ -209,3 +209,14 @@ _select_env() {
     assert_output --partial "Setting up OpenCode configuration for: internal"
     [ -f "$HOME/.config/opencode/opencode.json" ]
 }
+
+@test "opencode_select_environment: closed stdin with no mode file falls back to public (no input loop)" {
+    rm -f "$HOME/.dotfiles-setup-mode"
+    # Real ux_input (not stubbed): EOF must end the prompt instead of looping.
+    run_opencode_tool "
+        DOTFILES_FORCE_INIT=1 . '${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh'
+        opencode_select_environment </dev/null 2>/dev/null
+    "
+    assert_success
+    assert_output "public"
+}

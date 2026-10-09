@@ -429,8 +429,8 @@ if [ -n "$SETTINGS_FILE" ]; then
     # session-start-settings-drift.sh 만 사내 모드에서 자동 복구한다 — 그 외
     # 모드는 advisory 뿐이라 여기서도 같은 재시드 안내(./setup.sh)를 줘야
     # "새 세션이면 알아서 고쳐진다"는 잘못된 기대를 심지 않는다.
-    case "${_mode_raw:-}" in
-      2|internal) _drift_fix_hint="./aws/setup.sh 재실행(훅 등록 자체가 지워진 경우 #1364) 후 새 세션 시작하면 사내 모드에서 자동 복구됨" ;;
+    case "${_mode:-}" in
+      internal) _drift_fix_hint="./aws/setup.sh 재실행(훅 등록 자체가 지워진 경우 #1364) 후 새 세션 시작하면 사내 모드에서 자동 복구됨" ;;
       *) _drift_fix_hint="사내 모드가 아니라 자동 복구 대상 아님 → ./setup.sh 재실행 필요" ;;
     esac
     if [ -f "$_ssot_settings" ]; then

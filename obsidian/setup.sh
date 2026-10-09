@@ -7,7 +7,7 @@
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
 # SSOT: Symlink target declared in shell-common/config/symlinks.conf
 
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 DOTFILES_ROOT="${_SCRIPT_DIR%/obsidian}"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
