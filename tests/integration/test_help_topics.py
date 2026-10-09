@@ -44,6 +44,7 @@ HELP_TOPICS = [
     "graphify_help",
     "herdr_help",
     "hermes_help",
+    "jetbrain_help",
     "litellm_help",
     "llm_wiki_help",
     "mytool_help",

@@ -218,6 +218,8 @@ _register_default_help_descriptions() {
     _register_help ghes_mirror_help "[Development] Mirror public GitHub repo to internal GHES instance" development
     _register_help mirror_pages_activate_help "[Development] Activate GHE Pages + replace upstream URLs in README" development
     _register_help gh_project_pat_help "[Development] PROJECT_BOARD_PAT guide + multi-repo secret set/status" development
+    _register_help hook_help "[Development] Git hook management" development
+    _register_help jetbrain_help "[Development] JetBrains IDE launcher (pycharm)" development
 
     # devops
     _register_help docker_help "[DevOps] Docker commands and aliases" devops
@@ -233,6 +235,7 @@ _register_default_help_descriptions() {
     _register_help wsl_check_help "[DevOps] WSL & Docker environment health (disk/mem/docker)" devops
     _register_help window_help "[DevOps] Windows host PowerShell one-liners (Compact-WSL vhdx)" devops
     _register_help sync_to_deploy_help "[DevOps] Merge internal/external main branches and push a deploy branch" devops
+    _register_help ssh_help "[DevOps] SSH hosts and file transfer" devops
 
     # ai
     _register_help claude_help "[AI/LLM] Claude Code + MCP integration" ai
@@ -284,19 +287,17 @@ _register_default_help_descriptions() {
     # meta
     _register_help category_help "[Meta] Browse help categories" meta
     _register_help register_help "[Meta] Register help descriptions" meta
+    _register_help setup_mode_help "[Meta] setup.sh mode flags" meta
 
     # No category yet: reachable via my-help <topic> and the func registry,
     # hidden from category pages (#726 kept these registered for lint-helpfunc).
     _register_help show_devx_pr_verify_live_backend_identity_help "[Development] Backend container identity verification helper"
-    _register_help ssh_help "[DevOps] SSH hosts and file transfer"
     _register_help gh_flow_help "[Development] gh-flow issue/PR worker pipeline"
     _register_help gh_pr_review_help "[Development] gh-pr-review external-AI review delegation"
     _register_help gh_pr_reply_help "[Development] gh-pr-reply review-comment handler"
     _register_help gh_pr_approve_help "[Development] gh-pr-approve PR approval workflow"
     _register_help gh_audit_builtin_workflows_help "[Development] gh audit-builtin-workflows scan"
-    _register_help hook_help "[Development] Git hook management"
     _register_help gcp_help "[DevOps] gcloud / GCP helpers"
-    _register_help setup_mode_help "[Meta] setup.sh mode flags"
     _register_help zsh_autosuggestions_install_help "[CLI] zsh-autosuggestions installer"
 }
 

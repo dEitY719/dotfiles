@@ -39,6 +39,7 @@ HELP_TOPICS = [
     "gwt_help",
     "gpu_help",
     "hermes_help",
+    "jetbrain_help",
     "litellm_help",
     "mytool_help",
     "mysql_help",
