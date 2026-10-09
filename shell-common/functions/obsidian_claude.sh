@@ -16,6 +16,11 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 #
 # Usage: obsidian-claude [personal|work|work1] [extra claude args...]
 
+if ! command -v _win_home >/dev/null 2>&1; then
+	# shellcheck disable=SC1091
+	. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/win_home.sh"
+fi
+
 # Derive the vault path lazily at call-time (not source-time) to avoid a
 # ~200ms cmd.exe penalty on every shell start.
 # Override: export OBSIDIAN_VAULT_DIR before calling to skip auto-detection.
@@ -26,19 +31,10 @@ _obsidian_vault_dir() {
 		printf '%s\n' "$OBSIDIAN_VAULT_DIR"
 		return 0
 	}
-	# 2) Windows %USERPROFILE% universal derivation (works across PCs with different usernames)
-	if command -v cmd.exe >/dev/null 2>&1 && command -v wslpath >/dev/null 2>&1; then
-		local win prof
-		win=$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r\n')
-		if [ -n "$win" ]; then
-			prof=$(wslpath -u "$win" 2>/dev/null)
-			[ -n "$prof" ] && {
-				printf '%s/Documents/ObsidianVault-TilNote\n' "$prof"
-				return 0
-			}
-		fi
-	fi
-	return 1
+	# 2) Windows profile dir (util/win_home.sh: works across PCs with different usernames)
+	local prof
+	prof=$(_win_home) || return 1
+	printf '%s/Documents/ObsidianVault-TilNote\n' "$prof"
 }
 
 obsidian_claude() {
