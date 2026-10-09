@@ -19,15 +19,31 @@ dotfiles() {
     cd "${DOTFILES_ROOT:-$HOME/dotfiles}" || return 1
 }
 
-# Windows directory paths (WSL). The Windows profile dir is resolved at call
-# time: $WIN_HOME when set (e.g. in a gitignored *.local.sh), else
-# /mnt/c/Users/$USER (Windows and WSL user names match on these PCs).
-alias cd-wdocu='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents"'
-alias cd-wobsidian='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents/.obsidian"'
-alias cd-wdown='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Downloads"'
-alias cd-wpicture='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Pictures"'
-alias cd-tilnote='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents/ObsidianVault-TilNote"'
-alias cd-obsidian='cd "${WIN_HOME:-/mnt/c/Users/$USER}/Documents/ObsidianVault-TilNote"'
+# Windows directory paths (WSL). The profile dir comes from _win_home
+# (util/win_home.sh: $WIN_HOME, else %USERPROFILE% via wslpath). Resolved on
+# first use and cached for this shell, so shell start never runs cmd.exe.
+if ! command -v _win_home >/dev/null 2>&1; then
+    # shellcheck disable=SC1091
+    . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/win_home.sh"
+fi
+
+_cd_win() {
+    if [ -z "${WIN_HOME-}" ] && [ -z "${_DOTFILES_WIN_HOME-}" ]; then
+        _DOTFILES_WIN_HOME=$(_win_home) || {
+            _DOTFILES_WIN_HOME=""
+            ux_error "Windows profile dir not found (WSL only). Set WIN_HOME to override."
+            return 1
+        }
+    fi
+    cd "${WIN_HOME:-$_DOTFILES_WIN_HOME}/$1" || return 1
+}
+
+alias cd-wdocu='_cd_win Documents'
+alias cd-wobsidian='_cd_win Documents/.obsidian'
+alias cd-wdown='_cd_win Downloads'
+alias cd-wpicture='_cd_win Pictures'
+alias cd-tilnote='_cd_win Documents/ObsidianVault-TilNote'
+alias cd-obsidian='_cd_win Documents/ObsidianVault-TilNote'
 
 # PARA structure
 alias mk-para='mkdir -p para/{archive,area,project,resource}'

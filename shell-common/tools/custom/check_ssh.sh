@@ -15,18 +15,11 @@ source "$(dirname "$0")/init.sh" || exit 1
 KEY_NAME="${DOTFILES_SSH_KEY_NAME:-id_rsa_dev}"
 WSL_SSH_DIR="$HOME/.ssh"
 
-# Detect Windows username from WSL
-_detect_win_user() {
-    local win_user
-    win_user=$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r\n')
-    if [ -z "$win_user" ]; then
-        win_user=$(powershell.exe -Command '[System.Environment]::UserName' 2>/dev/null | tr -d '\r\n')
-    fi
-    echo "$win_user"
-}
-
-WIN_USER="$(_detect_win_user)"
-WIN_SSH_DIR="/mnt/c/Users/${WIN_USER}/.ssh"
+# Windows profile dir (%USERPROFILE% via wslpath) — util/win_home.sh SSOT.
+# The profile dir name can differ from %USERNAME%, so never build it from that.
+. "$(dirname "$0")/../../util/win_home.sh" || exit 1
+WIN_PROFILE="$(_win_home)"
+WIN_SSH_DIR="${WIN_PROFILE}/.ssh"
 
 # ============================================================
 # Diagnostic functions
@@ -71,16 +64,16 @@ check_ssh_key() {
 check_ssh_copy() {
     ux_header "2. Windows Copy"
 
-    if [ -z "$WIN_USER" ]; then
-        ux_error "Cannot detect Windows username"
-        ux_info "WSL cmd.exe/powershell.exe access may be restricted"
+    if [ -z "$WIN_PROFILE" ]; then
+        ux_error "Cannot detect the Windows profile dir"
+        ux_info "WSL cmd.exe access may be restricted (or set WIN_HOME)"
         echo ""
         return 1
     fi
 
     ux_section "Environment"
     ux_info "WSL User: $USER"
-    ux_info "Windows User: $WIN_USER"
+    ux_info "Windows Profile: $WIN_PROFILE"
     ux_info "Target: ${WIN_SSH_DIR}/${KEY_NAME}"
     echo ""
 
