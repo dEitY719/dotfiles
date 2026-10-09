@@ -230,6 +230,10 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
     "gh-flow:issue stopped at step",
     "gh-flow-issue complete (#",
     "gh-flow-issue stopped at step",
+    # Step 1.5 origin-gate BLOCK report (#2066): the chain never started, so it is
+    # neither `complete` nor `stopped at step`.
+    "gh-flow:issue blocked at Step 1.5 (#",
+    "gh-flow-issue blocked at Step 1.5 (#",
 )
 
 # Issue #1270 — terminal marker as it appears in the `Bash` fallback
@@ -246,7 +250,7 @@ TERMINAL_PATTERNS: tuple[str, ...] = (
 # Only one namespace survives the migration (#1681, #1410 Phase 4-2), so the
 # pattern is a single branch.
 _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
-    r"gh-flow[-:]issue\s+(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d)",
+    r"gh-flow[-:]issue\s+(?:complete\s+\(#\d+\)|stopped\s+at\s+step\s+\d|blocked\s+at\s+Step\s+1\.5\s+\(#\d+\))",
 )
 
 # Issue #1274 — report-SHAPE requirement, applied to the paired
@@ -261,7 +265,7 @@ _TERMINAL_COMMAND_RE: re.Pattern[str] = re.compile(
 # fix:` line, neither of which a single grepped marker line reproduces.
 # Kept as its own pattern (not folded into `_TERMINAL_COMMAND_RE`) because
 # the two run against different halves of the pair.
-_TERMINAL_REPORT_FIELDS: tuple[str, ...] = ("PR URL:", "Resume after fix:")
+_TERMINAL_REPORT_FIELDS: tuple[str, ...] = ("PR URL:", "Resume after fix:", "violated:")
 
 # Issue #1270 — spans Claude Code injects into user-role messages that are
 # NOT user prose. `<system-reminder>…</system-reminder>` blocks are harness
