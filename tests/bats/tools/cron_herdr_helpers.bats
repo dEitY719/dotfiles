@@ -225,10 +225,10 @@ _in() {
 @test "cron herdr helpers: agent_status prints the status, fails when get fails" {
     local _p
     for _p in iw pmt; do
-        _in "${_p}" '@P@_agent_status a1' 'HERDR_AGENT_STATUS=working'
+        _in "${_p}" '_hp_agent_status a1' 'HERDR_AGENT_STATUS=working'
         assert_success
         assert_output "working"
-        _in "${_p}" '@P@_agent_status a1; echo "rc=$?"' 'HERDR_AGENT_STATUS=fail'
+        _in "${_p}" '_hp_agent_status a1; echo "rc=$?"' 'HERDR_AGENT_STATUS=fail'
         assert_output "rc=1"
     done
 }
@@ -237,7 +237,7 @@ _in() {
     local _p
     for _p in iw pmt; do
         : >"${_LOG}"
-        _in "${_p}" "@P@_agent_start name1 pane1 ${_WORK_DIR}/err.${_p}"
+        _in "${_p}" "_hp_agent_start name1 pane1 ${_WORK_DIR}/err.${_p}"
         assert_success
         run cat "${_LOG}"
         assert_output "herdr agent start name1 --kind claude --pane pane1 -- --dangerously-skip-permissions"
@@ -251,11 +251,11 @@ _in() {
     : >"${_WORK_DIR}/empty"
     local _p
     for _p in iw pmt; do
-        _in "${_p}" "@P@_herdr_error_code '{\"error\":{\"code\":\"from_stdout\"}}' ${_WORK_DIR}/errfile"
+        _in "${_p}" "_hp_herdr_error_code '{\"error\":{\"code\":\"from_stdout\"}}' ${_WORK_DIR}/errfile"
         assert_output "from_stdout"
-        _in "${_p}" "@P@_herdr_error_code '' ${_WORK_DIR}/errfile"
+        _in "${_p}" "_hp_herdr_error_code '' ${_WORK_DIR}/errfile"
         assert_output "from_stderr"
-        _in "${_p}" "@P@_herdr_error_code '' ${_WORK_DIR}/empty"
+        _in "${_p}" "_hp_herdr_error_code '' ${_WORK_DIR}/empty"
         assert_output ""
     done
 }
@@ -263,7 +263,7 @@ _in() {
 @test "cron herdr helpers: now prints epoch seconds" {
     local _p
     for _p in iw pmt; do
-        _in "${_p}" '@P@_now'
+        _in "${_p}" '_hp_now'
         assert_success
         [[ "${output}" =~ ^[0-9]+$ ]]
     done
