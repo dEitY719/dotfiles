@@ -49,6 +49,7 @@ rg "fzf 피커" docs/guide/commands/
 - [herdr](./herdr.md)
 - [hermes](./hermes.md)
 - [hook](./hook.md)
+- [jetbrain](./jetbrain.md)
 - [litellm](./litellm.md)
 - [llm-wiki](./llm-wiki.md)
 - [mount](./mount.md)
