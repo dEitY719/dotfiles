@@ -14,8 +14,8 @@
 - Usage: register-help [section|--list|--all]
 - sections
     - topic: function ending with _help
-    - description: HELP_DESCRIPTIONS[<name>_help]
-    - category: HELP_CATEGORY_MEMBERS[<category>]
+    - description: _register_help <name>_help "<desc>" [category]
+    - category: 3rd argument of the same _register_help row
     - details: register-help <section>  (example: register-help topic)
 
 ## 섹션
@@ -27,11 +27,11 @@
 
 ### description
 
-- Set: HELP_DESCRIPTIONS[mytool_help]="[Development] ..."
+- Add a row in my_help.sh: _register_help mytool_help "[Development] ..." development
 
 ### category
 
-- Edit: HELP_CATEGORY_MEMBERS[development]="... mytool"
+- The row's 3rd argument appends mytool to that category (omit it to stay uncategorized)
 - Then reload your shell (source ~/.bashrc or ~/.zshrc)
 
 ## 엣지케이스 / 의도된 동작

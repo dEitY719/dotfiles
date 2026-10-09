@@ -85,8 +85,8 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
    ux_lib guard 패턴 포함. 상세: [`docs/guide/playbooks/shell-common-cheatsheet.md`](../docs/guide/playbooks/shell-common-cheatsheet.md) → "Tool Integration UX-lib Guard"
 2. **`functions/<tool>_help.sh`** (자동 로드) — `<tool>_help()` + `alias <tool>-help='<tool>_help'`.
    `ux_table_row` / `ux_section` / `ux_bullet` 사용
-3. **`functions/my_help.sh` 수동 등록** (자동 안 됨!) —
-   `HELP_CATEGORY_MEMBERS[<category>]`에 토픽 추가 + `HELP_DESCRIPTIONS[<tool>_help]` 항목 추가.
+3. **`functions/my_help.sh` 수동 등록** (자동 안 됨!) — `_register_default_help_descriptions` 에
+   `_register_help <tool>_help "[Category] 설명" <category>` 한 줄 (설명+카테고리 동시 등록).
    카테고리: `development`, `devops`, `ai`, `cli`, `config`, `docs`, `system`, `meta`
 
 참조 예시: `npm.sh` + `npm_help.sh` + `my_help.sh` 의 npm 항목

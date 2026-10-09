@@ -4,7 +4,8 @@
 #
 # Rule:
 # Any function ending in 'help' (e.g., 'git-help', 'docker_help') is considered
-# a public help topic and MUST be registered in HELP_DESCRIPTIONS.
+# a public help topic and MUST be registered in HELP_DESCRIPTIONS (directly or via
+# a `_register_help <name> "<desc>" [category]` row in my_help.sh).
 # If it is an internal utility, it MUST start with '_' (e.g., '_register_help').
 
 check_help_integrity() {
@@ -46,12 +47,12 @@ check_help_integrity() {
 
         # Check 1: Is it registered in the current file?
         # Look for: HELP_DESCRIPTIONS["func"]=... or HELP_DESCRIPTIONS[func]=...
-        if grep -Eq "HELP_DESCRIPTIONS\\[(\"?${func}\"?)\\]" "$file"; then
+        if grep -Eq "(HELP_DESCRIPTIONS\\[\"?|_register_help[[:space:]]+)${func}(\"?\\]|[[:space:]])" "$file"; then
             continue
         fi
 
         # Check 2: Is it registered in the global registry (my_help.sh)?
-        if [ -f "$my_help_path" ] && grep -Eq "HELP_DESCRIPTIONS\\[(\"?${func}\"?)\\]" "$my_help_path"; then
+        if [ -f "$my_help_path" ] && grep -Eq "(HELP_DESCRIPTIONS\\[\"?|_register_help[[:space:]]+)${func}(\"?\\]|[[:space:]])" "$my_help_path"; then
             continue
         fi
 
@@ -59,10 +60,10 @@ check_help_integrity() {
         # e.g., func is "apt-help", but registered as "apt_help"
         local normalized="${func//-/_}"
         if [ "$func" != "$normalized" ]; then
-            if grep -Eq "HELP_DESCRIPTIONS\\[(\"?${normalized}\"?)\\]" "$file"; then
+            if grep -Eq "(HELP_DESCRIPTIONS\\[\"?|_register_help[[:space:]]+)${normalized}(\"?\\]|[[:space:]])" "$file"; then
                 continue
             fi
-            if [ -f "$my_help_path" ] && grep -Eq "HELP_DESCRIPTIONS\\[(\"?${normalized}\"?)\\]" "$my_help_path"; then
+            if [ -f "$my_help_path" ] && grep -Eq "(HELP_DESCRIPTIONS\\[\"?|_register_help[[:space:]]+)${normalized}(\"?\\]|[[:space:]])" "$my_help_path"; then
                 continue
             fi
         fi
