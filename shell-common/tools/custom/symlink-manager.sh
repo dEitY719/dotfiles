@@ -1,6 +1,6 @@
 #!/bin/bash
 # Symbolic Link Manager for Dotfiles
-# Manages all symlinks defined in bash/config/symlinks.conf
+# Manages all symlinks defined in shell-common/config/symlinks.conf
 
 set -u
 
@@ -8,6 +8,9 @@ DOTFILES_ROOT="${DOTFILES_ROOT:-${HOME}/dotfiles}"
 SYMLINKS_CONF="${SHELL_COMMON_ROOT:-${DOTFILES_ROOT}/shell-common}/config/symlinks.conf"
 # shellcheck source=init.sh
 . "$(dirname "${BASH_SOURCE[0]}")/init.sh" || exit 1
+# Physical checkout path for ${DOTFILES_ROOT} in symlinks.conf — matches
+# ssh/setup.sh, which links from its own `pwd -P` location.
+_SYMLINK_ROOT="$(cd "$DOTFILES_ROOT" && pwd -P)"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper Functions
@@ -31,6 +34,7 @@ parse_symlink_entry() {
     # Expand variables safely
     target="${target//\$\{HOME\}/$HOME}"
     source="${source//\$\{HOME\}/$HOME}"
+    source="${source//\$\{DOTFILES_ROOT\}/$_SYMLINK_ROOT}"
 
     printf '%s\n' "$target|$source|$description"
 }
@@ -212,7 +216,7 @@ Commands:
   help      Show this help message
 
 Configuration:
-  ~/dotfiles/bash/config/symlinks.conf
+  shell-common/config/symlinks.conf
 
 Example:
   symlink-manager init      # Set up all symlinks

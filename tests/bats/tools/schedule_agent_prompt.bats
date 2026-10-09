@@ -773,7 +773,7 @@ _prompt_calls() {
 }
 
 @test "A8b: the PATH symlink is registered in symlinks.conf" {
-    run grep -F '${HOME}/.local/bin/schedule-agent-prompt|${HOME}/dotfiles/shell-common/tools/custom/schedule_agent_prompt.sh|' \
+    run grep -F '${HOME}/.local/bin/schedule-agent-prompt|${DOTFILES_ROOT}/shell-common/tools/custom/schedule_agent_prompt.sh|' \
         "${DOTFILES_ROOT}/shell-common/config/symlinks.conf"
     assert_success
 }

@@ -6,7 +6,9 @@
 # SSOT: Symlink target declared in shell-common/config/symlinks.conf
 #       This script adds permissions/backup logic on top of the declarative config.
 
-_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# pwd -P: link to the physical checkout path, the same one symlink-manager.sh
+# expands ${DOTFILES_ROOT} to, so the two never rewrite each other's link.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 DOTFILES_ROOT="${_SCRIPT_DIR%/ssh}"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
