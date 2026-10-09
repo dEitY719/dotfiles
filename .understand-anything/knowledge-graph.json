@@ -41,20 +41,6 @@
       "languageNotes": "Tool versions are pinned once in mise.toml, the same SSOT used by local `mise run lint`, so CI and dev machines cannot drift."
     },
     {
-      "id": "pipeline:.github/workflows/cli-package.yml",
-      "type": "pipeline",
-      "name": "cli-package.yml",
-      "filePath": ".github/workflows/cli-package.yml",
-      "summary": "Node.js CI/CD pipeline scoped to packages/my-cli \u2014 runs test/coverage, lint/typecheck, bundle size check, e2e tests, and a release job that publishes on tag/version bump.",
-      "tags": [
-        "ci-cd",
-        "deployment",
-        "release",
-        "nodejs"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "pipeline:.github/workflows/project-board-sync.yml",
       "type": "pipeline",
       "name": "project-board-sync.yml",
@@ -165,19 +151,6 @@
       "complexity": "complex"
     },
     {
-      "id": "document:REFACTORING_SETUP_SH.md",
-      "type": "document",
-      "name": "REFACTORING_SETUP_SH.md",
-      "filePath": "REFACTORING_SETUP_SH.md",
-      "summary": "Historical design document recording the SOLID-principle refactor of setup.sh \u2014 config extraction, function separation, an environments.conf SSOT, before/after metrics, and a migration path for future phases.",
-      "tags": [
-        "documentation",
-        "refactoring",
-        "design-notes"
-      ],
-      "complexity": "complex"
-    },
-    {
       "id": "file:install.sh",
       "type": "file",
       "name": "install.sh",
@@ -236,19 +209,6 @@
       "complexity": "moderate"
     },
     {
-      "id": "document:requirements.txt",
-      "type": "document",
-      "name": "requirements.txt",
-      "filePath": "requirements.txt",
-      "summary": "Auto-generated pinned dependency lockfile (via `uv pip compile`) covering rich, markdown-it-py, mdurl, and pygments used by the repo's Python tooling.",
-      "tags": [
-        "dependencies",
-        "lockfile",
-        "python"
-      ],
-      "complexity": "simple"
-    },
-    {
       "id": "file:setup.sh",
       "type": "file",
       "name": "setup.sh",
@@ -281,7 +241,7 @@
       "type": "document",
       "name": "README.md",
       "filePath": "aws/README.md",
-      "summary": "Step-by-step onboarding guide for internal-PC AWS Bedrock setup \u2014 running aws/setup.sh, editing aws.local.sh, `aws sso login`, installing OTel telemetry, restarting Claude Code, and running aws/diagnose.sh, plus a troubleshooting reverse-index.",
+      "summary": "Step-by-step onboarding guide for internal-PC AWS Bedrock setup — running aws/setup.sh, editing aws.local.sh, `aws sso login`, installing OTel telemetry, restarting Claude Code, and running aws/diagnose.sh, plus a troubleshooting reverse-index.",
       "tags": [
         "documentation",
         "onboarding",
@@ -295,7 +255,7 @@
       "type": "file",
       "name": "diagnose.sh",
       "filePath": "aws/diagnose.sh",
-      "summary": "Read-only diagnostic script (issue #677) that checks whether the aws/setup.sh and aws/install-otel-managed-settings.sh bootstrap completed correctly \u2014 proxy certs, AWS CLI, Bedrock env vars, ~/.aws/config, Claude settings, OTel managed-settings, and SSO session state \u2014 reporting PASS/FAIL/WARN per item.",
+      "summary": "Read-only diagnostic script (issue #677) that checks whether the aws/setup.sh and aws/install-otel-managed-settings.sh bootstrap completed correctly — proxy certs, AWS CLI, Bedrock env vars, ~/.aws/config, Claude settings, OTel managed-settings, and SSO session state — reporting PASS/FAIL/WARN per item.",
       "tags": [
         "diagnostics",
         "aws",
@@ -597,7 +557,7 @@
         "migration"
       ],
       "complexity": "complex",
-      "languageNotes": "Heavy use of guarded one-off `_migrate_*` functions that detect and repair stale symlink layouts from earlier dotfiles versions \u2014 a pattern for backward-compatible setup scripts."
+      "languageNotes": "Heavy use of guarded one-off `_migrate_*` functions that detect and repair stale symlink layouts from earlier dotfiles versions — a pattern for backward-compatible setup scripts."
     },
     {
       "id": "file:claude/statusline-command.sh",
@@ -809,7 +769,7 @@
       "type": "document",
       "name": "refactor-clean_KO.md",
       "filePath": "claude/docs/marketplaces/claude-code-workflows/plugins/code-refactoring/commands/refactor-clean_KO.md",
-      "summary": "Extensive Korean-translated reference for the refactor-clean command, walking through before/after examples for single-responsibility, open/closed, modular architecture, CI-integrated static analysis (Sourcery, Semgrep, CodeQL), exception handling, and O(n\u00b2)-to-O(n) algorithmic cleanup.",
+      "summary": "Extensive Korean-translated reference for the refactor-clean command, walking through before/after examples for single-responsibility, open/closed, modular architecture, CI-integrated static analysis (Sourcery, Semgrep, CodeQL), exception handling, and O(n²)-to-O(n) algorithmic cleanup.",
       "tags": [
         "documentation",
         "vendored",
@@ -1802,7 +1762,7 @@
       "type": "document",
       "name": "todo-defer-2026-05.md",
       "filePath": "docs/archive/todo-defer-2026-05.md",
-      "summary": "Archived Phase 2 refactoring review plan (plugin loader `load_category` abstraction and UX library interface split) with review criteria, triggers, a pre-implementation checklist, and a decision record \u2014 deferred past its 2026-05 due date.",
+      "summary": "Archived Phase 2 refactoring review plan (plugin loader `load_category` abstraction and UX library interface split) with review criteria, triggers, a pre-implementation checklist, and a decision record — deferred past its 2026-05 due date.",
       "tags": [
         "documentation",
         "archive",
@@ -1837,307 +1797,6 @@
         "automation",
         "workflow",
         "guide"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "document",
-      "name": "AIE_member_code_mapping.md",
-      "filePath": "docs/archive/company/AIE_member_code_mapping.md",
-      "summary": "Confidential part-lead-only mapping table linking JIRA Story summary letter codes (Greek letters like delta, xi, lambda) to actual team members, plus the summary-prefix format rules and JQL query examples used across the AI Enable part's evaluation JIRA structure.",
-      "tags": [
-        "documentation",
-        "confidential",
-        "jira",
-        "reference-table",
-        "internal-mapping"
-      ],
-      "complexity": "moderate",
-      "languageNotes": "Uses Greek letters as permanent pseudonymous member codes to keep JIRA summaries anonymized while remaining stable identifiers across history."
-    },
-    {
-      "id": "document:docs/archive/company/JIRA_Story_draft_2026-C.md",
-      "type": "document",
-      "name": "JIRA_Story_draft_2026-C.md",
-      "filePath": "docs/archive/company/JIRA_Story_draft_2026-C.md",
-      "summary": "One AI-assisted draft (variant C) of a JIRA Story structure for the 2026 AI Enable part evaluation cycle, covering both part-level and individual-level stories across four weighted evaluation categories.",
-      "tags": [
-        "documentation",
-        "jira",
-        "draft",
-        "ai-generated",
-        "okr"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/archive/company/JIRA_Story_draft_2026-CX.md",
-      "type": "document",
-      "name": "JIRA_Story_draft_2026-CX.md",
-      "filePath": "docs/archive/company/JIRA_Story_draft_2026-CX.md",
-      "summary": "A second AI-assisted draft (variant CX) proposing a JIRA Story skeleton for the same 2026 AI Enable part and individual evaluation structure, written in a more conversational, unpolished tone as a comparison alternative.",
-      "tags": [
-        "documentation",
-        "jira",
-        "draft",
-        "ai-generated",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/JIRA_Story_draft_2026-G.md",
-      "type": "document",
-      "name": "JIRA_Story_draft_2026-G.md",
-      "filePath": "docs/archive/company/JIRA_Story_draft_2026-G.md",
-      "summary": "A third, more concise AI-assisted draft (variant G) sketching the part-level and individual-level JIRA Story breakdown for the 2026 evaluation cycle, framed around SOLID/SSOT principles.",
-      "tags": [
-        "documentation",
-        "jira",
-        "draft",
-        "ai-generated",
-        "okr"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "document:docs/archive/company/JIRA_Story_draft_2026.md",
-      "type": "document",
-      "name": "JIRA_Story_draft_2026.md",
-      "filePath": "docs/archive/company/JIRA_Story_draft_2026.md",
-      "summary": "The final, adopted JIRA Story template for the 2026 AI Enable part evaluation structure \u2014 defines part-level Stories (P-1..P-5), key-product Stories (K-1..K-4), and the individual member Story template (M-1..M-4), later expanded into the paste_ready/ files.",
-      "tags": [
-        "documentation",
-        "jira",
-        "template",
-        "okr",
-        "final-draft"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "file:docs/archive/company/OKR_Structure_Guide.html",
-      "type": "file",
-      "name": "OKR_Structure_Guide.html",
-      "filePath": "docs/archive/company/OKR_Structure_Guide.html",
-      "summary": "Self-contained, theme-aware interactive HTML visualization of the OKR Structure Guide (rendered from OKR_Structure_Guide.md), likely generated via a slash-command visualization tool, with light/dark theme persistence and export-to-image support.",
-      "tags": [
-        "documentation",
-        "visualization",
-        "okr",
-        "interactive",
-        "html-report"
-      ],
-      "complexity": "complex",
-      "languageNotes": "Single HTML file inlining fonts, styles and a FOUC-prevention theme script; uses html-to-image for client-side export."
-    },
-    {
-      "id": "document:docs/archive/company/OKR_Structure_Guide.md",
-      "type": "document",
-      "name": "OKR_Structure_Guide.md",
-      "filePath": "docs/archive/company/OKR_Structure_Guide.md",
-      "summary": "Guide for AI Enable part members explaining how GHRP evaluation items translate into the OKR-style Objective/Story naming convention (prefix grammar, Greek-letter codes, three-level Objective hierarchy) with worked JQL query examples.",
-      "tags": [
-        "documentation",
-        "okr",
-        "guide",
-        "onboarding",
-        "jira"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/archive/company/claude-skills-review.md",
-      "type": "document",
-      "name": "claude-skills-review.md",
-      "filePath": "docs/archive/company/claude-skills-review.md",
-      "summary": "A blog-style write-up sharing personal experience using Claude Code Skills for token efficiency, walking through the MCP-to-Agent-to-Skill evolution, five daily-use skills (gh:issue, gh:commit, gh:pr, gh:pr-reply, visualize) and a tool-neutral cheat sheet for teams without Claude access.",
-      "tags": [
-        "documentation",
-        "blog-post",
-        "claude-code",
-        "productivity",
-        "ai-tooling"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/skills-experience-draft.md",
-      "type": "document",
-      "name": "skills-experience-draft.md",
-      "filePath": "docs/archive/company/skills-experience-draft.md",
-      "summary": "A rough content brief/outline requested by a colleague for a Claude Skills experience-sharing article \u2014 lists the desired talking points (token savings, MCP/Agent/Skill comparison, favorite skills) that were later expanded into claude-skills-review.md.",
-      "tags": [
-        "documentation",
-        "draft",
-        "claude-code",
-        "content-brief",
-        "outline"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03b3.md",
-      "type": "document",
-      "name": "AIE-\u03b3.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03b3.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'gamma', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03b4.md",
-      "type": "document",
-      "name": "AIE-\u03b4.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03b4.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'delta', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03b6.md",
-      "type": "document",
-      "name": "AIE-\u03b6.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03b6.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'zeta', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03b8.md",
-      "type": "document",
-      "name": "AIE-\u03b8.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03b8.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'theta', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03bb.md",
-      "type": "document",
-      "name": "AIE-\u03bb.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03bb.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'lambda', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03be.md",
-      "type": "document",
-      "name": "AIE-\u03be.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03be.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'xi', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03c0.md",
-      "type": "document",
-      "name": "AIE-\u03c0.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03c0.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'pi', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03c3.md",
-      "type": "document",
-      "name": "AIE-\u03c3.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03c3.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'sigma', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/AIE-\u03c8.md",
-      "type": "document",
-      "name": "AIE-\u03c8.md",
-      "filePath": "docs/archive/company/paste_ready/AIE-\u03c8.md",
-      "summary": "Paste-ready, copy/paste-only JIRA Story set (M-1..M-4) for the anonymized team member coded 'psi', expanded from the JIRA_Story_draft_2026.md template with the letter already substituted in.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/README.md",
-      "type": "document",
-      "name": "README.md",
-      "filePath": "docs/archive/company/paste_ready/README.md",
-      "summary": "Index/usage guide for the paste_ready directory explaining the 10-file, 45-Story structure (part-independent stories plus 9 per-member files), how to copy each Story into JIRA, the K-number substitution caveat for M-1, and the manual annual regeneration procedure from the source template.",
-      "tags": [
-        "documentation",
-        "index",
-        "jira",
-        "usage-guide"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "document:docs/archive/company/paste_ready/part_independent.md",
-      "type": "document",
-      "name": "part_independent.md",
-      "filePath": "docs/archive/company/paste_ready/part_independent.md",
-      "summary": "Paste-ready JIRA Story set for the letter-independent, part-level scope: the part Epic, P-1..P-5 evaluation stories, and the four key-product stories (K-1..K-4 for Agent App Store, Alpha Agent, Cowork, MCP/Skill Hub), ready to copy directly into JIRA.",
-      "tags": [
-        "documentation",
-        "jira",
-        "paste-ready",
-        "template-instance",
-        "okr"
       ],
       "complexity": "complex"
     },
@@ -2227,193 +1886,6 @@
       "languageNotes": "Written as a structured feature-requirement scratch doc with a diff-tracking table showing which reviewer feedback items were incorporated."
     },
     {
-      "id": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "type": "document",
-      "name": "legacy-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/legacy-analysis.md",
-      "summary": "Overview analysis of the legacy my-help shell help system (34 help files across 8 categories, ~2000 lines) as part of the my-cli migration Discovery phase; defines a 4-tier usage-frequency classification and a phased migration plan (CL-7.1 through CL-7.9).",
-      "tags": [
-        "documentation",
-        "analysis",
-        "migration",
-        "planning"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-      "type": "document",
-      "name": "ai-llm-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-      "summary": "Per-topic migration analysis for the AI/LLM help category (claude, cc, gemini, codex, litellm, ollama, claude_plugins, claude_skills_marketplace), rating each legacy help file's usage frequency and proposing Quick/Full mode content splits for the my-cli rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "cli-tools",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-      "type": "document",
-      "name": "cli-tools-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-      "summary": "Per-topic migration analysis for the CLI Tools help category (fzf, fd, fasd, ripgrep, pet, bat, zsh, zsh_autosuggestions, gc), documenting each legacy help file's size and usage tier for the my-cli content rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "cli-tools",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-      "type": "document",
-      "name": "config-system-meta-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-      "summary": "Combined migration analysis for the Config, System, Meta, and Docs help categories (p10k, crt, apt, pip, dir, opencode, category, register, dot, show_doc, notion, work_log, work), ranking each topic by tier and priority for the my-cli rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "configuration",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/development-category-analysis.md",
-      "type": "document",
-      "name": "development-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/development-category-analysis.md",
-      "summary": "Per-topic migration analysis for the Development help category (git, uv, py, nvm, npm, pp, cli, ux, du, psql, mytool) \u2014 the largest and highest-priority category \u2014 with a detailed section-by-section breakdown of the git help content and Quick/Full mode recommendations.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "development",
-        "migration"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/analysis/devops-category-analysis.md",
-      "type": "document",
-      "name": "devops-category-analysis.md",
-      "filePath": "docs/feature/my-cli/analysis/devops-category-analysis.md",
-      "summary": "Per-topic migration analysis for the DevOps help category (docker, dproxy, sys, proxy, mount, mysql, gpu), documenting expected sections and Quick Mode command shortlists for the my-cli rewrite.",
-      "tags": [
-        "documentation",
-        "analysis",
-        "devops",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "document",
-      "name": "implementation-roadmap.md",
-      "filePath": "docs/feature/my-cli/planning/implementation-roadmap.md",
-      "summary": "Implementation roadmap for migrating the legacy my-help shell system to my-cli, redefining the tier classification and laying out a 4-phase plan (Foundation, Tier 1 optimization, Tier 2 optimization, Polish & Release) with a timeline, data-model example, and data-format strategy options.",
-      "tags": [
-        "documentation",
-        "planning",
-        "roadmap",
-        "migration"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/phase-1-detail.md",
-      "type": "document",
-      "name": "phase-1-detail.md",
-      "filePath": "docs/feature/my-cli/planning/phase-1-detail.md",
-      "summary": "Detailed task-level implementation plan for Phase 1 (CL-7.1 UI improvements and CL-7.2 data model extension) of the my-cli migration, covering TopicDetail.tsx refactoring, ShellFunctionAdapter.ts changes, HelpTopic type extension, and unit/E2E test tasks.",
-      "tags": [
-        "documentation",
-        "planning",
-        "implementation-plan",
-        "migration"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/progress-checklist.md",
-      "type": "document",
-      "name": "progress-checklist.md",
-      "filePath": "docs/feature/my-cli/planning/progress-checklist.md",
-      "summary": "Progress-tracking checklist for the full my-cli migration (CL-7.0 through CL-7.9), recording task completion status, current status notes, and milestones per phase.",
-      "tags": [
-        "documentation",
-        "planning",
-        "progress-tracking",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/planning/quick-start.md",
-      "type": "document",
-      "name": "quick-start.md",
-      "filePath": "docs/feature/my-cli/planning/quick-start.md",
-      "summary": "Quick-resume checklist for restarting work on the my-cli migration after a break: verify git state, re-review the analysis and roadmap docs, confirm the packages/my-cli build/test environment, and jump into the next phase.",
-      "tags": [
-        "documentation",
-        "onboarding",
-        "checklist",
-        "migration"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "document:docs/feature/my-cli/requirements/req-abc-c.md",
-      "type": "document",
-      "name": "req-abc-c.md",
-      "filePath": "docs/feature/my-cli/requirements/req-abc-c.md",
-      "summary": "Comprehensive, consolidated design document for `my-cli`, a TypeScript/ink rewrite of the shell-based help system \u2014 covering architecture, security (input sanitization, shell-call safety, pager strategy), registry loading strategies, CLI interface (interactive TUI and non-interactive JSON/text modes), an 18-CL (change-list) phased implementation plan spanning 11-12 weeks, test strategy, acceptance criteria, a peer-review checklist, dependencies, and a shell-to-TypeScript migration map.",
-      "tags": [
-        "requirements",
-        "design-doc",
-        "cli",
-        "typescript",
-        "planning"
-      ],
-      "complexity": "complex",
-      "languageNotes": "Korean-language technical spec with English CL identifiers and code identifiers (e.g. packages/core/src/sanitize.ts); structured as a formal consolidated PRD/TRD hybrid with 88 headings across architecture, security, and phased delivery sections."
-    },
-    {
-      "id": "document:docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-      "type": "document",
-      "name": "req-cli-mycli-1-learning-guide.md",
-      "filePath": "docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-      "summary": "Two-week self-study learning guide for ink + TypeScript + React + yargs, structured as a day-by-day plan with environment setup steps, common pitfalls, curated resources, daily checklists, and an FAQ, intended to prepare the developer for implementing the my-cli requirements.",
-      "tags": [
-        "documentation",
-        "learning-guide",
-        "typescript",
-        "onboarding",
-        "planning"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "type": "document",
-      "name": "req-cli-mycli-1.md",
-      "filePath": "docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "summary": "Original requirements document for the my-cli Personal CLI Tool Suite \u2014 a TypeScript/ink rewrite of the shell my-help system modeled on the gemini-cli reference architecture, defining the help registry, plugin architecture, command system, UI design, data model, API, configuration, backwards-compatibility strategy with existing shell functions, testing strategy, acceptance criteria, risks, and a 5-phase (Week 1-7) implementation timeline.",
-      "tags": [
-        "requirements",
-        "design-doc",
-        "cli",
-        "typescript",
-        "help-system"
-      ],
-      "complexity": "complex",
-      "languageNotes": "Bilingual (Korean headings, English technical terms); documents backwards-compatibility with the existing shell my-help function suite this project would eventually replace."
-    },
-    {
       "id": "document:docs/feature/superpowers-plans/2026-04-22-gh-skills-expansion.md",
       "type": "document",
       "name": "2026-04-22-gh-skills-expansion.md",
@@ -2488,7 +1960,7 @@
       "type": "document",
       "name": "2026-04-22-gh-skills-expansion-design.md",
       "filePath": "docs/feature/superpowers-specs/2026-04-22-gh-skills-expansion-design.md",
-      "summary": "Design spec for expanding the gh:* skill family \u2014 renaming gh:issue-create, adding gh:issue-read, gh:issue-implement, gh:pr-merge, and the composite gh:issue-flow skill, with directory layout and rollout order.",
+      "summary": "Design spec for expanding the gh:* skill family — renaming gh:issue-create, adding gh:issue-read, gh:issue-implement, gh:pr-merge, and the composite gh:issue-flow skill, with directory layout and rollout order.",
       "tags": [
         "documentation",
         "design-spec",
@@ -2641,7 +2113,7 @@
       "type": "document",
       "name": "README.md",
       "filePath": "docs/guide/learnings/README.md",
-      "summary": "Index and authoring template for the learnings knowledge base \u2014 short (50-80 line) reusable patterns extracted from real PRs/commits, listing the current 7 documents and the file structure / reference-link / language conventions to follow.",
+      "summary": "Index and authoring template for the learnings knowledge base — short (50-80 line) reusable patterns extracted from real PRs/commits, listing the current 7 documents and the file structure / reference-link / language conventions to follow.",
       "tags": [
         "documentation",
         "entry-point",
@@ -2807,7 +2279,7 @@
       "type": "file",
       "name": "index.html",
       "filePath": "docs/guide/superpowers-ko/index.html",
-      "summary": "Landing page titled 'Superpowers Skills \u2014 Platform Comparison' that links out to the Claude Code, Codex, and Gemini styled HTML variants of the skill overview.",
+      "summary": "Landing page titled 'Superpowers Skills — Platform Comparison' that links out to the Claude Code, Codex, and Gemini styled HTML variants of the skill overview.",
       "tags": [
         "documentation",
         "html",
@@ -4861,20 +4333,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:scripts/flush-transfer.sh",
-      "type": "file",
-      "name": "flush-transfer.sh",
-      "filePath": "scripts/flush-transfer.sh",
-      "summary": "One-shot cleanup script that removes all tracked files under transfer/, commits the removal, and pushes \u2014 used to erase a one-time PC-to-PC transfer payload after it has been consumed.",
-      "tags": [
-        "git-automation",
-        "cleanup",
-        "one-shot",
-        "transfer"
-      ],
-      "complexity": "simple"
-    },
-    {
       "id": "file:scripts/lint_docs_filenames.sh",
       "type": "file",
       "name": "lint_docs_filenames.sh",
@@ -4944,7 +4402,7 @@
         75,
         89
       ],
-      "summary": "Tests whether a given skill name passes the Codex allowlist gate \u2014 an empty allowlist means every skill is allowed.",
+      "summary": "Tests whether a given skill name passes the Codex allowlist gate — an empty allowlist means every skill is allowed.",
       "tags": [
         "validation",
         "allowlist"
@@ -5091,159 +4549,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "type": "file",
-      "name": "analyze_shebang_report.sh",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "summary": "Comprehensive shebang-consistency analyzer that scans .sh/.bash files for bash-specific feature usage (arrays, [[ ]], parameter expansion, etc.), classifies each file as posix-ok/bash-required/wrong-shebang/missing-shebang, and prints a colorized findings report with prioritized fix recommendations.",
-      "tags": [
-        "static-analysis",
-        "shebang-linting",
-        "bash-detection",
-        "reporting"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:detect_bash_features",
-      "type": "function",
-      "name": "detect_bash_features",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        47,
-        59
-      ],
-      "summary": "Scans a file against a table of bash-specific regex patterns (arrays, [[ ]], BASH_SOURCE, parameter expansion, etc.) and returns the names of features found.",
-      "tags": [
-        "pattern-matching",
-        "bash-detection"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:get_shebang",
-      "type": "function",
-      "name": "get_shebang",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        62,
-        72
-      ],
-      "summary": "Extracts and normalizes a file's shebang line for comparison against its detected feature requirements.",
-      "tags": [
-        "shebang-parsing"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "type": "function",
-      "name": "analyze_file",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        81,
-        143
-      ],
-      "summary": "Core per-file analysis routine that combines shebang inspection and bash-feature detection to classify a file into one of the report categories and update running statistics.",
-      "tags": [
-        "file-analysis",
-        "classification"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_stats",
-      "type": "function",
-      "name": "print_stats",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        156,
-        170
-      ],
-      "summary": "Prints the summary statistics table (counts per classification category) for the analyzed file set.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_priority_files",
-      "type": "function",
-      "name": "print_priority_files",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        173,
-        208
-      ],
-      "summary": "Prints the highest-priority files needing a shebang fix, ranked by severity.",
-      "tags": [
-        "reporting",
-        "prioritization"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_findings",
-      "type": "function",
-      "name": "print_findings",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        211,
-        243
-      ],
-      "summary": "Prints the detailed per-category findings section of the shebang analysis report.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_source_only",
-      "type": "function",
-      "name": "print_source_only",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        246,
-        258
-      ],
-      "summary": "Prints the list of files that are source-only (not directly executable) along with their shebang status.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:print_bash_required",
-      "type": "function",
-      "name": "print_bash_required",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        261,
-        272
-      ],
-      "summary": "Prints the list of files detected as requiring bash-specific features.",
-      "tags": [
-        "reporting"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "type": "function",
-      "name": "main",
-      "filePath": "scripts/maintenance/analyze_shebang_report.sh",
-      "lineRange": [
-        285,
-        315
-      ],
-      "summary": "Orchestrates the full scan \u2014 walks the target files, calls analyze_file on each, then renders all report sections in order.",
-      "tags": [
-        "entry-point",
-        "orchestration"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:scripts/maintenance/check_bash_status.sh",
       "type": "file",
       "name": "check_bash_status.sh",
@@ -5338,7 +4643,7 @@
       "type": "document",
       "name": "README.md",
       "filePath": "shell-common/README.md",
-      "summary": "Comprehensive reference for the shell-common/ directory \u2014 its structure (env/aliases/functions/tools/projects), module loading order, environment/alias/function module catalogs, instructions for adding new shared modules, and configuration file templates.",
+      "summary": "Comprehensive reference for the shell-common/ directory — its structure (env/aliases/functions/tools/projects), module loading order, environment/alias/function module catalogs, instructions for adding new shared modules, and configuration file templates.",
       "tags": [
         "documentation",
         "module-guide",
@@ -5674,7 +4979,7 @@
         749,
         867
       ],
-      "summary": "Entry point that runs the full setup sequence \u2014 local files, security config, tool configs, package repos \u2014 and reports verification results.",
+      "summary": "Entry point that runs the full setup sequence — local files, security config, tool configs, package repos — and reports verification results.",
       "tags": [
         "entry-point",
         "orchestration"
@@ -5686,7 +4991,7 @@
       "type": "file",
       "name": "claude_plugins.sh",
       "filePath": "shell-common/aliases/claude_plugins.sh",
-      "summary": "Alias shortcuts for Claude Code marketplace plugin management commands \u2014 opening, listing, syncing, and generating documentation for plugins.",
+      "summary": "Alias shortcuts for Claude Code marketplace plugin management commands — opening, listing, syncing, and generating documentation for plugins.",
       "tags": [
         "aliases",
         "claude-code",
@@ -5799,7 +5104,7 @@
       "type": "file",
       "name": "kill.sh",
       "filePath": "shell-common/aliases/kill.sh",
-      "summary": "Port-management helpers \u2014 kill_by_port() force-kills whatever process holds a given TCP port, and check_port() reports what's listening on it, exposed via the kp/lp aliases.",
+      "summary": "Port-management helpers — kill_by_port() force-kills whatever process holds a given TCP port, and check_port() reports what's listening on it, exposed via the kp/lp aliases.",
       "tags": [
         "aliases",
         "process-management",
@@ -5828,7 +5133,7 @@
       "type": "file",
       "name": "mytool.sh",
       "filePath": "shell-common/aliases/mytool.sh",
-      "summary": "Aliases for the custom mytool suite \u2014 help text, source-bundling (srcpack), hardware-info reporting, AGENTS.md scaffolding, and the dotfiles test-suite runner.",
+      "summary": "Aliases for the custom mytool suite — help text, source-bundling (srcpack), hardware-info reporting, AGENTS.md scaffolding, and the dotfiles test-suite runner.",
       "tags": [
         "aliases",
         "custom-tooling",
@@ -6472,7 +5777,7 @@
       "type": "file",
       "name": "database_help.sh",
       "filePath": "shell-common/functions/database_help.sh",
-      "summary": "Registers three database CLI help-topic commands \u2014 `mysql-help`, `psql-help`, and `redis-help` \u2014 each covering the tool's service management and core command reference.",
+      "summary": "Registers three database CLI help-topic commands — `mysql-help`, `psql-help`, and `redis-help` — each covering the tool's service management and core command reference.",
       "tags": [
         "help-topic",
         "cli-documentation",
@@ -6533,7 +5838,7 @@
       "type": "file",
       "name": "devops_help.sh",
       "filePath": "shell-common/functions/devops_help.sh",
-      "summary": "Registers three DevOps CLI help-topic commands \u2014 `docker-help` (including compose-file detection in the current directory and a use-case recommendation engine), `proxy-help`/`proxy-check`, and `dproxy-help` \u2014 for Docker, HTTP proxy, and Docker-proxy workflows respectively.",
+      "summary": "Registers three DevOps CLI help-topic commands — `docker-help` (including compose-file detection in the current directory and a use-case recommendation engine), `proxy-help`/`proxy-check`, and `dproxy-help` — for Docker, HTTP proxy, and Docker-proxy workflows respectively.",
       "tags": [
         "help-topic",
         "cli-documentation",
@@ -6771,7 +6076,7 @@
       "type": "file",
       "name": "devx_help.sh",
       "filePath": "shell-common/functions/devx_help.sh",
-      "summary": "Registers the `devx-help` topic content for the `devx` dispatcher \u2014 covering lint, fix, lint-helpfunc, lint-deadcode, and stat subcommands \u2014 invoked directly by `devx()` rather than through its own dash-form alias (a deliberate \u00a77.6.1 deviation).",
+      "summary": "Registers the `devx-help` topic content for the `devx` dispatcher — covering lint, fix, lint-helpfunc, lint-deadcode, and stat subcommands — invoked directly by `devx()` rather than through its own dash-form alias (a deliberate §7.6.1 deviation).",
       "tags": [
         "help-topic",
         "cli-documentation",
@@ -6814,7 +6119,7 @@
       "type": "file",
       "name": "agy_help.sh",
       "filePath": "shell-common/functions/agy_help.sh",
-      "summary": "Registers the `agy-help` topic command describing Antigravity CLI (agy) usage \u2014 basic commands, setup/install, and OAuth token/PATH-conflict tips \u2014 following the directory's dash-form help-topic pattern.",
+      "summary": "Registers the `agy-help` topic command describing Antigravity CLI (agy) usage — basic commands, setup/install, and OAuth token/PATH-conflict tips — following the directory's dash-form help-topic pattern.",
       "tags": [
         "help-topic",
         "cli-documentation",
@@ -7085,7 +6390,7 @@
       "type": "file",
       "name": "ai_usage.sh",
       "filePath": "shell-common/functions/ai_usage.sh",
-      "summary": "Wraps AI CLI invocations (claude/codex/gemini) to record per-call token usage and cost into usage.jsonl, then aggregates a run's totals into a human-readable summary \u2014 used by gh-issue-flow's detached background workers to catch runaway quota burn.",
+      "summary": "Wraps AI CLI invocations (claude/codex/gemini) to record per-call token usage and cost into usage.jsonl, then aggregates a run's totals into a human-readable summary — used by gh-issue-flow's detached background workers to catch runaway quota burn.",
       "tags": [
         "cost-tracking",
         "ai-tooling",
@@ -7268,7 +6573,7 @@
       "type": "file",
       "name": "claude_allow_clean.sh",
       "filePath": "shell-common/functions/claude_allow_clean.sh",
-      "summary": "Implements `claude-allow-clean`, which prunes junk entries from Claude Code's `.claude/settings.local.json` permissions.allow list \u2014 one-time session tokens, structurally broken multi-line artifacts, and entries that should never be pre-approved such as `--no-verify`.",
+      "summary": "Implements `claude-allow-clean`, which prunes junk entries from Claude Code's `.claude/settings.local.json` permissions.allow list — one-time session tokens, structurally broken multi-line artifacts, and entries that should never be pre-approved such as `--no-verify`.",
       "tags": [
         "maintenance",
         "claude-code",
@@ -9009,7 +8314,7 @@
         1444,
         1782
       ],
-      "summary": "Spawns a fully isolated worktree workspace (branch, directory, environment) for parallel AI-agent or feature work \u2014 the largest single function in the file.",
+      "summary": "Spawns a fully isolated worktree workspace (branch, directory, environment) for parallel AI-agent or feature work — the largest single function in the file.",
       "tags": [
         "worktree",
         "spawn",
@@ -10981,7 +10286,7 @@
       "type": "file",
       "name": "package_managers_help.sh",
       "filePath": "shell-common/functions/package_managers_help.sh",
-      "summary": "Help topics and availability-check helpers for pip, npm, uv, and bun package managers, plus generic apt/cargo/nuget/rpm presence checks \u2014 all following the same sectioned help pattern.",
+      "summary": "Help topics and availability-check helpers for pip, npm, uv, and bun package managers, plus generic apt/cargo/nuget/rpm presence checks — all following the same sectioned help pattern.",
       "tags": [
         "help-system",
         "documentation",
@@ -11270,7 +10575,7 @@
       "type": "file",
       "name": "system_help.sh",
       "filePath": "shell-common/functions/system_help.sh",
-      "summary": "Bundles five independent SSOT help dispatchers \u2014 sys_help, gpu_help, du_help, dir_help, and network_help/network_check \u2014 covering system diagnostics, GPU/Docker troubleshooting, disk usage, directory navigation, and network checks.",
+      "summary": "Bundles five independent SSOT help dispatchers — sys_help, gpu_help, du_help, dir_help, and network_help/network_check — covering system diagnostics, GPU/Docker troubleshooting, disk usage, directory navigation, and network checks.",
       "tags": [
         "help-system",
         "documentation",
@@ -12021,7 +11326,7 @@
         "cli-help"
       ],
       "complexity": "complex",
-      "languageNotes": "Uses eval-based dynamic function definition plus typeset -f/declare -f introspection to clone and wrap existing shell functions at load time \u2014 a metaprogramming pattern uncommon in POSIX shell, kept portable between bash and zsh via ZSH_VERSION branching."
+      "languageNotes": "Uses eval-based dynamic function definition plus typeset -f/declare -f introspection to clone and wrap existing shell functions at load time — a metaprogramming pattern uncommon in POSIX shell, kept portable between bash and zsh via ZSH_VERSION branching."
     },
     {
       "id": "function:shell-common/functions/zz_help_standard_adapter.sh:apply_help_standard_adapter",
@@ -15824,38 +15129,6 @@
       "complexity": "moderate"
     },
     {
-      "id": "file:shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "type": "file",
-      "name": "run_agents_md_master_prompt.sh",
-      "filePath": "shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "summary": "Non-interactively invokes Claude Code with the repo's AGENTS.md master prompt to (re)generate module-level AGENTS.md documentation.",
-      "tags": [
-        "automation",
-        "claude-code",
-        "documentation",
-        "cli-tool",
-        "non-interactive"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:shell-common/tools/custom/run_agents_md_master_prompt.sh:main",
-      "type": "function",
-      "name": "main",
-      "filePath": "shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "lineRange": [
-        21,
-        68
-      ],
-      "summary": "Resolves the master prompt file path and dispatches it to Claude Code in non-interactive mode.",
-      "tags": [
-        "automation",
-        "claude-code",
-        "cli-tool"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:shell-common/tools/custom/set_locale.sh",
       "type": "file",
       "name": "set_locale.sh",
@@ -15956,7 +15229,7 @@
       "type": "file",
       "name": "skill_loader.sh",
       "filePath": "shell-common/tools/custom/skill_loader.sh",
-      "summary": "Standalone CLI utility for programmatic access to Claude Code / Codex / Gemini skill definitions \u2014 lists skills and loads a named skill's content.",
+      "summary": "Standalone CLI utility for programmatic access to Claude Code / Codex / Gemini skill definitions — lists skills and loads a named skill's content.",
       "tags": [
         "cli-tool",
         "skills",
@@ -18394,7 +17667,7 @@
       "type": "file",
       "name": "uv.sh",
       "filePath": "shell-common/tools/integrations/uv.sh",
-      "summary": "Defines short-form aliases for common uv (Python package manager) operations \u2014 sync, upgrade, dev install, lock, requirements export/sync \u2014 plus an install wrapper function.",
+      "summary": "Defines short-form aliases for common uv (Python package manager) operations — sync, upgrade, dev install, lock, requirements export/sync — plus an install wrapper function.",
       "tags": [
         "utility",
         "aliases",
@@ -18449,7 +17722,7 @@
       "type": "file",
       "name": "ux_lib.sh",
       "filePath": "shell-common/tools/ux_lib/ux_lib.sh",
-      "summary": "Central POSIX-compliant UX library providing semantic colors, headers/success/error/warning output, spinners and progress bars, confirmation/input/menu prompts, table formatting, error trapping, and log filtering \u2014 the single styling dependency for all dotfiles scripts.",
+      "summary": "Central POSIX-compliant UX library providing semantic colors, headers/success/error/warning output, spinners and progress bars, confirmation/input/menu prompts, table formatting, error trapping, and log filtering — the single styling dependency for all dotfiles scripts.",
       "tags": [
         "ux-library",
         "terminal-output",
@@ -18865,88 +18138,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "type": "file",
-      "name": "gh_pr_merge_board_gate.sh",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "summary": "Bats test fixture mirroring the Step 4-B project-board approval gate snippet in the gh-pr-merge skill, verifying merges are refused unless the board Status is 'Approved' (or the check is skipped).",
-      "tags": [
-        "test",
-        "fixture",
-        "bats",
-        "mock",
-        "board-gate"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh:gh_pr_merge_board_gate",
-      "type": "function",
-      "name": "gh_pr_merge_board_gate",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "lineRange": [
-        25,
-        50
-      ],
-      "summary": "Gates a PR merge on the project board Status field, refusing (rc=2) unless the card is 'Approved', empty (no board), or the GH_PR_MERGE_SKIP_BOARD_CHECK escape hatch is set.",
-      "tags": [
-        "test",
-        "fixture",
-        "board-gate"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "type": "file",
-      "name": "gh_pr_reply_auto_approve.sh",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "summary": "Bats test fixture mirroring the gh-pr-reply skill's Step 8 solo-repo auto-approve gating logic \u2014 four guard checks (allowlist, PR state/draft, reviewDecision) that decide whether to bypass the fail-closed approval guard.",
-      "tags": [
-        "test",
-        "fixture",
-        "bats",
-        "mock",
-        "auto-approve"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_auto_approve_step8",
-      "type": "function",
-      "name": "gh_pr_reply_auto_approve_step8",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "lineRange": [
-        42,
-        122
-      ],
-      "summary": "Evaluates four guards (comment count, repo allowlist membership, PR state/draft, reviewDecision) and, if all pass, calls the board-sync helper to auto-approve, recording the outcome in STEP8_OUTCOME.",
-      "tags": [
-        "test",
-        "fixture",
-        "auto-approve",
-        "gating-logic"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_render_step8_row",
-      "type": "function",
-      "name": "gh_pr_reply_render_step8_row",
-      "filePath": "tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "lineRange": [
-        127,
-        161
-      ],
-      "summary": "Maps a STEP8_OUTCOME value to its user-visible report row (OK/SKIP/WARN/FAIL) for the gh-pr-reply final summary.",
-      "tags": [
-        "test",
-        "fixture",
-        "reporting"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh",
       "type": "file",
       "name": "gh_pr_reply_board_sync.sh",
@@ -19291,7 +18482,7 @@
         "claude-plugin"
       ],
       "complexity": "complex",
-      "languageNotes": "Kept in lockstep with structure-spec.md by convention comment \u2014 a markdown spec with no shell entry point, so this file is the only place the M/R rules are actually executable and bats-testable."
+      "languageNotes": "Kept in lockstep with structure-spec.md by convention comment — a markdown spec with no shell entry point, so this file is the only place the M/R rules are actually executable and bats-testable."
     },
     {
       "id": "function:tests/bats/skills/_fixtures/claude_plugin_structure.sh:_cps_detect_mode",
@@ -20052,49 +19243,6 @@
       "complexity": "complex"
     },
     {
-      "id": "document:transfer/avata-card.md",
-      "type": "document",
-      "name": "avata-card.md",
-      "filePath": "transfer/avata-card.md",
-      "summary": "Draft input values for an Avatar Studio UI 'Avatar Card' form, defining a single AI full-stack developer persona and the ordered list of three roles to attach to it.",
-      "tags": [
-        "documentation",
-        "draft",
-        "avatar-studio",
-        "persona"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "document:transfer/avata-role.md",
-      "type": "document",
-      "name": "avata-role.md",
-      "filePath": "transfer/avata-role.md",
-      "summary": "Draft input values for three Avatar Studio roles (AI-assisted implementer, design/verification owner, dev workflow/environment manager) each listing a description and the tasks to link to it.",
-      "tags": [
-        "documentation",
-        "draft",
-        "avatar-studio",
-        "role-definition"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "document:transfer/avata-task.md",
-      "type": "document",
-      "name": "avata-task.md",
-      "filePath": "transfer/avata-task.md",
-      "summary": "Draft input values for six Avatar Studio tasks spanning issue implementation, PR review handling, requirements/design, E2E verification and merge, skill authoring, and dev-environment migration \u2014 each mapping to registered Agent Factory skills and free-text tools.",
-      "tags": [
-        "documentation",
-        "draft",
-        "avatar-studio",
-        "task-definition",
-        "workflow"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "document:zsh/AGENTS.md",
       "type": "document",
       "name": "AGENTS.md",
@@ -20227,20 +19375,6 @@
         "ux-guidelines"
       ],
       "complexity": "simple"
-    },
-    {
-      "id": "file:.debug/test_install_opencode.sh",
-      "type": "file",
-      "name": "test_install_opencode.sh",
-      "filePath": ".debug/test_install_opencode.sh",
-      "summary": "Ad-hoc validation script that checks install_opencode.sh for known segfault triggers (echo -e, ux_confirm), verifies its dependencies exist, and confirms the opencode-ai npm package is reachable, without performing an actual installation.",
-      "tags": [
-        "test",
-        "debug",
-        "shell-script",
-        "installer-validation"
-      ],
-      "complexity": "moderate"
     },
     {
       "id": "config:.gitattributes",
@@ -20395,51 +19529,6 @@
         "bedrock",
         "example-template",
         "environment-variables"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "file:bash/env/bash_interactive.sh",
-      "type": "file",
-      "name": "bash_interactive.sh",
-      "filePath": "bash/env/bash_interactive.sh",
-      "summary": "Bash-only interactive shell settings (history dedup/size, histappend, checkwinsize, less/lesspipe config, debian_chroot detection, dircolors, and bash-completion sourcing), guarded to no-op outside bash and non-interactive shells.",
-      "tags": [
-        "shell-config",
-        "bash",
-        "interactive-shell",
-        "environment"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:bash/util/init.bash",
-      "type": "file",
-      "name": "init.bash",
-      "filePath": "bash/util/init.bash",
-      "summary": "Utility providing init_dotfiles_bash_dir, which resolves the dotfiles bash/ directory from any script's location (direct match or upward search), exported for use by other bash entry-point scripts.",
-      "tags": [
-        "utility",
-        "bash",
-        "path-resolution",
-        "bootstrap"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:bash/util/init.bash:init_dotfiles_bash_dir",
-      "type": "function",
-      "name": "init_dotfiles_bash_dir",
-      "filePath": "bash/util/init.bash",
-      "lineRange": [
-        9,
-        35
-      ],
-      "summary": "Resolves and prints the dotfiles bash/ directory given a script path: returns immediately if the script's real directory ends in /bash, otherwise walks up the directory tree looking for a bash/ subdirectory, erroring if none is found.",
-      "tags": [
-        "utility",
-        "path-resolution",
-        "exported-function"
       ],
       "complexity": "simple"
     },
@@ -21198,7 +20287,7 @@
         "tested"
       ],
       "complexity": "complex",
-      "languageNotes": "Sister hook to gh_issue_flow_stop_guard.py \u2014 that one guards the outer 5-sub-skill chain of gh-issue-flow, this one guards the inner required-step emit of each catalog-listed skill, and both can coexist on the Stop hook chain with unioned block reasons."
+      "languageNotes": "Sister hook to gh_issue_flow_stop_guard.py — that one guards the outer 5-sub-skill chain of gh-issue-flow, this one guards the inner required-step emit of each catalog-listed skill, and both can coexist on the Stop hook chain with unioned block reasons."
     },
     {
       "id": "function:claude/hooks/skill_completion_guard.py:_trace",
@@ -21408,7 +20497,7 @@
         "orchestration"
       ],
       "complexity": "complex",
-      "languageNotes": "Uses a workflow DSL (phase/agent/parallel/log helpers) rather than plain Node.js \u2014 each `agent()` call dispatches a long natural-language prompt to a sub-agent and awaits its text result, chaining five sequential phases."
+      "languageNotes": "Uses a workflow DSL (phase/agent/parallel/log helpers) rather than plain Node.js — each `agent()` call dispatches a long natural-language prompt to a sub-agent and awaits its text result, chaining five sequential phases."
     },
     {
       "id": "document:claude/workflows/harness-legacy-check.md",
@@ -21618,20 +20707,6 @@
       "complexity": "moderate"
     },
     {
-      "id": "document:docs/feature/my-cli/README.md",
-      "type": "document",
-      "name": "README.md",
-      "filePath": "docs/feature/my-cli/README.md",
-      "summary": "Entry-point overview for the my-cli legacy migration analysis bundle, indexing per-category analysis documents and a phased implementation roadmap, plus key decisions on data format and quick-mode/UI behavior.",
-      "tags": [
-        "feature-design",
-        "entry-point",
-        "migration",
-        "roadmap"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "document:docs/feature/skill-ai-worktree-teardown/design-G.md",
       "type": "document",
       "name": "design-G.md",
@@ -21759,7 +20834,7 @@
       "type": "file",
       "name": "post-commit.generic",
       "filePath": "git/hooks/post-commit.generic",
-      "summary": "Portable, project-agnostic version of the post-commit work-log hook meant to be symlinked into any project's .git/hooks/post-commit \u2014 parses commit metadata into work_log.txt and optionally auto-commits it into a configurable playbook repo (WORK_LOG_DIR / AUTO_COMMIT_REPO env overrides).",
+      "summary": "Portable, project-agnostic version of the post-commit work-log hook meant to be symlinked into any project's .git/hooks/post-commit — parses commit metadata into work_log.txt and optionally auto-commits it into a configurable playbook repo (WORK_LOG_DIR / AUTO_COMMIT_REPO env overrides).",
       "tags": [
         "git-hook",
         "work-log",
@@ -22115,7 +21190,7 @@
         242,
         268
       ],
-      "summary": "Orchestrates the automatic SSH setup flow \u2014 checks for an existing key, ensures the agent is running, generates/registers a key as needed, and verifies GitHub access.",
+      "summary": "Orchestrates the automatic SSH setup flow — checks for an existing key, ensures the agent is running, generates/registers a key as needed, and verifies GitHub access.",
       "tags": [
         "setup-script",
         "ssh",
@@ -22609,7 +21684,7 @@
       "type": "config",
       "name": "config.yml",
       "filePath": "gh/config.yml",
-      "summary": "GitHub CLI (gh) configuration \u2014 sets the ssh git protocol, editor, prompt, pager, and custom aliases; symlinked into ~/.config/gh/config.yml by gh/setup.sh so aliases stay version-controlled.",
+      "summary": "GitHub CLI (gh) configuration — sets the ssh git protocol, editor, prompt, pager, and custom aliases; symlinked into ~/.config/gh/config.yml by gh/setup.sh so aliases stay version-controlled.",
       "tags": [
         "configuration",
         "github-cli",
@@ -22635,7 +21710,7 @@
       "type": "file",
       "name": "config",
       "filePath": "ghostty/config",
-      "summary": "Ghostty terminal configuration \u2014 Catppuccin Mocha theme, Nerd Font, background opacity/blur, and a global quick-terminal keybinding \u2014 symlinked from ~/.config/ghostty/config.",
+      "summary": "Ghostty terminal configuration — Catppuccin Mocha theme, Nerd Font, background opacity/blur, and a global quick-terminal keybinding — symlinked from ~/.config/ghostty/config.",
       "tags": [
         "configuration",
         "terminal",
@@ -22648,7 +21723,7 @@
       "type": "file",
       "name": ".gitconfig",
       "filePath": "git/.gitconfig",
-      "summary": "Tracked SSOT for global git configuration \u2014 user identity, git-lfs filters, pull/push/fetch defaults, and a portable credential helper wired for github.com, gist.github.com, and ghes.example.invalid via git/scripts/gh-credential-helper.sh. Included (never symlinked) into the machine-local ~/.gitconfig by git/setup.sh.",
+      "summary": "Tracked SSOT for global git configuration — user identity, git-lfs filters, pull/push/fetch defaults, and a portable credential helper wired for github.com, gist.github.com, and ghes.example.invalid via git/scripts/gh-credential-helper.sh. Included (never symlinked) into the machine-local ~/.gitconfig by git/setup.sh.",
       "tags": [
         "configuration",
         "git",
@@ -22702,7 +21777,7 @@
       "type": "file",
       "name": "pre-commit",
       "filePath": "git/global-hooks/pre-commit",
-      "summary": "User-level global git pre-commit hook (wired via core.hooksPath) that runs lightweight universal safety checks \u2014 secret/key detection, conflict markers, forbidden filenames with git-crypt and .env allowlist awareness, trailing whitespace, debug-code and large-file warnings, and a work/personal email-vs-directory mismatch warning \u2014 then delegates to whichever project-specific hook it finds among .githooks, git/hooks, or .git/hooks.",
+      "summary": "User-level global git pre-commit hook (wired via core.hooksPath) that runs lightweight universal safety checks — secret/key detection, conflict markers, forbidden filenames with git-crypt and .env allowlist awareness, trailing whitespace, debug-code and large-file warnings, and a work/personal email-vs-directory mismatch warning — then delegates to whichever project-specific hook it finds among .githooks, git/hooks, or .git/hooks.",
       "tags": [
         "git-hook",
         "security",
@@ -22717,7 +21792,7 @@
       "type": "file",
       "name": "wrapper_check.sh",
       "filePath": "git/hooks/checks/wrapper_check.sh",
-      "summary": "Pre-commit check module providing check_wrapper_function, which flags wrapper-function anti-patterns \u2014 functions that merely forward to another command without adding value \u2014 as a non-blocking warning.",
+      "summary": "Pre-commit check module providing check_wrapper_function, which flags wrapper-function anti-patterns — functions that merely forward to another command without adding value — as a non-blocking warning.",
       "tags": [
         "git-hook",
         "check-module",
@@ -22777,7 +21852,7 @@
         120,
         152
       ],
-      "summary": "Determines whether a staged path must block the commit \u2014 exempts git-crypt-managed files, then checks path-based rules (.aws/credentials), forbidden basenames (id_rsa, *.pem, credentials.json), and .env files against an example/sample/template/dist allowlist.",
+      "summary": "Determines whether a staged path must block the commit — exempts git-crypt-managed files, then checks path-based rules (.aws/credentials), forbidden basenames (id_rsa, *.pem, credentials.json), and .env files against an example/sample/template/dist allowlist.",
       "tags": [
         "security",
         "validation",
@@ -22807,7 +21882,7 @@
       "type": "config",
       "name": "npmrc.external",
       "filePath": "npm/npmrc.external",
-      "summary": "npm registry configuration variant for external/VPN PCs \u2014 direct internet access via VPN, no proxy, with the corporate CA cert and a user-owned global prefix.",
+      "summary": "npm registry configuration variant for external/VPN PCs — direct internet access via VPN, no proxy, with the corporate CA cert and a user-owned global prefix.",
       "tags": [
         "configuration",
         "npm",
@@ -22821,7 +21896,7 @@
       "type": "config",
       "name": "npmrc.internal",
       "filePath": "npm/npmrc.internal",
-      "summary": "npm registry configuration variant for internal-network PCs \u2014 routes through the corporate proxy and mirrored npm registry.",
+      "summary": "npm registry configuration variant for internal-network PCs — routes through the corporate proxy and mirrored npm registry.",
       "tags": [
         "configuration",
         "npm",
@@ -22835,7 +21910,7 @@
       "type": "config",
       "name": "npmrc.public",
       "filePath": "npm/npmrc.public",
-      "summary": "npm registry configuration variant for public/home PCs \u2014 uses the default public registry and only pins a user-owned global prefix (fixing root-owned /usr auto-update permission failures) plus allow-git for npx github: installs.",
+      "summary": "npm registry configuration variant for public/home PCs — uses the default public registry and only pins a user-owned global prefix (fixing root-owned /usr auto-update permission failures) plus allow-git for npx github: installs.",
       "tags": [
         "configuration",
         "npm",
@@ -22876,7 +21951,7 @@
       "type": "file",
       "name": "obsidian",
       "filePath": "obsidian/bin/obsidian",
-      "summary": "POSIX-sh executable installed on PATH that routes the `obsidian` command per environment \u2014 forwards to the WSL Obsidian.com CLI redirector, or launches the latest native-Linux Obsidian AppImage \u2014 so both interactive shells and non-interactive AI-agent subprocesses can invoke it.",
+      "summary": "POSIX-sh executable installed on PATH that routes the `obsidian` command per environment — forwards to the WSL Obsidian.com CLI redirector, or launches the latest native-Linux Obsidian AppImage — so both interactive shells and non-interactive AI-agent subprocesses can invoke it.",
       "tags": [
         "entry-point",
         "cli-wrapper",
@@ -22944,20 +22019,6 @@
         "opencode",
         "environment-variant",
         "ai-provider"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "config:opencode/opencode.json.home",
-      "type": "config",
-      "name": "opencode.json.home",
-      "filePath": "opencode/opencode.json.home",
-      "summary": "OpenCode configuration variant for the home environment \u2014 entirely commented out, documenting that no custom config is needed there and showing an example LiteLLM override for reference.",
-      "tags": [
-        "configuration",
-        "opencode",
-        "environment-variant",
-        "home"
       ],
       "complexity": "simple"
     },
@@ -23812,20 +22873,6 @@
       "complexity": "complex"
     },
     {
-      "id": "file:tests/bats/functions/claude_compose_skills_dir.bats",
-      "type": "file",
-      "name": "claude_compose_skills_dir.bats",
-      "filePath": "tests/bats/functions/claude_compose_skills_dir.bats",
-      "summary": "Bats tests for _claude_compose_skills_dir, the F-8/issue #707 helper that converts the legacy directory-level Claude skills symlink into a real composed directory.",
-      "tags": [
-        "test",
-        "bats",
-        "symlink",
-        "claude-integration"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:tests/bats/functions/claude_help_plugin.bats",
       "type": "file",
       "name": "claude_help_plugin.bats",
@@ -23969,7 +23016,7 @@
       "type": "file",
       "name": "gcp.bats",
       "filePath": "tests/bats/functions/gcp.bats",
-      "summary": "Large bats test suite for the gcp_* function family unified under the 'gcp <verb>' Type 2A dispatcher (issue #697), covering the command-design-pattern \u00a74 conventions across many gcloud subcommand wrappers.",
+      "summary": "Large bats test suite for the gcp_* function family unified under the 'gcp <verb>' Type 2A dispatcher (issue #697), covering the command-design-pattern §4 conventions across many gcloud subcommand wrappers.",
       "tags": [
         "test",
         "bats",
@@ -24538,21 +23585,6 @@
       "complexity": "moderate"
     },
     {
-      "id": "file:tests/bats/skills/devx_docs_bootstrap_scaffold.bats",
-      "type": "file",
-      "name": "devx_docs_bootstrap_scaffold.bats",
-      "filePath": "tests/bats/skills/devx_docs_bootstrap_scaffold.bats",
-      "summary": "Offline coverage (issue #1028) for claude/skills/devx-docs-bootstrap/lib/scaffold.sh, testing --help, default dry-run planning, --apply directory/README scaffolding, --check gating, idempotent re-runs, and --force overwrite behavior.",
-      "tags": [
-        "test",
-        "docs-bootstrap",
-        "scaffold",
-        "dry-run",
-        "idempotency"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:tests/bats/skills/gh_add_ai_metrics_date.bats",
       "type": "file",
       "name": "gh_add_ai_metrics_date.bats",
@@ -24651,50 +23683,6 @@
         "markdown-headings"
       ],
       "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/gh_kanban_bootstrap_setup.bats",
-      "type": "file",
-      "name": "gh_kanban_bootstrap_setup.bats",
-      "filePath": "tests/bats/skills/gh_kanban_bootstrap_setup.bats",
-      "summary": "Large offline coverage suite for claude/skills/gh-kanban-bootstrap/lib/setup.sh, covering project-scope detection, org workflow checklist dry-runs, owner/repo auto-detection from git context, workflow #3 disable messaging (issue #699), and the GH_PR_REPLY_AUTO_APPROVE_REPOS ~/.zshrc.local wiring (issue #743).",
-      "tags": [
-        "test",
-        "gh-kanban-bootstrap",
-        "project-scope",
-        "auto-detect",
-        "auto-approve-env"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "file:tests/bats/skills/gh_pr_merge_board_gate.bats",
-      "type": "file",
-      "name": "gh_pr_merge_board_gate.bats",
-      "filePath": "tests/bats/skills/gh_pr_merge_board_gate.bats",
-      "summary": "Verifies the Step 4-B board-approval gate for gh-pr-merge (issue #397) across five cases: Approved proceeds, any non-Approved status refuses with redirect (rc=2), no board silently skips, and GH_PR_MERGE_SKIP_BOARD_CHECK=1 bypasses entirely.",
-      "tags": [
-        "test",
-        "gh-pr-merge",
-        "board-gate",
-        "project-status"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/gh_pr_reply_auto_approve.bats",
-      "type": "file",
-      "name": "gh_pr_reply_auto_approve.bats",
-      "filePath": "tests/bats/skills/gh_pr_reply_auto_approve.bats",
-      "summary": "Verifies the Step 8 solo-repo auto-approve gate for gh-pr-reply (issue #410) across seven acceptance cases: allowlist matching, draft/CHANGES_REQUESTED/REVIEW_REQUIRED skip guards, zero-comment defensive skip, helper-failure soft-fail handling, and bypass-env-var scope leakage prevention.",
-      "tags": [
-        "test",
-        "gh-pr-reply",
-        "auto-approve",
-        "allowlist",
-        "review-decision"
-      ],
-      "complexity": "complex"
     },
     {
       "id": "file:tests/bats/skills/gh_pr_reply_board_sync.bats",
@@ -24906,76 +23894,6 @@
         "session-start"
       ],
       "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-      "type": "file",
-      "name": "test_add_defects_1132.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-      "summary": "Bats regression suite for issue #1132 covering three devx:ssh-delegate `add` defects: shadowing IdentityFile detection/adoption, fail-fast on non-interactive ssh-copy-id, and the --key-only flag skipping config regeneration.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "regression"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_audit_append.bats",
-      "type": "file",
-      "name": "test_audit_append.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_audit_append.bats",
-      "summary": "Bats suite for the ssh-delegate audit.sh log helper, verifying its JSONL append-only log writes one escaped, valid JSON line per event and honors the DEVX_SSH_AUDIT_LOG override.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "audit-log"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-      "type": "file",
-      "name": "test_install_dry_run.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-      "summary": "Bats suite asserting the ssh-delegate ssh_delegate.sh --dry-run guard mutates nothing (no manifest, config, or audit log) while still rendering the intended ssh-copy-id command and default alias.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "dry-run"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-      "type": "file",
-      "name": "test_manifest_parse.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-      "summary": "Unit test suite for the dependency-free ssh-delegate manifest.sh engine, covering YAML parsing, defaults, membership checks, and idempotent upsert/field-mutation round-trips.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "manifest"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
-      "type": "file",
-      "name": "test_verify_batchmode.bats",
-      "filePath": "tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
-      "summary": "Bats suite for the ssh-delegate verify.sh helper, asserting ssh_verify_alias always passes BatchMode=yes (never prompts for a password) and only refreshes last_verified_at on success, using a mocked ssh binary.",
-      "tags": [
-        "test",
-        "bats",
-        "ssh-delegate",
-        "verify"
-      ],
-      "complexity": "simple"
     },
     {
       "id": "file:tests/bats/test_helper.bash",
@@ -25192,7 +24110,7 @@
       "type": "file",
       "name": "test_golden_rules.sh",
       "filePath": "tests/golden_rules/test_golden_rules.sh",
-      "summary": "Standalone shell script enforcing project-wide golden rules \u2014 no hardcoded paths in main shell entry points, direct-exec guards on custom tools, ux_lib usage instead of raw echo, no emojis, POSIX compliance, and no leaked `model` key in the tracked claude/settings.json SSOT.",
+      "summary": "Standalone shell script enforcing project-wide golden rules — no hardcoded paths in main shell entry points, direct-exec guards on custom tools, ux_lib usage instead of raw echo, no emojis, POSIX compliance, and no leaked `model` key in the tracked claude/settings.json SSOT.",
       "tags": [
         "test",
         "golden-rules",
@@ -25739,7 +24657,7 @@
       "type": "file",
       "name": "conftest.py",
       "filePath": "tests/integration/conftest.py",
-      "summary": "Shared pytest fixtures for the integration test suite: spawns isolated bash/zsh subprocesses against a temporary HOME, runs shell commands, and snapshots dotfiles state \u2014 consumed by every test_*.py file in tests/integration/.",
+      "summary": "Shared pytest fixtures for the integration test suite: spawns isolated bash/zsh subprocesses against a temporary HOME, runs shell commands, and snapshots dotfiles state — consumed by every test_*.py file in tests/integration/.",
       "tags": [
         "test",
         "fixture",
@@ -26481,20 +25399,6 @@
       "weight": 0.5
     },
     {
-      "source": "document:REFACTORING_SETUP_SH.md",
-      "target": "file:setup.sh",
-      "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "config:pyproject.toml",
-      "target": "document:requirements.txt",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
       "source": "file:setup.sh",
       "target": "file:install.sh",
       "type": "related",
@@ -27188,202 +26092,6 @@
       "weight": 0.5
     },
     {
-      "source": "file:docs/archive/company/OKR_Structure_Guide.html",
-      "target": "document:docs/archive/company/OKR_Structure_Guide.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/JIRA_Story_draft_2026.md",
-      "target": "document:docs/archive/company/JIRA_Story_draft_2026-C.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/JIRA_Story_draft_2026.md",
-      "target": "document:docs/archive/company/JIRA_Story_draft_2026-CX.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/JIRA_Story_draft_2026.md",
-      "target": "document:docs/archive/company/JIRA_Story_draft_2026-G.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "target": "document:docs/archive/company/JIRA_Story_draft_2026.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/skills-experience-draft.md",
-      "target": "document:docs/archive/company/claude-skills-review.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/part_independent.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03b3.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03b4.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03b6.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03b8.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03bb.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03be.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03c0.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03c3.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/paste_ready/AIE-\u03c8.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/JIRA_Story_draft_2026.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/README.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/part_independent.md",
-      "target": "document:docs/archive/company/JIRA_Story_draft_2026.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03b3.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03b4.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03b6.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03b8.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03bb.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03be.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03c0.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03c3.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/archive/company/paste_ready/AIE-\u03c8.md",
-      "target": "document:docs/archive/company/AIE_member_code_mapping.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
       "source": "document:docs/feature/enhance-git-clean-local-command/input.txt",
       "target": "document:docs/feature/enhance-git-clean-local-command/enhance-git-clean-local-CX.md",
       "type": "related",
@@ -27415,97 +26123,6 @@
       "source": "document:docs/feature/enhance-git-clean-local-command/enhance-git-clean-local.md",
       "target": "file:shell-common/functions/git.sh",
       "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/development-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "target": "document:docs/feature/my-cli/analysis/devops-category-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "target": "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/phase-1-detail.md",
-      "target": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/progress-checklist.md",
-      "target": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/quick-start.md",
-      "target": "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/quick-start.md",
-      "target": "document:docs/feature/my-cli/planning/phase-1-detail.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/planning/quick-start.md",
-      "target": "document:docs/feature/my-cli/README.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "target": "document:docs/feature/my-cli/requirements/req-abc-c.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-      "target": "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
-      "type": "related",
       "direction": "forward",
       "weight": 0.5
     },
@@ -28565,118 +27182,6 @@
       "type": "documents",
       "direction": "forward",
       "weight": 0.5
-    },
-    {
-      "source": "document:scripts/maintenance/README.md",
-      "target": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:detect_bash_features",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:get_shebang",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_stats",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_priority_files",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_findings",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_source_only",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_bash_required",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:scripts/maintenance/analyze_shebang_report.sh",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_stats",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_priority_files",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:main",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:print_findings",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:detect_bash_features",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:scripts/maintenance/analyze_shebang_report.sh:analyze_file",
-      "target": "function:scripts/maintenance/analyze_shebang_report.sh:get_shebang",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
     },
     {
       "source": "file:scripts/maintenance/check_bash_status.sh",
@@ -33544,13 +32049,6 @@
       "weight": 0.8
     },
     {
-      "source": "file:shell-common/tools/custom/run_agents_md_master_prompt.sh",
-      "target": "function:shell-common/tools/custom/run_agents_md_master_prompt.sh:main",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
       "source": "file:shell-common/tools/custom/set_locale.sh",
       "target": "function:shell-common/tools/custom/set_locale.sh:main",
       "type": "contains",
@@ -34734,27 +33232,6 @@
       "weight": 0.6
     },
     {
-      "source": "file:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-      "target": "function:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh:gh_pr_merge_board_gate",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "target": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_auto_approve_step8",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
-      "target": "function:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh:gh_pr_reply_render_step8_row",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
       "source": "file:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh",
       "target": "function:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh:gh_pr_reply_board_sync_step65",
       "type": "contains",
@@ -35252,20 +33729,6 @@
       "weight": 0.8
     },
     {
-      "source": "document:transfer/avata-card.md",
-      "target": "document:transfer/avata-role.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:transfer/avata-role.md",
-      "target": "document:transfer/avata-task.md",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
       "source": "document:zsh/AGENTS.md",
       "target": "file:zsh/main.zsh",
       "type": "documents",
@@ -35357,27 +33820,6 @@
       "weight": 0.6
     },
     {
-      "source": "file:bash/util/init.bash",
-      "target": "function:bash/util/init.bash:init_dotfiles_bash_dir",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
-    },
-    {
-      "source": "file:bash/util/init.bash",
-      "target": "function:bash/util/init.bash:init_dotfiles_bash_dir",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:.debug/test_install_opencode.sh",
-      "target": "file:shell-common/tools/custom/install_opencode.sh",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
       "source": "config:apt/sources.list.jammy",
       "target": "config:apt/sources.list.jammy.internal",
       "type": "related",
@@ -35449,34 +33891,6 @@
     },
     {
       "source": "config:.shellcheckrc",
-      "target": "file:.debug/test_install_opencode.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.shellcheckrc",
-      "target": "file:agy/setup.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.shellcheckrc",
-      "target": "file:bash/env/bash_interactive.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.shellcheckrc",
-      "target": "file:bash/util/init.bash",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.gitattributes",
       "target": "file:agy/setup.sh",
       "type": "configures",
       "direction": "forward",
@@ -35484,21 +33898,7 @@
     },
     {
       "source": "config:.gitattributes",
-      "target": "file:bash/env/bash_interactive.sh",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.gitattributes",
-      "target": "file:bash/util/init.bash",
-      "type": "configures",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "config:.gitattributes",
-      "target": "file:.debug/test_install_opencode.sh",
+      "target": "file:agy/setup.sh",
       "type": "configures",
       "direction": "forward",
       "weight": 0.6
@@ -36666,13 +35066,6 @@
       "weight": 0.5
     },
     {
-      "source": "config:opencode/opencode.json.external",
-      "target": "config:opencode/opencode.json.home",
-      "type": "related",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
       "source": "config:opencode/opencode.json.internal",
       "target": "config:shell-common/env/development.local.example",
       "type": "depends_on",
@@ -37248,41 +35641,6 @@
     },
     {
       "source": "file:tests/bats/skills/session_start_settings_drift_hook.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_audit_append.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-      "target": "file:tests/bats/test_helper.bash",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
       "target": "file:tests/bats/test_helper.bash",
       "type": "depends_on",
       "direction": "forward",
@@ -38021,14 +36379,12 @@
     {
       "id": "layer:shell-core",
       "name": "Shell Core Runtime",
-      "description": "The Bash and Zsh entry points (bash/main.bash, zsh/main.zsh) plus the POSIX-compatible shell-common library they both source \u2014 aliases, env setup, functions, and tool integrations that make up the actual running shell.",
+      "description": "The Bash and Zsh entry points (bash/main.bash, zsh/main.zsh) plus the POSIX-compatible shell-common library they both source — aliases, env setup, functions, and tool integrations that make up the actual running shell.",
       "nodeIds": [
         "document:bash/AGENTS.md",
         "file:bash/main.bash",
         "file:bash/profile.bash",
         "file:bash/setup.sh",
-        "file:bash/env/bash_interactive.sh",
-        "file:bash/util/init.bash",
         "document:zsh/AGENTS.md",
         "file:zsh/main.zsh",
         "file:zsh/setup.sh",
@@ -38213,7 +36569,6 @@
         "file:shell-common/tools/custom/make_jira.sh",
         "file:shell-common/tools/custom/mirror-pages-activate.sh",
         "file:shell-common/tools/custom/repo_stats.sh",
-        "file:shell-common/tools/custom/run_agents_md_master_prompt.sh",
         "file:shell-common/tools/custom/set_locale.sh",
         "file:shell-common/tools/custom/setup_crt.sh",
         "file:shell-common/tools/custom/setup_gpg_cache.sh",
@@ -38287,45 +36642,12 @@
         "document:docs/archive/todo-defer-2026-05.md",
         "document:docs/archive/todo-ollama.md",
         "document:docs/archive/workflow-git-jira-confluence-automation-guide-validated.md",
-        "document:docs/archive/company/AIE_member_code_mapping.md",
-        "document:docs/archive/company/JIRA_Story_draft_2026-C.md",
-        "document:docs/archive/company/JIRA_Story_draft_2026-CX.md",
-        "document:docs/archive/company/JIRA_Story_draft_2026-G.md",
-        "document:docs/archive/company/JIRA_Story_draft_2026.md",
-        "file:docs/archive/company/OKR_Structure_Guide.html",
-        "document:docs/archive/company/OKR_Structure_Guide.md",
-        "document:docs/archive/company/claude-skills-review.md",
-        "document:docs/archive/company/skills-experience-draft.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03b3.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03b4.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03b6.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03b8.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03bb.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03be.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03c0.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03c3.md",
-        "document:docs/archive/company/paste_ready/AIE-\u03c8.md",
-        "document:docs/archive/company/paste_ready/README.md",
-        "document:docs/archive/company/paste_ready/part_independent.md",
         "document:docs/archive/review-2026/abc-review-C.md",
         "document:docs/archive/review-2026/abc-review-CX.md",
         "document:docs/archive/review-2026/abc-review-G.md",
         "document:docs/feature/enhance-git-clean-local-command/input.txt",
         "document:docs/feature/enhance-git-clean-local-command/enhance-git-clean-local-CX.md",
         "document:docs/feature/enhance-git-clean-local-command/enhance-git-clean-local.md",
-        "document:docs/feature/my-cli/analysis/legacy-analysis.md",
-        "document:docs/feature/my-cli/analysis/ai-llm-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/cli-tools-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/config-system-meta-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/development-category-analysis.md",
-        "document:docs/feature/my-cli/analysis/devops-category-analysis.md",
-        "document:docs/feature/my-cli/planning/implementation-roadmap.md",
-        "document:docs/feature/my-cli/planning/phase-1-detail.md",
-        "document:docs/feature/my-cli/planning/progress-checklist.md",
-        "document:docs/feature/my-cli/planning/quick-start.md",
-        "document:docs/feature/my-cli/requirements/req-abc-c.md",
-        "document:docs/feature/my-cli/requirements/req-cli-mycli-1-learning-guide.md",
-        "document:docs/feature/my-cli/requirements/req-cli-mycli-1.md",
         "document:docs/feature/superpowers-plans/2026-04-22-gh-skills-expansion.md",
         "document:docs/feature/superpowers-plans/2026-05-04-claude-multi-account.md",
         "document:docs/feature/superpowers-plans/2026-07-01-claude-plugin-manifest.md",
@@ -38454,7 +36776,6 @@
         "document:docs/feature/gh-pr-approve-ai-option/design.md",
         "document:docs/feature/gh-pr-approve-status-prune/design.md",
         "document:docs/feature/gh-pr-reply-ai-option/design.md",
-        "document:docs/feature/my-cli/README.md",
         "document:docs/feature/skill-ai-worktree-teardown/design-G.md",
         "document:docs/feature/skill-git-worktree-create/design-C.md",
         "document:docs/feature/skill-write-task-history/design.md",
@@ -38471,8 +36792,6 @@
       "name": "Test Suite",
       "description": "The bats shell-test suite, pytest integration tests, and golden-rule checks that verify the shell config and hook system behave as expected.",
       "nodeIds": [
-        "file:tests/bats/skills/_fixtures/gh_pr_merge_board_gate.sh",
-        "file:tests/bats/skills/_fixtures/gh_pr_reply_auto_approve.sh",
         "file:tests/bats/skills/_fixtures/gh_pr_reply_board_sync.sh",
         "file:tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh",
         "file:tests/bats/skills/_fixtures/gh_pr_stacked_detect.sh",
@@ -38488,7 +36807,6 @@
         "document:tests/AGENTS.md",
         "file:tests/bats/functions/ai_setup.bats",
         "file:tests/bats/functions/ai_usage.bats",
-        "file:tests/bats/functions/claude_compose_skills_dir.bats",
         "file:tests/bats/functions/claude_help_plugin.bats",
         "file:tests/bats/functions/claude_local_email_prompt.bats",
         "file:tests/bats/functions/claude_plugin_list.bats",
@@ -38539,7 +36857,6 @@
         "file:tests/bats/setup/test_no_backup_accumulation.bats",
         "file:tests/bats/skills/claude_plugin_structure.bats",
         "file:tests/bats/skills/closing_keyword_policy.bats",
-        "file:tests/bats/skills/devx_docs_bootstrap_scaffold.bats",
         "file:tests/bats/skills/gh_add_ai_metrics_date.bats",
         "file:tests/bats/skills/gh_add_ai_metrics_pace.bats",
         "file:tests/bats/skills/gh_disable_ai_metrics.bats",
@@ -38547,9 +36864,6 @@
         "file:tests/bats/skills/gh_issue_implement_claim.bats",
         "file:tests/bats/skills/gh_issue_proceed_safety.bats",
         "file:tests/bats/skills/gh_issue_proceed_schema.bats",
-        "file:tests/bats/skills/gh_kanban_bootstrap_setup.bats",
-        "file:tests/bats/skills/gh_pr_merge_board_gate.bats",
-        "file:tests/bats/skills/gh_pr_reply_auto_approve.bats",
         "file:tests/bats/skills/gh_pr_reply_board_sync.bats",
         "file:tests/bats/skills/gh_pr_reply_remote.bats",
         "file:tests/bats/skills/gh_pr_review_arg_parse.bats",
@@ -38565,11 +36879,6 @@
         "file:tests/bats/skills/post_gh_pr_create_hook.bats",
         "file:tests/bats/skills/session_start_pc_context_hook.bats",
         "file:tests/bats/skills/session_start_settings_drift_hook.bats",
-        "file:tests/bats/skills/ssh_delegate/test_add_defects_1132.bats",
-        "file:tests/bats/skills/ssh_delegate/test_audit_append.bats",
-        "file:tests/bats/skills/ssh_delegate/test_install_dry_run.bats",
-        "file:tests/bats/skills/ssh_delegate/test_manifest_parse.bats",
-        "file:tests/bats/skills/ssh_delegate/test_verify_batchmode.bats",
         "file:tests/bats/test_helper.bash",
         "file:tests/bats/tools/claude_plugin_publish_sync.bats",
         "file:tests/bats/tools/claude_plugin_reconcile.bats",
@@ -38747,11 +37056,9 @@
         "document:CLAUDE.md",
         "document:PORTS.md",
         "document:README.md",
-        "document:REFACTORING_SETUP_SH.md",
         "file:install.sh",
         "config:mise.toml",
         "config:pyproject.toml",
-        "document:requirements.txt",
         "file:setup.sh",
         "config:.gitattributes",
         "config:.gitmessage",
@@ -38760,22 +37067,16 @@
         "file:scripts/check_port_registry.sh",
         "file:scripts/debug_pip_config.sh",
         "file:scripts/disable-git-crypt-local.sh",
-        "file:scripts/flush-transfer.sh",
         "file:scripts/lint_docs_filenames.sh",
         "file:scripts/setup-skills-ssot.sh",
         "file:scripts/verify-config-files.sh",
         "document:scripts/maintenance/README.md",
-        "file:scripts/maintenance/analyze_shebang_report.sh",
         "file:scripts/maintenance/check_bash_status.sh",
         "file:scripts/maintenance/fix_crlf_issue.sh",
         "file:scripts/maintenance/analyze_shebangs.py",
         "file:scripts/maintenance/check_bash_status.py",
         "file:scripts/maintenance/check_codex_skills_budget.py",
-        "document:.ai/postmortems/2026-04-11-gwt-help-format-mismatch.md",
-        "file:.debug/test_install_opencode.sh",
-        "document:transfer/avata-card.md",
-        "document:transfer/avata-role.md",
-        "document:transfer/avata-task.md"
+        "document:.ai/postmortems/2026-04-11-gwt-help-format-mismatch.md"
       ]
     },
     {
@@ -38791,7 +37092,6 @@
         "config:aws/aws-config.example",
         "config:aws/aws.local.example",
         "pipeline:.github/workflows/ci.yml",
-        "pipeline:.github/workflows/cli-package.yml",
         "pipeline:.github/workflows/project-board-sync.yml",
         "pipeline:.github/workflows/test.yml",
         "document:.github/pull_request_template.md",
@@ -38802,7 +37102,6 @@
         "file:obsidian/bin/obsidian",
         "file:script:obsidian/setup.sh",
         "config:opencode/opencode.json.external",
-        "config:opencode/opencode.json.home",
         "config:opencode/opencode.json.internal",
         "document:agy/AGENTS.md",
         "file:agy/setup.sh",
@@ -38831,7 +37130,7 @@
     {
       "order": 1,
       "title": "Project Overview",
-      "description": "README.md frames this repository as opinionated Bash/Zsh dotfiles for reproducible terminal environments across WSL, Linux, and macOS. It lays out the four pillars the rest of this tour will walk through in code: environment-aware setup, modular shell configuration split by purpose, cross-shell shared code, and a built-in UX library with integrated linting. Keep this directory structure in mind \u2014 bash/, zsh/, shell-common/, git/ \u2014 as every following step drills into one of these pieces.",
+      "description": "README.md frames this repository as opinionated Bash/Zsh dotfiles for reproducible terminal environments across WSL, Linux, and macOS. It lays out the four pillars the rest of this tour will walk through in code: environment-aware setup, modular shell configuration split by purpose, cross-shell shared code, and a built-in UX library with integrated linting. Keep this directory structure in mind — bash/, zsh/, shell-common/, git/ — as every following step drills into one of these pieces.",
       "nodeIds": [
         "document:README.md"
       ]
@@ -38839,7 +37138,7 @@
     {
       "order": 2,
       "title": "Entry Point: setup.sh & install.sh",
-      "description": "setup.sh is the orchestrator a new user actually runs: it canonicalizes the dotfiles root and delegates to the bash/, zsh/, git/, and claude/ sub-setup scripts to create symlinks and export required environment variables. install.sh is the optional companion that runs afterward for IDE integration and Postgres config \u2014 it depends on setup.sh having already bootstrapped the shell environment. Together they are the README's 'Quick Start' made concrete: clone, run setup.sh, then optionally run install.sh.",
+      "description": "setup.sh is the orchestrator a new user actually runs: it canonicalizes the dotfiles root and delegates to the bash/, zsh/, git/, and claude/ sub-setup scripts to create symlinks and export required environment variables. install.sh is the optional companion that runs afterward for IDE integration and Postgres config — it depends on setup.sh having already bootstrapped the shell environment. Together they are the README's 'Quick Start' made concrete: clone, run setup.sh, then optionally run install.sh.",
       "nodeIds": [
         "file:setup.sh",
         "file:install.sh"
@@ -38848,12 +37147,12 @@
     {
       "order": 3,
       "title": "Cross-Shell Entry Points",
-      "description": "bash/main.bash and zsh/main.zsh are the actual runtime loaders sourced by ~/.bashrc and ~/.zshrc respectively \u2014 this is where setup.sh's symlinks lead at every new shell startup. bash/main.bash guards against loading under zsh, non-interactive shells, or Codex CLI before bootstrapping; zsh/main.zsh resolves DOTFILES_ROOT and then sources shell-common in a fixed phase order (env, aliases, functions, integrations) before its own zsh-only modules. This is the 'Cross-Shell Support' feature from the README: two thin, shell-specific loaders converging on one shared library.",
+      "description": "bash/main.bash and zsh/main.zsh are the actual runtime loaders sourced by ~/.bashrc and ~/.zshrc respectively — this is where setup.sh's symlinks lead at every new shell startup. bash/main.bash guards against loading under zsh, non-interactive shells, or Codex CLI before bootstrapping; zsh/main.zsh resolves DOTFILES_ROOT and then sources shell-common in a fixed phase order (env, aliases, functions, integrations) before its own zsh-only modules. This is the 'Cross-Shell Support' feature from the README: two thin, shell-specific loaders converging on one shared library.",
       "nodeIds": [
         "file:bash/main.bash",
         "file:zsh/main.zsh"
       ],
-      "languageLesson": "Every file that produces output starts with an interactive guard (`case $- in *i*) ;; *) return 0 ;; esac`) so sourcing it from a script or non-interactive subshell is a silent no-op \u2014 critical for a dotfiles repo where the same files get sourced by real shells, test harnesses, and CI alike."
+      "languageLesson": "Every file that produces output starts with an interactive guard (`case $- in *i*) ;; *) return 0 ;; esac`) so sourcing it from a script or non-interactive subshell is a silent no-op — critical for a dotfiles repo where the same files get sourced by real shells, test harnesses, and CI alike."
     },
     {
       "order": 4,
@@ -38864,32 +37163,32 @@
         "file:shell-common/functions/dotfiles_root.sh",
         "file:shell-common/util/setup_mode.sh"
       ],
-      "languageLesson": "POSIX-compatible sourcing across bash and zsh forbids the common bash idiom `source \"${BASH_SOURCE[0]%/*}/file.sh\"` (BASH_SOURCE doesn't exist in zsh) \u2014 this repo always sources via the resolved `${SHELL_COMMON}` absolute path instead, which is why dotfiles_root.sh's canonicalization matters so much."
+      "languageLesson": "POSIX-compatible sourcing across bash and zsh forbids the common bash idiom `source \"${BASH_SOURCE[0]%/*}/file.sh\"` (BASH_SOURCE doesn't exist in zsh) — this repo always sources via the resolved `${SHELL_COMMON}` absolute path instead, which is why dotfiles_root.sh's canonicalization matters so much."
     },
     {
       "order": 5,
       "title": "The UX Library Convention",
-      "description": "ux_lib.sh is the single POSIX-compliant styling dependency for every script in the repo \u2014 colors, headers, success/error/warning output, spinners, progress bars, prompts, and table formatting all live here, and it has the highest fan-out (17 outgoing references) of any shell-common file. The project convention is absolute: app scripts never call raw echo, printf, or tput directly, they call ux_lib functions like ux_header and ux_success. UX_GUIDELINES.md documents the design principles and color semantics behind it, so any new script written for this repo starts by sourcing this file.",
+      "description": "ux_lib.sh is the single POSIX-compliant styling dependency for every script in the repo — colors, headers, success/error/warning output, spinners, progress bars, prompts, and table formatting all live here, and it has the highest fan-out (17 outgoing references) of any shell-common file. The project convention is absolute: app scripts never call raw echo, printf, or tput directly, they call ux_lib functions like ux_header and ux_success. UX_GUIDELINES.md documents the design principles and color semantics behind it, so any new script written for this repo starts by sourcing this file.",
       "nodeIds": [
         "file:shell-common/tools/ux_lib/ux_lib.sh",
         "document:shell-common/tools/ux_lib/UX_GUIDELINES.md"
       ],
-      "languageLesson": "Terminal UX in POSIX shell means detecting capability rather than assuming it \u2014 ux_lib checks for color/tty support before emitting ANSI codes, so scripts degrade gracefully when piped or run in CI."
+      "languageLesson": "Terminal UX in POSIX shell means detecting capability rather than assuming it — ux_lib checks for color/tty support before emitting ANSI codes, so scripts degrade gracefully when piped or run in CI."
     },
     {
       "order": 6,
       "title": "Environment-Specific Configuration",
-      "description": "shell-common/setup.sh (called from step 2's root setup.sh) symlinks per-tool configuration files \u2014 pip, uv, cargo, nuget, npm, bun, opencode \u2014 into their canonical locations and resolves per-account settings like a account ID. proxy.local.example is a template for the gitignored override file it produces: a machine-specific proxy config that never gets committed. This is the README's 'Environment-Specific Setup' feature in action \u2014 the same setup.sh call produces different results depending on whether you're on a Public, Internal, or External machine.",
+      "description": "shell-common/setup.sh (called from step 2's root setup.sh) symlinks per-tool configuration files — pip, uv, cargo, nuget, npm, bun, opencode — into their canonical locations and resolves per-account settings like a account ID. proxy.local.example is a template for the gitignored override file it produces: a machine-specific proxy config that never gets committed. This is the README's 'Environment-Specific Setup' feature in action — the same setup.sh call produces different results depending on whether you're on a Public, Internal, or External machine.",
       "nodeIds": [
         "file:shell-common/setup.sh",
         "config:shell-common/env/proxy.local.example"
       ],
-      "languageLesson": "The `*.local.example` \u2192 gitignored `*.local.sh` pattern keeps machine-specific secrets and overrides (proxy hosts, API keys) out of version control while still giving every contributor a documented template to copy from."
+      "languageLesson": "The `*.local.example` → gitignored `*.local.sh` pattern keeps machine-specific secrets and overrides (proxy hosts, API keys) out of version control while still giving every contributor a documented template to copy from."
     },
     {
       "order": 7,
       "title": "Adding a New Tool Integration",
-      "description": "init.sh has the highest fan-in of any file in the repo (21 other scripts depend on it) \u2014 it's sourced by every custom tool script to resolve DOTFILES_ROOT/SHELL_COMMON paths and load ux_lib exactly once, replacing what used to be hardcoded relative paths in 20+ places. claude.sh shows the pattern in practice: a full integration module handling install/init/settings for the Claude Code CLI. shell-common/AGENTS.md documents the required 3-step sequence for adding a new integration like this one \u2014 this is the file a contributor reads before adding support for a new tool.",
+      "description": "init.sh has the highest fan-in of any file in the repo (21 other scripts depend on it) — it's sourced by every custom tool script to resolve DOTFILES_ROOT/SHELL_COMMON paths and load ux_lib exactly once, replacing what used to be hardcoded relative paths in 20+ places. claude.sh shows the pattern in practice: a full integration module handling install/init/settings for the Claude Code CLI. shell-common/AGENTS.md documents the required 3-step sequence for adding a new integration like this one — this is the file a contributor reads before adding support for a new tool.",
       "nodeIds": [
         "file:shell-common/tools/custom/init.sh",
         "file:shell-common/tools/integrations/claude.sh",
@@ -38899,7 +37198,7 @@
     {
       "order": 8,
       "title": "Git Hooks & Workflow",
-      "description": "git/hooks/pre-commit is the project-level hook runner: it sources hook-config.sh (the single source of truth for secret-detection regexes, forbidden filenames, and expected shebangs) and every check module in git/hooks/checks/, enforcing a protected-branch guard first and then a dozen-plus checks \u2014 shellcheck, naming, UX-library usage, subshell sourcing \u2014 before deciding pass/fail. shared.sh is the common helper those check modules call to materialize staged file content for scanning. git/AGENTS.md ties it together as the 2-tier hook system referenced in the top-level CLAUDE.md, debuggable via GIT_HOOKS_DEBUG=1.",
+      "description": "git/hooks/pre-commit is the project-level hook runner: it sources hook-config.sh (the single source of truth for secret-detection regexes, forbidden filenames, and expected shebangs) and every check module in git/hooks/checks/, enforcing a protected-branch guard first and then a dozen-plus checks — shellcheck, naming, UX-library usage, subshell sourcing — before deciding pass/fail. shared.sh is the common helper those check modules call to materialize staged file content for scanning. git/AGENTS.md ties it together as the 2-tier hook system referenced in the top-level CLAUDE.md, debuggable via GIT_HOOKS_DEBUG=1.",
       "nodeIds": [
         "file:git/hooks/pre-commit",
         "file:git/config/hook-config.sh",
@@ -38910,19 +37209,19 @@
     {
       "order": 9,
       "title": "The Test Suite",
-      "description": "tests/test is the single entrypoint the project's `mise run test` invokes: it orchestrates bats shell-unit tests in parallel, golden-rules static analysis, and pytest integration tests. test_helper.bash has the highest fan-in in the whole graph (22 dependents) \u2014 every .bats file sources it to freeze the real DOTFILES_ROOT/SHELL_COMMON and get HOME isolation before exercising bash/main.bash and zsh/main.zsh from steps 3-4. conftest.py plays the same role for the Python side, spawning isolated shell subprocesses against a temp HOME for every test_*.py file.",
+      "description": "tests/test is the single entrypoint the project's `mise run test` invokes: it orchestrates bats shell-unit tests in parallel, golden-rules static analysis, and pytest integration tests. test_helper.bash has the highest fan-in in the whole graph (22 dependents) — every .bats file sources it to freeze the real DOTFILES_ROOT/SHELL_COMMON and get HOME isolation before exercising bash/main.bash and zsh/main.zsh from steps 3-4. conftest.py plays the same role for the Python side, spawning isolated shell subprocesses against a temp HOME for every test_*.py file.",
       "nodeIds": [
         "file:tests/test",
         "file:tests/bats/test_helper.bash",
         "file:tests/integration/conftest.py",
         "document:tests/AGENTS.md"
       ],
-      "languageLesson": "bats tests are POSIX shell files with `@test \"description\" { ... }` blocks; pytest's conftest.py fixtures are the Python-side equivalent of test_helper.bash \u2014 both exist to give tests a hermetic HOME so they never touch a real dotfiles installation."
+      "languageLesson": "bats tests are POSIX shell files with `@test \"description\" { ... }` blocks; pytest's conftest.py fixtures are the Python-side equivalent of test_helper.bash — both exist to give tests a hermetic HOME so they never touch a real dotfiles installation."
     },
     {
       "order": 10,
       "title": "CI/CD and the mise Task SSOT",
-      "description": "ci.yml runs mise-driven lint (ruff, mypy, shellcheck, shfmt) on every push and PR to main or develop \u2014 notably, the old pytest CI job was deliberately moved to the local pre-push git hook from step 8 to save CI runner time, a real architectural decision worth noticing. test.yml is a leaner shell-lint-only workflow. Both trigger against mise.toml, which is the actual SSOT for every `mise run lint`/`fix`/`test` task referenced throughout this repo's CLAUDE.md and AGENTS.md files \u2014 CI and local dev run the exact same task definitions.",
+      "description": "ci.yml runs mise-driven lint (ruff, mypy, shellcheck, shfmt) on every push and PR to main or develop — notably, the old pytest CI job was deliberately moved to the local pre-push git hook from step 8 to save CI runner time, a real architectural decision worth noticing. test.yml is a leaner shell-lint-only workflow. Both trigger against mise.toml, which is the actual SSOT for every `mise run lint`/`fix`/`test` task referenced throughout this repo's CLAUDE.md and AGENTS.md files — CI and local dev run the exact same task definitions.",
       "nodeIds": [
         "pipeline:.github/workflows/ci.yml",
         "pipeline:.github/workflows/test.yml",
@@ -38933,7 +37232,7 @@
     {
       "order": 11,
       "title": "Claude Code Integration Layer",
-      "description": "claude/setup.sh symlinks settings.json, the statusline script, skills, and docs into ~/.claude (or per-account config dirs), handling legacy-layout migrations along the way \u2014 it's one of the four sub-setups step 2's root setup.sh delegates to. claude/AGENTS.md documents the 4-way entry-level symlink scheme shared across Claude Code, Codex, OpenCode, and Gemini CLI, plus why settings.json is copied as a real file rather than symlinked (so `/model` writes don't dirty the tracked source of truth). This is a whole architectural layer in this repo \u2014 dotfiles that configure not just your shell, but your AI coding tools too.",
+      "description": "claude/setup.sh symlinks settings.json, the statusline script, skills, and docs into ~/.claude (or per-account config dirs), handling legacy-layout migrations along the way — it's one of the four sub-setups step 2's root setup.sh delegates to. claude/AGENTS.md documents the 4-way entry-level symlink scheme shared across Claude Code, Codex, OpenCode, and Gemini CLI, plus why settings.json is copied as a real file rather than symlinked (so `/model` writes don't dirty the tracked source of truth). This is a whole architectural layer in this repo — dotfiles that configure not just your shell, but your AI coding tools too.",
       "nodeIds": [
         "file:claude/setup.sh",
         "document:claude/AGENTS.md",
@@ -38943,9 +37242,8 @@
     {
       "order": 12,
       "title": "Design History and Conventions",
-      "description": "REFACTORING_SETUP_SH.md is the project's own record of refactoring setup.sh (step 2) toward SOLID principles \u2014 config extraction, function separation, an environments.conf SSOT \u2014 showing this codebase treats its own architecture as documented, evolving history rather than static code. command-design-pattern.md closes the loop from the other direction: it's the SSOT new shell commands must follow (naming, dispatcher types, help integration), the same convention discipline you've now seen enforced by the UX library, the git hooks, and the test suite throughout this tour.",
+      "description": "REFACTORING_SETUP_SH.md is the project's own record of refactoring setup.sh (step 2) toward SOLID principles — config extraction, function separation, an environments.conf SSOT — showing this codebase treats its own architecture as documented, evolving history rather than static code. command-design-pattern.md closes the loop from the other direction: it's the SSOT new shell commands must follow (naming, dispatcher types, help integration), the same convention discipline you've now seen enforced by the UX library, the git hooks, and the test suite throughout this tour.",
       "nodeIds": [
-        "document:REFACTORING_SETUP_SH.md",
         "document:docs/.ssot/command-design-pattern.md"
       ]
     }
