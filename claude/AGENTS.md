@@ -215,7 +215,7 @@ origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
   (#1417). `skill:check` Check 16 은 길이만 재므로 "짧으면서 동시에 안 걸리는"
   상태를 통과시킨다. 표본 스킬은 `<repo>/skills/<name>/evals/trigger-eval.json`
   (20쿼리, should-trigger 10 / should-not 10) 을 가지며 계약은
-  `after >= before - 5%p`. 수동 하네스 `claude/tools/run-trigger-eval.sh` 는
-  #1680 이후 **포팅 대기** 상태다 — 입력(스킬·eval 세트·`run_eval.py`·비교
-  대상 git 이력)이 전부 marketplace repo 로 옮겨갔다. 절차·격리 4종·모델 고정 근거:
+  `after >= before - 5%p`. 옛 수동 하네스 `claude/tools/run-trigger-eval.sh` 는
+  #1680 이후 실행 불가(입력이 전부 marketplace repo 로 이동)라 삭제했다 — 필요하면
+  git 이력에서 꺼내 marketplace repo 로 포팅한다. 절차·격리 4종·모델 고정 근거:
   `authoring-skills` repo 의 `skills/skill-check/references/trigger-eval-procedure.md`.

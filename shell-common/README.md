@@ -243,15 +243,15 @@ Project-specific utility functions:
 
 ### Adding Bash-Specific Configuration
 
-1. Create a file in `bash/env/` or `bash/util/`:
+1. Create a `*.bash` file in `bash/env/` (the loader only globs `env/*.bash`):
    ```bash
-   touch bash/env/my_bash_config.sh
+   touch bash/env/my_bash_config.bash
    ```
 
 2. Add bash-specific code:
    ```bash
    #!/bin/bash
-   # bash/env/my_bash_config.sh
+   # bash/env/my_bash_config.bash
 
    # Bash-specific features only
    shopt -s histappend

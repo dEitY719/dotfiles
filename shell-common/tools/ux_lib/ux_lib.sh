@@ -65,25 +65,6 @@ else
     UX_LIB_DIR="$(cd "$(dirname -- "$0")" && pwd)"
 fi
 
-# =============================================================================
-# DEFENSE: Safe script name extraction (prevents $0 flag injection attacks)
-# =============================================================================
-# This function is used by all scripts to safely extract script name from $0
-# Problem: When sourcing with flags like "bash -i -l", $0 becomes "-i" or "-l"
-# This caused "basename -i" → error: invalid option -- 'i'
-# Solution: Use parameter expansion + validation (no external commands)
-# =============================================================================
-ux_get_safe_script_name() {
-    # Extract filename portion using parameter expansion (POSIX-safe)
-    local _fname="${0##*/}"
-
-    # Validation: if filename starts with -, it's from shell flags (sourced context)
-    # Return empty in that case (signals: don't treat as direct execution)
-    if [ "${_fname#-}" = "$_fname" ]; then
-        echo "$_fname"
-    fi
-}
-
 # Semantic colors (named by purpose, not appearance)
 # Use these instead of direct color codes for consistency
 export UX_PRIMARY
@@ -582,22 +563,6 @@ ux_usage() {
         echo "  $description"
     fi
     echo ""
-}
-
-# =============================================================================
-# Migration Helpers
-# =============================================================================
-
-# Check if function is using old color style (for migration tracking)
-# This is a helper for developers, not for end users
-ux_check_old_style() {
-    local func_name="$1"
-
-    if type "$func_name" 2>/dev/null | grep -q 'tput bold'; then
-        ux_warning "Function '$func_name' still uses old color definitions"
-        return 1
-    fi
-    return 0
 }
 
 # =============================================================================

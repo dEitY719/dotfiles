@@ -51,11 +51,6 @@ _check_manifest_staleness() {
     return 0  # Fresh
 }
 
-# Count skills in all marketplaces
-_count_all_skills() {
-    find "$MARKETPLACE_BASE_DIR" -type f -name "SKILL.md" 2>/dev/null | wc -l
-}
-
 # Extract YAML frontmatter value
 # Usage: _get_yaml_value "field_name" < file.md
 _get_yaml_value() {
