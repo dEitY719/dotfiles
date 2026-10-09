@@ -28,8 +28,8 @@ check_help_integrity() {
 
     local func_names
     func_names=$(
-        grep -E '^[[:space:]]*(function[[:space:]]+)?[a-zA-Z0-9_-]+help[[:space:]]*(\\(\\))?[[:space:]]*\\{' "$file" |
-            sed -E 's/^[[:space:]]*(function[[:space:]]+)?//; s/[[:space:]]*\\(\\)[[:space:]]*\\{.*$//; s/[[:space:]]*\\{.*$//'
+        grep -E '^[[:space:]]*(function[[:space:]]+)?[a-zA-Z0-9_-]+help[[:space:]]*(\(\))?[[:space:]]*\{' "$file" |
+            sed -E 's/^[[:space:]]*(function[[:space:]]+)?//; s/[[:space:]]*\(\)[[:space:]]*\{.*$//; s/[[:space:]]*\{.*$//'
     )
 
     if [ -z "$func_names" ]; then
