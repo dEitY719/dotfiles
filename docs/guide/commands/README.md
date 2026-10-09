@@ -18,6 +18,7 @@ rg "fzf 피커" docs/guide/commands/
 ## 문서 목록
 
 - [agy](./agy.md)
+- [apt](./apt.md)
 - [bat](./bat.md)
 - [bun](./bun.md)
 - [category](./category.md)
@@ -54,8 +55,10 @@ rg "fzf 피커" docs/guide/commands/
 - [mysql](./mysql.md)
 - [mytool](./mytool.md)
 - [network](./network.md)
+- [notion](./notion.md)
 - [npm](./npm.md)
 - [nvm](./nvm.md)
+- [opencode](./opencode.md)
 - [p10k](./p10k.md)
 - [pet](./pet.md)
 - [pip](./pip.md)
