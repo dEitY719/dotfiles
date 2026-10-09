@@ -108,8 +108,8 @@ check_proxy_env() {
     # Validate against setup mode
     local mode
     mode="$(get_setup_mode)"
-    case "$mode" in
-        public|external)
+    case "$(_dotfiles_setup_mode_proxy "$mode")" in
+        forbidden)
             if [ "$has_proxy" -eq 1 ]; then
                 echo ""
                 ux_error "ISSUE DETECTED: Proxy is set but should not be (Mode $mode)"
@@ -120,7 +120,7 @@ check_proxy_env() {
                 record_pass
             fi
             ;;
-        internal)
+        required)
             if [ "$has_proxy" -eq 0 ]; then
                 echo ""
                 ux_warning "No proxy set but internal mode expects proxy"
@@ -196,9 +196,7 @@ check_proxy_shell_loading() {
     local zsh_result=""
     local expected_proxy=0
 
-    case "$mode" in
-        internal) expected_proxy=1 ;;
-    esac
+    [ "$(_dotfiles_setup_mode_proxy "$mode")" = "required" ] && expected_proxy=1
 
     ux_section "Bash"
     ux_info "Testing: bash -c 'source proxy.sh && echo \$http_proxy'"
@@ -242,8 +240,8 @@ check_proxy_connectivity() {
     local mode
     mode="$(get_setup_mode)"
     if [ -z "${http_proxy:-}" ] && [ -z "${HTTP_PROXY:-}" ]; then
-        case "$mode" in
-        internal)
+        case "$(_dotfiles_setup_mode_proxy "$mode")" in
+        required)
             ux_warning "No proxy configured but internal mode expects one"
             ux_info "Check proxy.local.sh and shell loading diagnostics"
             record_warn

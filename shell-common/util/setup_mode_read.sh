@@ -28,3 +28,17 @@ _dotfiles_setup_mode() {
         *)          echo "$_dsm_raw" ;;
     esac
 }
+
+# _dotfiles_setup_mode_proxy [mode] — proxy policy of a mode (default: current).
+#
+# Prints "required" (internal: corporate proxy from env/proxy.local.sh),
+# "forbidden" (public|external: an inherited proxy is wrong and gets unset), or
+# "" (unset/unknown mode: leave the environment alone). Single owner of the
+# "which mode uses a proxy" rule — util/setup_mode.sh and check_proxy.sh read it.
+_dotfiles_setup_mode_proxy() {
+    case "${1-$(_dotfiles_setup_mode)}" in
+        internal)        echo "required" ;;
+        public|external) echo "forbidden" ;;
+        *)               echo "" ;;
+    esac
+}
