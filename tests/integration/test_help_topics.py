@@ -47,6 +47,7 @@ HELP_TOPICS = [
     "jetbrain_help",
     "litellm_help",
     "llm_wiki_help",
+    "markitdown_help",
     "mytool_help",
     "mysql_help",
     "network_help",
@@ -212,10 +213,10 @@ class TestHelpCategoryRendering:
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_category_lists_each_topic_with_its_description(self, shell_runner, shell):
-        """my_help_impl cli must render all 12 topics individually, not merged."""
+        """my_help_impl cli must render all 13 topics individually, not merged."""
         result = shell_runner(shell, "my_help_impl cli")
         assert result.exit_code == 0, f"{shell}: my_help_impl cli failed"
-        assert "Topics (12)" in result.stdout, f"{shell}: expected 12 separate topics, got: {result.stdout}"
+        assert "Topics (13)" in result.stdout, f"{shell}: expected 13 separate topics, got: {result.stdout}"
         assert "No description available" not in result.stdout, (
             f"{shell}: a topic fell back to the missing-description placeholder"
         )

@@ -25,7 +25,7 @@
 
 - **Category** — Topics
 - **AI/LLM (12)** — claude, cc, agy, codex, graphify, +7 more
-- **CLI Utilities (12)** — fzf, fd, fasd, ripgrep, pet, +7 more
+- **CLI Utilities (13)** — fzf, fd, fasd, ripgrep, pet, +8 more
 - **Configuration (6)** — p10k, crt, apt, pip, ghostty, +1 more
 - **Development (20)** — git, gwt, gbr, devx, uv, +15 more
 - **DevOps/Infra (14)** — docker, dproxy, sys, proxy, ssl, +9 more
