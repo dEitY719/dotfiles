@@ -86,8 +86,9 @@ alias sops-status='sops_age_status'
 _senv_usage() {
     ux_info "Usage: senv <command> [args]   (acts on the current directory)"
     ux_bullet "workflow"
-    ux_bullet_sub "키가 있는 PC: senv init -> senv enc -> git commit -> senv key export"
-    ux_bullet_sub "새 PC: git pull -> senv key import -> senv dec"
+    ux_bullet_sub "키가 있는 PC: senv init -> senv enc -> git commit"
+    ux_bullet_sub "키 백업: senv key export -> cp ~/senv-key.age ~/para/area/vault/secrets/ -> vault 에서 git commit && git push"
+    ux_bullet_sub "새 PC: cd ~/para/area/vault && git pull -> senv key import ~/para/area/vault/secrets/senv-key.age -> senv dec -f -> senv check"
     ux_bullet_sub "점검: senv check"
     ux_bullet "init              write .sops.yaml (your age public key) + ignore .env"
     ux_bullet "enc [file]        encrypt .env -> .enc.env ([file] -> [file].enc)"
