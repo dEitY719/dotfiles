@@ -1721,10 +1721,15 @@ _assert_slow_cli_within_bound() {
 _stub_posix_timeout_path() {
     local dir="$TEST_TEMP_HOME/bin_posix_timeout"
     mkdir -p "$dir"
-    ln -sf "$(command -v sleep)" "$dir/sleep"
+    local b
+    for b in sleep mktemp rm; do ln -sf "$(command -v "$b")" "$dir/$b"; done
     printf '#!/bin/sh\nexec %s 30\necho SHOULD_NOT_PRINT\n' "$(command -v sleep)" >"$dir/hang"
     printf '#!/bin/sh\necho "fast ran"\nexit 3\n' >"$dir/fast"
-    chmod +x "$dir/hang" "$dir/fast"
+    # #2077: the command's own pid, or a grandchild's pid, to a pidfile. The
+    # grandchild drops the output pipe, or `run` would block on it for 30s.
+    printf '#!/bin/sh\necho $$ >"%s"\nexec %s 30\n' "$dir/hangpid.pid" "$(command -v sleep)" >"$dir/hangpid"
+    printf '#!/bin/sh\n%s 30 >/dev/null 2>&1 &\necho $! >"%s"\nwait\n' "$(command -v sleep)" "$dir/grandkid.pid" >"$dir/grandkid"
+    chmod +x "$dir/hang" "$dir/fast" "$dir/hangpid" "$dir/grandkid"
     printf '%s' "$dir"
 }
 
@@ -1761,6 +1766,102 @@ _stub_posix_timeout_path() {
     run zsh -f -c "DOTFILES_FORCE_INIT=1 source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh'; PATH='$dir'; _gh_pr_review_timeout 1 hang"
     assert_failure 124
     refute_output --partial "SHOULD_NOT_PRINT"
+}
+
+# #2077: true when $1's pidfile names a process still alive after ~2s; kills
+# it so no test leaves a stray sleep behind whatever it asserts.
+_posix_timeout_pid_alive() {
+    local pid i
+    pid=$(cat "$1" 2>/dev/null)
+    [ -n "$pid" ] || return 1
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        kill -0 "$pid" 2>/dev/null || return 1
+        sleep 0.2
+    done
+    kill -KILL "$pid" 2>/dev/null
+    return 0
+}
+
+@test "_gh_pr_review_timeout: POSIX fallback kills the command's process group, grandchildren included (#2077)" {
+    _source_module
+    local dir alive=no
+    dir=$(_stub_posix_timeout_path)
+
+    PATH="$dir" run _gh_pr_review_timeout 1 grandkid
+    _posix_timeout_pid_alive "$dir/grandkid.pid" && alive=yes
+    assert_failure 124
+    [ "$alive" = no ]
+}
+
+# Runs the fallback under shell $1 in its own session, sends the group INT
+# (what a terminal Ctrl-C delivers, and not pre-ignored as for a `&` job),
+# and asserts the command died and the wrapper returned 130.
+_assert_posix_timeout_forwards_int() {
+    command -v setsid >/dev/null 2>&1 || skip "setsid not installed"
+    local shell_bin="$1" dir harness i pgid alive=no
+    dir=$(_stub_posix_timeout_path)
+    harness="$TEST_TEMP_HOME/int-harness.sh"
+    cat >"$harness" <<HARNESS
+. "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh"
+echo \$\$ >"$dir/harness.pid"
+# Survive the group INT ourselves (zsh would die before recording rc).
+trap : INT
+PATH="$dir" _gh_pr_review_timeout 30 hangpid
+echo "\$?" >"$dir/harness.rc"
+HARNESS
+    DOTFILES_FORCE_INIT=1 setsid --fork "$shell_bin" "$harness" </dev/null >/dev/null 2>&1
+    for i in $(seq 1 50); do
+        [ -s "$dir/hangpid.pid" ] && [ -s "$dir/harness.pid" ] && break
+        sleep 0.1
+    done
+    pgid=$(ps -o pgid= -p "$(cat "$dir/harness.pid")" | tr -d ' ')
+    [ -n "$pgid" ]
+    kill -INT "-$pgid"
+    for i in $(seq 1 50); do
+        [ -s "$dir/harness.rc" ] && break
+        sleep 0.1
+    done
+    _posix_timeout_pid_alive "$dir/hangpid.pid" && alive=yes
+    [ "$alive" = no ]
+    [ "$(cat "$dir/harness.rc")" = 130 ]
+}
+
+@test "_gh_pr_review_timeout: POSIX fallback forwards Ctrl-C (INT) to the command (#2077)" {
+    _assert_posix_timeout_forwards_int bash
+}
+
+@test "_gh_pr_review_timeout: POSIX fallback forwards Ctrl-C (INT) under zsh too (#2077)" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    _assert_posix_timeout_forwards_int zsh
+}
+
+@test "_gh_pr_review_timeout: POSIX fallback expiry is rc 124 even when the watcher is cancelled mid-kill (#2077)" {
+    _source_module
+    local dir i
+    dir=$(_stub_posix_timeout_path)
+    # Widen the race window: every kill pauses after sending, so the main
+    # shell cancels the watcher right after the watcher has killed the
+    # command, where the old trap-swap logic lost the 124.
+    kill() { builtin kill "$@"; local r=$?; sleep 0.3; return "$r"; }
+
+    for i in 1 2 3 4 5; do
+        PATH="$dir" run _gh_pr_review_timeout 0.2 hang
+        [ "$status" -eq 124 ] || { unset -f kill; false; }
+    done
+    unset -f kill
+}
+
+@test "_gh_pr_review_timeout: POSIX fallback expiry is rc 124 under zsh when the watcher is cancelled mid-kill (#2077)" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    local dir
+    dir=$(_stub_posix_timeout_path)
+
+    run zsh -f -c "DOTFILES_FORCE_INIT=1 source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh'
+kill() { builtin kill \"\$@\"; local r=\$?; sleep 0.3; return \$r; }
+PATH='$dir'
+for i in 1 2 3 4 5; do _gh_pr_review_timeout 0.2 hang; echo \"rc=\$?\"; done"
+    assert_success
+    assert_output "$(printf 'rc=124\n%.0s' 1 2 3 4 5)"
 }
 
 # ---------------------------------------------------------------------------
