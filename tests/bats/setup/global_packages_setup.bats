@@ -27,7 +27,8 @@ teardown() {
     rm -rf "$STUB_BIN"
 }
 
-# uv stub: `tool list` prints $UV_INSTALLED; `tool install` logs its args and
+# uv stub: `tool list` prints $UV_INSTALLED; `tool dir` prints
+# ${STUB_BIN}/tools (receipts live there); `tool install` logs its args and
 # fails when UV_FAIL_SPEC matches the last arg.
 stub_uv() {
     cat >"${STUB_BIN}/uv" <<'EOF'
@@ -35,6 +36,7 @@ stub_uv() {
 echo "$*" >>"$UV_LOG"
 case "$1 $2" in
     "tool list") cat "$UV_INSTALLED"; exit 0 ;;
+    "tool dir") echo "${UV_INSTALLED%/*}/tools"; exit 0 ;;
     "tool install")
         for last in "$@"; do :; done
         [ -n "${UV_FAIL_SPEC-}" ] && [ "$last" = "$UV_FAIL_SPEC" ] && exit 1
@@ -111,5 +113,71 @@ EOF
     assert_success
     assert_output --partial '⚠'
     run grep -Fx 'tool install --native-tls browser-use' "$UV_LOG"
+    assert_success
+}
+
+@test "passes per-tool options through with the spec last" {
+    stub_uv
+    printf 'markitdown[all] --python 3.12 --with pip-system-certs  # why\n' >"$GLOBAL_PACKAGES_LIST"
+    run bash "$GP_SETUP"
+    assert_success
+    run grep -Fx 'tool install --native-tls --python 3.12 --with pip-system-certs markitdown[all]' "$UV_LOG"
+    assert_success
+}
+
+# Receipt for an installed markitdown built with python $1 and --with $2.
+write_receipt() {
+    mkdir -p "${STUB_BIN}/tools/markitdown"
+    cat >"${STUB_BIN}/tools/markitdown/uv-receipt.toml" <<EOF
+[tool]
+requirements = [
+    { name = "markitdown", extras = ["all"] },
+    { name = "$2" },
+]
+python = "$1"
+EOF
+}
+
+@test "skips an installed tool whose receipt matches its options" {
+    stub_uv
+    printf 'markitdown[all] --python 3.12 --with pip-system-certs\n' >"$GLOBAL_PACKAGES_LIST"
+    printf 'markitdown v0.1.5\n- markitdown\n' >"$UV_INSTALLED"
+    write_receipt 3.12 pip-system-certs
+    run bash "$GP_SETUP"
+    assert_success
+    assert_output --partial '건너뜀: markitdown'
+    run grep -F 'tool install' "$UV_LOG"
+    assert_failure
+}
+
+@test "force-reinstalls an installed tool whose receipt is missing" {
+    stub_uv
+    printf 'markitdown[all] --python 3.12 --with pip-system-certs\n' >"$GLOBAL_PACKAGES_LIST"
+    printf 'markitdown v0.1.5\n- markitdown\n' >"$UV_INSTALLED"
+    run bash "$GP_SETUP"
+    assert_success
+    run grep -Fx 'tool install --native-tls --force --python 3.12 --with pip-system-certs markitdown[all]' "$UV_LOG"
+    assert_success
+}
+
+@test "force-reinstalls when the receipt python differs" {
+    stub_uv
+    printf 'markitdown[all] --python 3.12 --with pip-system-certs\n' >"$GLOBAL_PACKAGES_LIST"
+    printf 'markitdown v0.1.5\n- markitdown\n' >"$UV_INSTALLED"
+    write_receipt 3.13 pip-system-certs
+    run bash "$GP_SETUP"
+    assert_success
+    run grep -Fx 'tool install --native-tls --force --python 3.12 --with pip-system-certs markitdown[all]' "$UV_LOG"
+    assert_success
+}
+
+@test "force-reinstalls when a --with package is missing from the receipt" {
+    stub_uv
+    printf 'markitdown[all] --python 3.12 --with pip-system-certs\n' >"$GLOBAL_PACKAGES_LIST"
+    printf 'markitdown v0.1.5\n- markitdown\n' >"$UV_INSTALLED"
+    write_receipt 3.12 other-pkg
+    run bash "$GP_SETUP"
+    assert_success
+    run grep -Fx 'tool install --native-tls --force --python 3.12 --with pip-system-certs markitdown[all]' "$UV_LOG"
     assert_success
 }

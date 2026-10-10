@@ -1,4 +1,11 @@
-# Global uv tools synced by global-packages/setup.sh (one spec per line).
-# Installed with `uv tool install --native-tls <spec>`; never uninstalled.
-markitdown[all]
+# Global uv tools synced by global-packages/setup.sh.
+# Line format: <spec> [uv tool install options...]  (whitespace-separated)
+# Installed with `uv tool install --native-tls <options...> <spec>`; never
+# uninstalled. `--python V` / `--with X` are also drift-checked against the
+# installed receipt and repaired with --force (see AGENTS.md).
+
+# Corporate proxy CA lacks Authority Key Identifier; Python 3.13+ (urllib3)
+# enforces strict X509 and rejects it, so pin 3.12. pip-system-certs makes
+# requests trust the OS store instead of certifi.
+markitdown[all] --python 3.12 --with pip-system-certs
 browser-use
