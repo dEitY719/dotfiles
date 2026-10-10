@@ -250,12 +250,12 @@ EOF
     refute_output --partial "Required CLI 'agy'"
 }
 
-# #2069 removed the internal-PC gate: an external setup mode no longer
-# refuses opencode / hermes; only the real prerequisites (the CLI on PATH)
-# still do.
-@test "require_ai_cli: opencode on external PC is not gated (#2069)" {
+# #2069 removed the internal-PC gate: the setup mode no longer refuses
+# opencode / hermes, so these tests need no `_dotfiles_setup_mode` stub (#2074);
+# only the real prerequisites (the CLI on PATH) still do. The `internal-PC`
+# refutes guard against the gate message coming back.
+@test "require_ai_cli: opencode is not setup-mode gated (#2069)" {
     _source_module
-    _dotfiles_setup_mode() { echo external; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
     printf '#!/bin/sh\nexit 0\n' >"$stub_dir/opencode"
@@ -266,9 +266,8 @@ EOF
     refute_output --partial "internal-PC"
 }
 
-@test "require_ai_cli: opencode on external PC still requires the CLI" {
+@test "require_ai_cli: opencode still requires the CLI" {
     _source_module
-    _dotfiles_setup_mode() { echo external; }
 
     PATH="" run _gh_pr_review_require_ai_cli opencode
     assert_failure 1
@@ -276,10 +275,9 @@ EOF
     refute_output --partial "internal-PC"
 }
 
-@test "gh_pr_review: opencode external preflight reaches the PATH check (#2069)" {
+@test "gh_pr_review: opencode preflight reaches the PATH check (#2069)" {
     _source_module
     _stub_gh_noop
-    _dotfiles_setup_mode() { echo external; }
 
     # gh stub + coreutils only, so the AI CLI itself is what is missing.
     PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run gh_pr_review --ai opencode 1337 origin
@@ -288,9 +286,8 @@ EOF
     refute_output --partial "internal-PC"
 }
 
-@test "require_ai_cli: hermes on external PC is not gated (#2069)" {
+@test "require_ai_cli: hermes is not setup-mode gated (#2069)" {
     _source_module
-    _dotfiles_setup_mode() { echo external; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
     printf '#!/bin/sh\nexit 0\n' >"$stub_dir/hermes"
@@ -301,9 +298,8 @@ EOF
     refute_output --partial "internal-PC"
 }
 
-@test "require_ai_cli: hermes on external PC still requires the CLI" {
+@test "require_ai_cli: hermes still requires the CLI" {
     _source_module
-    _dotfiles_setup_mode() { echo external; }
 
     PATH="" run _gh_pr_review_require_ai_cli hermes
     assert_failure 1
@@ -311,10 +307,9 @@ EOF
     refute_output --partial "internal-PC"
 }
 
-@test "gh_pr_review: hermes external preflight reaches the PATH check (#2069)" {
+@test "gh_pr_review: hermes preflight reaches the PATH check (#2069)" {
     _source_module
     _stub_gh_noop
-    _dotfiles_setup_mode() { echo external; }
 
     # gh stub + coreutils only, so the AI CLI itself is what is missing.
     PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run gh_pr_review --ai hermes 1337 origin
@@ -1395,7 +1390,6 @@ EOF
 
 @test "run_ai opencode: model from env is passed with --model (issue #2007)" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     _stub_opencode_echo
     export DOTFILES_OPENCODE_REVIEW_MODEL="example-corp/example-model"
     local f="$TEST_TEMP_HOME/prompt.txt"
@@ -1411,7 +1405,6 @@ EOF
 
 @test "run_ai opencode: model falls back to internal.local.sh parse (issue #2007)" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     _stub_opencode_echo
     unset DOTFILES_OPENCODE_REVIEW_MODEL
     mkdir -p "$TEST_TEMP_HOME/sc/env"
@@ -1427,7 +1420,6 @@ EOF
 
 @test "run_ai opencode: no model configured skips with a warning (issue #2007)" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir" "$TEST_TEMP_HOME/sc/env"
     cat >"$stub_dir/opencode" <<'EOF'
@@ -1454,7 +1446,6 @@ EOF
     # review-opencode.* directory) makes opencode unable to read its own
     # prompt and return empty output every time.
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
     cat >"$stub_dir/opencode" <<'EOF'
@@ -1485,9 +1476,8 @@ EOF
     refute_output --partial "REFUSED"
 }
 
-@test "run_ai opencode: external mode invokes opencode (#2069)" {
+@test "run_ai opencode: invokes opencode regardless of setup mode (#2069)" {
     _source_module
-    _dotfiles_setup_mode() { echo external; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
     cat >"$stub_dir/opencode" <<'EOF'
@@ -1508,7 +1498,6 @@ EOF
 
 @test "run_ai opencode: relative writes are isolated outside caller working tree" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     local repo="$TEST_TEMP_HOME/repo"
     mkdir -p "$repo"
     git -C "$repo" init -q
@@ -1578,7 +1567,6 @@ EOF
 
 @test "run_ai hermes: small prompt → passed as value argument, not stdin" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     _stub_hermes_echo
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
@@ -1592,7 +1580,6 @@ EOF
 
 @test "run_ai hermes: prompt one byte under MAX_ARG_STRLEN (131071 bytes) → still succeeds, hermes invoked" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     _stub_hermes_echo
     local f="$TEST_TEMP_HOME/almost-big.txt"
     # 131071 bytes — one under the guard's `-ge 131072` boundary.
@@ -1606,7 +1593,6 @@ EOF
 
 @test "run_ai hermes: prompt at/over MAX_ARG_STRLEN (131072 bytes) → fails with clear message, hermes never invoked" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     _stub_hermes_echo
     local f="$TEST_TEMP_HOME/big.txt"
     # 131072 bytes exactly — the guard's `-ge` boundary.
@@ -1618,9 +1604,8 @@ EOF
     refute_output --partial "hermes args:"
 }
 
-@test "run_ai hermes: external mode invokes hermes (#2069)" {
+@test "run_ai hermes: invokes hermes regardless of setup mode (#2069)" {
     _source_module
-    _dotfiles_setup_mode() { echo external; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
     cat >"$stub_dir/hermes" <<'EOF'
@@ -1672,7 +1657,6 @@ _assert_slow_cli_timeout() {
         skip "coreutils timeout not available — wrapper degrades to unbounded"
     fi
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     _stub_slow_cli "$ai" 0.3
     export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=0.1
     local f="$TEST_TEMP_HOME/prompt.txt"
@@ -1688,7 +1672,6 @@ _assert_slow_cli_timeout() {
 _assert_slow_cli_within_bound() {
     local ai="$1"
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
     _stub_slow_cli "$ai" 0.1
     export GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC=10
     local f="$TEST_TEMP_HOME/prompt.txt"
@@ -1722,7 +1705,7 @@ _assert_slow_cli_within_bound() {
 # `_gh_pr_review_timeout` directly (not through `_gh_pr_review_run_ai`, which
 # needs no unrelated CLI/network mocking) with a PATH that has no `timeout`
 # binary at all, regardless of what the real test host provides.
-@test "_gh_pr_review_timeout: no timeout binary on PATH still runs the wrapped command unbounded" {
+@test "_gh_pr_review_timeout: no timeout binary and no sleep on PATH still runs the wrapped command" {
     _source_module
     local no_timeout_dir="$TEST_TEMP_HOME/bin_no_timeout"
     mkdir -p "$no_timeout_dir"
@@ -1730,6 +1713,54 @@ _assert_slow_cli_within_bound() {
     PATH="$no_timeout_dir" run _gh_pr_review_timeout 5 echo "degrade path ran"
     assert_success
     assert_output "degrade path ran"
+}
+
+# #2074: stock macOS has neither `timeout` nor `gtimeout`, so the POSIX
+# fallback (background run + `sleep` watcher + kill) must still bound a hung
+# lane. The PATH holds `sleep` and the stubs only — no timeout binary at all.
+_stub_posix_timeout_path() {
+    local dir="$TEST_TEMP_HOME/bin_posix_timeout"
+    mkdir -p "$dir"
+    ln -sf "$(command -v sleep)" "$dir/sleep"
+    printf '#!/bin/sh\nexec %s 30\necho SHOULD_NOT_PRINT\n' "$(command -v sleep)" >"$dir/hang"
+    printf '#!/bin/sh\necho "fast ran"\nexit 3\n' >"$dir/fast"
+    chmod +x "$dir/hang" "$dir/fast"
+    printf '%s' "$dir"
+}
+
+@test "_gh_pr_review_timeout: no timeout/gtimeout → POSIX fallback kills a hang with rc 124 (#2074)" {
+    _source_module
+    local dir start
+    dir=$(_stub_posix_timeout_path)
+    start=$SECONDS
+
+    PATH="$dir" run _gh_pr_review_timeout 1 hang
+    assert_failure 124
+    refute_output --partial "SHOULD_NOT_PRINT"
+    [ $((SECONDS - start)) -lt 10 ]
+}
+
+@test "_gh_pr_review_timeout: POSIX fallback passes through output and rc of a command inside the bound (#2074)" {
+    _source_module
+    local dir start
+    dir=$(_stub_posix_timeout_path)
+    start=$SECONDS
+
+    PATH="$dir" run _gh_pr_review_timeout 20 fast
+    assert_failure 3
+    assert_output "fast ran"
+    # The watcher is reaped, not left to sleep out its 20s.
+    [ $((SECONDS - start)) -lt 10 ]
+}
+
+@test "_gh_pr_review_timeout: POSIX fallback kills a hang under zsh too (#2074)" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    local dir
+    dir=$(_stub_posix_timeout_path)
+
+    run zsh -f -c "DOTFILES_FORCE_INIT=1 source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh'; PATH='$dir'; _gh_pr_review_timeout 1 hang"
+    assert_failure 124
+    refute_output --partial "SHOULD_NOT_PRINT"
 }
 
 # ---------------------------------------------------------------------------
