@@ -27,8 +27,10 @@ alias hermes-skill-install='hermes_skill_install'
 #   HERMES_ALLOW_PRIVATE_URLS=1  - SSRF guard is_safe_url() blocks RFC1918 IPs
 #   SSL_CERT_FILE=<system bundle> - WSL default points at a single proxy CA
 # Per-command env only: never exported, config.yaml never touched.
+# The SSRF bypass covers the whole call, redirects included — only feed it
+# URLs from the GHES you trust.
 hermes_skill_install() {
-    local _hsi_arg _hsi_host="" _hsi_bundle
+    local _hsi_arg _hsi_host="" _hsi_bundle _hsi_ghes
     for _hsi_arg in "$@"; do
         case "$_hsi_arg" in
         http://* | https://*)
@@ -41,7 +43,10 @@ hermes_skill_install() {
         esac
     done
 
-    if [ -z "${DOTFILES_GHES_HOST-}" ] || [ "$_hsi_host" != "$DOTFILES_GHES_HOST" ]; then
+    # DNS names are case-insensitive.
+    _hsi_host=$(printf '%s' "$_hsi_host" | tr '[:upper:]' '[:lower:]')
+    _hsi_ghes=$(printf '%s' "${DOTFILES_GHES_HOST-}" | tr '[:upper:]' '[:lower:]')
+    if [ -z "$_hsi_ghes" ] || [ "$_hsi_host" != "$_hsi_ghes" ]; then
         command hermes skills install "$@"
         return
     fi

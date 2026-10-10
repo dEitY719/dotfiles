@@ -123,3 +123,31 @@ _pre() {
     run_in_bash "$(_pre "export STUB_RC=3; export DOTFILES_GHES_HOST=$GHES; hermes_skill_install https://$GHES/o/r/SKILL.md")"
     assert_failure 3
 }
+
+@test "zsh: missing CA bundle fails without calling hermes" {
+    run_in_zsh "$(_pre "export DOTFILES_GHES_HOST=$GHES; export HERMES_SKILL_CA_BUNDLE=/nonexistent/ca.crt; hermes_skill_install https://$GHES/o/r/SKILL.md")"
+    assert_failure
+    [ ! -e "$STUB_LOG" ]
+}
+
+@test "bash: host match is case-insensitive" {
+    run_in_bash "$(_pre "export DOTFILES_GHES_HOST=GHES.Example.Invalid; hermes_skill_install https://Ghes.EXAMPLE.invalid/o/r/SKILL.md")"
+    assert_success
+    run cat "$STUB_LOG"
+    assert_line "ALLOW=1"
+}
+
+@test "zsh: host match is case-insensitive" {
+    run_in_zsh "$(_pre "export DOTFILES_GHES_HOST=GHES.Example.Invalid; hermes_skill_install https://Ghes.EXAMPLE.invalid/o/r/SKILL.md")"
+    assert_success
+    run cat "$STUB_LOG"
+    assert_line "ALLOW=1"
+}
+
+@test "bash: no URL argument is a plain passthrough" {
+    run_in_bash "$(_pre "export DOTFILES_GHES_HOST=$GHES; hermes_skill_install --help")"
+    assert_success
+    run cat "$STUB_LOG"
+    assert_line "ALLOW=<unset>"
+    assert_line "ARGS=skills install --help"
+}
