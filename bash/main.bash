@@ -77,7 +77,7 @@ export DOTFILES_ROOT
 # here would die with the very conflict-marker breakage it reports. Plain
 # printf because ux_lib is not loaded yet (same exception as git-sync.sh #1958).
 if [ -f "${DOTFILES_ROOT}/.git/MERGE_HEAD" ]; then
-    printf '⚠ dotfiles 머지 미완(.git/MERGE_HEAD 존재) — cd ~/dotfiles && git status 로 충돌을 해결하세요\n' >&2
+    printf '⚠ dotfiles 머지 미완(.git/MERGE_HEAD 존재) — cd "%s" && git status 로 충돌을 해결하세요\n' "${DOTFILES_ROOT}" >&2
 fi
 
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
