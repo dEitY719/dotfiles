@@ -41,6 +41,7 @@ HELP_TOPICS = [
     "hermes_help",
     "jetbrain_help",
     "litellm_help",
+    "markitdown_help",
     "mytool_help",
     "mysql_help",
     "network_help",

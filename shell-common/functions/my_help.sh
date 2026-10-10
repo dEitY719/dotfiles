@@ -258,6 +258,7 @@ _register_default_help_descriptions() {
     _register_help ripgrep_help "[CLI] rg (ripgrep) search" cli
     _register_help pet_help "[CLI] pet snippet manager" cli
     _register_help bat_help "[CLI] bat file viewer" cli
+    _register_help markitdown_help "[CLI] markitdown — 문서/URL → Markdown 변환 (wrapper 자동 저장)" cli
     _register_help zsh_help "[CLI] Zsh shell management" cli
     _register_help zsh_autosuggestions_help "[CLI] zsh-autosuggestions plugin" cli
     _register_help gc_help "[CLI] Git commit shortcuts (gc, gca)" cli

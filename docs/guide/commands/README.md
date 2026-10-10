@@ -52,6 +52,7 @@ rg "fzf 피커" docs/guide/commands/
 - [jetbrain](./jetbrain.md)
 - [litellm](./litellm.md)
 - [llm-wiki](./llm-wiki.md)
+- [markitdown](./markitdown.md)
 - [mount](./mount.md)
 - [mysql](./mysql.md)
 - [mytool](./mytool.md)

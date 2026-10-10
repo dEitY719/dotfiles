@@ -2,7 +2,8 @@
 
 # global-packages/setup.sh: sync global uv tools from uv-tools.txt
 #
-# PURPOSE: Install every uv tool listed in uv-tools.txt that is missing
+# PURPOSE: Install every uv tool listed in uv-tools.txt that is missing,
+#          and reinstall (--force) one whose --python/--with drifted
 # WHEN TO RUN: Via ./setup.sh (idempotent; safe to re-run)
 #
 # Never fails the parent setup: every problem is a ux_warning + exit 0.
@@ -32,6 +33,22 @@ spec_name() {
     printf '%s\n' "$1" | sed 's/[][<>=!~;@ ].*//' | tr 'A-Z_.' 'a-z--'
 }
 
+# Receipt of installed tool $1 matches its options ($2...)? Only
+# `--python V` and `--with X` (space-separated form) are checked.
+receipt_matches() {
+    local receipt
+    receipt="$(uv tool dir 2>/dev/null)/$1/uv-receipt.toml"
+    shift
+    [ -f "$receipt" ] || return 1
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --python) grep -qFx "python = \"$2\"" "$receipt" || return 1; shift ;;
+            --with) grep -qF "name = \"$(spec_name "$2")\"" "$receipt" || return 1; shift ;;
+        esac
+        shift
+    done
+}
+
 # uv missing -> install the mise-pinned version (mise.toml) and use it.
 ensure_uv() {
     command -v uv >/dev/null 2>&1 && return 0
@@ -55,18 +72,27 @@ main() {
     fi
 
     # Tool header lines look like "name vX.Y.Z"; "- entrypoint" lines skipped.
-    local installed spec name listed="" extra
+    local installed line spec name listed="" extra
+    local -a toks opts force
     installed="$(uv tool list 2>/dev/null | awk '!/^-/ && $2 ~ /^v/ {print $1}')"
 
-    while IFS= read -r spec || [ -n "$spec" ]; do
-        spec="${spec%%#*}"
-        spec="$(printf '%s' "$spec" | tr -d '[:space:]')"
-        [ -z "$spec" ] && continue
+    while IFS= read -r line || [ -n "$line" ]; do
+        read -r -a toks <<<"${line%%#*}"
+        [ ${#toks[@]} -eq 0 ] && continue
+        spec="${toks[0]}"
+        opts=("${toks[@]:1}")
         name="$(spec_name "$spec")"
         listed="$listed $name "
+        force=()
         if printf '%s\n' "$installed" | grep -qx -- "$name"; then
-            ux_info "이미 설치됨, 건너뜀: $name"
-        elif uv tool install --native-tls "$spec"; then
+            if [ ${#opts[@]} -eq 0 ] || receipt_matches "$name" "${opts[@]}"; then
+                ux_info "이미 설치됨, 건너뜀: $name"
+                continue
+            fi
+            ux_info "설치 옵션 불일치 (${opts[*]}), --force 재설치: $name"
+            force=(--force)
+        fi
+        if uv tool install --native-tls "${force[@]}" "${opts[@]}" "$spec" </dev/null; then
             ux_success "설치 완료: $spec"
         else
             ux_warning "설치 실패 (계속 진행): $spec"
