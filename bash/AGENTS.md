@@ -1,6 +1,7 @@
 # Module Context
 - **Purpose**: Core Bash configuration hub. Manages environment, aliases, and shared utilities.
 - **Entry Point**: `main.bash` (Sources all modules including shell-common/).
+- **Startup merge guard (#2078)**: `main.bash` 상단에 인라인 `.git/MERGE_HEAD` 진단(대화형 한정)이 있다. 미완 `git sync` 머지를 알리는 용도라 파일 소싱 없이 `printf` 만 쓴다.
 - **Structure**:
     - `bash/env/`: Bash-specific environment (`*.bash` only — `main.bash` globs `env/*.bash`)
     - `shell-common/env/`: Shared environment (PATH, LOCALE, etc.)
