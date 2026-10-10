@@ -250,62 +250,77 @@ EOF
     refute_output --partial "Required CLI 'agy'"
 }
 
-@test "require_ai_cli: opencode on non-internal PC refuses before PATH check" {
+# #2069 removed the internal-PC gate: an external setup mode no longer
+# refuses opencode / hermes; only the real prerequisites (the CLI on PATH)
+# still do.
+@test "require_ai_cli: opencode on external PC is not gated (#2069)" {
     _source_module
     _dotfiles_setup_mode() { echo external; }
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\nexit 0\n' >"$stub_dir/opencode"
+    chmod +x "$stub_dir/opencode"
 
-    PATH="" run _gh_pr_review_require_ai_cli opencode
-    assert_failure 1
-    assert_output --partial "--ai opencode is internal-PC only"
-    refute_output --partial "Required CLI 'opencode' not found in PATH"
+    PATH="$stub_dir" run _gh_pr_review_require_ai_cli opencode
+    assert_success
+    refute_output --partial "internal-PC"
 }
 
-@test "require_ai_cli: opencode on internal PC still requires the CLI" {
+@test "require_ai_cli: opencode on external PC still requires the CLI" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
+    _dotfiles_setup_mode() { echo external; }
 
     PATH="" run _gh_pr_review_require_ai_cli opencode
     assert_failure 1
     assert_output --partial "Required CLI 'opencode' not found in PATH"
+    refute_output --partial "internal-PC"
 }
 
-@test "gh_pr_review: opencode non-internal preflight returns 1" {
+@test "gh_pr_review: opencode external preflight reaches the PATH check (#2069)" {
     _source_module
     _stub_gh_noop
     _dotfiles_setup_mode() { echo external; }
 
-    run gh_pr_review --ai opencode 1337 origin
+    # gh stub + coreutils only, so the AI CLI itself is what is missing.
+    PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run gh_pr_review --ai opencode 1337 origin
     assert_failure 1
-    assert_output --partial "--ai opencode is internal-PC only"
+    assert_output --partial "Required CLI 'opencode' not found in PATH"
+    refute_output --partial "internal-PC"
 }
 
-@test "require_ai_cli: hermes on non-internal PC refuses before PATH check" {
+@test "require_ai_cli: hermes on external PC is not gated (#2069)" {
     _source_module
     _dotfiles_setup_mode() { echo external; }
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\nexit 0\n' >"$stub_dir/hermes"
+    chmod +x "$stub_dir/hermes"
 
-    PATH="" run _gh_pr_review_require_ai_cli hermes
-    assert_failure 1
-    assert_output --partial "--ai hermes is internal-PC only"
-    refute_output --partial "Required CLI 'hermes' not found in PATH"
+    PATH="$stub_dir" run _gh_pr_review_require_ai_cli hermes
+    assert_success
+    refute_output --partial "internal-PC"
 }
 
-@test "require_ai_cli: hermes on internal PC still requires the CLI" {
+@test "require_ai_cli: hermes on external PC still requires the CLI" {
     _source_module
-    _dotfiles_setup_mode() { echo internal; }
+    _dotfiles_setup_mode() { echo external; }
 
     PATH="" run _gh_pr_review_require_ai_cli hermes
     assert_failure 1
     assert_output --partial "Required CLI 'hermes' not found in PATH"
+    refute_output --partial "internal-PC"
 }
 
-@test "gh_pr_review: hermes non-internal preflight returns 1" {
+@test "gh_pr_review: hermes external preflight reaches the PATH check (#2069)" {
     _source_module
     _stub_gh_noop
     _dotfiles_setup_mode() { echo external; }
 
-    run gh_pr_review --ai hermes 1337 origin
+    # gh stub + coreutils only, so the AI CLI itself is what is missing.
+    PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run gh_pr_review --ai hermes 1337 origin
     assert_failure 1
-    assert_output --partial "--ai hermes is internal-PC only"
+    assert_output --partial "Required CLI 'hermes' not found in PATH"
+    refute_output --partial "internal-PC"
 }
 
 # ---------------------------------------------------------------------------
@@ -1470,14 +1485,14 @@ EOF
     refute_output --partial "REFUSED"
 }
 
-@test "run_ai opencode: non-internal mode refuses without invoking opencode" {
+@test "run_ai opencode: external mode invokes opencode (#2069)" {
     _source_module
     _dotfiles_setup_mode() { echo external; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
     cat >"$stub_dir/opencode" <<'EOF'
 #!/bin/sh
-echo "SHOULD_NOT_RUN"
+echo "opencode RAN"
 exit 0
 EOF
     chmod +x "$stub_dir/opencode"
@@ -1486,9 +1501,9 @@ EOF
     printf 'review this diff' >"$f"
 
     run _gh_pr_review_run_ai opencode "$f"
-    assert_failure 1
-    assert_output --partial "--ai opencode is internal-PC only"
-    refute_output --partial "SHOULD_NOT_RUN"
+    assert_success
+    assert_output --partial "opencode RAN"
+    refute_output --partial "internal-PC"
 }
 
 @test "run_ai opencode: relative writes are isolated outside caller working tree" {
@@ -1603,14 +1618,14 @@ EOF
     refute_output --partial "hermes args:"
 }
 
-@test "run_ai hermes: non-internal mode refuses without invoking hermes" {
+@test "run_ai hermes: external mode invokes hermes (#2069)" {
     _source_module
     _dotfiles_setup_mode() { echo external; }
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
     cat >"$stub_dir/hermes" <<'EOF'
 #!/bin/sh
-echo "SHOULD_NOT_RUN"
+echo "hermes RAN"
 exit 0
 EOF
     chmod +x "$stub_dir/hermes"
@@ -1619,9 +1634,9 @@ EOF
     printf 'review this diff' >"$f"
 
     run _gh_pr_review_run_ai hermes "$f"
-    assert_failure 1
-    assert_output --partial "--ai hermes is internal-PC only"
-    refute_output --partial "SHOULD_NOT_RUN"
+    assert_success
+    assert_output --partial "hermes RAN"
+    refute_output --partial "internal-PC"
 }
 
 # ---------------------------------------------------------------------------

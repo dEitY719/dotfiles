@@ -110,14 +110,14 @@ setup() {
 
 # ── gh-verify-skills#56: multi-preset review lanes (--lanes) ──────────
 # The flag names one `<ai>:<preset>` lane per comma-separated entry. Omitting
-# it must reproduce today's four-lane fan-out exactly — that is the whole
-# backward-compatibility claim — and a malformed value must fail loudly
-# instead of quietly dispatching fewer lanes than asked for.
+# it yields the five-lane default (#2069: claude joins, so the running harness
+# reviews too) — and a malformed value must fail loudly instead of quietly
+# dispatching fewer lanes than asked for.
 
-@test "--lanes omitted -> the legacy four default lanes" {
+@test "--lanes omitted -> the five default lanes (#2069)" {
     run devx_pr_review_all_parse 123
     assert_success
-    assert_line "lanes=agy:default,codex:default,opencode:default,hermes:default"
+    assert_line "lanes=claude:default,codex:default,opencode:default,agy:default,hermes:default"
 }
 
 @test "--lanes takes a two-preset fan-out of the same AI" {
