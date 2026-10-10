@@ -401,7 +401,8 @@ _gh_pr_review_mktemp_prompt() {
 }
 
 # _gh_pr_review_timeout — bounded-run wrapper for the slow CLIs (issue
-# #1506); devx_pr_review_all_fanout bounds every lane with it (#2069). Args: $1 = seconds, $2.. = command + argv.
+# #1506); devx_pr_review_all_fanout bounds every lane with it (#2069).
+# Args: $1 = seconds, $2.. = command + argv.
 #
 # `timeout` is GNU coreutils and is absent on a stock macOS, so this degrades
 # to running the command unbounded rather than hard-failing — same shape as

@@ -269,7 +269,7 @@ devx_pr_review_all_fanout() {
     local pr="${1-}" remote="${2-}" lanes="${3-}"
     local _src="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_review.sh"
     local _sec="${GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC:-540}"
-    local _dir="" _rest="" _lane="" _f="" _pids="" _pid="" _rc="" _why=""
+    local _dir="" _rest="" _lane="" _f="" _order="" _pids="" _pid="" _rc="" _why=""
 
     # Lane shape and PR# validation is the parser's; reuse it, don't copy it.
     if [ "$#" -ne 3 ] || [ -z "$remote" ] ||
@@ -291,6 +291,7 @@ devx_pr_review_all_fanout() {
     while [ -n "$_rest" ]; do
         _lane="${_rest%%,*}"
         case "$_rest" in *,*) _rest="${_rest#*,}" ;; *) _rest="" ;; esac
+        _order="$_order $_lane"
         _f="$_dir/${_lane%%:*}.${_lane#*:}"
         (
             # gh_pr_review.sh returns early in a non-interactive shell.
@@ -309,10 +310,8 @@ devx_pr_review_all_fanout() {
         wait "$_pid"
     done
 
-    _rest="$lanes"
-    while [ -n "$_rest" ]; do
-        _lane="${_rest%%,*}"
-        case "$_rest" in *,*) _rest="${_rest#*,}" ;; *) _rest="" ;; esac
+    # Parser-validated lanes are [A-Za-z0-9_-] tokens, safe to word-split.
+    for _lane in $_order; do
         _f="$_dir/${_lane%%:*}.${_lane#*:}"
         _rc=$(cat "$_f.rc" 2>/dev/null)
         if [ "$_rc" = 0 ]; then
