@@ -85,3 +85,16 @@ teardown() {
     assert_failure 2
     assert_output --partial "usage: <pr> <remote>"
 }
+
+@test "fanout: a lane runs under bash, so gh_pr_review.sh's set -o pipefail works (dash rejects it)" {
+    # #2072: the real gh_pr_review wraps its CLI pipe in `( set -o pipefail; ... )`;
+    # under /bin/sh = dash every lane died with `Illegal option -o pipefail`.
+    cat >"$SHELL_COMMON/functions/gh_pr_review.sh" <<'STUB'
+gh_pr_review() {
+    ( set -o pipefail; echo "review posted $2" | cat ) || return 1
+}
+STUB
+    run devx_pr_review_all_fanout 42 origin "claude:default"
+    assert_success
+    assert_output "claude:default:ok"
+}
