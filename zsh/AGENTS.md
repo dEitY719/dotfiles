@@ -2,6 +2,7 @@
 
 - **Purpose**: Zsh-specific configuration and application integrations
 - **Entry Point**: `main.zsh` — sources `shell-common` then zsh-specific modules
+- **Startup merge guard (#2078)**: `main.zsh` 가 경로 정규화 직후 인라인 `.git/MERGE_HEAD` 진단(대화형 한정, `printf`, 소싱 없음)을 출력한다. bash 와 동일 문구.
 - **Structure**: `app/`(zsh 앱: git, p10k, zsh utilities) · `env/`(zsh-only env) · `main.zsh`(loader)
 - **Dependencies**: `shell-common/` (공유 유틸리티), Powerlevel10k (옵션 테마)
 

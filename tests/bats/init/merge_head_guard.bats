@@ -60,3 +60,32 @@ _zsh_i() {
     run zsh -f -c "DOTFILES_ROOT='$FAKE'; . '$FAKE/zsh/main.zsh'" 2>&1
     [[ "$output" != *"$MSG"* ]]
 }
+
+# Diagnostic must precede any module-sourcing failure (#2078 AC-3): plant a
+# conflict-marker ux_lib and assert the diagnostic line comes before the error.
+_assert_diag_before_error() {
+    local diag_line err_line
+    diag_line=$(printf '%s\n' "$output" | grep -an "$MSG" | head -1 | cut -d: -f1)
+    err_line=$(printf '%s\n' "$output" | grep -anE '<<|syntax error|parse error' | head -1 | cut -d: -f1)
+    [ -n "$diag_line" ]
+    [ -z "$err_line" ] || [ "$diag_line" -lt "$err_line" ]
+}
+
+_plant_conflict_ux_lib() {
+    mkdir -p "$FAKE/shell-common/tools/ux_lib"
+    printf '<<<<<<< HEAD\nx=1\n=======\nx=2\n>>>>>>> upstream/main\n' \
+        >"$FAKE/shell-common/tools/ux_lib/ux_lib.sh"
+    : >"$FAKE/.git/MERGE_HEAD"
+}
+
+@test "bash: diagnostic precedes conflict-marker parse error in shell-common" {
+    _plant_conflict_ux_lib
+    _bash_i
+    _assert_diag_before_error
+}
+
+@test "zsh: diagnostic precedes conflict-marker parse error in shell-common" {
+    _plant_conflict_ux_lib
+    _zsh_i
+    _assert_diag_before_error
+}
