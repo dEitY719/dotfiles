@@ -170,8 +170,8 @@ _senv() {
     _senv "senv"
     assert_success
     [ "$(printf '%s\n' "$output" | wc -l)" -le 20 ]
-    assert_output --partial "senv init -> senv enc -> git commit -> senv key export"
-    assert_output --partial "git pull -> senv key import -> senv dec"
+    assert_output --partial "키 백업: senv key export -> cp ~/senv-key.age ~/para/area/vault/secrets/"
+    assert_output --partial "senv key import ~/para/area/vault/secrets/senv-key.age -> senv dec -f"
     assert_output --partial "senv check"
 }
 
