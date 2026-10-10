@@ -16,7 +16,7 @@
     - concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트
     - install: 공식 install.sh | ./hermes/setup.sh 가 하는 6단계
     - config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT
-    - pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA | Python 3.13 AKI
+    - pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA | Python 3.13 AKI | 사내 GHES 스킬 설치
     - browser: agent-browser 설치 옵션
     - example | related
     - details: hermes-help <section>  (example: hermes-help pitfalls)
@@ -105,6 +105,14 @@
 - 해결: ./hermes/setup.sh Part 6 이 sitecustomize.py 를 ~/.hermes/tools/python-*/lib 에 설치. Python 버전이 바뀌면 재실행
 - setup.sh Part 5 가 대신 해준다 — HERMES_CORP_CA_CERT 지정 시 (미지정이면 sudo 프롬프트 없이 완전 스킵)
 - HERMES_CORP_CA_CERT 미지정이면 shell-common/env/security.local.sh 의 $CA_CERT 를 폴백으로 쓴다
+**5. 사내 GHES 에서 hermes skills install 이 차단/SSL 실패**
+
+- 해결: hermes-skill-install <url> -y — URL 호스트가 $DOTFILES_GHES_HOST (internal.local.sh) 면 그 1회 호출에만 env 주입
+- 수동 등가: HERMES_ALLOW_PRIVATE_URLS=1 SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt hermes skills install "https://<GHES_HOST>/<org>/<repo>/raw/main/<path>/SKILL.md" -y
+- 원인 1: SSRF 가드 is_safe_url() 가 RFC1918 사설 IP 를 차단 → HERMES_ALLOW_PRIVATE_URLS=1
+- 원인 2: WSL 기본 SSL_CERT_FILE 이 프록시 CA 단일 파일 → httpx 가 self-signed certificate in certificate chain. 시스템 번들로 교체 (HERMES_SKILL_CA_BUNDLE 로 변경 가능)
+- 주의: config.yaml 의 security.allow_private_urls: true 는 모든 URL 의 SSRF 차단을 푸는 전역 토글 — 켜두지 말 것
+- hermes plugins install 은 git clone 경로라 영향 없음
 
 ### browser
 
