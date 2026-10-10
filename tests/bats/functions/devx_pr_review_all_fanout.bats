@@ -44,8 +44,9 @@ teardown() {
     assert_line --index 0 "claude:default:ok"
     assert_line --index 1 "$(printf 'codex:thorough:skip\tboom: it broke')"
     assert_line --index 2 "opencode:default:ok"
-    # Three 1s lanes run serially would take >= 3s.
-    [ $((end - start)) -lt 2 ]
+    # Three 1s lanes run serially take >= 3s, which whole-second `date +%s`
+    # can never report as under 3; in parallel they take ~1s (<= 2 reported).
+    [ $((end - start)) -lt 3 ]
 }
 
 @test "fanout: non-zero rc with empty stderr -> exit <rc>" {
