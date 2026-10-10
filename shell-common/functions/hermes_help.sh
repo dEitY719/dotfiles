@@ -113,6 +113,8 @@ _hermes_help_rows_pitfalls() {
     ux_bullet "원인 1: SSRF 가드 ${UX_BOLD}is_safe_url()${UX_RESET} 가 RFC1918 사설 IP 를 차단 → HERMES_ALLOW_PRIVATE_URLS=1"
     ux_bullet "원인 2: WSL 기본 SSL_CERT_FILE 이 프록시 CA 단일 파일 → httpx 가 self-signed certificate in certificate chain. 시스템 번들로 교체 (HERMES_SKILL_CA_BUNDLE 로 변경 가능)"
     ux_bullet "주의: config.yaml 의 ${UX_BOLD}security.allow_private_urls: true${UX_RESET} 는 모든 URL 의 SSRF 차단을 푸는 전역 토글 — 켜두지 말 것"
+    ux_bullet "한계: 래퍼는 skills install 만 감싼다 — 같은 출처의 skills update/check 는 수동 등가 env 를 붙여 실행"
+    ux_bullet "한계: SSRF 우회는 그 호출 전체(리다이렉트 포함)에 적용 — 신뢰하는 GHES URL 에만 쓸 것"
     ux_bullet "hermes plugins install 은 git clone 경로라 영향 없음"
 }
 
