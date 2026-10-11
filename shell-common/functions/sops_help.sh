@@ -101,7 +101,7 @@ _sops_help_rows_newpc() {
     ux_bullet_sub "  -> 오프라인 대입을 버티도록 긴 passphrase(무작위 단어 6개 이상) 필수. export 가드는 실수로 프로젝트 repo 에 넣는 것만 막는다"
     ux_bullet_sub "새 PC: cd ~/para/area/vault && git pull"
     ux_bullet_sub "  -> senv key import ~/para/area/vault/secrets/senv-key.age"
-    ux_bullet_sub "  -> senv dec -f   # 기존 .env 를 덮어쓴다. 먼저 작업트리 밖으로 백업 (cp .env ~/myproj.env.bak)"
+    ux_bullet_sub "  -> senv dec -f   # 기존 .env 를 덮어쓴다. 먼저 작업트리 밖으로 백업 (install -m 600 .env ~/myproj.env.bak)"
     ux_bullet_sub "  -> senv check"
     ux_bullet "수동 방법 A: 기존 PC 의 keys.txt 를 안전한 경로(scp, USB)로 복사"
     ux_bullet_sub "복사 위치: ~/.config/sops/age/keys.txt  ->  chmod 600 ~/.config/sops/age/keys.txt"

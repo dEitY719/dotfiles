@@ -147,7 +147,7 @@ _write_key() {
     # secrets one `git add .` away from a commit.
     run_in_bash "sops_help --all; sops_help"
     assert_success
-    refute_output --partial "cp .env .env.bak"
+    refute_output --regexp 'cp +\.env +\.env'
 }
 
 @test "every 'senv dec -f' step carries an overwrite warning (#2086)" {
