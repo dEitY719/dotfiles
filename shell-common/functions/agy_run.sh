@@ -57,9 +57,17 @@ _agy_run_stream() {
     # silent empty output. Buffering into `_stream` is what makes agy's own
     # exit code recoverable: POSIX has no PIPESTATUS, so mid-pipeline agy
     # would lose it, and the caller logs/prints that code verbatim.
+    # SUCCESS with a blank `response` is a failure too (issue #2084): headless
+    # agy auto-denies a tool needing command permission and still exits 0 with
+    # SUCCESS, and `jq -e` treats "" as truthy — name the cause here so the
+    # caller's summary line points at it instead of "<no stderr>".
     printf '%s\n' "$_stream" |
         jq -er 'select(.event == "result")
-                | if .result.status == "SUCCESS" then .result.response // ""
+                | if .result.status == "SUCCESS" then
+                      (.result.response // "")
+                      | if test("\\S") then .
+                        else "agy returned SUCCESS with an empty response\n" | halt_error(1)
+                        end
                   else "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")\n"
                        | halt_error(1)
                   end' || [ "$_ec" -ne 0 ] || _ec=1
