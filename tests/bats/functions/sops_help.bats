@@ -141,3 +141,28 @@ _write_key() {
     assert_output --partial "$alt (mode 600)"
     refute_output --partial "AGE-SECRET-KEY"
 }
+
+@test "help never suggests an in-tree .env.bak backup (#2086)" {
+    # senv init only gitignores .env, so `cp .env .env.bak` leaves plaintext
+    # secrets one `git add .` away from a commit.
+    run_in_bash "sops_help --all; sops_help"
+    assert_success
+    refute_output --partial "cp .env .env.bak"
+}
+
+@test "every 'senv dec -f' step carries an overwrite warning (#2086)" {
+    run_in_bash "sops_help --all; sops_help"
+    assert_success
+    local line
+    while IFS= read -r line; do
+        case "$line" in *"senv dec -f"*)
+            case "$line" in *덮어*) ;; *) echo "no warning: $line"; return 1 ;; esac ;;
+        esac
+    done <<<"$output"
+}
+
+@test "newpc states why the locked key may live in the git vault (#2086)" {
+    run_in_bash "sops_help newpc"
+    assert_success
+    assert_output --partial "비밀번호 강도"
+}
