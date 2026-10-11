@@ -13,9 +13,9 @@
 
 - Usage: sops-help [section|--list|--all]   (alias: age-help)
 - quick start (senv, 현재 디렉터리 기준)
-    - 키가 있는 PC: senv init -> senv enc -> git commit -> senv key export
-    - 새 PC: git pull -> senv key import -> senv dec  (또는 senv run make run)
-    - 점검: senv check
+    - 키가 있는 PC: senv init -> senv enc -> git commit
+    - 키 백업: senv key export -> cp ~/senv-key.age ~/para/area/vault/secrets/ -> vault 에서 git commit && git push
+    - 새 PC: cd ~/para/area/vault && git pull -> senv key import ~/para/area/vault/secrets/senv-key.age -> senv dec -f -> senv check
 - sections
     - overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .enc.env 커밋
     - setup: install-sops-age | age-keygen | sops-status
@@ -55,7 +55,7 @@
     - senv enc    # .env -> .enc.env
     - git add .sops.yaml .gitignore .enc.env && git commit
 - 개인키 내보내기: senv key export  (~/senv-key.age, sops-help newpc)
-- 새 PC: git pull -> senv key import -> senv dec (파일 생성) 또는 senv run make run (파일 없음)
+- 새 PC: cd ~/para/area/vault && git pull -> senv key import ~/para/area/vault/secrets/senv-key.age -> senv dec -f -> senv check  (파일 없이: senv run make run)
 - senv init 이 만드는 .sops.yaml (공개키만 들어가므로 커밋 OK)
     - creation_rules:
     -   - path_regex: '(^|/)\.(enc\.)?env(\.enc)?$'
@@ -86,7 +86,11 @@
 
 - 권장: senv 로 옮긴다 (age 가 터미널에서 비밀번호를 직접 묻는다)
     - 키가 있는 PC: senv key export   # ~/senv-key.age (git 작업트리 밖에만 쓴다)
-    - 새 PC: senv key import ~/senv-key.age -> senv dec -> senv check
+    -   -> cp ~/senv-key.age ~/para/area/vault/secrets/ -> vault 에서 git commit && git push -> rm ~/senv-key.age
+    - 새 PC: cd ~/para/area/vault && git pull
+    -   -> senv key import ~/para/area/vault/secrets/senv-key.age
+    -   -> senv dec -f   # 이미 .env 가 있으면 -f 필요 (덮어쓰기 전에 cp .env .env.bak)
+    -   -> senv check
 - 수동 방법 A: 기존 PC 의 keys.txt 를 안전한 경로(scp, USB)로 복사
     - 복사 위치: ~/.config/sops/age/keys.txt  ->  chmod 600 ~/.config/sops/age/keys.txt
 - 수동 방법 B: 비밀번호로 잠근 키 파일을 개인 저장소에 두고 새 PC 에서 1회 해제
