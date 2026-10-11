@@ -1368,6 +1368,104 @@ EOF
     assert_output --partial "upstream 503"
 }
 
+
+# ---------------------------------------------------------------------------
+# Empty review guard (issue #2084): a CLI that exits 0 with no review text
+# must fail the lane and post nothing — a marker-only comment would read as
+# "already reviewed" to the review-all aggregation / duplicate guard.
+# ---------------------------------------------------------------------------
+
+# agy stub reporting SUCCESS with an empty `response` and exit 0 — the
+# headless permission-denied shape observed on dEitY719/equinest#595.
+_stub_agy_empty_success() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'STUB'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"init","conversation_id":"stub"}\n'
+printf '{"event":"result","result":{"status":"SUCCESS","response":""}}\n'
+exit 0
+STUB
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+}
+
+# gh stub for a full gh_pr_review run: answers the meta fetch with an open
+# PR, and appends every invocation to $GH_STUB_LOG so a test can count
+# `pr comment` posts.
+_stub_gh_full_flow() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    export GH_STUB_LOG="$TEST_TEMP_HOME/gh-calls.log"
+    : >"$GH_STUB_LOG"
+    cat >"$stub_dir/gh" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >>"$GH_STUB_LOG"
+case "$1 $2" in
+"pr view")
+    printf '{"state":"OPEN","isDraft":false,"baseRefName":"main","headRefName":"feat","headRefOid":"abc123"}\n'
+    ;;
+"pr comment")
+    printf 'https://github.com/owner/repo/pull/7#issuecomment-1\n'
+    ;;
+esac
+exit 0
+STUB
+    chmod +x "$stub_dir/gh"
+    export PATH="$stub_dir:$PATH"
+    git init -q "$TEST_TEMP_HOME/repo"
+    git -C "$TEST_TEMP_HOME/repo" remote add origin https://github.com/owner/repo.git
+    cd "$TEST_TEMP_HOME/repo"
+}
+
+@test "run_ai agy: SUCCESS with an empty response fails, naming the cause (#2084)" {
+    _source_module
+    _stub_agy_empty_success
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure
+    assert_output --partial "agy returned SUCCESS with an empty response"
+}
+
+@test "gh_pr_review: agy empty review → non-zero, no PR comment posted (#2084)" {
+    _source_module
+    _stub_agy_empty_success
+    _stub_gh_full_flow
+    run gh_pr_review --ai agy 7 origin
+    assert_failure
+    refute_output --partial "[OK]"
+    run grep -c '^pr comment' "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "gh_pr_review: any CLI exiting 0 with a whitespace-only review is rejected (#2084)" {
+    # The guard sits in gh_pr_review itself, not the agy transport, so it
+    # covers every --ai lane — codex stands in for "some other CLI".
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\ncat >/dev/null\nprintf "  \\n\\t\\n"\nexit 0\n' >"$stub_dir/codex"
+    chmod +x "$stub_dir/codex"
+    _stub_gh_full_flow
+    run gh_pr_review --ai codex 7 origin
+    assert_failure
+    assert_output --partial "External AI CLI 'codex' returned an empty review"
+    run grep -c '^pr comment' "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "gh_pr_review: a non-empty review is still posted (#2084 guard is not over-eager)" {
+    _source_module
+    _stub_agy_echo
+    _stub_gh_full_flow
+    run gh_pr_review --ai agy 7 origin
+    assert_success
+    assert_output --partial "[OK] PR #7 reviewed by agy"
+    run grep -c '^pr comment' "$GH_STUB_LOG"
+    assert_output "1"
+}
 # ---------------------------------------------------------------------------
 # _gh_pr_review_run_ai — opencode transport (issue #1334)
 # ---------------------------------------------------------------------------

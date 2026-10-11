@@ -1582,6 +1582,17 @@ EOF
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return "$_rc"
     fi
+    # Issue #2084: exit 0 is not a review. A CLI that succeeds with no text
+    # (agy's headless permission denial did exactly that) would otherwise
+    # post a marker-only comment that review-all's aggregation and the
+    # duplicate-review guard read as "this head sha is already reviewed".
+    # Every --ai lane, not just agy — an empty review is never worth posting.
+    if ! grep -q '[^[:space:]]' "$AI_OUT" 2>/dev/null; then
+        echo "External AI CLI '$ai' returned an empty review — no comment posted" >&2
+        _gh_pr_review_disarm_trap
+        rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" "$AI_STDERR_FILE"
+        return 1
+    fi
 
     # ---- Step 6: post PR comment ----
     local TOKENS HUMAN_H ELAPSED
