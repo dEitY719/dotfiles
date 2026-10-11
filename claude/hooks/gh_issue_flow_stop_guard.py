@@ -982,6 +982,14 @@ def main() -> int:
         return _allow("no gh-flow:issue boundary in transcript", layer="L1")
 
     terminal, seen = _scan_after_boundary(messages, boundary)
+    # Issue #2088 — the turn's final assistant text may not be flushed to the
+    # transcript yet when Stop fires (a report was seen blocked 136 ms after it
+    # was written), so the stdin copy is a second terminal channel. Same
+    # TERMINAL_PATTERNS rule as an assistant text block; only `terminal` widens,
+    # sub-skill counts come from tool_use blocks that are already on disk.
+    last_message = event.get("last_assistant_message")
+    if not terminal and isinstance(last_message, str):
+        terminal = any(pat in last_message for pat in TERMINAL_PATTERNS)
     # Issue #1270 — the fresh-prompt count feeds nothing but the expiry
     # valve below, and counting is a second full pass over the transcript
     # on the turn-end hot path. Skip it whenever the result provably cannot
