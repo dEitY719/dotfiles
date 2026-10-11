@@ -147,18 +147,21 @@ _write_key() {
     # secrets one `git add .` away from a commit.
     run_in_bash "sops_help --all; sops_help"
     assert_success
-    refute_output --regexp 'cp +\.env +\.env'
+    # Any cp/install whose destination is a relative .env* path stays in-tree.
+    refute_output --regexp '(cp|install) [^#~]*(\./)?\.env +(\./)?\.env'
 }
 
 @test "every 'senv dec -f' step carries an overwrite warning (#2086)" {
     run_in_bash "sops_help --all; sops_help"
     assert_success
-    local line
+    local line seen=0
     while IFS= read -r line; do
         case "$line" in *"senv dec -f"*)
+            seen=$((seen + 1))
             case "$line" in *덮어*) ;; *) echo "no warning: $line"; return 1 ;; esac ;;
         esac
     done <<<"$output"
+    [ "$seen" -gt 0 ]
 }
 
 @test "newpc states why the locked key may live in the git vault (#2086)" {
