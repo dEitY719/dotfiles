@@ -1368,7 +1368,6 @@ EOF
     assert_output --partial "upstream 503"
 }
 
-
 # ---------------------------------------------------------------------------
 # Empty review guard (issue #2084): a CLI that exits 0 with no review text
 # must fail the lane and post nothing — a marker-only comment would read as
@@ -1466,6 +1465,7 @@ STUB
     run grep -c '^pr comment' "$GH_STUB_LOG"
     assert_output "1"
 }
+
 # ---------------------------------------------------------------------------
 # _gh_pr_review_run_ai — opencode transport (issue #1334)
 # ---------------------------------------------------------------------------
