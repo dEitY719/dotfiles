@@ -65,8 +65,8 @@ _agy_run_stream() {
         jq -er 'select(.event == "result")
                 | if .result.status == "SUCCESS" then
                       (.result.response // "")
-                      | if test("\\S") then .
-                        else "agy returned SUCCESS with an empty response\n" | halt_error(1)
+                      | if type == "string" and test("\\S") then .
+                        else "agy returned SUCCESS with an empty or non-string response\n" | halt_error(1)
                         end
                   else "agy result status=\(.result.status // "?"): \(.result.error // "no error reported")\n"
                        | halt_error(1)

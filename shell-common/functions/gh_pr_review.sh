@@ -531,8 +531,9 @@ _gh_pr_review_run_ai() {
     # Ctrl-C during the CLI run leaks it into /tmp. Callers that care hand
     # the path down so it sits in the handler's `rm -f` list; the
     # self-allocating branch stays for direct callers (and tests).
-    local _stderr_file="${4:-}"
+    local _stderr_file="${4:-}" _stderr_owned=0
     if [ -z "$_stderr_file" ]; then
+        _stderr_owned=1
         _stderr_file=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX") || {
             echo "Could not create stderr temp file under /tmp" >&2
             return 1
@@ -687,7 +688,9 @@ _gh_pr_review_run_ai() {
         # Intentionally do NOT rm — leave the file for the user.
         return "$_rc"
     fi
-    rm -f "$_stderr_file"
+    # A caller-supplied path is the caller's to delete (issue #2084): its
+    # empty-review guard keeps the file when exit 0 came with no output.
+    [ "$_stderr_owned" -eq 1 ] && rm -f "$_stderr_file"
     return 0
 }
 
@@ -1587,10 +1590,13 @@ EOF
     # post a marker-only comment that review-all's aggregation and the
     # duplicate-review guard read as "this head sha is already reviewed".
     # Every --ai lane, not just agy — an empty review is never worth posting.
+    # AI_STDERR_FILE is kept, as on the failure branch above: with an empty
+    # stdout it is the only clue to why the CLI produced nothing.
     if ! grep -q '[^[:space:]]' "$AI_OUT" 2>/dev/null; then
         echo "External AI CLI '$ai' returned an empty review — no comment posted" >&2
+        echo "  full stderr saved to: $AI_STDERR_FILE" >&2
         _gh_pr_review_disarm_trap
-        rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE" "$AI_STDERR_FILE"
+        rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return 1
     fi
 

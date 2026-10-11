@@ -1425,10 +1425,13 @@ STUB
     printf 'review this diff' >"$f"
     run _gh_pr_review_run_ai agy "$f"
     assert_failure
-    assert_output --partial "agy returned SUCCESS with an empty response"
+    assert_output --partial "agy returned SUCCESS with an empty or non-string response"
 }
 
 @test "gh_pr_review: agy empty review → non-zero, no PR comment posted (#2084)" {
+    # End-to-end for the agy lane: the transport itself now fails (the test
+    # above), so this run exits through the `_rc -ne 0` branch and never
+    # reaches the empty-review guard — the codex test below covers that.
     _source_module
     _stub_agy_empty_success
     _stub_gh_full_flow
@@ -1445,7 +1448,7 @@ STUB
     _source_module
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
-    printf '#!/bin/sh\ncat >/dev/null\nprintf "  \\n\\t\\n"\nexit 0\n' >"$stub_dir/codex"
+    printf '#!/bin/sh\ncat >/dev/null\necho "stub: tool call denied" >&2\nprintf "  \\n\\t\\n"\nexit 0\n' >"$stub_dir/codex"
     chmod +x "$stub_dir/codex"
     _stub_gh_full_flow
     run gh_pr_review --ai codex 7 origin
@@ -1453,6 +1456,43 @@ STUB
     assert_output --partial "External AI CLI 'codex' returned an empty review"
     run grep -c '^pr comment' "$GH_STUB_LOG"
     assert_output "0"
+}
+
+@test "gh_pr_review: empty review keeps the CLI's stderr file — the only clue left (#2084)" {
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\ncat >/dev/null\necho "stub: tool call denied" >&2\nexit 0\n' >"$stub_dir/codex"
+    chmod +x "$stub_dir/codex"
+    _stub_gh_full_flow
+    run gh_pr_review --ai codex 7 origin
+    assert_failure
+    local saved
+    saved=$(printf '%s\n' "$output" | sed -n 's/^  full stderr saved to: //p')
+    [ -n "$saved" ]
+    run cat "$saved"
+    assert_output --partial "stub: tool call denied"
+    rm -f "$saved"
+}
+
+@test "run_ai agy: SUCCESS with a non-string response fails with a named cause, not a jq error (#2084)" {
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'STUB'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"result","result":{"status":"SUCCESS","response":{"text":"x"}}}\n'
+exit 0
+STUB
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
+    local f="$TEST_TEMP_HOME/prompt.txt"
+    printf 'review this diff' >"$f"
+    run _gh_pr_review_run_ai agy "$f"
+    assert_failure
+    assert_output --partial "empty or non-string response"
+    refute_output --partial "cannot be matched"
 }
 
 @test "gh_pr_review: a non-empty review is still posted (#2084 guard is not over-eager)" {
