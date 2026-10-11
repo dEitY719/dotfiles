@@ -3159,3 +3159,50 @@ def test_bash_grep_of_block_marker_does_not_terminate(tmp_path: Path) -> None:
     result = _run_hook(_hook_event(transcript))
     assert result.returncode == 0
     assert json.loads(result.stdout)["decision"] == "block"
+
+
+# --- #2088: terminal report not yet flushed to the transcript at Stop time ---
+
+_UNFLUSHED_BLOCK_REPORT = "gh-flow:issue blocked at Step 1.5 (#2087) - origin gate"
+
+
+def _boundary_only_transcript(tmp_path: Path) -> Path:
+    return _write_transcript(tmp_path, [_user_text("/gh-flow:issue 2087")])
+
+
+def test_last_assistant_message_terminal_marker_allows_stop(tmp_path: Path) -> None:
+    """Report absent from transcript but present in stdin `last_assistant_message` → allow."""
+    transcript = _boundary_only_transcript(tmp_path)
+    result = _run_hook(_hook_event(transcript, last_assistant_message=_UNFLUSHED_BLOCK_REPORT))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_last_assistant_message_plain_text_still_blocks(tmp_path: Path) -> None:
+    transcript = _boundary_only_transcript(tmp_path)
+    result = _run_hook(_hook_event(transcript, last_assistant_message="working on it"))
+    assert json.loads(result.stdout).get("decision") == "block"
+
+
+def test_last_assistant_message_template_matches_transcript_rule(tmp_path: Path) -> None:
+    """SKILL.md template text is judged exactly as an assistant transcript text block (#608)."""
+    template = "gh-flow:issue complete (#<N>)"
+    via_stdin = _run_hook(_hook_event(_boundary_only_transcript(tmp_path), last_assistant_message=template))
+    in_dir = tmp_path / "t"
+    in_dir.mkdir()
+    via_transcript = _run_hook(
+        _hook_event(_write_transcript(in_dir, [_user_text("/gh-flow:issue 2087"), _assistant_text(template)]))
+    )
+    assert via_stdin.stdout.strip() == via_transcript.stdout.strip()
+
+
+def test_last_assistant_message_non_string_ignored(tmp_path: Path) -> None:
+    transcript = _boundary_only_transcript(tmp_path)
+    result = _run_hook(_hook_event(transcript, last_assistant_message=["x"]))
+    assert json.loads(result.stdout).get("decision") == "block"
+
+
+def test_missing_last_assistant_message_matches_transcript_scan(tmp_path: Path) -> None:
+    transcript = _boundary_only_transcript(tmp_path)
+    result = _run_hook(_hook_event(transcript))
+    assert json.loads(result.stdout).get("decision") == "block"
