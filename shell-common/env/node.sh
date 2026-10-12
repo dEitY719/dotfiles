@@ -1,7 +1,7 @@
 #!/bin/sh
 # shell-common/env/node.sh
 # Node.js trusts the OS CA store, so TLS-intercepting proxies work (#2093).
-# Older Node versions ignore the variable; a pre-set value is kept.
+# Older Node versions ignore the variable; a pre-set non-empty value is kept.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
