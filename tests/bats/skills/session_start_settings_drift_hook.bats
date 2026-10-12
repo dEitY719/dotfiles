@@ -169,7 +169,8 @@ JSON
     # Live: gateway-cli-owned keys + a clobbered statusLine.
     cat >"$LIVE_DIR/settings.json" <<'JSON'
 { "apiKeyHelper": "gateway-cli token",
-  "credentialExport": "gateway-cli creds",
+  "awsCredentialExport": "gateway-cli creds",
+  "awsAuthRefresh": "gateway-cli refresh",
   "cleanupPeriodDays": 365000,
   "env": { "ANTHROPIC_BASE_URL": "https://gateway.internal" },
   "model": "gateway-opus",
@@ -195,8 +196,10 @@ JSON
     # Every gateway-cli / Claude-Code-native key survives byte-for-byte.
     run jq -r '.apiKeyHelper' "$LIVE_DIR/settings.json"
     [ "$output" = "gateway-cli token" ]
-    run jq -r '.credentialExport' "$LIVE_DIR/settings.json"
+    run jq -r '.awsCredentialExport' "$LIVE_DIR/settings.json"
     [ "$output" = "gateway-cli creds" ]
+    run jq -r '.awsAuthRefresh' "$LIVE_DIR/settings.json"
+    [ "$output" = "gateway-cli refresh" ]
     run jq -r '.cleanupPeriodDays' "$LIVE_DIR/settings.json"
     [ "$output" = "365000" ]
     run jq -r '.env.ANTHROPIC_BASE_URL' "$LIVE_DIR/settings.json"

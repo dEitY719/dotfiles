@@ -19,6 +19,10 @@
 
 `internal` 모드 PC 의 Claude Code 인증은 2026-08-18부터 조직 LLM Gateway 전환 도구
 `gateway-cli` 가 담당한다 (`gateway-cli setup && gateway-cli verify`).
+(#2097 로 dotfiles 의 AWS/Bedrock 경로는 제거됐다. 기존 PC 에 남은 gitignored
+`aws/aws.local.sh`, `aws/aws-config.local`, `~/.aws/config`, 그리고 예전 OTel 설치기가 만든
+`/etc/claude-code/managed-settings.json` 은 dotfiles 가 더 이상 읽거나 쓰지 않는다 — 필요 없으면
+직접 지운다. 새 셸은 더 이상 `CLAUDE_CODE_USE_BEDROCK` 등을 export 하지 않는다.)
 `~/.claude/settings.json` 의 auth/env/model 키 소유권 상세는 `claude/AGENTS.md`
 "Configuration Files" 섹션 참고 (중복 서술 생략).
 
