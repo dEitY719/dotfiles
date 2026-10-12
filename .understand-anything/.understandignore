@@ -16,6 +16,7 @@ packages/
 **/.git-credentials
 *.local.sh
 ssh/*.local
+aws/aws-config.local
 .env
 .secrets/
 .git-crypt/
