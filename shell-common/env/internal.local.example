@@ -19,6 +19,14 @@ export DOTFILES_SSH_KEY_NAME="id_rsa_example"
 export DOTFILES_CLAUDE_USAGE_API_URL="https://usage.example.invalid/"
 export DOTFILES_CLAUDE_USAGE_ID="EMP00000"
 
+# 사내 PC 진단 기대값 (shell-common/tools/custom/diagnose_internal.sh, #2099).
+# no_proxy 에 반드시 들어가야 하는 사내 도메인 (앞의 점 없이)
+export DOTFILES_INTERNAL_DOMAIN="corp.example.invalid"
+# 사내 프록시 CA 인증서 본문 앞부분 (NODE_EXTRA_CA_CERTS 파일 포함 여부를 grep).
+# 추가 CA(선택, 미포함 시 WARN)는 공백 구분 목록.
+export DOTFILES_PROXY_CA_FINGERPRINT="EXAMPLEPROXYCAFINGERPRINT"
+export DOTFILES_EXTRA_CA_FINGERPRINTS=""
+
 # 사내 LLM gateway URL (setup.sh 가 opencode/opencode.json.internal 렌더링에 사용, #1967)
 export DOTFILES_OPENCODE_BASE_URL="http://llm-gateway.example.invalid/v1"
 
