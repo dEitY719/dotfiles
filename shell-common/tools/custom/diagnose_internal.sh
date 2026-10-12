@@ -180,27 +180,26 @@ main() {
         else
             pass "settings.json 실파일 존재"
         fi
-        if jq empty "$SETTINGS_FILE" 2>/dev/null; then
-            pass "JSON 형식 유효 ($SETTINGS_FILE)"
-        else
-            fail "JSON 형식 오류 ($SETTINGS_FILE) → .hooks/.statusLine 비교 생략"
-        fi
         if ! jq empty "$SETTINGS_FILE" 2>/dev/null; then
-            : # 파싱 실패 시 SSOT 비교는 오해만 낳는다 (빈 문자열 대 SSOT).
-        elif [ -f "$_ssot" ]; then
-            # 비교 기준(jq -S -c)은 session-start-settings-drift.sh 와 동일.
-            if [ "$(jq -S -c '.hooks // {}' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null)" ]; then
-                pass ".hooks 가 dotfiles SSOT 와 일치"
-            else
-                fail ".hooks 가 dotfiles SSOT 와 다름 → $_fix_hint"
-            fi
-            if [ "$(jq -S -c '.statusLine // null' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.statusLine // null' "$SETTINGS_FILE" 2>/dev/null)" ]; then
-                pass ".statusLine 이 dotfiles SSOT 와 일치"
-            else
-                fail ".statusLine 이 dotfiles SSOT 와 다름 → $_fix_hint"
-            fi
+            # 파싱 실패 시 SSOT 비교는 오해만 낳는다 (빈 문자열 대 SSOT).
+            fail "JSON 형식 오류 ($SETTINGS_FILE) → .hooks/.statusLine 비교 생략"
         else
-            warn "dotfiles SSOT 없음: $_ssot → .hooks/.statusLine 비교 생략"
+            pass "JSON 형식 유효 ($SETTINGS_FILE)"
+            if [ -f "$_ssot" ]; then
+                # 비교 기준(jq -S -c)은 session-start-settings-drift.sh 와 동일.
+                if [ "$(jq -S -c '.hooks // {}' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null)" ]; then
+                    pass ".hooks 가 dotfiles SSOT 와 일치"
+                else
+                    fail ".hooks 가 dotfiles SSOT 와 다름 → $_fix_hint"
+                fi
+                if [ "$(jq -S -c '.statusLine // null' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.statusLine // null' "$SETTINGS_FILE" 2>/dev/null)" ]; then
+                    pass ".statusLine 이 dotfiles SSOT 와 일치"
+                else
+                    fail ".statusLine 이 dotfiles SSOT 와 다름 → $_fix_hint"
+                fi
+            else
+                warn "dotfiles SSOT 없음: $_ssot → .hooks/.statusLine 비교 생략"
+            fi
         fi
         ux_info "auth/env/모델 설정은 gateway-cli 영역 → 'gateway-cli verify' 로 확인"
     fi
