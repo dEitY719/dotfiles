@@ -45,7 +45,8 @@ _make_enc() {
         --filename-override "$ENC" /dev/stdin >"$ENC"
     # The ciphertext must not carry the fake values in the clear.
     # `! cmd` is exempt from errexit, so test the match explicitly.
-    if grep -q 'fake' "$ENC"; then
+    # Long markers only: a short one like 'fake' can match base64 by chance.
+    if grep -qF -e 'fake tok' -e 'fake-exa-key' "$ENC"; then
         echo "ciphertext leaks plaintext" >&2
         return 1
     fi
@@ -58,6 +59,9 @@ _sr() {
 
 # Values that break naive parsing: spaces, both quotes, '=', $(...), backticks,
 # and an escaped newline (sops keeps it as the two characters \n).
+# The expected DQ/SQ/NL forms are what sops 3.x dotenv emits on decrypt (kept
+# quotes, re-escaped \n); a sops upgrade that changes that store fails here
+# first, before secret-run is suspected.
 _FAKE='SP=fake tok with spaces
 DQ="fake quoted"
 SQ='"'"'fake single'"'"'
@@ -110,8 +114,8 @@ SH
     age-keygen -o "$KEY_FILE.other" 2>/dev/null
     mv -f "$KEY_FILE.other" "$KEY_FILE"
     chmod 600 "$KEY_FILE"
-    _sr "dotfiles_secret_run sh -c 'echo ran:\${SP-none}'"
-    assert_success
+    _sr "dotfiles_secret_run sh -c 'echo ran:\${SP-none}; exit 3'"
+    [ "$status" -eq 3 ]
     assert_output --partial "could not decrypt"
     assert_output --partial "ran:none"
     refute_output --partial "fake"
