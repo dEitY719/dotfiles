@@ -176,10 +176,13 @@ _hermes_install_cli
 # the request comes back 401. See hermes-help pitfalls.
 # Values come from the repo's .enc.env first (#2096); llm_endpoint.local.sh
 # stays as the fallback for a PC without the age key or without those keys.
+# No per-key merge: if .enc.env has either key, llm_endpoint.local.sh is not read.
 # Only the two HERMES_LLM_* keys are exported, and Part 3 runs in a subshell
 # so they never reach Parts 4-6.
 _hermes_load_enc_endpoint() {
 	local plain
+	# Hermetic runs (tests) skip the real .enc.env unless one is named explicitly.
+	[ -n "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -z "${DOTFILES_ENC_ENV-}" ] && return 1
 	plain=$(_dotfiles_secret_decrypt) || return 1
 	# Inherited values must not pass for .enc.env hits (runs in Part 3's subshell).
 	unset HERMES_LLM_BASE_URL HERMES_LLM_API_KEY
