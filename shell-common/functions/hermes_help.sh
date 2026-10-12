@@ -9,6 +9,7 @@ _hermes_help_summary() {
     ux_bullet_sub "concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트"
     ux_bullet_sub "install: 공식 install.sh | ./hermes/setup.sh 가 하는 6단계"
     ux_bullet_sub "config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT"
+    ux_bullet_sub "update: hermes update | 사내 TLS 프록시 UV_SYSTEM_CERTS | sitecustomize 재설치"
     ux_bullet_sub "pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA | Python 3.13 AKI | 사내 GHES 스킬 설치"
     ux_bullet_sub "browser: agent-browser 설치 옵션"
     ux_bullet_sub "example | related"
@@ -20,6 +21,7 @@ _hermes_help_list_sections() {
     ux_bullet_sub "concept"
     ux_bullet_sub "install"
     ux_bullet_sub "config"
+    ux_bullet_sub "update"
     ux_bullet_sub "pitfalls"
     ux_bullet_sub "browser"
     ux_bullet_sub "example"
@@ -79,6 +81,20 @@ _hermes_help_rows_config() {
     ux_bullet "런타임 config (\$HOME/.hermes/config.yaml) 은 첫 setup 때 hermes/config.yaml 에서 복사된 ${UX_BOLD}로컬 실파일${UX_RESET} — 이후 setup 은 손대지 않는다"
     ux_bullet "hermes 자신의 쓰기(OAuth·모델 선택·_config_version)도, api_key 주입도 이 로컬 파일에만 남고 저장소 추적 파일에는 절대 도달하지 않는다"
     ux_bullet "레거시 심링크가 남아 있으면 setup.sh 가 현재 내용을 보존한 채 실파일로 detach 한다"
+}
+
+_hermes_help_rows_update() {
+    ux_bullet "기본: ${UX_BOLD}hermes update${UX_RESET} — 기본 채널 stable. 매 커밋을 따라가려면 ${UX_BOLD}hermes update --set-channel main${UX_RESET}"
+    ux_bullet "확인: ${UX_BOLD}hermes --version${UX_RESET} · ${UX_BOLD}hermes doctor${UX_RESET}"
+
+    ux_section "사내 TLS 인터셉션 프록시 뒤에서 업데이트"
+    ux_bullet "${UX_BOLD}UV_SYSTEM_CERTS=1 hermes update${UX_RESET}"
+    ux_bullet "증상: Installing Python dependencies failed — ${UX_BOLD}invalid peer certificate: UnknownIssuer${UX_RESET} (uv sync)"
+    ux_bullet "원인: uv 는 기본으로 내장 루트 CA 만 신뢰 — 프록시가 재서명한 PyPI 인증서를 모른다. 시스템 저장소는 프록시 CA 를 이미 신뢰"
+    ux_bullet "다음 증상: ${UX_BOLD}Missing Authority Key Identifier${UX_RESET} (api.github.com · cua-driver 다운로드) — 업데이트가 Hermes Python 런타임을 새로 깔며 sitecustomize.py 가 빠진 것"
+    ux_bullet "해결: ${UX_BOLD}./hermes/setup.sh${UX_RESET} 재실행 (Part 6) 또는 ${UX_BOLD}cp hermes/sitecustomize.py ~/.hermes/tools/python-*/lib/python3.*/${UX_RESET} 후 update 재시도"
+    ux_bullet "update 를 돌릴 때마다 sitecustomize.py 가 다시 지워질 수 있다 — update 직후 재설치 후 ${UX_BOLD}hermes pm install cua-driver${UX_RESET} 처럼 실패한 후속만 재시도"
+    ux_bullet "상세: ${UX_BOLD}hermes-help pitfalls${UX_RESET} 4번 (AKI)"
 }
 
 _hermes_help_rows_pitfalls() {
@@ -155,6 +171,7 @@ _hermes_help_section_rows() {
         concept)              _hermes_help_rows_concept ;;
         install)              _hermes_help_rows_install ;;
         config|configure)     _hermes_help_rows_config ;;
+        update|upgrade)       _hermes_help_rows_update ;;
         pitfall|pitfalls)     _hermes_help_rows_pitfalls ;;
         browser|agent-browser) _hermes_help_rows_browser ;;
         example|examples)     _hermes_help_rows_example ;;
@@ -172,6 +189,7 @@ _hermes_help_full() {
     _hermes_help_render_section "Core Concept" _hermes_help_rows_concept
     _hermes_help_render_section "Install" _hermes_help_rows_install
     _hermes_help_render_section "Configuration" _hermes_help_rows_config
+    _hermes_help_render_section "Update" _hermes_help_rows_update
     _hermes_help_render_section "Pitfalls" _hermes_help_rows_pitfalls
     _hermes_help_render_section "agent-browser" _hermes_help_rows_browser
     _hermes_help_render_section "Practical Example" _hermes_help_rows_example

@@ -16,6 +16,7 @@
     - concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트
     - install: 공식 install.sh | ./hermes/setup.sh 가 하는 6단계
     - config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT
+    - update: hermes update | 사내 TLS 프록시 UV_SYSTEM_CERTS | sitecustomize 재설치
     - pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA | Python 3.13 AKI | 사내 GHES 스킬 설치
     - browser: agent-browser 설치 옵션
     - example | related
@@ -77,6 +78,20 @@
 - 런타임 config ($HOME/.hermes/config.yaml) 은 첫 setup 때 hermes/config.yaml 에서 복사된 로컬 실파일 — 이후 setup 은 손대지 않는다
 - hermes 자신의 쓰기(OAuth·모델 선택·_config_version)도, api_key 주입도 이 로컬 파일에만 남고 저장소 추적 파일에는 절대 도달하지 않는다
 - 레거시 심링크가 남아 있으면 setup.sh 가 현재 내용을 보존한 채 실파일로 detach 한다
+
+### update
+
+- 기본: hermes update — 기본 채널 stable. 매 커밋을 따라가려면 hermes update --set-channel main
+- 확인: hermes --version · hermes doctor
+**사내 TLS 인터셉션 프록시 뒤에서 업데이트**
+
+- UV_SYSTEM_CERTS=1 hermes update
+- 증상: Installing Python dependencies failed — invalid peer certificate: UnknownIssuer (uv sync)
+- 원인: uv 는 기본으로 내장 루트 CA 만 신뢰 — 프록시가 재서명한 PyPI 인증서를 모른다. 시스템 저장소는 프록시 CA 를 이미 신뢰
+- 다음 증상: Missing Authority Key Identifier (api.github.com · cua-driver 다운로드) — 업데이트가 Hermes Python 런타임을 새로 깔며 sitecustomize.py 가 빠진 것
+- 해결: ./hermes/setup.sh 재실행 (Part 6) 또는 cp hermes/sitecustomize.py ~/.hermes/tools/python-*/lib/python3.*/ 후 update 재시도
+- update 를 돌릴 때마다 sitecustomize.py 가 다시 지워질 수 있다 — update 직후 재설치 후 hermes pm install cua-driver 처럼 실패한 후속만 재시도
+- 상세: hermes-help pitfalls 4번 (AKI)
 
 ### pitfalls
 
