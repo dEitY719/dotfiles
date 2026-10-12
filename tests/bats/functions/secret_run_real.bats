@@ -51,8 +51,9 @@ _make_enc() {
     fi
 }
 
+# Run $1 in a fresh dotfiles shell ($2: run_in_bash default, or run_in_zsh).
 _sr() {
-    run_in_bash "export SOPS_AGE_KEY_FILE='$KEY_FILE' DOTFILES_ENC_ENV='$ENC'; cd '$WORK' && $1"
+    "${2:-run_in_bash}" "export SOPS_AGE_KEY_FILE='$KEY_FILE' DOTFILES_ENC_ENV='$ENC'; cd '$WORK' && $1"
 }
 
 # Values that break naive parsing: spaces, both quotes, '=', $(...), backticks,
@@ -97,7 +98,7 @@ SH
 @test "real sops: -k limits injection and works under zsh" {
     _need sops age age-keygen zsh
     _make_enc "$_FAKE"
-    run_in_zsh "export SOPS_AGE_KEY_FILE='$KEY_FILE' DOTFILES_ENC_ENV='$ENC'; cd '$WORK' && dotfiles_secret_run -k CMD -k EQ sh -c 'echo \"\$CMD|\$EQ|\${SP-none}\"; exit 4'"
+    _sr "dotfiles_secret_run -k CMD -k EQ sh -c 'echo \"\$CMD|\$EQ|\${SP-none}\"; exit 4'" run_in_zsh
     [ "$status" -eq 4 ]
     assert_output '$(touch pwned)|fake=a==b|none'
     [ ! -e "$WORK/pwned" ]
