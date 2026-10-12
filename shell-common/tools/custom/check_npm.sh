@@ -110,6 +110,7 @@ check_npm_environment() {
 
     ux_section "CA/SSL Settings"
     _format_setting "NODE_EXTRA_CA_CERTS" "${NODE_EXTRA_CA_CERTS:-[NOT SET]}"
+    _format_setting "NODE_USE_SYSTEM_CA" "${NODE_USE_SYSTEM_CA:-[NOT SET]}"
     echo ""
 }
 
