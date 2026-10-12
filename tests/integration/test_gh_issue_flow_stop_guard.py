@@ -3193,7 +3193,7 @@ def test_last_assistant_message_template_matches_transcript_rule(tmp_path: Path)
     via_transcript = _run_hook(
         _hook_event(_write_transcript(in_dir, [_user_text("/gh-flow:issue 2087"), _assistant_text(template)]))
     )
-    assert via_stdin.stdout.strip() == via_transcript.stdout.strip()
+    assert via_stdin.stdout.strip() == via_transcript.stdout.strip() == "", "template text is a terminal match under #608's rule"
 
 
 def test_last_assistant_message_non_string_ignored(tmp_path: Path) -> None:
@@ -3206,3 +3206,28 @@ def test_missing_last_assistant_message_matches_transcript_scan(tmp_path: Path) 
     transcript = _boundary_only_transcript(tmp_path)
     result = _run_hook(_hook_event(transcript))
     assert json.loads(result.stdout).get("decision") == "block"
+
+
+@pytest.mark.parametrize(
+    "report",
+    [
+        "gh-flow:issue complete (#2088)\n  PR URL: https://github.com/example/repo/pull/1",
+        "gh-flow:issue stopped at step 2/6\n  Resume after fix: /gh-flow:issue 2088",
+        "gh-flow-issue complete (#2088)",
+        "trailing text before\n" + _UNFLUSHED_BLOCK_REPORT + "\nand text after",
+    ],
+)
+def test_last_assistant_message_terminal_variants_allow_stop(tmp_path: Path, report: str) -> None:
+    result = _run_hook(_hook_event(_boundary_only_transcript(tmp_path), last_assistant_message=report))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_last_assistant_message_terminal_allows_with_partial_sub_skills(tmp_path: Path) -> None:
+    """`seen` is not consulted once terminal: a late-flushed report allows even mid-chain."""
+    transcript = _write_transcript(
+        tmp_path, [_user_text("/gh-flow:issue 2088"), _assistant_skill("gh-issue-implement")]
+    )
+    result = _run_hook(_hook_event(transcript, last_assistant_message=_UNFLUSHED_BLOCK_REPORT))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
