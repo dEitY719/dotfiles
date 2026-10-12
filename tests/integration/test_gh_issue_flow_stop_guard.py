@@ -3193,7 +3193,9 @@ def test_last_assistant_message_template_matches_transcript_rule(tmp_path: Path)
     via_transcript = _run_hook(
         _hook_event(_write_transcript(in_dir, [_user_text("/gh-flow:issue 2087"), _assistant_text(template)]))
     )
-    assert via_stdin.stdout.strip() == via_transcript.stdout.strip() == "", "template text is a terminal match under #608's rule"
+    assert via_stdin.stdout.strip() == via_transcript.stdout.strip() == "", (
+        "template text is a terminal match under #608's rule"
+    )
 
 
 def test_last_assistant_message_non_string_ignored(tmp_path: Path) -> None:
