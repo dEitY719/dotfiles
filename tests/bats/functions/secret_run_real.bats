@@ -44,7 +44,11 @@ _make_enc() {
     printf '%s' "$1" | sops --config "$REPO/.sops.yaml" -e --input-type dotenv --output-type dotenv \
         --filename-override "$ENC" /dev/stdin >"$ENC"
     # The ciphertext must not carry the fake values in the clear.
-    ! grep -q 'fake' "$ENC"
+    # `! cmd` is exempt from errexit, so test the match explicitly.
+    if grep -q 'fake' "$ENC"; then
+        echo "ciphertext leaks plaintext" >&2
+        return 1
+    fi
 }
 
 _sr() {
@@ -81,7 +85,8 @@ SH
     assert_line 'BT=[`touch pwned2`]'
     assert_line 'NL=[fake1\nfake2]'
     assert_line "leak=unset"
-    [ ! -e "$WORK/pwned" ] && [ ! -e "$WORK/pwned2" ]
+    [ ! -e "$WORK/pwned" ]
+    [ ! -e "$WORK/pwned2" ]
     # No plaintext anywhere: work dir empty, repo dir holds only config + ciphertext.
     [ -z "$(ls -A "$WORK")" ]
     [ "$(ls -A "$REPO" | sort | tr '\n' ' ')" = ".enc.env .sops.yaml " ]
