@@ -35,7 +35,7 @@ _dotfiles_secret_decrypt() {
         ux_warning ".enc.env not found: ${enc}" >&2
         return 1
     fi
-    key="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/keys.txt}"
+    key=$(_senv_key_file)
     if [ ! -f "$key" ]; then
         ux_warning "age key not found: ${key}; .enc.env values not loaded" >&2
         ux_info "Next: senv key import" >&2
