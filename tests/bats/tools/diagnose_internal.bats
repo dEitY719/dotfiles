@@ -144,6 +144,7 @@ _path_without() {
     mkdir -p "$bin"
     for f in /usr/local/bin/* /usr/bin/* /bin/*; do
         [ "${f##*/}" = "$1" ] && continue
+        [ -e "$f" ] || continue # 안 맞은 glob('*' 리터럴)·깨진 링크는 건너뛴다
         ln -s "$f" "$bin/" 2>/dev/null || true # 앞 디렉터리 우선, 중복은 무시
     done
     printf '%s' "$bin"
@@ -274,5 +275,6 @@ _path_without() {
     run env PATH="$(_path_without jq)" bash "$SCRIPT"
     assert_output --partial "[WARN] jq 미설치 → settings.json 검증 생략"
     refute_output --partial "JSON 형식 오류"
-    assert_output --partial "PASS:"
+    refute_output --partial "[PASS] JSON 형식 유효"
+    refute_output --partial ".hooks 가 dotfiles SSOT"
 }
