@@ -22,6 +22,13 @@ _source_node() {
     assert_output "0"
 }
 
+@test "node.sh: non-interactive shell without DOTFILES_FORCE_INIT exports nothing" {
+    run env -u NODE_USE_SYSTEM_CA -u DOTFILES_FORCE_INIT \
+        bash -c ". '${SHELL_COMMON}/env/node.sh'; printf '%s' \"\${NODE_USE_SYSTEM_CA-unset}\""
+    assert_success
+    assert_output "unset"
+}
+
 @test "node.sh: the export reaches child processes" {
     run env -u NODE_USE_SYSTEM_CA DOTFILES_FORCE_INIT=1 \
         bash -c ". '${SHELL_COMMON}/env/node.sh'; sh -c 'printf %s \"\$NODE_USE_SYSTEM_CA\"'"
