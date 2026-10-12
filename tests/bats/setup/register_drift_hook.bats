@@ -39,6 +39,7 @@ JSON
     cp "$LIVE" "$TEST_TEMP_HOME/live-before.json"
 
     printf 'internal' >"$HOME/.dotfiles-setup-mode"
+    _ssot_with_drift_hook
 }
 
 teardown() {
@@ -56,7 +57,7 @@ teardown() {
 DRIFT_HOOK_CMD='/opt/checkout/dotfiles/claude/hooks/session-start-settings-drift.sh'
 REG_BACKUP_SUFFIX='.pre-sessionstart-hook-reg.backup'
 
-# Overwrite the shared fixture's SSOT with one that DOES define the drift-heal
+# Isolated SSOT (written by setup) that DOES define the drift-heal
 # hook (plus an unrelated sibling hook, so we can prove only one entry matches).
 _ssot_with_drift_hook() {
     cat >"$ISO/claude/settings.json" <<JSON
@@ -84,7 +85,6 @@ _assert_other_keys_preserved_and_backed_up() {
 }
 
 @test "#1364: live settings.json already registering the drift hook is left untouched" {
-    _ssot_with_drift_hook
     cat >"$LIVE" <<JSON
 {
   "apiKeyHelper": "gateway-cli token",
@@ -110,7 +110,6 @@ JSON
 }
 
 @test "#1364: missing drift-hook entry is re-registered, siblings preserved" {
-    _ssot_with_drift_hook
     # The SPOF as it actually shows up: .hooks.SessionStart survives but the
     # drift-heal entry is gone (here: another tool rewrote the array).
     cat >"$LIVE" <<'JSON'
@@ -144,7 +143,6 @@ JSON
 }
 
 @test "#1364: live settings.json with .hooks entirely absent gets the hook back" {
-    _ssot_with_drift_hook
     # The literal bootstrap deadlock from the issue body: jq 'del(.hooks)'.
     cat >"$LIVE" <<'JSON'
 {
@@ -166,7 +164,6 @@ JSON
 }
 
 @test "#1364: re-registration is idempotent across two runs" {
-    _ssot_with_drift_hook
     run bash -c 'jq "del(.hooks)" "$1" > "$1.t" && mv "$1.t" "$1"' _ "$LIVE"
     assert_success
 
@@ -185,7 +182,6 @@ JSON
 }
 
 @test "#1364: never creates the live settings.json when it is absent" {
-    _ssot_with_drift_hook
     rm -f "$LIVE"
 
     run bash "$SCRIPT"
@@ -196,7 +192,6 @@ JSON
 }
 
 @test "#1364: a symlinked live settings.json is never rewritten" {
-    _ssot_with_drift_hook
     rm -f "$LIVE"
     cat >"$TEST_TEMP_HOME/symlink-target.json" <<'JSON'
 { "apiKeyHelper": "gateway-cli token" }
@@ -215,7 +210,6 @@ JSON
 }
 
 @test "register-drift-hook: non-internal mode is a silent no-op" {
-    _ssot_with_drift_hook
     run bash -c 'jq "del(.hooks)" "$1" > "$1.t" && mv "$1.t" "$1"' _ "$LIVE"
     cp "$LIVE" "$TEST_TEMP_HOME/live-before.json"
     printf 'external' >"$HOME/.dotfiles-setup-mode"

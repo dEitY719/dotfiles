@@ -16,9 +16,8 @@
 # Why it now HEALS instead of only warning (2026-08-18): the org's LLM Gateway
 # migration made `gateway-cli setup` the owner of the internal-PC live
 # settings.json (apiKeyHelper / credential keys / cleanupPeriodDays / env.*),
-# and the old re-seed merge — the ONLY thing that
-# ever carried SSOT `.hooks`/`.statusLine` changes into an internal PC's live
-# file — was deprecated to stop the two writers from ping-ponging. That left
+# and the old re-seed merge — the ONLY thing that ever carried SSOT
+# `.hooks`/`.statusLine` changes into an internal PC's live file — was deprecated to stop the two writers from ping-ponging. That left
 # internal PCs with a detector whose remediation ("re-run the re-seed") no
 # longer does anything. Worse, gateway-cli's own `setup` OVERWRITES
 # `.statusLine.command` with its (currently placeholder-printing) binary, so

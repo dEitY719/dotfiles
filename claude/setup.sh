@@ -502,8 +502,7 @@ EOF
 # 사내 PC 의 live ~/.claude/settings.json 은 (2026-08-18 부터) `gateway-cli
 # setup` 이 쓴다 — 구 SSOT+오버레이 jq deep-merge (#687)는 폐지됐다.
 # `env.ANTHROPIC_BASE_URL` 등은 예전엔 레거시 게이트웨이 키(#677 O-1)로
-# 취급돼 strip 대상이었지만,
-# 지금은 gateway-cli 가 쓰는 정상 키다 — strip 로직 자체가 없어졌다.
+# 취급돼 strip 대상이었지만, 지금은 gateway-cli 가 쓰는 정상 키다 — strip 로직 자체가 없어졌다.
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
 

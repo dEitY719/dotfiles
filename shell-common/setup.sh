@@ -43,7 +43,8 @@ fi
 
 # Placeholder marker of the tracked *.local.example templates (#1944/#1969):
 # fake hosts end in `.example.invalid`, fake cert files are `example-*.crt`;
-# non-domain fakes (SSH key name, usage id, review model id) are listed one by one — keep in sync with the templates (#2021).
+# non-domain fakes (SSH key name, usage id, review model id) are listed one by
+# one — keep in sync with the templates (#2021).
 LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt|id_rsa_example|"EMP00000"|example-corp/example-model'
 
 # Fake gateway URL of opencode/opencode.json.internal, replaced at setup time
