@@ -139,6 +139,7 @@ _mk_cert() {
 }
 
 # $1 만 뺀 PATH 디렉터리 — 나머지 도구는 그대로 쓴다. 경로는 stdout.
+# shortcut: 시스템 bin 3곳만 링크한다 — bash 가 그 밖에만 있는 PC 면 테스트가 깨진다, 그때 PATH 전체를 훑도록 넓힌다.
 _path_without() {
     local bin="$BATS_TEST_TMPDIR/no-$1" f
     mkdir -p "$bin"
@@ -216,6 +217,8 @@ _path_without() {
     printf 'export DOTFILES_INTERNAL_DOMAIN=corp.test\n' >"$iso/shell-common/env/internal.local.sh"
     run env -u DOTFILES_SKIP_LOCAL_ENV -u DOTFILES_INTERNAL_DOMAIN no_proxy=localhost,.corp.test \
         bash "$iso/$SCRIPT_REL"
+    # exit 1 = 끝까지 돌고 다른 항목(CA/PATH/프록시) FAIL — 복사 목록 누락으로 중간에 죽으면 다른 코드.
+    assert_failure 1
     assert_output --partial "[PASS] no_proxy 에 corp.test 포함됨"
     refute_output --partial "no_proxy 사내 도메인: internal.local.sh 미설정"
     # 같은 트리라도 SKIP 가드가 켜지면 로딩하지 않는다.
@@ -271,7 +274,10 @@ _path_without() {
     printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
     mkdir -p "$HOME/.claude"
     printf '{not json' >"$HOME/.claude/settings.json"
-    run env PATH="$(_path_without jq)" bash "$SCRIPT"
+    local bin
+    bin="$(_path_without jq)"
+    [ -z "$(PATH="$bin" command -v jq)" ] # stub PATH 에서 jq 가 정말 빠졌는지
+    run env PATH="$bin" bash "$SCRIPT"
     assert_output --partial "[WARN] jq 미설치 → settings.json 검증 생략"
     refute_output --partial "JSON 형식 오류"
     refute_output --partial "[PASS] JSON 형식 유효"
