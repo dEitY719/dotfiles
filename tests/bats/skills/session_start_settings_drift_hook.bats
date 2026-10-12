@@ -7,8 +7,8 @@
 # (claude/settings.json, resolved relative to the hook's own dir) against the
 # live ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json. Non-internal modes
 # get an advisory; internal mode auto-heals those two keys in place
-# (2026-08-18 — gateway-cli owns the rest of the live file, and aws/setup.sh's
-# old re-seed merge is deprecated, so nothing else carries SSOT changes over).
+# (2026-08-18 — gateway-cli owns the rest of the live file, and the old
+# re-seed merge is gone, so nothing else carries SSOT changes over).
 #
 # Cases:
 #   1. non-SessionStart event   → exit 0, silent
@@ -104,7 +104,7 @@ JSON
 }
 
 @test "settings-drift: overlay-style extra top-level key is ignored (only .hooks compared)" {
-    # Live has identical .hooks but an extra Bedrock-overlay-style key —
+    # Live has identical .hooks but an extra overlay-style key —
     # must NOT be flagged as drift.
     cat >"$LIVE_DIR/settings.json" <<'JSON'
 { "model": "global.anthropic.claude-opus-4-7",
@@ -125,7 +125,7 @@ JSON
 }
 
 # --- Internal-mode self-heal (2026-08-18) ---------------------------------
-# aws/setup.sh no longer re-seeds settings.json (gateway-cli owns the file), so
+# Nothing re-seeds settings.json any more (gateway-cli owns the file), so
 # on internal PCs the hook patches the two dotfiles-owned keys itself.
 
 @test "settings-drift: internal mode + .hooks drift → live patched from SSOT + backup" {
@@ -169,8 +169,7 @@ JSON
     # Live: gateway-cli-owned keys + a clobbered statusLine.
     cat >"$LIVE_DIR/settings.json" <<'JSON'
 { "apiKeyHelper": "gateway-cli token",
-  "awsCredentialExport": "gateway-cli creds",
-  "awsAuthRefresh": "gateway-cli refresh",
+  "credentialExport": "gateway-cli creds",
   "cleanupPeriodDays": 365000,
   "env": { "ANTHROPIC_BASE_URL": "https://gateway.internal" },
   "model": "gateway-opus",
@@ -196,10 +195,8 @@ JSON
     # Every gateway-cli / Claude-Code-native key survives byte-for-byte.
     run jq -r '.apiKeyHelper' "$LIVE_DIR/settings.json"
     [ "$output" = "gateway-cli token" ]
-    run jq -r '.awsCredentialExport' "$LIVE_DIR/settings.json"
+    run jq -r '.credentialExport' "$LIVE_DIR/settings.json"
     [ "$output" = "gateway-cli creds" ]
-    run jq -r '.awsAuthRefresh' "$LIVE_DIR/settings.json"
-    [ "$output" = "gateway-cli refresh" ]
     run jq -r '.cleanupPeriodDays' "$LIVE_DIR/settings.json"
     [ "$output" = "365000" ]
     run jq -r '.env.ANTHROPIC_BASE_URL' "$LIVE_DIR/settings.json"

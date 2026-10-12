@@ -43,9 +43,8 @@ fi
 
 # Placeholder marker of the tracked *.local.example templates (#1944/#1969):
 # fake hosts end in `.example.invalid`, fake cert files are `example-*.crt`;
-# non-domain fakes (SSH key name, usage id, CA fingerprint, AWS account id,
-# review model id) are listed one by one — keep in sync with the templates (#2021).
-LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt|id_rsa_example|"EMP00000"|"000000000000"|EXAMPLEPROXYCAFINGERPRINT|example-corp/example-model'
+# non-domain fakes (SSH key name, usage id, review model id) are listed one by one — keep in sync with the templates (#2021).
+LOCAL_PLACEHOLDER_ERE='example\.invalid|/example-[a-z-]*\.crt|id_rsa_example|"EMP00000"|example-corp/example-model'
 
 # Fake gateway URL of opencode/opencode.json.internal, replaced at setup time
 # with DOTFILES_OPENCODE_BASE_URL from env/internal.local.sh (#1967).
@@ -223,8 +222,8 @@ copy_local_files() {
         case "$environment" in
             internal)
                 # Internal company PC: install ALL .local.example files.
-                # Bedrock 으로 통일된 #677 이후, claude.local.sh 에 사내 게이트웨이
-                # ANTHROPIC_BASE_URL/AUTH_TOKEN/MODEL 을 inject 하지 않는다 (#683 F-1).
+                # claude.local.sh 에 사내 게이트웨이 ANTHROPIC_BASE_URL/AUTH_TOKEN/
+                # MODEL 을 inject 하지 않는다 (#683 F-1).
                 # CLAUDE_ENABLED_ACCOUNTS 도 shell-common/env/claude.sh 가 setup-mode
                 # 기준으로 "work" (single-account) 를 SSOT 로 export 하므로 여기서
                 # 덮어쓰지 않는다.

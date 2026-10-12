@@ -341,7 +341,7 @@ if [ -n "$session_id" ] && [ -f "$_cw_file" ] && read -r _cw_t _cw_ttl _ <"$_cw_
 fi
 usage_group="${usage_group:+${usage_group} }${ttl_info}"
 
-# Bedrock cost display (internal only)
+# Usage-API cost display (internal only)
 SETUP_MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 
 # Usage-API URL and employee ID live in the gitignored internal.local.sh
@@ -359,7 +359,7 @@ cost_info=""
 if [ "$SETUP_MODE" = "internal" ] && [ -n "${DOTFILES_CLAUDE_USAGE_ID:-}" ] &&
     [ -n "${DOTFILES_CLAUDE_USAGE_API_URL:-}" ]; then
     _BUDGET=175
-    _CACHE_FILE="${TMPDIR:-/tmp}/.claude_bedrock_cost_cache"
+    _CACHE_FILE="${TMPDIR:-/tmp}/.claude_usage_cost_cache"
     _CACHE_TTL=300
     _API_URL="${DOTFILES_CLAUDE_USAGE_API_URL}?id=${DOTFILES_CLAUDE_USAGE_ID}"
     _now=$(date +%s)

@@ -17,13 +17,12 @@
 #
 # Internal mode 에서 ~/.claude/settings.json 은 (2026-08-18 부터) 조직 LLM
 # Gateway 전환 도구 `gateway-cli setup` 이 소유·작성한다 — dotfiles 는 이
-# 파일을 만들거나 덮어쓰지 않는다. aws/setup.sh 의 구 SSOT+Bedrock 오버레이
-# jq deep-merge(#687)는 폐지됐다. 본 스크립트는 internal 분기에서
+# 파일을 만들거나 덮어쓰지 않는다. 구 SSOT+오버레이 jq deep-merge(#687)는
+# 폐지됐다. 본 스크립트는 internal 분기에서
 # settings.json symlink 를 만들지 않으며, dotfiles SSOT 의 `.hooks`/
 # `.statusLine` 만 SessionStart 훅(claude/hooks/session-start-settings-drift.sh)
 # 이 사내 모드에서 live 파일에 자동 복구한다. ~/.claude/settings.local.json 은
-# #924 이후 개인 override 의 정식 슬롯이라 본 스크립트도 aws/setup.sh 도
-# 더 이상 건드리지 않는다.
+# #924 이후 개인 override 의 정식 슬롯이라 본 스크립트는 건드리지 않는다.
 #
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
@@ -501,9 +500,9 @@ EOF
 
 # Note: 이전에 있던 `_print_internal_local_env_guidance` 는 #683 F-2 에서 제거.
 # 사내 PC 의 live ~/.claude/settings.json 은 (2026-08-18 부터) `gateway-cli
-# setup` 이 쓴다 — aws/setup.sh 의 구 SSOT+Bedrock 오버레이 jq deep-merge
-# (#687)는 폐지됐다. `env.ANTHROPIC_BASE_URL` 등은 예전엔 Bedrock 과
-# 양립 불가한 레거시 게이트웨이 키(#677 O-1)로 취급돼 strip 대상이었지만,
+# setup` 이 쓴다 — 구 SSOT+오버레이 jq deep-merge (#687)는 폐지됐다.
+# `env.ANTHROPIC_BASE_URL` 등은 예전엔 레거시 게이트웨이 키(#677 O-1)로
+# 취급돼 strip 대상이었지만,
 # 지금은 gateway-cli 가 쓰는 정상 키다 — strip 로직 자체가 없어졌다.
 
 # --- Main Script Logic (issue #287, Phase 1: multi-account) ---
@@ -562,9 +561,10 @@ DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.s
 
 # settings.local.json 은 dotfiles 가 직접 관리하지 않는다 (#584) — #924 부터
 # 개인 override 의 정식 슬롯. Internal-PC 의 live settings.json 자체도
-# (2026-08-18 부터) gateway-cli setup 이 소유하며 aws/setup.sh 는 더 이상
-# 이 파일을 머지하지 않는다 (구 #677 F-7 Bedrock jq-머지 폐지). 단 #1364 부터
-# drift-heal 훅 자신의 .hooks.SessionStart 등록 1건만은 aws/setup.sh 가 복구한다. 이전 게이트웨이
+# (2026-08-18 부터) gateway-cli setup 이 소유하며 dotfiles 는 이 파일을
+# 머지하지 않는다 (구 #677 F-7 jq-머지 폐지). 단 #1364 부터 drift-heal 훅
+# 자신의 .hooks.SessionStart 등록 1건만은 claude/tools/register-drift-hook.sh
+# 가 복구한다 (#2097 에서 이관). 이전 게이트웨이
 # 자동 생성 분기는 #683 F-2 에서 제거.
 
 # Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
@@ -654,23 +654,24 @@ _single_account_ensure_link() {
 #
 # settings.json 은 symlink 가 아니라 실파일이지만, (2026-08-18 부터) 그 실파일의
 # writer 는 dotfiles 가 아니라 `gateway-cli setup` (조직 LLM Gateway 전환 도구)
-# 이다. 구 #687 설계(aws/setup.sh 가 SSOT + Bedrock 오버레이를 jq deep-merge)
+# 이다. 구 #687 설계(SSOT + 오버레이를 jq deep-merge)
 # 는 폐지됐다 — gateway-cli 가 apiKeyHelper/env.* 를 직접 쓰는 같은 파일을
 # dotfiles 가 다시 덮어쓰면 두 writer 가 서로를 지우는 왕복이 되기 때문
 # (실측 사례: gateway-cli 가 .statusLine 을 자기 바이너리로 덮어씀). 그래서
 # 본 분기(이 스크립트)는 settings.json 을 아예 건드리지 않는다. dotfiles
 # SSOT 의 `.hooks`/`.statusLine` 만 SessionStart 훅(session-start-settings-
 # drift.sh)이 사내 모드에서 live 파일에 자동 복구한다. settings.local.json
-# 은 #924 이후 개인 override 의 정식 슬롯이라 본 분기도 aws/setup.sh 도
-# 건드리지 않는다. 단 예외 하나 — 그 드리프트 훅 자신의 `.hooks.SessionStart`
-# 등록이 사라지면 (별도 스크립트인) `aws/setup.sh` 가 그 1건만 되살린다
-# (F-7b, #1364).
+# 은 #924 이후 개인 override 의 정식 슬롯이라 본 분기도 건드리지 않는다.
+# 단 예외 하나 — 그 드리프트 훅 자신의 `.hooks.SessionStart` 등록이 사라지면
+# `claude/tools/register-drift-hook.sh` 가 그 1건만 되살린다 (F-7b, #1364).
 if [ "$_setup_mode" = "internal" ]; then
     log_info "Internal PC mode — single-account setup (skipping claude-accounts)"
 
     # settings.json 은 gateway-cli setup 이 소유한다 — 본 분기는 이 파일에
     # 손대지 않는다. dotfiles SSOT 변경은 session-start-settings-drift.sh 가 전파.
     _claude_install_herdr_hook "$HOME/.claude"
+    # F-7b (#1364): restore only the drift-heal hook's own registration.
+    bash "$DOTFILES_ROOT/claude/tools/register-drift-hook.sh" || true
     _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
     # skills/ stays a real directory (issue #707, F-8) so externally added
     # symlinks can be layered into it, but workspace skills are NOT composed:
@@ -691,8 +692,8 @@ if [ "$_setup_mode" = "internal" ]; then
 
     # --- Verify Links (single-account) ---
     # settings.json is intentionally absent from this list — gateway-cli
-    # setup writes it as a regular file (2026-08-18~, aws/setup.sh's #687
-    # merge is deprecated). settings.local.json is also absent — it is the
+    # setup writes it as a regular file (2026-08-18~, the #687 merge is
+    # gone). settings.local.json is also absent — it is the
     # personal-override slot (#924) and never a dotfiles symlink (#584).
     # skills/ is a real directory (#707, F-8) — workspace skills come from
     # plugins, so it may well be empty — checked as `-d` (and `! -L`).
@@ -726,7 +727,7 @@ if [ "$_setup_mode" = "internal" ]; then
     ux_info ""
 
     # settings.json 의 auth/env/모델 설정은 (2026-08-18 부터) gateway-cli setup
-    # 이 책임진다 — dotfiles 는 관여하지 않는다 (구 #677 F-7 Bedrock jq-머지
+    # 이 책임진다 — dotfiles 는 관여하지 않는다 (구 #677 F-7 jq-머지
     # 폐지). 이전의 _print_internal_local_env_guidance 호출은 #683 F-2 에서
     # 이미 제거됨.
 

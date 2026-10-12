@@ -55,7 +55,7 @@ setup_isolated_home() {
     # An isolated $HOME is NOT isolation while CLAUDE_CONFIG_DIR still points
     # at the developer's real account dir: every `${CLAUDE_CONFIG_DIR:-$HOME/.claude}`
     # consumer (statusline-command.sh, session-start-settings-drift.sh,
-    # aws/setup.sh's #1364 hook re-registration, …) would escape the sandbox and
+    # claude/tools/register-drift-hook.sh, …) would escape the sandbox and
     # write to the live config. Suites that need the override set it themselves
     # (see tests/bats/skills/session_start_settings_drift_hook.bats).
     unset CLAUDE_CONFIG_DIR

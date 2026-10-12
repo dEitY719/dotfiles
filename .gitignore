@@ -15,9 +15,8 @@ git/.git-credentials
 *.local.sh
 ssh/*.local
 shell-common/config/pg_services.list
-# AWS Bedrock host-specific override for ~/.aws/config (#677 F-6).
-# *.local.sh already covers aws/aws.local.sh; aws-config.local has no .sh
-# extension so it needs an explicit rule.
+# aws/ was removed (#2097), but internal PCs may still hold this gitignored
+# file with real internal values. Keep the rule so it can never be committed.
 aws/aws-config.local
 # Real-value siblings of tracked internal-mode configs (#1968), e.g.
 # npm/npmrc.internal.local; seeded by scripts/internal-config-migrate.sh.
