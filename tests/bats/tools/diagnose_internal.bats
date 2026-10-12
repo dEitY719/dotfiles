@@ -99,6 +99,32 @@ _home_snapshot() { (cd "$HOME" && find . | sort); }
     refute_output --partial ".hooks 가 dotfiles SSOT 와 다름"
 }
 
+@test "internal mode: correct no_proxy entry next to a wildcard passes with WARN" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    run env DOTFILES_INTERNAL_DOMAIN=corp.test no_proxy='.corp.test,*.corp.test' bash "$SCRIPT"
+    assert_output --partial "[PASS] no_proxy 에 corp.test 포함됨"
+    assert_output --partial "[WARN] no_proxy 에 와일드카드(*.corp.test) 도 있음"
+    refute_output --partial "[FAIL] no_proxy"
+}
+
+@test "internal mode: .hooks/.statusLine drift from the SSOT is a FAIL" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    printf '{"hooks":{},"statusLine":null}' >"$HOME/.claude/settings.json"
+    run bash "$SCRIPT"
+    assert_failure 1
+    assert_output --partial "[FAIL] .hooks 가 dotfiles SSOT 와 다름"
+    assert_output --partial "[FAIL] .statusLine 이 dotfiles SSOT 와 다름"
+}
+
+@test "unknown argument: usage + exit 2, no checks" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    run bash "$SCRIPT" --hlep
+    assert_failure 2
+    assert_output --partial "알 수 없는 인자: --hlep"
+    refute_output --partial "[PASS]"
+}
+
 @test "no AWS/Bedrock check revived" {
     run grep -iE 'bedrock|aws sts|AWS_CA_BUNDLE' "$SCRIPT"
     assert_failure 1

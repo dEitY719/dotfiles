@@ -64,6 +64,12 @@ main() {
             diagnose_internal_help
             return 0
             ;;
+        "") ;;
+        *)
+            ux_error "알 수 없는 인자: $1"
+            diagnose_internal_help
+            return 2
+            ;;
     esac
 
     _mode=$(_dotfiles_setup_mode)
@@ -76,6 +82,8 @@ main() {
     # env/internal.sh 가 소유한다 (DOTFILES_SKIP_LOCAL_ENV 가드 포함).
     # shellcheck source=../../env/internal.sh
     SHELL_COMMON="$DOTFILES_ROOT/shell-common" DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/internal.sh"
+    # "FINGERPRINT" 는 이름일 뿐 openssl 지문이 아니다 — PEM 본문 한 줄 안의 고유
+    # 부분 문자열을 고정 문자열로 grep 한다 (줄바꿈을 넘는 값은 매치되지 않음).
     _proxy_fp="${DOTFILES_PROXY_CA_FINGERPRINT:-}"
     _extra_fps="${DOTFILES_EXTRA_CA_FINGERPRINTS:-}"
     _domain="${DOTFILES_INTERNAL_DOMAIN:-}"
@@ -157,11 +165,22 @@ main() {
     else
         pass "no_proxy 설정됨"
         # 콤마로 나눈 항목 단위 정확 비교 — 부분 문자열(notcorp.x, corp.x.evil) 오탐 방지.
-        case ",$(printf '%s' "$_no_proxy" | tr -d ' ')," in
-            *",*.$_domain,"* | *",*$_domain,"*)
-                fail "no_proxy 에 와일드카드(*.$_domain) 사용됨 → .$_domain 으로 변경" ;;
-            *",.$_domain,"* | *",$_domain,"*) pass "no_proxy 에 $_domain 포함됨" ;;
-            *) fail "no_proxy 에 $_domain 미포함 → .$_domain 추가" ;;
+        # 올바른 항목을 먼저 본다 — 같이 있는 와일드카드는 WARN, 와일드카드뿐이면 FAIL.
+        _np=",$(printf '%s' "$_no_proxy" | tr -d ' '),"
+        _np_wild=0
+        case "$_np" in *",*.$_domain,"* | *",*$_domain,"*) _np_wild=1 ;; esac
+        case "$_np" in
+            *",.$_domain,"* | *",$_domain,"*)
+                pass "no_proxy 에 $_domain 포함됨"
+                [ "$_np_wild" = 0 ] || warn "no_proxy 에 와일드카드(*.$_domain) 도 있음 → 도구에 따라 무시되니 제거 권장"
+                ;;
+            *)
+                if [ "$_np_wild" = 1 ]; then
+                    fail "no_proxy 에 와일드카드(*.$_domain) 만 있음 → .$_domain 으로 변경"
+                else
+                    fail "no_proxy 에 $_domain 미포함 → .$_domain 추가"
+                fi
+                ;;
         esac
     fi
 
