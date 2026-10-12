@@ -110,3 +110,60 @@ teardown() {
     assert_output --partial "installed sitecustomize.py"
     cmp -s "${_BATS_REAL_DOTFILES_ROOT}/hermes/sitecustomize.py" "${lib}/sitecustomize.py"
 }
+
+# --- Part 3: endpoint values from .enc.env (#2096) --------------------------
+# sops is stubbed (plain copy of fake values); the hermes stub logs each
+# `config set` key so the test proves the value went in without printing it.
+
+_part3_stubs() {
+    cat > "${STUB_BIN}/sops" <<'STUB'
+#!/bin/sh
+for last in "$@"; do :; done
+cat "$last"
+STUB
+    cat > "${STUB_BIN}/hermes" <<STUB
+#!/bin/sh
+[ "\$1" = "--version" ] && { echo "Hermes Agent v0.0.0-stub"; exit 0; }
+[ "\$1 \$2" = "config set" ] && echo "\$3=\$4" >> "${HOME}/hermes-set.log"
+exit 0
+STUB
+    chmod +x "${STUB_BIN}/sops" "${STUB_BIN}/hermes"
+    mkdir -p "${HOME}/.config/sops/age"
+    printf 'AGE-SECRET-KEY-1FAKE\n' > "${HOME}/.config/sops/age/keys.txt"
+    chmod 600 "${HOME}/.config/sops/age/keys.txt"
+    export DOTFILES_ENC_ENV="${HOME}/fake.enc.env"
+}
+
+@test "endpoint: HERMES_LLM_* come from .enc.env and are never printed" {
+    _part3_stubs
+    printf 'HERMES_LLM_BASE_URL=https://fake-endpoint.invalid/v1\nHERMES_LLM_API_KEY=fake-key-123\nEXA_API_KEY=fake-exa\n' > "$DOTFILES_ENC_ENV"
+    run bash "${HERMES_SETUP}"
+    assert_success
+    assert_output --partial "LLM endpoint values from .enc.env"
+    assert_output --partial "set model.api_key (value not printed)"
+    refute_output --partial "fake-key-123"
+    refute_output --partial "fake-endpoint.invalid"
+    grep -qx "model.base_url=https://fake-endpoint.invalid/v1" "${HOME}/hermes-set.log"
+    grep -qx "model.api_key=fake-key-123" "${HOME}/hermes-set.log"
+}
+
+@test "endpoint: .enc.env without HERMES keys warns and falls back" {
+    _part3_stubs
+    printf 'EXA_API_KEY=fake-exa\n' > "$DOTFILES_ENC_ENV"
+    run bash "${HERMES_SETUP}"
+    assert_success
+    assert_output --partial ".enc.env has no HERMES_LLM_BASE_URL"
+    assert_output --partial "No custom LLM endpoint configured"
+    [ ! -e "${HOME}/hermes-set.log" ]
+}
+
+@test "endpoint: no age key warns and falls back without failing setup" {
+    _part3_stubs
+    rm "${HOME}/.config/sops/age/keys.txt"
+    printf 'HERMES_LLM_API_KEY=fake-key-123\n' > "$DOTFILES_ENC_ENV"
+    run bash "${HERMES_SETUP}"
+    assert_success
+    assert_output --partial "senv key import"
+    assert_output --partial "No custom LLM endpoint configured"
+    [ ! -e "${HOME}/hermes-set.log" ]
+}

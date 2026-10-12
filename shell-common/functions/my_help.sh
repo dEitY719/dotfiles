@@ -886,6 +886,7 @@ _my_help_func_registry() {
         "skill_loader	Load skills into an agent harness" \
         "aicron	Scheduled AI job manager" \
         "gcp	gcloud / GCP helpers" \
+        "dotfiles_secret_run	Run a command with the repo .enc.env secrets injected (secret-run)" \
         "wsl_check	WSL and Docker environment health check" \
         "wcp	cp that accepts Windows paths (wcp --help)" \
         "del_file	Clean backup/original garbage files" \

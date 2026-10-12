@@ -25,7 +25,7 @@ _sops_help_summary() {
     ux_bullet_sub "risks: 분실=복구 불가 | 유출=원본 비밀값 교체"
     ux_bullet_sub "trouble: unmarshal 오류 | no master key | 권한"
     ux_bullet_sub "more: 공식 문서 | 관련 명령"
-    ux_bullet_sub "details: sops-help <section>  (example: sops-help usage)"
+    ux_bullet_sub "details: sops-help <section>  (example: sops-help usage | secrets: dotfiles .enc.env, 새 키 추가)"
 }
 
 _sops_help_list_sections() {
@@ -35,6 +35,7 @@ _sops_help_list_sections() {
     ux_bullet_sub "newproject"
     ux_bullet_sub "usage"
     ux_bullet_sub "newpc"
+    ux_bullet_sub "secrets"
     ux_bullet_sub "risks"
     ux_bullet_sub "trouble"
     ux_bullet_sub "more"
@@ -116,6 +117,27 @@ _sops_help_rows_newpc() {
     ux_bullet "마무리: install-sops-age && sops-status"
 }
 
+# dotfiles repo .enc.env: personal secrets, injected per command (#2096).
+# This is the one place the add-a-key procedure is written down (F-5).
+_sops_help_rows_secrets() {
+    ux_bullet "개인 비밀값(API 키, 쿠키)은 dotfiles 루트의 .enc.env 한 곳에 둔다"
+    ux_bullet_sub "사내 식별값(호스트, 도메인, 프록시 CA 등)과 AWS 값은 넣지 않는다 (public repo: 암호문과 키 이름이 history 에 영구히 남음)"
+    ux_bullet_sub "PC 마다 다른 비밀 아닌 값(CA 경로, 활성 계정)은 *.local.sh 유지"
+    ux_table_row "secret-run [-k KEY]... <cmd>" "\$DOTFILES_ROOT/.enc.env 를 주입해 실행" "cwd 불변, 평문 파일 없음, 셸에는 안 남음"
+    ux_table_row "mcporter <args>" "EXA_API_KEY 만 주입" "mcporter.json 은 \${EXA_API_KEY:-} 로 읽음"
+    ux_table_row "mcporter-exa-setup" "mcporter.json 의 exa 를 placeholder 로 교체" "평문 키 제거, 1회 실행"
+    ux_table_row "twitter <args>" "TWITTER_AUTH_TOKEN / TWITTER_CT0 만 주입" "twitter status 로 확인"
+    ux_table_row "./hermes/setup.sh" "HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY" "없으면 hermes/llm_endpoint.local.sh"
+    ux_bullet "실패(키 없음, 권한 600 아님, 복호화 실패)는 경고 후 값 없이 실행 -> 기존 fallback 그대로"
+    ux_bullet "mcporter/twitter 는 셸 함수: timeout/xargs 로 감싸면 래퍼를 건너뛴다 -> secret-run -k KEY timeout 60 twitter status"
+    ux_bullet "새 키 추가 절차"
+    ux_bullet_sub "1. cd ~/dotfiles && senv edit   # \$EDITOR 에 KEY=value 한 줄 추가, 저장 시 재암호화"
+    ux_bullet_sub "2. senv check && git diff .enc.env   # 키 이름만 평문, 값은 ENC[...]"
+    ux_bullet_sub "3. 소비 명령: secret-run -k KEY <cmd>, 자주 쓰면 functions/secret_run.sh 에 -k KEY 래퍼 추가"
+    ux_bullet_sub "4. git commit .enc.env (평문 .env 는 만들지 않는다. 남은 평문 복제본은 삭제)"
+    ux_bullet "비대화형(cron, AI 도구)에서도 동작한다: 개인키가 passphrase 없는 keys.txt 일 때만"
+}
+
 _sops_help_rows_risks() {
     ux_table_row "개인키 분실" "복구 불가" "keys.txt 백업 필수 (잠금 파일/오프라인 보관)"
     ux_table_row "개인키 유출" "재암호화만으로 부족" "원본 비밀값(DB 암호, API 키) 자체를 교체"
@@ -139,6 +161,7 @@ _sops_help_rows_more() {
     ux_bullet "age:  https://github.com/FiloSottile/age"
     ux_bullet "설치 스크립트: shell-common/tools/custom/install_sops_age.sh"
     ux_bullet "진단/워크플로 함수: sops-status, senv (shell-common/tools/integrations/sops.sh)"
+    ux_bullet "주입 함수: secret-run, mcporter, twitter (shell-common/functions/secret_run.sh)"
 }
 
 _sops_help_render_section() {
@@ -153,6 +176,7 @@ _sops_help_section_rows() {
         newproject | project | init) _sops_help_rows_newproject ;;
         usage | examples | cmds) _sops_help_rows_usage ;;
         newpc | pc) _sops_help_rows_newpc ;;
+        secrets | secret | dotfiles) _sops_help_rows_secrets ;;
         risks | risk) _sops_help_rows_risks ;;
         trouble | troubleshooting) _sops_help_rows_trouble ;;
         more | docs | references) _sops_help_rows_more ;;
@@ -171,6 +195,7 @@ _sops_help_full() {
     _sops_help_render_section "신규 프로젝트" _sops_help_rows_newproject
     _sops_help_render_section "사용 예시" _sops_help_rows_usage
     _sops_help_render_section "새 PC" _sops_help_rows_newpc
+    _sops_help_render_section "dotfiles 비밀값" _sops_help_rows_secrets
     _sops_help_render_section "위험 요소" _sops_help_rows_risks
     _sops_help_render_section "문제 해결" _sops_help_rows_trouble
     _sops_help_render_section "더 알아보기" _sops_help_rows_more
