@@ -623,6 +623,11 @@ def _find_flow_boundary(messages: list[dict[str, Any]]) -> int:
     return -1
 
 
+def _has_terminal_marker(text: str) -> bool:
+    """True when `text` carries a Step 3 terminal marker (TERMINAL_PATTERNS)."""
+    return any(pat in text for pat in TERMINAL_PATTERNS)
+
+
 def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bool, list[str]]:
     """Walk forward from the boundary.
 
@@ -719,7 +724,7 @@ def _scan_after_boundary(messages: list[dict[str, Any]], start: int) -> tuple[bo
         # the full sub-skill count.
         if role == "assistant" and not terminal:
             for text in _iter_text_blocks(msg, include_tool_results=False):
-                if any(pat in text for pat in TERMINAL_PATTERNS):
+                if _has_terminal_marker(text):
                     terminal = True
                     break
             if not terminal:
@@ -989,7 +994,7 @@ def main() -> int:
     # sub-skill counts come from tool_use blocks that are already on disk.
     last_message = event.get("last_assistant_message")
     if not terminal and isinstance(last_message, str):
-        terminal = any(pat in last_message for pat in TERMINAL_PATTERNS)
+        terminal = _has_terminal_marker(last_message)
     # Issue #1270 — the fresh-prompt count feeds nothing but the expiry
     # valve below, and counting is a second full pass over the transcript
     # on the turn-end hot path. Skip it whenever the result provably cannot
