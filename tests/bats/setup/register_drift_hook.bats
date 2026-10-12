@@ -211,6 +211,7 @@ JSON
 
 @test "register-drift-hook: non-internal mode is a silent no-op" {
     run bash -c 'jq "del(.hooks)" "$1" > "$1.t" && mv "$1.t" "$1"' _ "$LIVE"
+    assert_success
     cp "$LIVE" "$TEST_TEMP_HOME/live-before.json"
     printf 'external' >"$HOME/.dotfiles-setup-mode"
 
@@ -218,4 +219,13 @@ JSON
     [ "$status" -eq 0 ]
     run cmp -s "$TEST_TEMP_HOME/live-before.json" "$LIVE"
     assert_success
+}
+
+@test "register-drift-hook: claude/setup.sh internal branch invokes the script" {
+    # Static wiring guard: the call is `|| true`, so a dropped line or a bad
+    # path would otherwise fail silently.
+    run grep -n 'bash "$DOTFILES_ROOT/claude/tools/register-drift-hook.sh"' \
+        "${_BATS_REAL_DOTFILES_ROOT}/claude/setup.sh"
+    assert_success
+    [ -x "${_BATS_REAL_DOTFILES_ROOT}/claude/tools/register-drift-hook.sh" ]
 }
