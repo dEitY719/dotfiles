@@ -125,9 +125,9 @@ _sops_help_rows_secrets() {
     ux_bullet_sub "PC 마다 다른 비밀 아닌 값(CA 경로, 활성 계정)은 *.local.sh 유지"
     ux_table_row "secret-run [-k KEY]... <cmd>" "\$DOTFILES_ROOT/.enc.env 를 주입해 실행" "cwd 불변, 평문 파일 없음, 셸에는 안 남음"
     ux_table_row "mcporter <args>" "EXA_API_KEY 만 주입" "mcporter.json 은 \${EXA_API_KEY:-} 로 읽음"
-    ux_table_row "mcporter-exa-setup" "mcporter.json 의 exa 를 placeholder 로 교체" "평문 키 제거, 1회 실행"
+    ux_table_row "mcporter-exa-setup" "mcporter.json 의 exa 를 placeholder 로 교체" ".enc.env 에 EXA_API_KEY 가 있어야 실행, 1회"
     ux_table_row "twitter <args>" "TWITTER_AUTH_TOKEN / TWITTER_CT0 만 주입" "twitter status 로 확인"
-    ux_table_row "./hermes/setup.sh" "HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY" "없으면 hermes/llm_endpoint.local.sh"
+    ux_table_row "./hermes/setup.sh" "HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY" "둘 다 없을 때만 hermes/llm_endpoint.local.sh (키별 병합 없음)"
     ux_bullet "실패(키 없음, 권한 600 아님, 복호화 실패)는 경고 후 값 없이 실행 -> 기존 fallback 그대로"
     ux_bullet "mcporter/twitter 는 셸 함수: timeout/xargs 로 감싸면 래퍼를 건너뛴다 -> secret-run -k KEY timeout 60 twitter status"
     ux_bullet "새 키 추가 절차"
@@ -135,7 +135,8 @@ _sops_help_rows_secrets() {
     ux_bullet_sub "2. senv check && git diff .enc.env   # 키 이름만 평문, 값은 ENC[...]"
     ux_bullet_sub "3. 소비 명령: secret-run -k KEY <cmd>, 자주 쓰면 functions/secret_run.sh 에 -k KEY 래퍼 추가"
     ux_bullet_sub "4. git commit .enc.env (평문 .env 는 만들지 않는다. 남은 평문 복제본은 삭제)"
-    ux_bullet "비대화형(cron, AI 도구)에서도 동작한다: 개인키가 passphrase 없는 keys.txt 일 때만"
+    ux_bullet "mcporter/twitter 래퍼는 대화형 셸 함수다. cron 처럼 함수가 없는 곳은 래퍼를 안 거친다 (secret-run 도 셸 함수)"
+    ux_bullet_sub "어느 경우든 복호화는 개인키가 passphrase 없는 keys.txt 일 때만 비대화형으로 된다"
 }
 
 _sops_help_rows_risks() {

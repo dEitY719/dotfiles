@@ -36,9 +36,11 @@ teardown() {
     teardown_isolated_home
 }
 
-# Run in $WORK (not the repo dir) with the stubs first on PATH.
+# Run in $WORK (not the repo dir) with the stubs first on PATH. The stubs are
+# also on PATH while the loader runs, because the wrappers are only defined
+# when their CLI is installed.
 _sr() {
-    run_in_bash "PATH='$STUB_BIN:/usr/bin:/bin'; export DOTFILES_ENC_ENV='$ENC'; cd '$WORK' && $1"
+    PATH="$STUB_BIN:$PATH" run_in_bash "PATH='$STUB_BIN:/usr/bin:/bin'; export DOTFILES_ENC_ENV='$ENC'; cd '$WORK' && $1"
 }
 
 @test "functions are defined after the bash loader runs" {
@@ -139,13 +141,58 @@ _sr() {
     [ "$(jq -r '.mcpServers.exa.baseUrl' "$cfg")" = 'https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY:-}' ]
     [ "$(jq -r '.mcpServers.exa.x' "$cfg")" = "1" ]
     [ "$(jq -r '.mcpServers.other.command' "$cfg")" = "o" ]
-    ! grep -q OLDSECRET "$cfg"
+    run grep -q OLDSECRET "$cfg"
+    assert_failure
     [ "$(stat -c '%a' "$cfg" 2>/dev/null || stat -f '%Lp' "$cfg")" = "600" ]
     # Idempotent, and creates the file when absent.
     rm "$cfg"
     _sr "mcporter_exa_setup && mcporter_exa_setup"
     assert_success
     [ "$(jq -r '.mcpServers.exa.baseUrl' "$cfg")" = 'https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY:-}' ]
+}
+
+@test "mcporter-exa-setup replaces a url field too" {
+    command -v jq >/dev/null 2>&1 || skip "jq not installed"
+    mkdir -p "$HOME/.mcporter"
+    printf '{"mcpServers":{"exa":{"url":"https://mcp.exa.ai/mcp?exaApiKey=OLDSECRET"}}}' >"$HOME/.mcporter/mcporter.json"
+    _sr "mcporter_exa_setup"
+    assert_success
+    [ "$(jq -r '.mcpServers.exa | keys | join(",")' "$HOME/.mcporter/mcporter.json")" = "baseUrl" ]
+}
+
+@test "mcporter-exa-setup refuses when .enc.env has no EXA_API_KEY, cannot decrypt, or the config is a symlink" {
+    command -v jq >/dev/null 2>&1 || skip "jq not installed"
+    mkdir -p "$HOME/.mcporter"
+    cfg="$HOME/.mcporter/mcporter.json"
+    printf '{"mcpServers":{"exa":{"baseUrl":"https://mcp.exa.ai/mcp?exaApiKey=OLDSECRET"}}}' >"$cfg"
+
+    printf 'OTHER=x\nEXA_API_KEY=\n' >"$ENC"
+    _sr "mcporter_exa_setup"
+    assert_failure
+    assert_output --partial "no EXA_API_KEY"
+    grep -q OLDSECRET "$cfg"
+
+    printf 'EXA_API_KEY=fake-exa\n' >"$ENC"
+    _sr "SOPS_STUB_FAIL=1 mcporter_exa_setup"
+    assert_failure
+    assert_output --partial "left unchanged"
+    grep -q OLDSECRET "$cfg"
+
+    mv "$cfg" "$HOME/real.json"
+    ln -s "$HOME/real.json" "$cfg"
+    _sr "mcporter_exa_setup"
+    assert_failure
+    assert_output --partial "symlink"
+    [ -L "$cfg" ]
+    refute_output --partial "OLDSECRET"
+}
+
+@test "wrappers are not defined when their CLI is not installed" {
+    rm "$STUB_BIN/twitter" "$STUB_BIN/mcporter"
+    command -v twitter >/dev/null 2>&1 && skip "a real twitter is installed"
+    command -v mcporter >/dev/null 2>&1 && skip "a real mcporter is installed"
+    _sr "type twitter; type mcporter; true"
+    refute_output --partial "is a function"
 }
 
 @test "zsh: secret-run injects literally, keeps cwd, propagates exit code" {

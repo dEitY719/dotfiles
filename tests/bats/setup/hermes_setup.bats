@@ -167,3 +167,15 @@ STUB
     assert_output --partial "No custom LLM endpoint configured"
     [ ! -e "${HOME}/hermes-set.log" ]
 }
+
+@test "endpoint: DOTFILES_SKIP_LOCAL_ENV skips the real .enc.env unless one is named" {
+    _part3_stubs
+    printf 'HERMES_LLM_API_KEY=fake-key-123\n' > "$DOTFILES_ENC_ENV"
+    unset DOTFILES_ENC_ENV
+    run bash "${HERMES_SETUP}"
+    assert_success
+    refute_output --partial "LLM endpoint values from .enc.env"
+    refute_output --partial "senv key import"
+    assert_output --partial "No custom LLM endpoint configured"
+    [ ! -e "${HOME}/hermes-set.log" ]
+}

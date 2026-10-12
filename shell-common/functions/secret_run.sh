@@ -90,17 +90,27 @@ alias secret-run='dotfiles_secret_run'
 # mcporter never sees the Twitter cookies.
 # mcporter.json reads the key as ${EXA_API_KEY:-} (mcporter 0.14 expands it;
 # see mcporter_exa_setup), so the key is never stored in plaintext.
-mcporter() { dotfiles_secret_run -k EXA_API_KEY mcporter "$@"; }
+# Defined only when the CLI is installed, so `command -v` keeps meaning
+# "installed". Being shell functions, they are bypassed by anything that execs
+# the binary directly (cron, xargs, timeout): use secret-run there.
+if command -v mcporter >/dev/null 2>&1; then
+    mcporter() { dotfiles_secret_run -k EXA_API_KEY mcporter "$@"; }
+fi
 # twitter-cli reads TWITTER_AUTH_TOKEN / TWITTER_CT0 from the environment.
-twitter() { dotfiles_secret_run -k TWITTER_AUTH_TOKEN -k TWITTER_CT0 twitter "$@"; }
+if command -v twitter >/dev/null 2>&1; then
+    twitter() { dotfiles_secret_run -k TWITTER_AUTH_TOKEN -k TWITTER_CT0 twitter "$@"; }
+fi
 
 # Point mcporter's exa server at ${EXA_API_KEY:-} instead of a literal key.
-# Rewrites only mcpServers.exa.baseUrl in ~/.mcporter/mcporter.json; other
+# Rewrites only mcpServers.exa's URL in ~/.mcporter/mcporter.json; other
 # servers and fields are kept. The old URL (with the key) is never printed.
+# Refuses unless .enc.env decrypts to a non-empty EXA_API_KEY: otherwise the
+# plaintext key would be removed with no other copy, and exa would silently
+# get an empty key.
 mcporter_exa_setup() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Only $HOME is quoted: naming_check.sh reads a quoted mcporter path as help text.
-    local cfg="$HOME"/.mcporter/mcporter.json tmp
+    local cfg="$HOME"/.mcporter/mcporter.json tmp plain
     # Single quotes on purpose: mcporter expands the placeholder, not the shell.
     # shellcheck disable=SC2016
     local url='https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY:-}'
@@ -108,10 +118,28 @@ mcporter_exa_setup() {
         ux_error "jq is not installed"
         return 1
     fi
+    if [ -L "$cfg" ]; then
+        ux_error "${cfg} is a symlink; edit its target instead"
+        return 1
+    fi
+    if ! plain=$(_dotfiles_secret_decrypt); then
+        ux_error "EXA_API_KEY is not readable from .enc.env; ${cfg} left unchanged"
+        return 1
+    fi
+    case "$plain" in
+        EXA_API_KEY=?* | *"
+EXA_API_KEY="?*) ;;
+        *)
+            ux_error ".enc.env has no EXA_API_KEY; ${cfg} left unchanged"
+            ux_info "Add it first: sops-help secrets"
+            return 1
+            ;;
+    esac
+    unset plain
     mkdir -p "${cfg%/*}" || return 1
     [ -f "$cfg" ] || printf '{}\n' >"$cfg"
     tmp=$(mktemp "${cfg}.XXXXXX") || return 1
-    if ! jq --arg u "$url" '.mcpServers.exa.baseUrl = $u' "$cfg" >"$tmp" 2>/dev/null; then
+    if ! jq --arg u "$url" '.mcpServers.exa |= ((. // {}) | del(.url) | .baseUrl = $u)' "$cfg" >"$tmp" 2>/dev/null; then
         rm -f "$tmp"
         ux_error "could not update ${cfg} (invalid JSON?)"
         return 1
