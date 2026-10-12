@@ -10,8 +10,8 @@
 # 사용: bash shell-common/tools/custom/diagnose_internal.sh [-h|--help]
 
 # init.sh 는 DOTFILES_TEST_MODE=1 에서 ux_lib 로드 전에 return 하므로 직접 보충한다.
-_di_dir="$(cd "$(dirname "$0")" && pwd)"
-source "$_di_dir/init.sh" || exit 1
+_di_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+source "$_di_dir/init.sh" || return 1 2>/dev/null || exit 1
 DOTFILES_ROOT="${_di_dir%/shell-common/tools/custom}"
 type ux_header >/dev/null 2>&1 || . "$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh"
 # shellcheck source=../../util/setup_mode_read.sh
@@ -44,7 +44,6 @@ warn() {
 }
 
 SECURITY_LOCAL_SH="$DOTFILES_ROOT/shell-common/env/security.local.sh"
-INTERNAL_LOCAL_SH="$DOTFILES_ROOT/shell-common/env/internal.local.sh"
 
 # 변수가 ~/.bashrc 또는 security.local.sh 에 export 되어 있으면 그 경로를 출력.
 _env_registered() {
@@ -73,11 +72,10 @@ main() {
         return 0
     fi
 
-    # 사내 기대값은 공개 repo 에 두지 않는다 (#1966) — gitignored internal.local.sh.
-    if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$INTERNAL_LOCAL_SH" ]; then
-        # shellcheck source=/dev/null
-        . "$INTERNAL_LOCAL_SH"
-    fi
+    # 사내 기대값은 공개 repo 에 두지 않는다 (#1966) — internal.local.sh 로딩은
+    # env/internal.sh 가 소유한다 (DOTFILES_SKIP_LOCAL_ENV 가드 포함).
+    # shellcheck source=../../env/internal.sh
+    SHELL_COMMON="$DOTFILES_ROOT/shell-common" DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/internal.sh"
     _proxy_fp="${DOTFILES_PROXY_CA_FINGERPRINT:-}"
     _extra_fps="${DOTFILES_EXTRA_CA_FINGERPRINTS:-}"
     _domain="${DOTFILES_INTERNAL_DOMAIN:-}"
@@ -97,7 +95,8 @@ main() {
     if _src=$(_env_registered NODE_EXTRA_CA_CERTS); then
         pass "NODE_EXTRA_CA_CERTS 등록됨 (source: $_src)"
     else
-        fail "NODE_EXTRA_CA_CERTS 미등록 → shell-common/env/security.local.sh 에 export 추가"
+        # 다른 rc/env 파일에서 올 수 있어 FAIL 이 아니라 WARN — 값 자체는 위에서 검사.
+        warn "NODE_EXTRA_CA_CERTS 등록 미확인 (~/.bashrc, security.local.sh) → 새 셸에서도 유지되는지 확인"
     fi
     CHECK_CERT="${CERT_FILE:-${SSL_CERT_FILE:-}}"
     if [ -n "$CHECK_CERT" ] && [ -f "$CHECK_CERT" ]; then
@@ -109,7 +108,7 @@ main() {
         fi
         if [ -z "$_proxy_fp" ]; then
             warn "사내 프록시 인증서 포함 여부: $_unset_hint"
-        elif grep -q "$_proxy_fp" "$CHECK_CERT"; then
+        elif grep -qF -- "$_proxy_fp" "$CHECK_CERT"; then
             pass "사내 프록시 인증서 포함됨"
         else
             fail "사내 프록시 인증서 미포함"
@@ -117,7 +116,7 @@ main() {
         _n=0
         for _fp in $_extra_fps; do
             _n=$((_n + 1))
-            if grep -q "$_fp" "$CHECK_CERT"; then
+            if grep -qF -- "$_fp" "$CHECK_CERT"; then
                 pass "추가 사내 CA 인증서 #$_n 포함됨"
             else
                 warn "추가 사내 CA 인증서 #$_n 미포함"
@@ -157,14 +156,13 @@ main() {
         warn "no_proxy 사내 도메인: $_unset_hint"
     else
         pass "no_proxy 설정됨"
-        _dom_re=$(printf '%s' "$_domain" | sed 's/\./\\./g')
-        if ! printf '%s' "$_no_proxy" | grep -q "$_dom_re"; then
-            fail "no_proxy 에 $_domain 미포함 → .$_domain 추가"
-        elif printf '%s' "$_no_proxy" | grep -qE "\\*\\.?$_dom_re"; then
-            fail "no_proxy 에 와일드카드(*.$_domain) 사용됨 → .$_domain 으로 변경"
-        else
-            pass "no_proxy 에 $_domain 포함됨"
-        fi
+        # 콤마로 나눈 항목 단위 정확 비교 — 부분 문자열(notcorp.x, corp.x.evil) 오탐 방지.
+        case ",$(printf '%s' "$_no_proxy" | tr -d ' ')," in
+            *",*.$_domain,"* | *",*$_domain,"*)
+                fail "no_proxy 에 와일드카드(*.$_domain) 사용됨 → .$_domain 으로 변경" ;;
+            *",.$_domain,"* | *",$_domain,"*) pass "no_proxy 에 $_domain 포함됨" ;;
+            *) fail "no_proxy 에 $_domain 미포함 → .$_domain 추가" ;;
+        esac
     fi
 
     ux_section "4) ~/.claude/settings.json"
@@ -185,9 +183,11 @@ main() {
         if jq empty "$SETTINGS_FILE" 2>/dev/null; then
             pass "JSON 형식 유효 ($SETTINGS_FILE)"
         else
-            fail "JSON 형식 오류 ($SETTINGS_FILE)"
+            fail "JSON 형식 오류 ($SETTINGS_FILE) → .hooks/.statusLine 비교 생략"
         fi
-        if [ -f "$_ssot" ]; then
+        if ! jq empty "$SETTINGS_FILE" 2>/dev/null; then
+            : # 파싱 실패 시 SSOT 비교는 오해만 낳는다 (빈 문자열 대 SSOT).
+        elif [ -f "$_ssot" ]; then
             # 비교 기준(jq -S -c)은 session-start-settings-drift.sh 와 동일.
             if [ "$(jq -S -c '.hooks // {}' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null)" ]; then
                 pass ".hooks 가 dotfiles SSOT 와 일치"
