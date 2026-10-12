@@ -181,6 +181,8 @@ _hermes_install_cli
 _hermes_load_enc_endpoint() {
 	local plain
 	plain=$(_dotfiles_secret_decrypt) || return 1
+	# Inherited values must not pass for .enc.env hits (runs in Part 3's subshell).
+	unset HERMES_LLM_BASE_URL HERMES_LLM_API_KEY
 	_senv_export_lines "$plain" "HERMES_LLM_BASE_URL HERMES_LLM_API_KEY"
 	if [ -z "${HERMES_LLM_BASE_URL:-}" ] && [ -z "${HERMES_LLM_API_KEY:-}" ]; then
 		ux_warning ".enc.env has no HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY — trying ${HERMES_ENDPOINT_LOCAL##*/}"
