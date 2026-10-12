@@ -83,10 +83,15 @@ _ca_in_bundle() {
         return
     fi
     if ! command -v openssl >/dev/null 2>&1; then
-        warn "$2: openssl 미설치 → 지문 비교 생략"
+        [ -n "${_fps_warned+x}" ] || warn "$2: openssl 미설치 → 지문 비교 생략"
+        _fps_warned=1 # 같은 원인을 CA 마다 반복해 알리지 않는다
         return 2
     fi
-    [ -n "${_fps_cache+x}" ] || _fps_cache="$(_bundle_fps)"
+    if [ -z "${_fps_cache+x}" ]; then
+        _fps_cache="$(_bundle_fps)"
+        # 파싱 실패를 진짜 미포함과 구분한다 (BEGIN/END CERTIFICATE PEM 블록만 읽는다).
+        [ -n "$_fps_cache" ] || warn "bundle 에서 인증서 지문을 하나도 읽지 못함 → PEM CERTIFICATE 블록 형식 확인"
+    fi
     printf '%s\n' "$_fps_cache" | grep -qxF -- "$(printf '%s' "$1" | tr -d ':' | tr 'a-f' 'A-F')"
 }
 
@@ -145,7 +150,7 @@ main() {
         else
             fail "인증서 첫 줄이 깨져 있을 수 있음 → -----BEGIN CERTIFICATE----- 형식 확인"
         fi
-        unset _fps_cache
+        unset _fps_cache _fps_warned
         if [ -z "$_proxy_fp" ]; then
             warn "사내 프록시 인증서 포함 여부: $_unset_hint"
         else

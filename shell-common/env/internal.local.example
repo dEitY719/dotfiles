@@ -26,6 +26,7 @@ export DOTFILES_INTERNAL_DOMAIN="corp.example.invalid"
 # 값 구하기: openssl x509 -in <사내CA>.crt -noout -fingerprint -sha256
 # NODE_EXTRA_CA_CERTS bundle 의 인증서마다 지문을 계산해 비교한다. 지문 형식이 아닌
 # 값은 예전 PEM 부분 문자열 비교로 fallback + WARN, openssl 이 없으면 WARN 후 생략.
+# 프록시 CA 가 재발급(rotate)되면 지문도 바뀌므로 이 값도 함께 갱신한다.
 # 추가 CA(선택, 미포함 시 WARN)는 공백 구분 지문 목록.
 export DOTFILES_PROXY_CA_FINGERPRINT="EXAMPLEPROXYCAFINGERPRINT"
 export DOTFILES_EXTRA_CA_FINGERPRINTS=""

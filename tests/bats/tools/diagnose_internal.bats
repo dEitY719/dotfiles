@@ -176,10 +176,21 @@ _mk_cert() {
         case "${f##*/}" in openssl) continue ;; esac
         ln -s "$f" "$bin/" 2>/dev/null || true # 앞 디렉터리 우선, 중복은 무시
     done
-    run env PATH="$bin" NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/target.crt" \
+    run env PATH="$bin" NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/target.crt" DOTFILES_EXTRA_CA_FINGERPRINTS="$fp" \
         DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[WARN] 사내 프록시 인증서: openssl 미설치"
+    [ "$(printf '%s\n' "$output" | grep -c 'openssl 미설치')" -eq 1 ]
     refute_output --partial "사내 프록시 인증서 포함됨"
     refute_output --partial "사내 프록시 인증서 미포함"
     assert_output --partial "2) Claude Code 설치 & PATH"
+}
+
+@test "internal mode: unparseable bundle is told apart from a missing CA" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    printf -- '-----BEGIN CERTIFICATE-----\nnot-a-cert\n-----END CERTIFICATE-----\n' >"$HOME/ca.crt"
+    run env NODE_EXTRA_CA_CERTS="$HOME/ca.crt" \
+        DOTFILES_PROXY_CA_FINGERPRINT="$(printf 'AB:%.0s' $(seq 32) | sed 's/:$//')" bash "$SCRIPT"
+    assert_output --partial "[WARN] bundle 에서 인증서 지문을 하나도 읽지 못함"
+    assert_output --partial "[FAIL] 사내 프록시 인증서 미포함"
 }
