@@ -58,6 +58,38 @@ _env_registered() {
     return 1
 }
 
+# CHECK_CERT bundle 의 인증서별 SHA-256 지문 — 콜론 제거·대문자, 한 줄에 하나.
+_bundle_fps() {
+    local _line _blk="" _in=0
+    while IFS= read -r _line || [ -n "$_line" ]; do
+        _line="${_line%$'\r'}"
+        case "$_line" in *"-----BEGIN CERTIFICATE-----"*) _in=1 _blk="" ;; esac
+        [ "$_in" = 1 ] && _blk="$_blk$_line"$'\n'
+        case "$_line" in *"-----END CERTIFICATE-----"*)
+            [ "$_in" = 1 ] && printf '%s' "$_blk" | openssl x509 -noout -fingerprint -sha256 2>/dev/null |
+                sed 's/.*=//' | tr -d ':' | tr 'a-f' 'A-F'
+            _in=0
+            ;;
+        esac
+    done <"$CHECK_CERT"
+}
+
+# $1(지문 값)이 CHECK_CERT 에 있나: 0=포함, 1=미포함, 2=openssl 없어 비교 생략.
+# 지문 형식이 아닌 값은 예전 PEM 부분 문자열 비교로 fallback 하고 WARN 한다.
+_ca_in_bundle() {
+    if ! printf '%s' "$1" | grep -qE '^([0-9A-Fa-f]{2}:?){32}$'; then
+        warn "$2: SHA-256 지문 형식이 아님 → 부분 문자열 비교로 대체 (openssl x509 -noout -fingerprint -sha256 값으로 교체 권장)"
+        grep -qF -- "$1" "$CHECK_CERT"
+        return
+    fi
+    if ! command -v openssl >/dev/null 2>&1; then
+        warn "$2: openssl 미설치 → 지문 비교 생략"
+        return 2
+    fi
+    [ -n "${_fps_cache+x}" ] || _fps_cache="$(_bundle_fps)"
+    printf '%s\n' "$_fps_cache" | grep -qxF -- "$(printf '%s' "$1" | tr -d ':' | tr 'a-f' 'A-F')"
+}
+
 main() {
     case "${1:-}" in
         -h | --help | help)
@@ -82,8 +114,7 @@ main() {
     # env/internal.sh 가 소유한다 (DOTFILES_SKIP_LOCAL_ENV 가드 포함).
     # shellcheck source=../../env/internal.sh
     SHELL_COMMON="$DOTFILES_ROOT/shell-common" DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/internal.sh"
-    # "FINGERPRINT" 는 이름일 뿐 openssl 지문이 아니다 — PEM 본문 한 줄 안의 고유
-    # 부분 문자열을 고정 문자열로 grep 한다 (줄바꿈을 넘는 값은 매치되지 않음).
+    # 값은 SHA-256 지문 (openssl x509 -noout -fingerprint -sha256, #2103).
     _proxy_fp="${DOTFILES_PROXY_CA_FINGERPRINT:-}"
     _extra_fps="${DOTFILES_EXTRA_CA_FINGERPRINTS:-}"
     _domain="${DOTFILES_INTERNAL_DOMAIN:-}"
@@ -114,21 +145,24 @@ main() {
         else
             fail "인증서 첫 줄이 깨져 있을 수 있음 → -----BEGIN CERTIFICATE----- 형식 확인"
         fi
+        unset _fps_cache
         if [ -z "$_proxy_fp" ]; then
             warn "사내 프록시 인증서 포함 여부: $_unset_hint"
-        elif grep -qF -- "$_proxy_fp" "$CHECK_CERT"; then
-            pass "사내 프록시 인증서 포함됨"
         else
-            fail "사내 프록시 인증서 미포함"
+            _ca_in_bundle "$_proxy_fp" "사내 프록시 인증서"
+            case $? in
+                0) pass "사내 프록시 인증서 포함됨" ;;
+                1) fail "사내 프록시 인증서 미포함" ;;
+            esac
         fi
         _n=0
         for _fp in $_extra_fps; do
             _n=$((_n + 1))
-            if grep -qF -- "$_fp" "$CHECK_CERT"; then
-                pass "추가 사내 CA 인증서 #$_n 포함됨"
-            else
-                warn "추가 사내 CA 인증서 #$_n 미포함"
-            fi
+            _ca_in_bundle "$_fp" "추가 사내 CA 인증서 #$_n"
+            case $? in
+                0) pass "추가 사내 CA 인증서 #$_n 포함됨" ;;
+                1) warn "추가 사내 CA 인증서 #$_n 미포함" ;;
+            esac
         done
     else
         fail "인증서 파일을 찾을 수 없음: ${CHECK_CERT:-(없음)}"

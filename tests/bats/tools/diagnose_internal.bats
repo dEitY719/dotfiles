@@ -129,3 +129,57 @@ _home_snapshot() { (cd "$HOME" && find . | sort); }
     run grep -iE 'bedrock|aws sts|AWS_CA_BUNDLE' "$SCRIPT"
     assert_failure 1
 }
+
+# 자체 서명 인증서 생성 → $BATS_TEST_TMPDIR/<name>.crt, 지문은 stdout (#2103).
+_mk_cert() {
+    openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+        -keyout "$BATS_TEST_TMPDIR/$1.key" -out "$BATS_TEST_TMPDIR/$1.crt" \
+        -subj "/CN=$1" -days 1 >/dev/null 2>&1
+    openssl x509 -in "$BATS_TEST_TMPDIR/$1.crt" -noout -fingerprint -sha256 | sed 's/.*=//'
+}
+
+@test "internal mode: CA check compares real SHA-256 fingerprints per certificate" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    local fp other_fp
+    fp="$(_mk_cert target)"
+    other_fp="$(_mk_cert other)"
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/other.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
+    assert_output --partial "[FAIL] 사내 프록시 인증서 미포함"
+    cat "$BATS_TEST_TMPDIR/other.crt" "$BATS_TEST_TMPDIR/target.crt" >"$BATS_TEST_TMPDIR/bundle.crt"
+    # 콜론 없음 + 소문자도 같은 지문으로 정규화된다.
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" \
+        DOTFILES_PROXY_CA_FINGERPRINT="$(printf '%s' "$fp" | tr -d ':' | tr 'A-F' 'a-f')" \
+        DOTFILES_EXTRA_CA_FINGERPRINTS="$other_fp" bash "$SCRIPT"
+    assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+    assert_output --partial "[PASS] 추가 사내 CA 인증서 #1 포함됨"
+    refute_output --partial "지문 형식이 아님"
+}
+
+@test "internal mode: non-fingerprint CA value falls back to substring with WARN" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    printf -- '-----BEGIN CERTIFICATE-----\nFAKEFP\n' >"$HOME/ca.crt"
+    run env NODE_EXTRA_CA_CERTS="$HOME/ca.crt" DOTFILES_PROXY_CA_FINGERPRINT=FAKEFP bash "$SCRIPT"
+    assert_output --partial "[WARN] 사내 프록시 인증서: SHA-256 지문 형식이 아님"
+    assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+}
+
+@test "internal mode: missing openssl skips the fingerprint comparison with WARN" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    local fp bin f
+    fp="$(_mk_cert target)"
+    # openssl 만 뺀 PATH — 나머지 도구는 그대로 쓴다.
+    bin="$BATS_TEST_TMPDIR/bin"
+    mkdir -p "$bin"
+    for f in /usr/local/bin/* /usr/bin/* /bin/*; do
+        case "${f##*/}" in openssl) continue ;; esac
+        ln -s "$f" "$bin/" 2>/dev/null || true # 앞 디렉터리 우선, 중복은 무시
+    done
+    run env PATH="$bin" NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/target.crt" \
+        DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
+    assert_output --partial "[WARN] 사내 프록시 인증서: openssl 미설치"
+    refute_output --partial "사내 프록시 인증서 포함됨"
+    refute_output --partial "사내 프록시 인증서 미포함"
+    assert_output --partial "2) Claude Code 설치 & PATH"
+}
