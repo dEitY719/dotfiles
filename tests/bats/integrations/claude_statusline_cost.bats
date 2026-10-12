@@ -22,7 +22,7 @@ setup() {
     STATUSLINE="$ISO/claude/statusline-command.sh"
     LOCAL_SH="$ISO/shell-common/env/internal.local.sh"
     CURL_LOG="$TEST_TEMP_HOME/curl.log"
-    CACHE="$TEST_TEMP_HOME/tmp/.claude_bedrock_cost_cache"
+    CACHE="$TEST_TEMP_HOME/tmp/.claude_usage_cost_cache"
     # curl stub: record the URL, answer with a fixed cost.
     cat >"$TEST_TEMP_HOME/bin/curl" <<EOF
 #!/bin/sh

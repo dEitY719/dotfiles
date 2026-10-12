@@ -7,7 +7,7 @@
 #
 # Why (#1086): in every mode the live settings.json is a REAL FILE, not a
 # symlink — multi-account copies the SSOT (#940), internal used to
-# deep-merge SSOT + Bedrock overlay via aws/setup.sh (#687). So a commit that
+# deep-merge SSOT + an overlay via a re-seed script (#687). So a commit that
 # adds or changes a hook in the SSOT does NOT reach the live file until a
 # re-seed script is run. A user who only `git pull`s + restarts Claude Code
 # starts sessions with the OLD hook set, so new hooks silently never fire —
@@ -15,11 +15,11 @@
 #
 # Why it now HEALS instead of only warning (2026-08-18): the org's LLM Gateway
 # migration made `gateway-cli setup` the owner of the internal-PC live
-# settings.json (apiKeyHelper / awsCredentialExport / awsAuthRefresh /
-# cleanupPeriodDays / env.*), and `aws/setup.sh`'s merge — the ONLY thing that
+# settings.json (apiKeyHelper / credential keys / cleanupPeriodDays / env.*),
+# and the old re-seed merge — the ONLY thing that
 # ever carried SSOT `.hooks`/`.statusLine` changes into an internal PC's live
 # file — was deprecated to stop the two writers from ping-ponging. That left
-# internal PCs with a detector whose remediation ("re-run ./aws/setup.sh") no
+# internal PCs with a detector whose remediation ("re-run the re-seed") no
 # longer does anything. Worse, gateway-cli's own `setup` OVERWRITES
 # `.statusLine.command` with its (currently placeholder-printing) binary, so
 # `.statusLine` drift is not hypothetical — it is what actually happened and
@@ -29,8 +29,8 @@
 # Scope of the write is deliberately tiny — ONLY `.hooks`, `.statusLine` and
 # the single sub-key `.env.CLAUDE_CODE_PLUGIN_DIRS` (#2029, cache-watch mod
 # load; internal PCs get no other path for it) are assigned, via jq, into the existing document. Every other key's VALUE
-# is left alone: gateway-cli's (apiKeyHelper, awsCredentialExport,
-# awsAuthRefresh, cleanupPeriodDays, env, model, availableModels), Claude
+# is left alone: gateway-cli's (apiKeyHelper, credential keys,
+# cleanupPeriodDays, env, model, availableModels), Claude
 # Code's own (enabledPlugins, extraKnownMarketplaces), and anything a user or
 # a future tool adds. dotfiles claims no other key in the live file.
 # (Not literally byte-for-byte: jq re-serializes the whole document on write,
@@ -41,7 +41,7 @@
 # Which keys are compared, and why exactly these two: they are the only
 # settings.json fields that dotfiles ships as behaviour (hook wiring + the
 # statusline command path) rather than as auth/model configuration. The old
-# Bedrock overlay never touched either, and gateway-cli only touches
+# overlay never touched either, and gateway-cli only touches
 # `.statusLine` (by accident), so SSOT-vs-live inequality on these two always
 # means the live file is stale, clobbered, or hand-edited — never a legitimate
 # per-PC difference.
@@ -210,7 +210,7 @@ if [ "$_healed" -eq 1 ]; then
 	if [ "$_drift_statusline" -eq 1 ] && [ "$_healed_statusline" -ne 1 ]; then
 		_leftover=".statusLine (SSOT 값 없음 — 자동 복구 불가, 수동 확인 필요)"
 	fi
-	_msg="[dotfiles #1086] Claude settings.json hook drift auto-corrected: the live config (${LIVE}) had drifted from the dotfiles SSOT (claude/settings.json) in: ${_healed_keys}. Internal-PC mode patched ONLY those keys back in place — gateway-cli-owned keys (apiKeyHelper / awsCredentialExport / awsAuthRefresh / cleanupPeriodDays / env (except CLAUDE_CODE_PLUGIN_DIRS) / model) were not touched. No action needed; restart Claude Code if you want the restored hooks/statusLine active in THIS session. Backup: ${_backup}${_leftover:+ | NOT auto-corrected: ${_leftover}}"
+	_msg="[dotfiles #1086] Claude settings.json hook drift auto-corrected: the live config (${LIVE}) had drifted from the dotfiles SSOT (claude/settings.json) in: ${_healed_keys}. Internal-PC mode patched ONLY those keys back in place — gateway-cli-owned keys (apiKeyHelper / credential keys / cleanupPeriodDays / env (except CLAUDE_CODE_PLUGIN_DIRS) / model) were not touched. No action needed; restart Claude Code if you want the restored hooks/statusLine active in THIS session. Backup: ${_backup}${_leftover:+ | NOT auto-corrected: ${_leftover}}"
 else
 	# Non-internal PCs (and the internal fallbacks: symlinked live file, SSOT
 	# does not define the drifted key, or a failed patch) re-seed by hand.

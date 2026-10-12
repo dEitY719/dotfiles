@@ -229,8 +229,6 @@ main() {
     run_step hermes optional ./hermes/setup.sh # 1회 복사 (#1373)
     run_step claude critical ./claude/setup.sh
     run_step agy optional ./agy/setup.sh # Antigravity CLI 확인 (#1180)
-    # Internal-PC AWS SSO/CLI seeding only; no-op on external/public PCs.
-    run_step aws optional ./aws/setup.sh
     run_step skills-ssot critical ./scripts/setup-skills-ssot.sh
     run_step vscode-extensions optional ./vscode-extensions/setup.sh
     # .vscode/base.json → live VS Code settings (#586); exits 1 without VS Code.

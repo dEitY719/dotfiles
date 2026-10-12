@@ -19,20 +19,6 @@ export DOTFILES_SSH_KEY_NAME="id_rsa_example"
 export DOTFILES_CLAUDE_USAGE_API_URL="https://usage.example.invalid/"
 export DOTFILES_CLAUDE_USAGE_ID="EMP00000"
 
-# AWS / Bedrock 사내 기대값 (aws/diagnose.sh, aws/install-otel-managed-settings.sh, #1966)
-export DOTFILES_AWS_BEDROCK_URL="https://bedrock.example.invalid"
-export DOTFILES_AWS_SSO_START_URL="https://sso.example.invalid/start"
-export DOTFILES_AWS_SSO_ACCOUNT_ID="000000000000"
-# no_proxy 에 반드시 들어가야 하는 사내 도메인 (diagnose 가 검사, 앞의 점 없이)
-export DOTFILES_INTERNAL_DOMAIN="corp.example.invalid"
-# 사내 프록시 CA 인증서 본문 앞부분 (diagnose 가 CA bundle 포함 여부를 grep).
-# 추가 CA(선택, 미포함 시 WARN)는 공백 구분 목록.
-export DOTFILES_PROXY_CA_FINGERPRINT="EXAMPLEPROXYCAFINGERPRINT"
-export DOTFILES_EXTRA_CA_FINGERPRINTS=""
-# OTel collector 호스트와 managed-settings 의 NO_PROXY 에 넣을 사내 도메인(콤마 구분)
-export DOTFILES_OTEL_ENDPOINT_HOST="otel.example.invalid"
-export DOTFILES_OTEL_NO_PROXY_DOMAINS=".corp.example.invalid"
-
 # 사내 LLM gateway URL (setup.sh 가 opencode/opencode.json.internal 렌더링에 사용, #1967)
 export DOTFILES_OPENCODE_BASE_URL="http://llm-gateway.example.invalid/v1"
 

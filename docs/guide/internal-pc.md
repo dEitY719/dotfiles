@@ -18,9 +18,9 @@
 ## Claude Code 인증 (gateway-cli)
 
 `internal` 모드 PC 의 Claude Code 인증은 2026-08-18부터 조직 LLM Gateway 전환 도구
-`gateway-cli` 가 담당한다. 전체 부트스트랩 순서는 `aws/README.md` Step 3.5,
+`gateway-cli` 가 담당한다 (`gateway-cli setup && gateway-cli verify`).
 `~/.claude/settings.json` 의 auth/env/model 키 소유권 상세는 `claude/AGENTS.md`
-"Configuration Files" 섹션과 `aws/AGENTS.md` 참고 (중복 서술 생략).
+"Configuration Files" 섹션 참고 (중복 서술 생략).
 
 1. **설치** — 아티팩트 `gateway-cli-setup.run` (~50MB 바이너리) 은 사내 전용 배포물이라
    git 에 커밋하지 않는다. 정확한 배포 URL은 사내 전용이라 이 문서(`pc-environment.md`
