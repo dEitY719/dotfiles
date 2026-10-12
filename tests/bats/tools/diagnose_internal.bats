@@ -179,10 +179,9 @@ _path_without() {
 @test "internal mode: missing openssl skips the fingerprint comparison with WARN" {
     command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
     printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
-    local fp bin
+    local fp
     fp="$(_mk_cert target)"
-    bin="$(_path_without openssl)"
-    run env PATH="$bin" NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/target.crt" DOTFILES_EXTRA_CA_FINGERPRINTS="$fp" \
+    run env PATH="$(_path_without openssl)" NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/target.crt" DOTFILES_EXTRA_CA_FINGERPRINTS="$fp" \
         DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[WARN] 사내 프록시 인증서: openssl 미설치"
     [ "$(printf '%s\n' "$output" | grep -c 'openssl 미설치')" -eq 1 ]
