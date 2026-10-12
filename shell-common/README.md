@@ -78,7 +78,7 @@ All files in `env/` contain environment variable definitions (POSIX-compatible).
 | `editor.sh` | Editor configuration (EDITOR, VISUAL, GIT_EDITOR) |
 | `fcitx.sh` | Korean input (fcitx) configuration |
 | `locale.sh` | Locale and timezone settings (LANG, TZ) |
-| `node.sh` | Node.js trusts the OS CA store (NODE_USE_SYSTEM_CA=1) for TLS-intercepting proxies |
+| `node.sh` | Node.js trusts the OS CA store (NODE_USE_SYSTEM_CA=1) for TLS-intercepting proxies; additive with NODE_EXTRA_CA_CERTS |
 | `path.sh` | PATH environment with deduplication |
 | `proxy.sh` | Network proxy defaults (http_proxy, https_proxy, no_proxy); help in `functions/proxy_help.sh` |
 | `security.sh` | Security settings (SSH_AUTH_SOCK, GPG_TTY) - POSIX-compatible |
