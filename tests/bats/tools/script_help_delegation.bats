@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/tools/script_help_delegation.bats
-# claude/git scripts delegate -h/--help to a help function: exit 0, help
+# claude/git/shell-common scripts delegate -h/--help to a help function: exit 0, help
 # text unchanged (golden), no side effects (#1915, follow-up of #1880).
 # claude/setup.sh takes no arguments and is N/A under the #1880 rule, so it is
 # not covered here.
@@ -49,6 +49,22 @@ _assert_help() {
   Publishes claude/plugin manifest changes to origin (and the
   internal company/ repo when present) via branch + PR + admin-merge.
   --dry-run  show the diff that would be published; no push/PR/merge."
+}
+
+@test "shell-common/tools/custom/diagnose_internal.sh -h|--help: diagnose_internal_help golden, no checks run" {
+    _assert_help shell-common/tools/custom/diagnose_internal.sh "
+Usage
+─────
+  diagnose_internal.sh [-h|--help]
+
+  사내(internal) PC 진단 — read-only, PASS / FAIL / WARN 으로 보고한다.
+
+  ◆ 1) 프록시 인증서 (NODE_EXTRA_CA_CERTS, 사내 프록시 CA 포함 여부)
+  ◆ 2) Claude Code 설치 & PATH (~/.local/bin)
+  ◆ 3) 프록시 env (http(s)_proxy, no_proxy 사내 도메인)
+  ◆ 4) ~/.claude/settings.json JSON 유효성 + .hooks/.statusLine SSOT 일치
+  ◆ 사내 기대값: shell-common/env/internal.local.sh (미설정 항목은 WARN)
+  ◆ internal 모드가 아니면 아무것도 검사하지 않고 exit 0"
 }
 
 @test "git/hooks/install-hooks.sh -h|--help: install_hooks_help, exit 0, no hooks installed" {

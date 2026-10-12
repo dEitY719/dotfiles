@@ -112,6 +112,8 @@ rollback 동작:
 
 ## 검증
 
+사내 PC 진단(프록시 CA·`claude`/PATH·프록시 env·settings.json `.hooks`/`.statusLine` SSOT 일치, read-only): `bash shell-common/tools/custom/diagnose_internal.sh` (#2099).
+
 ```bash
 # Setup mode 확인
 cat ~/.dotfiles-setup-mode    # internal

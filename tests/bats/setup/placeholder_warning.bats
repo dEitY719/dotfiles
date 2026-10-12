@@ -32,7 +32,7 @@ warn_for() {
     warn_for "$ENV_DIR/internal.local.sh"
     assert_success
     for v in DOTFILES_GHES_HOST DOTFILES_SSH_KEY_NAME DOTFILES_CLAUDE_USAGE_API_URL \
-        DOTFILES_CLAUDE_USAGE_ID \
+        DOTFILES_CLAUDE_USAGE_ID DOTFILES_INTERNAL_DOMAIN DOTFILES_PROXY_CA_FINGERPRINT \
         DOTFILES_OPENCODE_BASE_URL DOTFILES_OPENCODE_REVIEW_MODEL; do
         assert_output --partial "$v"
     done
@@ -53,6 +53,7 @@ warn_for() {
 export DOTFILES_GHES_HOST="ghes.corp-fake.test"
 export DOTFILES_SSH_KEY_NAME="id_fake_key"
 export DOTFILES_CLAUDE_USAGE_ID="EMP12345"
+export DOTFILES_PROXY_CA_FINGERPRINT="MIIDfakeRealPrefix"
 export DOTFILES_OPENCODE_REVIEW_MODEL="corp-fake/model-x"
 EOT
     warn_for "$ENV_DIR/internal.local.sh"

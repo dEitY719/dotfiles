@@ -40,6 +40,7 @@
 - **delete_claude** — Claude Code CLI Uninstall Script
 - **demo_ux** — Interactive demo of UX library features
 - **devx** — This script exists so `devx` can be run as a standalone c...
+- **diagnose_internal** — 사내(internal) PC read-only 진단 — 프록시 CA, cl...
 - **docker_configure_proxy** — Docker Proxy 설정 스크립트 (대화형)
 - **enable_docker** — Docker 서비스 자동 시작 설정 (systemd) - 대화형
 - **ensure-ollama-deps** — Ollama Dependency Installer
@@ -95,7 +96,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 72 custom tools available
+- Total: 73 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage
