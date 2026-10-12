@@ -138,6 +138,17 @@ _mk_cert() {
     openssl x509 -in "$BATS_TEST_TMPDIR/$1.crt" -noout -fingerprint -sha256 | sed 's/.*=//'
 }
 
+# $1 만 뺀 PATH 디렉터리 — 나머지 도구는 그대로 쓴다. 경로는 stdout.
+_path_without() {
+    local bin="$BATS_TEST_TMPDIR/no-$1" f
+    mkdir -p "$bin"
+    for f in /usr/local/bin/* /usr/bin/* /bin/*; do
+        [ "${f##*/}" = "$1" ] && continue
+        ln -s "$f" "$bin/" 2>/dev/null || true # 앞 디렉터리 우선, 중복은 무시
+    done
+    printf '%s' "$bin"
+}
+
 @test "internal mode: CA check compares real SHA-256 fingerprints per certificate" {
     command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
     printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
@@ -167,15 +178,9 @@ _mk_cert() {
 @test "internal mode: missing openssl skips the fingerprint comparison with WARN" {
     command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
     printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
-    local fp bin f
+    local fp bin
     fp="$(_mk_cert target)"
-    # openssl 만 뺀 PATH — 나머지 도구는 그대로 쓴다.
-    bin="$BATS_TEST_TMPDIR/bin"
-    mkdir -p "$bin"
-    for f in /usr/local/bin/* /usr/bin/* /bin/*; do
-        case "${f##*/}" in openssl) continue ;; esac
-        ln -s "$f" "$bin/" 2>/dev/null || true # 앞 디렉터리 우선, 중복은 무시
-    done
+    bin="$(_path_without openssl)"
     run env PATH="$bin" NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/target.crt" DOTFILES_EXTRA_CA_FINGERPRINTS="$fp" \
         DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[WARN] 사내 프록시 인증서: openssl 미설치"
@@ -193,4 +198,81 @@ _mk_cert() {
         DOTFILES_PROXY_CA_FINGERPRINT="$(printf 'AB:%.0s' $(seq 32) | sed 's/:$//')" bash "$SCRIPT"
     assert_output --partial "[WARN] bundle 에서 인증서 지문을 하나도 읽지 못함"
     assert_output --partial "[FAIL] 사내 프록시 인증서 미포함"
+}
+
+# --- #2104: 남은 커버리지 공백 ---
+
+@test "internal mode: internal.local.sh is really loaded without DOTFILES_SKIP_LOCAL_ENV" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    # 스크립트는 자기 위치로 DOTFILES_ROOT 를 정한다 — 실제 트리를 건드리지 않게
+    # 필요한 파일만 임시 트리로 복사한다 (setup_isolated_dotfiles_root 는
+    # shell-common 을 실제 트리로 symlink 하므로 여기엔 맞지 않는다).
+    local real="$DOTFILES_ROOT" iso="$BATS_TEST_TMPDIR/iso"
+    mkdir -p "$iso/shell-common/tools/custom" "$iso/shell-common/util" "$iso/shell-common/env"
+    cp "$real/$SCRIPT_REL" "$real/shell-common/tools/custom/init.sh" "$iso/shell-common/tools/custom/"
+    cp -R "$real/shell-common/tools/ux_lib" "$iso/shell-common/tools/"
+    cp "$real/shell-common/util/setup_mode_read.sh" "$iso/shell-common/util/"
+    cp "$real/shell-common/env/internal.sh" "$iso/shell-common/env/"
+    printf 'export DOTFILES_INTERNAL_DOMAIN=corp.test\n' >"$iso/shell-common/env/internal.local.sh"
+    run env -u DOTFILES_SKIP_LOCAL_ENV -u DOTFILES_INTERNAL_DOMAIN no_proxy=localhost,.corp.test \
+        bash "$iso/$SCRIPT_REL"
+    assert_output --partial "[PASS] no_proxy 에 corp.test 포함됨"
+    refute_output --partial "no_proxy 사내 도메인: internal.local.sh 미설정"
+    # 같은 트리라도 SKIP 가드가 켜지면 로딩하지 않는다.
+    run env -u DOTFILES_INTERNAL_DOMAIN DOTFILES_SKIP_LOCAL_ENV=1 no_proxy=localhost,.corp.test \
+        bash "$iso/$SCRIPT_REL"
+    assert_output --partial "[WARN] no_proxy 사내 도메인: internal.local.sh 미설정"
+}
+
+@test "internal mode: CA file without .crt extension is a FAIL" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    printf -- '-----BEGIN CERTIFICATE-----\n' >"$HOME/ca.pem"
+    run env NODE_EXTRA_CA_CERTS="$HOME/ca.pem" bash "$SCRIPT"
+    assert_failure 1
+    assert_output --partial "[FAIL] 인증서 확장자가 .crt 가 아님 (현재: pem)"
+}
+
+@test "internal mode: broken BEGIN CERTIFICATE line is a FAIL" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    # vim 붙여넣기 사고 재현 — 첫 글자가 잘린 BEGIN 줄.
+    printf -- '----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n' >"$HOME/ca.crt"
+    run env NODE_EXTRA_CA_CERTS="$HOME/ca.crt" bash "$SCRIPT"
+    assert_failure 1
+    assert_output --partial "[FAIL] 인증서 첫 줄이 깨져 있을 수 있음"
+    refute_output --partial "[PASS] 인증서 첫 줄 형식 정상"
+}
+
+@test "internal mode: settings.json symlink is a FAIL" {
+    command -v jq >/dev/null 2>&1 || skip "jq not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    cp "$DOTFILES_ROOT/claude/settings.json" "$HOME/real-settings.json"
+    ln -s "$HOME/real-settings.json" "$HOME/.claude/settings.json"
+    run bash "$SCRIPT"
+    assert_failure 1
+    assert_output --partial "[FAIL] settings.json 이 symlink"
+    refute_output --partial "[PASS] settings.json 실파일 존재"
+}
+
+@test "internal mode: DOTFILES_EXTRA_CA_FINGERPRINTS present is PASS, missing is WARN" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    local fp other_fp
+    fp="$(_mk_cert target)"
+    other_fp="$(_mk_cert other)"
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/target.crt" \
+        DOTFILES_EXTRA_CA_FINGERPRINTS="$fp $other_fp" bash "$SCRIPT"
+    assert_output --partial "[PASS] 추가 사내 CA 인증서 #1 포함됨"
+    assert_output --partial "[WARN] 추가 사내 CA 인증서 #2 미포함"
+    refute_output --partial "[FAIL] 추가 사내 CA"
+}
+
+@test "internal mode: missing jq skips settings.json validation with WARN" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    printf '{not json' >"$HOME/.claude/settings.json"
+    run env PATH="$(_path_without jq)" bash "$SCRIPT"
+    assert_output --partial "[WARN] jq 미설치 → settings.json 검증 생략"
+    refute_output --partial "JSON 형식 오류"
+    assert_output --partial "PASS:"
 }
