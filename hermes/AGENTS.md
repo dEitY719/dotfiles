@@ -19,7 +19,7 @@
 |---|---|---|
 | 1 | `hermes/config.yaml` → `~/.hermes/config.yaml` **1회 복사** (심링크 아님) | **hard-fail** (로컬 config 부재 = 조용한 기본값 복귀) |
 | 2 | 공식 `install.sh` 실행 (`command -v hermes` 로 스킵) | soft-fail |
-| 3 | `llm_endpoint.local.sh` 읽어 `model.base_url`/`model.api_key` 주입 | soft-fail, 옵션 |
+| 3 | `.enc.env` 의 `HERMES_LLM_*` (없으면 `llm_endpoint.local.sh`) 읽어 `model.base_url`/`model.api_key` 주입 | soft-fail, 옵션 |
 | 4 | `agent-browser` npm 의존성 설치 | soft-fail, 옵션 |
 | 5 | root CA 를 Chromium NSS 저장소에 임포트 | soft-fail, 옵션 |
 | 6 | `sitecustomize.py` 를 Hermes 고정 Python(`~/.hermes/tools`) stdlib 에 설치 — 프록시 CA 의 `Missing Authority Key Identifier` 해소 | soft-fail, 옵션 (`SSL_CERT_FILE`/`CA_CERT` 있을 때만) |

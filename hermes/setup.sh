@@ -8,7 +8,8 @@
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
 # SSOT: Config template is hermes/config.yaml — copied (never symlinked) to
 #       ~/.hermes/config.yaml; see Part 1.
-#       Endpoint credentials declared in hermes/llm_endpoint.local.sh
+#       Endpoint credentials: HERMES_LLM_* in the repo's .enc.env (#2096),
+#       else hermes/llm_endpoint.local.sh
 #       (gitignored — copy hermes/llm_endpoint.local.example to create it)
 #
 # Failure policy: Part 1 (config seed copy) hard-fails — without a local config
@@ -33,6 +34,9 @@ SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 source "${SHELL_COMMON}/tools/custom/lib/install_helpers.sh"
+# .enc.env reader for Part 3 (both files are interactive-guarded).
+DOTFILES_FORCE_INIT=1 source "${SHELL_COMMON}/tools/integrations/sops.sh"
+DOTFILES_FORCE_INIT=1 source "${SHELL_COMMON}/functions/secret_run.sh"
 
 HERMES_CONFIG_SRC="${_SCRIPT_DIR}/config.yaml"
 HERMES_CONFIG_DIR="${HOME}/.hermes"
@@ -170,20 +174,38 @@ _hermes_install_cli
 # than ~/.hermes/.env — hermes host-gates OPENAI_API_KEY to openai.com /
 # openai.azure.com, so a .env key is silently dropped for a custom base_url and
 # the request comes back 401. See hermes-help pitfalls.
-_hermes_configure_endpoint() {
-	if [ -n "${DOTFILES_SKIP_LOCAL_ENV-}" ] || [ ! -f "${HERMES_ENDPOINT_LOCAL}" ]; then
-		ux_info "No custom LLM endpoint configured — skipping"
-		ux_bullet "To wire one up: cp hermes/llm_endpoint.local.example hermes/llm_endpoint.local.sh"
-		ux_bullet "Fill in HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY, then re-run ./hermes/setup.sh"
-		return 0
-	fi
-
-	# shellcheck source=/dev/null
-	. "${HERMES_ENDPOINT_LOCAL}" || { ux_warning "Could not source: ${HERMES_ENDPOINT_LOCAL}"; return 0; }
-
+# Values come from the repo's .enc.env first (#2096); llm_endpoint.local.sh
+# stays as the fallback for a PC without the age key or without those keys.
+# Only the two HERMES_LLM_* keys are exported, and Part 3 runs in a subshell
+# so they never reach Parts 4-6.
+_hermes_load_enc_endpoint() {
+	local plain
+	plain=$(_dotfiles_secret_decrypt) || return 1
+	_senv_export_lines "$plain" "HERMES_LLM_BASE_URL HERMES_LLM_API_KEY"
 	if [ -z "${HERMES_LLM_BASE_URL:-}" ] && [ -z "${HERMES_LLM_API_KEY:-}" ]; then
-		ux_warning "${HERMES_ENDPOINT_LOCAL} sets neither HERMES_LLM_BASE_URL nor HERMES_LLM_API_KEY — skipping"
+		ux_warning ".enc.env has no HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY — trying ${HERMES_ENDPOINT_LOCAL##*/}"
+		return 1
+	fi
+	ux_info "LLM endpoint values from .enc.env"
+}
+
+_hermes_configure_endpoint() {
+	if _hermes_load_enc_endpoint; then
+		:
+	elif [ -n "${DOTFILES_SKIP_LOCAL_ENV-}" ] || [ ! -f "${HERMES_ENDPOINT_LOCAL}" ]; then
+		ux_info "No custom LLM endpoint configured — skipping"
+		ux_bullet "To wire one up: add HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY to .enc.env (sops-help secrets)"
+		ux_bullet "  or: cp hermes/llm_endpoint.local.example hermes/llm_endpoint.local.sh, fill it in"
+		ux_bullet "Then re-run ./hermes/setup.sh"
 		return 0
+	else
+		# shellcheck source=/dev/null
+		. "${HERMES_ENDPOINT_LOCAL}" || { ux_warning "Could not source: ${HERMES_ENDPOINT_LOCAL}"; return 0; }
+
+		if [ -z "${HERMES_LLM_BASE_URL:-}" ] && [ -z "${HERMES_LLM_API_KEY:-}" ]; then
+			ux_warning "${HERMES_ENDPOINT_LOCAL} sets neither HERMES_LLM_BASE_URL nor HERMES_LLM_API_KEY — skipping"
+			return 0
+		fi
 	fi
 
 	if ! command -v hermes >/dev/null 2>&1; then
@@ -196,7 +218,7 @@ _hermes_configure_endpoint() {
 
 	if [ -n "${HERMES_LLM_BASE_URL:-}" ]; then
 		if hermes config set model.base_url "${HERMES_LLM_BASE_URL}" >/dev/null 2>&1; then
-			ux_success "set model.base_url (${HERMES_LLM_BASE_URL})"
+			ux_success "set model.base_url (value not printed)"
 		else
 			ux_warning "Could not set model.base_url — run manually: hermes config set model.base_url <url>"
 		fi
@@ -215,7 +237,7 @@ _hermes_configure_endpoint() {
 	return 0
 }
 
-_hermes_configure_endpoint
+(_hermes_configure_endpoint)
 
 # ============================================================================
 # Part 4: agent-browser (soft-fail, optional)

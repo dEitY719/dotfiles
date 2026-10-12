@@ -25,7 +25,7 @@
     - risks: 분실=복구 불가 | 유출=원본 비밀값 교체
     - trouble: unmarshal 오류 | no master key | 권한
     - more: 공식 문서 | 관련 명령
-    - details: sops-help <section>  (example: sops-help usage)
+    - details: sops-help <section>  (example: sops-help usage | secrets: dotfiles .enc.env, 새 키 추가)
 
 ## 섹션
 
@@ -105,6 +105,25 @@
 - age -p / age -d 는 터미널에서 비밀번호를 묻는다 (파이프/스크립트로 넘기지 말 것)
 - 마무리: install-sops-age && sops-status
 
+### secrets
+
+- 개인 비밀값(API 키, 쿠키)은 dotfiles 루트의 .enc.env 한 곳에 둔다
+    - 사내 식별값(호스트, 도메인, 프록시 CA 등)과 AWS 값은 넣지 않는다 (public repo: 암호문과 키 이름이 history 에 영구히 남음)
+    - PC 마다 다른 비밀 아닌 값(CA 경로, 활성 계정)은 *.local.sh 유지
+- **secret-run [-k KEY]... <cmd>** — $DOTFILES_ROOT/.enc.env 를 주입해 실행 — cwd 불변, 평문 파일 없음, 셸에는 안 남음
+- **mcporter <args>** — EXA_API_KEY 만 주입 — mcporter.json 은 ${EXA_API_KEY:-} 로 읽음
+- **mcporter-exa-setup** — mcporter.json 의 exa 를 placeholder 로 교체 — 평문 키 제거, 1회 실행
+- **twitter <args>** — TWITTER_AUTH_TOKEN / TWITTER_CT0 만 주입 — twitter status 로 확인
+- **./hermes/setup.sh** — HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY — 없으면 hermes/llm_endpoint.local.sh
+- 실패(키 없음, 권한 600 아님, 복호화 실패)는 경고 후 값 없이 실행 -> 기존 fallback 그대로
+- mcporter/twitter 는 셸 함수: timeout/xargs 로 감싸면 래퍼를 건너뛴다 -> secret-run -k KEY timeout 60 twitter status
+- 새 키 추가 절차
+    - 1. cd ~/dotfiles && senv edit   # $EDITOR 에 KEY=value 한 줄 추가, 저장 시 재암호화
+    - 2. senv check && git diff .enc.env   # 키 이름만 평문, 값은 ENC[...]
+    - 3. 소비 명령: secret-run -k KEY <cmd>, 자주 쓰면 functions/secret_run.sh 에 -k KEY 래퍼 추가
+    - 4. git commit .enc.env (평문 .env 는 만들지 않는다. 남은 평문 복제본은 삭제)
+- 비대화형(cron, AI 도구)에서도 동작한다: 개인키가 passphrase 없는 keys.txt 일 때만
+
 ### risks
 
 - **개인키 분실** — 복구 불가 — keys.txt 백업 필수 (잠금 파일/오프라인 보관)
@@ -129,6 +148,7 @@
 - age:  https://github.com/FiloSottile/age
 - 설치 스크립트: shell-common/tools/custom/install_sops_age.sh
 - 진단/워크플로 함수: sops-status, senv (shell-common/tools/integrations/sops.sh)
+- 주입 함수: secret-run, mcporter, twitter (shell-common/functions/secret_run.sh)
 
 ## 엣지케이스 / 의도된 동작
 

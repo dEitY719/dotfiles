@@ -294,33 +294,48 @@ _senv_run() {
         return 1
     fi
     (
-        # Split on newlines with parameter expansion (no `read`, no heredoc
-        # temp file, same behaviour in bash and zsh). Each KEY=VALUE line is
-        # exported verbatim; nothing is eval'ed.
-        _senv_nl='
-'
-        _senv_rest="$_senv_plain"
+        _senv_export_lines "$_senv_plain"
         unset _senv_plain
-        while [ -n "$_senv_rest" ]; do
-            _senv_line="${_senv_rest%%"$_senv_nl"*}"
-            case "$_senv_rest" in
-                *"$_senv_nl"*) _senv_rest="${_senv_rest#*"$_senv_nl"}" ;;
-                *) _senv_rest="" ;;
-            esac
-            case "$_senv_line" in
-                "" | "#"*) continue ;;
-                [A-Za-z_]*=*) ;;
-                *) continue ;;
-            esac
-            case "${_senv_line%%=*}" in
-                *[!A-Za-z0-9_]*) continue ;;
-            esac
-            # shellcheck disable=SC2163  # exports the KEY=VALUE string itself
-            export "$_senv_line"
-        done
-        unset _senv_nl _senv_rest _senv_line
         exec "$@"
     )
+}
+
+# Export each KEY=VALUE line of decrypted dotenv text $1 into the current
+# shell. Optional $2 is a space-separated allow-list of key names; other keys
+# are skipped. Shared by `senv run` and dotfiles_secret_run (#2096).
+# Split on newlines with parameter expansion (no `read`, no heredoc temp file,
+# same behaviour in bash and zsh). Each line is exported verbatim; nothing is
+# eval'ed. Callers run this in a subshell so the values never outlive the
+# command they are for.
+_senv_export_lines() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local _senv_nl _senv_rest _senv_line _senv_only="${2-}"
+    _senv_nl='
+'
+    _senv_rest="$1"
+    while [ -n "$_senv_rest" ]; do
+        _senv_line="${_senv_rest%%"$_senv_nl"*}"
+        case "$_senv_rest" in
+            *"$_senv_nl"*) _senv_rest="${_senv_rest#*"$_senv_nl"}" ;;
+            *) _senv_rest="" ;;
+        esac
+        case "$_senv_line" in
+            "" | "#"*) continue ;;
+            [A-Za-z_]*=*) ;;
+            *) continue ;;
+        esac
+        case "${_senv_line%%=*}" in
+            *[!A-Za-z0-9_]*) continue ;;
+        esac
+        if [ -n "$_senv_only" ]; then
+            case " $_senv_only " in
+                *" ${_senv_line%%=*} "*) ;;
+                *) continue ;;
+            esac
+        fi
+        # shellcheck disable=SC2163  # exports the KEY=VALUE string itself
+        export "$_senv_line"
+    done
 }
 
 # Report-only health check. Prints success/failure per item and one next
