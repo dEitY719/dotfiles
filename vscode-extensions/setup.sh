@@ -123,6 +123,7 @@ echo ""
 
 ux_success "VS Code extensions 설정이 완료되었습니다!"
 ux_info "다음 설정이 적용되었습니다:"
+# shellcheck disable=SC2088  # display text, not a path
 ux_bullet "~/.prettierrc → ~/dotfiles/vscode-extensions/.prettierrc (symlink)"
 echo ""
 
