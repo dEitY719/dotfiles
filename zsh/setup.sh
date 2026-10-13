@@ -1,4 +1,5 @@
 #!/bin/zsh
+# shellcheck disable=SC1071  # zsh script; shellcheck cannot parse zsh
 
 # zsh/setup.sh: Zsh shell environment setup
 #
