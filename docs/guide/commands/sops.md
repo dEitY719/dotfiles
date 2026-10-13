@@ -112,7 +112,7 @@
     - PC 마다 다른 비밀 아닌 값(CA 경로, 활성 계정)은 *.local.sh 유지
 - **secret-run [-k KEY]... <cmd>** — $DOTFILES_ROOT/.enc.env 를 주입해 실행 — cwd 불변, 평문 파일 없음, 셸에는 안 남음
 - **mcporter <args>** — EXA_API_KEY 만 주입 — mcporter.json 은 ${EXA_API_KEY:-} 로 읽음
-- **mcporter-exa-setup** — mcporter.json 의 exa 를 placeholder 로 교체 — .enc.env 에 EXA_API_KEY 가 있어야 실행, 1회
+- **mcporter-exa-setup** — mcporter.json 의 exa 를 placeholder 로 교체 — .enc.env 에 EXA_API_KEY 가 있어야 실행, ./setup.sh 가 자동 실행
 - **twitter <args>** — TWITTER_AUTH_TOKEN / TWITTER_CT0 만 주입 — twitter status 로 확인
 - **./hermes/setup.sh** — HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY — 둘 다 없을 때만 hermes/llm_endpoint.local.sh (키별 병합 없음)
 - 실패(키 없음, 권한 600 아님, 복호화 실패)는 경고 후 값 없이 실행 -> 기존 fallback 그대로
