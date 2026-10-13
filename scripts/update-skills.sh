@@ -139,28 +139,33 @@ if [ "$STEP_VERBOSE" != 1 ]; then
     ux_info "skills-sync (요약 모드 — 전체 출력은 skills-sync -v)"
 fi
 
+# --dry-run: steps 1/2/4 preview only; synthesis (3/5) is skipped.
+clone_args=()
+plugins_args=()
+sfx=""
 if [ "$dry_run" = 1 ]; then
-    _us_step 1 "git-clone-skills (dry-run)" critical \
-        "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" --dry-run
-    _us_step 2 "git-pull-skills (dry-run)" critical \
-        "${DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" "${pull_args[@]}"
-    _us_step 4 "update-plugins (dry-run)" optional \
-        "${DOTFILES_ROOT}/claude/plugin/update-plugins.sh" --dry-run
-    plugins_rc=$STEP_LAST_RC
-    ux_info "--dry-run: 합성 단계(claude/setup.sh, setup-skills-ssot.sh)를 건너뜁니다"
-    step_summary "skills-sync (dry-run)"
-    exit "$plugins_rc"
+    clone_args=(--dry-run)
+    plugins_args=(--dry-run)
+    sfx=" (dry-run)"
 fi
 
-_us_step 1 git-clone-skills critical "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh"
-_us_step 2 git-pull-skills critical \
+_us_step 1 "git-clone-skills$sfx" critical \
+    "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" ${clone_args[@]+"${clone_args[@]}"}
+_us_step 2 "git-pull-skills$sfx" critical \
     "${DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" ${pull_args[@]+"${pull_args[@]}"}
-_us_step 3 claude/setup.sh critical "${DOTFILES_ROOT}/claude/setup.sh"
+if [ "$dry_run" != 1 ]; then
+    _us_step 3 claude/setup.sh critical "${DOTFILES_ROOT}/claude/setup.sh"
+fi
 # plugin 갱신 실패(네트워크 등)는 5단계 합성을 막지 않는다 — 끝까지 진행한 뒤
 # 그 종료 코드로 끝낸다.
-_us_step 4 update-plugins optional "${DOTFILES_ROOT}/claude/plugin/update-plugins.sh"
+_us_step 4 "update-plugins$sfx" optional \
+    "${DOTFILES_ROOT}/claude/plugin/update-plugins.sh" ${plugins_args[@]+"${plugins_args[@]}"}
 plugins_rc=$STEP_LAST_RC
-_us_step 5 setup-skills-ssot critical "${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
+if [ "$dry_run" = 1 ]; then
+    ux_info "--dry-run: 합성 단계(claude/setup.sh, setup-skills-ssot.sh)를 건너뜁니다"
+else
+    _us_step 5 setup-skills-ssot critical "${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
+fi
 
-step_summary skills-sync
+step_summary "skills-sync$sfx"
 exit "$plugins_rc"
