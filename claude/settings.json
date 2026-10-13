@@ -51,6 +51,10 @@
           {
             "command": "${HOME}/dotfiles/claude/hooks/bash_stdin_repl_guard.py",
             "type": "command"
+          },
+          {
+            "command": "${HOME}/dotfiles/claude/hooks/bash_unattended_rm_allow.py",
+            "type": "command"
           }
         ],
         "matcher": "Bash"
