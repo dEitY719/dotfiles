@@ -1,6 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
-# shell-common/tools/external/zsh.sh
+# shell-common/tools/integrations/zsh.sh
 # Auto-generated from bash/app/zsh.bash
 
 # Guard: This file contains bash-only features (export -f)

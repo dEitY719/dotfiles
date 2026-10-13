@@ -1,6 +1,6 @@
 #!/bin/sh
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
-# shell-common/tools/external/gpu.sh
+# shell-common/tools/integrations/gpu.sh
 # Auto-generated from bash/app/gpu.bash
 
 
