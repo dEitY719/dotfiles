@@ -13,7 +13,7 @@
 #
 # EXIT: 항상 0 — 실패해도 setup.sh 흐름을 막지 않는다. 결과는 ux 로그로 표면화.
 
-# UX lib — fail-fast to stay consistent with install.sh / setup.sh.
+# UX lib — fail-fast to stay consistent with setup.sh.
 _SCRIPT_PATH=$(cd "$(dirname "$0")" && pwd)
 DOTFILES_ROOT="$(cd "$_SCRIPT_PATH/.." && pwd)"
 UX_LIB="$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh"

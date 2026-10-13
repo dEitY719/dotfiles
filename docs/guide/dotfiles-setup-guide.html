@@ -520,9 +520,9 @@
             </tr>
             <tr>
               <td><code>./install.sh</code></td>
-              <td>Claude / PG 보조 설정</td>
-              <td><span class="badge badge-optional">Optional</span></td>
-              <td>Optional</td>
+              <td>폐기됨 (#2131) — 실행 시 exit 2, ./setup.sh 사용</td>
+              <td><span class="badge badge-optional">Deprecated</span></td>
+              <td>Never</td>
             </tr>
           </tbody>
         </table>
@@ -534,7 +534,7 @@
       <div class="container">
         <div class="section-header animate">
           <h2>New User Setup</h2>
-          <p>3단계로 완료하는 초기 설치</p>
+          <p>2단계로 완료하는 초기 설치</p>
         </div>
 
         <div class="process-flow">
@@ -545,11 +545,6 @@
           </div>
           <div class="process-step animate delay-2">
             <span class="step-num">Step 2</span>
-            <h3>Claude / PG Setup</h3>
-            <p>install.sh 실행으로 Claude 설정 및 PostgreSQL 구성</p>
-          </div>
-          <div class="process-step animate delay-3">
-            <span class="step-num">Step 3</span>
             <h3>Restart Shell</h3>
             <p>exec bash 또는 exec zsh로 새 shell 진입</p>
           </div>
@@ -606,14 +601,14 @@
           <div class="file-card animate delay-4">
             <div class="file-name">git/setup.sh</div>
             <h3>Git Config Manager</h3>
-            <p>~/.gitconfig symlink 생성, UX 함수를 이용한 피드백</p>
-            <div class="role"><strong>Special:</strong> UX 피드백</div>
+            <p>~/.gitconfig 실파일 + [include] git/.gitconfig 보장 (symlink 아님), UX 피드백</p>
+            <div class="role"><strong>Special:</strong> include 모델, 로컬 설정 보존</div>
           </div>
           <div class="file-card animate delay-5">
-            <div class="file-name">install.sh</div>
-            <h3>Claude / PG Setup</h3>
-            <p>Claude 설정, PostgreSQL 설정, Bash/Zsh/Git symlink 재설정</p>
-            <div class="role"><strong>Note:</strong> Claude, PG 추가 설정만 가능</div>
+            <div class="file-name">claude/setup.sh</div>
+            <h3>Claude Code Setup</h3>
+            <p>settings.json 실파일 복사, statusline / docs symlink (setup.sh 가 호출)</p>
+            <div class="role"><strong>Note:</strong> install.sh 는 폐기됨 (#2131)</div>
           </div>
           <div class="file-card animate delay-6">
             <div class="file-name">setup.sh (root)</div>
@@ -640,9 +635,7 @@
             <div style="font-family: monospace; background: var(--bg); padding: 16px; border-radius: 8px;">
               <div style="color: var(--text-secondary);">$ cd ~/dotfiles</div>
               <div>$ ./setup.sh</div>
-              <div style="color: var(--text-secondary);"># Step 1: Shell 설정</div>
-              <div>$ ./install.sh</div>
-              <div style="color: var(--text-secondary);"># Step 2: Claude/PG 설정</div>
+              <div style="color: var(--text-secondary);"># 전체 설정 (Claude Code 포함)</div>
               <div>$ exec bash</div>
             </div>
           </div>
@@ -651,8 +644,8 @@
             <p style="margin-bottom: 16px;">업데이트만 필요할 때</p>
             <div style="font-family: monospace; background: var(--bg); padding: 16px; border-radius: 8px;">
               <div style="color: var(--text-secondary);">$ cd ~/dotfiles</div>
-              <div>$ ./install.sh</div>
-              <div style="color: var(--text-secondary);"># Claude/PG 설정만 업데이트</div>
+              <div>$ ./setup.sh</div>
+              <div style="color: var(--text-secondary);"># 멱등 — 다시 실행하면 수렴</div>
             </div>
           </div>
           <div class="file-card animate delay-3" style="border-left: 4px solid var(--warning);">
@@ -722,8 +715,8 @@
         <div class="principles-grid">
           <div class="principle-card animate delay-1">
             <div class="num">01</div>
-            <h3>Complementary Relationship</h3>
-            <p>setup.sh와 install.sh는 보완 관계 — setup.sh: Shell 환경, install.sh: Claude/PG</p>
+            <h3>One Command</h3>
+            <p>./setup.sh 하나로 수렴 — install.sh 는 폐기됨 (#2131)</p>
           </div>
           <div class="principle-card animate delay-2">
             <div class="num">02</div>
@@ -732,8 +725,8 @@
           </div>
           <div class="principle-card animate delay-3">
             <div class="num">03</div>
-            <h3>Symlink Only</h3>
-            <p>install.sh는 symlink 재설정만 가능 — bash/zsh 환경변수 설정 안 함</p>
+            <h3>Idempotent</h3>
+            <p>신규 설치와 업데이트 모두 같은 ./setup.sh — 반복 실행해도 같은 상태</p>
           </div>
           <div class="principle-card animate delay-4">
             <div class="num">04</div>
@@ -742,8 +735,8 @@
           </div>
           <div class="principle-card animate delay-5">
             <div class="num">05</div>
-            <h3>Recovery Impossible</h3>
-            <p>install.sh로 복구 불가능 — 초기 설치 시 setup.sh 필수</p>
+            <h3>Real-file Configs</h3>
+            <p>~/.gitconfig, ~/.claude/settings.json 은 실파일 — 도구의 쓰기가 SSOT 를 오염시키지 않음</p>
           </div>
         </div>
       </div>
@@ -768,8 +761,7 @@ dotfiles/
 │   ├── functions/ # shell 함수
 │   ├── env/       # 환경 설정
 │   └── tools/     # 유틸리티 도구
-├── setup.sh       # Orchestrator (필수)
-└── install.sh     # Claude/PG (선택)
+└── setup.sh       # Orchestrator (유일한 진입점)
           </pre>
         </div>
       </div>

@@ -30,7 +30,7 @@ _dot_help_summary() {
     ux_bullet_sub "setup: setup.sh | maintenance | diagnostics"
     ux_bullet_sub "features: shell separation | UX | help | git | skills"
     ux_bullet_sub "commands: my-help | src | dot | ux-help"
-    ux_bullet_sub "docs: SETUP_GUIDE | AGENTS | UX_GUIDELINES"
+    ux_bullet_sub "docs: setup guide | AGENTS | UX_GUIDELINES"
     ux_bullet_sub "details: dot-help <section>  (example: dot-help setup)"
 }
 
@@ -77,7 +77,7 @@ _dot_help_rows_commands() {
 }
 
 _dot_help_rows_docs() {
-    ux_info "Complete setup guide: ./SETUP_GUIDE.md"
+    ux_info "Complete setup guide: ./docs/guide/setup.md"
     ux_info "Project structure: ./AGENTS.md"
     ux_info "UX standards: ./shell-common/tools/ux_lib/UX_GUIDELINES.md"
 }

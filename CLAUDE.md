@@ -7,7 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 # Setup
 ./setup.sh          # Symlinks + environment config
-./install.sh        # Full install
 
 # Lint / test tasks
 mise tasks          # SSOT for lint / fix / test / lint-docs — read mise.toml, not this file

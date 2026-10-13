@@ -11,10 +11,10 @@
 #   3. Creates ~/.bashrc symlink
 #   4. Creates ~/.bash_profile symlink (optional)
 #
-# These environment variables are NOT set by install.sh and are CRITICAL
+# These environment variables are CRITICAL
 # for bash shell initialization to work properly.
 #
-# See SETUP_GUIDE.md for more information
+# See docs/guide/setup.md for more information
 
 # --- Constants ---
 

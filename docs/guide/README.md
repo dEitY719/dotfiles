@@ -4,7 +4,7 @@
 
 ## 진입 가이드 (루트 레벨 파일)
 
-- [setup.md](./setup.md) — 초기 설치 + `setup.sh` / `install.sh` 실행 순서
+- [setup.md](./setup.md) — 초기 설치 + `setup.sh` 실행 순서 (`install.sh` 는 폐기됨)
 - [team-git.md](./team-git.md) — 팀 Git Hooks 가이드 (커밋 표준, branch naming, FAQ)
 - [internal-pc.md](./internal-pc.md) — 사내 PC 환경 셋업 차이점
 - [dotfiles-setup-guide.html](./dotfiles-setup-guide.html) — `setup.sh` 의 사람 친화 HTML 변환본

@@ -15,7 +15,7 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 
 핵심 가치 명제:
 
-- **One-command bootstrap** — 신규 머신에서 `./setup.sh && ./install.sh` 만으로 동일 환경 구축
+- **One-command bootstrap** — 신규 머신에서 `./setup.sh` 만으로 동일 환경 구축
 - **POSIX-first shared layer** — `shell-common/` 는 bash/zsh 모두에서 안전하게 동작 (sourcing guard · interactive guard · `[ ]` 호환 문법)
 - **AI agent SSOT** — `claude/skills/` 한 곳에 스킬 정의, 모든 사용자(SSOT) · 멀티 계정 (`~/.claude*/skills` symlink) 으로 배포
 - **GitHub-as-IDE** — issue → PR 까지 5-step composition (`/gh:issue-flow`) 으로 자동화

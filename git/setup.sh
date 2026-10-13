@@ -16,7 +16,7 @@
 #   2. Provides user feedback using UX library
 #   3. Ensures proper git configuration initialization
 #
-# See SETUP_GUIDE.md for more information
+# See docs/guide/setup.md for more information
 
 # --- Constants ---
 # 현재 스크립트가 위치한 git 디렉토리의 절대 경로를 설정합니다.
