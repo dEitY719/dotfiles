@@ -855,9 +855,25 @@ _git_hook_run_script() {
     limit="$(_resolve_git_hook_timeout)"
     mkdir -p "$home/.config" "$home/.cache"
     : >"$home/.gitconfig"
-    local isolate=(env HOME="$home" XDG_CONFIG_HOME="$home/.config"
+    # Strip the repo-locating vars git exports to hooks (a linked worktree's
+    # pre-push sees an absolute GIT_DIR): under PRE_PUSH_FULL_TEST=1 the
+    # fixtures' `git -C <tmp> init/config/commit` would otherwise act on the
+    # real repo. Also strip hook escape hatches / leak-guard config so a
+    # caller's exported SKIP_LEAK_GUARD=1 etc. cannot flip expected verdicts.
+    local isolate=(env
+        -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_COMMON_DIR
+        -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES
+        -u GIT_PREFIX -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_COUNT
+        -u SKIP_LEAK_GUARD -u SKIP_PRE_PUSH -u GIT_HOOKS_SKIP_GLOBAL
+        -u ALLOW_MAIN_COMMIT -u UPSTREAM_REMOTES_ERE -u LEAK_PATTERNS_ERE
+        -u PRE_PUSH_TEST -u PRE_PUSH_FULL_TEST
+        HOME="$home" XDG_CONFIG_HOME="$home/.config"
         XDG_CACHE_HOME="$home/.cache" GIT_CONFIG_NOSYSTEM=1
-        GIT_CONFIG_GLOBAL="$home/.gitconfig")
+        GIT_CONFIG_GLOBAL="$home/.gitconfig"
+        # Keep mise shims on PATH (shellcheck, shfmt, ...) resolvable: pin
+        # their data/config dirs to the real ones before HOME moves.
+        MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
+        MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}")
     # --foreground keeps the script in the runner's process group so an
     # interrupt's group kill still reaches it (see _bats_run_file).
     if command -v timeout >/dev/null 2>&1; then
@@ -866,9 +882,13 @@ _git_hook_run_script() {
         "${isolate[@]}" bash "$script" >"$log" 2>&1
     fi
     rc=$?
-    if [ "$rc" = "124" ]; then
+    # 137 = the -k 10 follow-up KILL (script ignored TERM); same as 124.
+    case "$rc" in
+    124 | 137)
+        rc=124
         printf '# killed after GIT_HOOK_TEST_TIMEOUT=%ss\n' "$limit" >>"$log"
-    fi
+        ;;
+    esac
     return "$rc"
 }
 
@@ -947,13 +967,13 @@ run_tests() {
 
     local exit_code=0
 
-    # Serial (-s): fully sequential, as before.
     # Scratch dir for the git hook phase (#2133): logs + per-script HOMEs,
     # removed by _on_test_exit even on interrupt.
     local hooks_dir
     hooks_dir="$(mktemp -d)"
     _TEST_TMP_PATHS="$_TEST_TMP_PATHS $hooks_dir"
 
+    # Serial (-s): fully sequential, as before.
     if [ "$SERIAL" = "1" ] || [ "${TEST_PHASES_SEQUENTIAL:-0}" = "1" ]; then
         run_bats || exit_code=1
         run_golden_rules || exit_code=1
