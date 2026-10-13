@@ -3,7 +3,7 @@
 # zsh/main.zsh
 # Zsh Dotfiles Loader (SOLID Principle Compliant)
 # Completely independent from bash - no emulation, native zsh execution
-# Loading order: Env → UX → Alias → Functions → Utils → App
+# Loading order: UX → Env → Alias → Functions → Integrations → Projects → App
 
 # Exit if not in zsh (safely return without killing shell)
 if [ -z "$ZSH_VERSION" ]; then

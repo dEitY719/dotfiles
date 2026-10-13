@@ -88,8 +88,8 @@ _source_module() {
 # so under zsh it self-disabled on the very first line and every prior test
 # here only ever proved the bash path. Prove the guard really fires when a
 # zsh shell sources this file, with a $HOME whose dotfiles is an unrelated
-# repo. The file is re-sourced explicitly rather than read off zsh/main.zsh
-# Phase 5 because both loaders source with `2>/dev/null` (safe_source /
+# repo. The file is re-sourced explicitly rather than read off zsh/main.zsh's
+# functions block because both loaders source with `2>/dev/null` (safe_source /
 # load_category), which would swallow the very stderr under test.
 @test "zsh: #1454 foreign-checkout guard warns when sourced under zsh" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not available"

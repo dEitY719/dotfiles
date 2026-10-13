@@ -3,7 +3,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/util/loader.sh
 # Category module loader
-# Centralizes module loading logic for both bash and zsh
+# Used by bash/main.bash (zsh/main.zsh loops with safe_source instead)
 #
 # Usage:
 #   source shell-common/util/loader.sh
@@ -47,14 +47,7 @@ load_category() {
         *.local.sh) continue ;;
         esac
 
-        # Source file
-        if [ -n "${ZSH_VERSION}" ]; then
-            # Zsh: use dot command for consistency
-            . "$f" 2>/dev/null
-        else
-            # Bash/sh: use source or dot
-            . "$f" 2>/dev/null
-        fi
+        . "$f" 2>/dev/null
 
         count=$((count + 1))
 

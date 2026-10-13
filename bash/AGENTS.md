@@ -25,7 +25,7 @@ for file in "${SHELL_COMMON}/aliases/"*.sh; do
 done
 
 # Loading bash-specific modules
-for file in "${DOTFILES_BASH_DIR}/env/"*.sh; do
+for file in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     [ -r "$file" ] && safe_source "$file" "Failed to load bash env"
 done
 ```
