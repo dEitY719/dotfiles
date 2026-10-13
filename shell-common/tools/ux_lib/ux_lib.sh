@@ -61,7 +61,7 @@ _ux_tput_cap() {
 # xterm/screen/tmux terminfo families with 16+ colors every other cap is plain
 # ECMA-48 SGR, so it is spelled as a literal (byte-identical to what their
 # terminfo returns); only sgr0 varies (`\e(B\e[m` vs `\e[m\017`) and comes
-# from tput. Any other TERM (rxvt, xterm-direct, ...), tput missing, unknown
+# from tput. Any other TERM (rxvt, konsole, *-direct, ...), tput missing, unknown
 # TERM or <16 colors falls back to per-cap tput, so behavior is unchanged.
 UX_BOLD="" UX_DIM="" UX_RESET=""
 UX_PRIMARY="" UX_SUCCESS="" UX_WARNING="" UX_ERROR="" UX_INFO="" UX_MUTED=""
@@ -71,7 +71,8 @@ if ! $_UX_DISABLE_ANSI; then
     _ux_ti=""
     case "${TERM:-}" in
         *-direct*) ;;
-        xterm-256color | xterm-16color | xterm-88color | screen* | tmux*)
+        # Not `screen*`: screen.rxvt / screen.konsole* inherit rxvt/konsole caps.
+        xterm-256color | xterm-16color | xterm-88color | screen | screen-* | screen.xterm* | tmux*)
             _ux_ti=$(printf 'colors\nsgr0\n' | tput -S 2>/dev/null) || _ux_ti=""
             ;;
     esac
