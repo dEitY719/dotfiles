@@ -199,7 +199,7 @@ _hp_resolve_config_dir() {
         # above; only the wording of the failure is this helper's business.
         if ! _claude_account_logged_in "${_cfg_dir}"; then
             ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing, empty, or not valid JSON (internal mode also accepts apiKeyHelper or ANTHROPIC_API_KEY) — the pane would open on 'Not logged in' and every prompt would stall."
-            ux_info "Run: claude-accounts status   (then log that account in)" >&2
+            ux_info "Run: claude-accounts status   (then log that account in)" >&4
             exit 1
         fi
 
