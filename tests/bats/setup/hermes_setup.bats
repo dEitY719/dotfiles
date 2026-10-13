@@ -147,7 +147,7 @@ STUB
     grep -qx "model.api_key=fake-key-123" "${HOME}/hermes-set.log"
 }
 
-@test "endpoint: .enc.env without HERMES keys warns and falls back" {
+@test "endpoint: .enc.env without HERMES keys notes it and falls back" {
     _part3_stubs
     printf 'EXA_API_KEY=fake-exa\n' > "$DOTFILES_ENC_ENV"
     run bash "${HERMES_SETUP}"
