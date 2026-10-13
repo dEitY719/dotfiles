@@ -59,8 +59,10 @@ _env_registered() {
 }
 
 # CHECK_CERT bundle 의 인증서별 SHA-256 지문 — 콜론 제거·대문자, 한 줄에 하나 (순서 무관).
-# openssl 기동 비용(~10ms)이 인증서당 들어 시스템 bundle(~120개)에서 1.5s → 병렬 실행 (#2109).
+# openssl 기동 비용(~10ms)이 인증서당 들어 시스템 bundle(~120개)에서 1.5s → 병렬 실행 (#2109, 측정은 PR #2114).
 # awk 가 PEM 블록을 '|' 로 이은 한 줄로 내고, tr 이 그 줄을 NUL 구분·원래 줄바꿈으로 되돌린다.
+# '|' 는 base64 본문·BEGIN/END 줄에 나오지 않고, 블록 밖 텍스트(-text 덤프 등)는 awk 가 이미 버린다.
+# 지문 한 줄은 PIPE_BUF 보다 훨씬 짧아 병렬 출력이 섞이지 않는다. xargs -P/-r 은 GNU·BSD·busybox 공통.
 # shellcheck disable=SC2016 # sh -c 의 $1 은 xargs 가 넘기는 자식 셸 인자
 _bundle_fps() {
     awk '{ sub(/\r$/, "") }
@@ -69,7 +71,7 @@ _bundle_fps() {
         # 인증서는 수 KB — 64KB 넘는 블록은 깨진 것으로 보고 버린다 (xargs 인자 한도로 전체가 멈추지 않게).
         index($0, "-----END CERTIFICATE-----") && _in { if (length(_blk) < 65536) print _blk; _in = 0 }' "$CHECK_CERT" |
         tr '\n|' '\0\n' |
-        xargs -0 -n1 -P 8 \
+        xargs -0 -r -n1 -P 8 \
             sh -c 'printf "%s" "$1" | openssl x509 -noout -fingerprint -sha256 2>/dev/null' _ |
         sed 's/.*=//' | tr -d ':' | tr 'a-f' 'A-F'
 }
