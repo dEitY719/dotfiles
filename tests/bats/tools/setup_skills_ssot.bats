@@ -1048,3 +1048,14 @@ seed_router_source() {
     assert_output --partial "라우터 연결을 건너뜁니다"
     [ ! -e "${WS_ROOT}/AGENTS.md" ]
 }
+
+@test "router: a missing router source is warned about and skipped (#2123)" {
+    seed_router_source
+    rm -f "$ROUTER_SRC"
+
+    run_setup
+    assert_success
+    assert_output --partial "라우터 원본이 없습니다"
+    [ ! -e "${WS_ROOT}/AGENTS.md" ]
+    [ ! -L "${WS_ROOT}/AGENTS.md" ]
+}

@@ -4,7 +4,8 @@
 #
 #   1. claude/plugin/git-clone-skills.sh      — manifest 의 누락 repo clone (idempotent, --dry-run 만 전달)
 #   2. claude/plugin/git-pull-skills.sh "$@"  — workspace repo pull
-#   3. claude/setup.sh                        — Claude Code 합성
+#   3. claude/setup.sh                        — 계정 디렉토리 링크 + 남은 평면 스킬 링크 정리
+#                                               (스킬 자체는 4단계 plugin store 에서 로드)
 #   4. claude/plugin/update-plugins.sh        — Claude Code plugin store 갱신
 #                                               (marketplace update + plugin update)
 #   5. scripts/setup-skills-ssot.sh           — OpenCode/Codex/agy 합성 + Hermes external_dirs (#1829)

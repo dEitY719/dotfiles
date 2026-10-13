@@ -212,8 +212,13 @@ _union_plugins() {
 }
 
 # _select_marketplaces <mp json> <filter:true|false> — marketplace names, one per line.
-# Owners are compared case-insensitively, as GitHub does.
+# Owners are compared case-insensitively, as GitHub does. Only string sources
+# ("owner/repo" or a git URL) are supported; any other shape is warned about on
+# stderr instead of being dropped silently.
 _select_marketplaces() {
+	local bad
+	bad="$(printf '%s' "$1" | jq -r 'to_entries[] | select(.value | type != "string") | .key')" || return 1
+	[ -z "$bad" ] || ux_warning "Unsupported (non-string) marketplace source — skipped: $(printf '%s' "$bad" | paste -sd, -)" >&2
 	if [ "$2" = true ] && ! $ALL_OWNERS; then
 		printf '%s' "$1" | jq -r --arg owner "$OWNER_FILTER" \
 			'to_entries[] | select(.value | type == "string")
@@ -238,6 +243,13 @@ CLAUDE_CONFIG_DIR="$(_target_config_dir)"
 # or "uninstalled on purpose" (restore.sh tombstone): updating it can only
 # fail, which would turn every skills-sync red.
 STORE_DIR="$CLAUDE_CONFIG_DIR/plugins"
+# A missing store means setup has not linked this account to the shared store
+# yet. Running claude now would create a real $STORE_DIR that claude/setup.sh's
+# link convergence then has to back up — so stop and point at setup instead.
+if ! $DRY_RUN && [ ! -e "$STORE_DIR" ]; then
+	ux_warning "Plugin store not found: $STORE_DIR — run ./claude/setup.sh (and claude/plugin/restore.sh) first. Skipping."
+	exit 0
+fi
 KNOWN_MPS=""
 KNOWN_MPS_SET=false
 INSTALLED_PLS=""
@@ -249,6 +261,12 @@ fi
 if [ -r "$STORE_DIR/installed_plugins.json" ] &&
 	INSTALLED_PLS="$(jq -r '(.plugins // {}) | keys[]' "$STORE_DIR/installed_plugins.json" 2>/dev/null)"; then
 	INSTALLED_PLS_SET=true
+fi
+
+# A store file that exists but lists nothing (`{}`) would silently skip every
+# entry below and still exit 0 — indistinguishable from a healthy run.
+if { $KNOWN_MPS_SET && [ -z "$KNOWN_MPS" ]; } || { $INSTALLED_PLS_SET && [ -z "$INSTALLED_PLS" ]; }; then
+	ux_warning "Plugin store at $STORE_DIR lists no marketplaces/plugins — nothing will be updated (run claude/plugin/restore.sh)."
 fi
 
 # _in_list <needle> <newline list>
@@ -275,6 +293,7 @@ MP_REFRESHED=0
 PL_TOTAL=0
 PL_UPDATED=0
 PL_UPTODATE=0
+PL_UNKNOWN=0
 PL_SKIPPED=0
 FAILED=0
 
@@ -313,12 +332,18 @@ EOF
 $(printf '%s\n' "$json" | jq -r '[.updateOutcome // "", .oldVersion // "", .newVersion // ""] | join("|")' 2>/dev/null)
 EOF
 	fi
+	# Only the two outcomes the CLI documents are counted; anything else (no
+	# JSON, a new outcome value) is reported as unknown rather than as "updated",
+	# which would print a false restart hint.
 	if [ "$outcome" = "up_to_date" ] || { [ -z "$outcome" ] && printf '%s' "$out" | grep -q 'already at the latest'; }; then
 		ux_info "  $id: up to date${new:+ ($new)}"
 		PL_UPTODATE=$((PL_UPTODATE + 1))
-	else
+	elif [ "$outcome" = "updated" ]; then
 		ux_success "  $id: updated${old:+ $old -> $new}"
 		PL_UPDATED=$((PL_UPDATED + 1))
+	else
+		ux_warning "  $id: unrecognized update result (${outcome:-no JSON}) — check 'claude plugin update $id' by hand"
+		PL_UNKNOWN=$((PL_UNKNOWN + 1))
 	fi
 }
 
@@ -340,7 +365,7 @@ _update_scope() {
 		FAILED=$((FAILED + 1))
 		return 0
 	fi
-	if ! names="$(_select_marketplaces "$mp_json" "$filter" 2>/dev/null)"; then
+	if ! names="$(_select_marketplaces "$mp_json" "$filter")"; then
 		ux_error "Failed to read marketplace list: $dir/marketplaces.json"
 		FAILED=$((FAILED + 1))
 		return 0
@@ -390,6 +415,9 @@ else
 	ux_bullet "Plugins updated: $PL_UPDATED"
 	ux_bullet "Plugins up to date: $PL_UPTODATE"
 	ux_bullet "Failed: $FAILED"
+fi
+if [ "$PL_UNKNOWN" -gt 0 ]; then
+	ux_bullet "Plugins with an unrecognized result: $PL_UNKNOWN"
 fi
 if [ "$PL_SKIPPED" -gt 0 ]; then
 	ux_bullet "Plugins skipped (not installed): $PL_SKIPPED"
