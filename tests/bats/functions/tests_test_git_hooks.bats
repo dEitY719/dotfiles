@@ -99,6 +99,52 @@ git config --global user.name probe
     [ ! -e "$real_home/.gitconfig" ]
 }
 
+@test "each script gets its own HOME: a global git write does not reach the next" {
+    # Discovery is glob-ordered: a.sh runs before b.sh.
+    fake_script a.sh 'git config --global user.name leaked-from-a'
+    fake_script b.sh '[ -z "$(git config --global user.name)" ] || { echo "HOME shared"; exit 1; }'
+    run run_git_hook_tests "$WORK"
+    assert_success
+    assert_output --partial "git hooks: 2 scripts passed"
+}
+
+@test "a 137 exit before the cap is reported as a failure, not a timeout" {
+    fake_script oom.sh 'exit 137'
+    GIT_HOOK_TEST_TIMEOUT=600 run run_git_hook_tests "$WORK"
+    assert_failure
+    refute_output --partial "killed after GIT_HOOK_TEST_TIMEOUT"
+}
+
+# run_tests wiring: stub the other phases so only the git hook phase decides
+# the result, then check both the parallel and the sequential path.
+_stub_other_phases() {
+    run_bats() { echo "stub-bats"; }
+    run_golden_rules() { echo "stub-golden"; }
+    run_pytest() { echo "stub-pytest"; }
+}
+
+@test "run_tests (parallel): a failing hook script fails the run and its log is printed" {
+    _stub_other_phases
+    fake_script bad.sh 'echo hook-phase-detail; exit 1'
+    SERIAL=0 TEST_PHASES_SEQUENTIAL=0 run run_tests
+    assert_failure
+    assert_output --partial "Running Git Hook Tests"
+    assert_output --partial "hook-phase-detail"
+    assert_output --partial "stub-pytest"
+}
+
+@test "run_tests (TEST_PHASES_SEQUENTIAL=1): hook phase runs and gates the result" {
+    _stub_other_phases
+    fake_script bad.sh 'exit 1'
+    SERIAL=0 TEST_PHASES_SEQUENTIAL=1 run run_tests
+    assert_failure
+    assert_output --partial "FAILED:"
+    fake_script bad.sh 'exit 0'
+    SERIAL=0 TEST_PHASES_SEQUENTIAL=1 run run_tests
+    assert_success
+    assert_output --partial "git hooks: 1 scripts passed"
+}
+
 @test "scripts never inherit a hook's GIT_DIR or leak-guard escape hatches" {
     fake_script env.sh '
 [ -z "${GIT_DIR+x}" ] || { echo "GIT_DIR leaked: $GIT_DIR"; exit 1; }
