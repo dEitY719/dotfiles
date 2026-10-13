@@ -634,12 +634,16 @@ _claude_backup_original() {
         # shellcheck disable=SC1091
         . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/functions/dotfiles_backup.sh" || return 1
     fi
-    _cbo_dest=$(dotfiles_backup_path "$_cbo_tgt" "$DOTFILES_ORIGINAL_SUFFIX")
+    # Never pass an empty suffix: the helper would fall back to
+    # DOTFILES_BACKUP_SUFFIX, and if that is empty too dest == target and its
+    # `rm -rf <dest>` would delete the very data being backed up.
+    _cbo_suffix="${DOTFILES_ORIGINAL_SUFFIX:-.original}"
+    _cbo_dest=$(dotfiles_backup_path "$_cbo_tgt" "$_cbo_suffix")
     if [ -e "$_cbo_dest" ] || [ -L "$_cbo_dest" ]; then
         ux_warning "  replacing previous backup (latest-only, #806): $_cbo_dest"
     fi
     ux_warning "  backing up $_cbo_label: $_cbo_tgt → $_cbo_dest"
-    dotfiles_backup_move "$_cbo_tgt" "$DOTFILES_ORIGINAL_SUFFIX" >/dev/null || {
+    dotfiles_backup_move "$_cbo_tgt" "$_cbo_suffix" >/dev/null || {
         ux_error "  backup failed: $_cbo_tgt → $_cbo_dest"
         return 1
     }

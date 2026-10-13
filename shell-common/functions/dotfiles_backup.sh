@@ -62,6 +62,12 @@ dotfiles_backup_move() {
     [ -e "$_dbm_target" ] || return 0
     _dbm_dest=$(dotfiles_backup_path "$_dbm_target" "$_dbm_suffix")
     rm -rf "$_dbm_dest" 2>/dev/null || true
+    # A prior backup that survived rm (e.g. unremovable contents) must fail
+    # the move: `mv <target> <existing-dir>` would nest <target> inside it
+    # and still report success.
+    if [ -e "$_dbm_dest" ] || [ -L "$_dbm_dest" ]; then
+        return 1
+    fi
     mv "$_dbm_target" "$_dbm_dest" || return 1
     printf '%s\n' "$_dbm_dest"
 }
