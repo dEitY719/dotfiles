@@ -36,11 +36,25 @@ source "${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 # shellcheck source=../shell-common/tools/ux_lib/step_runner.sh
 source "${DOTFILES_ROOT}/shell-common/tools/ux_lib/step_runner.sh"
 
+_us_help() {
+    ux_usage "skills-sync" "[-v|--verbose] [--dry-run] [git-pull-skills options]" \
+        "clone -> pull -> claude/setup.sh -> update-plugins -> setup-skills-ssot.sh"
+    ux_bullet "-v, --verbose: stream full sub-script output (SKILLS_SYNC_VERBOSE=1 is the same)"
+    ux_bullet "--dry-run: preview clone/pull/update-plugins only, skip synthesis"
+    ux_bullet "other options go to git-pull-skills.sh (see: claude/plugin/git-pull-skills.sh --help)"
+}
+
 verbose="${SKILLS_SYNC_VERBOSE:-0}"
 dry_run=0
 pull_args=()
 for arg in "$@"; do
     case "$arg" in
+    -h | --help | help)
+        # Before any side effect — summary mode would otherwise swallow
+        # git-pull-skills' help text and still run the full sync.
+        _us_help
+        exit 0
+        ;;
     -v | --verbose) verbose=1 ;;
     *)
         if [ "$arg" = --dry-run ]; then dry_run=1; fi
@@ -48,15 +62,13 @@ for arg in "$@"; do
         ;;
     esac
 done
-clone_args=()
-if [ "$dry_run" = 1 ]; then clone_args=(--dry-run); fi
 
-# Last "◆ <key>: <n>" (or ux_lib-fallback "* <key>: <n>") Summary count in the
-# step's captured output; empty when the line is missing. <key> is an ERE.
+# Last "◆ <key>: <n>" (or ux_lib-fallback "* <key>: <n>") Summary count in
+# $_US_CLEAN (the step output with ANSI escapes stripped, set by _us_digest);
+# empty when the line is missing. <key> is an ERE.
 # shellcheck disable=SC2317  # reached only via the STEP_*_FN callbacks
 _us_count() {
-    sed 's/\x1b\[[0-9;]*m//g' "$STEP_OUT" |
-        sed -En "s/^[[:space:]]*(◆|\*) $1: ([0-9]+).*$/\2/p" | tail -n 1
+    sed -En "s/^[[:space:]]*(◆|\*) $1: ([0-9]+).*$/\2/p" <<<"$_US_CLEAN" | tail -n 1
 }
 
 # STEP_DIGEST_FN: change counts from the sub-script's Summary block (F-3).
@@ -64,6 +76,9 @@ _us_count() {
 # shellcheck disable=SC2317  # reached only via the STEP_*_FN callbacks
 _us_digest() {
     local n up fail
+    # Strip SGR (\e[..m) and charset selects (\e(B — part of `tput sgr0` on
+    # xterm-like TERMs, which ux_lib emits even when output is redirected).
+    _US_CLEAN=$(sed -e 's/\x1b\[[0-9;]*m//g' -e 's/\x1b[()][0-9A-Za-z]//g' "$STEP_OUT")
     case "$1" in
     git-clone-skills*)
         n=$(_us_count Cloned)
@@ -126,7 +141,7 @@ fi
 
 if [ "$dry_run" = 1 ]; then
     _us_step 1 "git-clone-skills (dry-run)" critical \
-        "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" "${clone_args[@]}"
+        "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" --dry-run
     _us_step 2 "git-pull-skills (dry-run)" critical \
         "${DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" "${pull_args[@]}"
     _us_step 4 "update-plugins (dry-run)" optional \
@@ -137,8 +152,7 @@ if [ "$dry_run" = 1 ]; then
     exit "$plugins_rc"
 fi
 
-_us_step 1 git-clone-skills critical \
-    "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" ${clone_args[@]+"${clone_args[@]}"}
+_us_step 1 git-clone-skills critical "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh"
 _us_step 2 git-pull-skills critical \
     "${DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" ${pull_args[@]+"${pull_args[@]}"}
 _us_step 3 claude/setup.sh critical "${DOTFILES_ROOT}/claude/setup.sh"
