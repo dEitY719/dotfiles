@@ -188,7 +188,7 @@ _hermes_load_enc_endpoint() {
 	unset HERMES_LLM_BASE_URL HERMES_LLM_API_KEY
 	_senv_export_lines "$plain" "HERMES_LLM_BASE_URL HERMES_LLM_API_KEY"
 	if [ -z "${HERMES_LLM_BASE_URL:-}" ] && [ -z "${HERMES_LLM_API_KEY:-}" ]; then
-		ux_warning ".enc.env has no HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY — trying ${HERMES_ENDPOINT_LOCAL##*/}"
+		ux_info ".enc.env has no HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY — trying ${HERMES_ENDPOINT_LOCAL##*/}"
 		return 1
 	fi
 	ux_info "LLM endpoint values from .enc.env"
