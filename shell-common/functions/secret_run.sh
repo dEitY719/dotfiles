@@ -107,13 +107,15 @@ fi
 # Refuses unless .enc.env decrypts to a non-empty EXA_API_KEY: otherwise the
 # plaintext key would be removed with no other copy, and exa would silently
 # get an empty key.
+# Shared with mcporter/setup.sh's "already converted" check, so the two cannot drift.
+# Single quotes on purpose: mcporter expands the placeholder, not the shell.
+# shellcheck disable=SC2016
+DOTFILES_MCPORTER_EXA_URL='https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY:-}'
 mcporter_exa_setup() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Only $HOME is quoted: naming_check.sh reads a quoted mcporter path as help text.
     local cfg="$HOME"/.mcporter/mcporter.json tmp plain
-    # Single quotes on purpose: mcporter expands the placeholder, not the shell.
-    # shellcheck disable=SC2016
-    local url='https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY:-}'
+    local url="$DOTFILES_MCPORTER_EXA_URL"
     if ! command -v jq >/dev/null 2>&1; then
         ux_error "jq is not installed"
         return 1

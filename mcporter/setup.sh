@@ -20,9 +20,7 @@ DOTFILES_FORCE_INIT=1 source "${SHELL_COMMON}/tools/integrations/sops.sh"
 DOTFILES_FORCE_INIT=1 source "${SHELL_COMMON}/functions/secret_run.sh"
 
 MCPORTER_CFG="${HOME}/.mcporter/mcporter.json"
-# Single quotes on purpose: mcporter expands the placeholder, not the shell.
-# shellcheck disable=SC2016
-MCPORTER_EXA_URL='https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY:-}'
+MCPORTER_EXA_URL="$DOTFILES_MCPORTER_EXA_URL" # defined in secret_run.sh
 
 main() {
     if ! command -v mcporter >/dev/null 2>&1; then
