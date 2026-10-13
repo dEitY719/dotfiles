@@ -18,9 +18,10 @@
     - /lint: 기계+판단 검사 보고서 (자동 수정 안 함)
     - /theme {주제}: 새 추적 테마 개설 + 기존 페이지 근거 수집
     - /archive {경로}: 40-Archive 로 이동 + 위키 링크 재작성 (이동은 이것만)
-- 클립 스킬 (vault 밖)
-    - /pkm:obsidian-web-clip <url>: 99-Inbox/Web/
-    - /pkm:obsidian-session-clip: 99-Inbox/ai-session/
+- pkm 스킬 (vault 밖)
+    - /pkm:obsidian-clip <url|영상|문서>: markitdown 변환 후 99-Inbox/
+    - /pkm:obsidian-clip-session: AI 세션 -> 99-Inbox/ai-session/
+    - /pkm:obsidian-cli: 실행 중인 Obsidian 앱을 obsidian CLI 로 읽기·검색·추가
 - flow: 클립 -> 99-Inbox -> /ingest -> 00-wiki · index.md · log.md
     - details: llm-wiki-help <section>  (sections: commands clip flow related)
 
@@ -36,13 +37,14 @@
 
 ### clip
 
-- **/pkm:obsidian-web-clip <url>** — URL 을 99-Inbox/Web/ 에 클립
-- **/pkm:obsidian-session-clip** — AI 세션을 99-Inbox/ai-session/ 에 클립
-- 두 클리퍼는 Inbox 까지만 넣는다. 이후는 /ingest 담당
+- **/pkm:obsidian-clip <input>** — URL·YouTube·로컬 문서(pdf/docx/xlsx/pptx) 1건을 markitdown 으로 변환해 99-Inbox/ 에 클립
+- **/pkm:obsidian-clip-session** — AI 세션을 99-Inbox/ai-session/ 에 클립. 명시 호출 전용
+- **/pkm:obsidian-cli** — 실행 중인 Obsidian 앱을 obsidian CLI 로 노트 읽기·검색·추가, 플러그인 reload
+- 클리퍼는 Inbox 까지만 넣는다. 이후는 /ingest 담당
 
 ### flow
 
-- 클립 (web-clip / session-clip) -> 99-Inbox -> /ingest -> 00-wiki · index.md · log.md
+- 클립 (obsidian-clip / obsidian-clip-session) -> 99-Inbox -> /ingest -> 00-wiki · index.md · log.md
 
 ### related
 

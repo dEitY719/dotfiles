@@ -11,9 +11,10 @@ _llm_wiki_help_summary() {
     ux_bullet_sub "/lint: 기계+판단 검사 보고서 (자동 수정 안 함)"
     ux_bullet_sub "/theme {주제}: 새 추적 테마 개설 + 기존 페이지 근거 수집"
     ux_bullet_sub "/archive {경로}: 40-Archive 로 이동 + 위키 링크 재작성 (이동은 이것만)"
-    ux_bullet "클립 스킬 (vault 밖)"
-    ux_bullet_sub "/pkm:obsidian-web-clip <url>: 99-Inbox/Web/"
-    ux_bullet_sub "/pkm:obsidian-session-clip: 99-Inbox/ai-session/"
+    ux_bullet "pkm 스킬 (vault 밖)"
+    ux_bullet_sub "/pkm:obsidian-clip <url|영상|문서>: markitdown 변환 후 99-Inbox/"
+    ux_bullet_sub "/pkm:obsidian-clip-session: AI 세션 -> 99-Inbox/ai-session/"
+    ux_bullet_sub "/pkm:obsidian-cli: 실행 중인 Obsidian 앱을 obsidian CLI 로 읽기·검색·추가"
     ux_bullet "flow: 클립 -> 99-Inbox -> /ingest -> 00-wiki · index.md · log.md"
     ux_bullet_sub "details: llm-wiki-help <section>  (sections: commands clip flow related)"
 }
@@ -35,13 +36,14 @@ _llm_wiki_help_rows_commands() {
 }
 
 _llm_wiki_help_rows_clip() {
-    ux_table_row "/pkm:obsidian-web-clip <url>" "URL 을 99-Inbox/Web/ 에 클립"
-    ux_table_row "/pkm:obsidian-session-clip" "AI 세션을 99-Inbox/ai-session/ 에 클립"
-    ux_bullet "두 클리퍼는 Inbox 까지만 넣는다. 이후는 /ingest 담당"
+    ux_table_row "/pkm:obsidian-clip <input>" "URL·YouTube·로컬 문서(pdf/docx/xlsx/pptx) 1건을 markitdown 으로 변환해 99-Inbox/ 에 클립"
+    ux_table_row "/pkm:obsidian-clip-session" "AI 세션을 99-Inbox/ai-session/ 에 클립. 명시 호출 전용"
+    ux_table_row "/pkm:obsidian-cli" "실행 중인 Obsidian 앱을 obsidian CLI 로 노트 읽기·검색·추가, 플러그인 reload"
+    ux_bullet "클리퍼는 Inbox 까지만 넣는다. 이후는 /ingest 담당"
 }
 
 _llm_wiki_help_rows_flow() {
-    ux_bullet "클립 (web-clip / session-clip) -> 99-Inbox -> /ingest -> 00-wiki · index.md · log.md"
+    ux_bullet "클립 (obsidian-clip / obsidian-clip-session) -> 99-Inbox -> /ingest -> 00-wiki · index.md · log.md"
 }
 
 _llm_wiki_help_rows_related() {
