@@ -153,9 +153,9 @@ _lib() {
 
 @test "herdr_pane: resolve_config_dir rejects a logged-out account and names the credentials file" {
     mkdir -p "${HOME}/.claude"
-    echo external >"${HOME}/.dotfiles-setup-mode"
+    echo internal >"${HOME}/.dotfiles-setup-mode"
     _lib 'out=$(_hp_resolve_config_dir "$SHELL_COMMON" job-x stderr 2>&1); echo "rc=$? out=[${out}]"' \
-        "SHELL_COMMON=${SHELL_COMMON}" "HOME=${HOME}"
+        "SHELL_COMMON=${SHELL_COMMON}" "HOME=${HOME}" "ANTHROPIC_API_KEY="
     assert_output --partial "${HOME}/.claude/.credentials.json is missing, empty, or not valid JSON"
     assert_output --partial "Run: claude-accounts status"
     assert_output --partial "rc=1"
