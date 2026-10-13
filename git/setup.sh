@@ -364,6 +364,7 @@ else
 
     linked_global_hooks=0
     replaced_global_hooks=""
+    replaced_lfs_hooks=""
     for global_hook_name in "${GIT_GLOBAL_HOOKS[@]}"; do
         global_hook_source="${GLOBAL_HOOKS_SOURCE_DIR}/${global_hook_name}"
         global_hook_target="${GLOBAL_HOOKS_DIR}/${global_hook_name}"
@@ -371,16 +372,22 @@ else
         if [ -f "$global_hook_source" ]; then
             # A pre-existing REAL file here belongs to another installer
             # (git-lfs writes pre-push / post-commit / post-checkout /
-            # post-merge). create_symlink backs it up as <name>.original, but
-            # the tool that owns it stops working until it is re-installed.
-            # Back up + remove here (same .original as create_symlink) so the
-            # replacements are reported once below instead of 3 lines per hook.
-            # Identical .original = already backed up; replace quietly (#1872).
+            # post-merge). Back up + remove here (same .original as
+            # create_symlink) so the replacements are reported once below
+            # instead of 3 lines per hook. Identical .original = already
+            # backed up; replace quietly (#1872).
+            # A git-lfs-generated hook loses nothing: our wrapper runs
+            # `git lfs <hook> "$@"` itself in LFS repos (lib/lfs.sh), so it is
+            # reported as info. Anything else stops working -> warning.
             if [ -f "$global_hook_target" ] && [ ! -L "$global_hook_target" ]; then
                 if ! cmp -s "$global_hook_target" "${global_hook_target}.original"; then
                     cp "$global_hook_target" "${global_hook_target}.original" \
                         || log_error_and_exit "백업 파일 생성 실패: $global_hook_target"
-                    replaced_global_hooks="${replaced_global_hooks:+$replaced_global_hooks }${global_hook_name}"
+                    if grep -Eqs "^[[:space:]]*git[[:space:]]+lfs[[:space:]]+${global_hook_name}([[:space:]]|$)" "$global_hook_target"; then
+                        replaced_lfs_hooks="${replaced_lfs_hooks:+$replaced_lfs_hooks }${global_hook_name}"
+                    else
+                        replaced_global_hooks="${replaced_global_hooks:+$replaced_global_hooks }${global_hook_name}"
+                    fi
                 fi
                 rm "$global_hook_target" || log_error_and_exit "기존 파일 제거 실패: $global_hook_target"
             fi
@@ -394,9 +401,12 @@ else
         fi
     done
 
+    if [ -n "${replaced_lfs_hooks:-}" ]; then
+        ux_info "git-lfs global hook 을 <name>.original 로 백업 후 교체: ${replaced_lfs_hooks} — wrapper 가 LFS repo 에서 'git lfs <hook>' 을 직접 체인하므로 재설치 불필요."
+    fi
     if [ -n "${replaced_global_hooks:-}" ]; then
         ux_warning "경고: 타 도구가 설치한 global hook 을 <name>.original 로 백업 후 교체: ${replaced_global_hooks}"
-        ux_warning "      git-lfs 가 같은 hook 을 다시 써도 이후 재실행은 경고 없이 교체 — LFS 가 필요한 repo 는 'git lfs install --local' 로 별도 확인."
+        ux_warning "      wrapper 는 그 hook 을 실행하지 않음 — 필요한 repo 의 .git/hooks/<name> 로 .original 을 옮기면 wrapper 가 위임 실행."
     fi
 
     if [ "$linked_global_hooks" -gt 0 ]; then

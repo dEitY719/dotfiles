@@ -13,8 +13,11 @@
 #   * a real git/setup.sh run links every wrapper, idempotently
 #   * hook_check.sh reports the whole set and fails on a missing/broken one
 #
-# Delegation behaviour (does the wrapper forward to the project hook, and stay
-# a no-op elsewhere) lives in git/tests/test_hooks.sh.
+#   * a pre-existing git-lfs hook is reported as info, any other one warns
+#
+# Delegation behaviour (does the wrapper forward to the project hook, chain
+# git-lfs in LFS repos, and stay a no-op elsewhere) lives in
+# git/tests/test_hooks.sh.
 
 load '../test_helper'
 
@@ -138,39 +141,67 @@ _run_hook_check() {
 }
 
 # Issue #1872 — git-lfs rewrites its real-file hooks into core.hooksPath, so
-# every setup.sh re-run found them again and re-warned. An identical
+# every setup.sh re-run found them again and re-reported. An identical
 # <name>.original from an earlier run means the backup already exists: still
 # replace with the symlink, but stay quiet.
-@test "git/setup.sh warns about a foreign global hook only on first backup" {
-    _stage_sandbox_dotfiles
-    local hooks="$HOME/.config/git/hooks" lfs_hook='#!/bin/sh
+#
+# A git-lfs-generated hook is reported as info, never a warning: the wrapper
+# chains `git lfs <hook>` itself (git/global-hooks/lib/lfs.sh), so nothing is
+# lost and no re-install is needed. Only an unrecognized hook warns.
+_GIT_LFS_POST_COMMIT='#!/bin/sh
+command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\n%s\n\n" "This repository is configured for Git LFS but '"'"'git-lfs'"'"' was not found on your path."; exit 2; }
 git lfs post-commit "$@"
 '
+
+@test "git/setup.sh replaces a git-lfs global hook with info, not a warning" {
+    _stage_sandbox_dotfiles
+    local hooks="$HOME/.config/git/hooks"
     mkdir -p "$hooks"
-    printf '%s' "$lfs_hook" >"$hooks/post-commit"
+    printf '%s' "$_GIT_LFS_POST_COMMIT" >"$hooks/post-commit"
 
     run bash "$SANDBOX/repo/git/setup.sh"
     assert_success
-    assert_output --partial "백업 후 교체: post-commit"
+    assert_output --partial "git-lfs global hook 을 <name>.original 로 백업 후 교체: post-commit"
+    refute_output --partial "경고: 타 도구"
+    refute_output --partial "git lfs install"
+    [ -L "$hooks/post-commit" ] || fail "post-commit not replaced by symlink"
 
-    # git-lfs writes the same hook back.
+    # git-lfs writes the same hook back: replaced quietly on re-run.
     rm -f "$hooks/post-commit"
-    printf '%s' "$lfs_hook" >"$hooks/post-commit"
+    printf '%s' "$_GIT_LFS_POST_COMMIT" >"$hooks/post-commit"
 
     run bash "$SANDBOX/repo/git/setup.sh"
     assert_success
     refute_output --partial "백업 후 교체"
     [ -L "$hooks/post-commit" ] || fail "post-commit not replaced by symlink on re-run"
-    printf '%s' "$lfs_hook" | cmp -s - "$hooks/post-commit.original" ||
+    printf '%s' "$_GIT_LFS_POST_COMMIT" | cmp -s - "$hooks/post-commit.original" ||
         fail "post-commit.original no longer holds the git-lfs hook"
+}
 
-    # A different foreign hook is a new backup and warns again.
-    rm -f "$hooks/post-commit"
+@test "git/setup.sh warns about an unrecognized global hook only on first backup" {
+    _stage_sandbox_dotfiles
+    local hooks="$HOME/.config/git/hooks"
+    mkdir -p "$hooks"
     printf '#!/bin/sh\necho other\n' >"$hooks/post-commit"
 
     run bash "$SANDBOX/repo/git/setup.sh"
     assert_success
-    assert_output --partial "백업 후 교체: post-commit"
+    assert_output --partial "경고: 타 도구가 설치한 global hook 을 <name>.original 로 백업 후 교체: post-commit"
+    refute_output --partial "git-lfs global hook"
+    refute_output --partial "git lfs install"
+
+    rm -f "$hooks/post-commit"
+    printf '#!/bin/sh\necho other\n' >"$hooks/post-commit"
+    run bash "$SANDBOX/repo/git/setup.sh"
+    assert_success
+    refute_output --partial "백업 후 교체"
+
+    # A different foreign hook is a new backup and warns again.
+    rm -f "$hooks/post-commit"
+    printf '#!/bin/sh\necho another\n' >"$hooks/post-commit"
+    run bash "$SANDBOX/repo/git/setup.sh"
+    assert_success
+    assert_output --partial "경고: 타 도구가 설치한 global hook 을 <name>.original 로 백업 후 교체: post-commit"
 }
 
 # ---------------------------------------------------------------------------
