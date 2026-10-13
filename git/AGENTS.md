@@ -1,13 +1,13 @@
 # Module Context
 
 - **Purpose**: Git configuration, hooks, and hook documentation for this dotfiles repo.
-- **Scope**: `git/` only (setup scripts, hook logic, hook docs, minimal tests).
+- **Scope**: `git/` only (setup scripts, hook logic, hook docs, `tests/` hook integration scripts).
 
 # Operational Commands
 
 - **Setup (via root)**: `./setup.sh` (installs git config and hooks as part of dotfiles setup)
 - **Setup (direct)**: `bash git/setup.sh` (only if you know what it does; prefers running via `./setup.sh`)
-- **Hook Tests**: `bash git/tests/test_hooks.sh`
+- **Hook Tests**: `./tests/test` runs every `git/tests/*.sh` (isolated HOME, 600s cap per script, #2133); standalone: `bash git/tests/test_hooks.sh`
 - **Hook Debug**: `GIT_HOOKS_DEBUG=1 git commit -m "msg"` (shows why a commit is blocked)
 
 # Golden Rules
@@ -15,13 +15,13 @@
 - **No Credentials**: Never commit `*.git-credentials` or SSH keys; keep them ignored and local-only.
 - **SSOT Config**: Treat `git/config/hook-config.sh` as the single source of truth for patterns and thresholds.
 - **No Surprises**: Hook changes must be fast, deterministic, and explain failures clearly.
-- **Test First**: Add a failing case to `git/tests/test_hooks.sh` before tightening checks.
+- **Test First**: Add a failing case to `git/tests/test_hooks.sh` (or `git/tests/test-pre-push.sh` for pre-push) before tightening checks — `./tests/test` runs it.
 - **~/.gitconfig include model (NOT a symlink)**: `git/setup.sh` creates `~/.gitconfig` as a **real machine-local file** whose first section is `[include] path = <repo>/git/.gitconfig`. Never symlink `~/.gitconfig` to the tracked SSOT. Reason: tools that run `git config --global` — chiefly `gh auth setup-git` (triggered by `gh auth login`/`refresh`) — write **through** a symlink and rewrite the SSOT's portable credential-helper line (`git/scripts/gh-credential-helper.sh`, which probes multiple `gh` install paths across PCs) into a machine-specific absolute path, breaking portability. With the include model those writes land in the local file and the SSOT stays clean. Same principle as CLAUDE.md's settings.json "real file, not symlink" rule. Defense in depth: `gh/config.yml` sets `git_protocol: ssh` so `gh` stops managing HTTPS credential helpers at all.
 - **Internal hosts stay out of the SSOT (#2006)**: `git/.gitconfig` ends with `[include] path = ~/.gitconfig.internal.local` (and `ssh/config` starts with `Include ~/.ssh/config.internal.local`); internal PCs hold the GHES credential section / internal Host blocks there, seeded from git history by `scripts/internal-ssh-git-migrate.sh` (internal-mode `./setup.sh` runs it). `git/setup.sh` takes the GHES host from `DOTFILES_GHES_HOST` (`_gh_ghes_host`), never a literal.
 
 # Testing Strategy
 
-- Prefer `bash git/tests/test_hooks.sh` for integration-level verification of the 2-tier hook system.
+- `./tests/test` runs `git/tests/*.sh` (git hook phase); run one standalone, e.g. `bash git/tests/test_hooks.sh`, for integration-level verification of the 2-tier hook system.
 - If a change targets repository-wide policy (naming, shebang, UX rules), also run `mise run lint-sh`.
 
 # Global Hook Wrappers (issue #1664)

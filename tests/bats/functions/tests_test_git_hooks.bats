@@ -1,0 +1,108 @@
+#!/usr/bin/env bats
+# tests/bats/functions/tests_test_git_hooks.bats
+# Unit tests for tests/test's git hook phase (#2133).
+#
+# git/tests/*.sh (test_hooks.sh, test-pre-push.sh, test-prepare-commit-msg.sh)
+# used to run only by hand; run_git_hook_tests() now runs them from
+# ./tests/test with an isolated HOME / global git config and a per-script
+# wall clock cap (GIT_HOOK_TEST_TIMEOUT). These tests drive the phase over
+# fake scripts (GIT_HOOK_TESTS_DIR) — the real scripts take ~1-4 min.
+#
+# tests/test guards its `main "$@"` call, so sourcing it is side-effect free.
+
+load '../test_helper'
+
+RUNNER="${BATS_TEST_DIRNAME}/../../test"
+REAL_REPO="$(cd "${BATS_TEST_DIRNAME}/../../.." && pwd)"
+
+setup() {
+    setup_isolated_home
+    # shellcheck source=/dev/null
+    source "$RUNNER"
+    VERBOSE=0
+    unset GIT_HOOK_TEST_TIMEOUT
+    FAKE_DIR="$TEST_TEMP_HOME/hooks"
+    WORK="$TEST_TEMP_HOME/work"
+    mkdir -p "$FAKE_DIR" "$WORK"
+    export GIT_HOOK_TESTS_DIR="$FAKE_DIR"
+}
+
+teardown() {
+    unset GIT_HOOK_TESTS_DIR
+    teardown_isolated_home
+}
+
+# fake_script <name> <body>
+fake_script() {
+    printf '#!/bin/bash\n%s\n' "$2" >"$FAKE_DIR/$1"
+}
+
+@test "the three hook scripts live in git/tests/ and git/test/ is gone" {
+    unset GIT_HOOK_TESTS_DIR
+    [ ! -d "$REAL_REPO/git/test" ]
+    run _discover_git_hook_tests
+    assert_success
+    assert_output --partial "/git/tests/test_hooks.sh"
+    assert_output --partial "/git/tests/test-pre-push.sh"
+    assert_output --partial "/git/tests/test-prepare-commit-msg.sh"
+}
+
+@test "_resolve_git_hook_timeout: defaults to 600, honors a positive override" {
+    run _resolve_git_hook_timeout
+    assert_output "600"
+    GIT_HOOK_TEST_TIMEOUT=42 run _resolve_git_hook_timeout
+    assert_output "42"
+    GIT_HOOK_TEST_TIMEOUT=abc run _resolve_git_hook_timeout
+    assert_output "600"
+}
+
+@test "run_git_hook_tests: all scripts passing -> success + summary" {
+    fake_script a.sh 'echo a-ran'
+    fake_script b.sh 'echo b-ran'
+    run run_git_hook_tests "$WORK"
+    assert_success
+    assert_output --partial "git hooks: 2 scripts passed"
+    # Passing output is buffered, not printed (only -v shows it).
+    refute_output --partial "a-ran"
+}
+
+@test "run_git_hook_tests: a failing script fails the phase and prints its log" {
+    fake_script a.sh 'echo fine'
+    fake_script b.sh 'echo boom-detail; exit 3'
+    run run_git_hook_tests "$WORK"
+    assert_failure
+    assert_output --partial "FAILED:"
+    assert_output --partial "b.sh"
+    assert_output --partial "boom-detail"
+    assert_output --partial "1 of 2 scripts failed"
+}
+
+@test "run_git_hook_tests: no scripts found fails closed" {
+    run run_git_hook_tests "$WORK"
+    assert_failure
+    assert_output --partial "No git hook test scripts found"
+}
+
+@test "scripts run with an isolated HOME and empty global git config" {
+    local real_home="$HOME"
+    fake_script iso.sh '
+[ "$HOME" != "'"$real_home"'" ] || { echo "HOME not isolated"; exit 1; }
+[ "$GIT_CONFIG_NOSYSTEM" = "1" ] || { echo "system config not disabled"; exit 1; }
+[ -z "$(git config --global --list 2>/dev/null)" ] || { echo "global config not empty"; exit 1; }
+git config --global user.name probe
+[ "$(git config --global user.name)" = probe ] || exit 1'
+    run run_git_hook_tests "$WORK"
+    assert_success
+    # The script's global write landed in its own HOME, not the caller's.
+    [ ! -e "$real_home/.gitconfig" ]
+}
+
+@test "GIT_HOOK_TEST_TIMEOUT kills a hung script and fails the phase" {
+    command -v timeout >/dev/null 2>&1 || skip "timeout(1) not available"
+    fake_script hang.sh 'exec sleep 30'
+    SECONDS=0
+    GIT_HOOK_TEST_TIMEOUT=1 run run_git_hook_tests "$WORK"
+    assert_failure
+    assert_output --partial "killed after GIT_HOOK_TEST_TIMEOUT=1s"
+    ((SECONDS < 20)) || false
+}

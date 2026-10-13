@@ -22,6 +22,8 @@
 #   and divides the job count among them
 #   Caps every bats test at BATS_TEST_TIMEOUT seconds (default 300) so a hung
 #   test fails the suite instead of stalling it forever
+#   Runs git/tests/*.sh (hook integration scripts) under an isolated HOME,
+#   each capped at GIT_HOOK_TEST_TIMEOUT seconds (default 600)
 #
 
 # Note: Do NOT use 'set -e' as it terminates the script when main() returns
@@ -87,6 +89,9 @@ ENVIRONMENT VARIABLES:
     BATS_FILE_TIMEOUT=N   Per-file wall clock cap in seconds (default: 900).
                            A bats file still running after it is killed and
                            reported as "FAILED (file timeout ...)".
+    GIT_HOOK_TEST_TIMEOUT=N  Per-script cap in seconds (default: 600) for
+                           the git hook phase (git/tests/*.sh, run with an
+                           isolated HOME and empty global git config).
 
 EXAMPLES:
     ./tests/test                  # Run all tests (parallel)
@@ -95,8 +100,9 @@ EXAMPLES:
     ./tests/test --verbose --serial # Verbose + sequential
 
 PERFORMANCE:
-    Default: bats (one process per file) and pytest (xdist) run at the same
-             time, each sized to this PC; slowest bats files start first
+    Default: bats (one process per file), pytest (xdist) and the git hook
+             scripts (git/tests/*.sh) run at the same time, each sized to
+             this PC; slowest bats files start first
              (durations cached in ~/.cache/dotfiles/bats-durations.tsv)
     Serial:  Sequential execution, single bats process (~15+ min)
     Jobs:    min(nproc x factor, MemAvailable / TEST_WORKER_MB, TEST_JOBS_MAX)
@@ -109,7 +115,8 @@ PERFORMANCE:
              TEST_WORKER_MB=N      memory per job (default: ${_TEST_WORKER_MB_DEFAULT})
              TEST_JOBS_MAX=N       hard cap on either phase
              TEST_RUN_STALE_SEC=N  ignore peer runs older than this (7200)
-             TEST_PHASES_SEQUENTIAL=1  run pytest after bats, not alongside
+             TEST_PHASES_SEQUENTIAL=1  run pytest and git hooks after bats,
+                                       not alongside
     Ctrl+C:  stops every worker (bats, xargs, pytest) and exits 130
 
 REQUIREMENTS:
@@ -813,6 +820,93 @@ run_golden_rules() {
     return 0
 }
 
+# ---------------------------------------------------------------------------
+# Git hook tests (#2133)
+#
+# git/tests/*.sh (test_hooks.sh, test-pre-push.sh, test-prepare-commit-msg.sh)
+# are self-contained assert scripts that drive real commits/pushes in
+# throwaway repos. They used to run only by hand; this phase makes them part
+# of ./tests/test. Each script runs once, in order, with:
+#   - a fresh HOME / XDG dirs and an empty global git config, so a fixture
+#     commit never reads the user's ~/.gitconfig (hooksPath, gpgsign,
+#     templateDir, ...) and nothing is written under the real HOME;
+#   - a wall clock cap of GIT_HOOK_TEST_TIMEOUT seconds per script (default
+#     600; test_hooks.sh alone takes ~4 min under load).
+# Output is buffered per script and printed on failure (or with -v).
+# GIT_HOOK_TESTS_DIR overrides the script directory (tests use it).
+# ---------------------------------------------------------------------------
+
+_discover_git_hook_tests() {
+    local dir="${GIT_HOOK_TESTS_DIR:-${REPO_ROOT}/git/tests}" f
+    for f in "$dir"/*.sh; do
+        [ -f "$f" ] && printf '%s\n' "$f"
+    done
+    return 0
+}
+
+_resolve_git_hook_timeout() {
+    _resolve_positive_int "${GIT_HOOK_TEST_TIMEOUT:-}" 600
+}
+
+# Run one script under an isolated HOME ($3, created by the caller) with its
+# output in $2. Returns the script's exit status (124 = timed out).
+_git_hook_run_script() {
+    local script="$1" log="$2" home="$3" limit rc
+    limit="$(_resolve_git_hook_timeout)"
+    mkdir -p "$home/.config" "$home/.cache"
+    : >"$home/.gitconfig"
+    local isolate=(env HOME="$home" XDG_CONFIG_HOME="$home/.config"
+        XDG_CACHE_HOME="$home/.cache" GIT_CONFIG_NOSYSTEM=1
+        GIT_CONFIG_GLOBAL="$home/.gitconfig")
+    # --foreground keeps the script in the runner's process group so an
+    # interrupt's group kill still reaches it (see _bats_run_file).
+    if command -v timeout >/dev/null 2>&1; then
+        "${isolate[@]}" timeout --foreground -k 10 "$limit" bash "$script" >"$log" 2>&1
+    else
+        "${isolate[@]}" bash "$script" >"$log" 2>&1
+    fi
+    rc=$?
+    if [ "$rc" = "124" ]; then
+        printf '# killed after GIT_HOOK_TEST_TIMEOUT=%ss\n' "$limit" >>"$log"
+    fi
+    return "$rc"
+}
+
+# $1 = scratch dir (created and cleaned up by the caller) for logs and the
+# per-script HOMEs. Returns non-zero if any script fails or none is found.
+run_git_hook_tests() {
+    local workdir="$1" scripts=() f name rc=0 passed=0
+    while IFS= read -r f; do
+        scripts+=("$f")
+    done < <(_discover_git_hook_tests)
+
+    print_header "Running Git Hook Tests"
+    if [ ${#scripts[@]} -eq 0 ]; then
+        print_error "No git hook test scripts found in ${GIT_HOOK_TESTS_DIR:-git/tests}"
+        return 1
+    fi
+
+    for f in "${scripts[@]}"; do
+        name="$(basename "$f")"
+        if _run_in_group _git_hook_run_script "$f" "$workdir/$name.log" "$workdir/home-$name"; then
+            passed=$((passed + 1))
+            print_success "${f#"${REPO_ROOT}/"}"
+            [ "$VERBOSE" = "1" ] && cat "$workdir/$name.log"
+        else
+            rc=1
+            print_error "FAILED: ${f#"${REPO_ROOT}/"}"
+            cat "$workdir/$name.log"
+        fi
+    done
+
+    if [ "$rc" -eq 0 ]; then
+        print_success "git hooks: ${passed} scripts passed"
+    else
+        print_error "git hooks: $((${#scripts[@]} - passed)) of ${#scripts[@]} scripts failed"
+    fi
+    return $rc
+}
+
 # Run pytest integration tests
 run_pytest() {
     local verbose_flag=""
@@ -854,9 +948,16 @@ run_tests() {
     local exit_code=0
 
     # Serial (-s): fully sequential, as before.
+    # Scratch dir for the git hook phase (#2133): logs + per-script HOMEs,
+    # removed by _on_test_exit even on interrupt.
+    local hooks_dir
+    hooks_dir="$(mktemp -d)"
+    _TEST_TMP_PATHS="$_TEST_TMP_PATHS $hooks_dir"
+
     if [ "$SERIAL" = "1" ] || [ "${TEST_PHASES_SEQUENTIAL:-0}" = "1" ]; then
         run_bats || exit_code=1
         run_golden_rules || exit_code=1
+        run_git_hook_tests "$hooks_dir" || exit_code=1
         run_pytest || exit_code=1
         return $exit_code
     fi
@@ -873,9 +974,19 @@ run_tests() {
     [ -t 1 ] && export PY_COLORS=1
     _spawn_group run_pytest >"$pytest_out" 2>&1
     pytest_pid=$_SPAWNED_PID
+    # Git hook scripts (~4 min, #2133) run alongside too, buffered the same
+    # way, so they add no wall time while bats is the long pole.
+    local hooks_out hooks_pid
+    hooks_out="$(mktemp)"
+    _TEST_TMP_PATHS="$_TEST_TMP_PATHS $hooks_out"
+    _spawn_group run_git_hook_tests "$hooks_dir" >"$hooks_out" 2>&1
+    hooks_pid=$_SPAWNED_PID
 
     run_bats || exit_code=1
     run_golden_rules || exit_code=1
+    _wait_group "$hooks_pid" || exit_code=1
+    cat "$hooks_out"
+    rm -f "$hooks_out"
     _wait_group "$pytest_pid" || exit_code=1
     cat "$pytest_out"
     rm -f "$pytest_out"
