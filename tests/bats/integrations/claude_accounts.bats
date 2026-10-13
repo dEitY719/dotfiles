@@ -212,8 +212,9 @@ LOCAL
     run_in_bash "_claude_ensure_symlink '$HOME/src/file.txt' '$HOME/tgt-dir/link'"
     assert_success
     [ -L "$HOME/tgt-dir/link" ]
-    # Backup uses claude/setup.sh:100 legacy convention: <name>-YYYYMMDDHHMMSS-original
-    ls "$HOME/tgt-dir/" | grep -qE "link-[0-9]{14}-original"
+    # Latest-only fixed suffix (#806, #2130): <name>.original, no timestamp.
+    grep -q "old" "$HOME/tgt-dir/link.original"
+    ! ls "$HOME/tgt-dir/" | grep -qE "link-[0-9]{14}-original" || return 1
 }
 
 # ---------- Task 5: account setup ----------
@@ -1400,7 +1401,7 @@ run_with_fake_ssot() {
 
     [ -d "$HOME/.claude-personal/skills" ]
     [ ! -L "$HOME/.claude-personal/skills" ]
-    [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
+    [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original "$HOME/.claude-personal/skills.original" 2>/dev/null)" ]
     grep -q "user-data" "$HOME/.claude-personal/skills/leftover/notes.md"
     [ ! -e "$HOME/.claude-personal/skills/alpha" ] && [ ! -L "$HOME/.claude-personal/skills/alpha" ]
 }
@@ -1430,8 +1431,8 @@ run_with_fake_ssot() {
     [ ! -L "$HOME/.claude-personal/skills/alpha" ]
     [ -L "$HOME/.claude-personal/skills/graphify" ]
     # No backups created on the second run — state was already correct.
-    [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original 2>/dev/null)" ]
-    [ -z "$(ls -d "$HOME/.claude-personal/docs-"*-original 2>/dev/null)" ]
+    [ -z "$(ls -d "$HOME/.claude-personal/skills-"*-original "$HOME/.claude-personal/skills.original" 2>/dev/null)" ]
+    [ -z "$(ls -d "$HOME/.claude-personal/docs-"*-original "$HOME/.claude-personal/docs.original" 2>/dev/null)" ]
 }
 
 @test "claude/setup.sh prunes workspace links in every account and reports the count" {
