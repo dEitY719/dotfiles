@@ -119,15 +119,14 @@ main() {
     cd "$DOTFILES_DIR"
 
     step_init dotfiles-setup "$SETUP_VERBOSE"
-    SETUP_VERBOSE="$STEP_VERBOSE"
-    if [ "$SETUP_VERBOSE" != 1 ]; then
+    if [ "$STEP_VERBOSE" != 1 ]; then
         ux_info "dotfiles setup (요약 모드 — 전체 출력은 ./setup.sh -v)"
     fi
 
     # Verbose without DOTFILES_SETUP_CHOICE keeps the original interactive menu
     # (and shell-common's tty-only account ID / account e-mail prompts).
     local sc_step=(_setup_run_shell_common) sc_label="shell-common"
-    if [ "$SETUP_VERBOSE" = 1 ] && [ -z "${DOTFILES_SETUP_CHOICE:-}" ]; then
+    if [ "$STEP_VERBOSE" = 1 ] && [ -z "${DOTFILES_SETUP_CHOICE:-}" ]; then
         sc_step=(./shell-common/setup.sh)
     else
         _setup_resolve_choice || exit 1

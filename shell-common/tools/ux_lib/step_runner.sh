@@ -86,13 +86,14 @@ step_init() {
 
 # step_run <label> <critical|optional> <cmd...>
 step_run() {
-    local label="$1" level="$2" rc=0 t0 dt d miss="" warns suffix=""
+    local label="$1" level="$2" rc=0 t0 dt d miss="" warns suffix="" is_path=0
     shift 2
+    if [ "${1#*/}" != "$1" ]; then is_path=1; fi
     STEP_TOTAL=$((STEP_TOTAL + 1))
     _step_now_ds
     t0=$_STEP_NOW_DS
     : >"$STEP_OUT"
-    if [ "${1#*/}" != "$1" ] && [ ! -x "$1" ]; then
+    if [ "$is_path" = 1 ] && [ ! -x "$1" ]; then
         rc=127
         miss="스크립트가 없거나 실행 권한이 없음: $1"
     elif [ "$STEP_VERBOSE" = 1 ]; then
@@ -134,7 +135,7 @@ step_run() {
             while IFS= read -r line; do ux_bullet_sub "$line"; done < <(tail -n 20 "$STEP_OUT")
         fi
         ux_bullet "조치:"
-        if [ "${1#*/}" != "$1" ]; then
+        if [ "$is_path" = 1 ]; then
             ux_bullet_sub "상세 재현: bash -x $1"
         elif [ -n "$STEP_RERUN" ]; then
             ux_bullet_sub "상세 재현: $STEP_RERUN -v"
