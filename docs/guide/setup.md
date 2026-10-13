@@ -6,6 +6,15 @@ dotfiles 설치는 `./setup.sh` 하나로 수렴합니다 — 신규 PC 든 기�
 실행하면 됩니다(멱등). Claude Code 설정도 `setup.sh` 가 호출하는 `claude/setup.sh` 가 맡습니다.
 
 > `install.sh` 는 폐기되었습니다(#2131). 실행하면 안내 메시지와 함께 exit 2 로 종료합니다.
+>
+> 이전 `install.sh` 가 하던 일의 행방:
+> - Claude Code 설정(`statusline-command.sh`, `settings.json`) → `claude/setup.sh` 가 담당
+>   (`settings.json` 은 symlink 가 아닌 실파일 복사, #940/#924)
+> - bash/zsh/git 링크 → `bash|zsh|git/setup.sh` 가 담당
+> - `claude/*.md` → `~/.claude/agents/` 링크 → 에이전트가 아닌 파일을 등록하던 버그라 이관하지 않음
+> - `~/.config/pg_services.list` 링크 → 원본 `shell-common/config/pg_services.list` 가 저장소에 없어
+>   이관하지 않음. PG 서비스 목록이 필요하면 `~/.config/pg_services.list` 를 직접 만든다
+>   (`shell-common/tools/integrations/postgresql.sh` 가 읽는 경로)
 
 ---
 
