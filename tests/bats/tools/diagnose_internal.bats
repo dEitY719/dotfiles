@@ -175,9 +175,11 @@ _path_without() {
     local fp i
     fp="$(_mk_cert target)"
     _mk_cert other >/dev/null
-    # 병렬 지문 계산 폭보다 많은 블록 + 중간의 깨진 블록 — 나머지 인증서는 그대로 읽힌다.
+    # 병렬 지문 계산 폭(8)보다 많은 블록 + 중간의 깨진 블록 — 나머지 인증서는 그대로 읽힌다.
     for i in $(seq 40); do cat "$BATS_TEST_TMPDIR/other.crt"; done >"$BATS_TEST_TMPDIR/bundle.crt"
     printf -- '-----BEGIN CERTIFICATE-----\nnot-a-cert\n-----END CERTIFICATE-----\n' >>"$BATS_TEST_TMPDIR/bundle.crt"
+    # 64KB 넘는 블록은 버려지고, xargs 인자 한도로 나머지 계산이 멈추지 않는다.
+    { printf -- '-----BEGIN CERTIFICATE-----\n'; for i in $(seq 3000); do printf '%064d\n' 0; done; printf -- '-----END CERTIFICATE-----\n'; } >>"$BATS_TEST_TMPDIR/bundle.crt"
     cat "$BATS_TEST_TMPDIR/target.crt" >>"$BATS_TEST_TMPDIR/bundle.crt"
     run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
