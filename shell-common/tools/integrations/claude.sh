@@ -624,7 +624,10 @@ _claude_expected_email() {
 # Moves <target> to "<target>${DOTFILES_ORIGINAL_SUFFIX}" via the SSOT helper
 # in shell-common/functions/dotfiles_backup.sh, so repeated init/repair runs
 # keep at most ONE backup per target instead of accumulating timestamped
-# copies. A prior backup at that path is replaced (one warning line names it).
+# copies. A prior FILE backup at that path is replaced (one warning line names
+# it). A prior non-empty DIRECTORY backup is never replaced: it can be the only
+# copy of user data (e.g. a pre-bind-mount skills dir), so the call fails with
+# a manual-cleanup hint instead of `rm -rf`-ing it.
 # Legacy `<target>-YYYYmmddHHMMSS-original` files are never auto-deleted —
 # removing user files stays a manual decision.
 _claude_backup_original() {
@@ -639,7 +642,12 @@ _claude_backup_original() {
     # `rm -rf <dest>` would delete the very data being backed up.
     _cbo_suffix="${DOTFILES_ORIGINAL_SUFFIX:-.original}"
     _cbo_dest=$(dotfiles_backup_path "$_cbo_tgt" "$_cbo_suffix")
-    if [ -e "$_cbo_dest" ] || [ -L "$_cbo_dest" ]; then
+    if [ -d "$_cbo_dest" ] && [ ! -L "$_cbo_dest" ] \
+        && [ -n "$(ls -A "$_cbo_dest" 2>/dev/null)" ]; then
+        ux_error "  previous backup directory holds data — not overwriting: $_cbo_dest"
+        ux_info "  inspect/move it manually, then re-run: $_cbo_tgt is left in place"
+        return 1
+    elif [ -e "$_cbo_dest" ] || [ -L "$_cbo_dest" ]; then
         ux_warning "  replacing previous backup (latest-only, #806): $_cbo_dest"
     fi
     ux_warning "  backing up $_cbo_label: $_cbo_tgt → $_cbo_dest"
