@@ -249,7 +249,7 @@ _register_default_help_descriptions() {
     _register_help claude_plugins_help "[AI/LLM] Claude plugins setup" ai
     _register_help claude_skills_marketplace_help "[AI/LLM] Skills marketplace system" ai
     _register_help superpowers_help "[AI/LLM] Superpowers plugin skills reference" ai
-    _register_help llm_wiki_help "[AI] llm-wiki — vault 커맨드 5종 + 클립 스킬 2종 치트시트" ai
+    _register_help llm_wiki_help "[AI] llm-wiki — vault 커맨드 5종 + pkm 스킬 3종 치트시트" ai
 
     # cli
     _register_help fzf_help "[CLI] fzf keybindings and usage" cli
