@@ -42,11 +42,12 @@ teardown() {
     teardown_isolated_home
 }
 
-# _lib <snippet> [VAR=VALUE ...] — source ux_lib + the lib, then eval.
+# _lib <snippet> [VAR=VALUE ...] — source ux_lib + the lib, then eval. Claude
+# account env is cleared first so the caller's shell cannot leak into a case.
 _lib() {
     local _snippet="$1"
     shift
-    run env \
+    run env -u CLAUDE_DEFAULT_ACCOUNT -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_CONFIG_DIR \
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
         "UX_LIB=${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" \
