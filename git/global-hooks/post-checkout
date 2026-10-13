@@ -19,6 +19,8 @@
 #   file checkout. git ignores the exit code; it is still propagated so a
 #   direct caller sees the delegate's status.
 #
+# git-lfs: in an LFS repo `git lfs post-checkout "$@"` runs before delegation (lib/lfs.sh).
+#
 # To debug: export GIT_HOOKS_DEBUG=1
 
 set -u

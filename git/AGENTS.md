@@ -44,10 +44,12 @@ and are a silent no-op anywhere that path does not exist (never link
 first run `lib/graphify-refresh.sh` — a background `graphify update .` on the
 default branch, opt-in by `graphify-out/graph.json`.
 
-Third-party installers also write here (git-lfs owns `pre-push`,
-`post-commit`, `post-checkout`, `post-merge`). setup.sh backs up a colliding
-real file as `<name>.original` and warns; re-install that tool afterwards
-(e.g. `git lfs install --force`).
+git-lfs also writes `pre-push`/`post-commit`/`post-checkout`/`post-merge`
+here; those wrappers run `git lfs <hook> "$@"` themselves (`lib/lfs.sh`, only
+in repos with `<git-common-dir>/lfs`; pre-push stdin is buffered + replayed,
+an lfs failure aborts the push). setup.sh backs a colliding real file up as
+`<name>.original`: info for a git-lfs hook, a warning for anything else.
+Never run `git lfs install --force` (clobbers the wrappers).
 
 Regression: `git/tests/test_hooks.sh` (delegation + no-op) and
 `tests/bats/git/test_global_hooks.bats` (SSOT, setup.sh linking, hook_check).

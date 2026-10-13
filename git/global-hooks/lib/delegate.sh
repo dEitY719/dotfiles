@@ -20,6 +20,11 @@
 #   stderr but never fails or exits, so the delegation contract below is
 #   unchanged.
 #
+#   git-lfs (lib/lfs.sh): pre-push / post-commit / post-checkout / post-merge
+#   run `git lfs <hook> "$@"` before delegating — in repos that use LFS only,
+#   when git-lfs is on PATH. Everywhere else lfs_chain is a silent no-op, so
+#   the delegation contract above is unchanged byte for byte.
+#
 # Requires HOOK_NAME to already be set by the caller. Uses "$0"/"$@" as
 # inherited from the sourcing wrapper's own invocation (source does not
 # reset positional parameters).
@@ -97,12 +102,24 @@ if [ -z "$RUN_HOOK" ]; then
     fi
 fi
 
+# git-lfs chaining. A failed `git lfs pre-push` exits inside lfs_chain (push
+# aborted); on success stdin is already swapped for the replay copy. A failed
+# post-* sets LFS_HOOK_RC, which wins over the delegate's code below.
+# shellcheck source=./lfs.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lfs.sh"
+lfs_chain "$@"
+
 if [ -z "$RUN_HOOK" ]; then
     [ "$DEBUG" = "1" ] && echo "[Debug] No project-level ${HOOK_NAME} hook found"
-    exit 0
+    exit "$LFS_HOOK_RC"
 fi
 
 echo -e "${BLUE}[Global Hook] Delegating to project hook: $RUN_HOOK${NC}"
+
+if [ "$LFS_HOOK_RC" -ne 0 ]; then
+    "$RUN_HOOK" "$@"
+    exit "$LFS_HOOK_RC"
+fi
 
 # `exec` replaces this wrapper's own process image with the project hook
 # instead of running it as a waited-on child (agy review, PR #1674) — one

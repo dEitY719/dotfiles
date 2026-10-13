@@ -815,6 +815,156 @@ test_global_wrappers_are_noop_outside_git_repo() {
 }
 
 # ---------------------------------------------------------------------------
+# git-lfs chaining (git/global-hooks/lib/lfs.sh)
+#
+# `git lfs install` writes pre-push / post-commit / post-checkout / post-merge
+# into core.hooksPath, where setup.sh replaces them with our wrappers. The
+# wrappers must therefore run `git lfs <hook>` themselves in LFS repos — and
+# stay byte-identical to plain delegation everywhere else. git dispatches
+# `git lfs` to the first `git-lfs` on PATH, so a stub there keeps it hermetic.
+# ---------------------------------------------------------------------------
+
+# Fake git-lfs in $1/.lfs-bin: appends "ARGS:<argv>" then "STDIN:<line>" per
+# stdin line to $1/.lfs-calls, exits $FAKE_LFS_RC (default 0).
+install_fake_git_lfs() {
+  local repo_dir="$1"
+  mkdir -p "$repo_dir/.lfs-bin"
+  cat >"$repo_dir/.lfs-bin/git-lfs" <<EOF
+#!/bin/sh
+printf 'ARGS:%s\n' "\$*" >>"${repo_dir}/.lfs-calls"
+while IFS= read -r line; do printf 'STDIN:%s\n' "\$line" >>"${repo_dir}/.lfs-calls"; done
+exit \${FAKE_LFS_RC:-0}
+EOF
+  chmod +x "$repo_dir/.lfs-bin/git-lfs"
+}
+
+# Repo + fake git-lfs; $2 = "lfs" marks it as an LFS repo (.git/lfs exists,
+# as git-lfs's clean/smudge filter leaves it).
+make_lfs_fixture() {
+  local repo_dir="$1"
+  make_plain_repo "$repo_dir"
+  install_fake_git_lfs "$repo_dir"
+  if [ "${2:-}" = "lfs" ]; then
+    mkdir -p "$repo_dir/.git/lfs/objects"
+  fi
+}
+
+# Project hook recording argv and every stdin line to $repo_dir/.delegated.
+install_stdin_recording_project_hook() {
+  local repo_dir="$1" hook_name="$2"
+  mkdir -p "$repo_dir/git/hooks"
+  cat >"$repo_dir/git/hooks/${hook_name}" <<EOF
+#!/bin/bash
+printf 'DELEGATED:%s\n' "\$*" >"${repo_dir}/.delegated"
+while IFS= read -r line; do printf 'STDIN:%s\n' "\$line" >>"${repo_dir}/.delegated"; done
+exit 0
+EOF
+  chmod +x "$repo_dir/git/hooks/${hook_name}"
+}
+
+# pre-push: git lfs pre-push gets argv + the full ref list, and the project
+# hook still gets the same ref list (stdin buffered once, replayed).
+test_global_lfs_pre_push_chains_and_replays_stdin() {
+  local repo_dir refs stdin_lines
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_lfs_fixture "$repo_dir" lfs
+  install_stdin_recording_project_hook "$repo_dir" pre-push
+  refs="$(printf 'refs/heads/a 1111 refs/heads/a %s\nrefs/heads/b 2222 refs/heads/b %s' "$ZERO_SHA" "$ZERO_SHA")"
+  stdin_lines="$(printf '%s\n' "$refs" | sed 's/^/STDIN:/')"
+
+  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin "https://example.invalid/r.git" \
+    < <(printf '%s\n' "$refs") || die "Expected LFS pre-push chain to succeed: $WRAPPER_OUT"
+
+  [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:pre-push origin https://example.invalid/r.git
+${stdin_lines}" ] ||
+    die "git lfs pre-push got wrong argv/stdin: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+  [ "$(cat "$repo_dir/.delegated" 2>/dev/null)" = "DELEGATED:origin https://example.invalid/r.git
+${stdin_lines}" ] ||
+    die "Project pre-push lost the replayed stdin: $(cat "$repo_dir/.delegated" 2>/dev/null)"
+
+  rm -rf "$repo_dir"
+}
+
+# pre-push: a failing git lfs pre-push aborts the push with its exit code and
+# the project hook never runs.
+test_global_lfs_pre_push_failure_blocks() {
+  local repo_dir rc=0
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_lfs_fixture "$repo_dir" lfs
+  install_stdin_recording_project_hook "$repo_dir" pre-push
+
+  FAKE_LFS_RC=2 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
+    < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") || rc=$?
+
+  [ "$rc" -eq 2 ] || die "Expected lfs failure (2) to block the push, got ${rc}: $WRAPPER_OUT"
+  [ ! -f "$repo_dir/.delegated" ] || die "Project pre-push ran after git lfs pre-push failed"
+  echo "$WRAPPER_OUT" | grep -q "git lfs pre-push failed (exit 2)" ||
+    die "Expected an abort notice, got: $WRAPPER_OUT"
+
+  rm -rf "$repo_dir"
+}
+
+# post-*: git lfs <hook> runs with argv (also with no project hook); a failing
+# lfs still lets the project hook run, and git-lfs's exit code wins.
+test_global_lfs_post_hooks_chain() {
+  local hook_name repo_dir rc
+  for hook_name in post-commit post-checkout post-merge; do
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir" lfs
+
+    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" alpha beta </dev/null ||
+      die "Expected ${hook_name} LFS chain to succeed: $WRAPPER_OUT"
+    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:${hook_name} alpha beta" ] ||
+      die "Expected git lfs ${hook_name} alpha beta, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+
+    install_recording_project_hook "$repo_dir" "$hook_name" 0
+    rc=0
+    FAKE_LFS_RC=3 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" x </dev/null || rc=$?
+    [ "$rc" -eq 3 ] || die "Expected ${hook_name} to exit with git-lfs's code 3, got ${rc}: $WRAPPER_OUT"
+    grep -q "^DELEGATED:x$" "$repo_dir/.delegated" ||
+      die "Expected ${hook_name} project hook to run despite the lfs failure"
+
+    rm -rf "$repo_dir"
+  done
+}
+
+# Non-LFS repo: git-lfs on PATH is never invoked and output stays empty.
+test_global_lfs_skipped_in_non_lfs_repo() {
+  local hook_name repo_dir
+  for hook_name in pre-push post-commit post-checkout post-merge; do
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir"
+
+    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" a b \
+      < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") ||
+      die "Expected ${hook_name} to be a no-op in a non-LFS repo: $WRAPPER_OUT"
+    [ -z "$WRAPPER_OUT" ] || die "Expected ${hook_name} to stay silent, got: $WRAPPER_OUT"
+    [ ! -f "$repo_dir/.lfs-calls" ] ||
+      die "git lfs invoked in a non-LFS repo: $(cat "$repo_dir/.lfs-calls")"
+
+    rm -rf "$repo_dir"
+  done
+}
+
+# A project hook that already runs `git lfs pre-push` (git lfs install --local)
+# is not doubled: the wrapper leaves lfs to it.
+test_global_lfs_not_doubled_by_lfs_project_hook() {
+  local repo_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_lfs_fixture "$repo_dir" lfs
+  printf '#!/bin/sh\ngit lfs pre-push "$@"\n' >"$repo_dir/.git/hooks/pre-push"
+  chmod +x "$repo_dir/.git/hooks/pre-push"
+
+  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
+    < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") ||
+    die "Expected pre-push to succeed: $WRAPPER_OUT"
+  [ "$(grep -c '^ARGS:' "$repo_dir/.lfs-calls")" -eq 1 ] ||
+    die "Expected exactly one git lfs pre-push run, got: $(cat "$repo_dir/.lfs-calls")"
+
+  rm -rf "$repo_dir"
+}
+
+# ---------------------------------------------------------------------------
 # Issue #1838 — post-merge / post-rewrite graphify refresh
 # ---------------------------------------------------------------------------
 
@@ -1088,6 +1238,13 @@ main() {
   test_global_wrappers_propagate_exit_code
   test_global_wrappers_are_noop_without_project_hook
   test_global_wrappers_are_noop_outside_git_repo
+
+  # git-lfs chaining in the global wrappers (lib/lfs.sh)
+  test_global_lfs_pre_push_chains_and_replays_stdin
+  test_global_lfs_pre_push_failure_blocks
+  test_global_lfs_post_hooks_chain
+  test_global_lfs_skipped_in_non_lfs_repo
+  test_global_lfs_not_doubled_by_lfs_project_hook
 
   # Issue #1838 — graphify refresh on default-branch pulls
   test_graphify_ff_pull_on_default_branch

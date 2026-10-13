@@ -22,6 +22,8 @@
 #   No arguments. git ignores the exit code; it is still propagated so a
 #   caller invoking this wrapper directly sees the delegate's status.
 #
+# git-lfs: in an LFS repo `git lfs post-commit "$@"` runs before delegation (lib/lfs.sh).
+#
 # To debug: export GIT_HOOKS_DEBUG=1
 
 set -u
