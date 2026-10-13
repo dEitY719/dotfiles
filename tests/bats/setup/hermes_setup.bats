@@ -153,6 +153,12 @@ STUB
     run bash "${HERMES_SETUP}"
     assert_success
     assert_output --partial ".enc.env has no HERMES_LLM_BASE_URL"
+    # An absent key is expected, not a problem: the line must be rendered by
+    # ux_info (U+2139 info glyph), never ux_warning (U+26A0 warning glyph).
+    local note_line
+    note_line="$(printf '%s\n' "$output" | grep -F ".enc.env has no HERMES_LLM_BASE_URL")"
+    [[ "$note_line" == *$'\xe2\x84\xb9'* ]] || fail "note not rendered as info: $note_line"
+    [[ "$note_line" != *$'\xe2\x9a\xa0'* ]] || fail "note rendered as a warning: $note_line"
     assert_output --partial "No custom LLM endpoint configured"
     [ ! -e "${HOME}/hermes-set.log" ]
 }

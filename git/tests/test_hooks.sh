@@ -885,8 +885,8 @@ ${stdin_lines}" ] ||
   rm -rf "$repo_dir"
 }
 
-# pre-push: a failing git lfs pre-push aborts the push with its exit code and
-# the project hook never runs.
+# pre-push: a failing git lfs pre-push aborts the push with its exit code,
+# after the project hook (which runs first) already passed.
 test_global_lfs_pre_push_failure_blocks() {
   local repo_dir rc=0
   repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
@@ -897,9 +897,31 @@ test_global_lfs_pre_push_failure_blocks() {
     < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") || rc=$?
 
   [ "$rc" -eq 2 ] || die "Expected lfs failure (2) to block the push, got ${rc}: $WRAPPER_OUT"
-  [ ! -f "$repo_dir/.delegated" ] || die "Project pre-push ran after git lfs pre-push failed"
+  grep -q "^DELEGATED:origin url$" "$repo_dir/.delegated" ||
+    die "Expected the project pre-push to run before git lfs pre-push"
   echo "$WRAPPER_OUT" | grep -q "git lfs pre-push failed (exit 2)" ||
     die "Expected an abort notice, got: $WRAPPER_OUT"
+
+  rm -rf "$repo_dir"
+}
+
+# pre-push order: a project pre-push that rejects the push (protected branch,
+# leak guard) aborts it before git-lfs runs — no LFS blob is uploaded for a
+# push that never happens.
+test_global_lfs_pre_push_project_failure_skips_lfs() {
+  local repo_dir rc=0
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_lfs_fixture "$repo_dir" lfs
+  install_recording_project_hook "$repo_dir" pre-push 5
+
+  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
+    < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") || rc=$?
+
+  [ "$rc" -eq 5 ] || die "Expected the project hook's exit code 5, got ${rc}: $WRAPPER_OUT"
+  grep -q "^DELEGATED:origin url$" "$repo_dir/.delegated" ||
+    die "Expected the project pre-push to run"
+  [ ! -f "$repo_dir/.lfs-calls" ] ||
+    die "git lfs pre-push ran after the project hook rejected the push: $(cat "$repo_dir/.lfs-calls")"
 
   rm -rf "$repo_dir"
 }
@@ -923,6 +945,64 @@ test_global_lfs_post_hooks_chain() {
     [ "$rc" -eq 3 ] || die "Expected ${hook_name} to exit with git-lfs's code 3, got ${rc}: $WRAPPER_OUT"
     grep -q "^DELEGATED:x$" "$repo_dir/.delegated" ||
       die "Expected ${hook_name} project hook to run despite the lfs failure"
+
+    rm -rf "$repo_dir"
+  done
+}
+
+# post-*: with no project hook, a failing git lfs <hook> is the wrapper's exit
+# code.
+test_global_lfs_post_hook_failure_without_project_hook() {
+  local hook_name repo_dir rc
+  for hook_name in post-commit post-checkout post-merge; do
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir" lfs
+
+    rc=0
+    FAKE_LFS_RC=4 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" x </dev/null || rc=$?
+    [ "$rc" -eq 4 ] || die "Expected ${hook_name} to exit with git-lfs's code 4, got ${rc}: $WRAPPER_OUT"
+    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:${hook_name} x" ] ||
+      die "Expected git lfs ${hook_name} x, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+
+    rm -rf "$repo_dir"
+  done
+}
+
+# Linked worktree of an LFS repo: `.git` is a file there, so detection must go
+# through --git-common-dir — the chain still fires.
+test_global_lfs_chains_in_linked_worktree() {
+  local repo_dir wt_dir
+  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+  make_lfs_fixture "$repo_dir" lfs
+  wt_dir="${repo_dir}-wt"
+  git -C "$repo_dir" worktree add -q "$wt_dir" -b lfs-wt >/dev/null 2>&1 ||
+    die "Could not create a linked worktree"
+
+  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$wt_dir" post-checkout a b 1 </dev/null ||
+    die "Expected post-checkout in the worktree to succeed: $WRAPPER_OUT"
+  [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:post-checkout a b 1" ] ||
+    die "Expected git lfs post-checkout in the linked worktree, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+
+  rm -rf "$wt_dir" "$repo_dir"
+}
+
+# Detection without <git-common-dir>/lfs (GIT_LFS_SKIP_SMUDGE clone, fresh
+# repo): a tracked .gitattributes — root or nested — with filter=lfs is enough.
+test_global_lfs_detected_via_tracked_gitattributes() {
+  local attr_path repo_dir
+  for attr_path in .gitattributes sub/dir/.gitattributes; do
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir"
+    mkdir -p "$(dirname "$repo_dir/$attr_path")"
+    echo '*.bin filter=lfs diff=lfs merge=lfs -text' >"$repo_dir/$attr_path"
+    git -C "$repo_dir" add "$attr_path"
+    git -C "$repo_dir" -c core.hooksPath=/dev/null commit -q -m "lfs attrs"
+    [ ! -d "$repo_dir/.git/lfs" ] || die "Fixture unexpectedly has .git/lfs"
+
+    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" post-commit </dev/null ||
+      die "Expected post-commit to succeed: $WRAPPER_OUT"
+    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:post-commit" ] ||
+      die "Expected ${attr_path} filter=lfs to enable the chain, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
 
     rm -rf "$repo_dir"
   done
@@ -1242,7 +1322,11 @@ main() {
   # git-lfs chaining in the global wrappers (lib/lfs.sh)
   test_global_lfs_pre_push_chains_and_replays_stdin
   test_global_lfs_pre_push_failure_blocks
+  test_global_lfs_pre_push_project_failure_skips_lfs
   test_global_lfs_post_hooks_chain
+  test_global_lfs_post_hook_failure_without_project_hook
+  test_global_lfs_chains_in_linked_worktree
+  test_global_lfs_detected_via_tracked_gitattributes
   test_global_lfs_skipped_in_non_lfs_repo
   test_global_lfs_not_doubled_by_lfs_project_hook
 

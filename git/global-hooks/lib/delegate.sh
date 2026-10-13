@@ -21,9 +21,10 @@
 #   unchanged.
 #
 #   git-lfs (lib/lfs.sh): pre-push / post-commit / post-checkout / post-merge
-#   run `git lfs <hook> "$@"` before delegating — in repos that use LFS only,
-#   when git-lfs is on PATH. Everywhere else lfs_chain is a silent no-op, so
-#   the delegation contract above is unchanged byte for byte.
+#   also run `git lfs <hook> "$@"` — in repos that use LFS only, when git-lfs
+#   is on PATH. pre-push runs the project hook first (a rejected push uploads
+#   no LFS blob), post-* run git-lfs first. Everywhere else lfs_hook_applies
+#   is false and the delegation contract above is unchanged byte for byte.
 #
 # Requires HOOK_NAME to already be set by the caller. Uses "$0"/"$@" as
 # inherited from the sourcing wrapper's own invocation (source does not
@@ -85,11 +86,7 @@ done
 # inside, for every repo on the machine, defeating both the worktree fix and
 # the pre-existing "no-op in an unrelated repo" guarantee.
 if [ -z "$RUN_HOOK" ]; then
-    GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
-    case "$GIT_COMMON_DIR" in
-        /*) : ;;
-        ?*) GIT_COMMON_DIR="$REPO_ROOT/$GIT_COMMON_DIR" ;;
-    esac
+    GIT_COMMON_DIR=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
     HOOK_PATH="${GIT_COMMON_DIR:+$GIT_COMMON_DIR/hooks/${HOOK_NAME}}"
 
     [ "$DEBUG" = "1" ] && echo "[Debug] Checking: $HOOK_PATH"
@@ -102,24 +99,21 @@ if [ -z "$RUN_HOOK" ]; then
     fi
 fi
 
-# git-lfs chaining. A failed `git lfs pre-push` exits inside lfs_chain (push
-# aborted); on success stdin is already swapped for the replay copy. A failed
-# post-* sets LFS_HOOK_RC, which wins over the delegate's code below.
+# git-lfs chaining. In an LFS repo lfs_run_and_delegate runs git-lfs and the
+# project hook (as a child, in the order lib/lfs.sh documents) and exits with
+# the combined code; it never returns.
 # shellcheck source=./lfs.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lfs.sh"
-lfs_chain "$@"
+if lfs_hook_applies; then
+    lfs_run_and_delegate "$@"
+fi
 
 if [ -z "$RUN_HOOK" ]; then
     [ "$DEBUG" = "1" ] && echo "[Debug] No project-level ${HOOK_NAME} hook found"
-    exit "$LFS_HOOK_RC"
+    exit 0
 fi
 
 echo -e "${BLUE}[Global Hook] Delegating to project hook: $RUN_HOOK${NC}"
-
-if [ "$LFS_HOOK_RC" -ne 0 ]; then
-    "$RUN_HOOK" "$@"
-    exit "$LFS_HOOK_RC"
-fi
 
 # `exec` replaces this wrapper's own process image with the project hook
 # instead of running it as a waited-on child (agy review, PR #1674) — one
