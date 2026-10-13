@@ -39,7 +39,9 @@ fake_script() {
 
 @test "the three hook scripts live in git/tests/ and git/test/ is gone" {
     unset GIT_HOOK_TESTS_DIR
-    [ ! -d "$REAL_REPO/git/test" ]
+    # Tracked files only: an untracked leftover (editor swap, cache) can keep
+    # an old git/test/ dir alive in a dev checkout after the move.
+    [ -z "$(git -C "$REAL_REPO" ls-files -- git/test 2>/dev/null)" ]
     run _discover_git_hook_tests
     assert_success
     assert_output --partial "/git/tests/test_hooks.sh"
@@ -95,6 +97,17 @@ git config --global user.name probe
     assert_success
     # The script's global write landed in its own HOME, not the caller's.
     [ ! -e "$real_home/.gitconfig" ]
+}
+
+@test "scripts never inherit a hook's GIT_DIR or leak-guard escape hatches" {
+    fake_script env.sh '
+[ -z "${GIT_DIR+x}" ] || { echo "GIT_DIR leaked: $GIT_DIR"; exit 1; }
+[ -z "${GIT_INDEX_FILE+x}" ] || { echo "GIT_INDEX_FILE leaked"; exit 1; }
+[ -z "${SKIP_LEAK_GUARD+x}" ] || { echo "SKIP_LEAK_GUARD leaked"; exit 1; }
+[ -z "${PRE_PUSH_FULL_TEST+x}" ] || { echo "PRE_PUSH_FULL_TEST leaked"; exit 1; }'
+    GIT_DIR=/nonexistent/.git GIT_INDEX_FILE=/nonexistent/index \
+        SKIP_LEAK_GUARD=1 PRE_PUSH_FULL_TEST=1 run run_git_hook_tests "$WORK"
+    assert_success
 }
 
 @test "GIT_HOOK_TEST_TIMEOUT kills a hung script and fails the phase" {
