@@ -49,6 +49,9 @@ SH
     chmod +x "$FAKEBIN/claude"
     export PATH="$FAKEBIN:/usr/bin:/bin"
     unset CLAUDE_DEFAULT_ACCOUNT
+    # The store the script refuses to run without (setup links it per account).
+    mkdir -p "$TEST_TEMP_HOME/.claude-personal/plugins" "$TEST_TEMP_HOME/.claude-work1/plugins" \
+        "$TEST_TEMP_HOME/.claude/plugins"
 }
 
 teardown() {
@@ -220,6 +223,55 @@ SH
     assert_success
     assert_output --partial "gh-flow@gh-flow-skills: up to date (1.0.0)"
     assert_output --partial "Plugins updated: 0"
+}
+
+@test "update-plugins.sh reports an unrecognized outcome instead of counting it as updated" {
+    cat >"$FAKEBIN/claude" <<'SH'
+#!/bin/bash
+echo "$*" >>"$CLAUDE_LOG"
+[ "$1 $2" = "plugin update" ] && echo "done, probably"
+exit 0
+SH
+    chmod +x "$FAKEBIN/claude"
+    run "$PLUGDIR/update-plugins.sh"
+    assert_success
+    assert_output --partial "gh-flow@gh-flow-skills: unrecognized update result (no JSON)"
+    assert_output --partial "Plugins updated: 0"
+    assert_output --partial "Plugins with an unrecognized result: 2"
+    refute_output --partial "Restart running Claude Code sessions"
+}
+
+@test "update-plugins.sh skips with a warning when the plugin store is missing" {
+    rm -rf "$TEST_TEMP_HOME/.claude-personal/plugins"
+    run "$PLUGDIR/update-plugins.sh"
+    assert_success
+    assert_output --partial "Plugin store not found"
+    [ ! -e "$CLAUDE_LOG" ]
+    [ ! -e "$TEST_TEMP_HOME/.claude-personal/plugins" ]
+}
+
+@test "update-plugins.sh warns when the plugin store lists nothing" {
+    echo '{}' >"$TEST_TEMP_HOME/.claude-personal/plugins/known_marketplaces.json"
+    run "$PLUGDIR/update-plugins.sh"
+    assert_success
+    assert_output --partial "lists no marketplaces/plugins"
+}
+
+@test "update-plugins.sh warns about a non-string marketplace source" {
+    echo '{"obj-skills": {"source": "git", "url": "https://example.com/x.git"}}' >"$PLUGDIR/marketplaces.local.json"
+    run "$PLUGDIR/update-plugins.sh" --all
+    assert_success
+    assert_output --partial "Unsupported (non-string) marketplace source — skipped: obj-skills"
+    run cat "$CLAUDE_LOG"
+    refute_output --partial "obj-skills"
+}
+
+@test "update-plugins.sh lets the tracked manifest win an overlay key conflict" {
+    echo '{"gh-flow-skills": "someone-else/gh-flow-skills"}' >"$PLUGDIR/marketplaces.local.json"
+    run "$PLUGDIR/update-plugins.sh"
+    assert_success
+    run cat "$CLAUDE_LOG"
+    assert_output --partial "plugin marketplace update gh-flow-skills"
 }
 
 @test "update-plugins.sh rejects an unknown flag" {
