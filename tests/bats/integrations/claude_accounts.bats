@@ -542,6 +542,7 @@ _internal_apikeyhelper_home() {
 }
 
 @test "bash: #2116 external + apiKeyHelper only -> still NOT logged in (OAuth rule kept)" {
+    echo "external" > "$HOME/.dotfiles-setup-mode"
     mkdir -p "$HOME/.claude-work"
     printf '{"apiKeyHelper":"/opt/gw/api-key-helper"}\n' > "$HOME/.claude-work/settings.json"
     run_in_bash 'ANTHROPIC_API_KEY=sk-test _claude_account_logged_in "$HOME/.claude-work"'
@@ -560,6 +561,7 @@ _internal_apikeyhelper_home() {
 }
 
 @test "bash: #2116 claude_accounts_status external shows OAuth credentials label" {
+    echo "external" > "$HOME/.dotfiles-setup-mode"
     mkdir -p "$HOME/.claude-personal"
     printf '{"claudeAiOauth":{"accessToken":"t"}}\n' > "$HOME/.claude-personal/.credentials.json"
     run_in_bash 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
