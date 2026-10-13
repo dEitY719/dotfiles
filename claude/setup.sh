@@ -27,7 +27,7 @@
 # These files/directories are version-controlled in dotfiles and should
 # be managed via symbolic links for consistency across machines.
 #
-# See SETUP_GUIDE.md for more information
+# See docs/guide/setup.md for more information
 
 # --- Constants ---
 

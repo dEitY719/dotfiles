@@ -14,7 +14,7 @@
 # Note: While zsh/main.zsh is the main loader, this script ensures
 # proper initialization and user communication during setup.
 #
-# See SETUP_GUIDE.md for more information
+# See docs/guide/setup.md for more information
 
 # --- Constants ---
 

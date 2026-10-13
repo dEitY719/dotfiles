@@ -17,7 +17,7 @@
     - setup: setup.sh | maintenance | diagnostics
     - features: shell separation | UX | help | git | skills
     - commands: my-help | src | dot | ux-help
-    - docs: SETUP_GUIDE | AGENTS | UX_GUIDELINES
+    - docs: setup guide | AGENTS | UX_GUIDELINES
     - details: dot-help <section>  (example: dot-help setup)
 
 ## 섹션
@@ -56,7 +56,7 @@
 
 ### docs
 
-- Complete setup guide: ./SETUP_GUIDE.md
+- Complete setup guide: ./docs/guide/setup.md
 - Project structure: ./AGENTS.md
 - UX standards: ./shell-common/tools/ux_lib/UX_GUIDELINES.md
 

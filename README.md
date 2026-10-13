@@ -80,7 +80,7 @@ dotfiles/
 │   └── setup.sh         # Git setup
 │
 ├── docs/                # Documentation
-│   └── SETUP_GUIDE.md   # Detailed setup instructions
+│   └── guide/setup.md   # Detailed setup instructions
 │
 ├── setup.sh             # Main orchestrator
 └── README.md            # This file

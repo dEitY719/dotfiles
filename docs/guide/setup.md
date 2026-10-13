@@ -2,12 +2,10 @@
 
 ## 📋 개요
 
-dotfiles는 두 가지 설정 스크립트로 나뉩니다:
+dotfiles 설치는 `./setup.sh` 하나로 수렴합니다 — 신규 PC 든 기존 PC 든 같은 명령을 다시
+실행하면 됩니다(멱등). Claude Code 설정도 `setup.sh` 가 호출하는 `claude/setup.sh` 가 맡습니다.
 
-| 스크립트 | 목적 | 실행 시점 |
-|---------|------|---------|
-| `./setup.sh` | **Shell 환경 설정** (필수) | 초기 설치 시 필수 |
-| `./install.sh` | **Claude/PG 보조 설정** (선택) | 초기 설치 또는 필요시 |
+> `install.sh` 는 폐기되었습니다(#2131). 실행하면 안내 메시지와 함께 exit 2 로 종료합니다.
 
 ---
 
@@ -42,7 +40,10 @@ cd ~/dotfiles
    - 완료 메시지 및 다음 단계 안내
 
 4. `git/setup.sh` 실행
-   - `~/.gitconfig` → `git/.gitconfig` symlink 생성
+   - `~/.gitconfig` 를 실파일로 두고 최상단에 `[include] path = <dotfiles>/git/.gitconfig` 보장
+     (symlink 아님 — `git config --global` 쓰기가 SSOT 를 오염시키지 않도록)
+
+5. `claude/setup.sh` 등 나머지 단계 실행 (Claude Code 설정, gh, ssh 등)
 
 **결과:** 환경에 맞는 설정으로 초기화 완료
 
@@ -54,16 +55,6 @@ cd ~/dotfiles
 check-npm files    # symlink 상태 확인
 ```
 
-### Step 2: Claude/PostgreSQL 설정 (선택사항)
-```bash
-./install.sh
-```
-
-**이 스크립트가 하는 일:**
-- `~/.claude/` 디렉토리 설정 (statusline-command.sh, settings.json, agents)
-- PostgreSQL `pg_services.list` 설정
-- 위의 symlink 재설정 (이미 생성된 경우 업데이트)
-
 ---
 
 ## ⚠️ 중요: 파일 삭제 금지
@@ -72,7 +63,7 @@ check-npm files    # symlink 상태 확인
 - ❌ `shell-common/setup.sh` - 환경별 설정 필수
 - ❌ `bash/setup.sh` - bash 환경변수 설정 필수
 - ❌ `zsh/setup.sh` - zsh 초기화 필수
-- ❌ `git/setup.sh` - git config symlink 필수
+- ❌ `git/setup.sh` - ~/.gitconfig include 설정 필수
 - ❌ `setup.sh` - 위 파일들의 orchestrator
 
 **이유:**
@@ -80,8 +71,6 @@ check-npm files    # symlink 상태 확인
 - bash/setup.sh: DOTFILES_BASH_DIR, SHELL_COMMON 환경변수 설정
 - zsh/setup.sh: 사용자 안내 및 피드백
 - git/setup.sh: UX 함수 활용한 피드백
-
-`install.sh`만으로는 이러한 **특수 초기화**를 할 수 없습니다.
 
 ---
 
@@ -119,7 +108,7 @@ check-npm files    # symlink 상태 확인
 ### bash/setup.sh
 ```bash
 # 역할:
-# 1. DOTFILES_BASH_DIR, SHELL_COMMON 환경변수 설정 ← install.sh가 못함
+# 1. DOTFILES_BASH_DIR, SHELL_COMMON 환경변수 설정
 # 2. ~/.bashrc symlink 생성
 # 3. ~/.bash_profile symlink 생성 (선택사항)
 ```
@@ -141,25 +130,12 @@ check-npm files    # symlink 상태 확인
 ### git/setup.sh
 ```bash
 # 역할:
-# 1. ~/.gitconfig symlink 생성
+# 1. ~/.gitconfig 실파일 + [include] SSOT 보장 (레거시 symlink 는 실파일로 전환)
 # 2. UX 함수를 이용한 피드백
 ```
-- **특수 작업**: UX 피드백
+- **특수 작업**: include 모델 유지 (로컬 커스터마이즈 보존), UX 피드백
 - **언제 실행**: setup.sh에서 자동 호출 (수동 호출 X)
-- **symlink 생성**: ~/.gitconfig
-
-### install.sh
-```bash
-# 역할:
-# 1. Claude 설정 (statusline-command.sh, settings.json, agents)
-# 2. PostgreSQL 설정 (pg_services.list)
-# 3. Bash/Zsh/Git symlink 재설정 (setup.sh와 중복)
-```
-- **특수 작업**: Claude, PG 설정
-- **언제 실행**:
-  - 초기 설치 시 (setup.sh 후)
-  - Claude 설정 필요시 아무 때나
-- **symlink 생성**: ~/.bashrc, ~/.zshrc, ~/.gitconfig (setup.sh와 동일)
+- **생성 파일**: ~/.gitconfig (실파일, `git/.gitconfig` 를 include)
 
 ---
 
@@ -168,15 +144,14 @@ check-npm files    # symlink 상태 확인
 ### 🔵 신규 사용자 (처음 설치)
 ```bash
 cd ~/dotfiles
-./setup.sh    # Step 1: Shell 설정 (필수) ← 환경변수 설정 포함
-./install.sh  # Step 2: Claude/PG 설정 (선택)
+./setup.sh    # 전체 설정 (환경변수, symlink, Claude Code 포함)
 exec bash     # 또는 exec zsh (새 shell로 진입)
 ```
 
 ### 🟢 기존 사용자 (업데이트)
 ```bash
 cd ~/dotfiles
-./install.sh  # Claude/PG 설정만 업데이트
+./setup.sh    # 멱등 — 다시 실행하면 최신 상태로 수렴
 ```
 
 ### 🟡 특정 shell만 재설정
@@ -222,22 +197,17 @@ cd ~/dotfiles
 
 ## 📌 핵심 원칙
 
-1. **setup.sh와 install.sh는 보완 관계**
-   - setup.sh: Shell 환경 설정 (필수)
-   - install.sh: Claude/PG 추가 설정 (선택)
+1. **`./setup.sh` 하나로 수렴**
+   - 신규 설치와 업데이트 모두 같은 명령 (멱등)
+   - `install.sh` 는 폐기됨 — 실행 시 exit 2
 
 2. **setup.sh의 하위 파일들은 특수 초기화 수행**
    - bash/setup.sh: 환경변수 설정
    - zsh/setup.sh: 사용자 피드백
    - git/setup.sh: UX 피드백
 
-3. **install.sh는 symlink 재설정만 가능**
-   - bash/zsh 환경변수 설정 안 함
-   - 따라서 초기 설치 시에는 setup.sh 필수
-
-4. **절대 setup.sh 파일들을 삭제하면 안 됨**
+3. **절대 setup.sh 파일들을 삭제하면 안 됨**
    - 특수 초기화 로직이 손실됨
-   - install.sh로 복구 불가능
 
 ---
 
@@ -245,5 +215,5 @@ cd ~/dotfiles
 
 - `bash/main.bash`: bash 셸 초기화
 - `zsh/zshrc` & `zsh/main.zsh`: zsh 셸 초기화
-- `git/.gitconfig`: git 설정
+- `git/.gitconfig`: git 설정 SSOT (`~/.gitconfig` 가 include)
 - `shell-common/`: bash/zsh 공유 리소스 (aliases, functions, env, ux_lib)
