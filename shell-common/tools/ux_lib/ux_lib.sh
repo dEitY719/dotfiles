@@ -34,26 +34,6 @@ if [ "${DOTFILES_TEST_MODE:-}" = "1" ] || [ "${TERM:-}" = "dumb" ] || [ -n "${NO
     _UX_DISABLE_ANSI=true
 fi
 
-# Text styles
-export UX_BOLD
-if $_UX_DISABLE_ANSI; then
-    UX_BOLD=""
-else
-    UX_BOLD=$(tput bold 2>/dev/null || echo "")
-fi
-export UX_DIM
-if $_UX_DISABLE_ANSI; then
-    UX_DIM=""
-else
-    UX_DIM=$(tput dim 2>/dev/null || echo "")
-fi
-export UX_RESET
-if $_UX_DISABLE_ANSI; then
-    UX_RESET=""
-else
-    UX_RESET=$(tput sgr0 2>/dev/null || echo "")
-fi
-
 # Determine directory where this script is located
 # This allows the library to be self-contained and portable
 if $_UX_IS_BASH; then
@@ -65,44 +45,57 @@ else
     UX_LIB_DIR="$(cd "$(dirname -- "$0")" && pwd)"
 fi
 
-# Semantic colors (named by purpose, not appearance)
-# Use these instead of direct color codes for consistency
-export UX_PRIMARY
-if $_UX_DISABLE_ANSI; then
-    UX_PRIMARY=""
-else
-    UX_PRIMARY=$(tput setaf 4 2>/dev/null || echo "") # blue - headers, titles
+# Text styles + semantic colors (named by purpose, not appearance).
+# Use these instead of direct color codes for consistency.
+#   UX_PRIMARY blue (headers)   UX_SUCCESS green   UX_WARNING yellow
+#   UX_ERROR   red              UX_INFO    cyan    UX_MUTED   gray
+export UX_BOLD UX_DIM UX_RESET
+export UX_PRIMARY UX_SUCCESS UX_WARNING UX_ERROR UX_INFO UX_MUTED
+
+# Per-capability tput lookup (the original slow path, one fork per cap).
+_ux_tput_cap() {
+    tput "$@" 2>/dev/null || echo ""
+}
+
+# Startup cost (#2129): one `tput -S` fork fetches `colors` + `sgr0`. On a
+# 16+ color terminal every other cap is plain ECMA-48 SGR, so it is spelled
+# as a literal (byte-identical to what terminfo returns for xterm/screen/tmux
+# 256color); only sgr0 varies per terminfo and is taken from tput. Anything
+# else (tput missing, unknown TERM, <16 colors) falls back to per-cap tput,
+# so the empty-string fallback is unchanged.
+UX_BOLD="" UX_DIM="" UX_RESET=""
+UX_PRIMARY="" UX_SUCCESS="" UX_WARNING="" UX_ERROR="" UX_INFO="" UX_MUTED=""
+if ! $_UX_DISABLE_ANSI; then
+    _ux_nl='
+'
+    _ux_ti=$(printf 'colors\nsgr0\n' | tput -S 2>/dev/null) || _ux_ti=""
+    _ux_colors=${_ux_ti%%"$_ux_nl"*}
+    case "$_ux_colors" in '' | *[!0-9]*) _ux_colors=0 ;; esac
+    if [ "$_ux_colors" -ge 16 ] && [ "$_ux_ti" != "$_ux_colors" ] && { $_UX_IS_BASH || $_UX_IS_ZSH; }; then
+        _ux_esc=$'\033'
+        UX_BOLD="${_ux_esc}[1m"
+        UX_DIM="${_ux_esc}[2m"
+        UX_RESET=${_ux_ti#*"$_ux_nl"}
+        UX_PRIMARY="${_ux_esc}[34m"
+        UX_SUCCESS="${_ux_esc}[32m"
+        UX_WARNING="${_ux_esc}[33m"
+        UX_ERROR="${_ux_esc}[31m"
+        UX_INFO="${_ux_esc}[36m"
+        UX_MUTED="${_ux_esc}[90m"
+    else
+        UX_BOLD=$(_ux_tput_cap bold)
+        UX_DIM=$(_ux_tput_cap dim)
+        UX_RESET=$(_ux_tput_cap sgr0)
+        UX_PRIMARY=$(_ux_tput_cap setaf 4)
+        UX_SUCCESS=$(_ux_tput_cap setaf 2)
+        UX_WARNING=$(_ux_tput_cap setaf 3)
+        UX_ERROR=$(_ux_tput_cap setaf 1)
+        UX_INFO=$(_ux_tput_cap setaf 6)
+        UX_MUTED=$(_ux_tput_cap setaf 8)
+    fi
+    unset _ux_nl _ux_ti _ux_colors _ux_esc
 fi
-export UX_SUCCESS
-if $_UX_DISABLE_ANSI; then
-    UX_SUCCESS=""
-else
-    UX_SUCCESS=$(tput setaf 2 2>/dev/null || echo "") # green - success states
-fi
-export UX_WARNING
-if $_UX_DISABLE_ANSI; then
-    UX_WARNING=""
-else
-    UX_WARNING=$(tput setaf 3 2>/dev/null || echo "") # yellow - warnings
-fi
-export UX_ERROR
-if $_UX_DISABLE_ANSI; then
-    UX_ERROR=""
-else
-    UX_ERROR=$(tput setaf 1 2>/dev/null || echo "") # red - errors
-fi
-export UX_INFO
-if $_UX_DISABLE_ANSI; then
-    UX_INFO=""
-else
-    UX_INFO=$(tput setaf 6 2>/dev/null || echo "") # cyan - info messages
-fi
-export UX_MUTED
-if $_UX_DISABLE_ANSI; then
-    UX_MUTED=""
-else
-    UX_MUTED=$(tput setaf 8 2>/dev/null || echo "") # gray - secondary info
-fi
+unset -f _ux_tput_cap
 
 # =============================================================================
 # Standard Output Functions

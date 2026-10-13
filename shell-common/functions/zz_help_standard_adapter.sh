@@ -7,7 +7,8 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _help_std_is_function() {
     if [ -n "${ZSH_VERSION:-}" ]; then
-        whence -w "$1" 2>/dev/null | grep -q ": function$"
+        # Fork-free lookup (#2129): the old `whence -w | grep` forked per call.
+        (( ${+functions[$1]} ))
     else
         declare -f "$1" >/dev/null 2>&1
     fi
@@ -239,6 +240,5 @@ apply_help_standard_adapter() {
     _help_std_wrap_topics
 }
 
-# Apply once for help functions sourced from shell-common/functions/.
-# bash/zsh loader re-applies after integrations are sourced.
-apply_help_standard_adapter
+# Not applied at source time (#2129): the bash/zsh entry points call
+# apply_help_standard_adapter once, after functions/ and integrations/ load.
