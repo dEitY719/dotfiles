@@ -195,6 +195,11 @@ config dir 은 setup-mode 로 라우팅된다 (#1103) — internal → `~/.claud
 그 외 → `~/.claude-<account>` (기본 `$CLAUDE_DEFAULT_ACCOUNT`). 특정 계정은
 `--user <account>`, 전체 계정은 `--all-accounts`.
 
+이미 설치된 플러그인 갱신: `./claude/plugin/update-plugins.sh` (`skills-sync` 4/5, `--dry-run`).
+플러그인 저장소·version bump 규칙·진단 SSOT: `docs/.ssot/skills-distribution.md`.
+`claude/workspace/AGENTS.md` 는 스킬 작업 폴더 루트 라우터 원본이다 —
+`scripts/setup-skills-ssot.sh` 가 `${WORKSPACE_ROOT}/{AGENTS,CLAUDE}.md` 로 링크한다 (#2123).
+
 두 레포 모두 "PR을 통해서만 변경 가능" 규칙이 걸려 있어 로컬 커밋이
 origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
 (`--dry-run` 지원)를 수동 실행하면 쌓인 변경분을 브랜치+PR+admin-merge로

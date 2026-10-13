@@ -24,6 +24,7 @@
 | [`local-test-policy.md`](./local-test-policy.md) | 테스트 실행 위치 정책 — push = 테스트 없음 (opt-in smoke), PR 생성 = `mise run pr-gate` 전체 테스트, CI = 비차단 전체 스위트 (이슈 #754, #2046, #2054) |
 | [`pc-environment.md`](./pc-environment.md) | 5개 PC 환경(internal/external/public) 인벤토리, `~/.dotfiles-setup-mode` 모드 스위치, 모드별 동기화·AI 태깅 규칙 |
 | [`one-click-setup.md`](./one-click-setup.md) | `./setup.sh` 원클릭 멱등 수렴 원칙 — soft-fail, internal/external 양쪽 반영, 절대경로 금지 |
+| [`skills-distribution.md`](./skills-distribution.md) | 스킬 배포 구조 — 작업 사본 vs Claude 플러그인 저장소, 모드별 저장소 위치, `skills-sync` 5단계, "Claude 에 스킬이 안 보인다" 진단, 릴리스 시 version bump 필수 (#2123) |
 
 ## 변경 절차
 
