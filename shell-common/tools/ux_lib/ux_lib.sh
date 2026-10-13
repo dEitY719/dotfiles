@@ -57,18 +57,24 @@ _ux_tput_cap() {
     tput "$@" 2>/dev/null || echo ""
 }
 
-# Startup cost (#2129): one `tput -S` fork fetches `colors` + `sgr0`. On a
-# 16+ color terminal every other cap is plain ECMA-48 SGR, so it is spelled
-# as a literal (byte-identical to what terminfo returns for xterm/screen/tmux
-# 256color); only sgr0 varies per terminfo and is taken from tput. Anything
-# else (tput missing, unknown TERM, <16 colors) falls back to per-cap tput,
-# so the empty-string fallback is unchanged.
+# Startup cost (#2129): one `tput -S` fork fetches `colors` + `sgr0`. For the
+# xterm/screen/tmux terminfo families with 16+ colors every other cap is plain
+# ECMA-48 SGR, so it is spelled as a literal (byte-identical to what their
+# terminfo returns); only sgr0 varies (`\e(B\e[m` vs `\e[m\017`) and comes
+# from tput. Any other TERM (rxvt, xterm-direct, ...), tput missing, unknown
+# TERM or <16 colors falls back to per-cap tput, so behavior is unchanged.
 UX_BOLD="" UX_DIM="" UX_RESET=""
 UX_PRIMARY="" UX_SUCCESS="" UX_WARNING="" UX_ERROR="" UX_INFO="" UX_MUTED=""
 if ! $_UX_DISABLE_ANSI; then
     _ux_nl='
 '
-    _ux_ti=$(printf 'colors\nsgr0\n' | tput -S 2>/dev/null) || _ux_ti=""
+    _ux_ti=""
+    case "${TERM:-}" in
+        *-direct*) ;;
+        xterm-256color | xterm-16color | xterm-88color | screen* | tmux*)
+            _ux_ti=$(printf 'colors\nsgr0\n' | tput -S 2>/dev/null) || _ux_ti=""
+            ;;
+    esac
     _ux_colors=${_ux_ti%%"$_ux_nl"*}
     case "$_ux_colors" in '' | *[!0-9]*) _ux_colors=0 ;; esac
     if [ "$_ux_colors" -ge 16 ] && [ "$_ux_ti" != "$_ux_colors" ] && { $_UX_IS_BASH || $_UX_IS_ZSH; }; then

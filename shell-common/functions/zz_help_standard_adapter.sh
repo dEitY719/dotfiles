@@ -8,6 +8,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 _help_std_is_function() {
     if [ -n "${ZSH_VERSION:-}" ]; then
         # Fork-free lookup (#2129): the old `whence -w | grep` forked per call.
+        # shellcheck disable=SC2296  # zsh-only expansion; branch is unreachable under bash
         (( ${+functions[$1]} ))
     else
         declare -f "$1" >/dev/null 2>&1
@@ -40,8 +41,9 @@ _help_std_is_guideline_compliant() {
     local get_definition_fn='_help_std_get_definition'
     def="$($get_definition_fn "$func_name")" || return 1
 
-    printf "%s\n" "$def" | grep -Fq "[section|--list|--all]" || return 1
-    printf "%s\n" "$def" | grep -Fq 'ux_bullet "sections"' || return 1
+    # Fork-free substring checks (#2129) — this runs once per topic at startup.
+    case "$def" in *'[section|--list|--all]'*) ;; *) return 1 ;; esac
+    case "$def" in *'ux_bullet "sections"'*) ;; *) return 1 ;; esac
     return 0
 }
 
