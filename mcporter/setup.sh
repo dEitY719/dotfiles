@@ -11,7 +11,7 @@
 # already converted, and warns when .enc.env has no readable EXA_API_KEY yet.
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOTFILES_ROOT="${_SCRIPT_DIR%/mcporter}"
+DOTFILES_ROOT="$(cd "${_SCRIPT_DIR}/.." && pwd)"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
@@ -40,7 +40,7 @@ main() {
         return 0
     fi
     if ! mcporter_exa_setup; then
-        ux_warning "mcporter exa setup incomplete; add EXA_API_KEY to .enc.env (sops-help secrets), then re-run ./mcporter/setup.sh"
+        ux_warning "mcporter exa setup incomplete; see the message above, fix it, then re-run ./mcporter/setup.sh"
     fi
     return 0
 }
