@@ -66,9 +66,10 @@ _bundle_fps() {
     awk '{ sub(/\r$/, "") }
         index($0, "-----BEGIN CERTIFICATE-----") { _in = 1; _blk = "" }
         _in { _blk = _blk $0 "|" }
-        index($0, "-----END CERTIFICATE-----") && _in { print _blk; _in = 0 }' "$CHECK_CERT" |
+        # 인증서는 수 KB — 64KB 넘는 블록은 깨진 것으로 보고 버린다 (xargs 인자 한도로 전체가 멈추지 않게).
+        index($0, "-----END CERTIFICATE-----") && _in { if (length(_blk) < 65536) print _blk; _in = 0 }' "$CHECK_CERT" |
         tr '\n|' '\0\n' |
-        xargs -0 -n1 -P "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" \
+        xargs -0 -n1 -P 8 \
             sh -c 'printf "%s" "$1" | openssl x509 -noout -fingerprint -sha256 2>/dev/null' _ |
         sed 's/.*=//' | tr -d ':' | tr 'a-f' 'A-F'
 }
