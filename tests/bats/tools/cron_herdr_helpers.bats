@@ -422,9 +422,16 @@ _in() {
     for _p in iw pmt; do
         _in "${_p}" 'out=$(@P@_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"; @P@_resolve_config_dir 2>&1 >/dev/null' \
             "CLAUDE_ENABLED_ACCOUNTS=personal"
-        assert_output --partial "rc=1 out=[]"
         assert_output --partial "Claude account not logged in"
     done
+    # Same stream split as the unknown-account case above: issue_watcher's
+    # account hint goes to stdout (the discarded capture), merge-train's to
+    # stderr. Asserted per script, not in the loop, so the iw half cannot
+    # demand the pmt contract.
+    _in iw 'out=$(_iw_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"' "CLAUDE_ENABLED_ACCOUNTS=personal"
+    assert_output --partial "rc=1 out=[ℹ"
+    _in pmt 'out=$(_pmt_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"' "CLAUDE_ENABLED_ACCOUNTS=personal"
+    assert_output --partial "rc=1 out=[]"
 }
 
 @test "cron herdr helpers: resolve_config_dir falls back to ~/.claude for a pre-#1393 user" {
