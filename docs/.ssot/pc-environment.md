@@ -34,6 +34,7 @@
 |------|------|------|
 | Claude Code 인증 | `gateway-cli setup` (조직 LLM Gateway) | `internal` → 2026-08-18~ `gateway-cli` 소유; 상세: `docs/guide/internal-pc.md` |
 | Claude 계정 활성화 | `shell-common/env/claude.sh` | `internal` → work 계정만; 그 외 → personal/work/work1 |
+| Claude 플러그인 저장소 | `claude/setup.sh` (`~/.claude-shared/plugins`) | 실제 저장소는 모든 모드에서 `~/.claude-shared/plugins`. `public`/`external` → 계정별 `~/.claude-<acct>/plugins` 심볼릭 링크로 공유, `internal` → `~/.claude/plugins` 단일 링크. 갱신·진단: [`skills-distribution.md`](./skills-distribution.md) (#2123) |
 | 사내 식별값 | `shell-common/env/internal.local.sh` (gitignored) | `internal` PC 는 `internal.local.example` 을 복사해 실제 값 입력 (예: `DOTFILES_GHES_HOST`) — #1944. `proxy`/`security` 템플릿도 가짜 placeholder 이며 `shell-common/setup.sh` 는 기존 `*.local.sh` 를 덮어쓰지 않는다(모드 재선택 시 `*.backup.local.sh` 로 옮겼다 복원) — #1969 |
 | Git host 라우팅 | `shell-common/functions/gh_host.sh` | `internal` → GHES, 그 외 → github.com |
 | 프록시 자동 정리 | `shell-common/util/setup_mode.sh` | WSL2 프록시 상속 방지. 모드별 프록시 규칙(`internal`=required, `public`/`external`=forbidden)은 `_dotfiles_setup_mode_proxy` (`shell-common/util/setup_mode_read.sh`) 한 곳 — `check_proxy.sh` 도 같은 함수를 쓴다 (#1810) |

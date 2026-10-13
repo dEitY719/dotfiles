@@ -554,6 +554,41 @@ link_skills_individual_codex() {
 
 ux_section "Skills 워크스페이스 연결"
 
+# 0. 워크스페이스 루트 라우터 (#2123 F-3): 스킬 작업 세션은 git repo 가 아닌
+#    워크스페이스 루트에서 시작하므로 dotfiles 의 문서 체인이 컨텍스트에 들어오지
+#    않는다. <root>/{AGENTS,CLAUDE}.md 를 dotfiles 원본 하나로 심볼릭 링크해
+#    docs/.ssot/skills-distribution.md 로 안내한다. 링크 대상은 main 체크아웃을
+#    우선한다 — 워크트리에서 실행해도 워크트리 삭제 뒤 끊어진 링크가 남지 않게.
+#    일반 파일은 사용자 소유로 보고 덮어쓰지 않는다. 소스 유무와 무관하게
+#    (clone 전이라도) 루트만 있으면 연결하므로 아래 "소스 없음" exit 보다 앞에 둔다.
+link_workspace_router() {
+    local router="${DOTFILES_MAIN_ROOT}/claude/workspace/AGENTS.md"
+    [ -f "$router" ] || router="${DOTFILES_ROOT}/claude/workspace/AGENTS.md"
+
+    if [ -z "$WORKSPACE_ROOT_RESOLVED" ]; then
+        log_info "워크스페이스 루트가 없어 라우터 연결을 건너뜁니다"
+        return 0
+    fi
+    if [ ! -f "$router" ]; then
+        log_warning "라우터 원본이 없습니다 — 건너뜁니다: $router"
+        return 0
+    fi
+
+    local name dest
+    for name in AGENTS.md CLAUDE.md; do
+        dest="${WORKSPACE_ROOT_RESOLVED}/${name}"
+        if [ -L "$dest" ]; then
+            [ "$(readlink "$dest")" = "$router" ] && continue
+        elif [ -e "$dest" ]; then
+            log_warning "라우터 대상이 일반 파일이라 덮어쓰지 않습니다: $dest (내용을 옮긴 뒤 지우고 다시 실행하세요)"
+            continue
+        fi
+        ln -sfn "$router" "$dest"
+        log_info "라우터 연결: $dest → $router"
+    done
+}
+link_workspace_router
+
 # 소스 목록을 한 번만 만들어 4개 CLI fan-out 이 공유한다 (issue #1652).
 SKILL_SOURCE_LIST="$(collect_skill_sources)"
 

@@ -975,3 +975,76 @@ run_setup_without_agy() {
     [ -L "${FIXTURE_HOME}/.gemini/config/skills" ]
     [ "$(readlink "${FIXTURE_HOME}/.gemini/config/skills")" = "${TEST_TEMP_HOME}/elsewhere/agy-skills" ]
 }
+
+# --- Workspace root router (#2123 F-3) ---
+# The workspace root is where skill-editing sessions start, but it is not a
+# git repo and has no context doc of its own. setup-skills-ssot.sh links
+# <root>/AGENTS.md and <root>/CLAUDE.md to the dotfiles-owned router so those
+# sessions find docs/.ssot/skills-distribution.md.
+
+seed_router_source() {
+    mkdir -p "${FIXTURE_DOTFILES}/claude/workspace"
+    cp "${DOTFILES_ROOT}/claude/workspace/AGENTS.md" \
+        "${FIXTURE_DOTFILES}/claude/workspace/AGENTS.md"
+    ROUTER_SRC="${FIXTURE_DOTFILES}/claude/workspace/AGENTS.md"
+    WS_ROOT="${FIXTURE_HOME}/para/project/skills"
+}
+
+@test "router: links AGENTS.md and CLAUDE.md at the workspace root (#2123)" {
+    seed_router_source
+    run_setup
+    assert_success
+
+    for f in AGENTS.md CLAUDE.md; do
+        [ -L "${WS_ROOT}/${f}" ]
+        [ "$(readlink -f "${WS_ROOT}/${f}")" = "$(readlink -f "$ROUTER_SRC")" ]
+    done
+}
+
+@test "router: second run changes nothing (#2123 NF-1)" {
+    seed_router_source
+    run_setup
+    assert_success
+    local before
+    before="$(ls -l --time-style=full-iso "$WS_ROOT"/AGENTS.md "$WS_ROOT"/CLAUDE.md)"
+
+    run_setup
+    assert_success
+    refute_output --partial "라우터 연결:"
+    [ "$(ls -l --time-style=full-iso "$WS_ROOT"/AGENTS.md "$WS_ROOT"/CLAUDE.md)" = "$before" ]
+}
+
+@test "router: an existing regular file is kept and warned about (#2123 NF-1)" {
+    seed_router_source
+    printf 'user notes\n' > "${WS_ROOT}/CLAUDE.md"
+
+    run_setup
+    assert_success
+    assert_output --partial "CLAUDE.md"
+    assert_output --partial "일반 파일"
+
+    [ ! -L "${WS_ROOT}/CLAUDE.md" ]
+    [ "$(cat "${WS_ROOT}/CLAUDE.md")" = "user notes" ]
+    # The other name is still linked.
+    [ -L "${WS_ROOT}/AGENTS.md" ]
+}
+
+@test "router: a symlink pointing elsewhere is re-pointed at the router (#2123)" {
+    seed_router_source
+    printf 'other\n' > "${TEST_TEMP_HOME}/other.md"
+    ln -s "${TEST_TEMP_HOME}/other.md" "${WS_ROOT}/AGENTS.md"
+
+    run_setup
+    assert_success
+    [ "$(readlink -f "${WS_ROOT}/AGENTS.md")" = "$(readlink -f "$ROUTER_SRC")" ]
+}
+
+@test "router: a missing workspace root is skipped with an info line (#2123)" {
+    seed_router_source
+    rm -rf "${FIXTURE_HOME}/para"
+
+    run_setup
+    assert_success
+    assert_output --partial "라우터 연결을 건너뜁니다"
+    [ ! -e "${WS_ROOT}/AGENTS.md" ]
+}
