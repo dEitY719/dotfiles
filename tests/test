@@ -851,7 +851,7 @@ _resolve_git_hook_timeout() {
 # Run one script under an isolated HOME ($3, created by the caller) with its
 # output in $2. Returns the script's exit status (124 = timed out).
 _git_hook_run_script() {
-    local script="$1" log="$2" home="$3" limit rc
+    local script="$1" log="$2" home="$3" limit rc start=$SECONDS
     limit="$(_resolve_git_hook_timeout)"
     mkdir -p "$home/.config" "$home/.cache"
     : >"$home/.gitconfig"
@@ -871,9 +871,12 @@ _git_hook_run_script() {
         XDG_CACHE_HOME="$home/.cache" GIT_CONFIG_NOSYSTEM=1
         GIT_CONFIG_GLOBAL="$home/.gitconfig"
         # Keep mise shims on PATH (shellcheck, shfmt, ...) resolvable: pin
-        # their data/config dirs to the real ones before HOME moves.
+        # their data/config/state (config trust) /cache dirs to the real ones.
+        # Expanded here, in the caller's env, before HOME moves.
         MISE_DATA_DIR="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}"
-        MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}")
+        MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}"
+        MISE_STATE_DIR="${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"
+        MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}")
     # --foreground keeps the script in the runner's process group so an
     # interrupt's group kill still reaches it (see _bats_run_file).
     if command -v timeout >/dev/null 2>&1; then
@@ -882,13 +885,12 @@ _git_hook_run_script() {
         "${isolate[@]}" bash "$script" >"$log" 2>&1
     fi
     rc=$?
-    # 137 = the -k 10 follow-up KILL (script ignored TERM); same as 124.
-    case "$rc" in
-    124 | 137)
+    # 124 = timed out; 137 is the -k 10 follow-up KILL (script ignored TERM)
+    # only when the cap actually elapsed — an OOM kill is not a timeout.
+    if [ "$rc" = "124" ] || { [ "$rc" = "137" ] && [ $((SECONDS - start)) -ge "$limit" ]; }; then
         rc=124
         printf '# killed after GIT_HOOK_TEST_TIMEOUT=%ss\n' "$limit" >>"$log"
-        ;;
-    esac
+    fi
     return "$rc"
 }
 
