@@ -2442,7 +2442,7 @@ FIXTURE
 #
 # zsh expands aliases at PARSE time, so sourcing gcp_scan.sh while
 # `alias cp='cp -i'` is active (shell-common/aliases/core.sh, loaded in
-# zsh/main.zsh Phase 4 — BEFORE Phase 5 functions) permanently imprints
+# zsh/main.zsh's aliases block — BEFORE the functions block) permanently imprints
 # `cp -i` into the function body. The restore `cp` then blocks on an
 # overwrite confirmation it can never receive on a non-TTY stdin, silently
 # fails, and the conflict markers `cherry-pick -n` injected into the tracked
@@ -2523,8 +2523,8 @@ FIXTURE
 }
 
 @test "alias-immunity #1663: preflight body carries no imprinted 'cp -i' under interactive zsh" {
-    # Behavioral guard, via the REAL production load order (main.zsh Phase 4
-    # aliases -> Phase 5 functions). The `aliascp=` assertion is load-bearing:
+    # Behavioral guard, via the REAL production load order (main.zsh aliases
+    # block -> functions block). The `aliascp=` assertion is load-bearing:
     # without it this test would pass vacuously on any day the alias stops
     # being defined, which is exactly the signal it exists to detect.
     run_in_zsh "
