@@ -90,7 +90,7 @@ ALLOW_MAIN_COMMIT=1 git/hooks/pre-commit; echo "exit=$?"   # exit=1 + leak-probe
 git rm -q --cached leak-probe.txt && rm leak-probe.txt
 
 # 3) 메커니즘 회귀 테스트 (가짜 패턴 fixture)
-bash git/test/test-pre-push.sh   # pre-push T-1..T-10
+bash git/tests/test-pre-push.sh  # pre-push T-1..T-10
 bash git/tests/test_hooks.sh     # pre-commit leak guard 케이스 (global hook 출력 포함)
 ```
 

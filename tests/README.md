@@ -1,11 +1,11 @@
 # Test Suite
 
-dotfiles 프로젝트의 테스트 스위트. bats 쉘 유닛 테스트, pytest 통합 테스트, golden rules 정적 검사로 구성.
+dotfiles 프로젝트의 테스트 스위트. bats 쉘 유닛 테스트, pytest 통합 테스트, golden rules 정적 검사, git hook 통합 스크립트(`git/tests/*.sh`)로 구성.
 
 ## Quick Start
 
 ```bash
-# 전체 실행 (bats → golden rules → pytest)
+# 전체 실행 (bats → golden rules, pytest·git hooks 는 병렬)
 ./tests/test
 
 # 옵션
@@ -18,7 +18,7 @@ dotfiles 프로젝트의 테스트 스위트. bats 쉘 유닛 테스트, pytest 
 
 ```
 tests/
-├── test                       # 통합 러너 (bats + golden rules + pytest)
+├── test                       # 통합 러너 (bats + golden rules + pytest + git hooks)
 ├── AGENTS.md                  # AI 에이전트용 모듈 컨텍스트
 ├── README.md                  # 이 파일
 │
@@ -124,6 +124,17 @@ bash tests/golden_rules/test_golden_rules.sh
 | 3 | shell-common/functions에서 raw echo 미사용 (ux_lib 사용) |
 | 4 | 소스 코드에 이모지 없음 |
 | 5 | shell-common에서 POSIX 준수 |
+
+### 4. Git Hooks — 통합 스크립트 (#2133)
+
+`git/tests/*.sh` (`test_hooks.sh`, `test-pre-push.sh`, `test-prepare-commit-msg.sh`) 는
+임시 repo 에서 실제 commit/push 를 돌리는 자체 assert 스크립트. `./tests/test` 가 스크립트마다
+격리 HOME + 빈 global git config 로 실행하고, `GIT_HOOK_TEST_TIMEOUT` (기본 600 초) 를 넘기면
+죽여 실패로 친다. 출력은 실패 시(또는 `-v`)에만 보인다.
+
+```bash
+bash git/tests/test_hooks.sh   # 단독 실행
+```
 
 ## 환경 변수
 

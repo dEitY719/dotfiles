@@ -8,6 +8,10 @@
 # This script creates temporary git repos under /tmp and runs real commits.
 
 set -euo pipefail
+# Assertions read captured output via a here-string (`grep -q P <<<"$out"`),
+# never `echo "$out" | grep -q P`: bash line-buffers echo/printf into a pipe,
+# grep -q exits on the first match, a later write gets SIGPIPE and pipefail
+# turns the pipeline into a spurious failure under load (#2133).
 
 DOTFILES_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
@@ -46,7 +50,7 @@ assert_failure() {
   if [ $code -eq 0 ]; then
     die "Expected failure but succeeded: $cmd"
   fi
-  echo "$out" | grep -q "BLOCKING" || die "Expected BLOCKING output but got: $out"
+  grep -q "BLOCKING" <<<"$out" || die "Expected BLOCKING output but got: $out"
 }
 
 make_repo() {
@@ -313,8 +317,8 @@ test_shellcheck_blocks_staged_violation() {
   code=$?
   set -e
   [ $code -ne 0 ] || die "Expected ShellCheck to block d/probe.sh, got: $out"
-  echo "$out" | grep -q "BLOCKING.*ShellCheck" || die "Expected a ShellCheck section, got: $out"
-  echo "$out" | grep -q "d/probe.sh: .*SC2045" || die "Expected SC2045 for d/probe.sh, got: $out"
+  grep -q "BLOCKING.*ShellCheck" <<<"$out" || die "Expected a ShellCheck section, got: $out"
+  grep -q "d/probe.sh: .*SC2045" <<<"$out" || die "Expected SC2045 for d/probe.sh, got: $out"
 
   rm -rf "$repo_dir"
 }
@@ -357,10 +361,10 @@ test_wrapper_check_flags_delegating_wrappers() {
   )
   local want
   for want in "args_fwd() { bar" "bare_call() { qux" "one_line() { y" "var_call() { cmd"; do
-    echo "$out" | grep -qF "'$want ... }'" || die "Expected wrapper warning '$want', got: $out"
+    grep -qF "'$want ... }'" <<<"$out" || die "Expected wrapper warning '$want', got: $out"
   done
   for want in real_logic positional; do
-    echo "$out" | grep -qF "'$want()" && die "Unexpected wrapper warning for $want: $out"
+    grep -qF "'$want()" <<<"$out" && die "Unexpected wrapper warning for $want: $out"
   done
   rm -rf "$dir"
 }
@@ -387,8 +391,8 @@ test_leak_guard_blocks_without_echoing_match() {
   code=$?
   set -e
   [ $code -ne 0 ] || die "Expected leak guard to block the commit"
-  echo "$out" | grep -q "leak.txt:1" || die "Expected file:line in output, got: $out"
-  if echo "$out" | grep -q "corp-internal.example.invalid"; then
+  grep -q "leak.txt:1" <<<"$out" || die "Expected file:line in output, got: $out"
+  if grep -q "corp-internal.example.invalid" <<<"$out"; then
     die "Leak guard echoed the matched text: $out"
   fi
 
@@ -411,14 +415,14 @@ test_leak_guard_redacts_matching_path() {
   code=$?
   set -e
   [ $code -ne 0 ] || die "Expected leak guard to block a matching path"
-  if echo "$out" | grep -q "qx9FAKE"; then
+  if grep -q "qx9FAKE" <<<"$out"; then
     die "Leak guard echoed a matching path or text: $out"
   fi
   [ "$(echo "$out" | grep -cE "<redacted path: [0-9]+ chars, matches LEAK_PATTERNS_ERE>  \(use: git diff --cached --name-only")" -eq 2 ] \
     || die "Expected one redacted-path hint per matching path, got: $out"
-  echo "$out" | grep -q "<redacted path: 20 chars>:1  (matches LEAK_PATTERNS_ERE)" \
+  grep -q "<redacted path: 20 chars>:1  (matches LEAK_PATTERNS_ERE)" <<<"$out" \
     || die "Expected redacted path:line for content hit, got: $out"
-  echo "$out" | grep -q "leak.txt:1" || die "Expected ordinary path to print normally, got: $out"
+  grep -q "leak.txt:1" <<<"$out" || die "Expected ordinary path to print normally, got: $out"
 
   rm -rf "$repo_dir"
 }
@@ -441,11 +445,11 @@ test_leak_guard_redacts_other_check_reports() {
   code=$?
   set -e
   [ $code -ne 0 ] || die "Expected the commit to be blocked"
-  echo "$out" | grep -q "Shebang violations" || die "Expected the shebang report, got: $out"
-  echo "$out" | grep -q "shell-common/<redacted>.sh:1" || die "Expected a redacted shebang path, got: $out"
+  grep -q "Shebang violations" <<<"$out" || die "Expected the shebang report, got: $out"
+  grep -q "shell-common/<redacted>.sh:1" <<<"$out" || die "Expected a redacted shebang path, got: $out"
   # #2014: the ShellCheck report names the path too, and must be redacted.
-  echo "$out" | grep -q "d/<redacted>.sh: .*SC2045" || die "Expected a redacted ShellCheck path, got: $out"
-  if echo "$out" | grep -q "qx9FAKE"; then
+  grep -q "d/<redacted>.sh: .*SC2045" <<<"$out" || die "Expected a redacted ShellCheck path, got: $out"
+  if grep -q "qx9FAKE" <<<"$out"; then
     die "A check report echoed a matching path: $out"
   fi
 
@@ -453,7 +457,7 @@ test_leak_guard_redacts_other_check_reports() {
   set +e
   inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "inactive" 2>&1)
   set -e
-  echo "$inactive" | grep -q "shell-common/qx9FAKETOKEN78.sh:1" \
+  grep -q "shell-common/qx9FAKETOKEN78.sh:1" <<<"$inactive" \
     || die "Expected the unfiltered path when inactive, got: $inactive"
 
   rm -rf "$repo_dir"
@@ -476,11 +480,11 @@ test_leak_guard_redacts_global_and_project_output() {
   code=$?
   set -e
   [ $code -ne 0 ] || die "Expected the project leak guard to block"
-  echo "$out" | grep -q "Debug code detected" || die "Expected the global debug warning, got: $out"
-  echo "$out" | grep -q "   - d/<redacted>.py" || die "Expected a redacted global path, got: $out"
-  echo "$out" | grep -q "Delegating to project hook" || die "Expected delegation, got: $out"
-  echo "$out" | grep -q "matches LEAK_PATTERNS_ERE" || die "Expected the project leak report, got: $out"
-  if echo "$out" | grep -q "qx9FAKE"; then
+  grep -q "Debug code detected" <<<"$out" || die "Expected the global debug warning, got: $out"
+  grep -q "   - d/<redacted>.py" <<<"$out" || die "Expected a redacted global path, got: $out"
+  grep -q "Delegating to project hook" <<<"$out" || die "Expected delegation, got: $out"
+  grep -q "matches LEAK_PATTERNS_ERE" <<<"$out" || die "Expected the project leak report, got: $out"
+  if grep -q "qx9FAKE" <<<"$out"; then
     die "The commit output echoed a matching path: $out"
   fi
 
@@ -506,14 +510,14 @@ test_global_hook_leak_guard_in_unrelated_repo() {
   code=$?
   set -e
   [ $code -ne 0 ] || die "Expected the trailing whitespace check to block"
-  echo "$out" | grep -q "Trailing whitespace detected" || die "Expected the whitespace report, got: $out"
-  echo "$out" | grep -q "d/<redacted>.txt:1" || die "Expected a redacted whitespace path, got: $out"
+  grep -q "Trailing whitespace detected" <<<"$out" || die "Expected the whitespace report, got: $out"
+  grep -q "d/<redacted>.txt:1" <<<"$out" || die "Expected a redacted whitespace path, got: $out"
   [ "$(echo "$out" | grep -c "qx9FAKE")" -eq 0 ] || die "The global hook echoed a matching path: $out"
 
   set +e
   inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "ws" 2>&1)
   set -e
-  echo "$inactive" | grep -q "d/qx9FAKETOKEN77.txt:1" \
+  grep -q "d/qx9FAKETOKEN77.txt:1" <<<"$inactive" \
     || die "Expected the unfiltered path when inactive, got: $inactive"
 
   printf 'x\n' >"$repo_dir/d/qx9FAKETOKEN77.txt"
@@ -552,7 +556,7 @@ test_leak_guard_skip_escape_hatch() {
 #      fire in an unrelated repository.
 #
 # The wrappers are invoked directly with synthetic argv/stdin (the technique
-# git/test/test-pre-push.sh already uses) instead of driving a real push.
+# git/tests/test-pre-push.sh already uses) instead of driving a real push.
 # ---------------------------------------------------------------------------
 
 ZERO_SHA="0000000000000000000000000000000000000000"
@@ -648,9 +652,9 @@ test_global_pre_push_delegates_to_project_hook() {
     die "Expected the delegated pre-push to block a protected branch: $WRAPPER_OUT"
   fi
 
-  echo "$WRAPPER_OUT" | grep -q "Delegating to project hook" ||
+  grep -q "Delegating to project hook" <<<"$WRAPPER_OUT" ||
     die "Expected delegation notice but got: $WRAPPER_OUT"
-  echo "$WRAPPER_OUT" | grep -q "Cannot push directly to protected branch" ||
+  grep -q "Cannot push directly to protected branch" <<<"$WRAPPER_OUT" ||
     die "Expected protected-branch block but got: $WRAPPER_OUT"
 
   rm -rf "$repo_dir"
@@ -734,7 +738,7 @@ EOF
     die "Expected the pre-push wrapper to succeed from a linked worktree: $WRAPPER_OUT"
   fi
 
-  echo "$WRAPPER_OUT" | grep -q "Delegating to project hook" ||
+  grep -q "Delegating to project hook" <<<"$WRAPPER_OUT" ||
     die "Expected delegation notice from the linked worktree but got: $WRAPPER_OUT"
   [ -f "$main_dir/.delegated" ] ||
     die "Expected the shared .git/hooks/pre-push to run from the linked worktree: $WRAPPER_OUT"
@@ -899,7 +903,7 @@ test_global_lfs_pre_push_failure_blocks() {
   [ "$rc" -eq 2 ] || die "Expected lfs failure (2) to block the push, got ${rc}: $WRAPPER_OUT"
   grep -q "^DELEGATED:origin url$" "$repo_dir/.delegated" ||
     die "Expected the project pre-push to run before git lfs pre-push"
-  echo "$WRAPPER_OUT" | grep -q "git lfs pre-push failed (exit 2)" ||
+  grep -q "git lfs pre-push failed (exit 2)" <<<"$WRAPPER_OUT" ||
     die "Expected an abort notice, got: $WRAPPER_OUT"
 
   rm -rf "$repo_dir"

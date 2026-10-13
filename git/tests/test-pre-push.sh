@@ -11,6 +11,10 @@
 
 set -o errexit
 set -o pipefail
+# Assertions read captured output via a here-string (`grep -q P <<<"$out"`),
+# never `echo "$out" | grep -q P`: bash line-buffers echo/printf into a pipe,
+# grep -q exits on the first match, a later write gets SIGPIPE and pipefail
+# turns the pipeline into a spurious failure under load (#2133).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -165,11 +169,11 @@ _t3_upstream_push_pattern_in_commit_message_blocks() {
 
     local rc_ok=0
     if [ "$rc" -eq 1 ] \
-        && printf '%s' "$LEAK_OUT" | grep -q "Upstream push blocked" \
-        && printf '%s' "$LEAK_OUT" | grep -q "<commit message>" \
-        && printf '%s' "$LEAK_OUT" | grep -q "lines:  1 " \
-        && ! printf '%s' "$LEAK_OUT" | grep -q "zq7canary" \
-        && ! printf '%s' "$LEAK_OUT" | grep -q "example.internal"; then
+        && grep -q "Upstream push blocked" <<<"$LEAK_OUT" \
+        && grep -q "<commit message>" <<<"$LEAK_OUT" \
+        && grep -q "lines:  1 " <<<"$LEAK_OUT" \
+        && ! grep -q "zq7canary" <<<"$LEAK_OUT" \
+        && ! grep -q "example.internal" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -191,11 +195,11 @@ _t4_upstream_push_pattern_in_diff_blocks() {
 
     local rc_ok=0
     if [ "$rc" -eq 1 ] \
-        && printf '%s' "$LEAK_OUT" | grep -q "Upstream push blocked" \
-        && printf '%s' "$LEAK_OUT" | grep -q "source: seed.txt" \
-        && printf '%s' "$LEAK_OUT" | grep -q "lines:  [0-9]" \
-        && ! printf '%s' "$LEAK_OUT" | grep -q "zq7canary" \
-        && ! printf '%s' "$LEAK_OUT" | grep -q "private-overlay"; then
+        && grep -q "Upstream push blocked" <<<"$LEAK_OUT" \
+        && grep -q "source: seed.txt" <<<"$LEAK_OUT" \
+        && grep -q "lines:  [0-9]" <<<"$LEAK_OUT" \
+        && ! grep -q "zq7canary" <<<"$LEAK_OUT" \
+        && ! grep -q "private-overlay" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -260,7 +264,7 @@ _t7_protected_branch_takes_priority() {
 
     local rc_ok=0
     if [ "$rc" -eq 1 ] \
-        && printf '%s' "$out" | grep -q "protected branch"; then
+        && grep -q "protected branch" <<<"$out"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -291,10 +295,10 @@ _t8_matching_path_redacted() {
     local rc_ok=0
     if [ "$rc" -eq 1 ] \
         && [ "$(printf '%s\n' "$LEAK_OUT" | grep -c "source: <redacted path: 21 chars, matches LEAK_PATTERNS_ERE>")" -eq 2 ] \
-        && printf '%s' "$LEAK_OUT" | grep -q "lines:  (file name)" \
-        && printf '%s' "$LEAK_OUT" | grep -q "path:    git diff-tree" \
-        && printf '%s' "$LEAK_OUT" | grep -q "source: seed.txt" \
-        && ! printf '%s' "$LEAK_OUT" | grep -q "qx9FAKE"; then
+        && grep -q "lines:  (file name)" <<<"$LEAK_OUT" \
+        && grep -q "path:    git diff-tree" <<<"$LEAK_OUT" \
+        && grep -q "source: seed.txt" <<<"$LEAK_OUT" \
+        && ! grep -q "qx9FAKE" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -317,8 +321,8 @@ _t9_matching_path_clean_content_blocks() {
 
     local rc_ok=0
     if [ "$rc" -eq 1 ] \
-        && printf '%s' "$LEAK_OUT" | grep -q "source: <redacted path:" \
-        && ! printf '%s' "$LEAK_OUT" | grep -q "qx9FAKE"; then
+        && grep -q "source: <redacted path:" <<<"$LEAK_OUT" \
+        && ! grep -q "qx9FAKE" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -340,8 +344,8 @@ _t10_matching_ref_name_redacted() {
 
     local rc_ok=0
     if [ "$rc" -eq 1 ] \
-        && printf '%s' "$out" | grep -q "source: <redacted ref name:" \
-        && ! printf '%s' "$out" | grep -q "qx9FAKE"; then
+        && grep -q "source: <redacted ref name:" <<<"$out" \
+        && ! grep -q "qx9FAKE" <<<"$out"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -366,7 +370,7 @@ _push_line_rc() {
 _t11_renamed_local_to_remote_master_blocks() {
     _push_line_rc refs/heads/sync/foo refs/heads/master
     local ok=0
-    [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
+    [ "$PUSH_RC" -eq 1 ] && grep -q "protected branch" <<<"$LEAK_OUT" && ok=1
     _assert_eq "T-11 sync/foo -> remote master is BLOCKED" 1 "$ok"
 }
 
@@ -378,7 +382,7 @@ _t12_same_name_feature_push_passes() {
 _t13_delete_remote_master_blocks() {
     _push_line_rc "(delete)" refs/heads/master
     local ok=0
-    [ "$PUSH_RC" -eq 1 ] && printf '%s' "$LEAK_OUT" | grep -q "protected branch" && ok=1
+    [ "$PUSH_RC" -eq 1 ] && grep -q "protected branch" <<<"$LEAK_OUT" && ok=1
     _assert_eq "T-13 delete remote master is BLOCKED" 1 "$ok"
 }
 
