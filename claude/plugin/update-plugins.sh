@@ -15,14 +15,18 @@
 #
 # Selection mirrors git-clone-skills.sh: marketplaces from
 # claude/plugin/marketplaces.json ({name: "owner/repo"}) filtered by owner
-# (default dEitY719, --owner <o>, --all for none); plugins from
-# claude/plugin/plugins.json (.plugins[] "plugin@marketplace") whose
-# marketplace was selected. On an internal PC with claude/plugin/company/.git
-# the private company manifest is included too (same gate as restore.sh) —
-# unfiltered by owner, since its sources are GHES URLs rather than owner/repo.
+# (default dEitY719, --owner <o>, --all for none; case-insensitive); plugins
+# from claude/plugin/plugins.json (.plugins[] "plugin@marketplace") whose
+# marketplace was selected. Each manifest is unioned with its gitignored
+# machine-local overlay (*.local.json, #1685) — the same set restore.sh
+# installs from. On an internal PC with claude/plugin/company/.git the private
+# company manifest is included too (same gate as restore.sh) — unfiltered by
+# owner, since its sources are GHES URLs rather than owner/repo.
 #
-# Only updates what is already registered/installed; adding missing entries is
-# restore.sh's job.
+# Only updates what is already registered/installed: when the plugin store's
+# known_marketplaces.json / installed_plugins.json exist, entries missing from
+# them (not yet restored, or uninstalled on purpose) are skipped rather than
+# failed. Adding missing entries is restore.sh's job.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,8 +47,11 @@ else
 	ux_bullet() { printf '  * %s\n' "$1"; }
 fi
 
-# Setup-mode reader SSOT (#1810) — same lookup chain as restore.sh.
-for _rsm_dir in "${SHELL_COMMON:-}" "${DOTFILES_ROOT:-}/shell-common" "$HOME/dotfiles/shell-common"; do
+# Setup-mode reader SSOT (#1810) — restore.sh's lookup chain plus this
+# checkout's own shell-common, so a dotfiles clone outside ~/dotfiles run with
+# no SHELL_COMMON (skills-sync does not export DOTFILES_ROOT) still sees the
+# internal mode instead of silently targeting ~/.claude-personal.
+for _rsm_dir in "${SHELL_COMMON:-}" "${DOTFILES_ROOT:-}/shell-common" "$HOME/dotfiles/shell-common" "$SCRIPT_DIR/../../shell-common"; do
 	if [ -r "${_rsm_dir}/util/setup_mode_read.sh" ]; then
 		# shellcheck disable=SC1091
 		. "${_rsm_dir}/util/setup_mode_read.sh"
@@ -67,13 +74,13 @@ plugins to the latest version (claude plugin marketplace update / plugin update)
 Options:
   --dry-run          Print the plan without calling claude (claude CLI not required)
   --all              Every marketplace in the manifest (no owner filter)
-  --owner <owner>    Owner to filter marketplaces by (default: dEitY719)
+  --owner <owner>    Owner to filter marketplaces by (default: dEitY719, case-insensitive)
   --user <account>   Target ~/.claude-<account> (public/external mode)
   -h, --help, help   Show this help message
 
-public/external: ~/.claude-<account>/plugins all link to ~/.claude-shared/plugins,
-so one run updates every account. internal: single-account ~/.claude/plugins
-(no ~/.claude-shared) is updated directly.
+The store is ~/.claude-shared/plugins in every mode. public/external: each
+~/.claude-<account>/plugins links to it, so one run updates every account.
+internal: the single-account ~/.claude/plugins links to it.
 Restart running Claude Code sessions to load updated plugins.
 USAGE
 }
@@ -136,8 +143,6 @@ if ! $DRY_RUN && ! command -v claude >/dev/null 2>&1; then
 	exit 0
 fi
 
-MP_MANIFEST="$SCRIPT_DIR/marketplaces.json"
-PL_MANIFEST="$SCRIPT_DIR/plugins.json"
 PRIV="$SCRIPT_DIR/company"
 MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 COMPANY_ACTIVE=false
@@ -159,12 +164,13 @@ _valid_acct() {
 	return 0
 }
 
-# Unlike restore.sh there is no --all-accounts. public/external: the plugin
-# store (~/.claude-shared/plugins) is symlinked into every ~/.claude-<account>,
+# Unlike restore.sh there is no --all-accounts. The plugin store
+# (~/.claude-shared/plugins) is symlinked into every ~/.claude-<account>
+# (public/external) or into the single ~/.claude (internal, claude/setup.sh),
 # so updating through the FIRST resolved config dir updates all accounts at
-# once. internal: single-account ~/.claude owns a real plugins/ dir and
-# ~/.claude-shared does not exist — nothing here depends on it; the claude CLI
-# writes into $CLAUDE_CONFIG_DIR/plugins either way.
+# once. Nothing here depends on the shared path itself — the claude CLI writes
+# into $CLAUDE_CONFIG_DIR/plugins either way (a PC whose setup has not re-run
+# yet may still have a real ~/.claude/plugins dir).
 _target_config_dir() {
 	if [ "$MODE" = "internal" ]; then
 		echo "$HOME/.claude"
@@ -179,27 +185,76 @@ _target_config_dir() {
 	echo "$HOME/.claude"
 }
 
-# _select_marketplaces <manifest> <filter:true|false> — marketplace names, one per line.
+# _union_marketplaces <tracked> <overlay> — {name: repo} union of the tracked
+# manifest and its machine-local overlay (#1685), tracked winning on a key
+# conflict like restore.sh. Prints nothing when neither exists; a malformed
+# file makes jq (and so this function) fail.
+_union_marketplaces() {
+	local f files=()
+	for f in "$2" "$1"; do
+		[ -r "$f" ] && files+=("$f")
+	done
+	[ ${#files[@]} -gt 0 ] || return 0
+	jq -s 'reduce .[] as $m ({}; . * $m)' "${files[@]}"
+}
+
+# _union_plugins <tracked> <overlay> — {plugins: [...]} set union of both.
+_union_plugins() {
+	local f files=()
+	for f in "$1" "$2"; do
+		[ -r "$f" ] && files+=("$f")
+	done
+	[ ${#files[@]} -gt 0 ] || {
+		echo '{"plugins":[]}'
+		return 0
+	}
+	jq -s '{plugins: (map(.plugins // []) | add | unique)}' "${files[@]}"
+}
+
+# _select_marketplaces <mp json> <filter:true|false> — marketplace names, one per line.
+# Owners are compared case-insensitively, as GitHub does.
 _select_marketplaces() {
-	[ -r "$1" ] || return 0
 	if [ "$2" = true ] && ! $ALL_OWNERS; then
-		jq -r --arg owner "$OWNER_FILTER" \
+		printf '%s' "$1" | jq -r --arg owner "$OWNER_FILTER" \
 			'to_entries[] | select(.value | type == "string")
-			 | select(.value | startswith($owner + "/")) | .key' "$1"
+			 | select(.value | ascii_downcase | startswith(($owner | ascii_downcase) + "/")) | .key'
 	else
-		jq -r 'to_entries[] | select(.value | type == "string") | .key' "$1"
+		printf '%s' "$1" | jq -r 'to_entries[] | select(.value | type == "string") | .key'
 	fi
 }
 
-# _plugins_of <manifest> <marketplace> — "plugin@marketplace" ids of that marketplace.
+# _plugins_of <pl json> <marketplace> — "plugin@marketplace" ids of that marketplace.
 _plugins_of() {
-	[ -r "$1" ] || return 0
-	jq -r --arg mp "$2" '(.plugins // [])[] | select(type == "string")
-		| select(split("@") | last == $mp)' "$1"
+	printf '%s' "$1" | jq -r --arg mp "$2" '(.plugins // [])[] | select(type == "string")
+		| select(split("@") | last == $mp)'
 }
 
 export CLAUDE_CONFIG_DIR
 CLAUDE_CONFIG_DIR="$(_target_config_dir)"
+
+# What the plugin store already has. Only read when the file exists — a missing
+# store file (fresh config dir, tests) disables that filter rather than
+# skipping everything. A name absent from a present file is "not restored yet"
+# or "uninstalled on purpose" (restore.sh tombstone): updating it can only
+# fail, which would turn every skills-sync red.
+STORE_DIR="$CLAUDE_CONFIG_DIR/plugins"
+KNOWN_MPS=""
+KNOWN_MPS_SET=false
+INSTALLED_PLS=""
+INSTALLED_PLS_SET=false
+if [ -r "$STORE_DIR/known_marketplaces.json" ] &&
+	KNOWN_MPS="$(jq -r 'keys[]' "$STORE_DIR/known_marketplaces.json" 2>/dev/null)"; then
+	KNOWN_MPS_SET=true
+fi
+if [ -r "$STORE_DIR/installed_plugins.json" ] &&
+	INSTALLED_PLS="$(jq -r '(.plugins // {}) | keys[]' "$STORE_DIR/installed_plugins.json" 2>/dev/null)"; then
+	INSTALLED_PLS_SET=true
+fi
+
+# _in_list <needle> <newline list>
+_in_list() {
+	printf '%s\n' "$2" | grep -Fxq -- "$1"
+}
 
 ux_header "Claude Plugin Update"
 if [ "$MODE" = "internal" ]; then
@@ -220,12 +275,18 @@ MP_REFRESHED=0
 PL_TOTAL=0
 PL_UPDATED=0
 PL_UPTODATE=0
+PL_SKIPPED=0
 FAILED=0
 
 # _update_plugin <id> — `claude plugin update --json` and classify the outcome.
 # `</dev/null`: claude must not drain the caller's here-doc/loop stdin.
 _update_plugin() {
-	local id="$1" out rc outcome old new
+	local id="$1" out rc json outcome="" old="" new="" line
+	if $INSTALLED_PLS_SET && ! _in_list "$id" "$INSTALLED_PLS"; then
+		ux_info "  $id: not installed — skipped (restore.sh installs it)"
+		PL_SKIPPED=$((PL_SKIPPED + 1))
+		return 0
+	fi
 	PL_TOTAL=$((PL_TOTAL + 1))
 	if $DRY_RUN; then
 		ux_info "  $id: would run 'claude plugin update $id' (dry-run)"
@@ -235,13 +296,23 @@ _update_plugin() {
 	rc=$?
 	if [ "$rc" -ne 0 ]; then
 		ux_warning "  $id: update failed (exit $rc) — continuing"
-		[ -n "$out" ] && printf '%s\n' "$out" | sed 's/^/      /'
+		while IFS= read -r line; do
+			[ -n "$line" ] && ux_bullet "$line"
+		done <<EOF
+$out
+EOF
 		FAILED=$((FAILED + 1))
 		return 0
 	fi
-	outcome="$(printf '%s\n' "$out" | tail -n 1 | jq -r '.updateOutcome // empty' 2>/dev/null)"
-	old="$(printf '%s\n' "$out" | tail -n 1 | jq -r '.oldVersion // empty' 2>/dev/null)"
-	new="$(printf '%s\n' "$out" | tail -n 1 | jq -r '.newVersion // empty' 2>/dev/null)"
+	# stdout and stderr share $out (the error path above shows both), so the
+	# JSON result is the last line that starts with `{` — not blindly the last
+	# line, which a trailing stderr notice would turn into a parse failure.
+	json="$(printf '%s\n' "$out" | grep '^[[:space:]]*{' | tail -n 1)"
+	if [ -n "$json" ]; then
+		IFS='|' read -r outcome old new <<EOF
+$(printf '%s\n' "$json" | jq -r '[.updateOutcome // "", .oldVersion // "", .newVersion // ""] | join("|")' 2>/dev/null)
+EOF
+	fi
 	if [ "$outcome" = "up_to_date" ] || { [ -z "$outcome" ] && printf '%s' "$out" | grep -q 'already at the latest'; }; then
 		ux_info "  $id: up to date${new:+ ($new)}"
 		PL_UPTODATE=$((PL_UPTODATE + 1))
@@ -251,21 +322,37 @@ _update_plugin() {
 	fi
 }
 
-# _update_scope <label> <mp manifest> <pl manifest> <filter:true|false>
+# _update_scope <label> <scope dir> <filter:true|false> — reads
+# <dir>/{marketplaces,plugins}.json plus their *.local.json overlays.
 _update_scope() {
-	local label="$1" mp_manifest="$2" pl_manifest="$3" filter="$4" names name id
-	if [ ! -r "$mp_manifest" ]; then
+	local label="$1" dir="$2" filter="$3" mp_json pl_json names name id
+	if ! mp_json="$(_union_marketplaces "$dir/marketplaces.json" "$dir/marketplaces.local.json" 2>/dev/null)"; then
+		ux_error "Failed to read marketplace manifest: $dir/marketplaces{,.local}.json"
+		FAILED=$((FAILED + 1))
+		return 0
+	fi
+	if [ -z "$mp_json" ]; then
 		ux_info "($label manifest not found — skipped)"
 		return 0
 	fi
-	if ! names="$(_select_marketplaces "$mp_manifest" "$filter" 2>/dev/null)"; then
-		ux_error "Failed to read marketplace list: $mp_manifest"
+	if ! pl_json="$(_union_plugins "$dir/plugins.json" "$dir/plugins.local.json" 2>/dev/null)"; then
+		ux_error "Failed to read plugin manifest: $dir/plugins{,.local}.json"
+		FAILED=$((FAILED + 1))
+		return 0
+	fi
+	if ! names="$(_select_marketplaces "$mp_json" "$filter" 2>/dev/null)"; then
+		ux_error "Failed to read marketplace list: $dir/marketplaces.json"
 		FAILED=$((FAILED + 1))
 		return 0
 	fi
 	ux_section "$label marketplaces"
 	while IFS= read -r name; do
 		[ -n "$name" ] || continue
+		if $KNOWN_MPS_SET && ! _in_list "$name" "$KNOWN_MPS"; then
+			# Its plugins cannot be installed without it either — skip both.
+			ux_info "$name: marketplace not registered — skipped (restore.sh adds it)"
+			continue
+		fi
 		MP_TOTAL=$((MP_TOTAL + 1))
 		if $DRY_RUN; then
 			ux_info "$name: would run 'claude plugin marketplace update $name' (dry-run)"
@@ -282,16 +369,16 @@ _update_scope() {
 			[ -n "$id" ] || continue
 			_update_plugin "$id"
 		done <<EOF
-$(_plugins_of "$pl_manifest" "$name" 2>/dev/null)
+$(_plugins_of "$pl_json" "$name")
 EOF
 	done <<EOF
 $names
 EOF
 }
 
-_update_scope "Public" "$MP_MANIFEST" "$PL_MANIFEST" true
+_update_scope "Public" "$SCRIPT_DIR" true
 if $COMPANY_ACTIVE; then
-	_update_scope "Company" "$PRIV/marketplaces.json" "$PRIV/plugins.json" false
+	_update_scope "Company" "$PRIV" false
 fi
 
 ux_section "Summary"
@@ -303,6 +390,9 @@ else
 	ux_bullet "Plugins updated: $PL_UPDATED"
 	ux_bullet "Plugins up to date: $PL_UPTODATE"
 	ux_bullet "Failed: $FAILED"
+fi
+if [ "$PL_SKIPPED" -gt 0 ]; then
+	ux_bullet "Plugins skipped (not installed): $PL_SKIPPED"
 fi
 
 if [ "$PL_UPDATED" -gt 0 ]; then
