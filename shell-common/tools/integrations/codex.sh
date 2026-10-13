@@ -311,8 +311,9 @@ _codex_register_auto_sync_hooks() {
     CODEX_AUTO_SYNC_HOOKS_REGISTERED=1
 
     # Seed the periodic clock (#2129): left unset (=0), the first precmd would
-    # run the full signature check before the first prompt, just moving the
-    # startup cost instead of removing it.
+    # run the signature check right before the very first prompt. Seeded, the
+    # first check runs on a prompt once the interval (default 5s) has elapsed —
+    # the cost moves off shell startup, it does not disappear.
     : "${CODEX_SKILLS_AUTO_SYNC_LAST_CHECK:=$(date +%s 2>/dev/null || echo 0)}"
 
     if [ -n "${BASH_VERSION:-}" ]; then
@@ -407,4 +408,6 @@ codex_status() {
 # No source-time sync (#2129): it cost ~0.4s per shell start. The codex()
 # wrapper syncs before the first (and every) codex run, and the prompt hook
 # below keeps the periodic check (first one after the interval elapses).
+# A codex started outside the wrapper (`command codex`, an IDE) relies on that
+# periodic check or `codex_skills_sync`, not on shell startup.
 _codex_register_auto_sync_hooks
