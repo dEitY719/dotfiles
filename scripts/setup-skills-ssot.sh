@@ -557,13 +557,14 @@ ux_section "Skills 워크스페이스 연결"
 # 0. 워크스페이스 루트 라우터 (#2123 F-3): 스킬 작업 세션은 git repo 가 아닌
 #    워크스페이스 루트에서 시작하므로 dotfiles 의 문서 체인이 컨텍스트에 들어오지
 #    않는다. <root>/{AGENTS,CLAUDE}.md 를 dotfiles 원본 하나로 심볼릭 링크해
-#    docs/.ssot/skills-distribution.md 로 안내한다. 링크 대상은 main 체크아웃을
-#    우선한다 — 워크트리에서 실행해도 워크트리 삭제 뒤 끊어진 링크가 남지 않게.
+#    docs/.ssot/skills-distribution.md 로 안내한다. 링크 대상은 항상 main 체크아웃의
+#    원본이다 — 워크트리에서 실행해도 워크트리 삭제 뒤 끊어진 링크가 남지 않게.
 #    일반 파일은 사용자 소유로 보고 덮어쓰지 않는다. 소스 유무와 무관하게
 #    (clone 전이라도) 루트만 있으면 연결하므로 아래 "소스 없음" exit 보다 앞에 둔다.
 link_workspace_router() {
+    # 워크트리 원본으로 fallback 하지 않는다 — 머지 전 워크트리에서 실행하면
+    # 워크트리 삭제 뒤 끊어진 링크가 남는다. main 에 원본이 생긴 뒤 수렴한다.
     local router="${DOTFILES_MAIN_ROOT}/claude/workspace/AGENTS.md"
-    [ -f "$router" ] || router="${DOTFILES_ROOT}/claude/workspace/AGENTS.md"
 
     if [ -z "$WORKSPACE_ROOT_RESOLVED" ]; then
         log_info "워크스페이스 루트가 없어 라우터 연결을 건너뜁니다"
