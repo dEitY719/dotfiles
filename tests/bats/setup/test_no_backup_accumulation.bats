@@ -122,3 +122,49 @@ teardown() {
         "${DOTFILES_ROOT}/shell-common/functions/claude_stop_hook_install.sh"
     assert_failure
 }
+
+@test "shell-common/tools/integrations/claude.sh: no timestamped -original backups remain (issue #2130)" {
+    run grep -nE '\-\$\(date' "${DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
+    assert_failure
+}
+
+@test "_claude_ensure_symlink: repeated backups keep exactly one .original (issue #2130)" {
+    # A real file at the link target forces the backup branch. Re-create a
+    # real file before the second call so BOTH calls take that branch — the
+    # pre-#2130 timestamped naming would leave two backups here.
+    run_in_bash '
+        src="$HOME/src.txt"; tgt="$HOME/.claude-test/settings.txt"
+        mkdir -p "$HOME/.claude-test"; printf src > "$src"
+        printf first > "$tgt"
+        _claude_ensure_symlink "$src" "$tgt" >/dev/null 2>&1 || exit 1
+        rm "$tgt"; printf second > "$tgt"
+        _claude_ensure_symlink "$src" "$tgt" >/dev/null 2>&1 || exit 1
+        _claude_ensure_symlink "$src" "$tgt" >/dev/null 2>&1 || exit 1
+        echo "count=$(find "$HOME/.claude-test" -maxdepth 1 -name "settings.txt?*" | wc -l | tr -d " ")"
+        echo "link=$(readlink "$tgt")"
+        cat "$tgt.original"
+    '
+    assert_success
+    assert_output --partial "count=1"
+    assert_output --partial "link=$HOME/src.txt"
+    # The single backup is the LATEST displaced file.
+    assert_output --partial "second"
+}
+
+@test "_claude_prepare_skills_dir: unexpected file backed up to fixed .original (issue #2130)" {
+    run_in_bash '
+        tgt="$HOME/.claude-test/skills"
+        mkdir -p "$HOME/.claude-test"
+        printf one > "$tgt"
+        _claude_prepare_skills_dir "$tgt" >/dev/null 2>&1 || exit 1
+        rmdir "$tgt"; printf two > "$tgt"
+        _claude_prepare_skills_dir "$tgt" >/dev/null 2>&1 || exit 1
+        echo "count=$(find "$HOME/.claude-test" -maxdepth 1 -name "skills?*" | wc -l | tr -d " ")"
+        [ -d "$tgt" ] && echo "dir=yes"
+        cat "$tgt.original"
+    '
+    assert_success
+    assert_output --partial "count=1"
+    assert_output --partial "dir=yes"
+    assert_output --partial "two"
+}

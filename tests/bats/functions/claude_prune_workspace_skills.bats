@@ -303,7 +303,8 @@ run_prune() {
     assert_success
 
     [ -d "$TGT" ] && [ ! -L "$TGT" ]
-    run bash -c "cat \"$TEST_TEMP_HOME/.claude\"/skills-*-original"
+    # Latest-only fixed suffix (#806, #2130).
+    run cat "$TEST_TEMP_HOME/.claude/skills.original"
     assert_success
     assert_output --partial "user data"
 }

@@ -620,11 +620,36 @@ _claude_expected_email() {
     eval "echo \"\${CLAUDE_ACCOUNT_EMAIL_${_ceeem_acct}:-}\""
 }
 
+# _claude_backup_original <target> <label> — latest-only backup (#806, #2130).
+# Moves <target> to "<target>${DOTFILES_ORIGINAL_SUFFIX}" via the SSOT helper
+# in shell-common/functions/dotfiles_backup.sh, so repeated init/repair runs
+# keep at most ONE backup per target instead of accumulating timestamped
+# copies. A prior backup at that path is replaced (one warning line names it).
+# Legacy `<target>-YYYYmmddHHMMSS-original` files are never auto-deleted —
+# removing user files stays a manual decision.
+_claude_backup_original() {
+    _cbo_tgt="$1"
+    _cbo_label="${2:-existing file}"
+    if ! command -v dotfiles_backup_move >/dev/null 2>&1; then
+        # shellcheck disable=SC1091
+        . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/functions/dotfiles_backup.sh" || return 1
+    fi
+    _cbo_dest=$(dotfiles_backup_path "$_cbo_tgt" "$DOTFILES_ORIGINAL_SUFFIX")
+    if [ -e "$_cbo_dest" ] || [ -L "$_cbo_dest" ]; then
+        ux_warning "  replacing previous backup (latest-only, #806): $_cbo_dest"
+    fi
+    ux_warning "  backing up $_cbo_label: $_cbo_tgt → $_cbo_dest"
+    dotfiles_backup_move "$_cbo_tgt" "$DOTFILES_ORIGINAL_SUFFIX" >/dev/null || {
+        ux_error "  backup failed: $_cbo_tgt → $_cbo_dest"
+        return 1
+    }
+}
+
 # _claude_ensure_symlink — 멱등 symlink 생성.
 # - 없음 → 생성
 # - 같은 target 의 symlink → skip (출력 "already")
 # - bind-mount → sudo umount 후 재생성 (issue #575 마이그레이션 경로)
-# - 다른 file/dir → timestamped backup 후 재생성
+# - 다른 file/dir → 고정 suffix(.original) 백업 후 재생성 (#806, latest-only)
 _claude_ensure_symlink() {
     _ces_src="$1"
     _ces_tgt="$2"
@@ -653,16 +678,10 @@ _claude_ensure_symlink() {
         # back it up so `ln -s` below has a clear slot (the next elif
         # would be skipped because this branch already matched).
         if [ -e "$_ces_tgt" ] && ! rmdir "$_ces_tgt" 2>/dev/null; then
-            _ces_backup="${_ces_tgt}-$(date +%Y%m%d%H%M%S)-original"
-            ux_warning "  backing up revealed directory: $_ces_tgt → $_ces_backup"
-            mv "$_ces_tgt" "$_ces_backup" || return 1
+            _claude_backup_original "$_ces_tgt" "revealed directory" || return 1
         fi
     elif [ -e "$_ces_tgt" ]; then
-        # Backup naming matches claude/setup.sh:100 legacy convention
-        # so users with a mixed-version setup see one consistent format.
-        _ces_backup="${_ces_tgt}-$(date +%Y%m%d%H%M%S)-original"
-        ux_warning "  backing up existing file: $_ces_tgt → $_ces_backup"
-        mv "$_ces_tgt" "$_ces_backup"
+        _claude_backup_original "$_ces_tgt" "existing file" || return 1
     fi
 
     ln -s "$_ces_src" "$_ces_tgt"
@@ -852,18 +871,13 @@ _claude_prepare_skills_dir() {
         # rmdir clears it and `mkdir -p` below creates a fresh slot. If
         # populated (stale skill data from before the bind-mount era),
         # back it up so the entry-composition loop does not mingle
-        # symlinks with the user's data. Mirrors _claude_ensure_symlink's
-        # post-umount backup (line 625) so a mixed-version install sees
-        # one consistent naming convention.
+        # symlinks with the user's data. Shares _claude_ensure_symlink's
+        # latest-only backup helper so both sites use one naming convention.
         if [ -e "$_cpsd_tgt" ] && ! rmdir "$_cpsd_tgt" 2>/dev/null; then
-            _cpsd_backup="${_cpsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
-            ux_warning "  backing up revealed directory: $_cpsd_tgt → $_cpsd_backup"
-            mv "$_cpsd_tgt" "$_cpsd_backup" || return 1
+            _claude_backup_original "$_cpsd_tgt" "revealed directory" || return 1
         fi
     elif [ -e "$_cpsd_tgt" ] && [ ! -d "$_cpsd_tgt" ]; then
-        _cpsd_backup="${_cpsd_tgt}-$(date +%Y%m%d%H%M%S)-original"
-        ux_warning "  unexpected file at $_cpsd_tgt — backing up: $_cpsd_backup"
-        mv "$_cpsd_tgt" "$_cpsd_backup" || return 1
+        _claude_backup_original "$_cpsd_tgt" "unexpected file" || return 1
     fi
     mkdir -p "$_cpsd_tgt"
 }
