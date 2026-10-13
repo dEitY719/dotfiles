@@ -68,3 +68,13 @@ teardown() {
     assert_output --partial "setup incomplete"
     [ "$(cksum <"$CFG")" = "$before" ]
 }
+
+@test "legacy url key without baseUrl is converted and the url key dropped" {
+    command -v jq >/dev/null 2>&1 || skip "jq not installed"
+    printf '{"mcpServers":{"exa":{"url":"https://mcp.exa.ai/mcp?exaApiKey=OLDSECRET"}}}' >"$CFG"
+    run bash "$MC_SETUP"
+    assert_success
+    refute_output --partial "OLDSECRET"
+    [ "$(jq -r '.mcpServers.exa.baseUrl' "$CFG")" = "$PLACEHOLDER" ]
+    [ "$(jq '.mcpServers.exa | has("url")' "$CFG")" = false ]
+}
