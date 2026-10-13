@@ -169,6 +169,21 @@ _path_without() {
     refute_output --partial "지문 형식이 아님"
 }
 
+@test "internal mode: large bundle with a broken block still finds the last certificate (#2109)" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    local fp i
+    fp="$(_mk_cert target)"
+    _mk_cert other >/dev/null
+    # 병렬 지문 계산 폭보다 많은 블록 + 중간의 깨진 블록 — 나머지 인증서는 그대로 읽힌다.
+    for i in $(seq 40); do cat "$BATS_TEST_TMPDIR/other.crt"; done >"$BATS_TEST_TMPDIR/bundle.crt"
+    printf -- '-----BEGIN CERTIFICATE-----\nnot-a-cert\n-----END CERTIFICATE-----\n' >>"$BATS_TEST_TMPDIR/bundle.crt"
+    cat "$BATS_TEST_TMPDIR/target.crt" >>"$BATS_TEST_TMPDIR/bundle.crt"
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
+    assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+    refute_output --partial "지문을 하나도 읽지 못함"
+}
+
 @test "internal mode: non-fingerprint CA value falls back to substring with WARN" {
     printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
     printf -- '-----BEGIN CERTIFICATE-----\nFAKEFP\n' >"$HOME/ca.crt"

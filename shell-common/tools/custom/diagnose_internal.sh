@@ -58,20 +58,19 @@ _env_registered() {
     return 1
 }
 
-# CHECK_CERT bundle 의 인증서별 SHA-256 지문 — 콜론 제거·대문자, 한 줄에 하나.
+# CHECK_CERT bundle 의 인증서별 SHA-256 지문 — 콜론 제거·대문자, 한 줄에 하나 (순서 무관).
+# openssl 기동 비용(~10ms)이 인증서당 들어 시스템 bundle(~120개)에서 1.5s → 병렬 실행 (#2109).
+# awk 가 PEM 블록을 '|' 로 이은 한 줄로 내고, tr 이 그 줄을 NUL 구분·원래 줄바꿈으로 되돌린다.
+# shellcheck disable=SC2016 # sh -c 의 $1 은 xargs 가 넘기는 자식 셸 인자
 _bundle_fps() {
-    local _line _blk="" _in=0
-    while IFS= read -r _line || [ -n "$_line" ]; do
-        _line="${_line%$'\r'}"
-        case "$_line" in *"-----BEGIN CERTIFICATE-----"*) _in=1 _blk="" ;; esac
-        [ "$_in" = 1 ] && _blk="$_blk$_line"$'\n'
-        case "$_line" in *"-----END CERTIFICATE-----"*)
-            [ "$_in" = 1 ] && printf '%s' "$_blk" | openssl x509 -noout -fingerprint -sha256 2>/dev/null |
-                sed 's/.*=//' | tr -d ':' | tr 'a-f' 'A-F'
-            _in=0
-            ;;
-        esac
-    done <"$CHECK_CERT"
+    awk '{ sub(/\r$/, "") }
+        index($0, "-----BEGIN CERTIFICATE-----") { _in = 1; _blk = "" }
+        _in { _blk = _blk $0 "|" }
+        index($0, "-----END CERTIFICATE-----") && _in { print _blk; _in = 0 }' "$CHECK_CERT" |
+        tr '\n|' '\0\n' |
+        xargs -0 -n1 -P "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" \
+            sh -c 'printf "%s" "$1" | openssl x509 -noout -fingerprint -sha256 2>/dev/null' _ |
+        sed 's/.*=//' | tr -d ':' | tr 'a-f' 'A-F'
 }
 
 # $1(지문 값)이 CHECK_CERT 에 있나: 0=포함, 1=미포함, 2=openssl 없어 비교 생략.
