@@ -12,6 +12,7 @@
 #   - git/setup.sh: Sets up git configuration
 #   - claude/setup.sh: Manages Claude Code settings via symlinks
 #   - global-packages/setup.sh: Installs missing global uv tools (uv-tools.txt)
+#   - mcporter/setup.sh: Points mcporter's exa server at ${EXA_API_KEY:-} (.enc.env)
 #
 # See docs/.ssot/one-click-setup.md for the full step list and idempotency rules
 #
@@ -234,6 +235,7 @@ main() {
     # .vscode/base.json → live VS Code settings (#586); exits 1 without VS Code.
     run_step vscode-settings optional ./.vscode/sync-push.sh
     run_step global-packages optional ./global-packages/setup.sh # global uv tools 동기화, 삭제 안 함
+    run_step mcporter optional ./mcporter/setup.sh # exa 키를 .enc.env placeholder 로 (#2106)
     run_step ssh optional ./ssh/setup.sh
     run_step gh optional ./gh/setup.sh
     run_step windows optional ./windows/setup.sh # WSL only
