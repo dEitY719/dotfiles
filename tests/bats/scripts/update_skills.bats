@@ -129,6 +129,23 @@ update-plugins --dry-run"
     refute_output --partial "전체 로그"
 }
 
+@test "summary mode: digest survives tput sgr0 escapes (\\e(B\\e[m) around the bullet" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 '  \033[34m◆\033(B\033[m Updated: 3\n  \033[34m◆\033(B\033[m Up to date: 9\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --regexp '✅ git-pull-skills \([0-9]+\.[0-9]s\) — 갱신 3 / 최신 9'
+}
+
+@test "--help prints usage and runs no step" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" --help
+    assert_success
+    assert_output --partial "skills-sync"
+    assert_output --partial "--dry-run"
+    [ ! -s "$CALL_LOG" ]
+}
+
 @test "summary mode: ux_lib-fallback WARN: line marks the step as warning and is shown" {
     _make_fake_root 0
     _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 'WARN: notes-skills: dirty working tree\nfine\n'

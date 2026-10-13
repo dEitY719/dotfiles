@@ -41,14 +41,16 @@ if ! command -v ux_success >/dev/null 2>&1; then
     source "$(dirname "${BASH_SOURCE[0]}")/ux_lib.sh"
 fi
 
-STEP_VERBOSE="${STEP_VERBOSE:-0}"
-STEP_LOG="${STEP_LOG:-/dev/null}"
-STEP_OUT="${STEP_OUT:-/dev/null}"
-STEP_NAME="${STEP_NAME:-작업}"
-STEP_RERUN="${STEP_RERUN:-}"
-STEP_HINT_FN="${STEP_HINT_FN:-}"
-STEP_DIGEST_FN="${STEP_DIGEST_FN:-}"
-STEP_LOG_ALWAYS="${STEP_LOG_ALWAYS:-1}"
+# Plain defaults, never read from the environment: callers set the knobs after
+# sourcing, and an exported STEP_DIGEST_FN / STEP_LOG_ALWAYS must not leak in.
+STEP_VERBOSE=0
+STEP_LOG=/dev/null
+STEP_OUT=/dev/null
+STEP_NAME=작업
+STEP_RERUN=""
+STEP_HINT_FN=""
+STEP_DIGEST_FN=""
+STEP_LOG_ALWAYS=1
 STEP_DIGEST=""
 STEP_LAST_RC=0
 STEP_TOTAL=0
@@ -71,7 +73,8 @@ step_init() {
     if [ "$STEP_VERBOSE" = 1 ]; then
         return 0
     fi
-    STEP_LOG="${TMPDIR:-/tmp}/${prefix}-$(date +%Y%m%d-%H%M%S).log"
+    # $$ keeps two runs started in the same second from sharing log/.step files.
+    STEP_LOG="${TMPDIR:-/tmp}/${prefix}-$(date +%Y%m%d-%H%M%S)-$$.log"
     if ! { : >"$STEP_LOG"; } 2>/dev/null; then
         ux_warning "로그 파일을 만들 수 없음 ($STEP_LOG) — 전체 출력 모드로 전환합니다"
         STEP_VERBOSE=1
@@ -140,6 +143,7 @@ step_run() {
         if [ "$STEP_LOG" != /dev/null ]; then ux_bullet_sub "전체 로그: $STEP_LOG"; fi
     } >&2
     if [ "$level" = critical ]; then
+        if [ "$STEP_OUT" != /dev/null ]; then rm -f "$STEP_OUT"; fi
         ux_error "critical 스텝 '$label' 실패 — $STEP_NAME 을 중단합니다. 위 조치 후 ${STEP_RERUN:-$STEP_NAME} 를 다시 실행하세요."
         exit 1
     fi
