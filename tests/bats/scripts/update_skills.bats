@@ -216,3 +216,41 @@ claude-setup"
     assert_output --regexp '✅ update-plugins \(dry-run\) \('
     assert_output --partial "skills-sync (dry-run) 완료: 3개 스텝 모두 정상"
 }
+
+@test "--dry-run: update-plugins failure is reported as optional and becomes the exit code" {
+    _make_fake_root 0 0 5
+    run "$FAKE_ROOT/scripts/update-skills.sh" --dry-run
+    assert_failure 5
+    assert_output --partial "update-plugins (dry-run) 실패 [optional] (exit 5"
+    assert_output --partial "실패 스텝(optional): update-plugins (dry-run)"
+}
+
+@test "summary mode: all-green run deletes its log; a warning run keeps it" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    run bash -c "ls '$TMPDIR' | grep -c '^skills-sync-'"
+    assert_output "0"
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 'WARN: dirty\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    run bash -c "ls '$TMPDIR' | grep -c '^skills-sync-.*\.log$'"
+    assert_output "1"
+}
+
+@test "a --target value that looks like -v or help is passed to git-pull-skills untouched" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" --target -v
+    assert_success
+    assert_output --partial "요약 모드"
+    run grep '^pull' "$CALL_LOG"
+    assert_output "pull --target -v"
+}
+
+@test "update-plugins digest flags a needed session restart and unrecognized results" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 0 '  ◆ Plugins updated: 1\n  ◆ Plugins up to date: 16\n  ◆ Failed: 0\n  ◆ Plugins with an unrecognized result: 2\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "— 갱신 1 / 최신 16 (실행 중인 Claude Code 세션 재시작 필요) / 미인식 2"
+}
