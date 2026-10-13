@@ -130,10 +130,10 @@ fi
 shopt -s nullglob
 
 # ------------------------------------------------------------------
-# --- Load modules in priority order ---
+# --- Load modules in order ---
 # ------------------------------------------------------------------
-# Priority 1: Shell-common (POSIX-compatible, shared across bash/zsh)
-# Priority 2: ENV directory (bash-specific environment variables)
+# Order: shell-common env -> aliases -> functions -> integrations -> projects
+#        -> bash-specific env (bash/env/*.bash)
 
 # --- Load shell-common modules via loader ---
 source "${SHELL_COMMON}/util/loader.sh"

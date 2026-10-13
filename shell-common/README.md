@@ -150,7 +150,7 @@ else
 fi
 ```
 
-### External Tool Integration (tools/external/)
+### External Tool Integration (tools/integrations/)
 
 Automatic integration scripts for external tools. Output formatting uses the UX library for consistency:
 - **Git integration** (`git.sh`) - Git utilities with UX-formatted messages

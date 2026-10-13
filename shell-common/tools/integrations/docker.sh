@@ -1,6 +1,6 @@
 #!/bin/sh
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
-# shell-common/tools/external/docker.sh
+# shell-common/tools/integrations/docker.sh
 # Docker / Docker Compose - aliases, functions, and help
 # Shared between bash and zsh
 
