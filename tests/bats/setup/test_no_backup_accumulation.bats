@@ -172,3 +172,44 @@ teardown() {
     assert_output --partial "dir=yes"
     assert_output --partial "two"
 }
+
+@test "helper: backup_move fails instead of nesting when the old backup cannot be removed" {
+    [ "$(id -u)" -ne 0 ] || skip "root can remove read-only dirs"
+    run bash -c '
+        . "'"$BACKUP_HELPER"'"
+        d=$(mktemp -d "${TMPDIR:-/tmp}/backup_test.XXXXXX")
+        mkdir -p "$d/t.original/locked"; : > "$d/t.original/locked/f"
+        chmod 555 "$d/t.original/locked"
+        printf live > "$d/t"
+        dotfiles_backup_move "$d/t" .original >/dev/null; echo "rc=$?"
+        [ -f "$d/t" ] && echo "target=kept"
+        [ -e "$d/t.original/t" ] && echo "nested=yes"
+        chmod 755 "$d/t.original/locked"; rm -rf "$d"
+    '
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "target=kept"
+    refute_output --partial "nested=yes"
+}
+
+@test "_claude_backup_original: never overwrites a non-empty directory backup (issue #2130)" {
+    run_in_bash '
+        tgt="$HOME/.claude-test/skills"
+        mkdir -p "$tgt.original" "$tgt"
+        printf precious > "$tgt.original/data"; printf new > "$tgt/data"
+        _claude_backup_original "$tgt" "revealed directory" >/dev/null 2>&1; echo "rc=$?"
+        cat "$tgt.original/data"; echo; cat "$tgt/data"
+    '
+    assert_success
+    assert_output --partial "rc=1"
+    assert_output --partial "precious"
+    assert_output --partial "new"
+}
+
+@test "claude.sh: variable-timestamp -original backups only in claude_accounts_rollback (issue #2130)" {
+    # Catches `ts=$(date ...); mv x "$x-${ts}-original"` too, which the inline
+    # `-$(date` grep above cannot see. Rollback (`_car_ts`) is the documented
+    # exception.
+    run bash -c "grep -nE '\\}-original|[a-z_]-original\"' '${DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh' | grep -v '_car_ts'"
+    assert_failure
+}
