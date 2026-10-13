@@ -47,7 +47,15 @@ _us_help() {
 verbose="${SKILLS_SYNC_VERBOSE:-0}"
 dry_run=0
 pull_args=()
+prev=""
 for arg in "$@"; do
+    # A --target value is git-pull-skills' own, even when it reads "-v"/"help".
+    if [ "$prev" = --target ]; then
+        pull_args+=("$arg")
+        prev=""
+        continue
+    fi
+    prev="$arg"
     case "$arg" in
     -h | --help | help)
         # Before any side effect — summary mode would otherwise swallow
@@ -75,7 +83,7 @@ _us_count() {
 # A missing/changed Summary format just drops the digest.
 # shellcheck disable=SC2317  # reached only via the STEP_*_FN callbacks
 _us_digest() {
-    local n up fail
+    local n up odd
     # Strip SGR (\e[..m) and charset selects (\e(B — part of `tput sgr0` on
     # xterm-like TERMs, which ux_lib emits even when output is redirected).
     _US_CLEAN=$(sed -e 's/\x1b\[[0-9;]*m//g' -e 's/\x1b[()][0-9A-Za-z]//g' "$STEP_OUT")
@@ -92,18 +100,21 @@ _us_digest() {
         if [ -n "$n" ] && [ -n "$up" ]; then STEP_DIGEST="갱신 $n / 최신 $up"; fi
         ;;
     update-plugins*)
+        # Failed>0 exits 1, so a digest (rc 0 only) never needs a failure count.
         n=$(_us_count "Plugins updated")
         up=$(_us_count "Plugins up to date")
-        fail=$(_us_count Failed)
         if [ -n "$n" ] && [ -n "$up" ]; then
             STEP_DIGEST="갱신 $n / 최신 $up"
+            # update-plugins' restart hint is ux_info, so summary mode would hide it.
+            if [ "$n" != 0 ]; then STEP_DIGEST="$STEP_DIGEST (실행 중인 Claude Code 세션 재시작 필요)"; fi
         else
             n=$(_us_count "Plugins \\(would update\\)")
             if [ -n "$n" ]; then STEP_DIGEST="갱신 예정 $n"; fi
         fi
-        if [ -n "$STEP_DIGEST" ] && [ -n "$fail" ] && [ "$fail" != 0 ]; then
-            STEP_DIGEST="$STEP_DIGEST / 실패 $fail"
-        fi
+        for odd in "Plugins with an unrecognized result:미인식" "Plugins skipped \\(not installed\\):미설치 skip"; do
+            n=$(_us_count "${odd%%:*}")
+            if [ -n "$n" ] && [ "$n" != 0 ]; then STEP_DIGEST="${STEP_DIGEST:+$STEP_DIGEST / }${odd#*:} $n"; fi
+        done
         ;;
     esac
     return 0
