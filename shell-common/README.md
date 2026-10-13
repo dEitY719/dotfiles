@@ -62,9 +62,8 @@ Files are loaded in the following order (see `bash/main.bash` or `zsh/main.zsh`)
 5. **Common Functions** (`shell-common/functions/*.sh`)
 6. **External Tools** (`shell-common/tools/external/*.sh`)
 7. **Projects** (`shell-common/projects/*.sh`)
-8. **Shell-Specific Environment** (`bash/env/*.sh` or `zsh/env/*.sh`)
-9. **Auto-discovery** (Additional shell-specific files)
-10. **FZF Bindings** (If fzf is installed)
+8. **Shell-Specific Modules** (`bash/env/*.bash` or `zsh/app/*.zsh`)
+9. **FZF Bindings** (If fzf is installed)
 
 ## Environment Modules (env/)
 

@@ -77,7 +77,7 @@ typeset -gi SOURCED_FILES_COUNT=0
 . "${SHELL_COMMON}/util/safe_source.sh"
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 1: Load UX Library FIRST (consistent with bash loader)
+# Load UX Library FIRST (consistent with bash loader)
 # Provides: colors, output functions, progress indicators, prompts, tables
 # MUST load before any code that uses ux_* functions
 # ═══════════════════════════════════════════════════════════════
@@ -89,7 +89,7 @@ if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 2: Load Shared Environment Variables (shell-common/env/)
+# Load Shared Environment Variables (shell-common/env/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/env" ]; then
@@ -102,17 +102,7 @@ if [ -d "${SHELL_COMMON}/env" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 3: Load Zsh Environment Settings (zsh/env/)
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${ZSH_DOTFILES}/env" ]; then
-    for f in "${ZSH_DOTFILES}"/env/*.zsh; do
-        [ -f "$f" ] && safe_source "$f" "Failed to load zsh env" || true
-    done
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Phase 4: Load Shared Aliases (shell-common/aliases/)
+# Load Shared Aliases (shell-common/aliases/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/aliases" ]; then
@@ -125,7 +115,7 @@ if [ -d "${SHELL_COMMON}/aliases" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 5: Load Shared Functions (shell-common/functions/)
+# Load Shared Functions (shell-common/functions/)
 # ═══════════════════════════════════════════════════════════════
 
 if [ -d "${SHELL_COMMON}/functions" ]; then
@@ -138,7 +128,7 @@ if [ -d "${SHELL_COMMON}/functions" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 6: Load Shared Tools - Integrations (shell-common/tools/integrations/)
+# Load Shared Tools - Integrations (shell-common/tools/integrations/)
 # 3rd-party integrations: apt, ccusage, claude, codex, git, npm, etc
 # ═══════════════════════════════════════════════════════════════
 
@@ -156,14 +146,7 @@ fi
 typeset -f apply_help_standard_adapter >/dev/null 2>&1 && apply_help_standard_adapter
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 7: Load Shared Tools - Custom (shell-common/tools/custom/)
-# NOTE: shell-common/tools/custom/ contains executable utility scripts
-# that should NOT be auto-sourced. They are meant to be run explicitly
-# as commands, not loaded as shell functions. Examples: demo_ux.sh, check_ux_consistency.sh
-# ═══════════════════════════════════════════════════════════════
-
-# ═══════════════════════════════════════════════════════════════
-# Phase 8: Load Shared Projects (shell-common/projects/)
+# Load Shared Projects (shell-common/projects/)
 # Project-specific configurations and utilities
 # ═══════════════════════════════════════════════════════════════
 
@@ -177,20 +160,7 @@ if [ -d "${SHELL_COMMON}/projects" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Phase 9: Load Zsh Utilities (zsh/util/)
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${ZSH_DOTFILES}/util" ]; then
-    # Use setopt null_glob to allow empty glob results (e.g., when no .zsh files exist)
-    setopt null_glob
-    for f in "${ZSH_DOTFILES}"/util/*.zsh; do
-        [ -f "$f" ] && safe_source "$f" "Failed to load zsh util" || true
-    done
-    unsetopt null_glob
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Phase 10: Load Zsh Application Modules (zsh/app/)
+# Load Zsh Application Modules (zsh/app/)
 # ═══════════════════════════════════════════════════════════════
 
 _load_zsh_apps() {

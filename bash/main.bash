@@ -134,10 +134,8 @@ shopt -s nullglob
 # ------------------------------------------------------------------
 # Priority 1: Shell-common (POSIX-compatible, shared across bash/zsh)
 # Priority 2: ENV directory (bash-specific environment variables)
-# Priority 3: All other directories (auto-discovered, no manual addition needed)
 
 # --- Load shell-common modules via loader ---
-# Centralized module loading with configuration-based filtering
 source "${SHELL_COMMON}/util/loader.sh"
 
 load_category "env"
@@ -171,10 +169,6 @@ done
 # Note: my_help is now loaded from shell-common/functions/my_help.sh (shared version)
 # This was previously loaded here as bash/util/my_help.bash but we now use
 # the unified shell-common version for parity with zsh
-
-# --- Auto-load bash-specific directories ---
-# Load all .bash files from DOTFILES_BASH_DIR subdirectories (except skip list in config)
-load_auto_directories "${DOTFILES_BASH_DIR}" ".bash"
 
 # --- Restore nullglob to previous state ---
 if [[ ${__NULLGLOB_WAS_ON} -eq 0 ]]; then

@@ -18,12 +18,10 @@
 1. Shell detection (zsh 아니면 exit)
 2. Directory setup (`DOTFILES_ROOT`, `SHELL_COMMON`, `ZSH_DOTFILES`)
 3. `safe_source` 헬퍼 정의
-4. Common env (`shell-common/env/*.sh`)
-5. Zsh-only env (`zsh/env/*.sh`)
-6. UX library (`shell-common/tools/ux_lib/ux_lib.sh`)
-7. Common aliases / functions / 외부 도구 / 프로젝트
-8. Zsh utilities (`zsh/util/*.zsh`)
-9. Zsh applications (`zsh/app/*.zsh`)
+4. UX library (`shell-common/tools/ux_lib/ux_lib.sh`)
+5. Common env (`shell-common/env/*.sh`)
+6. Common aliases / functions / 외부 도구 / 프로젝트
+7. Zsh applications (`zsh/app/*.zsh`)
 
 # Golden Rules
 
