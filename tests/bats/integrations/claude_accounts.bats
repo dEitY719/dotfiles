@@ -503,6 +503,70 @@ SH
     assert_output --partial "Account: work"
 }
 
+# ---------- #2116: internal mode (single account, non-OAuth auth) ----------
+
+# internal PC fixture: ~/.claude with apiKeyHelper, no .credentials.json.
+_internal_apikeyhelper_home() {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    printf '{"apiKeyHelper":"/opt/gw/api-key-helper"}\n' > "$HOME/.claude/settings.json"
+}
+
+@test "bash: #2116 internal + apiKeyHelper, no .credentials.json -> logged in" {
+    _internal_apikeyhelper_home
+    run_in_bash '_claude_account_logged_in "$HOME/.claude"'
+    assert_success
+}
+
+@test "bash: #2116 internal + settings.local.json apiKeyHelper -> logged in" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    printf '{"apiKeyHelper":"/opt/gw/api-key-helper"}\n' > "$HOME/.claude/settings.local.json"
+    run_in_bash '_claude_account_logged_in "$HOME/.claude"'
+    assert_success
+}
+
+@test "bash: #2116 internal + ANTHROPIC_API_KEY -> logged in" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    run_in_bash 'ANTHROPIC_API_KEY=sk-test _claude_account_logged_in "$HOME/.claude"'
+    assert_success
+}
+
+@test "bash: #2116 internal + no auth at all -> NOT logged in" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    printf '{"apiKeyHelper":""}\n' > "$HOME/.claude/settings.json"
+    run_in_bash 'unset ANTHROPIC_API_KEY; _claude_account_logged_in "$HOME/.claude"'
+    assert_failure
+}
+
+@test "bash: #2116 external + apiKeyHelper only -> still NOT logged in (OAuth rule kept)" {
+    mkdir -p "$HOME/.claude-work"
+    printf '{"apiKeyHelper":"/opt/gw/api-key-helper"}\n' > "$HOME/.claude-work/settings.json"
+    run_in_bash 'ANTHROPIC_API_KEY=sk-test _claude_account_logged_in "$HOME/.claude-work"'
+    assert_failure
+}
+
+@test "bash: #2116 claude_accounts_status internal inspects ~/.claude, not ~/.claude-work" {
+    _internal_apikeyhelper_home
+    run_in_bash 'claude_accounts_status'
+    assert_success
+    assert_output --partial "internal mode"
+    assert_output --partial "$HOME/.claude "
+    refute_output --partial ".claude-work"
+    refute_output --partial "claude-yolo --user"
+    assert_output --partial "apiKeyHelper"
+}
+
+@test "bash: #2116 claude_accounts_status external shows OAuth credentials label" {
+    mkdir -p "$HOME/.claude-personal"
+    printf '{"claudeAiOauth":{"accessToken":"t"}}\n' > "$HOME/.claude-personal/.credentials.json"
+    run_in_bash 'CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
+    assert_success
+    assert_output --partial "OAuth (.credentials.json)"
+}
+
 # ---------- Task 7: migrate ----------
 
 @test "bash: claude_accounts_migrate moves ~/.claude → ~/.claude-personal" {
@@ -1140,7 +1204,7 @@ $HOME/.claude/docs" ]
 @test "issue #300-C: claude_accounts_status prints email/org from .claude.json" {
     mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-personal"
-    echo "creds" > "$HOME/.claude-personal/.credentials.json"
+    echo '{"claudeAiOauth":{}}' > "$HOME/.claude-personal/.credentials.json"
     cat > "$HOME/.claude-personal/.claude.json" <<'JSON'
 {
   "oauthAccount": {
@@ -1160,7 +1224,7 @@ JSON
 @test "issue #300-C: claude_accounts_status omits oauth lines when .claude.json missing" {
     mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-personal"
-    echo "creds" > "$HOME/.claude-personal/.credentials.json"
+    echo '{"claudeAiOauth":{}}' > "$HOME/.claude-personal/.credentials.json"
     # No .claude.json — first run / fresh login.
 
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_init >/dev/null && CLAUDE_ENABLED_ACCOUNTS=personal claude_accounts_status'
@@ -1172,7 +1236,7 @@ JSON
 @test "issue #300-C: claude_accounts_status flags expected/actual mismatch with marker" {
     mkdir -p "${DOTFILES_ROOT}/claude/docs"
     mkdir -p "$HOME/.claude-work"
-    echo "creds" > "$HOME/.claude-work/.credentials.json"
+    echo '{"claudeAiOauth":{}}' > "$HOME/.claude-work/.credentials.json"
     cat > "$HOME/.claude-work/.claude.json" <<'JSON'
 {"oauthAccount":{"emailAddress":"personal@gmail.com","organizationName":"Personal"}}
 JSON

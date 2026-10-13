@@ -569,14 +569,40 @@ _claude_resolve_account() {
 # 규칙이 여기 사는 이유: "무슨 파일이 로그인을 뜻하는가" 는 이 파일이 이미
 # 세 군데(claude_accounts_status, claude_accounts_rollback)에서 손으로 쓰고
 # 있던 계약이다. #1530 이 남긴 교훈대로, 복사된 규칙은 복사된 만큼 어긋난다.
+#
+# internal PC (#2116) 는 OAuth 가 아니라 사내 gateway `apiKeyHelper` 로 인증하므로
+# `.credentials.json` 이 애초에 생기지 않는다. 그 모드에서만 판정을 넓힌다 —
+# external 은 OAuth 구독 로그인이 유일한 증거라 규칙을 그대로 둔다.
+# 판정은 `_claude_account_auth_kind` 한 곳에 두고 이 함수는 그 결과만 본다.
 _claude_account_logged_in() {
-    [ -n "${1:-}" ] || return 1
-    [ -r "$1/.credentials.json" ] || return 1
-    [ -s "$1/.credentials.json" ] || return 1
-    if command -v jq >/dev/null 2>&1; then
-        jq -e . "$1/.credentials.json" >/dev/null 2>&1 || return 1
+    [ "$(_claude_account_auth_kind "${1:-}")" != "none" ]
+}
+
+# _claude_account_auth_kind <config-dir> — prints the auth method in use:
+#   oauth | apiKeyHelper | apikey | none      (always exits 0)
+# apiKeyHelper / apikey 는 internal 모드에서만 인정한다 (위 주석 참조).
+_claude_account_auth_kind() {
+    _caak_dir="${1:-}"
+    [ -n "$_caak_dir" ] || { echo none; return 0; }
+    if [ -r "$_caak_dir/.credentials.json" ] && [ -s "$_caak_dir/.credentials.json" ]; then
+        if ! command -v jq >/dev/null 2>&1 || jq -e . "$_caak_dir/.credentials.json" >/dev/null 2>&1; then
+            echo oauth
+            return 0
+        fi
     fi
-    return 0
+    if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+        # shortcut: grep, not jq — only "non-empty string value" matters; upgrade if settings ever nest it.
+        if grep -qs '"apiKeyHelper"[[:space:]]*:[[:space:]]*"[^"]' \
+            "$_caak_dir/settings.json" "$_caak_dir/settings.local.json"; then
+            echo apiKeyHelper
+            return 0
+        fi
+        if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+            echo apikey
+            return 0
+        fi
+    fi
+    echo none
 }
 
 # _claude_expected_email <account-name> — expected oauth email lookup.
@@ -1042,12 +1068,20 @@ EOF
 # claude_accounts_status — 진단 출력 (모든 ENABLED 계정의 상태).
 claude_accounts_status() {
     ux_header "Claude Accounts Status"
-    ux_info "Default: $CLAUDE_DEFAULT_ACCOUNT"
-    ux_info "Enabled: $CLAUDE_ENABLED_ACCOUNTS"
-    if [ -d "$HOME/.claude-shared/plugins" ]; then
-        ux_info "Shared:  $HOME/.claude-shared/plugins ✓"
+    # internal PC: single account at ~/.claude, claude-accounts unused (#571),
+    # so inspect that dir instead of the multi-account ~/.claude-<name> set (#2116).
+    _cas_internal=0
+    if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+        _cas_internal=1
+        ux_info "internal mode — single-account (~/.claude), claude-accounts 미사용"
     else
-        ux_warning "Shared:  $HOME/.claude-shared/plugins ✗ missing"
+        ux_info "Default: $CLAUDE_DEFAULT_ACCOUNT"
+        ux_info "Enabled: $CLAUDE_ENABLED_ACCOUNTS"
+        if [ -d "$HOME/.claude-shared/plugins" ]; then
+            ux_info "Shared:  $HOME/.claude-shared/plugins ✓"
+        else
+            ux_warning "Shared:  $HOME/.claude-shared/plugins ✗ missing"
+        fi
     fi
     ux_info ""
 
@@ -1056,8 +1090,17 @@ claude_accounts_status() {
         emulate -L sh
     fi
 
-    for _cas_acct in $(_claude_resolve_account --list); do
-        _cas_cdir=$(_claude_resolve_account "$_cas_acct")
+    if [ "$_cas_internal" = "1" ]; then
+        _cas_accts="internal"
+    else
+        _cas_accts=$(_claude_resolve_account --list)
+    fi
+    for _cas_acct in $_cas_accts; do
+        if [ "$_cas_internal" = "1" ]; then
+            _cas_cdir="$HOME/.claude"
+        else
+            _cas_cdir=$(_claude_resolve_account "$_cas_acct")
+        fi
         ux_section "Account: $_cas_acct"
         if [ -d "$_cas_cdir" ]; then
             ux_bullet "Path:        $_cas_cdir ✓ exists"
@@ -1065,13 +1108,26 @@ claude_accounts_status() {
             ux_bullet "Path:        $_cas_cdir ✗ missing"
         fi
 
-        if [ -f "$_cas_cdir/.credentials.json" ]; then
-            ux_bullet "Credentials: .credentials.json ✓ logged in"
-            _claude_status_show_oauth "$_cas_cdir" "$_cas_acct"
-        else
-            ux_bullet "Credentials: .credentials.json ✗ NOT logged in"
-            ux_bullet_sub "Run: claude-yolo --user $_cas_acct"
-        fi
+        case "$(_claude_account_auth_kind "$_cas_cdir")" in
+            oauth)
+                ux_bullet "Credentials: OAuth (.credentials.json) ✓ logged in"
+                _claude_status_show_oauth "$_cas_cdir" "$_cas_acct"
+                ;;
+            apiKeyHelper)
+                ux_bullet "Credentials: apiKeyHelper ✓ configured"
+                ;;
+            apikey)
+                ux_bullet "Credentials: ANTHROPIC_API_KEY ✓ set"
+                ;;
+            *)
+                if [ "$_cas_internal" = "1" ]; then
+                    ux_bullet "Credentials: none ✗ (apiKeyHelper / ANTHROPIC_API_KEY not set)"
+                else
+                    ux_bullet "Credentials: .credentials.json ✗ NOT logged in"
+                    ux_bullet_sub "Run: claude-yolo --user $_cas_acct"
+                fi
+                ;;
+        esac
 
         for _cas_link in settings.json settings.local.json statusline-command.sh plugins projects/GLOBAL/memory skills docs workflows CLAUDE.md keybindings.json; do
             if [ "$_cas_link" = "settings.json" ]; then
