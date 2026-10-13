@@ -46,8 +46,8 @@ default branch, opt-in by `graphify-out/graph.json`.
 
 git-lfs also writes `pre-push`/`post-commit`/`post-checkout`/`post-merge`
 here; those wrappers run `git lfs <hook> "$@"` themselves (`lib/lfs.sh`, only
-in repos with `<git-common-dir>/lfs`; pre-push stdin is buffered + replayed,
-an lfs failure aborts the push). setup.sh backs a colliding real file up as
+in LFS repos; pre-push runs the project hook first so a rejected push uploads
+nothing, stdin is buffered + replayed, an lfs failure aborts the push). setup.sh backs a colliding real file up as
 `<name>.original`: info for a git-lfs hook, a warning for anything else.
 Never run `git lfs install --force` (clobbers the wrappers).
 

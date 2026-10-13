@@ -357,6 +357,25 @@ if ! declare -p GIT_GLOBAL_HOOKS >/dev/null 2>&1 || [ ${#GIT_GLOBAL_HOOKS[@]} -e
     done
 fi
 
+# lfs_hook_cmd_ere: the `git lfs <hook>` line matcher shared with the wrappers.
+# shellcheck source=./global-hooks/lib/lfs.sh
+[ -f "${GLOBAL_HOOKS_SOURCE_DIR}/lib/lfs.sh" ] && source "${GLOBAL_HOOKS_SOURCE_DIR}/lib/lfs.sh"
+
+# 0 = $1 is a pure git-lfs-generated <$2> hook: once the shebang, blank lines,
+# comments, the `command -v git-lfs ... || { ...; exit 2; }` guard and the
+# `git lfs <hook> "$@"` line are removed, nothing remains. Any extra line is
+# user logic the wrapper would not run, so it must take the warning path.
+is_git_lfs_generated_hook() {
+    local file="$1" hook="$2" lfs_line_ere
+    declare -F lfs_hook_cmd_ere >/dev/null || return 1
+    lfs_line_ere="$(lfs_hook_cmd_ere "$hook")"'[[:space:]]+"\$@"[[:space:]]*$'
+    grep -Eqs "$lfs_line_ere" "$file" || return 1
+    ! sed '1{/^#!/d;}' "$file" | grep -Ev \
+        -e '^[[:space:]]*(#|$)' \
+        -e '^[[:space:]]*command[[:space:]]+-v[[:space:]]+git-lfs[[:space:]].*\|\|[[:space:]]*\{.*exit[[:space:]]+2;?[[:space:]]*\}[[:space:]]*$' \
+        -e "$lfs_line_ere" | grep -q .
+}
+
 if [ ${#GIT_GLOBAL_HOOKS[@]} -eq 0 ]; then
     ux_warning "경고: 연결할 Global hook 이 없습니다 ('${GLOBAL_HOOKS_SOURCE_DIR}')."
 else
@@ -383,7 +402,7 @@ else
                 if ! cmp -s "$global_hook_target" "${global_hook_target}.original"; then
                     cp "$global_hook_target" "${global_hook_target}.original" \
                         || log_error_and_exit "백업 파일 생성 실패: $global_hook_target"
-                    if grep -Eqs "^[[:space:]]*git[[:space:]]+lfs[[:space:]]+${global_hook_name}([[:space:]]|$)" "$global_hook_target"; then
+                    if is_git_lfs_generated_hook "$global_hook_target" "$global_hook_name"; then
                         replaced_lfs_hooks="${replaced_lfs_hooks:+$replaced_lfs_hooks }${global_hook_name}"
                     else
                         replaced_global_hooks="${replaced_global_hooks:+$replaced_global_hooks }${global_hook_name}"

@@ -178,6 +178,21 @@ git lfs post-commit "$@"
         fail "post-commit.original no longer holds the git-lfs hook"
 }
 
+# A git-lfs hook the user extended loses that extra logic (the wrapper only
+# chains `git lfs <hook>`), so it must take the warning path, not info.
+@test "git/setup.sh warns about a git-lfs global hook with extra user logic" {
+    _stage_sandbox_dotfiles
+    local hooks="$HOME/.config/git/hooks"
+    mkdir -p "$hooks"
+    printf '%secho custom-step\n' "$_GIT_LFS_POST_COMMIT" >"$hooks/post-commit"
+
+    run bash "$SANDBOX/repo/git/setup.sh"
+    assert_success
+    assert_output --partial "경고: 타 도구가 설치한 global hook 을 <name>.original 로 백업 후 교체: post-commit"
+    refute_output --partial "git-lfs global hook"
+    [ -L "$hooks/post-commit" ] || fail "post-commit not replaced by symlink"
+}
+
 @test "git/setup.sh warns about an unrecognized global hook only on first backup" {
     _stage_sandbox_dotfiles
     local hooks="$HOME/.config/git/hooks"

@@ -23,8 +23,9 @@
 #   $1 = remote name, $2 = remote URL
 #   stdin lines: "<local_ref> <local_sha> <remote_ref> <remote_sha>"
 #   stdin is inherited by the delegate, never read here — except in an LFS
-#   repo, where lib/lfs.sh buffers it once so `git lfs pre-push` and the
-#   delegate both get every line; an lfs failure aborts the push.
+#   repo, where lib/lfs.sh buffers it once so the delegate and then
+#   `git lfs pre-push` both get every line; a failing delegate aborts the
+#   push before git-lfs uploads anything, and an lfs failure aborts it too.
 #
 # To bypass: git push --no-verify
 # To debug:  export GIT_HOOKS_DEBUG=1
