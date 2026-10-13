@@ -399,6 +399,7 @@ codex_status() {
     fi
 }
 
-# Prime state once per interactive shell session.
-_codex_maybe_auto_sync
+# No source-time sync (#2129): it cost ~0.4s per shell start. The codex()
+# wrapper syncs before the first (and every) codex run, and the prompt hook
+# below keeps the periodic check.
 _codex_register_auto_sync_hooks
