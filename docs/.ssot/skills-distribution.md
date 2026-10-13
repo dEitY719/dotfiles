@@ -44,6 +44,8 @@ GitHub repo ──claude plugin marketplace update + claude plugin update──>
 
 4/5 가 실패해도 5/5 는 진행하고, 마지막에 4/5 의 종료 코드로 끝난다. `--dry-run` 이면
 1/5·2/5·4/5 를 미리보기로만 실행하고 3/5·5/5 는 건너뛴다.
+출력은 기본 요약 모드(스텝당 1줄 + 변경 건수 digest, 경고/실패만 상세, 전체 로그는
+`${TMPDIR:-/tmp}/skills-sync-*.log`)이고, `-v` 또는 `SKILLS_SYNC_VERBOSE=1` 이면 전부 흘린다 (#2126).
 
 작업 폴더 루트 라우터: `scripts/setup-skills-ssot.sh` 가 `${WORKSPACE_ROOT}/AGENTS.md`,
 `${WORKSPACE_ROOT}/CLAUDE.md` 를 `claude/workspace/AGENTS.md` 로 심볼릭 링크한다
