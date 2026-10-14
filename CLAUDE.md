@@ -53,7 +53,7 @@ Output rule: `AGENTS.md` Golden Rules. Source: `shell-common/tools/ux_lib/ux_lib
 
 ### Claude Code Integration
 
-`claude/statusline-command.sh` and `claude/docs/` are symlinked into each account's Claude config dir; `claude/settings.json` is copied as a real file (not symlinked) so `/model` writes don't dirty the tracked SSOT. Full symlink-vs-copy scheme and rationale: `claude/AGENTS.md` → "Configuration Files".
+`claude/statusline-command.sh` and `claude/docs/` are symlinked into each account's Claude config dir; `claude/settings.json` is copied as a real file (not symlinked) so `/model` writes don't dirty the tracked SSOT. Full symlink-vs-copy scheme and rationale: `claude/docs/config-files.md`.
 
 **Skills no longer live in this repo (#1680)** — the 73 skills moved to 15 standalone marketplace repos, registered in `claude/plugin/{marketplaces,plugins}.json`. The only skill source is now the workspace: repos cloned side by side under `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`. `shell-common/functions/skill_sources.sh` (`_skill_workspace_root` / `_skill_workspace_dirs`) is the enumeration SSOT; `scripts/setup-skills-ssot.sh` entry-level symlink-composes them into Codex / OpenCode / Gemini / agy (its own `~/.gemini/config/skills` root — it does **not** inherit Gemini's, #1731) / Hermes, while Claude Code loads the same repos **only as plugins** (`claude/plugin/plugins.json`) — `claude/setup.sh` no longer flat-composes them into `~/.claude*/skills` (that would duplicate every skill as an un-namespaced command) and `_claude_prune_workspace_skills` removes leftover workspace links.
 
@@ -66,7 +66,7 @@ Output rule: `AGENTS.md` Golden Rules. Source: `shell-common/tools/ux_lib/ux_lib
 { "model": "sonnet" }
 ```
 
-Claude Code merges this with `settings.json` natively (local wins). Running `/model` writes into the per-account **real-file** `settings.json` copy — since #940 this no longer dirties the repo. Re-running `claude/setup.sh` refreshes the copy from the SSOT and auto-migrates any `/model`-written `model` key into `settings.local.json`. See `claude/AGENTS.md` → "Configuration Files" for the full merge/migration behavior.
+Claude Code merges this with `settings.json` natively (local wins). Running `/model` writes into the per-account **real-file** `settings.json` copy — since #940 this no longer dirties the repo. Re-running `claude/setup.sh` refreshes the copy from the SSOT and auto-migrates any `/model`-written `model` key into `settings.local.json`. See `claude/docs/config-files.md` for the full merge/migration behavior.
 
 ## Critical Rules
 
