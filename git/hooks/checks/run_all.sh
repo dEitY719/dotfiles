@@ -21,27 +21,23 @@ cd "$REPO_ROOT" || exit 1
 
 # shellcheck source=/dev/null
 . "$CHECKS_DIR/shared.sh" || exit 1
-names=()
+tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/run_all.XXXXXX") || exit 1
+trap 'rm -rf "$tmpdir"' EXIT
+found="$tmpdir/found"
+: >"$found"
+# Check-major: run each check on every file right after sourcing it, so no
+# per-name renaming of check_run is needed.
 for check_file in "$CHECKS_DIR"/*_check.sh; do
     unset CHECK_NAME CHECK_SCOPE
     unset -f check_run
     # shellcheck source=/dev/null
     . "$check_file" || exit 1
     case "${CHECK_SCOPE:-}" in per-file | per-shell-file) ;; *) continue ;; esac
-    eval "check_run__${CHECK_NAME}() $(declare -f check_run | tail -n +2)"
-    names+=("$CHECK_NAME:$CHECK_SCOPE")
-done
-
-tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/run_all.XXXXXX") || exit 1
-trap 'rm -rf "$tmpdir"' EXIT
-found="$tmpdir/found"
-: >"$found"
-for entry in "${names[@]}"; do : >"$tmpdir/${entry%%:*}.out"; done
-for file in "$@"; do
-    for entry in "${names[@]}"; do
-        name="${entry%%:*}"
-        [ "${entry#*:}" = per-shell-file ] && ! is_shell_lib_file "$REPO_ROOT" "$file" && continue
-        "check_run__$name" "$REPO_ROOT" "$tmpdir" "$file" "$tmpdir/$name.out" || echo "$name:$file" >>"$found"
+    out="$tmpdir/$CHECK_NAME.out"
+    : >"$out"
+    for file in "$@"; do
+        [ "$CHECK_SCOPE" = per-shell-file ] && ! is_shell_lib_file "$REPO_ROOT" "$file" && continue
+        check_run "$REPO_ROOT" "$tmpdir" "$file" "$out" || echo "$CHECK_NAME:$file" >>"$found"
     done
 done
 
