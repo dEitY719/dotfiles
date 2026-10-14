@@ -14,9 +14,10 @@ scripts/update-skills.sh                          (skills-sync 5단계 진입점
  ├─ claude/plugin/git-pull-skills.sh
  ├─ claude/setup.sh ── tools/custom/lib/claude_accounts_skills.sh (_claude_prune_workspace_skills)
  ├─ claude/plugin/update-plugins.sh ── marketplaces.json, plugins.json
- │    └─ restore.sh ── reconcile.sh ── functions/claude_plugin_manifest.sh, plugin_sync_title.sh
  └─ scripts/setup-skills-ssot.sh ── functions/skill_sources.sh ── 워크스페이스 clone
-claude/hooks/plugin-sync-session.sh -> plugin-sync.sh ── reconcile.sh, restore.sh, claude_plugin_manifest.sh
+claude/plugin/restore.sh ── functions/claude_plugin_manifest.sh   (독립: 신규 PC 설치)
+claude/plugin/reconcile.sh ── functions/claude_plugin_manifest.sh, plugin_sync_title.sh   (독립: drift 점검)
+claude/hooks/plugin-sync-session.sh -> plugin-sync.sh ── claude_plugin_manifest.sh, plugin_sync_title.sh
 claude/plugin/publish-sync.sh                     (독립: 게시)
 functions/marketplace.sh, claude_plugins_core.sh, claude_plugin_list.sh   (대화형 UI, plugin/*.sh 미참조)
 claude-accounts link/unlink ── tools/custom/lib/claude_accounts_skills.sh ── functions/skill_sources.sh
