@@ -43,6 +43,14 @@ setup 체인에 편입한다.
 
 - 각 서브스크립트는 `run_step <label> <critical|optional> <cmd...>` 로 실행한다.
   분류 SSOT 는 `setup.sh` 의 `main()` 스텝 목록 — 새 스텝도 거기에 등록한다.
+- **드리프트 lint** (`scripts/lint_setup_steps.sh`, `mise run lint-docs`, #2142):
+  `<module>/setup.sh` 는 `main()` 에 `./<module>/setup.sh` 로 등록하거나, 일부러
+  빼는 모듈이면 `<module>/.setup-optin` 에 사유 1줄을 둔다(예: graphify — pip 수동
+  설치 전제). 둘 다 없거나 둘 다 있으면 FAIL. 자동 발견 대신 명시 목록인 이유는
+  스텝 순서가 의미를 갖기 때문이다(#2127).
+- **멱등 테스트**: 새 모듈 setup.sh 는 `tests/bats/setup/<module>_setup.bats` 에서
+  `run_module_setup <module> [mode]`(`tests/bats/test_helper.bash`) 로 2회 실행 +
+  2회차가 `$HOME` 을 건드리지 않음을 단언한다. 외부 바이너리는 스텁 PATH 로.
 - **요약 모드(기본)**: 스텝당 한 줄(`✅ <label> (N.Ns)`). 출력에 `⚠️`/`❌` 줄이
   있으면 경고 한 줄 + 해당 줄만 표시하므로, 조치가 필요한 메시지는 `ux_warning`
   한 줄에 조치까지 담는다. 서브스크립트 전체 출력은
