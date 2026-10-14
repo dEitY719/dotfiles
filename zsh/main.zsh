@@ -38,7 +38,10 @@ esac
 case $? in
 0) ;;
 1) return 0 ;; # skip (or bootstrap.sh missing: the shell already printed why)
-*) printf 'dotfiles: core load failed under %s\n' "${SHELL_COMMON}" >&2; return 1 ;;
+*)
+    printf 'dotfiles: core load failed under %s\n' "${SHELL_COMMON}" >&2
+    return 1
+    ;;
 esac
 
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"

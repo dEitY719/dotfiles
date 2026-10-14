@@ -30,7 +30,10 @@ esac
 case $? in
 0) ;;
 1) return 0 ;; # skip (or bootstrap.sh missing: the shell already printed why)
-*) printf 'dotfiles: core load failed under %s\n' "${SHELL_COMMON}" >&2; return 1 ;;
+*)
+    printf 'dotfiles: core load failed under %s\n' "${SHELL_COMMON}" >&2
+    return 1
+    ;;
 esac
 
 DOTFILES_BASH_DIR="$_BASH_SCRIPT_DIR"
