@@ -440,11 +440,15 @@ _resolve_bats_file_timeout() {
 # Run "$@" under a $1-second cap that kills its whole process tree (#2165).
 # Plain `timeout` makes itself a new process group and signals that group on
 # expiry, so grandchildren (a hung git, a daemon) die too — `--foreground`
-# only killed the direct child. That group sits outside the runner's phase
-# group, so an interrupt's TERM/INT/HUP to this shell is forwarded to it.
+# only killed the direct child. That group is outside the runner's phase
+# group, so an interrupt's group kill would miss it: its pgid is registered
+# as a file in $_TEST_TREE_DIR (set by _install_test_traps) for _kill_test_groups to signal.
+# A TERM/INT trap forwarding to the group was tried and rejected: inside a
+# nested _spawn_group subshell it looped on bash 5.2 and orphaned timeout,
+# and `trap -` clobbered the caller's traps.
 # Returns timeout's status (124 timed out, 137 the -k 10 follow-up KILL).
 _run_with_tree_timeout() {
-    local limit="$1" tp rc
+    local limit="$1" tp rc dir="${_TEST_TREE_DIR:-}"
     shift
     if ! command -v timeout >/dev/null 2>&1; then
         "$@"
@@ -452,14 +456,10 @@ _run_with_tree_timeout() {
     fi
     timeout -k 10 "$limit" "$@" &
     tp=$!
-    trap 'kill -TERM -- "-$tp" 2>/dev/null || kill -TERM "$tp" 2>/dev/null' TERM INT HUP
-    # A trapped signal interrupts `wait`; wait again until timeout is reaped.
-    while :; do
-        wait "$tp"
-        rc=$?
-        kill -0 "$tp" 2>/dev/null || break
-    done
-    trap - TERM INT HUP
+    [ -n "$dir" ] && : >"$dir/$tp" 2>/dev/null
+    wait "$tp"
+    rc=$?
+    [ -n "$dir" ] && rm -f "$dir/$tp" 2>/dev/null
     return "$rc"
 }
 
@@ -683,13 +683,19 @@ _run_in_group() {
 
 # TERM every live phase group, then KILL whatever is left after a 1s grace.
 _kill_test_groups() {
-    local g alive=0
-    for g in $_TEST_GROUPS; do
+    local g alive=0 groups="$_TEST_GROUPS" f
+    # timeout's own groups (_run_with_tree_timeout) sit outside the phase groups.
+    if [ -n "${_TEST_TREE_DIR:-}" ]; then
+        for f in "$_TEST_TREE_DIR"/*; do
+            [ -e "$f" ] && groups="$groups ${f##*/}"
+        done
+    fi
+    for g in $groups; do
         kill -TERM -- "-$g" 2>/dev/null && alive=1
     done
     if [ "$alive" = "1" ]; then
         sleep 1
-        for g in $_TEST_GROUPS; do
+        for g in $groups; do
             kill -KILL -- "-$g" 2>/dev/null
         done
     fi
@@ -712,6 +718,10 @@ _on_test_signal() {
 }
 
 _install_test_traps() {
+    # Registry for timeout's own process groups (_run_with_tree_timeout).
+    _TEST_TREE_DIR="$(mktemp -d)"
+    export _TEST_TREE_DIR
+    _TEST_TMP_PATHS="$_TEST_TMP_PATHS $_TEST_TREE_DIR"
     trap _on_test_exit EXIT
     trap '_on_test_signal 130' INT
     trap '_on_test_signal 143' TERM
