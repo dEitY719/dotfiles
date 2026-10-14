@@ -194,7 +194,7 @@ _path_without() {
     fp="$(_mk_cert target)"
     _mk_cert other >/dev/null
     # Windows 에서 복사한 사내 CA 파일처럼 줄끝이 CRLF 인 bundle.
-    cat "$BATS_TEST_TMPDIR/other.crt" "$BATS_TEST_TMPDIR/target.crt" | sed 's/$/\r/' >"$BATS_TEST_TMPDIR/bundle.crt"
+    cat "$BATS_TEST_TMPDIR/other.crt" "$BATS_TEST_TMPDIR/target.crt" | awk '{ printf "%s\r\n", $0 }' >"$BATS_TEST_TMPDIR/bundle.crt"
     grep -q $'\r$' "$BATS_TEST_TMPDIR/bundle.crt"
     run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
