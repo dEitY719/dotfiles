@@ -49,6 +49,21 @@ run_linter() {
     assert_output --partial "모순"
 }
 
+@test "a path that only ends in ./<module>/setup.sh is not a registration" {
+    echo "manual install" >"$REPO/beta/.setup-optin"
+    sed -i 's#\./alpha/setup\.sh#../alpha/setup.sh#' "$REPO/setup.sh"
+    run_linter
+    assert_failure 1
+    assert_output --partial "FAIL  alpha"
+}
+
+@test "an empty module list fails instead of passing silently" {
+    git -C "$REPO" rm -q --cached alpha/setup.sh beta/setup.sh
+    run_linter
+    assert_failure 1
+    assert_output --partial "checked=0"
+}
+
 @test "real tree passes" {
     cd "$_BATS_REAL_DOTFILES_ROOT" && run sh "$LINTER"
     assert_success

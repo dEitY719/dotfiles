@@ -107,6 +107,8 @@ run_module_setup() {
     marker="$(mktemp "${BATS_TEST_TMPDIR}/marker.XXXXXX")"
     # mtime is jiffy-coarse: step past the marker's tick so a write in the
     # same tick still counts as newer.
+    # shortcut: assumes sub-second mtime (ext4/tmpfs/WSL); on a 1s-granularity
+    # FS a 2nd-run write can tie the marker and go unseen — sleep 1 there.
     sleep 0.05
     run "$script"
     [ "$status" -eq 0 ] || {
