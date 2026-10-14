@@ -990,7 +990,10 @@ _iw_resolve_flow_command() {
         "${_cfg}/plugins/installed_plugins.json" 2>/dev/null); do
         # Only an explicit `false` disables: a missing settings.json or entry
         # leaves an installed plugin enabled, which is claude's own default.
-        _on=$(jq -r --arg k "${_key}" '.enabledPlugins[$k]' "${_cfg}/settings.json" 2>/dev/null)
+        # settings.local.json overrides settings.json (claude merges them, local
+        # wins), so the last file that mentions the plugin decides.
+        _on=$(cat "${_cfg}/settings.json" "${_cfg}/settings.local.json" 2>/dev/null |
+            jq -rs --arg k "${_key}" 'map(select((.enabledPlugins // {}) | has($k)) | .enabledPlugins[$k]) | last' 2>/dev/null)
         if [ "${_on}" != "false" ]; then
             printf '/gh-flow:issue'
             return 0
@@ -1002,7 +1005,7 @@ _iw_resolve_flow_command() {
         # Frontmatter joined onto one line: a folded `description: >-` can put
         # `Use for` and `/gh-flow:issue` on different lines.
         awk 'NR==1 && /^---[[:space:]]*$/ {fm=1; next} fm && /^---[[:space:]]*$/ {exit} fm' "${_f}" |
-            tr -s ' \t\n' '   ' | grep -Eq 'Use for /gh-flow:issue([,. "]|$)' || continue
+            tr -s ' \t\n' '   ' | grep -Eq 'Use for /gh-flow:issue([^[:alnum:]:_-]|$)' || continue
         _hits="${_hits}${_f%/SKILL.md}
 "
         _count=$((_count + 1))
