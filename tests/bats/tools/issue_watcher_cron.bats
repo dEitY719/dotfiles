@@ -2946,7 +2946,8 @@ _two_repo_fixture() {
 }
 
 @test "issue_watcher_cron: missing python3 falls back to the jq selection with a warning" {
-    _run_tick "PATH=$(_path_without python3)"
+    # -u: a parent IW_SELECT_IMPL=shell would skip the python path and its fallback (#2182)
+    _run_tick -u IW_SELECT_IMPL "PATH=$(_path_without python3)"
     assert_success
     assert_output --partial "using the jq candidate selection"
     _assert_logged "agent prompt iw-dotfiles-issue-11"
