@@ -163,6 +163,7 @@ _run_git_setup() {
     cp -R "$R/shell-common/tools/ux_lib" "$SB/shell-common/tools/"
     cp "$R/shell-common/functions/gh_host.sh" "$R/shell-common/functions/dotfiles_root.sh" \
         "$SB/shell-common/functions/"
+    copy_setup_lib "$SB/shell-common"
     git -C "$SB" init -q
     git -C "$SB" remote add origin https://ghes.corp-fake.test/org/repo.git
     mkdir -p "$HOME/.ssh" && : >"$HOME/.ssh/id_ed25519"

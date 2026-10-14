@@ -135,6 +135,18 @@ setup_isolated_dotfiles_root() {
     export SHELL_COMMON="$iso_root/shell-common"
 }
 
+# copy_setup_lib <fixture-shell-common> — copy shell-common/lib/setup and the
+# two function files it sources into a minimal fixture tree, for tests that
+# copy a single setup script (shell-common/setup.sh sources lib/setup/link.sh
+# since #2138).
+copy_setup_lib() {
+    mkdir -p "$1/lib/setup" "$1/functions" || return 1
+    cp "$_BATS_REAL_DOTFILES_ROOT"/shell-common/lib/setup/*.sh "$1/lib/setup/" &&
+        cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/functions/dotfiles_root.sh" \
+            "$_BATS_REAL_DOTFILES_ROOT/shell-common/functions/dotfiles_backup.sh" \
+            "$1/functions/"
+}
+
 # Run a command in bash subprocess with dotfiles loaded.
 #
 # DOTFILES_ROOT_NO_CANONICALIZE=1 bypasses the worktree-canonicalization

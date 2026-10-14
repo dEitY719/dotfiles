@@ -11,6 +11,10 @@ SYMLINKS_CONF="${SHELL_COMMON_ROOT:-${DOTFILES_ROOT}/shell-common}/config/symlin
 # Physical checkout path for ${DOTFILES_ROOT} in symlinks.conf — matches
 # ssh/setup.sh, which links from its own `pwd -P` location.
 _SYMLINK_ROOT="$(cd "$DOTFILES_ROOT" && pwd -P)"
+# Idempotent link + latest-only backup lib (#2137, #2138).
+# shellcheck source=../../lib/setup/link.sh
+: "${SHELL_COMMON:=${DOTFILES_ROOT}/shell-common}"
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper Functions
@@ -71,37 +75,9 @@ symlink_init() {
         ux_bullet_sub "Target: $target"
         ux_bullet_sub "Source: $source"
 
-        # Create parent directory if needed
-        local target_dir
-        target_dir=$(dirname "$target")
-        if [[ ! -d "$target_dir" ]]; then
-            ux_bullet_sub "Creating directory: $target_dir"
-            mkdir -p "$target_dir"
-        fi
-
-        # Handle existing file/symlink
-        if [[ -L "$target" ]]; then
-            local current_target
-            current_target=$(readlink "$target")
-            if [[ "$current_target" == "$source" ]]; then
-                ux_success "Symlink already correct"
-                ((success++))
-            else
-                ux_warning "Updating symlink (was: $current_target)"
-                rm "$target"
-                ln -s "$source" "$target"
-                ((success++))
-            fi
-        elif [[ -f "$target" ]]; then
-            ux_warning "File exists, backing up to ${target}.backup"
-            mv "$target" "${target}.backup"
-            ln -s "$source" "$target"
-            ((success++))
-        elif [[ -e "$target" ]]; then
-            ux_error "Path exists but is not a regular file or symlink"
-        else
-            ux_bullet_sub "Creating symlink..."
-            ln -s "$source" "$target"
+        # Same link -> no-op; real file -> <target>.original backup; a real
+        # directory is refused (error), as before.
+        if dotfiles_ensure_link "$source" "$target"; then
             ((success++))
         fi
 

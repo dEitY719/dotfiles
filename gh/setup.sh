@@ -24,23 +24,15 @@ else
     exit 1
 fi
 
+SHELL_COMMON="$(cd "${DOTFILES_GH_DIR}/.." && pwd)/shell-common"
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
+
 ux_header "GitHub CLI (gh) dotfiles setup 시작"
 
-mkdir -p "$GH_CONFIG_DIR"
-
-if [ -L "$GH_CONFIG_TARGET" ]; then
-    rm "$GH_CONFIG_TARGET"
-elif [ -f "$GH_CONFIG_TARGET" ]; then
-    # Latest-only fixed suffix (issue #806) — overwrite one backup instead of
-    # accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
-    BACKUP_PATH="${GH_CONFIG_TARGET}.original"
-    rm -f "$BACKUP_PATH"
-    ux_warning "기존 config.yml 백업: ${BACKUP_PATH}"
-    mv "$GH_CONFIG_TARGET" "$BACKUP_PATH"
-fi
-
-ln -s "$GH_CONFIG_SOURCE" "$GH_CONFIG_TARGET" || { ux_error "심볼릭 링크 생성 실패"; exit 1; }
-ux_success "심볼릭 링크 생성: $GH_CONFIG_TARGET -> $GH_CONFIG_SOURCE"
+# Same link -> no-op; real file -> backed up to config.yml.original (#806, #2138).
+dotfiles_ensure_link "$GH_CONFIG_SOURCE" "$GH_CONFIG_TARGET" || exit 1
+ux_success "심볼릭 링크: $GH_CONFIG_TARGET -> $GH_CONFIG_SOURCE"
 
 ux_success "GitHub CLI (gh) dotfiles setup 완료"
 exit 0

@@ -75,24 +75,26 @@ EOF
     [ "$(readlink "${HOME}/.config/herdr/config.toml")" = "$real_src" ]
 }
 
-@test "config symlink: idempotent re-run reports already correct" {
+@test "config symlink: idempotent re-run re-creates nothing" {
     stub_herdr_all_present
     run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
     assert_success
     run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
     assert_success
-    assert_output --partial "Symlink already correct"
+    # dotfiles_ensure_link is a silent no-op on a correct link (#2138).
+    refute_output --partial "symlink: "
+    refute_output --partial "backed up"
 }
 
-@test "config symlink: pre-existing plain file is backed up with fixed .backup suffix" {
+@test "config symlink: pre-existing plain file is backed up with fixed .original suffix" {
     stub_herdr_all_present
     mkdir -p "${HOME}/.config/herdr"
     printf 'old = true\n' > "${HOME}/.config/herdr/config.toml"
     run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
     assert_success
     [ -L "${HOME}/.config/herdr/config.toml" ]
-    [ -f "${HOME}/.config/herdr/config.toml.backup" ]
-    grep -q 'old = true' "${HOME}/.config/herdr/config.toml.backup"
+    [ -f "${HOME}/.config/herdr/config.toml.original" ]
+    grep -q 'old = true' "${HOME}/.config/herdr/config.toml.original"
 }
 
 @test "plugin bootstrap: HERDR_SKIP_PLUGINS=1 skips without touching herdr" {

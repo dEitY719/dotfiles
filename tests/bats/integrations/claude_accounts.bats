@@ -202,7 +202,9 @@ LOCAL
     ln -s "$HOME/src/file.txt" "$HOME/tgt-dir/link"
     run_in_bash "_claude_ensure_symlink '$HOME/src/file.txt' '$HOME/tgt-dir/link'"
     assert_success
-    assert_output --partial "already"
+    # dotfiles_ensure_link is a silent no-op on an already-correct link (#2138).
+    refute_output --partial "symlink:"
+    [ "$(readlink "$HOME/tgt-dir/link")" = "$HOME/src/file.txt" ]
 }
 
 @test "bash: _claude_ensure_symlink backs up regular file collision" {
@@ -436,7 +438,8 @@ SH
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
     run_in_bash 'CLAUDE_SKIP_BIND_MOUNT=1 claude_accounts_init'
     assert_success
-    assert_output --partial "already"
+    # Second run re-creates no link (#2138: correct links are silent no-ops).
+    refute_output --partial "symlink:"
 }
 
 # ---------- Task 6: status ----------
@@ -1003,7 +1006,8 @@ _setup_sh_prereqs() {
     run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
     run_in_bash "CLAUDE_SKIP_BIND_MOUNT=1 CLAUDE_SKIP_SUDOERS=1 bash '${DOTFILES_ROOT}/claude/setup.sh'"
     assert_success
-    assert_output --partial "already"
+    # Second run re-creates no link (#2138: correct links are silent no-ops).
+    refute_output --partial "symlink:"
 }
 
 # ---------- Regression: issue #296 ----------
@@ -1318,7 +1322,12 @@ _seed_ssot_skills() {
     export FAKE_DOTFILES_ROOT="$HOME/fake-dotfiles"
     export FAKE_WORKSPACE_ROOT="$HOME/fake-workspace"
     rm -rf "$FAKE_DOTFILES_ROOT" "$FAKE_WORKSPACE_ROOT"
-    mkdir -p "$FAKE_DOTFILES_ROOT/claude/docs"
+    # Every link source _claude_account_setup_one expects: dotfiles_ensure_link
+    # refuses a missing source instead of leaving a dangling link (#2138).
+    mkdir -p "$FAKE_DOTFILES_ROOT/claude/docs" "$FAKE_DOTFILES_ROOT/claude/global-memory" \
+        "$FAKE_DOTFILES_ROOT/claude/workflows"
+    touch "$FAKE_DOTFILES_ROOT/claude/statusline-command.sh" \
+        "$FAKE_DOTFILES_ROOT/claude/CLAUDE.md" "$FAKE_DOTFILES_ROOT/claude/keybindings.json"
     _seed_ws_skills "$@"
 }
 
@@ -1419,7 +1428,7 @@ run_with_fake_ssot() {
 
     run_with_fake_ssot '_claude_account_setup_one personal "$HOME/.claude-personal"'
     assert_success
-    assert_output --partial "already linked"
+    refute_output --partial "symlink:"
     refute_output --partial "removed workspace skill link"
     after="$(ls -la "$HOME/.claude-personal/skills")"
     [ "$before" = "$after" ]

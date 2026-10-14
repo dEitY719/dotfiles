@@ -39,7 +39,8 @@ _ssh_link() { readlink "$HOME/.ssh/config"; }
 
     run bash "$HOME/dotlink/ssh/setup.sh"
     assert_success
-    assert_output --partial "Symlink already correct"
+    # dotfiles_ensure_link is silent on an already-correct link (#2138).
+    refute_output --partial "symlink: "
     [ "$(_ssh_link)" = "$first" ]
 }
 
@@ -49,7 +50,7 @@ _ssh_link() { readlink "$HOME/.ssh/config"; }
     before="$(find "$HOME" -maxdepth 4 -type l -exec sh -c 'printf "%s -> %s\n" "$1" "$(readlink "$1")"' _ {} \; | sort)"
     run env -u DOTFILES_TEST_MODE bash "$MANAGER" init
     assert_success
-    refute_output --partial "Updating symlink"
+    refute_output --partial "symlink: "
     after="$(find "$HOME" -maxdepth 4 -type l -exec sh -c 'printf "%s -> %s\n" "$1" "$(readlink "$1")"' _ {} \; | sort)"
     [ "$before" = "$after" ]
     [[ "$after" == *".tmux.conf -> $REAL_ROOT/tmux/tmux.conf"* ]]

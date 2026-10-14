@@ -50,67 +50,11 @@ else
     exit 1
 fi
 
-# Latest-only backup policy (issue #806). SSOT for the fixed suffixes;
-# fallback defaults guard against a missing helper (an empty suffix would
-# overwrite the live target).
-if [ -f "${DOTFILES_ROOT}/shell-common/functions/dotfiles_backup.sh" ]; then
-    source "${DOTFILES_ROOT}/shell-common/functions/dotfiles_backup.sh"
-fi
-: "${DOTFILES_BACKUP_SUFFIX:=.backup}"
-: "${DOTFILES_ORIGINAL_SUFFIX:=.original}"
-
-# --- Logging Compatibility Functions ---
-
-# Legacy logging functions for consistency with bash/setup.sh
-log_info() { ux_info "$1"; }
-log_error() { ux_error "$1"; }
-log_critical() {
-    ux_error "$1"
-    exit 1
-}
-log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-# [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
-log_debug() {
-    [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
-    printf "%s[DEBUG] %s%s\n" "${UX_MUTED}" "$1" "${UX_RESET}"
-}
-log_warning() { ux_warning "$1"; }
-
-# --- Functions ---
-
-log_error_and_exit() {
-    log_critical "$1"
-}
-
-backup_file() {
-    local file_to_backup="$1"
-    local backup_destination="$2"
-    if [ -e "$file_to_backup" ]; then
-        log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
-        cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
-    fi
-}
-
-create_symlink() {
-    local target="$1"
-    local link_name="$2"
-
-    if [ -L "$link_name" ]; then
-        log_dim "기존 심볼릭 링크 제거: $link_name"
-        rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
-    elif [ -f "$link_name" ]; then
-        log_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
-        local backup_path="${link_name}${DOTFILES_ORIGINAL_SUFFIX}"
-        backup_file "$link_name" "$backup_path"
-        rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
-        if [ "$link_name" = "$HOME_ZSHRC" ]; then
-            ZSHRC_BACKUP_NOTICE_PATH="$backup_path"
-        fi
-    fi
-
-    log_info "심볼릭 링크 생성: $link_name -> $target"
-    ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
-}
+# Idempotent link + latest-only backup lib (#806, #2138). It also loads
+# dotfiles_backup.sh (suffix SSOT) and the log_info/log_error/log_warning/
+# log_error_and_exit shims used below.
+SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 # --- Main Script Logic ---
 
@@ -121,8 +65,14 @@ if [ ! -f "$ZSH_ZSHRC_SOURCE" ]; then
     log_error_and_exit "zshrc 파일이 '${ZSH_ZSHRC_SOURCE}' 경로에 존재하지 않습니다. 파일을 먼저 생성해주세요."
 fi
 
-# ~/.zshrc 를 심볼릭 링크로 생성
-create_symlink "$ZSH_ZSHRC_SOURCE" "$HOME_ZSHRC"
+# ~/.zshrc 를 심볼릭 링크로 생성 (일반 파일이면 .original 로 백업 — #761 안내 대상)
+_zshrc_was_file=0
+[ -e "$HOME_ZSHRC" ] && [ ! -L "$HOME_ZSHRC" ] && _zshrc_was_file=1
+dotfiles_ensure_link "$ZSH_ZSHRC_SOURCE" "$HOME_ZSHRC" ||
+    log_error_and_exit "심볼릭 링크 생성 실패: $HOME_ZSHRC"
+if [ "$_zshrc_was_file" = 1 ] && [ -L "$HOME_ZSHRC" ]; then
+    ZSHRC_BACKUP_NOTICE_PATH="${HOME_ZSHRC}${DOTFILES_ORIGINAL_SUFFIX}"
+fi
 
 # Seed ~/.zshrc.local (untracked, PC-specific overrides). Issue #737 —
 # installer side-effects (bun, nvm, …) must NOT land in the tracked
@@ -156,7 +106,8 @@ P10K_SOURCE="${ZSH_DOTFILES}/app/p10k.zsh"
 HOME_P10K="${HOME}/.p10k.zsh"
 
 if [ -f "$P10K_SOURCE" ]; then
-    create_symlink "$P10K_SOURCE" "$HOME_P10K"
+    dotfiles_ensure_link "$P10K_SOURCE" "$HOME_P10K" ||
+        log_error_and_exit "심볼릭 링크 생성 실패: $HOME_P10K"
 else
     log_warning "경고: p10k.zsh 파일이 '${P10K_SOURCE}' 경로에 없습니다. ~/.p10k.zsh를 생성하지 않습니다."
 fi

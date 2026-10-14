@@ -31,6 +31,7 @@ setup() {
         "$FIXTURE_DOTFILES/shell-common/tools/ux_lib"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/setup.sh" \
        "$FIXTURE_DOTFILES/shell-common/setup.sh"
+    copy_setup_lib "$FIXTURE_DOTFILES/shell-common"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh" \
        "$FIXTURE_DOTFILES/shell-common/tools/ux_lib/ux_lib.sh"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/env/claude.local.example" \

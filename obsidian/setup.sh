@@ -12,6 +12,8 @@ DOTFILES_ROOT="${_SCRIPT_DIR%/obsidian}"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 OBSIDIAN_BIN_SRC="${_SCRIPT_DIR}/bin/obsidian"
 BIN_DIR="${HOME}/.local/bin"
@@ -28,21 +30,6 @@ fi
 # Source must be executable for the symlink to be runnable.
 chmod +x "${OBSIDIAN_BIN_SRC}"
 
-# Handle existing symlink or file.
-if [ -L "${OBSIDIAN_BIN_LINK}" ]; then
-	current_target=$(readlink "${OBSIDIAN_BIN_LINK}")
-	if [ "${current_target}" = "${OBSIDIAN_BIN_SRC}" ]; then
-		ux_success "Symlink already correct: ~/.local/bin/obsidian → ${OBSIDIAN_BIN_SRC}"
-		exit 0
-	fi
-	ux_info "Updating symlink (was: ${current_target})"
-	rm "${OBSIDIAN_BIN_LINK}"
-elif [ -e "${OBSIDIAN_BIN_LINK}" ]; then
-	backup="${OBSIDIAN_BIN_LINK}.backup"
-	rm -f "${backup}"
-	ux_info "Backing up existing file: ${backup}"
-	mv "${OBSIDIAN_BIN_LINK}" "${backup}"
-fi
-
-ln -s "${OBSIDIAN_BIN_SRC}" "${OBSIDIAN_BIN_LINK}"
-ux_success "Created: ~/.local/bin/obsidian → ${OBSIDIAN_BIN_SRC}"
+# Same link -> no-op; real file -> backed up to obsidian.original (#2138).
+dotfiles_ensure_link "${OBSIDIAN_BIN_SRC}" "${OBSIDIAN_BIN_LINK}" || exit 1
+ux_success "Linked: ~/.local/bin/obsidian → ${OBSIDIAN_BIN_SRC}"

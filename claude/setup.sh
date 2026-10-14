@@ -105,6 +105,12 @@ log_error_and_exit() {
     log_critical "$1"
 }
 
+# Idempotent link lib (#2137, #2138): dotfiles_ensure_link replaces the former
+# _single_account_ensure_link. Its log_* shims only fill gaps, so the
+# definitions above keep their format.
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${DOTFILES_ROOT}/shell-common/lib/setup/link.sh" || exit 1
+
 # Load mount utilities (provides _is_mounted).
 #
 # shell-common/functions/mount.sh has the standard interactive guard:
@@ -598,55 +604,6 @@ _migrate_legacy_plugin_paths
 # /sandbox 의존성 점검 (issue #340).
 _check_socat_for_sandbox
 
-# Single-account symlink helper for internal-PC mode (issue #571, F-1).
-# Idempotent: correct target → no-op; wrong target → recreate; legacy
-# bind-mount → unmount + symlink; existing regular file/dir → timestamped
-# backup then symlink.
-_single_account_ensure_link() {
-    local src="$1" tgt="$2"
-    if [ -L "$tgt" ]; then
-        if [ "$(readlink "$tgt")" = "$src" ]; then
-            log_dim "  ✓ already linked: $tgt → $src"
-            return 0
-        fi
-        rm -f "$tgt"
-        log_warning "  symlink target mismatch — recreating: $tgt"
-    elif _is_mounted "$tgt"; then
-        # Legacy multi-account-era bind mount surviving on a single-account
-        # internal PC. `mv` would fail with EBUSY because the kernel refuses
-        # to rename a mount point. Unmount first, then fall through to the
-        # normal `ln -s` path below. The mount source typically already
-        # points at the same dotfiles SSOT, so the swap is content-neutral.
-        log_warning "  bind-mount detected at $tgt — unmounting (sudo may prompt)"
-        if ! sudo umount "$tgt"; then
-            log_error "  unmount 실패: $tgt"
-            log_error "  수동 복구: sudo umount '$tgt' && rmdir '$tgt' && ./setup.sh"
-            return 1
-        fi
-        log_dim "  ✓ unmounted: $tgt"
-        # The bind mask is gone; the empty underlying directory is back.
-        # Remove it so the symlink below can take its place.
-        rmdir "$tgt" 2>/dev/null || true
-    elif [ -e "$tgt" ]; then
-        local backup
-        # Latest-only fixed suffix (issue #806) — overwrite one backup instead
-        # of accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
-        backup="${tgt}.backup"
-        rm -rf "$backup"
-        mv "$tgt" "$backup" || {
-            log_error "backup failed: $tgt → $backup"
-            return 1
-        }
-        log_warning "  backed up: $tgt → $backup"
-    fi
-    mkdir -p "$(dirname "$tgt")"
-    ln -s "$src" "$tgt" || {
-        log_error "symlink failed: $tgt → $src"
-        return 1
-    }
-    log_info "  symlink: $tgt → $src"
-}
-
 # Internal-PC single-account branch (issue #571, F-1; updated for #584, #683, #687).
 # Direct-symlink the dotfiles SSOT into ~/.claude/ — no claude-accounts,
 # no ~/.claude-personal, no ~/.claude-work.
@@ -671,7 +628,7 @@ if [ "$_setup_mode" = "internal" ]; then
     _claude_install_herdr_hook "$HOME/.claude"
     # F-7b (#1364): restore only the drift-heal hook's own registration.
     bash "$DOTFILES_ROOT/claude/tools/register-drift-hook.sh" || true
-    _single_account_ensure_link "$CLAUDE_STATUSLINE_SOURCE"             "$HOME_STATUSLINE"
+    dotfiles_ensure_link "$CLAUDE_STATUSLINE_SOURCE" "$HOME_STATUSLINE" --allow-dir --unmount-legacy
     # skills/ stays a real directory (issue #707, F-8) so externally added
     # symlinks can be layered into it, but workspace skills are NOT composed:
     # Claude Code loads them via plugins (claude/plugin/plugins.json,
@@ -680,14 +637,14 @@ if [ "$_setup_mode" = "internal" ]; then
     # not go through _claude_account_setup_one, so the call has to be
     # repeated here — internal PCs are single-account by design.
     _claude_prune_workspace_skills "$HOME_SKILLS"
-    _single_account_ensure_link "$CLAUDE_DOCS_SOURCE"                   "$HOME_DOCS"
-    _single_account_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE"          "$HOME_GLOBAL_MEMORY"
-    _single_account_ensure_link "$HOME/.claude-shared/plugins"          "$HOME/.claude/plugins"
-    _single_account_ensure_link "$CLAUDE_WORKFLOWS_SOURCE"              "$HOME_WORKFLOWS"
-    _single_account_ensure_link "$CLAUDE_MD_SOURCE"                     "$HOME_CLAUDE_MD"
+    dotfiles_ensure_link "$CLAUDE_DOCS_SOURCE" "$HOME_DOCS" --allow-dir --unmount-legacy
+    dotfiles_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE" "$HOME_GLOBAL_MEMORY" --allow-dir --unmount-legacy
+    dotfiles_ensure_link "$HOME/.claude-shared/plugins" "$HOME/.claude/plugins" --allow-dir --unmount-legacy
+    dotfiles_ensure_link "$CLAUDE_WORKFLOWS_SOURCE" "$HOME_WORKFLOWS" --allow-dir --unmount-legacy
+    dotfiles_ensure_link "$CLAUDE_MD_SOURCE" "$HOME_CLAUDE_MD" --allow-dir --unmount-legacy
     # Claude Code hot-reloads keybindings.json; ctrl+j → chat:sendNow
     # because terminals send LF for Ctrl+Enter.
-    _single_account_ensure_link "$CLAUDE_KEYBINDINGS_SOURCE"            "$HOME_KEYBINDINGS"
+    dotfiles_ensure_link "$CLAUDE_KEYBINDINGS_SOURCE" "$HOME_KEYBINDINGS" --allow-dir --unmount-legacy
 
     # --- Verify Links (single-account) ---
     # settings.json is intentionally absent from this list — gateway-cli
