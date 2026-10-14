@@ -94,7 +94,7 @@ _skill_workspace_dirs() {
 # _skill_under_workspace <path> [root [real_root]] — rc 0 when <path> lies
 # strictly inside the workspace root, under its raw or resolved spelling.
 #
-# The one "is this link ours?" rule both consumers above delete by (#2147):
+# The one "is this link ours?" rule both consumers delete by (#2147):
 # setup-skills-ssot.sh's skill_source_is_managed passes the root pair it
 # resolved once (no fork per call); the Claude Code account lib omits them
 # and gets _skill_workspace_root, so a missing / too-broad root means "not
