@@ -437,6 +437,9 @@ _pmt_backoff_write() {
 _pmt_backoff_gate() {
     local _target="$1" _file _verdict _action="" _window="" _remaining=""
 
+    # No fingerprint is no evidence: run, record nothing, and skip the python spawn.
+    [ -n "${_PMT_FINGERPRINT}" ] || return 1
+
     _file="$(_pmt_backoff_file)"
 
     # The verdict itself is the `backoff-next` op (dotfiles_tools.merge_train.queue):
