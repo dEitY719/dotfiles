@@ -54,3 +54,50 @@ run_main_first_step_fails() {
     run cat "$HOME/.dotfiles-setup-mode"
     assert_output "internal"
 }
+
+# --mode / DOTFILES_SETUP_MODE (#2140): no stdin needed, arg beats env.
+run_main_mode() {
+    run bash --noprofile --norc -c "
+        cd '$FX/shell-common'
+        . './setup.sh'
+        cleanup_local_files() { return 1; }
+        main $1
+    " </dev/null
+}
+
+@test "--mode writes the mode without reading stdin" {
+    for m in public internal external; do
+        run_main_mode "--mode $m"
+        run cat "$HOME/.dotfiles-setup-mode"
+        assert_output "$m"
+    done
+}
+
+@test "--mode=<m> form and legacy 1|2|3 alias are accepted" {
+    run_main_mode "--mode=external"
+    run cat "$HOME/.dotfiles-setup-mode"
+    assert_output "external"
+    run_main_mode "--mode 2"
+    run cat "$HOME/.dotfiles-setup-mode"
+    assert_output "internal"
+}
+
+@test "DOTFILES_SETUP_MODE env is used when --mode is absent" {
+    DOTFILES_SETUP_MODE=internal run_main_mode ""
+    run cat "$HOME/.dotfiles-setup-mode"
+    assert_output "internal"
+}
+
+@test "--mode wins over DOTFILES_SETUP_MODE env" {
+    DOTFILES_SETUP_MODE=internal run_main_mode "--mode public"
+    run cat "$HOME/.dotfiles-setup-mode"
+    assert_output "public"
+}
+
+@test "unknown --mode fails and keeps the existing mode file" {
+    echo internal >"$HOME/.dotfiles-setup-mode"
+    run_main_mode "--mode bogus"
+    assert_failure
+    run cat "$HOME/.dotfiles-setup-mode"
+    assert_output "internal"
+}
