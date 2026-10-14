@@ -213,11 +213,11 @@ pacman -S --noconfirm z-pkg"
     assert_output "brew install fd"
 }
 
-@test "pkg_install: no usable manager errors and returns 1 without installing" {
+@test "pkg_install: no usable manager errors and returns 2 without installing" {
     make_pkg_stubs "yum"
     run_pkg_install "apt=a brew=b"
-    assert_output --partial "ERR: No supported package manager found"
-    assert_output --partial "rc=1 mgr="
+    assert_output --partial "ERR: No supported package manager found (need one of: apt brew)"
+    assert_output --partial "rc=2 mgr="
     run cat "$CALL_LOG"
     assert_output ""
 }
@@ -231,9 +231,48 @@ pacman -S --noconfirm z-pkg"
 
 # zsh_autosuggestions is left out: its "install zsh first" hint names apt-get/brew.
 @test "simple install_* scripts call no package manager directly (#2145)" {
-    run grep -nE 'OSTYPE|(apt-get|yum|dnf|pacman|brew) (install|-S)' \
+    run grep -nE 'OSTYPE|apt-get|(yum|dnf|brew) install|pacman -S' \
         "$TOOLS_DIR"/install_{fd,ripgrep,bat,fzf,fasd,pet}.sh
     assert_output ""
+}
+
+# --- callers' fallback contract (#2145 review) ---------------------------------
+
+# Source an install script without running it ($0 is not the script name) and
+# replace pkg_install / the fallbacks with doubles.
+run_installer_fn() {
+    run bash -c "
+        cd '$TOOLS_DIR' || exit 99
+        export DOTFILES_TEST_MODE=1 HOME='$HOME'
+        set -e
+        . ./$1 >/dev/null || exit 98
+        $2
+    "
+}
+
+@test "zsh_autosuggestions: git fallback only when no manager (rc 2), real failure aborts" {
+    run_installer_fn install_zsh_autosuggestions.sh '
+        pkg_install() { return 2; }
+        _install_git_method() { echo git-method; }
+        _install_zsh_autosuggestions'
+    assert_success
+    assert_output --partial "git-method"
+
+    run_installer_fn install_zsh_autosuggestions.sh '
+        pkg_install() { return 100; }
+        _install_git_method() { echo git-method; }
+        _install_zsh_autosuggestions'
+    assert_failure 100
+    refute_output --partial "git-method"
+}
+
+@test "pet: any package-manager failure falls back to the GitHub release" {
+    run_installer_fn install_pet.sh '
+        pkg_install() { return 100; }
+        _install_pet_from_github() { echo "github $1"; }
+        _install_pet'
+    assert_success
+    assert_output --partial "github linux"
 }
 
 # --- static regression guard ---------------------------------------------------

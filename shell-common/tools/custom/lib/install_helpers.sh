@@ -46,9 +46,10 @@ verify_installed_binary() {
 # the order the old per-script branches checked them: apt(-get), yum, dnf,
 # pacman, brew. System managers run under sudo unless already root; brew never
 # does. Sets PKG_INSTALL_MANAGER to the manager used. No usable manager:
-# ux_error + return 1; otherwise returns the install command's status.
+# ux_error + return 2, so a caller can fall back on that alone; otherwise
+# returns the install command's status (none of the managers exits 2).
 pkg_install() {
-    local mgr bin spec pkg sudo=""
+    local mgr bin spec pkg names="" sudo=""
     PKG_INSTALL_MANAGER=""
     [ "$(id -u)" -eq 0 ] || sudo=sudo
     for mgr in apt yum dnf pacman brew; do
@@ -71,6 +72,7 @@ pkg_install() {
         esac
         return
     done
-    ux_error "No supported package manager found (need one of: $*)"
-    return 1
+    for spec in "$@"; do names="$names ${spec%%=*}"; done
+    ux_error "No supported package manager found (need one of:$names)"
+    return 2
 }
