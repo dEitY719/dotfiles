@@ -118,4 +118,3 @@ _migrate_account_id_file() {
         && chmod 600 "$HOME/.dotfiles-account-id" 2>/dev/null
     return 0
 }
-

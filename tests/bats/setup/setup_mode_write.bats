@@ -102,6 +102,16 @@ run_main_mode() {
     assert_output "internal"
 }
 
+@test "empty --mode value is rejected, not silently replaced by env or menu" {
+    echo internal >"$HOME/.dotfiles-setup-mode"
+    DOTFILES_SETUP_MODE=external run_main_mode "--mode ''"
+    assert_failure
+    DOTFILES_SETUP_MODE=external run_main_mode "--mode="
+    assert_failure
+    run cat "$HOME/.dotfiles-setup-mode"
+    assert_output "internal"
+}
+
 @test "unknown --mode fails and keeps the existing mode file" {
     echo internal >"$HOME/.dotfiles-setup-mode"
     run_main_mode "--mode bogus"
