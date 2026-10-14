@@ -13,7 +13,7 @@
 #   claude/hooks/plugin-sync.sh     _read_json_or            (local function)
 #   claude/plugin/restore.sh        inlined at the call site
 #   shell-common/functions/plugin_sync_title.sh
-#                                   _plugin_sync_read_json_or
+#                                   _plugin_sync_read_json_or (dropped, #2181)
 #
 # They agreed by accident, not by construction. This file is the one copy the
 # rule is now maintained in; all four files above source it and keep only a
