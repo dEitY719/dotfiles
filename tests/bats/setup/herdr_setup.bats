@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/setup/herdr_setup.bats
-# Coverage for herdr/setup.sh — the config symlink is hard-fail, the plugin
+# Coverage for herdr/setup.sh — the config source check is hard-fail, the plugin
 # and external-tool bootstraps (Parts 2-3) are soft-fail and must never abort
 # the parent `./setup.sh` (which runs under `set -e`).
 #
@@ -66,38 +66,13 @@ EOF
     assert_output --partial "Source config not found"
 }
 
-@test "config symlink: fresh HOME creates the symlink to the real source" {
+@test "config symlink: herdr/setup.sh leaves the link to symlinks.conf (#2139)" {
     stub_herdr_all_present
     run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
     assert_success
-    [ -L "${HOME}/.config/herdr/config.toml" ]
-    real_src="${_BATS_REAL_DOTFILES_ROOT}/herdr/config.toml"
-    [ "$(readlink "${HOME}/.config/herdr/config.toml")" = "$real_src" ]
-}
-
-@test "config symlink: idempotent re-run re-creates nothing" {
-    stub_herdr_all_present
-    run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
-    assert_success
-    inode_before=$(stat -c %i "${HOME}/.config/herdr/config.toml")
-    run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
-    assert_success
-    # Same inode: the link was left in place, not removed and re-created.
-    assert_equal "$(stat -c %i "${HOME}/.config/herdr/config.toml")" "$inode_before"
-    # dotfiles_ensure_link is a silent no-op on a correct link (#2138).
-    refute_output --partial "symlink: "
-    refute_output --partial "backed up"
-}
-
-@test "config symlink: pre-existing plain file is backed up with fixed .original suffix" {
-    stub_herdr_all_present
-    mkdir -p "${HOME}/.config/herdr"
-    printf 'old = true\n' > "${HOME}/.config/herdr/config.toml"
-    run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
-    assert_success
-    [ -L "${HOME}/.config/herdr/config.toml" ]
-    [ -f "${HOME}/.config/herdr/config.toml.original" ]
-    grep -q 'old = true' "${HOME}/.config/herdr/config.toml.original"
+    # The ./setup.sh `symlinks` step owns ~/.config/herdr/config.toml; link,
+    # idempotence and backup behavior are covered in tools/symlink_manager.bats.
+    [ ! -e "${HOME}/.config/herdr/config.toml" ]
 }
 
 @test "plugin bootstrap: HERDR_SKIP_PLUGINS=1 skips without touching herdr" {

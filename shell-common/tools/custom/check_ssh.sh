@@ -115,7 +115,7 @@ check_ssh_link() {
     ux_header "3. SSH Config Symlink"
 
     local dotfiles_config
-    dotfiles_config="$(cd "$DOTFILES_ROOT" && pwd -P)/ssh/config" # same physical path ssh/setup.sh links
+    dotfiles_config="$(cd "$DOTFILES_ROOT" && pwd -P)/ssh/config" # same physical path symlink-manager.sh links (symlinks.conf)
     local ssh_config_link="${WSL_SSH_DIR}/config"
 
     ux_section "Status"
@@ -144,7 +144,7 @@ check_ssh_link() {
     fi
     echo ""
 
-    ux_info "Run 'bash ${DOTFILES_ROOT}/ssh/setup.sh' to fix"
+    ux_info "Run 'bash ${DOTFILES_ROOT}/shell-common/tools/custom/symlink-manager.sh init' to fix"
     echo ""
 }
 

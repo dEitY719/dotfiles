@@ -1,16 +1,18 @@
 #!/bin/bash
 # herdr/setup.sh: herdr config activation + plugin bootstrap
 #
-# PURPOSE: Make a fresh machine's herdr match this repo — symlink the tracked
-#          config, install the plugins whose actions that config binds keys to,
-#          and install the external binaries those bindings shell out to.
+# PURPOSE: Make a fresh machine's herdr match this repo — install the plugins
+#          whose actions the tracked config binds keys to, and the external
+#          binaries those bindings shell out to.
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
-# SSOT: Symlink target declared in shell-common/config/symlinks.conf
+# SSOT: The ~/.config/herdr/config.toml link is a row in
+#       shell-common/config/symlinks.conf, made by ./setup.sh's `symlinks`
+#       step, which runs before this one (#2139).
 #       Plugin list declared in herdr/plugins.conf
 #       External tool list declared in herdr/tools.conf
 #
-# Failure policy: Part 1 (config symlink) hard-fails — a missing source means a
-# dangling link and herdr silently reverting to its defaults. Parts 2-4 soft-fail:
+# Failure policy: Part 1 (config source check) hard-fails — a missing source
+# means a dangling link and herdr silently reverting to its defaults. Parts 2-4 soft-fail:
 # they reach GitHub over a proxied corporate network and can fail for reasons this
 # script cannot fix, and everything they provide degrades gracefully (a missing
 # plugin makes its keybinding inert, a missing renderer drops the viewer to plain
@@ -28,33 +30,21 @@ source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 . "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 HERDR_CONFIG_SRC="${_SCRIPT_DIR}/config.toml"
-HERDR_CONFIG_DIR="${HOME}/.config/herdr"
-HERDR_CONFIG_LINK="${HERDR_CONFIG_DIR}/config.toml"
 HERDR_PLUGINS_CONF="${_SCRIPT_DIR}/plugins.conf"
 HERDR_TOOLS_CONF="${_SCRIPT_DIR}/tools.conf"
 
 ux_header "herdr Config Setup"
 
 # ============================================================================
-# Part 1: config symlink (hard-fail)
+# Part 1: config source check (hard-fail)
 # ============================================================================
 
-# The source must exist; without it the symlink would dangle and herdr would
-# silently fall back to its built-in defaults (no custom keybindings).
+# The source must exist; without it the symlinks.conf link would dangle and
+# herdr would silently fall back to its built-in defaults (no custom keybindings).
 if [ ! -f "${HERDR_CONFIG_SRC}" ]; then
 	ux_error "Source config not found: ${HERDR_CONFIG_SRC}"
 	exit 1
 fi
-
-# herdr creates this directory itself on first run, but setup.sh may run first.
-if [ ! -d "${HERDR_CONFIG_DIR}" ]; then
-	mkdir -p "${HERDR_CONFIG_DIR}" || { ux_error "Could not create: ${HERDR_CONFIG_DIR}"; exit 1; }
-	ux_success "Created: ~/.config/herdr"
-fi
-
-# Same link -> no-op; real file -> backed up to config.toml.original (#2138).
-dotfiles_ensure_link "${HERDR_CONFIG_SRC}" "${HERDR_CONFIG_LINK}" || exit 1
-if [ -L "${HERDR_CONFIG_LINK}" ]; then ux_success "Linked: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"; fi
 
 # ============================================================================
 # Part 2: plugin bootstrap (soft-fail)

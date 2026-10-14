@@ -147,6 +147,8 @@ main() {
     step_run bash critical ./bash/setup.sh
     step_run zsh critical ./zsh/setup.sh
     step_run git critical ./git/setup.sh
+    # symlinks.conf SSOT (#2139); before herdr, which reads its live config (#1855).
+    step_run symlinks optional ./shell-common/tools/custom/symlink-manager.sh init
     step_run obsidian optional ./obsidian/setup.sh # Obsidian CLI wrapper (#1023)
     step_run herdr optional ./herdr/setup.sh
     step_run hermes optional ./hermes/setup.sh # 1회 복사 (#1373)

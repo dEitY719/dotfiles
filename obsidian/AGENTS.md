@@ -41,9 +41,9 @@ REST backend 상세(자격증명 파일, 지원/미지원 서브커맨드), WSL 
 
 ## Wiring
 
-`obsidian/setup.sh` (called from the top-level `setup.sh`) symlinks
-`obsidian/bin/obsidian` → `~/.local/bin/obsidian`. SSOT for the link is declared
-in `shell-common/config/symlinks.conf`.
+The top-level `setup.sh` `symlinks` step links `obsidian/bin/obsidian` →
+`~/.local/bin/obsidian` from its row in `shell-common/config/symlinks.conf`
+(#2139); `obsidian/setup.sh` only keeps the wrapper executable.
 
 ## Overrides
 
