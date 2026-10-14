@@ -30,7 +30,7 @@ _call() {
         . '$SHELL_COMMON/tools/integrations/$2'
         SHELL_COMMON='$FAKE_SC'
         eval '$3'
-    "
+    " </dev/null
 }
 
 @test "new names and legacy aliases run the same installer (bash + zsh)" {
@@ -47,27 +47,51 @@ _call() {
 claude.sh claude_install clinstall install_claude
 claude.sh claude-install clinstall install_claude
 docker.sh docker_install dinstall install_docker
+docker.sh docker-install dinstall install_docker
 docker.sh docker_uninstall duninstall uninstall_docker
+docker.sh docker-uninstall duninstall uninstall_docker
 postgresql.sh postgresql_install pinstall install_postgresql
+postgresql.sh postgresql-install pinstall install_postgresql
 npm.sh npm_install npminstall install_npm
 npm.sh npm_uninstall npmuninstall uninstall_npm
 EOF
     done
 }
 
-@test "git.sh shared functions load in zsh, prompt block stays bash-only" {
+# Every function in git.sh's shared block, each pre-aliased the way an
+# oh-my-zsh-style plugin could: zsh must still define them all.
+_GIT_SHARED_FUNCS="gf git_rm_cached gupa gupdel glub gset git_lfs_install git_lfs_track"
+
+@test "git.sh shared functions load in zsh over same-named aliases, prompt block stays bash-only" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
     run zsh -f -c "
-        alias gsw='git switch' gf='git fetch' gupa='git pull --rebase --autostash'
+        for f in $_GIT_SHARED_FUNCS; do alias \$f='echo shadowed'; done
+        alias gsw='git switch'
         DOTFILES_FORCE_INIT=1
         . '$SHELL_COMMON/tools/integrations/git.sh'
-        whence -w git_lfs_install gf gupa gset _short_pwd gsw
-    "
-    [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
-    [[ "$output" == *"git_lfs_install: function"* ]]
-    [[ "$output" == *"gf: function"* ]]
-    [[ "$output" == *"gupa: function"* ]]
-    [[ "$output" == *"gset: function"* ]]
-    [[ "$output" == *"_short_pwd: none"* ]]
+        whence -w $_GIT_SHARED_FUNCS gsw
+        whence -w _short_pwd || echo 'no _short_pwd'
+        alias git-lfs-install glfs
+    " </dev/null
+    [ "$status" -eq 0 ]
+    for f in $_GIT_SHARED_FUNCS; do
+        [[ "$output" == *"$f: function"* ]] || { echo "$f not a function: $output"; false; }
+    done
     [[ "$output" == *"gsw: alias"* ]]
+    [[ "$output" == *"no _short_pwd"* ]]
+    [[ "$output" == *"git-lfs-install=git_lfs_install"* ]]
+}
+
+@test "git.sh loads the prompt block and gsw in bash" {
+    run bash --norc -c "
+        DOTFILES_FORCE_INIT=1 PROMPT_COMMAND=
+        . '$SHELL_COMMON/tools/integrations/git.sh'
+        type -t gsw _short_pwd __git_ps1 gf
+        printf 'PC=%s\n' \"\$PROMPT_COMMAND\"
+        case \"\$PS1\" in *_CACHED_SHORT_PWD*) echo ps1-ok ;; esac
+    " </dev/null
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s\n' "$output" | grep -c '^function$')" -eq 4 ]
+    [[ "$output" == *"PC=_update_prompt_cache"* ]]
+    [[ "$output" == *"ps1-ok"* ]]
 }
