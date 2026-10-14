@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/plugin_sync_session_hook.bats
+# tests/bats/claude_hooks/plugin_sync_session_hook.bats
 # claude/hooks/plugin-sync-session.sh — SSOT-diff path that catches the
 # built-in `/plugin` slash commands the PostToolUse+Bash hook misses (#1082).
 #

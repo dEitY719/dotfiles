@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/plugin_path_normalize_hook.bats
+# tests/bats/claude_hooks/session_start_plugin_path_normalize_hook.bats
 # claude/hooks/session-start-plugin-path-normalize.sh — rewrites plugin path
 # fields in the shared SSOT to the ACTIVE $CLAUDE_CONFIG_DIR spelling so that
 # Claude Code 2.1.199+'s literal-prefix installLocation check passes in every

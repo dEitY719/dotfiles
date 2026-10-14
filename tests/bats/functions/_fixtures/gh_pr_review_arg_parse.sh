@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh
+# tests/bats/functions/_fixtures/gh_pr_review_arg_parse.sh
 # Thin wrapper around the production SSOT for `gh_pr_review_parse`.
 # The arg-parse and KR-alias-normalization logic used to live here
 # (~142 lines) because the SKILL had no production shell function.
 # Issue #664 introduced `shell-common/functions/gh_pr_review.sh` as
 # the SSOT; this fixture now exists solely to expose the parser to
-# `tests/bats/skills/gh_pr_review_arg_parse.bats` under its historical
+# `tests/bats/functions/gh_pr_review_arg_parse.bats` under its historical
 # load path so neither the test suite nor downstream callers need to
 # change.
 

@@ -6,7 +6,7 @@
 # guards) without invoking real AI CLIs or the live GitHub API.
 #
 # The Step 1 arg-parser is already covered by
-# tests/bats/skills/gh_pr_review_arg_parse.bats (the fixture now
+# tests/bats/functions/gh_pr_review_arg_parse.bats (the fixture now
 # sources this same production file); this suite does NOT duplicate
 # those cases — it covers what the fixture cannot.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/session_start_settings_drift_hook.bats
+# tests/bats/claude_hooks/session_start_settings_drift_hook.bats
 # Verify the SessionStart hook documented in
 #   claude/hooks/session-start-settings-drift.sh (issue #1086)
 #

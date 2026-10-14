@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/plugin_sync_hook.bats
+# tests/bats/claude_hooks/plugin_sync_hook.bats
 # claude/hooks/plugin-sync.sh — install/marketplace add 병합(union) 경로 검증.
 # 삭제(uninstall/marketplace remove) 경로는 plugin_sync_hook_delete.bats.
 #

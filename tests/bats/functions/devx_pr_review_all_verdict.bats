@@ -546,7 +546,7 @@ EOF
 # marker text is TRUSTED from the pipeline login and IGNORED from anyone else.
 #
 # Mirrors the same suite for `_gh_pr_merge_train_review_passed_marker_sha`
-# (tests/bats/skills/gh_pr_merge_train_review_verdict_gate.bats, PR #1608).
+# (tests/bats/functions/gh_pr_merge_train_review_verdict_gate.bats, PR #1608).
 
 _comment() {
     jq -nc --arg login "$1" --arg body "$2" '{user: {login: $login}, body: $body}'

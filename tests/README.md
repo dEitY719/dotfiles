@@ -36,6 +36,8 @@ tests/
 │   │   ├── file_cleanup.bats  #   del_file, 기본 패턴
 │   │   ├── devx.bats          #   devx 함수, usage, 에러
 │   │   └── tmux_spawn.bats    #   tmux_spawn/teardown
+│   ├── claude_hooks/          # claude/hooks/* 훅 테스트
+│   ├── skills/                # 이전 보류된 skill 복사본 테스트 (skills/README.md)
 │   └── tools/                 # 커스텀 툴 드라이런
 │       └── custom_tools.bats  #   syntax, shebang, check_* 개별 검증
 │

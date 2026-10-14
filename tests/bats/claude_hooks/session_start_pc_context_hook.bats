@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/session_start_pc_context_hook.bats
+# tests/bats/claude_hooks/session_start_pc_context_hook.bats
 # Verify the SessionStart hook documented in
 #   claude/hooks/session-start-pc-context.sh (issue #1052)
 #

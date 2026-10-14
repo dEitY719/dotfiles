@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/post_bash_dispatch_hook.bats
+# tests/bats/claude_hooks/post_bash_dispatch_hook.bats
 # Verify the PostToolUse:Bash dispatcher documented in
 #   claude/hooks/post-bash-dispatch.sh
 # routes each event to the correct handler (or to none), forwarding the

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/post_gh_pr_create_hook.bats
+# tests/bats/claude_hooks/post_gh_pr_create_hook.bats
 # Verify the PostToolUse hook documented in
 #   claude/hooks/post-gh-pr-create.sh
 # Source-of-truth fixture: _fixtures/post_gh_pr_create_hook.sh

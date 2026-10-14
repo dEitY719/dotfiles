@@ -58,7 +58,7 @@ setup_isolated_home() {
     # consumer (statusline-command.sh, session-start-settings-drift.sh,
     # claude/tools/register-drift-hook.sh, …) would escape the sandbox and
     # write to the live config. Suites that need the override set it themselves
-    # (see tests/bats/skills/session_start_settings_drift_hook.bats).
+    # (see tests/bats/claude_hooks/session_start_settings_drift_hook.bats).
     unset CLAUDE_CONFIG_DIR
     # Same leak class: a developer's real DOTFILES_PLUGIN_SYNC_DISABLED=1
     # override (see CLAUDE.md personal-overrides section) would silently
@@ -218,7 +218,7 @@ run_in_bash() {
 # README.md advertises macOS support, and a GNU-only invocation here would
 # take every suite that builds `gh pr list` fixtures down on BSD. Shared by
 # every suite that needs one (tools/pr_merge_train_cron.bats,
-# skills/gh_pr_merge_train_quiet_period.bats, …) so the cascade lives once.
+# functions/gh_pr_merge_train_quiet_period.bats, …) so the cascade lives once.
 _epoch_to_iso() {
     local _epoch="$1" _out=""
     _out=$(date -u -d "@${_epoch}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) \

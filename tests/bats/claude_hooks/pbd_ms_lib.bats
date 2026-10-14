@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/pbd_ms_lib.bats
+# tests/bats/claude_hooks/pbd_ms_lib.bats
 # Unit coverage for claude/hooks/lib/pbd_ms.sh — the _pbd_ms epoch-milliseconds
 # helper the #1258 stage-timing instrumentation depends on.
 #

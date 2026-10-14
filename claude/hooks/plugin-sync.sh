@@ -127,7 +127,7 @@ MAIN_ROOT="$HOME/dotfiles"
 # subject, but the reader feeds `jq --argjson` for the merge itself: without it
 # the merged value comes out empty, _write_manifest refuses to write, and the
 # manifest update is lost silently. A stale install must still sync (pinned by
-# tests/bats/skills/plugin_sync_hook.bats "falls back to the bare subject when
+# tests/bats/claude_hooks/plugin_sync_hook.bats "falls back to the bare subject when
 # the title helper is unavailable", which asserts the commit still lands).
 # Behavior changes belong in shell-common/functions/claude_plugin_manifest.sh;
 # this copy follows it.

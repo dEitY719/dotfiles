@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_merge_train_review_verdict_gate.bats
+# tests/bats/functions/gh_pr_merge_train_review_verdict_gate.bats
 # The merge train's review verdict gate (#1564, umbrella #1527).
 # Source-of-truth fixture: _fixtures/gh_pr_merge_train_review_verdict_gate.sh
 # (the skill docs it used to mirror left this repo with #1680)
@@ -14,7 +14,7 @@
 
 load '../test_helper'
 
-FIXTURE='tests/bats/skills/_fixtures/gh_pr_merge_train_review_verdict_gate.sh'
+FIXTURE='tests/bats/functions/_fixtures/gh_pr_merge_train_review_verdict_gate.sh'
 
 setup() {
     setup_isolated_home
