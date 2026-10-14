@@ -10,7 +10,7 @@ teardown() {
 }
 
 @test "zsh: idempotent, links ~/.zshrc and seeds ~/.zshrc.local" {
-    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    [ -x /bin/zsh ] || skip "/bin/zsh not installed (script shebang)"
     run_module_setup zsh
     [ "$(readlink "$HOME/.zshrc")" = "${_BATS_REAL_DOTFILES_ROOT}/zsh/zshrc" ]
     [ -f "$HOME/.zshrc.local" ]

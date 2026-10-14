@@ -6,7 +6,7 @@
 
 | 위치 | 용도 | 누가 실행하나 |
 |------|------|---------------|
-| `scripts/` | 저장소 유지보수, CI/lint 게이트, root `setup.sh` 체인의 보조 스텝 | `mise` 태스크, CI, `setup.sh`, git hook — 사람이 셸에서 직접 부르는 도구가 아니다 |
+| `scripts/` | 저장소 유지보수, CI/lint 게이트, root `setup.sh` 체인의 보조 스텝 | `mise` 태스크, CI, `setup.sh`, git hook — 일상적으로 셸에서 부르는 도구가 아니다(1회성 이관·유지보수 스크립트는 사람이 수동 실행) |
 | `shell-common/tools/custom/` | 사용자가 셸에서 직접 실행하는 도구 (자동 source 안 됨) | 사람 |
 | `<module>/setup.sh` | 그 모듈 하나를 이 PC 에 수렴(링크·시드·확인) — 멱등 | root `setup.sh main()` (`scripts/lint_setup_steps.sh` 가 등록 여부 검사) |
 | `scripts/maintenance/` | 1회성/주기적 분석·정리 도구 | 사람 (수동) |

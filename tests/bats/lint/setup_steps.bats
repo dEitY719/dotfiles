@@ -14,7 +14,7 @@ setup() {
     cat >"$REPO/setup.sh" <<'EOF'
 main() {
     # step_run beta optional ./beta/setup.sh  (comment: not a registration)
-    step_run alpha critical ./alpha/setup.sh
+    step_run alpha critical ./alpha/setup.sh # trailing comment: not ./beta/setup.sh
 }
 EOF
     touch "$REPO/alpha/setup.sh" "$REPO/beta/setup.sh"
