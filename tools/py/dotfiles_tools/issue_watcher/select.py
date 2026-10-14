@@ -123,6 +123,16 @@ def repo_order(lines: list[str], last: str) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    # An unexpected JSON shape must read as "unreadable" (2), never as the
+    # uncaught-traceback exit 1, which handled-by-pr would take for "not handled".
+    try:
+        return _main(argv)
+    except Exception as exc:
+        print(f"select: unreadable input: {exc!r}", file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str]) -> int:
     if not argv:
         print(__doc__, file=sys.stderr)
         return 2
@@ -130,7 +140,11 @@ def main(argv: list[str]) -> int:
     raw = sys.stdin.read()
 
     if op == "repo-order":
-        for repo in repo_order(raw.splitlines(), args[0] if args else ""):
+        # split("\n"), not splitlines(): awk records end at LF only.
+        lines = raw.split("\n")
+        if lines[-1] == "":
+            lines.pop()
+        for repo in repo_order(lines, args[0] if args else ""):
             print(repo)
         return 0
 

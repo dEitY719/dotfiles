@@ -2948,7 +2948,7 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: missing python3 fails loudly and names the rollback" {
     _run_tick "PATH=$(_path_without python3)"
     assert_failure
-    assert_output --partial "python3 not found"
+    assert_output --partial "python3 (>= 3.10) not found"
     assert_output --partial "IW_SELECT_IMPL=shell"
 }
 

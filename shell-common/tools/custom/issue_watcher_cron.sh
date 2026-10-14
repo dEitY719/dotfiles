@@ -2957,8 +2957,11 @@ main() {
     fi
 
     # The candidate-selection ops run in Python unless rolled back (#2157).
-    if [ "${IW_SELECT_IMPL:-python}" = "python" ] && ! command -v python3 >/dev/null 2>&1; then
-        ux_error "python3 not found in PATH — cannot run the candidate selection."
+    # >= 3.10: handled-by-pr reads exit 1 as "not handled", so an older
+    # interpreter dying on import would silently dispatch a duplicate PR.
+    if [ "${IW_SELECT_IMPL:-python}" = "python" ] &&
+        ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
+        ux_error "python3 (>= 3.10) not found in PATH — cannot run the candidate selection."
         ux_info "Add python3 to the cron PATH, or set IW_SELECT_IMPL=shell to roll back to jq."
         exit 1
     fi
