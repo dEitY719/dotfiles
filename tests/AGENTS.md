@@ -1,7 +1,7 @@
 # Module Context
 
 - **Purpose**: Test suite validating bash/zsh compatibility, help system behavior, shell function correctness, and custom tool invariants.
-- **Scope**: `tests/` directory — bats shell unit tests, pytest integration tests, golden rules, and the runner for `git/tests/*.sh`.
+- **Scope**: `tests/` directory — bats shell unit tests, pytest integration tests, and golden rules (git hook integration cases are bats suites in `tests/bats/git/`).
 
 # Operational Commands
 
@@ -11,7 +11,7 @@
 - **Run Pytest Only**: `pytest tests/integration/`
 - **Single Pytest File**: `pytest tests/integration/test_help_topics.py -v`
 - **Run Golden Rules**: `bash tests/golden_rules/test_golden_rules.sh`
-- **Run Git Hook Tests**: `bash git/tests/test_hooks.sh` (also `test-pre-push.sh`, `test-prepare-commit-msg.sh`)
+- **Run Git Hook Tests**: `./tests/bats/lib/bats-core/bin/bats tests/bats/git` (`test_hooks_*.bats`, `test_pre_push_hook.bats`, `test_prepare_commit_msg.bats`)
 - **Full Lint Gate**: `mise run lint` (runs ruff, mypy, shellcheck, shfmt diff)
 
 # Test Structure
@@ -20,8 +20,7 @@
 tests/
 ├── AGENTS.md              # This file
 ├── README.md              # Detailed test documentation
-├── test                   # Unified runner: bats + pytest + golden rules + git hooks
-│                          #   (git/tests/*.sh, isolated HOME, GIT_HOOK_TEST_TIMEOUT=600)
+├── test                   # Unified runner: bats + pytest + golden rules
 ├── integration/           # Pytest integration tests (cross-shell parity)
 │   ├── conftest.py        # shell_runner fixture and environment isolation
 │   ├── test_compatibility.py

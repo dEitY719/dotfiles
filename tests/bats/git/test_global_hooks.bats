@@ -17,7 +17,7 @@
 #
 # Delegation behaviour (does the wrapper forward to the project hook, chain
 # git-lfs in LFS repos, and stay a no-op elsewhere) lives in
-# git/tests/test_hooks.sh.
+# test_hooks_global_wrappers.bats and test_hooks_global_lfs.bats.
 
 load '../test_helper'
 

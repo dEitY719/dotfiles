@@ -551,10 +551,8 @@ cat git/config/pre-push-rules.sh
 cat git/config/prepare-commit-msg-rules.sh
 
 # 테스트 실행:
-./tests/test   # git hooks 러너 단계가 git/tests/ 의 세 스크립트를 실행
-bash git/tests/test_hooks.sh
-bash git/tests/test-pre-push.sh
-bash git/tests/test-prepare-commit-msg.sh
+./tests/test   # bats 단계가 tests/bats/git/ 의 hook 스위트를 실행
+./tests/bats/lib/bats-core/bin/bats tests/bats/git   # hook 스위트만
 ```
 
 ---

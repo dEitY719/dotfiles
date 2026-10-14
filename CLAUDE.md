@@ -47,7 +47,7 @@ Output rule: `AGENTS.md` Golden Rules. Source: `shell-common/tools/ux_lib/ux_lib
 
 ### Git Hooks
 
-`git/` manages a 2-tier hook system. Config SSOT is `git/config/hook-config.sh`. Debug with `GIT_HOOKS_DEBUG=1 git commit -m "msg"`. `./tests/test` runs the hook tests (`git/tests/*.sh`); standalone: `bash git/tests/test_hooks.sh`.
+`git/` manages a 2-tier hook system. Config SSOT is `git/config/hook-config.sh`. Debug with `GIT_HOOKS_DEBUG=1 git commit -m "msg"`. Hook tests are bats suites under `tests/bats/git/` (`test_hooks_*.bats`, `test_pre_push_hook.bats`, `test_prepare_commit_msg.bats`), run by `./tests/test`; standalone: `./tests/bats/lib/bats-core/bin/bats tests/bats/git`.
 
 `git/hooks/pre-push` Layer 0 runs no tests by default (#2054) — opt in with `PRE_PUSH_TEST=1` (`mise run test-smoke`, <60s) or `PRE_PUSH_FULL_TEST=1` (full suite). The full suite gates PR creation instead: `_gh_pr_lint_run` (`shell-common/functions/gh_pr_lint.sh`, called by `gh-pr:create`) runs `mise run pr-gate` after lint when the repo defines that task (bypass `GH_PR_TEST_BYPASS=1`), and `mise run test` also runs non-blocking in CI (`test.yml`; SSOT `docs/.ssot/local-test-policy.md`). It also runs a protected-branch check (`master`, `release/*` — `main` is intentionally NOT protected so `git sync` can push it directly, #2033) plus an upstream leak guard (SSOT: `git/config/pre-push-rules.sh`). Upstream sync standard is `git sync`; `gcp scan` is the fallback only when history diverges widely again. The leak guard is inert until you export `UPSTREAM_REMOTES_ERE` and `LEAK_PATTERNS_ERE`; see `git/AGENTS.md` for the activation snippet and escape hatches.
 
