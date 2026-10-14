@@ -9,7 +9,6 @@
 #
 # Adding a check = adding one checks/<name>_check.sh file; this runner never
 # changes. Contract: git/doc/CHECK_REGISTRY.md.
-# Rollback (one release): GIT_HOOKS_LEGACY_DISPATCH=1 runs pre-commit.legacy.
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Configuration and setup
@@ -22,18 +21,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# setup.sh installs this hook as a .git/hooks/pre-commit symlink; resolve it so
-# the sibling pre-commit.legacy is found next to the real file.
-HOOK_SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
-HOOK_DIR="$(cd "$(dirname "$HOOK_SELF")" && pwd)"
 # The registry needs associative arrays (bash 4+); fail loudly instead of
 # half-running on an old bash (e.g. macOS /bin/bash 3.2).
 if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
     echo -e "${RED}✗ BLOCKING: git/hooks/pre-commit needs bash 4+ (found ${BASH_VERSION:-unknown})${NC}"
     exit 1
-fi
-if [ "${GIT_HOOKS_LEGACY_DISPATCH:-}" = "1" ]; then
-    exec "$HOOK_DIR/pre-commit.legacy" "$@"
 fi
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
