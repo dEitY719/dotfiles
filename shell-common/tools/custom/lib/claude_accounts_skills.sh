@@ -181,6 +181,19 @@ CASD_DIRS
     return 0
 }
 
+# _claude_ws_roots — resolve the workspace root pair once per loop into
+# _cws_root / _cws_rroot (both empty when skill_sources.sh is not loaded or
+# the root is unusable: then no link counts as a workspace link). Saves
+# _skill_under_workspace a root lookup + readlink fork per entry.
+_claude_ws_roots() {
+    _cws_root=""
+    _cws_rroot=""
+    command -v _skill_workspace_root >/dev/null 2>&1 || return 0
+    _cws_root=$(_skill_workspace_root) || _cws_root=""
+    [ -n "$_cws_root" ] || return 0
+    _cws_rroot=$(readlink -f "$_cws_root" 2>/dev/null || printf '%s' "$_cws_root")
+}
+
 # _claude_link_one <src_real> <name> <dry> <force> <targets> — fan one source
 # out into every target dir. rc 1 only when a link failed somewhere.
 _claude_link_one() {
@@ -232,6 +245,7 @@ CLO_TGTS
 # _claude_link_list <targets> — per account, the symlinks pointing outside the
 # workspace root (issue #1847 F-3); dangling ones are marked BROKEN.
 _claude_link_list() {
+    _claude_ws_roots
     while IFS= read -r _cll_tgt; do
         [ -n "$_cll_tgt" ] || continue
         ux_section "$_cll_tgt"
@@ -240,7 +254,9 @@ _claude_link_list() {
             [ -n "$_cll_l" ] || continue
             _cll_raw=$(readlink "$_cll_l")
             _cll_real=$(readlink -f "$_cll_l" 2>/dev/null || printf '%s' "$_cll_raw")
-            if _skill_under_workspace "$_cll_raw" || _skill_under_workspace "$_cll_real"; then
+            if [ -n "$_cws_root" ] &&
+                { _skill_under_workspace "$_cll_raw" "$_cws_root" "$_cws_rroot" ||
+                    _skill_under_workspace "$_cll_real" "$_cws_root" "$_cws_rroot"; }; then
                 continue
             fi
             if [ -e "$_cll_l" ]; then
@@ -303,6 +319,7 @@ claude_accounts_link() {
     fi
 
     _cal_land="$HOME/.claude/skills"
+    _claude_ws_roots
 
     # Explicit source: applied immediately (--dry-run previews).
     if [ -n "$_cal_src" ]; then
@@ -339,7 +356,8 @@ claude_accounts_link() {
         _cal_real=$(readlink -f "$_cal_e")
         # Workspace-backed entries are plugin-loaded in Claude Code and
         # setup prunes their flat links — never fan them out.
-        _skill_under_workspace "$_cal_real" && continue
+        [ -n "$_cws_root" ] &&
+            _skill_under_workspace "$_cal_real" "$_cws_root" "$_cws_rroot" && continue
         _cal_n="${_cal_e##*/}"
         # Already the same target in every account — nothing to plan.
         _cal_todo=0
