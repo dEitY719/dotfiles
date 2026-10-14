@@ -243,6 +243,37 @@ _claude_install_herdr_hook() {
     return 0
 }
 
+# _claude_link_table — Claude config dir 산출물 목록의 단일 SSOT (#2141).
+# 행 형식: src|rel-target|kind|modes
+#   src    DOTFILES_ROOT 기준 경로, @shared/<p> = $HOME/.claude-shared/<p>, dir 행은 -
+#   kind   link = symlink, copy = settings.json 실파일 복사 (#940),
+#          dir = 실디렉토리 + 워크스페이스 스킬 링크 정리 (#707, #1652)
+#   modes  all | multi | internal — internal 의 settings.json 은 gateway-cli 소유라
+#          multi 전용 (docs/.ssot/one-click-setup.md)
+# 소비자: _claude_link_apply (_claude_account_setup_one + claude/setup.sh 의
+# internal 분기) 와 claude/setup.sh 의 _phase_verify. 행 순서 = 검증 출력 순서.
+_claude_link_table() {
+    cat <<'EOF'
+claude/settings.json|settings.json|copy|multi
+claude/statusline-command.sh|statusline-command.sh|link|all
+claude/docs|docs|link|all
+@shared/plugins|plugins|link|all
+claude/global-memory|projects/GLOBAL/memory|link|all
+claude/workflows|workflows|link|all
+claude/CLAUDE.md|CLAUDE.md|link|all
+claude/keybindings.json|keybindings.json|link|all
+-|skills|dir|all
+EOF
+}
+
+# _claude_link_src <src> — 테이블 src 칸을 절대 경로로 푼다.
+_claude_link_src() {
+    case "$1" in
+    @shared/*) printf '%s\n' "$HOME/.claude-shared/${1#@shared/}" ;;
+    *) printf '%s\n' "${DOTFILES_ROOT}/$1" ;;
+    esac
+}
+
 # _claude_account_setup_one — 단일 계정의 link 멱등 셋업.
 #
 # skills/ 와 docs/ 는 SSOT 디렉토리 자체로의 단일 symlink 다 (issue #575).
