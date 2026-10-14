@@ -75,7 +75,10 @@ _hp_now() {
 _hp_acquire_lock() {
     if ! command -v cron_acquire_lock >/dev/null 2>&1; then
         # shellcheck source=/dev/null disable=SC3028,SC3054  # bash-only callers
-        . "$(dirname "${BASH_SOURCE[0]}")/cron_common.sh" || return 0
+        . "$(dirname "${BASH_SOURCE[0]}")/cron_common.sh" || {
+            ux_warning "cron_common.sh failed to load — running without single-instance protection"
+            return 0
+        }
     fi
     cron_acquire_lock "$1" "$2" "$3"
 }

@@ -16,6 +16,8 @@
 # loads ux_lib and exports SHELL_COMMON under DOTFILES_TEST_MODE=1 too, so the
 # per-script "SHELL_COMMON fallback + ux_lib reload" blocks are gone.
 # Resolves init.sh against $0, the same way every entrypoint always did.
+# Sourced from inside a function: init.sh must keep using plain assignments and
+# `export` at top level — a `local`/`declare` there would vanish on return.
 cron_bootstrap() {
     # shellcheck source=/dev/null
     . "$(dirname "$0")/init.sh"
