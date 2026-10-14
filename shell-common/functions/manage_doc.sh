@@ -420,5 +420,5 @@ if [ -z "${SHELL_COMMON:-}" ]; then
 fi
 
 # Help registry (#2135): skipped when sourced without util/help_registry.sh.
-command -v _register_help >/dev/null 2>&1 || return 0
+command -v _register_help >/dev/null 2>&1 || return 0 2>/dev/null || exit 0 # also run directly (see above)
 _register_help show_doc_help "[Docs] Documentation viewer" docs

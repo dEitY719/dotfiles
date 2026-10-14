@@ -132,3 +132,18 @@ FIXTURE_CHECK='
     assert_line --index 1 "1"
     assert_line "cat=cli"
 }
+
+# my_help.sh sourced on its own (preview helper, tests) has no loader: it loads
+# the registry and replays every functions/*.sh registration row, so topics
+# defined outside *_help.sh (gwt, del_file, mount) and _register_func rows stay.
+@test "bash: my_help.sh sourced alone still registers every topic and func" {
+    run bash --noprofile --norc -c "
+        export DOTFILES_FORCE_INIT=1 SHELL_COMMON='$DOTFILES_ROOT/shell-common' TERM=dumb
+        . '$DOTFILES_ROOT/shell-common/functions/my_help.sh' >/dev/null 2>&1
+        echo \"gwt=\${HELP_COMMAND_TO_CATEGORY[gwt]-none}\"
+        echo \"funcs=\$(_my_help_func_registry | wc -l)\"
+    "
+    assert_success
+    assert_line "gwt=development"
+    refute_line "funcs=0"
+}
