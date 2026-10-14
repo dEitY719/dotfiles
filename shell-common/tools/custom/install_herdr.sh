@@ -6,8 +6,9 @@
 # internal: herdr.dev is blocked by the corporate proxy, so download the GitHub
 #   release binary directly (Linux x86_64 only). Pin with HERDR_VERSION=v0.9.0.
 #
-# Config symlink, plugins and external tools (lazygit/glow/delta/bat) are
-# herdr/setup.sh's job — this script installs the binary only.
+# The config symlink is symlinks.conf's (./setup.sh `symlinks` step); plugins
+# and external tools (lazygit/glow/delta/bat) are herdr/setup.sh's job — this
+# script installs the binary only.
 #
 # Usage: install-herdr [--force]
 

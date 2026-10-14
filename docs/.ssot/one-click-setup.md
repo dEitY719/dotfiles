@@ -34,6 +34,12 @@ setup 체인에 편입한다.
   — 같은 링크면 no-op, 실파일은 `$DOTFILES_ORIGINAL_SUFFIX` 로 1회 백업(기존 백업은
   덮어쓰지 않음). 실파일로 두어야 하는 설정(settings.json, hermes)은
   `dotfiles_ensure_copy_once`, 디렉터리는 `dotfiles_ensure_dir`.
+- **새 symlink 는 `shell-common/config/symlinks.conf` 에 행을 추가한다** — 모듈
+  setup.sh 에 `ln -s` / `dotfiles_ensure_link` 로 링크 코드를 새로 쓰지 않는다.
+  root `setup.sh` 의 `symlinks` 스텝(optional, `git` 뒤 · `herdr` 앞)이
+  `symlink-manager.sh init` 으로 적용한다(#2139). 선택 4번째 칼럼:
+  `mode=public,external` / `on-mismatch=keep` / `allow-dir`. 모듈 setup.sh 에는
+  권한·실행비트 같은 부가 작업만 남긴다(ssh, obsidian, herdr).
 - `mode.sh`: `dotfiles_setup_mode_resolve [--mode m]` — `DOTFILES_SETUP_MODE` env >
   `--mode` > `~/.dotfiles-setup-mode`. `_dotfiles_setup_mode` 도 env 를 먼저 본다.
 - `runner.sh`: 아래 러너(`tools/ux_lib/step_runner.sh`)의 lib 진입점. `common.sh`:

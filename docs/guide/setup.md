@@ -163,6 +163,13 @@ cd ~/dotfiles
 ./setup.sh    # 멱등 — 다시 실행하면 최신 상태로 수렴
 ```
 
+**업그레이드 노트 (#2139)**: `./setup.sh` 가 이제 `symlinks` 스텝에서
+`shell-common/config/symlinks.conf` 전 항목을 자동으로 링크한다. 이전에는
+`symlink-init` 을 직접 실행해야 했던 `~/.tmux.conf`, `~/.config/ghostty/config`,
+`~/.local/bin/schedule-agent-prompt` 가 실파일로 있으면 첫 실행에서
+`<파일>.original` 로 백업된 뒤 dotfiles 링크로 바뀐다(이후 실행은 변경 없음).
+로컬 수정이 있었다면 `.original` 에서 옮겨 담는다.
+
 ### 🟡 특정 shell만 재설정
 ```bash
 # Bash만 재설정
