@@ -3,8 +3,8 @@
 # Remote-installer and post-install verification helpers for install*.sh
 # (issue #1801). Sourced by ../install*.sh.
 #
-# Pure functions with no ux_* output: init.sh returns before defining ux_*
-# under DOTFILES_TEST_MODE=1, and these must stay defined for bats.
+# Pure functions with no ux_* output, so they stay usable without ux_lib
+# (init.sh loads it even under DOTFILES_TEST_MODE=1 since #2144).
 
 # run_remote_installer <url> [installer-args...]
 # Download to a temp file first: `curl | sh` reports success on a failed

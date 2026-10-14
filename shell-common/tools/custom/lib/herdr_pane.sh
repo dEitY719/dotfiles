@@ -12,8 +12,8 @@
 #
 # `#!/bin/sh` per the lib/ shebang rule, but only ever sourced by the two bash
 # entrypoints: the `10#` base prefix in _hp_settle is bash arithmetic. Sourced
-# explicitly — tools/custom is never auto-sourced. Needs ux_* (ux_lib) and jq
-# at call time, not at source time.
+# explicitly — tools/custom is never auto-sourced. Needs ux_* (ux_lib), jq and
+# cron_common.sh (for _hp_acquire_lock) at call time, not at source time.
 
 # Echo the state dir <XDG_STATE_HOME>/<subdir>.
 #   $1 = subdir, e.g. issue-watcher
@@ -66,39 +66,11 @@ _hp_now() {
 # Single-instance guard for one cron tick.
 #   $1 = state dir, $2 = lock basename, $3 = tick name for the skip warning
 #
-# A cron tick can fire while the previous one is still blocked in `herdr agent
-# prompt --wait`; without a lock both would observe the same work and both act.
-# Deliberately non-blocking: a skipped tick just retries on the next period.
-# Returns non-zero only when another tick holds the lock; a missing flock or an
-# unusable state dir soft-degrades to "no protection" rather than failing.
-# Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
+# Thin wrapper kept for its name and signature (#1530): the lock itself moved to
+# lib/cron_common.sh (cron_acquire_lock, #2144), which the caller must have
+# sourced. Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
 _hp_acquire_lock() {
-    local _dir="$1" _lock
-    _lock="${_dir}/$2"
-
-    if ! command -v flock >/dev/null 2>&1; then
-        ux_warning "flock not found — running without single-instance protection"
-        return 0
-    fi
-
-    if ! mkdir -p "${_dir}" 2>/dev/null; then
-        ux_warning "Cannot create state directory (${_dir}) — running without single-instance protection"
-        return 0
-    fi
-
-    # The 2>/dev/null must be scoped to the group, not attached to `exec`:
-    # `exec 9>FILE 2>/dev/null` applies *both* redirections permanently, muting
-    # the whole script's stderr — every later ux_error would vanish from the
-    # cron log. The group restores fd 2 on exit while fd 9 persists.
-    if ! { exec 9>"${_lock}"; } 2>/dev/null; then
-        ux_warning "Cannot open lock file (${_lock}) — running without single-instance protection"
-        return 0
-    fi
-
-    if ! flock -n 9; then
-        ux_warning "another $3 tick is already running — skip"
-        return 1
-    fi
+    cron_acquire_lock "$1" "$2" "$3"
 }
 
 # CLAUDE_CONFIG_DIR for a dispatcher's pane (issue #571 / #1393) — the same

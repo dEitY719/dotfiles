@@ -22,22 +22,11 @@
 
 set -u
 
-# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
-. "$(dirname "$0")/init.sh" || exit 1
-
-# init.sh returns early under DOTFILES_TEST_MODE=1 (and before it exports
-# SHELL_COMMON), so resolve shell-common from this script's own location as a
-# fallback. ux_lib, gh_host.sh and the claude integration all load from here.
-_PMT_SHELL_COMMON="${SHELL_COMMON:-$(cd "$(dirname "$0")/../.." && pwd)}"
-
-# Same early return means ux_* can still be undefined here — every output path
-# below depends on it.
-if ! type ux_header >/dev/null 2>&1; then
-    if [ -f "${_PMT_SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-        # shellcheck source=/dev/null
-        . "${_PMT_SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-    fi
-fi
+# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib,
+# under DOTFILES_TEST_MODE=1 too) and the shared cron lock (#2144).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/cron_common.sh" && cron_bootstrap || exit 1
+_PMT_SHELL_COMMON="${SHELL_COMMON}"
 
 # The target filter (draft / `reply-pending` / quiet period) and the quiet
 # period itself, shared verbatim with the `gh:pr-merge-train` skill (#1524).

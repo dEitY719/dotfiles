@@ -13,12 +13,6 @@ if [ -n "${_CUSTOM_TOOLS_INITIALIZED:-}" ]; then
     return 0
 fi
 
-# Exit early in test mode (prevents side effects like package installations)
-if [ "${DOTFILES_TEST_MODE:-0}" = "1" ]; then
-    _CUSTOM_TOOLS_INITIALIZED=1
-    return 0
-fi
-
 # Define minimal UX fallback BEFORE validation (in case UX library fails to load)
 # This prevents "command not found" errors in error paths
 if ! type ux_error >/dev/null 2>&1; then
@@ -70,6 +64,14 @@ export SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
     . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
     # UX library loaded successfully (fallback already replaced)
+fi
+
+# Exit early in test mode — after path detection and ux_lib (#2144), so callers
+# get SHELL_COMMON and ux_* under bats too and need no fallback bootstrap of
+# their own. Only the helpers below are skipped, exactly as before.
+if [ "${DOTFILES_TEST_MODE:-0}" = "1" ]; then
+    _CUSTOM_TOOLS_INITIALIZED=1
+    return 0
 fi
 
 # Shared utility functions (SSOT: used by check_network.sh, check_proxy.sh, etc.)

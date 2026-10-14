@@ -24,22 +24,11 @@
 
 set -u
 
-# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
-. "$(dirname "$0")/init.sh" || exit 1
-
-# init.sh returns early under DOTFILES_TEST_MODE=1 (and before it exports
-# SHELL_COMMON), so resolve shell-common from this script's own location as a
-# fallback. Both ux_lib and the claude integration below are loaded from here.
-_IW_SHELL_COMMON="${SHELL_COMMON:-$(cd "$(dirname "$0")/../.." && pwd)}"
-
-# Same early return means ux_* can still be undefined here — every output path
-# below depends on it.
-if ! type ux_header >/dev/null 2>&1; then
-    if [ -f "${_IW_SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-        # shellcheck source=/dev/null
-        . "${_IW_SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-    fi
-fi
+# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib,
+# under DOTFILES_TEST_MODE=1 too) and the shared cron lock (#2144).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/cron_common.sh" && cron_bootstrap || exit 1
+_IW_SHELL_COMMON="${SHELL_COMMON}"
 
 # The herdr agent-name SSOT (#1530). Sourced at file scope rather than lazily
 # because _iw_agent_name is called from both the dispatch loop and the tick's

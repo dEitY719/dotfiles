@@ -53,7 +53,7 @@ _lib() {
         "UX_LIB=${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" \
         "LIB=${LIB}" \
         "$@" \
-        bash -c 'set -u; . "$UX_LIB"; . "$LIB" || exit 99; eval "$1"' _ "${_snippet}"
+        bash -c 'set -u; . "$UX_LIB"; . "${LIB%/*}/cron_common.sh"; . "$LIB" || exit 99; eval "$1"' _ "${_snippet}"
 }
 
 @test "herdr_pane: sources cleanly under set -u and defines only _hp_ functions" {
