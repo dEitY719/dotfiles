@@ -50,7 +50,9 @@ printf '%s' "$json" | cron_py dotfiles_tools.<영역>.<모듈> <op> [arg]
   op 의 "아니오" 로만 쓰되, **안전에 걸린 판정은 exit 1 이 아니라 stdout 으로 내린다** —
   import 조차 못 한 `python3` 도 exit 1 로 끝나므로, 셸은 빈/비숫자 stdout 을
   "판단 불가" 로 읽어야 한다 (`handled-by-pr` 가 그 예).
-- python3 >= 3.10 이 없으면 (RHEL 8 은 3.6) 롤백 경로로 경고 후 자동 전환한다 — 도구가 멈추지 않는다.
+- python3 >= 3.10 이 없으면 (RHEL 8 은 3.6) 롤백 경로가 남아 있는 동안은 경고 후 자동 전환한다 — 도구가 멈추지 않는다.
+  롤백 경로를 제거한 뒤에는 (issue watcher, #2173) python3 >= 3.10 이 cron PATH 의 **필수 요건**이 되고,
+  없으면 tick 이 `ux_error` 로 거부하고 exit 1 한다. 롤백 제거 전에 그 도구를 돌리는 호스트가 요건을 만족하는지 확인한다.
 - 진단 메시지는 stderr 만. 사용자 출력(`ux_*`)은 셸이 한다.
 
 ## 이식 절차
