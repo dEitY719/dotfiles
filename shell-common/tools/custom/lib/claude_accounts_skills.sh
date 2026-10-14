@@ -111,8 +111,12 @@ _claude_prune_workspace_skills() {
     # and the workspace cleanup would silently no-op. Say so
     # instead. Dangling links are still pruned (they need no root).
     _cpws_root=""
+    _cpws_rroot=""
     if command -v _skill_workspace_root >/dev/null 2>&1; then
         _cpws_root="$(_skill_workspace_root)" || _cpws_root=""
+        # Resolve once: _skill_under_workspace would fork readlink per call.
+        [ -z "$_cpws_root" ] ||
+            _cpws_rroot=$(readlink -f "$_cpws_root" 2>/dev/null || printf '%s' "$_cpws_root")
     else
         ux_warning "  workspace skill sources unavailable — shell-common/functions/skill_sources.sh not sourced (#1652)"
     fi
@@ -132,8 +136,8 @@ _claude_prune_workspace_skills() {
             # link would not match the root, so test the resolved spelling too.
             _cpws_raw=$(readlink "$_cpws_existing")
             _cpws_real=$(readlink -f "$_cpws_existing" 2>/dev/null || printf '%s' "$_cpws_raw")
-            if ! _skill_under_workspace "$_cpws_raw" "$_cpws_root" &&
-                ! _skill_under_workspace "$_cpws_real" "$_cpws_root"; then
+            if ! _skill_under_workspace "$_cpws_raw" "$_cpws_root" "$_cpws_rroot" &&
+                ! _skill_under_workspace "$_cpws_real" "$_cpws_root" "$_cpws_rroot"; then
                 continue
             fi
         fi
