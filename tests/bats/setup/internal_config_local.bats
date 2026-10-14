@@ -78,7 +78,7 @@ run_setup_fn() {
 }
 
 @test "setup: falls back to the tracked *.internal file when no .local exists" {
-    run_setup_fn "setup_npm_symlink internal; setup_pip_config internal; setup_uv_config internal"
+    run_setup_fn "setup_npm_config internal; setup_pip_config internal; setup_uv_config internal"
     assert_success
     [ "$(readlink "$HOME/.npmrc")" = "$FX/npm/npmrc.internal" ]
     [ "$(readlink "$HOME/.config/pip/pip.conf")" = "$FX/pip/pip.conf.internal" ]
@@ -87,11 +87,11 @@ run_setup_fn() {
 }
 
 @test "setup: prefers *.internal.local after migration, links keep working" {
-    run_setup_fn "setup_npm_symlink internal"
+    run_setup_fn "setup_npm_config internal"
     assert_success
     run bash "$MIGRATE" --apply
     assert_success
-    run_setup_fn "setup_npm_symlink internal; setup_pip_config internal; setup_uv_config internal; setup_cargo_config internal; setup_bun_config internal"
+    run_setup_fn "setup_npm_config internal; setup_pip_config internal; setup_uv_config internal; setup_cargo_config internal; setup_bun_config internal"
     assert_success
     [ "$(readlink "$HOME/.npmrc")" = "$FX/npm/npmrc.internal.local" ]
     [ "$(readlink "$HOME/.config/pip/pip.conf")" = "$FX/pip/pip.conf.internal.local" ]
@@ -106,7 +106,7 @@ run_setup_fn() {
 
 @test "setup: public mode is unaffected by a present .local sibling" {
     printf 'x\n' >"$FX/npm/npmrc.internal.local"
-    run_setup_fn "setup_npm_symlink public"
+    run_setup_fn "setup_npm_config public"
     assert_success
     [ "$(readlink "$HOME/.npmrc")" = "$FX/npm/npmrc.public" ]
 }
@@ -145,12 +145,12 @@ use_tracked_internal_files() {
 @test "swap: a PC with *.internal.local keeps real values through the links" {
     run bash "$MIGRATE" --apply
     assert_success
-    run_setup_fn "setup_npm_symlink internal; setup_pip_config internal; setup_cargo_config internal"
+    run_setup_fn "setup_npm_config internal; setup_pip_config internal; setup_cargo_config internal"
     assert_success
     before="$(readlink "$HOME/.npmrc") $(readlink "$HOME/.config/pip/pip.conf") $(readlink "$HOME/.cargo/config.toml")"
     # The swap lands via git pull: tracked files become placeholders.
     use_tracked_internal_files
-    run_setup_fn "setup_npm_symlink internal; setup_pip_config internal; setup_cargo_config internal"
+    run_setup_fn "setup_npm_config internal; setup_pip_config internal; setup_cargo_config internal"
     assert_success
     refute_output --partial "holds placeholder values"
     after="$(readlink "$HOME/.npmrc") $(readlink "$HOME/.config/pip/pip.conf") $(readlink "$HOME/.cargo/config.toml")"
@@ -164,7 +164,7 @@ use_tracked_internal_files() {
 
 @test "swap: a PC without *.internal.local gets placeholders and a clear warning" {
     use_tracked_internal_files
-    run_setup_fn "setup_npm_symlink internal; setup_uv_config internal"
+    run_setup_fn "setup_npm_config internal; setup_uv_config internal"
     assert_success
     assert_output --partial "npm/npmrc.internal holds placeholder values and npm/npmrc.internal.local is missing"
     assert_output --partial "uv/uv.toml.internal holds placeholder values"

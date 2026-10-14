@@ -22,7 +22,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 
 - **User-level** (npm/pip/uv/cargo/nuget): symlink to `{dir}/{config}.internal`, backup+restore on switch.
 - **System-level** (rpm/apt): sudo copy with 3-gate safety (tool exists, OS match, privilege), `MANAGED_BY_DOTFILES` marker.
-- **Adding new manager**: create `{dir}/{config}.internal`, add `setup_{name}()`, wire into `main()` 3 menu cases.
+- **Adding new manager**: create `{dir}/{config}.internal`, add `setup_<name>_config <mode>` in `shell-common/setup.d/`, add one word to `SETUP_REGISTRY_TOOLS` in `shell-common/setup.sh`.
 
 # Golden Rules
 

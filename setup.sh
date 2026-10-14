@@ -84,8 +84,13 @@ _setup_resolve_choice() {
     fi
 }
 
+# Mode is passed as an argument, not piped into the menu (#2140). stdin stays
+# non-tty as before: in summary mode a tty prompt would block unseen (output
+# goes to the log), so the tty-only prompts skip with a warning instead.
 _setup_run_shell_common() {
-    printf '%s\n' "$SETUP_CHOICE" | ./shell-common/setup.sh
+    local mode
+    case "$SETUP_CHOICE" in 1) mode=public ;; 2) mode=internal ;; 3) mode=external ;; esac
+    ./shell-common/setup.sh --mode "$mode" </dev/null
 }
 
 setup_help() {

@@ -89,10 +89,10 @@ run_setup_fn() {
 # --- single-target configs: external / public modes -------------------------
 
 @test "npm: external and public link their tracked files" {
-    run_setup_fn "setup_npm_symlink external"
+    run_setup_fn "setup_npm_config external"
     assert_success
     [ "$(readlink "$HOME/.npmrc")" = "$FX/npm/npmrc.external" ]
-    run_setup_fn "setup_npm_symlink public"
+    run_setup_fn "setup_npm_config public"
     assert_success
     assert_output --partial "Created symlink: ~/.npmrc → npm/npmrc.public"
     [ "$(readlink "$HOME/.npmrc")" = "$FX/npm/npmrc.public" ]
@@ -135,4 +135,22 @@ run_setup_fn() {
     assert_success
     [ ! -L "$HOME/.cargo/config.toml" ]
     [ "$(cat "$HOME/.cargo/config.toml")" = "user" ]
+}
+
+# #2140: main() is one loop over SETUP_REGISTRY_TOOLS — a new manager is one
+# word plus its setup_<name>_config, called in every mode.
+@test "SETUP_REGISTRY_TOOLS: one added word is called in all three modes" {
+    for m in public internal external; do
+        run bash --noprofile --norc -c "
+            cd '$FX/shell-common'
+            . './setup.sh'
+            _pre_$m() { :; }
+            for t in \$SETUP_REGISTRY_TOOLS; do eval \"setup_\${t}_config() { :; }\"; done
+            SETUP_REGISTRY_TOOLS=\"\$SETUP_REGISTRY_TOOLS fakemgr\"
+            setup_fakemgr_config() { echo \"fakemgr called: \$1\"; }
+            main --mode $m
+        " </dev/null
+        assert_success
+        assert_output --partial "fakemgr called: $m"
+    done
 }
