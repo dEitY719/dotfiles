@@ -4,11 +4,18 @@
 # A `#!/bin/sh` file in shell-common/util or shell-common/config must not read
 # bash-only ${BASH_*} variables (was golden Rule 5, moved here in #2149).
 # ShellCheck does not cover it: SC3028 skips ${BASH_VERSION}-style reads.
+# The shell-detection test `[ -n "${BASH_VERSION-}" ]` (also `:-`, bare, `-z`)
+# is sanctioned and safe in POSIX sh, so it is stripped before matching; any
+# other ${BASH_*} read on the same line is still a hit (#2189).
 
 check_posix_bashism() { # <abs_path> <repo_rel_path> <out>
     grep -q '^#!/bin/sh$' "$1" || return 0
     local hits
-    hits=$(grep -n '\${BASH_' "$1") || return 0
+    # sed: keep the original line (h/g) only if a ${BASH_ survives the strip.
+    hits=$(grep -n '\${BASH_' "$1" | sed -E \
+        -e 'h' -e 's/\[ -[nz] "?\$\{BASH_VERSION(:?-)?\}"? \]//g' \
+        -e '/\$\{BASH_/!d' -e 'g')
+    [ -n "$hits" ] || return 0
     printf '%s\n' "$hits" | sed "s|^|$2:|" >>"$3"
     return 1
 }
