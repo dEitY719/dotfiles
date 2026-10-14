@@ -6,14 +6,10 @@
 # WHEN TO RUN: Via ./setup.sh (do NOT run manually)
 #
 # SPECIAL INITIALIZATION (why this file is REQUIRED):
-#   1. Creates ~/.claude/settings.json symlink (tracked SSOT, #584)
-#   2. Creates ~/.claude/statusline-command.sh symlink (status line script)
-#   3. Creates ~/.claude/skills symlink (custom skills directory)
-#   4. Creates ~/.claude/docs symlink (custom docs directory)
-#   5. Creates ~/.claude/projects/GLOBAL/memory symlink (global memory)
-#   6. Creates ~/.claude/CLAUDE.md symlink (global instructions, #1115)
-#   7. Creates ~/.claude/keybindings.json symlink (Ctrl+J → chat:sendNow)
-#   8. Verifies ~/.claude directory structure
+#   Provisions every Claude config dir (multi-account ~/.claude-<acct>, or
+#   ~/.claude on an internal PC) from _claude_link_table — the single list of
+#   settings.json copy / symlinks / skills dir (claude_accounts_lifecycle.sh,
+#   #2141) — then verifies the result. main() runs the _phase_* functions.
 #
 # Internal mode 에서 ~/.claude/settings.json 은 (2026-08-18 부터) 조직 LLM
 # Gateway 전환 도구 `gateway-cli setup` 이 소유·작성한다 — dotfiles 는 이
@@ -62,17 +58,6 @@ _phase_load_libs() {
     unset _CLAUDE_DOTFILES_RESOLVER
 
     CLAUDE_DOTFILES="${DOTFILES_ROOT}/claude"
-
-    # Home directory locations
-    HOME_CLAUDE="${HOME}/.claude"
-    HOME_SETTINGS="${HOME_CLAUDE}/settings.json"
-    HOME_STATUSLINE="${HOME_CLAUDE}/statusline-command.sh"
-    HOME_SKILLS="${HOME_CLAUDE}/skills"
-    HOME_DOCS="${HOME_CLAUDE}/docs"
-    HOME_GLOBAL_MEMORY="${HOME_CLAUDE}/projects/GLOBAL/memory"
-    HOME_WORKFLOWS="${HOME_CLAUDE}/workflows"
-    HOME_CLAUDE_MD="${HOME_CLAUDE}/CLAUDE.md"
-    HOME_KEYBINDINGS="${HOME_CLAUDE}/keybindings.json"
 
     # Dotfiles source locations
     CLAUDE_SETTINGS_SOURCE="${CLAUDE_DOTFILES}/settings.json"
@@ -604,23 +589,10 @@ _phase_provision_internal() {
     _claude_install_herdr_hook "$HOME/.claude"
     # F-7b (#1364): restore only the drift-heal hook's own registration.
     bash "$DOTFILES_ROOT/claude/tools/register-drift-hook.sh" || true
-    dotfiles_ensure_link "$CLAUDE_STATUSLINE_SOURCE" "$HOME_STATUSLINE" --allow-dir --unmount-legacy
-    # skills/ stays a real directory (issue #707, F-8) so externally added
-    # symlinks can be layered into it, but workspace skills are NOT composed:
-    # Claude Code loads them via plugins (claude/plugin/plugins.json,
-    # restore.sh), and flat links would duplicate them as un-namespaced
-    # commands. Only the stale workspace links are pruned. This branch does
-    # not go through _claude_account_setup_one, so the call has to be
-    # repeated here — internal PCs are single-account by design.
-    _claude_prune_workspace_skills "$HOME_SKILLS"
-    dotfiles_ensure_link "$CLAUDE_DOCS_SOURCE" "$HOME_DOCS" --allow-dir --unmount-legacy
-    dotfiles_ensure_link "$CLAUDE_GLOBAL_MEMORY_SOURCE" "$HOME_GLOBAL_MEMORY" --allow-dir --unmount-legacy
-    dotfiles_ensure_link "$HOME/.claude-shared/plugins" "$HOME/.claude/plugins" --allow-dir --unmount-legacy
-    dotfiles_ensure_link "$CLAUDE_WORKFLOWS_SOURCE" "$HOME_WORKFLOWS" --allow-dir --unmount-legacy
-    dotfiles_ensure_link "$CLAUDE_MD_SOURCE" "$HOME_CLAUDE_MD" --allow-dir --unmount-legacy
-    # Claude Code hot-reloads keybindings.json; ctrl+j → chat:sendNow
-    # because terminals send LF for Ctrl+Enter.
-    dotfiles_ensure_link "$CLAUDE_KEYBINDINGS_SOURCE" "$HOME_KEYBINDINGS" --allow-dir --unmount-legacy
+    # 링크 목록은 _claude_link_table 1곳 (#2141) — modes 필터로 settings.json
+    # (multi 전용) 이 빠진다. 이 분기는 _claude_account_setup_one 을 타지 않으므로
+    # (#571, internal PC 는 단일 계정) 같은 테이블을 여기서 직접 적용한다.
+    _claude_link_apply internal "$HOME/.claude"
 }
 
 # _phase_provision_multi — 활성 계정마다 _claude_account_setup_one.
@@ -689,7 +661,7 @@ _phase_provision_bare() {
 # settings.json 은 #940 이후 실파일 복사 — symlink 는 /model 이 SSOT 를 오염시킨다 (#924).
 _claude_link_verify() {
     local mode="$1" cdir="$2" label="$3" rel kind modes
-    while IFS='|' read -r _ rel kind modes; do
+    while IFS='|' read -r _ rel kind modes <&3; do
         case "$modes" in all | "$mode") ;; *) continue ;; esac
         case "$kind" in
         copy)
@@ -714,7 +686,7 @@ _claude_link_verify() {
             fi
             ;;
         esac
-    done <<EOF
+    done 3<<EOF
 $(_claude_link_table)
 EOF
 }

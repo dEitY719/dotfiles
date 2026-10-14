@@ -15,7 +15,10 @@ setup 체인에 편입한다.
 - **양쪽 모드 반영**: `~/.dotfiles-setup-mode` 를 확인한다. internal PC 는 단일
   계정이며 `~/.claude/settings.json` 을 gateway-cli 가 소유한다
   (`claude/setup.sh` internal 분기는 `_claude_account_setup_one` 을 타지 않는다).
-  한쪽 경로에 단계를 추가하면 다른 쪽에도 반영한다.
+  Claude config dir 링크·복사 항목은 `_claude_link_table`
+  (`shell-common/tools/custom/lib/claude_accounts_lifecycle.sh`) 한 행으로 추가하면
+  internal·multi 생성과 검증에 모두 반영된다 — `modes` 칸으로 한쪽만 고른다.
+  그 밖의 단계는 한쪽 경로에 추가하면 다른 쪽에도 반영한다.
 - **계정별 작업**: `_claude_account_setup_one` 에 둔다(`claude-accounts` /
   `claude/setup.sh` 가 순회). 계정 루프를 새로 만들지 않는다.
 - **절대경로 금지**: 추적되는 SSOT(`claude/settings.json` 등)에 `/home/<user>` 를

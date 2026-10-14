@@ -274,6 +274,27 @@ _claude_link_src() {
     esac
 }
 
+# _claude_link_apply <mode> <cdir> — _claude_link_table 의 <mode> 행을 <cdir>
+# 에 멱등 적용한다. heredoc 입력이라 루프가 현재 셸에서 돌아 SETUP_MIGRATIONS
+# (#940 model 이주)·CLAUDE_WS_SKILLS_PRUNED 증가가 호출자에게 남는다 (#997).
+# 테이블은 fd 3 으로 읽는다 — 행 처리 중 stdin 을 읽는 명령이 행을 삼키지 않게.
+# dir 행: 외부에서 추가된 symlink(`claude-accounts link`, graphify 등)는 유지하고
+# 예전 flat 합성이 남긴 워크스페이스 스킬 링크만 지운다 (#1652).
+_claude_link_apply() {
+    _cla_mode="${1:-}"
+    _cla_cdir="${2:-}"
+    while IFS='|' read -r _cla_src _cla_rel _cla_kind _cla_modes <&3; do
+        case "$_cla_modes" in all | "$_cla_mode") ;; *) continue ;; esac
+        case "$_cla_kind" in
+        copy) _claude_ensure_settings_copy "$(_claude_link_src "$_cla_src")" "$_cla_cdir/$_cla_rel" ;;
+        link) _claude_ensure_symlink "$(_claude_link_src "$_cla_src")" "$_cla_cdir/$_cla_rel" ;;
+        dir) _claude_prune_workspace_skills "$_cla_cdir/$_cla_rel" ;;
+        esac
+    done 3<<EOF
+$(_claude_link_table)
+EOF
+}
+
 # _claude_account_setup_one — 단일 계정의 link 멱등 셋업.
 #
 # skills/ 와 docs/ 는 SSOT 디렉토리 자체로의 단일 symlink 다 (issue #575).
@@ -293,29 +314,9 @@ _claude_account_setup_one() {
     # Must precede _claude_ensure_settings_copy (it overwrites herdr's settings edit).
     _claude_install_herdr_hook "$_caso_cdir"
 
-    # settings.json is a real-file copy, NOT a symlink (#940) — Claude Code's
-    # /model persists into this file, and a symlink would write through into
-    # the tracked dotfiles SSOT (the #924 recurrence path).
-    _claude_ensure_settings_copy "${DOTFILES_ROOT}/claude/settings.json"    "$_caso_cdir/settings.json"
-    # settings.local.json is intentionally NOT symlinked from dotfiles (#584) —
-    # it is a per-PC regular file the user hand-creates only when local env
-    # overrides are needed. Claude Code merges it with settings.json natively.
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/statusline-command.sh"  "$_caso_cdir/statusline-command.sh"
-    _claude_ensure_symlink "$HOME/.claude-shared/plugins"                   "$_caso_cdir/plugins"
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/global-memory"          "$_caso_cdir/projects/GLOBAL/memory"
-    # skills/ 는 실디렉토리 (issue #707, F-8) 로 유지하되 워크스페이스 스킬은
-    # 합성하지 않는다 — Claude Code 는 그것들을 플러그인(claude/plugin/
-    # plugins.json, restore.sh 설치)으로 로드하고, flat 링크는 네임스페이스
-    # 없는 중복 명령이 된다. 예전 합성이 남긴 워크스페이스 링크만 정리한다.
-    # 외부에서 추가된 symlink(`claude-accounts link`, graphify 등)는 유지.
-    _claude_prune_workspace_skills "$_caso_cdir/skills"
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/docs"                   "$_caso_cdir/docs"
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/workflows"               "$_caso_cdir/workflows"
-    # Global instructions (Advisor/Worker) — SSOT symlink, all projects (#1115).
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/CLAUDE.md"              "$_caso_cdir/CLAUDE.md"
-    # Keybindings — Claude Code hot-reloads it; ctrl+j is bound to
-    # chat:sendNow because terminals send LF for Ctrl+Enter.
-    _claude_ensure_symlink "${DOTFILES_ROOT}/claude/keybindings.json"       "$_caso_cdir/keybindings.json"
+    # settings.json 실파일 복사(#940) + symlink + skills/ 실디렉토리 — 목록은
+    # _claude_link_table 1곳. settings.local.json 은 개인 PC 슬롯이라 없다 (#584).
+    _claude_link_apply multi "$_caso_cdir"
 }
 
 # _claude_status_show_oauth — append OAuth binding (email/org) to the

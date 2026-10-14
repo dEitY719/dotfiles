@@ -216,21 +216,23 @@ run_prune() {
 
 @test "every Claude Code skills site prunes and none composes workspace skills" {
     # The internal/single-account branch of claude/setup.sh does not go
-    # through _claude_account_setup_one (agy BLOCKER on PR #1670), so the
-    # cleanup call has to appear in BOTH files or single-account PCs keep
-    # the duplicate un-namespaced skills. Asserted per file so a failure
-    # names the file that lost its call.
+    # through _claude_account_setup_one (agy BLOCKER on PR #1670). Since #2141
+    # both paths apply the one _claude_link_table via _claude_link_apply, whose
+    # `dir` kind runs the prune — so the skills row must be an `all` row and
+    # both call sites must apply the table.
     local setup="${_BATS_REAL_DOTFILES_ROOT}/claude/setup.sh"
     # _claude_account_setup_one moved to the lifecycle lib (#2146).
     local lifecycle="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_lifecycle.sh"
     local skills="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_skills.sh"
 
-    local f
-    for f in "$setup" "$lifecycle"; do
-        run grep -c '^[[:space:]]*_claude_prune_workspace_skills ' "$f"
-        assert_success
-        [ "$output" -ge 1 ] || fail "no workspace prune call in $f"
-    done
+    run grep -c '^[[:space:]]*dir) _claude_prune_workspace_skills ' "$lifecycle"
+    assert_success
+    run grep -c '^-|skills|dir|all$' "$lifecycle"
+    assert_success
+    run grep -c '^[[:space:]]*_claude_link_apply internal ' "$setup"
+    assert_success
+    run grep -c '^[[:space:]]*_claude_link_apply multi ' "$lifecycle"
+    assert_success
 
     # Neither the retired workspace composer nor the older dotfiles composer
     # may creep back in — plugins are the single SSOT for Claude Code.

@@ -1198,8 +1198,9 @@ SH
     assert_success
     assert_output --partial "bind-mount detected at $HOME/.claude/skills"
     assert_output --partial "bind-mount detected at $HOME/.claude/docs"
-    [ "$(cat "$HOME/fake-umount.log")" = "$HOME/.claude/skills
-$HOME/.claude/docs" ]
+    # Order follows _claude_link_table (#2141) and is not part of the contract.
+    [ "$(sort "$HOME/fake-umount.log")" = "$HOME/.claude/docs
+$HOME/.claude/skills" ]
     # #707, F-8: skills/ converges to a real composed directory; docs/ stays a symlink.
     [ -d "$HOME/.claude/skills" ]
     [ ! -L "$HOME/.claude/skills" ]
