@@ -14,6 +14,10 @@
 
 set -eu
 
+# 저장소 root 기준으로 동작하고(하위 디렉터리에서 실행해도 조용히 통과하지 않게), 비ASCII 경로를 따옴표로 감싸지 않는다.
+cd "$(git rev-parse --show-toplevel)"
+git() { command git -c core.quotepath=false "$@"; }
+
 STATUS_DIRS="docs/requirement docs/feature docs/adr"
 VALID_STATUSES="draft review approved deprecated needs-review"
 
@@ -23,9 +27,10 @@ warnings=0
 # front-matter(첫 줄 `---` ~ 다음 `---`) 안의 status 값. 없으면 빈 문자열.
 front_matter_status() {
     awk '
-        NR == 1 { if ($0 != "---") exit; next }
+        { sub(/\r$/, "") }
+        NR == 1 { if ($0 !~ /^---[[:space:]]*$/) exit; next }
         /^---[[:space:]]*$/ { exit }
-        /^status:/ { sub(/^status:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); print; exit }
+        /^status:/ { sub(/^status:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); gsub(/^["\047]|["\047]$/, ""); print; exit }
     ' "$1"
 }
 
@@ -37,7 +42,8 @@ is_valid_status() {
 }
 
 # 첫 경로 성분이 추적되는 최상위 항목인가 — 다른 저장소의 경로(references/x.md 등) 오탐 차단.
-TOP_LEVEL="$(git ls-files | cut -d/ -f1 | sort -u)"
+TRACKED="$(git ls-files)"
+TOP_LEVEL="$(printf '%s\n' "$TRACKED" | cut -d/ -f1 | sort -u)"
 
 # 백틱 span 중 경로처럼 생긴 것만 뽑아 `:줄번호` 꼬리를 떼고 출력한다.
 extract_paths() {
@@ -58,7 +64,8 @@ check_stale_paths() {
     for _p in $(extract_paths "$_doc"); do
         _top="${_p%%/*}"
         printf '%s\n' "$TOP_LEVEL" | grep -qxF "$_top" || continue
-        if [ -n "$(git ls-files -- "${_p%/}" | head -n 1)" ]; then
+        # 파일 또는 디렉터리(접두)로 추적되는지 — 경로마다 git 을 띄우지 않고 캐시한 목록을 쓴다.
+        if printf '%s\n' "$TRACKED" | awk -v p="${_p%/}" '$0 == p || index($0, p "/") == 1 { f = 1; exit } END { exit !f }'; then
             continue
         fi
         echo "warn  $_doc — stale path \`$_p\` (git ls-files 에 없음, status: approved)"

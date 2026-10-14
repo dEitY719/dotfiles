@@ -12,6 +12,10 @@ set -eu
 
 LIMIT=100
 
+# 하위 디렉터리에서 실행해도 전체 저장소를 검사하고, 비ASCII 경로를 따옴표로 감싸지 않는다.
+cd "$(git rev-parse --show-toplevel)"
+git() { command git -c core.quotepath=false "$@"; }
+
 # wc -l 은 마지막 줄에 개행이 없으면 한 줄 덜 센다 — awk NR 로 센다.
 count_lines() {
     awk 'END { print NR }' "$1"
