@@ -284,8 +284,8 @@ _cleanup_select_mode() {
     done
 }
 
-# Public help topic for my-help integration. Registered in
-# shell-common/functions/my_help.sh (a `_register_help ... cli` row).
+# Public help topic for my-help integration. Registered by the
+# `_register_help ... cli` row at the end of this file (#2135).
 del_file_help() {
     ux_header "del-file"
     ux_usage "del-file" "[--home|--cache] [pattern...]" "Interactively delete backup/original/cache files"
@@ -418,3 +418,8 @@ del_file() {
 alias del-file='del_file'
 # Home-directory backup cleanup (issue #806).
 alias clean-home='del_file --home'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help del_file_help "[CLI] Clean backup/original garbage files (del-file, clean-home)" cli
+_register_func del_file "Clean backup/original garbage files"

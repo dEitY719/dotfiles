@@ -104,3 +104,7 @@ gh_project_pat_help() {
 }
 
 alias gh-project-pat-help='gh_project_pat_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help gh_project_pat_help "[Development] PROJECT_BOARD_PAT guide + multi-repo secret set/status" development

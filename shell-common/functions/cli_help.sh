@@ -102,3 +102,7 @@ cli_help() {
 }
 
 alias cli-help='cli_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help cli_help "[Development] Custom project CLIs" development

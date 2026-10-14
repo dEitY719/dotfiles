@@ -19,7 +19,7 @@
 
 - **DO**: `>/dev/null 2>&1`, `[ ]`, `#!/bin/sh`
 - **DON'T**: `&>/dev/null`, `[[ ]]` (shell-detected branch 외), bash array (detection 없이), `< <(cmd)`/`<<<` (→ `<<EOF` heredoc)
-- **dash 파싱 예외 (#1889)**: 연관배열이 필수인 `functions/my_help.sh`(`declare -gA`/`typeset -gA`)와 `env/path.sh` `clean_paths` bash/zsh 분기(POSIX fallback 분기 별도)는 `sh -n` 실패를 감수한다.
+- **dash 파싱 예외 (#1889)**: 연관배열이 필수인 `functions/my_help.sh`·`util/help_registry.sh`(`declare -gA`/`typeset -gA`)와 `env/path.sh` `clean_paths` bash/zsh 분기(POSIX fallback 분기 별도)는 `sh -n` 실패를 감수한다.
 - **Shebang exception**: `tools/custom/*.sh` 진입점(직접 실행, source 안 됨)은 `#!/bin/bash`.
   그 하위 디렉터리(`tools/custom/lib/*.sh` 등 source 전용)는 `#!/bin/sh` 유지.
   SSOT: `git/config/hook-config.sh` (`DOTFILES_HOOKS_SHEBANG_SHELL_COMMON_CUSTOM`), 강제: `git/hooks/checks/shebang_check.sh`
@@ -70,7 +70,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 | Alias | `aliases/*.sh` | yes | `gs='git status'` |
 | Environment | `env/*.sh` | yes | `export PATH=...` |
 | Help function | `functions/*_help.sh` | yes | `apt_help()` — row 함수는 `docs/guide/commands/` 자동생성 소스 (#1262) |
-| Utility function | `functions/*.sh` | yes | `devx()`, `gitlog()` — 사용자가 직접 치는 함수면 `my_help.sh` 의 `_my_help_func_registry` 에도 등록해야 `my-help` 팔레트 `/func` 에 뜬다 (#1740) |
+| Utility function | `functions/*.sh` | yes | `devx()`, `gitlog()` — 사용자가 직접 치는 함수면 정의 파일 끝에 `_register_func <name> "설명"` 을 둬야 `my-help` 팔레트 `/func` 에 뜬다 (#1740, #2135) |
 | 3rd-party wrapper | `tools/integrations/*.sh` | yes | `npm.sh`, `docker.sh` |
 | Executable script | `tools/custom/*.sh` (+ `lib/*.sh`) | **no** | `install_npm.sh` · `aicron.sh` + `lib/aicron_*.sh` · `session_doctor_cron.sh` + `lib/session_doctor_*.sh` · cron 진입점 공용 부트스트랩·lock `lib/cron_common.sh` (#2144) — Python 로직은 `cron_py` 로 `tools/py/dotfiles_tools` 호출, 경계 규칙 `docs/.ssot/shell-vs-python.md` (#2157) · `my_help_preview.sh` (my-help 팔레트 preview) · `diagnose_internal.sh` (사내 PC read-only 진단, #2099) |
 | Guard-free pure lib | `util/setup_mode_read.sh`, `util/win_home.sh` | **no** (각 소비자가 직접 source — hook/스크립트 포함) | `_dotfiles_setup_mode`, `_dotfiles_setup_mode_proxy`, `_win_home` |
@@ -78,18 +78,18 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 | Shell-specific | `bash/*.bash` 또는 `zsh/*.zsh` | varies | bash prompt setup |
 | Project-specific | `projects/<name>/*.sh` | yes | finrx utilities |
 
-# Adding a New Tool Integration (3-Step Pattern)
+# Adding a New Tool Integration (2-Step Pattern)
 
-새 외부 도구(예: bun, foo) 통합 시 항상 3개 파일이 필요:
+새 외부 도구(예: bun, foo) 통합 시 2개 파일이면 된다 — `my_help.sh` 는 고치지 않는다 (#2135):
 
 1. **`tools/integrations/<tool>.sh`** (자동 로드) — PATH export, alias, install/uninstall 함수.
    ux_lib guard 패턴 포함. 상세: [`docs/guide/playbooks/shell-common-cheatsheet.md`](../docs/guide/playbooks/shell-common-cheatsheet.md) → "Tool Integration UX-lib Guard"
-2. **`functions/<tool>_help.sh`** (자동 로드) — `<tool>_help()` + `alias <tool>-help='<tool>_help'`. `ux_table_row` / `ux_section` / `ux_bullet` 사용
-3. **`functions/my_help.sh` 수동 등록** (자동 안 됨!) — `_register_default_help_descriptions` 에
-   `_register_help <tool>_help "[Category] 설명" <category>` 한 줄 (설명+카테고리 동시 등록).
-   카테고리: `development`, `devops`, `ai`, `cli`, `config`, `docs`, `system`, `meta`
+2. **`functions/<tool>_help.sh`** (자동 로드) — `<tool>_help()` + `alias <tool>-help='<tool>_help'`. `ux_table_row` / `ux_section` / `ux_bullet` 사용.
+   파일 끝에 `command -v _register_help >/dev/null 2>&1 || return 0` 가드 + `_register_help <tool>_help "[Category] 설명" <category>` 한 줄
+   (`util/help_registry.sh` 가 functions/ 보다 먼저 로드됨). 카테고리: `development`, `devops`, `ai`, `cli`, `config`, `docs`, `system`, `meta`.
+   여러 topic 을 한 파일에 묶은 카테고리 help 파일(`cc_help.sh`, `database_help.sh`)도 공식 허용 — topic 마다 한 줄.
 
-참조 예시: `npm.sh` + `npm_help.sh` + `my_help.sh` 의 npm 항목
+참조 예시: `npm.sh` + `package_managers_help.sh` 끝의 `_register_help npm_help ...`
 
 # References
 

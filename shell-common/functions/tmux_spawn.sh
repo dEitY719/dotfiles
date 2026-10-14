@@ -266,3 +266,8 @@ tmux_teardown() {
 
 alias tmux-spawn='tmux_spawn'
 alias tmux-teardown='tmux_teardown'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func tmux_spawn "Spawn a tmux working session"
+_register_func tmux_teardown "Tear down a tmux working session"

@@ -740,3 +740,10 @@ _ollama_help_status() {
 }
 
 alias ollama-help='ollama_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help claude_help "[AI/LLM] Claude Code + MCP integration" ai
+_register_help codex_help "[AI/LLM] Codex CLI commands" ai
+_register_help litellm_help "[AI/LLM] LiteLLM proxy and routing" ai
+_register_help ollama_help "[AI/LLM] Ollama local models" ai

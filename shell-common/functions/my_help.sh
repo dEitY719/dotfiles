@@ -40,6 +40,12 @@ if [ -z "$SHELL_COMMON" ]; then
     SHELL_COMMON="${_MYHELP_DIR%/functions}"
 fi
 
+# The registry (arrays + _register_help) normally comes from dotfiles_load_all;
+# load it here when my_help.sh is sourced on its own (tests, preview helper).
+if ! command -v _register_func >/dev/null 2>&1; then
+    . "${SHELL_COMMON}/util/help_registry.sh"
+fi
+
 # Source all *_help.sh files from the functions directory.
 # MY_HELP_SKIP_TOPIC_SOURCES=1 loads the registry and renderers without the
 # ~380KB of topic files. Only the fzf preview helper sets it, and only for
@@ -55,67 +61,8 @@ if [ -z "${MY_HELP_SKIP_TOPIC_SOURCES-}" ]; then
 fi
 
 # ═══════════════════════════════════════════════════════════════
-# Help Registry Initialization (bash/zsh compatible)
+# Help Registry Lookups (registry itself: util/help_registry.sh)
 # ═══════════════════════════════════════════════════════════════
-
-# Initialize global help descriptions associative array (bash/zsh compatible)
-if [ -z "${HELP_DESCRIPTIONS+_}" ]; then
-    if [ -n "$BASH_VERSION" ]; then
-        declare -gA HELP_DESCRIPTIONS=()
-    elif [ -n "$ZSH_VERSION" ]; then
-        typeset -gA HELP_DESCRIPTIONS=()
-    fi
-fi
-
-# Initialize help category registries (bash/zsh compatible)
-if [ -z "${HELP_CATEGORIES+_}" ]; then
-    if [ -n "$BASH_VERSION" ]; then
-        declare -gA HELP_CATEGORIES=()
-    elif [ -n "$ZSH_VERSION" ]; then
-        typeset -gA HELP_CATEGORIES=()
-    fi
-fi
-
-if [ -z "${HELP_CATEGORY_MEMBERS+_}" ]; then
-    if [ -n "$BASH_VERSION" ]; then
-        declare -gA HELP_CATEGORY_MEMBERS=()
-    elif [ -n "$ZSH_VERSION" ]; then
-        typeset -gA HELP_CATEGORY_MEMBERS=()
-    fi
-fi
-
-if [ -z "${HELP_COMMAND_TO_CATEGORY+_}" ]; then
-    if [ -n "$BASH_VERSION" ]; then
-        declare -gA HELP_COMMAND_TO_CATEGORY=()
-    elif [ -n "$ZSH_VERSION" ]; then
-        typeset -gA HELP_COMMAND_TO_CATEGORY=()
-    fi
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Help Registry Functions
-# ═══════════════════════════════════════════════════════════════
-
-# Register a help topic in one call: description plus optional category.
-# Usage: _register_help <topic>_help "<description>" [category]
-# The first description registered wins (a module's own value beats the
-# defaults). The category appends <topic> to HELP_CATEGORY_MEMBERS[category]
-# once and fills the HELP_COMMAND_TO_CATEGORY reverse map.
-_register_help() {
-    local func_name="$1"
-    local description="$2"
-    local category="${3-}"
-    local topic="${func_name%_help}"
-    if [ -z "${HELP_DESCRIPTIONS[$func_name]-}" ]; then
-        HELP_DESCRIPTIONS[$func_name]="$description"
-    fi
-    [ -n "$category" ] || return 0
-    case " ${HELP_CATEGORY_MEMBERS[$category]-} " in
-        *" $topic "*) ;;
-        *) HELP_CATEGORY_MEMBERS[$category]="${HELP_CATEGORY_MEMBERS[$category]:+${HELP_CATEGORY_MEMBERS[$category]} }$topic" ;;
-    esac
-    HELP_COMMAND_TO_CATEGORY[$topic]="$category"
-}
 
 # Get help description
 # Usage: get_help_description "function_name"
@@ -159,147 +106,15 @@ _get_help_functions() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-# Default Help Descriptions Registration
+# Category member iteration
 # ═══════════════════════════════════════════════════════════════
 
-# zsh doesn't word-split a bare "$members" expansion; routing it through a
-# command substitution forces splitting in both shells. Used by every loop
-# that iterates a HELP_CATEGORY_MEMBERS value.
+# One member per line, sorted: members arrive in file-load order now that each
+# *_help.sh registers itself (#2135), so sorting keeps category pages stable.
+# The command substitution at every call site also forces word splitting in
+# zsh, which a bare "$members" expansion does not do.
 _my_help_split_members() {
-    printf '%s' "$1"
-}
-
-_register_default_help_categories() {
-    # Suppress zsh debug output - must be first command
-    [ -n "$ZSH_VERSION" ] && { setopt localoptions no_xtrace 2>/dev/null || true; }
-
-    # Category descriptions (values) are used for category detail pages.
-    HELP_CATEGORIES[ai]="${HELP_CATEGORIES[ai]:-AI/LLM assistants (Claude, Gemini, Codex, etc.)}"
-    HELP_CATEGORIES[cli]="${HELP_CATEGORIES[cli]:-CLI utilities (search, navigation, snippets, shell helpers)}"
-    HELP_CATEGORIES[config]="${HELP_CATEGORIES[config]:-Configuration and setup (prompt, certs, package managers)}"
-    HELP_CATEGORIES[development]="${HELP_CATEGORIES[development]:-Development tools (Git, Python, package managers, UX)}"
-    HELP_CATEGORIES[devops]="${HELP_CATEGORIES[devops]:-DevOps and infrastructure (Docker, proxy, DB, system)}"
-    HELP_CATEGORIES[docs]="${HELP_CATEGORIES[docs]:-Documentation and knowledge (dotfiles docs, notes, work logs)}"
-    HELP_CATEGORIES[meta]="${HELP_CATEGORIES[meta]:-Help system utilities (category browsing, registration)}"
-    HELP_CATEGORIES[system]="${HELP_CATEGORIES[system]:-System tools (directory navigation, opencode)}"
-}
-
-_register_default_help_descriptions() {
-    # Idempotent by itself: every caller (my_help_impl, the candidate builder,
-    # category_help, register_help, tests) just calls it instead of copying a
-    # `_HELP_DEFAULTS_REGISTERED` check of its own.
-    [ -z "${_HELP_DEFAULTS_REGISTERED-}" ] || return 0
-    _HELP_DEFAULTS_REGISTERED=1
-
-    _register_default_help_categories
-    _register_default_help_content
-
-    # One row per topic: _register_help <topic>_help "<description>" [category].
-    # Rows are grouped by category; row order is the order topics are listed
-    # on that category page. Modules load first, so a description they set
-    # themselves wins over the default here.
-
-    # development
-    _register_help git_help "[Development] Git version control shortcuts" development
-    _register_help gwt_help "[Development] Git worktree command guide" development
-    _register_help gbr_help "[Development] Git feature-branch teardown guide" development
-    _register_help devx_help "[Development] Dev helper — mise wrapper + repo checks" development
-    _register_help uv_help "[Development] UV packages and environments" development
-    _register_help py_help "[Development] Python environments and tooling" development
-    _register_help nvm_help "[Development] nvm node versions" development
-    _register_help npm_help "[Development] npm package manager" development
-    _register_help bun_help "[Development] Bun runtime and bunx" development
-    _register_help pp_help "[Development] Python quality tools" development
-    _register_help cli_help "[Development] Custom project CLIs" development
-    _register_help ux_help "[Development] UX library usage" development
-    _register_help du_help "[Development] Disk usage analysis" development
-    _register_help psql_help "[Development] PostgreSQL helpers" development
-    _register_help mytool_help "[Development] Custom tools and scripts" development
-    _register_help ghes_mirror_help "[Development] Mirror public GitHub repo to internal GHES instance" development
-    _register_help mirror_pages_activate_help "[Development] Activate GHE Pages + replace upstream URLs in README" development
-    _register_help gh_project_pat_help "[Development] PROJECT_BOARD_PAT guide + multi-repo secret set/status" development
-    _register_help hook_help "[Development] Git hook management" development
-    _register_help jetbrain_help "[Development] JetBrains IDE launcher (pycharm)" development
-
-    # devops
-    _register_help docker_help "[DevOps] Docker commands and aliases" devops
-    _register_help dproxy_help "[DevOps] Docker corporate proxy" devops
-    _register_help sys_help "[DevOps] System management helpers" devops
-    _register_help proxy_help "[DevOps] Proxy config and diagnostics" devops
-    _register_help ssl_help "[DevOps] SSL certificate config and diagnostics" devops
-    _register_help mount_help "[DevOps] Mount helpers" devops
-    _register_help mysql_help "[DevOps] MySQL service management" devops
-    _register_help redis_help "[DevOps] Redis service management" devops
-    _register_help gpu_help "[DevOps] GPU monitoring (WSL)" devops
-    _register_help network_help "[DevOps] Internet connectivity diagnostics" devops
-    _register_help wsl_check_help "[DevOps] WSL & Docker environment health (disk/mem/docker)" devops
-    _register_help window_help "[DevOps] Windows host PowerShell one-liners (Compact-WSL vhdx)" devops
-    _register_help sync_to_deploy_help "[DevOps] Merge internal/external main branches and push a deploy branch" devops
-    _register_help ssh_help "[DevOps] SSH hosts and file transfer" devops
-
-    # ai
-    _register_help claude_help "[AI/LLM] Claude Code + MCP integration" ai
-    _register_help cc_help "[AI/LLM] Claude Code CLI basics" ai
-    _register_help agy_help "[AI/LLM] Antigravity CLI commands" ai
-    _register_help codex_help "[AI/LLM] Codex CLI commands" ai
-    _register_help graphify_help "[AI] graphify — 코드베이스 knowledge graph (설치/멀티 계정/usage)" ai
-    _register_help hermes_help "[AI] Hermes Agent — 코딩 에이전트, 커스텀 LLM 엔드포인트 지원" ai
-    _register_help litellm_help "[AI/LLM] LiteLLM proxy and routing" ai
-    _register_help ollama_help "[AI/LLM] Ollama local models" ai
-    _register_help claude_plugins_help "[AI/LLM] Claude plugins setup" ai
-    _register_help claude_skills_marketplace_help "[AI/LLM] Skills marketplace system" ai
-    _register_help superpowers_help "[AI/LLM] Superpowers plugin skills reference" ai
-    _register_help llm_wiki_help "[AI] llm-wiki — vault 커맨드 5종 + pkm 스킬 3종 치트시트" ai
-
-    # cli
-    _register_help fzf_help "[CLI] fzf keybindings and usage" cli
-    _register_help fd_help "[CLI] fd file finder" cli
-    _register_help fasd_help "[CLI] fasd directory jump" cli
-    _register_help ripgrep_help "[CLI] rg (ripgrep) search" cli
-    _register_help pet_help "[CLI] pet snippet manager" cli
-    _register_help bat_help "[CLI] bat file viewer" cli
-    _register_help markitdown_help "[CLI] markitdown — 문서/URL → Markdown 변환 (wrapper 자동 저장)" cli
-    _register_help zsh_help "[CLI] Zsh shell management" cli
-    _register_help zsh_autosuggestions_help "[CLI] zsh-autosuggestions plugin" cli
-    _register_help gc_help "[CLI] Git commit shortcuts (gc, gca)" cli
-    _register_help tmux_help "[CLI] tmux terminal multiplexer" cli
-    _register_help herdr_help "[CLI] herdr agent multiplexer" cli
-    _register_help del_file_help "[CLI] Clean backup/original garbage files (del-file, clean-home)" cli
-
-    # config
-    _register_help p10k_help "[Config] Powerlevel10k prompt" config
-    _register_help crt_help "[Config] CA certificate management" config
-    _register_help apt_help "[Config] APT package manager" config
-    _register_help pip_help "[Config] pip config and diagnostics" config
-    _register_help ghostty_help "[Config] Ghostty terminal config" config
-    _register_help sops_help "[Config] sops + age secret encryption" config
-
-    # docs
-    _register_help dot_help "[Docs] Dotfiles overview and setup" docs
-    _register_help show_doc_help "[Docs] Documentation viewer" docs
-    _register_help notion_help "[Docs] Notion integration" docs
-    _register_help work_log_help "[Docs] Work log tracking" docs
-    _register_help work_help "[Docs] Work management" docs
-
-    # system
-    _register_help dir_help "[System] Directory navigation shortcuts" system
-    _register_help opencode_help "[System] OpenCode CLI setup" system
-
-    # meta
-    _register_help category_help "[Meta] Browse help categories" meta
-    _register_help register_help "[Meta] Register help descriptions" meta
-    _register_help setup_mode_help "[Meta] setup.sh mode flags" meta
-
-    # No category yet: reachable via my-help <topic> and the func registry,
-    # hidden from category pages (#726 kept these registered for lint-helpfunc).
-    _register_help show_devx_pr_verify_live_backend_identity_help "[Development] Backend container identity verification helper"
-    _register_help gh_flow_help "[Development] gh-flow issue/PR worker pipeline"
-    _register_help gh_pr_review_help "[Development] gh-pr-review external-AI review delegation"
-    _register_help gh_pr_reply_help "[Development] gh-pr-reply review-comment handler"
-    _register_help gh_pr_approve_help "[Development] gh-pr-approve PR approval workflow"
-    _register_help gh_audit_builtin_workflows_help "[Development] gh audit-builtin-workflows scan"
-    _register_help gcp_help "[DevOps] gcloud / GCP helpers"
-    _register_help zsh_autosuggestions_install_help "[CLI] zsh-autosuggestions installer"
+    printf '%s\n' "$1" | tr ' ' '\n' | LC_ALL=C sort
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -858,53 +673,25 @@ EOF
 # "utility function" home (shell-common/functions/*.sh) still yields 111 —
 # both dominated by internal helpers that happen to lack the `_` prefix
 # (aicron_crontab_write, devx_pr_review_all_parse, ...). The picker would drown
-# in them, which is exactly the noise Phase 3b was gated behind. The registry
-# below lists what a user actually types; locations are resolved from the
-# source tree at read time so a moved definition cannot go stale here.
+# in them, which is exactly the noise Phase 3b was gated behind. Only what a
+# user actually types is registered — each defining file ends with a
+# `_register_func <name> "<desc>"` row (util/help_registry.sh, #2135);
+# locations are resolved from the source tree at read time so a moved
+# definition cannot go stale here.
 #
 # Rules the registry must keep (pinned by test P10, which reads the emitted
 # index rather than this list): no `_`-prefixed names, no `*_help` names —
 # those are already `topic` candidates and the topic row carries a real
 # description.
 _my_help_func_registry() {
-    # name <TAB> description
-    printf '%s\n' \
-        "devx	Dev helper — mise wrapper and repo checks" \
-        "gwt	Git worktree helper (add/list/spawn/teardown)" \
-        "gbr	Git feature-branch teardown" \
-        "grs	Git restore helper" \
-        "git_log	Formatted git log views" \
-        "gh_flow	gh-flow issue/PR worker pipeline" \
-        "gh_pr_review	Delegate a PR review to an external AI CLI" \
-        "gh_pr_reply	Handle PR review comments" \
-        "gh_pr_approve	PR approval workflow" \
-        "gh_audit_builtin_workflows	Audit built-in GitHub workflows" \
-        "ghes_mirror	Mirror a public repo to an internal GHES instance" \
-        "mirror_pages_activate	Activate GHE Pages and rewrite upstream URLs" \
-        "gh_project_pat	PROJECT_BOARD_PAT guide + multi-repo secret set/status" \
-        "claude_skills_marketplace	Claude skills marketplace manager" \
-        "skill_loader	Load skills into an agent harness" \
-        "aicron	Scheduled AI job manager" \
-        "gcp	gcloud / GCP helpers" \
-        "dotfiles_secret_run	Run a command with the repo .enc.env secrets injected (secret-run)" \
-        "wsl_check	WSL and Docker environment health check" \
-        "wcp	cp that accepts Windows paths (wcp --help)" \
-        "del_file	Clean backup/original garbage files" \
-        "psgrep	Grep the process table" \
-        "srcpack	Pack source files for sharing" \
-        "myman	Friendlier man page viewer" \
-        "ta	tmux attach helper" \
-        "tmux_spawn	Spawn a tmux working session" \
-        "tmux_teardown	Tear down a tmux working session" \
-        "mount_add	Add a mount entry" \
-        "mount_show	Show current mounts" \
-        "obsidian_clone	Clone the Obsidian vault" \
-        "obsidian_claude	Run Claude against the Obsidian vault" \
-        "zsh_switch	Switch the login shell to zsh" \
-        "bash_switch	Switch the login shell to bash" \
-        "zsh_reload	Reload the zsh configuration" \
-        "zsh_theme	Show or change the zsh theme" \
-        "zsh_snippet	Manage zsh snippets"
+    # name <TAB> description, sorted
+    local name
+    if [ -n "${BASH_VERSION-}" ]; then
+        # eval: zsh must not parse bash-only ${!array[@]} at source time.
+        eval 'for name in "${!HELP_FUNCS[@]}"; do printf "%s\t%s\n" "$name" "${HELP_FUNCS[$name]}"; done'
+    elif [ -n "${ZSH_VERSION-}" ]; then
+        eval 'for name in ${(k)HELP_FUNCS}; do printf "%s\t%s\n" "$name" "${HELP_FUNCS[$name]}"; done'
+    fi | LC_ALL=C sort
 }
 
 # Internal: emit `func` index records (same 5-field schema as the alias index).
@@ -986,10 +773,6 @@ _my_help_category_candidates() {
 # Split out of _my_help_search so it can be exercised without a TTY or fzf.
 _my_help_search_candidates() {
     local scope="${1:-all}"
-
-    # Categories need the default registry; callers other than my_help_impl
-    # (tests, the preview helper) may not have triggered it yet.
-    _register_default_help_descriptions
 
     # Declare the loop-body variables once, up front: `local x=$(cmd)` inside
     # the piped while-read makes zsh echo the assignment as a stray stdout line
@@ -1299,9 +1082,6 @@ my_help_impl() {
         esac
     fi
 
-    # Register default descriptions (the function is idempotent).
-    _register_default_help_descriptions
-
     case "${1:-}" in
         "")
             # F-1: bare `my-help` opens the palette on an interactive terminal
@@ -1514,6 +1294,7 @@ _register_default_help_content
 # ═══════════════════════════════════════════════════════════════
 
 # Register built-in help functions (can be overridden)
+# shellcheck disable=SC2154 # assoc key (array declared in util/help_registry.sh), not a variable
 HELP_DESCRIPTIONS[my_help_impl]="Main help system"
 
 # Alias for my-help format (using dash instead of underscore)

@@ -100,3 +100,7 @@ ghostty_help() {
 }
 
 alias ghostty-help='ghostty_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help ghostty_help "[Config] Ghostty terminal config" config

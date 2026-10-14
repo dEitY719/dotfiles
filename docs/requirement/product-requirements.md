@@ -45,7 +45,7 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 |----|------|------|--------|--------|----------|
 | F1 | 멀티-쉘 entry loader | `bash/main.bash`, `zsh/main.zsh` 가 `shell-common/` 의 POSIX 모듈을 안전 sourcing | 상 | P0 | `bash/AGENTS.md`, `zsh/AGENTS.md` |
 | F2 | 통합 UX 라이브러리 | `ux_header`/`ux_success`/`ux_error`/`ux_info` 등 의미적 출력 함수 | 상 | P0 | `shell-common/tools/ux_lib/UX_GUIDELINES.md` |
-| F3 | Tool integrations | `shell-common/tools/integrations/` — 외부 도구 (gh, fzf, ollama, gcp 등) 1-파일 통합 | 상 | P0 | `shell-common/AGENTS.md` "3-Step Pattern" |
+| F3 | Tool integrations | `shell-common/tools/integrations/` — 외부 도구 (gh, fzf, ollama, gcp 등) 1-파일 통합 | 상 | P0 | `shell-common/AGENTS.md` "2-Step Pattern" |
 | F4 | Help 함수 표준 | `*_help.sh` 패턴 + ux 함수 일관 사용 | 중 | P0 | memory: `feedback_help_ux_rules` |
 | F5 | `tools/custom/` 명시 호출 | auto-source 금지 영역, 사용자가 명시적으로 invoke | 중 | P0 | `shell-common/AGENTS.md` |
 

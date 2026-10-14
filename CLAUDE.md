@@ -39,7 +39,7 @@ Key rule: `tools/custom/` is **never auto-sourced** — scripts there must be ca
 
 ### Adding a New Tool Integration
 
-See `shell-common/AGENTS.md` → "Adding a New Tool Integration (3-Step Pattern)" for the required 3-file sequence (`tools/integrations/`, `functions/*_help.sh`, `functions/my_help.sh` registration).
+See `shell-common/AGENTS.md` → "Adding a New Tool Integration (2-Step Pattern)" for the required 2-file sequence (`tools/integrations/`, `functions/*_help.sh` ending in its own `_register_help` row — no `my_help.sh` edit).
 
 ### UX Library
 

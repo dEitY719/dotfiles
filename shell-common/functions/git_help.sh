@@ -420,3 +420,7 @@ git_help() {
 }
 
 alias git-help='git_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help git_help "[Development] Git version control shortcuts" development

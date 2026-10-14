@@ -201,3 +201,8 @@ zsh_autosuggestions_install_help() {
 # ═══════════════════════════════════════════════════════════════
 
 alias zsh-autosuggestions-help='zsh_autosuggestions_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help zsh_autosuggestions_help "[CLI] zsh-autosuggestions plugin" cli
+_register_help zsh_autosuggestions_install_help "[CLI] zsh-autosuggestions installer"

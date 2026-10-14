@@ -184,3 +184,7 @@ setup_mode_help() {
 # ============================================================
 alias show-setup-mode='show_setup_mode'
 alias setup-mode-help='setup_mode_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help setup_mode_help "[Meta] setup.sh mode flags" meta

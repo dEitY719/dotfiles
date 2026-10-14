@@ -24,12 +24,12 @@
 **Categories**
 
 - **Category** — Topics
-- **AI/LLM (12)** — claude, cc, agy, codex, graphify, +7 more
-- **CLI Utilities (13)** — fzf, fd, fasd, ripgrep, pet, +8 more
-- **Configuration (6)** — p10k, crt, apt, pip, ghostty, +1 more
-- **Development (20)** — git, gwt, gbr, devx, uv, +15 more
-- **DevOps/Infra (14)** — docker, dproxy, sys, proxy, ssl, +9 more
-- **Documentation (5)** — dot, show_doc, notion, work_log, work
+- **AI/LLM (12)** — agy, cc, claude, claude_plugins, claude_skills_marketplace, +7 more
+- **CLI Utilities (13)** — bat, del_file, fasd, fd, fzf, +8 more
+- **Configuration (6)** — apt, crt, ghostty, p10k, pip, +1 more
+- **Development (20)** — bun, cli, devx, du, gbr, +15 more
+- **DevOps/Infra (14)** — docker, dproxy, gpu, mount, mysql, +9 more
+- **Documentation (5)** — dot, notion, show_doc, work, work_log
 - **Meta/Help (3)** — category, register, setup_mode
 - **System/Tools (2)** — dir, opencode
 - Use: my-help <category> (example: my-help ai)

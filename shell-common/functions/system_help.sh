@@ -581,3 +581,11 @@ network_check() {
 
 alias network-help='network_help'
 alias check-network='network_check'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help du_help "[Development] Disk usage analysis" development
+_register_help sys_help "[DevOps] System management helpers" devops
+_register_help gpu_help "[DevOps] GPU monitoring (WSL)" devops
+_register_help network_help "[DevOps] Internet connectivity diagnostics" devops
+_register_help dir_help "[System] Directory navigation shortcuts" system

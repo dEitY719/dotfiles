@@ -231,3 +231,7 @@ alias ux-help='ux_help'
 
 # Note: HELP_DESCRIPTIONS registration is handled by my_help.sh
 # which loads before this file and properly initializes the array
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help ux_help "[Development] UX library usage" development

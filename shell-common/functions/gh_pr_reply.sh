@@ -522,3 +522,8 @@ _gh_pr_reply_worker() {
 
 alias gh-pr-reply='gh_pr_reply'
 alias gh-pr-reply-help='gh_pr_reply_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help gh_pr_reply_help "[Development] gh-pr-reply review-comment handler"
+_register_func gh_pr_reply "Handle PR review comments"

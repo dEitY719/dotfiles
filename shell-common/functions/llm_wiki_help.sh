@@ -89,3 +89,7 @@ llm_wiki_help() {
 }
 
 alias llm-wiki-help='llm_wiki_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help llm_wiki_help "[AI] llm-wiki — vault 커맨드 5종 + pkm 스킬 3종 치트시트" ai

@@ -26,11 +26,13 @@ _register_help_rows_topic() {
 }
 
 _register_help_rows_description() {
-    ux_bullet "Add a row in my_help.sh: _register_help mytool_help \"[Development] ...\" development"
+    ux_bullet "Add one line at the end of the help file: _register_help mytool_help \"[Development] ...\" development"
+    ux_bullet "Guard it first: command -v _register_help >/dev/null 2>&1 || return 0"
+    ux_bullet "No my_help.sh edit: util/help_registry.sh loads before functions/"
 }
 
 _register_help_rows_category() {
-    ux_bullet "The row's 3rd argument appends mytool to that category (omit it to stay uncategorized)"
+    ux_bullet "The line's 3rd argument appends mytool to that category (omit it to stay uncategorized)"
     ux_bullet "Then reload your shell (source ~/.bashrc or ~/.zshrc)"
 }
 
@@ -67,13 +69,6 @@ _register_help_bootstrap() {
             . "${SHELL_COMMON}/functions/my_help.sh"
         fi
     fi
-
-    if type _register_default_help_descriptions >/dev/null 2>&1; then
-        if [ -z "${_HELP_DEFAULTS_REGISTERED:-}" ]; then
-            _register_default_help_descriptions
-            _HELP_DEFAULTS_REGISTERED=1
-        fi
-    fi
 }
 
 register_help() {
@@ -87,3 +82,7 @@ register_help() {
 }
 
 alias register-help='register_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help register_help "[Meta] Register help descriptions" meta

@@ -178,3 +178,7 @@ herdr_help() {
 }
 
 alias herdr-help='herdr_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help herdr_help "[CLI] herdr agent multiplexer" cli

@@ -443,3 +443,9 @@ ssh_check() {
 }
 
 alias ssh-check='ssh_check'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help ssl_help "[DevOps] SSL certificate config and diagnostics" devops
+_register_help ssh_help "[DevOps] SSH hosts and file transfer" devops
+_register_help crt_help "[Config] CA certificate management" config

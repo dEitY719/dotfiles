@@ -111,3 +111,7 @@ opencode_help() {
 }
 
 alias opencode-help='opencode_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help opencode_help "[System] OpenCode CLI setup" system

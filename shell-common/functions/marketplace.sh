@@ -717,3 +717,8 @@ alias claude-skills-marketplace='claude_skills_marketplace'
 alias claude-skills-marketplace-help='claude_skills_marketplace_help'
 # Short alias documented throughout the help/output (csm list, csm search, ...)
 alias csm='claude_skills_marketplace'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help claude_skills_marketplace_help "[AI/LLM] Skills marketplace system" ai
+_register_func claude_skills_marketplace "Claude skills marketplace manager"

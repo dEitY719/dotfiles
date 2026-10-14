@@ -153,3 +153,8 @@ obsidian_clone() {
 	git -C "$target" config core.fileMode false # /mnt/c 모드 churn 방지
 	ux_info "Cloned → $target"
 }
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func obsidian_clone "Clone the Obsidian vault"
+_register_func obsidian_claude "Run Claude against the Obsidian vault"

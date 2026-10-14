@@ -707,3 +707,9 @@ dproxy_help() {
 }
 
 alias dproxy-help='dproxy_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help docker_help "[DevOps] Docker commands and aliases" devops
+_register_help dproxy_help "[DevOps] Docker corporate proxy" devops
+_register_help proxy_help "[DevOps] Proxy config and diagnostics" devops

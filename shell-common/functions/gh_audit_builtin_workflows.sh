@@ -248,3 +248,8 @@ EOF
 
 alias gh-audit-builtin-workflows='gh_audit_builtin_workflows'
 alias gh-audit-builtin-workflows-help='gh_audit_builtin_workflows_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help gh_audit_builtin_workflows_help "[Development] gh audit-builtin-workflows scan"
+_register_func gh_audit_builtin_workflows "Audit built-in GitHub workflows"

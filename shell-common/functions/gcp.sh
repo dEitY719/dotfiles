@@ -295,3 +295,8 @@ alias gcp_theirs='gcp theirs'
 alias gcp_ours='gcp ours'
 alias gcp_author='gcp author'
 alias gcp-help='gcp_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help gcp_help "[DevOps] gcloud / GCP helpers"
+_register_func gcp "gcloud / GCP helpers"

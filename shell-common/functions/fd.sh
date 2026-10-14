@@ -201,3 +201,7 @@ fd_help() {
 
 # Naming Convention: Support both dash and underscore
 alias fd-help='fd_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help fd_help "[CLI] fd file finder" cli

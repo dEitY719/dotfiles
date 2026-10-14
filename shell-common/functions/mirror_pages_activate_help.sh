@@ -30,3 +30,7 @@ mirror_pages_activate_help() {
 }
 
 alias mirror-pages-activate-help='mirror_pages_activate_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help mirror_pages_activate_help "[Development] Activate GHE Pages + replace upstream URLs in README" development

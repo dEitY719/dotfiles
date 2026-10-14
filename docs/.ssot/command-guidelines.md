@@ -81,6 +81,13 @@ row 함수는 화면 출력뿐 아니라 **커맨드 레퍼런스 문서의 데�
 - 내부 helper: `_` 접두사 (`_git_help_rows_stash`)
 - alias: dash-form (`git-help`, `gwt-help`)
 
+## 등록 (my-help 노출)
+
+- help topic 은 정의 파일 끝에서 스스로 등록한다: `_register_help <topic>_help "[Category] 설명" <category>` (#2135). 중앙 테이블(`my_help.sh`)은 없다 — 배열과 등록 함수는 `shell-common/util/help_registry.sh` 가 `functions/` 보다 먼저 로드한다.
+- 사용자가 직접 치는 함수(팔레트 `/func`)는 `_register_func <name> "설명"`. `_` 접두사·`*_help` 이름은 넣지 않는다.
+- 등록 줄 앞에 `command -v _register_help >/dev/null 2>&1 || return 0` 가드를 둔다 — 파일을 단독 source 하는 테스트에서 레지스트리가 없어도 조용히 넘어가게.
+- 자동 전체 스캔은 하지 않는다 (private helper 소음 차단, #1740). 누락은 `tests/bats/functions/my_help_register.bats` 의 "every public *_help function is registered" 가 잡는다. 카테고리 페이지의 topic 순서는 이름순 정렬이다.
+
 명령어 자체의 dispatcher / private sub-function 네이밍은 [`command-design-pattern.md`](./command-design-pattern.md) §1 참조.
 
 ## 멀티 커맨드 함수형 CLI

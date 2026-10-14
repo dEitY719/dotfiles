@@ -36,3 +36,7 @@ window_help() {
 }
 
 alias window-help='window_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help window_help "[DevOps] Windows host PowerShell one-liners (Compact-WSL vhdx)" devops

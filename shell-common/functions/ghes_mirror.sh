@@ -147,3 +147,7 @@ ghes_mirror() {
 }
 
 alias ghes-mirror='ghes_mirror'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func ghes_mirror "Mirror a public repo to an internal GHES instance"

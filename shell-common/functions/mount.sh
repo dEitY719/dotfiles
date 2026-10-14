@@ -418,3 +418,9 @@ alias show-mnt='mount_show'
 
 # Note: Functions are automatically exported in both bash and zsh
 # No need for explicit export declarations in POSIX-compatible scripts
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help mount_help "[DevOps] Mount helpers" devops
+_register_func mount_add "Add a mount entry"
+_register_func mount_show "Show current mounts"
