@@ -1344,7 +1344,7 @@ EOF
 # reached the way `herdr` and `gh` are. A PATH-resolvable `gwt` wins when one
 # exists (that is how the bats suite stubs it); otherwise the function file is
 # sourced inside a subshell, which inherits ux_* from this script and keeps
-# git_worktree.sh's own definitions out of it.
+# the gwt files' own definitions out of it.
 _iw_gwt() {
     if command -v gwt >/dev/null 2>&1; then
         gwt "$@"
@@ -1354,8 +1354,11 @@ _iw_gwt() {
     (
         DOTFILES_FORCE_INIT=1
         export DOTFILES_FORCE_INIT
+        # spawn/teardown live in git_worktree_spawn.sh since #2156.
         # shellcheck source=/dev/null
         . "${_IW_SHELL_COMMON}/functions/git_worktree.sh" || exit 1
+        # shellcheck source=/dev/null
+        . "${_IW_SHELL_COMMON}/functions/git_worktree_spawn.sh" || exit 1
         gwt "$@"
     )
 }
