@@ -65,6 +65,7 @@ tests/
 - For new help topics, add to `shell-common/functions/` and extend coverage in `tests/integration/test_help_topics.py`.
 - For new shell functions, add bats tests in `tests/bats/functions/`.
 - For new custom tools, add syntax checks in `tests/bats/tools/custom_tools.bats`.
+- New module `<module>/setup.sh` requires `tests/bats/setup/<module>_setup.bats` using `run_module_setup <module> [mode]` (2 runs, 2nd run leaves `$HOME` untouched); register it in root `setup.sh main()` or add `<module>/.setup-optin` (`scripts/lint_setup_steps.sh`).
 
 # Context Map
 

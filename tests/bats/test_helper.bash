@@ -80,6 +80,47 @@ teardown_isolated_home() {
     export SHELL_COMMON="$_BATS_REAL_SHELL_COMMON"
 }
 
+# run_module_setup <module> [mode] — idempotency harness for <module>/setup.sh
+# (issue #2142). Seeds ~/.dotfiles-setup-mode and exports DOTFILES_SETUP_MODE
+# (lib/setup/mode.sh precedence: env > --mode > file), runs the script twice
+# via its own shebang, and fails unless both runs exit 0 and the 2nd run
+# touched nothing under $HOME. Leaves the 2nd run's $status/$output for extra
+# asserts. Calls setup_isolated_home itself when the caller has not; stub
+# external binaries on PATH before calling. An absolute path in place of
+# <module> runs that script (the harness's own self-test uses it).
+# shellcheck disable=SC2154  # status/output are set by bats' run
+run_module_setup() {
+    local module="$1" mode="${2:-public}" marker found script
+    case "$module" in
+    /*) script="$module" ;;
+    *) script="${_BATS_REAL_DOTFILES_ROOT}/${module}/setup.sh" ;;
+    esac
+    [ -n "${TEST_TEMP_HOME:-}" ] && [ "$HOME" = "$TEST_TEMP_HOME" ] || setup_isolated_home
+    printf '%s\n' "$mode" >"$HOME/.dotfiles-setup-mode"
+    export DOTFILES_SETUP_MODE="$mode"
+
+    run "$script"
+    [ "$status" -eq 0 ] || {
+        echo "run_module_setup: ${module} 1st run exit ${status}: ${output}" >&2
+        return 1
+    }
+    marker="$(mktemp "${BATS_TEST_TMPDIR}/marker.XXXXXX")"
+    # mtime is jiffy-coarse: step past the marker's tick so a write in the
+    # same tick still counts as newer.
+    sleep 0.05
+    run "$script"
+    [ "$status" -eq 0 ] || {
+        echo "run_module_setup: ${module} 2nd run exit ${status}: ${output}" >&2
+        return 1
+    }
+    found="$(find "$HOME" -newer "$marker")"
+    [ -z "$found" ] || {
+        echo "run_module_setup: ${module} 2nd run changed:" >&2
+        echo "$found" >&2
+        return 1
+    }
+}
+
 # Stage an isolated DOTFILES_ROOT for tests that invoke claude/setup.sh or
 # write to ${DOTFILES_ROOT}/claude/. Without this, setup.sh leaves
 # `settings.json.pre-statusline-fix-*` backup files in the version-controlled
