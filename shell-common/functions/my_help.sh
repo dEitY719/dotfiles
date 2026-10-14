@@ -1334,8 +1334,8 @@ if [ -n "$ZSH_VERSION" ]; then
             # Generic `<topic>-help` fallback (issue #1287). Each *_help.sh
             # defines its dash-form topic as an alias only, so a
             # non-interactive shell or one with `setopt no_aliases` lands
-            # here; map back to the canonical
-            # underscore helper and dispatch only when it is a real function
+            # here; map back to the canonical underscore helper and
+            # dispatch only when it is a real function
             # (never for aliases that point at a binary, e.g. `codex --help`).
             case "$cmd_name" in
                 *-help)
