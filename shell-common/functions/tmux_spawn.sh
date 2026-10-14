@@ -23,7 +23,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # _ts_known_agent / _tmux_add_agent_window live in lib/agent_launch.sh (#2156).
 # shellcheck source=/dev/null
-. "${SHELL_COMMON}/lib/agent_launch.sh"
+. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/lib/agent_launch.sh"
 
 tmux_spawn() {
     if ! command -v tmux >/dev/null 2>&1; then
