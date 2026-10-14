@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # Design: `/gh:issue-proceed` Skill
 
 **Created**: 2026-05-30

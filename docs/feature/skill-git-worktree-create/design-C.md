@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # Design: `ai-worktree:spawn` Skill (design-C, Final)
 
 - 문서 ID: `skill-ai-worktree-spawn-design-C`

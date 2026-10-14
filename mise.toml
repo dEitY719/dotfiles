@@ -63,7 +63,7 @@ run = [
 ]
 
 [tasks.lint-docs]
-description = "Docs 린터 (파일명 kebab-case #1027)"
+description = "Docs 린터 (파일명 kebab-case #1027, AGENTS.md 100줄 + front-matter status/stale 경로 #2152)"
 # adr/ + requirement/ 는 강제(FAIL), 나머지 docs/ 는 warn-only.
 # 레거시 위반 일괄 정리는 별도 이슈로 분리한다.
 # changelog fragment 검사(scripts/lint_changelog_fragments.sh) 중단(2026-09-02) —
@@ -73,6 +73,8 @@ description = "Docs 린터 (파일명 kebab-case #1027)"
 # 않다. 스크립트는 남아 있고 CLAUDE_SKILLS_DIR 로 해당 repo 를 가리켜 수동 실행한다.
 run = [
     "sh scripts/lint_docs_filenames.sh",
+    "sh scripts/lint_agents_md_lines.sh",
+    "sh scripts/lint_docs_status.sh",
 ]
 
 # ─── Test gate ───────────────────────────────────────────────────────

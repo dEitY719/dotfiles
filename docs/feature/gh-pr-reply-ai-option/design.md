@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # gh-pr-reply: --ai 실행 주체 선택 옵션 설계
 
 **작성일**: 2026-04-27

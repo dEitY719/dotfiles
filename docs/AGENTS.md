@@ -9,7 +9,7 @@
 - **Review**: open in markdown viewer (VS Code, grip)
 - **Line count**: `wc -l docs/**/*.md`
 - **Markdown lint**: 비활성화 — 자동 실행 금지
-- **Docs 린트**: `mise run lint-docs` = `scripts/lint_docs_filenames.sh` 1개 (태스크 SSOT `mise.toml`; changelog·`$HOME` 폴백 린터는 게이트에서 빠짐 — 후자는 `CLAUDE_SKILLS_DIR` 로 marketplace repo 를 가리켜 수동 실행, 사유는 `mise.toml` 주석)
+- **Docs 린트**: `mise run lint-docs` = `scripts/lint_docs_filenames.sh`(파일명) + `scripts/lint_agents_md_lines.sh`(AGENTS.md <100줄, FAIL) + `scripts/lint_docs_status.sh`(status 필수 FAIL, approved 문서 stale 경로 warn) 3개 (태스크 SSOT `mise.toml`; changelog·`$HOME` 폴백 린터는 게이트에서 빠짐 — 후자는 `CLAUDE_SKILLS_DIR` 로 marketplace repo 를 가리켜 수동 실행, 사유는 `mise.toml` 주석)
 
 # Golden Rules
 
@@ -50,7 +50,8 @@
 ## 문서 메타데이터·파일명 규칙 (#1027)
 
 - **front-matter `status:`** — `requirement/`·`feature/`·`adr/` 문서는 YAML front-matter
-  `status: draft | review | approved | deprecated` 로 현재 유효 SSOT 여부를 표시한다.
+  `status: draft | review | approved | deprecated | needs-review` 로 현재 유효 SSOT 여부를 표시한다
+  (`scripts/lint_docs_status.sh` 가 강제, `archive/`·`public/`·`company/` 는 대상 외).
 - **파일명 kebab-case** — docs 파일명은 kebab-case (`README.md`/`AGENTS.md` 면제).
   `mise run lint-docs` (SSOT: `scripts/lint_docs_filenames.sh`)가 검사 — 현재 **강제(FAIL)**
   범위는 `adr/`·`requirement/`, 나머지는 warn-only (레거시 정리는 별도 이슈).

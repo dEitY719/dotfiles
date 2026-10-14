@@ -28,7 +28,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 
 ## Immutable Constraints
 
-- **100-Line Limit**: Every AGENTS.md file must be under 100 lines — use nested AGENTS.md files for detail.
+- **100-Line Limit**: Every AGENTS.md file must be under 100 lines (enforced by `scripts/lint_agents_md_lines.sh` in `mise run lint-docs`) — use nested AGENTS.md files for detail.
 - **No emojis**: Strictly prohibited everywhere (token efficiency). Single exception: the `📊 👤 🤖` glyphs inside the `ai-metrics` footer (`<details>` wrapper + `<!-- ai-metrics -->` block) of GitHub Issue/PR cards (#317 F-2, PR #320, #367).
 - **Interactive Guards**: Every file that produces output starts with `case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac` (exceptions: `shell-common/AGENTS.md`).
 - **Loading Order**: Respect `bash/main.bash` priority (Env -> UX -> Alias -> App).

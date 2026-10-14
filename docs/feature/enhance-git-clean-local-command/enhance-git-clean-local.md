@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # git_clean_local 브랜치 보호 키워드 기능
 
 **v2 종합** | POSIX sh (bash/zsh 호환) | 2026-03-17

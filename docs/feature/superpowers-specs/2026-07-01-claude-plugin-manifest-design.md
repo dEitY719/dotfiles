@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # Claude Code Plugin Manifest — Design
 
 Origin: [Discussion #1042](https://github.com/dEitY719/dotfiles/discussions/1042) (Understand-Anything 플러그인 설치 세션에서 파생)

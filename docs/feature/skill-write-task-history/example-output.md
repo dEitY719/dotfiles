@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # Example Output: /write-task-history
 
 아래는 오늘(2026-03-20) dotfiles 프로젝트에서 작업한 내용을 예시로 한 출력입니다.

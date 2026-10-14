@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # my-help 명령어 UX 개선 통합 조사 및 종합 제안서
 
 - **문서 위치**: `docs/feature/ux-enhance/my-help-ux-modernization.md`

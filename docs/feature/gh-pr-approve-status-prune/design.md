@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # gh-pr-approve: status / prune 서브커맨드 설계
 
 **작성일**: 2026-04-29
