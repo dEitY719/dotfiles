@@ -48,7 +48,8 @@ description = "Shell lint (shellcheck + shfmt diff)"
 # notch below bash/ + shell-common/ (default severity = style): style/info findings
 # there were never triaged, so this is the current ratchet, not a permanent tier.
 # Other extensionless scripts (tests/test, obsidian/bin/obsidian) are not covered.
-# The git/hooks/* pathspecs assume every tracked file there is a shell hook.
+# The git/hooks/* pathspecs assume every tracked file there is a shell hook,
+# except the run_all.sh allowlist git/hooks/checks/baseline.txt (#2149).
 # shfmt covers bash/ git/ scripts/ + root setup.sh (#2150). shell-common/ stays
 # out — its formatting conventions diverge widely and reformatting 278 files
 # would bury blame; that is a separate effort.
@@ -57,7 +58,7 @@ description = "Shell lint (shellcheck + shfmt diff)"
 # git ls-files keeps the bats-core submodule's own .bats files out.
 run = [
     'find bash shell-common -type f \( -name "*.sh" -o -name "*.bash" \) -exec shellcheck -x -e SC1090,SC1091 {} +',
-    "git ls-files -z '*.sh' '*.bash' 'git/hooks/*' 'git/global-hooks/*' ':!:bash/' ':!:shell-common/' | xargs -0 shellcheck -x -S warning -e SC1090,SC1091",
+    "git ls-files -z '*.sh' '*.bash' 'git/hooks/*' 'git/global-hooks/*' ':!:bash/' ':!:shell-common/' ':!:git/hooks/checks/baseline.txt' | xargs -0 shellcheck -x -S warning -e SC1090,SC1091",
     "git ls-files -z '*.bats' | xargs -0 shellcheck -i SC2314 -S error",
     "shfmt -d -i 4 bash/ git/ scripts/ setup.sh",
 ]

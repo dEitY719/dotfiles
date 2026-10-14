@@ -8,8 +8,10 @@
 
 check_emoji() { # <abs_path> <repo_rel_path> <out>
     local hits
-    # shortcut: needs GNU grep -P; without it grep exits 2 and the check passes. Upgrade if a BSD-grep host commits here.
-    hits=$(LC_ALL=C.UTF-8 grep -nP '[\x{1F60A}-\x{1F64F}\x{1F680}\x{2728}\x{2B50}]' "$1" 2>/dev/null) || return 0
+    # perl, not grep -P: BSD grep has no -P and a missing C.UTF-8 locale breaks
+    # it, and either failure would read as "no emoji".
+    hits=$(perl -CSD -ne 'print "$.:$_" if /[\x{1F60A}-\x{1F64F}\x{1F680}\x{2728}\x{2B50}]/' "$1" 2>/dev/null)
+    [ -n "$hits" ] || return 0
     printf '%s\n' "$hits" | sed "s|^|$2:|" >>"$3"
     return 1
 }

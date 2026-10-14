@@ -23,6 +23,8 @@
 # paths that predate this guard no longer surface when an unrelated line
 # of an old file is first touched. The #737 defense contract is preserved
 # because an installer re-appending `/home/...` shows up as an added line.
+# Whole-file mode (CHECK_MODE=all, git/hooks/checks/run_all.sh, #2149) scans
+# the whole file instead; its legacy hits live in checks/baseline.txt.
 
 check_hardcoded_home_path() {
     local repo_root="$1"
