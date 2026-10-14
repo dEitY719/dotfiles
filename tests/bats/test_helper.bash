@@ -189,9 +189,9 @@ quote_args() {
 #
 # Sourcing under `bash -c` makes $0 == "bash", so `dirname "$0"` would resolve
 # relative to the caller's cwd instead of the script's — hence the leading
-# `cd` into TOOLS_DIR before sourcing. DOTFILES_TEST_MODE=1 makes init.sh
-# return before defining ux_*, so any doubles installed in BODY are the only
-# implementations in play. The script's own main() stays dormant: its
+# `cd` into TOOLS_DIR before sourcing. DOTFILES_TEST_MODE=1 still loads ux_lib
+# (#2144); doubles installed in BODY are defined later, so they override it.
+# The script's own main() stays dormant: its
 # direct-exec guard compares BASH_SOURCE[0] against $0, which never matches
 # while sourced.
 #

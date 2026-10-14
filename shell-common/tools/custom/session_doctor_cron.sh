@@ -25,23 +25,11 @@
 
 set -u
 
-# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
-. "$(dirname "$0")/init.sh" || exit 1
-
-# init.sh returns early under DOTFILES_TEST_MODE=1 (and before it exports
-# SHELL_COMMON), so resolve shell-common from this script's own location as a
-# fallback — the same two-tier resolution issue_watcher_cron.sh and
-# pr_merge_train_cron.sh use.
-_SD_SHELL_COMMON="${SHELL_COMMON:-$(cd "$(dirname "$0")/../.." && pwd)}"
-
-# Same early return means ux_* can still be undefined here — every output path
-# below depends on it.
-if ! type ux_header >/dev/null 2>&1; then
-    if [ -f "${_SD_SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-        # shellcheck source=/dev/null
-        . "${_SD_SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-    fi
-fi
+# Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib,
+# under DOTFILES_TEST_MODE=1 too) and the shared cron lock (#2144).
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib/cron_common.sh" && cron_bootstrap || exit 1
+_SD_SHELL_COMMON="${SHELL_COMMON}"
 
 # Detection (F-3/F-4) and per-tab state (F-6). Hard failures, not
 # degradations: without either one the tick has no way to tell a stuck session
@@ -80,42 +68,17 @@ _SD_TAB=$(printf '\t')
 # Preconditions — one tick at a time (NF-1)
 # ============================================================
 
-# The tick lock, mirroring _pmt_acquire_lock. A missing flock, an uncreatable
-# state dir and an unopenable lock file all degrade to "run without the
-# guarantee" rather than skipping the tick: the worst case is two ticks
+# The tick lock (cron_acquire_lock, lib/cron_common.sh). A missing flock, an
+# uncreatable state dir and an unopenable lock file all degrade to "run without
+# the guarantee" rather than skipping the tick: the worst case is two ticks
 # injecting into the same tab, which the cap still bounds, while skipping
-# would leave a stuck session stuck.
+# would leave a stuck session stuck. No tick name, so an overlap skips
+# silently: it is the normal outcome of a */1 schedule whose predecessor is
+# mid-injection, not an incident worth a line every minute.
 _sd_acquire_lock() {
-    local _dir _lock
-
-    _dir=$(session_doctor_state_dir)
+    local _lock
     _lock=$(session_doctor_tick_lock)
-
-    if ! command -v flock >/dev/null 2>&1; then
-        ux_warning "flock not found — running without single-instance protection"
-        return 0
-    fi
-
-    if ! mkdir -p "${_dir}" 2>/dev/null; then
-        ux_warning "Cannot create state directory (${_dir}) — running without single-instance protection"
-        return 0
-    fi
-
-    # The 2>/dev/null must be scoped to the group, not attached to `exec`:
-    # `exec 9>FILE 2>/dev/null` applies *both* redirections permanently, muting
-    # the whole script's stderr — every later ux_error would vanish from the
-    # cron log. The group restores fd 2 on exit while fd 9 persists.
-    if ! { exec 9>"${_lock}"; } 2>/dev/null; then
-        ux_warning "Cannot open lock file (${_lock}) — running without single-instance protection"
-        return 0
-    fi
-
-    if ! flock -n 9; then
-        # No output: a tick that overlaps its predecessor is the normal
-        # outcome of a */1 schedule whose predecessor is mid-injection, not an
-        # incident worth a line every minute.
-        return 1
-    fi
+    cron_acquire_lock "${_lock%/*}" "${_lock##*/}"
 }
 
 # ============================================================

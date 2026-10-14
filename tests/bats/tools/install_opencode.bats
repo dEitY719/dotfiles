@@ -50,7 +50,7 @@ curl"
 # --- environment selection (F4) -----------------------------------------------
 # Same numbering/value names as ./setup.sh (1=public 2=internal 3=external);
 # Enter keeps the current setup mode read via util/setup_mode_read.sh.
-# ux_* are stubbed: DOTFILES_TEST_MODE makes init.sh skip ux_lib.
+# ux_* are stubbed: BODY defines them after init.sh loads ux_lib, so they win.
 
 _select_env() {
     run_opencode_tool "
