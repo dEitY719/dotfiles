@@ -159,6 +159,7 @@ _path_without() {
     other_fp="$(_mk_cert other)"
     run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/other.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[FAIL] 사내 프록시 인증서 미포함"
+    refute_output --partial "PEM 부분 문자열로 보임"
     cat "$BATS_TEST_TMPDIR/other.crt" "$BATS_TEST_TMPDIR/target.crt" >"$BATS_TEST_TMPDIR/bundle.crt"
     # 콜론 없음 + 소문자도 같은 지문으로 정규화된다.
     run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" \
@@ -192,6 +193,20 @@ _path_without() {
     run env NODE_EXTRA_CA_CERTS="$HOME/ca.crt" DOTFILES_PROXY_CA_FINGERPRINT=FAKEFP bash "$SCRIPT"
     assert_output --partial "[WARN] 사내 프록시 인증서: SHA-256 지문 형식이 아님"
     assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+}
+
+@test "internal mode: 64-hex legacy substring value mistaken for a fingerprint FAILs with a hint (#2110)" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    local hex
+    hex="$(printf '%064d' 0 | tr 0 a)"
+    _mk_cert target >/dev/null
+    # 지문 정규식에 맞지만 실제로는 PEM 본문 부분 문자열인 예전(#2099) 형식 값.
+    { cat "$BATS_TEST_TMPDIR/target.crt"; printf -- '-----BEGIN CERTIFICATE-----\n%s\n-----END CERTIFICATE-----\n' "$hex"; } >"$BATS_TEST_TMPDIR/bundle.crt"
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$hex" bash "$SCRIPT"
+    assert_output --partial "[FAIL] 사내 프록시 인증서 미포함"
+    assert_output --partial "[WARN] 사내 프록시 인증서: 지문이 아니라 PEM 부분 문자열로 보임"
+    refute_output --partial "지문 형식이 아님"
 }
 
 @test "internal mode: missing openssl skips the fingerprint comparison with WARN" {

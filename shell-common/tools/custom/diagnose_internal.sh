@@ -94,7 +94,11 @@ _ca_in_bundle() {
         # 파싱 실패를 진짜 미포함과 구분한다 (BEGIN/END CERTIFICATE PEM 블록만 읽는다).
         [ -n "$_fps_cache" ] || warn "bundle 에서 인증서 지문을 하나도 읽지 못함 → PEM CERTIFICATE 블록 형식 확인"
     fi
-    printf '%s\n' "$_fps_cache" | grep -qxF -- "$(printf '%s' "$1" | tr -d ':' | tr 'a-f' 'A-F')"
+    printf '%s\n' "$_fps_cache" | grep -qxF -- "$(printf '%s' "$1" | tr -d ':' | tr 'a-f' 'A-F')" && return 0
+    # 판정(#2103 정규식)은 그대로 두고, 64자 all-hex 레거시 부분 문자열 값만 안내한다 (#2110).
+    ! grep -qF -- "$1" "$CHECK_CERT" ||
+        warn "$2: 지문이 아니라 PEM 부분 문자열로 보임 → openssl x509 -noout -fingerprint -sha256 값으로 교체"
+    return 1
 }
 
 main() {
