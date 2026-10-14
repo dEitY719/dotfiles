@@ -28,7 +28,10 @@ check_direct_exec_guard() {
 
     local tmp_file
     tmp_file=$(mktemp "$tmpdir/guard_check_XXXXXX.txt")
-    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
+    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || {
+        rm -f "$tmp_file"
+        return 0
+    }
 
     # Check for proper direct-exec guard pattern
     # Pattern 1: if [ "${BASH_SOURCE[0]}" = "$0" ]
@@ -77,7 +80,7 @@ check_direct_exec_guard() {
             echo "      main \"\$@\""
             echo "  fi"
             echo ""
-        } >> "$output_file"
+        } >>"$output_file"
         rm -f "$tmp_file"
         return 1
     fi

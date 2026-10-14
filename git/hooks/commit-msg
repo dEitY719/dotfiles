@@ -51,7 +51,7 @@ fi
 # branch ...") are not authored Conventional Commits; `git sync` (#2033)
 # produces them on every run, so validating them blocks the sync (#2041).
 case "$COMMIT_MSG" in
-    "Merge "*) exit 0 ;;
+"Merge "*) exit 0 ;;
 esac
 
 # Validate message

@@ -99,7 +99,7 @@ fi
 {
     echo -n "$TEMPLATE"
     cat "$COMMIT_MSG_FILE"
-} > "$COMMIT_MSG_FILE.tmp"
+} >"$COMMIT_MSG_FILE.tmp"
 
 mv "$COMMIT_MSG_FILE.tmp" "$COMMIT_MSG_FILE"
 

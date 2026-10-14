@@ -41,10 +41,10 @@ check_naming_violations() {
         [[ ${#func_name} -le 3 ]] && continue
         local matches
         matches=$(
-            grep -n "\".*$func_name.*\"" "$abs_path" 2>/dev/null | \
-                grep -v ":[[:space:]]*#" | \
-                grep -v "alias.*=" | \
-                grep -v ":[[:space:]]*$func_name()" | \
+            grep -n "\".*$func_name.*\"" "$abs_path" 2>/dev/null |
+                grep -v ":[[:space:]]*#" |
+                grep -v "alias.*=" |
+                grep -v ":[[:space:]]*$func_name()" |
                 grep -v "ux_info\|ux_header\|ux_error\|ux_success\|ux_warning\|ux_bullet\|ux_table_row" || true
         )
 
@@ -52,7 +52,7 @@ check_naming_violations() {
             printf '%s\n' "$matches" | sed "s|^|$abs_path:|" >>"$violations_file" 2>/dev/null
             violations_found=1
         fi
-    done < <(grep "^[[:space:]]*[a-z_][a-z0-9_]*()[[:space:]]*{" "$abs_path" | \
+    done < <(grep "^[[:space:]]*[a-z_][a-z0-9_]*()[[:space:]]*{" "$abs_path" |
         sed 's/^[[:space:]]*\([a-z_][a-z0-9_]*\)().*/\1/')
 
     return $violations_found

@@ -8,22 +8,22 @@
 # ============================================
 # Reference: https://www.conventionalcommits.org/
 COMMIT_TYPES=(
-    "feat"      # ✨ A new feature
-    "fix"       # 🐛 A bug fix
-    "docs"      # 📚 Documentation changes
-    "style"     # 🎨 Code style changes (formatting, semicolons, etc.)
-    "refactor"  # ♻️ Code refactoring without feature/fix
-    "perf"      # ⚡ Performance improvements
-    "test"      # ✅ Test-related changes
-    "chore"     # 🔧 Build, CI, dependency updates
+    "feat"     # ✨ A new feature
+    "fix"      # 🐛 A bug fix
+    "docs"     # 📚 Documentation changes
+    "style"    # 🎨 Code style changes (formatting, semicolons, etc.)
+    "refactor" # ♻️ Code refactoring without feature/fix
+    "perf"     # ⚡ Performance improvements
+    "test"     # ✅ Test-related changes
+    "chore"    # 🔧 Build, CI, dependency updates
 )
 
 # ============================================
 # MESSAGE LENGTH RULES
 # ============================================
-SUBJECT_MAX_LENGTH=72          # First line (subject) max length
-BODY_MAX_LENGTH=72             # Body line max length (per Conventional Commits spec)
-MIN_MESSAGE_LENGTH=10          # Minimum meaningful message length
+SUBJECT_MAX_LENGTH=72 # First line (subject) max length
+BODY_MAX_LENGTH=72    # Body line max length (per Conventional Commits spec)
+MIN_MESSAGE_LENGTH=10 # Minimum meaningful message length
 
 # ============================================
 # FORBIDDEN MESSAGE PATTERNS (차단할 메시지)
@@ -31,18 +31,18 @@ MIN_MESSAGE_LENGTH=10          # Minimum meaningful message length
 # These patterns indicate temporary/debug commits that should not be pushed
 # IMPORTANT: Use exact patterns to avoid blocking valid types like "test:"
 FORBIDDEN_PATTERNS=(
-    "^WIP"                     # Work In Progress (any message starting with WIP)
-    "^WIP:"                    # WIP: format
-    "^tmp"                     # Temporary commit
-    "^test$"                   # ONLY single word "test" (not "test: description")
-    "^fix$"                    # ONLY single word "fix" (not "fix: description")
-    "^TEMP"                    # Temporary marker
-    "^DEBUG"                   # Debug marker
-    "^XX[^A-Z0-9]"            # XX followed by non-alphanumeric (not release version)
-    "^TODO"                    # Incomplete work
-    "^FIXME"                   # Incomplete fix
-    "^XXX"                     # Another placeholder
-    "^!!!"                     # Urgency marker (not formal)
+    "^WIP"         # Work In Progress (any message starting with WIP)
+    "^WIP:"        # WIP: format
+    "^tmp"         # Temporary commit
+    "^test$"       # ONLY single word "test" (not "test: description")
+    "^fix$"        # ONLY single word "fix" (not "fix: description")
+    "^TEMP"        # Temporary marker
+    "^DEBUG"       # Debug marker
+    "^XX[^A-Z0-9]" # XX followed by non-alphanumeric (not release version)
+    "^TODO"        # Incomplete work
+    "^FIXME"       # Incomplete fix
+    "^XXX"         # Another placeholder
+    "^!!!"         # Urgency marker (not formal)
 )
 
 # ============================================

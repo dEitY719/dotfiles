@@ -26,7 +26,7 @@ check_backup_files() {
 
     # Write backup files to output file
     echo "$backup_files" | while read -r file; do
-        echo "${file#$repo_root/}" >> "$output_file"
+        echo "${file#$repo_root/}" >>"$output_file"
     done
 
     return 1

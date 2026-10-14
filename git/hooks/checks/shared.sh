@@ -30,8 +30,8 @@ write_staged_or_worktree_to_tmp() {
 # instead of silently becoming either a lib or an entry point.
 custom_tool_class() {
     case "$1" in
-        shell-common/tools/custom/lib/*) echo "lib" ;;
-        shell-common/tools/custom/*/*) ;;
-        shell-common/tools/custom/*.sh) echo "entrypoint" ;;
+    shell-common/tools/custom/lib/*) echo "lib" ;;
+    shell-common/tools/custom/*/*) ;;
+    shell-common/tools/custom/*.sh) echo "entrypoint" ;;
     esac
 }

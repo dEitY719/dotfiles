@@ -95,20 +95,20 @@ while read -r _kind _path; do
     if [ ! -f "$_path" ]; then
         if [ -L "$_path" ]; then
             ux_warning "Dangling symlink: $_path → $(readlink "$_path")"
-            ux_info    "→ Re-run ./setup.sh or restore the symlink target."
+            ux_info "→ Re-run ./setup.sh or restore the symlink target."
             _fail=1
         fi
         continue
     fi
 
     case "$_kind" in
-        json|tokenchk)
-            if ! _parse_json "$_path"; then
-                ux_error "Invalid JSON: $_path"
-                _fail=1
-                continue
-            fi
-            ;;
+    json | tokenchk)
+        if ! _parse_json "$_path"; then
+            ux_error "Invalid JSON: $_path"
+            _fail=1
+            continue
+        fi
+        ;;
     esac
 
     if ! _scan_bytes "$_path"; then
@@ -120,7 +120,7 @@ while read -r _kind _path; do
         _token=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$_path" 2>/dev/null)
         if [ -z "$_token" ] || [ "$_token" = "your-dt-api-key" ]; then
             ux_warning "$_path: ANTHROPIC_AUTH_TOKEN is empty or placeholder"
-            ux_info    "→ Edit the file and replace with the real token."
+            ux_info "→ Edit the file and replace with the real token."
         fi
     fi
 
@@ -131,9 +131,9 @@ EOF
 
 if [ "$_fail" -ne 0 ]; then
     ux_error "Config file verification FAILED — see messages above."
-    ux_info  "Likely cause: leftover git-crypt smudge filter (#594)."
-    ux_info  "Recovery:    rerun ./setup.sh after a fresh checkout, or"
-    ux_info  "             ./scripts/disable-git-crypt-local.sh && reset target file."
+    ux_info "Likely cause: leftover git-crypt smudge filter (#594)."
+    ux_info "Recovery:    rerun ./setup.sh after a fresh checkout, or"
+    ux_info "             ./scripts/disable-git-crypt-local.sh && reset target file."
     exit 1
 fi
 

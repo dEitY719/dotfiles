@@ -44,8 +44,8 @@ check_leak_patterns() {
         /^@@ / { hdr = 0; s = $3; sub(/^\+/, "", s); split(s, a, ","); n = a[1]; next }
         !hdr && /^\+/ { printf "%s\t%d\t%s\n", f, n, substr($0, 2); n++ }
     ')
-    bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR 2>/dev/null \
-        | grep -E -- "${LEAK_PATTERNS_ERE}" || true)
+    bad=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR 2>/dev/null |
+        grep -E -- "${LEAK_PATTERNS_ERE}" || true)
     idx=$(printf '%s\n' "$records" | cut -f3- | grep -nE -- "${LEAK_PATTERNS_ERE}" | cut -d: -f1)
 
     [ -z "$bad$idx" ] && return 0

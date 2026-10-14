@@ -61,7 +61,7 @@ fi
 log_info "Dotfiles root verified: $DOTFILES_DIR"
 
 # Check if we're in a git repository
-if ! git -C "$DOTFILES_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+if ! git -C "$DOTFILES_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     log_error "Not in a git repository"
     exit 1
 fi
@@ -130,7 +130,7 @@ TOTAL_FILES=$(echo "$SHELL_FILES" | wc -l)
 CONVERTED_COUNT=0
 
 # Check if any files have CRLF
-if echo "$SHELL_FILES" | xargs grep -l $'\r' 2>/dev/null | wc -l > /dev/null; then
+if echo "$SHELL_FILES" | xargs grep -l $'\r' 2>/dev/null | wc -l >/dev/null; then
     while IFS= read -r file; do
         # Check if file contains CRLF
         if grep -q $'\r' "$file"; then
@@ -140,7 +140,7 @@ if echo "$SHELL_FILES" | xargs grep -l $'\r' 2>/dev/null | wc -l > /dev/null; th
             # set -e would abort after the first conversion (#1972).
             CONVERTED_COUNT=$((CONVERTED_COUNT + 1))
         fi
-    done <<< "$SHELL_FILES"
+    done <<<"$SHELL_FILES"
 
     log_info "Converted $CONVERTED_COUNT files from CRLF to LF (checked $TOTAL_FILES files)"
 else

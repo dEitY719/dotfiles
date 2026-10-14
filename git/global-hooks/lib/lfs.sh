@@ -69,8 +69,8 @@ lfs_repo_uses_lfs() {
 # 0 = this invocation must chain into git-lfs, 1 = stay out of the way.
 lfs_hook_applies() {
     case "$HOOK_NAME" in
-        pre-push | post-commit | post-checkout | post-merge) ;;
-        *) return 1 ;;
+    pre-push | post-commit | post-checkout | post-merge) ;;
+    *) return 1 ;;
     esac
 
     command -v git-lfs >/dev/null 2>&1 || return 1

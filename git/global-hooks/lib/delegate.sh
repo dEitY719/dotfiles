@@ -48,8 +48,8 @@ fi
 
 # Candidate hooks in priority order (same order as the pre-commit wrapper)
 CANDIDATE_HOOKS=(
-  ".githooks/${HOOK_NAME}"       # Team shared hook (highest priority)
-  "git/hooks/${HOOK_NAME}"       # Dotfiles/Custom structure
+    ".githooks/${HOOK_NAME}" # Team shared hook (highest priority)
+    "git/hooks/${HOOK_NAME}" # Dotfiles/Custom structure
 )
 
 RUN_HOOK=""

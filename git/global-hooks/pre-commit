@@ -138,7 +138,7 @@ is_git_crypt_managed() {
 # Separates basename checks from path checks for precision and maintainability
 is_forbidden_staged_path() {
     local path="$1"
-    local base="${path##*/}"  # Extract basename (everything after last /)
+    local base="${path##*/}" # Extract basename (everything after last /)
 
     # 0. Allow git-crypt managed files (stored encrypted in the index)
     if is_git_crypt_managed "$path"; then
@@ -420,8 +420,8 @@ fi
 
 # Candidate hooks in priority order
 CANDIDATE_HOOKS=(
-  ".githooks/pre-commit"       # Team shared hook (highest priority)
-  "git/hooks/pre-commit"       # Dotfiles/Custom structure
+    ".githooks/pre-commit" # Team shared hook (highest priority)
+    "git/hooks/pre-commit" # Dotfiles/Custom structure
 )
 
 RUN_HOOK=""
@@ -462,8 +462,8 @@ done
 if [ -z "$RUN_HOOK" ]; then
     GIT_COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null)
     case "$GIT_COMMON_DIR" in
-        /*) : ;;
-        ?*) GIT_COMMON_DIR="$REPO_ROOT/$GIT_COMMON_DIR" ;;
+    /*) : ;;
+    ?*) GIT_COMMON_DIR="$REPO_ROOT/$GIT_COMMON_DIR" ;;
     esac
     HOOK_PATH="${GIT_COMMON_DIR:+$GIT_COMMON_DIR/hooks/pre-commit}"
 

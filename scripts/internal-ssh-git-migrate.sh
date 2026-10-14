@@ -38,10 +38,17 @@ usage() {
 
 apply=0
 case "${1:-}" in
-    "" | --dry-run) ;;
-    --apply) apply=1 ;;
-    -h | --help) usage; exit 0 ;;
-    *) ux_error "Unknown option: $1"; usage; exit 2 ;;
+"" | --dry-run) ;;
+--apply) apply=1 ;;
+-h | --help)
+    usage
+    exit 0
+    ;;
+*)
+    ux_error "Unknown option: $1"
+    usage
+    exit 2
+    ;;
 esac
 
 # _pre_swap <repo path> <marker>: print the newest committed version of the

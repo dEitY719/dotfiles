@@ -69,11 +69,11 @@ check_help_integrity() {
         fi
 
         # Violation found
-        echo "$file: Public help function '$func' found without description." >> "$violations_file"
-        echo "    -> Fix: Add HELP_DESCRIPTIONS[\"$func\"]=\"...\" OR rename to '_$func' if internal." >> "$violations_file"
+        echo "$file: Public help function '$func' found without description." >>"$violations_file"
+        echo "    -> Fix: Add HELP_DESCRIPTIONS[\"$func\"]=\"...\" OR rename to '_$func' if internal." >>"$violations_file"
         fail=1
 
-    done <<< "$func_names"
+    done <<<"$func_names"
 
     return $fail
 }

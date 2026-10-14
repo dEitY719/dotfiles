@@ -25,14 +25,14 @@
 # Consumers: git/setup.sh (symlink loop), hook_check.sh (diagnostic),
 # tests/bats/git/test_global_hooks.bats (regression).
 GIT_GLOBAL_HOOKS=(
-  pre-commit
-  pre-push
-  commit-msg
-  prepare-commit-msg
-  post-commit
-  post-checkout
-  post-merge
-  post-rewrite
+    pre-commit
+    pre-push
+    commit-msg
+    prepare-commit-msg
+    post-commit
+    post-checkout
+    post-merge
+    post-rewrite
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -52,8 +52,8 @@ GIT_HOOKS_DEBUG_PATTERNS_ERE="${GIT_HOOKS_DEBUG_PATTERNS_ERE:-pdb\\.set_trace\\(
 # - Exclude docs and shell scripts (shell often contains "breakpoint()" in comments)
 # - Exclude hook files themselves
 GIT_HOOKS_DEBUG_GREP_EXCLUDES=(
-  ':!*.md' ':!*.txt' ':!*.json' ':!*.yaml' ':!*.yml' ':!*.sh'
-  ':!git/global-hooks/pre-commit' ':!git/hooks/pre-commit'
+    ':!*.md' ':!*.txt' ':!*.json' ':!*.yaml' ':!*.yml' ':!*.sh'
+    ':!git/global-hooks/pre-commit' ':!git/hooks/pre-commit'
 )
 
 # Forbidden filename detection (basename/path + env allowlist)

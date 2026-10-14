@@ -13,11 +13,10 @@ check_auto_execution_in_sourced_files() {
 
     # Only check shell function files and integration tools (sourced files, not direct executables)
     case "$repo_rel_path" in
-        shell-common/functions/*.sh | shell-common/tools/integrations/*.sh)
-            ;;
-        *)
-            return 0
-            ;;
+    shell-common/functions/*.sh | shell-common/tools/integrations/*.sh) ;;
+    *)
+        return 0
+        ;;
     esac
 
     local abs_path="$repo_root/$repo_rel_path"
@@ -25,7 +24,10 @@ check_auto_execution_in_sourced_files() {
 
     local tmp_file
     tmp_file=$(mktemp "$tmpdir/auto_exec_XXXXXX.txt")
-    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
+    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || {
+        rm -f "$tmp_file"
+        return 0
+    }
 
     # Check for auto-execution patterns in sourced files
     # Pattern 1: Direct function calls (not in if statement)

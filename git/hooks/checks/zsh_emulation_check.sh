@@ -21,8 +21,8 @@ check_zsh_emulation_issues() {
     if grep -q "^[a-z_][a-z0-9_]*() {" "$abs_path" 2>/dev/null; then
 
         # If function uses 'set -x' or 'set +x' but no 'emulate -L sh'
-        if grep -q "set +x\|set -x" "$abs_path" 2>/dev/null && \
-           ! grep -q "emulate -L sh" "$abs_path" 2>/dev/null; then
+        if grep -q "set +x\|set -x" "$abs_path" 2>/dev/null &&
+            ! grep -q "emulate -L sh" "$abs_path" 2>/dev/null; then
 
             # Warning: may have zsh tracing issues
             # (Only a suggestion, not a blocking error since many scripts work fine)

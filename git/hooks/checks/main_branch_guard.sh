@@ -38,9 +38,9 @@ check_main_branch_guard() {
     [ -z "$MAIN_BRANCH_GUARD_CURRENT" ] && return 0
 
     case "$MAIN_BRANCH_GUARD_CURRENT" in
-        main | master)
-            return 1
-            ;;
+    main | master)
+        return 1
+        ;;
     esac
 
     return 0

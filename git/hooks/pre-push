@@ -141,10 +141,10 @@ fi
 # the "Error Cases" behaviour spelt out in the issue: empty pattern or no
 # matching URL silently disables the guard.
 LEAK_GUARD_ACTIVE=0
-if [ "${SKIP_LEAK_GUARD:-0}" != "1" ] \
-    && [ -n "${UPSTREAM_REMOTES_ERE}" ] \
-    && [ -n "${LEAK_PATTERNS_ERE}" ] \
-    && [ -n "${REMOTE_URL}" ]; then
+if [ "${SKIP_LEAK_GUARD:-0}" != "1" ] &&
+    [ -n "${UPSTREAM_REMOTES_ERE}" ] &&
+    [ -n "${LEAK_PATTERNS_ERE}" ] &&
+    [ -n "${REMOTE_URL}" ]; then
     if printf '%s' "${REMOTE_URL}" | grep -qE "${UPSTREAM_REMOTES_ERE}"; then
         LEAK_GUARD_ACTIVE=1
     fi
@@ -180,8 +180,8 @@ _leak_scan_range() {
         [ -z "${commit_hash}" ] && continue
 
         # Commit message scan
-        msg_match=$(git log -1 --format='%B' "${commit_hash}" 2>/dev/null \
-            | grep -nE "${LEAK_PATTERNS_ERE}" || true)
+        msg_match=$(git log -1 --format='%B' "${commit_hash}" 2>/dev/null |
+            grep -nE "${LEAK_PATTERNS_ERE}" || true)
         if [ -n "${msg_match}" ]; then
             echo "${MSG_LEAK_BLOCKED}"
             echo "  commit: ${commit_hash}"

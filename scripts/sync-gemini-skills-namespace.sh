@@ -19,7 +19,10 @@ if [ -f "$UX_LIB" ]; then
     source "$UX_LIB"
 else
     ux_header() { echo "=== $1 ==="; }
-    ux_section() { echo ""; echo "$1"; }
+    ux_section() {
+        echo ""
+        echo "$1"
+    }
     ux_success() { echo "✓ $1"; }
     ux_info() { echo "ℹ $1"; }
     ux_warning() { echo "⚠ $1"; }
@@ -55,27 +58,27 @@ PRUNE=1
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --dry-run)
-            DRY_RUN=1
-            shift
-            ;;
-        --prune)
-            PRUNE=1
-            shift
-            ;;
-        --no-prune)
-            PRUNE=0
-            shift
-            ;;
-        -h|--help|help)
-            _usage
-            exit 0
-            ;;
-        *)
-            ux_error "알 수 없는 옵션: $1"
-            _usage >&2
-            exit 2
-            ;;
+    --dry-run)
+        DRY_RUN=1
+        shift
+        ;;
+    --prune)
+        PRUNE=1
+        shift
+        ;;
+    --no-prune)
+        PRUNE=0
+        shift
+        ;;
+    -h | --help | help)
+        _usage
+        exit 0
+        ;;
+    *)
+        ux_error "알 수 없는 옵션: $1"
+        _usage >&2
+        exit 2
+        ;;
     esac
 done
 
@@ -97,23 +100,23 @@ collect_namespace_skills() {
 
         # worktree 디렉터리 스킵 (예: *-issue-[0-9]*, 또는 .git 이 파일인 경우)
         case "$repo" in
-            *-issue-[0-9]*) continue ;;
+        *-issue-[0-9]*) continue ;;
         esac
         [ -f "${skill_path%/*/*}/.git" ] && continue
 
         case "$repo" in
-            *-skills) namespace="${repo%-skills}" ;;
-            *) namespace="$repo" ;;
+        *-skills) namespace="${repo%-skills}" ;;
+        *) namespace="$repo" ;;
         esac
         entry_name="${namespace}:${skill_name}"
 
         case "$seen" in
-            *"|${entry_name}|"*) continue ;;
+        *"|${entry_name}|"*) continue ;;
         esac
         seen="${seen}${entry_name}|"
 
         printf "%s\t%s\n" "$skill_path" "$entry_name"
-    done <<< "$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
+    done <<<"$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
 }
 
 _agy_is_installed() {
@@ -143,7 +146,7 @@ declare -A SKILL_MAP=()
 while IFS=$'\t' read -r src_path link_name; do
     [ -n "$src_path" ] && [ -n "$link_name" ] || continue
     SKILL_MAP["$link_name"]="$(readlink -f "$src_path" 2>/dev/null || printf '%s' "$src_path")"
-done <<< "$SKILL_ENTRIES"
+done <<<"$SKILL_ENTRIES"
 
 entry_count="$(printf '%s\n' "$SKILL_ENTRIES" | grep -c .)"
 ux_header "Antigravity 네임스페이스 스킬 동기화"
@@ -178,7 +181,7 @@ for target_dir in "${TARGET_DIRS[@]}"; do
             ln -sfn "$src_path" "$dest_link"
             linked=$((linked + 1))
         fi
-    done <<< "$SKILL_ENTRIES"
+    done <<<"$SKILL_ENTRIES"
 
     # Stale prune: target_dir 내의 *:* 형태 symlink 중 유효하지 않거나 소스가 사라진 것 정리
     if [ "$PRUNE" -eq 1 ]; then
@@ -187,8 +190,8 @@ for target_dir in "${TARGET_DIRS[@]}"; do
             [ -L "$existing" ] || continue
             fname="${existing##*/}"
             case "$fname" in
-                *:*) ;;
-                *) continue ;; # 네임스페이스 심볼릭 링크만 관리
+            *:*) ;;
+            *) continue ;; # 네임스페이스 심볼릭 링크만 관리
             esac
 
             # link 가 가리키는 대상이 없거나 존재하지 않는 디렉터리인 경우

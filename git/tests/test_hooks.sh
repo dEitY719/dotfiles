@@ -19,132 +19,132 @@ SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 export DOTFILES_ROOT SHELL_COMMON
 
 if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-  # shellcheck source=/dev/null
-  . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+    # shellcheck source=/dev/null
+    . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 else
-  ux_header() { echo "$@"; }
-  ux_info() { echo "$@"; }
-  ux_success() { echo "$@"; }
-  ux_error() { echo "$@" >&2; }
+    ux_header() { echo "$@"; }
+    ux_info() { echo "$@"; }
+    ux_success() { echo "$@"; }
+    ux_error() { echo "$@" >&2; }
 fi
 
 die() {
-  ux_error "$1"
-  exit 1
+    ux_error "$1"
+    exit 1
 }
 
 assert_success() {
-  local cmd="$1"
-  if ! eval "$cmd" >/dev/null 2>&1; then
-    die "Expected success but failed: $cmd"
-  fi
+    local cmd="$1"
+    if ! eval "$cmd" >/dev/null 2>&1; then
+        die "Expected success but failed: $cmd"
+    fi
 }
 
 assert_failure() {
-  local cmd="$1"
-  local out
-  set +e
-  out=$(eval "$cmd" 2>&1)
-  local code=$?
-  set -e
-  if [ $code -eq 0 ]; then
-    die "Expected failure but succeeded: $cmd"
-  fi
-  grep -q "BLOCKING" <<<"$out" || die "Expected BLOCKING output but got: $out"
+    local cmd="$1"
+    local out
+    set +e
+    out=$(eval "$cmd" 2>&1)
+    local code=$?
+    set -e
+    if [ $code -eq 0 ]; then
+        die "Expected failure but succeeded: $cmd"
+    fi
+    grep -q "BLOCKING" <<<"$out" || die "Expected BLOCKING output but got: $out"
 }
 
 make_repo() {
-  local repo_dir="$1"
+    local repo_dir="$1"
 
-  mkdir -p "$repo_dir"
-  git -C "$repo_dir" init -q
-  # Fixture commits must not land on main/master: git/hooks/checks/main_branch_guard.sh
-  # blocks those, which would fail every case here for the wrong reason
-  # (git init picks main or master depending on init.defaultBranch).
-  git -C "$repo_dir" symbolic-ref HEAD refs/heads/hook-fixture
-  git -C "$repo_dir" config user.email "hook-test@example.com"
-  git -C "$repo_dir" config user.name "hook-test"
+    mkdir -p "$repo_dir"
+    git -C "$repo_dir" init -q
+    # Fixture commits must not land on main/master: git/hooks/checks/main_branch_guard.sh
+    # blocks those, which would fail every case here for the wrong reason
+    # (git init picks main or master depending on init.defaultBranch).
+    git -C "$repo_dir" symbolic-ref HEAD refs/heads/hook-fixture
+    git -C "$repo_dir" config user.email "hook-test@example.com"
+    git -C "$repo_dir" config user.name "hook-test"
 
-  mkdir -p "$repo_dir/.hooks"
-  cp "${DOTFILES_ROOT}/git/global-hooks/pre-commit" "$repo_dir/.hooks/pre-commit"
-  chmod +x "$repo_dir/.hooks/pre-commit"
-  git -C "$repo_dir" config core.hooksPath "$repo_dir/.hooks"
-  # Shared leak guard lib (#2008): next to the global hook, and at the path
-  # the project hook's checks/leak_pattern_check.sh sources it from.
-  mkdir -p "$repo_dir/.hooks/lib" "$repo_dir/git/global-hooks/lib"
-  cp "${DOTFILES_ROOT}/git/global-hooks/lib/leak_guard.sh" "$repo_dir/.hooks/lib/"
-  cp "${DOTFILES_ROOT}/git/global-hooks/lib/leak_guard.sh" "$repo_dir/git/global-hooks/lib/"
+    mkdir -p "$repo_dir/.hooks"
+    cp "${DOTFILES_ROOT}/git/global-hooks/pre-commit" "$repo_dir/.hooks/pre-commit"
+    chmod +x "$repo_dir/.hooks/pre-commit"
+    git -C "$repo_dir" config core.hooksPath "$repo_dir/.hooks"
+    # Shared leak guard lib (#2008): next to the global hook, and at the path
+    # the project hook's checks/leak_pattern_check.sh sources it from.
+    mkdir -p "$repo_dir/.hooks/lib" "$repo_dir/git/global-hooks/lib"
+    cp "${DOTFILES_ROOT}/git/global-hooks/lib/leak_guard.sh" "$repo_dir/.hooks/lib/"
+    cp "${DOTFILES_ROOT}/git/global-hooks/lib/leak_guard.sh" "$repo_dir/git/global-hooks/lib/"
 
-  mkdir -p "$repo_dir/git/hooks"
-  cp "${DOTFILES_ROOT}/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit"
-  chmod +x "$repo_dir/git/hooks/pre-commit"
+    mkdir -p "$repo_dir/git/hooks"
+    cp "${DOTFILES_ROOT}/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit"
+    chmod +x "$repo_dir/git/hooks/pre-commit"
 
-  mkdir -p "$repo_dir/git/hooks/checks"
-  cp -R "${DOTFILES_ROOT}/git/hooks/checks/." "$repo_dir/git/hooks/checks/"
+    mkdir -p "$repo_dir/git/hooks/checks"
+    cp -R "${DOTFILES_ROOT}/git/hooks/checks/." "$repo_dir/git/hooks/checks/"
 
-  mkdir -p "$repo_dir/git/config"
-  cp "${DOTFILES_ROOT}/git/config/hook-config.sh" "$repo_dir/git/config/hook-config.sh"
+    mkdir -p "$repo_dir/git/config"
+    cp "${DOTFILES_ROOT}/git/config/hook-config.sh" "$repo_dir/git/config/hook-config.sh"
 
-  mkdir -p "$repo_dir/bash" "$repo_dir/zsh"
-  cat >"$repo_dir/bash/main.bash" <<'EOF'
+    mkdir -p "$repo_dir/bash" "$repo_dir/zsh"
+    cat >"$repo_dir/bash/main.bash" <<'EOF'
 #!/bin/bash
 # placeholder init file
 EOF
-  cat >"$repo_dir/zsh/main.zsh" <<'EOF'
+    cat >"$repo_dir/zsh/main.zsh" <<'EOF'
 #!/bin/zsh
 # placeholder init file
 EOF
 
-  git -C "$repo_dir" add bash/main.bash zsh/main.zsh
-  git -C "$repo_dir" commit -m "init" -q
+    git -C "$repo_dir" add bash/main.bash zsh/main.zsh
+    git -C "$repo_dir" commit -m "init" -q
 }
 
 test_allows_spaces_in_filename() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  echo "ok" >"$repo_dir/file with spaces.txt"
-  git -C "$repo_dir" add "file with spaces.txt"
-  assert_success "git -C \"$repo_dir\" commit -m \"spaces\""
+    echo "ok" >"$repo_dir/file with spaces.txt"
+    git -C "$repo_dir" add "file with spaces.txt"
+    assert_success "git -C \"$repo_dir\" commit -m \"spaces\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_blocks_forbidden_env_file() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  echo "SECRET=1" >"$repo_dir/.env.local"
-  git -C "$repo_dir" add ".env.local"
-  assert_failure "git -C \"$repo_dir\" commit -m \"env\""
+    echo "SECRET=1" >"$repo_dir/.env.local"
+    git -C "$repo_dir" add ".env.local"
+    assert_failure "git -C \"$repo_dir\" commit -m \"env\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_blocks_init_sourcing_tools_custom() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  {
-    echo ""
-    echo ". \"\${SHELL_COMMON}/tools/custom/demo_ux.sh\""
-  } >>"$repo_dir/bash/main.bash"
-  git -C "$repo_dir" add bash/main.bash
-  assert_failure "git -C \"$repo_dir\" commit -m \"bad init\""
+    {
+        echo ""
+        echo ". \"\${SHELL_COMMON}/tools/custom/demo_ux.sh\""
+    } >>"$repo_dir/bash/main.bash"
+    git -C "$repo_dir" add bash/main.bash
+    assert_failure "git -C \"$repo_dir\" commit -m \"bad init\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_blocks_auto_exec_custom_script_without_guard() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  mkdir -p "$repo_dir/shell-common/tools/custom"
-  cat >"$repo_dir/shell-common/tools/custom/bad.sh" <<'EOF'
+    mkdir -p "$repo_dir/shell-common/tools/custom"
+    cat >"$repo_dir/shell-common/tools/custom/bad.sh" <<'EOF'
 #!/bin/bash
 main() {
   :
@@ -152,71 +152,71 @@ main() {
 main "$@"
 EOF
 
-  git -C "$repo_dir" add shell-common/tools/custom/bad.sh
-  assert_failure "git -C \"$repo_dir\" commit -m \"bad custom\""
+    git -C "$repo_dir" add shell-common/tools/custom/bad.sh
+    assert_failure "git -C \"$repo_dir\" commit -m \"bad custom\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_blocks_custom_script_wrong_shebang() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  mkdir -p "$repo_dir/shell-common/tools/custom"
-  cat >"$repo_dir/shell-common/tools/custom/wrong_shebang.sh" <<'EOF'
+    mkdir -p "$repo_dir/shell-common/tools/custom"
+    cat >"$repo_dir/shell-common/tools/custom/wrong_shebang.sh" <<'EOF'
 #!/bin/sh
 echo "hi"
 EOF
 
-  git -C "$repo_dir" add shell-common/tools/custom/wrong_shebang.sh
-  assert_failure "git -C \"$repo_dir\" commit -m \"wrong shebang\""
+    git -C "$repo_dir" add shell-common/tools/custom/wrong_shebang.sh
+    assert_failure "git -C \"$repo_dir\" commit -m \"wrong shebang\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_blocks_library_purity_top_level_read() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  mkdir -p "$repo_dir/shell-common/functions"
-  cat >"$repo_dir/shell-common/functions/bad.sh" <<'EOF'
+    mkdir -p "$repo_dir/shell-common/functions"
+    cat >"$repo_dir/shell-common/functions/bad.sh" <<'EOF'
 #!/bin/sh
 bad_func() { :; }
 read -r x
 EOF
 
-  git -C "$repo_dir" add shell-common/functions/bad.sh
-  assert_failure "git -C \"$repo_dir\" commit -m \"bad purity\""
+    git -C "$repo_dir" add shell-common/functions/bad.sh
+    assert_failure "git -C \"$repo_dir\" commit -m \"bad purity\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_blocks_library_purity_top_level_install() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  mkdir -p "$repo_dir/shell-common/tools/integrations"
-  cat >"$repo_dir/shell-common/tools/integrations/bad.sh" <<'EOF'
+    mkdir -p "$repo_dir/shell-common/tools/integrations"
+    cat >"$repo_dir/shell-common/tools/integrations/bad.sh" <<'EOF'
 #!/bin/sh
 apt-get install -y something
 EOF
 
-  git -C "$repo_dir" add shell-common/tools/integrations/bad.sh
-  assert_failure "git -C \"$repo_dir\" commit -m \"bad install\""
+    git -C "$repo_dir" add shell-common/tools/integrations/bad.sh
+    assert_failure "git -C \"$repo_dir\" commit -m \"bad install\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_allows_library_purity_commented_install() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  mkdir -p "$repo_dir/shell-common/tools/integrations"
-  cat >"$repo_dir/shell-common/tools/integrations/ok.sh" <<'EOF'
+    mkdir -p "$repo_dir/shell-common/tools/integrations"
+    cat >"$repo_dir/shell-common/tools/integrations/ok.sh" <<'EOF'
 #!/bin/sh
 # Example:
 #   npm install -g some-package
@@ -224,149 +224,149 @@ test_allows_library_purity_commented_install() {
 alias foo='bar'
 EOF
 
-  git -C "$repo_dir" add shell-common/tools/integrations/ok.sh
-  assert_success "git -C \"$repo_dir\" commit -m \"commented install ok\""
+    git -C "$repo_dir" add shell-common/tools/integrations/ok.sh
+    assert_success "git -C \"$repo_dir\" commit -m \"commented install ok\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_blocks_hardcoded_home_path_in_zshrc() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  # Simulate the bun installer re-appending a resolved /home/<user> path.
-  cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
+    # Simulate the bun installer re-appending a resolved /home/<user> path.
+    cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
 [ -s "/home/example-user/.bun/_bun" ] && source "/home/example-user/.bun/_bun"
 EOF
-  git -C "$repo_dir" add zsh/main.zsh
-  assert_failure "git -C \"$repo_dir\" commit -m \"hardcoded bun path\""
+    git -C "$repo_dir" add zsh/main.zsh
+    assert_failure "git -C \"$repo_dir\" commit -m \"hardcoded bun path\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_allows_hardcoded_home_path_with_marker() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
+    cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
 # allow-abs-home — example only, this PC's owner asked for a fixed path
 [ -s "/home/example-user/.bun/_bun" ] && source "/home/example-user/.bun/_bun" # allow-abs-home
 EOF
-  git -C "$repo_dir" add zsh/main.zsh
-  assert_success "git -C \"$repo_dir\" commit -m \"allow-listed path\""
+    git -C "$repo_dir" add zsh/main.zsh
+    assert_success "git -C \"$repo_dir\" commit -m \"allow-listed path\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_allows_home_var_reference() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
+    cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
 [ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 EOF
-  git -C "$repo_dir" add zsh/main.zsh
-  assert_success "git -C \"$repo_dir\" commit -m \"portable path\""
+    git -C "$repo_dir" add zsh/main.zsh
+    assert_success "git -C \"$repo_dir\" commit -m \"portable path\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # Issue #1142: a file that already carries a pre-existing absolute home path
 # (debt predating the #737 guard) must NOT block an unrelated one-line edit —
 # only added diff lines are scanned, so the untouched legacy line is ignored.
 test_allows_preexisting_abs_home_on_unrelated_edit() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
 
-  # Seed legacy debt: commit an abs-home line while bypassing the guard,
-  # simulating a path that landed before the guard existed.
-  cat >"$repo_dir/zsh/legacy.zsh" <<'EOF'
+    # Seed legacy debt: commit an abs-home line while bypassing the guard,
+    # simulating a path that landed before the guard existed.
+    cat >"$repo_dir/zsh/legacy.zsh" <<'EOF'
 #!/bin/zsh
 [ -s "/home/example-user/.bun/_bun" ] && source "/home/example-user/.bun/_bun"
 EOF
-  git -C "$repo_dir" add zsh/legacy.zsh
-  git -C "$repo_dir" commit -q --no-verify -m "legacy debt (pre-guard)"
+    git -C "$repo_dir" add zsh/legacy.zsh
+    git -C "$repo_dir" commit -q --no-verify -m "legacy debt (pre-guard)"
 
-  # Unrelated edit that does NOT touch the legacy line — must pass.
-  cat >>"$repo_dir/zsh/legacy.zsh" <<'EOF'
+    # Unrelated edit that does NOT touch the legacy line — must pass.
+    cat >>"$repo_dir/zsh/legacy.zsh" <<'EOF'
 export EDITOR=vim
 EOF
-  git -C "$repo_dir" add zsh/legacy.zsh
-  assert_success "git -C \"$repo_dir\" commit -m \"unrelated edit of legacy file\""
+    git -C "$repo_dir" add zsh/legacy.zsh
+    assert_success "git -C \"$repo_dir\" commit -m \"unrelated edit of legacy file\""
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # Issue #2014 — the ShellCheck step must actually run on staged files (the
 # call site used to pass the file on stdin while check_shellcheck reads $2).
 test_shellcheck_blocks_staged_violation() {
-  local repo_dir out code
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
-  mkdir -p "$repo_dir/d"
-  # shellcheck disable=SC2016
-  printf '#!/bin/bash\nfor f in $(ls); do echo "$f"; done\n' >"$repo_dir/d/probe.sh"
-  git -C "$repo_dir" add d/probe.sh
+    local repo_dir out code
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
+    mkdir -p "$repo_dir/d"
+    # shellcheck disable=SC2016
+    printf '#!/bin/bash\nfor f in $(ls); do echo "$f"; done\n' >"$repo_dir/d/probe.sh"
+    git -C "$repo_dir" add d/probe.sh
 
-  set +e
-  out=$(git -C "$repo_dir" commit -m "probe" 2>&1)
-  code=$?
-  set -e
-  [ $code -ne 0 ] || die "Expected ShellCheck to block d/probe.sh, got: $out"
-  grep -q "BLOCKING.*ShellCheck" <<<"$out" || die "Expected a ShellCheck section, got: $out"
-  grep -q "d/probe.sh: .*SC2045" <<<"$out" || die "Expected SC2045 for d/probe.sh, got: $out"
+    set +e
+    out=$(git -C "$repo_dir" commit -m "probe" 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected ShellCheck to block d/probe.sh, got: $out"
+    grep -q "BLOCKING.*ShellCheck" <<<"$out" || die "Expected a ShellCheck section, got: $out"
+    grep -q "d/probe.sh: .*SC2045" <<<"$out" || die "Expected SC2045 for d/probe.sh, got: $out"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_shellcheck_passes_clean_and_ignores_non_shell() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_repo "$repo_dir"
-  mkdir -p "$repo_dir/d"
-  printf '#!/bin/bash\necho "clean"\n' >"$repo_dir/d/clean.sh"
-  # Would be SC2045 if shellcheck ran on it: not a shell file, so it must not.
-  # shellcheck disable=SC2016
-  printf 'for f in $(ls); do echo $f; done\n' >"$repo_dir/d/notes.txt"
-  git -C "$repo_dir" add d/clean.sh d/notes.txt
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
+    mkdir -p "$repo_dir/d"
+    printf '#!/bin/bash\necho "clean"\n' >"$repo_dir/d/clean.sh"
+    # Would be SC2045 if shellcheck ran on it: not a shell file, so it must not.
+    # shellcheck disable=SC2016
+    printf 'for f in $(ls); do echo $f; done\n' >"$repo_dir/d/notes.txt"
+    git -C "$repo_dir" add d/clean.sh d/notes.txt
 
-  assert_success "git -C \"$repo_dir\" commit -m clean"
+    assert_success "git -C \"$repo_dir\" commit -m clean"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # Issue #2016 — wrapper_check matches the literal text "$@" (it used to expand
 # its own args into the regex, SC2199, so `foo "$@"` wrappers were missed).
 test_wrapper_check_flags_delegating_wrappers() {
-  local dir out
-  dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  # shellcheck disable=SC2016
-  printf '%s\n' \
-    'args_fwd() {' '    bar "$@"' '}' \
-    'bare_call() {' '    qux' '}' \
-    'one_line() { y "$@"; }' \
-    'var_call() {' '    $cmd "$@"' '}' \
-    'real_logic() {' '    echo hi' '    other' '}' \
-    'positional() {' '    z "$1"' '}' >"$dir/w.sh"
+    local dir out
+    dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    # shellcheck disable=SC2016
+    printf '%s\n' \
+        'args_fwd() {' '    bar "$@"' '}' \
+        'bare_call() {' '    qux' '}' \
+        'one_line() { y "$@"; }' \
+        'var_call() {' '    $cmd "$@"' '}' \
+        'real_logic() {' '    echo hi' '    other' '}' \
+        'positional() {' '    z "$1"' '}' >"$dir/w.sh"
 
-  out=$(
-    # shellcheck source=/dev/null
-    . "${DOTFILES_ROOT}/git/hooks/checks/wrapper_check.sh"
-    check_wrapper_function "$dir/w.sh" "$dir/out.txt" || true
-    cat "$dir/out.txt"
-  )
-  local want
-  for want in "args_fwd() { bar" "bare_call() { qux" "one_line() { y" "var_call() { cmd"; do
-    grep -qF "'$want ... }'" <<<"$out" || die "Expected wrapper warning '$want', got: $out"
-  done
-  for want in real_logic positional; do
-    grep -qF "'$want()" <<<"$out" && die "Unexpected wrapper warning for $want: $out"
-  done
-  rm -rf "$dir"
+    out=$(
+        # shellcheck source=/dev/null
+        . "${DOTFILES_ROOT}/git/hooks/checks/wrapper_check.sh"
+        check_wrapper_function "$dir/w.sh" "$dir/out.txt" || true
+        cat "$dir/out.txt"
+    )
+    local want
+    for want in "args_fwd() { bar" "bare_call() { qux" "one_line() { y" "var_call() { cmd"; do
+        grep -qF "'$want ... }'" <<<"$out" || die "Expected wrapper warning '$want', got: $out"
+    done
+    for want in real_logic positional; do
+        grep -qF "'$want()" <<<"$out" && die "Unexpected wrapper warning for $want: $out"
+    done
+    rm -rf "$dir"
 }
 
 # Issue #1970 — commit-time leak guard. Fake patterns only.
@@ -374,173 +374,173 @@ LEAK_TEST_UPSTREAM='github\.com[:/]example-owner/example-repo(\.git)?$'
 LEAK_TEST_PATTERNS='corp-internal\.example\.invalid|EMP[0-9]{5}'
 
 make_leak_repo() {
-  make_repo "$1"
-  git -C "$1" remote add upstream "$2"
-  echo "host = corp-internal.example.invalid" >"$1/leak.txt"
-  git -C "$1" add leak.txt
+    make_repo "$1"
+    git -C "$1" remote add upstream "$2"
+    echo "host = corp-internal.example.invalid" >"$1/leak.txt"
+    git -C "$1" add leak.txt
 }
 
 test_leak_guard_blocks_without_echoing_match() {
-  local repo_dir out code
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+    local repo_dir out code
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
 
-  set +e
-  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS" \
-    git -C "$repo_dir" commit -m "leak" 2>&1)
-  code=$?
-  set -e
-  [ $code -ne 0 ] || die "Expected leak guard to block the commit"
-  grep -q "leak.txt:1" <<<"$out" || die "Expected file:line in output, got: $out"
-  if grep -q "corp-internal.example.invalid" <<<"$out"; then
-    die "Leak guard echoed the matched text: $out"
-  fi
+    set +e
+    out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS" \
+        git -C "$repo_dir" commit -m "leak" 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected leak guard to block the commit"
+    grep -q "leak.txt:1" <<<"$out" || die "Expected file:line in output, got: $out"
+    if grep -q "corp-internal.example.invalid" <<<"$out"; then
+        die "Leak guard echoed the matched text: $out"
+    fi
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # Issue #1997 — a file NAME that matches is caught and never printed.
 test_leak_guard_redacts_matching_path() {
-  local repo_dir out code
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
-  mkdir "$repo_dir/d"
-  echo clean >"$repo_dir/d/qx9FAKETOKEN77.conf"
-  echo "qx9FAKETOKEN88 again" >"$repo_dir/d/qx9FAKETOKEN99.txt"
-  git -C "$repo_dir" add -A
+    local repo_dir out code
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+    mkdir "$repo_dir/d"
+    echo clean >"$repo_dir/d/qx9FAKETOKEN77.conf"
+    echo "qx9FAKETOKEN88 again" >"$repo_dir/d/qx9FAKETOKEN99.txt"
+    git -C "$repo_dir" add -A
 
-  set +e
-  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
-    git -C "$repo_dir" commit -m "path leak" 2>&1)
-  code=$?
-  set -e
-  [ $code -ne 0 ] || die "Expected leak guard to block a matching path"
-  if grep -q "qx9FAKE" <<<"$out"; then
-    die "Leak guard echoed a matching path or text: $out"
-  fi
-  [ "$(echo "$out" | grep -cE "<redacted path: [0-9]+ chars, matches LEAK_PATTERNS_ERE>  \(use: git diff --cached --name-only")" -eq 2 ] \
-    || die "Expected one redacted-path hint per matching path, got: $out"
-  grep -q "<redacted path: 20 chars>:1  (matches LEAK_PATTERNS_ERE)" <<<"$out" \
-    || die "Expected redacted path:line for content hit, got: $out"
-  grep -q "leak.txt:1" <<<"$out" || die "Expected ordinary path to print normally, got: $out"
+    set +e
+    out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
+        git -C "$repo_dir" commit -m "path leak" 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected leak guard to block a matching path"
+    if grep -q "qx9FAKE" <<<"$out"; then
+        die "Leak guard echoed a matching path or text: $out"
+    fi
+    [ "$(echo "$out" | grep -cE "<redacted path: [0-9]+ chars, matches LEAK_PATTERNS_ERE>  \(use: git diff --cached --name-only")" -eq 2 ] ||
+        die "Expected one redacted-path hint per matching path, got: $out"
+    grep -q "<redacted path: 20 chars>:1  (matches LEAK_PATTERNS_ERE)" <<<"$out" ||
+        die "Expected redacted path:line for content hit, got: $out"
+    grep -q "leak.txt:1" <<<"$out" || die "Expected ordinary path to print normally, got: $out"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # Issue #2002 — the OTHER checks' reports (shebang, shellcheck, ...) print
 # staged paths too; with the guard active the whole hook output is redacted.
 test_leak_guard_redacts_other_check_reports() {
-  local repo_dir out code inactive
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
-  mkdir -p "$repo_dir/d" "$repo_dir/shell-common"
-  # shellcheck disable=SC2016
-  printf '#!/bin/bash\nfor f in $(ls); do echo "$f"; done\n' >"$repo_dir/d/qx9FAKETOKEN77.sh"
-  printf '#!/bin/zsh\necho hi\n' >"$repo_dir/shell-common/qx9FAKETOKEN78.sh"
-  git -C "$repo_dir" add -A
+    local repo_dir out code inactive
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+    mkdir -p "$repo_dir/d" "$repo_dir/shell-common"
+    # shellcheck disable=SC2016
+    printf '#!/bin/bash\nfor f in $(ls); do echo "$f"; done\n' >"$repo_dir/d/qx9FAKETOKEN77.sh"
+    printf '#!/bin/zsh\necho hi\n' >"$repo_dir/shell-common/qx9FAKETOKEN78.sh"
+    git -C "$repo_dir" add -A
 
-  set +e
-  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
-    git -C "$repo_dir" commit -m "path leak" 2>&1)
-  code=$?
-  set -e
-  [ $code -ne 0 ] || die "Expected the commit to be blocked"
-  grep -q "Shebang violations" <<<"$out" || die "Expected the shebang report, got: $out"
-  grep -q "shell-common/<redacted>.sh:1" <<<"$out" || die "Expected a redacted shebang path, got: $out"
-  # #2014: the ShellCheck report names the path too, and must be redacted.
-  grep -q "d/<redacted>.sh: .*SC2045" <<<"$out" || die "Expected a redacted ShellCheck path, got: $out"
-  if grep -q "qx9FAKE" <<<"$out"; then
-    die "A check report echoed a matching path: $out"
-  fi
+    set +e
+    out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
+        git -C "$repo_dir" commit -m "path leak" 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected the commit to be blocked"
+    grep -q "Shebang violations" <<<"$out" || die "Expected the shebang report, got: $out"
+    grep -q "shell-common/<redacted>.sh:1" <<<"$out" || die "Expected a redacted shebang path, got: $out"
+    # #2014: the ShellCheck report names the path too, and must be redacted.
+    grep -q "d/<redacted>.sh: .*SC2045" <<<"$out" || die "Expected a redacted ShellCheck path, got: $out"
+    if grep -q "qx9FAKE" <<<"$out"; then
+        die "A check report echoed a matching path: $out"
+    fi
 
-  # Inactive (no upstream remote matches): the filter is skipped entirely.
-  set +e
-  inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "inactive" 2>&1)
-  set -e
-  grep -q "shell-common/qx9FAKETOKEN78.sh:1" <<<"$inactive" \
-    || die "Expected the unfiltered path when inactive, got: $inactive"
+    # Inactive (no upstream remote matches): the filter is skipped entirely.
+    set +e
+    inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "inactive" 2>&1)
+    set -e
+    grep -q "shell-common/qx9FAKETOKEN78.sh:1" <<<"$inactive" ||
+        die "Expected the unfiltered path when inactive, got: $inactive"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # Issue #2008 — the global hook (Layer 1) prints its own check results
 # (here: debug code warning) BEFORE delegating; with the guard active the
 # whole commit output, global + project hook, is filtered exactly once.
 test_leak_guard_redacts_global_and_project_output() {
-  local repo_dir out code
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
-  mkdir -p "$repo_dir/d"
-  printf 'breakpoint()\n' >"$repo_dir/d/qx9FAKETOKEN79.py"
-  git -C "$repo_dir" add d/qx9FAKETOKEN79.py
+    local repo_dir out code
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
+    mkdir -p "$repo_dir/d"
+    printf 'breakpoint()\n' >"$repo_dir/d/qx9FAKETOKEN79.py"
+    git -C "$repo_dir" add d/qx9FAKETOKEN79.py
 
-  set +e
-  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
-    git -C "$repo_dir" commit -m "global leak" 2>&1)
-  code=$?
-  set -e
-  [ $code -ne 0 ] || die "Expected the project leak guard to block"
-  grep -q "Debug code detected" <<<"$out" || die "Expected the global debug warning, got: $out"
-  grep -q "   - d/<redacted>.py" <<<"$out" || die "Expected a redacted global path, got: $out"
-  grep -q "Delegating to project hook" <<<"$out" || die "Expected delegation, got: $out"
-  grep -q "matches LEAK_PATTERNS_ERE" <<<"$out" || die "Expected the project leak report, got: $out"
-  if grep -q "qx9FAKE" <<<"$out"; then
-    die "The commit output echoed a matching path: $out"
-  fi
+    set +e
+    out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="$LEAK_TEST_PATTERNS|qx9FAKE[A-Z]+[0-9]+" \
+        git -C "$repo_dir" commit -m "global leak" 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected the project leak guard to block"
+    grep -q "Debug code detected" <<<"$out" || die "Expected the global debug warning, got: $out"
+    grep -q "   - d/<redacted>.py" <<<"$out" || die "Expected a redacted global path, got: $out"
+    grep -q "Delegating to project hook" <<<"$out" || die "Expected delegation, got: $out"
+    grep -q "matches LEAK_PATTERNS_ERE" <<<"$out" || die "Expected the project leak report, got: $out"
+    if grep -q "qx9FAKE" <<<"$out"; then
+        die "The commit output echoed a matching path: $out"
+    fi
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # Issue #2008 — a repo with none of this repo's files, using the real global
 # hook directory: trailing whitespace in a matching path is redacted when
 # active, printed verbatim when inactive, and a clean commit still succeeds.
 test_global_hook_leak_guard_in_unrelated_repo() {
-  local repo_dir out code inactive
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_plain_repo "$repo_dir"
-  git -C "$repo_dir" config core.hooksPath "$GLOBAL_HOOKS_DIR"
-  git -C "$repo_dir" remote add upstream "git@github.com:example-owner/example-repo.git"
-  mkdir -p "$repo_dir/d"
-  printf 'x   \n' >"$repo_dir/d/qx9FAKETOKEN77.txt"
-  git -C "$repo_dir" add d/qx9FAKETOKEN77.txt
+    local repo_dir out code inactive
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$repo_dir"
+    git -C "$repo_dir" config core.hooksPath "$GLOBAL_HOOKS_DIR"
+    git -C "$repo_dir" remote add upstream "git@github.com:example-owner/example-repo.git"
+    mkdir -p "$repo_dir/d"
+    printf 'x   \n' >"$repo_dir/d/qx9FAKETOKEN77.txt"
+    git -C "$repo_dir" add d/qx9FAKETOKEN77.txt
 
-  set +e
-  out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" \
-    git -C "$repo_dir" commit -m "ws" 2>&1)
-  code=$?
-  set -e
-  [ $code -ne 0 ] || die "Expected the trailing whitespace check to block"
-  grep -q "Trailing whitespace detected" <<<"$out" || die "Expected the whitespace report, got: $out"
-  grep -q "d/<redacted>.txt:1" <<<"$out" || die "Expected a redacted whitespace path, got: $out"
-  [ "$(echo "$out" | grep -c "qx9FAKE")" -eq 0 ] || die "The global hook echoed a matching path: $out"
+    set +e
+    out=$(UPSTREAM_REMOTES_ERE="$LEAK_TEST_UPSTREAM" LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" \
+        git -C "$repo_dir" commit -m "ws" 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected the trailing whitespace check to block"
+    grep -q "Trailing whitespace detected" <<<"$out" || die "Expected the whitespace report, got: $out"
+    grep -q "d/<redacted>.txt:1" <<<"$out" || die "Expected a redacted whitespace path, got: $out"
+    [ "$(echo "$out" | grep -c "qx9FAKE")" -eq 0 ] || die "The global hook echoed a matching path: $out"
 
-  set +e
-  inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "ws" 2>&1)
-  set -e
-  grep -q "d/qx9FAKETOKEN77.txt:1" <<<"$inactive" \
-    || die "Expected the unfiltered path when inactive, got: $inactive"
+    set +e
+    inactive=$(LEAK_PATTERNS_ERE="qx9FAKE[A-Z]+[0-9]+" git -C "$repo_dir" commit -m "ws" 2>&1)
+    set -e
+    grep -q "d/qx9FAKETOKEN77.txt:1" <<<"$inactive" ||
+        die "Expected the unfiltered path when inactive, got: $inactive"
 
-  printf 'x\n' >"$repo_dir/d/qx9FAKETOKEN77.txt"
-  git -C "$repo_dir" add d/qx9FAKETOKEN77.txt
-  assert_success "UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='qx9FAKE[A-Z]+[0-9]+' git -C \"$repo_dir\" commit -q -m clean"
+    printf 'x\n' >"$repo_dir/d/qx9FAKETOKEN77.txt"
+    git -C "$repo_dir" add d/qx9FAKETOKEN77.txt
+    assert_success "UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='qx9FAKE[A-Z]+[0-9]+' git -C \"$repo_dir\" commit -q -m clean"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 test_leak_guard_inert_without_upstream_remote() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_leak_repo "$repo_dir" "git@private-mirror.example.invalid:team/dotfiles.git"
-  assert_success "UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"private only\""
-  rm -rf "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_leak_repo "$repo_dir" "git@private-mirror.example.invalid:team/dotfiles.git"
+    assert_success "UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"private only\""
+    rm -rf "$repo_dir"
 }
 
 test_leak_guard_skip_escape_hatch() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_leak_repo "$repo_dir" "https://github.com/example-owner/example-repo.git"
-  assert_success "SKIP_LEAK_GUARD=1 UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"skip\""
-  rm -rf "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_leak_repo "$repo_dir" "https://github.com/example-owner/example-repo.git"
+    assert_success "SKIP_LEAK_GUARD=1 UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"skip\""
+    rm -rf "$repo_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -564,135 +564,135 @@ GLOBAL_HOOKS_DIR="${DOTFILES_ROOT}/git/global-hooks"
 
 # Throwaway repo with one commit and no project-level hooks at all.
 make_plain_repo() {
-  local repo_dir="$1"
+    local repo_dir="$1"
 
-  mkdir -p "$repo_dir"
-  git -C "$repo_dir" init -q
-  git -C "$repo_dir" config user.email "hook-test@example.com"
-  git -C "$repo_dir" config user.name "hook-test"
-  git -C "$repo_dir" config commit.gpgsign false
+    mkdir -p "$repo_dir"
+    git -C "$repo_dir" init -q
+    git -C "$repo_dir" config user.email "hook-test@example.com"
+    git -C "$repo_dir" config user.name "hook-test"
+    git -C "$repo_dir" config commit.gpgsign false
 
-  echo "seed" >"$repo_dir/seed.txt"
-  git -C "$repo_dir" add seed.txt
-  git -C "$repo_dir" -c core.hooksPath=/dev/null commit -q -m "seed"
+    echo "seed" >"$repo_dir/seed.txt"
+    git -C "$repo_dir" add seed.txt
+    git -C "$repo_dir" -c core.hooksPath=/dev/null commit -q -m "seed"
 }
 
 # Copy the real project-level pre-push (plus the rules file it sources) into
 # a throwaway repo, mirroring this repo's layout.
 install_project_pre_push() {
-  local repo_dir="$1"
+    local repo_dir="$1"
 
-  mkdir -p "$repo_dir/git/hooks" "$repo_dir/git/config"
-  cp "${DOTFILES_ROOT}/git/hooks/pre-push" "$repo_dir/git/hooks/pre-push"
-  chmod +x "$repo_dir/git/hooks/pre-push"
-  cp "${DOTFILES_ROOT}/git/config/pre-push-rules.sh" "$repo_dir/git/config/pre-push-rules.sh"
+    mkdir -p "$repo_dir/git/hooks" "$repo_dir/git/config"
+    cp "${DOTFILES_ROOT}/git/hooks/pre-push" "$repo_dir/git/hooks/pre-push"
+    chmod +x "$repo_dir/git/hooks/pre-push"
+    cp "${DOTFILES_ROOT}/git/config/pre-push-rules.sh" "$repo_dir/git/config/pre-push-rules.sh"
 }
 
 # Stub project hook that records the argv it was handed and exits with $3.
 install_recording_project_hook() {
-  local repo_dir="$1"
-  local hook_name="$2"
-  local exit_code="${3:-0}"
+    local repo_dir="$1"
+    local hook_name="$2"
+    local exit_code="${3:-0}"
 
-  mkdir -p "$repo_dir/git/hooks"
-  cat >"$repo_dir/git/hooks/${hook_name}" <<EOF
+    mkdir -p "$repo_dir/git/hooks"
+    cat >"$repo_dir/git/hooks/${hook_name}" <<EOF
 #!/bin/bash
 printf 'DELEGATED:%s\n' "\$*" >"${repo_dir}/.delegated"
 exit ${exit_code}
 EOF
-  chmod +x "$repo_dir/git/hooks/${hook_name}"
+    chmod +x "$repo_dir/git/hooks/${hook_name}"
 }
 
 # Run a global wrapper with $repo_dir as cwd. stdout+stderr land in
 # $WRAPPER_OUT; the wrapper's exit code is returned. stdin is inherited so
 # callers can feed the pre-push ref list.
 run_global_hook() {
-  local repo_dir="$1"
-  local hook_name="$2"
-  shift 2
+    local repo_dir="$1"
+    local hook_name="$2"
+    shift 2
 
-  # `&& rc=0 || rc=$?` keeps the wrapper inside a tested context so the
-  # suite's errexit does not abort on an intentionally failing hook.
-  local out rc
-  out=$(cd "$repo_dir" && "${GLOBAL_HOOKS_DIR}/${hook_name}" "$@" 2>&1) && rc=0 || rc=$?
-  WRAPPER_OUT="$out"
-  return "$rc"
+    # `&& rc=0 || rc=$?` keeps the wrapper inside a tested context so the
+    # suite's errexit does not abort on an intentionally failing hook.
+    local out rc
+    out=$(cd "$repo_dir" && "${GLOBAL_HOOKS_DIR}/${hook_name}" "$@" 2>&1) && rc=0 || rc=$?
+    WRAPPER_OUT="$out"
+    return "$rc"
 }
 
 # Every hook named by the SSOT must exist as an executable wrapper.
 test_global_hook_set_matches_ssot() {
-  # shellcheck source=../config/hook-config.sh
-  . "${DOTFILES_ROOT}/git/config/hook-config.sh"
+    # shellcheck source=../config/hook-config.sh
+    . "${DOTFILES_ROOT}/git/config/hook-config.sh"
 
-  if [ "${#GIT_GLOBAL_HOOKS[@]}" -eq 0 ]; then
-    die "GIT_GLOBAL_HOOKS is empty — the global hook SSOT must not be empty"
-  fi
+    if [ "${#GIT_GLOBAL_HOOKS[@]}" -eq 0 ]; then
+        die "GIT_GLOBAL_HOOKS is empty — the global hook SSOT must not be empty"
+    fi
 
-  local hook_name
-  for hook_name in "${GIT_GLOBAL_HOOKS[@]}"; do
-    [ -f "${GLOBAL_HOOKS_DIR}/${hook_name}" ] ||
-      die "Missing global hook wrapper: git/global-hooks/${hook_name}"
-    [ -x "${GLOBAL_HOOKS_DIR}/${hook_name}" ] ||
-      die "Global hook wrapper is not executable: git/global-hooks/${hook_name}"
-  done
+    local hook_name
+    for hook_name in "${GIT_GLOBAL_HOOKS[@]}"; do
+        [ -f "${GLOBAL_HOOKS_DIR}/${hook_name}" ] ||
+            die "Missing global hook wrapper: git/global-hooks/${hook_name}"
+        [ -x "${GLOBAL_HOOKS_DIR}/${hook_name}" ] ||
+            die "Global hook wrapper is not executable: git/global-hooks/${hook_name}"
+    done
 }
 
 # Delegation: the real project pre-push runs and blocks a protected branch.
 # The branch name arrives on stdin, so this also proves stdin passthrough.
 test_global_pre_push_delegates_to_project_hook() {
-  local repo_dir sha
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_plain_repo "$repo_dir"
-  install_project_pre_push "$repo_dir"
-  sha="$(git -C "$repo_dir" rev-parse HEAD)"
+    local repo_dir sha
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$repo_dir"
+    install_project_pre_push "$repo_dir"
+    sha="$(git -C "$repo_dir" rev-parse HEAD)"
 
-  if SKIP_LOCAL_PYTEST=1 run_global_hook "$repo_dir" pre-push \
-    origin "https://github.com/owner/repo.git" \
-    < <(printf 'refs/heads/master %s refs/heads/master %s\n' "$sha" "$ZERO_SHA"); then
-    die "Expected the delegated pre-push to block a protected branch: $WRAPPER_OUT"
-  fi
+    if SKIP_LOCAL_PYTEST=1 run_global_hook "$repo_dir" pre-push \
+        origin "https://github.com/owner/repo.git" \
+        < <(printf 'refs/heads/master %s refs/heads/master %s\n' "$sha" "$ZERO_SHA"); then
+        die "Expected the delegated pre-push to block a protected branch: $WRAPPER_OUT"
+    fi
 
-  grep -q "Delegating to project hook" <<<"$WRAPPER_OUT" ||
-    die "Expected delegation notice but got: $WRAPPER_OUT"
-  grep -q "Cannot push directly to protected branch" <<<"$WRAPPER_OUT" ||
-    die "Expected protected-branch block but got: $WRAPPER_OUT"
+    grep -q "Delegating to project hook" <<<"$WRAPPER_OUT" ||
+        die "Expected delegation notice but got: $WRAPPER_OUT"
+    grep -q "Cannot push directly to protected branch" <<<"$WRAPPER_OUT" ||
+        die "Expected protected-branch block but got: $WRAPPER_OUT"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # THE regression that matters: a repo with no git/hooks/pre-push must get a
 # silent no-op — no output, exit 0, and `mise run test` never invoked.
 test_global_pre_push_is_noop_in_unrelated_repo() {
-  local repo_dir sha stub_dir sentinel
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_plain_repo "$repo_dir"
-  sha="$(git -C "$repo_dir" rev-parse HEAD)"
+    local repo_dir sha stub_dir sentinel
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$repo_dir"
+    sha="$(git -C "$repo_dir" rev-parse HEAD)"
 
-  # A mise stub that records any invocation. Nothing should ever call it.
-  stub_dir="$repo_dir/.stub"
-  sentinel="$repo_dir/.mise-invoked"
-  mkdir -p "$stub_dir"
-  cat >"$stub_dir/mise" <<EOF
+    # A mise stub that records any invocation. Nothing should ever call it.
+    stub_dir="$repo_dir/.stub"
+    sentinel="$repo_dir/.mise-invoked"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/mise" <<EOF
 #!/bin/sh
 printf 'MISE_CALLED:%s\n' "\$*" >>"${sentinel}"
 exit 0
 EOF
-  chmod +x "$stub_dir/mise"
+    chmod +x "$stub_dir/mise"
 
-  # "master" is a PROTECTED_BRANCH for this repo — in an unrelated repo that
-  # rule must not apply either.
-  if ! PATH="${stub_dir}:${PATH}" run_global_hook "$repo_dir" pre-push \
-    origin "https://github.com/owner/repo.git" \
-    < <(printf 'refs/heads/master %s refs/heads/master %s\n' "$sha" "$ZERO_SHA"); then
-    die "Global pre-push wrapper must be a no-op without a project hook: $WRAPPER_OUT"
-  fi
+    # "master" is a PROTECTED_BRANCH for this repo — in an unrelated repo that
+    # rule must not apply either.
+    if ! PATH="${stub_dir}:${PATH}" run_global_hook "$repo_dir" pre-push \
+        origin "https://github.com/owner/repo.git" \
+        < <(printf 'refs/heads/master %s refs/heads/master %s\n' "$sha" "$ZERO_SHA"); then
+        die "Global pre-push wrapper must be a no-op without a project hook: $WRAPPER_OUT"
+    fi
 
-  [ -z "$WRAPPER_OUT" ] ||
-    die "Expected silent no-op but wrapper printed: $WRAPPER_OUT"
-  [ ! -f "$sentinel" ] ||
-    die "mise was invoked in an unrelated repo: $(cat "$sentinel")"
+    [ -z "$WRAPPER_OUT" ] ||
+        die "Expected silent no-op but wrapper printed: $WRAPPER_OUT"
+    [ ! -f "$sentinel" ] ||
+        die "mise was invoked in an unrelated repo: $(cat "$sentinel")"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # In a linked worktree `.git` is a FILE, not a directory (agy + codex review,
@@ -701,121 +701,121 @@ EOF
 # still be found and run when the wrapper is invoked from the worktree, not
 # just from the main checkout.
 test_global_pre_push_delegates_from_linked_worktree() {
-  local main_dir wt_dir hook_target sha
-  main_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_plain_repo "$main_dir"
+    local main_dir wt_dir hook_target sha
+    main_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$main_dir"
 
-  # $main_dir is a normal (non-worktree) repo, so its .git is a real
-  # directory — a plain path join is fine here. The wrapper-under-test is
-  # what must resolve this via --git-common-dir instead of a path join
-  # (see delegate.sh / pre-commit); using --git-path here to build the
-  # fixture would itself resolve against this machine's real
-  # core.hooksPath when one is configured, planting the honeypot hook at
-  # a real global location instead of inside the throwaway test repo.
-  hook_target="$main_dir/.git/hooks/pre-push"
-  mkdir -p "$(dirname "$hook_target")"
-  cat >"$hook_target" <<EOF
+    # $main_dir is a normal (non-worktree) repo, so its .git is a real
+    # directory — a plain path join is fine here. The wrapper-under-test is
+    # what must resolve this via --git-common-dir instead of a path join
+    # (see delegate.sh / pre-commit); using --git-path here to build the
+    # fixture would itself resolve against this machine's real
+    # core.hooksPath when one is configured, planting the honeypot hook at
+    # a real global location instead of inside the throwaway test repo.
+    hook_target="$main_dir/.git/hooks/pre-push"
+    mkdir -p "$(dirname "$hook_target")"
+    cat >"$hook_target" <<EOF
 #!/bin/bash
 printf 'DELEGATED:%s\n' "\$*" >"${main_dir}/.delegated"
 exit 0
 EOF
-  chmod +x "$hook_target"
+    chmod +x "$hook_target"
 
-  wt_dir="$(mktemp -u /tmp/dotfiles-hook-test.XXXXXX)"
-  git -C "$main_dir" worktree add -q "$wt_dir" -b hook-fixture-wt >/dev/null 2>&1 ||
-    die "Failed to create a linked worktree for the delegation test"
+    wt_dir="$(mktemp -u /tmp/dotfiles-hook-test.XXXXXX)"
+    git -C "$main_dir" worktree add -q "$wt_dir" -b hook-fixture-wt >/dev/null 2>&1 ||
+        die "Failed to create a linked worktree for the delegation test"
 
-  [ -f "$wt_dir/.git" ] ||
-    die "Expected the linked worktree's .git to be a file (test precondition)"
+    [ -f "$wt_dir/.git" ] ||
+        die "Expected the linked worktree's .git to be a file (test precondition)"
 
-  sha="$(git -C "$wt_dir" rev-parse HEAD)"
+    sha="$(git -C "$wt_dir" rev-parse HEAD)"
 
-  if SKIP_LOCAL_PYTEST=1 run_global_hook "$wt_dir" pre-push \
-    origin "https://github.com/owner/repo.git" \
-    < <(printf 'refs/heads/hook-fixture-wt %s refs/heads/hook-fixture-wt %s\n' "$sha" "$ZERO_SHA"); then
-    :
-  else
-    die "Expected the pre-push wrapper to succeed from a linked worktree: $WRAPPER_OUT"
-  fi
+    if SKIP_LOCAL_PYTEST=1 run_global_hook "$wt_dir" pre-push \
+        origin "https://github.com/owner/repo.git" \
+        < <(printf 'refs/heads/hook-fixture-wt %s refs/heads/hook-fixture-wt %s\n' "$sha" "$ZERO_SHA"); then
+        :
+    else
+        die "Expected the pre-push wrapper to succeed from a linked worktree: $WRAPPER_OUT"
+    fi
 
-  grep -q "Delegating to project hook" <<<"$WRAPPER_OUT" ||
-    die "Expected delegation notice from the linked worktree but got: $WRAPPER_OUT"
-  [ -f "$main_dir/.delegated" ] ||
-    die "Expected the shared .git/hooks/pre-push to run from the linked worktree: $WRAPPER_OUT"
+    grep -q "Delegating to project hook" <<<"$WRAPPER_OUT" ||
+        die "Expected delegation notice from the linked worktree but got: $WRAPPER_OUT"
+    [ -f "$main_dir/.delegated" ] ||
+        die "Expected the shared .git/hooks/pre-push to run from the linked worktree: $WRAPPER_OUT"
 
-  git -C "$main_dir" worktree remove -f "$wt_dir" >/dev/null 2>&1
-  rm -rf "$main_dir" "$wt_dir"
+    git -C "$main_dir" worktree remove -f "$wt_dir" >/dev/null 2>&1
+    rm -rf "$main_dir" "$wt_dir"
 }
 
 # Every wrapper forwards argv to the project hook of the current repo.
 test_global_wrappers_delegate_argv() {
-  local hook_name repo_dir
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-    make_plain_repo "$repo_dir"
-    install_recording_project_hook "$repo_dir" "$hook_name" 0
+    local hook_name repo_dir
+    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        make_plain_repo "$repo_dir"
+        install_recording_project_hook "$repo_dir" "$hook_name" 0
 
-    run_global_hook "$repo_dir" "$hook_name" alpha beta </dev/null ||
-      die "Expected ${hook_name} delegation to succeed: $WRAPPER_OUT"
+        run_global_hook "$repo_dir" "$hook_name" alpha beta </dev/null ||
+            die "Expected ${hook_name} delegation to succeed: $WRAPPER_OUT"
 
-    grep -q "^DELEGATED:alpha beta$" "$repo_dir/.delegated" ||
-      die "Expected ${hook_name} to receive argv, got: $(cat "$repo_dir/.delegated" 2>/dev/null)"
+        grep -q "^DELEGATED:alpha beta$" "$repo_dir/.delegated" ||
+            die "Expected ${hook_name} to receive argv, got: $(cat "$repo_dir/.delegated" 2>/dev/null)"
 
-    rm -rf "$repo_dir"
-  done
+        rm -rf "$repo_dir"
+    done
 }
 
 # Every wrapper propagates the project hook's exit code verbatim.
 test_global_wrappers_propagate_exit_code() {
-  local hook_name repo_dir rc
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-    make_plain_repo "$repo_dir"
-    install_recording_project_hook "$repo_dir" "$hook_name" 42
+    local hook_name repo_dir rc
+    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        make_plain_repo "$repo_dir"
+        install_recording_project_hook "$repo_dir" "$hook_name" 42
 
-    rc=0
-    run_global_hook "$repo_dir" "$hook_name" </dev/null || rc=$?
+        rc=0
+        run_global_hook "$repo_dir" "$hook_name" </dev/null || rc=$?
 
-    [ "$rc" -eq 42 ] ||
-      die "Expected ${hook_name} wrapper to exit 42, got ${rc}: $WRAPPER_OUT"
+        [ "$rc" -eq 42 ] ||
+            die "Expected ${hook_name} wrapper to exit 42, got ${rc}: $WRAPPER_OUT"
 
-    rm -rf "$repo_dir"
-  done
+        rm -rf "$repo_dir"
+    done
 }
 
 # No project hook of that type -> silent no-op for every wrapper.
 test_global_wrappers_are_noop_without_project_hook() {
-  local hook_name repo_dir
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-    make_plain_repo "$repo_dir"
+    local hook_name repo_dir
+    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        make_plain_repo "$repo_dir"
 
-    run_global_hook "$repo_dir" "$hook_name" </dev/null ||
-      die "Expected ${hook_name} wrapper to exit 0 without a project hook: $WRAPPER_OUT"
+        run_global_hook "$repo_dir" "$hook_name" </dev/null ||
+            die "Expected ${hook_name} wrapper to exit 0 without a project hook: $WRAPPER_OUT"
 
-    [ -z "$WRAPPER_OUT" ] ||
-      die "Expected ${hook_name} wrapper to stay silent but got: $WRAPPER_OUT"
+        [ -z "$WRAPPER_OUT" ] ||
+            die "Expected ${hook_name} wrapper to stay silent but got: $WRAPPER_OUT"
 
-    rm -rf "$repo_dir"
-  done
+        rm -rf "$repo_dir"
+    done
 }
 
 # Outside any git repository the wrappers must exit 0 without noise.
 test_global_wrappers_are_noop_outside_git_repo() {
-  local hook_name work_dir
-  work_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  # Detach from any enclosing repository (mktemp dirs live under /tmp).
-  export GIT_CEILING_DIRECTORIES="$work_dir"
+    local hook_name work_dir
+    work_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    # Detach from any enclosing repository (mktemp dirs live under /tmp).
+    export GIT_CEILING_DIRECTORIES="$work_dir"
 
-  for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
-    run_global_hook "$work_dir" "$hook_name" </dev/null ||
-      die "Expected ${hook_name} wrapper to exit 0 outside a repo: $WRAPPER_OUT"
-    [ -z "$WRAPPER_OUT" ] ||
-      die "Expected ${hook_name} wrapper to stay silent outside a repo: $WRAPPER_OUT"
-  done
+    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+        run_global_hook "$work_dir" "$hook_name" </dev/null ||
+            die "Expected ${hook_name} wrapper to exit 0 outside a repo: $WRAPPER_OUT"
+        [ -z "$WRAPPER_OUT" ] ||
+            die "Expected ${hook_name} wrapper to stay silent outside a repo: $WRAPPER_OUT"
+    done
 
-  unset GIT_CEILING_DIRECTORIES
-  rm -rf "$work_dir"
+    unset GIT_CEILING_DIRECTORIES
+    rm -rf "$work_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -831,221 +831,221 @@ test_global_wrappers_are_noop_outside_git_repo() {
 # Fake git-lfs in $1/.lfs-bin: appends "ARGS:<argv>" then "STDIN:<line>" per
 # stdin line to $1/.lfs-calls, exits $FAKE_LFS_RC (default 0).
 install_fake_git_lfs() {
-  local repo_dir="$1"
-  mkdir -p "$repo_dir/.lfs-bin"
-  cat >"$repo_dir/.lfs-bin/git-lfs" <<EOF
+    local repo_dir="$1"
+    mkdir -p "$repo_dir/.lfs-bin"
+    cat >"$repo_dir/.lfs-bin/git-lfs" <<EOF
 #!/bin/sh
 printf 'ARGS:%s\n' "\$*" >>"${repo_dir}/.lfs-calls"
 while IFS= read -r line; do printf 'STDIN:%s\n' "\$line" >>"${repo_dir}/.lfs-calls"; done
 exit \${FAKE_LFS_RC:-0}
 EOF
-  chmod +x "$repo_dir/.lfs-bin/git-lfs"
+    chmod +x "$repo_dir/.lfs-bin/git-lfs"
 }
 
 # Repo + fake git-lfs; $2 = "lfs" marks it as an LFS repo (.git/lfs exists,
 # as git-lfs's clean/smudge filter leaves it).
 make_lfs_fixture() {
-  local repo_dir="$1"
-  make_plain_repo "$repo_dir"
-  install_fake_git_lfs "$repo_dir"
-  if [ "${2:-}" = "lfs" ]; then
-    mkdir -p "$repo_dir/.git/lfs/objects"
-  fi
+    local repo_dir="$1"
+    make_plain_repo "$repo_dir"
+    install_fake_git_lfs "$repo_dir"
+    if [ "${2:-}" = "lfs" ]; then
+        mkdir -p "$repo_dir/.git/lfs/objects"
+    fi
 }
 
 # Project hook recording argv and every stdin line to $repo_dir/.delegated.
 install_stdin_recording_project_hook() {
-  local repo_dir="$1" hook_name="$2"
-  mkdir -p "$repo_dir/git/hooks"
-  cat >"$repo_dir/git/hooks/${hook_name}" <<EOF
+    local repo_dir="$1" hook_name="$2"
+    mkdir -p "$repo_dir/git/hooks"
+    cat >"$repo_dir/git/hooks/${hook_name}" <<EOF
 #!/bin/bash
 printf 'DELEGATED:%s\n' "\$*" >"${repo_dir}/.delegated"
 while IFS= read -r line; do printf 'STDIN:%s\n' "\$line" >>"${repo_dir}/.delegated"; done
 exit 0
 EOF
-  chmod +x "$repo_dir/git/hooks/${hook_name}"
+    chmod +x "$repo_dir/git/hooks/${hook_name}"
 }
 
 # pre-push: git lfs pre-push gets argv + the full ref list, and the project
 # hook still gets the same ref list (stdin buffered once, replayed).
 test_global_lfs_pre_push_chains_and_replays_stdin() {
-  local repo_dir refs stdin_lines
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_lfs_fixture "$repo_dir" lfs
-  install_stdin_recording_project_hook "$repo_dir" pre-push
-  refs="$(printf 'refs/heads/a 1111 refs/heads/a %s\nrefs/heads/b 2222 refs/heads/b %s' "$ZERO_SHA" "$ZERO_SHA")"
-  stdin_lines="$(printf '%s\n' "$refs" | sed 's/^/STDIN:/')"
+    local repo_dir refs stdin_lines
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir" lfs
+    install_stdin_recording_project_hook "$repo_dir" pre-push
+    refs="$(printf 'refs/heads/a 1111 refs/heads/a %s\nrefs/heads/b 2222 refs/heads/b %s' "$ZERO_SHA" "$ZERO_SHA")"
+    stdin_lines="$(printf '%s\n' "$refs" | sed 's/^/STDIN:/')"
 
-  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin "https://example.invalid/r.git" \
-    < <(printf '%s\n' "$refs") || die "Expected LFS pre-push chain to succeed: $WRAPPER_OUT"
+    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin "https://example.invalid/r.git" \
+        < <(printf '%s\n' "$refs") || die "Expected LFS pre-push chain to succeed: $WRAPPER_OUT"
 
-  [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:pre-push origin https://example.invalid/r.git
+    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:pre-push origin https://example.invalid/r.git
 ${stdin_lines}" ] ||
-    die "git lfs pre-push got wrong argv/stdin: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
-  [ "$(cat "$repo_dir/.delegated" 2>/dev/null)" = "DELEGATED:origin https://example.invalid/r.git
+        die "git lfs pre-push got wrong argv/stdin: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+    [ "$(cat "$repo_dir/.delegated" 2>/dev/null)" = "DELEGATED:origin https://example.invalid/r.git
 ${stdin_lines}" ] ||
-    die "Project pre-push lost the replayed stdin: $(cat "$repo_dir/.delegated" 2>/dev/null)"
+        die "Project pre-push lost the replayed stdin: $(cat "$repo_dir/.delegated" 2>/dev/null)"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # pre-push: a failing git lfs pre-push aborts the push with its exit code,
 # after the project hook (which runs first) already passed.
 test_global_lfs_pre_push_failure_blocks() {
-  local repo_dir rc=0
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_lfs_fixture "$repo_dir" lfs
-  install_stdin_recording_project_hook "$repo_dir" pre-push
+    local repo_dir rc=0
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir" lfs
+    install_stdin_recording_project_hook "$repo_dir" pre-push
 
-  FAKE_LFS_RC=2 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
-    < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") || rc=$?
+    FAKE_LFS_RC=2 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
+        < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") || rc=$?
 
-  [ "$rc" -eq 2 ] || die "Expected lfs failure (2) to block the push, got ${rc}: $WRAPPER_OUT"
-  grep -q "^DELEGATED:origin url$" "$repo_dir/.delegated" ||
-    die "Expected the project pre-push to run before git lfs pre-push"
-  grep -q "git lfs pre-push failed (exit 2)" <<<"$WRAPPER_OUT" ||
-    die "Expected an abort notice, got: $WRAPPER_OUT"
+    [ "$rc" -eq 2 ] || die "Expected lfs failure (2) to block the push, got ${rc}: $WRAPPER_OUT"
+    grep -q "^DELEGATED:origin url$" "$repo_dir/.delegated" ||
+        die "Expected the project pre-push to run before git lfs pre-push"
+    grep -q "git lfs pre-push failed (exit 2)" <<<"$WRAPPER_OUT" ||
+        die "Expected an abort notice, got: $WRAPPER_OUT"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # pre-push order: a project pre-push that rejects the push (protected branch,
 # leak guard) aborts it before git-lfs runs — no LFS blob is uploaded for a
 # push that never happens.
 test_global_lfs_pre_push_project_failure_skips_lfs() {
-  local repo_dir rc=0
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_lfs_fixture "$repo_dir" lfs
-  install_recording_project_hook "$repo_dir" pre-push 5
+    local repo_dir rc=0
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir" lfs
+    install_recording_project_hook "$repo_dir" pre-push 5
 
-  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
-    < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") || rc=$?
+    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
+        < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") || rc=$?
 
-  [ "$rc" -eq 5 ] || die "Expected the project hook's exit code 5, got ${rc}: $WRAPPER_OUT"
-  grep -q "^DELEGATED:origin url$" "$repo_dir/.delegated" ||
-    die "Expected the project pre-push to run"
-  [ ! -f "$repo_dir/.lfs-calls" ] ||
-    die "git lfs pre-push ran after the project hook rejected the push: $(cat "$repo_dir/.lfs-calls")"
+    [ "$rc" -eq 5 ] || die "Expected the project hook's exit code 5, got ${rc}: $WRAPPER_OUT"
+    grep -q "^DELEGATED:origin url$" "$repo_dir/.delegated" ||
+        die "Expected the project pre-push to run"
+    [ ! -f "$repo_dir/.lfs-calls" ] ||
+        die "git lfs pre-push ran after the project hook rejected the push: $(cat "$repo_dir/.lfs-calls")"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # post-*: git lfs <hook> runs with argv (also with no project hook); a failing
 # lfs still lets the project hook run, and git-lfs's exit code wins.
 test_global_lfs_post_hooks_chain() {
-  local hook_name repo_dir rc
-  for hook_name in post-commit post-checkout post-merge; do
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-    make_lfs_fixture "$repo_dir" lfs
+    local hook_name repo_dir rc
+    for hook_name in post-commit post-checkout post-merge; do
+        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        make_lfs_fixture "$repo_dir" lfs
 
-    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" alpha beta </dev/null ||
-      die "Expected ${hook_name} LFS chain to succeed: $WRAPPER_OUT"
-    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:${hook_name} alpha beta" ] ||
-      die "Expected git lfs ${hook_name} alpha beta, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+        PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" alpha beta </dev/null ||
+            die "Expected ${hook_name} LFS chain to succeed: $WRAPPER_OUT"
+        [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:${hook_name} alpha beta" ] ||
+            die "Expected git lfs ${hook_name} alpha beta, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
 
-    install_recording_project_hook "$repo_dir" "$hook_name" 0
-    rc=0
-    FAKE_LFS_RC=3 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" x </dev/null || rc=$?
-    [ "$rc" -eq 3 ] || die "Expected ${hook_name} to exit with git-lfs's code 3, got ${rc}: $WRAPPER_OUT"
-    grep -q "^DELEGATED:x$" "$repo_dir/.delegated" ||
-      die "Expected ${hook_name} project hook to run despite the lfs failure"
+        install_recording_project_hook "$repo_dir" "$hook_name" 0
+        rc=0
+        FAKE_LFS_RC=3 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" x </dev/null || rc=$?
+        [ "$rc" -eq 3 ] || die "Expected ${hook_name} to exit with git-lfs's code 3, got ${rc}: $WRAPPER_OUT"
+        grep -q "^DELEGATED:x$" "$repo_dir/.delegated" ||
+            die "Expected ${hook_name} project hook to run despite the lfs failure"
 
-    rm -rf "$repo_dir"
-  done
+        rm -rf "$repo_dir"
+    done
 }
 
 # post-*: with no project hook, a failing git lfs <hook> is the wrapper's exit
 # code.
 test_global_lfs_post_hook_failure_without_project_hook() {
-  local hook_name repo_dir rc
-  for hook_name in post-commit post-checkout post-merge; do
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-    make_lfs_fixture "$repo_dir" lfs
+    local hook_name repo_dir rc
+    for hook_name in post-commit post-checkout post-merge; do
+        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        make_lfs_fixture "$repo_dir" lfs
 
-    rc=0
-    FAKE_LFS_RC=4 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" x </dev/null || rc=$?
-    [ "$rc" -eq 4 ] || die "Expected ${hook_name} to exit with git-lfs's code 4, got ${rc}: $WRAPPER_OUT"
-    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:${hook_name} x" ] ||
-      die "Expected git lfs ${hook_name} x, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+        rc=0
+        FAKE_LFS_RC=4 PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" x </dev/null || rc=$?
+        [ "$rc" -eq 4 ] || die "Expected ${hook_name} to exit with git-lfs's code 4, got ${rc}: $WRAPPER_OUT"
+        [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:${hook_name} x" ] ||
+            die "Expected git lfs ${hook_name} x, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
 
-    rm -rf "$repo_dir"
-  done
+        rm -rf "$repo_dir"
+    done
 }
 
 # Linked worktree of an LFS repo: `.git` is a file there, so detection must go
 # through --git-common-dir — the chain still fires.
 test_global_lfs_chains_in_linked_worktree() {
-  local repo_dir wt_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_lfs_fixture "$repo_dir" lfs
-  wt_dir="${repo_dir}-wt"
-  git -C "$repo_dir" worktree add -q "$wt_dir" -b lfs-wt >/dev/null 2>&1 ||
-    die "Could not create a linked worktree"
+    local repo_dir wt_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir" lfs
+    wt_dir="${repo_dir}-wt"
+    git -C "$repo_dir" worktree add -q "$wt_dir" -b lfs-wt >/dev/null 2>&1 ||
+        die "Could not create a linked worktree"
 
-  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$wt_dir" post-checkout a b 1 </dev/null ||
-    die "Expected post-checkout in the worktree to succeed: $WRAPPER_OUT"
-  [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:post-checkout a b 1" ] ||
-    die "Expected git lfs post-checkout in the linked worktree, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$wt_dir" post-checkout a b 1 </dev/null ||
+        die "Expected post-checkout in the worktree to succeed: $WRAPPER_OUT"
+    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:post-checkout a b 1" ] ||
+        die "Expected git lfs post-checkout in the linked worktree, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
 
-  rm -rf "$wt_dir" "$repo_dir"
+    rm -rf "$wt_dir" "$repo_dir"
 }
 
 # Detection without <git-common-dir>/lfs (GIT_LFS_SKIP_SMUDGE clone, fresh
 # repo): a tracked .gitattributes — root or nested — with filter=lfs is enough.
 test_global_lfs_detected_via_tracked_gitattributes() {
-  local attr_path repo_dir
-  for attr_path in .gitattributes sub/dir/.gitattributes; do
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-    make_lfs_fixture "$repo_dir"
-    mkdir -p "$(dirname "$repo_dir/$attr_path")"
-    echo '*.bin filter=lfs diff=lfs merge=lfs -text' >"$repo_dir/$attr_path"
-    git -C "$repo_dir" add "$attr_path"
-    git -C "$repo_dir" -c core.hooksPath=/dev/null commit -q -m "lfs attrs"
-    [ ! -d "$repo_dir/.git/lfs" ] || die "Fixture unexpectedly has .git/lfs"
+    local attr_path repo_dir
+    for attr_path in .gitattributes sub/dir/.gitattributes; do
+        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        make_lfs_fixture "$repo_dir"
+        mkdir -p "$(dirname "$repo_dir/$attr_path")"
+        echo '*.bin filter=lfs diff=lfs merge=lfs -text' >"$repo_dir/$attr_path"
+        git -C "$repo_dir" add "$attr_path"
+        git -C "$repo_dir" -c core.hooksPath=/dev/null commit -q -m "lfs attrs"
+        [ ! -d "$repo_dir/.git/lfs" ] || die "Fixture unexpectedly has .git/lfs"
 
-    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" post-commit </dev/null ||
-      die "Expected post-commit to succeed: $WRAPPER_OUT"
-    [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:post-commit" ] ||
-      die "Expected ${attr_path} filter=lfs to enable the chain, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
+        PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" post-commit </dev/null ||
+            die "Expected post-commit to succeed: $WRAPPER_OUT"
+        [ "$(cat "$repo_dir/.lfs-calls" 2>/dev/null)" = "ARGS:post-commit" ] ||
+            die "Expected ${attr_path} filter=lfs to enable the chain, got: $(cat "$repo_dir/.lfs-calls" 2>/dev/null)"
 
-    rm -rf "$repo_dir"
-  done
+        rm -rf "$repo_dir"
+    done
 }
 
 # Non-LFS repo: git-lfs on PATH is never invoked and output stays empty.
 test_global_lfs_skipped_in_non_lfs_repo() {
-  local hook_name repo_dir
-  for hook_name in pre-push post-commit post-checkout post-merge; do
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-    make_lfs_fixture "$repo_dir"
+    local hook_name repo_dir
+    for hook_name in pre-push post-commit post-checkout post-merge; do
+        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        make_lfs_fixture "$repo_dir"
 
-    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" a b \
-      < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") ||
-      die "Expected ${hook_name} to be a no-op in a non-LFS repo: $WRAPPER_OUT"
-    [ -z "$WRAPPER_OUT" ] || die "Expected ${hook_name} to stay silent, got: $WRAPPER_OUT"
-    [ ! -f "$repo_dir/.lfs-calls" ] ||
-      die "git lfs invoked in a non-LFS repo: $(cat "$repo_dir/.lfs-calls")"
+        PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" a b \
+            < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") ||
+            die "Expected ${hook_name} to be a no-op in a non-LFS repo: $WRAPPER_OUT"
+        [ -z "$WRAPPER_OUT" ] || die "Expected ${hook_name} to stay silent, got: $WRAPPER_OUT"
+        [ ! -f "$repo_dir/.lfs-calls" ] ||
+            die "git lfs invoked in a non-LFS repo: $(cat "$repo_dir/.lfs-calls")"
 
-    rm -rf "$repo_dir"
-  done
+        rm -rf "$repo_dir"
+    done
 }
 
 # A project hook that already runs `git lfs pre-push` (git lfs install --local)
 # is not doubled: the wrapper leaves lfs to it.
 test_global_lfs_not_doubled_by_lfs_project_hook() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_lfs_fixture "$repo_dir" lfs
-  printf '#!/bin/sh\ngit lfs pre-push "$@"\n' >"$repo_dir/.git/hooks/pre-push"
-  chmod +x "$repo_dir/.git/hooks/pre-push"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_lfs_fixture "$repo_dir" lfs
+    printf '#!/bin/sh\ngit lfs pre-push "$@"\n' >"$repo_dir/.git/hooks/pre-push"
+    chmod +x "$repo_dir/.git/hooks/pre-push"
 
-  PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
-    < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") ||
-    die "Expected pre-push to succeed: $WRAPPER_OUT"
-  [ "$(grep -c '^ARGS:' "$repo_dir/.lfs-calls")" -eq 1 ] ||
-    die "Expected exactly one git lfs pre-push run, got: $(cat "$repo_dir/.lfs-calls")"
+    PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" pre-push origin url \
+        < <(printf 'refs/heads/a 1111 refs/heads/a %s\n' "$ZERO_SHA") ||
+        die "Expected pre-push to succeed: $WRAPPER_OUT"
+    [ "$(grep -c '^ARGS:' "$repo_dir/.lfs-calls")" -eq 1 ] ||
+        die "Expected exactly one git lfs pre-push run, got: $(cat "$repo_dir/.lfs-calls")"
 
-  rm -rf "$repo_dir"
+    rm -rf "$repo_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -1056,301 +1056,301 @@ test_global_lfs_not_doubled_by_lfs_project_hook() {
 # `graphify` in $GFY_DIR/bin that appends its argv to $GFY_DIR/calls.
 # $1 = "graph" to create clone/graphify-out/graph.json (the opt-in signal).
 setup_graphify_fixture() {
-  GFY_DIR="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  mkdir -p "$GFY_DIR/bin"
-  cat >"$GFY_DIR/bin/graphify" <<EOF
+    GFY_DIR="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    mkdir -p "$GFY_DIR/bin"
+    cat >"$GFY_DIR/bin/graphify" <<EOF
 #!/bin/sh
 echo "\$*" >>"$GFY_DIR/calls"
 EOF
-  chmod +x "$GFY_DIR/bin/graphify"
+    chmod +x "$GFY_DIR/bin/graphify"
 
-  git init -q -b main "$GFY_DIR/upstream"
-  git -C "$GFY_DIR/upstream" config user.email "hook-test@example.com"
-  git -C "$GFY_DIR/upstream" config user.name "hook-test"
-  echo "seed" >"$GFY_DIR/upstream/seed.txt"
-  git -C "$GFY_DIR/upstream" add seed.txt
-  git -C "$GFY_DIR/upstream" -c core.hooksPath=/dev/null commit -q -m "seed"
+    git init -q -b main "$GFY_DIR/upstream"
+    git -C "$GFY_DIR/upstream" config user.email "hook-test@example.com"
+    git -C "$GFY_DIR/upstream" config user.name "hook-test"
+    echo "seed" >"$GFY_DIR/upstream/seed.txt"
+    git -C "$GFY_DIR/upstream" add seed.txt
+    git -C "$GFY_DIR/upstream" -c core.hooksPath=/dev/null commit -q -m "seed"
 
-  git clone -q "$GFY_DIR/upstream" "$GFY_DIR/clone"
-  git -C "$GFY_DIR/clone" config user.email "hook-test@example.com"
-  git -C "$GFY_DIR/clone" config user.name "hook-test"
-  git -C "$GFY_DIR/clone" config commit.gpgsign false
-  if [ "${1:-}" = graph ]; then
-    mkdir -p "$GFY_DIR/clone/graphify-out"
-    echo '{}' >"$GFY_DIR/clone/graphify-out/graph.json"
-  fi
+    git clone -q "$GFY_DIR/upstream" "$GFY_DIR/clone"
+    git -C "$GFY_DIR/clone" config user.email "hook-test@example.com"
+    git -C "$GFY_DIR/clone" config user.name "hook-test"
+    git -C "$GFY_DIR/clone" config commit.gpgsign false
+    if [ "${1:-}" = graph ]; then
+        mkdir -p "$GFY_DIR/clone/graphify-out"
+        echo '{}' >"$GFY_DIR/clone/graphify-out/graph.json"
+    fi
 }
 
 # A new upstream commit for the clone to pull.
 advance_upstream() {
-  echo "$1" >"$GFY_DIR/upstream/$1.txt"
-  git -C "$GFY_DIR/upstream" add "$1.txt"
-  git -C "$GFY_DIR/upstream" -c core.hooksPath=/dev/null commit -q -m "$1"
+    echo "$1" >"$GFY_DIR/upstream/$1.txt"
+    git -C "$GFY_DIR/upstream" add "$1.txt"
+    git -C "$GFY_DIR/upstream" -c core.hooksPath=/dev/null commit -q -m "$1"
 }
 
 # Run git in the clone with the global wrappers active and the fake graphify
 # first on PATH.
 gfy_git() {
-  PATH="$GFY_DIR/bin:$PATH" git -C "$GFY_DIR/clone" -c core.hooksPath="$GLOBAL_HOOKS_DIR" "$@"
+    PATH="$GFY_DIR/bin:$PATH" git -C "$GFY_DIR/clone" -c core.hooksPath="$GLOBAL_HOOKS_DIR" "$@"
 }
 
 # Count fake graphify calls. The call is backgrounded, so poll up to ~5s when
 # one is expected; otherwise give a stray call a moment to land.
 graphify_calls() {
-  local expected="$1" i
-  if [ "$expected" -gt 0 ]; then
-    for i in $(seq 50); do
-      [ -f "$GFY_DIR/calls" ] && break
-      sleep 0.1
-    done
-  else
-    sleep 0.5
-  fi
-  if [ -f "$GFY_DIR/calls" ]; then wc -l <"$GFY_DIR/calls" | tr -d ' '; else echo 0; fi
+    local expected="$1" i
+    if [ "$expected" -gt 0 ]; then
+        for i in $(seq 50); do
+            [ -f "$GFY_DIR/calls" ] && break
+            sleep 0.1
+        done
+    else
+        sleep 0.5
+    fi
+    if [ -f "$GFY_DIR/calls" ]; then wc -l <"$GFY_DIR/calls" | tr -d ' '; else echo 0; fi
 }
 
 test_graphify_ff_pull_on_default_branch() {
-  local n
-  setup_graphify_fixture graph
-  advance_upstream ff
-  local out
-  out=$(gfy_git pull -q --no-rebase --ff-only 2>&1) || die "ff pull failed"
-  case "$out" in *"graphify: update started"*) ;; *) die "Expected graphify start notice, got: $out" ;; esac
-  n=$(graphify_calls 1)
-  [ "$n" -eq 1 ] || die "Expected 1 graphify call on ff pull, got $n"
-  grep -qx "update ." "$GFY_DIR/calls" || die "Expected 'graphify update .', got: $(cat "$GFY_DIR/calls")"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture graph
+    advance_upstream ff
+    local out
+    out=$(gfy_git pull -q --no-rebase --ff-only 2>&1) || die "ff pull failed"
+    case "$out" in *"graphify: update started"*) ;; *) die "Expected graphify start notice, got: $out" ;; esac
+    n=$(graphify_calls 1)
+    [ "$n" -eq 1 ] || die "Expected 1 graphify call on ff pull, got $n"
+    grep -qx "update ." "$GFY_DIR/calls" || die "Expected 'graphify update .', got: $(cat "$GFY_DIR/calls")"
+    rm -rf "$GFY_DIR"
 }
 
 test_graphify_rebase_pull_on_default_branch() {
-  local n
-  setup_graphify_fixture graph
-  advance_upstream remote
-  echo local >"$GFY_DIR/clone/local.txt"
-  git -C "$GFY_DIR/clone" add local.txt
-  git -C "$GFY_DIR/clone" -c core.hooksPath=/dev/null commit -q -m local
-  gfy_git pull -q --rebase >/dev/null 2>&1 || die "rebase pull failed"
-  n=$(graphify_calls 1)
-  [ "$n" -eq 1 ] || die "Expected 1 graphify call on rebase pull, got $n"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture graph
+    advance_upstream remote
+    echo local >"$GFY_DIR/clone/local.txt"
+    git -C "$GFY_DIR/clone" add local.txt
+    git -C "$GFY_DIR/clone" -c core.hooksPath=/dev/null commit -q -m local
+    gfy_git pull -q --rebase >/dev/null 2>&1 || die "rebase pull failed"
+    n=$(graphify_calls 1)
+    [ "$n" -eq 1 ] || die "Expected 1 graphify call on rebase pull, got $n"
+    rm -rf "$GFY_DIR"
 }
 
 # `git rebase origin/main` with nothing local to replay fires only
 # post-checkout (inside .git/rebase-merge/), never post-rewrite.
 test_graphify_ff_rebase_on_default_branch() {
-  local n
-  setup_graphify_fixture graph
-  advance_upstream ffrebase
-  git -C "$GFY_DIR/clone" fetch -q
-  gfy_git rebase -q origin/main >/dev/null 2>&1 || die "ff rebase failed"
-  n=$(graphify_calls 1)
-  [ "$n" -eq 1 ] || die "Expected 1 graphify call on ff rebase, got $n"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture graph
+    advance_upstream ffrebase
+    git -C "$GFY_DIR/clone" fetch -q
+    gfy_git rebase -q origin/main >/dev/null 2>&1 || die "ff rebase failed"
+    n=$(graphify_calls 1)
+    [ "$n" -eq 1 ] || die "Expected 1 graphify call on ff rebase, got $n"
+    rm -rf "$GFY_DIR"
 }
 
 # A rebase that replays commits fires post-checkout AND post-rewrite; only
 # post-rewrite may refresh, so the graph is rebuilt once, not twice.
 test_graphify_replay_rebase_refreshes_once() {
-  local n
-  setup_graphify_fixture graph
-  advance_upstream replay
-  echo local >"$GFY_DIR/clone/local.txt"
-  git -C "$GFY_DIR/clone" add local.txt
-  git -C "$GFY_DIR/clone" -c core.hooksPath=/dev/null commit -q -m local
-  git -C "$GFY_DIR/clone" fetch -q
-  gfy_git rebase -q origin/main >/dev/null 2>&1 || die "replay rebase failed"
-  graphify_calls 1 >/dev/null
-  sleep 0.5
-  n=$(graphify_calls 1)
-  [ "$n" -eq 1 ] || die "Expected exactly 1 graphify call on replay rebase, got $n"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture graph
+    advance_upstream replay
+    echo local >"$GFY_DIR/clone/local.txt"
+    git -C "$GFY_DIR/clone" add local.txt
+    git -C "$GFY_DIR/clone" -c core.hooksPath=/dev/null commit -q -m local
+    git -C "$GFY_DIR/clone" fetch -q
+    gfy_git rebase -q origin/main >/dev/null 2>&1 || die "replay rebase failed"
+    graphify_calls 1 >/dev/null
+    sleep 0.5
+    n=$(graphify_calls 1)
+    [ "$n" -eq 1 ] || die "Expected exactly 1 graphify call on replay rebase, got $n"
+    rm -rf "$GFY_DIR"
 }
 
 # A plain branch switch stays graphify's own post-checkout job.
 test_graphify_skips_branch_switch() {
-  local n
-  setup_graphify_fixture graph
-  git -C "$GFY_DIR/clone" switch -q -c feature
-  gfy_git switch -q main >/dev/null 2>&1 || die "switch failed"
-  n=$(graphify_calls 0)
-  [ "$n" -eq 0 ] || die "Expected no graphify call on branch switch, got $n"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture graph
+    git -C "$GFY_DIR/clone" switch -q -c feature
+    gfy_git switch -q main >/dev/null 2>&1 || die "switch failed"
+    n=$(graphify_calls 0)
+    [ "$n" -eq 0 ] || die "Expected no graphify call on branch switch, got $n"
+    rm -rf "$GFY_DIR"
 }
 
 test_graphify_skips_commit_amend() {
-  local n
-  setup_graphify_fixture graph
-  gfy_git commit -q --amend -m "amended" >/dev/null 2>&1 || die "amend failed"
-  n=$(graphify_calls 0)
-  [ "$n" -eq 0 ] || die "Expected no graphify call on commit --amend, got $n"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture graph
+    gfy_git commit -q --amend -m "amended" >/dev/null 2>&1 || die "amend failed"
+    n=$(graphify_calls 0)
+    [ "$n" -eq 0 ] || die "Expected no graphify call on commit --amend, got $n"
+    rm -rf "$GFY_DIR"
 }
 
 test_graphify_skips_non_default_branch() {
-  local n
-  setup_graphify_fixture graph
-  git -C "$GFY_DIR/clone" switch -q -c feature --track origin/main
-  advance_upstream feat
-  gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "feature pull failed"
-  n=$(graphify_calls 0)
-  [ "$n" -eq 0 ] || die "Expected no graphify call off the default branch, got $n"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture graph
+    git -C "$GFY_DIR/clone" switch -q -c feature --track origin/main
+    advance_upstream feat
+    gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "feature pull failed"
+    n=$(graphify_calls 0)
+    [ "$n" -eq 0 ] || die "Expected no graphify call off the default branch, got $n"
+    rm -rf "$GFY_DIR"
 }
 
 test_graphify_noop_without_graph_json() {
-  local n
-  setup_graphify_fixture
-  advance_upstream nograph
-  gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "pull without graph.json failed"
-  PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null ||
-    die "Expected post-merge to exit 0 without graph.json: $WRAPPER_OUT"
-  [ -z "$WRAPPER_OUT" ] || die "Expected no output without graph.json, got: $WRAPPER_OUT"
-  n=$(graphify_calls 0)
-  [ "$n" -eq 0 ] || die "Expected no graphify call without graph.json, got $n"
-  [ ! -e "$GFY_DIR/clone/graphify-out" ] || die "Expected no graphify-out side effect"
-  rm -rf "$GFY_DIR"
+    local n
+    setup_graphify_fixture
+    advance_upstream nograph
+    gfy_git pull -q --no-rebase --ff-only >/dev/null 2>&1 || die "pull without graph.json failed"
+    PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null ||
+        die "Expected post-merge to exit 0 without graph.json: $WRAPPER_OUT"
+    [ -z "$WRAPPER_OUT" ] || die "Expected no output without graph.json, got: $WRAPPER_OUT"
+    n=$(graphify_calls 0)
+    [ "$n" -eq 0 ] || die "Expected no graphify call without graph.json, got $n"
+    [ ! -e "$GFY_DIR/clone/graphify-out" ] || die "Expected no graphify-out side effect"
+    rm -rf "$GFY_DIR"
 }
 
 test_graphify_absent_pull_succeeds() {
-  local dir no_gfy_path=""
-  setup_graphify_fixture graph
-  # Drop every PATH entry that provides a real graphify.
-  local IFS=:
-  for dir in $PATH; do
-    [ -x "$dir/graphify" ] || no_gfy_path="${no_gfy_path:+$no_gfy_path:}$dir"
-  done
-  unset IFS
-  advance_upstream absent
-  PATH="$no_gfy_path" git -C "$GFY_DIR/clone" -c core.hooksPath="$GLOBAL_HOOKS_DIR" pull -q --no-rebase --ff-only >/dev/null 2>&1 ||
-    die "Expected pull to succeed without graphify on PATH"
-  PATH="$no_gfy_path" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null ||
-    die "Expected post-merge to exit 0 without graphify: $WRAPPER_OUT"
-  [ ! -e "$GFY_DIR/clone/graphify-out/.hook-update.log" ] || die "Expected no graphify run"
-  rm -rf "$GFY_DIR"
+    local dir no_gfy_path=""
+    setup_graphify_fixture graph
+    # Drop every PATH entry that provides a real graphify.
+    local IFS=:
+    for dir in $PATH; do
+        [ -x "$dir/graphify" ] || no_gfy_path="${no_gfy_path:+$no_gfy_path:}$dir"
+    done
+    unset IFS
+    advance_upstream absent
+    PATH="$no_gfy_path" git -C "$GFY_DIR/clone" -c core.hooksPath="$GLOBAL_HOOKS_DIR" pull -q --no-rebase --ff-only >/dev/null 2>&1 ||
+        die "Expected pull to succeed without graphify on PATH"
+    PATH="$no_gfy_path" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null ||
+        die "Expected post-merge to exit 0 without graphify: $WRAPPER_OUT"
+    [ ! -e "$GFY_DIR/clone/graphify-out/.hook-update.log" ] || die "Expected no graphify run"
+    rm -rf "$GFY_DIR"
 }
 
 # graphify refresh must not swallow delegation: exit code and post-rewrite's
 # stdin still reach the project hook.
 test_graphify_keeps_project_hook_delegation() {
-  local rc=0 n
-  setup_graphify_fixture graph
-  install_recording_project_hook "$GFY_DIR/clone" post-merge 7
-  PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null || rc=$?
-  [ "$rc" -eq 7 ] || die "Expected post-merge exit 7 from project hook, got $rc: $WRAPPER_OUT"
-  grep -q "^DELEGATED:0$" "$GFY_DIR/clone/.delegated" || die "Expected project post-merge to run"
-  n=$(graphify_calls 1)
-  [ "$n" -eq 1 ] || die "Expected 1 graphify call before delegation, got $n"
+    local rc=0 n
+    setup_graphify_fixture graph
+    install_recording_project_hook "$GFY_DIR/clone" post-merge 7
+    PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-merge 0 </dev/null || rc=$?
+    [ "$rc" -eq 7 ] || die "Expected post-merge exit 7 from project hook, got $rc: $WRAPPER_OUT"
+    grep -q "^DELEGATED:0$" "$GFY_DIR/clone/.delegated" || die "Expected project post-merge to run"
+    n=$(graphify_calls 1)
+    [ "$n" -eq 1 ] || die "Expected 1 graphify call before delegation, got $n"
 
-  cat >"$GFY_DIR/clone/git/hooks/post-rewrite" <<EOF
+    cat >"$GFY_DIR/clone/git/hooks/post-rewrite" <<EOF
 #!/bin/bash
 cat >"$GFY_DIR/clone/.stdin"
 EOF
-  chmod +x "$GFY_DIR/clone/git/hooks/post-rewrite"
-  PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-rewrite rebase \
-    < <(printf 'aaa bbb\n') || die "Expected post-rewrite delegation to succeed: $WRAPPER_OUT"
-  grep -qx "aaa bbb" "$GFY_DIR/clone/.stdin" || die "Expected post-rewrite stdin to reach the project hook"
-  rm -rf "$GFY_DIR"
+    chmod +x "$GFY_DIR/clone/git/hooks/post-rewrite"
+    PATH="$GFY_DIR/bin:$PATH" run_global_hook "$GFY_DIR/clone" post-rewrite rebase \
+        < <(printf 'aaa bbb\n') || die "Expected post-rewrite delegation to succeed: $WRAPPER_OUT"
+    grep -qx "aaa bbb" "$GFY_DIR/clone/.stdin" || die "Expected post-rewrite stdin to reach the project hook"
+    rm -rf "$GFY_DIR"
 }
 
 # Issue #2041 — git-generated merge messages bypass commit-msg validation,
 # authored messages are still validated.
 test_commit_msg_skips_git_merge_message() {
-  local msg_file out
-  msg_file="$(mktemp /tmp/dotfiles-hook-test.XXXXXX)"
-  printf "Merge remote-tracking branch 'upstream/main'\n" >"$msg_file"
-  "${DOTFILES_ROOT}/git/hooks/commit-msg" "$msg_file" >/dev/null 2>&1 ||
-    die "Expected git-generated merge message to pass commit-msg"
-  printf 'bogus message without type\n' >"$msg_file"
-  if out=$("${DOTFILES_ROOT}/git/hooks/commit-msg" "$msg_file" 2>&1); then
-    die "Expected non-conventional message to be rejected: $out"
-  fi
-  rm -f "$msg_file"
+    local msg_file out
+    msg_file="$(mktemp /tmp/dotfiles-hook-test.XXXXXX)"
+    printf "Merge remote-tracking branch 'upstream/main'\n" >"$msg_file"
+    "${DOTFILES_ROOT}/git/hooks/commit-msg" "$msg_file" >/dev/null 2>&1 ||
+        die "Expected git-generated merge message to pass commit-msg"
+    printf 'bogus message without type\n' >"$msg_file"
+    if out=$("${DOTFILES_ROOT}/git/hooks/commit-msg" "$msg_file" 2>&1); then
+        die "Expected non-conventional message to be rejected: $out"
+    fi
+    rm -f "$msg_file"
 }
 
 # Issue #2041 — main_branch_guard lets an in-progress merge commit through.
 test_main_branch_guard_allows_merge_in_progress() {
-  local repo_dir
-  repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
-  make_plain_repo "$repo_dir"
-  git -C "$repo_dir" checkout -q -b main
-  (
-    cd "$repo_dir"
-    # shellcheck source=/dev/null
-    . "${DOTFILES_ROOT}/git/hooks/checks/main_branch_guard.sh"
-    ! check_main_branch_guard || exit 1   # plain commit on main stays blocked
-    git rev-parse HEAD >.git/MERGE_HEAD
-    check_main_branch_guard               # merge in progress is allowed
-  ) || die "main_branch_guard merge-in-progress behavior wrong"
-  rm -rf "$repo_dir"
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_plain_repo "$repo_dir"
+    git -C "$repo_dir" checkout -q -b main
+    (
+        cd "$repo_dir"
+        # shellcheck source=/dev/null
+        . "${DOTFILES_ROOT}/git/hooks/checks/main_branch_guard.sh"
+        ! check_main_branch_guard || exit 1 # plain commit on main stays blocked
+        git rev-parse HEAD >.git/MERGE_HEAD
+        check_main_branch_guard # merge in progress is allowed
+    ) || die "main_branch_guard merge-in-progress behavior wrong"
+    rm -rf "$repo_dir"
 }
 
 main() {
-  ux_header "Hook integration tests"
-  test_allows_spaces_in_filename
-  test_blocks_forbidden_env_file
-  test_blocks_init_sourcing_tools_custom
-  test_blocks_auto_exec_custom_script_without_guard
-  test_blocks_custom_script_wrong_shebang
-  test_blocks_library_purity_top_level_read
-  test_blocks_library_purity_top_level_install
-  test_allows_library_purity_commented_install
-  test_blocks_hardcoded_home_path_in_zshrc
-  test_allows_hardcoded_home_path_with_marker
-  test_allows_home_var_reference
-  test_allows_preexisting_abs_home_on_unrelated_edit
+    ux_header "Hook integration tests"
+    test_allows_spaces_in_filename
+    test_blocks_forbidden_env_file
+    test_blocks_init_sourcing_tools_custom
+    test_blocks_auto_exec_custom_script_without_guard
+    test_blocks_custom_script_wrong_shebang
+    test_blocks_library_purity_top_level_read
+    test_blocks_library_purity_top_level_install
+    test_allows_library_purity_commented_install
+    test_blocks_hardcoded_home_path_in_zshrc
+    test_allows_hardcoded_home_path_with_marker
+    test_allows_home_var_reference
+    test_allows_preexisting_abs_home_on_unrelated_edit
 
-  # Issue #2014 — ShellCheck step runs on staged files
-  test_shellcheck_blocks_staged_violation
-  test_shellcheck_passes_clean_and_ignores_non_shell
-  test_wrapper_check_flags_delegating_wrappers
+    # Issue #2014 — ShellCheck step runs on staged files
+    test_shellcheck_blocks_staged_violation
+    test_shellcheck_passes_clean_and_ignores_non_shell
+    test_wrapper_check_flags_delegating_wrappers
 
-  # Issue #1970 — commit-time leak guard
-  test_leak_guard_blocks_without_echoing_match
-  test_leak_guard_redacts_matching_path
-  test_leak_guard_redacts_other_check_reports
-  test_leak_guard_redacts_global_and_project_output
-  test_global_hook_leak_guard_in_unrelated_repo
-  test_leak_guard_inert_without_upstream_remote
-  test_leak_guard_skip_escape_hatch
+    # Issue #1970 — commit-time leak guard
+    test_leak_guard_blocks_without_echoing_match
+    test_leak_guard_redacts_matching_path
+    test_leak_guard_redacts_other_check_reports
+    test_leak_guard_redacts_global_and_project_output
+    test_global_hook_leak_guard_in_unrelated_repo
+    test_leak_guard_inert_without_upstream_remote
+    test_leak_guard_skip_escape_hatch
 
-  # Issue #1664 — global wrapper delegation for pre-push & friends
-  test_global_hook_set_matches_ssot
-  test_global_pre_push_delegates_to_project_hook
-  test_global_pre_push_is_noop_in_unrelated_repo
-  test_global_pre_push_delegates_from_linked_worktree
-  test_global_wrappers_delegate_argv
-  test_global_wrappers_propagate_exit_code
-  test_global_wrappers_are_noop_without_project_hook
-  test_global_wrappers_are_noop_outside_git_repo
+    # Issue #1664 — global wrapper delegation for pre-push & friends
+    test_global_hook_set_matches_ssot
+    test_global_pre_push_delegates_to_project_hook
+    test_global_pre_push_is_noop_in_unrelated_repo
+    test_global_pre_push_delegates_from_linked_worktree
+    test_global_wrappers_delegate_argv
+    test_global_wrappers_propagate_exit_code
+    test_global_wrappers_are_noop_without_project_hook
+    test_global_wrappers_are_noop_outside_git_repo
 
-  # git-lfs chaining in the global wrappers (lib/lfs.sh)
-  test_global_lfs_pre_push_chains_and_replays_stdin
-  test_global_lfs_pre_push_failure_blocks
-  test_global_lfs_pre_push_project_failure_skips_lfs
-  test_global_lfs_post_hooks_chain
-  test_global_lfs_post_hook_failure_without_project_hook
-  test_global_lfs_chains_in_linked_worktree
-  test_global_lfs_detected_via_tracked_gitattributes
-  test_global_lfs_skipped_in_non_lfs_repo
-  test_global_lfs_not_doubled_by_lfs_project_hook
+    # git-lfs chaining in the global wrappers (lib/lfs.sh)
+    test_global_lfs_pre_push_chains_and_replays_stdin
+    test_global_lfs_pre_push_failure_blocks
+    test_global_lfs_pre_push_project_failure_skips_lfs
+    test_global_lfs_post_hooks_chain
+    test_global_lfs_post_hook_failure_without_project_hook
+    test_global_lfs_chains_in_linked_worktree
+    test_global_lfs_detected_via_tracked_gitattributes
+    test_global_lfs_skipped_in_non_lfs_repo
+    test_global_lfs_not_doubled_by_lfs_project_hook
 
-  # Issue #1838 — graphify refresh on default-branch pulls
-  test_graphify_ff_pull_on_default_branch
-  test_graphify_rebase_pull_on_default_branch
-  test_graphify_ff_rebase_on_default_branch
-  test_graphify_replay_rebase_refreshes_once
-  test_graphify_skips_branch_switch
-  test_graphify_skips_commit_amend
-  test_graphify_skips_non_default_branch
-  test_graphify_noop_without_graph_json
-  test_graphify_absent_pull_succeeds
-  test_graphify_keeps_project_hook_delegation
+    # Issue #1838 — graphify refresh on default-branch pulls
+    test_graphify_ff_pull_on_default_branch
+    test_graphify_rebase_pull_on_default_branch
+    test_graphify_ff_rebase_on_default_branch
+    test_graphify_replay_rebase_refreshes_once
+    test_graphify_skips_branch_switch
+    test_graphify_skips_commit_amend
+    test_graphify_skips_non_default_branch
+    test_graphify_noop_without_graph_json
+    test_graphify_absent_pull_succeeds
+    test_graphify_keeps_project_hook_delegation
 
-  # Issue #2041 — git sync merge commits pass the hooks
-  test_commit_msg_skips_git_merge_message
-  test_main_branch_guard_allows_merge_in_progress
+    # Issue #2041 — git sync merge commits pass the hooks
+    test_commit_msg_skips_git_merge_message
+    test_main_branch_guard_allows_merge_in_progress
 
-  ux_success "All hook tests passed"
+    ux_success "All hook tests passed"
 }
 
 main "$@"

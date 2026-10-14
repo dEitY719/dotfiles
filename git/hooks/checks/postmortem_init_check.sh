@@ -7,13 +7,16 @@ check_init_auto_sourcing() {
     local output_file="$4"
 
     case "$repo_rel_path" in
-        bash/main.bash|zsh/main.zsh) ;;
-        *) return 0 ;;
+    bash/main.bash | zsh/main.zsh) ;;
+    *) return 0 ;;
     esac
 
     local tmp_file
     tmp_file=$(mktemp "$tmpdir/init_stage_XXXXXX.txt")
-    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
+    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || {
+        rm -f "$tmp_file"
+        return 0
+    }
 
     local matches
     matches=$(awk '
