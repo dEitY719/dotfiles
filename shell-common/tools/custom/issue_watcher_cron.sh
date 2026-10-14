@@ -1359,6 +1359,8 @@ _iw_gwt() {
         . "${_IW_SHELL_COMMON}/functions/git_worktree.sh" || exit 1
         # shellcheck source=/dev/null
         . "${_IW_SHELL_COMMON}/functions/git_worktree_spawn.sh" || exit 1
+        # shellcheck source=/dev/null
+        . "${_IW_SHELL_COMMON}/functions/gwt_help.sh" || exit 1
         gwt "$@"
     )
 }
