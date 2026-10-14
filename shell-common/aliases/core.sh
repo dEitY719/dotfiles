@@ -50,8 +50,8 @@ src() {
     # a new terminal sources the rc files directly and never calls src(), so
     # the hint stays out of shell startup. Non-fatal — a failing health probe
     # must never break the reload.
-    if command -v _wsl_check_oneline >/dev/null 2>&1; then
-        _wsl_check_oneline 2>/dev/null || true
+    if command -v wsl_check >/dev/null 2>&1; then
+        wsl_check 2>/dev/null || true
     fi
 }
 

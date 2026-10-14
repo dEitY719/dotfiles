@@ -16,6 +16,13 @@
 
 load '../test_helper'
 
+# #2155: `gcp scan` is the executable tools/custom/gcp_scan.sh; its private
+# helpers (tools/custom/lib/gcp_scan_*.sh) reach a test shell by sourcing it —
+# the direct-exec guard keeps the scan itself from running. A test that stubs a
+# helper calls _gcp_scan_run in-process: the _gcp_scan wrapper forks the script.
+GCP_SCAN_SRC=". '${DOTFILES_ROOT}/shell-common/tools/custom/gcp_scan.sh'
+"
+
 setup() {
     setup_isolated_home
 }
@@ -503,13 +510,13 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_preflight_is_noop private function exists" {
-    run_in_bash 'declare -f _gcp_scan_preflight_is_noop >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_preflight_is_noop >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "preflight #913: empty commit (no file changes) -> no-op (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         git checkout -q -b side
         git commit -q --allow-empty -m empty
@@ -523,7 +530,7 @@ FIXTURE
 }
 
 @test "preflight #913: content already in HEAD via another path -> no-op (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         git checkout -q -b side
         echo v2 > a.txt && git add a.txt && git commit -qm 'side: bump to v2'
@@ -539,7 +546,7 @@ FIXTURE
 }
 
 @test "preflight #913: commit bringing a genuinely new file -> real work (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         git checkout -q -b side
         echo only-on-side > b.txt && echo shared > c.txt && git add b.txt c.txt && git commit -qm 'side: add b and c'
@@ -555,7 +562,7 @@ FIXTURE
 }
 
 @test "preflight #913: probe is non-destructive — dirty working tree survives" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         git checkout -q -b side
         echo v2 > a.txt && git add a.txt && git commit -qm 'side: bump to v2'
@@ -584,7 +591,7 @@ FIXTURE
     # PR #916 review: a fatal `cherry-pick -n` error (invalid object, lock)
     # leaves an empty conflict list on a clean index — it must NOT be mistaken
     # for an absorbed commit and silently skipped.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         _gcp_scan_preflight_is_noop deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
         echo \"rc=\$?\"
@@ -597,7 +604,7 @@ FIXTURE
     # PR #916 review: `git add -A` used to stage untracked files (which the
     # initial `git diff` dirty-check never stashed), wrongly flipping a real
     # no-op to rc=1. The untracked file must survive AND the verdict stay 0.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         git checkout -q -b side
         echo v2 > a.txt && git add a.txt && git commit -qm 'side: bump to v2'
@@ -655,7 +662,7 @@ FIXTURE
 }
 
 @test "preflight #1149: symlink topology — probe leaves ~/.gitconfig -> git/.gitconfig uncorrupted (#1016/#1018 regression guard)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1149_make_repo)
         rm -f \"\$HOME/.gitconfig\"
         ln -s \"\$repo/git/.gitconfig\" \"\$HOME/.gitconfig\"
@@ -671,7 +678,7 @@ FIXTURE
 }
 
 @test "preflight #1149: [include] topology — probe leaves the tracked git/.gitconfig uncorrupted" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1149_make_repo)
         rm -f \"\$HOME/.gitconfig\"
         printf '[include]\n\tpath = %s/git/.gitconfig\n' \"\$repo\" > \"\$HOME/.gitconfig\"
@@ -852,7 +859,7 @@ FIXTURE
 }
 
 @test "preflight #913: context-drift conflict that resolves to HEAD -> no-op (0), non-destructive" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '# comment v1\nCONFIG=old\n' > conf.txt && git add conf.txt && git commit -qm 'add conf'
         git checkout -q -b side
@@ -879,7 +886,7 @@ FIXTURE
 }
 
 @test "preflight #913: conflicting commit that ALSO adds new content -> real work (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '# comment v1\nCONFIG=old\n' > conf.txt && git add conf.txt && git commit -qm 'add conf'
         git checkout -q -b side
@@ -902,7 +909,7 @@ FIXTURE
     # Regression: a child commit touching the same lone file as its parent can
     # be deferred by Stage-1.6 when the parent is also in the pick list, but
     # Stage-2 must still keep it once the file carries genuine new content.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1177.XXXXXX\")\"
         trap \"rm -rf \$repo\" EXIT
         cd \"\$repo\" || exit 1
@@ -971,13 +978,13 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_json_leaves private function exists" {
-    run_in_bash 'declare -f _gcp_scan_json_leaves >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_json_leaves >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "leaves #1688: array index lives in the path, so order is preserved" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         f=\$(mktemp); printf '[\"a\",\"b\"]' > \"\$f\"
         _gcp_scan_json_leaves \"\$f\"; rm -f \"\$f\"
     "
@@ -987,7 +994,7 @@ FIXTURE
 }
 
 @test "leaves #1688: invalid JSON fails to parse (caller falls back to exact)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         f=\$(mktemp); printf '{\n  \"a\": \"1\",\n}\n' > \"\$f\"
         _gcp_scan_json_leaves \"\$f\" >/dev/null 2>&1; echo \"rc=\$?\"; rm -f \"\$f\"
     "
@@ -1001,7 +1008,7 @@ FIXTURE
     # same characters. The fix keeps the literal (unquoted) container value —
     # `jq -c` never renders any other JSON type as bare `{}`/`[]` — so the two
     # records must differ by more than just their path.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         f=\$(mktemp)
         printf '{\"note\": \"{}\", \"empty\": {}, \"arr\": [], \"strarr\": \"[]\"}' > \"\$f\"
         _gcp_scan_json_leaves \"\$f\"; rm -f \"\$f\"
@@ -1015,7 +1022,7 @@ FIXTURE
 }
 
 @test "drift #1690: a string leaf changed TO the bytes '{}' is real content, not absorbed as an empty-container no-op (codex BLOCKER)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '{\"note\": \"pending\"}' > obj.json && git add obj.json && git commit -qm 'add obj'
         git checkout -q -b source
@@ -1034,7 +1041,7 @@ FIXTURE
 # --- the reported case: still absorbed -------------------------------------
 
 @test "drift #1688: trailing-comma-only difference is drift, not new content (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1688_make_json_repo)
         _gcp_scan_conflict_adds_new_content \"\$src\" m.json; echo \"rc=\$?\"
     "
@@ -1043,7 +1050,7 @@ FIXTURE
 }
 
 @test "drift #1688: JSON whitespace noise is drift (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '{\n  \"a\": \"1\"\n}\n' > w.json && git add w.json && git commit -qm 'add w'
         git checkout -q -b source
@@ -1058,7 +1065,7 @@ FIXTURE
 }
 
 @test "drift #1688: an extensionless JSON config is covered, no extension list (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '{\n  \"a\": \"1\"\n}\n' > .eslintrc && git add .eslintrc && git commit -qm 'add rc'
         git checkout -q -b source
@@ -1076,7 +1083,7 @@ FIXTURE
 # --- round 3 (codex BLOCKER): JSON array order is content -------------------
 
 @test "drift #1688: a JSON array reorder is real content, not drift (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '[\n  \"a\"\n]\n' > arr.json && git add arr.json && git commit -qm 'add arr'
         git checkout -q -b source
@@ -1093,7 +1100,7 @@ FIXTURE
 }
 
 @test "drift #1688: a JSON array append HEAD already has is still drift (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '[\n  \"a\"\n]\n' > arr.json && git add arr.json && git commit -qm 'add arr'
         git checkout -q -b source
@@ -1112,7 +1119,7 @@ FIXTURE
 # --- issue #1775 PR #1776 review (agy/codex FOLLOW-UP): coverage gaps ------
 
 @test "drift #1775: a nested (non-root) scalar array absorbs index shift too (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '{\n  \"plugins\": [\n    \"a\"\n  ]\n}\n' > reg.json && git add reg.json && git commit -qm 'add reg'
         git checkout -q -b source
@@ -1129,7 +1136,7 @@ FIXTURE
 }
 
 @test "drift #1775: duplicate-valued array elements still absorb an index shift (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '[\n  \"a\",\n  \"a\"\n]\n' > reg.json && git add reg.json && git commit -qm 'add reg'
         git checkout -q -b source
@@ -1149,7 +1156,7 @@ FIXTURE
 # --- issue #1775: an unrelated insertion shifts the absolute indices --------
 
 @test "drift #1775: 배열에 값 삽입으로 인덱스가 밀려도 이미 존재하는 값은 no-op (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '[\n  \"a\"\n]\n' > reg.json && git add reg.json && git commit -qm 'add reg'
         git checkout -q -b source
@@ -1171,7 +1178,7 @@ FIXTURE
 }
 
 @test "drift #1775: an element the commit REMOVES from an array is still real content (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '[\n  \"a\",\n  \"b\"\n]\n' > reg.json && git add reg.json && git commit -qm 'add reg'
         git checkout -q -b source
@@ -1190,7 +1197,7 @@ FIXTURE
 # --- round 2 (agy + codex BLOCKER): the commit's own delta ------------------
 
 @test "drift #1688: a JSON commit whose only work is deleting a stray comma is NOT dropped (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '{\n  \"a\": \"1\",\n}\n' > s.json && git add s.json && git commit -qm 'add s with stray comma'
         git checkout -q -b source
@@ -1213,7 +1220,7 @@ FIXTURE
 # strip would have removed. All three were measured as silently dropped.
 
 @test "drift #1688: trailing whitespace is significant outside JSON (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf 'alpha   \nkeep\n' > w.txt && git add w.txt && git commit -qm 'add w'
         git checkout -q -b source
@@ -1228,7 +1235,7 @@ FIXTURE
 }
 
 @test "drift #1688: a Python trailing comma is significant, not noise (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf 'x = 1,\nkeep\n' > t.py && git add t.py && git commit -qm 'add t'
         git checkout -q -b source
@@ -1243,7 +1250,7 @@ FIXTURE
 }
 
 @test "drift #1688: a CSV empty trailing field is significant, not noise (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf 'a,b,\nkeep\n' > d.csv && git add d.csv && git commit -qm 'add d'
         git checkout -q -b source
@@ -1260,7 +1267,7 @@ FIXTURE
 # --- degradation + the #1177 contract ---------------------------------------
 
 @test "drift #1688: without jq the discriminator degrades to exact lines (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1688_make_json_repo)
         # Shadow jq so the structural guard fails; the pre-#1688 byte-exact
         # comparison must run, which reads this same fixture as real work.
@@ -1272,7 +1279,7 @@ FIXTURE
 }
 
 @test "drift #1688: genuinely new entry still counts as real content (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1688_make_json_repo)
         git checkout -q source
         printf '{\n  \"a\": \"1\",\n  \"b\": \"2\",\n  \"z\": \"9\"\n}\n' > m.json
@@ -1286,7 +1293,7 @@ FIXTURE
 }
 
 @test "drift #1688: a real deletion is still detected (0)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf '{\n  \"a\": \"1\",\n  \"drop\": \"0\"\n}\n' > d.json && git add d.json && git commit -qm 'add d'
         git checkout -q -b source
@@ -1301,7 +1308,7 @@ FIXTURE
 }
 
 @test "preflight #1688: comma-drift commit is absorbed as a no-op (0), non-destructive" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1688_make_json_repo)
         orig=\$(git rev-parse HEAD)
         echo localedit > untracked_note.txt
@@ -1445,7 +1452,7 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_check_file_deps private function exists" {
-    run_in_bash 'declare -f _gcp_scan_check_file_deps >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_check_file_deps >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -1568,7 +1575,7 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_predict_content_conflict private function exists" {
-    run_in_bash 'declare -f _gcp_scan_predict_content_conflict >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_predict_content_conflict >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -1655,7 +1662,7 @@ FIXTURE
     # Directly exercise _gcp_scan_predict_content_conflict: the SAME commit that
     # is flagged a conflict with an empty pick_list must be DEFERRED once a
     # precedent touching the conflicting file is present in the pick_list.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp_test.XXXXXX\")\"
         trap \"rm -rf \$repo\" EXIT
         cd \"\$repo\" || exit 1
@@ -1688,7 +1695,7 @@ FIXTURE
     # other pick commit (uncovered) — is still GUARANTEED to conflict on the
     # uncovered file, so it must be FLAGGED (return 1) naming that file, NOT
     # deferred just because the other file is covered.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp_test.XXXXXX\")\"
         trap \"rm -rf \$repo\" EXIT
         cd \"\$repo\" || exit 1
@@ -1733,13 +1740,13 @@ FIXTURE
 # ---------------------------------------------------------------------------
 
 @test "bash: _gcp_scan_load_skip_list private function exists" {
-    run_in_bash 'declare -f _gcp_scan_load_skip_list >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_load_skip_list >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gcp_scan_in_skip_list private function exists" {
-    run_in_bash 'declare -f _gcp_scan_in_skip_list >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_in_skip_list >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -1929,13 +1936,13 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_load_skip_paths private function exists" {
-    run_in_bash 'declare -f _gcp_scan_load_skip_paths >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_load_skip_paths >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gcp_scan_is_path_excluded private function exists" {
-    run_in_bash 'declare -f _gcp_scan_is_path_excluded >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_is_path_excluded >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -2078,7 +2085,7 @@ FIXTURE
     # first call swallows the loop's here-doc and the loop exits after one
     # iteration, so only 1 of 2 survivors is counted. With the guard both are
     # processed -> both no-op -> count 0 -> "Nothing to do".
-    run_in_bash '
+    run_in_bash "$GCP_SCAN_SRC"'
         repo="$(mktemp -d "${TMPDIR:-/tmp}/gcp_test.XXXXXX")"
         trap "rm -rf $repo" EXIT
         cd "$repo" || exit 1
@@ -2093,7 +2100,7 @@ FIXTURE
         # Override the Stage-2 helper: drain stdin like a stdin-reading git
         # subprocess, then report no-op so BOTH survivors must be counted.
         _gcp_scan_preflight_is_noop() { cat >/dev/null 2>&1; return 0; }
-        _gcp_scan main source
+        _gcp_scan_run main source
     '
     assert_success
     assert_output --partial "Already in HEAD (no-op): 2"
@@ -2156,7 +2163,7 @@ FIXTURE
     # candidate can have changed HEAD's copy by the time the candidate is picked.
     # Pre-fix the whole list was scanned, so c2 (later) wrongly "covered"
     # conf.txt and c1's guaranteed conflict was deferred (rc=0, silent).
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         repo=\"\$(mktemp -d \"\${TMPDIR:-/tmp}/gcp1647u.XXXXXX\")\"
         trap \"rm -rf \$repo\" EXIT
         cd \"\$repo\" || exit 1
@@ -2219,7 +2226,7 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_cherry_pick_quiet private function exists" {
-    run_in_bash 'declare -f _gcp_scan_cherry_pick_quiet >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_cherry_pick_quiet >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -2452,7 +2459,7 @@ FIXTURE
 # `command` is structurally immune.
 # ---------------------------------------------------------------------------
 
-@test "alias-immunity #1663: gcp_scan.sh has no bare cp/rm/mv command words" {
+@test "alias-immunity #1663: lib/gcp_scan_*.sh have no bare cp/rm/mv command words" {
     # Static guard, so a future file-wide cleanup cannot drop the `command`
     # prefix again unnoticed.
     #
@@ -2479,10 +2486,10 @@ FIXTURE
                 out = out c
             }
             print out
-        }" "$1" |
+        }" "$@" |
             sed "s/\\bcommand[[:space:]][[:space:]]*\\(cp\\|rm\\|mv\\)\\b/command_OK/g" |
             grep -nE "(^|[^[:alnum:]_./-])(cp|rm|mv)[[:space:]]" || true
-    ' _ "${SHELL_COMMON}/functions/gcp_scan.sh"
+    ' _ "${SHELL_COMMON}"/tools/custom/lib/gcp_scan_*.sh
     # No `assert_success`: the pipeline ends in `|| true` (grep exits 1 on the
     # expected no-match), so status is always 0. `assert_output ""` is the real
     # assertion, and it also catches a broken `sed`/`awk` — bats folds stderr
@@ -2502,7 +2509,7 @@ FIXTURE
     # `git reset --hard HEAD`, and git re-materializes a tracked file at its
     # own 644 whatever cp did — so slot 2 would pass with or without the fix.
     # Only the untracked slot 1 has cp as the last writer of its mode.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1149_make_repo)
         rm -f \"\$HOME/.gitconfig\"
         printf '[include]\n\tpath = %s/git/.gitconfig\n' \"\$repo\" > \"\$HOME/.gitconfig\"
@@ -2522,21 +2529,18 @@ FIXTURE
     assert_output --partial "CONTENT_OK"
 }
 
-@test "alias-immunity #1663: preflight body carries no imprinted 'cp -i' under interactive zsh" {
-    # Behavioral guard, via the REAL production load order (main.zsh aliases
-    # block -> functions block). The `aliascp=` assertion is load-bearing:
-    # without it this test would pass vacuously on any day the alias stops
-    # being defined, which is exactly the signal it exists to detect.
+@test "alias-immunity #1663: scan internals never load into an interactive zsh (#2155)" {
+    # Since #2155 the scan runs as a bash child process, so zsh never parses
+    # its body and no alias can be imprinted. Pin that: the real production
+    # load order still defines the `cp -i` alias, yet none of the scan
+    # internals exist in the shell. If they ever come back as sourced
+    # functions, the parse-time imprint risk of #1663 returns with them.
     run_in_zsh "
         printf 'aliascp=%s\n' \"\${aliases[cp]}\"
-        printf 'aliasrm=%s\n' \"\${aliases[rm]}\"
-        print -r -- \$functions[_gcp_scan_preflight_is_noop] | grep -c 'cp -i' | sed 's/^/cp_imprint=/'
-        print -r -- \$functions[_gcp_scan_preflight_is_noop] | grep -c 'rm -i' | sed 's/^/rm_imprint=/'
+        print -r -- \"loaded=\${+functions[_gcp_scan_preflight_is_noop]}\"
     "
     assert_output --partial "aliascp=cp -i"
-    assert_output --partial "aliasrm=rm -i"
-    assert_output --partial "cp_imprint=0"
-    assert_output --partial "rm_imprint=0"
+    assert_output --partial "loaded=0"
 }
 
 # ---------------------------------------------------------------------------
@@ -2597,10 +2601,10 @@ FIXTURE
     # rather than on one variable name, which a reimplementation could rename
     # past (codex FOLLOW-UP). Only lines that actually RUN cherry-pick count:
     # the ux_info/echo lines legitimately PRINT a range as a manual hint.
-    local src="${DOTFILES_ROOT}/shell-common/functions/gcp_scan.sh"
+    local src="${DOTFILES_ROOT}/shell-common/tools/custom/lib/gcp_scan_run.sh"
     [ -f "$src" ] || fail "guard cannot run — source not found: $src"
     local exec_cp='(^|[;&|]|[[:space:]](then|do|if)[[:space:]]|![[:space:]]*)[[:space:]]*git cherry-pick'
-    run bash -c "grep -nE '${exec_cp}' '${src}' | grep -F '..'"
+    run bash -c "grep -nE '${exec_cp}' '${src%/*}'/gcp_scan_*.sh | grep -F '..'"
     assert_failure 1
 }
 
@@ -2608,7 +2612,7 @@ FIXTURE
     # The narrower, name-keyed companion: every surviving mention of the
     # variable the tool actually uses must be its own assignment or an output
     # call.
-    local src="${DOTFILES_ROOT}/shell-common/functions/gcp_scan.sh"
+    local src="${DOTFILES_ROOT}/shell-common/tools/custom/lib/gcp_scan_run.sh"
     [ -f "$src" ] || fail "guard cannot run — source not found: $src"
     run bash -c "grep 'range_str' '${src}' | grep -vE 'local range_str=|ux_bullet|ux_info|echo '"
     assert_failure 1
@@ -2668,7 +2672,7 @@ FIXTURE
 }
 
 @test "bash: _gcp_scan_staged_is_duplicate_append private function exists" {
-    run_in_bash 'declare -f _gcp_scan_staged_is_duplicate_append >/dev/null && echo ok'
+    run_in_bash "$GCP_SCAN_SRC"'declare -f _gcp_scan_staged_is_duplicate_append >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -2691,7 +2695,7 @@ FIXTURE
 }
 
 @test "preflight #1759: a cleanly re-applied duplicate block is absorbed as a no-op (0), non-destructive" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1759_make_dup_append_repo)
         orig=\$(git rev-parse HEAD)
         echo localedit > untracked_note.txt
@@ -2711,7 +2715,7 @@ FIXTURE
     # The #1177 direction: a commit dropped from the candidate list must leave
     # a trace naming the sha, so a wrong verdict is auditable rather than
     # invisible.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp1759_make_dup_append_repo)
         _gcp_scan_preflight_is_noop \"\$src\"
     "
@@ -2721,7 +2725,7 @@ FIXTURE
 }
 
 @test "dup #1759: a genuinely new block is NOT a duplicate append (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source
@@ -2737,7 +2741,7 @@ FIXTURE
 @test "dup #1759: a commit that also DELETES is never absorbed (1)" {
     # Deletion is the #1177 data-loss direction — an addition-only staged diff
     # is a precondition, not a detail.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source
@@ -2770,7 +2774,7 @@ FIXTURE
         printf 'alpha\nbeta\n    return 0\ngamma\n' > f.txt
         git add f.txt && git commit -qm 'append a lone return'
     "
-    run_in_bash "$fixture
+    run_in_bash "$GCP_SCAN_SRC$fixture
         _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
     "
     assert_success
@@ -2781,7 +2785,7 @@ FIXTURE
     # Pins GCP_SCAN_DUP_BLOCK_MIN_LINES as a live knob — the phantom-commit
     # runbook sends users to it, so a default-only test would leave the
     # documented escape hatch unproven.
-    run_in_bash "$fixture
+    run_in_bash "$GCP_SCAN_SRC$fixture
         GCP_SCAN_DUP_BLOCK_MIN_LINES=1
         _gcp_scan_preflight_is_noop \"\$src\"; echo \"rc=\$?\"
     "
@@ -2790,7 +2794,7 @@ FIXTURE
 }
 
 @test "dup #1759: a commit that ADDS a file is never a duplicate append (1)" {
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source
@@ -2807,7 +2811,7 @@ FIXTURE
 @test "dup #1759: a mode-only change has no hunks and is never absorbed (1)" {
     # A non-empty staged diff with zero hunks would make "every added block is
     # already in HEAD" vacuously true.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         printf 'echo hi\n' > s.sh && git add s.sh && git commit -qm 'add script'
         git checkout -q -b source
@@ -2827,7 +2831,7 @@ FIXTURE
     # absorbing the latter is the #1177 data-loss direction. The diff shape
     # here is identical to the absorbed case above — only the SUBJECT differs,
     # which is exactly the signal precondition 4 reads.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         seq 1 12 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source
@@ -2849,7 +2853,7 @@ FIXTURE
     # past `bn`, where block_ok never reads. This case and the next pin that
     # both verdicts come out right, so the claim stays disproved rather than
     # merely argued.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         seq 1 30 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source
@@ -2869,7 +2873,7 @@ FIXTURE
     # The other half of the stale-array disproof: were the leftover tail of the
     # LONG first block still being compared, this short second hunk could match
     # on those stale lines and the commit would be wrongly absorbed.
-    run_in_bash "
+    run_in_bash "$GCP_SCAN_SRC
         $(_gcp903_make_repo)
         seq 1 30 | sed 's/^/L/' > f.txt && git add f.txt && git commit -qm 'seed'
         git checkout -q -b source

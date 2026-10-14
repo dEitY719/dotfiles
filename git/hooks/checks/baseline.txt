@@ -13,7 +13,6 @@ posix_bashism:shell-common/util/loader.sh
 ux_usage:shell-common/functions/devx_pr_verify_live_backend_identity.sh
 ux_usage:shell-common/functions/git_worktree.sh
 ux_usage:shell-common/functions/mirror_pages_activate_help.sh
-ux_usage:shell-common/functions/wsl_check.sh
 wrapper:shell-common/functions/category_help.sh
 wrapper:shell-common/functions/git_help.sh
 wrapper:shell-common/functions/mytool_help.sh
@@ -21,7 +20,6 @@ wrapper:shell-common/functions/plugin_sync_title.sh
 wrapper:shell-common/functions/register_help.sh
 wrapper:shell-common/functions/superpowers_help.sh
 wrapper:shell-common/functions/work.sh
-wrapper:shell-common/functions/wsl_check.sh
 wrapper:shell-common/tools/integrations/codex.sh
 wrapper:shell-common/tools/integrations/litellm.sh
 zsh_emulation:shell-common/functions/my_help.sh

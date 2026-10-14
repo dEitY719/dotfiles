@@ -15,6 +15,10 @@
 
 load '../test_helper'
 
+# The audit is a PATH executable since #2155; its private helpers are loaded by
+# sourcing it (the direct-exec guard keeps the audit itself from running).
+AUDIT_EXE_SRC=". '${DOTFILES_ROOT}/shell-common/tools/custom/gh_audit_builtin_workflows.sh'"
+
 setup() {
     setup_isolated_home
 }
@@ -46,7 +50,7 @@ teardown() {
 }
 
 @test "bash: _gh_audit_builtin_workflows_is_forbidden helper exists" {
-    run_in_bash 'declare -f _gh_audit_builtin_workflows_is_forbidden >/dev/null && echo ok'
+    run_in_bash "$AUDIT_EXE_SRC; declare -f _gh_audit_builtin_workflows_is_forbidden >/dev/null && echo ok"
     assert_success
     assert_output --partial "ok"
 }
@@ -106,19 +110,19 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "forbidden: 'Pull request linked to issue' matches" {
-    run_in_bash '_gh_audit_builtin_workflows_is_forbidden "Pull request linked to issue" && echo MATCH || echo NO'
+    run_in_bash "$AUDIT_EXE_SRC; _gh_audit_builtin_workflows_is_forbidden \"Pull request linked to issue\" && echo MATCH || echo NO"
     assert_success
     assert_output --partial "MATCH"
 }
 
 @test "forbidden: unrelated workflow name does not match" {
-    run_in_bash '_gh_audit_builtin_workflows_is_forbidden "Item closed" && echo MATCH || echo NO'
+    run_in_bash "$AUDIT_EXE_SRC; _gh_audit_builtin_workflows_is_forbidden \"Item closed\" && echo MATCH || echo NO"
     assert_success
     assert_output --partial "NO"
 }
 
 @test "forbidden: empty value never matches" {
-    run_in_bash '_gh_audit_builtin_workflows_is_forbidden "" && echo MATCH || echo NO'
+    run_in_bash "$AUDIT_EXE_SRC; _gh_audit_builtin_workflows_is_forbidden \"\" && echo MATCH || echo NO"
     assert_success
     assert_output --partial "NO"
 }
