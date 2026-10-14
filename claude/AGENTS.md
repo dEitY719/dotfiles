@@ -57,8 +57,6 @@ marketplace repo 로 분리됐다. 등록은 `claude/plugin/{marketplaces,plugin
 
 ## Skill 작성 규칙
 
-## Skill 작성 규칙
-
 - SSOT: 해당 marketplace repo 의 `skills/<name>/SKILL.md` (#1680 이후 dotfiles 밖)
 - frontmatter: `name`, `description`, `allowed-tools` 필수
 - `name` 형식: `{namespace}:{action}` (e.g. `skill:check`, `gh:commit`)

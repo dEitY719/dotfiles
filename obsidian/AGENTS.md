@@ -36,7 +36,6 @@ are non-empty. No network probe is involved — reachability is the request's
 problem, not the router's. On a PC that never sets them, behavior is
 byte-for-byte what it was before the REST backend existed.
 
-
 REST backend 상세(자격증명 파일, 지원/미지원 서브커맨드), WSL 전제조건, 관련 스킬,
 테스트 설계는 [`README.md`](./README.md).
 
