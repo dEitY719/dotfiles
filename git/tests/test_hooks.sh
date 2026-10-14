@@ -405,6 +405,16 @@ test_registry_runs_added_check_file() {
     grep -q "BLOCKING.*Fixture marker found (1)" <<<"$out" || die "Expected the fixture section, got: $out"
     grep -q "notes.txt: fixture marker" <<<"$out" || die "Expected the fixture finding, got: $out"
 
+    # A blocking check that fails without a report still explains itself.
+    printf '%s\n' 'CHECK_NAME=zz_silent' 'CHECK_SCOPE=global' 'CHECK_SEVERITY=blocking' \
+        'CHECK_TITLE="Silent failure"' 'check_run() { return 1; }' >"$repo_dir/git/hooks/checks/zz_silent_check.sh"
+    set +e
+    out=$(git -C "$repo_dir" commit -m silent 2>&1)
+    set -e
+    grep -q "check 'zz_silent' failed without writing a report" <<<"$out" ||
+        die "Expected the silent-failure note, got: $out"
+    rm -f "$repo_dir/git/hooks/checks/zz_silent_check.sh"
+
     # Rollback switch: the legacy explicit dispatch never sees the new file.
     assert_success "GIT_HOOKS_LEGACY_DISPATCH=1 git -C \"$repo_dir\" commit -m legacy"
 
@@ -412,14 +422,30 @@ test_registry_runs_added_check_file() {
 }
 
 test_registry_blocks_invalid_check_file() {
-    local repo_dir
+    local repo_dir out code
     repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
     make_repo "$repo_dir"
     printf 'CHECK_NAME=broken\nCHECK_SCOPE=per-everything\n' >"$repo_dir/git/hooks/checks/broken_check.sh"
     echo hi >"$repo_dir/notes.txt"
     git -C "$repo_dir" add notes.txt
 
-    assert_failure "git -C \"$repo_dir\" commit -m broken"
+    set +e
+    out=$(git -C "$repo_dir" commit -m broken 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected an invalid check file to block, got: $out"
+    grep -q "Invalid check module .*broken_check.sh: CHECK_SCOPE 'per-everything'" <<<"$out" ||
+        die "Expected the invalid-scope message, got: $out"
+
+    # Duplicate CHECK_NAME is rejected too.
+    cp "$repo_dir/git/hooks/checks/shebang_check.sh" "$repo_dir/git/hooks/checks/zz_dup_check.sh"
+    rm -f "$repo_dir/git/hooks/checks/broken_check.sh"
+    set +e
+    out=$(git -C "$repo_dir" commit -m dup 2>&1)
+    code=$?
+    set -e
+    [ $code -ne 0 ] || die "Expected a duplicate CHECK_NAME to block, got: $out"
+    grep -q "duplicate CHECK_NAME 'shebang'" <<<"$out" || die "Expected the duplicate-name message, got: $out"
 
     rm -rf "$repo_dir"
 }

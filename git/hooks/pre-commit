@@ -26,6 +26,12 @@ NC='\033[0m' # No Color
 # the sibling pre-commit.legacy is found next to the real file.
 HOOK_SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 HOOK_DIR="$(cd "$(dirname "$HOOK_SELF")" && pwd)"
+# The registry needs associative arrays (bash 4+); fail loudly instead of
+# half-running on an old bash (e.g. macOS /bin/bash 3.2).
+if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+    echo -e "${RED}✗ BLOCKING: git/hooks/pre-commit needs bash 4+ (found ${BASH_VERSION:-unknown})${NC}"
+    exit 1
+fi
 if [ "${GIT_HOOKS_LEGACY_DISPATCH:-}" = "1" ]; then
     exec "$HOOK_DIR/pre-commit.legacy" "$@"
 fi
@@ -80,7 +86,9 @@ invalid_check() {
 load_module_or_exit "${CHECKS_DIR}/shared.sh"
 load_module_or_exit "${CHECKS_DIR}/main_branch_guard.sh"
 
-for check_file in "$CHECKS_DIR"/*_check.sh; do
+# Explicit C-locale sort: glob order follows LC_COLLATE and must not vary by machine.
+mapfile -t CHECK_FILES < <(printf '%s\n' "$CHECKS_DIR"/*_check.sh | LC_ALL=C sort)
+for check_file in "${CHECK_FILES[@]}"; do
     [ -f "$check_file" ] || continue
     unset CHECK_NAME CHECK_SCOPE CHECK_SEVERITY CHECK_TITLE CHECK_LABEL CHECK_REPORT_LINES CHECK_HINT CHECK_COUNT_LINES
     unset -f check_run
@@ -217,13 +225,18 @@ done
 report_check() { # <name>
     local name="$1" out="${CHECK_OUT[$1]}" count="${CHECK_COUNT[$1]}"
     local lines="${CHECK_LINES_OF[$1]}" color="$YELLOW" label="${CHECK_LABEL_OF[$1]:-WARNING}"
-    [ "$count" -gt 0 ] && [ -s "$out" ] || return 0
+    [ "$count" -gt 0 ] || return 0
     if [ "${CHECK_SEVERITY_OF[$name]}" = "blocking" ]; then
         color="$RED"
         label="BLOCKING"
+    else
+        [ -s "$out" ] || return 0
     fi
     echo -e "${color}[$label] ${CHECK_TITLE_OF[$name]} ($count):${NC}"
-    if [ -n "$lines" ]; then
+    if [ ! -s "$out" ]; then
+        # A failing blocking check must never be counted without a reason shown.
+        echo "  (check '$name' failed without writing a report; rerun with GIT_HOOKS_DEBUG=1)"
+    elif [ -n "$lines" ]; then
         head -n "$lines" "$out" | sed 's/^/  /'
         [ "$(wc -l <"$out")" -gt "$lines" ] && echo "  ... and more"
     else
