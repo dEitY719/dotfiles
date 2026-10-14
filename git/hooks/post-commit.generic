@@ -48,7 +48,7 @@ CATEGORY=$(echo "$MSG" | grep -iE '^Category:' | cut -d: -f2 | xargs || echo "ot
 # Parse Jira Key (extract from commit message, fallback to env var)
 JIRA_KEY=$(echo "$MSG" | grep -oE '\[[A-Z]+[A-Z0-9]*-[0-9]+\]' | head -1 | tr -d '[]' || echo "$JIRA_KEY")
 if [ -z "$JIRA_KEY" ]; then
-    JIRA_KEY="${JIRA_KEY_DEFAULT:-$(basename $(git rev-parse --show-toplevel) | tr '[:lower:]' '[:upper:]')-AUTO}"
+    JIRA_KEY="${JIRA_KEY_DEFAULT:-$(basename "$(git rev-parse --show-toplevel)" | tr '[:lower:]' '[:upper:]')-AUTO}"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════

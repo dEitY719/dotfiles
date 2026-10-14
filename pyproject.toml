@@ -28,6 +28,7 @@ dev = [
     "pexpect>=4.8",  # interactive shell testing
     "ruff==0.12.7",  # pinned: CI 가 최신 ruff 픽업 시 format 규칙 드리프트로 red (#1219 PR #1238)
     "mypy>=1.10",
+    "types-PyYAML",  # mypy stubs for claude/hooks/skill_completion_guard.py (#2150)
 ]
 
 
@@ -79,7 +80,7 @@ disallow_untyped_calls = false # 타입 힌트가 없는 함수 호출에 경고
 
 # mypy 검사에서 제외할 디렉터리 및 파일 패턴 (정규 표현식)
 # (?x) 플래그는 정규 표현식 내에서 공백과 주석을 허용하여 가독성을 높입니다.
-exclude = '(?x)( \.venv/ | \.tox/ | \.vscode/ | \.git/ | build/ | config/tox/ | tests | claude/ )'
+exclude = '(?x)( \.venv/ | \.tox/ | \.vscode/ | \.git/ | build/ | config/tox/ | tests )'
 
 
 [tool.ruff]

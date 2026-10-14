@@ -334,7 +334,7 @@ if [ $blocking_violations -eq 0 ]; then
     if [ $subshell_violations -gt 0 ] && [ -s "$SUBSHELL_VIOLATIONS_FILE" ]; then
         echo -e "${YELLOW}⚠ [WARNING] Subshell sourcing anti-pattern ($subshell_violations violation(s)):${NC}"
         head -n 3 "$SUBSHELL_VIOLATIONS_FILE" | sed 's/^/  /'
-        [ $(wc -l <"$SUBSHELL_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
+        [ "$(wc -l <"$SUBSHELL_VIOLATIONS_FILE")" -gt 3 ] && echo "  ... and more" && echo ""
         echo ""
         has_warnings=1
     fi
@@ -342,7 +342,7 @@ if [ $blocking_violations -eq 0 ]; then
     if [ $wrapper_violations -gt 0 ] && [ -s "$WRAPPER_VIOLATIONS_FILE" ]; then
         echo -e "${YELLOW}⚠ [WARNING] Wrapper function anti-patterns ($wrapper_violations violation(s)):${NC}"
         head -n 3 "$WRAPPER_VIOLATIONS_FILE" | sed 's/^/  /'
-        [ $(wc -l <"$WRAPPER_VIOLATIONS_FILE") -gt 3 ] && echo "  ... and more" && echo ""
+        [ "$(wc -l <"$WRAPPER_VIOLATIONS_FILE")" -gt 3 ] && echo "  ... and more" && echo ""
         echo ""
         has_warnings=1
     fi
@@ -368,7 +368,7 @@ if [ $blocking_violations -eq 0 ]; then
     if [ $zsh_emulation_violations -gt 0 ] && [ -s "$ZSH_EMULATION_FILE" ]; then
         echo -e "${YELLOW}ℹ [INFO] Zsh compatibility suggestions ($zsh_emulation_violations):${NC}"
         head -n 2 "$ZSH_EMULATION_FILE" | sed 's/^/  /'
-        [ $(wc -l <"$ZSH_EMULATION_FILE") -gt 2 ] && echo "  ..." && echo ""
+        [ "$(wc -l <"$ZSH_EMULATION_FILE")" -gt 2 ] && echo "  ..." && echo ""
         echo ""
         has_warnings=1
     fi
@@ -376,7 +376,7 @@ if [ $blocking_violations -eq 0 ]; then
     if [ $gh_api_type_violations -gt 0 ] && [ -s "$GH_API_TYPE_FILE" ]; then
         echo -e "${YELLOW}⚠ [WARNING] gh api graphql -f/-F type-mapping heuristics ($gh_api_type_violations file(s)):${NC}"
         head -n 5 "$GH_API_TYPE_FILE" | sed 's/^/  /'
-        [ $(wc -l <"$GH_API_TYPE_FILE") -gt 5 ] && echo "  ... and more"
+        [ "$(wc -l <"$GH_API_TYPE_FILE")" -gt 5 ] && echo "  ... and more"
         echo "  See: docs/guide/learnings/gh-api-type-casting.md (issue #395)"
         echo ""
         has_warnings=1
@@ -472,21 +472,21 @@ fi
 if [ $shellcheck_violations -gt 0 ] && [ -s "$SHELLCHECK_VIOLATIONS_FILE" ]; then
     echo -e "${RED}[BLOCKING] ShellCheck static analysis issues ($shellcheck_violations):${NC}"
     head -n 10 "$SHELLCHECK_VIOLATIONS_FILE" | sed 's/^/  /'
-    [ $(wc -l <"$SHELLCHECK_VIOLATIONS_FILE") -gt 10 ] && echo "  ... and more"
+    [ "$(wc -l <"$SHELLCHECK_VIOLATIONS_FILE")" -gt 10 ] && echo "  ... and more"
     echo ""
 fi
 
 if [ $pipe_loop_violations -gt 0 ] && [ -s "$PIPE_LOOP_VIOLATIONS_FILE" ]; then
     echo -e "${RED}[BLOCKING] Pipe-based loop anti-pattern ($pipe_loop_violations):${NC}"
     head -n 5 "$PIPE_LOOP_VIOLATIONS_FILE" | sed 's/^/  /'
-    [ $(wc -l <"$PIPE_LOOP_VIOLATIONS_FILE") -gt 5 ] && echo "  ... and more"
+    [ "$(wc -l <"$PIPE_LOOP_VIOLATIONS_FILE")" -gt 5 ] && echo "  ... and more"
     echo ""
 fi
 
 if [ $abs_home_violations -gt 0 ] && [ -s "$ABS_HOME_VIOLATIONS_FILE" ]; then
     echo -e "${RED}[BLOCKING] Hardcoded absolute home path ($abs_home_violations file(s)):${NC}"
     head -n 10 "$ABS_HOME_VIOLATIONS_FILE" | sed 's/^/  /'
-    [ $(wc -l <"$ABS_HOME_VIOLATIONS_FILE") -gt 10 ] && echo "  ... and more"
+    [ "$(wc -l <"$ABS_HOME_VIOLATIONS_FILE")" -gt 10 ] && echo "  ... and more"
     echo ""
 fi
 

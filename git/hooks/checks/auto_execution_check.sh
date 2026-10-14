@@ -76,7 +76,8 @@ check_auto_execution_in_sourced_files() {
         # But we need to be careful not to flag legitimate helper functions
         # Only flag if there are multiple violations or very obvious ones
 
-        local violation_count=$(echo "$violations" | wc -l)
+        local violation_count
+        violation_count=$(echo "$violations" | wc -l)
         if [ "$violation_count" -gt 0 ]; then
             # Be conservative: only flag if we see function calls that look like auto-exec
             if echo "$violations" | grep -qE '\$\{0##|SUSPICIOUS|^[[:space:]]*(work_log_help|help_func|__init__)'; then
