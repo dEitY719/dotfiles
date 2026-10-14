@@ -1,6 +1,6 @@
-# obsidian/ — 상세
+# obsidian/ — details
 
-> 요약·라우팅은 [`AGENTS.md`](./AGENTS.md) (#2151 에서 분리).
+> Summary and routing table: [`AGENTS.md`](./AGENTS.md) (split out in #2151).
 
 ## REST backend
 
@@ -17,7 +17,7 @@ OBSIDIAN_REST_API_URL=https://127.0.0.1:27124
 ```
 
 A missing, empty, or unreadable file is not an error — routing just falls
-through to the legacy rows above. Needs `curl` + `jq` on PATH; the plugin's
+through to the legacy rows of the routing table in `AGENTS.md`. Needs `curl` + `jq` on PATH; the plugin's
 cert is self-signed, so requests go out with `curl -sk` (no validation, no
 pinning). The key is never printed, not even in error output.
 
@@ -52,7 +52,6 @@ exactly one vault — whichever its Obsidian instance has open), and a
 partial emulation would be worse than a refusal. Windows-native Obsidian
 (`OBSIDIAN_CLI_BIN`) still implements the full first-party CLI — unset
 `OBSIDIAN_REST_API_URL` to route back to it on a PC that has both.
-
 
 ## WSL prerequisites
 

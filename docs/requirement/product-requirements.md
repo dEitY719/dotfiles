@@ -110,4 +110,4 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 
 | 날짜 | 이슈 | 내용 |
 |------|------|------|
-| 2026-10-14 | #2151 | D-05·F11·F12 를 #1680 이후 marketplace/plugin 배포 구조로 재작성, D-06 경로를 `shell-common/env/` 로 정정, F17 을 9 개 디렉토리로 갱신. 개정 중 `status: needs-review`, 반영 후 `approved` 복원 |
+| 2026-10-14 | #2151 | D-05·F11·F12 를 #1680 이후 marketplace/plugin 배포 구조로 재작성, D-06 경로를 `shell-common/env/` 로 정정, F17 을 9 개 디렉토리로 갱신. 단일 PR 로 반영돼 `status: approved` 유지 |

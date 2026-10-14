@@ -38,6 +38,8 @@ marketplace repo 로 분리됐다. 등록은 `claude/plugin/{marketplaces,plugin
 - 훅(SessionStart drift 자동복구, statusline override, plugin path normalize, PostToolUse 디스패처,
   PreToolUse 가드 3종, Stop 가드 공용 헬퍼)과 `mods/cache-watch`, `claude-accounts link`.
 
+**PreToolUse 가드(`claude/hooks/bash_*.py`)의 규칙을 넓히지 말 것** — 오탐은 `tests/integration/test_bash_*_guard.py` 의 ALLOWED 표에 추가하고 규칙을 좁힌다.
+
 상세(계정별 경로 표, 모드별 settings 소유권, 훅별 동작·탈출구): [`docs/config-files.md`](./docs/config-files.md).
 
 ---

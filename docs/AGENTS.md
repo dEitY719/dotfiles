@@ -9,7 +9,7 @@
 - **Review**: open in markdown viewer (VS Code, grip)
 - **Line count**: `wc -l docs/**/*.md`
 - **Markdown lint**: 비활성화 — 자동 실행 금지
-- **Docs 린트**: `mise run lint-docs` = `scripts/lint_docs_filenames.sh` 1개 (태스크 SSOT `mise.toml`; changelog·`$HOME` 폴백 린터는 게이트에서 빠짐)
+- **Docs 린트**: `mise run lint-docs` = `scripts/lint_docs_filenames.sh` 1개 (태스크 SSOT `mise.toml`; changelog·`$HOME` 폴백 린터는 게이트에서 빠짐 — 후자는 `CLAUDE_SKILLS_DIR` 로 marketplace repo 를 가리켜 수동 실행, 사유는 `mise.toml` 주석)
 
 # Golden Rules
 
