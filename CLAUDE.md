@@ -76,7 +76,7 @@ Shared rules (POSIX, interactive guard, sourcing, no `~/.bashrc` writes, one-cli
 
 ## graphify (선탐색 인덱스)
 
-아키텍처/오리엔테이션/"X 어디 있나"/"Y가 뭘 호출하나" 류 질문은 **graphify 를 먼저** 쓴다 — 사용 규칙은 `AGENTS.md` → "graphify". When the user types `/graphify`, use the installed graphify skill.
+아키텍처/오리엔테이션/"X 어디 있나"/"Y가 뭘 호출하나" 류 질문은 **graphify 를 먼저** 쓴다 — 사용 규칙(`/graphify` 트리거 포함)은 `AGENTS.md` → "graphify".
 
 `graphify-out/graph.json` 이 없을 때만 fallback 으로 `.understand-anything/knowledge-graph.json` 을 `jq` 로 구조 쿼리한다(노드 `summary`/`tags`/`edges` 만, 파일 통독 금지, 약 1.1MB). 이 그래프는 마지막 `/understand` 실행 시점 스냅샷(`.understand-anything/meta.json` 의 `gitCommitHash`)이라 드리프트 가능 — 소스가 최종 진실이다.
 
