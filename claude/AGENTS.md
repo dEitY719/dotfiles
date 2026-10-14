@@ -52,6 +52,7 @@ marketplace repo 로 분리됐다. 등록은 `claude/plugin/{marketplaces,plugin
 - 사내 전용 항목은 `claude/plugin/company/`(별도 private GHES 레포).
 - 신규 PC `./claude/plugin/restore.sh`, 갱신 `./claude/plugin/update-plugins.sh`, 게시 `./claude/plugin/publish-sync.sh`.
 - `claude/workspace/AGENTS.md` 는 스킬 작업 폴더 루트 라우터 원본 (#2123).
+- 플러그인·스킬 관리 코드 4개 위치의 역할표·결정 트리: [`plugin/README.md`](./plugin/README.md) (#2147).
 
 상세: [`docs/plugins.md`](./docs/plugins.md).
 

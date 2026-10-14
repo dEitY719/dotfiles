@@ -90,3 +90,26 @@ _skill_workspace_dirs() {
             printf '%s\n' "$_swd_dir"
         done
 }
+
+# _skill_under_workspace <path> [root [real_root]] — rc 0 when <path> lies
+# strictly inside the workspace root, under its raw or resolved spelling.
+#
+# The one "is this link ours?" rule both consumers above delete by (#2147):
+# setup-skills-ssot.sh's skill_source_is_managed passes the root pair it
+# resolved once (no fork per call); the Claude Code account lib omits them
+# and gets _skill_workspace_root, so a missing / too-broad root means "not
+# ours" and nothing is deleted.
+_skill_under_workspace() {
+    [ -n "${1:-}" ] || return 1
+    _suw_root="${2:-}"
+    if [ -z "$_suw_root" ]; then
+        _suw_root=$(_skill_workspace_root) || return 1
+    fi
+    _suw_real="${3:-}"
+    [ -n "$_suw_real" ] ||
+        _suw_real=$(readlink -f "$_suw_root" 2>/dev/null || printf '%s' "$_suw_root")
+    case "$1" in
+        "$_suw_root"/* | "$_suw_real"/*) return 0 ;;
+    esac
+    return 1
+}

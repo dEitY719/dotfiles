@@ -225,18 +225,8 @@ collect_skill_sources() {
 # 관리 대상이면 갱신/정리해도 되고, 아니면 사용자 데이터로 보고 보존한다.
 # raw / resolved 두 형태를 모두 대조한다 — 호출부마다 비교 대상이 다르다.
 skill_source_is_managed() {
-    local path="$1"
-    local root
-
-    [ -n "$path" ] || return 1
-
-    for root in "$WORKSPACE_ROOT_RESOLVED" "$WORKSPACE_ROOT_REAL"; do
-        [ -n "$root" ] || continue
-        case "$path" in
-        "$root"/*) return 0 ;;
-        esac
-    done
-    return 1
+    [ -n "$WORKSPACE_ROOT_RESOLVED" ] || return 1
+    _skill_under_workspace "$1" "$WORKSPACE_ROOT_RESOLVED" "$WORKSPACE_ROOT_REAL"
 }
 
 # 합성 엔트리 이름으로 소스 경로를 되찾는다. 없으면 비어 있는 출력 + rc 1.
