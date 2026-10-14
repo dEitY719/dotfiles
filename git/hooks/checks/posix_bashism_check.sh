@@ -4,16 +4,18 @@
 # A `#!/bin/sh` file in shell-common/util or shell-common/config must not read
 # bash-only ${BASH_*} variables (was golden Rule 5, moved here in #2149).
 # ShellCheck does not cover it: SC3028 skips ${BASH_VERSION}-style reads.
-# The shell-detection test `[ -n "${BASH_VERSION-}" ]` (also `:-`, bare, `-z`)
-# is sanctioned and safe in POSIX sh, so it is stripped before matching; any
-# other ${BASH_*} read on the same line is still a hit (#2189).
+# The sanctioned shell-detection test is stripped before matching (#2189):
+# exactly `[ -n|-z "${BASH_VERSION-}" ]`, quoted, single-spaced, also `:-` and
+# bare (bare aborts under `set -u`; prefer `-`). Other spellings (`test -n`,
+# unquoted, compound `[ ... -a ... ]`) stay hits on purpose: a false positive
+# is cheaper than a missed bashism. Any other ${BASH_*} read on the line is a hit.
 
 check_posix_bashism() { # <abs_path> <repo_rel_path> <out>
     grep -q '^#!/bin/sh$' "$1" || return 0
     local hits
     # sed: keep the original line (h/g) only if a ${BASH_ survives the strip.
     hits=$(grep -n '\${BASH_' "$1" | sed -E \
-        -e 'h' -e 's/\[ -[nz] ("\$\{BASH_VERSION(:?-)?\}"|\$\{BASH_VERSION(:?-)?\}) \]//g' \
+        -e 'h' -e 's/\[ -[nz] "\$\{BASH_VERSION(:?-)?\}" \]//g' \
         -e '/\$\{BASH_/!d' -e 'g')
     [ -n "$hits" ] || return 0
     printf '%s\n' "$hits" | sed "s|^|$2:|" >>"$3"

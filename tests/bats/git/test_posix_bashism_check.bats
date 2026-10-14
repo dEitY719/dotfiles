@@ -20,8 +20,7 @@ _write() { printf '#!/bin/sh\n%s\n' "$1" >"$F"; }
         'if [ -n "${BASH_VERSION-}" ]; then' \
         'if [ -n "${BASH_VERSION:-}" ]; then' \
         '[ -z "${BASH_VERSION}" ] && :' \
-        'elif [ -n "${BASH_VERSION-}" ]; then' \
-        '[ -n ${BASH_VERSION-} ] && :'; do
+        'elif [ -n "${BASH_VERSION-}" ]; then'; do
         _write "$line"
         run check_posix_bashism "$F" f.sh "$OUT"
         [ "$status" -eq 0 ] || { echo "flagged: $line"; false; }
@@ -54,8 +53,10 @@ _write() { printf '#!/bin/sh\n%s\n' "$1" >"$F"; }
     [ "$status" -eq 1 ]
 }
 
-@test "posix_bashism: BASH_VERSION:+ and unbalanced quotes are not the idiom" {
-    for line in 'x=${BASH_VERSION:+bash}' '[ -n "${BASH_VERSION-} ] && :'; do
+@test "posix_bashism: BASH_VERSION:+, unquoted and unbalanced quotes are not the idiom" {
+    # unquoted: `[ -n ${BASH_VERSION-} ]` is `[ -n ]` (always true) in non-bash
+    for line in 'x=${BASH_VERSION:+bash}' '[ -n ${BASH_VERSION-} ] && :' \
+        '[ -n "${BASH_VERSION-} ] && :'; do
         _write "$line"
         run check_posix_bashism "$F" f.sh "$OUT"
         [ "$status" -eq 1 ] || { echo "missed: $line"; false; }
