@@ -35,7 +35,8 @@ Usage: git-pull-skills.sh [options]
 Options:
   --dry-run             Check repository status and incoming updates without pulling
   --all-branches        Pull non-main branches if tracking remote exists (default: skips non-main branches)
-  --target <dir>        Target directory to search for git repositories (default: ~/para/project/skills)
+  --target <dir>        Target directory to search for git repositories (default: ~/para/project/skills;
+                        hidden directories such as .claude are skipped)
   --jobs <N>            Repositories processed in parallel (default: \$DOTFILES_SKILLS_JOBS or 4; 1 = sequential)
   -h, --help, help      Show this help message
 USAGE
@@ -371,6 +372,12 @@ done < <(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | LC_AL
 TOTAL=${#REPO_DIRS[@]}
 
 POOL_COUNTERS="UPDATED UP_TO_DATE SKIPPED_DIRTY SKIPPED_BRANCH SKIPPED_NOT_GIT FAILED"
+# Parallel jobs have their output buffered, so a credential or passphrase
+# prompt would hang unseen: fail that fetch instead (#2198 review).
+if [ "$JOBS" -gt 1 ]; then
+	export GIT_TERMINAL_PROMPT=0
+	export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -o BatchMode=yes}"
+fi
 _run_pool _process_repo ${REPO_DIRS[@]+"${REPO_DIRS[@]}"}
 
 ux_section "Summary"

@@ -324,3 +324,51 @@ SH
     assert_failure 2
     assert_output --partial "--jobs"
 }
+
+@test "update-plugins.sh --jobs 4 routes every call to the --user config dir" {
+    run "$PLUGDIR/update-plugins.sh" --all --user work1 --jobs 4
+    assert_success
+    run grep -c "cfg=$TEST_TEMP_HOME/.claude-work1]" "$CLAUDE_LOG"
+    assert_output "6"
+    run grep -vc "cfg=$TEST_TEMP_HOME/.claude-work1]" "$CLAUDE_LOG"
+    assert_output "0"
+}
+
+@test "update-plugins.sh fails when the plugin store is corrupted during the run" {
+    mkdir -p "$TEST_TEMP_HOME/.claude-personal/plugins"
+    printf '{"gh-flow-skills": {}, "notes-skills": {}}' >"$TEST_TEMP_HOME/.claude-personal/plugins/known_marketplaces.json"
+    # Fake claude truncates the store on a marketplace refresh.
+    cat >"$FAKEBIN/claude" <<'SH'
+#!/bin/bash
+[ "$1 $2 $3" = "plugin marketplace update" ] && printf '{"gh-flow' >"$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json"
+[ "$1 $2" = "plugin update" ] && printf '{"updateOutcome":"up_to_date"}\n'
+exit 0
+SH
+    chmod +x "$FAKEBIN/claude"
+    run "$PLUGDIR/update-plugins.sh" --jobs 4
+    assert_failure 1
+    assert_output --partial "Plugin store file is not valid JSON after the update"
+}
+
+@test "update-plugins.sh fails when the plugin store loses a marketplace during the run" {
+    mkdir -p "$TEST_TEMP_HOME/.claude-personal/plugins"
+    printf '{"gh-flow-skills": {}, "notes-skills": {}}' >"$TEST_TEMP_HOME/.claude-personal/plugins/known_marketplaces.json"
+    cat >"$FAKEBIN/claude" <<'SH'
+#!/bin/bash
+[ "$1 $2 $3 $4" = "plugin marketplace update notes-skills" ] && printf '{"notes-skills": {}}' >"$CLAUDE_CONFIG_DIR/plugins/known_marketplaces.json"
+[ "$1 $2" = "plugin update" ] && printf '{"updateOutcome":"up_to_date"}\n'
+exit 0
+SH
+    chmod +x "$FAKEBIN/claude"
+    run "$PLUGDIR/update-plugins.sh" --jobs 4
+    assert_failure 1
+    assert_output --partial "Plugin store lost 'gh-flow-skills' during the update"
+}
+
+@test "the job-pool block is identical in update-plugins.sh and git-pull-skills.sh" {
+    local pull="${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" block1 block2
+    block1="$(sed -n '/^# --- job pool (#2198)/,/^# --- end job pool/p' "$UPDATE")"
+    block2="$(sed -n '/^# --- job pool (#2198)/,/^# --- end job pool/p' "$pull")"
+    [ -n "$block1" ]
+    [ "$block1" = "$block2" ]
+}
