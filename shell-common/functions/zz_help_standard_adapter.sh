@@ -235,10 +235,6 @@ EOF
 }
 
 apply_help_standard_adapter() {
-    if _help_std_is_function "_register_default_help_descriptions"; then
-        _register_default_help_descriptions >/dev/null 2>&1 || true
-    fi
-
     _help_std_wrap_topics
 }
 

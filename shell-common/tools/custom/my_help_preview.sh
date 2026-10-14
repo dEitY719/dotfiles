@@ -18,7 +18,7 @@
 # run by dash.
 
 # No `set -u`: my_help.sh probes optional globals ($ZSH_VERSION,
-# $_HELP_DEFAULTS_REGISTERED, ...) with bare expansions, so nounset kills the
+# $MY_HELP_SKIP_TOPIC_SOURCES, ...) with bare expansions, so nounset kills the
 # source before a single record is rendered.
 
 # Static, scope-aware key sheet (F-8). No candidate data reaches this text.

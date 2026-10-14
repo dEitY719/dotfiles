@@ -40,10 +40,13 @@ if [ -z "$SHELL_COMMON" ]; then
     SHELL_COMMON="${_MYHELP_DIR%/functions}"
 fi
 
-# The registry (arrays + _register_help) normally comes from dotfiles_load_all;
-# load it here when my_help.sh is sourced on its own (tests, preview helper).
+# The registry (arrays + _register_help) normally comes from dotfiles_load_all.
+# Sourced on its own (tests, preview helper), load it here and replay every
+# file's registration rows: they are literal calls, and topics defined outside
+# *_help.sh (gwt, del_file, mount, ...) would otherwise be missing.
 if ! command -v _register_func >/dev/null 2>&1; then
     . "${SHELL_COMMON}/util/help_registry.sh"
+    eval "$(grep -h -E '^_register_(help|func) ' "${SHELL_COMMON}/functions"/*.sh 2>/dev/null)"
 fi
 
 # Source all *_help.sh files from the functions directory.
