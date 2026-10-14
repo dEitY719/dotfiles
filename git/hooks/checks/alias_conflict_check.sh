@@ -53,3 +53,12 @@ check_alias_function_conflict() {
 
     return $violations_found
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=alias_conflict
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Alias/Function name conflicts"
+check_run() { check_alias_function_conflict "$1/$3" "$4" 2>/dev/null; }

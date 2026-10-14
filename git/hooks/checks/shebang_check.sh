@@ -34,3 +34,18 @@ check_shebang_violation() {
     [ "$actual" = "$expected" ] && return 0
     return 1
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=shebang
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Shebang violations"
+check_run() {
+    local repo_root="$1" file="$3" out="$4" abs_path
+    case "$file" in shell-common/*.sh | bash/*.sh | zsh/*.sh) ;; *) return 0 ;; esac
+    abs_path="$repo_root/$file"
+    [ -f "$abs_path" ] || return 0
+    check_shebang_violation "$repo_root" "$abs_path" && return 0
+    echo "$file:1: Expected: $(get_expected_shebang "$repo_root" "$abs_path") Got: $(head -n1 "$abs_path")" >>"$out"
+    return 1
+}

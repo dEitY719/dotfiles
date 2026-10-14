@@ -66,3 +66,14 @@ check_leak_patterns() {
         }' >>"$output_file"
     return 1
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# shellcheck disable=SC2016 # literal $LEAK_PATTERNS_ERE in the hint, never its value
+CHECK_NAME=leak_pattern
+CHECK_SCOPE=global
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Internal-identifier leak pattern in staged lines or file names"
+CHECK_REPORT_LINES=10
+CHECK_HINT='Matched text is not shown. Inspect: git diff --cached -U0 | grep -nE "$LEAK_PATTERNS_ERE"
+Escape hatch (verified-safe only): SKIP_LEAK_GUARD=1 git commit ...'
+check_run() { check_leak_patterns "$4"; }

@@ -64,3 +64,12 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     echo "This script should be sourced, not executed directly"
     exit 1
 fi
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=alias_location
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Alias/Function location violations"
+check_run() { check_alias_location "$1" "$2" "$3" "$4" 2>/dev/null; }

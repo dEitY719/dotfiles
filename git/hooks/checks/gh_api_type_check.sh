@@ -122,3 +122,16 @@ check_gh_api_type_mapping() {
     [ "$found" -eq 0 ] && return 0
     return 1
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=gh_api_type
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=warning
+CHECK_TITLE="gh api graphql -f/-F type-mapping heuristics"
+CHECK_REPORT_LINES=5
+CHECK_HINT="See: docs/guide/learnings/gh-api-type-casting.md (issue #395)"
+check_run() {
+    case "$3" in *.sh | *.bash | *.md) ;; *) return 0 ;; esac
+    [ -f "$1/$3" ] || return 0
+    check_gh_api_type_mapping "$1/$3" "$4" 2>/dev/null
+}

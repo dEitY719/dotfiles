@@ -103,3 +103,12 @@ check_auto_execution_in_sourced_files() {
     rm -f "$tmp_file"
     return 0
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=auto_execution
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Auto-execution in sourced files"
+check_run() { check_auto_execution_in_sourced_files "$1" "$2" "$3" "$4" 2>/dev/null; }

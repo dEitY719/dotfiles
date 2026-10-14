@@ -88,3 +88,10 @@ check_direct_exec_guard() {
     rm -f "$tmp_file"
     return 0
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=direct_exec_guard
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Direct-exec guard violations"
+check_run() { check_direct_exec_guard "$1" "$2" "$3" "$4" 2>/dev/null; }

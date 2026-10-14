@@ -37,3 +37,14 @@ check_zsh_emulation_issues() {
     [ $has_issues -eq 0 ] && return 0
     return 1
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=zsh_emulation
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=warning
+CHECK_LABEL=INFO
+CHECK_TITLE="Zsh compatibility suggestions"
+CHECK_REPORT_LINES=2
+check_run() { check_zsh_emulation_issues "$1/$3" "$4" 2>/dev/null; }

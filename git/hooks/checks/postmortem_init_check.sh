@@ -66,3 +66,10 @@ check_init_auto_sourcing() {
     rm -f "$tmp_file"
     return 0
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=init_auto_sourcing
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="tools/custom auto-sourcing in init files"
+check_run() { check_init_auto_sourcing "$1" "$2" "$3" "$4" 2>/dev/null; }

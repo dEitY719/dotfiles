@@ -31,3 +31,12 @@ check_backup_files() {
 
     return 1
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=backup_files
+CHECK_SCOPE=global
+CHECK_SEVERITY=warning
+CHECK_LABEL=CLEANUP
+CHECK_TITLE="Backup files found in repository"
+CHECK_HINT="Delete the files above with rm -f."
+check_run() { check_backup_files "$1" "$4" 2>/dev/null; }

@@ -53,3 +53,13 @@ check_wrapper_function() {
 
     return $violations_found
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=wrapper
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=warning
+CHECK_TITLE="Wrapper function anti-patterns"
+CHECK_REPORT_LINES=3
+check_run() { check_wrapper_function "$1/$3" "$4" 2>/dev/null; }
