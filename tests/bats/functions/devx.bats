@@ -222,7 +222,10 @@ EOF
 # ---------------------------------------------------------------------------
 
 @test "bash: private _devx_* sub-functions exist" {
+    # Since #2195 they live in the PATH executable; its direct-exec guard lets
+    # it be sourced for inspection.
     run_in_bash '
+        . "${SHELL_COMMON}/tools/custom/devx.sh"
         for fn in _devx_lint _devx_fix _devx_fmt_deprecated _devx_stat _devx_lint_helpfunc _devx_lint_deadcode; do
             declare -f "$fn" >/dev/null || { echo MISSING $fn; exit 1; }
         done

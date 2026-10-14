@@ -264,7 +264,7 @@ gcp_help() {
 # with this shell but exported env and cwd. Resolved at call time, so the
 # alphabetical load order (gcp.sh -> gcp_scan.sh) does not matter.
 # ----------------------------------------------------------------------------
-gcp() {
+_gcp_main() {
     case "${1:-}" in
         scan)    shift; _gcp_scan   "$@" ;;
         theirs)  shift; _gcp_theirs "$@" ;;
@@ -287,6 +287,13 @@ gcp() {
             fi
             ;;
     esac
+}
+
+# gcp — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/gcp.sh (also ~/.local/bin), never in this shell.
+gcp() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gcp.sh
+    "$_exe" "$@"
 }
 
 # Deprecated backward-compat aliases (Phase 1 — see issue #697 "Out of Scope")

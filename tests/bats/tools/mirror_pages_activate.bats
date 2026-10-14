@@ -28,7 +28,7 @@ teardown() {
 @test "mirror-pages-activate: --help exits 0 and prints usage" {
     run bash "${SCRIPT}" --help
     assert_success
-    assert_output --partial "Usage: mirror-pages-activate"
+    assert_output --partial "mirror-pages-activate --dry-run"
     assert_output --partial "--dry-run"
 }
 

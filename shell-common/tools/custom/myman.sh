@@ -1,0 +1,105 @@
+#!/bin/bash
+# shell-common/tools/custom/myman.sh
+# Project-level "manual" — pages through aliases/functions discovered by
+# analyze_bash_scripts.sh.
+#
+# PATH executable since #2195 (~/.local/bin/my-man via config/symlinks.conf):
+# it never changes the parent shell's state (docs/.ssot/command-delivery-model.md
+# §3), so AI agents' non-interactive `bash -c 'my-man'` resolves it.
+# functions/my_man.sh keeps the `myman` / `my-man` names as a thin wrapper.
+
+# readlink -f: resolve the ~/.local/bin symlink to find init.sh next to the source.
+# shellcheck source=/dev/null
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
+
+_myman_help() {
+    if type ux_header >/dev/null 2>&1; then
+        ux_header "my-man"
+        ux_usage "my-man" "[alias | function]" "Show defined aliases or functions"
+        ux_bullet "alias     Show every alias discovered under \$SHELL_COMMON"
+        ux_bullet "function  Show every function discovered under \$SHELL_COMMON"
+        ux_bullet "          (data sourced from tools/custom/analyze_bash_scripts.sh)"
+        ux_info "Next: my-man alias | my-man function"
+    else
+        echo "Usage: my-man [alias | function]"
+        echo "  alias     Show every alias discovered under \$SHELL_COMMON"
+        echo "  function  Show every function discovered under \$SHELL_COMMON"
+    fi
+}
+
+# myman 함수 정의
+# 이 함수는 analyze_bash_scripts.sh 스크립트가 생성한 정보를 활용합니다.
+myman() {
+    [ -n "${ZSH_VERSION:-}" ] && emulate -L sh
+
+    local type_to_show="${1:-}"
+
+    # R3: reject unknown verbs up-front, before any side effect (mktemp).
+    case "$type_to_show" in
+        -h|--help|help) _myman_help; return 0 ;;
+        "") _myman_help; return 1 ;;
+        alias|function) ;;
+        *)
+            ux_error "Unknown command: $type_to_show"
+            ux_info "Run: my-man help"
+            return 1
+            ;;
+    esac
+
+    local analyzer_script="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/analyze_bash_scripts.sh"
+    local sh_config_dir="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+
+    if [ ! -f "$analyzer_script" ]; then
+        ux_error "스크립트를 찾을 수 없습니다: '$analyzer_script'"
+        ux_info "스크립트 경로를 확인하거나, 스크립트가 실행 가능한지 확인하십시오."
+        return 1
+    fi
+
+    local temp_output_file
+    temp_output_file=$(mktemp) # 안전한 임시 파일 생성
+
+    # NOTE: `trap ... EXIT` inside a function fires on shell exit (NOT on
+    # function return) in bash. Since this file is sourced into an interactive
+    # shell, the temp file would otherwise leak until the terminal closes
+    # (gemini #524 review). Use a local cleanup helper called before every
+    # return path instead, and detect both regular files and dangling symlinks.
+    _myman_cleanup() {
+        if [ -e "$temp_output_file" ] || [ -L "$temp_output_file" ]; then
+            rm -f "$temp_output_file"
+        fi
+    }
+
+    # 스크립트를 실행하여 임시 파일에 결과를 저장 (에러 출력은 숨김)
+    "$analyzer_script" "$sh_config_dir" >"$temp_output_file" 2>/dev/null
+
+    local rc=0
+    if [ "$type_to_show" = "alias" ]; then
+        (
+            ux_header "Alias 목록"
+            # sed로 alias 목록만 추출하고 빈 줄 제거 후 less로 출력
+            sed -n '/### Alias 목록/,/### Function 목록/p' "$temp_output_file" |
+                grep -v '### Alias 목록' |
+                grep -v '### Function 목록' |
+                sed '/^$/d'
+        ) | less
+    elif [ "$type_to_show" = "function" ]; then
+        (
+            ux_header "Function 목록"
+            # sed로 function 목록 추출 후 less로 출력
+            sed -n '/### Function 목록/,$p' "$temp_output_file" |
+                grep -v '### Function 목록'
+        ) | less
+    else
+        ux_error "유효하지 않은 옵션: '$type_to_show'"
+        _myman_help
+        rc=1
+    fi
+
+    _myman_cleanup
+    unset -f _myman_cleanup 2>/dev/null
+    return $rc
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    myman "$@"
+fi

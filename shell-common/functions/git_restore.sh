@@ -48,7 +48,7 @@ _grs_help() {
 }
 
 # grs — preflight-classify path args, then restore transparently or diagnose.
-grs() {
+_grs_main() {
     # zsh: run under POSIX word-splitting rules (git.sh convention).
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -184,6 +184,13 @@ grs() {
 
     git restore "$@"
     return $?
+}
+
+# grs — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/grs.sh (also ~/.local/bin), never in this shell.
+grs() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/grs.sh
+    "$_exe" "$@"
 }
 
 # Help registry (#2135): skipped when sourced without util/help_registry.sh.

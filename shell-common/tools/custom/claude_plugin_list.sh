@@ -1,0 +1,113 @@
+#!/bin/bash
+# shell-common/tools/custom/claude_plugin_list.sh
+# claude-plugin-list — human-readable summary of installed Claude Code plugins,
+# grouped by the marketplace that provided them. Answers the question the
+# `/plugins` card UI makes tedious: "did this `superpowers` come from
+# claude-plugins-official or superpowers-dev?".
+#
+# SSOT is ~/.claude-shared/plugins/installed_plugins.json (+ known_marketplaces
+# .json for the repo/url per marketplace). Path is overridable via
+# CLAUDE_SHARED_PLUGINS_DIR, then falls back to $CLAUDE_CONFIG_DIR/plugins.
+#
+# PATH executable since #2195 (~/.local/bin/claude-plugin-list via config/symlinks.conf):
+# it never changes the parent shell's state (docs/.ssot/command-delivery-model.md
+# §3), so AI agents' non-interactive `bash -c 'claude-plugin-list'` resolves it.
+# functions/claude_plugin_list.sh keeps the `claude_plugin_list` / `claude-plugin-list` names as a thin wrapper.
+
+# readlink -f: resolve the ~/.local/bin symlink to find init.sh next to the source.
+# shellcheck source=/dev/null
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
+
+# Inline help (`_<prefix>_help`) — Type 1 simple function, 0 sub-commands, so
+# help lives beside the dispatcher per command-design-pattern.md §7.
+_cpl_help() {
+    ux_info "Usage: claude-plugin-list"
+    ux_bullet "설치된 플러그인을 마켓플레이스별로 그룹핑해 출력"
+    ux_bullet_sub "SSOT: ~/.claude-shared/plugins/installed_plugins.json"
+    ux_bullet_sub "override: CLAUDE_SHARED_PLUGINS_DIR / CLAUDE_CONFIG_DIR"
+}
+
+# Resolve the plugins state dir: explicit override → default shared dir →
+# CLAUDE_CONFIG_DIR-derived. First one that actually holds the SSOT wins.
+_cpl_resolve_dir() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local cand
+    for cand in \
+        "${CLAUDE_SHARED_PLUGINS_DIR:-}" \
+        "$HOME/.claude-shared/plugins" \
+        "${CLAUDE_CONFIG_DIR:+$CLAUDE_CONFIG_DIR/plugins}"; do
+        if [ -n "$cand" ] && [ -f "$cand/installed_plugins.json" ]; then
+            printf '%s' "$cand"
+            return 0
+        fi
+    done
+    return 1
+}
+
+claude_plugin_list() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local shared_dir pl_src mp_src mp_json count
+
+    case "${1:-}" in
+    -h | --help | help)
+        _cpl_help
+        return 0
+        ;;
+    esac
+
+    if ! command -v jq >/dev/null 2>&1; then
+        ux_error "jq가 필요합니다."
+        return 1
+    fi
+
+    if ! shared_dir=$(_cpl_resolve_dir); then
+        ux_error "installed_plugins.json 을 찾을 수 없습니다."
+        ux_info "확인 경로: \${CLAUDE_SHARED_PLUGINS_DIR}, ~/.claude-shared/plugins, \${CLAUDE_CONFIG_DIR}/plugins"
+        return 1
+    fi
+    pl_src="$shared_dir/installed_plugins.json"
+    mp_src="$shared_dir/known_marketplaces.json"
+
+    # marketplace → repo|url|path map (empty object when the file is absent).
+    mp_json='{}'
+    if [ -f "$mp_src" ]; then
+        mp_json=$(jq -c '
+            [to_entries[] | {(.key): (.value.source.repo // .value.source.url // .value.source.path // "")}]
+            | add // {}
+        ' "$mp_src" 2>/dev/null)
+        [ -n "$mp_json" ] || mp_json='{}'
+    fi
+
+    ux_header "Installed Claude Code Plugins"
+
+    count=$(jq -r '(.plugins // {}) | length' "$pl_src" 2>/dev/null)
+    if [ -z "$count" ] || [ "$count" = "0" ]; then
+        ux_info "설치된 플러그인이 없습니다: $pl_src"
+        return 0
+    fi
+
+    # Emit a pipe-delimited stream: one MP line per marketplace group, then a
+    # PL line per install record. `|` never appears in marketplace repos,
+    # plugin names, versions, scopes, or ISO dates, so it is a safe delimiter.
+    jq -r --argjson mp "$mp_json" '
+        (.plugins // {}) | to_entries
+        | map(. + {mp: (.key | split("@") | last), name: (.key | sub("@[^@]*$"; ""))})
+        | group_by(.mp) | .[]
+        | ("MP|" + .[0].mp + "|" + (($mp[.[0].mp]) // "unknown")),
+          (.[] | . as $e | $e.value[]
+            | "PL|" + $e.name
+              + "|" + (.version // "unknown")
+              + "|" + (.scope // "?")
+              + "|" + ((.installedAt // "")[0:10]))
+    ' "$pl_src" 2>/dev/null |
+        while IFS='|' read -r kind a b c d; do
+            case "$kind" in
+            MP) ux_section "$a  ($b)" ;;
+            PL) ux_bullet "$(printf '%-22s %-9s %-6s %s' "$a" "$b" "$c" "$d")" ;;
+            esac
+        done
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    claude_plugin_list "$@"
+fi

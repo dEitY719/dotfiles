@@ -3,7 +3,12 @@
 # Copy files from Windows "Downloads" to WSL ~/downloads with robust path resolution.
 # Bash-specific (uses local -a, (( )), mapfile, compgen). Lives in tools/custom/ so
 # it is NOT auto-sourced. The user-facing function comes from the wrapper in
-# shell-common/functions/cp_wdown.sh, which runs this script via bash.
+# shell-common/functions/cp_wdown.sh, which runs this script.
+# PATH executable since #2195 (~/.local/bin/cp-wdown via config/symlinks.conf).
+
+# Resolve the ~/.local/bin symlink so init.sh is found next to the real file.
+# shellcheck source=/dev/null
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
 
 cp_wdown() {
     # ✅ getopts initialization: prevent OPTIND state from previous calls
@@ -177,6 +182,6 @@ EOF
 }
 
 # Only execute if run directly (not sourced)
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     cp_wdown "$@"
 fi

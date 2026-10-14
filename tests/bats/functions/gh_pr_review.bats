@@ -149,7 +149,7 @@ _source_module() {
 @test "gh_pr_review: parser errors preserve exit 2" {
     _source_module
 
-    run gh_pr_review --ai chatgpt 99
+    run _gh_pr_review_main --ai chatgpt 99
     assert_failure 2
     assert_output --partial "Unknown --ai value: 'chatgpt'"
 }
@@ -280,7 +280,7 @@ EOF
     _stub_gh_noop
 
     # gh stub + coreutils only, so the AI CLI itself is what is missing.
-    PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run gh_pr_review --ai opencode 1337 origin
+    PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run _gh_pr_review_main --ai opencode 1337 origin
     assert_failure 1
     assert_output --partial "Required CLI 'opencode' not found in PATH"
     refute_output --partial "internal-PC"
@@ -312,7 +312,7 @@ EOF
     _stub_gh_noop
 
     # gh stub + coreutils only, so the AI CLI itself is what is missing.
-    PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run gh_pr_review --ai hermes 1337 origin
+    PATH="$TEST_TEMP_HOME/bin:/usr/bin:/bin" run _gh_pr_review_main --ai hermes 1337 origin
     assert_failure 1
     assert_output --partial "Required CLI 'hermes' not found in PATH"
     refute_output --partial "internal-PC"
@@ -646,7 +646,7 @@ _stub_gh_pr_review_preconditions() {
     # PROMPT_FILE still allocates successfully.
     printf 'squatted\n' >"$out_fb"
 
-    run gh_pr_review --ai codex 1283
+    run _gh_pr_review_main --ai codex 1283
     assert_failure 1
     assert_output --partial "Could not create AI output temp file under /tmp"
 
@@ -669,7 +669,7 @@ _stub_gh_pr_review_preconditions() {
     rm -f "$prompt_fb" "$out_fb"
     printf 'squatted\n' >"$body_fb"
 
-    run gh_pr_review --ai codex 1283
+    run _gh_pr_review_main --ai codex 1283
     assert_failure 1
     assert_output --partial "Could not create comment body temp file under /tmp"
 
@@ -737,7 +737,7 @@ _gh_pr_review_fetch_meta() {
 }
 _gh_pr_review_preflight_pr_state() { return 0; }
 echo \$\$ >"$pidfile"
-gh_pr_review --ai codex 1286
+_gh_pr_review_main --ai codex 1286
 echo "FUNC-RC=\$?"
 EOF
     _HARNESS_OUT="$TEST_TEMP_HOME/harness.out"
@@ -848,7 +848,7 @@ _interrupt_harness_interrupt() {
 
     local before after rc=0
     before=$(trap -p INT; trap -p TERM)
-    gh_pr_review --ai codex --no-post-comment 1283 >/dev/null 2>&1 || rc=$?
+    _gh_pr_review_main --ai codex --no-post-comment 1283 >/dev/null 2>&1 || rc=$?
     after=$(trap -p INT; trap -p TERM)
 
     [ "$rc" -eq 0 ]
@@ -869,7 +869,7 @@ _interrupt_harness_interrupt() {
 
     local before after rc=0
     before=$(trap -p INT; trap -p TERM)
-    gh_pr_review --ai codex 1283 >/dev/null 2>&1 || rc=$?
+    _gh_pr_review_main --ai codex 1283 >/dev/null 2>&1 || rc=$?
     after=$(trap -p INT; trap -p TERM)
 
     [ "$rc" -eq 1 ]
@@ -920,7 +920,7 @@ _gh_pr_review_fetch_meta() {
 }
 _gh_pr_review_preflight_pr_state() { return 0; }
 echo \$\$ >"$pidfile"
-gh_pr_review --ai codex --no-post-comment 1294
+_gh_pr_review_main --ai codex --no-post-comment 1294
 EOF
 
     run bash "$harness"
@@ -1022,7 +1022,7 @@ exit 0
 EOF
     chmod +x "$stub_dir/codex"
 
-    run gh_pr_review --ai codex --no-post-comment 1474
+    run _gh_pr_review_main --ai codex --no-post-comment 1474
     assert_success
 
     # If this doesn't exist, the stub never actually deleted PROMPT_FILE —
@@ -1049,7 +1049,7 @@ EOF
     # No codex stub is needed: Step 5 redirects the (now missing) prompt file
     # into the CLI, so the run aborts at the redirection before any binary is
     # execed. This test asserts only that the warning fired first.
-    run gh_pr_review --ai codex --no-post-comment 1474
+    run _gh_pr_review_main --ai codex --no-post-comment 1474
     assert_output --partial "Could not read prompt file for the token estimate"
 }
 
@@ -1435,7 +1435,7 @@ STUB
     _source_module
     _stub_agy_empty_success
     _stub_gh_full_flow
-    run gh_pr_review --ai agy 7 origin
+    run _gh_pr_review_main --ai agy 7 origin
     assert_failure
     refute_output --partial "[OK]"
     run grep -c '^pr comment' "$GH_STUB_LOG"
@@ -1451,7 +1451,7 @@ STUB
     printf '#!/bin/sh\ncat >/dev/null\necho "stub: tool call denied" >&2\nprintf "  \\n\\t\\n"\nexit 0\n' >"$stub_dir/codex"
     chmod +x "$stub_dir/codex"
     _stub_gh_full_flow
-    run gh_pr_review --ai codex 7 origin
+    run _gh_pr_review_main --ai codex 7 origin
     assert_failure
     assert_output --partial "External AI CLI 'codex' returned an empty review"
     run grep -c '^pr comment' "$GH_STUB_LOG"
@@ -1465,7 +1465,7 @@ STUB
     printf '#!/bin/sh\ncat >/dev/null\necho "stub: tool call denied" >&2\nexit 0\n' >"$stub_dir/codex"
     chmod +x "$stub_dir/codex"
     _stub_gh_full_flow
-    run gh_pr_review --ai codex 7 origin
+    run _gh_pr_review_main --ai codex 7 origin
     assert_failure
     local saved
     saved=$(printf '%s\n' "$output" | sed -n 's/^  full stderr saved to: //p')
@@ -1499,7 +1499,7 @@ STUB
     _source_module
     _stub_agy_echo
     _stub_gh_full_flow
-    run gh_pr_review --ai agy 7 origin
+    run _gh_pr_review_main --ai agy 7 origin
     assert_success
     assert_output --partial "[OK] PR #7 reviewed by agy"
     run grep -c '^pr comment' "$GH_STUB_LOG"
@@ -2195,7 +2195,7 @@ EOF
             echo "{\"state\":\"OPEN\",\"isDraft\":false,\"baseRefName\":\"main\",\"headRefName\":\"feat\"}"
         }
         _gh_pr_review_preflight_pr_state() { return 0; }
-        gh_pr_review --ai codex --no-post-comment 1286 >/dev/null 2>&1
+        _gh_pr_review_main --ai codex --no-post-comment 1286 >/dev/null 2>&1
         echo "rc=$?"
         trap > "$HOME/traps.after" 2>&1
         if grep -q PROMPT_FILE "$HOME/traps.after"; then

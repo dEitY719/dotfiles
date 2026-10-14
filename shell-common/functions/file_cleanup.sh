@@ -307,7 +307,7 @@ del_file_help() {
     ux_info "Next: del-file (interactive — preview, then choose 1/2/0)"
 }
 
-del_file() {
+_del_file_main() {
     [ -n "${ZSH_VERSION:-}" ] && emulate -L sh
 
     # Parse options in a loop so help works regardless of flag order
@@ -413,6 +413,13 @@ del_file() {
             return 0
             ;;
     esac
+}
+
+# del_file — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/del_file.sh (also ~/.local/bin), never in this shell.
+del_file() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/del_file.sh
+    "$_exe" "$@"
 }
 
 alias del-file='del_file'

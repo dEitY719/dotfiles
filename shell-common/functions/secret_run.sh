@@ -55,7 +55,7 @@ _dotfiles_secret_decrypt() {
 
 # dotfiles_secret_run [-k KEY]... <cmd...>
 # -k limits the injected keys (repeatable); without it every key is injected.
-dotfiles_secret_run() {
+_dotfiles_secret_run_main() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local only="" plain
     while [ "${1-}" = "-k" ]; do
@@ -81,6 +81,13 @@ dotfiles_secret_run() {
         ux_warning "running $1 without .enc.env values" >&2
         (exec "$@")
     fi
+}
+
+# dotfiles_secret_run — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/dotfiles_secret_run.sh (also ~/.local/bin), never in this shell.
+dotfiles_secret_run() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/dotfiles_secret_run.sh
+    "$_exe" "$@"
 }
 
 alias secret-run='dotfiles_secret_run'
@@ -110,7 +117,7 @@ fi
 # Single quotes on purpose: mcporter expands the placeholder, not the shell.
 # shellcheck disable=SC2016
 DOTFILES_MCPORTER_EXA_URL='https://mcp.exa.ai/mcp?exaApiKey=${EXA_API_KEY:-}'
-mcporter_exa_setup() {
+_mcporter_exa_setup_main() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Only $HOME is quoted: naming_check.sh reads a quoted mcporter path as help text.
     local cfg="$HOME"/.mcporter/mcporter.json tmp plain
@@ -149,6 +156,13 @@ EXA_API_KEY="?*) ;;
     ux_success "exa reads EXA_API_KEY at run time: ${cfg}"
     ux_info "Run mcporter through the shell wrapper (it injects the key from .enc.env)"
     ux_info "Remove any plaintext EXA_API_KEY copy left in a .env file"
+}
+
+# mcporter_exa_setup — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/mcporter_exa_setup.sh (also ~/.local/bin), never in this shell.
+mcporter_exa_setup() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mcporter_exa_setup.sh
+    "$_exe" "$@"
 }
 
 alias mcporter-exa-setup='mcporter_exa_setup'

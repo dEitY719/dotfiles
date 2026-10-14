@@ -1,31 +1,16 @@
 #!/bin/bash
-# shell-common/tools/custom/install_ollama.sh
+# shell-common/tools/custom/install-ollama.sh
 # WSL Environment: Ollama Binary Installation Script
 # Supports: online installation (download from GitHub) & offline installation (local file)
 # Handles installation, validation, and port conflict detection
 
 set -e
 
-# Load UX library - use dynamic path detection with fallback
-_ux_lib_path="${SHELL_COMMON:-$(dirname "$(dirname "$(dirname "$0")")")}/tools/ux_lib/ux_lib.sh"
-if [ -f "$_ux_lib_path" ]; then
-    source "$_ux_lib_path" 2>/dev/null || {
-        echo "Warning: Failed to source UX library at $_ux_lib_path" >&2
-    }
-else
-    # Define minimal fallback functions if UX library not available
-    ux_header() { echo ""; echo "=== $1 ==="; echo ""; }
-    ux_section() { echo ""; echo "## $1"; }
-    ux_error() { echo "❌ Error: $*" >&2; }
-    ux_warning() { echo "⚠️  Warning: $*" >&2; }
-    ux_info() { if [ -n "$*" ]; then echo "ℹ️  $*"; else echo; fi; }
-    ux_success() { echo "✅ $*"; }
-    ux_bullet() { echo "  • $*"; }
-    ux_numbered() { echo "  $1. $2"; }
-    ux_usage() { echo "Usage: $1 $2"; [ -z "${3:-}" ] || echo "  $3"; }
-fi
-unset _ux_lib_path
-. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
+# PATH executable since #2195 (~/.local/bin/install-ollama via config/symlinks.conf).
+# Resolve the ~/.local/bin symlink so init.sh is found next to the real file.
+# shellcheck source=/dev/null
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
+. "${SHELL_COMMON}/tools/custom/lib/install_helpers.sh" || exit 1
 
 install_ollama_help() {
     ux_usage "install-ollama" "[--offline <file>|<file>]" "Install the Ollama binary on WSL (online or offline)"

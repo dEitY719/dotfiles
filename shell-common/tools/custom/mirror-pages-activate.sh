@@ -4,6 +4,7 @@
 # github.io Pages URLs in README.md with the GHE Pages URL.
 # Run from inside a mirrored repo (origin=GHE, upstream=github.com).
 # Usage: mirror-pages-activate [--dry-run]
+# PATH executable since #2195 (~/.local/bin/mirror-pages-activate via config/symlinks.conf).
 
 set -euo pipefail
 
@@ -34,15 +35,9 @@ main() {
 			_DRY_RUN=1
 			;;
 		-h | --help)
-			printf 'Usage: mirror-pages-activate [--dry-run]\n\n'
-			printf '  Activates GitHub Pages on the GHE origin repo and replaces\n'
-			printf '  upstream github.io URLs in README.md with the GHE Pages URL.\n\n'
-			printf '  Must be run from inside a mirrored repo:\n'
-			printf '    origin   = GHE mirror  (https://<ghe-host>/owner/repo)\n'
-			printf '    upstream = github.com source\n\n'
-			printf '  Pages source defaults to: branch=main, path=/docs\n\n'
-			printf 'Options:\n'
-			printf '  --dry-run  Preview actions without making changes\n'
+			# shellcheck source=/dev/null
+			DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/functions/mirror_pages_activate_help.sh"
+			mirror_pages_activate_help
 			exit 0
 			;;
 		*)

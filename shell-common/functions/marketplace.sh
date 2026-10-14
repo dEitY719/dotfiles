@@ -676,7 +676,7 @@ claude_skills_marketplace_help() {
 }
 
 # Main router function
-claude_skills_marketplace() {
+_claude_skills_marketplace_main() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local command="${1:-help}"
     shift || true
@@ -709,6 +709,13 @@ claude_skills_marketplace() {
             return 1
             ;;
     esac
+}
+
+# claude_skills_marketplace — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/claude_skills_marketplace.sh (also ~/.local/bin), never in this shell.
+claude_skills_marketplace() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_skills_marketplace.sh
+    "$_exe" "$@"
 }
 
 # Create short alias for convenience

@@ -78,9 +78,9 @@ gbr_help() {
 # gbr — git branch dispatcher
 # Usage: gbr <subcommand> [args...]
 # ============================================================================
-gbr() {
+_gbr_main() {
     case "${1:-}" in
-        teardown) shift; git_branch_teardown "$@" ;;
+        teardown) shift; _git_branch_teardown_main "$@" ;;
         help)
             ux_error "Use canonical entrypoint: gbr-help (not 'gbr help')"
             ux_info "Try: gbr-help"
@@ -98,6 +98,13 @@ gbr() {
     esac
 }
 
+# gbr — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/gbr.sh (also ~/.local/bin), never in this shell.
+gbr() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gbr.sh
+    "$_exe" "$@"
+}
+
 # ============================================================================
 # Branch teardown — feature-branch cleanup after PR merge
 #   1. Switch to main
@@ -106,7 +113,7 @@ gbr() {
 #
 # Usage: git_branch_teardown [--force] [--keep-branch]
 # ============================================================================
-git_branch_teardown() {
+_git_branch_teardown_main() {
     # zsh compatibility: strict POSIX sh
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -419,6 +426,13 @@ git_branch_teardown() {
     ux_success "Teardown complete"
     ux_info "  Deleted: $branch"
     ux_info "  Now on:  $main_branch"
+}
+
+# git_branch_teardown — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/gbr.sh (also ~/.local/bin), never in this shell.
+git_branch_teardown() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gbr.sh
+    "$_exe" teardown "$@"
 }
 
 alias gbr-help='gbr_help'

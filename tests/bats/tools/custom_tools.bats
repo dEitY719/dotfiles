@@ -110,10 +110,10 @@ teardown() {
     assert_success
 }
 
-# --- shell-state-neutral dispatchers moved to PATH executables (#2155) ---
+# --- shell-state-neutral dispatchers moved to PATH executables (#2155, #2195) ---
 
 # <script stem> <~/.local/bin name>
-DISPATCHERS="gcp_scan:gcp-scan gh_audit_builtin_workflows:gh-audit-builtin-workflows ghes_mirror:ghes-mirror ai_usage:ai-usage wsl_check:wsl-check"
+DISPATCHERS="gcp_scan:gcp-scan gh_audit_builtin_workflows:gh-audit-builtin-workflows ghes_mirror:ghes-mirror ai_usage:ai-usage wsl_check:wsl-check gh_flow:gh-flow gh_pr_approve:gh-pr-approve gh_pr_reply:gh-pr-reply gh_pr_review:gh-pr-review aicron:aicron issue_watcher_cron:issue-watcher-cron graphify_setup:graphify-setup cp_wdown:cp-wdown mirror-pages-activate:mirror-pages-activate skill_loader:skill-loader devx:devx ensure-ollama-deps:ensure-ollama-deps install-ollama:install-ollama gh_project_pat:gh-project-pat claude_plugin_list:claude-plugin-list claude_allow_clean:claude-allow-clean claude_marketplace_autoupdate:claude-marketplace-autoupdate graphify_vault:graphify-vault git_ssh_check:git-ssh-check wcp:wcp psgrep:ps-grep myman:my-man gcp:gcp claude_skills_marketplace:claude-skills-marketplace del_file:del-file clear_doc:clear-doc delete_doc:del-doc mount_add:mount-add mount_show:show-mnt ai_setup:ai-setup ai_teardown:ai-teardown ollama_serve:ollama-serve ollama_launch:ollama-launch gbr:gbr grs:grs dotfiles_secret_run:secret-run mcporter_exa_setup:mcporter-exa-setup"
 
 # Link each dispatcher the way symlinks.conf does, into a bin dir on PATH.
 _link_dispatchers() {
@@ -125,7 +125,7 @@ _link_dispatchers() {
     done
 }
 
-@test "#2155 dispatchers: executable, bash -n clean, linked in symlinks.conf" {
+@test "#2155/#2195 dispatchers: executable, bash -n clean, linked in symlinks.conf" {
     local pair stem conf="${DOTFILES_ROOT}/shell-common/config/symlinks.conf"
     for pair in $DISPATCHERS; do
         stem="${pair%%:*}"
@@ -136,7 +136,7 @@ _link_dispatchers() {
     done
 }
 
-@test "#2155 dispatchers: --help through the ~/.local/bin link in a bare bash -c" {
+@test "#2155/#2195 dispatchers: --help through the ~/.local/bin link in a bare bash -c" {
     _link_dispatchers
     local pair
     for pair in $DISPATCHERS; do
