@@ -6,6 +6,7 @@ set -e
 
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # Check if fzf is already installed
 _check_installed() {
@@ -19,49 +20,11 @@ _check_installed() {
 
 # Install fzf via system package manager
 _install_fzf() {
-    local os_type=""
-
-    # Detect OS
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        os_type="linux"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        os_type="macos"
-    else
-        ux_error "Unsupported OS: $OSTYPE"
-        return 1
-    fi
-
-    ux_info "Installing fzf for $os_type..."
-
-    if [ "$os_type" = "linux" ]; then
-        # For Linux (including WSL2)
-        if command -v apt-get &>/dev/null; then
-            ux_info "Updating package manager..."
-            sudo apt-get update -qq
-            ux_info "Installing fzf..."
-            sudo apt-get install -y fzf
-        elif command -v yum &>/dev/null; then
-            ux_info "Installing fzf via yum..."
-            sudo yum install -y fzf
-        elif command -v pacman &>/dev/null; then
-            ux_info "Installing fzf via pacman..."
-            sudo pacman -S --noconfirm fzf
-        else
-            ux_error "No supported package manager found (apt-get, yum, or pacman required)"
-            return 1
-        fi
-    elif [ "$os_type" = "macos" ]; then
-        # For macOS
-        if command -v brew &>/dev/null; then
-            ux_info "Installing fzf via Homebrew..."
-            brew install fzf
-            # Install shell integration
-            "$(brew --prefix)/opt/fzf/install" --key-bindings --completion --no-update-rc
-        else
-            ux_error "Homebrew is required for macOS installation"
-            ux_info "Install Homebrew from: https://brew.sh"
-            return 1
-        fi
+    ux_info "Installing fzf..."
+    pkg_install apt=fzf yum=fzf pacman=fzf brew=fzf
+    if [ "$PKG_INSTALL_MANAGER" = brew ]; then
+        # Install shell integration
+        "$(brew --prefix)/opt/fzf/install" --key-bindings --completion --no-update-rc
     fi
 
     ux_success "fzf installed successfully."

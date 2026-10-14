@@ -6,6 +6,7 @@ set -e
 
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # Check if pet is already installed
 _check_installed() {
@@ -111,59 +112,17 @@ _install_pet_from_github() {
 
 # Install pet via system package manager or from releases
 _install_pet() {
-    local os_type=""
-
-    # Detect OS
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        os_type="linux"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        os_type="macos"
-    else
-        ux_error "Unsupported OS: $OSTYPE"
-        return 1
-    fi
+    local os_type="linux"
+    [ "$(uname -s)" = Darwin ] && os_type="macos"
 
     ux_info "Installing pet for $os_type..."
-
-    if [ "$os_type" = "linux" ]; then
-        # For Linux (including WSL2) - try package manager first
-        if command -v apt-get &>/dev/null; then
-            ux_info "Trying to install pet via apt-get..."
-            if sudo apt-get update -qq && sudo apt-get install -y pet 2>/dev/null; then
-                ux_success "pet installed via apt-get."
-                return 0
-            fi
-            ux_info "apt-get package not available, trying GitHub..."
-        elif command -v yum &>/dev/null; then
-            ux_info "Trying to install pet via yum..."
-            if sudo yum install -y pet 2>/dev/null; then
-                ux_success "pet installed via yum."
-                return 0
-            fi
-            ux_info "yum package not available, trying GitHub..."
-        elif command -v pacman &>/dev/null; then
-            ux_info "Trying to install pet via pacman..."
-            if sudo pacman -S --noconfirm pet 2>/dev/null; then
-                ux_success "pet installed via pacman."
-                return 0
-            fi
-            ux_info "pacman package not available, trying GitHub..."
-        fi
-
-        # Fallback to GitHub release
-        _install_pet_from_github "$os_type"
-
-    elif [ "$os_type" = "macos" ]; then
-        # For macOS
-        if command -v brew &>/dev/null; then
-            ux_info "Installing pet via Homebrew..."
-            brew install pet
-            ux_success "pet installed via Homebrew."
-        else
-            ux_warning "Homebrew not found, trying GitHub..."
-            _install_pet_from_github "$os_type"
-        fi
+    if pkg_install apt=pet yum=pet pacman=pet brew=pet; then
+        ux_success "pet installed via $PKG_INSTALL_MANAGER."
+        return 0
     fi
+
+    ux_info "Package not available, trying GitHub..."
+    _install_pet_from_github "$os_type"
 }
 
 # Display pet usage examples
