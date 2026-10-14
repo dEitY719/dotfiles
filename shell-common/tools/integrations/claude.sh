@@ -319,7 +319,7 @@ claude_yolo() {
     # CLAUDE_ENABLED_ACCOUNTS can't trip the "Unknown account" path.
     if [ "$(_dotfiles_setup_mode_accounts)" = "single" ]; then
         _cy_config_dir="$HOME/.claude"
-        _cy_account=$(_dotfiles_setup_mode)
+        _cy_account='internal'
     else
         # 계정 → CONFIG_DIR (SSOT 호출)
         _cy_config_dir=$(_claude_resolve_account "$_cy_account") || {
