@@ -28,9 +28,10 @@ warnings=0
 front_matter_status() {
     awk '
         { sub(/\r$/, "") }
+        NR == 1 { sub(/^\357\273\277/, "") }
         NR == 1 { if ($0 !~ /^---[[:space:]]*$/) exit; next }
         /^---[[:space:]]*$/ { exit }
-        /^status:/ { sub(/^status:[[:space:]]*/, ""); sub(/[[:space:]]+$/, ""); gsub(/^["\047]|["\047]$/, ""); print; exit }
+        /^status:/ { sub(/^status:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); sub(/[[:space:]]+$/, ""); gsub(/^["\047]|["\047]$/, ""); print; exit }
     ' "$1"
 }
 
@@ -42,6 +43,8 @@ is_valid_status() {
 }
 
 # 첫 경로 성분이 추적되는 최상위 항목인가 — 다른 저장소의 경로(references/x.md 등) 오탐 차단.
+# shortcut: 최상위 디렉터리째 삭제된 경로(예: aws/...), `/` 없는 경로(setup.sh), `.` 시작 경로(.github/...)는
+# 검사하지 않는다 — WARN 오탐 비용을 줄이려는 의도, 누락이 실제로 문제 되면 허용 목록 방식으로 넓힌다.
 TRACKED="$(git ls-files)"
 TOP_LEVEL="$(printf '%s\n' "$TRACKED" | cut -d/ -f1 | sort -u)"
 
@@ -73,7 +76,10 @@ check_stale_paths() {
     done
 }
 
-for file in $(git ls-files -- $STATUS_DIRS | grep '\.md$' || true); do
+# 공백이 든 경로도 한 줄 = 한 파일로 읽는다 (for $(...) 단어 분할 회피).
+# shellcheck disable=SC2086 # STATUS_DIRS 는 의도적으로 분할한다
+while IFS= read -r file; do
+    [ -n "$file" ] || continue
     case "$(basename "$file")" in
     README.md | AGENTS.md) continue ;;
     esac
@@ -91,13 +97,18 @@ for file in $(git ls-files -- $STATUS_DIRS | grep '\.md$' || true); do
     if [ "$status" = approved ]; then
         check_stale_paths "$file"
     fi
-done
+done <<EOF
+$(git ls-files -- $STATUS_DIRS | grep '\.md$' || true)
+EOF
 
-for file in $(git ls-files -- 'docs/.ssot/*.md'); do
+while IFS= read -r file; do
+    [ -n "$file" ] || continue
     if [ "$(front_matter_status "$file")" = approved ]; then
         check_stale_paths "$file"
     fi
-done
+done <<EOF
+$(git ls-files -- 'docs/.ssot/*.md')
+EOF
 
 echo "lint-docs-status: errors=${errors} warnings=${warnings} (status required: ${STATUS_DIRS})"
 
