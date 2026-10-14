@@ -81,8 +81,7 @@ lazy 한 gh 호출 순서) — 네트워크 호출 사이에 끼어 있어 순�
 
 이식 시점 수치 (#2157): `issue_watcher_cron.sh` 의 jq 호출 6 → 2 (남은 2건은 watch list·herdr pane 파싱), `grep -c "jq "` 11 → 9 (롤백 안내 문구 포함), 줄 수 3204 → 3209 (선택 로직 −40줄, 롤백·fail-closed 분기 +45줄).
 
-후속: 롤백 경로 제거 #2173 (1 릴리스 관측 후), 2순위 이식
-(`pr_merge_train_cron.sh`, claude 계정 로직) #2174.
+후속: 2순위 이식 (`pr_merge_train_cron.sh`, claude 계정 로직) 은 아래 "2차 이식" (#2174).
 
 ## 2차 이식 — merge train dispatcher (#2174)
 
