@@ -254,3 +254,23 @@ claude-setup"
     assert_success
     assert_output --partial "— 갱신 1 / 최신 16 (실행 중인 Claude Code 세션 재시작 필요) / 미인식 2"
 }
+
+@test "--jobs N / --jobs=N reach both pull and update-plugins through DOTFILES_SKILLS_JOBS (#2198)" {
+    _make_fake_root 0
+    local s
+    for s in git-pull-skills:pull update-plugins:update-plugins; do
+        printf '#!/bin/bash\necho %s "jobs=${DOTFILES_SKILLS_JOBS:-}" "$@" >>"$CALL_LOG"\n' "${s#*:}" \
+            >"$FAKE_ROOT/claude/plugin/${s%%:*}.sh"
+    done
+    cd /
+    run "$FAKE_ROOT/scripts/update-skills.sh" --jobs 2 --all-branches
+    assert_success
+    run grep -E '^(pull|update-plugins) ' "$CALL_LOG"
+    assert_line "pull jobs=2 --all-branches"
+    assert_line "update-plugins jobs=2"
+    : >"$CALL_LOG"
+    run "$FAKE_ROOT/scripts/update-skills.sh" --jobs=1
+    assert_success
+    run grep -c 'jobs=1' "$CALL_LOG"
+    assert_output "2"
+}

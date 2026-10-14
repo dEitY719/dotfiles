@@ -343,3 +343,15 @@ _mk_mixed_skills() {
     DOTFILES_SKILLS_JOBS=abc run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS"
     assert_failure 2
 }
+
+@test "git-pull-skills.sh counts a job that died without a result as failed" {
+    SKILLS="${TEST_TEMP_HOME}/skills"
+    mkdir -p "$SKILLS/alpha" "${TEST_TEMP_HOME}/bin"
+    # Fake git kills its parent (the job subshell) before any outcome is recorded.
+    printf '#!/bin/bash\nkill -9 $PPID\n' >"${TEST_TEMP_HOME}/bin/git"
+    chmod +x "${TEST_TEMP_HOME}/bin/git"
+    PATH="${TEST_TEMP_HOME}/bin:$PATH" run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS"
+    assert_failure 1
+    assert_output --partial "alpha: job exited without a result"
+    assert_output --partial "Failed: 1"
+}

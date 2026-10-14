@@ -328,7 +328,15 @@ _update_plugin() {
 		ux_info "  $id: would run 'claude plugin update $id' (dry-run)"
 		return 0
 	fi
-	out="$(claude plugin update "$id" --json </dev/null 2>&1)"
+	# Plugin installs from parallel marketplace jobs all rewrite the shared
+	# installed_plugins.json, so they take one lock (#2198 fallback); the slow
+	# marketplace refreshes stay parallel. shortcut: no lock where flock is
+	# missing (stock macOS) — add a mkdir lock if a store race shows up there.
+	if command -v flock >/dev/null 2>&1; then
+		out="$(flock "$POOL_DIR/plugin-update.lock" claude plugin update "$id" --json </dev/null 2>&1)"
+	else
+		out="$(claude plugin update "$id" --json </dev/null 2>&1)"
+	fi
 	rc=$?
 	if [ "$rc" -ne 0 ]; then
 		ux_warning "  $id: update failed (exit $rc) — continuing"
@@ -395,7 +403,7 @@ _update_scope() {
 $names
 EOF
 	SCOPE_PL_JSON="$pl_json"
-	_run_pool ${mps[@]+"${mps[@]}"}
+	_run_pool _update_marketplace ${mps[@]+"${mps[@]}"}
 }
 
 # _update_marketplace <name> — refresh one marketplace, then update its
@@ -406,7 +414,6 @@ _update_marketplace() {
 	if $KNOWN_MPS_SET && ! _in_list "$name" "$KNOWN_MPS"; then
 		# Its plugins cannot be installed without it either — skip both.
 		ux_info "$name: marketplace not registered — skipped (restore.sh adds it)"
-		_count DONE
 		return 0
 	fi
 	_count MP_TOTAL
@@ -427,55 +434,86 @@ _update_marketplace() {
 	done <<EOF
 $(_plugins_of "$SCOPE_PL_JSON" "$name")
 EOF
-	_count DONE
 }
 
+POOL_COUNTERS="MP_TOTAL MP_REFRESHED PL_TOTAL PL_UPDATED PL_UPTODATE PL_UNKNOWN PL_SKIPPED FAILED"
+# --- job pool (#2198) -------------------------------------------------------
+# Same block in git-pull-skills.sh and update-plugins.sh: each script must stay
+# runnable as a single copied file (the bats fixtures copy it alone).
+
 # _count <VAR> — record one outcome for <VAR>. Jobs run in subshells, so a
-# plain VAR=$((VAR + 1)) would be lost; _run_pool sums these files instead.
+# plain VAR=$((VAR + 1)) would be lost; _pool_flush sums these files instead.
 _count() {
 	printf '%s\n' "$1" >>"$RES_FILE"
 }
 
-# _run_pool <marketplace>... — _update_marketplace over the names, at most
-# $JOBS at once. Each job's stdout/stderr/outcomes are buffered under
-# $POOL_DIR and replayed in argument order, so --jobs 1 and --jobs N print the
-# same. POOL_SEQ numbers jobs across both scopes.
-_run_pool() {
-	local first=$((POOL_SEQ + 1)) n k name names=("$@")
-	for name in "$@"; do
-		POOL_SEQ=$((POOL_SEQ + 1))
-		while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
-			wait -n
-		done
-		(RES_FILE="$POOL_DIR/$POOL_SEQ.res" _update_marketplace "$name") \
-			>"$POOL_DIR/$POOL_SEQ.out" 2>"$POOL_DIR/$POOL_SEQ.err" &
-	done
-	wait
-	for ((n = first; n <= POOL_SEQ; n++)); do
-		cat "$POOL_DIR/$n.out"
-		cat "$POOL_DIR/$n.err" >&2
-		# A job that died before finishing must not pass as success.
+# _pool_wait — block until a job finishes. `wait -n` needs bash 4.3+; older
+# bash (stock macOS 3.2) waits for the whole running batch instead.
+_pool_wait() {
+	if [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -ge 3 ]; }; then
+		wait -n
+	else
+		wait
+	fi
+}
+
+# _pool_flush [all] — replay finished jobs in launch order and sum their
+# outcomes, stopping at the first job still running: output streams while the
+# pool works yet stays in argument order, so --jobs 1 and --jobs N print the
+# same. "all" (after the final wait) also replays a job that died before its
+# DONE line, and counts it as failed.
+_pool_flush() {
+	local n k
+	while [ "$POOL_NEXT" -le "$POOL_SEQ" ]; do
+		n=$POOL_NEXT
 		if ! grep -qx DONE "$POOL_DIR/$n.res" 2>/dev/null; then
-			ux_error "${names[n - first]}: job exited without a result"
+			[ "${1:-}" = all ] || return 0
+			ux_error "$(cat "$POOL_DIR/$n.name"): job exited without a result"
 			FAILED=$((FAILED + 1))
 		fi
-		[ -f "$POOL_DIR/$n.res" ] || continue
-		while IFS= read -r k; do
-			case "$k" in
-			MP_TOTAL | MP_REFRESHED | PL_TOTAL | PL_UPDATED | PL_UPTODATE | PL_UNKNOWN | PL_SKIPPED | FAILED)
-				printf -v "$k" '%d' $((${!k} + 1))
-				;;
-			esac
-		done <"$POOL_DIR/$n.res"
+		cat "$POOL_DIR/$n.out"
+		cat "$POOL_DIR/$n.err" >&2
+		if [ -f "$POOL_DIR/$n.res" ]; then
+			while IFS= read -r k; do
+				case " $POOL_COUNTERS " in
+				*" $k "*) printf -v "$k" '%d' $((${!k} + 1)) ;;
+				esac
+			done <"$POOL_DIR/$n.res"
+		fi
+		POOL_NEXT=$((n + 1))
 	done
 }
 
+# _run_pool <worker> <item>... — run `<worker> <item>` for each item, at most
+# $JOBS at once, each buffered under $POOL_DIR/<seq>.{out,err,res}.
+_run_pool() {
+	local worker="$1" item
+	shift
+	for item in "$@"; do
+		while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+			_pool_wait
+			_pool_flush
+		done
+		POOL_SEQ=$((POOL_SEQ + 1))
+		printf '%s\n' "${item##*/}" >"$POOL_DIR/$POOL_SEQ.name"
+		(
+			RES_FILE="$POOL_DIR/$POOL_SEQ.res"
+			"$worker" "$item"
+			_count DONE
+		) >"$POOL_DIR/$POOL_SEQ.out" 2>"$POOL_DIR/$POOL_SEQ.err" &
+	done
+	wait
+	_pool_flush all
+}
+
 POOL_SEQ=0
+POOL_NEXT=1
 POOL_DIR="$(mktemp -d)" || {
 	ux_error "mktemp -d failed — cannot buffer job output."
 	exit 1
 }
 trap 'rm -rf "$POOL_DIR"' EXIT
+# --- end job pool ------------------------------------------------------------
 
 _update_scope "Public" "$SCRIPT_DIR" true
 if $COMPANY_ACTIVE; then

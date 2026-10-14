@@ -41,6 +41,7 @@ _us_help() {
         "clone -> pull -> claude/setup.sh -> update-plugins -> setup-skills-ssot.sh"
     ux_bullet "-v, --verbose: stream full sub-script output (SKILLS_SYNC_VERBOSE=1 is the same)"
     ux_bullet "--dry-run: preview clone/pull/update-plugins only, skip synthesis"
+    ux_bullet "--jobs <N>: repos / marketplaces synced in parallel by pull and update-plugins (default 4, DOTFILES_SKILLS_JOBS)"
     ux_bullet "other options go to git-pull-skills.sh (see: claude/plugin/git-pull-skills.sh --help)"
 }
 
@@ -55,8 +56,17 @@ for arg in "$@"; do
         prev=""
         continue
     fi
+    # --jobs feeds both parallel steps (pull + update-plugins) through the env
+    # var they share; each validates the value itself (#2198).
+    if [ "$prev" = --jobs ]; then
+        export DOTFILES_SKILLS_JOBS="$arg"
+        prev=""
+        continue
+    fi
     prev="$arg"
     case "$arg" in
+    --jobs) ;;
+    --jobs=*) export DOTFILES_SKILLS_JOBS="${arg#*=}" ;;
     -h | --help | help)
         # Before any side effect — summary mode would otherwise swallow
         # git-pull-skills' help text and still run the full sync.
