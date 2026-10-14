@@ -7,7 +7,9 @@
 #
 # API
 #   dotfiles_ensure_link <src> <tgt> [--on-mismatch replace|keep] [--allow-dir] [--unmount-legacy]
-#       src is resolved with `pwd -P`. tgt already linking to src -> silent
+#       src's directory part is resolved with `pwd -P` (a symlinked src file
+#       itself is kept as is). tgt already linking to src (absolute, relative
+#       or via an alias path) -> silent
 #       no-op. Link elsewhere -> replaced. Real file (or, with --allow-dir, a
 #       directory) -> moved to tgt$DOTFILES_ORIGINAL_SUFFIX (#806), then
 #       linked; an existing backup is never overwritten (warn, tgt left as is).
@@ -76,7 +78,11 @@ dotfiles_ensure_link() {
     _del_src=$(_dotfiles_physical "$_del_src") || return 1
 
     if [ -L "$_del_tgt" ]; then
-        [ "$(readlink "$_del_tgt")" = "$_del_src" ] && return 0
+        _del_cur=$(readlink "$_del_tgt")
+        # Same target via a relative or aliased path is still "same link".
+        case "$_del_cur" in /*) ;; *) _del_cur="$(dirname "$_del_tgt")/$_del_cur" ;; esac
+        [ "$_del_cur" = "$_del_src" ] && return 0
+        [ -e "$_del_cur" ] && [ "$(_dotfiles_physical "$_del_cur")" = "$_del_src" ] && return 0
         if [ "$_del_mode" = keep ]; then
             ux_warning "keep: $_del_tgt links to $(readlink "$_del_tgt"), not $_del_src"
             return 0
@@ -91,7 +97,7 @@ dotfiles_ensure_link() {
             # Legacy bind mount (#575): mv would fail with EBUSY. The mount
             # source is the same SSOT, so unmounting is content-neutral.
             ux_warning "bind-mount detected at $_del_tgt — unmounting (sudo may prompt)"
-            if ! sudo umount "$_del_tgt"; then
+            if ! command -v sudo >/dev/null 2>&1 || ! sudo umount "$_del_tgt"; then
                 ux_error "unmount failed: $_del_tgt — manual fix: sudo umount '$_del_tgt' && rmdir '$_del_tgt' && ./setup.sh"
                 return 1
             fi
