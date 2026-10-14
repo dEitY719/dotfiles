@@ -1,27 +1,24 @@
-#!/bin/bash
-# Test suite for pre-push hook
+# shellcheck shell=bash
+# tests/bats/git/pre_push_cases.bash
 #
+# Case library for git/hooks/pre-push (moved from git/tests/test-pre-push.sh,
+# #2163). tests/bats/git/test_pre_push_hook.bats calls each case as one @test.
 # Covers two layers:
 #   1. Protected-branch detection (pure logic — sources pre-push-rules.sh).
-#   2. Upstream leak guard (T-1 .. T-7 from issue #708) — invokes the real
-#      hook against a throwaway git repo with synthetic stdin / argv.
+#   2. Upstream leak guard (T-1 .. T-10, issue #708) and remote_ref
+#      protection (T-11 .. T-13) — invokes the real hook against a throwaway
+#      git repo with synthetic stdin / argv.
 #
 # Fixtures use generic placeholder strings (example.internal, /home/.*/
 # private-overlay/) — no real internal identifiers ever appear in this file.
-
-set -o errexit
-set -o pipefail
+#
 # Assertions read captured output via a here-string (`grep -q P <<<"$out"`),
-# never `echo "$out" | grep -q P`: bash line-buffers echo/printf into a pipe,
-# grep -q exits on the first match, a later write gets SIGPIPE and pipefail
-# turns the pipeline into a spurious failure under load (#2133).
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# never `echo "$out" | grep -q P` (SIGPIPE + pipefail under load, #2133).
 
 # shellcheck source=/dev/null
-source "${SCRIPT_DIR}/config/pre-push-rules.sh"
+source "${DOTFILES_ROOT}/git/config/pre-push-rules.sh"
 
-HOOK="${SCRIPT_DIR}/hooks/pre-push"
+HOOK="${DOTFILES_ROOT}/git/hooks/pre-push"
 # Layer 0 (`mise run test`, #754) would run inside each throwaway fixture
 # repo and fail there; these cases exercise layers 1-2 only.
 export SKIP_LOCAL_PYTEST=1
@@ -73,7 +70,7 @@ run_test() {
 # Fixture: tiny git repo with one commit. Caller mutates from there.
 _setup_repo() {
     local dir
-    dir=$(mktemp -d -t leak-guard-test.XXXXXX)
+    dir=$(mktemp -d "${TEST_TEMP_HOME}"/leak-guard-test.XXXXXX)
     git -C "$dir" init -q
     git -C "$dir" config user.email "leak-test@example.com"
     git -C "$dir" config user.name "leak-test"
@@ -92,12 +89,14 @@ _invoke_hook() {
     local_sha=$(git -C "$dir" rev-parse HEAD)
     remote_sha="${4:-$ZERO_SHA}"
 
-    set +e
+    # `&& rc=0 || rc=$?` instead of `set +e ... set -e`: re-enabling errexit
+    # here would make the non-zero `return` below abort the bats test before
+    # the caller reads it. A here-string, not `printf | hook`: a hook that
+    # exits without reading stdin (SKIP_PRE_PUSH=1) SIGPIPEs the printf and
+    # pipefail turns that into rc=141.
     out=$(cd "$dir" &&
-        printf 'refs/heads/test %s refs/heads/test %s\n' "$local_sha" "$remote_sha" |
-        "$HOOK" "$remote_name" "$remote_url" 2>&1)
-    rc=$?
-    set -e
+        "$HOOK" "$remote_name" "$remote_url" 2>&1 \
+            <<<"refs/heads/test ${local_sha} refs/heads/test ${remote_sha}") && rc=0 || rc=$?
     LEAK_OUT="$out"
     return "$rc"
 }
@@ -384,55 +383,3 @@ _t13_delete_remote_master_blocks() {
     [ "$PUSH_RC" -eq 1 ] && grep -q "protected branch" <<<"$LEAK_OUT" && ok=1
     _assert_eq "T-13 delete remote master is BLOCKED" 1 "$ok"
 }
-
-# ============================================
-# RUN TESTS
-# ============================================
-
-echo "=== Pre-push Hook Tests ==="
-echo ""
-echo "Protected branches: ${PROTECTED_BRANCHES[*]}"
-echo ""
-
-all_passed=1
-
-echo "Testing protected branches (should be BLOCKED):"
-run_test "master" "BLOCKED" || all_passed=0
-run_test "release/1.0" "BLOCKED" || all_passed=0
-run_test "release/2.5.3" "BLOCKED" || all_passed=0
-run_test "release/v1.0.0" "BLOCKED" || all_passed=0
-
-echo ""
-echo "Testing feature branches (should be ALLOWED):"
-run_test "main" "ALLOWED" || all_passed=0
-run_test "feature/my-feature" "ALLOWED" || all_passed=0
-run_test "feature/auth-token" "ALLOWED" || all_passed=0
-run_test "develop" "ALLOWED" || all_passed=0
-run_test "bugfix/urgent" "ALLOWED" || all_passed=0
-run_test "hotfix/security" "ALLOWED" || all_passed=0
-run_test "test/experiment" "ALLOWED" || all_passed=0
-
-echo ""
-echo "Testing leak guard (T-1 .. T-10) and remote_ref protection (T-11 .. T-13):"
-_t1_origin_push_with_pattern_passes || all_passed=0
-_t2_upstream_push_no_pattern_passes || all_passed=0
-_t3_upstream_push_pattern_in_commit_message_blocks || all_passed=0
-_t4_upstream_push_pattern_in_diff_blocks || all_passed=0
-_t5_skip_leak_guard_escape_hatch || all_passed=0
-_t6_skip_pre_push_escape_hatch || all_passed=0
-_t7_protected_branch_takes_priority || all_passed=0
-_t8_matching_path_redacted || all_passed=0
-_t9_matching_path_clean_content_blocks || all_passed=0
-_t10_matching_ref_name_redacted || all_passed=0
-_t11_renamed_local_to_remote_master_blocks || all_passed=0
-_t12_same_name_feature_push_passes || all_passed=0
-_t13_delete_remote_master_blocks || all_passed=0
-
-echo ""
-if [ $all_passed -eq 1 ]; then
-    echo "✅ All tests passed!"
-    exit 0
-else
-    echo "❌ Some tests failed"
-    exit 1
-fi

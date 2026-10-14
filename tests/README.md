@@ -1,6 +1,6 @@
 # Test Suite
 
-dotfiles 프로젝트의 테스트 스위트. bats 쉘 유닛 테스트, pytest 통합 테스트, golden rules 정적 검사, git hook 통합 스크립트(`git/tests/*.sh`)로 구성.
+dotfiles 프로젝트의 테스트 스위트. bats 쉘 유닛 테스트, pytest 통합 테스트, golden rules 정적 검사로 구성. git hook 통합 케이스도 bats(`tests/bats/git/`)로 돈다.
 
 ## Quick Start
 
@@ -127,15 +127,16 @@ bash tests/golden_rules/test_golden_rules.sh
 | 4 | 소스 코드에 이모지 없음 |
 | 5 | shell-common에서 POSIX 준수 |
 
-### 4. Git Hooks — 통합 스크립트 (#2133)
+### 4. Git Hooks — bats 통합 케이스 (#2133, #2163)
 
-`git/tests/*.sh` (`test_hooks.sh`, `test-pre-push.sh`, `test-prepare-commit-msg.sh`) 는
-임시 repo 에서 실제 commit/push 를 돌리는 자체 assert 스크립트. `./tests/test` 가 스크립트마다
-격리 HOME + 빈 global git config 로 실행하고, `GIT_HOOK_TEST_TIMEOUT` (기본 600 초) 를 넘기면
-죽여 실패로 친다. 출력은 실패 시(또는 `-v`)에만 보인다.
+임시 repo 에서 실제 commit/push 를 돌리는 hook 케이스는 `tests/bats/git/` 의 bats 스위트다
+(`test_hooks_*.bats`, `test_pre_push_hook.bats`, `test_prepare_commit_msg.bats`). 케이스 본문은
+`hook_cases.bash` / `pre_push_cases.bash`, 격리(HOME + 빈 global git config + hook 탈출구 env
+제거)는 `hook_test_env.bash` 의 `hook_test_setup`. 다른 bats 와 같이 per-test 타임아웃·병렬
+실행을 받는다.
 
 ```bash
-bash git/tests/test_hooks.sh   # 단독 실행
+./tests/bats/lib/bats-core/bin/bats tests/bats/git   # 단독 실행
 ```
 
 ## 환경 변수

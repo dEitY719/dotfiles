@@ -7,7 +7,7 @@
 
 - **Setup (via root)**: `./setup.sh` (installs git config and hooks as part of dotfiles setup)
 - **Setup (direct)**: `bash git/setup.sh` (only if you know what it does; prefers running via `./setup.sh`)
-- **Hook Tests**: `./tests/test` runs every `git/tests/*.sh` (isolated HOME, 600s cap per script, #2133); standalone: `bash git/tests/test_hooks.sh`
+- **Hook Tests**: bats suites in `tests/bats/git/` (`test_hooks_*.bats`, `test_pre_push_hook.bats`, `test_prepare_commit_msg.bats`, #2163), run by `./tests/test`; standalone: `./tests/bats/lib/bats-core/bin/bats tests/bats/git`
 - **Hook Debug**: `GIT_HOOKS_DEBUG=1 git commit -m "msg"` (shows why a commit is blocked)
 
 # Golden Rules
@@ -15,13 +15,13 @@
 - **No Credentials**: Never commit `*.git-credentials` or SSH keys; keep them ignored and local-only.
 - **SSOT Config**: Treat `git/config/hook-config.sh` as the single source of truth for patterns and thresholds.
 - **No Surprises**: Hook changes must be fast, deterministic, and explain failures clearly.
-- **Test First**: Add a failing case to `git/tests/test_hooks.sh` (or `git/tests/test-pre-push.sh` for pre-push) before tightening checks — `./tests/test` runs it.
+- **Test First**: Add a failing case to `tests/bats/git/hook_cases.bash` (or `pre_push_cases.bash` for pre-push) plus its `@test` line before tightening checks — `./tests/test` runs it.
 - **~/.gitconfig include model (NOT a symlink)**: `git/setup.sh` creates `~/.gitconfig` as a **real machine-local file** whose first section is `[include] path = <repo>/git/.gitconfig`. Never symlink `~/.gitconfig` to the tracked SSOT. Reason: tools that run `git config --global` — chiefly `gh auth setup-git` (triggered by `gh auth login`/`refresh`) — write **through** a symlink and rewrite the SSOT's portable credential-helper line (`git/scripts/gh-credential-helper.sh`, which probes multiple `gh` install paths across PCs) into a machine-specific absolute path, breaking portability. With the include model those writes land in the local file and the SSOT stays clean. Same principle as CLAUDE.md's settings.json "real file, not symlink" rule. Defense in depth: `gh/config.yml` sets `git_protocol: ssh` so `gh` stops managing HTTPS credential helpers at all.
 - **Internal hosts stay out of the SSOT (#2006)**: `git/.gitconfig` ends with `[include] path = ~/.gitconfig.internal.local` (and `ssh/config` starts with `Include ~/.ssh/config.internal.local`); internal PCs hold the GHES credential section / internal Host blocks there, seeded from git history by `scripts/internal-ssh-git-migrate.sh` (internal-mode `./setup.sh` runs it). `git/setup.sh` takes the GHES host from `DOTFILES_GHES_HOST` (`_gh_ghes_host`), never a literal.
 
 # Testing Strategy
 
-- `./tests/test` runs `git/tests/*.sh` (git hook phase); run one standalone, e.g. `bash git/tests/test_hooks.sh`, for integration-level verification of the 2-tier hook system.
+- `./tests/test` runs the hook suites with the rest of bats; run one standalone, e.g. `./tests/bats/lib/bats-core/bin/bats tests/bats/git/test_hooks_precommit_checks.bats`, for integration-level verification of the 2-tier hook system.
 - If a change targets repository-wide policy (naming, shebang, UX rules), also run `mise run lint-sh`.
 
 # Global Hook Wrappers (issue #1664)
@@ -51,7 +51,7 @@ nothing, stdin is buffered + replayed, an lfs failure aborts the push). setup.sh
 `<name>.original`: info for a git-lfs hook, a warning for anything else.
 Never run `git lfs install --force` (clobbers the wrappers).
 
-Regression: `git/tests/test_hooks.sh` (delegation + no-op) and
+Regression: `tests/bats/git/test_hooks_global_wrappers.bats` / `test_hooks_global_lfs.bats` (delegation + no-op) and
 `tests/bats/git/test_global_hooks.bats` (SSOT, setup.sh linking, hook_check).
 
 # Local Tests (issues #754, #2046, #2054)

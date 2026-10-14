@@ -1,35 +1,18 @@
-#!/usr/bin/env bash
-# git/tests/test_hooks.sh
+# shellcheck shell=bash
+# tests/bats/git/hook_cases.bash
 #
-# Minimal integration tests for the 2-tier hook system:
-# - Global hook (core.hooksPath) runs first
-# - Delegates to project hook at git/hooks/pre-commit
+# Case library for the 2-tier hook system (moved from git/tests/test_hooks.sh,
+# #2163). Each test_* function is one case driven by real commits/pushes in
+# throwaway repos; the tests/bats/git/test_hooks_*.bats files call them one
+# @test each. Load hook_test_env.bash first (isolated HOME + git config).
 #
-# This script creates temporary git repos under /tmp and runs real commits.
-
-set -euo pipefail
 # Assertions read captured output via a here-string (`grep -q P <<<"$out"`),
 # never `echo "$out" | grep -q P`: bash line-buffers echo/printf into a pipe,
 # grep -q exits on the first match, a later write gets SIGPIPE and pipefail
 # turns the pipeline into a spurious failure under load (#2133).
 
-DOTFILES_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-
-SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
-export DOTFILES_ROOT SHELL_COMMON
-
-if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-    # shellcheck source=/dev/null
-    . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-else
-    ux_header() { echo "$@"; }
-    ux_info() { echo "$@"; }
-    ux_success() { echo "$@"; }
-    ux_error() { echo "$@" >&2; }
-fi
-
 die() {
-    ux_error "$1"
+    printf '%s\n' "$1" >&2
     exit 1
 }
 
@@ -102,7 +85,7 @@ EOF
 
 test_allows_spaces_in_filename() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     echo "ok" >"$repo_dir/file with spaces.txt"
@@ -114,7 +97,7 @@ test_allows_spaces_in_filename() {
 
 test_blocks_forbidden_env_file() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     echo "SECRET=1" >"$repo_dir/.env.local"
@@ -126,7 +109,7 @@ test_blocks_forbidden_env_file() {
 
 test_blocks_init_sourcing_tools_custom() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     {
@@ -141,7 +124,7 @@ test_blocks_init_sourcing_tools_custom() {
 
 test_blocks_auto_exec_custom_script_without_guard() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     mkdir -p "$repo_dir/shell-common/tools/custom"
@@ -161,7 +144,7 @@ EOF
 
 test_blocks_custom_script_wrong_shebang() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     mkdir -p "$repo_dir/shell-common/tools/custom"
@@ -178,7 +161,7 @@ EOF
 
 test_blocks_library_purity_top_level_read() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     mkdir -p "$repo_dir/shell-common/functions"
@@ -196,7 +179,7 @@ EOF
 
 test_blocks_library_purity_top_level_install() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     mkdir -p "$repo_dir/shell-common/tools/integrations"
@@ -213,7 +196,7 @@ EOF
 
 test_allows_library_purity_commented_install() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     mkdir -p "$repo_dir/shell-common/tools/integrations"
@@ -233,7 +216,7 @@ EOF
 
 test_blocks_hardcoded_home_path_in_zshrc() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     # Simulate the bun installer re-appending a resolved /home/<user> path.
@@ -248,7 +231,7 @@ EOF
 
 test_allows_hardcoded_home_path_with_marker() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
@@ -263,7 +246,7 @@ EOF
 
 test_allows_home_var_reference() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     cat >>"$repo_dir/zsh/main.zsh" <<'EOF'
@@ -280,7 +263,7 @@ EOF
 # only added diff lines are scanned, so the untouched legacy line is ignored.
 test_allows_preexisting_abs_home_on_unrelated_edit() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
 
     # Seed legacy debt: commit an abs-home line while bypassing the guard,
@@ -306,7 +289,7 @@ EOF
 # call site used to pass the file on stdin while check_shellcheck reads $2).
 test_shellcheck_blocks_staged_violation() {
     local repo_dir out code
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     mkdir -p "$repo_dir/d"
     # shellcheck disable=SC2016
@@ -326,7 +309,7 @@ test_shellcheck_blocks_staged_violation() {
 
 test_shellcheck_passes_clean_and_ignores_non_shell() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     mkdir -p "$repo_dir/d"
     printf '#!/bin/bash\necho "clean"\n' >"$repo_dir/d/clean.sh"
@@ -344,7 +327,7 @@ test_shellcheck_passes_clean_and_ignores_non_shell() {
 # its own args into the regex, SC2199, so `foo "$@"` wrappers were missed).
 test_wrapper_check_flags_delegating_wrappers() {
     local dir out
-    dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     # shellcheck disable=SC2016
     printf '%s\n' \
         'args_fwd() {' '    bar "$@"' '}' \
@@ -389,7 +372,7 @@ EOF2
 
 test_registry_runs_added_check_file() {
     local repo_dir out code before
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     before=$(cksum <"$repo_dir/git/hooks/pre-commit")
     add_fixture_check "$repo_dir"
@@ -423,7 +406,7 @@ test_registry_runs_added_check_file() {
 
 test_registry_blocks_invalid_check_file() {
     local repo_dir out code
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     printf 'CHECK_NAME=broken\nCHECK_SCOPE=per-everything\n' >"$repo_dir/git/hooks/checks/broken_check.sh"
     echo hi >"$repo_dir/notes.txt"
@@ -463,7 +446,7 @@ make_leak_repo() {
 
 test_leak_guard_blocks_without_echoing_match() {
     local repo_dir out code
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
 
     set +e
@@ -483,7 +466,7 @@ test_leak_guard_blocks_without_echoing_match() {
 # Issue #1997 — a file NAME that matches is caught and never printed.
 test_leak_guard_redacts_matching_path() {
     local repo_dir out code
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
     mkdir "$repo_dir/d"
     echo clean >"$repo_dir/d/qx9FAKETOKEN77.conf"
@@ -512,7 +495,7 @@ test_leak_guard_redacts_matching_path() {
 # staged paths too; with the guard active the whole hook output is redacted.
 test_leak_guard_redacts_other_check_reports() {
     local repo_dir out code inactive
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
     mkdir -p "$repo_dir/d" "$repo_dir/shell-common"
     # shellcheck disable=SC2016
@@ -549,7 +532,7 @@ test_leak_guard_redacts_other_check_reports() {
 # whole commit output, global + project hook, is filtered exactly once.
 test_leak_guard_redacts_global_and_project_output() {
     local repo_dir out code
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_leak_repo "$repo_dir" "git@github.com:example-owner/example-repo.git"
     mkdir -p "$repo_dir/d"
     printf 'breakpoint()\n' >"$repo_dir/d/qx9FAKETOKEN79.py"
@@ -577,7 +560,7 @@ test_leak_guard_redacts_global_and_project_output() {
 # active, printed verbatim when inactive, and a clean commit still succeeds.
 test_global_hook_leak_guard_in_unrelated_repo() {
     local repo_dir out code inactive
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_plain_repo "$repo_dir"
     git -C "$repo_dir" config core.hooksPath "$GLOBAL_HOOKS_DIR"
     git -C "$repo_dir" remote add upstream "git@github.com:example-owner/example-repo.git"
@@ -610,7 +593,7 @@ test_global_hook_leak_guard_in_unrelated_repo() {
 
 test_leak_guard_inert_without_upstream_remote() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_leak_repo "$repo_dir" "git@private-mirror.example.invalid:team/dotfiles.git"
     assert_success "UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"private only\""
     rm -rf "$repo_dir"
@@ -618,7 +601,7 @@ test_leak_guard_inert_without_upstream_remote() {
 
 test_leak_guard_skip_escape_hatch() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_leak_repo "$repo_dir" "https://github.com/example-owner/example-repo.git"
     assert_success "SKIP_LEAK_GUARD=1 UPSTREAM_REMOTES_ERE='$LEAK_TEST_UPSTREAM' LEAK_PATTERNS_ERE='$LEAK_TEST_PATTERNS' git -C \"$repo_dir\" commit -m \"skip\""
     rm -rf "$repo_dir"
@@ -637,7 +620,7 @@ test_leak_guard_skip_escape_hatch() {
 #      fire in an unrelated repository.
 #
 # The wrappers are invoked directly with synthetic argv/stdin (the technique
-# git/tests/test-pre-push.sh already uses) instead of driving a real push.
+# pre_push_cases.bash already uses) instead of driving a real push.
 # ---------------------------------------------------------------------------
 
 ZERO_SHA="0000000000000000000000000000000000000000"
@@ -722,7 +705,7 @@ test_global_hook_set_matches_ssot() {
 # The branch name arrives on stdin, so this also proves stdin passthrough.
 test_global_pre_push_delegates_to_project_hook() {
     local repo_dir sha
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_plain_repo "$repo_dir"
     install_project_pre_push "$repo_dir"
     sha="$(git -C "$repo_dir" rev-parse HEAD)"
@@ -745,7 +728,7 @@ test_global_pre_push_delegates_to_project_hook() {
 # silent no-op — no output, exit 0, and `mise run test` never invoked.
 test_global_pre_push_is_noop_in_unrelated_repo() {
     local repo_dir sha stub_dir sentinel
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_plain_repo "$repo_dir"
     sha="$(git -C "$repo_dir" rev-parse HEAD)"
 
@@ -783,7 +766,7 @@ EOF
 # just from the main checkout.
 test_global_pre_push_delegates_from_linked_worktree() {
     local main_dir wt_dir hook_target sha
-    main_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    main_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_plain_repo "$main_dir"
 
     # $main_dir is a normal (non-worktree) repo, so its .git is a real
@@ -802,7 +785,7 @@ exit 0
 EOF
     chmod +x "$hook_target"
 
-    wt_dir="$(mktemp -u /tmp/dotfiles-hook-test.XXXXXX)"
+    wt_dir="$(mktemp -u "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     git -C "$main_dir" worktree add -q "$wt_dir" -b hook-fixture-wt >/dev/null 2>&1 ||
         die "Failed to create a linked worktree for the delegation test"
 
@@ -832,7 +815,7 @@ EOF
 test_global_wrappers_delegate_argv() {
     local hook_name repo_dir
     for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
-        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_plain_repo "$repo_dir"
         install_recording_project_hook "$repo_dir" "$hook_name" 0
 
@@ -850,7 +833,7 @@ test_global_wrappers_delegate_argv() {
 test_global_wrappers_propagate_exit_code() {
     local hook_name repo_dir rc
     for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
-        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_plain_repo "$repo_dir"
         install_recording_project_hook "$repo_dir" "$hook_name" 42
 
@@ -868,7 +851,7 @@ test_global_wrappers_propagate_exit_code() {
 test_global_wrappers_are_noop_without_project_hook() {
     local hook_name repo_dir
     for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
-        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_plain_repo "$repo_dir"
 
         run_global_hook "$repo_dir" "$hook_name" </dev/null ||
@@ -884,7 +867,7 @@ test_global_wrappers_are_noop_without_project_hook() {
 # Outside any git repository the wrappers must exit 0 without noise.
 test_global_wrappers_are_noop_outside_git_repo() {
     local hook_name work_dir
-    work_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    work_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     # Detach from any enclosing repository (mktemp dirs live under /tmp).
     export GIT_CEILING_DIRECTORIES="$work_dir"
 
@@ -951,7 +934,7 @@ EOF
 # hook still gets the same ref list (stdin buffered once, replayed).
 test_global_lfs_pre_push_chains_and_replays_stdin() {
     local repo_dir refs stdin_lines
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_lfs_fixture "$repo_dir" lfs
     install_stdin_recording_project_hook "$repo_dir" pre-push
     refs="$(printf 'refs/heads/a 1111 refs/heads/a %s\nrefs/heads/b 2222 refs/heads/b %s' "$ZERO_SHA" "$ZERO_SHA")"
@@ -974,7 +957,7 @@ ${stdin_lines}" ] ||
 # after the project hook (which runs first) already passed.
 test_global_lfs_pre_push_failure_blocks() {
     local repo_dir rc=0
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_lfs_fixture "$repo_dir" lfs
     install_stdin_recording_project_hook "$repo_dir" pre-push
 
@@ -995,7 +978,7 @@ test_global_lfs_pre_push_failure_blocks() {
 # push that never happens.
 test_global_lfs_pre_push_project_failure_skips_lfs() {
     local repo_dir rc=0
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_lfs_fixture "$repo_dir" lfs
     install_recording_project_hook "$repo_dir" pre-push 5
 
@@ -1016,7 +999,7 @@ test_global_lfs_pre_push_project_failure_skips_lfs() {
 test_global_lfs_post_hooks_chain() {
     local hook_name repo_dir rc
     for hook_name in post-commit post-checkout post-merge; do
-        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_lfs_fixture "$repo_dir" lfs
 
         PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" alpha beta </dev/null ||
@@ -1040,7 +1023,7 @@ test_global_lfs_post_hooks_chain() {
 test_global_lfs_post_hook_failure_without_project_hook() {
     local hook_name repo_dir rc
     for hook_name in post-commit post-checkout post-merge; do
-        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_lfs_fixture "$repo_dir" lfs
 
         rc=0
@@ -1057,7 +1040,7 @@ test_global_lfs_post_hook_failure_without_project_hook() {
 # through --git-common-dir — the chain still fires.
 test_global_lfs_chains_in_linked_worktree() {
     local repo_dir wt_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_lfs_fixture "$repo_dir" lfs
     wt_dir="${repo_dir}-wt"
     git -C "$repo_dir" worktree add -q "$wt_dir" -b lfs-wt >/dev/null 2>&1 ||
@@ -1076,7 +1059,7 @@ test_global_lfs_chains_in_linked_worktree() {
 test_global_lfs_detected_via_tracked_gitattributes() {
     local attr_path repo_dir
     for attr_path in .gitattributes sub/dir/.gitattributes; do
-        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_lfs_fixture "$repo_dir"
         mkdir -p "$(dirname "$repo_dir/$attr_path")"
         echo '*.bin filter=lfs diff=lfs merge=lfs -text' >"$repo_dir/$attr_path"
@@ -1097,7 +1080,7 @@ test_global_lfs_detected_via_tracked_gitattributes() {
 test_global_lfs_skipped_in_non_lfs_repo() {
     local hook_name repo_dir
     for hook_name in pre-push post-commit post-checkout post-merge; do
-        repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+        repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_lfs_fixture "$repo_dir"
 
         PATH="$repo_dir/.lfs-bin:$PATH" run_global_hook "$repo_dir" "$hook_name" a b \
@@ -1115,7 +1098,7 @@ test_global_lfs_skipped_in_non_lfs_repo() {
 # is not doubled: the wrapper leaves lfs to it.
 test_global_lfs_not_doubled_by_lfs_project_hook() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_lfs_fixture "$repo_dir" lfs
     printf '#!/bin/sh\ngit lfs pre-push "$@"\n' >"$repo_dir/.git/hooks/pre-push"
     chmod +x "$repo_dir/.git/hooks/pre-push"
@@ -1137,7 +1120,7 @@ test_global_lfs_not_doubled_by_lfs_project_hook() {
 # `graphify` in $GFY_DIR/bin that appends its argv to $GFY_DIR/calls.
 # $1 = "graph" to create clone/graphify-out/graph.json (the opt-in signal).
 setup_graphify_fixture() {
-    GFY_DIR="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    GFY_DIR="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     mkdir -p "$GFY_DIR/bin"
     cat >"$GFY_DIR/bin/graphify" <<EOF
 #!/bin/sh
@@ -1337,7 +1320,7 @@ EOF
 # authored messages are still validated.
 test_commit_msg_skips_git_merge_message() {
     local msg_file out
-    msg_file="$(mktemp /tmp/dotfiles-hook-test.XXXXXX)"
+    msg_file="$(mktemp "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     printf "Merge remote-tracking branch 'upstream/main'\n" >"$msg_file"
     "${DOTFILES_ROOT}/git/hooks/commit-msg" "$msg_file" >/dev/null 2>&1 ||
         die "Expected git-generated merge message to pass commit-msg"
@@ -1351,7 +1334,7 @@ test_commit_msg_skips_git_merge_message() {
 # Issue #2041 — main_branch_guard lets an in-progress merge commit through.
 test_main_branch_guard_allows_merge_in_progress() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_plain_repo "$repo_dir"
     git -C "$repo_dir" checkout -q -b main
     (
@@ -1369,7 +1352,7 @@ test_main_branch_guard_allows_merge_in_progress() {
 # interactive guard).
 test_blocks_emoji_in_main_bash() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     printf 'echo "done \xf0\x9f\x9a\x80"\n' >>"$repo_dir/bash/main.bash"
     git -C "$repo_dir" add bash/main.bash
@@ -1379,7 +1362,7 @@ test_blocks_emoji_in_main_bash() {
 
 test_blocks_model_key_in_claude_settings() {
     local repo_dir
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     mkdir -p "$repo_dir/claude"
     printf '{\n  "model": "opus"\n}\n' >"$repo_dir/claude/settings.json"
@@ -1393,7 +1376,7 @@ test_blocks_model_key_in_claude_settings() {
 
 test_warns_missing_interactive_guard() {
     local repo_dir out
-    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     mkdir -p "$repo_dir/shell-common/aliases"
     printf '#!/bin/sh\nalias gs="git status"\n' >"$repo_dir/shell-common/aliases/nog.sh"
@@ -1402,83 +1385,3 @@ test_warns_missing_interactive_guard() {
     grep -q "Missing interactive guard" <<<"$out" || die "Expected interactive guard warning: $out"
     rm -rf "$repo_dir"
 }
-
-main() {
-    ux_header "Hook integration tests"
-    test_allows_spaces_in_filename
-    test_blocks_forbidden_env_file
-    test_blocks_init_sourcing_tools_custom
-    test_blocks_auto_exec_custom_script_without_guard
-    test_blocks_custom_script_wrong_shebang
-    test_blocks_library_purity_top_level_read
-    test_blocks_library_purity_top_level_install
-    test_allows_library_purity_commented_install
-    test_blocks_hardcoded_home_path_in_zshrc
-    test_allows_hardcoded_home_path_with_marker
-    test_allows_home_var_reference
-    test_allows_preexisting_abs_home_on_unrelated_edit
-
-    # Issue #2014 — ShellCheck step runs on staged files
-    test_shellcheck_blocks_staged_violation
-    test_shellcheck_passes_clean_and_ignores_non_shell
-    test_wrapper_check_flags_delegating_wrappers
-
-    # Issue #2143 — pre-commit check registry
-    test_registry_runs_added_check_file
-    test_registry_blocks_invalid_check_file
-
-    # Issue #2149 — rules moved from golden_rules into checks
-    test_blocks_emoji_in_main_bash
-    test_blocks_model_key_in_claude_settings
-    test_warns_missing_interactive_guard
-
-    # Issue #1970 — commit-time leak guard
-    test_leak_guard_blocks_without_echoing_match
-    test_leak_guard_redacts_matching_path
-    test_leak_guard_redacts_other_check_reports
-    test_leak_guard_redacts_global_and_project_output
-    test_global_hook_leak_guard_in_unrelated_repo
-    test_leak_guard_inert_without_upstream_remote
-    test_leak_guard_skip_escape_hatch
-
-    # Issue #1664 — global wrapper delegation for pre-push & friends
-    test_global_hook_set_matches_ssot
-    test_global_pre_push_delegates_to_project_hook
-    test_global_pre_push_is_noop_in_unrelated_repo
-    test_global_pre_push_delegates_from_linked_worktree
-    test_global_wrappers_delegate_argv
-    test_global_wrappers_propagate_exit_code
-    test_global_wrappers_are_noop_without_project_hook
-    test_global_wrappers_are_noop_outside_git_repo
-
-    # git-lfs chaining in the global wrappers (lib/lfs.sh)
-    test_global_lfs_pre_push_chains_and_replays_stdin
-    test_global_lfs_pre_push_failure_blocks
-    test_global_lfs_pre_push_project_failure_skips_lfs
-    test_global_lfs_post_hooks_chain
-    test_global_lfs_post_hook_failure_without_project_hook
-    test_global_lfs_chains_in_linked_worktree
-    test_global_lfs_detected_via_tracked_gitattributes
-    test_global_lfs_skipped_in_non_lfs_repo
-    test_global_lfs_not_doubled_by_lfs_project_hook
-
-    # Issue #1838 — graphify refresh on default-branch pulls
-    test_graphify_ff_pull_on_default_branch
-    test_graphify_rebase_pull_on_default_branch
-    test_graphify_ff_rebase_on_default_branch
-    test_graphify_replay_rebase_refreshes_once
-    test_graphify_skips_branch_switch
-    test_graphify_skips_commit_amend
-    test_graphify_skips_non_default_branch
-    test_graphify_noop_without_graph_json
-    test_graphify_absent_pull_succeeds
-    test_graphify_keeps_project_hook_delegation
-
-    # Issue #2041 — git sync merge commits pass the hooks
-    test_commit_msg_skips_git_merge_message
-    test_main_branch_guard_allows_merge_in_progress
-
-    ux_success "All hook tests passed"
-}
-
-main "$@"
