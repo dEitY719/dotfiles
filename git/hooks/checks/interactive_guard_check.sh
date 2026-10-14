@@ -19,7 +19,7 @@ check_interactive_guard() { # <abs_path> <repo_rel_path> <out>
 # --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
 CHECK_NAME=interactive_guard
 CHECK_SCOPE=per-file
-CHECK_SEVERITY=warning
+CHECK_SEVERITY=blocking
 CHECK_TITLE="Missing interactive guard"
 CHECK_REPORT_LINES=5
 check_run() {

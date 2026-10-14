@@ -20,9 +20,10 @@ check_zsh_emulation_issues() {
     # (only flag if it's a function file, not a simple script)
     if grep -q "^[a-z_][a-z0-9_]*() {" "$abs_path" 2>/dev/null; then
 
-        # If function uses 'set -x' or 'set +x' but no 'emulate -L sh'
+        # If function uses 'set -x' or 'set +x' but neither 'emulate -L sh'
+        # nor zsh's own 'unsetopt xtrace' (it already handles zsh tracing)
         if grep -q "set +x\|set -x" "$abs_path" 2>/dev/null &&
-            ! grep -q "emulate -L sh" "$abs_path" 2>/dev/null; then
+            ! grep -q "emulate -L sh\|unsetopt xtrace" "$abs_path" 2>/dev/null; then
 
             # Warning: may have zsh tracing issues
             # (Only a suggestion, not a blocking error since many scripts work fine)

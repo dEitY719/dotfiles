@@ -7,9 +7,9 @@ mirror_pages_activate_help() {
     ux_header "mirror-pages-activate"
 
     ux_section "Usage"
-    echo "  ${UX_SUCCESS}mirror-pages-activate${UX_RESET}           ${UX_MUTED}# activate Pages + replace URLs${UX_RESET}"
-    echo "  ${UX_SUCCESS}mirror-pages-activate --dry-run${UX_RESET} ${UX_MUTED}# preview without making changes${UX_RESET}"
-    echo "  ${UX_SUCCESS}mirror-pages-activate --help${UX_RESET}    ${UX_MUTED}# show this help${UX_RESET}"
+    ux_table_row "mirror-pages-activate" "activate Pages + replace URLs"
+    ux_table_row "mirror-pages-activate --dry-run" "preview without making changes"
+    ux_table_row "mirror-pages-activate --help" "show this help"
     echo ""
 
     ux_section "What it does"

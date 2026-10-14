@@ -1,6 +1,8 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/functions/gh_discussion.sh
+# No interactive guard: pure function library, sourced by the gh discussion
+# skills from non-interactive shells.
 # GraphQL wrappers for the GitHub Discussions write API. The REST endpoints
 # for Discussions are read-only — `createDiscussion` and friends only exist
 # in GraphQL — so this helper centralises the mutation + the lookup chain

@@ -112,3 +112,16 @@ _zsh_codex() {
     refute_output --partial "no matches found"
     assert_output --partial "rc0"
 }
+
+# #2181: the direct-exec guard judges by ${0##*/} alone (no BASH_SOURCE), and
+# must not fire when zsh rebinds $0 to the sourced file.
+@test "loader.sh refuses direct execution but sources under bash and zsh" {
+    loader="${_BATS_REAL_DOTFILES_ROOT}/shell-common/util/loader.sh"
+    run env DOTFILES_FORCE_INIT=1 bash "$loader"
+    assert_failure
+    assert_output --partial 'should be sourced, not executed'
+    run env DOTFILES_FORCE_INIT=1 bash -c ". '$loader' && command -v load_category"
+    assert_success
+    run env DOTFILES_FORCE_INIT=1 zsh --no-rcs -c ". '$loader' && whence load_category"
+    assert_success
+}

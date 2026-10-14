@@ -95,13 +95,6 @@ if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
     }
 fi
 
-# Back-compat alias for the pre-#1696 name. Kept because it is part of this
-# file's published surface (tests/bats/tools/plugin_sync_title_smoke.bats
-# asserts it is defined) — new code should call _claude_plugin_read_json_or.
-_plugin_sync_read_json_or() {
-    _claude_plugin_read_json_or "$@"
-}
-
 # _changed_keys_marketplaces <current_file> <target_json>
 #
 # Bare "+key"/"-key"/"~key" tokens (added/removed/changed), one per line —

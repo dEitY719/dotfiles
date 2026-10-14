@@ -68,10 +68,10 @@ verdicts() {
     [[ "$output" == *"emoji:bash/main.bash"* ]]
 }
 
-@test "bash-only \${BASH_*} in a #!/bin/sh util file: pre-commit warns, run_all fails" {
+@test "bash-only \${BASH_*} in a #!/bin/sh util file: pre-commit and run_all both fail (#2181)" {
     mkdir -p "$REPO/shell-common/util"
     verdicts shell-common/util/x.sh '#!/bin/sh\necho "${BASH_VERSION-}"\n'
-    [ "$PRE" = pass ]
+    [ "$PRE" = fail ]
     [ "$ALL" = fail ]
 }
 
@@ -86,10 +86,10 @@ verdicts() {
     [ "$status" -eq 0 ]
 }
 
-@test "missing interactive guard: pre-commit warns (passes), run_all fails" {
+@test "missing interactive guard: pre-commit and run_all both fail (#2181)" {
     mkdir -p "$REPO/shell-common/aliases"
     verdicts shell-common/aliases/nog.sh '#!/bin/sh\nalias gs="git status"\n'
-    [ "$PRE" = pass ]
+    [ "$PRE" = fail ]
     [ "$ALL" = fail ]
 }
 

@@ -18,13 +18,7 @@ if [ -f "$_UX_LIB_PATH" ]; then
     source "$_UX_LIB_PATH"
 else
     ux_error() { echo "$1" >&2; }
-    ux_info() {
-        if [ -n "$1" ]; then
-            echo "$1"
-        else
-            echo ""
-        fi
-    }
+    ux_info() { printf '%s\n' "${1-}"; }
     ux_header() { echo "=== $1 ==="; }
 fi
 unset _UX_LIB_PATH
