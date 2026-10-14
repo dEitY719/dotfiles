@@ -25,6 +25,8 @@ ALLOWED = [
     "rm -rf /tmp/claude-1000/scratch/a.txt",
     "sh -c 'rm -f /tmp/claude-1000/x/y'",
     "D=/tmp/claude-1000/w; rm -rf ${D}/sub",
+    'for sh in bash zsh; do $sh -c "echo hi"; done',  # opaque -c, no rm word
+    'env -i PATH="$PATH" zsh -f -c "echo hi"',
 ]
 
 NO_OPINION = [

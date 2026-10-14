@@ -9,7 +9,8 @@ timeout, so the command fails and the night's work is lost.
 This hook answers `permissionDecision: "allow"` only when ALL hold:
     - `permission_mode` is `bypassPermissions` (a yolo session; elsewhere the
       prompt is a feature and this hook has no opinion);
-    - the command has at least one `rm`/`rmdir` word;
+    - the command has at least one `rm`/`rmdir` word, or no `rm` but a `-c`
+      script argument (opaque to the harness, same prompt);
     - every non-option argument of every `rm`/`rmdir` is under
       `/tmp/claude-<uid>/` (literal, or `$VAR` assigned in the same command
       from such a path / `mktemp -d /tmp/claude-<uid>/...`), without `..`.
@@ -47,6 +48,9 @@ _RM_RE = re.compile(r"(?<![\w./-])(?:rm|rmdir)\b([^;&|)\n]*)")
 _ASSIGN_RE = re.compile(
     r"\b([A-Za-z_]\w*)=(?:\$\(\s*mktemp\s+-d\s+)?[\"']?(" + _SAFE_ROOT + r"[^\s\"')]*|[^\s\"')]*XXXX[^\s\"')]*)"
 )
+# `$sh -c "..."` / `env -i ... zsh -c "..."`: the harness cannot read the script and
+# asks `runs rm and could not be checked` even though no `rm` word is visible.
+_DASH_C_RE = re.compile(r"\s-[A-Za-z]*c\s")
 _VAR_RE = re.compile(r"^\$(?:\{(\w+)\}|(\w+))(/.*)?$")
 
 
@@ -71,7 +75,7 @@ def all_rm_targets_safe(command: str) -> bool:
         args = [a for a in m.group(1).replace("'", " ").replace('"', " ").split() if not a.startswith("-")]
         if not args or not all(_arg_ok(a, safe_vars) for a in args):
             return False
-    return seen
+    return seen or bool(_DASH_C_RE.search(command))
 
 
 def main() -> int:
