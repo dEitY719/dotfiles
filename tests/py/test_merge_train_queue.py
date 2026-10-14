@@ -67,8 +67,10 @@ CASES = [
     (["backoff-next", "8", FP + ";2:b:::"], "state_open.txt", 0, "run 1 1\n"),
     # window open: skip and count down.
     (["backoff-next", "8", FP], "state_open.txt", 0, "skip 4 1\n"),
-    # window elapsed: run and double.
+    # last tick of an open window: still a skip, counted down to 0.
     (["backoff-next", "8", FP], "state_window1.txt", 0, "skip 1 0\n"),
+    # window elapsed: run and double, capped at <max>.
+    (["backoff-next", "8", FP], "state_elapsed.txt", 0, "run 4 4\n"),
     (["backoff-next", "8", FP], "state_capped.txt", 0, "run 8 8\n"),
     (["backoff-next", "4", FP], "state_capped.txt", 0, "run 4 4\n"),
     # a corrupt window reads as 0; surrounding spaces around the stored fingerprint drop.

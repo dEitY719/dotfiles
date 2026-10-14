@@ -490,6 +490,10 @@ EOF
         ;;
     esac
     # No fingerprint, or no readable verdict: no evidence — run, record nothing.
+    # A fingerprint with no verdict means the op itself broke (python crash,
+    # import error): say so, or backoff silently stays off on every tick.
+    [ -z "${_PMT_FINGERPRINT}" ] ||
+        ux_warning "No backoff verdict for ${_PMT_REPO} (queue op failed; PMT_QUEUE_IMPL=${PMT_QUEUE_IMPL:-python}) — running the tick without backoff."
     return 1
 }
 
