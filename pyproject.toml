@@ -34,8 +34,10 @@ dev = [
 
 [tool.setuptools]
 # The Python side of the shell/Python boundary (docs/.ssot/shell-vs-python.md, #2157).
-packages = ["dotfiles_tools", "dotfiles_tools.issue_watcher"]
 package-dir = { "" = "tools/py" }
+
+[tool.setuptools.packages.find]
+where = ["tools/py"]
 
 
 # [[tool.uv.index]]

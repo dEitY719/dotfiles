@@ -7,6 +7,7 @@ requires byte-identical stdout and the same exit code.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -20,13 +21,14 @@ LEGACY = ROOT / "shell-common/tools/custom/lib/issue_watcher_select_shell.sh"
 US = "\x1f"
 
 
-def run_python(op: list[str], fixture: str) -> tuple[int, str]:
+def run_python(op: list[str], fixture: str, env: dict[str, str] | None = None) -> tuple[int, str]:
     """Invoke the module the way cron_py does: -E -s, cwd = tools/py."""
     proc = subprocess.run(
         [sys.executable, "-E", "-s", "-m", "dotfiles_tools.issue_watcher.select", *op],
         input=(FIXTURES / fixture).read_bytes(),
         capture_output=True,
         cwd=ROOT / "tools/py",
+        env=env,
         check=False,
     )
     return proc.returncode, proc.stdout.decode()
@@ -50,18 +52,23 @@ CASES = [
         f"acme/api\t14\tbug{US}needs review, soon\nacme/web\t3\t\nacme/api\t145\twontfix\n",
     ),
     (["search-rows"], "truncated.json", 2, ""),
+    # Korean label passes through as UTF-8; a tab inside a label is @tsv-escaped.
+    (["search-rows"], "search_issues_korean.json", 0, f"acme/api\t9\t보류{US}tab\\there\n"),
     (["pr-count"], "open_prs.json", 0, "4\n"),
     (["pr-count"], "truncated.json", 2, ""),
+    # jq `length` semantics: null is 0, a number its absolute value.
+    (["pr-count"], "null.json", 0, "0\n"),
+    (["pr-count"], "negative_number.json", 0, "3\n"),
     # body keyword, with the trailing \b: #14 must not match "Closes #145".
-    (["handled-by-pr", "145"], "open_prs.json", 0, ""),
-    (["handled-by-pr", "14"], "open_prs.json", 1, ""),
+    (["handled-by-pr", "145"], "open_prs.json", 0, "1\n"),
+    (["handled-by-pr", "14"], "open_prs.json", 0, "0\n"),
     # branch name wt/issue-<n>/ — and #77's branch must not handle #7 or vice versa.
-    (["handled-by-pr", "7"], "open_prs.json", 0, ""),
-    (["handled-by-pr", "77"], "open_prs.json", 0, ""),
+    (["handled-by-pr", "7"], "open_prs.json", 0, "1\n"),
+    (["handled-by-pr", "77"], "open_prs.json", 0, "1\n"),
     # `fixes: owner/repo#11` spelling.
-    (["handled-by-pr", "11"], "open_prs.json", 0, ""),
+    (["handled-by-pr", "11"], "open_prs.json", 0, "1\n"),
     # a plain reference is not a closing keyword.
-    (["handled-by-pr", "12"], "open_prs.json", 1, ""),
+    (["handled-by-pr", "12"], "open_prs.json", 0, "0\n"),
     (["handled-by-pr", "12"], "truncated.json", 2, ""),
     (["open-blockers"], "blocked_by_open.json", 0, "1,3\n"),
     (["open-blockers"], "blocked_by_closed.json", 1, "\n"),
@@ -90,3 +97,9 @@ def test_repo_order_empty_watch_list() -> None:
     from dotfiles_tools.issue_watcher.select import repo_order
 
     assert repo_order([], "acme/api") == []
+
+
+def test_c_locale_keeps_korean_labels() -> None:
+    """cron may run under LANG=C; the label must still come out as UTF-8."""
+    env = {"PATH": os.environ.get("PATH", ""), "LC_ALL": "C", "LANG": "C"}
+    assert run_python(["search-rows"], "search_issues_korean.json", env) == (0, f"acme/api\t9\t보류{US}tab\\there\n")

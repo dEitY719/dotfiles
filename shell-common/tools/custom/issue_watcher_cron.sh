@@ -870,7 +870,18 @@ _iw_load_open_prs() {
 # owner/repo#11` — which the first cut missed, so a hand-written PR using either
 # read as "unhandled" and the issue was dispatched again (PR #1456 codex review).
 _iw_handled_by_pr() {
-    printf '%s' "${_IW_PR_CACHE_DATA}" | _iw_sel handled-by-pr "$1"
+    local _hits
+
+    # Decided from the printed count, never from the exit status: a python3
+    # that cannot import the module exits 1 too, and 1 must not mean "not
+    # handled" — that would open a second PR on the issue.
+    _hits=$(printf '%s' "${_IW_PR_CACHE_DATA}" | _iw_sel handled-by-pr "$1") || _hits=""
+
+    case "${_hits}" in
+    '' | *[!0-9]*) return 2 ;;
+    0) return 1 ;;
+    *) return 0 ;;
+    esac
 }
 
 # ============================================================
@@ -2957,13 +2968,14 @@ main() {
     fi
 
     # The candidate-selection ops run in Python unless rolled back (#2157).
-    # >= 3.10: handled-by-pr reads exit 1 as "not handled", so an older
-    # interpreter dying on import would silently dispatch a duplicate PR.
+    # No python3 >= 3.10 (RHEL 8 ships 3.6) degrades to the jq rollback rather
+    # than stopping the watcher: both paths answer the same (golden parity).
     if [ "${IW_SELECT_IMPL:-python}" = "python" ] &&
         ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
-        ux_error "python3 (>= 3.10) not found in PATH — cannot run the candidate selection."
-        ux_info "Add python3 to the cron PATH, or set IW_SELECT_IMPL=shell to roll back to jq."
-        exit 1
+        ux_warning "python3 (>= 3.10) not found in PATH — using the jq candidate selection (IW_SELECT_IMPL=shell)."
+        # shellcheck source=/dev/null
+        . "${_IW_SHELL_COMMON}/tools/custom/lib/issue_watcher_select_shell.sh" || exit 1
+        _iw_sel() { _iw_sel_shell "$@"; }
     fi
 
     if [ ! -f "$(_iw_repos_file)" ]; then

@@ -69,5 +69,5 @@ cron_acquire_lock() {
 # PYTHONPATH and user site; the cd makes `-m` import from tools/py, a path this
 # repo owns, instead of whatever directory the tick was started in.
 cron_py() {
-    (cd "${SHELL_COMMON}/../tools/py" && python3 -E -s -m "$@")
+    (cd "${SHELL_COMMON:?cron_py: SHELL_COMMON unset}/../tools/py" && python3 -E -s -m "$@")
 }

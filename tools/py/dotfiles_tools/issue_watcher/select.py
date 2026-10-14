@@ -11,12 +11,14 @@ Usage: python3 -s -E -m dotfiles_tools.issue_watcher.select <op> [arg] < input
   search-rows          gh search issues JSON -> `<repo>TAB<number>TAB<labels>` lines,
                        labels joined by US (0x1f)
   pr-count             gh pr list JSON -> its length
-  handled-by-pr <n>    gh pr list JSON -> exit 0 handled / 1 not / 2 cannot tell
+  handled-by-pr <n>    gh pr list JSON -> how many open PRs close issue <n>
   open-blockers        blockedBy GraphQL JSON -> comma-joined OPEN blockers;
                        exit 0 when there is one, 1 when there is none
   repo-order [<last>]  watch-list TSV lines -> repos, starting after <last>
 
-Exit codes: 0 / 1 are the op's answer, 2 is unreadable input or bad usage.
+Exit codes: 0 answered (open-blockers: 1 = no open blocker), 2 unreadable input
+or bad usage, with empty stdout. The shell decides from stdout, never from exit 1
+alone: a python3 that cannot even import this module also exits 1.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Iterable
 from typing import Any, cast
 
 from dotfiles_tools.issue_watcher.models import BlockerNode, OpenPr, SearchIssue
@@ -72,8 +75,8 @@ def search_rows(issues: Any) -> list[str]:
     return rows
 
 
-def handled_by_pr(prs: Any, number: str) -> bool:
-    """True when an open PR closes issue <number> by branch name or by keyword.
+def handled_by_pr(prs: Any, number: str) -> int:
+    """How many open PRs close issue <number>, by branch name or by keyword.
 
     The trailing \\b is load-bearing: without it #14 would match a body that
     closes #145. `Closes: #11` and the cross-repo `Closes owner/repo#11` count too.
@@ -82,6 +85,7 @@ def handled_by_pr(prs: Any, number: str) -> bool:
     keyword = re.compile(
         r"\b(close[sd]?|fix(e[sd])?|resolve[sd]?):?\s+(\S+)?#" + re.escape(number) + r"\b", re.IGNORECASE
     )
+    hits = 0
     for item in _iterate(prs):
         pr = cast(OpenPr, item)
         head = pr.get("headRefName") or ""
@@ -89,8 +93,8 @@ def handled_by_pr(prs: Any, number: str) -> bool:
         if not isinstance(head, str) or not isinstance(body, str):
             raise ValueError("headRefName/body is not a string")
         if branch.search(head) or keyword.search(body):
-            return True
-    return False
+            hits += 1
+    return hits
 
 
 def open_blockers(response: Any) -> list[int]:
@@ -121,58 +125,67 @@ def repo_order(lines: list[str], last: str) -> list[str]:
     return [repos[(start + k) % len(repos)] for k in range(len(repos))]
 
 
+def jq_length(value: Any) -> int | float:
+    """jq `length`: null is 0, a number its absolute value, a boolean an error."""
+    if value is None:
+        return 0
+    if isinstance(value, bool):
+        raise ValueError("boolean has no length")
+    if isinstance(value, int | float):
+        return abs(value)
+    return len(value)
+
+
 def main(argv: list[str]) -> int:
-    # An unexpected JSON shape must read as "unreadable" (2), never as the
-    # uncaught-traceback exit 1, which handled-by-pr would take for "not handled".
+    # An unexpected JSON shape must read as "unreadable" (2) with empty stdout,
+    # never as an uncaught-traceback exit 1.
     try:
-        return _main(argv)
+        code, out = _main(argv)
     except Exception as exc:
         print(f"select: unreadable input: {exc!r}", file=sys.stderr)
         return 2
+    # Bytes, not the text layer: cron may run under LANG=C, and a Korean label
+    # must come out as the UTF-8 gh sent, whatever the locale says.
+    sys.stdout.buffer.write(out.encode("utf-8"))
+    return code
 
 
-def _main(argv: list[str]) -> int:
+def _lines(items: Iterable[object]) -> str:
+    return "".join(f"{item}\n" for item in items)
+
+
+def _main(argv: list[str]) -> tuple[int, str]:
     if not argv:
         print(__doc__, file=sys.stderr)
-        return 2
+        return 2, ""
     op, args = argv[0], argv[1:]
-    raw = sys.stdin.read()
+    # jq replaces invalid UTF-8 with U+FFFD rather than failing; so does this.
+    raw = sys.stdin.buffer.read().decode("utf-8", errors="replace")
 
     if op == "repo-order":
         # split("\n"), not splitlines(): awk records end at LF only.
         lines = raw.split("\n")
         if lines[-1] == "":
             lines.pop()
-        for repo in repo_order(lines, args[0] if args else ""):
-            print(repo)
-        return 0
+        return 0, _lines(repo_order(lines, args[0] if args else ""))
 
     try:
         data = json.loads(raw)
     except ValueError:
-        return 2
+        return 2, ""
 
     if op == "search-rows":
-        for row in search_rows(data):
-            print(row)
-        return 0
+        return 0, _lines(search_rows(data))
     if op == "pr-count":
-        if isinstance(data, list | dict | str):
-            print(len(data))
-            return 0
-        return 2
+        return 0, _lines([jq_length(data)])
     if op == "handled-by-pr" and len(args) == 1:
-        try:
-            return 0 if handled_by_pr(data, args[0]) else 1
-        except ValueError:
-            return 2
+        return 0, _lines([handled_by_pr(data, args[0])])
     if op == "open-blockers":
         blockers = open_blockers(data)
-        print(",".join(str(n) for n in blockers))
-        return 0 if blockers else 1
+        return (0 if blockers else 1), _lines([",".join(str(n) for n in blockers)])
 
     print(f"select: unknown op or bad arguments: {' '.join(argv)}", file=sys.stderr)
-    return 2
+    return 2, ""
 
 
 if __name__ == "__main__":

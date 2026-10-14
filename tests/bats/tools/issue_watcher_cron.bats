@@ -2945,11 +2945,11 @@ _two_repo_fixture() {
     _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: missing python3 fails loudly and names the rollback" {
+@test "issue_watcher_cron: missing python3 falls back to the jq selection with a warning" {
     _run_tick "PATH=$(_path_without python3)"
-    assert_failure
-    assert_output --partial "python3 (>= 3.10) not found"
-    assert_output --partial "IW_SELECT_IMPL=shell"
+    assert_success
+    assert_output --partial "using the jq candidate selection"
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
 @test "issue_watcher_cron: missing python3 is fine under IW_SELECT_IMPL=shell" {
