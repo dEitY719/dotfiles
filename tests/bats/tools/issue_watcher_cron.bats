@@ -4001,6 +4001,15 @@ metadata:
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
 }
 
+@test "issue_watcher_cron: settings.local.json disabling the plugin falls through to the flat copy" {
+    printf '{"enabledPlugins":{"gh-flow@test":true}}\n' >"${HOME}/.claude-personal/settings.json"
+    printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.local.json"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
+}
+
 @test "issue_watcher_cron: no plugin dispatches the Agent Factory copy by its anchor" {
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
