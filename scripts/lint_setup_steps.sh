@@ -34,7 +34,9 @@ while IFS= read -r file; do
     module="${file%/setup.sh}"
     checked=$((checked + 1))
     registered=0
-    case "$steps" in *"./${module}/setup.sh"*) registered=1 ;; esac
+    # 토큰 경계까지 맞춘다 — `../x/setup.sh` 나 `foo./x/setup.sh` 는 등록이 아니다.
+    printf '%s\n' "$steps" | grep -Eq "(^|[[:space:]\"'(])\./${module}/setup\.sh([[:space:]\"';)]|$)" &&
+        registered=1
     optin=0
     [ -f "${module}/.setup-optin" ] && optin=1
     if [ "$registered" = 1 ] && [ "$optin" = 1 ]; then
@@ -51,5 +53,11 @@ $(git ls-files '*/setup.sh')
 EOF
 
 echo "lint-setup-steps: checked=${checked} errors=${errors}"
+
+# heredoc 안의 $(git ls-files) 실패는 set -e 에 걸리지 않는다 — 0건은 열거 실패로 본다.
+if [ "$checked" -eq 0 ]; then
+    echo "FAIL  모듈 setup.sh 를 하나도 찾지 못했습니다(git ls-files 실패?)." >&2
+    exit 1
+fi
 
 [ "$errors" -eq 0 ] || exit 1
