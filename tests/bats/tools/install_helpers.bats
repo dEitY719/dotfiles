@@ -140,6 +140,102 @@ CURL_OK='
     assert_output "tool version --short"
 }
 
+# --- pkg_install (#2145) --------------------------------------------------------
+
+# Stub PATH: only the managers named in $1 exist; each logs "<cmd> <args>" to
+# $CALL_LOG. sudo logs then runs its args; id reports UID $2 (default 1000).
+make_pkg_stubs() {
+    STUB_DIR="$HOME/stub-bin"
+    CALL_LOG="$HOME/calls.log"
+    mkdir -p "$STUB_DIR"
+    : >"$CALL_LOG"
+    local tool
+    for tool in $1; do
+        printf '#!/bin/sh\necho "%s $*" >>"%s"\n' "$tool" "$CALL_LOG" >"$STUB_DIR/$tool"
+    done
+    printf '#!/bin/sh\necho "sudo" >>"%s"\nexec "$@"\n' "$CALL_LOG" >"$STUB_DIR/sudo"
+    printf '#!/bin/sh\necho %s\n' "${2:-1000}" >"$STUB_DIR/id"
+    chmod +x "$STUB_DIR"/*
+}
+
+run_pkg_install() {
+    run_helpers "
+        ux_info() { :; }
+        ux_error() { echo \"ERR: \$*\"; }
+        PATH='$STUB_DIR'
+        rc=0
+        pkg_install $1 || rc=\$?
+        echo \"rc=\$rc mgr=\$PKG_INSTALL_MANAGER\"
+    "
+}
+
+@test "pkg_install: apt-get updates then installs its package under sudo" {
+    make_pkg_stubs "apt-get yum brew"
+    run_pkg_install "apt=fd-find yum=fd-find brew=fd"
+    assert_success
+    assert_output "rc=0 mgr=apt"
+    run cat "$CALL_LOG"
+    assert_output "sudo
+apt-get update -qq
+sudo
+apt-get install -y fd-find"
+}
+
+@test "pkg_install: first manager on PATH wins in apt, yum, dnf, pacman, brew order" {
+    make_pkg_stubs "pacman yum"
+    run_pkg_install "apt=x pacman=p-pkg yum=y-pkg"
+    assert_output "rc=0 mgr=yum"
+    run cat "$CALL_LOG"
+    assert_output "sudo
+yum install -y y-pkg"
+}
+
+@test "pkg_install: a manager without a spec is skipped" {
+    make_pkg_stubs "yum pacman"
+    run_pkg_install "apt=z pacman=z-pkg"
+    assert_output "rc=0 mgr=pacman"
+    run cat "$CALL_LOG"
+    assert_output "sudo
+pacman -S --noconfirm z-pkg"
+}
+
+@test "pkg_install: root runs without sudo, brew never uses sudo" {
+    make_pkg_stubs "dnf" 0
+    run_pkg_install "dnf=rg"
+    assert_output "rc=0 mgr=dnf"
+    run cat "$CALL_LOG"
+    assert_output "dnf install -y rg"
+
+    make_pkg_stubs "brew"
+    run_pkg_install "brew=fd"
+    assert_output "rc=0 mgr=brew"
+    run cat "$CALL_LOG"
+    assert_output "brew install fd"
+}
+
+@test "pkg_install: no usable manager errors and returns 1 without installing" {
+    make_pkg_stubs "yum"
+    run_pkg_install "apt=a brew=b"
+    assert_output --partial "ERR: No supported package manager found"
+    assert_output --partial "rc=1 mgr="
+    run cat "$CALL_LOG"
+    assert_output ""
+}
+
+@test "pkg_install: propagates the install command's failure" {
+    make_pkg_stubs "pacman"
+    printf '#!/bin/sh\nexit 7\n' >"$STUB_DIR/pacman"
+    run_pkg_install "pacman=p"
+    assert_output "rc=7 mgr=pacman"
+}
+
+# zsh_autosuggestions is left out: its "install zsh first" hint names apt-get/brew.
+@test "simple install_* scripts call no package manager directly (#2145)" {
+    run grep -nE 'OSTYPE|(apt-get|yum|dnf|pacman|brew) (install|-S)' \
+        "$TOOLS_DIR"/install_{fd,ripgrep,bat,fzf,fasd,pet}.sh
+    assert_output ""
+}
+
 # --- static regression guard ---------------------------------------------------
 
 @test "no install*.sh pipes curl into a shell or runs sh -c \"\$(curl ...)\"" {

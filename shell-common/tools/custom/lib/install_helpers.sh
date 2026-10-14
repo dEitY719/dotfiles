@@ -1,10 +1,12 @@
 #!/bin/sh
 # shell-common/tools/custom/lib/install_helpers.sh
-# Remote-installer and post-install verification helpers for install*.sh
-# (issue #1801). Sourced by ../install*.sh.
+# Remote-installer, package-manager and post-install verification helpers for
+# install*.sh (issues #1801, #2145). Sourced by ../install*.sh after init.sh.
 #
-# Pure functions with no ux_* output, so they stay usable without ux_lib
-# (init.sh loads it even under DOTFILES_TEST_MODE=1 since #2144).
+# run_remote_installer / verify_installed_binary print nothing, so they stay
+# usable without ux_lib. pkg_install reports through ux_info / ux_error, which
+# init.sh always provides (ux_lib, or its own fallback) -- even under
+# DOTFILES_TEST_MODE=1 since #2144.
 
 # run_remote_installer <url> [installer-args...]
 # Download to a temp file first: `curl | sh` reports success on a failed
@@ -36,4 +38,39 @@ verify_installed_binary() {
     fi
     [ $# -gt 0 ] || set -- --version
     "$bin" "$@"
+}
+
+# pkg_install <manager>=<package>...
+#   e.g. pkg_install apt=fd-find yum=fd-find pacman=fd brew=fd
+# Installs with the first manager that is both on PATH and given a spec, in
+# the order the old per-script branches checked them: apt(-get), yum, dnf,
+# pacman, brew. System managers run under sudo unless already root; brew never
+# does. Sets PKG_INSTALL_MANAGER to the manager used. No usable manager:
+# ux_error + return 1; otherwise returns the install command's status.
+pkg_install() {
+    local mgr bin spec pkg sudo=""
+    PKG_INSTALL_MANAGER=""
+    [ "$(id -u)" -eq 0 ] || sudo=sudo
+    for mgr in apt yum dnf pacman brew; do
+        pkg=""
+        for spec in "$@"; do
+            case "$spec" in "$mgr="*) pkg="${spec#*=}" ;; esac
+        done
+        bin="$mgr"
+        [ "$mgr" = apt ] && bin=apt-get
+        if [ -z "$pkg" ] || ! command -v "$bin" >/dev/null 2>&1; then
+            continue
+        fi
+        PKG_INSTALL_MANAGER="$mgr"
+        ux_info "Installing $pkg via $bin..."
+        case "$mgr" in
+            apt) $sudo apt-get update -qq && $sudo apt-get install -y "$pkg" ;;
+            yum | dnf) $sudo "$bin" install -y "$pkg" ;;
+            pacman) $sudo pacman -S --noconfirm "$pkg" ;;
+            brew) brew install "$pkg" ;;
+        esac
+        return
+    done
+    ux_error "No supported package manager found (need one of: $*)"
+    return 1
 }

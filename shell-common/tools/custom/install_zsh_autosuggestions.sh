@@ -6,6 +6,7 @@ set -e
 
 # Initialize common tools environment
 source "$(dirname "$0")/init.sh" || exit 1
+. "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
 # Check if zsh-autosuggestions is already installed
 _check_installed() {
@@ -34,48 +35,12 @@ _check_installed() {
 
 # Install zsh-autosuggestions via system package manager
 _install_zsh_autosuggestions() {
-    local os_type=""
-
-    # Detect OS
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        os_type="linux"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        os_type="macos"
-    else
-        ux_error "Unsupported OS: $OSTYPE"
-        return 1
-    fi
-
-    ux_info "Installing zsh-autosuggestions for $os_type..."
-
-    if [ "$os_type" = "linux" ]; then
-        # For Linux (including WSL2)
-        if command -v apt-get &>/dev/null; then
-            ux_info "Updating package manager..."
-            sudo apt-get update -qq
-            ux_info "Installing zsh-autosuggestions..."
-            sudo apt-get install -y zsh-autosuggestions
-        elif command -v yum &>/dev/null; then
-            ux_info "Installing zsh-autosuggestions via git (yum package not available)..."
-            _install_git_method
-            return $?
-        elif command -v pacman &>/dev/null; then
-            ux_info "Installing zsh-autosuggestions via pacman..."
-            sudo pacman -S --noconfirm zsh-autosuggestions
-        else
-            ux_error "No supported package manager found (apt-get, yum, or pacman required)"
-            return 1
-        fi
-    elif [ "$os_type" = "macos" ]; then
-        # For macOS
-        if command -v brew &>/dev/null; then
-            ux_info "Installing zsh-autosuggestions via Homebrew..."
-            brew install zsh-autosuggestions
-        else
-            ux_error "Homebrew is required for macOS installation"
-            ux_info "Install Homebrew from: https://brew.sh"
-            return 1
-        fi
+    ux_info "Installing zsh-autosuggestions..."
+    # yum has no package: falls through to the git method, as before
+    if ! pkg_install apt=zsh-autosuggestions pacman=zsh-autosuggestions brew=zsh-autosuggestions; then
+        ux_info "Installing zsh-autosuggestions via git (no package available)..."
+        _install_git_method
+        return $?
     fi
 
     ux_success "zsh-autosuggestions installed successfully."
