@@ -61,12 +61,6 @@ _phase_load_libs() {
 
     # Dotfiles source locations
     CLAUDE_SETTINGS_SOURCE="${CLAUDE_DOTFILES}/settings.json"
-    CLAUDE_STATUSLINE_SOURCE="${CLAUDE_DOTFILES}/statusline-command.sh"
-    CLAUDE_DOCS_SOURCE="${CLAUDE_DOTFILES}/docs"
-    CLAUDE_GLOBAL_MEMORY_SOURCE="${CLAUDE_DOTFILES}/global-memory"
-    CLAUDE_WORKFLOWS_SOURCE="${CLAUDE_DOTFILES}/workflows"
-    CLAUDE_MD_SOURCE="${CLAUDE_DOTFILES}/CLAUDE.md"
-    CLAUDE_KEYBINDINGS_SOURCE="${CLAUDE_DOTFILES}/keybindings.json"
 
     # Load UX library (unified library at shell-common/tools/ux_lib/)
     UX_LIB="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
@@ -512,12 +506,16 @@ _phase_preflight() {
     # 필수 dotfiles source 검증
     # settings.json 은 이제 tracked SSOT (#584) — 부트스트랩/템플릿 단계 불필요.
     [ -f "$CLAUDE_SETTINGS_SOURCE" ]      || log_error_and_exit "settings.json 없음: $CLAUDE_SETTINGS_SOURCE"
-    [ -f "$CLAUDE_STATUSLINE_SOURCE" ]    || log_error_and_exit "statusline-command.sh 없음: $CLAUDE_STATUSLINE_SOURCE"
-    [ -d "$CLAUDE_DOCS_SOURCE" ]          || log_error_and_exit "docs 디렉토리 없음: $CLAUDE_DOCS_SOURCE"
-    [ -d "$CLAUDE_GLOBAL_MEMORY_SOURCE" ] || log_error_and_exit "global-memory 없음: $CLAUDE_GLOBAL_MEMORY_SOURCE"
-    [ -d "$CLAUDE_WORKFLOWS_SOURCE" ]    || log_error_and_exit "workflows 디렉토리 없음: $CLAUDE_WORKFLOWS_SOURCE"
-    [ -f "$CLAUDE_MD_SOURCE" ]            || log_error_and_exit "CLAUDE.md 없음: $CLAUDE_MD_SOURCE"
-    [ -f "$CLAUDE_KEYBINDINGS_SOURCE" ]   || log_error_and_exit "keybindings.json 없음: $CLAUDE_KEYBINDINGS_SOURCE"
+    # 나머지 소스는 _claude_link_table 의 src 칸에서 파생 — 행을 추가하면 검증도
+    # 따라온다 (#2141). dir 행(-)과 @shared 는 dotfiles 소스가 아니라 건너뛴다.
+    local _pf_src _pf_rel _pf_path
+    while IFS='|' read -r _pf_src _pf_rel _ <&3; do
+        case "$_pf_src" in - | @*) continue ;; esac
+        _pf_path=$(_claude_link_src "$_pf_src")
+        [ -e "$_pf_path" ] || log_error_and_exit "${_pf_rel} 없음: $_pf_path"
+    done 3<<EOF
+$(_claude_link_table)
+EOF
 
     # Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
     # helper sourced via tools/custom/lib/claude_accounts_auth.sh (above)
