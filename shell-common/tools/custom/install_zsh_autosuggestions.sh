@@ -35,12 +35,16 @@ _check_installed() {
 
 # Install zsh-autosuggestions via system package manager
 _install_zsh_autosuggestions() {
-    # yum has no package: falls through to the git method, as before
-    if ! pkg_install apt=zsh-autosuggestions pacman=zsh-autosuggestions brew=zsh-autosuggestions; then
+    local rc=0
+    pkg_install apt=zsh-autosuggestions pacman=zsh-autosuggestions brew=zsh-autosuggestions || rc=$?
+    # rc 2 = no usable manager (yum has no package): git method, as before.
+    # A real install failure still aborts instead of being masked by git.
+    if [ "$rc" -eq 2 ]; then
         ux_info "Installing zsh-autosuggestions via git (no package available)..."
         _install_git_method
         return $?
     fi
+    [ "$rc" -eq 0 ] || return "$rc"
 
     ux_success "zsh-autosuggestions installed successfully."
 }
