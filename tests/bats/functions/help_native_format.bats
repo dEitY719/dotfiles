@@ -54,3 +54,27 @@ NATIVE_CHECK='
         "${DOTFILES_ROOT}/shell-common" "${DOTFILES_ROOT}/bash" "${DOTFILES_ROOT}/zsh"
     assert_failure
 }
+
+# Ratchet for topics added after #2136: no adapter backfills them any more, so
+# every registered topic must carry the summary helper and dash alias itself.
+# Only these pre-existing exceptions may lack one; shrink the list, never grow it.
+LEGACY_NON_NATIVE=' del_file_help devx_help my_help_impl
+show_devx_pr_verify_live_backend_identity_help zsh_autosuggestions_install_help
+gh_audit_builtin_workflows_help ghes_mirror_help gh_flow_help
+gh_pr_approve_help gh_pr_reply_help gh_pr_review_help
+mirror_pages_activate_help sync_to_deploy_help '
+
+@test "every registered help topic is native, except the legacy allowlist" {
+    run_in_bash '
+        legacy=" $(printf "%s" "'"$LEGACY_NON_NATIVE"'" | tr "\n" " ") "
+        for k in "${!HELP_DESCRIPTIONS[@]}"; do
+            case "$legacy" in *" $k "*) continue ;; esac
+            declare -F "_${k}_summary" >/dev/null || echo "MISSING summary $k"
+            a="$(printf "%s" "${k%_help}" | tr _ -)-help"
+            alias "$a" >/dev/null 2>&1 || echo "MISSING alias $a"
+        done
+        echo done
+    '
+    assert_success
+    assert_output "done"
+}

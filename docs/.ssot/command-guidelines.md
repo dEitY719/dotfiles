@@ -87,10 +87,10 @@ row 함수는 화면 출력뿐 아니라 **커맨드 레퍼런스 문서의 데�
   - `--list` · `list` · `section` · `sections` → 섹션 목록
   - `--all` · `all` → full
   - 그 외 → 해당 섹션 row (모르는 섹션은 에러 + 목록)
-- **dash alias**: 정의 파일에 `alias <topic-dash>-help='<topic>_help'`. zsh 에서도 함수가 아니라 **alias** 로만 둔다(#1287 — 함수로 두면 `my-help find` 가 topic 을 두 번 표시). 비대화형·`no_aliases` 호출은 `my_help.sh` 의 `command_not_found_handler` 가 `*-help` → `*_help` 로 이어준다.
+- **dash alias**: 정의 파일에 `alias <topic-dash>-help='<topic>_help'`. zsh 에서도 함수가 아니라 **alias** 로만 둔다(#1287 — 함수로 두면 `my-help find` 가 topic 을 두 번 표시). dotfiles 를 로드한 zsh 에서 alias 가 확장되지 않는 호출(`zsh -c` 스크립트, `setopt no_aliases`)은 `my_help.sh` 의 `command_not_found_handler` 가 `*-help` → `*_help` 로 이어준다 — dotfiles 를 로드하지 않은 셸에는 이 안전망이 없다.
 - **등록**: 아래 "등록" 절의 `_register_help`.
 
-`tests/bats/functions/help_native_format.bats` 가 예전 어댑터 대상 57 topic 의 summary helper·dash alias 를 bash/zsh 양쪽에서 고정한다.
+`tests/bats/functions/help_native_format.bats` 가 예전 어댑터 대상 57 topic 의 summary helper·dash alias 를 bash/zsh 양쪽에서 고정하고, 등록된 모든 topic 에 같은 규칙을 강제한다(기존 예외 13개만 allowlist — 줄이기만 한다). dispatcher 인자 동작은 `tests/integration/test_help_compact_policy.py` 가 검증한다.
 
 ## 네이밍 규칙 (help 함수)
 
