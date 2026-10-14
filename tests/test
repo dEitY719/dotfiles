@@ -437,19 +437,39 @@ _resolve_bats_file_timeout() {
     _resolve_positive_int "${BATS_FILE_TIMEOUT:-}" 900
 }
 
+# Run "$@" under a $1-second cap that kills its whole process tree (#2165).
+# Plain `timeout` makes itself a new process group and signals that group on
+# expiry, so grandchildren (a hung git, a daemon) die too — `--foreground`
+# only killed the direct child. That group sits outside the runner's phase
+# group, so an interrupt's TERM/INT/HUP to this shell is forwarded to it.
+# Returns timeout's status (124 timed out, 137 the -k 10 follow-up KILL).
+_run_with_tree_timeout() {
+    local limit="$1" tp rc
+    shift
+    if ! command -v timeout >/dev/null 2>&1; then
+        "$@"
+        return
+    fi
+    timeout -k 10 "$limit" "$@" &
+    tp=$!
+    trap 'kill -TERM -- "-$tp" 2>/dev/null || kill -TERM "$tp" 2>/dev/null' TERM INT HUP
+    # A trapped signal interrupts `wait`; wait again until timeout is reaped.
+    while :; do
+        wait "$tp"
+        rc=$?
+        kill -0 "$tp" 2>/dev/null || break
+    done
+    trap - TERM INT HUP
+    return "$rc"
+}
+
 # One xargs worker: run bats on one file, its output to <out>/<idx>.log and
 # its verdict to <out>/<idx>.status (0 pass, 1 fail, 124 file timeout).
-# Exported (export -f) so `xargs ... bash -c` can call it. `timeout
-# --foreground` keeps bats in the runner's process group — plain `timeout`
-# moves itself into a new one, which the interrupt cleanup could not reach.
+# Exported (export -f) so `xargs ... bash -c` can call it.
 _bats_run_file() {
     local bats="$1" out="$2" idx="$3" f="$4" limit rc start=$SECONDS
     limit="$(_resolve_bats_file_timeout)"
-    if command -v timeout >/dev/null 2>&1; then
-        timeout --foreground -k 10 "$limit" "$bats" "$f" >"$out/$idx.log" 2>&1
-    else
-        "$bats" "$f" >"$out/$idx.log" 2>&1
-    fi
+    _run_with_tree_timeout "$limit" "$bats" "$f" >"$out/$idx.log" 2>&1
     rc=$?
     case "$rc" in
     0) ;;
@@ -724,7 +744,7 @@ run_bats() {
     # shell locals.
     BATS_TEST_TIMEOUT="$(_resolve_bats_timeout)"
     export BATS_TEST_TIMEOUT
-    export -f _bats_run_file _resolve_bats_file_timeout _resolve_positive_int
+    export -f _bats_run_file _run_with_tree_timeout _resolve_bats_file_timeout _resolve_positive_int
 
     local bats_files=()
     while IFS= read -r f; do
@@ -877,13 +897,7 @@ _git_hook_run_script() {
         MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}"
         MISE_STATE_DIR="${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"
         MISE_CACHE_DIR="${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}")
-    # --foreground keeps the script in the runner's process group so an
-    # interrupt's group kill still reaches it (see _bats_run_file).
-    if command -v timeout >/dev/null 2>&1; then
-        "${isolate[@]}" timeout --foreground -k 10 "$limit" bash "$script" >"$log" 2>&1
-    else
-        "${isolate[@]}" bash "$script" >"$log" 2>&1
-    fi
+    _run_with_tree_timeout "$limit" "${isolate[@]}" bash "$script" >"$log" 2>&1
     rc=$?
     # 124 = timed out; 137 is the -k 10 follow-up KILL (script ignored TERM)
     # only when the cap actually elapsed — an OOM kill is not a timeout.
