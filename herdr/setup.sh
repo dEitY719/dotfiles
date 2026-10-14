@@ -54,7 +54,7 @@ fi
 
 # Same link -> no-op; real file -> backed up to config.toml.original (#2138).
 dotfiles_ensure_link "${HERDR_CONFIG_SRC}" "${HERDR_CONFIG_LINK}" || exit 1
-ux_success "Linked: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
+if [ -L "${HERDR_CONFIG_LINK}" ]; then ux_success "Linked: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"; fi
 
 # ============================================================================
 # Part 2: plugin bootstrap (soft-fail)

@@ -31,4 +31,4 @@ fi
 # Same link -> no-op; real file -> backed up to config.original (#806, #2138).
 dotfiles_ensure_link "${SSH_CONFIG_SRC}" "${SSH_CONFIG_LINK}" || exit 1
 chmod 600 "${SSH_CONFIG_SRC}"
-ux_success "Linked: ~/.ssh/config → ${SSH_CONFIG_SRC}"
+if [ -L "${SSH_CONFIG_LINK}" ]; then ux_success "Linked: ~/.ssh/config → ${SSH_CONFIG_SRC}"; fi

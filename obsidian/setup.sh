@@ -32,4 +32,4 @@ chmod +x "${OBSIDIAN_BIN_SRC}"
 
 # Same link -> no-op; real file -> backed up to obsidian.original (#2138).
 dotfiles_ensure_link "${OBSIDIAN_BIN_SRC}" "${OBSIDIAN_BIN_LINK}" || exit 1
-ux_success "Linked: ~/.local/bin/obsidian → ${OBSIDIAN_BIN_SRC}"
+if [ -L "${OBSIDIAN_BIN_LINK}" ]; then ux_success "Linked: ~/.local/bin/obsidian → ${OBSIDIAN_BIN_SRC}"; fi
