@@ -4010,6 +4010,21 @@ metadata:
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
 }
 
+@test "issue_watcher_cron: a disabled plugin with no flat copy dispatches nothing" {
+    printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.json"
+    _run_tick
+    assert_failure
+    assert_output --partial "has no /gh-flow:issue entry point"
+    _refute_logged "gwt spawn"
+}
+
+@test "issue_watcher_cron: a malformed settings.json leaves an installed plugin enabled" {
+    printf '{not json\n' >"${HOME}/.claude-personal/settings.json"
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+}
+
 @test "issue_watcher_cron: no plugin dispatches the Agent Factory copy by its anchor" {
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
