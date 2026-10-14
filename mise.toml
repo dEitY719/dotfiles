@@ -44,7 +44,11 @@ description = "Shell lint (shellcheck + shfmt diff)"
 # pins shell=bash so its bash/zsh-branching files don't get flagged with POSIX-sh
 # false positives (SC3xxx). Every other tracked *.sh/*.bash (git/ scripts/ claude/
 # setup.sh */setup.sh tests/ ...) plus the extensionless git hooks is checked at
-# -S warning (#2150) — 100% of `git ls-files '*.sh' '*.bash'`.
+# -S warning (#2150) — 100% of `git ls-files '*.sh' '*.bash'`. Deliberately one
+# notch below bash/ + shell-common/ (default severity = style): style/info findings
+# there were never triaged, so this is the current ratchet, not a permanent tier.
+# Other extensionless scripts (tests/test, obsidian/bin/obsidian) are not covered.
+# The git/hooks/* pathspecs assume every tracked file there is a shell hook.
 # shfmt covers bash/ git/ scripts/ + root setup.sh (#2150). shell-common/ stays
 # out — its formatting conventions diverge widely and reformatting 278 files
 # would bury blame; that is a separate effort.
