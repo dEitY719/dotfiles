@@ -1,14 +1,13 @@
 """dotfiles_tools.issue_watcher.select (#2157).
 
-Two layers: explicit expectations per op, and a golden parity check that runs
-the legacy jq/awk filters (IW_SELECT_IMPL=shell) on the same fixtures and
-requires byte-identical stdout and the same exit code.
+Explicit expectations per op. The golden parity check against the legacy jq/awk
+filters left with the IW_SELECT_IMPL=shell rollback (#2173); these cases are what
+it proved the Python ops match.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +16,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures" / "issue_watcher"
-LEGACY = ROOT / "shell-common/tools/custom/lib/issue_watcher_select_shell.sh"
 US = "\x1f"
 
 
@@ -29,16 +27,6 @@ def run_python(op: list[str], fixture: str, env: dict[str, str] | None = None) -
         capture_output=True,
         cwd=ROOT / "tools/py",
         env=env,
-        check=False,
-    )
-    return proc.returncode, proc.stdout.decode()
-
-
-def run_shell(op: list[str], fixture: str) -> tuple[int, str]:
-    proc = subprocess.run(
-        ["sh", "-c", '. "$0" && _iw_sel_shell "$@"', str(LEGACY), *op],
-        input=(FIXTURES / fixture).read_bytes(),
-        capture_output=True,
         check=False,
     )
     return proc.returncode, proc.stdout.decode()
@@ -84,13 +72,6 @@ CASES = [
 @pytest.mark.parametrize(("op", "fixture", "code", "out"), CASES)
 def test_python_select(op: list[str], fixture: str, code: int, out: str) -> None:
     assert run_python(op, fixture) == (code, out)
-
-
-@pytest.mark.skipif(shutil.which("jq") is None, reason="legacy filters need jq")
-@pytest.mark.parametrize(("op", "fixture", "code", "out"), CASES)
-def test_shell_python_parity(op: list[str], fixture: str, code: int, out: str) -> None:
-    """Golden: the rollback path answers exactly what the Python path answers."""
-    assert run_shell(op, fixture) == run_python(op, fixture)
 
 
 def test_repo_order_empty_watch_list() -> None:

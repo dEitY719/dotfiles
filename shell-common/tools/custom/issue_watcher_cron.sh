@@ -65,23 +65,9 @@ fi
 # shellcheck source=/dev/null
 . "${_IW_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" || exit 1
 
-# Candidate-selection ops (#2157): Python by default (dotfiles_tools.issue_watcher.select,
-# via cron_py), IW_SELECT_IMPL=shell rolls back to the legacy jq/awk filters for
-# one release. Same op names, same stdin/stdout/exit contract either way.
-case "${IW_SELECT_IMPL:-python}" in
-shell)
-    # shellcheck source=/dev/null
-    . "${_IW_SHELL_COMMON}/tools/custom/lib/issue_watcher_select_shell.sh" || exit 1
-    _iw_sel() { _iw_sel_shell "$@"; }
-    ;;
-python)
-    _iw_sel() { cron_py dotfiles_tools.issue_watcher.select "$@"; }
-    ;;
-*)
-    ux_error "IW_SELECT_IMPL must be python or shell (got: ${IW_SELECT_IMPL})."
-    exit 1
-    ;;
-esac
+# Candidate-selection ops (#2157): dotfiles_tools.issue_watcher.select via cron_py.
+# The legacy jq/awk rollback path was removed after one release (#2173).
+_iw_sel() { cron_py dotfiles_tools.issue_watcher.select "$@"; }
 
 # ============================================================
 # Constants (SSOT for the watch cycle)
@@ -3071,15 +3057,13 @@ main() {
         exit 1
     fi
 
-    # The candidate-selection ops run in Python unless rolled back (#2157).
-    # No python3 >= 3.10 (RHEL 8 ships 3.6) degrades to the jq rollback rather
-    # than stopping the watcher: both paths answer the same (golden parity).
-    if [ "${IW_SELECT_IMPL:-python}" = "python" ] &&
-        ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
-        ux_warning "python3 (>= 3.10) not found in PATH — using the jq candidate selection (IW_SELECT_IMPL=shell)."
-        # shellcheck source=/dev/null
-        . "${_IW_SHELL_COMMON}/tools/custom/lib/issue_watcher_select_shell.sh" || exit 1
-        _iw_sel() { _iw_sel_shell "$@"; }
+    # The candidate-selection ops run in Python (#2157); the jq rollback is gone
+    # (#2173), so without python3 >= 3.10 (RHEL 8 ships 3.6) there is no way to
+    # pick a candidate. Refusing loudly beats a tick that silently selects nothing.
+    if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
+        ux_error "python3 (>= 3.10) not found in PATH — cannot run the candidate selection."
+        ux_info "Install python3 >= 3.10, or add it to the cron PATH."
+        exit 1
     fi
 
     if [ ! -f "$(_iw_repos_file)" ]; then

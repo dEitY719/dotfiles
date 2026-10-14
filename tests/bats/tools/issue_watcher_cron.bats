@@ -2950,33 +2950,14 @@ _two_repo_fixture() {
 }
 
 # ---------------------------------------------------------------------------
-# Candidate-selection implementation switch (issue #2157)
+# Candidate-selection runtime (issue #2157, rollback removed in #2173)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: IW_SELECT_IMPL=shell rollback dispatches the same issue" {
-    _run_tick "IW_SELECT_IMPL=shell"
-    assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11"
-}
-
-@test "issue_watcher_cron: missing python3 falls back to the jq selection with a warning" {
-    # -u: a parent IW_SELECT_IMPL=shell would skip the python path and its fallback (#2182)
-    _run_tick -u IW_SELECT_IMPL "PATH=$(_path_without python3)"
-    assert_success
-    assert_output --partial "using the jq candidate selection"
-    _assert_logged "agent prompt iw-dotfiles-issue-11"
-}
-
-@test "issue_watcher_cron: missing python3 is fine under IW_SELECT_IMPL=shell" {
-    _run_tick "PATH=$(_path_without python3)" "IW_SELECT_IMPL=shell"
-    assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11"
-}
-
-@test "issue_watcher_cron: an unknown IW_SELECT_IMPL is refused" {
-    _run_tick "IW_SELECT_IMPL=perl"
+@test "issue_watcher_cron: missing python3 is refused, not silently skipped" {
+    _run_tick "PATH=$(_path_without python3)"
     assert_failure
-    assert_output --partial "IW_SELECT_IMPL must be python or shell"
+    assert_output --partial "python3 (>= 3.10) not found"
+    _refute_logged "agent prompt"
 }
 
 # ---------------------------------------------------------------------------

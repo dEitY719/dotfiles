@@ -2,9 +2,9 @@
 
 The shell keeps every gh/herdr call, the lock and the logging; it pipes the JSON
 gh printed into one of the ops below and reads the answer back. Each op mirrors
-the jq/awk filter it replaced byte for byte -- the legacy filters live in
-shell-common/tools/custom/lib/issue_watcher_select_shell.sh (IW_SELECT_IMPL=shell)
-and tests/py/test_issue_watcher_select.py proves both agree on every fixture.
+the jq/awk filter it replaced byte for byte; the IW_SELECT_IMPL=shell rollback was
+removed after one release (#2173) and tests/py/test_issue_watcher_select.py pins
+the outputs.
 
 Usage: python3 -s -E -m dotfiles_tools.issue_watcher.select <op> [arg] < input
 
