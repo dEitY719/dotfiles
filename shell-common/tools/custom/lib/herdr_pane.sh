@@ -145,7 +145,7 @@ _hp_resolve_config_dir() {
         # Internal-PC single-account override (issue #571): the multi-account
         # layout is off there, so this branch must run before account
         # resolution — an empty CLAUDE_ENABLED_ACCOUNTS must not fail the tick.
-        if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+        if [ "$(_dotfiles_setup_mode_accounts)" = "single" ]; then
             _cfg_dir="$HOME/.claude"
         else
             _account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"

@@ -34,15 +34,15 @@ export CLAUDE_SKILLS_PATH="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills"
 # we overwrite any stale value inherited from a prior shell-init cycle.
 # Per-PC overrides happen below via claude.local.sh, which is sourced
 # AFTER this block and can freely reassign these vars.
-_claude_setup_mode=""
+_claude_accounts="multi"
 _claude_setup_mode_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
 if [ -r "$_claude_setup_mode_lib" ]; then
     # shellcheck disable=SC1091
     . "$_claude_setup_mode_lib"
-    _claude_setup_mode="$(_dotfiles_setup_mode)"
+    _claude_accounts="$(_dotfiles_setup_mode_accounts)"
 fi
-case "$_claude_setup_mode" in
-    internal)
+case "$_claude_accounts" in
+    single)
         export CLAUDE_DEFAULT_ACCOUNT="work"
         export CLAUDE_ENABLED_ACCOUNTS="work"
         ;;
@@ -51,11 +51,9 @@ case "$_claude_setup_mode" in
         export CLAUDE_ENABLED_ACCOUNTS="personal work work1"
         ;;
 esac
-unset _claude_setup_mode
+unset _claude_accounts _claude_setup_mode_lib
 
 # Load PC-local overrides (gitignored, see claude.local.example).
-_claude_env_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_claude_env_root/env/claude.local.sh" ]; then
-    . "$_claude_env_root/env/claude.local.sh"
-fi
-unset _claude_env_root
+_local_env_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/local_env.sh"
+[ -r "$_local_env_lib" ] && . "$_local_env_lib" && _dotfiles_source_local claude
+unset _local_env_lib

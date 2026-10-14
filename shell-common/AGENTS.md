@@ -54,7 +54,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 # Decision Tree (새 파일을 어디에 둘지)
 
 1. 단순 alias? → `aliases/*.sh`
-2. env 변수 export? → `env/*.sh` — 사내 식별값(호스트·URL·경로)은 tracked 금지: `env/<topic>.local.sh`(gitignored, `env/<topic>.sh` 가 source) + `.local.example`(가짜 placeholder), 미설정 시 경고/skip (#1944)
+2. env 변수 export? → `env/*.sh` — 사내 식별값(호스트·URL·경로)은 tracked 금지: `env/<topic>.local.sh`(gitignored, `env/<topic>.sh` 가 `_dotfiles_source_local <topic>` 로 source — `util/local_env.sh`) + `.local.example`(가짜 placeholder), 미설정 시 경고/skip (#1944). 모드별 분기는 `= internal` 직접 비교 대신 정책 함수(`_dotfiles_setup_mode_is/_accounts/_gh_host/_ca/_proxy`) 사용 (#2158)
    - 개인 비밀값(API 키·쿠키)은 env 로 export 하지 않는다 → repo `.enc.env` + `secret-run` 실행 시점 주입 (`functions/secret_run.sh`, #2096). 새 키 추가 절차 SSOT: `sops-help secrets`. 사내 식별값·AWS 값은 `.enc.env` 금지
 3. help 함수 (apt_help, git_help)? → `functions/*_help.sh`
 4. 셸에서 호출하는 유틸 함수? → `functions/*.sh`
@@ -73,7 +73,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 | Utility function | `functions/*.sh` | yes | `devx()`, `gitlog()` — 사용자가 직접 치는 함수면 정의 파일 끝에 `_register_func <name> "설명"` 을 둬야 `my-help` 팔레트 `/func` 에 뜬다 (#1740, #2135) |
 | 3rd-party wrapper | `tools/integrations/*.sh` | yes | `npm.sh`, `docker.sh` |
 | Executable script | `tools/custom/*.sh` (+ `lib/*.sh`) | **no** | `install_npm.sh` · `aicron.sh` + `lib/aicron_*.sh` · `session_doctor_cron.sh` + `lib/session_doctor_*.sh` · cron 진입점 공용 부트스트랩·lock `lib/cron_common.sh` (#2144) — Python 로직은 `cron_py` 로 `tools/py/dotfiles_tools` 호출, 경계 규칙 `docs/.ssot/shell-vs-python.md` (#2157) · `my_help_preview.sh` (my-help 팔레트 preview) · `diagnose_internal.sh` (사내 PC read-only 진단, #2099) · `claude_accounts.sh` + `lib/claude_accounts_{auth,lifecycle,skills}.sh` (`claude_accounts` 함수는 `integrations/claude.sh` 에 남아 위임; auth lib 은 셸 상주, 나머지 `_claude_*` 는 lazy-load wrapper, `claude/setup.sh` 는 lib 직접 source, #2146) · 셸 상태를 안 바꾸는 디스패처 `gcp_scan.sh` (+ `lib/gcp_scan_{probe,conflict,lists,run}.sh`) · `gh_audit_builtin_workflows.sh` · `ghes_mirror.sh` · `ai_usage.sh` · `wsl_check.sh` — `~/.local/bin/<dash-name>` 노출은 `config/symlinks.conf`, `functions/` 의 동명 함수는 thin wrapper(`ghes_mirror` 는 clone 경로를 받아 `cd`), 나머지 디스패처는 #2195 (#2155) |
-| Guard-free pure lib | `util/setup_mode_read.sh`, `util/win_home.sh`, `util/help_registry.sh` | **no** (각 소비자가 직접 source — hook/스크립트 포함; `help_registry.sh` 는 loader 가 functions/ 앞에서 source) | `_dotfiles_setup_mode`, `_dotfiles_setup_mode_proxy`, `_win_home`, `_register_help` |
+| Guard-free pure lib | `util/setup_mode_read.sh`, `util/local_env.sh`, `util/win_home.sh`, `util/help_registry.sh` | **no** (각 소비자가 직접 source — hook/스크립트 포함; `help_registry.sh` 는 loader 가 functions/ 앞에서 source) | `_dotfiles_setup_mode` + 정책 질의 `_dotfiles_setup_mode_{is,accounts,gh_host,ca,proxy}` (#2158), `_dotfiles_source_local`, `_win_home`, `_register_help` |
 | Setup lib (pure) | `lib/setup/{common,link,runner,mode}.sh` | **no** (setup 스크립트가 `SHELL_COMMON`/`DOTFILES_ROOT` export 후 직접 source) | `dotfiles_ensure_link`, `dotfiles_ensure_copy_once`, `dotfiles_setup_mode_resolve`, `step_run` (#2137); `setup.d/*.sh` = `setup.sh` 전용 SRP 조각 (#2140) |
 | Shell-specific | `bash/*.bash` 또는 `zsh/*.zsh` | varies | bash prompt setup |
 | Project-specific | `projects/<name>/*.sh` | yes | finrx utilities |

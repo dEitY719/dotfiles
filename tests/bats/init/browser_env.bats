@@ -40,6 +40,7 @@ _fake_shell_common() {
     mkdir -p "$root/env"
     ln -sfn "${SHELL_COMMON}/functions" "$root/functions"
     ln -sfn "${SHELL_COMMON}/tools" "$root/tools"
+    ln -sfn "${SHELL_COMMON}/util" "$root/util"
     printf '%s' "$root"
 }
 

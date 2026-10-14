@@ -36,11 +36,9 @@ export NO_PROXY="$no_proxy"
 #
 # Note: When sourcing, $0 may be shell name (bash, -zsh, etc), so we use
 # SHELL_COMMON (or DOTFILES_ROOT) for reliable path resolution.
-_proxy_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_proxy_root/env/proxy.local.sh" ]; then
-    . "$_proxy_root/env/proxy.local.sh"
-fi
-unset _proxy_root
+_local_env_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/local_env.sh"
+[ -r "$_local_env_lib" ] && . "$_local_env_lib" && _dotfiles_source_local proxy
+unset _local_env_lib
 
 # ============================================================
 # NPM proxy note

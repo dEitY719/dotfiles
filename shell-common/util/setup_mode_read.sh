@@ -6,6 +6,12 @@
 # tools/custom/lib/install_helpers.sh: every consumer (shell init, hooks,
 # claude/plugin/*.sh, bats) must be able to source this and get the function,
 # including under DOTFILES_TEST_MODE=1. Pure function, no ux_* dependency.
+#
+# Re-source guard (#2158): one shell start sources this from several files.
+# Keyed on the LAST function defined below, not _dotfiles_setup_mode, so an
+# older vendored copy (skill repos) loaded first never hides the policy
+# functions this copy adds. Output-free, so the guard-free contract holds.
+command -v _dotfiles_setup_mode_ca >/dev/null 2>&1 && return 0
 
 # _dotfiles_setup_mode — read ~/.dotfiles-setup-mode and canonicalise.
 #
@@ -45,5 +51,44 @@ _dotfiles_setup_mode_proxy() {
         internal)        echo "required" ;;
         public|external) echo "forbidden" ;;
         *)               echo "" ;;
+    esac
+}
+
+# Policy queries (#2158) — consumers ask "what does this mode imply" instead of
+# comparing `= internal` themselves, so a new mode is one edit here. Each takes
+# an optional mode (default: current, DOTFILES_SETUP_MODE env first via
+# _dotfiles_setup_mode) and always prints a value.
+
+# _dotfiles_setup_mode_is <mode> — true when the current mode is <mode>.
+_dotfiles_setup_mode_is() {
+    [ "$(_dotfiles_setup_mode)" = "${1-}" ]
+}
+
+# _dotfiles_setup_mode_accounts [mode] — Claude account layout: "single"
+# (internal: ~/.claude only, claude-accounts unused, #571) or "multi".
+_dotfiles_setup_mode_accounts() {
+    case "${1-$(_dotfiles_setup_mode)}" in
+        internal) echo "single" ;;
+        *)        echo "multi" ;;
+    esac
+}
+
+# _dotfiles_setup_mode_gh_host [mode] — GitHub host class: "ghes" (internal,
+# host from DOTFILES_GHES_HOST) or "github" (github.com).
+_dotfiles_setup_mode_gh_host() {
+    case "${1-$(_dotfiles_setup_mode)}" in
+        internal) echo "ghes" ;;
+        *)        echo "github" ;;
+    esac
+}
+
+# _dotfiles_setup_mode_ca [mode] — CA trust: "custom" (internal: corporate
+# proxy CA via security.local.sh), "system" (public|external), "none"
+# (unset/unknown mode). Keep this the last definition: the guard above keys on it.
+_dotfiles_setup_mode_ca() {
+    case "${1-$(_dotfiles_setup_mode)}" in
+        internal)        echo "custom" ;;
+        public|external) echo "system" ;;
+        *)               echo "none" ;;
     esac
 }

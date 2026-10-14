@@ -312,14 +312,14 @@ claude_yolo() {
     shift   # sentinel 제거
 
     # Internal-PC single-account override (issue #571, F-2). When
-    # ~/.dotfiles-setup-mode == internal, the multi-account layout is
+    # ~/.dotfiles-setup-mode is internal, the multi-account layout is
     # intentionally disabled — Claude Code config lives at ~/.claude/ and
     # `claude-accounts` is not in use. This branch runs BEFORE
     # _claude_resolve_account so a sandbox PC with an unset/empty
     # CLAUDE_ENABLED_ACCOUNTS can't trip the "Unknown account" path.
-    if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+    if [ "$(_dotfiles_setup_mode_accounts)" = "single" ]; then
         _cy_config_dir="$HOME/.claude"
-        _cy_account="internal"
+        _cy_account=$(_dotfiles_setup_mode)
     else
         # 계정 → CONFIG_DIR (SSOT 호출)
         _cy_config_dir=$(_claude_resolve_account "$_cy_account") || {

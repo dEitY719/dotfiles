@@ -6,7 +6,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # Environment-specific CA certificate setup:
 #   1. Copy shell-common/env/security.local.example to security.local.sh
 #   2. Choose CA settings for your environment (corporate/home)
-#   3. security.local.sh is automatically loaded (.gitignore excludes it)
+#   3. That file is automatically loaded (.gitignore excludes it)
 
 # SSH agent socket configuration
 
@@ -29,10 +29,8 @@ fi
 # Environment-specific security settings (CA certificates, etc.)
 # ========================================
 
-# Load environment-specific settings from security.local.sh (if present).
+# Load environment-specific settings (if present).
 # NOTE: $0 is unreliable in sourced context, so prefer predefined variables.
-_security_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_security_root/env/security.local.sh" ]; then
-    . "$_security_root/env/security.local.sh"
-fi
-unset _security_root
+_local_env_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/local_env.sh"
+[ -r "$_local_env_lib" ] && . "$_local_env_lib" && _dotfiles_source_local security
+unset _local_env_lib
