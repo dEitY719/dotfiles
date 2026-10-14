@@ -29,26 +29,10 @@
 #
 # See docs/guide/setup.md for more information
 
-# --- Logging Compatibility Functions ---
-
-log_info() { ux_info "$1"; }
-log_error() { ux_error "$1"; }
-log_critical() {
-    ux_error "$1"
-    exit 1
-}
+# log_info / log_warning / log_error / log_error_and_exit come from
+# shell-common/lib/setup/common.sh (sourced via link.sh in _phase_load_libs,
+# #2137). Only the dim check-mark line has no shared equivalent.
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-# [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
-# shellcheck disable=SC2317  # 본 파일은 호출처가 없지만 향후 디버깅 보조용으로 정의 보존
-log_debug() {
-    [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
-    echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"
-}
-log_warning() { ux_warning "$1"; }
-
-log_error_and_exit() {
-    log_critical "$1"
-}
 
 # --- Phase 1: libraries + path constants ---
 
@@ -109,8 +93,8 @@ _phase_load_libs() {
     fi
 
     # Idempotent link lib (#2137, #2138): dotfiles_ensure_link replaces the former
-    # _single_account_ensure_link. Its log_* shims only fill gaps, so the
-    # definitions above keep their format.
+    # _single_account_ensure_link. Its common.sh also supplies the log_*
+    # helpers every later phase uses.
     # shellcheck source=../shell-common/lib/setup/link.sh
     . "${DOTFILES_ROOT}/shell-common/lib/setup/link.sh" || exit 1
 
