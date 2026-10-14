@@ -46,7 +46,7 @@ run_linter() {
 }
 
 @test "missing trailing newline is still counted" {
-    seq 100 | head -c -1 >"$REPO/AGENTS.md"
+    printf '%s' "$(seq 100)" >"$REPO/AGENTS.md"
     git -C "$REPO" add AGENTS.md
     run_linter
     assert_failure 1
@@ -58,6 +58,20 @@ run_linter() {
     run_linter
     assert_success
     assert_output --partial "info  CLAUDE.md — 150줄"
+}
+
+@test "only files named exactly AGENTS.md are checked" {
+    write_lines AGENTS.md 5
+    write_lines sub/MY_AGENTS.md 150
+    run_linter
+    assert_success
+}
+
+@test "running from a subdirectory still checks the whole repo" {
+    write_lines AGENTS.md 120
+    cd "$REPO/sub" && run sh "$LINTER"
+    assert_failure 1
+    assert_output --partial "FAIL  AGENTS.md"
 }
 
 @test "untracked AGENTS.md is ignored" {

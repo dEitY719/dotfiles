@@ -34,7 +34,7 @@ while IFS= read -r file; do
         errors=$((errors + 1))
     fi
 done <<EOF
-$(git ls-files '*AGENTS.md')
+$(git ls-files 'AGENTS.md' '*/AGENTS.md')
 EOF
 
 while IFS= read -r file; do

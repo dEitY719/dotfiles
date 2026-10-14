@@ -34,6 +34,19 @@ run_linter() {
     assert_output --partial "errors=0 warnings=0"
 }
 
+@test "BOM, CRLF, quotes and a trailing comment are tolerated" {
+    printf '\357\273\277---\r\nstatus: "draft" # wip\r\n---\r\n' | add_doc docs/feature/foo/design.md
+    run_linter
+    assert_success
+}
+
+@test "a path with a space is read as one file" {
+    printf '# no status\n' | add_doc "docs/feature/foo/my design.md"
+    run_linter
+    assert_failure 1
+    assert_output --partial "FAIL  docs/feature/foo/my design.md"
+}
+
 @test "feature document without status fails" {
     printf '# no front-matter\n' | add_doc docs/feature/foo/design.md
     run_linter
