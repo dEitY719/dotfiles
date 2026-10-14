@@ -92,14 +92,17 @@ alias npm-list='npm_list'
 # ========================================
 
 # NPM 설치 (대화형 스크립트)
-npminstall() {
+npm_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_npm.sh"
 }
+# no npm-install alias: it would read as `npm install` (package install).
+alias npminstall='npm_install' # legacy name (#2148)
 
 # NPM 제거 (대화형 스크립트)
-npmuninstall() {
+npm_uninstall() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_npm.sh"
 }
+alias npmuninstall='npm_uninstall' # legacy name (#2148)
 
 # ========================================
 # CA Certificate Setup

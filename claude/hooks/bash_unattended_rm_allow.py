@@ -34,6 +34,14 @@ import os
 import re
 import sys
 
+# Shared stdin parsing lives next to this file's *real* location (settings.json
+# may run it through a symlinked checkout). Missing helpers fail open (exit 0).
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+try:
+    import _hook_common  # noqa: E402
+except ImportError:
+    sys.exit(0)
+
 _SAFE_ROOT = r"/tmp/claude-\d+/"
 _RM_RE = re.compile(r"(?<![\w./-])(?:rm|rmdir)\b([^;&|)\n]*)")
 _ASSIGN_RE = re.compile(
@@ -69,17 +77,13 @@ def all_rm_targets_safe(command: str) -> bool:
 def main() -> int:
     if os.environ.get("BASH_UNATTENDED_RM_ALLOW_BYPASS") == "1":
         return 0
-    try:
-        event = json.loads(sys.stdin.read())
-    except (ValueError, TypeError):
-        return 0
-    if not isinstance(event, dict) or event.get("tool_name") != "Bash":
+    event = _hook_common.read_hook_input()
+    if event.get("tool_name") != "Bash":
         return 0
     if event.get("permission_mode") != "bypassPermissions":
         return 0
-    tool_input = event.get("tool_input")
-    command = tool_input.get("command") if isinstance(tool_input, dict) else None
-    if not isinstance(command, str) or not all_rm_targets_safe(command):
+    command = _hook_common.tool_input_command(event)
+    if not command or not all_rm_targets_safe(command):
         return 0
     json.dump(
         {

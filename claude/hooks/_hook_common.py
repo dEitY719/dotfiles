@@ -1,7 +1,9 @@
-"""Helpers shared by the Python Stop-guard hooks (refactor F7).
+"""Helpers shared by the Python hooks (refactor F7, #2148).
 
-Imported by gh_issue_flow_stop_guard.py, devx_autopilot_stop_guard.py and
-skill_completion_guard.py, which used to carry identical copies. Each hook
+Imported by the Stop guards (gh_issue_flow_stop_guard.py,
+devx_autopilot_stop_guard.py, skill_completion_guard.py) for transcript
+helpers, and by the PreToolUse Bash hooks (bash_*.py) for stdin parsing --
+each used to carry its own copy. Each hook
 puts its own *real* directory on sys.path before importing this module —
 settings.json runs hooks by a path that may go through a symlinked checkout,
 and the module must be found next to the real file, not next to the link.
@@ -14,8 +16,29 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
+
+
+def read_hook_input() -> dict[str, Any]:
+    """Parse the hook event JSON on stdin; {} when empty, malformed or not an object.
+
+    Callers treat {} as "nothing to judge" and exit 0, so a bad payload
+    always fails open.
+    """
+    try:
+        event = json.load(sys.stdin)
+    except (ValueError, TypeError, OSError):
+        return {}
+    return event if isinstance(event, dict) else {}
+
+
+def tool_input_command(payload: dict[str, Any]) -> str:
+    """Return `tool_input.command` when it is a string, else ""."""
+    tool_input = payload.get("tool_input")
+    command = tool_input.get("command") if isinstance(tool_input, dict) else None
+    return command if isinstance(command, str) else ""
 
 
 def line_anchored_alternation(markers: tuple[str, ...], shapes: tuple[str, ...] = ()) -> re.Pattern[str]:

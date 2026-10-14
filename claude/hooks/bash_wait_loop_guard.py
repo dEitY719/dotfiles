@@ -150,6 +150,14 @@ import re
 import shlex
 import sys
 
+# Shared stdin parsing lives next to this file's *real* location (settings.json
+# may run it through a symlinked checkout). Missing helpers fail open (exit 0).
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+try:
+    import _hook_common  # noqa: E402
+except ImportError:
+    sys.exit(0)
+
 # Manual escape hatch.
 _BYPASS_ENABLED: bool = os.environ.get("BASH_WAIT_LOOP_GUARD_BYPASS") == "1"
 
@@ -422,29 +430,11 @@ def main() -> int:
         _trace("bypass enabled; allowing")
         return 0
 
-    try:
-        raw = sys.stdin.read()
-    except Exception:  # pragma: no cover -- defensive
-        return 0
-    if not raw.strip():
-        return 0
-
-    try:
-        event = json.loads(raw)
-    except (ValueError, TypeError):
-        _trace("stdin is not valid JSON; allowing")
-        return 0
-    if not isinstance(event, dict):
-        return 0
-
+    event = _hook_common.read_hook_input()
     if event.get("tool_name") != "Bash":
         return 0
-
-    tool_input = event.get("tool_input")
-    if not isinstance(tool_input, dict):
-        return 0
-    command = tool_input.get("command")
-    if not isinstance(command, str) or not command.strip():
+    command = _hook_common.tool_input_command(event)
+    if not command.strip():
         return 0
 
     reason = _check_pgrep_self_match(command) or _check_tasks_output_poll(command)
