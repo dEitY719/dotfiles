@@ -27,19 +27,10 @@ import re
 import sys
 from typing import Any
 
-from dotfiles_tools.issue_watcher.select import jq_length
+from dotfiles_tools.issue_watcher.select import _iterate, jq_length
 
 VERDICT_LABELS = ("review-passed", "review-blocked", "reply-pending")
 _DIGITS = re.compile(r"[0-9]+")
-
-
-def _iterate(value: Any) -> list[Any]:
-    """jq `.[]?`: an array's elements, an object's values, nothing otherwise."""
-    if isinstance(value, list):
-        return value
-    if isinstance(value, dict):
-        return list(value.values())
-    return []
 
 
 def _jq_str(value: Any) -> str:
