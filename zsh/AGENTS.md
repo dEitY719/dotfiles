@@ -1,7 +1,7 @@
 # Module Context
 
 - **Purpose**: Zsh-specific configuration and application integrations
-- **Entry Point**: `main.zsh` — sources `shell-common` then zsh-specific modules
+- **Entry Point**: `main.zsh` — 얇은 진입점. 로딩 코어는 `shell-common/util/bootstrap.sh` + `loader.sh` 의 `dotfiles_load_all` (#2134, bash 와 공유)
 - **Startup merge guard (#2078)**: `main.zsh` 가 경로 정규화 직후 인라인 `.git/MERGE_HEAD` 진단(대화형 한정, `printf`, 소싱 없음)을 출력한다. bash 와 동일 문구.
 - **Structure**: `app/`(zsh 앱: git, p10k, zsh utilities) · `main.zsh`(loader)
 - **Dependencies**: `shell-common/` (공유 유틸리티), Powerlevel10k (옵션 테마)
@@ -16,12 +16,11 @@
 # Loading Order (`main.zsh`)
 
 1. Shell detection (zsh 아니면 exit)
-2. Directory setup (`DOTFILES_ROOT`, `SHELL_COMMON`, `ZSH_DOTFILES`)
-3. `safe_source` 헬퍼 정의
-4. UX library (`shell-common/tools/ux_lib/ux_lib.sh`)
-5. Common env (`shell-common/env/*.sh`)
-6. Common aliases / functions / 외부 도구 / 프로젝트
-7. Zsh applications (`zsh/app/*.zsh`)
+2. `DOTFILES_ROOT` 후보 (zshrc 프리셋 또는 `${(%):-%N}`) + MERGE_HEAD 진단(인라인)
+3. `shell-common/util/bootstrap.sh` — skip 가드(비대화형·`DOTFILES_SKIP_INIT`·Codex, bash 와 동일), #589 정규화, `SHELL_COMMON`, counter, `safe_source`, ux_lib, loader
+4. `dotfiles_load_all` — env → aliases → functions → integrations → help adapter → projects (`*help` cleanup 선행)
+5. Zsh applications (`zsh/app/*.zsh`, `zsh.zsh`·`git.zsh` 우선)
+6. setup_mode → `dotfiles_show_init_summary` (`DOTFILES_SUPPRESS_MESSAGE=1` 이면 생략)
 
 # Golden Rules
 

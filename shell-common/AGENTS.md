@@ -4,6 +4,7 @@
 - **Scope**: env vars, aliases, functions, external tool integrations, project utilities
 - **Structure**: `env/` · `aliases/` · `functions/` · `tools/{integrations,custom,ux_lib}/` · `projects/`
 - **Dependencies**: 없음 (self-contained, `bash/main.bash`와 `zsh/main.zsh`가 source 함)
+- **Loading core (#2134)**: 진입점은 `util/bootstrap.sh`(skip 가드·#589 정규화·counter·safe_source·ux_lib) 후 `util/loader.sh` 의 `dotfiles_load_all` 1회 호출 — env → aliases → functions → `tools/integrations` → help adapter → projects. 모든 파일은 `safe_source` 경유(오류 노출 #1454/#1504 + `SOURCED_FILES_COUNT`, `DEBUG_DOTFILES=1` 시 `DEBUG: Loaded:` 1줄). shell-specific(`bash/env`, `zsh/app`)은 그 **뒤**.
 
 # Operational Commands
 

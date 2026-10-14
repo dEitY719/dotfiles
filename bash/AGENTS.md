@@ -1,7 +1,8 @@
 # Module Context
 - **Purpose**: Core Bash configuration hub. Manages environment, aliases, and shared utilities.
-- **Entry Point**: `main.bash` (Sources all modules including shell-common/).
-- **Startup merge guard (#2078)**: `main.bash` 상단에 인라인 `.git/MERGE_HEAD` 진단(대화형 한정)이 있다. 미완 `git sync` 머지를 알리는 용도라 파일 소싱 없이 `printf` 만 쓴다.
+- **Entry Point**: `main.bash` — 얇은 진입점. 로딩 코어는 `shell-common/util/bootstrap.sh` + `loader.sh` 의 `dotfiles_load_all` (#2134, zsh 와 공유).
+- **Loading order**: zsh 가드 → ROOT 후보(realpath) → MERGE_HEAD 진단 → `bootstrap.sh`(skip 가드·정규화·ux_lib) → `dotfiles_load_all`(env → aliases → functions → integrations → adapter → projects) → `bash/env/*.bash`(공통값 override 용으로 공통 로드 **뒤**) → summary → fzf/fasd → setup_mode → `~/.bashrc.local`.
+- **Startup merge guard (#2078)**: `main.bash` 상단에 인라인 `.git/MERGE_HEAD` 진단(대화형 한정)이 있다. 미완 `git sync` 머지를 알리는 용도라 파일 소싱 없이 `printf` 만 쓴다 — bootstrap 으로 옮기지 않는다.
 - **Structure**:
     - `bash/env/`: Bash-specific environment (`*.bash` only — `main.bash` globs `env/*.bash`)
     - `shell-common/env/`: Shared environment (PATH, LOCALE, etc.)
@@ -19,14 +20,12 @@
 
 ## File Loading
 ```bash
-# In main.bash: Loading shared modules
-for file in "${SHELL_COMMON}/aliases/"*.sh; do
-    [ -r "$file" ] && safe_source "$file" "Failed to load alias"
-done
+# In main.bash: shared modules — one call, every file goes through safe_source
+dotfiles_load_all
 
 # Loading bash-specific modules
-for file in "${DOTFILES_BASH_DIR}/env/"*.bash; do
-    [ -r "$file" ] && safe_source "$file" "Failed to load bash env"
+for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
+    safe_source "$f" "Environment variable file not found"
 done
 ```
 
