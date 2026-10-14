@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # claude/plugin/publish-sync.sh — 매니페스트 배치 publish 설계
 
 ## 배경

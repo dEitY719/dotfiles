@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # gh-flow: Fire-and-forget GitHub Issue → PR Automation
 
 **작성일**: 2026-04-22

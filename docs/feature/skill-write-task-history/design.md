@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # Skill Design: write-task-history
 
 ## 1. 개요

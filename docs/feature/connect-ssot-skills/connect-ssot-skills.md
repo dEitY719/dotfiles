@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # Connect SSOT Skills
 
 **구현 완료** | Shell, Linux Configuration | 2026-03-27

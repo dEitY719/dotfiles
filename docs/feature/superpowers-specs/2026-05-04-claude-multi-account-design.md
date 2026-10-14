@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # Claude Code Multi-Account Configuration Design
 
 Issue: [#287](https://github.com/dEitY719/dotfiles/issues/287)

@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # ai-worktree:teardown — Design Document
 
 ## Overview

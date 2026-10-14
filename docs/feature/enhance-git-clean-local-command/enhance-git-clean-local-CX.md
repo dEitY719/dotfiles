@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # git_clean_local 개선 설계 제안
 
 - 문서 ID: `enhance-git-clean-local-CX`

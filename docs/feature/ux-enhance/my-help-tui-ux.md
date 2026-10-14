@@ -1,3 +1,7 @@
+---
+status: needs-review
+---
+
 # my-help 명령어 탐색 UX 개선 조사
 
 - 작성일: 2026-09-03
