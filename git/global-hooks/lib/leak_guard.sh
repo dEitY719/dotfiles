@@ -21,8 +21,8 @@ leak_guard_active() {
     [ "${SKIP_LEAK_GUARD:-0}" = "1" ] && return 1
     [ -n "${LEAK_PATTERNS_ERE:-}" ] || return 1
     [ -n "${UPSTREAM_REMOTES_ERE:-}" ] || return 1
-    git config --get-regexp '^remote\..*\.url$' 2>/dev/null \
-        | cut -d' ' -f2- | grep -qE -- "${UPSTREAM_REMOTES_ERE}"
+    git config --get-regexp '^remote\..*\.url$' 2>/dev/null |
+        cut -d' ' -f2- | grep -qE -- "${UPSTREAM_REMOTES_ERE}"
 }
 
 # leak_redact — stdin to stdout, every LEAK_PATTERNS_ERE match replaced by

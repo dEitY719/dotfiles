@@ -25,17 +25,17 @@ check_wrapper_function() {
             [ -z "$end_line" ] && end_line=$((start_line + 5))
 
             local body
-            body=$(sed -n "${start_line},$end_line p" "$abs_path" | \
-                sed '1s/.*{\(.*\)/\1/;$s/\(.*\)}.*/\1/' | \
+            body=$(sed -n "${start_line},$end_line p" "$abs_path" |
+                sed '1s/.*{\(.*\)/\1/;$s/\(.*\)}.*/\1/' |
                 grep -v '^[[:space:]]*$' | head -1)
 
             # Match the literal text "$@" in the body. Kept in a variable: an
             # inline escaped "$@" expanded this function's own args into the
             # regex (SC2199), so `foo() { bar "$@"; }` was never flagged.
             local args_re='"[$]@"'
-            if [[ "$body" =~ ^[[:space:]]*\$?[a-z_-][a-z0-9_-]*[[:space:]]*${args_re}[[:space:]]*$ ]] || \
-               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*${args_re} ]] || \
-               [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*$ ]]; then
+            if [[ "$body" =~ ^[[:space:]]*\$?[a-z_-][a-z0-9_-]*[[:space:]]*${args_re}[[:space:]]*$ ]] ||
+                [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*${args_re} ]] ||
+                [[ "$body" =~ ^[[:space:]]*[a-z_-][a-z0-9_-]*[[:space:]]*$ ]]; then
 
                 local called_func
                 called_func=$(echo "$body" | sed 's/^[[:space:]]*[$]\{0,1\}\([a-z_-][a-z0-9_-]*\).*/\1/')

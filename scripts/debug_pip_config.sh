@@ -21,9 +21,16 @@ EOF
 
 # Reject unknown / positional args; `--help` shortcuts straight to usage.
 case "${1:-}" in
-    "") ;;
-    -h|--help|help) usage; exit 0 ;;
-    *) printf 'Error: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+"") ;;
+-h | --help | help)
+    usage
+    exit 0
+    ;;
+*)
+    printf 'Error: unknown argument: %s\n' "$1" >&2
+    usage >&2
+    exit 2
+    ;;
 esac
 
 # Best-effort source of the project ux_lib so output is consistent with the
@@ -66,9 +73,9 @@ for i in "${!config_paths[@]}"; do
     path="${config_paths[$i]}"
     if [ -n "$path" ]; then
         if [ -f "$path" ]; then
-            ux_success "[$((i+1))] EXISTS: $path"
+            ux_success "[$((i + 1))] EXISTS: $path"
         else
-            ux_bullet "[$((i+1))] missing: $path"
+            ux_bullet "[$((i + 1))] missing: $path"
         fi
     fi
 done

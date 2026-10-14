@@ -12,15 +12,18 @@ check_auto_executable_in_custom() {
 
     local tmp_file
     tmp_file=$(mktemp "$tmpdir/custom_stage_XXXXXX.txt")
-    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || { rm -f "$tmp_file"; return 0; }
+    write_staged_or_worktree_to_tmp "$repo_root" "$repo_rel_path" "$tmp_file" 2>/dev/null || {
+        rm -f "$tmp_file"
+        return 0
+    }
 
     if grep -qE '^[[:space:]]*main[[:space:]]*\(\)[[:space:]]*\{' "$tmp_file" 2>/dev/null; then
         local tail_calls
         local main_tail_lines="${DOTFILES_HOOKS_CUSTOM_MAIN_TAIL_LINES:-30}"
         local guard_tail_lines="${DOTFILES_HOOKS_CUSTOM_GUARD_TAIL_LINES:-80}"
 
-        tail_calls=$(tail -n "$main_tail_lines" "$tmp_file" | \
-            grep -nE '^[[:space:]]*main([[:space:]]+"?\$@"?)?[[:space:]]*$' | \
+        tail_calls=$(tail -n "$main_tail_lines" "$tmp_file" |
+            grep -nE '^[[:space:]]*main([[:space:]]+"?\$@"?)?[[:space:]]*$' |
             grep -vE '^[0-9]+:[[:space:]]*#' || true)
 
         if [ -n "$tail_calls" ]; then

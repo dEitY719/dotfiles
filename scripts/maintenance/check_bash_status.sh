@@ -9,18 +9,18 @@ DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh"
 
 show_help() {
-  ux_usage "./check_bash_status.sh" "[ROOT_DIR(default: ./bash)] [--mode isolated|chain] [--logdir ./bash_check_logs]" \
-    "Inspect .bash files one by one in clean shells with tracing."
-  ux_section "Options"
-  ux_table_row "ROOT_DIR" "Directory to search for .bash files (default: ./bash)"
-  ux_table_row "--mode MODE" "isolated (default): each file in a fresh shell"
-  ux_table_row "" "chain: all files sourced in one shell sequentially"
-  ux_table_row "--logdir DIR" "Directory to store logs (default: ./bash_check_logs)"
-  ux_table_row "--help" "Show this help message"
-  ux_section "Examples"
-  ux_bullet "./check_bash_status.sh"
-  ux_bullet "./check_bash_status.sh ./bash --mode isolated"
-  ux_bullet "./check_bash_status.sh ./bash --mode chain --logdir ./logs"
+    ux_usage "./check_bash_status.sh" "[ROOT_DIR(default: ./bash)] [--mode isolated|chain] [--logdir ./bash_check_logs]" \
+        "Inspect .bash files one by one in clean shells with tracing."
+    ux_section "Options"
+    ux_table_row "ROOT_DIR" "Directory to search for .bash files (default: ./bash)"
+    ux_table_row "--mode MODE" "isolated (default): each file in a fresh shell"
+    ux_table_row "" "chain: all files sourced in one shell sequentially"
+    ux_table_row "--logdir DIR" "Directory to store logs (default: ./bash_check_logs)"
+    ux_table_row "--help" "Show this help message"
+    ux_section "Examples"
+    ux_bullet "./check_bash_status.sh"
+    ux_bullet "./check_bash_status.sh ./bash --mode isolated"
+    ux_bullet "./check_bash_status.sh ./bash --mode chain --logdir ./logs"
 }
 
 # defaults
@@ -31,54 +31,62 @@ LOG_DIR="./bash_check_logs"
 # --- parse args: options first, then positional ROOT_DIR (first non-option) ---
 ROOT_DIR_SET=0
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --help|-h)
-      show_help
-      exit 0
-      ;;
+    case "$1" in
+    --help | -h)
+        show_help
+        exit 0
+        ;;
     --mode)
-      [[ $# -ge 2 ]] || { ux_error "--mode requires a value"; exit 2; }
-      MODE="$2"; shift 2
-      ;;
+        [[ $# -ge 2 ]] || {
+            ux_error "--mode requires a value"
+            exit 2
+        }
+        MODE="$2"
+        shift 2
+        ;;
     --logdir)
-      [[ $# -ge 2 ]] || { ux_error "--logdir requires a value"; exit 2; }
-      LOG_DIR="$2"; shift 2
-      ;;
+        [[ $# -ge 2 ]] || {
+            ux_error "--logdir requires a value"
+            exit 2
+        }
+        LOG_DIR="$2"
+        shift 2
+        ;;
     --) # end of options
-      shift
-      break
-      ;;
-    -*)
-      ux_error "unknown option: $1"
-      exit 2
-      ;;
-    *)
-      if [[ $ROOT_DIR_SET -eq 0 ]]; then
-        ROOT_DIR="$1"
-        ROOT_DIR_SET=1
         shift
-      else
-        ux_error "multiple ROOT_DIR values supplied (already have '$ROOT_DIR', extra '$1')"
+        break
+        ;;
+    -*)
+        ux_error "unknown option: $1"
         exit 2
-      fi
-      ;;
-  esac
+        ;;
+    *)
+        if [[ $ROOT_DIR_SET -eq 0 ]]; then
+            ROOT_DIR="$1"
+            ROOT_DIR_SET=1
+            shift
+        else
+            ux_error "multiple ROOT_DIR values supplied (already have '$ROOT_DIR', extra '$1')"
+            exit 2
+        fi
+        ;;
+    esac
 done
 
 mkdir -p "$LOG_DIR"
 
 # sanity checks
 if [[ ! -d "$ROOT_DIR" ]]; then
-  ux_error "ROOT_DIR does not exist or is not a directory: ${ROOT_DIR}"
-  exit 2
+    ux_error "ROOT_DIR does not exist or is not a directory: ${ROOT_DIR}"
+    exit 2
 fi
 
 # collect files
 mapfile -t FILES < <(find "$ROOT_DIR" -type f -name '*.bash' | sort)
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
-  ux_warning "No .bash files under ${ROOT_DIR}"
-  exit 0
+    ux_warning "No .bash files under ${ROOT_DIR}"
+    exit 0
 fi
 
 ux_header "Checking .bash files under: ${ROOT_DIR}"
@@ -87,89 +95,91 @@ ux_table_row "Log dir" "${LOG_DIR}"
 ux_info ""
 
 run_isolated() {
-  for f in "${FILES[@]}"; do
-    [[ -n "${f:-}" ]] || continue
+    for f in "${FILES[@]}"; do
+        [[ -n "${f:-}" ]] || continue
 
-    rel="${f#"$ROOT_DIR"/}"
-    [[ "$rel" == "$f" ]] && rel="$(realpath --relative-to="$ROOT_DIR" "$f" 2>/dev/null || echo "$f")"
-    log="${LOG_DIR}/isolated_${rel//\//_}.log"
+        rel="${f#"$ROOT_DIR"/}"
+        [[ "$rel" == "$f" ]] && rel="$(realpath --relative-to="$ROOT_DIR" "$f" 2>/dev/null || echo "$f")"
+        log="${LOG_DIR}/isolated_${rel//\//_}.log"
 
-    ux_step "*" "${rel}"
+        ux_step "*" "${rel}"
 
-    tmp_script="$(mktemp)"
-{
-  cat <<'EOS'
+        tmp_script="$(mktemp)"
+        {
+            cat <<'EOS'
 set -Eeuo pipefail
 PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-main}() '
 export BASH_XTRACEFD=3
 set -x
 trap 'code=$?; echo "ERR($code) at ${BASH_SOURCE[0]}:${LINENO} -> ${BASH_COMMAND}" >&2' ERR
 EOS
-  printf 'exec 3> "%s"\n' "$log"
+            printf 'exec 3> "%s"\n' "$log"
 
-  printf 'bash -n "%s"\n' "$f"
-  printf 'source "%s"\n' "$f"
+            printf 'bash -n "%s"\n' "$f"
+            printf 'source "%s"\n' "$f"
 
-  # 👇 성공 메시지를 stdout과 fd3(xtrace 로그) 둘 다에 남김
-  printf 'echo ">>> LOAD OK: %s"\n' "$f"
-  printf 'echo "체크한 결과, 정상입니다. (%s)" >&3\n' "$f"
-} > "$tmp_script"
+            # 👇 성공 메시지를 stdout과 fd3(xtrace 로그) 둘 다에 남김
+            printf 'echo ">>> LOAD OK: %s"\n' "$f"
+            printf 'echo "체크한 결과, 정상입니다. (%s)" >&3\n' "$f"
+        } >"$tmp_script"
 
-
-    # 깨끗한 셸에서 실행 (여기서는 3> 리다이렉션 붙이지 않음)
-    if ! bash --noprofile --norc "$tmp_script"; then
-      ux_error "${rel}"
-      ux_info "Trace: ${log}"
-      ux_info ""
-      tail -n 30 "$log" | sed 's/^/    /'
-      rm -f "$tmp_script"
-      exit 1
-    else
-      ux_success "${rel}  (trace: ${log})"
-    fi
-    rm -f "$tmp_script"
-  done
+        # 깨끗한 셸에서 실행 (여기서는 3> 리다이렉션 붙이지 않음)
+        if ! bash --noprofile --norc "$tmp_script"; then
+            ux_error "${rel}"
+            ux_info "Trace: ${log}"
+            ux_info ""
+            tail -n 30 "$log" | sed 's/^/    /'
+            rm -f "$tmp_script"
+            exit 1
+        else
+            ux_success "${rel}  (trace: ${log})"
+        fi
+        rm -f "$tmp_script"
+    done
 }
 
 run_chain() {
-  log="${LOG_DIR}/chain.log"
-  tmp_script="$(mktemp)"
-  {
-    cat <<'EOS'
+    log="${LOG_DIR}/chain.log"
+    tmp_script="$(mktemp)"
+    {
+        cat <<'EOS'
 set -Eeuo pipefail
 PS4='+ ${BASH_SOURCE##*/}:${LINENO}:${FUNCNAME[0]:-main}() '
 export BASH_XTRACEFD=3
 set -x
 trap 'code=$?; echo "ERR($code) at ${BASH_SOURCE[0]}:${LINENO} -> ${BASH_COMMAND}" >&2' ERR
 EOS
-    # chain 전체의 xtrace를 chain.log에 기록
-    printf 'exec 3> "%s"\n' "$log"
+        # chain 전체의 xtrace를 chain.log에 기록
+        printf 'exec 3> "%s"\n' "$log"
 
-    for f in "${FILES[@]}"; do
-      printf 'echo "--- SOURCE: %s"\n' "$f"
-      printf 'bash -n "%s"\n' "$f"
-      printf 'source "%s"\n' "$f"
-    done
-    printf 'echo ">>> LOAD OK: chained %d files"\n' "${#FILES[@]}"
-  } > "$tmp_script"
+        for f in "${FILES[@]}"; do
+            printf 'echo "--- SOURCE: %s"\n' "$f"
+            printf 'bash -n "%s"\n' "$f"
+            printf 'source "%s"\n' "$f"
+        done
+        printf 'echo ">>> LOAD OK: chained %d files"\n' "${#FILES[@]}"
+    } >"$tmp_script"
 
-  if ! bash --noprofile --norc "$tmp_script"; then
-    ux_error "chain mode"
-    ux_info "Trace: ${log}"
-    ux_info ""
-    tail -n 80 "$log" | sed 's/^/    /'
+    if ! bash --noprofile --norc "$tmp_script"; then
+        ux_error "chain mode"
+        ux_info "Trace: ${log}"
+        ux_info ""
+        tail -n 80 "$log" | sed 's/^/    /'
+        rm -f "$tmp_script"
+        exit 1
+    else
+        ux_success "chain mode (trace: ${log})"
+    fi
     rm -f "$tmp_script"
-    exit 1
-  else
-    ux_success "chain mode (trace: ${log})"
-  fi
-  rm -f "$tmp_script"
 }
 
 case "$MODE" in
-  isolated) run_isolated ;;
-  chain) run_chain ;;
-  *) ux_error "invalid --mode: $MODE"; exit 2 ;;
+isolated) run_isolated ;;
+chain) run_chain ;;
+*)
+    ux_error "invalid --mode: $MODE"
+    exit 2
+    ;;
 esac
 
 ux_info ""

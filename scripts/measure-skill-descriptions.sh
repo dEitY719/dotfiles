@@ -149,7 +149,7 @@ while IFS= read -r _dir; do
     printf '%-36s %5d %s\n' "$_name" "$_len" "$_verdict"
     total=$((total + _len))
     count=$((count + 1))
-done <<< "$SKILL_DIRS"
+done <<<"$SKILL_DIRS"
 
 if [ "$count" -eq 0 ]; then
     printf '%s[FAIL]%s 측정 대상 SKILL.md 가 없습니다: %s\n' "$UX_ERROR" "$UX_RESET" "$SOURCE_LABEL" >&2

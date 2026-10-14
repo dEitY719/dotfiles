@@ -33,12 +33,10 @@ GIT_HOOKS_SOURCE_DIR="${DOTFILES_GIT_DIR}/hooks"
 HOME_GITCONFIG="${HOME}/.gitconfig"
 REPO_GIT_HOOKS_DIR="${DOTFILES_REPO_ROOT}/.git/hooks"
 
-
 # --- Logging Initialization ---
 # ux_lib.sh를 로드합니다.
 # setup.sh가 dotfiles/git에 있으므로, shell-common/tools/ux_lib는 ../shell-common/tools/ux_lib에 있습니다.
 UX_LIB_SCRIPT="${DOTFILES_GIT_DIR}/../shell-common/tools/ux_lib/ux_lib.sh"
-
 
 if [[ -f "${UX_LIB_SCRIPT}" ]]; then
     source "${UX_LIB_SCRIPT}"
@@ -47,14 +45,12 @@ else
     exit 1
 fi
 
-
 # --- Functions ---
 # log_critical 함수를 사용하여 log_error_and_exit 대체
 log_error_and_exit() {
     ux_error "$1"
     exit 1
 }
-
 
 backup_file() {
     local file_to_backup="$1"
@@ -64,7 +60,6 @@ backup_file() {
         cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
     fi
 }
-
 
 create_symlink() {
     local target="$1"
@@ -84,7 +79,6 @@ create_symlink() {
     ux_bullet_sub "심볼릭 링크 생성: $link_name -> $target"
     ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
 }
-
 
 # ~/.gitconfig 를 "실파일 + [include] SSOT" 모델로 보장합니다 (symlink 금지).
 #
@@ -141,26 +135,22 @@ ensure_gitconfig_include() {
     } >"$target" || log_error_and_exit ".gitconfig 실파일 생성 실패: $target"
 }
 
-
 # --- SSH Setup Functions ---
 # SSH 키 존재 여부 확인
 check_ssh_key_exists() {
     [ -f "${HOME}/.ssh/id_ed25519" ]
 }
 
-
 # SSH 에이전트 실행 여부 확인
 check_ssh_agent_running() {
     [ -n "$SSH_AUTH_SOCK" ]
 }
-
 
 # SSH 에이전트 시작
 start_ssh_agent() {
     eval "$(ssh-agent -s)" >/dev/null 2>&1
     ux_info "SSH 에이전트가 시작되었습니다 (PID: $SSH_AGENT_PID)"
 }
-
 
 # SSH 키를 에이전트에 등록
 register_ssh_key() {
@@ -173,7 +163,6 @@ register_ssh_key() {
         return 1
     fi
 }
-
 
 # SSH 키 생성
 generate_ssh_key() {
@@ -201,7 +190,6 @@ generate_ssh_key() {
     fi
 }
 
-
 # 사내 GHES 호스트 해석: shell-common/functions/gh_host.sh 의 _gh_ghes_host 재사용.
 # 파일이 없는 최소 체크아웃에서는 환경변수만 본다.
 _git_setup_ghes_host() {
@@ -212,7 +200,6 @@ _git_setup_ghes_host() {
         printf '%s' "${DOTFILES_GHES_HOST-}"
     fi
 }
-
 
 # Git 리모트를 SSH로 변경
 configure_git_remote_ssh() {
@@ -249,7 +236,6 @@ configure_git_remote_ssh() {
     fi
 }
 
-
 # SSH 설정 자동화 (한 번에 처리)
 setup_ssh_auto() {
     ux_header "SSH 설정 자동화 확인"
@@ -279,15 +265,12 @@ setup_ssh_auto() {
     ux_success "SSH 설정이 완료되었습니다"
 }
 
-
 # --- Main Script Logic ---
 ux_header "Git dotfiles setup 시작"
-
 
 # SSH 설정 자동화 (선택적, 실패해도 진행)
 setup_ssh_auto || ux_warning "SSH 설정 중 일부 작업이 실패했습니다. 수동으로 구성하세요."
 ux_info ""
-
 
 # .gitconfig: 실파일 + [include] SSOT 모델 (symlink 아님 — 함수 주석 참고)
 if [ -f "$GIT_CONFIG_SOURCE" ]; then
@@ -295,7 +278,6 @@ if [ -f "$GIT_CONFIG_SOURCE" ]; then
 else
     ux_warning "경고: .gitconfig SSOT 가 '${GIT_CONFIG_SOURCE}' 경로에 없습니다. include 설정을 건너뜁니다."
 fi
-
 
 # Git hooks 설정
 # .git/hooks 디렉토리 생성 (필요시)
@@ -313,7 +295,6 @@ else
     ux_warning "경고: pre-commit hook 파일이 '${GIT_HOOKS_SOURCE_DIR}/pre-commit' 경로에 없습니다."
 fi
 
-
 # Post-commit hook 심볼릭 링크 생성
 # Source: git/hooks/post-commit (tracked in git)
 # Target: .git/hooks/post-commit (symlink, not tracked)
@@ -325,7 +306,6 @@ if [ -f "${GIT_HOOKS_SOURCE_DIR}/post-commit" ]; then
 else
     ux_info "정보: post-commit hook 파일이 '${GIT_HOOKS_SOURCE_DIR}/post-commit' 경로에 없습니다."
 fi
-
 
 # --- Global Git Hooks Setup ---
 #
@@ -400,8 +380,8 @@ else
             # reported as info. Anything else stops working -> warning.
             if [ -f "$global_hook_target" ] && [ ! -L "$global_hook_target" ]; then
                 if ! cmp -s "$global_hook_target" "${global_hook_target}.original"; then
-                    cp "$global_hook_target" "${global_hook_target}.original" \
-                        || log_error_and_exit "백업 파일 생성 실패: $global_hook_target"
+                    cp "$global_hook_target" "${global_hook_target}.original" ||
+                        log_error_and_exit "백업 파일 생성 실패: $global_hook_target"
                     if is_git_lfs_generated_hook "$global_hook_target" "$global_hook_name"; then
                         replaced_lfs_hooks="${replaced_lfs_hooks:+$replaced_lfs_hooks }${global_hook_name}"
                     else
@@ -437,7 +417,6 @@ else
         ux_warning "경고: Global hook 을 하나도 연결하지 못해 core.hooksPath 설정을 건너뜁니다."
     fi
 fi
-
 
 ux_success "Git dotfiles setup 완료"
 ux_info "Git 설정이 적용되었습니다."

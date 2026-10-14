@@ -45,10 +45,10 @@ validate_commit_type() {
     local first_line="${msg%%$'\n'*}"
 
     # Extract type (word before the colon)
-    local type="${first_line%%(*}"      # Remove scope if present (feat(scope)...)
-    type="${type%%:*}"                  # Get word before colon
-    type="${type#/}"                    # Remove leading slash if any
-    type="${type%% }"                   # Trim trailing spaces
+    local type="${first_line%%(*}" # Remove scope if present (feat(scope)...)
+    type="${type%%:*}"             # Get word before colon
+    type="${type#/}"               # Remove leading slash if any
+    type="${type%% }"              # Trim trailing spaces
 
     # Check if type is valid
     local valid=0
@@ -92,7 +92,7 @@ validate_body_length() {
     # Split message into lines
     while IFS= read -r line; do
         lines+=("$line")
-    done <<< "$msg"
+    done <<<"$msg"
 
     # Skip first line (subject) - line 0
     # Line 1 should be empty (separator)

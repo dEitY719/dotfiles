@@ -37,15 +37,15 @@ check_shellcheck() {
     while IFS= read -r file; do
         [ -f "$file" ] || continue
         case "$file" in
-            *.zsh) continue ;;
-            *.sh | *.bash) ;;
-            *) head -1 "$file" 2>/dev/null | grep -qE '^#!.*\b(bash|sh)\b' || continue ;;
+        *.zsh) continue ;;
+        *.sh | *.bash) ;;
+        *) head -1 "$file" 2>/dev/null | grep -qE '^#!.*\b(bash|sh)\b' || continue ;;
         esac
         head -1 "$file" 2>/dev/null | grep -qE '^#!.*\bzsh\b' && continue
 
         case "$file" in
-            bash/* | shell-common/*) shellcheck_args=(-x -e "SC1090,SC1091") ;;
-            *) shellcheck_args=(-S error) ;;
+        bash/* | shell-common/*) shellcheck_args=(-x -e "SC1090,SC1091") ;;
+        *) shellcheck_args=(-S error) ;;
         esac
 
         # Non-zero exit just means findings; the appended lines decide.

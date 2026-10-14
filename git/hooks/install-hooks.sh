@@ -23,7 +23,10 @@ install_hooks_help() {
 }
 
 case "${1:-}" in
-    -h|--help) install_hooks_help; exit 0 ;;
+-h | --help)
+    install_hooks_help
+    exit 0
+    ;;
 esac
 
 if [ $# -lt 1 ]; then
@@ -35,7 +38,7 @@ PROJECT_PATH="$1"
 FORCE="${2:---}"
 
 # Absolute path to this script's directory
-HOOKS_SOURCE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+HOOKS_SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ux_lib lives in the same dotfiles checkout as this script (git/hooks/ ->
 # shell-common/), so it is always present; usage above stays raw for the

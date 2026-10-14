@@ -96,7 +96,10 @@ log_info() { ux_info "$1"; }
 log_error() { ux_error "$1"; }
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
 log_warning() { ux_warning "$1"; }
-log_critical() { ux_error "$1"; exit 1; }
+log_critical() {
+    ux_error "$1"
+    exit 1
+}
 
 CODEX_MANAGED_MARKER=".dotfiles-skill-source"
 
@@ -119,11 +122,11 @@ _realpath_or_self() {
 # Usage: _ssot_is_legacy_broken_link <resolved_target_path>
 _ssot_is_legacy_broken_link() {
     case "$1" in
-        "${DOTFILES_ROOT}/claude/skills" | "${DOTFILES_ROOT}/claude/skills"/* \
-            | "${DOTFILES_MAIN_ROOT}/claude/skills" | "${DOTFILES_MAIN_ROOT}/claude/skills"/*)
-            return 0
-            ;;
-        *) return 1 ;;
+    "${DOTFILES_ROOT}/claude/skills" | "${DOTFILES_ROOT}/claude/skills"/* | \
+        "${DOTFILES_MAIN_ROOT}/claude/skills" | "${DOTFILES_MAIN_ROOT}/claude/skills"/*)
+        return 0
+        ;;
+    *) return 1 ;;
     esac
 }
 
@@ -147,8 +150,8 @@ _ssot_link_is_legacy_stale() {
     # 링크라 `readlink -f` 는 못 쓰므로, 존재 여부와 무관하게 `..` 를 펴 주는
     # `realpath -m` 으로 링크 자신의 디렉토리 기준 절대 경로를 만든다.
     case "$_target" in
-        "" | /*) ;;
-        *) _target="$(realpath -m "$(dirname "$1")/$_target" 2>/dev/null)" ;;
+    "" | /*) ;;
+    *) _target="$(realpath -m "$(dirname "$1")/$_target" 2>/dev/null)" ;;
     esac
     _ssot_is_legacy_broken_link "$_target"
 }
@@ -156,8 +159,8 @@ _ssot_link_is_legacy_stale() {
 # 빈 문자열 = 워크스페이스 없음/너무 넓음 → 연결할 소스가 없다.
 WORKSPACE_ROOT_RESOLVED="$(_skill_workspace_root || true)"
 WORKSPACE_ROOT_REAL=""
-[ -n "$WORKSPACE_ROOT_RESOLVED" ] \
-    && WORKSPACE_ROOT_REAL="$(_realpath_or_self "$WORKSPACE_ROOT_RESOLVED")"
+[ -n "$WORKSPACE_ROOT_RESOLVED" ] &&
+    WORKSPACE_ROOT_REAL="$(_realpath_or_self "$WORKSPACE_ROOT_RESOLVED")"
 
 # 모든 skill 소스를 `<소스 경로><TAB><합성 엔트리 이름>` 한 줄씩 표준출력으로 낸다.
 #
@@ -188,15 +191,15 @@ collect_skill_sources() {
         repo="${repo##*/}"
 
         case "$seen" in
-            *"|${repo}/${skill_name}|"*) continue ;;
+        *"|${repo}/${skill_name}|"*) continue ;;
         esac
 
         entry_name="$skill_name"
         case "$seen" in
-            *"/${skill_name}|"*)
-                entry_name="${repo}__${skill_name}"
-                log_dim "[skills] 이름 충돌 — 접두사 부여: ${entry_name} (원본: ${skill_path})" >&2
-                ;;
+        *"/${skill_name}|"*)
+            entry_name="${repo}__${skill_name}"
+            log_dim "[skills] 이름 충돌 — 접두사 부여: ${entry_name} (원본: ${skill_path})" >&2
+            ;;
         esac
         seen="${seen}${repo}/${skill_name}|"
 
@@ -207,15 +210,15 @@ collect_skill_sources() {
         # 온 쪽을 건너뛰며 경고한다. 실사용 저장소/스킬 이름에는 `__` 가 없어
         # 사실상 발동하지 않는 방어선이다.
         case "$used_entries" in
-            *"|${entry_name}|"*)
-                log_warning "[skills] 합성 엔트리 이름 충돌 — 건너뜀: ${entry_name} (원본: ${skill_path})" >&2
-                continue
-                ;;
+        *"|${entry_name}|"*)
+            log_warning "[skills] 합성 엔트리 이름 충돌 — 건너뜀: ${entry_name} (원본: ${skill_path})" >&2
+            continue
+            ;;
         esac
         used_entries="${used_entries}${entry_name}|"
 
         printf "%s\t%s\n" "$skill_path" "$entry_name"
-    done <<< "$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
+    done <<<"$(_skill_workspace_dirs "$WORKSPACE_ROOT_RESOLVED")"
 }
 
 # symlink target 이 우리가 관리하는 소스 루트 아래인지 판별.
@@ -230,7 +233,7 @@ skill_source_is_managed() {
     for root in "$WORKSPACE_ROOT_RESOLVED" "$WORKSPACE_ROOT_REAL"; do
         [ -n "$root" ] || continue
         case "$path" in
-            "$root"/*) return 0 ;;
+        "$root"/*) return 0 ;;
         esac
     done
     return 1
@@ -252,7 +255,7 @@ skill_source_path_for() {
             printf "%s\n" "$candidate"
             return 0
         fi
-    done <<< "$SKILL_SOURCE_LIST"
+    done <<<"$SKILL_SOURCE_LIST"
 
     return 1
 }
@@ -279,9 +282,9 @@ collect_codex_homes() {
 
         resolved="$(readlink -f "$candidate" 2>/dev/null || printf "%s" "$candidate")"
         case "$seen" in
-            *"|${resolved}|"*)
-                continue
-                ;;
+        *"|${resolved}|"*)
+            continue
+            ;;
         esac
 
         seen="${seen}${resolved}|"
@@ -338,15 +341,15 @@ link_skills_compose() {
 
         if [ -L "$link_target" ]; then
             current_link="$(readlink "$link_target")"
-            if [ "$current_link" = "$skill_path" ] \
-                || [ "$(readlink -f "$link_target" 2>/dev/null)" = "$source_realpath" ]; then
+            if [ "$current_link" = "$skill_path" ] ||
+                [ "$(readlink -f "$link_target" 2>/dev/null)" = "$source_realpath" ]; then
                 continue
             fi
             # 디렉토리-단위 마이그레이션과 같은 판정을 엔트리에도 적용한다
             # (#1732): 옛 SSOT 를 가리키다 끊어진 링크는 이름이 살아 있는
             # 소스와 겹치는 한 그 스킬을 계속 가린다.
-            if skill_source_is_managed "$current_link" \
-                || _ssot_link_is_legacy_stale "$link_target"; then
+            if skill_source_is_managed "$current_link" ||
+                _ssot_link_is_legacy_stale "$link_target"; then
                 rm -f "$link_target"
                 refreshed=$((refreshed + 1))
             else
@@ -366,7 +369,7 @@ link_skills_compose() {
             log_error "[$tool] skill symlink 생성 실패: $link_target"
             continue
         }
-    done <<< "$SKILL_SOURCE_LIST"
+    done <<<"$SKILL_SOURCE_LIST"
 
     # Stale cleanup: SSOT 로 향하던 symlink 의 원본이 사라진 경우만 정리.
     # SSOT 밖을 가리키는 entry (private overlay 등) 는 보존.
@@ -470,10 +473,10 @@ link_skills_individual_codex() {
                         local existing_entry_target
                         existing_entry_target="$(readlink -f "$existing_entry" 2>/dev/null || true)"
                         case "$existing_entry_target" in
-                            "$source_realpath"/*)
-                                can_migrate=1
-                                continue
-                                ;;
+                        "$source_realpath"/*)
+                            can_migrate=1
+                            continue
+                            ;;
                         esac
                     fi
                     has_user_data=1
@@ -500,7 +503,7 @@ link_skills_individual_codex() {
             continue
         }
         linked=$((linked + 1))
-    done <<< "$SKILL_SOURCE_LIST"
+    done <<<"$SKILL_SOURCE_LIST"
 
     local existing_skill_entry
     for existing_skill_entry in "$target_dir"/*; do
@@ -519,8 +522,8 @@ link_skills_individual_codex() {
         if [ -L "$existing_skill_entry" ]; then
             local stale_target
             stale_target="$(readlink -f "$existing_skill_entry" 2>/dev/null || true)"
-            if skill_source_is_managed "$stale_target" \
-                || _ssot_link_is_legacy_stale "$existing_skill_entry"; then
+            if skill_source_is_managed "$stale_target" ||
+                _ssot_link_is_legacy_stale "$existing_skill_entry"; then
                 rm -f "$existing_skill_entry" || {
                     log_error "[codex] stale skill 제거 실패: $existing_skill_entry"
                     continue
@@ -642,7 +645,7 @@ else
             mkdir -p "$CODEX_SKILLS"
             link_skills_individual_codex "$CODEX_SKILLS"
         fi
-    done <<< "$CODEX_HOME_LIST"
+    done <<<"$CODEX_HOME_LIST"
 fi
 
 # 3. Gemini: 순정 Gemini CLI 지원 제거 및 ~/.gemini/skills 정리 (#1787)
@@ -702,7 +705,8 @@ hermes_workspace_dirs() {
 hermes_cli() {
     local err out rc
     err="$(mktemp)" || return 1
-    out="$(hermes "$@" 2>"$err")"; rc=$?
+    out="$(hermes "$@" 2>"$err")"
+    rc=$?
     [ -z "$out" ] || printf '%s\n' "$out"
     [ "$rc" -eq 0 ] || cat "$err" >&2
     rm -f "$err"
@@ -718,9 +722,9 @@ hermes_external_dirs_get() {
         case "$out" in *"Config key not set"*) return 0 ;; esac
         return 1
     fi
-    printf '%s\n' "$out" | sed -n "s/^[[:space:]]*- //p" \
-        | sed -e 's/[[:space:]]\{1,\}#.*$//' -e 's/[[:space:]]*$//' \
-              -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/'
+    printf '%s\n' "$out" | sed -n "s/^[[:space:]]*- //p" |
+        sed -e 's/[[:space:]]\{1,\}#.*$//' -e 's/[[:space:]]*$//' \
+            -e "s/^'\(.*\)'\$/\1/" -e 's/^"\(.*\)"$/\1/'
 }
 
 # 같은 이름의 스킬이 두 external dir 에 있으면 Hermes 는 로드를 거부한다
@@ -731,7 +735,7 @@ hermes_warn_duplicates() {
     while IFS=$'\t' read -r skill_path entry_name; do
         [ "$entry_name" = "${skill_path##*/}" ] && continue
         log_warning "[hermes] 스킬 이름 중복 — Hermes 가 로드를 거부합니다: $(skill_source_path_for "${skill_path##*/}") ↔ ${skill_path}"
-    done <<< "$SKILL_SOURCE_LIST"
+    done <<<"$SKILL_SOURCE_LIST"
 }
 
 # 예전 합성 링크 정리 (#1829). external_dirs 와 이름이 겹치면 전부 Ambiguous 로
@@ -740,8 +744,8 @@ hermes_warn_duplicates() {
 hermes_prune_links() {
     local link
     if [ -L "$HERMES_LINK_DIR" ]; then
-        if skill_source_is_managed "$(readlink -f "$HERMES_LINK_DIR" 2>/dev/null)" \
-            || _ssot_link_is_legacy_stale "$HERMES_LINK_DIR"; then
+        if skill_source_is_managed "$(readlink -f "$HERMES_LINK_DIR" 2>/dev/null)" ||
+            _ssot_link_is_legacy_stale "$HERMES_LINK_DIR"; then
             rm -f "$HERMES_LINK_DIR"
         else
             log_warning "[hermes] 사용자 symlink 보존: $HERMES_LINK_DIR"
@@ -776,14 +780,17 @@ hermes_sync_external_dirs() {
     hermes_prune_links
 
     # 워크스페이스 밖 기존 항목 + 새 워크스페이스 목록 → JSON 리스트 (\ 와 " 만 이스케이프).
-    dirs="$(while IFS= read -r dir; do
+    dirs="$(
+        while IFS= read -r dir; do
             [ -n "$dir" ] && ! skill_source_is_managed "$dir" && printf '%s\n' "$dir"
-        done <<< "$current"; hermes_workspace_dirs)"
+        done <<<"$current"
+        hermes_workspace_dirs
+    )"
     while IFS= read -r dir; do
         [ -n "$dir" ] || continue
         dir="${dir//\\/\\\\}"
         json="${json:+${json}, }\"${dir//\"/\\\"}\""
-    done <<< "$dirs"
+    done <<<"$dirs"
 
     if hermes_cli config set skills.external_dirs "[${json}]" >/dev/null; then
         log_info "[hermes] skills.external_dirs 갱신: 워크스페이스 $(hermes_workspace_dirs | grep -c .)개"
@@ -807,7 +814,7 @@ ux_section "Skills 워크스페이스 연결 확인"
 verify_link() {
     local tool="$1"
     local path="$2"
-    local mode="$3"   # "compose" or "codex"
+    local mode="$3" # "compose" or "codex"
 
     if [ "$mode" = "compose" ]; then
         # Entry-level 합성: 실제 디렉토리 + child symlink 카운트.
@@ -836,25 +843,28 @@ if [ -n "${CODEX_HOME_LIST:-}" ]; then
     while IFS= read -r codex_home; do
         [ -n "$codex_home" ] || continue
         verify_link "codex" "${codex_home}/skills" "codex"
-    done <<< "$CODEX_HOME_LIST"
+    done <<<"$CODEX_HOME_LIST"
 fi
 _agy_is_installed && verify_link "agy" "$AGY_SKILLS" "compose"
 
 # Hermes (#1829): external_dirs 에 워크스페이스 목록이 전부 있고 관리 링크가 남지 않았는지.
 hermes_verify() {
     local current dir link missing=0 left=0
-    current="$(hermes_external_dirs_get)" || { log_warning "[hermes] skills.external_dirs 확인 실패"; return 0; }
+    current="$(hermes_external_dirs_get)" || {
+        log_warning "[hermes] skills.external_dirs 확인 실패"
+        return 0
+    }
     while IFS= read -r dir; do
         printf '%s\n' "$current" | grep -Fxq -- "$dir" && continue
         log_warning "[hermes] external_dirs 누락: $dir"
         missing=$((missing + 1))
-    done <<< "$(hermes_workspace_dirs)"
+    done <<<"$(hermes_workspace_dirs)"
     for link in "$HERMES_LINK_DIR"/*; do
         [ -L "$link" ] && skill_source_is_managed "$(readlink "$link")" && left=$((left + 1))
     done
     [ "$left" -eq 0 ] || log_warning "[hermes] 관리 symlink 가 ${left}개 남아 있습니다: $HERMES_LINK_DIR"
-    [ "$missing" -eq 0 ] && [ "$left" -eq 0 ] \
-        && log_dim "✓ [hermes] skills.external_dirs (워크스페이스 $(hermes_workspace_dirs | grep -c .)개)"
+    [ "$missing" -eq 0 ] && [ "$left" -eq 0 ] &&
+        log_dim "✓ [hermes] skills.external_dirs (워크스페이스 $(hermes_workspace_dirs | grep -c .)개)"
 }
 [ -d "${HOME}/.hermes" ] && command -v hermes >/dev/null 2>&1 && hermes_verify
 

@@ -6,11 +6,11 @@ check_alias_function_conflict() {
     local violations_found=0
 
     local alias_names
-    alias_names=$(grep -o "^alias[[:space:]]*[a-z_-][a-z0-9_-]*=" "$abs_path" 2>/dev/null | \
+    alias_names=$(grep -o "^alias[[:space:]]*[a-z_-][a-z0-9_-]*=" "$abs_path" 2>/dev/null |
         sed "s/.*alias[[:space:]]*\\([^=]*\\)=.*/\\1/" | sort -u || true)
 
     local func_names
-    func_names=$(grep -o "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$abs_path" 2>/dev/null | \
+    func_names=$(grep -o "^[a-z_-][a-z0-9_-]*()[[:space:]]*{" "$abs_path" 2>/dev/null |
         sed "s/(.*//;s/^[[:space:]]*//;s/[[:space:]]*$//" | sort -u || true)
 
     if [ -n "$alias_names" ] && [ -n "$func_names" ]; then
@@ -29,7 +29,7 @@ check_alias_function_conflict() {
 
                     # Allow if alias value matches function name (with or without normalization)
                     if [ "$alias_value" = "$func_name" ] || [ "${alias_value//-/_}" = "$normalized_func" ]; then
-                        continue  # This is the recommended pattern (alias points to function)
+                        continue # This is the recommended pattern (alias points to function)
                     fi
 
                     local alias_line

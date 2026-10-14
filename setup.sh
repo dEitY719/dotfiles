@@ -98,7 +98,10 @@ setup_help() {
 main() {
     local canonical=""
     case "${1:-}" in
-    -h | --help) setup_help; return 0 ;;
+    -h | --help)
+        setup_help
+        return 0
+        ;;
     -v | --verbose) SETUP_VERBOSE=1 ;;
     esac
 
@@ -154,7 +157,7 @@ main() {
     # .vscode/base.json → live VS Code settings (#586); exits 1 without VS Code.
     step_run vscode-settings optional ./.vscode/sync-push.sh
     step_run global-packages optional ./global-packages/setup.sh # global uv tools 동기화, 삭제 안 함
-    step_run mcporter optional ./mcporter/setup.sh # exa 키를 .enc.env placeholder 로 (#2106)
+    step_run mcporter optional ./mcporter/setup.sh               # exa 키를 .enc.env placeholder 로 (#2106)
     step_run ssh optional ./ssh/setup.sh
     step_run gh optional ./gh/setup.sh
     step_run windows optional ./windows/setup.sh # WSL only

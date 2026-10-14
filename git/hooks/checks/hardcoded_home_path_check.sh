@@ -31,15 +31,15 @@ check_hardcoded_home_path() {
     local output_file="$4"
 
     case "$repo_rel_path" in
-        bash/* | zsh/* | shell-common/*) ;;
-        zshrc | bashrc | profile) ;;
-        *) return 0 ;;
+    bash/* | zsh/* | shell-common/*) ;;
+    zshrc | bashrc | profile) ;;
+    *) return 0 ;;
     esac
 
     case "$repo_rel_path" in
-        *.md) return 0 ;;
-        tests/* | */tests/*) return 0 ;;
-        docs/* | */docs/*) return 0 ;;
+    *.md) return 0 ;;
+    tests/* | */tests/*) return 0 ;;
+    docs/* | */docs/*) return 0 ;;
     esac
 
     # Scan only the added (`+`) lines of the staged diff. Hunk headers

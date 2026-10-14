@@ -93,9 +93,9 @@ _invoke_hook() {
     remote_sha="${4:-$ZERO_SHA}"
 
     set +e
-    out=$(cd "$dir" \
-        && printf 'refs/heads/test %s refs/heads/test %s\n' "$local_sha" "$remote_sha" \
-        | "$HOOK" "$remote_name" "$remote_url" 2>&1)
+    out=$(cd "$dir" &&
+        printf 'refs/heads/test %s refs/heads/test %s\n' "$local_sha" "$remote_sha" |
+        "$HOOK" "$remote_name" "$remote_url" 2>&1)
     rc=$?
     set -e
     LEAK_OUT="$out"
@@ -168,12 +168,12 @@ _t3_upstream_push_pattern_in_commit_message_blocks() {
     set -e
 
     local rc_ok=0
-    if [ "$rc" -eq 1 ] \
-        && grep -q "Upstream push blocked" <<<"$LEAK_OUT" \
-        && grep -q "<commit message>" <<<"$LEAK_OUT" \
-        && grep -q "lines:  1 " <<<"$LEAK_OUT" \
-        && ! grep -q "zq7canary" <<<"$LEAK_OUT" \
-        && ! grep -q "example.internal" <<<"$LEAK_OUT"; then
+    if [ "$rc" -eq 1 ] &&
+        grep -q "Upstream push blocked" <<<"$LEAK_OUT" &&
+        grep -q "<commit message>" <<<"$LEAK_OUT" &&
+        grep -q "lines:  1 " <<<"$LEAK_OUT" &&
+        ! grep -q "zq7canary" <<<"$LEAK_OUT" &&
+        ! grep -q "example.internal" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -194,12 +194,12 @@ _t4_upstream_push_pattern_in_diff_blocks() {
     set -e
 
     local rc_ok=0
-    if [ "$rc" -eq 1 ] \
-        && grep -q "Upstream push blocked" <<<"$LEAK_OUT" \
-        && grep -q "source: seed.txt" <<<"$LEAK_OUT" \
-        && grep -q "lines:  [0-9]" <<<"$LEAK_OUT" \
-        && ! grep -q "zq7canary" <<<"$LEAK_OUT" \
-        && ! grep -q "private-overlay" <<<"$LEAK_OUT"; then
+    if [ "$rc" -eq 1 ] &&
+        grep -q "Upstream push blocked" <<<"$LEAK_OUT" &&
+        grep -q "source: seed.txt" <<<"$LEAK_OUT" &&
+        grep -q "lines:  [0-9]" <<<"$LEAK_OUT" &&
+        ! grep -q "zq7canary" <<<"$LEAK_OUT" &&
+        ! grep -q "private-overlay" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -254,17 +254,17 @@ _t7_protected_branch_takes_priority() {
     local_sha=$(git -C "$dir" rev-parse HEAD)
 
     set +e
-    out=$(cd "$dir" \
-        && UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" \
-        LEAK_PATTERNS_ERE="$_LEAK_PATTERNS_ERE" \
-        printf 'refs/heads/master %s refs/heads/master %s\n' "$local_sha" "$ZERO_SHA" \
-        | "$HOOK" upstream "https://github.com/owner/repo.git" 2>&1)
+    out=$(cd "$dir" &&
+        UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" \
+            LEAK_PATTERNS_ERE="$_LEAK_PATTERNS_ERE" \
+            printf 'refs/heads/master %s refs/heads/master %s\n' "$local_sha" "$ZERO_SHA" |
+        "$HOOK" upstream "https://github.com/owner/repo.git" 2>&1)
     rc=$?
     set -e
 
     local rc_ok=0
-    if [ "$rc" -eq 1 ] \
-        && grep -q "protected branch" <<<"$out"; then
+    if [ "$rc" -eq 1 ] &&
+        grep -q "protected branch" <<<"$out"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -293,12 +293,12 @@ _t8_matching_path_redacted() {
     set -e
 
     local rc_ok=0
-    if [ "$rc" -eq 1 ] \
-        && [ "$(printf '%s\n' "$LEAK_OUT" | grep -c "source: <redacted path: 21 chars, matches LEAK_PATTERNS_ERE>")" -eq 2 ] \
-        && grep -q "lines:  (file name)" <<<"$LEAK_OUT" \
-        && grep -q "path:    git diff-tree" <<<"$LEAK_OUT" \
-        && grep -q "source: seed.txt" <<<"$LEAK_OUT" \
-        && ! grep -q "qx9FAKE" <<<"$LEAK_OUT"; then
+    if [ "$rc" -eq 1 ] &&
+        [ "$(printf '%s\n' "$LEAK_OUT" | grep -c "source: <redacted path: 21 chars, matches LEAK_PATTERNS_ERE>")" -eq 2 ] &&
+        grep -q "lines:  (file name)" <<<"$LEAK_OUT" &&
+        grep -q "path:    git diff-tree" <<<"$LEAK_OUT" &&
+        grep -q "source: seed.txt" <<<"$LEAK_OUT" &&
+        ! grep -q "qx9FAKE" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -320,9 +320,9 @@ _t9_matching_path_clean_content_blocks() {
     set -e
 
     local rc_ok=0
-    if [ "$rc" -eq 1 ] \
-        && grep -q "source: <redacted path:" <<<"$LEAK_OUT" \
-        && ! grep -q "qx9FAKE" <<<"$LEAK_OUT"; then
+    if [ "$rc" -eq 1 ] &&
+        grep -q "source: <redacted path:" <<<"$LEAK_OUT" &&
+        ! grep -q "qx9FAKE" <<<"$LEAK_OUT"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -335,17 +335,17 @@ _t10_matching_ref_name_redacted() {
     local_sha=$(git -C "$dir" rev-parse HEAD)
 
     set +e
-    out=$(cd "$dir" \
-        && printf 'refs/heads/f %s refs/heads/feat/qx9FAKETOKEN77 %s\n' "$local_sha" "$ZERO_SHA" \
-        | UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" LEAK_PATTERNS_ERE="$_FAKE_PAT" \
+    out=$(cd "$dir" &&
+        printf 'refs/heads/f %s refs/heads/feat/qx9FAKETOKEN77 %s\n' "$local_sha" "$ZERO_SHA" |
+        UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" LEAK_PATTERNS_ERE="$_FAKE_PAT" \
             "$HOOK" upstream "https://github.com/owner/repo.git" 2>&1)
     rc=$?
     set -e
 
     local rc_ok=0
-    if [ "$rc" -eq 1 ] \
-        && grep -q "source: <redacted ref name:" <<<"$out" \
-        && ! grep -q "qx9FAKE" <<<"$out"; then
+    if [ "$rc" -eq 1 ] &&
+        grep -q "source: <redacted ref name:" <<<"$out" &&
+        ! grep -q "qx9FAKE" <<<"$out"; then
         rc_ok=1
     fi
     rm -rf "$dir"
@@ -359,9 +359,9 @@ _push_line_rc() {
     local local_ref="$1" remote_ref="$2" dir
     dir=$(_setup_repo)
     set +e
-    LEAK_OUT=$(cd "$dir" \
-        && printf '%s %s %s %s\n' "$local_ref" "$ZERO_SHA" "$remote_ref" "$ZERO_SHA" \
-        | "$HOOK" origin "git@example.com:owner/repo.git" 2>&1)
+    LEAK_OUT=$(cd "$dir" &&
+        printf '%s %s %s %s\n' "$local_ref" "$ZERO_SHA" "$remote_ref" "$ZERO_SHA" |
+        "$HOOK" origin "git@example.com:owner/repo.git" 2>&1)
     PUSH_RC=$?
     set -e
     rm -rf "$dir"

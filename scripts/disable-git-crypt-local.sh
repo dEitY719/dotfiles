@@ -37,6 +37,6 @@ git -C "$DOTFILES_ROOT" config filter.git-crypt.required false
 git -C "$DOTFILES_ROOT" config diff.git-crypt.textconv cat
 
 ux_success "filter.git-crypt.{smudge,clean,required} + diff.git-crypt.textconv neutralized"
-ux_info    "Idempotent — safe to re-run on every setup.sh."
+ux_info "Idempotent — safe to re-run on every setup.sh."
 
 exit 0

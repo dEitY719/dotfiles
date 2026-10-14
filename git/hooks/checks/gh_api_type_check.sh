@@ -44,9 +44,9 @@ check_gh_api_type_mapping() {
     # caller code. An explicit opt-out marker lets future docs/tests
     # opt out without editing this list.
     case "$abs_path" in
-        */docs/*) return 0 ;;
-        */git/hooks/checks/gh_api_type_check.sh) return 0 ;;
-        */tests/bats/lint/gh_api_type_mapping.bats) return 0 ;;
+    */docs/*) return 0 ;;
+    */git/hooks/checks/gh_api_type_check.sh) return 0 ;;
+    */tests/bats/lint/gh_api_type_mapping.bats) return 0 ;;
     esac
     if grep -q 'gh-api-type-check: skip-file' "$abs_path" 2>/dev/null; then
         return 0
@@ -89,7 +89,7 @@ check_gh_api_type_mapping() {
             [ -z "$line" ] && continue
             # Skip query= itself, which is naturally a multi-line string.
             case "$line" in
-                *'-f query='*) continue ;;
+            *'-f query='*) continue ;;
             esac
             printf '%s:%s [WARN] -f with literal numeric value — likely should be -F for Int!\n' \
                 "$abs_path" "$line" >>"$warnings_file"
@@ -107,15 +107,15 @@ check_gh_api_type_mapping() {
         local window
         window=$(sed -n "${start},${line_no}p" "$abs_path" 2>/dev/null)
         case "$window" in
-            *Variables:*) ;;
-            *)
-                # shellcheck disable=SC2016
-                # The literal "$x Type!" is part of the convention message;
-                # single quotes are intentional to prevent shell expansion.
-                printf '%s:%s [WARN] gh api graphql call missing `# Variables: $x Type!, ...` annotation\n' \
-                    "$abs_path" "$line_no" >>"$warnings_file"
-                found=1
-                ;;
+        *Variables:*) ;;
+        *)
+            # shellcheck disable=SC2016
+            # The literal "$x Type!" is part of the convention message;
+            # single quotes are intentional to prevent shell expansion.
+            printf '%s:%s [WARN] gh api graphql call missing `# Variables: $x Type!, ...` annotation\n' \
+                "$abs_path" "$line_no" >>"$warnings_file"
+            found=1
+            ;;
         esac
     done < <(grep -nE 'gh api graphql' "$abs_path" 2>/dev/null || true)
 

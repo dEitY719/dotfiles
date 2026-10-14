@@ -45,7 +45,7 @@ if [ "${DOTFILES_WORKLOG_ENABLED:-0}" = "1" ]; then
     if [ "$TIME" != "-" ]; then
         time_log_part="${TIME}h"
     fi
-    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | $time_log_part | $HASH | $SUBJECT" >> "$LOGFILE"
+    echo "[$TIMESTAMP] [$JIRA_KEY] | $TYPE | $CATEGORY | $time_log_part | $HASH | $SUBJECT" >>"$LOGFILE"
 fi
 
 # 메타정보 (선택사항)
