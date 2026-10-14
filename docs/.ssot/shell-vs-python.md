@@ -64,8 +64,9 @@ printf '%s' "$json" | cron_py dotfiles_tools.<영역>.<모듈> <op> [arg]
 ## 1차 이식 — issue watcher (#2157)
 
 `dotfiles_tools.issue_watcher.select` 가 `issue_watcher_cron.sh` 의 후보 선정·필터
-순수 로직을 맡는다. 롤백: `IW_SELECT_IMPL=shell`
-(`shell-common/tools/custom/lib/issue_watcher_select_shell.sh`).
+순수 로직을 맡는다. 1 릴리스 관측 후 `IW_SELECT_IMPL=shell` 롤백 경로
+(`issue_watcher_select_shell.sh`)와 golden parity 테스트는 제거됐다 (#2173) —
+python3 >= 3.10 이 없으면 watcher tick 은 후보 선정을 하지 않고 에러로 종료한다.
 
 | 셸 함수 | op | 바뀐 것 |
 |---------|----|---------|
