@@ -49,3 +49,13 @@ check_pipe_loop_antipattern() {
 
     return 0
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=pipe_loop
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Pipe-based loop anti-pattern"
+CHECK_REPORT_LINES=5
+check_run() { check_pipe_loop_antipattern "$1/$3" "$4" 2>/dev/null; }

@@ -77,7 +77,8 @@ make_repo() {
 
     mkdir -p "$repo_dir/git/hooks"
     cp "${DOTFILES_ROOT}/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit"
-    chmod +x "$repo_dir/git/hooks/pre-commit"
+    cp "${DOTFILES_ROOT}/git/hooks/pre-commit.legacy" "$repo_dir/git/hooks/pre-commit.legacy"
+    chmod +x "$repo_dir/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit.legacy"
 
     mkdir -p "$repo_dir/git/hooks/checks"
     cp -R "${DOTFILES_ROOT}/git/hooks/checks/." "$repo_dir/git/hooks/checks/"
@@ -367,6 +368,60 @@ test_wrapper_check_flags_delegating_wrappers() {
         grep -qF "'$want()" <<<"$out" && die "Unexpected wrapper warning for $want: $out"
     done
     rm -rf "$dir"
+}
+
+# Issue #2143 — check registry: one new checks/*_check.sh file is picked up
+# without touching pre-commit; GIT_HOOKS_LEGACY_DISPATCH=1 runs the old path.
+add_fixture_check() {
+    cat >"$1/git/hooks/checks/zz_fixture_check.sh" <<'EOF2'
+#!/usr/bin/env bash
+CHECK_NAME=zz_fixture
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Fixture marker found"
+check_run() {
+    grep -q FIXTURE_MARKER "$1/$3" 2>/dev/null || return 0
+    echo "$3: fixture marker" >>"$4"
+    return 1
+}
+EOF2
+}
+
+test_registry_runs_added_check_file() {
+    local repo_dir out code before
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
+    before=$(cksum <"$repo_dir/git/hooks/pre-commit")
+    add_fixture_check "$repo_dir"
+    echo "FIXTURE_MARKER" >"$repo_dir/notes.txt"
+    git -C "$repo_dir" add notes.txt
+
+    set +e
+    out=$(git -C "$repo_dir" commit -m "fixture" 2>&1)
+    code=$?
+    set -e
+    [ "$(cksum <"$repo_dir/git/hooks/pre-commit")" = "$before" ] || die "pre-commit was modified"
+    [ $code -ne 0 ] || die "Expected the fixture check to block, got: $out"
+    grep -q "BLOCKING.*Fixture marker found (1)" <<<"$out" || die "Expected the fixture section, got: $out"
+    grep -q "notes.txt: fixture marker" <<<"$out" || die "Expected the fixture finding, got: $out"
+
+    # Rollback switch: the legacy explicit dispatch never sees the new file.
+    assert_success "GIT_HOOKS_LEGACY_DISPATCH=1 git -C \"$repo_dir\" commit -m legacy"
+
+    rm -rf "$repo_dir"
+}
+
+test_registry_blocks_invalid_check_file() {
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
+    printf 'CHECK_NAME=broken\nCHECK_SCOPE=per-everything\n' >"$repo_dir/git/hooks/checks/broken_check.sh"
+    echo hi >"$repo_dir/notes.txt"
+    git -C "$repo_dir" add notes.txt
+
+    assert_failure "git -C \"$repo_dir\" commit -m broken"
+
+    rm -rf "$repo_dir"
 }
 
 # Issue #1970 — commit-time leak guard. Fake patterns only.
@@ -1303,6 +1358,10 @@ main() {
     test_shellcheck_blocks_staged_violation
     test_shellcheck_passes_clean_and_ignores_non_shell
     test_wrapper_check_flags_delegating_wrappers
+
+    # Issue #2143 — pre-commit check registry
+    test_registry_runs_added_check_file
+    test_registry_blocks_invalid_check_file
 
     # Issue #1970 — commit-time leak guard
     test_leak_guard_blocks_without_echoing_match

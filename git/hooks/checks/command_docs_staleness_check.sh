@@ -36,3 +36,12 @@ check_command_docs_staleness() {
     } >>"$warnings_file"
     return 1
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# STAGED_FILES_WITH_DELETIONS (runner global, ACDMR): a removed tool script
+# must stay visible to this check (codex review, PR #1741).
+CHECK_NAME=command_docs_staleness
+CHECK_SCOPE=global
+CHECK_SEVERITY=warning
+CHECK_TITLE="Command docs may be stale (issue #1737)"
+check_run() { check_command_docs_staleness "${STAGED_FILES_WITH_DELETIONS:-}" "$4"; }

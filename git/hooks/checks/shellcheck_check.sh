@@ -68,3 +68,19 @@ if [ -z "$_SHELLCHECK_CHECK_SOURCED" ]; then
         check_shellcheck "$SHELLCHECK_VIOLATIONS_FILE" "$STAGED_FILES"
     fi
 fi
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=shellcheck
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="ShellCheck static analysis issues"
+CHECK_REPORT_LINES=10
+check_run() {
+    local file="$3"
+    [ -f "$1/$file" ] || return 0
+    case "$file" in
+    *.sh | *.bash) ;;
+    *) head -1 "$1/$file" 2>/dev/null | grep -qE "^#!.*\b(bash|sh|zsh)" || return 0 ;;
+    esac
+    check_shellcheck "$4" "$file"
+}

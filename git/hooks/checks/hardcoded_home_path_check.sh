@@ -90,3 +90,11 @@ check_hardcoded_home_path() {
 
     return 1
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=hardcoded_home_path
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Hardcoded absolute home path"
+CHECK_REPORT_LINES=10
+check_run() { check_hardcoded_home_path "$1" "$2" "$3" "$4" 2>/dev/null; }

@@ -84,3 +84,10 @@ DOTFILES_HOOKS_LIBRARY_PURITY_INSTALL_ERE="${DOTFILES_HOOKS_LIBRARY_PURITY_INSTA
 # tools/custom auto-exec: tail window sizes
 DOTFILES_HOOKS_CUSTOM_MAIN_TAIL_LINES="${DOTFILES_HOOKS_CUSTOM_MAIN_TAIL_LINES:-30}"
 DOTFILES_HOOKS_CUSTOM_GUARD_TAIL_LINES="${DOTFILES_HOOKS_CUSTOM_GUARD_TAIL_LINES:-80}"
+
+# Pre-commit check registry (#2143): git/hooks/pre-commit loads every
+# git/hooks/checks/*_check.sh; each declares CHECK_NAME / CHECK_SCOPE /
+# CHECK_SEVERITY / CHECK_TITLE and check_run (contract: git/doc/CHECK_REGISTRY.md).
+# CHECK_ORDER lists CHECK_NAMEs to report first; the rest follow in file-name
+# order. Empty = file-name (alphabetical) order.
+CHECK_ORDER=()

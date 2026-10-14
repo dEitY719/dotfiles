@@ -57,3 +57,20 @@ check_naming_violations() {
 
     return $violations_found
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=naming
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Naming convention violations"
+CHECK_REPORT_LINES=10
+CHECK_HINT="User-facing text must use dash-form; function definitions must use snake_case."
+check_run() {
+    local abs_path="$1/$3" out="$4" rc=0
+    case "$3" in shell-common/functions/*.sh) ;; *) return 0 ;; esac
+    check_naming_violations "$abs_path" "$out" 2>/dev/null || rc=1
+    check_function_naming "$abs_path" "$out" 2>/dev/null || rc=1
+    return "$rc"
+}

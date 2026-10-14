@@ -77,3 +77,15 @@ check_help_integrity() {
 
     return $fail
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+# per-shell-file: the runner only passes shell-common/functions/*.sh and
+# shell-common/tools/integrations/*.sh paths that exist in the worktree.
+CHECK_NAME=help_integrity
+CHECK_SCOPE=per-shell-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Help Integrity violations"
+check_run() {
+    case "$3" in shell-common/functions/*.sh) ;; *) return 0 ;; esac
+    check_help_integrity "$1/$3" "$4" "$1" 2>/dev/null
+}

@@ -60,3 +60,10 @@ check_auto_executable_in_custom() {
     rm -f "$tmp_file"
     return 0
 }
+
+# --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
+CHECK_NAME=custom_tools_entrypoint
+CHECK_SCOPE=per-file
+CHECK_SEVERITY=blocking
+CHECK_TITLE="Auto-executable tools/custom scripts without guard"
+check_run() { check_auto_executable_in_custom "$1" "$2" "$3" "$4" 2>/dev/null; }
