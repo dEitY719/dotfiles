@@ -96,8 +96,9 @@ _ca_in_bundle() {
     fi
     printf '%s\n' "$_fps_cache" | grep -qxF -- "$(printf '%s' "$1" | tr -d ':' | tr 'a-f' 'A-F')" && return 0
     # 판정(#2103 정규식)은 그대로 두고, 64자 all-hex 레거시 부분 문자열 값만 안내한다 (#2110).
-    ! grep -qF -- "$1" "$CHECK_CERT" ||
+    if grep -qF -- "$1" "$CHECK_CERT"; then
         warn "$2: 지문이 아니라 PEM 부분 문자열로 보임 → openssl x509 -noout -fingerprint -sha256 값으로 교체"
+    fi
     return 1
 }
 
