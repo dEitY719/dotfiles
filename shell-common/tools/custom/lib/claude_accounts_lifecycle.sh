@@ -281,18 +281,21 @@ _claude_link_src() {
 # dir 행: 외부에서 추가된 symlink(`claude-accounts link`, graphify 등)는 유지하고
 # 예전 flat 합성이 남긴 워크스페이스 스킬 링크만 지운다 (#1652).
 _claude_link_apply() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     _cla_mode="${1:-}"
     _cla_cdir="${2:-}"
+    _cla_rc=0 # any failed row fails the call, not only the last one
     while IFS='|' read -r _cla_src _cla_rel _cla_kind _cla_modes <&3; do
         case "$_cla_modes" in all | "$_cla_mode") ;; *) continue ;; esac
         case "$_cla_kind" in
-        copy) _claude_ensure_settings_copy "$(_claude_link_src "$_cla_src")" "$_cla_cdir/$_cla_rel" ;;
-        link) _claude_ensure_symlink "$(_claude_link_src "$_cla_src")" "$_cla_cdir/$_cla_rel" ;;
-        dir) _claude_prune_workspace_skills "$_cla_cdir/$_cla_rel" ;;
+        copy) _claude_ensure_settings_copy "$(_claude_link_src "$_cla_src")" "$_cla_cdir/$_cla_rel" || _cla_rc=1 ;;
+        link) _claude_ensure_symlink "$(_claude_link_src "$_cla_src")" "$_cla_cdir/$_cla_rel" || _cla_rc=1 ;;
+        dir) _claude_prune_workspace_skills "$_cla_cdir/$_cla_rel" || _cla_rc=1 ;;
         esac
     done 3<<EOF
 $(_claude_link_table)
 EOF
+    return "$_cla_rc"
 }
 
 # _claude_account_setup_one — 단일 계정의 link 멱등 셋업.

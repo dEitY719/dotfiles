@@ -1329,6 +1329,9 @@ _seed_ssot_skills() {
         "$FAKE_DOTFILES_ROOT/claude/workflows"
     touch "$FAKE_DOTFILES_ROOT/claude/statusline-command.sh" \
         "$FAKE_DOTFILES_ROOT/claude/CLAUDE.md" "$FAKE_DOTFILES_ROOT/claude/keybindings.json"
+    # settings.json copy source — _claude_link_apply now fails on any failed
+    # row, not only the last one (#2141).
+    echo '{}' >"$FAKE_DOTFILES_ROOT/claude/settings.json"
     _seed_ws_skills "$@"
 }
 
