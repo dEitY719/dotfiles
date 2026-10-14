@@ -222,11 +222,11 @@ run_prune() {
     # names the file that lost its call.
     local setup="${_BATS_REAL_DOTFILES_ROOT}/claude/setup.sh"
     # _claude_account_setup_one moved to the lifecycle lib (#2146).
-    local integ="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_lifecycle.sh"
+    local lifecycle="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_lifecycle.sh"
     local skills="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_skills.sh"
 
     local f
-    for f in "$setup" "$integ"; do
+    for f in "$setup" "$lifecycle"; do
         run grep -c '^[[:space:]]*_claude_prune_workspace_skills ' "$f"
         assert_success
         [ "$output" -ge 1 ] || fail "no workspace prune call in $f"
@@ -234,9 +234,9 @@ run_prune() {
 
     # Neither the retired workspace composer nor the older dotfiles composer
     # may creep back in — plugins are the single SSOT for Claude Code.
-    run grep -nE '^[[:space:]]*_claude_compose_(workspace_skills|skills_dir)\b' "$setup" "$integ"
+    run grep -nE '^[[:space:]]*_claude_compose_(workspace_skills|skills_dir)\b' "$setup" "$lifecycle"
     assert_failure
-    run grep -nE '^_claude_compose_(workspace_skills|skills_dir)\(\)' "$integ" "$skills"
+    run grep -nE '^_claude_compose_(workspace_skills|skills_dir)\(\)' "$lifecycle" "$skills"
     assert_failure
 }
 

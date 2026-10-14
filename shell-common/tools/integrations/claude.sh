@@ -430,12 +430,14 @@ unset _ic_claude_lib
 # interactive startup does not parse them. Each name below stays defined as a
 # lazy loader: the first call sources both libs, which redefine every name
 # with its real body, then re-dispatches. Keeps the public name set intact.
+# The libs also redefine the claude_accounts_* wrappers below with their
+# in-process bodies; same code, so the result is identical either way.
 _claude_accounts_load() {
-    _cal_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/lib"
-    . "$_cal_lib/claude_accounts_lifecycle.sh" && . "$_cal_lib/claude_accounts_skills.sh"
-    _cal_rc=$?
-    unset _cal_lib
-    return "$_cal_rc"
+    _cacl_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/lib"
+    . "$_cacl_lib/claude_accounts_lifecycle.sh" && . "$_cacl_lib/claude_accounts_skills.sh"
+    _cacl_rc=$?
+    unset _cacl_lib
+    return "$_cacl_rc"
 }
 for _ic_claude_fn in _claude_backup_original _claude_ensure_symlink _claude_link_lib \
     _claude_ensure_settings_copy _claude_install_herdr_hook _claude_account_setup_one \

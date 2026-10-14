@@ -87,6 +87,26 @@ work"
 b"
 }
 
+@test "integrations/claude.sh: lazy loader re-dispatches to the real body (bash, zsh)" {
+    local tgt="$TEST_TEMP_HOME/lazy-skills" sh
+    for sh in bash zsh; do
+        command -v "$sh" >/dev/null 2>&1 || continue
+        rm -rf "$tgt"
+        : >"$tgt"   # a stray file: the real _claude_prepare_skills_dir backs it up
+        run "$sh" -c "
+            . '${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh'
+            . '${DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh'
+            _claude_prepare_skills_dir '$tgt' >/dev/null 2>&1 || exit 1
+            [ -d '$tgt' ] && [ -e '$tgt.original' ] || exit 2
+            # second call goes straight to the real body (no reload)
+            _claude_accounts_load() { return 1; }
+            _claude_prepare_skills_dir '$tgt' >/dev/null 2>&1 || exit 3
+        "
+        assert_success
+        rm -rf "$tgt" "$tgt.original"
+    done
+}
+
 @test "integrations/claude.sh stays under 500 lines" {
     run wc -l <"${DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
     assert_success
