@@ -46,7 +46,11 @@ printf '%s' "$json" | cron_py dotfiles_tools.<영역>.<모듈> <op> [arg]
 - 입력: stdin — gh 가 출력한 JSON 그대로 (셸이 이미 가진 줄 목록이면 그 줄 그대로).
 - 출력: stdout — 셸이 바로 소비하는 형태 (`read` 루프면 TSV 줄, 아니면 JSON).
   셸 쪽에 jq 재파싱을 남기지 않는 것이 목적이다.
-- 종료 코드: `0`/`1` 은 op 의 답 (예/아니오), `2` 는 읽을 수 없는 입력·잘못된 사용.
+- 종료 코드: `0` 은 답함, `2` 는 읽을 수 없는 입력·잘못된 사용 (stdout 비움). `1` 은
+  op 의 "아니오" 로만 쓰되, **안전에 걸린 판정은 exit 1 이 아니라 stdout 으로 내린다** —
+  import 조차 못 한 `python3` 도 exit 1 로 끝나므로, 셸은 빈/비숫자 stdout 을
+  "판단 불가" 로 읽어야 한다 (`handled-by-pr` 가 그 예).
+- python3 >= 3.10 이 없으면 (RHEL 8 은 3.6) 롤백 경로로 경고 후 자동 전환한다 — 도구가 멈추지 않는다.
 - 진단 메시지는 stderr 만. 사용자 출력(`ux_*`)은 셸이 한다.
 
 ## 이식 절차
@@ -67,14 +71,14 @@ printf '%s' "$json" | cron_py dotfiles_tools.<영역>.<모듈> <op> [arg]
 |---------|----|---------|
 | `_iw_search_issues` | `search-rows` | search JSON → `<repo>\t<n>\t<labels>` jq 필터 |
 | `_iw_load_open_prs` | `pr-count` | PR 창 크기 jq `length` |
-| `_iw_handled_by_pr` | `handled-by-pr <n>` | closing keyword / `wt/issue-<n>/` 판정 (0/1/2) |
+| `_iw_handled_by_pr` | `handled-by-pr <n>` | closing keyword / `wt/issue-<n>/` 에 걸린 PR 수 (셸이 0/1/2 로 판정) |
 | `_iw_blocked_by_open` | `open-blockers` | blockedBy GraphQL 응답의 OPEN 번호 |
 | `_iw_repo_order` | `repo-order <last>` | round-robin 순서 awk |
 
 셸에 남은 것: `_iw_select_candidates` 의 오케스트레이션 (예산 계산, per-repo cap,
 lazy 한 gh 호출 순서) — 네트워크 호출 사이에 끼어 있어 순수 함수가 아니다.
 
-수치: `issue_watcher_cron.sh` 3204 → 3194줄, `grep -c "jq "` 11 → 7.
+이식 시점 수치 (#2157): `issue_watcher_cron.sh` 의 jq 호출 6 → 2 (남은 2건은 watch list·herdr pane 파싱), `grep -c "jq "` 11 → 9 (롤백 안내 문구 포함), 줄 수 3204 → 3209 (선택 로직 −40줄, 롤백·fail-closed 분기 +45줄).
 
 후속: 롤백 경로 제거 #2173 (1 릴리스 관측 후), 2순위 이식
 (`pr_merge_train_cron.sh`, claude 계정 로직) #2174.

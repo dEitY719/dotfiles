@@ -10,7 +10,7 @@
 # Pure: reads stdin, writes stdout, no ux_lib, no network — sourceable alone.
 
 _iw_sel_shell() {
-    local _hits _open
+    local _open
 
     case "$1" in
     search-rows)
@@ -26,9 +26,9 @@ _iw_sel_shell() {
         jq -r 'length' 2>/dev/null || return 2
         ;;
     handled-by-pr)
-        # The `\b` after the number is load-bearing: without it `#14` would
-        # match a body that closes `#145`.
-        _hits=$(jq -r --arg n "$2" '
+        # How many open PRs close issue $2. The `\b` after the number is
+        # load-bearing: without it `#14` would match a body that closes `#145`.
+        jq -r --arg n "$2" '
             [ .[]?
               | select(
                   ((.headRefName // "") | test("^wt/issue-" + $n + "/"))
@@ -36,12 +36,7 @@ _iw_sel_shell() {
                       | test("\\b(close[sd]?|fix(e[sd])?|resolve[sd]?):?\\s+(\\S+)?#" + $n + "\\b"; "i"))
                 )
             ] | length
-        ' 2>/dev/null) || _hits=""
-        case "${_hits}" in
-        '' | *[!0-9]*) return 2 ;;
-        0) return 1 ;;
-        *) return 0 ;;
-        esac
+        ' 2>/dev/null || return 2
         ;;
     open-blockers)
         _open=$(jq -r '
