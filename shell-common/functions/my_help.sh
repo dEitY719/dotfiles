@@ -299,11 +299,9 @@ _my_help_enumerate_topic_names() {
     while IFS= read -r func; do
         # Extract function name (before '(' or first space)
         local func_name="${func%%[( ]*}"
-        # The `_*` arm below already excludes the adapter's internal helpers
-        # (_help_std_orig_*, _help_std_summary_*, _help_std_rows_*,
-        # _help_std_full_*, _help_std_list_*): they end in the topic name, and
-        # only today's leading-underscore convention keeps them out of the
-        # `*help` match.
+        # The `_*` arm below excludes private helpers such as
+        # _<topic>_help_summary: only the leading-underscore convention keeps
+        # them out of the `*help` match.
         case "$func_name" in
             my-help|run-help|_*) ;;
             *help)
@@ -1333,9 +1331,10 @@ if [ -n "$ZSH_VERSION" ]; then
                 return $?
             fi
 
-            # Generic `<topic>-help` fallback (issue #1287). The adapter registers
-            # dash-form topics as aliases only, so a non-interactive shell or one
-            # with `setopt no_aliases` lands here; map back to the canonical
+            # Generic `<topic>-help` fallback (issue #1287). Each *_help.sh
+            # defines its dash-form topic as an alias only, so a
+            # non-interactive shell or one with `setopt no_aliases` lands
+            # here; map back to the canonical
             # underscore helper and dispatch only when it is a real function
             # (never for aliases that point at a binary, e.g. `codex --help`).
             case "$cmd_name" in

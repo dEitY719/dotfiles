@@ -75,6 +75,23 @@ row 함수는 화면 출력뿐 아니라 **커맨드 레퍼런스 문서의 데�
 - 로케일 의존 출력(`sort` 정렬 순서, 멀티바이트 문자에 대한 `cut -c`)은 렌더 자식이
   `LC_ALL=C` 로 고정하므로 별도 처리 불필요.
 
+### 4) Native 형식 체크리스트 (#2136)
+
+런타임 shim 은 없다 — 예전 `zz_help_standard_adapter.sh` 가 셸 시작마다 하던 래핑·alias 등록을
+각 `*_help.sh` 가 스스로 한다. 새 topic 은 아래를 모두 갖춰야 한다:
+
+- **요약 helper**: `_<topic>_help_summary()` — 위 "출력 정책" 템플릿(Usage 줄 + `ux_bullet "sections"`).
+- **섹션 목록 / 전체**: `_<topic>_help_list_sections()`, `_<topic>_help_full()` (row 함수 재사용).
+- **dispatcher** `<topic>_help()` 의 인자 처리:
+  - `""` · `-h` · `--help` · `help` → summary
+  - `--list` · `list` · `section` · `sections` → 섹션 목록
+  - `--all` · `all` → full
+  - 그 외 → 해당 섹션 row (모르는 섹션은 에러 + 목록)
+- **dash alias**: 정의 파일에 `alias <topic-dash>-help='<topic>_help'`. zsh 에서도 함수가 아니라 **alias** 로만 둔다(#1287 — 함수로 두면 `my-help find` 가 topic 을 두 번 표시). 비대화형·`no_aliases` 호출은 `my_help.sh` 의 `command_not_found_handler` 가 `*-help` → `*_help` 로 이어준다.
+- **등록**: 아래 "등록" 절의 `_register_help`.
+
+`tests/bats/functions/help_native_format.bats` 가 예전 어댑터 대상 57 topic 의 summary helper·dash alias 를 bash/zsh 양쪽에서 고정한다.
+
 ## 네이밍 규칙 (help 함수)
 
 - 함수명: snake_case (`git_help`, `gwt_help`)

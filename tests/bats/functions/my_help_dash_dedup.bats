@@ -11,8 +11,8 @@
 # T1-T3 pin the invariant: dash-form is an alias, never a second function.
 # T4-T6 pin the user-visible symptom: no duplicate rows reach fzf.
 # T7-T9 pin that the fix did not break dash-form callability, including the
-#       three topics (git/gwt/gbr) whose _help_std_wrap_one special case the
-#       fix removed.
+#       three topics (git/gwt/gbr) the old adapter special-cased; T9 pins
+#       that no runtime help shim remains (#2136).
 # T10-T11 pin bash parity — bash was never affected and must stay unchanged.
 
 load '../test_helper'
@@ -113,11 +113,10 @@ teardown() {
     assert_output --partial "sections"
 }
 
-@test "T9: git/gwt/gbr stay unwrapped by the adapter" {
-    # They are guideline-compliant (each has a paired _<topic>_help_summary), so
-    # _help_std_wrap_one must still skip cloning them into _help_std_orig_*.
-    # This is the second thing the deleted special case used to guarantee.
-    run_in_zsh 'print -rl -- ${(k)functions} | grep -cE "^_help_std_orig_(git|gwt|gbr)_help$" || true'
+@test "T9: no runtime help shim wraps any topic" {
+    # The help adapter that cloned topics into _help_std_orig_* is gone
+    # (#2136); every topic is native, so no _help_std_* function may exist.
+    run_in_zsh 'print -rl -- ${(k)functions} | grep -c "^_help_std_" || true'
     assert_success
     assert_output "0"
 }

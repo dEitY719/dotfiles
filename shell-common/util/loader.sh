@@ -81,8 +81,7 @@ _dotfiles_clear_help_functions() {
 }
 
 # Load every shell-common category in order:
-#   env -> help registry -> aliases -> functions -> integrations
-#   -> (help adapter) -> projects
+#   env -> help registry -> aliases -> functions -> integrations -> projects
 # Shell-specific modules (bash/env, zsh/app) are the entry point's job and
 # load AFTER this, so they can override the common values.
 dotfiles_load_all() {
@@ -93,10 +92,6 @@ dotfiles_load_all() {
     load_category aliases
     load_category functions
     load_category integrations "${SHELL_COMMON}/tools"
-    # Normalize help interfaces after all help providers are sourced.
-    if command -v apply_help_standard_adapter >/dev/null 2>&1; then
-        apply_help_standard_adapter
-    fi
     load_category projects
     return 0
 }

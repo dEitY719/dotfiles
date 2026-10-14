@@ -18,7 +18,7 @@
 1. Shell detection (zsh 아니면 exit)
 2. `DOTFILES_ROOT` 후보 (zshrc 프리셋 또는 `${(%):-%N}`) + MERGE_HEAD 진단(인라인)
 3. `shell-common/util/bootstrap.sh` — skip 가드(비대화형·`DOTFILES_SKIP_INIT`·Codex, bash 와 동일), #589 정규화, `SHELL_COMMON`, counter, `safe_source`, ux_lib, loader
-4. `dotfiles_load_all` — env → aliases → functions → integrations → help adapter → projects (`*help` cleanup 선행)
+4. `dotfiles_load_all` — env → aliases → functions → integrations → projects (`*help` cleanup 선행)
 5. Zsh applications (`zsh/app/*.zsh`, `zsh.zsh`·`git.zsh` 우선)
 6. setup_mode → `dotfiles_show_init_summary` (`DOTFILES_SUPPRESS_MESSAGE=1` 이면 생략)
 
