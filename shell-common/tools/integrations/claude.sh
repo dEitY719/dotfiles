@@ -433,6 +433,9 @@ unset _ic_claude_lib
 _claude_accounts_load() {
     _cal_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/lib"
     . "$_cal_lib/claude_accounts_lifecycle.sh" && . "$_cal_lib/claude_accounts_skills.sh"
+    _cal_rc=$?
+    unset _cal_lib
+    return "$_cal_rc"
 }
 for _ic_claude_fn in _claude_backup_original _claude_ensure_symlink _claude_link_lib \
     _claude_ensure_settings_copy _claude_install_herdr_hook _claude_account_setup_one \
