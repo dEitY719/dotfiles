@@ -1,7 +1,7 @@
 # Module Context
 
 - **Purpose**: Git configuration, hooks, and hook documentation for this dotfiles repo.
-- **Scope**: `git/` only (setup scripts, hook logic, hook docs, `tests/` hook integration scripts).
+- **Scope**: `git/` only (setup scripts, hook logic, hook docs; hook integration tests live in `tests/bats/git/`).
 
 # Operational Commands
 
