@@ -20,7 +20,11 @@ dotfiles_setup_mode_resolve() {
     _dsmr_arg=""
     while [ $# -gt 0 ]; do
         case "$1" in
-            --mode) _dsmr_arg="${2-}" && shift ;;
+            --mode)
+                # dash aborts the whole script on a shift past $#; guard it.
+                [ $# -ge 2 ] || { ux_error "dotfiles_setup_mode_resolve: --mode needs a value" && return 2; }
+                _dsmr_arg="$2" && shift
+                ;;
             --mode=*) _dsmr_arg="${1#*=}" ;;
             *) ux_error "dotfiles_setup_mode_resolve: unknown option: $1" && return 2 ;;
         esac

@@ -52,7 +52,11 @@ dotfiles_ensure_link() {
     shift 2
     while [ $# -gt 0 ]; do
         case "$1" in
-            --on-mismatch) _del_mode="${2-}" && shift ;;
+            --on-mismatch)
+                # dash aborts the whole script on a shift past $#; guard it.
+                [ $# -ge 2 ] || { ux_error "dotfiles_ensure_link: --on-mismatch needs a value" && return 2; }
+                _del_mode="$2" && shift
+                ;;
             --on-mismatch=*) _del_mode="${1#*=}" ;;
             --allow-dir) _del_allow_dir=1 ;;
             --unmount-legacy) _del_unmount=1 ;;
