@@ -1299,6 +1299,13 @@ _gwt_branch_merged() {
     _gwt_pr_merged_into "$branch" "$target"
 }
 
+# ============================================================================
+# Internal: print the pid of the claude agent holding <wt_path>'s worktree
+# lock (`git worktree lock` reason "claude agent ... (pid N)"). Returns 1 when
+# the worktree is unlocked or locked by anything else. Used by status and
+# teardown.
+# Usage: _gwt_claude_lock_pid <wt_path>
+# ============================================================================
 _gwt_claude_lock_pid() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local wt_path="$1"
