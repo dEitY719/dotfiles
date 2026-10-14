@@ -60,8 +60,7 @@ make_repo() {
 
     mkdir -p "$repo_dir/git/hooks"
     cp "${DOTFILES_ROOT}/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit"
-    cp "${DOTFILES_ROOT}/git/hooks/pre-commit.legacy" "$repo_dir/git/hooks/pre-commit.legacy"
-    chmod +x "$repo_dir/git/hooks/pre-commit" "$repo_dir/git/hooks/pre-commit.legacy"
+    chmod +x "$repo_dir/git/hooks/pre-commit"
 
     mkdir -p "$repo_dir/git/hooks/checks"
     cp -R "${DOTFILES_ROOT}/git/hooks/checks/." "$repo_dir/git/hooks/checks/"
@@ -356,7 +355,7 @@ test_wrapper_check_flags_delegating_wrappers() {
 }
 
 # Issue #2143 — check registry: one new checks/*_check.sh file is picked up
-# without touching pre-commit; GIT_HOOKS_LEGACY_DISPATCH=1 runs the old path.
+# without touching pre-commit.
 add_fixture_check() {
     cat >"$1/git/hooks/checks/zz_fixture_check.sh" <<'EOF2'
 #!/usr/bin/env bash
@@ -399,9 +398,6 @@ test_registry_runs_added_check_file() {
     grep -q "check 'zz_silent' failed without writing a report" <<<"$out" ||
         die "Expected the silent-failure note, got: $out"
     rm -f "$repo_dir/git/hooks/checks/zz_silent_check.sh"
-
-    # Rollback switch: the legacy explicit dispatch never sees the new file.
-    assert_success "GIT_HOOKS_LEGACY_DISPATCH=1 git -C \"$repo_dir\" commit -m legacy"
 
     rm -rf "$repo_dir"
 }

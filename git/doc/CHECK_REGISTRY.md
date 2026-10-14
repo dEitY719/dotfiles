@@ -51,9 +51,7 @@ reject every commit touching such a file. `tests/golden_rules/test_golden_rules.
 runs it over `git ls-files` and holds no rule of its own: a rule lives only in
 its check file.
 
-## Order and rollback
+## Order
 
 Reports print blocking checks, then warnings, each in `CHECK_ORDER`
 (`git/config/hook-config.sh`) order first and file-name order after.
-`GIT_HOOKS_LEGACY_DISPATCH=1` runs `git/hooks/pre-commit.legacy`, the old
-explicit dispatch, for one release.
