@@ -443,9 +443,9 @@ _pmt_backoff_gate() {
     _file="$(_pmt_backoff_file)"
 
     # The verdict itself is the `backoff-next` op (dotfiles_tools.merge_train.queue):
-    # no fingerprint -> `run`; a changed one
-    # -> `run 1 1`; an open window -> `skip <window> <remaining - 1>`; an elapsed
-    # one -> `run <doubled, capped window> <same>`. The file I/O stays here.
+    # a changed fingerprint -> `run 1 1`; an open window -> `skip <window>
+    # <remaining - 1>`; an elapsed one -> `run <doubled, capped window> <same>`.
+    # The file I/O stays here.
     _verdict=$({ [ -r "${_file}" ] && cat "${_file}"; } 2>/dev/null |
         _pmt_q backoff-next "${_PMT_BACKOFF_MAX}" "${_PMT_FINGERPRINT}") || _verdict=""
     IFS=' ' read -r _action _window _remaining <<EOF
@@ -478,11 +478,9 @@ EOF
         return 1
         ;;
     esac
-    # No fingerprint, or no readable verdict: no evidence — run, record nothing.
-    # A fingerprint with no verdict means the op itself broke (python crash,
-    # import error): say so, or backoff silently stays off on every tick.
-    [ -z "${_PMT_FINGERPRINT}" ] ||
-        ux_warning "No backoff verdict for ${_PMT_REPO} (queue op failed) — running the tick without backoff."
+    # A fingerprint with no readable verdict means the op itself broke (python
+    # crash, import error): say so, or backoff silently stays off on every tick.
+    ux_warning "No backoff verdict for ${_PMT_REPO} (queue op failed) — running the tick without backoff."
     return 1
 }
 
