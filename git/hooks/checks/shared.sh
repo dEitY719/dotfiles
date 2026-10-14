@@ -35,3 +35,14 @@ custom_tool_class() {
     shell-common/tools/custom/*.sh) echo "entrypoint" ;;
     esac
 }
+
+# The one place that says which paths the per-shell-file checks see: function
+# libraries and tool integrations that exist in the worktree (the
+# *NAMING_CONVENTION* docs excluded). Used by pre-commit and checks/run_all.sh.
+is_shell_lib_file() { # <repo_root> <repo_rel_path>
+    case "$2" in
+    *NAMING_CONVENTION*) return 1 ;;
+    shell-common/functions/*.sh | shell-common/tools/integrations/*.sh) [ -f "$1/$2" ] ;;
+    *) return 1 ;;
+    esac
+}

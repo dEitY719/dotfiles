@@ -1,0 +1,26 @@
+# Legacy violations found by git/hooks/checks/run_all.sh in whole-file mode (#2149).
+# Format: <check_name>:<repo-relative path>. Listed keys do not fail golden rules;
+# shrink to zero, never add to it to pass a new violation.
+interactive_guard:shell-common/functions/claude_stop_hook_install.sh
+interactive_guard:shell-common/functions/gh_discussion.sh
+interactive_guard:shell-common/functions/gh_pr_lint.sh
+interactive_guard:shell-common/functions/gh_pr_merge_train.sh
+interactive_guard:shell-common/functions/gh_project_pat.sh
+interactive_guard:shell-common/functions/gh_project_status.sh
+interactive_guard:shell-common/functions/secret_run.sh
+interactive_guard:shell-common/functions/sops_help.sh
+ux_usage:shell-common/functions/devx_pr_verify_live_backend_identity.sh
+ux_usage:shell-common/functions/git_worktree.sh
+ux_usage:shell-common/functions/mirror_pages_activate_help.sh
+ux_usage:shell-common/functions/wsl_check.sh
+wrapper:shell-common/functions/category_help.sh
+wrapper:shell-common/functions/git_help.sh
+wrapper:shell-common/functions/mytool_help.sh
+wrapper:shell-common/functions/plugin_sync_title.sh
+wrapper:shell-common/functions/register_help.sh
+wrapper:shell-common/functions/superpowers_help.sh
+wrapper:shell-common/functions/work.sh
+wrapper:shell-common/functions/wsl_check.sh
+wrapper:shell-common/tools/integrations/codex.sh
+wrapper:shell-common/tools/integrations/litellm.sh
+zsh_emulation:shell-common/functions/my_help.sh

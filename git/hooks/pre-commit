@@ -195,12 +195,7 @@ run_check() { # <name> <file-or-empty>
 while IFS= read -r file; do
     [ -n "$file" ] || continue
     shell_lib=0
-    case "$file" in
-    *NAMING_CONVENTION*) ;;
-    shell-common/functions/*.sh | shell-common/tools/integrations/*.sh)
-        [ -f "$REPO_ROOT/$file" ] && shell_lib=1
-        ;;
-    esac
+    is_shell_lib_file "$REPO_ROOT" "$file" && shell_lib=1
     for name in "${CHECK_NAMES[@]}"; do
         case "${CHECK_SCOPE_OF[$name]}" in
         per-file) run_check "$name" "$file" ;;

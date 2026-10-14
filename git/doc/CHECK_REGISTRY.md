@@ -30,9 +30,21 @@ blocks the commit, so a broken check never turns itself off silently.
 
 | Scope | Called with | Checks |
 |---|---|---|
-| `per-file` | every staged file; the adapter filters further | shebang, shellcheck, gh_api_type, init_auto_sourcing, custom_tools_entrypoint, direct_exec_guard, hardcoded_home_path |
-| `per-shell-file` | staged `shell-common/functions/*.sh` and `shell-common/tools/integrations/*.sh` that exist (except `*NAMING_CONVENTION*`) | naming, ux_usage, help_integrity, subshell_sourcing, pipe_loop, zsh_emulation, alias_conflict, alias_location, wrapper, auto_execution, library_purity |
+| `per-file` | every staged file; the adapter filters further | shebang, shellcheck, gh_api_type, init_auto_sourcing, custom_tools_entrypoint, direct_exec_guard, hardcoded_home_path, emoji, settings_model_key, interactive_guard |
+| `per-shell-file` | staged `shell-common/functions/*.sh` and `shell-common/tools/integrations/*.sh` that exist (except `*NAMING_CONVENTION*`; `is_shell_lib_file` in `shared.sh`) | naming, ux_usage, help_integrity, subshell_sourcing, pipe_loop, zsh_emulation, alias_conflict, alias_location, wrapper, auto_execution, library_purity |
 | `global` | once, with an empty file; staged lists are in `STAGED_FILES` / `STAGED_FILES_WITH_DELETIONS` | backup_files, command_docs_staleness, leak_pattern |
+
+## Whole-file mode (golden rules, #2149)
+
+`git/hooks/checks/run_all.sh <file>...` loads the same modules and runs every
+`per-file` / `per-shell-file` check on the given files with `CHECK_MODE=all`
+exported; `global` checks are skipped (they judge the staged set). A check
+that reads the staged diff must judge the whole file when `CHECK_MODE=all`
+(`hardcoded_home_path` does). Every finding, warning or blocking, is a
+`<check_name>:<path>` key; keys in `checks/baseline.txt` are legacy
+violations and pass, any other key exits 1. `tests/golden_rules/test_golden_rules.sh`
+runs it over `git ls-files` and holds no rule of its own: a rule lives only in
+its check file.
 
 ## Order and rollback
 

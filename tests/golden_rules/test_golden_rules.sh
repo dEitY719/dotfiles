@@ -1,189 +1,26 @@
 #!/bin/bash
-# tests/test_golden_rules.sh
-# Validate golden rules compliance across the dotfiles project
-# Run: bash tests/test_golden_rules.sh
+# tests/golden_rules/test_golden_rules.sh
+# Golden rules = the pre-commit checks in whole-file mode over every tracked
+# file (#2149). Each rule lives only in git/hooks/checks/*_check.sh; this
+# script holds no rule of its own. Known legacy violations: baseline.txt.
+# Run: bash tests/golden_rules/test_golden_rules.sh
 
-# Self-locate the repo root so every relative path below (hermes/config.yaml,
-# claude/settings.json, ...) resolves correctly regardless of the caller's
-# cwd — PR #1381 review (agy): running this script from outside the repo
-# root silently no-ops the `[ -f ... ]` guards, false-passing every rule.
-DOTFILES_ROOT="${DOTFILES_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# Self-locate the repo root so the run is the same from any cwd (PR #1381).
+# Never an inherited DOTFILES_ROOT: in a worktree that names the main checkout.
+DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$DOTFILES_ROOT" || { echo "Could not cd to DOTFILES_ROOT: $DOTFILES_ROOT" >&2; exit 1; }
-failed=0
 
-# Color codes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
-test_case() {
-    local name="$1"
-    local result="$2"
-
-    if [ "$result" -eq 0 ]; then
-        echo -e "${GREEN}✓${NC} $name"
-    else
-        echo -e "${RED}✗${NC} $name"
-        failed=$((failed + 1))
-    fi
-}
-
 echo "════════════════════════════════════════════════════════════"
-echo "GOLDEN RULES VALIDATION"
+echo "GOLDEN RULES VALIDATION (git/hooks/checks/run_all.sh)"
 echo "════════════════════════════════════════════════════════════"
-echo ""
-
-# Rule 1: No hardcoded paths in main shell files
-echo "Rule 1: No hardcoded paths (use \$HOME or env vars)"
-for file in bash/main.bash zsh/main.zsh; do
-    if grep -q "export PATH=/home" "$file" 2>/dev/null; then
-        test_case "$file: no hardcoded paths" 1
-    else
-        test_case "$file: no hardcoded paths" 0
-    fi
-done
-echo ""
-
-# Rule 2: Direct-exec guards in custom tools
-echo "Rule 2: Direct-exec guards in custom tools"
-total=0
-with_guard=0
-without_guard=""
-for file in shell-common/tools/custom/*.sh; do
-    [ -f "$file" ] || continue
-    # Skip init.sh — it IS the shared initializer, not a standalone tool
-    [ "$(basename "$file")" = "init.sh" ] && continue
-    total=$((total + 1))
-    # Recognized guard patterns:
-    #   BASH_SOURCE[0] = $0   — standard guard
-    #   ${0##*/} = "name.sh"  — basename guard
-    if grep -qE 'BASH_SOURCE\[0\].*[=]+.*\$\{?0\}?|"\$\{0##\*/\}"' "$file"; then
-        with_guard=$((with_guard + 1))
-    else
-        without_guard="${without_guard}  $(basename "$file")\n"
-    fi
-done
-
-if [ "$with_guard" -eq "$total" ]; then
-    test_case "All $total custom tools have direct-exec guard" 0
-else
-    test_case "All custom tools have direct-exec guard ($with_guard/$total)" 1
-    printf "%b" "$without_guard" | head -5
-    remaining=$((total - with_guard - 5))
-    [ "$remaining" -gt 0 ] && echo "  ... and $remaining more"
-fi
-echo ""
-
-# Rule 3: No raw echo in shell-common functions (use ux_lib)
-# Exclude:
-#   - *_help.sh files: help content files use echo for structured text display
-#   - blank-line separators: echo "" / echo ''
-#   - file writes / pipes: echo ... > file, echo ... | cmd
-#   - lines already using UX_* variables (ux_lib colors)
-echo "Rule 3: Use ux_lib for output (no raw echo)"
-raw_echo_files=()
-for file in shell-common/functions/*.sh; do
-    [ -f "$file" ] || continue
-    # Skip help content files — they display structured text by design
-    case "$(basename "$file")" in *_help.sh) continue ;; esac
-    if grep "^    echo " "$file" 2>/dev/null \
-        | grep -v -e 'echo ""' -e "echo ''" \
-        | grep -v -e '> *\$' -e '> *"' -e '| ' \
-        | grep -v 'UX_' \
-        | grep -vq 'echo "  '; then
-        raw_echo_files+=("$file")
-    fi
-done
-
-if [ "${#raw_echo_files[@]}" -eq 0 ]; then
-    test_case "No raw echo in functions/" 0
-else
-    test_case "No raw echo in functions/ (${#raw_echo_files[@]} files)" 1
-    for file in "${raw_echo_files[@]:0:5}"; do
-        echo "  $file"
-    done
-    remaining=$((${#raw_echo_files[@]} - 5))
-    [ "$remaining" -gt 0 ] && echo "  ... and $remaining more"
-fi
-echo ""
-
-# Rule 4: No emojis in code
-echo "Rule 4: No emojis in source code"
-emoji_files=0
-for file in bash/main.bash zsh/main.zsh shell-common/util/*.sh shell-common/config/*; do
-    [ -f "$file" ] || continue
-    if grep -q "[😊-🙏🚀✨⭐]" "$file" 2>/dev/null; then
-        emoji_files=$((emoji_files + 1))
-    fi
-done
-
-if [ "$emoji_files" -eq 0 ]; then
-    test_case "No emojis in source files" 0
-else
-    test_case "No emojis in source files ($emoji_files files)" 1
-fi
-echo ""
-
-# Rule 5: No bash-specific variables without fallback in shell-common
-echo "Rule 5: POSIX compliance in shell-common"
-bashism_files=0
-for file in shell-common/util/*.sh shell-common/config/*; do
-    [ -f "$file" ] || continue
-    # Skip if file already has POSIX shebang
-    if grep -q "^#!/bin/sh$" "$file"; then
-        if grep -q '\$\{BASH_' "$file" 2>/dev/null; then
-            bashism_files=$((bashism_files + 1))
-        fi
-    fi
-done
-
-if [ "$bashism_files" -eq 0 ]; then
-    test_case "POSIX compliance in shell-common" 0
-else
-    test_case "POSIX compliance in shell-common" 1
-fi
-echo ""
-
-# Rule 6: tracked claude/settings.json (SSOT) must not carry a `model` key.
-# Claude Code's /model persists into the active config dir's settings.json.
-# If that file is ever a write-through symlink to this SSOT (e.g. a stale
-# pre-#940 link surviving a deploy-lag window), the personal model choice
-# leaks into the tracked file (#924). #598 removed model from the SSOT;
-# this rule keeps it out so a leak can never be committed.
-# Recovery: git checkout claude/settings.json
-echo "Rule 6: No model key in tracked claude/settings.json SSOT (#924)"
-if [ -f claude/settings.json ] \
-    && grep -qE '^[[:space:]]*"model"[[:space:]]*:' claude/settings.json; then
-    test_case "claude/settings.json has no model key" 1
-else
-    test_case "claude/settings.json has no model key" 0
-fi
-echo ""
-
-# Rule 7: tracked hermes/config.yaml (SSOT) must not carry a `_config_version`
-# key. That key is stamped only by the hermes CLI when it rewrites its own
-# config — a hand-authored template never has one. Its presence therefore
-# proves ~/.hermes/config.yaml was a write-through symlink into this repo and
-# hermes' own write (OAuth setup, model selection) clobbered the documented
-# placeholder with one PC's runtime state. Same failure class as rule 6.
-# hermes/setup.sh Part 1 now copies instead of symlinking; this rule keeps a
-# regression from ever being committed.
-# Recovery: git checkout hermes/config.yaml
-echo "Rule 7: No _config_version key in tracked hermes/config.yaml SSOT"
-if [ -f hermes/config.yaml ] \
-    && grep -qE '^[[:space:]]*_config_version[[:space:]]*:' hermes/config.yaml; then
-    test_case "hermes/config.yaml has no _config_version key" 1
-else
-    test_case "hermes/config.yaml has no _config_version key" 0
-fi
-echo ""
-
-echo "════════════════════════════════════════════════════════════"
-if [ "$failed" -eq 0 ]; then
+# Chunked across CPUs: one serial pass over the tree takes minutes.
+if git ls-files -z | xargs -0 -n 40 -P "$(nproc 2>/dev/null || echo 4)" git/hooks/checks/run_all.sh; then
     echo -e "${GREEN}All golden rules validated ✓${NC}"
     exit 0
-else
-    echo -e "${RED}$failed validation(s) failed${NC}"
-    exit 1
 fi
+echo -e "${RED}Golden rule violation(s) above (not in git/hooks/checks/baseline.txt)${NC}"
+exit 1
