@@ -2,8 +2,8 @@
 # tests/bats/claude_hooks/post_gh_pr_create_hook.bats
 # Verify the PostToolUse hook documented in
 #   claude/hooks/post-gh-pr-create.sh
-# Source-of-truth fixture: _fixtures/post_gh_pr_create_hook.sh
-# (provides a fake gh_project_status.sh that records every call).
+# No fixture file: stage_status_helper below writes a fake
+# gh_project_status.sh that records every call.
 #
 # Five cases drawn from issue #390's compatibility matrix:
 #   1. tool_name != Bash               → exit 0, no sync
