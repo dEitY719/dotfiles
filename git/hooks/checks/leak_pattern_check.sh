@@ -74,6 +74,7 @@ CHECK_SCOPE=global
 CHECK_SEVERITY=blocking
 CHECK_TITLE="Internal-identifier leak pattern in staged lines or file names"
 CHECK_REPORT_LINES=10
+CHECK_COUNT_LINES=1
 CHECK_HINT='Matched text is not shown. Inspect: git diff --cached -U0 | grep -nE "$LEAK_PATTERNS_ERE"
 Escape hatch (verified-safe only): SKIP_LEAK_GUARD=1 git commit ...'
 check_run() { check_leak_patterns "$4"; }

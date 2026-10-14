@@ -22,7 +22,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
+# setup.sh installs this hook as a .git/hooks/pre-commit symlink; resolve it so
+# the sibling pre-commit.legacy is found next to the real file.
+HOOK_SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+HOOK_DIR="$(cd "$(dirname "$HOOK_SELF")" && pwd)"
 if [ "${GIT_HOOKS_LEGACY_DISPATCH:-}" = "1" ]; then
     exec "$HOOK_DIR/pre-commit.legacy" "$@"
 fi
@@ -57,7 +60,7 @@ debug() {
 # ═══════════════════════════════════════════════════════════════════════════
 
 declare -A CHECK_SCOPE_OF=() CHECK_SEVERITY_OF=() CHECK_TITLE_OF=() CHECK_LABEL_OF=()
-declare -A CHECK_LINES_OF=() CHECK_HINT_OF=() CHECK_OUT=() CHECK_COUNT=()
+declare -A CHECK_LINES_OF=() CHECK_HINT_OF=() CHECK_COUNT_LINES_OF=() CHECK_OUT=() CHECK_COUNT=()
 CHECK_NAMES=()
 
 load_module_or_exit() {
@@ -79,12 +82,14 @@ load_module_or_exit "${CHECKS_DIR}/main_branch_guard.sh"
 
 for check_file in "$CHECKS_DIR"/*_check.sh; do
     [ -f "$check_file" ] || continue
-    unset CHECK_NAME CHECK_SCOPE CHECK_SEVERITY CHECK_TITLE CHECK_LABEL CHECK_REPORT_LINES CHECK_HINT
+    unset CHECK_NAME CHECK_SCOPE CHECK_SEVERITY CHECK_TITLE CHECK_LABEL CHECK_REPORT_LINES CHECK_HINT CHECK_COUNT_LINES
     unset -f check_run
     load_module_or_exit "$check_file"
     # A *_check.sh without CHECK_NAME is a library for another hook
     # (closing_keyword_check.sh serves commit-msg), not a pre-commit check.
+    # One that defines check_run but forgot CHECK_NAME is a broken check.
     if [ -z "${CHECK_NAME:-}" ]; then
+        declare -F check_run >/dev/null && invalid_check "$check_file" "check_run is defined but CHECK_NAME is not"
         debug "loaded without registering (no CHECK_NAME): ${check_file##*/}"
         continue
     fi
@@ -104,6 +109,7 @@ for check_file in "$CHECKS_DIR"/*_check.sh; do
     CHECK_LABEL_OF[$CHECK_NAME]="${CHECK_LABEL:-}"
     CHECK_LINES_OF[$CHECK_NAME]="${CHECK_REPORT_LINES:-}"
     CHECK_HINT_OF[$CHECK_NAME]="${CHECK_HINT:-}"
+    CHECK_COUNT_LINES_OF[$CHECK_NAME]="${CHECK_COUNT_LINES:-}"
     CHECK_COUNT[$CHECK_NAME]=0
     debug "registered check: $CHECK_NAME ($CHECK_SCOPE, $CHECK_SEVERITY)"
 done
@@ -198,6 +204,10 @@ done <<<"$STAGED_FILES"
 for name in "${CHECK_NAMES[@]}"; do
     [ "${CHECK_SCOPE_OF[$name]}" = "global" ] || continue
     run_check "$name" ""
+    # CHECK_COUNT_LINES=1: each report line is one finding (leak_pattern).
+    if [ "${CHECK_COUNT_LINES_OF[$name]}" = "1" ] && [ "${CHECK_COUNT[$name]}" -gt 0 ]; then
+        CHECK_COUNT[$name]=$(grep -c '^' "${CHECK_OUT[$name]}")
+    fi
 done
 
 # ═══════════════════════════════════════════════════════════════════════════

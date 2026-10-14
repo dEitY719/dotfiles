@@ -19,6 +19,7 @@ Each check file keeps its own judgment functions and ends with an adapter:
 | `CHECK_LABEL` | no | Warning tag instead of `WARNING` (`INFO`, `CLEANUP`) |
 | `CHECK_REPORT_LINES` | no | Show only the first N report lines (default: all) |
 | `CHECK_HINT` | no | Lines printed under the report |
+| `CHECK_COUNT_LINES` | no | `1`: count each report line as a finding (default: one per failing `check_run` call) |
 | `check_run <repo_root> <tmpdir> <file-or-empty> <out>` | yes | Append findings to `<out>`; return 1 on a finding, 0 otherwise |
 
 `<file>` is a repo-relative staged path (ACMR). `<tmpdir>` is a per-run
