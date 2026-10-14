@@ -187,6 +187,33 @@ _path_without() {
     refute_output --partial "지문을 하나도 읽지 못함"
 }
 
+@test "internal mode: CRLF bundle still matches the fingerprint (#2111)" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    local fp
+    fp="$(_mk_cert target)"
+    _mk_cert other >/dev/null
+    # Windows 에서 복사한 사내 CA 파일처럼 줄끝이 CRLF 인 bundle.
+    cat "$BATS_TEST_TMPDIR/other.crt" "$BATS_TEST_TMPDIR/target.crt" | sed 's/$/\r/' >"$BATS_TEST_TMPDIR/bundle.crt"
+    grep -q $'\r$' "$BATS_TEST_TMPDIR/bundle.crt"
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
+    assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+    refute_output --partial "지문을 하나도 읽지 못함"
+}
+
+@test "internal mode: bundle without a final newline still matches the last certificate (#2111)" {
+    command -v openssl >/dev/null 2>&1 || skip "openssl not installed"
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    local fp
+    fp="$(_mk_cert target)"
+    _mk_cert other >/dev/null
+    # 마지막 -----END CERTIFICATE----- 뒤 개행이 없다.
+    { cat "$BATS_TEST_TMPDIR/other.crt"; printf '%s' "$(cat "$BATS_TEST_TMPDIR/target.crt")"; } >"$BATS_TEST_TMPDIR/bundle.crt"
+    [ "$(tail -c 1 "$BATS_TEST_TMPDIR/bundle.crt")" = "-" ]
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
+    assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+}
+
 @test "internal mode: non-fingerprint CA value falls back to substring with WARN" {
     printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
     printf -- '-----BEGIN CERTIFICATE-----\nFAKEFP\n' >"$HOME/ca.crt"
