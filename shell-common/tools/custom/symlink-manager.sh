@@ -12,8 +12,8 @@ SYMLINKS_CONF="${SHELL_COMMON_ROOT:-${DOTFILES_ROOT}/shell-common}/config/symlin
 # ssh/setup.sh, which links from its own `pwd -P` location.
 _SYMLINK_ROOT="$(cd "$DOTFILES_ROOT" && pwd -P)"
 # Idempotent link + latest-only backup lib (#2137, #2138).
-# shellcheck source=../../lib/setup/link.sh
 : "${SHELL_COMMON:=${DOTFILES_ROOT}/shell-common}"
+# shellcheck source=../../lib/setup/link.sh
 . "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 # ═══════════════════════════════════════════════════════════════════════════
