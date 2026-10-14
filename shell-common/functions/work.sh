@@ -194,3 +194,7 @@ alias work-help='work_help'
 # It does NOT auto-execute when sourced
 # All functionality is on-demand via explicit function/alias calls
 # ═══════════════════════════════════════════════════════════════════════════
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help work_help "[Docs] Work management" docs

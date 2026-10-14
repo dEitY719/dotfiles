@@ -232,3 +232,9 @@ redis_help() {
 }
 
 alias redis-help='redis_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help psql_help "[Development] PostgreSQL helpers" development
+_register_help mysql_help "[DevOps] MySQL service management" devops
+_register_help redis_help "[DevOps] Redis service management" devops

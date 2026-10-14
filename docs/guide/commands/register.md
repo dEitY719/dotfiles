@@ -27,11 +27,13 @@
 
 ### description
 
-- Add a row in my_help.sh: _register_help mytool_help "[Development] ..." development
+- Add one line at the end of the help file: _register_help mytool_help "[Development] ..." development
+- Guard it first: command -v _register_help >/dev/null 2>&1 || return 0
+- No my_help.sh edit: util/help_registry.sh loads before functions/
 
 ### category
 
-- The row's 3rd argument appends mytool to that category (omit it to stay uncategorized)
+- The line's 3rd argument appends mytool to that category (omit it to stay uncategorized)
 - Then reload your shell (source ~/.bashrc or ~/.zshrc)
 
 ## 엣지케이스 / 의도된 동작

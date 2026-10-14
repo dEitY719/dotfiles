@@ -588,3 +588,10 @@ bun_help() {
 }
 
 alias bun-help='bun_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help uv_help "[Development] UV packages and environments" development
+_register_help npm_help "[Development] npm package manager" development
+_register_help bun_help "[Development] Bun runtime and bunx" development
+_register_help pip_help "[Config] pip config and diagnostics" config

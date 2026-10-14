@@ -517,3 +517,7 @@ alias gb='git_branch'
 alias git-clean-local='gb -D local'
 alias gprune='gb -D remote'
 alias git-prune-remote='gb -D remote'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func git_log "Formatted git log views"

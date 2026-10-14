@@ -12,13 +12,6 @@ _category_help_ensure_loaded() {
             . "${SHELL_COMMON}/functions/my_help.sh"
         fi
     fi
-
-    if type _register_default_help_descriptions >/dev/null 2>&1; then
-        if [ -z "${_HELP_DEFAULTS_REGISTERED:-}" ]; then
-            _register_default_help_descriptions
-            _HELP_DEFAULTS_REGISTERED=1
-        fi
-    fi
 }
 
 _category_help_summary() {
@@ -100,3 +93,7 @@ category_help() {
 }
 
 alias category-help='category_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help category_help "[Meta] Browse help categories" meta

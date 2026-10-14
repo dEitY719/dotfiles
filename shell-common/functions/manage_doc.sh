@@ -418,3 +418,7 @@ if [ -z "${SHELL_COMMON:-}" ]; then
 
     unset _script_name
 fi
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help show_doc_help "[Docs] Documentation viewer" docs

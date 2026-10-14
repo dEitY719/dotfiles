@@ -1422,3 +1422,8 @@ _gh_pr_approve_worker() {
 
 alias gh-pr-approve='gh_pr_approve'
 alias gh-pr-approve-help='gh_pr_approve_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help gh_pr_approve_help "[Development] gh-pr-approve PR approval workflow"
+_register_func gh_pr_approve "PR approval workflow"

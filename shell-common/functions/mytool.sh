@@ -151,3 +151,7 @@ alias install-pet='install_pet'
 alias install-herdr='install_herdr'
 alias install-sops-age='install_sops_age'
 alias install-zsh-autosuggestions='install_zsh_autosuggestions'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func srcpack "Pack source files for sharing"

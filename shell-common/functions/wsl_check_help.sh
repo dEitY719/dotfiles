@@ -47,3 +47,7 @@ wsl_check_help() {
 }
 
 alias wsl-check-help='wsl_check_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help wsl_check_help "[DevOps] WSL & Docker environment health (disk/mem/docker)" devops

@@ -421,3 +421,9 @@ alias zsh-snippets='zsh_snippets'
 alias zsh-fix-vscode='zsh_fix_vscode'
 alias zsh-clear-p10k-caches='zsh_clear_p10k_caches'
 alias zsh-git-fix='zsh_git_fix'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func zsh_reload "Reload the zsh configuration"
+_register_func zsh_theme "Show or change the zsh theme"
+_register_func zsh_snippet "Manage zsh snippets"

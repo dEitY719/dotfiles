@@ -120,9 +120,9 @@ _devx_stat() {
     return "${_devx_rc}"
 }
 
-# Audit shell-common/functions/*.sh for public *help functions that are
-# missing from HELP_DESCRIPTIONS in my_help.sh (a HELP_DESCRIPTIONS[...] line or
-# a _register_help row). Mirrors the legacy
+# Audit shell-common/functions/*.sh for public *help functions that are not
+# registered by their own file (a `_register_help` row at its end, #2135, or a
+# HELP_DESCRIPTIONS[...] line). Mirrors the legacy
 # _check_help_integrity from the deleted tools/dev.sh, ported to POSIX.
 _devx_lint_helpfunc() {
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -134,13 +134,6 @@ _devx_lint_helpfunc() {
         unset _devx_root
         return 1
     }
-    _devx_my_help="${_devx_root}/shell-common/functions/my_help.sh"
-    if [ ! -f "${_devx_my_help}" ]; then
-        ux_error "Missing: ${_devx_my_help}"
-        unset _devx_root _devx_my_help
-        return 1
-    fi
-
     _devx_files=$(find "${_devx_root}/shell-common/functions" -name "*.sh" -type f 2>/dev/null)
     _devx_found=0
     _devx_checked=0
@@ -160,7 +153,7 @@ _devx_lint_helpfunc() {
             _devx_dash=$(printf '%s' "${_devx_func}" | tr '_' '-')
             _devx_underscore=$(printf '%s' "${_devx_func}" | tr '-' '_')
 
-            if ! grep -Eq "(HELP_DESCRIPTIONS\[\"?|_register_help[[:space:]]+)(${_devx_func}|${_devx_dash}|${_devx_underscore})(\"?\]|[[:space:]])" "${_devx_my_help}" 2>/dev/null; then
+            if ! grep -Eq "(HELP_DESCRIPTIONS\[\"?|_register_help[[:space:]]+)(${_devx_func}|${_devx_dash}|${_devx_underscore})(\"?\]|[[:space:]])" "${_devx_file}" 2>/dev/null; then
                 _devx_rel="${_devx_file#"${_devx_root}/"}"
                 _devx_violations="${_devx_violations}  - ${_devx_rel}: '${_devx_func}' not registered in HELP_DESCRIPTIONS
 "
@@ -175,19 +168,19 @@ EOF
 
     if [ "${_devx_checked}" -eq 0 ]; then
         ux_info "No public *help functions found in shell-common/functions/."
-        unset _devx_root _devx_my_help _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
+        unset _devx_root _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
         return 0
     fi
 
     if [ "${_devx_found}" -eq 0 ]; then
         ux_success "All ${_devx_checked} public help functions are registered in HELP_DESCRIPTIONS."
-        unset _devx_root _devx_my_help _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
+        unset _devx_root _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
         return 0
     fi
 
     ux_warning "Found ${_devx_found} unregistered help function(s) out of ${_devx_checked} checked:"
     printf '%s' "${_devx_violations}"
-    unset _devx_root _devx_my_help _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
+    unset _devx_root _devx_files _devx_file _devx_funcs _devx_func _devx_dash _devx_underscore _devx_rel _devx_violations _devx_found _devx_checked
     return 1
 }
 
@@ -286,3 +279,7 @@ devx() {
             ;;
     esac
 }
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func devx "Dev helper — mise wrapper and repo checks"

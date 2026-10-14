@@ -155,3 +155,7 @@ alias devx-pr-verify-live-backend-identity='devx_pr_verify_live_backend_identity
 if [ -n "$BASH_VERSION" ]; then
     export -f devx_pr_verify_live_backend_identity show_devx_pr_verify_live_backend_identity_help
 fi
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help show_devx_pr_verify_live_backend_identity_help "[Development] Backend container identity verification helper"

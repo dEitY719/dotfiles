@@ -113,3 +113,7 @@ p10k_help() {
 
 # Alias for p10k-help format (using dash instead of underscore)
 alias p10k-help='p10k_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help p10k_help "[Config] Powerlevel10k prompt" config

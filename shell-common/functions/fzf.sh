@@ -160,3 +160,7 @@ fzf_help() {
 
 # Naming Convention: Support both dash and underscore
 alias fzf-help='fzf_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help fzf_help "[CLI] fzf keybindings and usage" cli

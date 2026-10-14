@@ -160,3 +160,7 @@ claude_plugins_help() {
 }
 
 alias claude-plugins-help='claude_plugins_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help claude_plugins_help "[AI/LLM] Claude plugins setup" ai

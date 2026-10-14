@@ -13,10 +13,9 @@ Antigravity CLI(`agy`) 통합 모듈. `agy` 는 Google 이 배포한 에이전�
 | `AGENTS.md` | 이 파일 — AI/리뷰어용 SSOT (≤100 줄) |
 
 shell 자동 로드 레이어와 help 시스템은 이 폴더가 아니라
-`shell-common/` 에 있다 (3-Step 패턴):
+`shell-common/` 에 있다 (2-Step 패턴):
 - `shell-common/tools/integrations/agy.sh` — alias + `agy_install()` / `agy_uninstall()`
-- `shell-common/functions/agy_help.sh` — `agy_help()` + `alias agy-help`
-- `shell-common/functions/my_help.sh` — 카테고리/설명 수동 등록
+- `shell-common/functions/agy_help.sh` — `agy_help()` + `alias agy-help` + 파일 끝 `_register_help` 자기 등록
 
 ## setup.sh 가 심볼릭 링크를 만들지 않는 이유
 
@@ -74,5 +73,5 @@ symlink 는 자동 정리한다 (#1787, #1789).
 
 ## References
 
-- **[Root](../AGENTS.md)** · **[shell-common](../shell-common/AGENTS.md)** ("Adding a New Tool Integration (3-Step Pattern)")
+- **[Root](../AGENTS.md)** · **[shell-common](../shell-common/AGENTS.md)** ("Adding a New Tool Integration (2-Step Pattern)")
 - 근거: `agy --help`, `agy help install`, `agy models`, 설치 스크립트 `https://antigravity.google/cli/install.sh`

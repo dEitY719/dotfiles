@@ -153,3 +153,7 @@ EXA_API_KEY="?*) ;;
 }
 
 alias mcporter-exa-setup='mcporter_exa_setup'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_func dotfiles_secret_run "Run a command with the repo .enc.env secrets injected (secret-run)"

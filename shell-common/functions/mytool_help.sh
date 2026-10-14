@@ -182,3 +182,7 @@ mytool_help() {
 
 # Alias for mytool-help format (using dash instead of underscore)
 alias mytool-help='mytool_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help mytool_help "[Development] Custom tools and scripts" development

@@ -188,3 +188,7 @@ alias work-log-help='work_log_help'
 #
 # Reason: Auto-execution during zsh initialization causes p10k instant prompt
 # conflicts and pollutes shell startup with help text.
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help work_log_help "[Docs] Work log tracking" docs

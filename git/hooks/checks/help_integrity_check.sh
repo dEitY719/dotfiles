@@ -4,8 +4,9 @@
 #
 # Rule:
 # Any function ending in 'help' (e.g., 'git-help', 'docker_help') is considered
-# a public help topic and MUST be registered in HELP_DESCRIPTIONS (directly or via
-# a `_register_help <name> "<desc>" [category]` row in my_help.sh).
+# a public help topic and MUST be registered in HELP_DESCRIPTIONS — normally via
+# a `_register_help <name> "<desc>" [category]` row at the end of its own file
+# (#2135); a row in my_help.sh is still accepted.
 # If it is an internal utility, it MUST start with '_' (e.g., '_register_help').
 
 check_help_integrity() {
@@ -70,7 +71,7 @@ check_help_integrity() {
 
         # Violation found
         echo "$file: Public help function '$func' found without description." >>"$violations_file"
-        echo "    -> Fix: Add HELP_DESCRIPTIONS[\"$func\"]=\"...\" OR rename to '_$func' if internal." >>"$violations_file"
+        echo "    -> Fix: Add '_register_help $func \"...\" <category>' at the end of the file OR rename to '_$func' if internal." >>"$violations_file"
         fail=1
 
     done <<<"$func_names"

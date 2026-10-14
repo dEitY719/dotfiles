@@ -73,3 +73,7 @@ gc_help() {
 }
 
 alias gc-help='gc_help'
+
+# Help registry (#2135): skipped when sourced without util/help_registry.sh.
+command -v _register_help >/dev/null 2>&1 || return 0
+_register_help gc_help "[CLI] Git commit shortcuts (gc, gca)" cli

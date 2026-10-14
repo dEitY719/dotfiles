@@ -150,6 +150,9 @@ stubs="$1"
 manifest="$2"
 
 . "$stubs" || exit 3
+# Registry first, as dotfiles_load_all does: each functions/*.sh registers its
+# own topics at source time and skips that when the registry is absent (#2135).
+. "${FUNCTIONS_DIR%/functions}/util/help_registry.sh" || exit 3
 for _f in "$FUNCTIONS_DIR"/*.sh; do
     [ -f "$_f" ] || continue
     . "$_f" >/dev/null 2>&1 || true
