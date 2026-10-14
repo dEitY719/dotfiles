@@ -354,3 +354,17 @@ _path_without() {
     refute_output --partial "[PASS] JSON 형식 유효"
     refute_output --partial ".hooks 가 dotfiles SSOT"
 }
+
+@test "internal mode: missing jq still reports settings.json symlink as FAIL (#2113)" {
+    printf 'internal\n' >"$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude"
+    printf '{}\n' >"$HOME/real-settings.json"
+    ln -s "$HOME/real-settings.json" "$HOME/.claude/settings.json"
+    local bin
+    bin="$(_path_without jq)"
+    [ -z "$(PATH="$bin" command -v jq)" ] # stub PATH 에서 jq 가 정말 빠졌는지
+    run env PATH="$bin" bash "$SCRIPT"
+    assert_failure 1
+    assert_output --partial "[FAIL] settings.json 이 symlink"
+    assert_output --partial "[WARN] jq 미설치 → settings.json 검증 생략"
+}
