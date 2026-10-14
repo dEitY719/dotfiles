@@ -116,6 +116,8 @@ def repo_order(lines: list[str], last: str) -> list[str]:
     repo after it, at one dispatch per tick.
     """
     repos = [line.split("\t", 1)[0] for line in lines]
+    if not repos:  # awk's `if (NR == 0) exit`; also keeps the modulo below obviously safe
+        return []
     start = 0
     if last:
         for index, repo in enumerate(repos):
