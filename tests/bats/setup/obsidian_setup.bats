@@ -9,7 +9,8 @@ teardown() {
     teardown_isolated_home
 }
 
-@test "obsidian: idempotent, links ~/.local/bin/obsidian" {
+@test "obsidian: idempotent, keeps the wrapper executable; the link is symlinks.conf's (#2139)" {
     run_module_setup obsidian
-    [ "$(readlink "$HOME/.local/bin/obsidian")" = "${_BATS_REAL_DOTFILES_ROOT}/obsidian/bin/obsidian" ]
+    [ -x "${_BATS_REAL_DOTFILES_ROOT}/obsidian/bin/obsidian" ]
+    [ ! -e "$HOME/.local/bin/obsidian" ]
 }
