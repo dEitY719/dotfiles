@@ -1,49 +1,26 @@
 #!/bin/zsh
 
 # zsh/main.zsh
-# Zsh Dotfiles Loader (SOLID Principle Compliant)
-# Completely independent from bash - no emulation, native zsh execution
-# Loading order: UX → Env → Alias → Functions → Integrations → Projects → App
+# Zsh entry point. Loading core: shell-common/util/bootstrap.sh + loader.sh
+# (#2134). Order: shell-common (env -> aliases -> functions -> integrations
+# -> projects) -> zsh/app -> setup mode -> summary.
 
 # Exit if not in zsh (safely return without killing shell)
 if [ -z "$ZSH_VERSION" ]; then
     return 0
 fi
 
-# ═══════════════════════════════════════════════════════════════
-# Directory Setup - Use provided variables or detect from script location
-# ═══════════════════════════════════════════════════════════════
-
-# Clear bash-specific variables that might be inherited from parent bash shell
-# to prevent path confusion
+# Clear bash-specific variables inherited from a parent bash shell
 unset DOTFILES_BASH_DIR
 
-# If zshrc already set these, use them. Otherwise detect them.
+# DOTFILES_ROOT candidate: zshrc may preset it; otherwise derive it from this
+# script's location (${(%):-%N} is the sourced script name). bootstrap.sh
+# canonicalizes it to the main worktree (#589).
 if [ -z "$DOTFILES_ROOT" ]; then
-    # Compute DOTFILES_ROOT from this script's location (unified with bash)
-    # In zsh, ${(%):-%N} gets the sourced script name
-    _ZSH_SCRIPT="${${(%):-%N}:-$0}"
-    _ZSH_SCRIPT_DIR="$(cd "$(dirname "$_ZSH_SCRIPT")" 2>/dev/null && pwd)" || _ZSH_SCRIPT_DIR=""
-
-    # Compute DOTFILES_ROOT: go up from zsh/ to parent directory
+    _ZSH_SCRIPT_DIR="$(cd "$(dirname "${${(%):-%N}:-$0}")" 2>/dev/null && pwd)" || _ZSH_SCRIPT_DIR=""
     DOTFILES_ROOT="${_ZSH_SCRIPT_DIR%/zsh}"
-
-    # Validate DOTFILES_ROOT is a real directory
-    if [ -z "$DOTFILES_ROOT" ] || [ ! -d "$DOTFILES_ROOT" ]; then
-        # Fallback to default location if detection fails
-        DOTFILES_ROOT="${HOME}/dotfiles"
-    fi
+    [ -n "$DOTFILES_ROOT" ] && [ -d "$DOTFILES_ROOT" ] || DOTFILES_ROOT="${HOME}/dotfiles"
 fi
-
-# Canonicalize to the main worktree (issue #589). Same rationale as
-# bash/main.bash — when sourced from a linked worktree, DOTFILES_ROOT
-# would otherwise leak that path into ~/.claude-*/ symlinks.
-_dotfiles_root_resolver="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
-if [ -r "$_dotfiles_root_resolver" ]; then
-    . "$_dotfiles_root_resolver"
-    _dotfiles_root_canonicalize
-fi
-unset _dotfiles_root_resolver
 
 # Unfinished-merge diagnostic (#2078). Inline on purpose: sourcing anything
 # here would die with the very conflict-marker breakage it reports. Plain
@@ -55,176 +32,27 @@ case $- in *i*)
     ;;
 esac
 
-# Set derived paths (unified with bash via consistent path resolution)
-SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
+# Skip guard (non-interactive / DOTFILES_SKIP_INIT / Codex), canonical root,
+# SHELL_COMMON, counter, safe_source, ux_lib, loader.
+. "${DOTFILES_ROOT}/shell-common/util/bootstrap.sh" || return 0
+
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
+export ZSH_DOTFILES
 
-# Exit if dotfiles not found
-if [ ! -d "$DOTFILES_ROOT" ]; then
-    echo "❌ Dotfiles directory not found at: $DOTFILES_ROOT" >&2
-    return 1
-fi
+dotfiles_load_all
 
-# ═══════════════════════════════════════════════════════════════
-# Initialize counter for sourced files (consistent with bash loader)
-# ═══════════════════════════════════════════════════════════════
-
-typeset -gi SOURCED_FILES_COUNT=0
-
-# ═══════════════════════════════════════════════════════════════
-# Safe source function (SSOT: shell-common/util/safe_source.sh)
-# ═══════════════════════════════════════════════════════════════
-. "${SHELL_COMMON}/util/safe_source.sh"
-
-# ═══════════════════════════════════════════════════════════════
-# Load UX Library FIRST (consistent with bash loader)
-# Provides: colors, output functions, progress indicators, prompts, tables
-# MUST load before any code that uses ux_* functions
-# ═══════════════════════════════════════════════════════════════
-
-if [ -f "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
-    source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" 2>/dev/null || {
-        echo "Warning: Failed to load UX library" >&2
-    }
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Load Shared Environment Variables (shell-common/env/)
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${SHELL_COMMON}/env" ]; then
-    for f in "${SHELL_COMMON}"/env/*.sh; do
-        case "$f" in
-            *.local.sh) continue ;;
-        esac
-        [ -f "$f" ] && safe_source "$f" "Failed to load env" || true
-    done
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Load Shared Aliases (shell-common/aliases/)
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${SHELL_COMMON}/aliases" ]; then
-    for f in "${SHELL_COMMON}"/aliases/*.sh; do
-        case "$f" in
-            *.local.sh) continue ;;
-        esac
-        [ -f "$f" ] && safe_source "$f" "Failed to load alias" || true
-    done
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Load Shared Functions (shell-common/functions/)
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${SHELL_COMMON}/functions" ]; then
-    for f in "${SHELL_COMMON}"/functions/*.sh; do
-        case "$f" in
-            *.local.sh) continue ;;
-        esac
-        [ -f "$f" ] && safe_source "$f" "Failed to load function" || true
-    done
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Load Shared Tools - Integrations (shell-common/tools/integrations/)
-# 3rd-party integrations: apt, ccusage, claude, codex, git, npm, etc
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${SHELL_COMMON}/tools/integrations" ]; then
-    for f in "${SHELL_COMMON}"/tools/integrations/*.sh; do
-        case "$f" in
-            *.local.sh) continue ;;
-        esac
-        [ -f "$f" ] && safe_source "$f" "Failed to load integration tool" || true
-    done
-fi
-
-# Normalize help interfaces after all help providers are sourced
-# (functions + integrations).
-typeset -f apply_help_standard_adapter >/dev/null 2>&1 && apply_help_standard_adapter
-
-# ═══════════════════════════════════════════════════════════════
-# Load Shared Projects (shell-common/projects/)
-# Project-specific configurations and utilities
-# ═══════════════════════════════════════════════════════════════
-
-if [ -d "${SHELL_COMMON}/projects" ]; then
-    for f in "${SHELL_COMMON}"/projects/*.sh; do
-        case "$f" in
-            *.local.sh) continue ;;
-        esac
-        [ -f "$f" ] && safe_source "$f" "Failed to load project" || true
-    done
-fi
-
-# ═══════════════════════════════════════════════════════════════
-# Load Zsh Application Modules (zsh/app/)
-# ═══════════════════════════════════════════════════════════════
-
+# Zsh application modules: zsh.zsh and git.zsh first (dependencies), then the rest.
 _load_zsh_apps() {
-    if [ ! -d "${ZSH_DOTFILES}/app" ]; then
-        return 0
-    fi
-
-    # Load in specific order for dependencies
-    local app_files=(
-        "${ZSH_DOTFILES}/app/zsh.zsh"      # Shell management
-        "${ZSH_DOTFILES}/app/git.zsh"      # Git commands
-    )
-
-    # Load specific files in order
-    local f
-    for f in "${app_files[@]}"; do
-        [ -f "$f" ] && safe_source "$f" "Failed to load zsh app" || true
-    done
-
-    # Load any remaining app files not explicitly listed
-    for f in "${ZSH_DOTFILES}"/app/*.zsh; do
-        # Skip if already loaded
-        case "$f" in
-            */zsh.zsh|*/git.zsh) continue ;;
-        esac
-        [ -f "$f" ] && safe_source "$f" "Failed to load zsh app" || true
+    local f seen=" "
+    for f in "${ZSH_DOTFILES}/app/zsh.zsh" "${ZSH_DOTFILES}/app/git.zsh" "${ZSH_DOTFILES}"/app/*.zsh(N); do
+        case "$seen" in *" $f "*) continue ;; esac
+        seen="${seen}${f} "
+        safe_source "$f" "Failed to load zsh app" || true
     done
 }
-
-# Execute the loader function
 _load_zsh_apps
 
-# ═══════════════════════════════════════════════════════════════
-# Setup Mode-Based Configuration
-# ═══════════════════════════════════════════════════════════════
 . "${SHELL_COMMON}/util/setup_mode.sh"
 _apply_setup_mode_config
 
-# ═══════════════════════════════════════════════════════════════
-# Export Configuration
-# ═══════════════════════════════════════════════════════════════
-
-# Make DOTFILES variables available to subshells
-export DOTFILES_ROOT
-export SHELL_COMMON
-export ZSH_DOTFILES
-
-# ═══════════════════════════════════════════════════════════════
-# Completion Message
-# ═══════════════════════════════════════════════════════════════
-
-# Display initialization summary (shared function from shell-common)
-# Show in interactive shells, unless explicitly disabled
-# Note: Will be suppressed automatically in nested/instant-prompt contexts
-if [[ -o interactive ]] && type dotfiles_init_summary >/dev/null 2>&1; then
-    # Allow suppression via environment variable for special cases (CI/CD, etc.)
-    if [[ "${DOTFILES_SUPPRESS_MESSAGE:-0}" != "1" ]]; then
-        # Try to suppress in instant-prompt contexts (check stderr)
-        # If stderr is not a TTY, we're likely in a nested/piped context
-        if [[ -t 2 ]]; then
-            dotfiles_init_summary "$SOURCED_FILES_COUNT"
-        elif [[ -z "$ZSH_SUBSHELL" ]]; then
-            # Not in a zsh subshell, likely safe to show
-            dotfiles_init_summary "$SOURCED_FILES_COUNT"
-        fi
-    fi
-fi
+dotfiles_show_init_summary

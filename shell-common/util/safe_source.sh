@@ -2,12 +2,10 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # shell-common/util/safe_source.sh
 # SSOT for safe file sourcing with counter tracking
-# Sourced by both bash/main.bash and zsh/main.zsh
+# Sourced by shell-common/util/bootstrap.sh (bash/main.bash, zsh/main.zsh)
 #
 # Must be sourced BEFORE any safe_source() calls.
-# Counter SOURCED_FILES_COUNT must be initialized by the caller:
-#   bash: declare -gi SOURCED_FILES_COUNT=0
-#   zsh:  typeset -gi SOURCED_FILES_COUNT=0
+# Counter SOURCED_FILES_COUNT is initialized by util/bootstrap.sh.
 
 safe_source() {
     local file_path="$1"
@@ -51,6 +49,10 @@ safe_source() {
     if [ $source_exit -eq 0 ]; then
         # Increment counter after successful source
         SOURCED_FILES_COUNT=$((SOURCED_FILES_COUNT + 1))
+        # One line per counted file, so the debug list matches the count.
+        if [ "${DEBUG_DOTFILES:-0}" = "1" ]; then
+            echo "DEBUG: Loaded: $file_path" >&2
+        fi
         return 0
     fi
 
