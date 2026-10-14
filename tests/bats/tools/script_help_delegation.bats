@@ -62,7 +62,7 @@ Usage
   ◆ 1) 프록시 인증서 (NODE_EXTRA_CA_CERTS, 사내 프록시 CA 포함 여부)
   ◆ 2) Claude Code 설치 & PATH (~/.local/bin)
   ◆ 3) 프록시 env (http(s)_proxy, no_proxy 사내 도메인)
-  ◆ 4) ~/.claude/settings.json JSON 유효성 + .hooks/.statusLine SSOT 일치
+  ◆ 4) ~/.claude/settings.json 실파일(symlink 아님) + JSON 유효성 + .hooks/.statusLine SSOT 일치 (jq 없으면 symlink 검사만)
   ◆ 사내 기대값: shell-common/env/internal.local.sh (미설정 항목은 WARN)
   ◆ internal 모드가 아니면 아무것도 검사하지 않고 exit 0"
 }
