@@ -238,36 +238,39 @@ main() {
     _fix_hint="./setup.sh 재실행(claude/tools/register-drift-hook.sh 가 훅 등록 복구) 후 새 세션 시작"
     if [ ! -f "$SETTINGS_FILE" ]; then
         fail "$SETTINGS_FILE 없음 → gateway-cli setup 미수행"
-    elif ! command -v jq >/dev/null 2>&1; then
-        warn "jq 미설치 → settings.json 검증 생략"
     else
+        # symlink 검사는 jq 와 무관 — jq 없는 PC 에서도 보고한다 (#2113).
         if [ -L "$SETTINGS_FILE" ]; then
             fail "settings.json 이 symlink → 제거 후 gateway-cli setup 재실행"
         else
             pass "settings.json 실파일 존재"
         fi
-        if ! jq empty "$SETTINGS_FILE" 2>/dev/null; then
-            # 파싱 실패 시 SSOT 비교는 오해만 낳는다 (빈 문자열 대 SSOT).
-            fail "JSON 형식 오류 ($SETTINGS_FILE) → .hooks/.statusLine 비교 생략"
+        if ! command -v jq >/dev/null 2>&1; then
+            warn "jq 미설치 → settings.json 검증 생략"
         else
-            pass "JSON 형식 유효 ($SETTINGS_FILE)"
-            if [ -f "$_ssot" ]; then
-                # 비교 기준(jq -S -c)은 session-start-settings-drift.sh 와 동일.
-                if [ "$(jq -S -c '.hooks // {}' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null)" ]; then
-                    pass ".hooks 가 dotfiles SSOT 와 일치"
-                else
-                    fail ".hooks 가 dotfiles SSOT 와 다름 → $_fix_hint"
-                fi
-                if [ "$(jq -S -c '.statusLine // null' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.statusLine // null' "$SETTINGS_FILE" 2>/dev/null)" ]; then
-                    pass ".statusLine 이 dotfiles SSOT 와 일치"
-                else
-                    fail ".statusLine 이 dotfiles SSOT 와 다름 → $_fix_hint"
-                fi
+            if ! jq empty "$SETTINGS_FILE" 2>/dev/null; then
+                # 파싱 실패 시 SSOT 비교는 오해만 낳는다 (빈 문자열 대 SSOT).
+                fail "JSON 형식 오류 ($SETTINGS_FILE) → .hooks/.statusLine 비교 생략"
             else
-                warn "dotfiles SSOT 없음: $_ssot → .hooks/.statusLine 비교 생략"
+                pass "JSON 형식 유효 ($SETTINGS_FILE)"
+                if [ -f "$_ssot" ]; then
+                    # 비교 기준(jq -S -c)은 session-start-settings-drift.sh 와 동일.
+                    if [ "$(jq -S -c '.hooks // {}' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.hooks // {}' "$SETTINGS_FILE" 2>/dev/null)" ]; then
+                        pass ".hooks 가 dotfiles SSOT 와 일치"
+                    else
+                        fail ".hooks 가 dotfiles SSOT 와 다름 → $_fix_hint"
+                    fi
+                    if [ "$(jq -S -c '.statusLine // null' "$_ssot" 2>/dev/null)" = "$(jq -S -c '.statusLine // null' "$SETTINGS_FILE" 2>/dev/null)" ]; then
+                        pass ".statusLine 이 dotfiles SSOT 와 일치"
+                    else
+                        fail ".statusLine 이 dotfiles SSOT 와 다름 → $_fix_hint"
+                    fi
+                else
+                    warn "dotfiles SSOT 없음: $_ssot → .hooks/.statusLine 비교 생략"
+                fi
             fi
+            ux_info "auth/env/모델 설정은 gateway-cli 영역 → 'gateway-cli verify' 로 확인"
         fi
-        ux_info "auth/env/모델 설정은 gateway-cli 영역 → 'gateway-cli verify' 로 확인"
     fi
 
     ux_section "결과"
