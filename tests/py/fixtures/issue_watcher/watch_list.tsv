@@ -1,0 +1,3 @@
+acme/api	/src/api	github.com
+acme/web	/src/web	github.com
+acme/cli	/src/cli	ghes.example.invalid

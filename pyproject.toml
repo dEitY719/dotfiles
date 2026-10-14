@@ -33,8 +33,9 @@ dev = [
 
 
 [tool.setuptools]
-# No Python packages in this bash dotfiles project
-packages = []
+# The Python side of the shell/Python boundary (docs/.ssot/shell-vs-python.md, #2157).
+packages = ["dotfiles_tools", "dotfiles_tools.issue_watcher"]
+package-dir = { "" = "tools/py" }
 
 
 # [[tool.uv.index]]
@@ -44,8 +45,8 @@ packages = []
 
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["tests/integration"]
+pythonpath = [".", "tools/py"]
+testpaths = ["tests/integration", "tests/py"]
 addopts = "-v --strict-markers -n auto --dist worksteal"
 # -n auto: parallel execution using all available CPU cores
 #   (./tests/test caps this via PYTEST_XDIST_AUTO_NUM_WORKERS when other

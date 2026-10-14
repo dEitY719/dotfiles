@@ -1,0 +1,6 @@
+[
+  {"number": 201, "headRefName": "feat/x", "body": "Some change.\n\nCloses #145"},
+  {"number": 202, "headRefName": "wt/issue-7/1", "body": null},
+  {"number": 203, "headRefName": null, "body": "fixes: acme/api#11"},
+  {"number": 204, "headRefName": "wt/issue-77/2", "body": "Refs #12, not closing it"}
+]

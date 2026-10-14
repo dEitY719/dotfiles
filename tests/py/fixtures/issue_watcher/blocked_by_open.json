@@ -1,0 +1,3 @@
+{"data": {"repository": {"issue": {"blockedBy": {"nodes": [
+  {"number": 1, "state": "OPEN"}, {"number": 2, "state": "CLOSED"}, {"number": 3, "state": "OPEN"}
+]}}}}}

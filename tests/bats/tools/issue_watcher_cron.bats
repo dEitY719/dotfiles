@@ -833,13 +833,17 @@ _path_without() {
 
     for _b in sh bash env git jq awk sed grep egrep head tail cat cut tr sort \
         uniq date mkdir rmdir rm ln basename dirname sleep mktemp flock tput \
-        uname wc chmod find id stty locale; do
+        uname wc chmod find id stty locale python3; do
         _skip=0
         for _p in "$@"; do
             [ "${_b}" != "${_p}" ] || _skip=1
         done
         [ "${_skip}" -eq 0 ] || continue
         _p=$(command -v "${_b}" 2>/dev/null) || continue
+        # A pyenv/asdf shim is a script that needs its manager on PATH; link
+        # the interpreter it resolves to instead.
+        [ "${_b}" != python3 ] ||
+            _p=$(python3 -c 'import os, sys; print(os.path.realpath(sys.executable))') || continue
         ln -sf "${_p}" "${_d}/${_b}" 2>/dev/null || true
     done
 
@@ -2929,6 +2933,35 @@ _two_repo_fixture() {
     assert_success
     assert_output --partial "without single-instance protection"
     _assert_logged "agent prompt iw-dotfiles-issue-11"
+}
+
+# ---------------------------------------------------------------------------
+# Candidate-selection implementation switch (issue #2157)
+# ---------------------------------------------------------------------------
+
+@test "issue_watcher_cron: IW_SELECT_IMPL=shell rollback dispatches the same issue" {
+    _run_tick "IW_SELECT_IMPL=shell"
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+}
+
+@test "issue_watcher_cron: missing python3 fails loudly and names the rollback" {
+    _run_tick "PATH=$(_path_without python3)"
+    assert_failure
+    assert_output --partial "python3 not found"
+    assert_output --partial "IW_SELECT_IMPL=shell"
+}
+
+@test "issue_watcher_cron: missing python3 is fine under IW_SELECT_IMPL=shell" {
+    _run_tick "PATH=$(_path_without python3)" "IW_SELECT_IMPL=shell"
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11"
+}
+
+@test "issue_watcher_cron: an unknown IW_SELECT_IMPL is refused" {
+    _run_tick "IW_SELECT_IMPL=perl"
+    assert_failure
+    assert_output --partial "IW_SELECT_IMPL must be python or shell"
 }
 
 # ---------------------------------------------------------------------------
