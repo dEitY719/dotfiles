@@ -726,3 +726,46 @@ teardown() {
     # Single positional arg, no --bg.
     assert_output "|hello world"
 }
+
+# ---------------------------------------------------------------------------
+# Standalone sourcing (#2156): gwt is split across git_worktree.sh,
+# git_worktree_spawn.sh, gwt_help.sh and lib/agent_launch.sh. A consumer that
+# sources the gwt files without the loader (issue_watcher_cron's _iw_gwt) must
+# still get spawn, help and the AI launcher.
+# ---------------------------------------------------------------------------
+
+_source_gwt_standalone() {
+    printf '%s' "
+        . '${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh'
+        DOTFILES_FORCE_INIT=1; export DOTFILES_FORCE_INIT
+        for f in git_worktree git_worktree_spawn gwt_help; do
+            . '${DOTFILES_ROOT}/shell-common/functions/'\$f.sh || exit 1
+        done
+    "
+}
+
+@test "standalone: the three gwt files run spawn and gwt -h without the loader" {
+    run bash --noprofile --norc -c "
+        export SHELL_COMMON='${DOTFILES_ROOT}/shell-common'
+        $(_source_gwt_standalone)
+        cd '$FAKE_REPO' || exit 1
+        gwt spawn --wt-name standalone 2>&1 || exit 1
+        gwt -h 2>&1
+        declare -f _agent_launch_cmd >/dev/null && echo LIB_OK
+    "
+    assert_success
+    assert_output --partial "Worktree spawned"
+    assert_output --partial "Usage: gwt-help"
+    assert_output --partial "LIB_OK"
+}
+
+@test "standalone: agent_launch.sh resolves from DOTFILES_ROOT when SHELL_COMMON is unset" {
+    run bash --noprofile --norc -c "
+        unset SHELL_COMMON
+        export DOTFILES_ROOT='${DOTFILES_ROOT}'
+        $(_source_gwt_standalone)
+        declare -f _agent_launch_cmd >/dev/null && echo LIB_OK
+    "
+    assert_success
+    assert_output --partial "LIB_OK"
+}

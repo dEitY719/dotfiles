@@ -9,7 +9,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # shellcheck source=/dev/null
-. "${SHELL_COMMON}/lib/agent_launch.sh"
+. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/lib/agent_launch.sh"
 
 # ============================================================================
 # Worktree spawn — auto-index, auto-branch, log
