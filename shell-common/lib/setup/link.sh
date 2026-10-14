@@ -55,19 +55,19 @@ dotfiles_ensure_link() {
         case "$1" in
             --on-mismatch)
                 # dash aborts the whole script on a shift past $#; guard it.
-                [ $# -ge 2 ] || { ux_error "dotfiles_ensure_link: --on-mismatch needs a value" && return 2; }
+                [ $# -ge 2 ] || { ux_error "dotfiles_ensure_link: --on-mismatch needs a value"; return 2; }
                 _del_mode="$2" && shift
                 ;;
             --on-mismatch=*) _del_mode="${1#*=}" ;;
             --allow-dir) _del_allow_dir=1 ;;
             --unmount-legacy) _del_unmount=1 ;;
-            *) ux_error "dotfiles_ensure_link: unknown option: $1" && return 2 ;;
+            *) ux_error "dotfiles_ensure_link: unknown option: $1"; return 2 ;;
         esac
         shift
     done
     case "$_del_mode" in
         replace | keep) ;;
-        *) ux_error "dotfiles_ensure_link: --on-mismatch must be replace|keep (got: $_del_mode)" && return 2 ;;
+        *) ux_error "dotfiles_ensure_link: --on-mismatch must be replace|keep (got: $_del_mode)"; return 2 ;;
     esac
     if [ ! -e "$_del_src" ]; then
         ux_error "link source missing: $_del_src"
@@ -83,7 +83,11 @@ dotfiles_ensure_link() {
         fi
         rm -f "$_del_tgt"
     elif [ -e "$_del_tgt" ]; then
-        if [ "$_del_unmount" = 1 ] && [ "$_del_mode" != keep ] && [ -d "$_del_tgt" ] && _dotfiles_is_mountpoint "$_del_tgt"; then
+        if [ "$_del_mode" = keep ]; then
+            ux_warning "keep: $_del_tgt is a real file/dir, not a link to $_del_src"
+            return 0
+        fi
+        if [ "$_del_unmount" = 1 ] && [ -d "$_del_tgt" ] && _dotfiles_is_mountpoint "$_del_tgt"; then
             # Legacy bind mount (#575): mv would fail with EBUSY. The mount
             # source is the same SSOT, so unmounting is content-neutral.
             ux_warning "bind-mount detected at $_del_tgt — unmounting (sudo may prompt)"
@@ -96,10 +100,6 @@ dotfiles_ensure_link() {
         fi
     fi
     if [ -e "$_del_tgt" ] && [ ! -L "$_del_tgt" ]; then
-        if [ "$_del_mode" = keep ]; then
-            ux_warning "keep: $_del_tgt is a real file/dir, not a link to $_del_src"
-            return 0
-        fi
         if [ -d "$_del_tgt" ] && [ "$_del_allow_dir" != 1 ]; then
             ux_error "refusing to replace directory $_del_tgt (pass --allow-dir)"
             return 1
