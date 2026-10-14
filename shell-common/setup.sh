@@ -113,6 +113,8 @@ main() {
     else
         setup_mode=$(_setup_menu_mode) || exit 1
     fi
+    # A blank value (--mode " ") resolves to "": never write that over the saved mode.
+    case "$setup_mode" in public | internal | external) ;; *) ux_error "empty or unknown setup mode (expected public|internal|external)"; exit 1 ;; esac
 
     # Persist the symbolic mode right after it is known, before any step can
     # fail under `set -e`: a mid-run failure used to leave the OLD mode on

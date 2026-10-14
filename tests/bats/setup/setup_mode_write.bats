@@ -94,6 +94,14 @@ run_main_mode() {
     assert_output "public"
 }
 
+@test "blank --mode value fails and keeps the existing mode file" {
+    echo internal >"$HOME/.dotfiles-setup-mode"
+    run_main_mode "--mode ' '"
+    assert_failure
+    run cat "$HOME/.dotfiles-setup-mode"
+    assert_output "internal"
+}
+
 @test "unknown --mode fails and keeps the existing mode file" {
     echo internal >"$HOME/.dotfiles-setup-mode"
     run_main_mode "--mode bogus"

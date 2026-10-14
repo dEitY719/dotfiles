@@ -48,7 +48,7 @@ STEP_HINT_FN=_step_hint
 
 _step_hint() {
     case "$1" in
-    shell-common*) ux_bullet_sub "환경 메뉴 입력/sudo(APT) 단계 확인 — 단독 재현: ./shell-common/setup.sh" ;;
+    shell-common*) ux_bullet_sub "sudo(APT) 단계 확인 — 단독 재현: ./shell-common/setup.sh --mode <public|internal|external>" ;;
     "bats submodule") ux_bullet_sub "git submodule update --init --recursive tests/bats/lib" ;;
     verify-config) ux_bullet_sub "로그에 표시된 손상 파일(JSON/NBSP/BOM/NUL)을 고친 뒤 재실행" ;;
     esac
