@@ -1022,7 +1022,7 @@ _iw_resolve_flow_command() {
 
     _f="${_hits%
 }/SKILL.md"
-    _name=$(awk 'NR==1 && /^---/ {fm=1; next} fm && /^---/ {exit} fm && /^name:/ {sub(/^name:[[:space:]]*/, ""); gsub(/["\047[:space:]]/, ""); print; exit}' "${_f}")
+    _name=$(awk 'NR==1 && /^---[[:space:]]*$/ {fm=1; next} fm && /^---[[:space:]]*$/ {exit} fm && /^name:/ {sub(/^name:[[:space:]]*/, ""); gsub(/["\047[:space:]]/, ""); print; exit}' "${_f}")
     [ -n "${_name}" ] || _name=$(basename "${_f%/SKILL.md}")
     printf '/%s' "${_name}"
 }
