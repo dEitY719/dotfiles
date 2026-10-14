@@ -11,7 +11,7 @@
 #
 # Provides
 #   _setup_lib_root [candidate]   canonical dotfiles root (pwd -P, main worktree)
-#   log_info / log_warning / log_error / log_error_and_exit   ux_* shims
+#   log_info / log_warning / log_error / log_error_and_exit   ux_* shims (only if undefined)
 #   plus everything from functions/dotfiles_root.sh, functions/dotfiles_backup.sh
 #   and tools/ux_lib/ux_lib.sh (the latter only when not loaded yet).
 
@@ -33,10 +33,12 @@ _setup_lib_root() {
     _resolve_dotfiles_root_canonical "$_slr_dir"
 }
 
-log_info() { ux_info "$1"; }
-log_warning() { ux_warning "$1"; }
-log_error() { ux_error "$1"; }
-log_error_and_exit() {
+# Shims only fill gaps: a caller's own log_* (bash/setup.sh, agy/setup.sh, ...)
+# keeps its format when it sources this lib afterwards.
+command -v log_info >/dev/null 2>&1 || log_info() { ux_info "$1"; }
+command -v log_warning >/dev/null 2>&1 || log_warning() { ux_warning "$1"; }
+command -v log_error >/dev/null 2>&1 || log_error() { ux_error "$1"; }
+command -v log_error_and_exit >/dev/null 2>&1 || log_error_and_exit() {
     ux_error "$1"
     exit 1
 }

@@ -14,7 +14,8 @@
 #       --on-mismatch keep: warn and leave any mismatch untouched.
 #       --unmount-legacy: unmount a pre-#575 bind mount at tgt first.
 #   dotfiles_ensure_copy_once <src> <tgt>
-#       Copy only when tgt is absent (real-file configs, #940/#924/#1373).
+#       Copy only when tgt is absent (real-file configs, #940/#924/#1373);
+#       a dangling symlink at tgt counts as absent and is replaced.
 #   dotfiles_ensure_dir <path>
 #
 # Returns 0 on success or deliberate skip, 1 on failure, 2 on bad usage.
@@ -38,7 +39,7 @@ _dotfiles_is_mountpoint() {
     if command -v findmnt >/dev/null 2>&1; then
         findmnt "$1" >/dev/null 2>&1
     else
-        mount 2>/dev/null | grep -q " on $1 "
+        mount 2>/dev/null | grep -qF " on $1 "
     fi
 }
 
@@ -127,9 +128,9 @@ dotfiles_ensure_copy_once() {
         ux_error "usage: dotfiles_ensure_copy_once <src> <tgt>"
         return 2
     fi
-    if [ -e "$_dco_tgt" ] || [ -L "$_dco_tgt" ]; then
-        return 0
-    fi
+    [ -e "$_dco_tgt" ] && return 0
+    # A dangling link (e.g. into a removed worktree, #589) is not a config.
+    [ -L "$_dco_tgt" ] && rm -f "$_dco_tgt"
     if [ ! -f "$_dco_src" ]; then
         ux_error "copy source missing: $_dco_src"
         return 1
