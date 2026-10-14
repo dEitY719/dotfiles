@@ -48,6 +48,17 @@ _lib() {
     assert_equal "$(readlink "$SB/home/f")" "$SB/src_file"
 }
 
+@test "ensure_link: a relative or aliased link to src is a silent no-op" {
+    ln -s ../src_file "$SB/home/rel"
+    ln -s "$SB/src_dir" "$SB/alias_dir"
+    ln -s "$SB/alias_dir" "$SB/home/via_alias"
+    _lib "dotfiles_ensure_link '$SB/src_file' '$SB/home/rel' && dotfiles_ensure_link '$SB/src_dir' '$SB/home/via_alias'"
+    assert_success
+    assert_output ""
+    assert_equal "$(readlink "$SB/home/rel")" "../src_file"
+    assert_equal "$(readlink "$SB/home/via_alias")" "$SB/alias_dir"
+}
+
 @test "ensure_link: a link to another target is replaced" {
     ln -s "$SB/elsewhere" "$SB/home/f"
     _lib "dotfiles_ensure_link '$SB/src_file' '$SB/home/f'"
