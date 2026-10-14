@@ -395,6 +395,11 @@ _IW_LIMIT_GATE_REOPENED=0
 # 1 once _iw_ensure_config_dir has run. Distinct from _IW_CONFIG_DIR being
 # non-empty, because "HOME is unset" resolves to a legitimately empty value.
 _IW_CONFIG_DIR_RESOLVED=0
+# The slash command a pane runs for one issue — `/gh-flow:issue` or an Agent
+# Factory flat copy such as `/issue-af01` (issue #2209). Resolved once per tick
+# by _iw_ensure_flow_command: 0 = not yet asked, 1 = resolved, 2 = failed.
+_IW_FLOW_COMMAND=""
+_IW_FLOW_RESOLVED=0
 
 # ============================================================
 # Helpers — state paths and JSON
@@ -966,6 +971,86 @@ _iw_ensure_config_dir() {
         exit 1
         ;;
     esac
+}
+
+# Print the slash command that runs the gh-flow issue chain in account dir <1>
+# (issue #2209). A slash command only runs on an exact name match, and the
+# Agent Factory app installs skills as flat `<name>-afNN` copies with an
+# unpredictable NN, so the name is looked up rather than hardcoded:
+#   1) gh-flow plugin installed and not disabled -> /gh-flow:issue
+#   2) exactly one skills/*/SKILL.md whose frontmatter says
+#      `Use for /gh-flow:issue` (upstream's alias, which the app keeps)
+#      -> /<that skill's name>
+# Exit 1 when nothing matches, 2 (matching dirs on stdout) when several do —
+# guessing would dispatch the wrong skill.
+_iw_resolve_flow_command() {
+    local _cfg="$1" _key _on _f _name _hits="" _count=0
+
+    for _key in $(jq -r '(.plugins // {}) | keys[] | select(startswith("gh-flow@"))' \
+        "${_cfg}/plugins/installed_plugins.json" 2>/dev/null); do
+        # Only an explicit `false` disables: a missing settings.json or entry
+        # leaves an installed plugin enabled, which is claude's own default.
+        _on=$(jq -r --arg k "${_key}" '.enabledPlugins[$k]' "${_cfg}/settings.json" 2>/dev/null)
+        if [ "${_on}" != "false" ]; then
+            printf '/gh-flow:issue'
+            return 0
+        fi
+    done
+
+    for _f in "${_cfg}"/skills/*/SKILL.md; do
+        [ -f "${_f}" ] || continue
+        # Frontmatter joined onto one line: a folded `description: >-` can put
+        # `Use for` and `/gh-flow:issue` on different lines.
+        awk 'NR==1 && /^---[[:space:]]*$/ {fm=1; next} fm && /^---[[:space:]]*$/ {exit} fm' "${_f}" |
+            tr -s ' \t\n' '   ' | grep -Eq 'Use for /gh-flow:issue([,. "]|$)' || continue
+        _hits="${_hits}${_f%/SKILL.md}
+"
+        _count=$((_count + 1))
+    done
+
+    case "${_count}" in
+    0) return 1 ;;
+    1) ;;
+    *)
+        printf '%s' "${_hits}"
+        return 2
+        ;;
+    esac
+
+    _f="${_hits%
+}/SKILL.md"
+    _name=$(awk 'NR==1 && /^---/ {fm=1; next} fm && /^---/ {exit} fm && /^name:/ {sub(/^name:[[:space:]]*/, ""); gsub(/["\047[:space:]]/, ""); print; exit}' "${_f}")
+    [ -n "${_name}" ] || _name=$(basename "${_f%/SKILL.md}")
+    printf '/%s' "${_name}"
+}
+
+# Resolve _IW_FLOW_COMMAND once per tick for the pane account. Shared by the
+# first dispatch and the casualty retry, so both send the same command. A
+# failure is logged once and is terminal for every dispatch this tick — it is
+# deterministic, so retrying it would only rebuild worktrees and panes.
+_iw_ensure_flow_command() {
+    local _cfg _out _rc=0
+    case "${_IW_FLOW_RESOLVED}" in
+    1) return 0 ;;
+    2) return 1 ;;
+    esac
+
+    _iw_ensure_config_dir
+    _cfg="${_IW_CONFIG_DIR:-${HOME-}/.claude}"
+    _out=$(_iw_resolve_flow_command "${_cfg}") || _rc=$?
+    if [ "${_rc}" -eq 0 ]; then
+        _IW_FLOW_COMMAND="${_out}"
+        _IW_FLOW_RESOLVED=1
+        return 0
+    fi
+
+    _IW_FLOW_RESOLVED=2
+    if [ "${_rc}" -eq 2 ]; then
+        ux_error "Pane account (${_cfg}) has several /gh-flow:issue entry points — keep one of: $(printf '%s' "${_out}" | tr '\n' ' ')"
+    else
+        ux_error "Pane account (${_cfg}) has no /gh-flow:issue entry point — install the gh-flow plugin or its Agent Factory copy."
+    fi
+    return 1
 }
 
 # ============================================================
@@ -1676,7 +1761,8 @@ _iw_escalate_prompt_stall() {
         "issue #${_number} prompt failure" || true
 }
 
-# Send `/gh-flow:issue <N>` to the issue's agent.
+# Send `<flow command> <N>` to the issue's agent — `/gh-flow:issue <N>`, or the
+# Agent Factory copy's name _iw_ensure_flow_command resolved (issue #2209).
 #
 # The prompt is a slash command, not prose: pre-#1440 this channel carried an
 # instruction to *run another agent*, and the receiving session had to work out
@@ -1686,7 +1772,8 @@ _iw_escalate_prompt_stall() {
 _iw_prompt_issue() {
     local _agent="$1" _number="$2" _tab="${3-}" _attempt="${4-}" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code
 
-    _prompt="/gh-flow:issue ${_number}"
+    _iw_ensure_flow_command || return 1
+    _prompt="${_IW_FLOW_COMMAND} ${_number}"
     _IW_STALL_RECOVER_ERROR=""
     _IW_PROMPT_KEEP_ATTEMPT=0
 
@@ -1757,6 +1844,13 @@ _iw_process_issue() {
         return 2
     }
     _label=$(_iw_workspace_label "${_repo}" "${_path}")
+
+    # Before any worktree or pane exists: no entry point is a deterministic
+    # failure, and the retry loop below would only rebuild them (#2209).
+    if ! _iw_ensure_flow_command; then
+        ux_warning "Not dispatching ${_repo}#${_number} — no /gh-flow:issue entry point to run."
+        return 1
+    fi
 
     while [ "${_attempt}" -le "${_IW_MAX_ATTEMPTS}" ]; do
         _wt=""
@@ -2843,7 +2937,7 @@ _iw_acquire_lock() {
 _iw_usage() {
     ux_header "issue_watcher_cron"
     ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | [-h|--help|help]"
-    ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:issue."
+    ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:issue (or its Agent Factory copy)."
     ux_bullet "options"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
