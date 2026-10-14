@@ -66,4 +66,4 @@ setup 체인에 편입한다.
 
 ## 사례
 
-- `_claude_install_herdr_hook` (`shell-common/tools/integrations/claude.sh`) — #1855.
+- `_claude_install_herdr_hook` (`shell-common/tools/custom/lib/claude_accounts_lifecycle.sh`) — #1855.

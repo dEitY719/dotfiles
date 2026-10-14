@@ -123,12 +123,15 @@ teardown() {
     assert_failure
 }
 
-@test "shell-common/tools/integrations/claude.sh: init/repair backups are not timestamped (issue #2130)" {
+@test "claude_accounts_{lifecycle,skills}.sh: init/repair backups are not timestamped (issue #2130)" {
     # Scope: _claude_ensure_symlink / _claude_prepare_skills_dir. The one-shot
     # claude_accounts_rollback still stamps whole account dirs with
     # `-${_car_ts}-original` on purpose (latest-only would overwrite a
     # previous rollback's account data), so it is excluded here.
-    run grep -nE -e '-\$\(date' "${DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
+    # Moved out of tools/integrations/claude.sh (#2146) — scan all three.
+    run grep -nE -e '-\$\(date' "${DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh" \
+        "${DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_lifecycle.sh" \
+        "${DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_skills.sh"
     assert_failure
 }
 

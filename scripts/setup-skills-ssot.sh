@@ -82,7 +82,7 @@ fi
 DOTFILES_MAIN_ROOT="$(_resolve_dotfiles_root_canonical "$DOTFILES_ROOT")"
 
 # 소스 판별/열거의 SSOT (issue #1652 / #1410 F-6 → #1680). Claude Code
-# 계정 쪽(shell-common/tools/integrations/claude.sh)이 같은 파일을 읽으므로
+# 계정 쪽(shell-common/tools/custom/lib/claude_accounts_skills.sh)이 같은 파일을 읽으므로
 # "무엇이 skill 소스인가" 규칙이 두 벌로 갈라지지 않는다.
 SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 if [ -f "$SKILL_SOURCES_LIB" ]; then

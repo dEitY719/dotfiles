@@ -178,7 +178,7 @@ if [ "$MODE" = "internal" ] && [ -e "$PRIV/.git" ]; then
 fi
 
 # _valid_acct <name> — POSIX safe-identifier check mirroring
-# _claude_resolve_account (shell-common/tools/integrations/claude.sh:523):
+# _claude_resolve_account (shell-common/tools/custom/lib/claude_accounts_auth.sh):
 # first char lowercase, rest [a-z0-9_-].
 _valid_acct() {
 	case "$1" in

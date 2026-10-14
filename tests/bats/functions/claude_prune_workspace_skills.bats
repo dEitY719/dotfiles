@@ -221,7 +221,9 @@ run_prune() {
     # the duplicate un-namespaced skills. Asserted per file so a failure
     # names the file that lost its call.
     local setup="${_BATS_REAL_DOTFILES_ROOT}/claude/setup.sh"
-    local integ="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
+    # _claude_account_setup_one moved to the lifecycle lib (#2146).
+    local integ="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_lifecycle.sh"
+    local skills="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/lib/claude_accounts_skills.sh"
 
     local f
     for f in "$setup" "$integ"; do
@@ -234,7 +236,7 @@ run_prune() {
     # may creep back in — plugins are the single SSOT for Claude Code.
     run grep -nE '^[[:space:]]*_claude_compose_(workspace_skills|skills_dir)\b' "$setup" "$integ"
     assert_failure
-    run grep -nE '^_claude_compose_(workspace_skills|skills_dir)\(\)' "$integ"
+    run grep -nE '^_claude_compose_(workspace_skills|skills_dir)\(\)' "$integ" "$skills"
     assert_failure
 }
 
