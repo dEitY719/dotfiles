@@ -29,8 +29,8 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 ## Immutable Constraints
 
 - **100-Line Limit**: Every AGENTS.md file must be under 100 lines — use nested AGENTS.md files for detail.
-- **No Emojis**: Strictly prohibited to save tokens.
-- **Interactive Guards**: Bash files must guard execution: `[[ $- == *i* ]]`.
+- **No emojis**: Strictly prohibited everywhere (token efficiency). Single exception: the `📊 👤 🤖` glyphs inside the `ai-metrics` footer (`<details>` wrapper + `<!-- ai-metrics -->` block) of GitHub Issue/PR cards (#317 F-2, PR #320, #367).
+- **Interactive Guards**: Every file that produces output starts with `case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac` (exceptions: `shell-common/AGENTS.md`).
 - **Loading Order**: Respect `bash/main.bash` priority (Env -> UX -> Alias -> App).
 - **No Direct Writes**: Do not write to `~/.bashrc` directly; use symlinks via `setup.sh`.
 
@@ -38,11 +38,11 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 
 - **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`) for ALL output.
 - **DO**: Use snake_case for all Bash functions and filenames.
-- **DO**: Run `mise run lint && mise run test` before committing.
+- **DO**: Run `mise run lint` before committing; the full test suite gates PR creation (`mise run pr-gate`), not commits — see `docs/.ssot/local-test-policy.md`.
 - **DO**: Use environment variables (e.g., `$SHELL_COMMON`) for sourcing files across shell contexts.
 - **DO**: Test scripts in both bash and zsh for cross-shell compatibility.
 - **DO**: Follow directory placement rules — see **[Shell Common](./shell-common/AGENTS.md)**.
-- **DON'T**: Use raw `echo` or `printf` (violates UX consistency).
+- **DON'T**: Use raw `echo`, `printf` or `tput` for user-facing output (violates UX consistency).
 - **DON'T**: Hardcode paths; use `$HOME` or relative paths.
 - **DON'T**: Commit secrets or sensitive data.
 - **DON'T**: Use `${BASH_SOURCE[0]%/*}` for sourcing (bash-only, fails in zsh); use `${SHELL_COMMON}/path`.
@@ -56,7 +56,7 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 - **Git Strategy**: Semantic commits (`Type: Summary`).
 - **One-click Setup**: `./setup.sh` must converge every PC idempotently (internal + external) — see `docs/.ssot/one-click-setup.md`.
   Output: one line per step (`run_step` in `setup.sh`, critical/optional list in `main()`), full log in `${TMPDIR:-/tmp}/dotfiles-setup-*.log`; `-v` streams all; `DOTFILES_SETUP_CHOICE=1|2|3` skips the env menu.
-- **Known Pitfalls**: `Agent({ isolation: "worktree" })` is blocked by git-crypt smudge filter in this repo — see `claude/AGENTS.md` ("Known Pitfall: Agent isolation + git-crypt") and `docs/guide/learnings/git-crypt-worktree-bootstrap.md`.
+- **Known Pitfalls**: `Agent({ isolation: "worktree" })` is blocked by git-crypt smudge filter in this repo — see `docs/guide/learnings/git-crypt-worktree-bootstrap.md`.
 - **Maintenance**: Update AGENTS.md when adding new modules.
 
 # Context Map
@@ -65,12 +65,15 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 - **[Zsh Module](./zsh/AGENTS.md)** — Zsh-specific configuration and applications
 - **[Shell Common](./shell-common/AGENTS.md)** — POSIX-compatible shared utilities (env, aliases, functions, tools, projects)
 - **[Git Hooks & Config](./git/AGENTS.md)** — Hook system, git config, and hook documentation
-- **[Claude Code](./claude/AGENTS.md)** — Claude Code configuration, settings, skills, and automation
+- **[Claude Code](./claude/AGENTS.md)** — Claude Code settings, multi-account routing, plugin list (skills live in marketplace repos, #1680)
 - **[graphify](./graphify/AGENTS.md)** — graphify knowledge-graph skill install + per-account links (manual opt-in)
 - **[Python Tests](./tests/AGENTS.md)** — pytest suite and cross-shell compatibility checks
-- **[Documentation](./docs/AGENTS.md)** — Project docs, AGENTS.md master prompt, SOLID reviews
-
-See **[Claude Code](./claude/AGENTS.md)** for skills management, multi-CLI registry, and commands.
+- **[Documentation](./docs/AGENTS.md)** — Project docs: policy SSOT, requirements, ADR, guides
+- **[Hermes](./hermes/AGENTS.md)** — Hermes Agent install + config SSOT
+- **[Obsidian](./obsidian/AGENTS.md)** — standalone `obsidian` command
+- **[agy](./agy/AGENTS.md)** — Antigravity CLI integration
+- **[Global Packages](./global-packages/AGENTS.md)** — global CLI tool sync across PCs (uv tools)
+- **[mcporter](./mcporter/AGENTS.md)** — mcporter exa server key injection
 
 <!-- my-share:changelog:begin -->
 ## 변경 기록 (changelog)

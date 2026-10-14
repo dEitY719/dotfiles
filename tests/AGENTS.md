@@ -7,7 +7,7 @@
 
 - **Run All (recommended)**: `./tests/test`
 - **Run All (verbose)**: `./tests/test -v`
-- **Run Bats Only**: `./tests/bats/lib/bats-core/bin/bats tests/bats/init tests/bats/functions tests/bats/tools`
+- **Run Bats Only**: `./tests/bats/lib/bats-core/bin/bats tests/bats/<group>` (one group dir at a time; `./tests/test` discovers every `tests/bats/**/*.bats` except `lib/` and `_fixtures/`)
 - **Run Pytest Only**: `pytest tests/integration/`
 - **Single Pytest File**: `pytest tests/integration/test_help_topics.py -v`
 - **Run Golden Rules**: `bash tests/golden_rules/test_golden_rules.sh`
@@ -31,9 +31,16 @@ tests/
 ├── bats/                  # Bats shell unit tests
 │   ├── test_helper.bash   # Common helper (isolation, subprocess runners)
 │   ├── lib/               # Git submodules: bats-core, bats-support, bats-assert
+│   ├── _fixtures/         # Shared fixtures (not run directly)
+│   ├── functions/         # Core utility function tests (largest group)
+│   ├── skills/            # Claude hook / skill-helper tests
+│   ├── tools/             # Custom tool dry-run tests
+│   ├── setup/             # setup.sh and bootstrap tests
+│   ├── integrations/      # tools/integrations/*.sh tests
 │   ├── init/              # Initialization & loading tests
-│   ├── functions/         # Core utility function tests
-│   └── tools/             # Custom tool dry-run tests
+│   ├── lint/              # Lint script tests
+│   ├── git/               # Git config / hook helper tests
+│   └── scripts/           # scripts/*.sh tests
 └── golden_rules/          # Static analysis rule checks
     └── test_golden_rules.sh
 ```
@@ -69,3 +76,4 @@ tests/
 - **[Init Tests](./bats/init/)** — Shell initialization and env var tests
 - **[Function Tests](./bats/functions/)** — Core utility function tests
 - **[Tool Tests](./bats/tools/)** — Custom tool validation
+- **[Skill/Hook Tests](./bats/skills/)** · **[Setup Tests](./bats/setup/)** · **[Integration Tests](./bats/integrations/)** · **[Git Tests](./bats/git/)**

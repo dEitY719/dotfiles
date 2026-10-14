@@ -197,6 +197,25 @@ fi
 200줄 초과 시: 기능 경계로 분할, 명확한 새 이름, `bash/main.bash` /
 `zsh/main.zsh` 의 참조 갱신.
 
+## Agent View 와 Multi-account 통합 (#640)
+
+- **Supervisor 격리**: `claude` background supervisor 는 `CLAUDE_CONFIG_DIR` 단위.
+  multi-account 환경에서는 계정마다 별도 view — `claude-yolo --user work agents`.
+- **main/master 가드 제거 (#647)**: `claude-yolo` 는 main 위에서도 그대로 실행된다.
+  격리가 필요하면 `gwt spawn --launch --ai claude --wt-name <slug>` 가 SSOT —
+  자동 `scratch/*` 분기, `CLAUDE_YOLO_STAY` env, read-only 화이트리스트의
+  누적 복잡도가 같이 사라졌다.
+- **Worktree dispatch (#650 grammar)**: `gwt spawn --launch --bg --wt-name
+  <slug> [--prompt <text...>]` (claude 전용) 로 worktree 생성 → cd →
+  `claude_yolo --bg "<prompt>"` 일괄 실행. `--user` 와 조합 가능.
+  `--prompt` 없이 `--bg` 단독 호출 시 `--bg ''` 로 dispatch — Agent View
+  진입 후 `claude agents` 에서 입력. `--bg` 없이 `--prompt` 만 주면
+  `claude_yolo "<prompt>"` 로 TUI 첫 메시지로 전달.
+
+## Vendoring to skill repos
+
+`functions/devx_pr_verify_live_*.sh` (and other files whose banner reads `# SSOT: dEitY719/dotfiles ...`) are vendored whole into the gh-* skill repos under `lib/vendor/shell-common/`. The sync tool is NOT in this repo: `scripts/sync-shell-common-vendor.sh` lives in `harness-skills` (`${WORKSPACE_ROOT:-~/para/project/skills}/harness-skills/`). Run `scripts/sync-shell-common-vendor.sh [--check] --ssot <this checkout> <repo>...` there. It only refreshes files a consumer already vendors; adding a new one (e.g. `devx_pr_verify_live_serving_identity.sh` in gh-verify-skills) is that repo's own copy-in.
+
 ## Known Issues
 
 - **함수가 zsh 에서 안 보임**: `export -f` (bash-only) 사용 → 파일 상단에

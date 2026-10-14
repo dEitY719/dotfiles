@@ -61,25 +61,12 @@ hermes 자신이 그 파일을 다시 쓰기 때문이다(OAuth 설정, 모델 �
 Part 3 의 `hermes config set` 은 이미 실파일에 쓰므로 별도 detach 단계가 없다.
 심링크로 되돌아가지 않도록 `symlinks.conf` 에도 hermes 항목을 두지 않는다.
 
-# 4가지 함정 (`hermes-help pitfalls` 가 SSOT)
+# 4가지 함정 (`hermes-help pitfalls` 가 SSOT — 상세는 거기)
 
-1. **`model.provider: custom` 의 API 키는 `.env` 가 아니라 config** — hermes 는
-   `OPENAI_API_KEY` 를 `openai.com` / `openai.azure.com` 호스트로만 전달하는
-   host-gate 를 걸어둔다. 커스텀 `base_url` 이면 키가 조용히 누락되어 401 이 난다.
-   해결: `hermes config set model.api_key "<key>"`.
-2. **`agent-browser` 는 workspace 전체를 설치할 필요가 없다** — 데스크톱 앱(Electron)이
-   같은 npm workspace 트리에 있어 같이 끌려온다. `agent-browser` 는 루트
-   `package.json` 의존성이라 `npm install --workspaces=false` 로 충분하다 (기본값).
-3. **TLS 인터셉션 프록시 뒤에서는 브라우저만 SSL 실패** — Chromium 은 시스템 CA
-   번들이 아니라 자체 NSS 저장소(`~/.pki/nssdb`, snap 이면
-   `~/snap/chromium/<rev>/.pki/nssdb`)를 본다. `certutil` 로 root CA 를 명시적으로
-   임포트해야 한다.
-
-4. **Python 3.13+ 는 AKI 없는 프록시 CA 인증서를 거부** — `hermes` 가 매 호출마다
-   "finishing an interrupted source update" 로 node/npm 을 받다 `CERTIFICATE_VERIFY_FAILED:
-   Missing Authority Key Identifier` 로 실패한다 (curl 은 통과). PM worker 는 PYTHON* env 를
-   지우고 세대별 venv 로 도므로 고정 Python 의 stdlib 에 놓은 `sitecustomize.py`(Part 6)로만
-   `VERIFY_X509_STRICT` 를 끌 수 있다. Python 버전이 바뀌면 setup 재실행.
+1. **커스텀 `base_url` 의 API 키는 `.env` 가 아니라 config** — `OPENAI_API_KEY` host-gate 로 조용히 401. `hermes config set model.api_key`.
+2. **`agent-browser` 는 workspace 전체 설치 불필요** — `npm install --workspaces=false` (기본값).
+3. **TLS 인터셉션 프록시 뒤 브라우저만 SSL 실패** — Chromium NSS 저장소(`~/.pki/nssdb`)에 `certutil` 로 root CA 임포트.
+4. **Python 3.13+ 가 AKI 없는 프록시 CA 거부** — 고정 Python stdlib 의 `sitecustomize.py`(Part 6)로만 해소. Python 버전이 바뀌면 setup 재실행.
 
 # 검증되지 않은 부분
 

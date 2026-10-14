@@ -27,8 +27,7 @@
 
 bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 
-- **Forbidden**: `source "${BASH_SOURCE[0]%/*}/file.sh"` (bash-only, zsh 깨짐)
-- **Required**: `source "${SHELL_COMMON}/path/to/file.sh"` 또는 `${DOTFILES_ROOT}` 사용
+- **`BASH_SOURCE` 금지 / `${SHELL_COMMON}` 경유**: 루트 [`AGENTS.md`](../AGENTS.md) Golden Rules (`${DOTFILES_ROOT}` 도 허용)
 - **Acceptable (executable script만)**: `source "$(dirname "$0")/file.sh"`
 - **Test**: `bash -i -c 'source main.bash && fn'` + `zsh -c 'source main.zsh && fn'`
 - **Skill 이 standalone `.` 하는 파일** (예: `gh_pr_review.sh`): #1454/#1505 foreign-checkout
@@ -40,8 +39,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 
 ## Output Standards
 
-- **DO**: `ux_lib` 함수 (`ux_header`, `ux_success`, `ux_error`)
-- **DON'T**: raw `echo`/`printf`
+- **ux_lib 필수 / raw `echo` 금지**: 루트 [`AGENTS.md`](../AGENTS.md) Golden Rules. 아래는 shell-common 고유 예외
 - **Exception**: ux_lib 미로드 시 단순 에러는 `echo ... >&2`
 - **변환 범위 (#1881)**: 사람이 읽는 장식/상태/usage 출력만 ux_lib 로 바꾼다. 제외 — 호출자가 파싱하는 출력(`$(...)` 캡처·eval·`key=value`·JSON·경로·`TARGET_SHA=` 류, skill/cron/hook 이 읽는 stdout·stderr 계약 → 필요 시 `echo` 대신 `printf '%s\n'`, 바이트 동일), git hook·check 모듈, 테스트·fixture, ux_lib 로드 전 단계(bootstrap·`install.sh`), bats 가 바이트 단위로 단언하는 출력(같은 PR 에서 테스트를 고치지 않는 한).
 - **`-h|--help` (#1880)**: 인자를 받는 사용자 명령(함수·`tools/custom` 진입점·`./setup.sh`)만 대상 — 부작용 전에 `*_help` 로 위임 후 `return 0`.
@@ -93,33 +91,10 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 
 참조 예시: `npm.sh` + `npm_help.sh` + `my_help.sh` 의 npm 항목
 
-# Agent View 와 Multi-account 통합 (#640)
-
-- **Supervisor 격리**: `claude` background supervisor 는 `CLAUDE_CONFIG_DIR` 단위.
-  multi-account 환경에서는 계정마다 별도 view — `claude-yolo --user work agents`.
-- **main/master 가드 제거 (#647)**: `claude-yolo` 는 main 위에서도 그대로 실행된다.
-  격리가 필요하면 `gwt spawn --launch --ai claude --wt-name <slug>` 가 SSOT —
-  자동 `scratch/*` 분기, `CLAUDE_YOLO_STAY` env, read-only 화이트리스트의
-  누적 복잡도가 같이 사라졌다.
-- **Worktree dispatch (#650 grammar)**: `gwt spawn --launch --bg --wt-name
-  <slug> [--prompt <text...>]` (claude 전용) 로 worktree 생성 → cd →
-  `claude_yolo --bg "<prompt>"` 일괄 실행. `--user` 와 조합 가능.
-  `--prompt` 없이 `--bg` 단독 호출 시 `--bg ''` 로 dispatch — Agent View
-  진입 후 `claude agents` 에서 입력. `--bg` 없이 `--prompt` 만 주면
-  `claude_yolo "<prompt>"` 로 TUI 첫 메시지로 전달.
-
-# Cheatsheet & Pitfalls
-
-자주 헷갈리는 패턴/실수 (file-structure 템플릿, shell detection 분기, 6대 mistake)
-는 분리되어 있다 — [`docs/guide/playbooks/shell-common-cheatsheet.md`](../docs/guide/playbooks/shell-common-cheatsheet.md) 참조.
-
 # References
 
 - **[Bash Module](../bash/AGENTS.md)** · **[Zsh Module](../zsh/AGENTS.md)** · **[Root](../AGENTS.md)**
 - **[UX Guidelines](./tools/ux_lib/UX_GUIDELINES.md)** — 출력 스타일 표준
-- **[Cheatsheet](../docs/guide/playbooks/shell-common-cheatsheet.md)** — 패턴 / 실수 예시
 - **[Command UX SSOT](../docs/.ssot/command-guidelines.md)** — 명령/help 인터페이스 정책
-
-## Vendoring to skill repos
-
-`functions/devx_pr_verify_live_*.sh` (and other files whose banner reads `# SSOT: dEitY719/dotfiles ...`) are vendored whole into the gh-* skill repos under `lib/vendor/shell-common/`. The sync tool is NOT in this repo: `scripts/sync-shell-common-vendor.sh` lives in `harness-skills` (`${WORKSPACE_ROOT:-~/para/project/skills}/harness-skills/`). Run `scripts/sync-shell-common-vendor.sh [--check] --ssot <this checkout> <repo>...` there. It only refreshes files a consumer already vendors; adding a new one (e.g. `devx_pr_verify_live_serving_identity.sh` in gh-verify-skills) is that repo's own copy-in.
+- **[Cheatsheet](../docs/guide/playbooks/shell-common-cheatsheet.md)** — file-structure 템플릿, shell detection 분기, 흔한 실수,
+  Agent View·multi-account 통합(#640), skill repo vendoring 절차
