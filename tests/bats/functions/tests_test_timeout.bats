@@ -249,7 +249,11 @@ _fake_bats() {
     _fake_bats "sleep $mark & exec sleep 30"
     BATS_FILE_TIMEOUT=1 run _bats_run_file "$FAKE_BATS" "$OUT" 0 some.bats
     assert_equal "$(cat "$OUT/0.status")" "124"
-    sleep 0.5
+    local i
+    for i in $(seq 1 30); do
+        pgrep -f "sleep $mark" >/dev/null || break
+        sleep 0.1
+    done
     run pgrep -f "sleep $mark"
     pkill -f "sleep $mark" 2>/dev/null || true
     assert_failure

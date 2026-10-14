@@ -174,8 +174,40 @@ _stub_other_phases() {
 exec sleep 30"
     GIT_HOOK_TEST_TIMEOUT=1 run run_git_hook_tests "$WORK"
     assert_output --partial "killed after GIT_HOOK_TEST_TIMEOUT=1s"
-    sleep 0.5
+    local i
+    for i in $(seq 1 30); do
+        pgrep -f "sleep $mark" >/dev/null || break
+        sleep 0.1
+    done
     run pgrep -f "sleep $mark"
     pkill -f "sleep $mark" 2>/dev/null || true
+    assert_failure
+}
+
+# #2165: timeout's own process group sits outside the phase group, so an
+# interrupt reaches a hung script's tree only through the _TEST_TREE_DIR
+# registry that _kill_test_groups reads.
+@test "SIGTERM to the runner kills a running hook script's whole tree" {
+    command -v timeout >/dev/null 2>&1 || skip "timeout(1) not available"
+    local mark=$((300000 + RANDOM)) i pid
+    fake_script hang.sh "sleep $mark &
+exec sleep $((mark + 1))"
+    set -m
+    TMPDIR="$TEST_TEMP_HOME" bash -c "source '$RUNNER'; VERBOSE=0
+        _install_test_traps; _run_in_group run_git_hook_tests '$WORK'" \
+        >/dev/null 2>&1 </dev/null 3>&- &
+    pid=$!
+    set +m
+    for i in $(seq 1 50); do
+        pgrep -f "sleep $((mark + 1))" >/dev/null && break
+        sleep 0.1
+    done
+    kill -TERM "$pid"
+    for i in $(seq 1 50); do
+        pgrep -f "sleep $mark|sleep $((mark + 1))" >/dev/null || break
+        sleep 0.1
+    done
+    run pgrep -f "sleep $mark|sleep $((mark + 1))"
+    pkill -f "sleep $mark|sleep $((mark + 1))" 2>/dev/null || true
     assert_failure
 }
