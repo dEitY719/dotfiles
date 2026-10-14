@@ -71,6 +71,22 @@ _run_setup_with_extra_row() {
     [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]
 }
 
+@test "#2141: internal mode still replaces a real directory with the link (--allow-dir kept)" {
+    # The internal branch used dotfiles_ensure_link --allow-dir --unmount-legacy
+    # directly; it now goes through _claude_ensure_symlink, which must keep
+    # both flags: a pre-existing real ~/.claude/docs converges to the link and
+    # its content survives in the backup instead of failing the run.
+    echo "internal" >"$HOME/.dotfiles-setup-mode"
+    mkdir -p "$HOME/.claude/docs"
+    echo "user-note" >"$HOME/.claude/docs/note.md"
+
+    run_in_bash "bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    [ -L "$HOME/.claude/docs" ]
+    [ "$(readlink "$HOME/.claude/docs")" = "$DOTFILES_ROOT/claude/docs" ]
+    grep -rqs "user-note" "$HOME/.claude/" --include=note.md
+}
+
 @test "#2141: _claude_link_apply fails when an earlier row fails" {
     run_in_bash "
         source '${DOTFILES_ROOT}/claude/setup.sh'
