@@ -11,7 +11,6 @@ interactive_guard:shell-common/functions/secret_run.sh
 interactive_guard:shell-common/functions/sops_help.sh
 posix_bashism:shell-common/util/loader.sh
 ux_usage:shell-common/functions/devx_pr_verify_live_backend_identity.sh
-ux_usage:shell-common/functions/git_worktree.sh
 ux_usage:shell-common/functions/mirror_pages_activate_help.sh
 wrapper:shell-common/functions/category_help.sh
 wrapper:shell-common/functions/git_help.sh

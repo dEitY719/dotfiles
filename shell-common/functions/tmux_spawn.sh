@@ -21,72 +21,9 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 #   | (ai-yolo)| right-bot|
 #   +----------+----------+
 
-_ts_known_agent() {
-    case "$1" in
-        claude|codex|agy|opencode|cursor|copilot) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
-# _tmux_add_agent_window <session> <agent> <dir> [account] [use_bg] [prompt]
-# Add a 3-pane window to a tmux session (creates session if needed).
-# Layout: LEFT (agent-yolo) | RIGHT-TOP / RIGHT-BOTTOM
-#
-# Optional 4th arg `account` (issue #295): when set with agent=claude, the
-# left pane runs `claude-yolo --user <account>` instead of plain
-# `claude-yolo`. Other agents have no multi-account support so the value is
-# ignored — the caller is responsible for rejecting that combination.
-#
-# Optional 5th arg `use_bg` (issue #640, signature changed in #650):
-# when "1" and agent=claude, append `--bg "<prompt>"` so Agent View picks up
-# the dispatched session. Empty prompt yields `--bg ''` and lets claude itself
-# emit any task-too-short error. Other agents lack a --bg flag and the
-# caller must reject the combination.
-#
-# Optional 6th arg `prompt` (issue #650): the AI initial-task text. If
-# `use_bg` is 1, the prompt becomes the --bg payload. Otherwise (claude
-# only) it is appended as the first positional arg so claude TUI opens
-# with that text as the first message.
-_tmux_add_agent_window() {
-    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local session="$1" agent="$2" dir="$3" account="${4-}" use_bg="${5-0}" prompt="${6-}"
-    local yolo win
-    if [ "$agent" = "claude" ] && [ -n "$account" ]; then
-        yolo="${agent}-yolo --user ${account}"
-    else
-        yolo="${agent}-yolo"
-    fi
-    # Single-quote-escape any prompt text so tmux send-keys passes it
-    # through verbatim through the eventual `eval` inside the agent yolo.
-    # Computed once and reused so SC2155 (local + command-substitution)
-    # cannot mask the sed exit status (PR #652 gemini-code-assist review).
-    local _ts_p_esc
-    _ts_p_esc=""
-    if [ -n "$prompt" ]; then
-        _ts_p_esc=$(printf '%s' "$prompt" | sed "s/'/'\\\\''/g")
-    fi
-    if [ "$agent" = "claude" ] && [ "$use_bg" = 1 ]; then
-        yolo="${yolo} --bg '${_ts_p_esc}'"
-    elif [ "$agent" = "claude" ] && [ -n "$prompt" ]; then
-        yolo="${yolo} '${_ts_p_esc}'"
-    fi
-
-    if tmux has-session -t "=$session" 2>/dev/null; then
-        win=$(tmux new-window -P -F '#{window_index}' \
-            -t "$session" -n "$agent" -c "$dir")
-    else
-        win=$(tmux new-session -d -P -F '#{window_index}' \
-            -s "$session" -n "$agent" -c "$dir")
-    fi
-
-    # 3-pane layout
-    tmux split-window -h -t "${session}:${win}" -c "$dir"
-    tmux split-window -v -t "${session}:${win}" -c "$dir"
-
-    # Run ai-yolo in pane 0, focus it
-    tmux send-keys -t "${session}:${win}.0" "$yolo" Enter
-    tmux select-pane -t "${session}:${win}.0"
-}
+# _ts_known_agent / _tmux_add_agent_window live in lib/agent_launch.sh (#2156).
+# shellcheck source=/dev/null
+. "${SHELL_COMMON}/lib/agent_launch.sh"
 
 tmux_spawn() {
     if ! command -v tmux >/dev/null 2>&1; then

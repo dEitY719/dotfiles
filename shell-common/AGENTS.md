@@ -94,6 +94,6 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 # References
 
 - **[Bash](../bash/AGENTS.md)** · **[Zsh](../zsh/AGENTS.md)** · **[Root](../AGENTS.md)** · **[UX Guidelines](./tools/ux_lib/UX_GUIDELINES.md)** · **[Command UX SSOT](../docs/.ssot/command-guidelines.md)**
-- **Vendoring**: 배너에 `# SSOT: dEitY719/dotfiles` 가 있는 파일(예: `functions/devx_pr_verify_live_*.sh`)은 gh-* skill repo 에 통째로 vendoring 된다 — 고친 뒤 `harness-skills` 의 `scripts/sync-shell-common-vendor.sh` 로 동기화
+- **Vendoring**: 배너에 `# SSOT: dEitY719/dotfiles` 가 있는 파일(예: `functions/devx_pr_verify_live_*.sh`)은 gh-* skill repo 에 통째로 vendoring 된다 — 고친 뒤 `harness-skills` 의 `scripts/sync-shell-common-vendor.sh` 로 동기화. `gwt` 는 `functions/git_worktree.sh` + `git_worktree_spawn.sh` + `gwt_help.sh` + `lib/agent_launch.sh` 4파일로 나뉘었다(#2156) — vendor 시 함께 동기화
 - **[Cheatsheet](../docs/guide/playbooks/shell-common-cheatsheet.md)** — file-structure 템플릿, shell detection 분기, 흔한 실수,
   Agent View·multi-account 통합(#640), skill repo vendoring 절차

@@ -1,6 +1,6 @@
 # gwt
 
-> 자동 생성 문서입니다. 직접 편집하지 마세요 — 내용은 `shell-common/functions/git_worktree.sh` 의 row 함수가 SSOT 입니다.
+> 자동 생성 문서입니다. 직접 편집하지 마세요 — 내용은 `shell-common/functions/gwt_help.sh` 의 row 함수가 SSOT 입니다.
 > 재생성: `shell-common/tools/custom/gen_command_docs.sh --topic gwt --force`
 
 ## 호출
@@ -84,5 +84,5 @@
 
 ## 소스
 
-- `shell-common/functions/git_worktree.sh`
+- `shell-common/functions/gwt_help.sh`
 - 인터페이스 규칙: `docs/.ssot/command-guidelines.md`

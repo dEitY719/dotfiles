@@ -366,14 +366,14 @@ git_branch_teardown() {
     fi
 
     # Sync main to origin — fetch + `git merge --ff-only`, matching
-    # `gwt teardown` (git_worktree.sh:2308). `git pull` was wrong here: under
+    # `gwt teardown` (_gwt_teardown_one_inplace, git_worktree_spawn.sh). `git pull` was wrong here: under
     # pull.rebase=false a diverged local main would silently gain an unwanted
     # merge commit, and under pull.rebase=true it rebases — neither is the
     # intended "catch up only if we cleanly can". Fast-forward only; a diverged
     # local main is reported with ahead/behind counts, never rewritten (#1125).
     if git fetch --quiet origin "$main_branch" 2>/dev/null; then
         if git rev-parse --verify --quiet "origin/$main_branch" >/dev/null 2>&1; then
-            # Capture ff-only stderr (same as gwt teardown, git_worktree.sh:2312)
+            # Capture ff-only stderr (same as gwt teardown, git_worktree_spawn.sh)
             # so a failure from uncommitted changes / an index lock surfaces its
             # real cause instead of being mislabeled as pure divergence.
             local _sync_err_file="${TMPDIR:-/tmp}/gbr-sync.$$.err"

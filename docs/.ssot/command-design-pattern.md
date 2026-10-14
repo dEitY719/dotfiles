@@ -116,7 +116,9 @@ canonical `gwt-help` (see the reference implementation below and
 
 ### 참조 구현: `gwt`
 
-파일: `shell-common/functions/git_worktree.sh`
+파일: `shell-common/functions/git_worktree.sh` (dispatcher + list/status/add/remove/prune).
+spawn/teardown 은 `git_worktree_spawn.sh`, 도움말은 `gwt_help.sh`, AI 런처(에이전트 명령·tmux 창·mise trust)는
+guard-free lib `shell-common/lib/agent_launch.sh` 로 분할돼 있다(#2156) — `tmux_spawn.sh` 도 같은 lib 를 쓴다.
 
 ```sh
 gwt() {
@@ -283,7 +285,7 @@ alias gprune='gb -D remote'           # deprecated
 
 - [`command-guidelines.md`](./command-guidelines.md) — Help interface SSOT (사용자 표면)
 - `shell-common/tools/ux_lib/UX_GUIDELINES.md` — UX output rules
-- `shell-common/functions/git_worktree.sh` — Type 2A 참조 구현 (gwt)
+- `shell-common/functions/git_worktree.sh` — Type 2A 참조 구현 (gwt; spawn/teardown·help·AI 런처는 #2156 분할 파일)
 - `shell-common/functions/git.sh` — Type 2B 참조 구현 (gb)
 - Issue #558 — gb 통합 설계 근거
 - PR #559 — gb 구현 검증
