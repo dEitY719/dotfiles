@@ -65,6 +65,24 @@ fi
 # shellcheck source=/dev/null
 . "${_IW_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" || exit 1
 
+# Candidate-selection ops (#2157): Python by default (dotfiles_tools.issue_watcher.select,
+# via cron_py), IW_SELECT_IMPL=shell rolls back to the legacy jq/awk filters for
+# one release. Same op names, same stdin/stdout/exit contract either way.
+case "${IW_SELECT_IMPL:-python}" in
+shell)
+    # shellcheck source=/dev/null
+    . "${_IW_SHELL_COMMON}/tools/custom/lib/issue_watcher_select_shell.sh" || exit 1
+    _iw_sel() { _iw_sel_shell "$@"; }
+    ;;
+python)
+    _iw_sel() { cron_py dotfiles_tools.issue_watcher.select "$@"; }
+    ;;
+*)
+    ux_error "IW_SELECT_IMPL must be python or shell (got: ${IW_SELECT_IMPL})."
+    exit 1
+    ;;
+esac
+
 # ============================================================
 # Constants (SSOT for the watch cycle)
 # ============================================================
@@ -821,7 +839,7 @@ _iw_load_open_prs() {
     # issue's PR sits outside the window, reads as "unhandled", and earns a
     # second PR. Treat it as "cannot tell" rather than as an answer
     # (PR #1456 agy/codex review).
-    _count=$(printf '%s' "${_json}" | jq -r 'length' 2>/dev/null) || _count=""
+    _count=$(printf '%s' "${_json}" | _iw_sel pr-count) || _count=""
     case "${_count}" in
     '' | *[!0-9]*) return 1 ;;
     esac
@@ -852,23 +870,7 @@ _iw_load_open_prs() {
 # owner/repo#11` — which the first cut missed, so a hand-written PR using either
 # read as "unhandled" and the issue was dispatched again (PR #1456 codex review).
 _iw_handled_by_pr() {
-    local _number="$1" _hits
-
-    _hits=$(printf '%s' "${_IW_PR_CACHE_DATA}" | jq -r --arg n "${_number}" '
-        [ .[]?
-          | select(
-              ((.headRefName // "") | test("^wt/issue-" + $n + "/"))
-              or ((.body // "")
-                  | test("\\b(close[sd]?|fix(e[sd])?|resolve[sd]?):?\\s+(\\S+)?#" + $n + "\\b"; "i"))
-            )
-        ] | length
-    ' 2>/dev/null) || _hits=""
-
-    case "${_hits}" in
-    '' | *[!0-9]*) return 2 ;;
-    0) return 1 ;;
-    *) return 0 ;;
-    esac
+    printf '%s' "${_IW_PR_CACHE_DATA}" | _iw_sel handled-by-pr "$1"
 }
 
 # ============================================================
@@ -916,17 +918,7 @@ _iw_write_last_repo() {
 # and at one dispatch per tick that first repo would be the only one ever
 # reached.
 _iw_repo_order() {
-    _iw_watch_list | awk -F "${_IW_TAB}" -v last="$1" '
-        { r[NR] = $1 }
-        END {
-            if (NR == 0) exit
-            start = 1
-            if (last != "") {
-                for (i = 1; i <= NR; i++) if (r[i] == last) { start = i + 1; break }
-            }
-            for (k = 0; k < NR; k++) print r[((start - 1 + k) % NR) + 1]
-        }
-    '
+    _iw_watch_list | _iw_sel repo-order "$1"
 }
 
 # ============================================================
@@ -1011,13 +1003,7 @@ _iw_search_issues() {
             continue
         }
 
-        printf '%s' "${_json}" | jq -r '
-            .[]?
-            | [ .repository.nameWithOwner,
-                (.number | tostring),
-                ([ .labels[]?.name ] | join("")) ]
-            | @tsv
-        ' 2>/dev/null
+        printf '%s' "${_json}" | _iw_sel search-rows
     done
     [ "${_errf}" = "/dev/null" ] || rm -f "${_errf}"
 }
@@ -1107,10 +1093,7 @@ _iw_blocked_by_open() {
         return 1
     }
 
-    _open=$(printf '%s' "${_json}" | jq -r '
-        [ .data.repository.issue.blockedBy.nodes[]?
-          | select(.state == "OPEN") | .number ] | join(",")
-    ' 2>/dev/null) || _open=""
+    _open=$(printf '%s' "${_json}" | _iw_sel open-blockers) || _open=""
 
     [ -n "${_open}" ] || return 1
     ux_info "Skipping ${_repo}#${_number} — blocked by open #${_open}." >&2
@@ -2970,6 +2953,13 @@ main() {
     if ! command -v jq >/dev/null 2>&1; then
         ux_error "jq not found in PATH — cannot parse the issue search or the watch list."
         ux_info "Install jq, or add it to the cron PATH."
+        exit 1
+    fi
+
+    # The candidate-selection ops run in Python unless rolled back (#2157).
+    if [ "${IW_SELECT_IMPL:-python}" = "python" ] && ! command -v python3 >/dev/null 2>&1; then
+        ux_error "python3 not found in PATH — cannot run the candidate selection."
+        ux_info "Add python3 to the cron PATH, or set IW_SELECT_IMPL=shell to roll back to jq."
         exit 1
     fi
 

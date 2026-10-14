@@ -61,3 +61,13 @@ cron_acquire_lock() {
         return 1
     fi
 }
+
+# Run a dotfiles_tools module: cron_py <module> [args...] (#2157).
+# The shell/Python call contract (docs/.ssot/shell-vs-python.md): stdin in,
+# stdout out, exit 0/1 = answer, 2 = unreadable input. The package is stdlib
+# only, so the system python3 on cron's PATH runs it with no venv. -E -s drop
+# PYTHONPATH and user site; the cd makes `-m` import from tools/py, a path this
+# repo owns, instead of whatever directory the tick was started in.
+cron_py() {
+    (cd "${SHELL_COMMON}/../tools/py" && python3 -E -s -m "$@")
+}

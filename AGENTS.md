@@ -54,6 +54,7 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 
 - **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md`, `pyproject.toml`, and `mise.toml`.
 - **Git Strategy**: Semantic commits (`Type: Summary`).
+- **Shell vs Python**: logic past the shell threshold goes to `tools/py/dotfiles_tools` behind a thin shell entrypoint — see `docs/.ssot/shell-vs-python.md`.
 - **One-click Setup**: `./setup.sh` must converge every PC idempotently (internal + external) — see `docs/.ssot/one-click-setup.md`.
   Output: one line per step (`run_step` in `setup.sh`, critical/optional list in `main()`), full log in `${TMPDIR:-/tmp}/dotfiles-setup-*.log`; `-v` streams all; `DOTFILES_SETUP_CHOICE=1|2|3` skips the env menu.
 - **Known Pitfalls**: `Agent({ isolation: "worktree" })` is blocked by git-crypt smudge filter in this repo — see `docs/guide/learnings/git-crypt-worktree-bootstrap.md`.

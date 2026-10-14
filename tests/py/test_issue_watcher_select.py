@@ -1,0 +1,92 @@
+"""dotfiles_tools.issue_watcher.select (#2157).
+
+Two layers: explicit expectations per op, and a golden parity check that runs
+the legacy jq/awk filters (IW_SELECT_IMPL=shell) on the same fixtures and
+requires byte-identical stdout and the same exit code.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = Path(__file__).parent / "fixtures" / "issue_watcher"
+LEGACY = ROOT / "shell-common/tools/custom/lib/issue_watcher_select_shell.sh"
+US = "\x1f"
+
+
+def run_python(op: list[str], fixture: str) -> tuple[int, str]:
+    """Invoke the module the way cron_py does: -E -s, cwd = tools/py."""
+    proc = subprocess.run(
+        [sys.executable, "-E", "-s", "-m", "dotfiles_tools.issue_watcher.select", *op],
+        input=(FIXTURES / fixture).read_bytes(),
+        capture_output=True,
+        cwd=ROOT / "tools/py",
+        check=False,
+    )
+    return proc.returncode, proc.stdout.decode()
+
+
+def run_shell(op: list[str], fixture: str) -> tuple[int, str]:
+    proc = subprocess.run(
+        ["sh", "-c", '. "$0" && _iw_sel_shell "$@"', str(LEGACY), *op],
+        input=(FIXTURES / fixture).read_bytes(),
+        capture_output=True,
+        check=False,
+    )
+    return proc.returncode, proc.stdout.decode()
+
+
+CASES = [
+    (
+        ["search-rows"],
+        "search_issues.json",
+        0,
+        f"acme/api\t14\tbug{US}needs review, soon\nacme/web\t3\t\nacme/api\t145\twontfix\n",
+    ),
+    (["search-rows"], "truncated.json", 2, ""),
+    (["pr-count"], "open_prs.json", 0, "4\n"),
+    (["pr-count"], "truncated.json", 2, ""),
+    # body keyword, with the trailing \b: #14 must not match "Closes #145".
+    (["handled-by-pr", "145"], "open_prs.json", 0, ""),
+    (["handled-by-pr", "14"], "open_prs.json", 1, ""),
+    # branch name wt/issue-<n>/ — and #77's branch must not handle #7 or vice versa.
+    (["handled-by-pr", "7"], "open_prs.json", 0, ""),
+    (["handled-by-pr", "77"], "open_prs.json", 0, ""),
+    # `fixes: owner/repo#11` spelling.
+    (["handled-by-pr", "11"], "open_prs.json", 0, ""),
+    # a plain reference is not a closing keyword.
+    (["handled-by-pr", "12"], "open_prs.json", 1, ""),
+    (["handled-by-pr", "12"], "truncated.json", 2, ""),
+    (["open-blockers"], "blocked_by_open.json", 0, "1,3\n"),
+    (["open-blockers"], "blocked_by_closed.json", 1, "\n"),
+    # fail-open: a server that does not know the field means "not blocked".
+    (["open-blockers"], "blocked_by_unknown_field.json", 1, "\n"),
+    (["repo-order"], "watch_list.tsv", 0, "acme/api\nacme/web\nacme/cli\n"),
+    (["repo-order", "acme/web"], "watch_list.tsv", 0, "acme/cli\nacme/api\nacme/web\n"),
+    (["repo-order", "acme/cli"], "watch_list.tsv", 0, "acme/api\nacme/web\nacme/cli\n"),
+    (["repo-order", "gone/repo"], "watch_list.tsv", 0, "acme/api\nacme/web\nacme/cli\n"),
+]
+
+
+@pytest.mark.parametrize(("op", "fixture", "code", "out"), CASES)
+def test_python_select(op: list[str], fixture: str, code: int, out: str) -> None:
+    assert run_python(op, fixture) == (code, out)
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="legacy filters need jq")
+@pytest.mark.parametrize(("op", "fixture", "code", "out"), CASES)
+def test_shell_python_parity(op: list[str], fixture: str, code: int, out: str) -> None:
+    """Golden: the rollback path answers exactly what the Python path answers."""
+    assert run_shell(op, fixture) == run_python(op, fixture)
+
+
+def test_repo_order_empty_watch_list() -> None:
+    from dotfiles_tools.issue_watcher.select import repo_order
+
+    assert repo_order([], "acme/api") == []

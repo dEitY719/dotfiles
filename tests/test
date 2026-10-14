@@ -940,7 +940,7 @@ run_pytest() {
     print_header "Running Pytest Integration Tests"
     if [ "$SERIAL" = "1" ] || [ "$HAS_XDIST" = "0" ]; then
         # Serial: override addopts to remove xdist options
-        _run_in_group python3 -m pytest tests/integration/ \
+        _run_in_group python3 -m pytest tests/integration/ tests/py/ \
             $verbose_flag \
             --tb=short \
             -o addopts="-v --strict-markers" \
@@ -957,7 +957,7 @@ run_pytest() {
             pytest_env=("PYTEST_XDIST_AUTO_NUM_WORKERS=${budget%% *}")
             print_info "Parallel: ${budget%% *} pytest workers ${budget#* } — PYTEST_XDIST_AUTO_NUM_WORKERS=N to override"
         fi
-        _run_in_group env "${pytest_env[@]}" python3 -m pytest tests/integration/ $verbose_flag --tb=short
+        _run_in_group env "${pytest_env[@]}" python3 -m pytest tests/integration/ tests/py/ $verbose_flag --tb=short
     fi
     return $?
 }

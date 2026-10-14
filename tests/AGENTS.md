@@ -28,6 +28,7 @@ tests/
 │   ├── test_help_topics.py
 │   ├── test_mytool_help.py
 │   └── test_file_cleanup.py
+├── py/                    # Pytest unit tests for tools/py/dotfiles_tools (docs/.ssot/shell-vs-python.md)
 ├── bats/                  # Bats shell unit tests
 │   ├── test_helper.bash   # Common helper (isolation, subprocess runners)
 │   ├── lib/               # Git submodules: bats-core, bats-support, bats-assert
