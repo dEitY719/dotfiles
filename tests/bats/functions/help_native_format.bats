@@ -31,7 +31,7 @@ NATIVE_CHECK='
         command -v "${t}_help" >/dev/null 2>&1 || echo "MISSING dispatcher $t"
         command -v "_${t}_help_summary" >/dev/null 2>&1 || echo "MISSING summary $t"
         a="$(printf "%s" "$t" | tr _ -)-help"
-        alias "$a" 2>/dev/null | grep -q "${t}_help" || echo "MISSING alias $a"
+        alias "$a" 2>/dev/null | grep -Eq "=.?${t}_help.?\$" || echo "MISSING alias $a"
     done
     echo "checked=$n"
 '
