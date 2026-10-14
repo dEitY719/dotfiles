@@ -119,3 +119,14 @@ run_main_mode() {
     run cat "$HOME/.dotfiles-setup-mode"
     assert_output "internal"
 }
+
+@test "--help, unknown option and a missing --mode value never write the mode file" {
+    run_main_mode "--help"
+    assert_success
+    assert_output --partial "--mode public|internal|external"
+    run_main_mode "--bogus"
+    [ "$status" -eq 2 ]
+    run_main_mode "--mode"
+    [ "$status" -eq 2 ]
+    [ ! -e "$HOME/.dotfiles-setup-mode" ]
+}
