@@ -683,57 +683,59 @@ _phase_provision_bare() {
     fi
 }
 
+# _claude_link_verify <mode> <cdir> <label> — _claude_link_table 의 <mode> 행이
+# <cdir> 에 기대한 형태로 있는지 확인한다 (#2141). 실패는 log_error_and_exit.
+# skills/ 는 실디렉토리 (#707, F-8) — 스킬은 플러그인에서 오므로 비어 있어도 된다.
+# settings.json 은 #940 이후 실파일 복사 — symlink 는 /model 이 SSOT 를 오염시킨다 (#924).
+_claude_link_verify() {
+    local mode="$1" cdir="$2" label="$3" rel kind modes
+    while IFS='|' read -r _ rel kind modes; do
+        case "$modes" in all | "$mode") ;; *) continue ;; esac
+        case "$kind" in
+        copy)
+            if [ -f "${cdir}/${rel}" ] && [ ! -L "${cdir}/${rel}" ]; then
+                log_dim "✓ ${label}/${rel} 실파일 확인됨"
+            else
+                log_error_and_exit "${label}/${rel} 실파일 생성 실패"
+            fi
+            ;;
+        link)
+            if [ -L "${cdir}/${rel}" ]; then
+                log_dim "✓ ${label}/${rel} 심볼릭 링크 확인됨"
+            else
+                log_error_and_exit "${label}/${rel} 심볼릭 링크 생성 실패"
+            fi
+            ;;
+        dir)
+            if [ -d "${cdir}/${rel}" ] && [ ! -L "${cdir}/${rel}" ]; then
+                log_dim "✓ ${label}/${rel} 실디렉토리 확인됨 (스킬은 플러그인으로 로드)"
+            else
+                log_error_and_exit "${label}/${rel} 실디렉토리 생성 실패 (디렉토리 아님)"
+            fi
+            ;;
+        esac
+    done <<EOF
+$(_claude_link_table)
+EOF
+}
+
 # _phase_verify — 산출물 검증. 실패는 log_error_and_exit (exit 1).
 _phase_verify() {
     if [ "$_setup_mode" = "internal" ]; then
         # --- Verify Links (single-account) ---
-        # settings.json is intentionally absent from this list — gateway-cli
-        # setup writes it as a regular file (2026-08-18~, the #687 merge is
-        # gone). settings.local.json is also absent — it is the
-        # personal-override slot (#924) and never a dotfiles symlink (#584).
-        # skills/ is a real directory (#707, F-8) — workspace skills come from
-        # plugins, so it may well be empty — checked as `-d` (and `! -L`).
+        # settings.json (multi 전용 행) 은 검증 대상이 아니다 — gateway-cli
+        # setup 이 실파일로 쓴다 (2026-08-18~, #687 머지 폐지). settings.local.json
+        # 은 개인 override 슬롯(#924)이라 테이블에 없다 (#584).
         ux_section "심볼릭 링크 확인 (internal/single-account)"
-        for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md keybindings.json; do
-            if [ -L "$HOME/.claude/$link" ]; then
-                log_dim "✓ ~/.claude/$link 심볼릭 링크 확인됨"
-            else
-                log_error_and_exit "$HOME/.claude/$link 심볼릭 링크 생성 실패"
-            fi
-        done
-        if [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]; then
-            log_dim "✓ ~/.claude/skills 실디렉토리 확인됨 (스킬은 플러그인으로 로드)"
-        else
-            log_error_and_exit "$HOME/.claude/skills 실디렉토리 생성 실패 (디렉토리 아님)"
-        fi
+        # shellcheck disable=SC2088  # 표시용 라벨 — 확장하지 않는다
+        _claude_link_verify internal "$HOME/.claude" "~/.claude"
         return 0
     fi
 
     # --- Verify Links (모든 활성 계정 + 접두사 없는 \$HOME/.claude) ---
-    # skills/ is a real directory (#707, F-8) — workspace skills come from
-    # plugins, so it may well be empty — checked as `-d` (and `! -L`).
-    # settings.json is a real-file copy since #940 (not a symlink) — the
-    # write-through symlink let /model pollute the tracked SSOT (#924).
     ux_section "심볼릭 링크 확인"
     for acct in $ENABLED_ACCOUNTS; do
-        cdir=$(_claude_resolve_account "$acct")
-        if [ -f "${cdir}/settings.json" ] && [ ! -L "${cdir}/settings.json" ]; then
-            log_dim "✓ ${acct}/settings.json 실파일 확인됨"
-        else
-            log_error_and_exit "${acct}/settings.json 실파일 생성 실패"
-        fi
-        for link in statusline-command.sh docs plugins projects/GLOBAL/memory workflows CLAUDE.md keybindings.json; do
-            if [ -L "${cdir}/${link}" ]; then
-                log_dim "✓ ${acct}/${link} 심볼릭 링크 확인됨"
-            else
-                log_error_and_exit "${acct}/${link} 심볼릭 링크 생성 실패"
-            fi
-        done
-        if [ -d "${cdir}/skills" ] && [ ! -L "${cdir}/skills" ]; then
-            log_dim "✓ ${acct}/skills 실디렉토리 확인됨 (스킬은 플러그인으로 로드)"
-        else
-            log_error_and_exit "${acct}/skills 실디렉토리 생성 실패 (디렉토리 아님)"
-        fi
+        _claude_link_verify multi "$(_claude_resolve_account "$acct")" "$acct"
     done
     # 접두사 없는 \$HOME/.claude/settings.json 도 실파일이어야 한다 (#1701) —
     # 위 계정 루프와 달리 심볼릭 링크·docs·skills 등 다른 항목은 이 경로에서
