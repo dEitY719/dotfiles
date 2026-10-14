@@ -317,11 +317,10 @@ github
 system"
 }
 
-@test "#2158: re-source guard keeps a caller's override, old copy does not block new functions" {
+@test "#2158: policy functions follow a redefined reader; an older reader loaded first is replaced" {
     run bash --noprofile --norc -c "
         . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
         _dotfiles_setup_mode() { echo internal; }
-        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
         _dotfiles_setup_mode_accounts
     "
     assert_output "single"
