@@ -61,7 +61,7 @@ _load_transcript = _hook_common.load_transcript
 _message_payload = _hook_common.message_payload
 
 try:
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 except ImportError:  # pragma: no cover — PyYAML is in dev deps; this is a defensive fallback
     yaml = None  # type: ignore[assignment]
 
@@ -168,7 +168,7 @@ def _load_catalog(path: Path) -> dict[str, dict[str, Any]]:
         return {}
     try:
         data = yaml.safe_load(raw)
-    except yaml.YAMLError as exc:  # type: ignore[attr-defined]
+    except yaml.YAMLError as exc:
         _trace(f"catalog YAML invalid: {exc}", layer="L2")
         return {}
     if not isinstance(data, dict):

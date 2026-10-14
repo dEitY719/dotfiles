@@ -46,6 +46,7 @@ fi
 # Check if branch matches template pattern
 should_process=0
 for pattern in "${TEMPLATE_BRANCHES[@]}"; do
+    # shellcheck disable=SC2053 # unquoted on purpose: TEMPLATE_BRANCHES entries are globs
     if [[ "$BRANCH" == $pattern ]]; then
         should_process=1
         break

@@ -158,6 +158,7 @@ if [ ! -d "$HOME/.config" ]; then
     mkdir -p "$HOME/.config"
     log_info "Created ~/.config directory"
 else
+    # shellcheck disable=SC2088 # literal "~" in a user-facing message, not a path
     log_info "~/.config directory already exists"
 fi
 

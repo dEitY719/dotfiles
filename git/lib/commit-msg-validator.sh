@@ -115,11 +115,13 @@ validate_body_length() {
 # Check if body exists (optional, but warn if only subject)
 validate_multi_line_format() {
     local msg="$1"
-    local line_count=$(echo "$msg" | wc -l)
+    local line_count
+    line_count=$(echo "$msg" | wc -l)
 
     # If message has more than 1 line, check separator
     if [ "$line_count" -gt 1 ]; then
-        local second_line=$(echo "$msg" | sed -n '2p')
+        local second_line
+        second_line=$(echo "$msg" | sed -n '2p')
         if [ -n "$second_line" ]; then
             echo "$MSG_NO_SEPARATOR"
             return 1

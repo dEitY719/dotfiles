@@ -25,7 +25,8 @@ bats_abort_timeout_countdown() {
 }
 
 # Project paths
-export DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DOTFILES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+export DOTFILES_ROOT
 export SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 # Frozen snapshot. setup_isolated_dotfiles_root overrides DOTFILES_ROOT for
