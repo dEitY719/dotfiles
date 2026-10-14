@@ -6,8 +6,8 @@
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib)
 source "$(dirname "$0")/init.sh" || exit 1
 
-# Setup-mode reader SSOT (#1810) — init.sh returns early under
-# DOTFILES_TEST_MODE=1 without setting SHELL_COMMON, hence the fallback.
+# Setup-mode reader SSOT (#1810). init.sh sets SHELL_COMMON (under
+# DOTFILES_TEST_MODE=1 too since #2144); the fallback is a safety net.
 _cp_setup_mode_read_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/setup_mode_read.sh"
 if [ -r "$_cp_setup_mode_read_lib" ]; then
     # shellcheck disable=SC1091

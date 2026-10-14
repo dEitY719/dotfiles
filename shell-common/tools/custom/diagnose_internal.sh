@@ -9,7 +9,7 @@
 #
 # 사용: bash shell-common/tools/custom/diagnose_internal.sh [-h|--help]
 
-# init.sh 는 DOTFILES_TEST_MODE=1 에서 ux_lib 로드 전에 return 하므로 직접 보충한다.
+# init.sh 가 ux_lib 를 로드한다 (#2144 이후 DOTFILES_TEST_MODE=1 에서도). 아래 보충은 안전망.
 _di_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 source "$_di_dir/init.sh" || return 1 2>/dev/null || exit 1
 DOTFILES_ROOT="${_di_dir%/shell-common/tools/custom}"
