@@ -131,7 +131,7 @@ if [ -f "$WORK_LOG_SRC" ]; then
         else
             log_debug "✓ work_log.txt 심볼릭 링크 확인됨"
         fi
-    else
+    elif [ ! -d "$WORK_LOG_LINK" ]; then
         # Regular file -> backed up to work_log.txt.original, then linked
         dotfiles_ensure_link "$WORK_LOG_SRC" "$WORK_LOG_LINK" ||
             log_error_and_exit "심볼릭 링크 생성 실패: $WORK_LOG_LINK"

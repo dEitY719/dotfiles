@@ -32,7 +32,7 @@ ux_header "GitHub CLI (gh) dotfiles setup 시작"
 
 # Same link -> no-op; real file -> backed up to config.yml.original (#806, #2138).
 dotfiles_ensure_link "$GH_CONFIG_SOURCE" "$GH_CONFIG_TARGET" || exit 1
-ux_success "심볼릭 링크: $GH_CONFIG_TARGET -> $GH_CONFIG_SOURCE"
+if [ -L "$GH_CONFIG_TARGET" ]; then ux_success "심볼릭 링크: $GH_CONFIG_TARGET -> $GH_CONFIG_SOURCE"; fi
 
 ux_success "GitHub CLI (gh) dotfiles setup 완료"
 exit 0

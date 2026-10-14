@@ -658,11 +658,20 @@ _claude_ensure_symlink() {
 }
 
 # _claude_link_lib — load lib/setup/link.sh on first use, so interactive
-# shell startup does not pay for it (#2138).
+# shell startup does not pay for it (#2138). The lib's log_* shims are meant
+# for setup scripts (log_error_and_exit exits), so any it adds are removed
+# again to keep them out of the user's interactive shell.
 _claude_link_lib() {
     command -v dotfiles_ensure_link >/dev/null 2>&1 && return 0
-    _cll_sc="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-    SHELL_COMMON="$_cll_sc" . "$_cll_sc/lib/setup/link.sh"
+    _clkl_sc="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+    _clkl_new=""
+    for _clkl_f in log_info log_warning log_error log_error_and_exit; do
+        command -v "$_clkl_f" >/dev/null 2>&1 || _clkl_new="$_clkl_new $_clkl_f "
+    done
+    SHELL_COMMON="$_clkl_sc" . "$_clkl_sc/lib/setup/link.sh" || return 1
+    for _clkl_f in log_info log_warning log_error log_error_and_exit; do
+        case "$_clkl_new" in *" $_clkl_f "*) unset -f "$_clkl_f" ;; esac
+    done
 }
 
 # _claude_ensure_settings_copy — settings.json 멱등 실파일 설치 (#940).
