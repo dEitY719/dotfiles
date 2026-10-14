@@ -32,7 +32,7 @@ teardown() {
 _run_script() {
     local name="$1"
     shift
-    # Real ux_lib (init.sh returns before loading it under test mode).
+    # Real ux_lib (init.sh loads it under test mode too since #2144).
     run env -u DOTFILES_TEST_MODE PATH="$STUB_DIR:$PATH" HOME="$HOME" \
         TERM=dumb bash "${SHELL_COMMON}/tools/custom/${name}.sh" "$@"
 }

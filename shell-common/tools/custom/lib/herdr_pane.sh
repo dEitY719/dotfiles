@@ -12,8 +12,8 @@
 #
 # `#!/bin/sh` per the lib/ shebang rule, but only ever sourced by the two bash
 # entrypoints: the `10#` base prefix in _hp_settle is bash arithmetic. Sourced
-# explicitly — tools/custom is never auto-sourced. Needs ux_* (ux_lib), jq and
-# cron_common.sh (for _hp_acquire_lock) at call time, not at source time.
+# explicitly — tools/custom is never auto-sourced. Needs ux_* (ux_lib) and jq
+# at call time, not at source time.
 
 # Echo the state dir <XDG_STATE_HOME>/<subdir>.
 #   $1 = subdir, e.g. issue-watcher
@@ -67,9 +67,16 @@ _hp_now() {
 #   $1 = state dir, $2 = lock basename, $3 = tick name for the skip warning
 #
 # Thin wrapper kept for its name and signature (#1530): the lock itself moved to
-# lib/cron_common.sh (cron_acquire_lock, #2144), which the caller must have
-# sourced. Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
+# lib/cron_common.sh (cron_acquire_lock, #2144). Sourced here on first use when
+# the caller has not, so a sourcer of this file alone never hits rc 127 — the
+# callers' `|| exit 0` would turn that into a silently idle tick. BASH_SOURCE is
+# fine: only bash entrypoints source this file (see header).
+# Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
 _hp_acquire_lock() {
+    if ! command -v cron_acquire_lock >/dev/null 2>&1; then
+        # shellcheck source=/dev/null disable=SC3028,SC3054  # bash-only callers
+        . "$(dirname "${BASH_SOURCE[0]}")/cron_common.sh" || return 0
+    fi
     cron_acquire_lock "$1" "$2" "$3"
 }
 

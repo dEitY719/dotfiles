@@ -16,7 +16,7 @@ teardown() {
     teardown_isolated_home
 }
 
-# ux_* stubs: DOTFILES_TEST_MODE makes init.sh return before loading ux_lib.
+# ux_* stubs: defined after init.sh loads ux_lib (#2144), so they override it.
 run_proxy_env_check() {
     run_sourced_tool_script "$TOOLS_DIR" "$TOOLS_DIR/check_proxy.sh" "
         for f in ux_header ux_section ux_bullet ux_info ux_success ux_warning ux_error; do

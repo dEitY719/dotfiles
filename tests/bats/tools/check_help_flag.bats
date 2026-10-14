@@ -30,7 +30,7 @@ teardown() {
     for name in check_apt check_cargo check_npm check_nuget check_pip \
         check_proxy check_rpm check_ssh check_uv; do
         for flag in -h --help; do
-            # Real ux_lib (init.sh returns before loading it under test mode).
+            # Real ux_lib (init.sh loads it under test mode too since #2144).
             run env -u DOTFILES_TEST_MODE PATH="$STUB_DIR:$PATH" HOME="$HOME" \
                 TERM=dumb bash "${SHELL_COMMON}/tools/custom/${name}.sh" "$flag"
             assert_success
