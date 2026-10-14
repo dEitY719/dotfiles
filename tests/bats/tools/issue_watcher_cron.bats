@@ -110,8 +110,22 @@ _write_watch_file() {
     printf '%s\n' "$1" >"${_WATCH_FILE}"
 }
 
-# `_make_account` — a logged-in claude account directory. Lives in
+# `_make_account` — a logged-in claude account directory, here with the gh-flow
+# plugin installed: since #2209 the tick dispatches only once it has resolved
+# the account's /gh-flow:issue entry point. The base fixture lives in
 # ../test_helper.bash; pr_merge_train_cron.bats fixtures the same rule.
+_make_account() {
+    mkdir -p "$1/plugins"
+    printf '{"claudeAiOauth":{"accessToken":"test"}}\n' >"$1/.credentials.json"
+    printf '{"plugins":{"gh-flow@test":[{}]}}\n' >"$1/plugins/installed_plugins.json"
+}
+
+# _write_skill <account-dir> <dir-name> <frontmatter-body> — a flat skill copy
+# the way the Agent Factory app installs one (#2209).
+_write_skill() {
+    mkdir -p "$1/skills/$2"
+    printf -- '---\n%s\n---\n\n# body\n' "$3" >"$1/skills/$2/SKILL.md"
+}
 
 # The `gh search issues` result set for this test.
 _set_issues() {
@@ -3954,4 +3968,85 @@ PROBE
     _assert_not_hung "green suite"
     assert_equal "${status}" 0
     assert_output --partial "ok 1 probe: healthy tick, honest assertion"
+}
+
+# ---------------------------------------------------------------------------
+# Entry-point resolution (issue #2209)
+# ---------------------------------------------------------------------------
+
+# An Agent Factory copy: renamed `issue-af07`, description kept, with the
+# folded block splitting `Use for` and `/gh-flow:issue` across two lines.
+_AF_FRONTMATTER='name: issue-af07
+description: >-
+  Chain one GitHub issue to a reviewed PR. Use for
+  /gh-flow:issue, "full flow on #42".
+metadata:
+  agent-factory:
+    kind: item'
+
+@test "issue_watcher_cron: an installed, enabled gh-flow plugin dispatches /gh-flow:issue" {
+    printf '{"enabledPlugins":{"gh-flow@test":true}}\n' >"${HOME}/.claude-personal/settings.json"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _run_tick
+    assert_success
+    # The plugin wins over a flat copy: upstream is the SSOT.
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+}
+
+@test "issue_watcher_cron: a disabled gh-flow plugin falls through to the flat copy" {
+    printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.json"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
+}
+
+@test "issue_watcher_cron: no plugin dispatches the Agent Factory copy by its anchor" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
+    assert_output --partial "Dispatched to iw-dotfiles-issue-11: /issue-af07 11"
+}
+
+@test "issue_watcher_cron: two anchored copies dispatch nothing and create no worktree" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _write_skill "${HOME}/.claude-personal" issue-af08 "name: issue-af08
+description: Use for /gh-flow:issue."
+    _run_tick
+    assert_failure
+    assert_output --partial "several /gh-flow:issue entry points"
+    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
+    _refute_logged "agent prompt"
+}
+
+@test "issue_watcher_cron: no anchored copy dispatches nothing and creates no worktree" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    # Mentions the chain without the slash form — must not count as the anchor.
+    _write_skill "${HOME}/.claude-personal" wave-af05 "name: wave-af05
+description: Carry one issue through gh-flow:issue, then via gh-flow:issue again."
+    _run_tick
+    assert_failure
+    assert_output --partial "has no /gh-flow:issue entry point"
+    _refute_logged "gwt spawn"
+    _refute_logged "agent prompt"
+    # Logged once for the tick, not once per attempt.
+    [ "$(printf '%s\n' "${output}" | grep -c 'has no /gh-flow:issue entry point')" -eq 1 ]
+}
+
+@test "issue_watcher_cron: a casualty re-prompt sends the resolved entry point" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "Re-prompting acme/dotfiles#11 in its surviving pane"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
+    _refute_logged "/gh-flow:issue 11"
 }
