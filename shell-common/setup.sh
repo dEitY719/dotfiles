@@ -94,10 +94,10 @@ main() {
     while [ $# -gt 0 ]; do
         case "$1" in
             --mode)
-                [ $# -ge 2 ] || { ux_error "--mode needs a value (public|internal|external)"; exit 2; }
+                [ -n "${2-}" ] || { ux_error "--mode needs a value (public|internal|external)"; exit 2; }
                 _setup_arg="$2" && shift
                 ;;
-            --mode=*) _setup_arg="${1#*=}" ;;
+            --mode=?*) _setup_arg="${1#*=}" ;;
             -h | --help)
                 ux_usage "shell-common/setup.sh" "[--mode public|internal|external]" "Environment-specific config (registries, .local.sh, CA)"
                 return 0

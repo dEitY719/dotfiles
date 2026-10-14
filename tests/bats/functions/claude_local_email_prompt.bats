@@ -62,6 +62,8 @@ run_copy_local_files() {
 @test "non-interactive external: enables accounts but writes no email lines (F-4)" {
     run_copy_local_files
     assert_success
+    # Skipped prompt is announced, not silent (#2140).
+    assert_output --partial "Claude account e-mails not set"
 
     [ -f "$LOCAL" ]
     # Anchor to `^export`: the copied template also carries *commented*
