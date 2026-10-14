@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/session_start_statusline_project_override_hook.bats
+# tests/bats/claude_hooks/session_start_statusline_project_override_hook.bats
 # Verify the SessionStart hook documented in
 #   claude/hooks/session-start-statusline-project-override.sh (issue #1236)
 #

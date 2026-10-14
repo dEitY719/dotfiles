@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bats/skills/_fixtures/gh_pr_reply_review_passed_gate.sh
+# tests/bats/functions/_fixtures/gh_pr_reply_targeted_review_passed_gate.sh
 # Source-of-truth mirror for gh:pr-reply Step 6's `review-passed` gate:
 #   claude/skills/gh-pr-reply/references/review-passed-gate.md
 #   claude/skills/gh-pr-reply/references/verdict-label-removal.sh.md

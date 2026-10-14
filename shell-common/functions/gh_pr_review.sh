@@ -13,7 +13,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # the prompt builder, and the PR comment body builder. The matching
 # claude/skills/gh-pr-review/SKILL.md delegates to gh_pr_review on
 # Steps 1, 4 (PROMPT_FILE path allocation only), 5, and 6. The bats fixture
-# tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh sources this
+# tests/bats/functions/_fixtures/gh_pr_review_arg_parse.sh sources this
 # file so the arg-parse contract has exactly one definition.
 
 # Advisory only (issue #1454): a stale copy of this file living in another

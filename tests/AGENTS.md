@@ -33,10 +33,12 @@ tests/
 │   ├── test_helper.bash   # Common helper (isolation, subprocess runners)
 │   ├── lib/               # Git submodules: bats-core, bats-support, bats-assert
 │   ├── _fixtures/         # Shared fixtures (not run directly)
-│   ├── functions/         # Core utility function tests (largest group)
-│   ├── skills/            # Claude hook / skill-helper tests
+│   ├── functions/         # Core utility function tests (largest group; own _fixtures/)
+│   ├── claude_hooks/      # claude/hooks/* tests
+│   ├── skills/            # Held copy-only skill mirrors (see skills/README.md)
 │   ├── tools/             # Custom tool dry-run tests
 │   ├── setup/             # setup.sh and bootstrap tests
+│   ├── lib_setup/         # shell-common/lib/setup/*.sh tests
 │   ├── integrations/      # tools/integrations/*.sh tests
 │   ├── init/              # Initialization & loading tests
 │   ├── lint/              # Lint script tests
@@ -53,7 +55,8 @@ tests/
 - **Cross-Shell**: If behavior is intended for both shells, parametrize over `bash` and `zsh`.
 - **No Network/Installs**: Tests must not require network access or package installation.
 - **Stable Output**: Assert on stable substrings, not full banners.
-- **Bats for shell units**: New shell function tests go in `tests/bats/functions/`.
+- **Bats for shell units**: New shell function tests go in `tests/bats/functions/`; `claude/hooks/*` tests go in `tests/bats/claude_hooks/`. Name a file `<target-stem>[_<topic>].bats` so `scripts/test_smoke.sh` maps it.
+- **No copy-fixture tests**: Never test a hand copy of code that lives outside this repo (e.g. a marketplace skill) — put the test in that code's repo. `tests/bats/skills/` only holds the pre-#2153 mirrors awaiting that move.
 - **Pytest for integration**: Cross-shell parity and help system tests stay in pytest.
 - **Dry-run only**: Custom tool tests use `bash -n` syntax check or `--help`/`help` mode. Never run actual installations.
 - **Subprocess isolation**: Bats tests run dotfiles in subprocesses (run_in_bash/run_in_zsh), not via direct source.
@@ -78,4 +81,4 @@ tests/
 - **[Init Tests](./bats/init/)** — Shell initialization and env var tests
 - **[Function Tests](./bats/functions/)** — Core utility function tests
 - **[Tool Tests](./bats/tools/)** — Custom tool validation
-- **[Skill/Hook Tests](./bats/skills/)** · **[Setup Tests](./bats/setup/)** · **[Integration Tests](./bats/integrations/)** · **[Git Tests](./bats/git/)**
+- **[Hook Tests](./bats/claude_hooks/)** · **[Held Skill Mirrors](./bats/skills/README.md)** · **[Setup Tests](./bats/setup/)** · **[Integration Tests](./bats/integrations/)** · **[Git Tests](./bats/git/)**

@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_review_arg_parse.bats
+# tests/bats/functions/gh_pr_review_arg_parse.bats
 # Verify the Step 1 arg-parsing + Step 3 preset-normalization logic
-# documented in claude/skills/gh-pr-review/SKILL.md.
+# documented in the gh-pr-review skill (gh-pr-skills repo since #1680),
+# now shipped as shell-common/functions/gh_pr_review.sh.
 # Source-of-truth fixture: _fixtures/gh_pr_review_arg_parse.sh.
 #
 # Covers issue #637's Acceptance Criteria:
@@ -16,7 +17,7 @@ load '../test_helper'
 setup() {
     setup_isolated_home
     # shellcheck disable=SC1091
-    source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh"
+    source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/functions/_fixtures/gh_pr_review_arg_parse.sh"
 }
 
 teardown() {

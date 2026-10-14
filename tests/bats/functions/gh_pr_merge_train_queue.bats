@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_merge_queue.bats
+# tests/bats/functions/gh_pr_merge_train_queue.bats
 # Issue #1707 — merge the train's PRs through GitHub's merge queue instead of
 # one blocking merge + one full CI cycle per PR:
 #   shell-common/functions/gh_pr_merge_train.sh                 (the predicate)
-# Source-of-truth fixture: _fixtures/gh_pr_merge_queue.sh
+# Source-of-truth fixture: _fixtures/gh_pr_merge_train_queue.sh
 #
 # #1680: the gh-pr-merge and gh-pr-merge-train skills moved to their own
 # marketplace repos, taking every doc guard that pinned this fixture to their
@@ -19,7 +19,7 @@
 
 load '../test_helper'
 
-FIXTURE='tests/bats/skills/_fixtures/gh_pr_merge_queue.sh'
+FIXTURE='tests/bats/functions/_fixtures/gh_pr_merge_train_queue.sh'
 
 setup() {
     setup_isolated_home
@@ -677,7 +677,7 @@ _run_json() {
     # The doc side of this pair (references/strict-mode-relaxation.md) left
     # with the skill in #1680; the fixture is what this repo still ships.
     run grep -F -- '[ "$BEHIND_DIRECT" = yes ] && [ -z "$BASE_CHECKS" ]' \
-        "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_merge_queue.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/functions/_fixtures/gh_pr_merge_train_queue.sh"
     assert_failure
 }
 

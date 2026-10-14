@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bats/skills/_fixtures/gh_pr_merge_train_review_verdict_gate.sh
+# tests/bats/functions/_fixtures/gh_pr_merge_train_review_verdict_gate.sh
 # Source-of-truth mirror for the review verdict gate documented in
 #   claude/skills/gh-pr-merge-train/references/review-verdict-gate.md
 #   claude/skills/gh-pr-merge-train/references/routing-table.md  (F-3 re-check)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/devx_pr_verify_live_backend_identity.bats
+# tests/bats/functions/devx_pr_verify_live_backend_identity_py.bats
 # Integration tests for devx_pr_verify_live_backend_identity.py helper.
 
 load '../test_helper'

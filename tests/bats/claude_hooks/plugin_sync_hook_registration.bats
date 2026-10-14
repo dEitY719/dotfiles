@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/plugin_sync_hook_registration.bats
+# tests/bats/claude_hooks/plugin_sync_hook_registration.bats
 # claude/settings.json에 plugin-sync.sh가 PostToolUse/Bash로 등록됐는지,
 # 기존 post-gh-pr-create.sh 등록이 안 깨졌는지 확인.
 

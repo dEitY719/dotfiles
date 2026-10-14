@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bats/skills/_fixtures/gh_pr_merge_queue.sh
+# tests/bats/functions/_fixtures/gh_pr_merge_train_queue.sh
 # Source-of-truth mirror for the merge-queue path added by issue #1707:
 #   claude/skills/gh-pr-merge/SKILL.md            (Step 1 flags, Step 3, Step 3.5)
 #   claude/skills/gh-pr-merge/references/finalize-merged-pr.sh.md
@@ -13,7 +13,7 @@
 #     production drifts (#1524's rule, same as the verdict-gate fixture).
 #   * `merge_step3_auto` / `merge_step3_5` mirror bash blocks that only exist
 #     as prose in a SKILL.md. Those are pinned by the drift-guard tests at the
-#     bottom of gh_pr_merge_queue.bats — change the doc, change this file.
+#     bottom of gh_pr_merge_train_queue.bats — change the doc, change this file.
 
 # shellcheck source=/dev/null
 . "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_merge_train.sh"
@@ -59,7 +59,7 @@ train_base_ci_red() {
 # Mirrors the block in
 # gh-pr-merge-train/references/strict-mode-relaxation.md → "New: the train
 # refuses to pile onto a red base". Pinned by the drift guards at the bottom of
-# gh_pr_merge_queue.bats — change the doc, change this file.
+# gh_pr_merge_train_queue.bats — change the doc, change this file.
 #
 # Echoes the verdict line the train reports, or nothing when the merge phase
 # may proceed. `$BASE_RULES` / `$BASE_CHECKS` stand in for the two `gh api`

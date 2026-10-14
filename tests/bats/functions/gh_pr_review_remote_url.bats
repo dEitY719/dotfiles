@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_review_remote_url.bats
+# tests/bats/functions/gh_pr_review_remote_url.bats
 # Unit tests for `_gh_pr_review_parse_remote_url` — the Bug C fix from
 # issue #694. Before #694, `gh_pr_review` called `gh repo view` without
 # `-R <url>` and swallowed gh's stderr with `2>/dev/null`, masking the
@@ -15,7 +15,7 @@ load '../test_helper'
 setup() {
     setup_isolated_home
     # shellcheck disable=SC1091
-    source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh"
+    source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/functions/_fixtures/gh_pr_review_arg_parse.sh"
 }
 
 teardown() {

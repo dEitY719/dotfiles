@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/closing_keyword_policy.bats
+# tests/bats/git/test_closing_keyword_check.bats
 # Verify the closing-keyword policy from issue #392:
 #   - commit-msg hook (git/hooks/checks/closing_keyword_check.sh) rejects
 #     Refs / Resolves / See / References at the start of a footer line

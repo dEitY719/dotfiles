@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_merge_train_own_push_exemption.bats
+# tests/bats/functions/gh_pr_merge_train_own_push_exemption.bats
 # Tests for the quiet-period exemption the train grants its OWN pushes (#1708).
 #
 # The D-6 quiet period drops any PR whose `updatedAt` is too recent, because a
@@ -9,7 +9,7 @@
 # every following tick. The fix is an ADDITIVE second pass over the same raw
 # list, never a change to `_gh_pr_merge_train_filter_targets` (AC3): that filter
 # is the SSOT both this skill and the cron dispatcher run, and
-# tests/bats/skills/gh_pr_merge_train_quiet_period.bats still pins its behaviour
+# tests/bats/functions/gh_pr_merge_train_quiet_period.bats still pins its behaviour
 # unchanged.
 #
 # Same purity rule as the sibling suite: the state directory is a parameter, so

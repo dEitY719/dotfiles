@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_reply_remote.bats
+# tests/bats/functions/gh_pr_review_reply_remote.bats
 # Behavior tests for the `[remote]` positional added to the gh:pr-reply
 # skill (issue #1165). The skill's Step 1 resolves TARGET_REPO by parsing
 # the named remote's URL via the SSOT helper
@@ -17,7 +17,7 @@ load '../test_helper'
 setup() {
     setup_isolated_home
     # shellcheck disable=SC1091
-    source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/skills/_fixtures/gh_pr_review_arg_parse.sh"
+    source "${_BATS_REAL_DOTFILES_ROOT}/tests/bats/functions/_fixtures/gh_pr_review_arg_parse.sh"
 
     # Fake repo with two GitHub remotes on the same host.
     MULTI_REMOTE_REPO="$TEST_TEMP_HOME/multi-remote"

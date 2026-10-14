@@ -10,7 +10,7 @@
 # `exit` early, so sourcing it to reach _pbd_ms is impossible — which left the
 # BSD-date fallback tier below untestable, and it silently regressed once
 # (a /simplify pass deleted the tier; it had to be restored by hand).
-# Coverage now lives in tests/bats/skills/pbd_ms_lib.bats.
+# Coverage now lives in tests/bats/claude_hooks/pbd_ms_lib.bats.
 
 # Convert an EPOCHREALTIME snapshot ("<sec>.<usec>", locale decimal point) to
 # epoch milliseconds, assigned to the variable named by $1. An empty snapshot

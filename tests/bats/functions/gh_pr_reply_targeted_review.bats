@@ -439,7 +439,7 @@ Verdict: LGTM'
 # a far lower bar than the label-write access `review-passed` needs.
 #
 # Mirrors the same suite for `_gh_pr_merge_train_review_passed_marker_sha`
-# (tests/bats/skills/gh_pr_merge_train_review_verdict_gate.bats, PR #1608).
+# (tests/bats/functions/gh_pr_merge_train_review_verdict_gate.bats, PR #1608).
 
 @test "ledger (#1639): a well-formed ledger from an UNTRUSTED login is ignored" {
     run _history_by attacker '<!-- pr-reply-origins:deadbeef -->

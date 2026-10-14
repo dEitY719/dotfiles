@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/plugin_sync_hook_delete.bats
+# tests/bats/claude_hooks/plugin_sync_hook_delete.bats
 # claude/hooks/plugin-sync.sh — uninstall / marketplace remove 경로.
 # 병합(install/add) 경로 커버리지는 plugin_sync_hook.bats.
 #

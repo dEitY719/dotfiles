@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_reply_review_passed_gate.bats
+# tests/bats/functions/gh_pr_reply_targeted_review_passed_gate.bats
 # Issue #1636 — gh:pr-reply Step 6's `review-passed` gate, end to end.
-# Source-of-truth fixture: _fixtures/gh_pr_reply_review_passed_gate.sh
+# Source-of-truth fixture: _fixtures/gh_pr_reply_targeted_review_passed_gate.sh
 # (the skill's SKILL.md / references/ left this repo with #1680, so the fixture
 # is no longer pinned to them)
 #
@@ -27,7 +27,7 @@
 
 load '../test_helper'
 
-FIXTURE='tests/bats/skills/_fixtures/gh_pr_reply_review_passed_gate.sh'
+FIXTURE='tests/bats/functions/_fixtures/gh_pr_reply_targeted_review_passed_gate.sh'
 
 setup() {
     setup_isolated_home

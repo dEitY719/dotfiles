@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_merge_train_quiet_period.bats
+# tests/bats/functions/gh_pr_merge_train_quiet_period.bats
 # Tests for shell-common/functions/gh_pr_merge_train.sh — the SSOT merge-train
 # target filter (#1524).
 #
