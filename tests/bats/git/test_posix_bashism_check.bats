@@ -20,7 +20,8 @@ _write() { printf '#!/bin/sh\n%s\n' "$1" >"$F"; }
         'if [ -n "${BASH_VERSION-}" ]; then' \
         'if [ -n "${BASH_VERSION:-}" ]; then' \
         '[ -z "${BASH_VERSION}" ] && :' \
-        'elif [ -n "${BASH_VERSION-}" ]; then'; do
+        'elif [ -n "${BASH_VERSION-}" ]; then' \
+        '[ -n ${BASH_VERSION-} ] && :'; do
         _write "$line"
         run check_posix_bashism "$F" f.sh "$OUT"
         [ "$status" -eq 0 ] || { echo "flagged: $line"; false; }
@@ -51,4 +52,20 @@ _write() { printf '#!/bin/sh\n%s\n' "$1" >"$F"; }
     _write 'v=${BASH_VERSION}'
     run check_posix_bashism "$F" f.sh "$OUT"
     [ "$status" -eq 1 ]
+}
+
+@test "posix_bashism: BASH_VERSION:+ and unbalanced quotes are not the idiom" {
+    for line in 'x=${BASH_VERSION:+bash}' '[ -n "${BASH_VERSION-} ] && :'; do
+        _write "$line"
+        run check_posix_bashism "$F" f.sh "$OUT"
+        [ "$status" -eq 1 ] || { echo "missed: $line"; false; }
+    done
+}
+
+@test "posix_bashism: only the non-idiom line of a multi-hit file is reported" {
+    printf '#!/bin/sh\nif [ -n "${BASH_VERSION-}" ]; then :; fi\nd=${BASH_SOURCE[0]}\n' >"$F"
+    run check_posix_bashism "$F" f.sh "$OUT"
+    [ "$status" -eq 1 ]
+    [ "$(wc -l <"$OUT")" -eq 1 ]
+    grep -q '^f.sh:3:' "$OUT"
 }
