@@ -1,13 +1,11 @@
 """dotfiles_tools.merge_train.queue (#2174).
 
-Two layers: explicit expectations per op, and a golden parity check that runs
-the legacy jq/shell code (PMT_QUEUE_IMPL=shell) on the same fixtures and
-requires byte-identical stdout and the same exit code.
+Explicit expectations per op. The golden parity check against the legacy
+jq/shell code went away with that rollback path (#2210).
 """
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +14,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures" / "merge_train"
-LEGACY = ROOT / "shell-common/tools/custom/lib/merge_train_queue_shell.sh"
 FP = "github.com/acme/api|1:aaa:CLEAN:MERGEABLE:review-passed"
 
 
@@ -27,16 +24,6 @@ def run_python(op: list[str], fixture: str) -> tuple[int, str]:
         input=(FIXTURES / fixture).read_bytes(),
         capture_output=True,
         cwd=ROOT / "tools/py",
-        check=False,
-    )
-    return proc.returncode, proc.stdout.decode()
-
-
-def run_shell(op: list[str], fixture: str) -> tuple[int, str]:
-    proc = subprocess.run(
-        ["bash", "-c", '. "$0" && _pmt_q_shell "$@"', str(LEGACY), *op],
-        input=(FIXTURES / fixture).read_bytes(),
-        capture_output=True,
         check=False,
     )
     return proc.returncode, proc.stdout.decode()
@@ -82,13 +69,6 @@ CASES = [
 @pytest.mark.parametrize(("op", "fixture", "code", "out"), CASES)
 def test_python_queue(op: list[str], fixture: str, code: int, out: str) -> None:
     assert run_python(op, fixture) == (code, out)
-
-
-@pytest.mark.skipif(shutil.which("jq") is None, reason="legacy filters need jq")
-@pytest.mark.parametrize(("op", "fixture", "code", "out"), CASES)
-def test_shell_python_parity(op: list[str], fixture: str, code: int, out: str) -> None:
-    """Golden: the rollback path answers exactly what the Python path answers."""
-    assert run_shell(op, fixture) == run_python(op, fixture)
 
 
 def test_backoff_window_sequence() -> None:

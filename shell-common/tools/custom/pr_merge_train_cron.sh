@@ -61,23 +61,9 @@ fi
 # shellcheck source=/dev/null
 . "${_PMT_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" || exit 1
 
-# Queue ops (#2174): Python by default (dotfiles_tools.merge_train.queue, via
-# cron_py), PMT_QUEUE_IMPL=shell rolls back to the legacy jq/shell code for one
-# release. Same op names, same stdin/stdout/exit contract either way.
-case "${PMT_QUEUE_IMPL:-python}" in
-shell)
-    # shellcheck source=/dev/null
-    . "${_PMT_SHELL_COMMON}/tools/custom/lib/merge_train_queue_shell.sh" || exit 1
-    _pmt_q() { _pmt_q_shell "$@"; }
-    ;;
-python)
-    _pmt_q() { cron_py dotfiles_tools.merge_train.queue "$@"; }
-    ;;
-*)
-    ux_error "PMT_QUEUE_IMPL must be python or shell (got: ${PMT_QUEUE_IMPL})."
-    exit 1
-    ;;
-esac
+# Queue ops (#2174): dotfiles_tools.merge_train.queue via cron_py. The jq/shell
+# rollback was removed after one release of observation (#2210).
+_pmt_q() { cron_py dotfiles_tools.merge_train.queue "$@"; }
 
 # ============================================================
 # Constants (SSOT for the dispatcher)
@@ -453,8 +439,8 @@ _pmt_backoff_gate() {
 
     _file="$(_pmt_backoff_file)"
 
-    # The verdict itself is the `backoff-next` op (lib/merge_train_queue_shell.sh
-    # or dotfiles_tools.merge_train.queue): no fingerprint -> `run`; a changed one
+    # The verdict itself is the `backoff-next` op (dotfiles_tools.merge_train.queue):
+    # no fingerprint -> `run`; a changed one
     # -> `run 1 1`; an open window -> `skip <window> <remaining - 1>`; an elapsed
     # one -> `run <doubled, capped window> <same>`. The file I/O stays here.
     _verdict=$({ [ -r "${_file}" ] && cat "${_file}"; } 2>/dev/null |
@@ -493,7 +479,7 @@ EOF
     # A fingerprint with no verdict means the op itself broke (python crash,
     # import error): say so, or backoff silently stays off on every tick.
     [ -z "${_PMT_FINGERPRINT}" ] ||
-        ux_warning "No backoff verdict for ${_PMT_REPO} (queue op failed; PMT_QUEUE_IMPL=${PMT_QUEUE_IMPL:-python}) — running the tick without backoff."
+        ux_warning "No backoff verdict for ${_PMT_REPO} (queue op failed) — running the tick without backoff."
     return 1
 }
 
@@ -1036,15 +1022,13 @@ main() {
         exit 1
     fi
 
-    # The queue ops run in Python unless rolled back (#2174). No python3 >= 3.10
-    # (RHEL 8 ships 3.6) degrades to the jq rollback rather than stopping the
-    # tick: both paths answer the same (golden parity).
-    if [ "${PMT_QUEUE_IMPL:-python}" = "python" ] &&
-        ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
-        ux_warning "python3 (>= 3.10) not found in PATH — using the jq queue ops (PMT_QUEUE_IMPL=shell)."
-        # shellcheck source=/dev/null
-        . "${_PMT_SHELL_COMMON}/tools/custom/lib/merge_train_queue_shell.sh" || exit 1
-        _pmt_q() { _pmt_q_shell "$@"; }
+    # The queue ops (count / fingerprint / backoff-next) are Python only since
+    # the jq rollback went away (#2210): no python3 >= 3.10 (RHEL 8 ships 3.6)
+    # leaves no way to count or fingerprint the queue, so the tick stops here.
+    if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
+        ux_error "python3 (>= 3.10) not found in PATH — cannot run the merge-train queue ops."
+        ux_info "Install python3 >= 3.10, or add it to the cron PATH."
+        exit 1
     fi
 
     # A dry run reports and touches nothing, so it must stay usable on a
