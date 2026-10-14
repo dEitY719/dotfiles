@@ -16,10 +16,10 @@ set -eu
 cd "$(git rev-parse --show-toplevel)"
 git() { command git -c core.quotepath=false "$@"; }
 
-# main() 본문에서 주석 줄을 뺀 것 — 주석 속 `./x/setup.sh` 언급은 등록이 아니다.
+# main() 본문에서 주석 줄·줄 끝 주석을 뺀 것 — 주석 속 `./x/setup.sh` 언급은 등록이 아니다.
 steps="$(awk '/^main\(\) *\{/ { in_main = 1; next }
     in_main && /^\}/ { exit }
-    in_main && !/^[[:space:]]*#/ { print }' setup.sh)"
+    in_main && !/^[[:space:]]*#/ { sub(/[[:space:]]+#.*/, ""); print }' setup.sh)"
 if [ -z "$steps" ]; then
     echo "FAIL  setup.sh — main() 을 찾지 못했습니다." >&2
     exit 1

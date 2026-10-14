@@ -17,6 +17,7 @@ setup() {
 }
 
 @test "agy: idempotent without the CLI, prints install guidance" {
+    command -v agy >/dev/null 2>&1 && skip "agy installed in system PATH"
     run_module_setup agy
     assert_output --partial "antigravity.google/cli/install.sh"
 }
