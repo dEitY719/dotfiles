@@ -26,13 +26,11 @@ check_wrapper_function() {
 
             # Only a single-statement body delegates; a helper call followed
             # by more logic (`_x_ensure_loaded` then a case) is not a wrapper.
-            case "$line_text" in
-            *"}"*) ;;
-            *)
+            # A one-liner ends with `}`; `${x}` mid-line does not make one.
+            if ! printf '%s\n' "$line_text" | grep -q '}[;[:space:]]*$'; then
                 [ "$(sed -n "$((start_line + 1)),$((end_line - 1))p" "$abs_path" |
                     grep -cv '^[[:space:]]*\(#.*\)\{0,1\}$')" -gt 1 ] && continue
-                ;;
-            esac
+            fi
 
             local body
             body=$(sed -n "${start_line},$end_line p" "$abs_path" |
