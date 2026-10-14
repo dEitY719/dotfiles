@@ -1775,10 +1775,12 @@ _iw_escalate_prompt_stall() {
 _iw_prompt_issue() {
     local _agent="$1" _number="$2" _tab="${3-}" _attempt="${4-}" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code
 
-    _iw_ensure_flow_command || return 1
-    _prompt="${_IW_FLOW_COMMAND} ${_number}"
     _IW_STALL_RECOVER_ERROR=""
     _IW_PROMPT_KEEP_ATTEMPT=0
+    # After the resets: a caller reading them on this failure must not see a
+    # previous issue's values.
+    _iw_ensure_flow_command || return 1
+    _prompt="${_IW_FLOW_COMMAND} ${_number}"
 
     # Baseline taken *before* the prompt is sent, not after a stall is detected:
     # by then the counter may already have moved for the very submission this
