@@ -761,6 +761,8 @@ psql_server() {
     fi
 }
 
-pinstall() {
+postgresql_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_postgresql.sh"
 }
+alias postgresql-install='postgresql_install'
+alias pinstall='postgresql_install' # legacy name (#2148)

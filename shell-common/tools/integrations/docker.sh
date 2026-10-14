@@ -504,14 +504,18 @@ dexport() {
 }
 
 # WSL Docker 설치 (대화형 스크립트)
-dinstall() {
+docker_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_docker.sh"
 }
+alias docker-install='docker_install'
+alias dinstall='docker_install' # legacy name (#2148)
 
 # WSL Docker 제거 (대화형 스크립트)
-duninstall() {
+docker_uninstall() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_docker.sh"
 }
+alias docker-uninstall='docker_uninstall'
+alias duninstall='docker_uninstall' # legacy name (#2148)
 
 # Docker 서비스 자동 시작 설정 (대화형 스크립트)
 denable() {

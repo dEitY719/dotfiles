@@ -1,118 +1,15 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/tools/integrations/git.sh
-# Bash-specific git functions and features
-# (This file requires bash and should not be sourced in other shells)
-
-# Exit if not running in bash
+# Git helper functions shared by bash and zsh, then the bash-only prompt block.
+# zsh/app/git.zsh defines no git aliases or functions, so nothing here
+# duplicates it (#2148); zsh prompt comes from oh-my-zsh/p10k instead.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
-[ -n "$BASH" ] || return 0
-
 # ============================================================
-# BASH-SPECIFIC HELPERS
+# SHARED FUNCTIONS (bash + zsh)
 # ============================================================
-
-# Path abbreviation using bash builtins (no external forks).
-# Truncates to last 3 directory components when deeper.
-_short_pwd() {
-    local full_path
-    full_path="$PWD"
-
-    # Abbreviate home directory (~)
-    case "$full_path" in
-        "$HOME"/*)
-            full_path="~${full_path#"$HOME"}"
-            ;;
-        "$HOME")
-            echo "~"
-            return
-            ;;
-    esac
-
-    # Count slashes using parameter expansion (no awk fork)
-    local stripped="${full_path//[!\/]/}"
-    local level_count=${#stripped}
-
-    if [ "$level_count" -gt 3 ]; then
-        # Extract last 3 path components using parameter expansion
-        local tmp="${full_path%/*}"    # remove last component
-        tmp="${tmp%/*}"                # remove second-to-last
-        tmp="${full_path#"$tmp"/}"     # keep everything after
-        echo ".../$tmp"
-    else
-        echo "$full_path"
-    fi
-}
-
-# Render active Python virtual environment for bash prompt.
-_prompt_virtualenv() {
-    [ -n "${VIRTUAL_ENV:-}" ] || return 0
-
-    local venv_prompt="${VIRTUAL_ENV_PROMPT:-}"
-    if [ -n "$venv_prompt" ]; then
-        # activate scripts often set a trailing space in VIRTUAL_ENV_PROMPT.
-        venv_prompt="${venv_prompt% }"
-        case "$venv_prompt" in
-            \(*\))
-                printf '%s ' "$venv_prompt"
-                ;;
-            *)
-                printf '(%s) ' "$venv_prompt"
-                ;;
-        esac
-        return 0
-    fi
-
-    local venv_name="${VIRTUAL_ENV##*/}"
-    [ -n "$venv_name" ] && printf '(%s) ' "$venv_name"
-}
-
-# Git prompt setup (PS1 only for bash, zsh uses oh-my-zsh themes)
-if [ -f /usr/share/git-core/contrib/completion/git-prompt.sh ]; then
-    # shellcheck source=/usr/share/git-core/contrib/completion/git-prompt.sh
-    . /usr/share/git-core/contrib/completion/git-prompt.sh
-else
-    __git_ps1() {
-        local branch
-        branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-        if [ -n "$branch" ]; then
-            local fmt="${1:-%s}"
-            local suffix="${2-}"
-            fmt="${fmt//%s/$branch}"
-            printf "%s%s" "$fmt" "$suffix"
-        fi
-    }
-fi
-
-# Cache _short_pwd once per prompt, then reference cached value in PS1.
-# This avoids calling _short_pwd twice (title + visible prompt).
-_update_prompt_cache() {
-    _CACHED_SHORT_PWD=$(_short_pwd)
-}
-
-PS1="\[\e]0;\u@\h: \${_CACHED_SHORT_PWD}\a\]\[\e[35m\]\$(_prompt_virtualenv)\[\e[32m\]\u@\h:\[\e[33m\]\${_CACHED_SHORT_PWD}\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
-
-if [[ "${PROMPT_COMMAND-}" != *"_update_prompt_cache"* ]]; then
-    if [ -n "${PROMPT_COMMAND-}" ]; then
-        PROMPT_COMMAND="_update_prompt_cache;${PROMPT_COMMAND}"
-    else
-        PROMPT_COMMAND="_update_prompt_cache"
-    fi
-fi
-
-# ============================================================
-# BASH-SPECIFIC FUNCTIONS
-# ============================================================
-
-gsw() {
-    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    case "${1:-}" in -h | --help) git_help sync; return 0 ;; esac
-    local remote_branch="$1"
-    local local_branch="${remote_branch#*/}"
-    git switch -c "$local_branch" "$remote_branch"
-}
 
 unalias gf 2>/dev/null || true
 gf() {
@@ -234,3 +131,111 @@ git_lfs_track() {
 }
 
 alias glfs='git_lfs_track'
+alias git-lfs-install='git_lfs_install'
+
+# ============================================================
+# BASH-ONLY: everything below needs bash (PS1 escapes, PROMPT_COMMAND,
+# ${var//} prompt helpers) or would clobber an oh-my-zsh git alias.
+# ============================================================
+[ -n "${BASH_VERSION-}" ] || return 0
+
+# gsw stays bash-only: oh-my-zsh's git plugin (zsh/zshrc plugins=(git)) owns
+# gsw='git switch' in zsh, and this remote-tracking variant would replace it.
+gsw() {
+    case "${1:-}" in -h | --help) git_help sync; return 0 ;; esac
+    local remote_branch="$1"
+    local local_branch="${remote_branch#*/}"
+    git switch -c "$local_branch" "$remote_branch"
+}
+
+# ============================================================
+# BASH-SPECIFIC HELPERS
+# ============================================================
+
+# Path abbreviation using bash builtins (no external forks).
+# Truncates to last 3 directory components when deeper.
+_short_pwd() {
+    local full_path
+    full_path="$PWD"
+
+    # Abbreviate home directory (~)
+    case "$full_path" in
+        "$HOME"/*)
+            full_path="~${full_path#"$HOME"}"
+            ;;
+        "$HOME")
+            echo "~"
+            return
+            ;;
+    esac
+
+    # Count slashes using parameter expansion (no awk fork)
+    local stripped="${full_path//[!\/]/}"
+    local level_count=${#stripped}
+
+    if [ "$level_count" -gt 3 ]; then
+        # Extract last 3 path components using parameter expansion
+        local tmp="${full_path%/*}"    # remove last component
+        tmp="${tmp%/*}"                # remove second-to-last
+        tmp="${full_path#"$tmp"/}"     # keep everything after
+        echo ".../$tmp"
+    else
+        echo "$full_path"
+    fi
+}
+
+# Render active Python virtual environment for bash prompt.
+_prompt_virtualenv() {
+    [ -n "${VIRTUAL_ENV:-}" ] || return 0
+
+    local venv_prompt="${VIRTUAL_ENV_PROMPT:-}"
+    if [ -n "$venv_prompt" ]; then
+        # activate scripts often set a trailing space in VIRTUAL_ENV_PROMPT.
+        venv_prompt="${venv_prompt% }"
+        case "$venv_prompt" in
+            \(*\))
+                printf '%s ' "$venv_prompt"
+                ;;
+            *)
+                printf '(%s) ' "$venv_prompt"
+                ;;
+        esac
+        return 0
+    fi
+
+    local venv_name="${VIRTUAL_ENV##*/}"
+    [ -n "$venv_name" ] && printf '(%s) ' "$venv_name"
+}
+
+# Git prompt setup (PS1 only for bash, zsh uses oh-my-zsh themes)
+if [ -f /usr/share/git-core/contrib/completion/git-prompt.sh ]; then
+    # shellcheck source=/usr/share/git-core/contrib/completion/git-prompt.sh
+    . /usr/share/git-core/contrib/completion/git-prompt.sh
+else
+    __git_ps1() {
+        local branch
+        branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        if [ -n "$branch" ]; then
+            local fmt="${1:-%s}"
+            local suffix="${2-}"
+            fmt="${fmt//%s/$branch}"
+            printf "%s%s" "$fmt" "$suffix"
+        fi
+    }
+fi
+
+# Cache _short_pwd once per prompt, then reference cached value in PS1.
+# This avoids calling _short_pwd twice (title + visible prompt).
+_update_prompt_cache() {
+    _CACHED_SHORT_PWD=$(_short_pwd)
+}
+
+PS1="\[\e]0;\u@\h: \${_CACHED_SHORT_PWD}\a\]\[\e[35m\]\$(_prompt_virtualenv)\[\e[32m\]\u@\h:\[\e[33m\]\${_CACHED_SHORT_PWD}\[\e[36m\]\$(__git_ps1 '(%s)' '')\[\e[0m\]\$ "
+
+if [[ "${PROMPT_COMMAND-}" != *"_update_prompt_cache"* ]]; then
+    if [ -n "${PROMPT_COMMAND-}" ]; then
+        PROMPT_COMMAND="_update_prompt_cache;${PROMPT_COMMAND}"
+    else
+        PROMPT_COMMAND="_update_prompt_cache"
+    fi
+fi

@@ -34,9 +34,11 @@ ensure_jq() {
 # Claude Code Installation
 # ═══════════════════════════════════════════════════════════════
 
-clinstall() {
+claude_install() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_claude.sh"
 }
+alias claude-install='claude_install'
+alias clinstall='claude_install' # legacy name (#2148)
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Uninstallation

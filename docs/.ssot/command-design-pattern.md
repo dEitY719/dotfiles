@@ -23,6 +23,7 @@
 | Public alias (user-facing) | `dash-form`, 풀어쓴 `<tool>-<noun/verb>` 권장 (§1.1) | `agy-version`, `git-log`; git 예외: `gb`, `gwt` |
 | Help 함수 (inline) | `_<prefix>_help` | `_gb_help` |
 | Help 함수 (standalone) | `<topic>_help` + alias `<topic>-help` | `gwt_help` / `gwt-help` |
+| install/uninstall 함수 | `<tool>_install`/`<tool>_uninstall` + alias `<tool>-install`/`<tool>-uninstall`; 옛 이름은 alias 로 보존 (#2148) | `claude_install` / `claude-install` (`clinstall`), `docker_uninstall` (`duninstall`) |
 
 ### 1.1 별칭 가독성 — cryptic 축약 지양
 

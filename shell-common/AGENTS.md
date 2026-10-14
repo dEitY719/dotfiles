@@ -82,7 +82,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 
 새 외부 도구(예: bun, foo) 통합 시 2개 파일이면 된다 — `my_help.sh` 는 고치지 않는다 (#2135):
 
-1. **`tools/integrations/<tool>.sh`** (자동 로드) — PATH export, alias, install/uninstall 함수.
+1. **`tools/integrations/<tool>.sh`** (자동 로드) — PATH export, alias, install/uninstall 함수 (`<tool>_install`/`<tool>_uninstall` + `<tool>-install` alias, 옛 이름은 alias 로 보존 — #2148).
    ux_lib guard 패턴 포함. 상세: [`docs/guide/playbooks/shell-common-cheatsheet.md`](../docs/guide/playbooks/shell-common-cheatsheet.md) → "Tool Integration UX-lib Guard"
 2. **`functions/<tool>_help.sh`** (자동 로드) — `<tool>_help()` + `alias <tool>-help='<tool>_help'`. `ux_table_row` / `ux_section` / `ux_bullet` 사용.
    파일 끝에 `command -v _register_help >/dev/null 2>&1 || return 0` 가드 + `_register_help <tool>_help "[Category] 설명" <category>` 한 줄
