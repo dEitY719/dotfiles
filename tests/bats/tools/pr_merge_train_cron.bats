@@ -677,6 +677,35 @@ _hold_lock() {
     assert_equal "$(_backoff_window)" "8"
 }
 
+# The queue ops (count / fingerprint / backoff-next) run in Python by default
+# (#2174); PMT_QUEUE_IMPL=shell is the one-release jq rollback, and a host with
+# no python3 >= 3.10 falls back to it on its own.
+@test "pr_merge_train_cron: PMT_QUEUE_IMPL=shell rollback backs off the same" {
+    _run_tick PMT_QUEUE_IMPL=shell
+    assert_success
+    _assert_logged "herdr agent prompt"
+    assert_equal "$(_backoff_window)" "1"
+
+    _run_tick PMT_QUEUE_IMPL=shell
+    assert_output --partial "Queue unchanged"
+    assert_equal "$(_backoff_remaining)" "0"
+}
+
+@test "pr_merge_train_cron: missing python3 degrades to the jq queue ops" {
+    # _path_without links no python3, so `command -v python3` finds none.
+    _run_tick "PATH=$(_path_without)"
+    assert_success
+    assert_output --partial "PMT_QUEUE_IMPL=shell"
+    _assert_logged "herdr agent prompt"
+}
+
+@test "pr_merge_train_cron: an unknown PMT_QUEUE_IMPL fails the tick" {
+    _run_tick PMT_QUEUE_IMPL=perl
+    assert_failure
+    assert_output --partial "PMT_QUEUE_IMPL must be python or shell"
+    _refute_train_started
+}
+
 @test "pr_merge_train_cron: a moved head resets the backoff immediately" {
     _assert_change_wakes_train \
         "[$(_pr_json 11 30 false oid-a)]" \

@@ -82,3 +82,37 @@ lazy 한 gh 호출 순서) — 네트워크 호출 사이에 끼어 있어 순�
 
 후속: 롤백 경로 제거 #2173 (1 릴리스 관측 후), 2순위 이식
 (`pr_merge_train_cron.sh`, claude 계정 로직) #2174.
+
+## 2차 이식 — merge train dispatcher (#2174)
+
+`dotfiles_tools.merge_train.queue` 가 `pr_merge_train_cron.sh` 의 큐 판정 순수 로직을
+맡는다. 롤백: `PMT_QUEUE_IMPL=shell` (`shell-common/tools/custom/lib/merge_train_queue_shell.sh`).
+python3 >= 3.10 이 없으면 경고 후 자동으로 롤백 경로를 쓴다.
+
+| 셸 함수 | 기준 | op | 바뀐 것 |
+|---------|------|----|---------|
+| `_pmt_target_count` | (b) | `count` | 필터된 PR 배열 jq `length` |
+| `_pmt_bind_fingerprint` | (b) | `fingerprint` | `(number, headRefOid, mergeStateStatus, mergeable, verdict labels)` 튜플 정렬·접기 jq |
+| `_pmt_backoff_gate` | (a)(d) | `backoff-next <max> <fp>` | 상태줄 → `run` / `run <w> <r>` / `skip <w> <r>` 판정 (리셋·카운트다운·2배·상한) |
+
+셸에 남은 것: 상태 파일 읽기/쓰기와 쓰기 실패 시 "skip 대신 run" 결정, lock, gh/herdr 호출,
+`_pmt_bind_actionable` (판정 술어가 `gh:pr-merge-train` 스킬과 공유하는
+`functions/gh_pr_merge_train.sh` 의 SSOT — #1524 가 중복을 없앤 그 로직이라 옮기지 않는다),
+`_pmt_start_agent_retrying` / `_pmt_prompt_train` 의 재시도 루프 (각 시도가 herdr 호출이고
+분기는 에러 코드 1개 비교라 순수 로직이 남지 않는다).
+
+### claude 계정 로직 — 이식 대상 없음
+
+`claude_accounts.sh` + `lib/claude_accounts_{auth,lifecycle,skills}.sh` 를 같은 기준으로
+판정했다. migrate/rollback 은 (a)(b)(d) 어느 것에도 해당하지 않아 셸에 둔다.
+
+| 함수 | 판정 | 이유 |
+|------|------|------|
+| `claude_accounts_migrate` | 셸 유지 | 대화형 확인(`read`) + `mv`/`umount` 순차 실행. 상태 전이·JSON·재시도 없음 |
+| `claude_accounts_rollback` | 셸 유지 | 활성 계정 선택은 파일 존재 2-pass 검사 1개, 나머지는 `mv` 순차 실행 |
+| `claude_accounts_repair` | 셸 유지 | symlink 재지정 — 파일시스템 조작이 본체 |
+| `_claude_has_unmigrated_data` | 셸 유지 | 파일 존재 술어 |
+| `_claude_resolve_account` · `_claude_account_auth_kind` · `_claude_validate_login` | 셸 유지 | auth lib 은 부모 셸 상주(`claude_yolo` 가 source), jq 1단계 조회 |
+| `_claude_ensure_settings_copy` | 셸 유지 | (b) 에 해당(model 키 이주·로컬 전용 키 병합)하지만 `./setup.sh` 경로다 — one-click setup 은 python3 >= 3.10 이 없는 PC 에서도 수렴해야 하고(`docs/.ssot/one-click-setup.md`), 이미 jq 부재 시 degrade 경로가 있다 |
+
+후속: 롤백 경로(`PMT_QUEUE_IMPL`) 제거 #2210 (1 릴리스 관측 후, #2173 과 같은 형태).
