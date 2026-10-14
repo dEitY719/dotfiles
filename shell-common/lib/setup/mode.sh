@@ -22,11 +22,11 @@ dotfiles_setup_mode_resolve() {
         case "$1" in
             --mode)
                 # dash aborts the whole script on a shift past $#; guard it.
-                [ $# -ge 2 ] || { ux_error "dotfiles_setup_mode_resolve: --mode needs a value" && return 2; }
+                [ $# -ge 2 ] || { ux_error "dotfiles_setup_mode_resolve: --mode needs a value"; return 2; }
                 _dsmr_arg="$2" && shift
                 ;;
             --mode=*) _dsmr_arg="${1#*=}" ;;
-            *) ux_error "dotfiles_setup_mode_resolve: unknown option: $1" && return 2 ;;
+            *) ux_error "dotfiles_setup_mode_resolve: unknown option: $1"; return 2 ;;
         esac
         shift
     done
