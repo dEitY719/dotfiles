@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # tests/bats/functions/_fixtures/gh_pr_merge_train_queue.sh
+# The claude/skills/ paths below left this repo with #1680 (now the gh-pr-skills
+# marketplace repo). The mirrored half moves there with #2200; the half that
+# sources shell-common/functions stays here.
 # Source-of-truth mirror for the merge-queue path added by issue #1707:
 #   claude/skills/gh-pr-merge/SKILL.md            (Step 1 flags, Step 3, Step 3.5)
 #   claude/skills/gh-pr-merge/references/finalize-merged-pr.sh.md

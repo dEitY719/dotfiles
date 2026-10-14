@@ -38,5 +38,6 @@ fixture(`_fixtures/*.sh`)로 재현해 검사**한다. 정본이 바뀌어도 �
 | gh_pr_resolve_outdated_review_passed.bats | 31 | gh-resolve:outdated | dEitY719/gh-resolve-skills |
 | skill_check_description_length.bats | 13 | authoring:skill-check | dEitY719/authoring-skills |
 
+`_fixtures/` 는 통째로 위 테스트들의 것이다(`review_passed_gh_stub.sh` 는 resolve 3개가 공유).
 `_fixtures/skill_description_length.sh` 는 `scripts/measure-skill-descriptions.sh` 도
 재사용한다 — 이전 시 그 스크립트의 경로도 함께 고친다.
