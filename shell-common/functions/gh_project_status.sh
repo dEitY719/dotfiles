@@ -1,6 +1,8 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/functions/gh_project_status.sh
+# No interactive guard: sourced by skills and hooks from non-interactive
+# shells; a guard would leave _gh_project_status_sync undefined.
 # Push a projectV2 Status transition for an Issue or PR. Auto-discovers every
 # projectV2 the target belongs to; for each project that has a "Status" field
 # with an option matching the target name, updates the item's Status to that

@@ -1,5 +1,7 @@
 #!/bin/sh
 # shell-common/functions/claude_stop_hook_install.sh
+# No interactive guard: its only side effect, the auto-install at the bottom,
+# is gated on `case $-` itself so the function stays callable from scripts.
 #
 # Auto-install the gh-flow:issue Stop hook into claude/settings.json on
 # interactive shell startup (issue #505).

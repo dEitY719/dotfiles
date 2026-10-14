@@ -202,6 +202,7 @@ test_allows_library_purity_commented_install() {
     mkdir -p "$repo_dir/shell-common/tools/integrations"
     cat >"$repo_dir/shell-common/tools/integrations/ok.sh" <<'EOF'
 #!/bin/sh
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # Example:
 #   npm install -g some-package
 #   apt-get install -y something
@@ -335,6 +336,7 @@ test_wrapper_check_flags_delegating_wrappers() {
         'one_line() { y "$@"; }' \
         'var_call() {' '    $cmd "$@"' '}' \
         'real_logic() {' '    echo hi' '    other' '}' \
+        'helper_then_logic() {' '    setup' '    other' '}' \
         'positional() {' '    z "$1"' '}' >"$dir/w.sh"
 
     out=$(
@@ -347,7 +349,7 @@ test_wrapper_check_flags_delegating_wrappers() {
     for want in "args_fwd() { bar" "bare_call() { qux" "one_line() { y" "var_call() { cmd"; do
         grep -qF "'$want ... }'" <<<"$out" || die "Expected wrapper warning '$want', got: $out"
     done
-    for want in real_logic positional; do
+    for want in real_logic helper_then_logic positional; do
         grep -qF "'$want()" <<<"$out" && die "Unexpected wrapper warning for $want: $out"
     done
     rm -rf "$dir"
@@ -1374,14 +1376,15 @@ test_blocks_model_key_in_claude_settings() {
     rm -rf "$repo_dir"
 }
 
-test_warns_missing_interactive_guard() {
+# Issue #2181 — baseline.txt reached zero, so the guard check blocks in pre-commit.
+test_blocks_missing_interactive_guard() {
     local repo_dir out
     repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
     make_repo "$repo_dir"
     mkdir -p "$repo_dir/shell-common/aliases"
     printf '#!/bin/sh\nalias gs="git status"\n' >"$repo_dir/shell-common/aliases/nog.sh"
     git -C "$repo_dir" add shell-common/aliases/nog.sh
-    out=$(git -C "$repo_dir" commit -m "no guard" 2>&1) || die "Expected a warning, not a block: $out"
-    grep -q "Missing interactive guard" <<<"$out" || die "Expected interactive guard warning: $out"
+    out=$(git -C "$repo_dir" commit -m "no guard" 2>&1) && die "Expected a block: $out"
+    grep -q "Missing interactive guard" <<<"$out" || die "Expected interactive guard report: $out"
     rm -rf "$repo_dir"
 }

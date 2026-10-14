@@ -7,7 +7,6 @@
 # 와 `sops exec-env .env.enc` 가 "Could not unmarshal input data" 로 실패한다.
 # exec-env 에는 --input-type 플래그가 없으므로 senv run 이 복호화 후 export 한다.
 # 그래서 표준 암호문 이름은 `.enc.env` 다(#2062). `.env.enc` 는 폴백으로만 읽는다.
-
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _sops_help_summary() {

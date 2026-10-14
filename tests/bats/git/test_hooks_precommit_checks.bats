@@ -93,6 +93,6 @@ teardown() {
     test_blocks_model_key_in_claude_settings
 }
 
-@test "test_warns_missing_interactive_guard" {
-    test_warns_missing_interactive_guard
+@test "test_blocks_missing_interactive_guard" {
+    test_blocks_missing_interactive_guard
 }

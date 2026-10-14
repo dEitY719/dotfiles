@@ -1,7 +1,8 @@
 #!/bin/sh
 # shell-common/functions/secret_run.sh
 # Inject the dotfiles repo's .enc.env values into one command (issue #2096).
-#
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+
 # `senv run` reads $PWD/.enc.env. This reads $DOTFILES_ROOT/.enc.env instead,
 # so the caller's cwd never changes. The decrypted text lives only in a shell
 # variable and is exported in a subshell right before exec (same loop as
@@ -13,8 +14,6 @@
 # command and its children see them.
 #
 # Details: sops-help secrets
-
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # Repo-wide ciphertext. DOTFILES_ENC_ENV overrides it (tests, other repos).
 _dotfiles_enc_env() {

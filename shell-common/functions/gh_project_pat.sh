@@ -7,7 +7,6 @@
 # hidden PAT prompt and `gh secret set` (PAT on stdin only) live in the
 # stdlib helper shell-common/tools/custom/lib/gh_project_pat.py, which prints
 # tab-separated records (never the PAT) that _gh_project_pat_render shows.
-
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 _gh_project_pat_render() {

@@ -21,7 +21,7 @@ FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/plugin_sync_title.sh"
 @test "plugin_sync_title.sh sources cleanly under bash and defines all four functions" {
     run bash --noprofile --norc -c "
         source '${FILE}'
-        for f in _plugin_sync_read_json_or _changed_keys_marketplaces _changed_keys_plugins _build_sync_title _plugin_sync_title; do
+        for f in _claude_plugin_read_json_or _changed_keys_marketplaces _changed_keys_plugins _build_sync_title _plugin_sync_title; do
             command -v \"\$f\" >/dev/null 2>&1 || { echo \"missing: \$f\"; exit 1; }
         done
         echo all-defined
@@ -33,7 +33,7 @@ FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/plugin_sync_title.sh"
 @test "plugin_sync_title.sh sources cleanly under zsh and defines all four functions" {
     run zsh --no-rcs -c "
         source '${FILE}'
-        for f in _plugin_sync_read_json_or _changed_keys_marketplaces _changed_keys_plugins _build_sync_title _plugin_sync_title; do
+        for f in _claude_plugin_read_json_or _changed_keys_marketplaces _changed_keys_plugins _build_sync_title _plugin_sync_title; do
             command -v \"\$f\" >/dev/null 2>&1 || { echo \"missing: \$f\"; exit 1; }
         done
         echo all-defined
@@ -42,7 +42,7 @@ FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/plugin_sync_title.sh"
     assert_output --partial 'all-defined'
 }
 
-@test "_plugin_sync_read_json_or still works when claude_plugin_manifest.sh cannot be sourced (#1696 agy+codex PR #1697 review)" {
+@test "_claude_plugin_read_json_or still works when claude_plugin_manifest.sh cannot be sourced (#1696 agy+codex PR #1697 review)" {
     # A stale/partial shell-common checkout: this file is reachable (sourced
     # directly by absolute path below, as every real caller does) but its
     # sibling claude_plugin_manifest.sh is not (SHELL_COMMON points elsewhere).

@@ -1,6 +1,8 @@
 #!/bin/sh
 # shellcheck shell=bash
 # shell-common/functions/gh_pr_lint.sh
+# No interactive guard: gh-pr:create sources it from a non-interactive shell;
+# a guard would leave _gh_pr_lint_run undefined.
 # Optional pre-push lint guard for the `gh:pr` skill (issue #396, design
 # in #384#issuecomment-4403809305).
 #

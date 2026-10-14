@@ -10,9 +10,9 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 #   load_category "integrations" "${SHELL_COMMON}/tools"
 #   dotfiles_load_all                              # every category, in order
 
-# Direct-exec guard: This file should be sourced, not executed
-
-if [ "${0##*/}" != "loader.sh" ] && [ -n "${BASH_SOURCE[0]}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+# Direct-exec guard: This file should be sourced, not executed. zsh rebinds $0
+# to the sourced file, so only a non-zsh $0 of loader.sh means direct exec.
+if [ -z "${ZSH_VERSION-}" ] && [ "${0##*/}" = "loader.sh" ]; then
     echo "Error: This file should be sourced, not executed directly" >&2
     exit 1
 fi
