@@ -20,14 +20,10 @@ else
     ux_error() { echo "✗ $1" >&2; }
 fi
 
-# Latest-only backup policy (issue #806). SSOT for the fixed suffixes;
-# fallback defaults guard against a missing helper (an empty suffix would
-# overwrite the live target).
-if [ -f "${SHELL_COMMON_DIR}/functions/dotfiles_backup.sh" ]; then
-    . "${SHELL_COMMON_DIR}/functions/dotfiles_backup.sh"
-fi
-: "${DOTFILES_BACKUP_SUFFIX:=.backup}"
-: "${DOTFILES_ORIGINAL_SUFFIX:=.original}"
+# Idempotent link lib (#2137, #2138); also loads dotfiles_backup.sh, the
+# latest-only backup SSOT (#806) for DOTFILES_BACKUP_SUFFIX.
+SHELL_COMMON="${SHELL_COMMON_DIR}"
+. "${SHELL_COMMON_DIR}/lib/setup/link.sh" || exit 1
 
 # ============================================================================
 # Configuration Values (SSOT - Single Source of Truth)
@@ -68,24 +64,26 @@ OPENCODE_ACCOUNT_ID_ERE='your-(account|knox)-id'
 # ============================================================================
 
 # Prepare a config target path for symlink creation.
-# Removes existing symlinks, backs up regular files and directories.
+# Removes existing symlinks, backs up regular files and directories to
+# <target>$DOTFILES_BACKUP_SUFFIX (the slot _restore_config_from_backup reads).
 # Usage: _prepare_config_target "/path/to/config"
 _prepare_config_target() {
     _target="$1"
     if [ -L "$_target" ]; then
         rm -f "$_target"
         ux_info "Removed existing symlink: $_target"
-    elif [ -d "$_target" ]; then
-        _backup="${_target}${DOTFILES_BACKUP_SUFFIX}"
-        rm -rf "$_backup"
-        mv "$_target" "$_backup"
-        ux_warning "Backed up existing directory: $_backup"
-    elif [ -f "$_target" ]; then
-        _backup="${_target}${DOTFILES_BACKUP_SUFFIX}"
-        rm -f "$_backup"
-        mv "$_target" "$_backup"
-        ux_info "Backed up existing file: $_backup"
+    elif [ -e "$_target" ]; then
+        _backup=$(dotfiles_backup_move "$_target")
+        ux_warning "Backed up existing config: $_backup"
     fi
+}
+
+# Link <src> at <target>: a correct link is a no-op (second run changes
+# nothing); a real file/dir is first backed up by _prepare_config_target.
+# Usage: _link_config_target "/path/to/src" "/path/to/config"
+_link_config_target() {
+    [ -L "$2" ] || _prepare_config_target "$2"
+    dotfiles_ensure_link "$1" "$2"
 }
 
 # Resolve the deploy source for a tracked internal-mode config (#1968).
@@ -373,8 +371,7 @@ _setup_mode_config() {
 
     case "$environment" in
         internal)
-            _prepare_config_target "$_mc_target"
-            ln -s "$(_internal_src "$4")" "$_mc_target"
+            _link_config_target "$(_internal_src "$4")" "$_mc_target"
             ux_success "Created symlink: ~${_mc_target#"$HOME"} → $4"
             ux_info "$5"
             return 0
@@ -393,8 +390,7 @@ _setup_mode_config() {
             ;;
         link\|*)
             _mc_rest="${_mc_action#link|}"
-            _prepare_config_target "$_mc_target"
-            ln -s "${DOTFILES_ROOT}/${_mc_rest%%|*}" "$_mc_target"
+            _link_config_target "${DOTFILES_ROOT}/${_mc_rest%%|*}" "$_mc_target"
             ux_success "Created symlink: ~${_mc_target#"$HOME"} → ${_mc_rest%%|*}"
             ux_info "${_mc_rest#*|}"
             ;;
@@ -555,8 +551,7 @@ setup_opencode_config() {
             ;;
         external)
             mkdir -p "$(dirname "$opencode_target")"
-            _prepare_config_target "$opencode_target"
-            ln -s "${DOTFILES_ROOT}/opencode/opencode.json.external" "$opencode_target"
+            _link_config_target "${DOTFILES_ROOT}/opencode/opencode.json.external" "$opencode_target"
             ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.external"
             ux_info "Using: Local LiteLLM proxy (localhost:4444)"
             ;;
@@ -647,8 +642,7 @@ setup_nuget_config() {
         internal)
             for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
                 mkdir -p "$(dirname "$_nuget_conf")"
-                _prepare_config_target "$_nuget_conf"
-                ln -s "$(_internal_src nuget/NuGet.Config.internal)" "$_nuget_conf"
+                _link_config_target "$(_internal_src nuget/NuGet.Config.internal)" "$_nuget_conf"
             done
             ux_success "Created symlinks: NuGet.Config → nuget/NuGet.Config.internal"
             ux_info "  ~/.nuget/NuGet/ (dotnet CLI) + ~/.config/NuGet/ (mono)"

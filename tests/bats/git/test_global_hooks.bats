@@ -51,6 +51,7 @@ _stage_sandbox_dotfiles() {
     mkdir -p "$SANDBOX/repo/shell-common/tools"
     cp -R "${REAL_ROOT}/git" "$SANDBOX/repo/git"
     cp -R "${REAL_ROOT}/shell-common/tools/ux_lib" "$SANDBOX/repo/shell-common/tools/ux_lib"
+    copy_setup_lib "$SANDBOX/repo/shell-common"
     git -C "$SANDBOX/repo" init -q
 
     mkdir -p "$HOME/.ssh"

@@ -77,14 +77,8 @@ claude_init() {
     ux_section "Settings Configuration"
     if [ -L "$settings_target" ]; then
         ux_success "settings.json symbolic link already exists"
-    elif [ -f "$settings_target" ]; then
-        ux_warning "settings.json exists as regular file"
-        ux_info "Backing up to settings.json.backup..."
-        mv "$settings_target" "$settings_target.backup"
-        ln -s "$settings_source" "$settings_target"
-        ux_success "Created symbolic link for settings.json"
-    else
-        ln -s "$settings_source" "$settings_target"
+    elif _claude_link_lib && dotfiles_ensure_link "$settings_source" "$settings_target"; then
+        # A regular file is moved to settings.json.original first (#806, #2138).
         ux_success "Created symbolic link for settings.json"
     fi
     ux_info ""
@@ -93,14 +87,8 @@ claude_init() {
     ux_section "Statusline Configuration"
     if [ -L "$statusline_target" ]; then
         ux_success "statusline-command.sh symbolic link already exists"
-    elif [ -f "$statusline_target" ]; then
-        ux_warning "statusline-command.sh exists as regular file"
-        ux_info "Backing up to statusline-command.sh.backup..."
-        mv "$statusline_target" "$statusline_target.backup"
-        ln -s "$statusline_source" "$statusline_target"
-        ux_success "Created symbolic link for statusline-command.sh"
-    else
-        ln -s "$statusline_source" "$statusline_target"
+    elif _claude_link_lib && dotfiles_ensure_link "$statusline_source" "$statusline_target"; then
+        # A regular file is moved to statusline-command.sh.original first (#806, #2138).
         ux_success "Created symbolic link for statusline-command.sh"
     fi
     ux_info ""
@@ -657,47 +645,24 @@ _claude_backup_original() {
     }
 }
 
-# _claude_ensure_symlink — 멱등 symlink 생성.
-# - 없음 → 생성
-# - 같은 target 의 symlink → skip (출력 "already")
+# _claude_ensure_symlink — 멱등 symlink 생성. Thin wrapper over
+# dotfiles_ensure_link (#2138); the name stays because external skill repos
+# and docs reference it.
+# - 없음 → 생성 / 같은 target 의 symlink → silent no-op
 # - bind-mount → sudo umount 후 재생성 (issue #575 마이그레이션 경로)
-# - 다른 file/dir → 고정 suffix(.original) 백업 후 재생성 (#806, latest-only)
+# - 다른 file/dir → 고정 suffix(.original) 백업 후 재생성 (#806); 백업이 이미
+#   있으면 덮어쓰지 않고 target 을 그대로 둔 채 경고
 _claude_ensure_symlink() {
-    _ces_src="$1"
-    _ces_tgt="$2"
+    _claude_link_lib || return 1
+    dotfiles_ensure_link "$1" "$2" --allow-dir --unmount-legacy
+}
 
-    if [ -L "$_ces_tgt" ]; then
-        _ces_current=$(readlink "$_ces_tgt")
-        if [ "$_ces_current" = "$_ces_src" ]; then
-            ux_info "  ✓ already linked: $_ces_tgt"
-            return 0
-        fi
-        ux_warning "  symlink target mismatch — recreating: $_ces_tgt"
-        rm "$_ces_tgt"
-    elif _is_mounted "$_ces_tgt" 2>/dev/null; then
-        # Legacy bind-mount survivor from the #287/#342-era multi-account
-        # layout. The kernel refuses `mv` on a mount point, so unmount
-        # first and then fall through to the normal `ln -s` path.
-        ux_warning "  bind-mount detected at $_ces_tgt — unmounting (sudo may prompt)"
-        if ! sudo umount "$_ces_tgt"; then
-            ux_error "  unmount failed: $_ces_tgt"
-            return 1
-        fi
-        ux_success "  ✓ unmounted: $_ces_tgt"
-        # Three post-umount states: (a) dir already gone, (b) empty
-        # backing dir, (c) non-empty backing dir hiding user data.
-        # Try rmdir for (b), and if (c) reveals a populated directory,
-        # back it up so `ln -s` below has a clear slot (the next elif
-        # would be skipped because this branch already matched).
-        if [ -e "$_ces_tgt" ] && ! rmdir "$_ces_tgt" 2>/dev/null; then
-            _claude_backup_original "$_ces_tgt" "revealed directory" || return 1
-        fi
-    elif [ -e "$_ces_tgt" ]; then
-        _claude_backup_original "$_ces_tgt" "existing file" || return 1
-    fi
-
-    ln -s "$_ces_src" "$_ces_tgt"
-    ux_success "  created symlink: $_ces_tgt → $_ces_src"
+# _claude_link_lib — load lib/setup/link.sh on first use, so interactive
+# shell startup does not pay for it (#2138).
+_claude_link_lib() {
+    command -v dotfiles_ensure_link >/dev/null 2>&1 && return 0
+    _cll_sc="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
+    SHELL_COMMON="$_cll_sc" . "$_cll_sc/lib/setup/link.sh"
 }
 
 # _claude_ensure_settings_copy — settings.json 멱등 실파일 설치 (#940).
@@ -1600,15 +1565,10 @@ claude_accounts_repair() {
             ux_info    "    from: $_car_target"
             ux_info    "    to:   $_car_canon"
             if [ "$_car_dry" = "0" ]; then
-                rm -f "$_car_link" || {
-                    ux_error "    rm failed — skipping"
-                    continue
-                }
-                mkdir -p "$(dirname "$_car_link")"
-                if ln -s "$_car_canon" "$_car_link"; then
+                if _claude_link_lib && dotfiles_ensure_link "$_car_canon" "$_car_link"; then
                     _car_repaired=$((_car_repaired + 1))
                 else
-                    ux_error "    ln -s failed — symlink missing now, manual recovery needed"
+                    ux_error "    rebind failed: $_car_link — manual recovery needed"
                 fi
             else
                 _car_repaired=$((_car_repaired + 1))
@@ -1669,7 +1629,7 @@ _claude_under_workspace() {
 }
 
 # _claude_link_one <src_real> <name> <dry> <force> <targets> — fan one source
-# out into every target dir. rc 1 only when an `ln -s` failed somewhere.
+# out into every target dir. rc 1 only when a link failed somewhere.
 _claude_link_one() {
     _clo_src="$1"
     _clo_name="$2"
@@ -1704,10 +1664,10 @@ _claude_link_one() {
             ux_info "  would link: $_clo_link -> $_clo_src"
             continue
         fi
-        if ln -s "$_clo_src" "$_clo_link"; then
+        if _claude_link_lib && dotfiles_ensure_link "$_clo_src" "$_clo_link"; then
             ux_success "  linked: $_clo_link -> $_clo_src"
         else
-            ux_error "  ln -s failed: $_clo_link -> $_clo_src"
+            ux_error "  link failed: $_clo_link -> $_clo_src"
             _clo_rc=1
         fi
     done <<CLO_TGTS

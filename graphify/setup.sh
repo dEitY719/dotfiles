@@ -12,6 +12,8 @@
 # Help: graphify-help install | graphify-help accounts
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 ux_header "graphify Setup"
 
@@ -46,23 +48,11 @@ for acct in $(_claude_resolve_account --list); do
 		continue
 	fi
 	link="${cdir}/skills/graphify"
-	if [ -L "$link" ]; then
-		target=$(readlink "$link")
-		if [ "$target" = "$GRAPHIFY_SKILL_SRC" ]; then
-			ux_success "${acct}: link already correct"
-		else
-			ux_warning "${acct}: ${link} points to ${target} — left alone"
-		fi
-		continue
-	fi
-	if [ -e "$link" ]; then
-		ux_warning "${acct}: ${link} is a real directory/file — left alone"
-		continue
-	fi
-	if mkdir -p "${cdir}/skills" && ln -s "$GRAPHIFY_SKILL_SRC" "$link"; then
-		ux_success "${acct}: linked ${link} -> ${GRAPHIFY_SKILL_SRC}"
-	else
+	# keep: a link elsewhere or a real dir is the user's — warn, leave alone.
+	if ! dotfiles_ensure_link "$GRAPHIFY_SKILL_SRC" "$link" --on-mismatch keep; then
 		ux_warning "${acct}: could not create ${link}"
+	elif [ -L "$link" ] && [ "$(cd -P "$link" && pwd)" = "$(cd -P "$GRAPHIFY_SKILL_SRC" && pwd)" ]; then
+		ux_success "${acct}: link ok"
 	fi
 done
 

@@ -16,6 +16,7 @@ setup() {
     cp "$_BATS_REAL_DOTFILES_ROOT/scripts/internal-config-migrate.sh" "$FX/scripts/"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh" "$FX/shell-common/tools/ux_lib/"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/setup.sh" "$FX/shell-common/"
+    copy_setup_lib "$FX/shell-common"
     for f in npm/npmrc.internal pip/pip.conf.internal uv/uv.toml.internal \
         cargo/config.toml.internal bun/bunfig.toml.internal; do
         printf 'registry=https://registry.corp-fake.test/%s\nproxy=http://proxy.corp-fake.test:8080\n' "$f" >"$FX/$f"

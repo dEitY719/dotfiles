@@ -24,6 +24,8 @@ DOTFILES_ROOT="${_SCRIPT_DIR%/herdr}"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 HERDR_CONFIG_SRC="${_SCRIPT_DIR}/config.toml"
 HERDR_CONFIG_DIR="${HOME}/.config/herdr"
@@ -50,31 +52,9 @@ if [ ! -d "${HERDR_CONFIG_DIR}" ]; then
 	ux_success "Created: ~/.config/herdr"
 fi
 
-# A function so the "already correct" case returns early instead of nesting the
-# rewrite branch. Body matches obsidian/setup.sh except `exit 0` → `return 0`:
-# Parts 2-4 must still run.
-_herdr_link_config() {
-	if [ -L "${HERDR_CONFIG_LINK}" ]; then
-		local current_target
-		current_target=$(readlink "${HERDR_CONFIG_LINK}")
-		if [ "${current_target}" = "${HERDR_CONFIG_SRC}" ]; then
-			ux_success "Symlink already correct: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
-			return 0
-		fi
-		ux_info "Updating symlink (was: ${current_target})"
-		rm "${HERDR_CONFIG_LINK}" || { ux_error "Could not remove stale symlink: ${HERDR_CONFIG_LINK}"; exit 1; }
-	elif [ -e "${HERDR_CONFIG_LINK}" ]; then
-		local backup="${HERDR_CONFIG_LINK}.backup"
-		rm -f "${backup}"
-		ux_info "Backing up existing file: ${backup}"
-		mv "${HERDR_CONFIG_LINK}" "${backup}" || { ux_error "Could not back up: ${HERDR_CONFIG_LINK}"; exit 1; }
-	fi
-
-	ln -s "${HERDR_CONFIG_SRC}" "${HERDR_CONFIG_LINK}" || { ux_error "Could not create symlink: ${HERDR_CONFIG_LINK}"; exit 1; }
-	ux_success "Created: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
-}
-
-_herdr_link_config
+# Same link -> no-op; real file -> backed up to config.toml.original (#2138).
+dotfiles_ensure_link "${HERDR_CONFIG_SRC}" "${HERDR_CONFIG_LINK}" || exit 1
+ux_success "Linked: ~/.config/herdr/config.toml → ${HERDR_CONFIG_SRC}"
 
 # ============================================================================
 # Part 2: plugin bootstrap (soft-fail)
@@ -159,8 +139,7 @@ _herdr_install_plugins
 # a second copy — the viewer looks for `bat`.
 _herdr_bridge_batcat() {
 	command -v batcat >/dev/null 2>&1 || return 1
-	mkdir -p "${HOME}/.local/bin"
-	ln -sf "$(command -v batcat)" "${HOME}/.local/bin/bat"
+	dotfiles_ensure_link "$(command -v batcat)" "${HOME}/.local/bin/bat" || return 1
 	ux_success "bridged: batcat → ~/.local/bin/bat (no download needed)"
 	return 0
 }

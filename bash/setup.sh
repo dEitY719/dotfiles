@@ -44,75 +44,18 @@ HOME_BASH_PROFILE="${HOME}/.bash_profile"
 # Load UX library (unified library at shell-common/tools/ux_lib/)
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
 
-# Latest-only backup policy (issue #806). SSOT for the fixed suffixes.
-# Fallback defaults guard against a missing helper so the suffix is never
-# empty (an empty suffix would overwrite the live target).
-if [ -f "${SHELL_COMMON}/functions/dotfiles_backup.sh" ]; then
-    source "${SHELL_COMMON}/functions/dotfiles_backup.sh"
-fi
-: "${DOTFILES_BACKUP_SUFFIX:=.backup}"
-: "${DOTFILES_ORIGINAL_SUFFIX:=.original}"
+# Idempotent link + latest-only backup lib (#806, #2138). It also loads
+# dotfiles_backup.sh (suffix SSOT) and the log_info/log_error/log_warning/
+# log_error_and_exit shims; only the bash-specific loggers stay below.
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 # Define legacy mapping functions for backward compatibility
-log_info() { ux_info "$1"; }
-log_error() { ux_error "$1"; }
-log_critical() {
-    ux_error "$1"
-    exit 1
-}
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
 # [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
 log_debug() {
     [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
     printf "%s[DEBUG] %s%s\n" "${UX_MUTED}" "$1" "${UX_RESET}"
-}
-log_warning() { ux_warning "$1"; }
-
-# --- Functions ---
-
-# log_critical 함수를 사용하여 log_error_and_exit 대체
-
-log_error_and_exit() {
-
-    log_critical "$1" # log_critical 함수를 호출하여 에러 메시지 출력 후 종료
-
-}
-
-backup_file() {
-    local file_to_backup="$1"
-    local backup_destination="$2"
-    if [ -e "$file_to_backup" ]; then
-        log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
-        cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
-    fi
-}
-
-create_symlink() {
-
-    local target="$1"
-
-    local link_name="$2"
-
-    if [ -L "$link_name" ]; then
-
-        log_dim "기존 심볼릭 링크 제거: $link_name"
-
-        rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
-
-    elif [ -f "$link_name" ]; then
-
-        log_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
-
-        backup_file "$link_name" "${link_name}${DOTFILES_ORIGINAL_SUFFIX}"
-
-        rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
-
-    fi
-
-    log_info "심볼릭 링크 생성: $link_name -> $target"
-
-    ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
-
 }
 
 # --- Main Script Logic ---
@@ -129,7 +72,8 @@ fi
 
 # ~/.bashrc 로 심볼릭링크
 
-create_symlink "$MAIN_BASH_SOURCE" "$HOME_BASHRC"
+dotfiles_ensure_link "$MAIN_BASH_SOURCE" "$HOME_BASHRC" ||
+    log_error_and_exit "심볼릭 링크 생성 실패: $HOME_BASHRC"
 
 # Seed ~/.bashrc.local (untracked, PC-specific overrides). Issue #1290 —
 # mirrors the zsh pattern from issue #737. Installer/hook side-effects
@@ -157,7 +101,8 @@ if [ -f "${DOTFILES_BASH_DIR}/profile.bash" ]; then
 
     log_dim "profile.bash 파일이 존재하므로 ~/.bash_profile 심볼릭 링크를 생성합니다."
 
-    create_symlink "${DOTFILES_BASH_DIR}/profile.bash" "$HOME_BASH_PROFILE"
+    dotfiles_ensure_link "${DOTFILES_BASH_DIR}/profile.bash" "$HOME_BASH_PROFILE" ||
+        log_error_and_exit "심볼릭 링크 생성 실패: $HOME_BASH_PROFILE"
 
 else
 
@@ -186,16 +131,10 @@ if [ -f "$WORK_LOG_SRC" ]; then
         else
             log_debug "✓ work_log.txt 심볼릭 링크 확인됨"
         fi
-    elif [ -f "$WORK_LOG_LINK" ]; then
-        # Regular file exists, backup and create symlink
-        backup_file="${WORK_LOG_LINK}${DOTFILES_BACKUP_SUFFIX}"
-        log_error "경고: ~/work_log.txt가 일반 파일입니다"
-        log_dim "백업: $backup_file로 이동"
-        mv "$WORK_LOG_LINK" "$backup_file"
-        create_symlink "$WORK_LOG_SRC" "$WORK_LOG_LINK"
     else
-        # Symlink doesn't exist, create it
-        create_symlink "$WORK_LOG_SRC" "$WORK_LOG_LINK"
+        # Regular file -> backed up to work_log.txt.original, then linked
+        dotfiles_ensure_link "$WORK_LOG_SRC" "$WORK_LOG_LINK" ||
+            log_error_and_exit "심볼릭 링크 생성 실패: $WORK_LOG_LINK"
     fi
 fi
 

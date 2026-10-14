@@ -138,7 +138,7 @@ claude-yolo
 ## 관련 코드
 
 - `shell-common/setup.sh` — 환경 분기 SSOT, `~/.dotfiles-setup-mode` 작성
-- `claude/setup.sh` — internal 모드일 때 single-account 분기 (`_single_account_ensure_link`)
+- `claude/setup.sh` — internal 모드일 때 single-account 분기 (`dotfiles_ensure_link --unmount-legacy`, #2138)
 - `shell-common/tools/integrations/claude.sh` — `_dotfiles_setup_mode`, `claude_yolo` F-2 분기, `claude_accounts_rollback`
 - `.gitignore` — `claude/settings.local.json` untracked 강제
 

@@ -12,6 +12,7 @@ setup() {
     ENV_DIR="$FX/shell-common/env"
     mkdir -p "$ENV_DIR" "$FX/shell-common/tools/ux_lib"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/setup.sh" "$FX/shell-common/"
+    copy_setup_lib "$FX/shell-common"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh" "$FX/shell-common/tools/ux_lib/"
 }
 

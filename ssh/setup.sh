@@ -13,6 +13,8 @@ DOTFILES_ROOT="${_SCRIPT_DIR%/ssh}"
 SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
 SSH_CONFIG_SRC="${_SCRIPT_DIR}/config"
 SSH_CONFIG_LINK="${HOME}/.ssh/config"
@@ -26,24 +28,7 @@ if [ ! -d "${HOME}/.ssh" ]; then
     ux_success "Created: ~/.ssh (700)"
 fi
 
-# Handle existing file or symlink
-if [ -L "${SSH_CONFIG_LINK}" ]; then
-    current_target=$(readlink "${SSH_CONFIG_LINK}")
-    if [ "${current_target}" = "${SSH_CONFIG_SRC}" ]; then
-        ux_success "Symlink already correct: ~/.ssh/config → ${SSH_CONFIG_SRC}"
-        exit 0
-    fi
-    ux_info "Updating symlink (was: ${current_target})"
-    rm "${SSH_CONFIG_LINK}"
-elif [ -f "${SSH_CONFIG_LINK}" ]; then
-    # Latest-only fixed suffix (issue #806) — overwrite one backup instead of
-    # accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
-    backup="${SSH_CONFIG_LINK}.backup"
-    rm -f "${backup}"
-    ux_info "Backing up existing file: ${backup}"
-    mv "${SSH_CONFIG_LINK}" "${backup}"
-fi
-
-ln -s "${SSH_CONFIG_SRC}" "${SSH_CONFIG_LINK}"
+# Same link -> no-op; real file -> backed up to config.original (#806, #2138).
+dotfiles_ensure_link "${SSH_CONFIG_SRC}" "${SSH_CONFIG_LINK}" || exit 1
 chmod 600 "${SSH_CONFIG_SRC}"
-ux_success "Created: ~/.ssh/config → ${SSH_CONFIG_SRC}"
+ux_success "Linked: ~/.ssh/config → ${SSH_CONFIG_SRC}"

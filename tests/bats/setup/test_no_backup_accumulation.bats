@@ -132,27 +132,30 @@ teardown() {
     assert_failure
 }
 
-@test "_claude_ensure_symlink: repeated backups keep exactly one .original (issue #2130)" {
+@test "_claude_ensure_symlink: repeated backups keep exactly one .original (issue #2130, #2138)" {
     # A real file at the link target forces the backup branch. Re-create a
     # real file before the second call so BOTH calls take that branch — the
-    # pre-#2130 timestamped naming would leave two backups here.
+    # pre-#2130 timestamped naming would leave two backups here. Since #2138
+    # (dotfiles_ensure_link) an existing backup is never overwritten: the
+    # second displaced file stays in place with a warning instead.
     run_in_bash '
         src="$HOME/src.txt"; tgt="$HOME/.claude-test/settings.txt"
         mkdir -p "$HOME/.claude-test"; printf src > "$src"
         printf first > "$tgt"
         _claude_ensure_symlink "$src" "$tgt" >/dev/null 2>&1 || exit 1
+        echo "link1=$(readlink "$tgt")"
         rm "$tgt"; printf second > "$tgt"
-        _claude_ensure_symlink "$src" "$tgt" >/dev/null 2>&1 || exit 1
-        _claude_ensure_symlink "$src" "$tgt" >/dev/null 2>&1 || exit 1
+        _claude_ensure_symlink "$src" "$tgt" 2>&1 || exit 1
         echo "count=$(find "$HOME/.claude-test" -maxdepth 1 -name "settings.txt?*" | wc -l | tr -d " ")"
-        echo "link=$(readlink "$tgt")"
-        cat "$tgt.original"
+        echo "backup=$(cat "$tgt.original")"
+        echo "target=$(cat "$tgt")"
     '
     assert_success
+    assert_output --partial "link1=$HOME/src.txt"
     assert_output --partial "count=1"
-    assert_output --partial "link=$HOME/src.txt"
-    # The single backup is the LATEST displaced file.
-    assert_output --partial "second"
+    assert_output --partial "already exists"
+    assert_output --partial "backup=first"
+    assert_output --partial "target=second"
 }
 
 @test "_claude_prepare_skills_dir: unexpected file backed up to fixed .original (issue #2130)" {

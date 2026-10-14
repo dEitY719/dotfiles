@@ -54,10 +54,18 @@ teardown() {
     cmp -s "$DOTFILES_ROOT/claude/settings.json" "$HOME/.claude-personal/settings.json"
 }
 
-@test "claude_accounts_repair: rebinds dangling skills (directory symlink) too" {
-    run_in_bash 'claude_accounts_repair >/dev/null 2>&1; readlink "$HOME/.claude-personal/skills"'
+@test "claude_accounts_repair: rebinds dangling docs (directory symlink) too" {
+    run_in_bash 'claude_accounts_repair >/dev/null 2>&1; readlink "$HOME/.claude-personal/docs"'
     assert_success
-    assert_output "$DOTFILES_ROOT/claude/skills"
+    assert_output "$DOTFILES_ROOT/claude/docs"
+}
+
+@test "claude_accounts_repair: never rebinds onto a missing canonical source (#2138)" {
+    # claude/skills left the repo in #1680; dotfiles_ensure_link refuses a
+    # missing source instead of swapping one dangling link for another.
+    run_in_bash 'claude_accounts_repair 2>&1; echo "link=$(readlink "$HOME/.claude-personal/skills")"'
+    assert_output --partial "rebind failed: $HOME/.claude-personal/skills"
+    assert_output --partial "link=/tmp/dotfiles-fake-worktree-DOES-NOT-EXIST/claude/skills"
 }
 
 @test "claude_accounts_repair: rebinds nested projects/GLOBAL/memory" {

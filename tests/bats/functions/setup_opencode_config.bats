@@ -23,6 +23,7 @@ setup() {
        "$FIXTURE_DOTFILES/shell-common/tools/ux_lib/ux_lib.sh"
     cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/setup.sh" \
        "$FIXTURE_DOTFILES/shell-common/setup.sh"
+    copy_setup_lib "$FIXTURE_DOTFILES/shell-common"
 
     TARGET="$HOME/.config/opencode/opencode.json"
     mkdir -p "$(dirname "$TARGET")"

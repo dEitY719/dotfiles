@@ -41,7 +41,7 @@ teardown() {
     assert_success
     run bash "$GRAPHIFY_SETUP"
     assert_success
-    assert_output --partial "work: link already correct"
+    assert_output --partial "work: link ok"
     [ "$(readlink "$HOME/.claude-work/skills/graphify")" = "$SRC" ]
     [ "$(readlink "$HOME/.claude-work1/skills/graphify")" = "$SRC" ]
     [ ! -e "$HOME/.claude-personal" ]

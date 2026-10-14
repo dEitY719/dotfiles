@@ -45,41 +45,13 @@ else
     exit 1
 fi
 
+# Idempotent link + latest-only backup lib (#806, #2138); also provides
+# log_error_and_exit and the .original suffix SSOT (DOTFILES_ORIGINAL_SUFFIX).
+SHELL_COMMON="${DOTFILES_REPO_ROOT}/shell-common"
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
+
 # --- Functions ---
-# log_critical 함수를 사용하여 log_error_and_exit 대체
-log_error_and_exit() {
-    ux_error "$1"
-    exit 1
-}
-
-backup_file() {
-    local file_to_backup="$1"
-    local backup_destination="$2"
-    if [ -e "$file_to_backup" ]; then
-        ux_info "백업 파일 생성: $file_to_backup -> $backup_destination"
-        cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
-    fi
-}
-
-create_symlink() {
-    local target="$1"
-    local link_name="$2"
-
-    if [ -L "$link_name" ]; then
-        ux_bullet_sub "기존 심볼릭 링크 제거: $link_name"
-        rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
-    elif [ -f "$link_name" ]; then
-        ux_warning "경고: $link_name 가 심볼릭 링크가 아닌 일반 파일입니다. 백업 후 제거합니다."
-        # Latest-only fixed suffix (issue #806) — repeated runs overwrite one
-        # backup instead of accumulating. SSOT: shell-common/functions/dotfiles_backup.sh
-        backup_file "$link_name" "${link_name}.original"
-        rm "$link_name" || log_error_and_exit "기존 파일 제거 실패: $link_name"
-    fi
-
-    ux_bullet_sub "심볼릭 링크 생성: $link_name -> $target"
-    ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
-}
-
 # ~/.gitconfig 를 "실파일 + [include] SSOT" 모델로 보장합니다 (symlink 금지).
 #
 # WHY: ~/.gitconfig 를 추적 SSOT 로 symlink 하면 `git config --global` 을 쓰는
@@ -288,7 +260,8 @@ mkdir -p "$REPO_GIT_HOOKS_DIR" 2>/dev/null || true
 # Target: .git/hooks/pre-commit (symlink, not tracked)
 if [ -f "${GIT_HOOKS_SOURCE_DIR}/pre-commit" ]; then
     PRE_COMMIT_TARGET="${REPO_GIT_HOOKS_DIR}/pre-commit"
-    create_symlink "${GIT_HOOKS_SOURCE_DIR}/pre-commit" "$PRE_COMMIT_TARGET"
+    dotfiles_ensure_link "${GIT_HOOKS_SOURCE_DIR}/pre-commit" "$PRE_COMMIT_TARGET" ||
+        log_error_and_exit "심볼릭 링크 생성 실패: $PRE_COMMIT_TARGET"
     chmod +x "${GIT_HOOKS_SOURCE_DIR}/pre-commit"
     ux_info "Pre-commit hook 설정 완료: ${PRE_COMMIT_TARGET}"
 else
@@ -300,7 +273,8 @@ fi
 # Target: .git/hooks/post-commit (symlink, not tracked)
 if [ -f "${GIT_HOOKS_SOURCE_DIR}/post-commit" ]; then
     POST_COMMIT_TARGET="${REPO_GIT_HOOKS_DIR}/post-commit"
-    create_symlink "${GIT_HOOKS_SOURCE_DIR}/post-commit" "$POST_COMMIT_TARGET"
+    dotfiles_ensure_link "${GIT_HOOKS_SOURCE_DIR}/post-commit" "$POST_COMMIT_TARGET" ||
+        log_error_and_exit "심볼릭 링크 생성 실패: $POST_COMMIT_TARGET"
     chmod +x "${GIT_HOOKS_SOURCE_DIR}/post-commit"
     ux_info "Post-commit hook 설정 완료: ${POST_COMMIT_TARGET}"
 else
@@ -372,7 +346,7 @@ else
             # A pre-existing REAL file here belongs to another installer
             # (git-lfs writes pre-push / post-commit / post-checkout /
             # post-merge). Back up + remove here (same .original as
-            # create_symlink) so the replacements are reported once below
+            # dotfiles_ensure_link) so the replacements are reported once below
             # instead of 3 lines per hook. Identical .original = already
             # backed up; replace quietly (#1872).
             # A git-lfs-generated hook loses nothing: our wrapper runs
@@ -391,7 +365,8 @@ else
                 rm "$global_hook_target" || log_error_and_exit "기존 파일 제거 실패: $global_hook_target"
             fi
 
-            create_symlink "$global_hook_source" "$global_hook_target"
+            dotfiles_ensure_link "$global_hook_source" "$global_hook_target" ||
+                log_error_and_exit "심볼릭 링크 생성 실패: $global_hook_target"
             chmod +x "$global_hook_source"
             ux_info "Global ${global_hook_name} hook 설정 완료: ${global_hook_target}"
             linked_global_hooks=$((linked_global_hooks + 1))

@@ -37,62 +37,13 @@ else
     exit 1
 fi
 
-# --- Logging Compatibility Functions ---
+# Idempotent link + latest-only backup lib (#806, #2138); also provides
+# log_error_and_exit.
+SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
+# shellcheck source=../shell-common/lib/setup/link.sh
+. "${SHELL_COMMON}/lib/setup/link.sh" || exit 1
 
-log_info() { ux_info "$1"; }
-log_error() { ux_error "$1"; }
-log_critical() {
-    ux_error "$1"
-    exit 1
-}
 log_dim() { echo "${UX_DIM}$1${UX_RESET}"; }
-# [DEBUG] 접두 출력은 명시적으로 DOTFILES_DEBUG=1 일 때만 노출 (#793 F-3).
-# shellcheck disable=SC2317  # 본 파일은 호출처가 없지만 향후 디버깅 보조용으로 정의 보존
-log_debug() {
-    [ "${DOTFILES_DEBUG:-0}" = "1" ] || return 0
-    echo "${UX_MUTED}[DEBUG] $1${UX_RESET}"
-}
-log_warning() { ux_warning "$1"; }
-
-log_error_and_exit() {
-    log_critical "$1"
-}
-
-# --- Functions ---
-
-backup_file() {
-    local file_to_backup="$1"
-    local backup_destination="$2"
-    if [ -e "$file_to_backup" ]; then
-        log_info "백업 파일 생성: $file_to_backup -> $backup_destination"
-        if [ -d "$file_to_backup" ]; then
-            cp -r "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 디렉토리 생성 실패: $file_to_backup"
-        else
-            cp "$file_to_backup" "$backup_destination" || log_error_and_exit "백업 파일 생성 실패: $file_to_backup"
-        fi
-    fi
-}
-
-create_symlink() {
-    local target="$1"
-    local link_name="$2"
-
-    if [ -L "$link_name" ]; then
-        log_dim "기존 심볼릭 링크 제거: $link_name"
-        rm "$link_name" || log_error_and_exit "기존 심볼릭 링크 제거 실패: $link_name"
-    elif [ -f "$link_name" ] || [ -d "$link_name" ]; then
-        log_warning "경고: $link_name 가 심볼릭 링크가 아닙니다. 백업 후 제거합니다."
-        # Latest-only fixed suffix (issue #806) — overwrite a single backup
-        # instead of accumulating. Clear any prior backup first so a directory
-        # backup does not nest. SSOT: shell-common/functions/dotfiles_backup.sh
-        rm -rf "${link_name}.original"
-        backup_file "$link_name" "${link_name}.original"
-        rm -rf "$link_name" || log_error_and_exit "기존 파일/디렉토리 제거 실패: $link_name"
-    fi
-
-    log_info "심볼릭 링크 생성: $link_name -> $target"
-    ln -s "$target" "$link_name" || log_error_and_exit "심볼릭 링크 생성 실패: $link_name -> $target"
-}
 
 # --- Main Script Logic ---
 
@@ -103,8 +54,9 @@ if [ ! -f "$PRETTIERRC_SOURCE" ]; then
     log_error_and_exit ".prettierrc 파일이 '${PRETTIERRC_SOURCE}' 경로에 존재하지 않습니다."
 fi
 
-# .prettierrc 심볼릭 링크 생성
-create_symlink "$PRETTIERRC_SOURCE" "$HOME_PRETTIERRC"
+# .prettierrc 심볼릭 링크 생성 (파일/디렉토리면 .prettierrc.original 로 백업)
+dotfiles_ensure_link "$PRETTIERRC_SOURCE" "$HOME_PRETTIERRC" --allow-dir ||
+    log_error_and_exit "심볼릭 링크 생성 실패: $HOME_PRETTIERRC"
 
 # --- Verify Links ---
 
