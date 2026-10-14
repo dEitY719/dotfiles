@@ -340,7 +340,7 @@ _setup_foreign_home_1505() {
 #
 # Shared by `issue_watcher_cron.bats` and `pr_merge_train_cron.bats`, which
 # both fixture the same production rule (`_claude_account_logged_in` in
-# `shell-common/tools/integrations/claude.sh`) — so the fixture tracks that
+# `shell-common/tools/custom/lib/claude_accounts_auth.sh`) — so the fixture tracks that
 # rule from one place rather than two.
 _make_account() {
     mkdir -p "$1"

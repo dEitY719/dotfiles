@@ -36,6 +36,7 @@
 - **check_ssh** — SSH key setup and diagnostics for the dev-server key (WSL...
 - **check_uv** — Comprehensive uv configuration diagnostic script
 - **check_ux_consistency** — Check UX consistency across all bash files
+- **claude_accounts** — Claude Code multi-account management (claude-accounts): s...
 - **cp_wdown** — Copy files from Windows "Downloads" to WSL ~/downloads wi...
 - **delete_claude** — Claude Code CLI Uninstall Script
 - **demo_ux** — Interactive demo of UX library features
@@ -96,7 +97,7 @@
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **work_log** — Companion to post-commit hook for tracking non-developmen...
-- Total: 73 custom tools available
+- Total: 74 custom tools available
 - Location: ~/dotfiles/shell-common/tools/custom
 
 ### usage

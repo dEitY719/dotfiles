@@ -113,13 +113,11 @@ log_error_and_exit() {
 
 # Load mount utilities (provides _is_mounted).
 #
-# shell-common/functions/mount.sh has the standard interactive guard:
-#   case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
-# setup.sh is normally invoked non-interactively, so force the function
-# definitions to load here just like the claude env/integration sources below.
+# shell-common/functions/mount.sh defines its pure helpers (_is_mounted)
+# above its interactive guard, so a plain non-interactive source is enough.
 MOUNT_LIB="${DOTFILES_ROOT}/shell-common/functions/mount.sh"
 if [ -f "$MOUNT_LIB" ]; then
-    DOTFILES_FORCE_INIT=1 . "$MOUNT_LIB"
+    . "$MOUNT_LIB"
 else
     log_error_and_exit "Mount library not found at $MOUNT_LIB"
 fi
@@ -131,13 +129,13 @@ fi
 # Load workspace skill-source helpers (issue #1652), used by
 # _claude_prune_workspace_skills to recognize (and remove) flat workspace
 # skill links in the Claude Code skills dirs — Claude Code loads those skills
-# via plugins (claude/plugin/plugins.json), not via flat links. Same
-# interactive-guard reasoning as mount.sh above. The declare-f assertion is
+# via plugins (claude/plugin/plugins.json), not via flat links. A pure
+# function library with no interactive guard. The declare-f assertion is
 # the #724 lesson: without it a missing definition makes the cleanup silently
 # no-op rather than fail.
 SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
 if [ -f "$SKILL_SOURCES_LIB" ]; then
-    DOTFILES_FORCE_INIT=1 . "$SKILL_SOURCES_LIB"
+    . "$SKILL_SOURCES_LIB"
 else
     log_error_and_exit "Skill sources library not found at $SKILL_SOURCES_LIB"
 fi
@@ -553,16 +551,16 @@ _migrate_legacy_statusline_command
 # the entry when it's missing AND no conflicting Stop hook is configured.
 _migrate_install_gh_issue_flow_stop_hook
 
-# 다중 계정 함수 source (env + integration).
-# 두 파일은 함수 정의 앞에 단순 interactive guard(`case $- in *i*) ;; *)
-# [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac`)를 가지므로,
-# ./setup.sh 가 비대화형으로 호출됐을 때 함수 정의가 스킵된다.
-# 결과적으로 _claude_has_unmigrated_data / _claude_resolve_account 가
-# 미정의로 떨어져 다중 계정 루프(line 419)가 silent skip 됨 (issue #554).
-# 가드 자체는 단순 형태를 유지해야 하므로(`bats/CI` 호환), source 직전
-# prefix 형태로 FORCE_INIT 신호를 한 줄만 켠다.
-DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/env/claude.sh"
-DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.sh"
+# 다중 계정 함수 source (env + account libs, #2146).
+# env/claude.sh 와 tools/custom/lib/claude_accounts_*.sh 는 interactive guard
+# 없는 순수 정의 파일이라 비대화형 setup 에서도 그대로 source 된다. 예전엔
+# tools/integrations/claude.sh 를 guard 우회 신호와 함께 source 했다(#554).
+. "$DOTFILES_ROOT/shell-common/env/claude.sh"
+for _claude_accounts_lib in auth lifecycle skills; do
+    # shellcheck source=/dev/null
+    . "$DOTFILES_ROOT/shell-common/tools/custom/lib/claude_accounts_${_claude_accounts_lib}.sh" || exit 1
+done
+unset _claude_accounts_lib
 
 # settings.local.json 은 dotfiles 가 직접 관리하지 않는다 (#584) — #924 부터
 # 개인 override 의 정식 슬롯. Internal-PC 의 live settings.json 자체도
@@ -573,15 +571,15 @@ DOTFILES_FORCE_INIT=1 . "$DOTFILES_ROOT/shell-common/tools/integrations/claude.s
 # 자동 생성 분기는 #683 F-2 에서 제거.
 
 # Setup-mode SSOT read (issue #571). Reuses the _dotfiles_setup_mode
-# helper sourced from shell-common/tools/integrations/claude.sh (line
-# 478 above) — single source of canonicalisation for both the symbolic
+# helper sourced via tools/custom/lib/claude_accounts_auth.sh (above)
+# — single source of canonicalisation for both the symbolic
 # names emitted by shell-common/setup.sh and any legacy "1|2|3" files
 # from pre-#571 installs.
 _setup_mode=$(_dotfiles_setup_mode)
 
 # 마이그레이션 미수행 가드는 mkdir 보다 먼저 — 그래야 stale ~/.claude 가
 # 가드 디렉토리 생성으로 가려지지 않는다. SSOT: _claude_has_unmigrated_data
-# (shell-common/tools/integrations/claude.sh)
+# (shell-common/tools/custom/lib/claude_accounts_lifecycle.sh)
 #
 # Internal mode bypasses this guard entirely — single-account layout uses
 # ~/.claude/ directly, so "unmigrated data" is the expected state, not an

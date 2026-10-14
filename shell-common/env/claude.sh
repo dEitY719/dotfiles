@@ -6,7 +6,9 @@
 # directory symlink (issue #575) — no bind-mount, no per-skill sync,
 # no auto-mount env vars. See claude/AGENTS.md for the layout.
 
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
+# No interactive guard on purpose (#2146): exports only, no output, and
+# claude/setup.sh plus tools/custom/claude_accounts.sh source it
+# non-interactively for the account defaults.
 
 # AI tool for documentation generation
 # Options: claude (default), agy, codex, or any CLI tool accepting -p/--prompt
