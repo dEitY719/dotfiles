@@ -209,6 +209,9 @@ def main() -> int:
     if _BYPASS_ENABLED:
         return 0
     event = _hook_common.read_hook_input()
+    if not event:
+        _trace("stdin is empty or not a JSON object; allowing")
+        return 0
     if event.get("tool_name") != "Bash":
         return 0
     command = _hook_common.tool_input_command(event)

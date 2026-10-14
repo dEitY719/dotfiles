@@ -11,7 +11,10 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # SHARED FUNCTIONS (bash + zsh)
 # ============================================================
 
-unalias gf 2>/dev/null || true
+# A same-named alias (oh-my-zsh git plugin: gf, gupa, ...) would make zsh
+# expand it inside `name() {` and abort the rest of this file, so drop any
+# alias for every function defined below first.
+unalias gf git_rm_cached gupa gupdel glub gset git_lfs_install git_lfs_track 2>/dev/null || true
 gf() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in -h | --help) git_help sync; return 0 ;; esac
@@ -44,7 +47,6 @@ git_rm_cached() {
     done
 }
 
-unalias gupa 2>/dev/null || true # oh-my-zsh git plugin alias breaks re-source in zsh
 gupa() {
     case "${1:-}" in -h | --help) git_help upstream; return 0 ;; esac
     if [ $# -eq 0 ]; then
