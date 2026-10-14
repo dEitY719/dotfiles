@@ -29,9 +29,9 @@ if [ -z "${CLAUDE_ENABLED_ACCOUNTS+x}" ]; then
 fi
 # _is_mounted / _skill_workspace_root: pure functions, loadable non-interactively.
 # shellcheck source=/dev/null
-. "${SHELL_COMMON}/functions/mount.sh"
+. "${SHELL_COMMON}/functions/mount.sh" || exit 1
 # shellcheck source=/dev/null
-. "${SHELL_COMMON}/functions/skill_sources.sh"
+. "${SHELL_COMMON}/functions/skill_sources.sh" || exit 1
 for _ca_lib in claude_accounts_auth claude_accounts_lifecycle claude_accounts_skills; do
     # shellcheck source=/dev/null
     . "${SHELL_COMMON}/tools/custom/lib/${_ca_lib}.sh" || exit 1

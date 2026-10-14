@@ -37,7 +37,7 @@ agy / Hermes)에만 적용된다. 소스는 로컬에 나란히 clone 된 market
 
 | 도구 | 담당 스크립트 / 함수 | 트리거 |
 |------|----------------------|--------|
-| Claude Code (각 계정) | 플러그인 전용 — `claude/plugin/plugins.json` + `claude/plugin/restore.sh`. `shell-common/tools/integrations/claude.sh` → `_claude_account_setup_one()` + `_claude_prune_workspace_skills()` 는 예전 flat 워크스페이스 링크를 **정리만** 한다 (합성 안 함) | `./claude/setup.sh` |
+| Claude Code (각 계정) | 플러그인 전용 — `claude/plugin/plugins.json` + `claude/plugin/restore.sh`. `shell-common/tools/custom/lib/claude_accounts_{lifecycle,skills}.sh` → `_claude_account_setup_one()` + `_claude_prune_workspace_skills()` 는 예전 flat 워크스페이스 링크를 **정리만** 한다 (합성 안 함) | `./claude/setup.sh` |
 | OpenCode / Gemini / agy / Hermes | `scripts/setup-skills-ssot.sh` → `link_skills_compose()` (#791, agy 는 #1731) | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
 | Codex | `scripts/setup-skills-ssot.sh` → `link_skills_individual_codex()` | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
 | 소스 열거 (#1652 / #1680) | `shell-common/functions/skill_sources.sh` + `collect_skill_sources()` (Claude Code 외 하네스) | 위와 동일 |
