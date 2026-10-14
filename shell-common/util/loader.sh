@@ -11,11 +11,18 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 #   dotfiles_load_all                              # every category, in order
 
 # Direct-exec guard: This file should be sourced, not executed. zsh rebinds $0
-# to the sourced file, so only a non-zsh $0 of loader.sh means direct exec.
-if [ -z "${ZSH_VERSION-}" ] && [ "${0##*/}" = "loader.sh" ]; then
+# to the sourced file, so zsh asks ZSH_EVAL_CONTEXT (has "file" when sourced).
+_loader_direct=0
+if [ -n "${ZSH_VERSION-}" ]; then
+    case "${ZSH_EVAL_CONTEXT-}" in *file*) ;; *) _loader_direct=1 ;; esac
+elif [ "${0##*/}" = "loader.sh" ]; then
+    _loader_direct=1
+fi
+if [ "$_loader_direct" = 1 ]; then
     echo "Error: This file should be sourced, not executed directly" >&2
     exit 1
 fi
+unset _loader_direct
 
 # Configuration
 LOADER_DEBUG="${DEBUG_DOTFILES:-0}"
