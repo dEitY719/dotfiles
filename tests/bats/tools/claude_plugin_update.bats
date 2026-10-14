@@ -65,7 +65,8 @@ teardown() {
 }
 
 @test "update-plugins.sh updates only the default owner's marketplaces and their plugins" {
-    run "$PLUGDIR/update-plugins.sh"
+    # --jobs 1: the exact cross-marketplace call order is only fixed serially.
+    run "$PLUGDIR/update-plugins.sh" --jobs 1
     assert_success
     run cat "$CLAUDE_LOG"
     assert_output "plugin marketplace update gh-flow-skills [cfg=$TEST_TEMP_HOME/.claude-personal]
@@ -93,8 +94,8 @@ plugin update notes@notes-skills --json [cfg=$TEST_TEMP_HOME/.claude-personal]"
 @test "update-plugins.sh --user routes CLAUDE_CONFIG_DIR to that account" {
     run "$PLUGDIR/update-plugins.sh" --user work1
     assert_success
-    run head -n 1 "$CLAUDE_LOG"
-    assert_output "plugin marketplace update gh-flow-skills [cfg=$TEST_TEMP_HOME/.claude-work1]"
+    run grep -Fx "plugin marketplace update gh-flow-skills [cfg=$TEST_TEMP_HOME/.claude-work1]" "$CLAUDE_LOG"
+    assert_success
 }
 
 @test "update-plugins.sh counts updated vs up-to-date and hints a restart" {
@@ -278,4 +279,48 @@ SH
     run "$PLUGDIR/update-plugins.sh" --bogus
     assert_failure 2
     assert_output --partial "Unknown argument: --bogus"
+}
+
+# --- #2198: --jobs N parallel execution ---------------------------------------
+
+@test "update-plugins.sh --jobs 1 and --jobs 4 give identical output and exit code" {
+    export FAKE_CLAUDE_FAIL="notes@notes-skills" FAKE_CLAUDE_UPDATED="gh-flow@gh-flow-skills"
+    run "$PLUGDIR/update-plugins.sh" --all --jobs 1
+    local out1="$output" rc1="$status"
+    [ "$rc1" -eq 1 ]
+    run "$PLUGDIR/update-plugins.sh" --all --jobs 4
+    [ "$status" -eq "$rc1" ]
+    [ "$output" = "$out1" ]
+    DOTFILES_SKILLS_JOBS=2 run "$PLUGDIR/update-plugins.sh" --all
+    [ "$status" -eq "$rc1" ]
+    [ "$output" = "$out1" ]
+}
+
+@test "update-plugins.sh parallel run keeps going past a failure and counts exactly" {
+    export FAKE_CLAUDE_FAIL="notes-skills" FAKE_CLAUDE_UPDATED="gh-flow@gh-flow-skills"
+    run "$PLUGDIR/update-plugins.sh" --all --jobs 4
+    assert_failure 1
+    assert_output --partial "notes-skills: marketplace update failed"
+    assert_output --partial "Marketplaces refreshed: 2/3"
+    assert_output --partial "Plugins updated: 1"
+    assert_output --partial "Plugins up to date: 2"
+    assert_output --partial "Failed: 1"
+    # Each marketplace still runs its own refresh before its plugin update.
+    run grep -n "caveman" "$CLAUDE_LOG"
+    assert_line --index 0 --partial "marketplace update caveman"
+}
+
+@test "update-plugins.sh --dry-run output is identical across --jobs" {
+    run "$PLUGDIR/update-plugins.sh" --dry-run --all --jobs 1
+    local out1="$output"
+    assert_success
+    run "$PLUGDIR/update-plugins.sh" --dry-run --all --jobs 4
+    assert_success
+    [ "$output" = "$out1" ]
+}
+
+@test "update-plugins.sh rejects a non-positive --jobs value" {
+    run "$PLUGDIR/update-plugins.sh" --jobs 0
+    assert_failure 2
+    assert_output --partial "--jobs"
 }

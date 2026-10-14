@@ -63,6 +63,7 @@ OWNER_FILTER="dEitY719"
 ALL_OWNERS=false
 DRY_RUN=false
 USER_ACCOUNT=""
+JOBS="${DOTFILES_SKILLS_JOBS:-4}"
 
 _usage() {
 	cat <<'USAGE'
@@ -76,6 +77,7 @@ Options:
   --all              Every marketplace in the manifest (no owner filter)
   --owner <owner>    Owner to filter marketplaces by (default: dEitY719, case-insensitive)
   --user <account>   Target ~/.claude-<account> (public/external mode)
+  --jobs <N>         Marketplaces processed in parallel (default: $DOTFILES_SKILLS_JOBS or 4; 1 = sequential)
   -h, --help, help   Show this help message
 
 The store is ~/.claude-shared/plugins in every mode. public/external: each
@@ -119,6 +121,14 @@ while [ $# -gt 0 ]; do
 		USER_ACCOUNT="${1#*=}"
 		shift
 		;;
+	--jobs)
+		JOBS="${2:-}"
+		shift $(($# > 1 ? 2 : 1))
+		;;
+	--jobs=*)
+		JOBS="${1#*=}"
+		shift
+		;;
 	-h | --help | help)
 		_usage
 		exit 0
@@ -130,6 +140,13 @@ while [ $# -gt 0 ]; do
 		;;
 	esac
 done
+
+case "$JOBS" in
+'' | *[!0-9]* | 0*)
+	ux_error "--jobs (or DOTFILES_SKILLS_JOBS) must be a positive integer, got '$JOBS'."
+	exit 2
+	;;
+esac
 
 if ! command -v jq >/dev/null 2>&1; then
 	ux_error "jq is required to read the plugin manifest but was not found in PATH."
@@ -303,10 +320,10 @@ _update_plugin() {
 	local id="$1" out rc json outcome="" old="" new="" line
 	if $INSTALLED_PLS_SET && ! _in_list "$id" "$INSTALLED_PLS"; then
 		ux_info "  $id: not installed — skipped (restore.sh installs it)"
-		PL_SKIPPED=$((PL_SKIPPED + 1))
+		_count PL_SKIPPED
 		return 0
 	fi
-	PL_TOTAL=$((PL_TOTAL + 1))
+	_count PL_TOTAL
 	if $DRY_RUN; then
 		ux_info "  $id: would run 'claude plugin update $id' (dry-run)"
 		return 0
@@ -320,7 +337,7 @@ _update_plugin() {
 		done <<EOF
 $out
 EOF
-		FAILED=$((FAILED + 1))
+		_count FAILED
 		return 0
 	fi
 	# stdout and stderr share $out (the error path above shows both), so the
@@ -337,20 +354,20 @@ EOF
 	# which would print a false restart hint.
 	if [ "$outcome" = "up_to_date" ] || { [ -z "$outcome" ] && printf '%s' "$out" | grep -q 'already at the latest'; }; then
 		ux_info "  $id: up to date${new:+ ($new)}"
-		PL_UPTODATE=$((PL_UPTODATE + 1))
+		_count PL_UPTODATE
 	elif [ "$outcome" = "updated" ]; then
 		ux_success "  $id: updated${old:+ $old -> $new}"
-		PL_UPDATED=$((PL_UPDATED + 1))
+		_count PL_UPDATED
 	else
 		ux_warning "  $id: unrecognized update result (${outcome:-no JSON}) — check 'claude plugin update $id' by hand"
-		PL_UNKNOWN=$((PL_UNKNOWN + 1))
+		_count PL_UNKNOWN
 	fi
 }
 
 # _update_scope <label> <scope dir> <filter:true|false> — reads
 # <dir>/{marketplaces,plugins}.json plus their *.local.json overlays.
 _update_scope() {
-	local label="$1" dir="$2" filter="$3" mp_json pl_json names name id
+	local label="$1" dir="$2" filter="$3" mp_json pl_json names name
 	if ! mp_json="$(_union_marketplaces "$dir/marketplaces.json" "$dir/marketplaces.local.json" 2>/dev/null)"; then
 		ux_error "Failed to read marketplace manifest: $dir/marketplaces{,.local}.json"
 		FAILED=$((FAILED + 1))
@@ -371,35 +388,94 @@ _update_scope() {
 		return 0
 	fi
 	ux_section "$label marketplaces"
+	local mps=()
 	while IFS= read -r name; do
-		[ -n "$name" ] || continue
-		if $KNOWN_MPS_SET && ! _in_list "$name" "$KNOWN_MPS"; then
-			# Its plugins cannot be installed without it either — skip both.
-			ux_info "$name: marketplace not registered — skipped (restore.sh adds it)"
-			continue
-		fi
-		MP_TOTAL=$((MP_TOTAL + 1))
-		if $DRY_RUN; then
-			ux_info "$name: would run 'claude plugin marketplace update $name' (dry-run)"
-		elif claude plugin marketplace update "$name" </dev/null >/dev/null 2>&1; then
-			ux_success "$name: marketplace refreshed"
-			MP_REFRESHED=$((MP_REFRESHED + 1))
-		else
-			# Plugins are still attempted: an update against the cached
-			# marketplace is harmless and may report its own failure.
-			ux_warning "$name: marketplace update failed — continuing"
-			FAILED=$((FAILED + 1))
-		fi
-		while IFS= read -r id; do
-			[ -n "$id" ] || continue
-			_update_plugin "$id"
-		done <<EOF
-$(_plugins_of "$pl_json" "$name")
-EOF
+		[ -n "$name" ] && mps+=("$name")
 	done <<EOF
 $names
 EOF
+	SCOPE_PL_JSON="$pl_json"
+	_run_pool ${mps[@]+"${mps[@]}"}
 }
+
+# _update_marketplace <name> — refresh one marketplace, then update its
+# plugins in manifest order. Marketplaces are independent, so _run_pool runs
+# several of these at once (#2198); plugins of one marketplace stay serial.
+_update_marketplace() {
+	local name="$1" id
+	if $KNOWN_MPS_SET && ! _in_list "$name" "$KNOWN_MPS"; then
+		# Its plugins cannot be installed without it either — skip both.
+		ux_info "$name: marketplace not registered — skipped (restore.sh adds it)"
+		_count DONE
+		return 0
+	fi
+	_count MP_TOTAL
+	if $DRY_RUN; then
+		ux_info "$name: would run 'claude plugin marketplace update $name' (dry-run)"
+	elif claude plugin marketplace update "$name" </dev/null >/dev/null 2>&1; then
+		ux_success "$name: marketplace refreshed"
+		_count MP_REFRESHED
+	else
+		# Plugins are still attempted: an update against the cached
+		# marketplace is harmless and may report its own failure.
+		ux_warning "$name: marketplace update failed — continuing"
+		_count FAILED
+	fi
+	while IFS= read -r id; do
+		[ -n "$id" ] || continue
+		_update_plugin "$id"
+	done <<EOF
+$(_plugins_of "$SCOPE_PL_JSON" "$name")
+EOF
+	_count DONE
+}
+
+# _count <VAR> — record one outcome for <VAR>. Jobs run in subshells, so a
+# plain VAR=$((VAR + 1)) would be lost; _run_pool sums these files instead.
+_count() {
+	printf '%s\n' "$1" >>"$RES_FILE"
+}
+
+# _run_pool <marketplace>... — _update_marketplace over the names, at most
+# $JOBS at once. Each job's stdout/stderr/outcomes are buffered under
+# $POOL_DIR and replayed in argument order, so --jobs 1 and --jobs N print the
+# same. POOL_SEQ numbers jobs across both scopes.
+_run_pool() {
+	local first=$((POOL_SEQ + 1)) n k name names=("$@")
+	for name in "$@"; do
+		POOL_SEQ=$((POOL_SEQ + 1))
+		while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+			wait -n
+		done
+		(RES_FILE="$POOL_DIR/$POOL_SEQ.res" _update_marketplace "$name") \
+			>"$POOL_DIR/$POOL_SEQ.out" 2>"$POOL_DIR/$POOL_SEQ.err" &
+	done
+	wait
+	for ((n = first; n <= POOL_SEQ; n++)); do
+		cat "$POOL_DIR/$n.out"
+		cat "$POOL_DIR/$n.err" >&2
+		# A job that died before finishing must not pass as success.
+		if ! grep -qx DONE "$POOL_DIR/$n.res" 2>/dev/null; then
+			ux_error "${names[n - first]}: job exited without a result"
+			FAILED=$((FAILED + 1))
+		fi
+		[ -f "$POOL_DIR/$n.res" ] || continue
+		while IFS= read -r k; do
+			case "$k" in
+			MP_TOTAL | MP_REFRESHED | PL_TOTAL | PL_UPDATED | PL_UPTODATE | PL_UNKNOWN | PL_SKIPPED | FAILED)
+				printf -v "$k" '%d' $((${!k} + 1))
+				;;
+			esac
+		done <"$POOL_DIR/$n.res"
+	done
+}
+
+POOL_SEQ=0
+POOL_DIR="$(mktemp -d)" || {
+	ux_error "mktemp -d failed — cannot buffer job output."
+	exit 1
+}
+trap 'rm -rf "$POOL_DIR"' EXIT
 
 _update_scope "Public" "$SCRIPT_DIR" true
 if $COMPANY_ACTIVE; then
