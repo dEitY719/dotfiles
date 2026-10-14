@@ -226,7 +226,8 @@ _path_without() {
     # 필요한 파일만 임시 트리로 복사한다 (setup_isolated_dotfiles_root 는
     # shell-common 을 실제 트리로 symlink 하므로 여기엔 맞지 않는다).
     local real="$DOTFILES_ROOT" iso="$BATS_TEST_TMPDIR/iso"
-    mkdir -p "$iso/shell-common/tools/custom" "$iso/shell-common/util" "$iso/shell-common/env"
+    # bash/: init.sh validates the tree layout even under DOTFILES_TEST_MODE (#2144).
+    mkdir -p "$iso/bash" "$iso/shell-common/tools/custom" "$iso/shell-common/util" "$iso/shell-common/env"
     cp "$real/$SCRIPT_REL" "$real/shell-common/tools/custom/init.sh" "$iso/shell-common/tools/custom/"
     cp -R "$real/shell-common/tools/ux_lib" "$iso/shell-common/tools/"
     cp "$real/shell-common/util/setup_mode_read.sh" "$iso/shell-common/util/"
