@@ -9,7 +9,7 @@
 # claude_accounts_lifecycle.sh. Function definitions only.
 #
 # Needs: ux_lib, functions/mount.sh (_is_mounted),
-# functions/skill_sources.sh (_skill_workspace_root), and
+# functions/skill_sources.sh (_skill_workspace_root, _skill_under_workspace), and
 # claude_accounts_lifecycle.sh (_claude_backup_original, _claude_link_lib,
 # _claude_accounts_help).
 
@@ -87,7 +87,7 @@ _claude_prepare_skills_dir() {
 #      포함: #1680 이전 ~/dotfiles/claude/skills/*, 사라진 company-skills 등)
 #      스킬을 제공하지 못하므로 지워도 잃는 것이 없다 (#2018). 워크스페이스
 #      루트를 판정할 수 없어도 동작한다.
-#   2. target 이 워크스페이스 루트 안에 있는 링크. 판정은 _claude_under_workspace
+#   2. target 이 워크스페이스 루트 안에 있는 링크. 판정은 _skill_under_workspace
 #      (raw / resolved 양쪽 철자)를 그대로 쓴다 — `claude-accounts link` 가
 #      워크스페이스 entry 로 보고 fan-out 에서 건너뛰는 기준과 같은 정의다.
 # 워크스페이스 밖을 가리키는 정상 링크(graphify, `claude-accounts link` 결과 등),
@@ -107,8 +107,8 @@ _claude_prune_workspace_skills() {
     _claude_prepare_skills_dir "$_cpws_tgt" || return 1
 
     # Defense-in-depth (#724 lesson): a caller that sources this file but not
-    # functions/skill_sources.sh would make _claude_under_workspace reject
-    # every path, and the workspace cleanup would silently no-op. Say so
+    # functions/skill_sources.sh has no workspace rule (_skill_under_workspace),
+    # and the workspace cleanup would silently no-op. Say so
     # instead. Dangling links are still pruned (they need no root).
     _cpws_root=""
     if command -v _skill_workspace_root >/dev/null 2>&1; then
@@ -132,7 +132,8 @@ _claude_prune_workspace_skills() {
             # link would not match the root, so test the resolved spelling too.
             _cpws_raw=$(readlink "$_cpws_existing")
             _cpws_real=$(readlink -f "$_cpws_existing" 2>/dev/null || printf '%s' "$_cpws_raw")
-            if ! _claude_under_workspace "$_cpws_raw" && ! _claude_under_workspace "$_cpws_real"; then
+            if ! _skill_under_workspace "$_cpws_raw" "$_cpws_root" &&
+                ! _skill_under_workspace "$_cpws_real" "$_cpws_root"; then
                 continue
             fi
         fi
@@ -174,18 +175,6 @@ CASD_DIRS
         printf '%s\n' "$HOME/.claude/skills"
     fi
     return 0
-}
-
-# _claude_under_workspace <path> — rc 0 when <path> lies inside the workspace
-# skill root (raw or resolved spelling). Those links belong to compose.
-_claude_under_workspace() {
-    command -v _skill_workspace_root >/dev/null 2>&1 || return 1
-    _cuw_root="$(_skill_workspace_root)" || return 1
-    _cuw_real=$(readlink -f "$_cuw_root" 2>/dev/null || printf '%s' "$_cuw_root")
-    case "${1:-}" in
-        "$_cuw_root"/* | "$_cuw_real"/*) return 0 ;;
-    esac
-    return 1
 }
 
 # _claude_link_one <src_real> <name> <dry> <force> <targets> — fan one source
@@ -247,7 +236,7 @@ _claude_link_list() {
             [ -n "$_cll_l" ] || continue
             _cll_raw=$(readlink "$_cll_l")
             _cll_real=$(readlink -f "$_cll_l" 2>/dev/null || printf '%s' "$_cll_raw")
-            if _claude_under_workspace "$_cll_raw" || _claude_under_workspace "$_cll_real"; then
+            if _skill_under_workspace "$_cll_raw" || _skill_under_workspace "$_cll_real"; then
                 continue
             fi
             if [ -e "$_cll_l" ]; then
@@ -346,7 +335,7 @@ claude_accounts_link() {
         _cal_real=$(readlink -f "$_cal_e")
         # Workspace-backed entries are plugin-loaded in Claude Code and
         # setup prunes their flat links — never fan them out.
-        _claude_under_workspace "$_cal_real" && continue
+        _skill_under_workspace "$_cal_real" && continue
         _cal_n="${_cal_e##*/}"
         # Already the same target in every account — nothing to plan.
         _cal_todo=0

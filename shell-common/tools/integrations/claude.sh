@@ -445,7 +445,7 @@ for _ic_claude_fn in _claude_backup_original _claude_ensure_symlink _claude_link
     _claude_ensure_settings_copy _claude_install_herdr_hook _claude_account_setup_one \
     _claude_status_show_oauth _claude_has_unmigrated_data _claude_accounts_help \
     _claude_prepare_skills_dir _claude_prune_workspace_skills _claude_account_skill_dirs \
-    _claude_under_workspace _claude_link_one _claude_link_list; do
+    _claude_link_one _claude_link_list; do
     eval "${_ic_claude_fn}() { _claude_accounts_load && ${_ic_claude_fn} \"\$@\"; }"
 done
 unset _ic_claude_fn

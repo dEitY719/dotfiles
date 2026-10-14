@@ -15,6 +15,8 @@ GitHub repo ──claude plugin marketplace update + claude plugin update──>
 
 - 작업 사본 열거 SSOT: `shell-common/functions/skill_sources.sh`. 비-Claude 도구 합성:
   `scripts/setup-skills-ssot.sh`.
+- 이 코드들이 사는 위치별 역할표와 "새 기능은 어디에" 결정 트리:
+  [`claude/plugin/README.md`](../../claude/plugin/README.md) (#2147).
 - Claude Code 쪽 목록 SSOT: `claude/plugin/{marketplaces,plugins}.json`. 신규 등록·설치는
   `claude/plugin/restore.sh`, 이미 설치된 것의 갱신은 `claude/plugin/update-plugins.sh`.
 - dEitY719 마켓플레이스에는 `autoUpdate` 가 없다. 명시적으로 갱신하지 않으면 설치 시점
