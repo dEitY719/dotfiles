@@ -688,6 +688,16 @@ _hold_lock() {
     _refute_train_started
 }
 
+@test "pr_merge_train_cron: python3 older than 3.10 fails the tick" {
+    # RHEL 8 ships 3.6: present on PATH, but the version probe answers "too old".
+    printf '#!/bin/sh\nexit 1\n' >"${_BIN_DIR}/python3"
+    chmod +x "${_BIN_DIR}/python3"
+    _run_tick
+    assert_failure
+    assert_output --partial "python3 (>= 3.10) not found"
+    _refute_train_started
+}
+
 @test "pr_merge_train_cron: a broken queue op warns and runs the tick" {
     # The real python3, except that the backoff-next op crashes.
     printf '#!/bin/sh\ncase "$*" in *backoff-next*) exit 1 ;; esac\nexec %s "$@"\n' \
