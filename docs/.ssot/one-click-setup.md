@@ -25,6 +25,20 @@ setup 체인에 편입한다.
   drift 를 만든다. SSOT 복사보다 먼저 실행해 복사가 이기게 하고, 스텁 바이너리로
   bats 테스트를 추가한다.
 
+## 공용 setup lib (`shell-common/lib/setup/`, #2137)
+
+- 새 setup 코드는 자체 symlink/backup/`log_*` 헬퍼를 만들지 않고 이 lib 를 쓴다.
+  `SHELL_COMMON`(또는 `DOTFILES_ROOT`)을 export 한 뒤 필요한 파일만 source 한다
+  (guard-free 라 `DOTFILES_FORCE_INIT=1` 불필요).
+- `link.sh`: `dotfiles_ensure_link <src> <tgt> [--on-mismatch replace|keep] [--allow-dir] [--unmount-legacy]`
+  — 같은 링크면 no-op, 실파일은 `$DOTFILES_ORIGINAL_SUFFIX` 로 1회 백업(기존 백업은
+  덮어쓰지 않음). 실파일로 두어야 하는 설정(settings.json, hermes)은
+  `dotfiles_ensure_copy_once`, 디렉터리는 `dotfiles_ensure_dir`.
+- `mode.sh`: `dotfiles_setup_mode_resolve [--mode m]` — `DOTFILES_SETUP_MODE` env >
+  `--mode` > `~/.dotfiles-setup-mode`. `_dotfiles_setup_mode` 도 env 를 먼저 본다.
+- `runner.sh`: 아래 러너(`tools/ux_lib/step_runner.sh`)의 lib 진입점. `common.sh`:
+  `_setup_lib_root`, ux_lib 로드, `log_*` shim.
+
 ## 출력 규약 (root `setup.sh` 러너)
 
 - 각 서브스크립트는 `run_step <label> <critical|optional> <cmd...>` 로 실행한다.

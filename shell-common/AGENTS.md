@@ -75,6 +75,7 @@ bash 와 zsh 양쪽 loader 에서 source 되는 파일에서:
 | 3rd-party wrapper | `tools/integrations/*.sh` | yes | `npm.sh`, `docker.sh` |
 | Executable script | `tools/custom/*.sh` (+ `lib/*.sh`) | **no** | `install_npm.sh` · `aicron.sh` + `lib/aicron_*.sh` · `session_doctor_cron.sh` + `lib/session_doctor_*.sh` · `my_help_preview.sh` (my-help 팔레트 preview) · `diagnose_internal.sh` (사내 PC read-only 진단, #2099) |
 | Guard-free pure lib | `util/setup_mode_read.sh`, `util/win_home.sh` | **no** (각 소비자가 직접 source — hook/스크립트 포함) | `_dotfiles_setup_mode`, `_dotfiles_setup_mode_proxy`, `_win_home` |
+| Setup lib (pure) | `lib/setup/{common,link,runner,mode}.sh` | **no** (setup 스크립트가 `SHELL_COMMON`/`DOTFILES_ROOT` export 후 직접 source) | `dotfiles_ensure_link`, `dotfiles_ensure_copy_once`, `dotfiles_setup_mode_resolve`, `step_run` (#2137) |
 | Shell-specific | `bash/*.bash` 또는 `zsh/*.zsh` | varies | bash prompt setup |
 | Project-specific | `projects/<name>/*.sh` | yes | finrx utilities |
 
