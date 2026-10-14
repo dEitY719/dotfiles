@@ -10,7 +10,7 @@ LIB="${BATS_TEST_DIRNAME}/../../../shell-common/lib/agent_launch.sh"
 
 run_lib() {
     run bash --noprofile --norc -c "
-        tmux() { printf 'TMUX %s\n' \"\$*\"; [ \"\$1\" = new-session ] && echo 0; [ \"\$1\" = has-session ] && return 1; return 0; }
+        tmux() { printf 'TMUX %s\n' \"\$*\" >&2; [ \"\$1\" = new-session ] && echo 0; [ \"\$1\" = has-session ] && return 1; return 0; }
         . '${LIB}'
         $1
     "
@@ -64,7 +64,8 @@ run_lib() {
 }
 
 @test "_agent_tmux_focus attaches outside tmux, switches inside" {
-    run_lib 'unset TMUX; _agent_tmux_focus s w; TMUX=x _agent_tmux_focus s w'
+    # stdout stub: switch-client's stderr is discarded by design.
+    run_lib 'tmux() { echo "TMUX $*"; }; unset TMUX; _agent_tmux_focus s w; TMUX=x _agent_tmux_focus s w'
     assert_line --index 0 "TMUX attach -t s"
     assert_line --index 1 "TMUX switch-client -t s:w"
 }
