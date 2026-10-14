@@ -67,3 +67,21 @@ verdicts() {
     [ "$status" -eq 1 ]
     [[ "$output" == *"emoji:bash/main.bash"* ]]
 }
+
+@test "bash-only \${BASH_*} in a #!/bin/sh util file: both fail" {
+    mkdir -p "$REPO/shell-common/util"
+    verdicts shell-common/util/x.sh '#!/bin/sh\necho "${BASH_VERSION-}"\n'
+    [ "$PRE" = fail ]
+    [ "$ALL" = fail ]
+}
+
+@test "stale baseline key for a judged file fails until removed" {
+    verdicts bash/main.bash '#!/bin/bash\n# clean\n'
+    echo 'emoji:bash/main.bash' >"$REPO/git/hooks/checks/baseline.txt"
+    run "$REPO/git/hooks/checks/run_all.sh" bash/main.bash
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"emoji:bash/main.bash  (stale"* ]]
+    # A key for a file not in this run is never judged stale (chunked runs).
+    run "$REPO/git/hooks/checks/run_all.sh" claude/settings.json
+    [ "$status" -eq 0 ]
+}

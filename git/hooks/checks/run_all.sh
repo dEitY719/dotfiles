@@ -45,10 +45,25 @@ for file in "$@"; do
     done
 done
 
-new=$(grep -vxF -f <(grep -v '^#' "$BASELINE" 2>/dev/null) "$found" 2>/dev/null || true)
-[ -z "$new" ] && exit 0
-while IFS= read -r key; do
-    echo "$key"
-    grep -F -- "${key#*:}" "$tmpdir/${key%%:*}.out" | head -n 5 | sed 's/^/    /'
-done <<<"$new"
+grep -v '^#' "$BASELINE" 2>/dev/null | grep . >"$tmpdir/baseline"
+new=$(grep -vxF -f "$tmpdir/baseline" "$found")
+# A baseline key for a file judged in this run that no longer reproduces is
+# stale: it would hide a later regression, so it fails until removed.
+printf '%s\n' "$@" >"$tmpdir/files"
+stale=$(awk 'FILENAME == ARGV[1] { judged[$0] = 1; next }
+    FILENAME == ARGV[2] { hit[$0] = 1; next }
+    (substr($0, index($0, ":") + 1) in judged) && !($0 in hit)' "$tmpdir/files" "$found" "$tmpdir/baseline")
+[ -z "$new$stale" ] && exit 0
+# One write per run so parallel chunks (golden rules) do not interleave lines.
+report=$(
+    while IFS= read -r key; do
+        [ -n "$key" ] || continue
+        echo "$key"
+        grep -F -- "${key#*:}" "$tmpdir/${key%%:*}.out" | head -n 5 | sed 's/^/    /'
+    done <<<"$new"
+    while IFS= read -r key; do
+        [ -n "$key" ] && echo "$key  (stale: no longer reproduces, remove it from baseline.txt)"
+    done <<<"$stale"
+)
+printf '%s\n' "$report"
 exit 1
