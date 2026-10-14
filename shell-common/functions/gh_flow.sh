@@ -732,7 +732,7 @@ gh_flow_help() {
 # Orchestrator
 # ============================================================================
 
-gh_flow() {
+_gh_flow_main() {
     # zsh compatibility
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -1140,6 +1140,14 @@ _gh_flow_worker() {
 # ============================================================================
 # Aliases (hyphenated command names per shell-common convention)
 # ============================================================================
+
+# Public entry (#2195): the PATH executable tools/custom/gh_flow.sh (also
+# ~/.local/bin/gh-flow) sources this file and calls _gh_flow_main; this thin
+# wrapper keeps the `gh_flow` / `gh-flow` names in interactive shells.
+gh_flow() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_flow.sh
+    "$_exe" "$@"
+}
 
 alias gh-flow='gh_flow'
 alias gh-flow-help='gh_flow_help'

@@ -1329,7 +1329,7 @@ _gh_pr_review_disarm_trap() {
 }
 
 # gh_pr_review — orchestrator. Maps SKILL.md Steps 1–7 to this function.
-gh_pr_review() {
+_gh_pr_review_main() {
     # zsh compatibility — keep the rest of the function POSIX-shaped.
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -1625,6 +1625,14 @@ EOF
 # ============================================================================
 # Aliases — hyphenated command names per shell-common convention
 # ============================================================================
+
+# Public entry (#2195): the PATH executable tools/custom/gh_pr_review.sh (also
+# ~/.local/bin/gh-pr-review) sources this file and calls _gh_pr_review_main; this thin
+# wrapper keeps the `gh_pr_review` / `gh-pr-review` names in interactive shells.
+gh_pr_review() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_review.sh
+    "$_exe" "$@"
+}
 
 alias gh-pr-review='gh_pr_review'
 alias gh-pr-review-help='gh_pr_review_help'

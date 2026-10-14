@@ -1,0 +1,242 @@
+#!/bin/bash
+# shell-common/tools/custom/ai_setup.sh
+# ai-setup — create git worktrees + tmux agent sessions in one step.
+#
+# PATH executable since #2195 (~/.local/bin/ai-setup via config/symlinks.conf):
+# it never changes the parent shell's state (docs/.ssot/command-delivery-model.md
+# §3), so AI agents' non-interactive `bash -c 'ai-setup'` resolve it too.
+# functions/ai_setup.sh keeps the `ai_setup` / `ai-setup` names as a thin wrapper.
+
+# readlink -f: resolve the ~/.local/bin symlink to find init.sh next to the source.
+# shellcheck source=/dev/null
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
+# shellcheck source=/dev/null
+. "${SHELL_COMMON}/lib/agent_launch.sh" || exit 1 # _ts_known_agent / _tmux_add_agent_window
+# shellcheck source=/dev/null
+DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/functions/git_worktree.sh" || exit 1
+# shellcheck source=/dev/null
+DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/functions/git_worktree_spawn.sh" || exit 1 # git_worktree_spawn
+
+main() {
+    local default_agent=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help|help)
+                ux_header "ai-setup - workspace orchestrator"
+                ux_info "Usage: ai-setup [--ai <agent>]"
+                ux_info ""
+                ux_info "Interactive setup that creates git worktrees and"
+                ux_info "tmux sessions with 3-pane windows in one step."
+                ux_info ""
+                ux_info "Options:"
+                ux_info "  --ai <agent>   Pre-fill the 'Tmux window agents' prompt"
+                ux_info "                    default (claude, codex, agy,"
+                ux_info "                    opencode, cursor, copilot)."
+                ux_info ""
+                ux_info "Steps:"
+                ux_info "  1. Enter worktree names   (free-form: issue-11 login-fix)"
+                ux_info "  2. Enter tmux windows     (AI agents: claude codex agy)"
+                ux_info "  3. Worktrees + tmux sessions are created automatically"
+                ux_info ""
+                ux_info "Note: worktree names are free-form (task/issue/feature slugs)."
+                ux_info "      tmux windows must be AI agent names (they run <agent>-yolo)."
+                ux_info ""
+                ux_info "Requirements: git, tmux, run from main repo (not worktree)"
+                return 0
+                ;;
+            --ai)
+                if [ -z "${2:-}" ]; then
+                    ux_error "--ai requires an argument"
+                    return 1
+                fi
+                if ! _ts_known_agent "$2"; then
+                    ux_error "Unknown agent: $2"
+                    ux_info "Available: claude, codex, agy, opencode, cursor, copilot"
+                    return 1
+                fi
+                default_agent="$2"
+                shift 2
+                ;;
+            "")
+                shift
+                ;;
+            *)
+                ux_warning "Unexpected argument: $1"
+                ux_info "Usage: ai-setup [--ai <agent>]"
+                ux_info "Run 'ai-setup --help' for details."
+                return 1
+                ;;
+        esac
+    done
+
+    # --- Guards ---
+    ux_require "git" || return 1
+    ux_require "tmux" || return 1
+
+    local git_common git_dir
+    git_common="$(git rev-parse --git-common-dir 2>/dev/null)" || \
+        { ux_error "Not inside a git repository"; return 1; }
+    git_dir="$(git rev-parse --git-dir)"
+    if [ "$git_dir" != "$git_common" ]; then
+        ux_error "Cannot run from inside a worktree. Run from the main repo."
+        return 1
+    fi
+
+    local project parent repo_root
+    project="$(basename "$(git rev-parse --show-toplevel)")"
+    parent="$(dirname "$(git rev-parse --show-toplevel)")"
+    repo_root="$(git rev-parse --show-toplevel)"
+
+    ux_header "AI Workspace Setup"
+    ux_info "Project: $project ($repo_root)"
+    echo
+
+    # --- Step 1: Read worktree names (free-form) ---
+    local wt_input="" a
+    while [ -z "$wt_input" ]; do
+        printf "%s❯%s Worktree names (space-separated, e.g. issue-11 login-fix): " \
+            "${UX_BOLD}${UX_INFO}" "${UX_RESET}"
+        read -r wt_input || return 1
+        if [ -z "$wt_input" ]; then
+            ux_error "At least one name required."
+        fi
+    done
+
+    # Validate worktree names (free-form slug; no '/', no spaces, no leading dash)
+    local wt_names="" wt_count=0
+    for a in $wt_input; do
+        case "$a" in
+            -* | */* | *" "*)
+                ux_error "Invalid name: '$a' (no '/', no spaces, no leading dash)"
+                return 1
+                ;;
+        esac
+        wt_names="$wt_names $a"
+        wt_count=$((wt_count + 1))
+    done
+    wt_names="${wt_names# }"
+
+    # --- Step 2: Read tmux window agents (still AI-only: they run <agent>-yolo) ---
+    local win_input="" win_prompt_hint="e.g. claude codex"
+    if [ -n "$default_agent" ]; then
+        win_prompt_hint="Enter for default: $default_agent"
+    fi
+    while [ -z "$win_input" ]; do
+        printf "%s❯%s Tmux window agents (space-separated, %s): " \
+            "${UX_BOLD}${UX_INFO}" "${UX_RESET}" "$win_prompt_hint"
+        read -r win_input || return 1
+        if [ -z "$win_input" ] && [ -n "$default_agent" ]; then
+            win_input="$default_agent"
+            break
+        fi
+        if [ -z "$win_input" ]; then
+            ux_error "At least one window required."
+        fi
+    done
+
+    # Validate window agents (must be known AI agents)
+    local win_agents="" win_count=0
+    for a in $win_input; do
+        if ! _ts_known_agent "$a"; then
+            ux_error "Unknown agent: $a"
+            ux_info "Available: claude, codex, agy, opencode, cursor, copilot"
+            return 1
+        fi
+        win_agents="$win_agents $a"
+        win_count=$((win_count + 1))
+    done
+    win_agents="${win_agents# }"
+
+    echo
+
+    # --- Step 3: Create worktrees ---
+    ux_info "Creating worktrees..."
+    local wt_paths="" wt_created=0 name existing_path new_path new_branch dir
+    for name in $wt_names; do
+        # Check if worktree already exists for this name
+        existing_path=""
+        for dir in "$parent/${project}-${name}"-*/; do
+            if [ -d "$dir" ]; then
+                existing_path="${dir%/}"
+                break
+            fi
+        done
+
+        if [ -n "$existing_path" ]; then
+            ux_warning "  $(basename "$existing_path") already exists — skipping"
+            wt_paths="$wt_paths $existing_path"
+        else
+            git_worktree_spawn "$name" >/dev/null
+            # Discover path from git worktree list (reliable across any index)
+            new_path=""
+            while IFS= read -r line; do
+                case "$line" in
+                    "worktree "*"-${name}-"*)
+                        new_path="${line#worktree }" ;;
+                esac
+            done <<EOF
+$(git worktree list --porcelain)
+EOF
+            if [ -n "$new_path" ]; then
+                new_branch="$(git -C "$new_path" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+                ux_success "  $(basename "$new_path") ($new_branch)"
+                wt_paths="$wt_paths $new_path"
+                wt_created=$((wt_created + 1))
+            else
+                ux_error "  Failed to create worktree for $name"
+            fi
+        fi
+    done
+    wt_paths="${wt_paths# }"
+
+    echo
+
+    # --- Step 4: Create tmux sessions + windows ---
+    ux_info "Creating tmux sessions..."
+    local session_count=0 total_windows=0 wt_path session_name win_display win_agent
+    for wt_path in $wt_paths; do
+        session_name="$(basename "$wt_path")"
+
+        # Skip if session already exists
+        if tmux has-session -t "=$session_name" 2>/dev/null; then
+            ux_warning "  $session_name: session exists — skipping"
+            continue
+        fi
+
+        win_display=""
+        for win_agent in $win_agents; do
+            _tmux_add_agent_window "$session_name" "$win_agent" "$wt_path"
+            if [ -z "$win_display" ]; then
+                win_display="$win_agent"
+            else
+                win_display="$win_display | $win_agent"
+            fi
+            total_windows=$((total_windows + 1))
+        done
+
+        ux_success "  $session_name: $win_display"
+        session_count=$((session_count + 1))
+    done
+
+    echo
+
+    # Restore terminal state (tmux session creation can disable onlcr)
+    stty onlcr 2>/dev/null || true
+
+    # --- Step 5: Summary ---
+    ux_header "Setup complete"
+    ux_info "  $wt_count worktrees, $session_count sessions, $total_windows windows total"
+
+    # Show how to connect
+    if [ -z "$TMUX" ]; then
+        echo
+        ux_info "Attach: tmux attach"
+    else
+        echo
+        ux_info "Switch: Ctrl+b s (session list)"
+    fi
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+    main "$@"
+fi

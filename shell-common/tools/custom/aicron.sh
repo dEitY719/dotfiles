@@ -47,11 +47,15 @@
 # rejects outright as a bad substitution, and NF-3 requires this file to run
 # under /bin/sh.
 
-# realpath is not guaranteed to exist; this idiom is.
-_AICRON_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+# PATH executable since #2195 (~/.local/bin/ai-cron via config/symlinks.conf):
+# $0 may be that symlink, so resolve it first. realpath is not guaranteed to
+# exist; readlink -f is (GNU, busybox, macOS 12.3+), and plain $0 is the
+# fallback when it is missing.
+_AICRON_SRC="$(readlink -f -- "$0" 2>/dev/null)" || _AICRON_SRC="$0"
+_AICRON_DIR="$(CDPATH='' cd -- "$(dirname -- "${_AICRON_SRC}")" && pwd)"
 # The absolute path cron will invoke. It goes into the marker block verbatim,
 # so it must not depend on anyone's PATH or cwd.
-_AICRON_SELF="${_AICRON_DIR}/$(basename -- "$0")"
+_AICRON_SELF="${_AICRON_DIR}/$(basename -- "${_AICRON_SRC}")"
 
 # Derived from this file's own location rather than inherited, and
 # unconditionally so — the same rule init.sh applies. A `run` inherits
@@ -394,7 +398,9 @@ main() {
     esac
 }
 
-if [ "${0##*/}" = "aicron.sh" ]; then
+# The second test covers the ~/.local/bin symlink (#2195); the first is the
+# literal basename guard git/hooks/checks/direct_exec_guard_check.sh looks for.
+if [ "${0##*/}" = "aicron.sh" ] || [ "${_AICRON_SELF##*/}" = "aicron.sh" ]; then
     main "$@"
     exit $?
 fi

@@ -876,7 +876,7 @@ gh_pr_approve_help() {
 # Orchestrator
 # ============================================================================
 
-gh_pr_approve() {
+_gh_pr_approve_main() {
     # zsh compatibility
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -1419,6 +1419,14 @@ _gh_pr_approve_worker() {
 # ============================================================================
 # Aliases (hyphenated command names per shell-common convention)
 # ============================================================================
+
+# Public entry (#2195): the PATH executable tools/custom/gh_pr_approve.sh (also
+# ~/.local/bin/gh-pr-approve) sources this file and calls _gh_pr_approve_main; this thin
+# wrapper keeps the `gh_pr_approve` / `gh-pr-approve` names in interactive shells.
+gh_pr_approve() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_approve.sh
+    "$_exe" "$@"
+}
 
 alias gh-pr-approve='gh_pr_approve'
 alias gh-pr-approve-help='gh_pr_approve_help'

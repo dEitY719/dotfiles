@@ -19,8 +19,11 @@
 # Sourced from inside a function: init.sh must keep using plain assignments and
 # `export` at top level — a `local`/`declare` there would vanish on return.
 cron_bootstrap() {
+    # readlink -f: $0 may be a ~/.local/bin symlink (#2195); readlink can be
+    # missing from a stripped PATH (tests), so fall back to the plain $0.
+    _cron_self=$(readlink -f "$0" 2>/dev/null) || _cron_self=$0
     # shellcheck source=/dev/null
-    . "$(dirname "$0")/init.sh"
+    . "$(dirname "$_cron_self")/init.sh"
 }
 
 # Single-instance guard for one cron tick.

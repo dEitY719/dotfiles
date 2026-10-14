@@ -174,7 +174,7 @@ gh_pr_reply_help() {
 # Orchestrator
 # ============================================================================
 
-gh_pr_reply() {
+_gh_pr_reply_main() {
     # zsh compatibility
     if [ -n "${ZSH_VERSION-}" ]; then
         emulate -L sh
@@ -519,6 +519,14 @@ _gh_pr_reply_worker() {
 # ============================================================================
 # Aliases (hyphenated command names per shell-common convention)
 # ============================================================================
+
+# Public entry (#2195): the PATH executable tools/custom/gh_pr_reply.sh (also
+# ~/.local/bin/gh-pr-reply) sources this file and calls _gh_pr_reply_main; this thin
+# wrapper keeps the `gh_pr_reply` / `gh-pr-reply` names in interactive shells.
+gh_pr_reply() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_reply.sh
+    "$_exe" "$@"
+}
 
 alias gh-pr-reply='gh_pr_reply'
 alias gh-pr-reply-help='gh_pr_reply_help'

@@ -1,30 +1,24 @@
 #!/bin/bash
-# shell-common/functions/ensure_ollama_deps.sh
+# shell-common/tools/custom/ensure-ollama-deps.sh
 # Ollama Dependency Installer
 # Single Responsibility: Install system dependencies required for Ollama
 # Does NOT install Ollama itself - that's install_ollama.sh's job
 
 set -e
 
-# Load UX library - use dynamic path detection with fallback
-_ux_lib_path="${SHELL_COMMON:-$(dirname "$(dirname "$(dirname "$0")")")}/tools/ux_lib/ux_lib.sh"
-if [ -f "$_ux_lib_path" ]; then
-    source "$_ux_lib_path" 2>/dev/null || {
-        echo "Warning: Failed to source UX library at $_ux_lib_path" >&2
-    }
-else
-    # Define minimal fallback functions if UX library not available
-    ux_header() { echo ""; echo "=== $1 ==="; echo ""; }
-    ux_section() { echo ""; echo "## $1"; }
-    ux_error() { echo "❌ Error: $*" >&2; }
-    ux_warning() { echo "⚠️  Warning: $*" >&2; }
-    ux_info() { echo "ℹ️  $*"; }
-    ux_success() { echo "✅ $*"; }
-    ux_bullet() { echo "  • $*"; }
-fi
-unset _ux_lib_path
+# PATH executable since #2195 (~/.local/bin/ensure-ollama-deps via config/symlinks.conf).
+# Resolve the ~/.local/bin symlink so init.sh is found next to the real file.
+# shellcheck source=/dev/null
+. "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
+
+ensure_ollama_deps_help() {
+    ux_usage "ensure-ollama-deps" "" "Install the system packages Ollama needs (zstd, curl)"
+    ux_bullet "Linux/WSL only: apt-get, dnf or pacman via sudo"
+    ux_bullet "Does not install Ollama itself: run install-ollama next"
+}
 
 main() {
+    case "${1:-}" in -h | --help) ensure_ollama_deps_help; return 0 ;; esac
     ux_header "Ollama System Dependencies Installer"
     echo ""
     

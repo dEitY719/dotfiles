@@ -5,7 +5,8 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 aicron() {
-    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/aicron.sh" "$@"
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/aicron.sh
+    "$_exe" "$@"
 }
 
 alias ai-cron='aicron'

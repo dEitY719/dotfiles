@@ -6,16 +6,6 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ensure_ollama_deps() {
-    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    # Try SHELL_COMMON first, then fallback to default location
-    local script_path="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/ensure-ollama-deps.sh"
-
-    if [ ! -f "$script_path" ]; then
-        echo "Error: ensure-ollama-deps.sh not found at $script_path" >&2
-        echo "Hint: Ensure SHELL_COMMON is set or dotfiles is at ~/dotfiles" >&2
-        echo "      Current SHELL_COMMON=${SHELL_COMMON:-<not set>}" >&2
-        return 1
-    fi
-
-    bash "$script_path" "$@"
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/ensure-ollama-deps.sh
+    "$_exe" "$@"
 }

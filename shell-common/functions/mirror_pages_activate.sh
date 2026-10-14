@@ -6,11 +6,8 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 mirror_pages_activate() {
-    if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
-        mirror_pages_activate_help
-        return 0
-    fi
-    "${SHELL_COMMON}/tools/custom/mirror-pages-activate.sh" "$@"
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mirror-pages-activate.sh
+    "$_exe" "$@"
 }
 
 alias mirror-pages-activate='mirror_pages_activate'

@@ -58,7 +58,8 @@ _run_probe() {
 }
 
 @test "claude_plugin_list: private sub-functions exist (_cpl_help, _cpl_resolve_dir)" {
-    run _run_probe 'type _cpl_help && type _cpl_resolve_dir'
+    # #2195: the helpers live in the PATH executable; sourcing it skips main.
+    run _run_probe ". '${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/claude_plugin_list.sh'; type _cpl_help && type _cpl_resolve_dir"
     assert_success
 }
 

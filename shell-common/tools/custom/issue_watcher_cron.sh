@@ -27,7 +27,7 @@ set -u
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib,
 # under DOTFILES_TEST_MODE=1 too) and the shared cron lock (#2144).
 # shellcheck source=/dev/null
-. "$(dirname "$0")/lib/cron_common.sh" && cron_bootstrap || exit 1
+. "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")/lib/cron_common.sh" && cron_bootstrap || exit 1
 _IW_SHELL_COMMON="${SHELL_COMMON}"
 
 # The herdr agent-name SSOT (#1530). Sourced at file scope rather than lazily

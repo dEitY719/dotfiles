@@ -233,7 +233,7 @@ HELP
 #   $1: source path (required)
 #   $2: target path (required)
 # Returns: 0 on success, 1 on failure
-mount_add() {
+_mount_add_main() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local source="$1"
     local target="$2"
@@ -296,6 +296,13 @@ mount_add() {
     fi
 }
 
+# mount_add — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/mount_add.sh (also ~/.local/bin), never in this shell.
+mount_add() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mount_add.sh
+    "$_exe" "$@"
+}
+
 # Internal: Show help for mount_show function
 _mount_show_help() {
     if type ux_header >/dev/null 2>&1; then
@@ -341,7 +348,7 @@ HELP
 # Parameters:
 #   $1: mount path to check (optional, defaults to all ~/.claude mounts)
 # Returns: 0 if mounted and displayed, 1 if command not available or error
-mount_show() {
+_mount_show_main() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local mount_path="${1}"
 
@@ -408,6 +415,13 @@ mount_show() {
             return 1
         fi
     fi
+}
+
+# mount_show — thin wrapper (#2195): the logic above runs in the PATH executable
+# tools/custom/mount_show.sh (also ~/.local/bin), never in this shell.
+mount_show() {
+    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mount_show.sh
+    "$_exe" "$@"
 }
 
 # ============================================================================

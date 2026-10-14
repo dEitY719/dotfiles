@@ -6,6 +6,8 @@
 # per-project steps (.gitignore, CLAUDE.md + hook, first graph) run in [dir].
 #
 # Usage: graphify_setup.sh [dir]   (alias: graphify-setup)
+#
+# PATH executable since #2195 (~/.local/bin/graphify-setup via config/symlinks.conf).
 
 SHELL_COMMON="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../.." && pwd)"
 source "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
