@@ -41,7 +41,8 @@
 set -u
 
 # Initialize common tools environment (DOTFILES_ROOT/SHELL_COMMON + ux_lib,
-# under DOTFILES_TEST_MODE=1 too) and the shared cron lock (#2144).
+# under DOTFILES_TEST_MODE=1 too) via the shared cron bootstrap (#2144). The
+# fd-8 write lock below stays its own: cron_acquire_lock is a tick guard.
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib/cron_common.sh" && cron_bootstrap || exit 1
 _SAP_SHELL_COMMON="${SHELL_COMMON}"
