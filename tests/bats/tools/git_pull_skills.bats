@@ -25,6 +25,7 @@ teardown() {
     assert_output --partial "Usage: git-pull-skills.sh"
     assert_output --partial "--dry-run"
     assert_output --partial "--target"
+    assert_output --partial "--jobs"
 }
 
 @test "git-pull-skills.sh fails gracefully on missing target" {
@@ -259,3 +260,86 @@ teardown() {
     [ -z "$(git -C "$local_repo" status --porcelain)" ]
 }
 
+
+# --- #2198: --jobs N parallel execution ---------------------------------------
+
+# _mk_clone <name> — bare remote + clone under $SKILLS on main, one commit.
+_mk_clone() {
+    local name="$1" remote="${TEST_TEMP_HOME}/remotes/$1.git"
+    mkdir -p "${TEST_TEMP_HOME}/remotes"
+    git init -q --bare -b main "$remote"
+    git clone -q "$remote" "$SKILLS/$name" 2>/dev/null
+    (
+        cd "$SKILLS/$name"
+        git checkout -q -b main 2>/dev/null || true
+        git config user.name "Test"
+        git config user.email "test@example.com"
+        echo v1 >f.txt
+        git add f.txt
+        git commit -qm c1
+        git push -q origin main
+    )
+}
+
+_mk_mixed_skills() {
+    SKILLS="${TEST_TEMP_HOME}/skills"
+    mkdir -p "$SKILLS"
+    _mk_clone alpha
+    _mk_clone bravo
+    _mk_clone charlie
+    _mk_clone delta
+    _mk_clone echo
+    # bravo: dirty; charlie: broken origin (fetch fails); delta: not git.
+    echo dirty >>"$SKILLS/bravo/f.txt"
+    git -C "$SKILLS/charlie" remote set-url origin "${TEST_TEMP_HOME}/missing.git"
+    rm -rf "$SKILLS/delta/.git"
+}
+
+@test "git-pull-skills.sh --jobs 1 and --jobs 4 give identical output and exit code" {
+    _mk_mixed_skills
+    run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS" --jobs 1
+    local out1="$output" rc1="$status"
+    run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS" --jobs 4
+    [ "$status" -eq "$rc1" ]
+    [ "$output" = "$out1" ]
+    DOTFILES_SKILLS_JOBS=3 run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS"
+    [ "$status" -eq "$rc1" ]
+    [ "$output" = "$out1" ]
+}
+
+@test "git-pull-skills.sh parallel run keeps going past a failed repo and counts exactly" {
+    _mk_mixed_skills
+    run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS" --jobs 4
+    assert_failure 1
+    assert_output --partial "charlie: git fetch origin failed"
+    assert_output --partial "Total scanned: 5"
+    assert_output --partial "Up to date: 2"
+    assert_output --partial "Skipped (dirty): 1"
+    assert_output --partial "Skipped (not git): 1"
+    assert_output --partial "Failed: 1"
+    # Replayed in alphabetical order regardless of completion order.
+    local order
+    order="$(printf '%s\n' "$output" | grep -oE '^[A-Za-z: ]*(alpha|bravo|charlie|delta|echo):' | grep -oE '(alpha|bravo|charlie|delta|echo)' | paste -sd, -)"
+    [ "$order" = "alpha,bravo,charlie,delta,echo" ]
+}
+
+@test "git-pull-skills.sh ignores hidden directories such as .claude" {
+    SKILLS="${TEST_TEMP_HOME}/skills"
+    mkdir -p "$SKILLS/.claude"
+    _mk_clone alpha
+    run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS"
+    assert_success
+    refute_output --partial ".claude"
+    refute_output --partial "not a git repository"
+    assert_output --partial "Total scanned: 1"
+}
+
+@test "git-pull-skills.sh rejects a non-positive --jobs value" {
+    SKILLS="${TEST_TEMP_HOME}/skills"
+    mkdir -p "$SKILLS"
+    run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS" --jobs 0
+    assert_failure 2
+    assert_output --partial "--jobs"
+    DOTFILES_SKILLS_JOBS=abc run bash "$SCRIPT_UNDER_TEST" --target "$SKILLS"
+    assert_failure 2
+}
