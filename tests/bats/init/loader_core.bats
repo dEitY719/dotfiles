@@ -120,6 +120,9 @@ _zsh_codex() {
     run env DOTFILES_FORCE_INIT=1 bash "$loader"
     assert_failure
     assert_output --partial 'should be sourced, not executed'
+    run env DOTFILES_FORCE_INIT=1 zsh --no-rcs "$loader"
+    assert_failure
+    assert_output --partial 'should be sourced, not executed'
     run env DOTFILES_FORCE_INIT=1 bash -c ". '$loader' && command -v load_category"
     assert_success
     run env DOTFILES_FORCE_INIT=1 zsh --no-rcs -c ". '$loader' && whence load_category"
