@@ -699,6 +699,17 @@ _hold_lock() {
     _assert_logged "herdr agent prompt"
 }
 
+@test "pr_merge_train_cron: a broken queue op warns and runs the tick" {
+    # The real python3, except that the backoff-next op crashes.
+    printf '#!/bin/sh\ncase "$*" in *backoff-next*) exit 1 ;; esac\nexec %s "$@"\n' \
+        "$(command -v python3)" >"${_BIN_DIR}/python3"
+    chmod +x "${_BIN_DIR}/python3"
+    _run_tick
+    assert_success
+    assert_output --partial "No backoff verdict"
+    _assert_logged "herdr agent prompt"
+}
+
 @test "pr_merge_train_cron: an unknown PMT_QUEUE_IMPL fails the tick" {
     _run_tick PMT_QUEUE_IMPL=perl
     assert_failure
