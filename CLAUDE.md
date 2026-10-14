@@ -1,6 +1,8 @@
+@AGENTS.md
+
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Claude Code-only guidance. Shared project rules (Golden Rules, Context Map, graphify rules) come from the `@AGENTS.md` import above — do not restate them here.
 
 ## Commands
 
@@ -41,7 +43,7 @@ See `shell-common/AGENTS.md` → "Adding a New Tool Integration (3-Step Pattern)
 
 ### UX Library
 
-All output must use `ux_lib` functions (`ux_header`, `ux_success`, `ux_error`, `ux_info`). Never use raw `echo`, `printf`, or `tput` in app scripts. Source: `shell-common/tools/ux_lib/ux_lib.sh`. Guidelines: `shell-common/tools/ux_lib/UX_GUIDELINES.md`.
+Output rule: `AGENTS.md` Golden Rules. Source: `shell-common/tools/ux_lib/ux_lib.sh`. Guidelines: `shell-common/tools/ux_lib/UX_GUIDELINES.md`.
 
 ### Git Hooks
 
@@ -68,41 +70,25 @@ Claude Code merges this with `settings.json` natively (local wins). Running `/mo
 
 ## Critical Rules
 
-**POSIX compatibility & cross-shell sourcing** — see `shell-common/AGENTS.md` → "Golden Rules" for full detail.
-- Use `>/dev/null 2>&1` (not `&>/dev/null`) and `[ ]` (not `[[ ]]`) unless inside a shell-detection branch.
-- Forbidden: `source "${BASH_SOURCE[0]%/*}/file.sh"` (bash-only, breaks in zsh). Use `source "${SHELL_COMMON}/path/to/file.sh"`.
-
-**Interactive guard** — every file that produces output must start with:
-```bash
-case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
-```
-
-**No direct writes to `~/.bashrc`** — use symlinks via `setup.sh`.
-
-**One-click idempotent setup (internal + external PCs)** — `./setup.sh` alone must converge every PC; setup/bootstrap 변경 전 `docs/.ssot/one-click-setup.md` 를 따른다.
-
-**After adding a module**: update the `AGENTS.md` in the module root.
+Shared rules (POSIX, interactive guard, sourcing, no `~/.bashrc` writes, one-click setup) live in `AGENTS.md` Golden Rules and `shell-common/AGENTS.md`.
 
 **On lint/test failure**: fix the root cause — do not use `--no-verify` or skip hooks.
 
-## Codebase Map (선탐색 인덱스)
+## graphify (선탐색 인덱스)
 
-아키텍처/오리엔테이션/"X 어디 있나"/"Y가 뭘 호출하나" 류 질문은 소스 전체를 grep 하기 전에 `.understand-anything/knowledge-graph.json` 을 **먼저 구조적으로 쿼리**한다 — 정밀 슬라이스는 `jq` 로 노드 `summary`/`tags`/`edges` 만 뽑고, 노드명 빠른 위치 확인은 grep 으로 (파일 통독 금지, 약 1.1MB). 파일·함수 지도는 여기서 얻고, 정확한 코드 확인은 소스로 fallback 한다.
+아키텍처/오리엔테이션/"X 어디 있나"/"Y가 뭘 호출하나" 류 질문은 **graphify 를 먼저** 쓴다 — 사용 규칙은 `AGENTS.md` → "graphify". When the user types `/graphify`, use the installed graphify skill.
 
-**주의**: 그래프는 마지막 `/understand` 실행 시점 스냅샷 (`.understand-anything/meta.json` 의 `gitCommitHash`). 그 이후 변경된 파일은 드리프트 가능 — 소스가 최종 진실이다. 크게 어긋나면 `/understand` 재실행.
+`graphify-out/graph.json` 이 없을 때만 fallback 으로 `.understand-anything/knowledge-graph.json` 을 `jq` 로 구조 쿼리한다(노드 `summary`/`tags`/`edges` 만, 파일 통독 금지, 약 1.1MB). 이 그래프는 마지막 `/understand` 실행 시점 스냅샷(`.understand-anything/meta.json` 의 `gitCommitHash`)이라 드리프트 가능 — 소스가 최종 진실이다.
 
 ## Standards & References
 
 - 운영 교훈 지식 베이스: `docs/guide/learnings/` (반복 실수 예방용 패턴 모음)
-- PC 환경 SSOT (5개 PC, `~/.dotfiles-setup-mode` 모드): `docs/.ssot/pc-environment.md` — 환경에 따라 동작이 달라지는 작업(계정 전환, git host, 프록시)을 다룰 때는 먼저 `cat ~/.dotfiles-setup-mode` 로 현재 모드를 확인한다.
+- PC 환경 SSOT (5개 PC, `~/.dotfiles-setup-mode` 모드): `docs/.ssot/pc-environment.md` — 환경에 따라 동작이 달라지는 작업(계정 전환, git host, 프록시)을 다룰 때는 우선 `cat ~/.dotfiles-setup-mode` 로 현재 모드를 확인한다.
 - 스킬 배포 구조 SSOT: `docs/.ssot/skills-distribution.md` — Claude Code 는 작업 사본(`~/para/project/skills`)이 아니라 플러그인 저장소에서 스킬을 로드한다. "새 스킬이 안 보인다" 진단·`skills-sync` 단계·version bump 규칙은 여기를 본다.
 - Command/help interface: `docs/.ssot/command-guidelines.md`
 - GitHub Project board: `docs/.ssot/github-project-board.md`
 - GitHub Discussions 운영: `docs/.ssot/discussions-policy.md`
-- Git strategy: Semantic commits (`Type: Summary`)
-- Naming: `snake_case` for functions and filenames; dash-form for user-facing aliases
-- No emojis anywhere (token efficiency) — **단 하나의 예외**: `ai-metrics` footer (`<details>` 래퍼 및 `<!-- ai-metrics -->` 블록) 내부의 `📊 👤 🤖` 글리프. 이는 GitHub Issue/PR 카드 footer 의 의도된 시각 디자인이며 #317 F-2 요구사항 + PR #320 으로 SSOT 확정됨 (#367 의 `<details><summary>🤖 AI Metrics</summary>` 래퍼 포함). 다른 어떤 위치에도 이모지 사용 금지.
-- For AGENTS.md files, aim to keep them under 100 lines each
+- Naming: dash-form for user-facing aliases (`snake_case` rule: `AGENTS.md`)
 
 <!-- my-share:changelog:begin -->
 ## 변경 기록 (changelog)
@@ -114,13 +100,3 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 - `mise run lint-docs` 에서도 `scripts/lint_changelog_fragments.sh` 호출을 뺐다 — 게이트 비활성.
 - 과거 규칙(파일명 `<YYYY-MM-DD>-<issue>.md`, `- 변경: **요약**` 포맷)과 스크립트/`tests/bats/lint/changelog_fragments.bats` 는 재개를 위해 그대로 남겨뒀다. 재개 시 my-share 토글(`changelog_toggle.py on`)과 `mise.toml` 의 `lint-docs` 를 함께 되돌린다.
 - **my-share 영향**: 일일/주간 보고 허브(`my-share`)의 수집기(`scripts/report_range.py`)는 `changelog.d/` 가 비어 있어도 에러 없이 빈 결과를 반환한다 — 이 기간 동안 dotfiles 항목은 보고서에서 조용히 빠진다(수집기 오작동이 아니라 fragment 부재의 정상 결과). 재개 전까지는 dotfiles 변경 사항을 daily/weekly 보고서에서 볼 수 없다는 뜻이다.
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

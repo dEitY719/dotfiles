@@ -17,7 +17,7 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 
 - **One-command bootstrap** — 신규 머신에서 `./setup.sh` 만으로 동일 환경 구축
 - **POSIX-first shared layer** — `shell-common/` 는 bash/zsh 모두에서 안전하게 동작 (sourcing guard · interactive guard · `[ ]` 호환 문법)
-- **AI agent SSOT** — `claude/skills/` 한 곳에 스킬 정의, 모든 사용자(SSOT) · 멀티 계정 (`~/.claude*/skills` symlink) 으로 배포
+- **AI agent SSOT** — 스킬 정본은 15 개 standalone marketplace repo (#1680). Claude Code 는 plugin 으로 로드하고, 다른 하네스는 작업 사본(`~/para/project/skills`)을 심볼릭 링크로 합성 (SSOT: `docs/.ssot/skills-distribution.md`)
 - **GitHub-as-IDE** — issue → PR 까지 5-step composition (`/gh:issue-flow`) 으로 자동화
 
 ## 2. 확정된 의사결정 (D-01 ~)
@@ -28,8 +28,8 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 | D-02 | **UX 라이브러리 사용 강제** | 모든 사용자 표시 출력은 `shell-common/tools/ux_lib/ux_lib.sh` 의 `ux_header`/`ux_success`/`ux_error`/`ux_info` 경유. raw `echo`/`printf`/`tput` 금지. | `shell-common/tools/ux_lib/UX_GUIDELINES.md` SSOT. devx:ux-guidelines 스킬로 audit. |
 | D-03 | **No-emoji 원칙** | 모든 출력·문서·커밋 메시지에 emoji 금지 (token 효율). **단일 예외**: `ai-metrics` footer 의 `📊 👤 🤖` 글리프 (#317 F-2 + PR #320 SSOT). | CLAUDE.md root 룰. Pre-commit hook `emoji_check.sh` (해당 시) 또는 grep 게이트. |
 | D-04 | **Git 2-tier hook system** | `git/` 하위 표준 hooks + 사용자 확장 layer. Config SSOT 는 `git/config/hook-config.sh`. 디버그 `GIT_HOOKS_DEBUG=1`. | hook 추가 시 `git/config/hook-config.sh` 만 갱신, fall-through 보장. |
-| D-05 | **AI 스킬 SSOT 위치** | `~/dotfiles/claude/skills/` 가 정본. `~/.claude/skills` · `~/.claude-personal/skills` 는 symlink (downstream). 동료팀 공유 레포 = `dEitY719/claude-skills`. | 스킬 편집은 dotfiles 레포에서만. memory: `reference_claude_skills_ssot`. |
-| D-06 | **멀티 머신 환경 분기** | 머신별 차이는 `bash/development.local.sh` + `PYTEST_ADDOPTS` 환경변수 오버라이드로 흡수. 호스트명·OS 분기를 코드에 직접 박지 않는다. | memory: `project_multi_machine_dev_env`. |
+| D-05 | **AI 스킬 SSOT 위치** | 정본 = 15 개 standalone marketplace repo (#1680 로 dotfiles 밖으로 이동). Claude Code 는 `claude/plugin/{marketplaces,plugins}.json` 에 등록된 plugin 으로만 로드하고, 작업 사본 `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>` 는 `scripts/setup-skills-ssot.sh` 가 Codex / OpenCode / Gemini / agy / Hermes 에 합성한다. | 스킬 편집은 각 marketplace repo 에서. 배포 경로·갱신 절차 SSOT: `docs/.ssot/skills-distribution.md` (#2123). |
+| D-06 | **멀티 머신 환경 분기** | 머신별 차이는 `shell-common/env/development.local.sh` (gitignored, 템플릿 `development.local.example`, `shell-common/env/development.sh` 가 source) + `PYTEST_ADDOPTS` 환경변수 오버라이드로 흡수. 호스트명·OS 분기를 코드에 직접 박지 않는다. | memory: `project_multi_machine_dev_env`. |
 | D-07 | **GitHub PR 자동화 5-step composition** | issue 처리 표준 흐름 = `/gh:issue-flow <N>` = implement → commit → PR → schedule pr-reply → resolve conflict. 직접 main 커밋 금지 — 항상 feature 브랜치 + worktree. | memory: `feedback_feature_branch_before_work`, `feedback_session_continuity`. |
 | D-08 | **Interactive guard 표준 형태** | 출력 산출 파일은 `case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac` 사용. 단순 형태 (`[[ $- != *i* ]] && return`) 는 bats/CI 회귀 유발 (PR #497 2건). | memory: `feedback_interactive_guard_force_init`. |
 | D-09 | **commit 메시지 strict policy** | Conventional commits + `Closes/Fixes` 만 (Refs/Resolves/See 금지). body line ≤ 72 자. | memory: `reference_commit_msg_hook_policy`. commit-msg hook 강제. |
@@ -63,8 +63,8 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 
 | ID | 기능 | 상세 | 중요도 | P-tier |
 |----|------|------|--------|--------|
-| F11 | Claude skill SSOT 배포 | `claude/skills/` symlink 모드로 모든 계정 인스턴스에 동기화 | 상 | P0 |
-| F12 | Multi-account 지원 | `~/.claude*/skills` directory-level symlink | 상 | P0 |
+| F11 | 스킬 배포 | marketplace repo 를 Claude Code 는 plugin 으로, 다른 하네스는 작업 사본 심볼릭 링크로 로드 (`docs/.ssot/skills-distribution.md`) | 상 | P0 |
+| F12 | Multi-account 지원 | 플러그인 저장소 `~/.claude-shared/plugins` 를 각 계정 `~/.claude*/plugins` 가 심볼릭 링크로 공유 | 상 | P0 |
 | F13 | gh:issue-flow composition | issue → implement → commit → PR → schedule → resolve | 상 | P0 |
 | F14 | gh:pr-reply 자동 응답 | 리뷰 코멘트 분류 후 accept/decline 답변 | 상 | P0 |
 | F15 | AI metrics footer 자동 부착 | issue/PR 본문에 tokens · human-h · ai-min 기록 (#317 / #320) | 중 | P0 |
@@ -74,7 +74,7 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 
 | ID | 기능 | 상세 | 중요도 | P-tier |
 |----|------|------|--------|--------|
-| F17 | 5-디렉토리 docs 구조 | `.ssot` / `requirement` / `guide` / `feature` / `archive` | 상 | P0 (#660) |
+| F17 | docs 디렉토리 구조 | 9 개 디렉토리 — 목록·역할은 `docs/AGENTS.md` | 상 | P0 (#660, #1027) |
 | F18 | guide/ 통합 가이드 | setup·team-git·learnings·playbooks·technic·superpowers-ko | 상 | P0 |
 | F19 | Setup HTML 출력 | `dotfiles-setup-guide.html` — setup.sh 의 사람 친화 변환본 | 중 | P0 |
 
@@ -94,7 +94,7 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 ## 5. Open Questions (O-XX)
 
 - **O-01: requirement/ 의 trd/ / use-cases/ 확장** — agent-toolbox 의 4 단 구조(`product-requirements.md` + `trd/` + `use-cases/` + `development-process.md`) 중 dotfiles 가 어디까지 받아들일지. 현 시점 1-파일 entry 만 도입, 후속 이슈에서 확장 판단.
-- **O-02: AGENTS.md vs CLAUDE.md 통합** — root `CLAUDE.md` 와 `docs/AGENTS.md` 의 정책 영역이 일부 중복. SSOT 일원화 검토 필요.
+- **O-02: AGENTS.md vs CLAUDE.md 통합** — root `CLAUDE.md` 와 `docs/AGENTS.md` 의 정책 영역이 일부 중복. SSOT 일원화 검토 필요. → #2151 에서 해소: 공통 규칙은 루트 `AGENTS.md` 1곳, `CLAUDE.md` 는 `@AGENTS.md` import + Claude 전용 항목만.
 - **O-03: superpowers-ko 의 외부 공유 채널** — `claude-skills` 레포로 별도 export 할지, dotfiles 내부에서만 유지할지.
 - **O-04: ai-metrics 자동 부착 범위** — 현재 issue/PR/일부 commit 자동, skill comment 까지 확장 여부.
 
@@ -105,3 +105,9 @@ dotfiles 는 bash/zsh 두 쉘과 다중 머신(WSL2 home / external work-pc)에�
 - 사람-팀원 가이드: [`docs/guide/`](../guide/README.md) — setup · team-git · learnings · playbooks · technic · superpowers-ko
 - 보관 자료: [`docs/archive/`](../archive/README.md) — postmortem · review-2026 · company · diagram · 도래일 지난 todo
 - 루트 컨텍스트: [`AGENTS.md`](../../AGENTS.md), [`CLAUDE.md`](../../CLAUDE.md)
+
+## 7. 개정
+
+| 날짜 | 이슈 | 내용 |
+|------|------|------|
+| 2026-10-14 | #2151 | D-05·F11·F12 를 #1680 이후 marketplace/plugin 배포 구조로 재작성, D-06 경로를 `shell-common/env/` 로 정정, F17 을 9 개 디렉토리로 갱신. 개정 중 `status: needs-review`, 반영 후 `approved` 복원 |

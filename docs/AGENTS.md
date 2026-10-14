@@ -1,7 +1,7 @@
 # Module Context
 
 - **Purpose**: Project documentation, AI agent prompts, learnings, playbooks, archived analyses
-- **6-디렉토리 구조 (#660 5-tier + #1027 `adr/` 하이브리드)**: `.ssot/` (정책) · `requirement/` (제품 요구사항) · `adr/` (아키텍처 결정 로그) · `guide/` (사람 가이드) · `feature/` (피처별 설계) · `archive/` (보관소)
+- **9-디렉토리 구조 (#660 + #1027 + #2151)**: 역할은 아래 "디렉토리 역할 분담" 표가 SSOT
 - **AGENTS.md 라우터 정책**: 정책 본문은 `.ssot/*.md` 에 두고 AGENTS.md 는 요약 + 링크만 유지
 
 # Operational Commands
@@ -9,9 +9,7 @@
 - **Review**: open in markdown viewer (VS Code, grip)
 - **Line count**: `wc -l docs/**/*.md`
 - **Markdown lint**: 비활성화 — 자동 실행 금지
-- **Docs 린트**: `mise run lint-docs` — 두 개를 순차 실행한다 (changelog fragment 검사는 2026-09-02 중단, `CLAUDE.md` 참고).
-  - `scripts/lint_docs_filenames.sh` — docs 파일명 kebab-case 검사 (`adr/`·`requirement/` 강제, 나머지 warn-only, #1027)
-  - `scripts/lint_shell_common_fallback.sh` — `claude/skills/**/*.md` 안 `${SHELL_COMMON}/...` 소싱 지시문의 `$HOME` 폴백 누락 강제 (#1612)
+- **Docs 린트**: `mise run lint-docs` = `scripts/lint_docs_filenames.sh` 1개 (태스크 SSOT `mise.toml`; changelog·`$HOME` 폴백 린터는 게이트에서 빠짐)
 
 # Golden Rules
 
@@ -24,11 +22,11 @@
 - **DO**: 사람-팀원 가이드는 `guide/` 하위에 두기 (`guide/learnings/`, `guide/playbooks/`, `guide/technic/`, `guide/superpowers-ko/`). 단 `guide/commands/` 는 자동 생성물 — 직접 편집 금지
 - **DON'T**: TODO 마커를 추적 없이 남기기 (`archive/todo-<topic>.md` 처럼 별도 파일로 분리)
 - **DON'T**: 이유 없이 archive 하지 않기 (이동 사유를 `archive/README.md` 또는 커밋 메시지에 남길 것)
-- **DON'T**: `docs/` 루트에 산문 파일 새로 만들지 않기 — 항상 6 개 디렉토리 중 하나로 분류 (AGENTS.md 제외)
+- **DON'T**: `docs/` 루트에 산문 파일 새로 만들지 않기 — 항상 9 개 디렉토리 중 하나로 분류 (AGENTS.md 제외)
 - **DO**: 굵직한 아키텍처 결정은 `adr/NNNN-<kebab>.md` 로 일원화 (제품 요구사항 내 경량 결정은 `requirement/` D-섹션)
 - **DO**: `requirement/`·`feature/`·`adr/` 문서는 front-matter `status:` 메타데이터 포함
 
-## 디렉토리 역할 분담 (6-tier, #660 + #1027)
+## 디렉토리 역할 분담 (9-tier, #660 + #1027)
 
 | 디렉토리 | 역할 | 인덱스 |
 |---------|------|--------|
@@ -36,7 +34,10 @@
 | **`requirement/`** | 제품 요구사항 entry SSOT — D (확정 결정) / F (기능) / NF (비기능) / O (미해소) 4-섹션. D-섹션 = **경량 inline 결정** | [`requirement/product-requirements.md`](./requirement/product-requirements.md) |
 | **`adr/`** | 아키텍처 결정 로그 (#1027) — 프로젝트 전체에 파급되는 **굵직한 결정**의 불변 기록. `NNNN-<kebab>.md` | [`adr/README.md`](./adr/README.md) |
 | **`guide/`** | 사람-팀원 가이드 — setup, team-git, learnings, playbooks, technic, superpowers-ko 한글 가이드. `commands/` 는 row 함수에서 자동 생성 (#1262) | [`guide/README.md`](./guide/README.md) |
-| **`feature/`** | 피처별 설계·분석 번들 — 한 디렉토리 = 한 피처. superpowers-plans/specs 포함 | (디렉토리 직접 탐색) |
+| **`feature/`** | 피처별 설계·분석 번들 — 한 디렉토리 = 한 피처 | (디렉토리 직접 탐색) |
+| **`superpowers/`** | superpowers 플러그인 산출물 — `plans/`·`specs/` (brainstorming/writing-plans 기본 경로라 이동 금지) | (디렉토리 직접 탐색) |
+| **`company/`** | 사내 보고용 초안·paste-ready 문서. **public 저장소** — 사내 도메인/IP/실명/내부 시스템명은 마스킹 후에만 커밋 | (디렉토리 직접 탐색) |
+| **`public/`** | 외부 수집용 산출물 — `changelog.d/` fragment (현재 수집 OFF, 루트 `CLAUDE.md`) | (디렉토리 직접 탐색) |
 | **`archive/`** | 보관소 — 사후 분석, 평가 자료, 다이어그램, 도래일 지난 todo, 폐기된 피처 설계 이력. 내부 자료는 두지 않는다 (public 저장소) | [`archive/README.md`](./archive/README.md) |
 
 **`adr/` vs `requirement/` D-섹션 경계**: 여러 모듈에 파급되는 굵직한 결정은 `adr/`,
@@ -59,19 +60,13 @@
 ## Language Policy
 
 - **사람-팀원 문서** (`guide/learnings/`, `guide/technic/`, `guide/playbooks/`, `archive/`): 한국어
-- **AI-instruction 문서** (`claude/skills/*/SKILL.md`, system prompt, machine-read template): 영어
+- **AI-instruction 문서** (SKILL.md — marketplace repo, system prompt, machine-read template): 영어
 - **`.ssot/` 정책 문서**: 한국어 본문 + 영어 키워드 혼용 (현재 관행)
 - **`requirement/product-requirements.md`**: 한국어 (entry SSOT 성격)
 
 ## Learnings 출처 링크 규칙
 
-`guide/learnings/*.md` 는 출처 링크를 포함한다:
-
-- **PR number**: `PR #130` (가장 안정적)
-- **Commit hash**: 코드 스니펫 출처
-- **Issue number**: 관련 논의/버그
-- **Review comment URL**: 봇/사람 리뷰 발화
-
+`guide/learnings/*.md` 는 출처(PR 번호 우선, commit hash, issue 번호, 리뷰 코멘트 URL)를 포함한다.
 출처가 없는 로컬 실험은 Context 섹션에 상황을 구체적으로 기록한다.
 
 # Maintenance
