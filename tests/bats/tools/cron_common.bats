@@ -54,8 +54,16 @@ _lock() {
     assert_output "sc=${DOTFILES_ROOT}/shell-common"
 }
 
-@test "cron_common: cron_bootstrap loads init.sh relative to \$0" {
-    run env -u SHELL_COMMON DOTFILES_TEST_MODE=1 bash -c 'cd "$1" && . lib/cron_common.sh && cron_bootstrap && type ux_header >/dev/null && echo ok' _ "${TOOLS}"
+@test "cron_common: cron_bootstrap loads init.sh from dirname \$0" {
+    # $0 is a path under TOOLS, so dirname "$0" is TOOLS whatever the cwd is.
+    run env -u SHELL_COMMON DOTFILES_TEST_MODE=1 bash -c '. "$1/lib/cron_common.sh" && cron_bootstrap && type ux_header >/dev/null && echo "sc=$SHELL_COMMON"' "${TOOLS}/entry.sh" "${TOOLS}"
+    assert_success
+    assert_output "sc=${DOTFILES_ROOT}/shell-common"
+}
+
+@test "cron_common: _hp_acquire_lock lazily sources cron_common when the caller did not" {
+    run env "UX_LIB=${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" "LIB=${TOOLS}/lib/herdr_pane.sh" "D=${_WORK_DIR}/st" \
+        bash -c 'set -u; . "$UX_LIB"; . "$LIB"; ! type cron_acquire_lock >/dev/null 2>&1 || exit 9; _hp_acquire_lock "$D" .lock t && type cron_acquire_lock >/dev/null && echo ok'
     assert_success
     assert_output "ok"
 }
