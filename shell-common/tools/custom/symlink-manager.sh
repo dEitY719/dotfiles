@@ -55,6 +55,11 @@ _symlink_opts_mode_ok() {
     return 0
 }
 
+# _symlink_source_off_pc <source> — 0 when a source outside the checkout is absent.
+_symlink_source_off_pc() {
+    [[ ! -e "$1" && "$1" != "$_SYMLINK_ROOT"/* ]]
+}
+
 # _symlink_opts_link_args <opts> — dotfiles_ensure_link flags, one per line.
 # Unknown options are rejected so a typo in symlinks.conf is not silently ignored.
 _symlink_opts_link_args() {
@@ -116,7 +121,7 @@ symlink_init() {
         fi
         # A source outside the checkout (e.g. the playbook work log) is
         # per-PC content: absent means "not on this PC", not a failure.
-        if [[ ! -e "$source" && "$source" != "$_SYMLINK_ROOT"/* ]]; then
+        if _symlink_source_off_pc "$source"; then
             ux_info "skipped: source not on this PC"
             ((skipped++))
             continue
@@ -177,7 +182,7 @@ symlink_check() {
         # Rows init skips on purpose (other setup mode, per-PC source absent)
         # are not issues here either.
         _symlink_opts_mode_ok "$opts" "$mode" || continue
-        [[ ! -e "$source" && "$source" != "$_SYMLINK_ROOT"/* && ! -L "$target" ]] && continue
+        _symlink_source_off_pc "$source" && [[ ! -L "$target" ]] && continue
 
         ((count++))
 
