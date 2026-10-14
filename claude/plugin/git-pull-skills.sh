@@ -108,11 +108,83 @@ SKIPPED_BRANCH=0
 SKIPPED_NOT_GIT=0
 FAILED=0
 
+# --- job pool (#2198) -------------------------------------------------------
+# Same block in git-pull-skills.sh and update-plugins.sh: each script must stay
+# runnable as a single copied file (the bats fixtures copy it alone).
+
 # _count <VAR> — record one outcome for <VAR>. Jobs run in subshells, so a
-# plain VAR=$((VAR + 1)) would be lost; _run_pool sums these files instead.
+# plain VAR=$((VAR + 1)) would be lost; _pool_flush sums these files instead.
 _count() {
 	printf '%s\n' "$1" >>"$RES_FILE"
 }
+
+# _pool_wait — block until a job finishes. `wait -n` needs bash 4.3+; older
+# bash (stock macOS 3.2) waits for the whole running batch instead.
+_pool_wait() {
+	if [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -ge 3 ]; }; then
+		wait -n
+	else
+		wait
+	fi
+}
+
+# _pool_flush [all] — replay finished jobs in launch order and sum their
+# outcomes, stopping at the first job still running: output streams while the
+# pool works yet stays in argument order, so --jobs 1 and --jobs N print the
+# same. "all" (after the final wait) also replays a job that died before its
+# DONE line, and counts it as failed.
+_pool_flush() {
+	local n k
+	while [ "$POOL_NEXT" -le "$POOL_SEQ" ]; do
+		n=$POOL_NEXT
+		if ! grep -qx DONE "$POOL_DIR/$n.res" 2>/dev/null; then
+			[ "${1:-}" = all ] || return 0
+			ux_error "$(cat "$POOL_DIR/$n.name"): job exited without a result"
+			FAILED=$((FAILED + 1))
+		fi
+		cat "$POOL_DIR/$n.out"
+		cat "$POOL_DIR/$n.err" >&2
+		if [ -f "$POOL_DIR/$n.res" ]; then
+			while IFS= read -r k; do
+				case " $POOL_COUNTERS " in
+				*" $k "*) printf -v "$k" '%d' $((${!k} + 1)) ;;
+				esac
+			done <"$POOL_DIR/$n.res"
+		fi
+		POOL_NEXT=$((n + 1))
+	done
+}
+
+# _run_pool <worker> <item>... — run `<worker> <item>` for each item, at most
+# $JOBS at once, each buffered under $POOL_DIR/<seq>.{out,err,res}.
+_run_pool() {
+	local worker="$1" item
+	shift
+	for item in "$@"; do
+		while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
+			_pool_wait
+			_pool_flush
+		done
+		POOL_SEQ=$((POOL_SEQ + 1))
+		printf '%s\n' "${item##*/}" >"$POOL_DIR/$POOL_SEQ.name"
+		(
+			RES_FILE="$POOL_DIR/$POOL_SEQ.res"
+			"$worker" "$item"
+			_count DONE
+		) >"$POOL_DIR/$POOL_SEQ.out" 2>"$POOL_DIR/$POOL_SEQ.err" &
+	done
+	wait
+	_pool_flush all
+}
+
+POOL_SEQ=0
+POOL_NEXT=1
+POOL_DIR="$(mktemp -d)" || {
+	ux_error "mktemp -d failed — cannot buffer job output."
+	exit 1
+}
+trap 'rm -rf "$POOL_DIR"' EXIT
+# --- end job pool ------------------------------------------------------------
 
 # _process_repo <dir> — sync one repository. Repos share no state, so this is
 # safe to run concurrently (#2198).
@@ -289,38 +361,6 @@ _process_repo() {
 	fi
 }
 
-# _run_pool <dir>... — run _process_repo over the dirs, at most $JOBS at once.
-# Each job's stdout/stderr/outcomes are buffered under $POOL_DIR and replayed
-# in argument (alphabetical) order, so --jobs 1 and --jobs N print the same.
-_run_pool() {
-	local i=0 n k repo_dir
-	for repo_dir in "$@"; do
-		i=$((i + 1))
-		while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do
-			wait -n
-		done
-		(RES_FILE="$POOL_DIR/$i.res" _process_repo "$repo_dir") >"$POOL_DIR/$i.out" 2>"$POOL_DIR/$i.err" &
-	done
-	wait
-	for ((n = 1; n <= i; n++)); do
-		cat "$POOL_DIR/$n.out"
-		cat "$POOL_DIR/$n.err" >&2
-		# A job that died before recording any outcome must not pass as success.
-		[ -s "$POOL_DIR/$n.res" ] || {
-			ux_error "$(basename "${!n}"): job exited without a result"
-			FAILED=$((FAILED + 1))
-			continue
-		}
-		while IFS= read -r k; do
-			case "$k" in
-			UPDATED | UP_TO_DATE | SKIPPED_DIRTY | SKIPPED_BRANCH | SKIPPED_NOT_GIT | FAILED)
-				printf -v "$k" '%d' $((${!k} + 1))
-				;;
-			esac
-		done <"$POOL_DIR/$n.res"
-	done
-}
-
 # Subdirectories sorted alphabetically; hidden ones (.claude, ...) are never
 # skill repos.
 REPO_DIRS=()
@@ -329,12 +369,8 @@ while IFS= read -r repo_dir; do
 done < <(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | LC_ALL=C sort)
 TOTAL=${#REPO_DIRS[@]}
 
-POOL_DIR="$(mktemp -d)" || {
-	ux_error "mktemp -d failed — cannot buffer job output."
-	exit 1
-}
-trap 'rm -rf "$POOL_DIR"' EXIT
-_run_pool ${REPO_DIRS[@]+"${REPO_DIRS[@]}"}
+POOL_COUNTERS="UPDATED UP_TO_DATE SKIPPED_DIRTY SKIPPED_BRANCH SKIPPED_NOT_GIT FAILED"
+_run_pool _process_repo ${REPO_DIRS[@]+"${REPO_DIRS[@]}"}
 
 ux_section "Summary"
 ux_bullet "Total scanned: $TOTAL"
