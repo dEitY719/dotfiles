@@ -32,6 +32,11 @@ dotfiles_should_skip_init() {
 
 dotfiles_should_skip_init && return 1
 
+# The loading core comes from the same tree as this bootstrap.sh (the entry
+# point's candidate root): canonicalizing first would pair a linked worktree's
+# entry point with the main checkout's possibly older loader.sh.
+_dotfiles_core="${DOTFILES_ROOT}/shell-common/util"
+
 # Canonicalize to the main worktree (issue #589). When sourced inside a linked
 # worktree, DOTFILES_ROOT would otherwise point at the worktree path and bleed
 # into ~/.claude-*/ symlinks created by claude_accounts_init. The helper is
@@ -48,8 +53,9 @@ export SHELL_COMMON
 # Counter of files sourced through safe_source (shown by dotfiles_init_summary).
 SOURCED_FILES_COUNT=0
 
-. "${SHELL_COMMON}/util/safe_source.sh" || return 2
+. "${_dotfiles_core}/safe_source.sh" || return 2
 # UX library first: everything loaded after it may call ux_* functions.
 . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" || return 2
-. "${SHELL_COMMON}/util/loader.sh" || return 2
+. "${_dotfiles_core}/loader.sh" || return 2
+unset _dotfiles_core
 return 0
