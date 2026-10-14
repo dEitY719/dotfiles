@@ -56,6 +56,32 @@ _run_setup_with_extra_row() {
     fi
 }
 
+@test "#2141: internal mode prunes workspace skill links through the table's dir row" {
+    echo "internal" >"$HOME/.dotfiles-setup-mode"
+    _ws="$HOME/ws-root"
+    mkdir -p "$_ws/packaging-skills/skills/alpha" "$_ws/packaging-skills/.git"
+    : >"$_ws/packaging-skills/skills/alpha/SKILL.md"
+    mkdir -p "$HOME/.claude/skills"
+    ln -s "$_ws/packaging-skills/skills/alpha" "$HOME/.claude/skills/alpha"
+
+    run_in_bash "export WORKSPACE_ROOT='$_ws'; bash '${DOTFILES_ROOT}/claude/setup.sh'"
+    assert_success
+    assert_output --partial "워크스페이스 스킬 링크 정리 1개"
+    [ ! -L "$HOME/.claude/skills/alpha" ]
+    [ -d "$HOME/.claude/skills" ] && [ ! -L "$HOME/.claude/skills" ]
+}
+
+@test "#2141: _claude_link_apply fails when an earlier row fails" {
+    run_in_bash "
+        source '${DOTFILES_ROOT}/claude/setup.sh'
+        _phase_load_libs
+        _claude_link_table() { printf '%s\\n' 'claude/no-such-src|a|link|all' '-|skills|dir|all'; }
+        _claude_ensure_symlink() { [ -e \"\$1\" ]; }
+        _claude_link_apply multi '$HOME/.claude-x'
+    "
+    assert_failure
+}
+
 @test "#2141: verify fails when a table row is missing" {
     run_in_bash "
         source '${DOTFILES_ROOT}/claude/setup.sh'
