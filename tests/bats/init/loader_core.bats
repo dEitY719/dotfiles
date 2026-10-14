@@ -79,3 +79,36 @@ _zsh_codex() {
         bash --noprofile --norc -i -c ". '$DOTFILES_ROOT/bash/main.bash'; declare -F gwt"
     refute_output --partial "gwt"
 }
+
+@test "zsh: DOTFILES_SKIP_INIT=1 skips initialization" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    _zsh_codex DOTFILES_SKIP_INIT=1
+    refute_output --partial "gwt"
+}
+
+# *help cleanup now runs in zsh too: a stale help function is dropped, while
+# my_help and zsh's own run-help survive.
+@test "zsh: dotfiles_load_all clears stale *help functions but keeps run-help" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    run_in_zsh '
+        stale_fixture_help() { :; }
+        function run-help { :; }
+        function my_help { :; }
+        dotfiles_load_all
+        typeset +f stale_fixture_help >/dev/null 2>&1 && echo stale-kept
+        typeset +f run-help >/dev/null 2>&1 && echo run-help-kept
+        typeset +f my_help >/dev/null 2>&1 && echo my-help-kept
+    '
+    refute_output --partial "stale-kept"
+    assert_output --partial "run-help-kept"
+    assert_output --partial "my-help-kept"
+}
+
+@test "zsh: load_category on an empty category is a quiet no-op" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    mkdir -p "$TEST_TEMP_HOME/empty/functions"
+    run_in_zsh "load_category functions '$TEST_TEMP_HOME/empty' && echo rc0"
+    assert_success
+    refute_output --partial "no matches found"
+    assert_output --partial "rc0"
+}
