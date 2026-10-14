@@ -116,7 +116,8 @@ _install_pet() {
     [ "$(uname -s)" = Darwin ] && os_type="macos"
 
     ux_info "Installing pet for $os_type..."
-    if pkg_install apt=pet yum=pet pacman=pet brew=pet; then
+    # stderr hidden as before: a missing package is expected, GitHub is the fallback
+    if pkg_install apt=pet yum=pet pacman=pet brew=pet 2>/dev/null; then
         ux_success "pet installed via $PKG_INSTALL_MANAGER."
         return 0
     fi
