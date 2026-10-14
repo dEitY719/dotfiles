@@ -396,7 +396,7 @@ claude_accounts_status() {
     fi
 
     if [ "$_cas_internal" = "1" ]; then
-        _cas_accts=$(_dotfiles_setup_mode)
+        _cas_accts='internal'
     else
         _cas_accts=$(_claude_resolve_account --list)
     fi
