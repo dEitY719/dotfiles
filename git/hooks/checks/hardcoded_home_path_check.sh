@@ -52,18 +52,28 @@ check_hardcoded_home_path() {
     # caught (gemini-code-assist review on PR #738). `awk -v pfx=...`
     # embeds the file name directly into the printf so a downstream sed
     # rewrite is unnecessary and whitespace in the line stays safe.
+    #
+    # Whole-file mode (CHECK_MODE=all, set by checks/run_all.sh, #2149): the
+    # whole file is fed as added lines from line 1, so the same judgment applies.
     local hits
-    hits=$(git -C "$repo_root" diff --cached --no-color --no-ext-diff -U0 -- "$repo_rel_path" 2>/dev/null |
-        awk -v pfx="$repo_rel_path" '
+    hits=$(
+        if [ "${CHECK_MODE:-}" = "all" ]; then
+            [ -f "$repo_root/$repo_rel_path" ] || exit 0
+            sed 's/^/+/' "$repo_root/$repo_rel_path"
+        else
+            git -C "$repo_root" diff --cached --no-color --no-ext-diff -U0 -- "$repo_rel_path" 2>/dev/null
+        fi |
+            awk -v pfx="$repo_rel_path" -v whole="${CHECK_MODE:-}" '
+            BEGIN { if (whole == "all") newline = 1 }
             # Hunk header: capture the new-file start line (the `+c` field).
-            /^@@/ {
+            whole != "all" && /^@@/ {
                 match($0, /\+[0-9]+/)
                 newline = substr($0, RSTART + 1, RLENGTH - 1) + 0
                 next
             }
             # Added content lines only (skip the `+++ b/file` file header).
             /^\+/ {
-                if ($0 ~ /^\+\+\+/) next
+                if (whole != "all" && $0 ~ /^\+\+\+/) next
                 line = substr($0, 2)
                 if (line !~ /^[[:space:]]*#/ && line !~ /# allow-abs-home/ &&
                     (line ~ /\/home\/[A-Za-z0-9._-]+/ ||
@@ -73,7 +83,8 @@ check_hardcoded_home_path() {
                 newline++
                 next
             }
-        ' 2>/dev/null || true)
+        ' 2>/dev/null || true
+    )
 
     if [ -z "$hits" ]; then
         return 0

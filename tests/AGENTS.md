@@ -43,7 +43,7 @@ tests/
 │   ├── git/               # Git config / hook helper tests
 │   └── scripts/           # scripts/*.sh tests
 └── golden_rules/          # Static analysis rule checks
-    └── test_golden_rules.sh
+    └── test_golden_rules.sh   # git/hooks/checks/run_all.sh over git ls-files (rules live in the checks, #2149)
 ```
 
 # Golden Rules

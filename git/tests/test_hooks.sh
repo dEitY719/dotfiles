@@ -1365,6 +1365,44 @@ test_main_branch_guard_allows_merge_in_progress() {
     rm -rf "$repo_dir"
 }
 
+# Issue #2149 — checks moved from golden rules (emoji, SSOT runtime key,
+# interactive guard).
+test_blocks_emoji_in_main_bash() {
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
+    printf 'echo "done \xf0\x9f\x9a\x80"\n' >>"$repo_dir/bash/main.bash"
+    git -C "$repo_dir" add bash/main.bash
+    assert_failure "git -C \"$repo_dir\" commit -m \"emoji\""
+    rm -rf "$repo_dir"
+}
+
+test_blocks_model_key_in_claude_settings() {
+    local repo_dir
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
+    mkdir -p "$repo_dir/claude"
+    printf '{\n  "model": "opus"\n}\n' >"$repo_dir/claude/settings.json"
+    git -C "$repo_dir" add claude/settings.json
+    assert_failure "git -C \"$repo_dir\" commit -m \"model key\""
+    printf '{\n  "env": {}\n}\n' >"$repo_dir/claude/settings.json"
+    git -C "$repo_dir" add claude/settings.json
+    assert_success "git -C \"$repo_dir\" commit -m \"no model key\""
+    rm -rf "$repo_dir"
+}
+
+test_warns_missing_interactive_guard() {
+    local repo_dir out
+    repo_dir="$(mktemp -d /tmp/dotfiles-hook-test.XXXXXX)"
+    make_repo "$repo_dir"
+    mkdir -p "$repo_dir/shell-common/aliases"
+    printf '#!/bin/sh\nalias gs="git status"\n' >"$repo_dir/shell-common/aliases/nog.sh"
+    git -C "$repo_dir" add shell-common/aliases/nog.sh
+    out=$(git -C "$repo_dir" commit -m "no guard" 2>&1) || die "Expected a warning, not a block: $out"
+    grep -q "Missing interactive guard" <<<"$out" || die "Expected interactive guard warning: $out"
+    rm -rf "$repo_dir"
+}
+
 main() {
     ux_header "Hook integration tests"
     test_allows_spaces_in_filename
@@ -1388,6 +1426,11 @@ main() {
     # Issue #2143 — pre-commit check registry
     test_registry_runs_added_check_file
     test_registry_blocks_invalid_check_file
+
+    # Issue #2149 — rules moved from golden_rules into checks
+    test_blocks_emoji_in_main_bash
+    test_blocks_model_key_in_claude_settings
+    test_warns_missing_interactive_guard
 
     # Issue #1970 — commit-time leak guard
     test_leak_guard_blocks_without_echoing_match

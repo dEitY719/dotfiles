@@ -31,8 +31,8 @@ done
 
 ## Interactive Guard
 ```bash
-# Top of every file if it produces output or binds keys
-[[ $- == *i* ]] || return 0
+# Top of every file if it produces output or binds keys (same form as root AGENTS.md)
+case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 ```
 
 # Golden Rules
