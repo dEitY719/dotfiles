@@ -16,7 +16,9 @@ check_posix_bashism() { # <abs_path> <repo_rel_path> <out>
 # --- pre-commit registry adapter (contract: git/doc/CHECK_REGISTRY.md, #2143) ---
 CHECK_NAME=posix_bashism
 CHECK_SCOPE=per-file
-CHECK_SEVERITY=blocking
+# warning: a blocking check would reject every commit touching a baselined
+# file (pre-commit has no baseline); golden rules still fail on a new one.
+CHECK_SEVERITY=warning
 CHECK_TITLE="Bash-only \${BASH_*} in a #!/bin/sh file"
 CHECK_REPORT_LINES=10
 check_run() {

@@ -43,7 +43,11 @@ that reads the staged diff must judge the whole file when `CHECK_MODE=all`
 (`hardcoded_home_path` does). Every finding, warning or blocking, is a
 `<check_name>:<path>` key; keys in `checks/baseline.txt` are legacy
 violations and pass, any other key exits 1, and so does a baseline key for a
-judged file that no longer reproduces (stale). `tests/golden_rules/test_golden_rules.sh`
+judged file that no longer reproduces, or whose file is gone (stale). Severity
+does not matter here: a `warning` that only informs at commit time fails
+golden rules when it is new. A check whose tree still has baselined findings
+must be `warning`, since pre-commit has no baseline and a `blocking` one would
+reject every commit touching such a file. `tests/golden_rules/test_golden_rules.sh`
 runs it over `git ls-files` and holds no rule of its own: a rule lives only in
 its check file.
 
