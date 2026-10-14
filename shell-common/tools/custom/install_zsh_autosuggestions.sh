@@ -35,7 +35,6 @@ _check_installed() {
 
 # Install zsh-autosuggestions via system package manager
 _install_zsh_autosuggestions() {
-    ux_info "Installing zsh-autosuggestions..."
     # yum has no package: falls through to the git method, as before
     if ! pkg_install apt=zsh-autosuggestions pacman=zsh-autosuggestions brew=zsh-autosuggestions; then
         ux_info "Installing zsh-autosuggestions via git (no package available)..."

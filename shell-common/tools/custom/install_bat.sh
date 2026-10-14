@@ -20,7 +20,6 @@ _check_installed() {
 
 # Install bat via system package manager
 _install_bat() {
-    ux_info "Installing bat..."
     pkg_install apt=bat yum=bat pacman=bat brew=bat
 
     ux_success "bat installed successfully."

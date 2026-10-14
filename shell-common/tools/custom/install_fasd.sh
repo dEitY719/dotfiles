@@ -20,7 +20,6 @@ _check_installed() {
 
 # Install fasd via system package manager
 _install_fasd() {
-    ux_info "Installing fasd..."
     pkg_install apt=fasd yum=fasd pacman=fasd brew=fasd
 
     ux_success "fasd installed successfully."

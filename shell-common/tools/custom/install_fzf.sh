@@ -20,7 +20,6 @@ _check_installed() {
 
 # Install fzf via system package manager
 _install_fzf() {
-    ux_info "Installing fzf..."
     pkg_install apt=fzf yum=fzf pacman=fzf brew=fzf
     if [ "$PKG_INSTALL_MANAGER" = brew ]; then
         # Install shell integration

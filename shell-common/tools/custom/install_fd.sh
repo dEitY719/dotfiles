@@ -20,7 +20,6 @@ _check_installed() {
 
 # Install fd via system package manager
 _install_fd() {
-    ux_info "Installing fd..."
     pkg_install apt=fd-find yum=fd-find pacman=fd brew=fd
 
     ux_success "fd installed successfully."
