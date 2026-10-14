@@ -40,7 +40,7 @@ _gcp_committish_p() {
 # ----------------------------------------------------------------------------
 # Family-shared pre-flight: refuse to start a new cherry-pick while one is
 # already in progress, and tell the user how to recover. SSOT for the check
-# `_gcp_scan` introduced inline (gcp_scan.sh) — other verbs reuse the same
+# `_gcp_scan_run` introduced inline (tools/custom/lib/gcp_scan_run.sh) — other verbs reuse the same
 # helper so the warning + recovery hint are identical across the family.
 # Returns 1 (and emits the recovery hint) when a cherry-pick is in progress;
 # 0 otherwise. PR #698 review feedback (gemini-code-assist).
@@ -113,7 +113,7 @@ _gcp_ours()   { _gcp_strategy_pick "ours" "$@"; }
 
 # ----------------------------------------------------------------------------
 # Cherry-pick all commits by <author> in <range>. Default author is dEitY719
-# (matches the SSOT in _gcp_scan / gcp_scan.sh).
+# (matches the SSOT in _gcp_scan_run / tools/custom/lib/gcp_scan_run.sh).
 # ----------------------------------------------------------------------------
 _gcp_author() {
     if [ -n "${ZSH_VERSION-}" ]; then
@@ -259,9 +259,10 @@ gcp_help() {
 }
 
 # ----------------------------------------------------------------------------
-# gcp — dispatcher (Type 2A). _gcp_scan is defined in gcp_scan.sh; the loader
-# sources both files alphabetically (gcp.sh -> gcp_scan.sh) so the function
-# is in scope by the time a user types 'gcp scan'.
+# gcp — dispatcher (Type 2A). _gcp_scan (gcp_scan.sh) runs the PATH executable
+# tools/custom/gcp_scan.sh (#2155) — a child process, so a scan shares nothing
+# with this shell but exported env and cwd. Resolved at call time, so the
+# alphabetical load order (gcp.sh -> gcp_scan.sh) does not matter.
 # ----------------------------------------------------------------------------
 gcp() {
     case "${1:-}" in

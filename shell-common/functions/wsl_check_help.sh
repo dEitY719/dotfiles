@@ -1,6 +1,6 @@
 #!/bin/sh
 # shell-common/functions/wsl_check_help.sh
-# Help for wsl-check (see wsl_check.sh). Registered under the `devops`
+# Help for wsl-check (logic: tools/custom/wsl_check.sh, #2155). Registered under the `devops`
 # category in functions/my_help.sh.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
@@ -36,7 +36,7 @@ _wsl_check_help_summary() {
     ux_bullet "C: drive is shown first: a full WSL crash (SIGBUS) was caused by"
     ux_bullet_sub "the Windows host C: drive filling up, not the WSL disk (#897)."
     ux_bullet "The one-line summary also prints after a manual 'src' reload."
-    ux_bullet "Prune is destructive and never runs in a non-interactive shell."
+    ux_bullet "Prune is destructive and never runs without a terminal on stdin."
 }
 
 wsl_check_help() {

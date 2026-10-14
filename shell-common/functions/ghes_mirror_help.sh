@@ -23,7 +23,8 @@ ghes_mirror_help() {
     ux_bullet "gh CLI authenticated to GHES host   (gh auth login --hostname <host>)"
 
     ux_section "Notes"
-    ux_bullet "The wizard changes your working directory to the cloned repo."
+    ux_bullet "ghes_mirror (shell function) leaves you inside the cloned repo;"
+    ux_bullet "  the ghes-mirror executable on PATH only prints its path."
     ux_bullet "GHES repo visibility: --public (upstream is public; --internal is GHEC-only)."
 }
 

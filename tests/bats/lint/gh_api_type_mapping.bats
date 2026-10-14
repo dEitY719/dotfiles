@@ -183,8 +183,8 @@ EOF
     [ "$status" -eq 0 ]
 }
 
-@test "real repo: shell-common/functions/gh_audit_builtin_workflows.sh is clean" {
-    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_audit_builtin_workflows.sh"
+@test "real repo: shell-common/tools/custom/gh_audit_builtin_workflows.sh is clean" {
+    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/gh_audit_builtin_workflows.sh"
     run check_gh_api_type_mapping "$f" "$WARN_FILE"
     if [ "$status" -ne 0 ]; then
         echo "Findings:"
