@@ -20,7 +20,6 @@ _check_installed() {
 
 # Install ripgrep via system package manager
 _install_ripgrep() {
-    ux_info "Installing ripgrep..."
     pkg_install apt=ripgrep yum=ripgrep pacman=ripgrep brew=ripgrep
 
     ux_success "ripgrep installed successfully."
