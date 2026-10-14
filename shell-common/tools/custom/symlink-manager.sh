@@ -156,6 +156,9 @@ symlink_check() {
         return 1
     fi
 
+    local mode
+    mode=$(dotfiles_setup_mode_resolve) || return 1
+
     local count=0
     local ok=0
     local broken=0
@@ -170,6 +173,11 @@ symlink_check() {
 
         local target source description opts
         IFS='|' read -r target source description opts <<< "$parsed"
+
+        # Rows init skips on purpose (other setup mode, per-PC source absent)
+        # are not issues here either.
+        _symlink_opts_mode_ok "$opts" "$mode" || continue
+        [[ ! -e "$source" && "$source" != "$_SYMLINK_ROOT"/* && ! -L "$target" ]] && continue
 
         ((count++))
 

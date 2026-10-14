@@ -3,9 +3,8 @@
 # symlinks.conf sources must resolve to the physical dotfiles root (pwd -P),
 # and symlinks.conf is the only place ssh/obsidian/herdr links come from (#2139).
 # The 4th-column options and the failure policy are covered below.
-# Historically ssh/setup.sh linked ~/.ssh/config too, and symlinks.conf hardcoded ${HOME}/dotfiles, so on
-# a PC whose checkout is elsewhere (or reached through a symlink) running
-# `symlink-manager init` and ./setup.sh rewrote ~/.ssh/config back and forth.
+# symlinks.conf used to hardcode ${HOME}/dotfiles, so on a PC whose checkout is
+# elsewhere (or reached through a symlink) links pointed at the wrong source.
 
 load '../test_helper'
 
