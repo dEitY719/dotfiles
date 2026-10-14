@@ -165,3 +165,17 @@ _stub_other_phases() {
     assert_output --partial "killed after GIT_HOOK_TEST_TIMEOUT=1s"
     ((SECONDS < 20)) || false
 }
+
+# #2165: a hung script's background child must die with it on timeout.
+@test "GIT_HOOK_TEST_TIMEOUT also kills a hung script's grandchildren" {
+    command -v timeout >/dev/null 2>&1 || skip "timeout(1) not available"
+    local mark=$((300000 + RANDOM))
+    fake_script hang.sh "sleep $mark &
+exec sleep 30"
+    GIT_HOOK_TEST_TIMEOUT=1 run run_git_hook_tests "$WORK"
+    assert_output --partial "killed after GIT_HOOK_TEST_TIMEOUT=1s"
+    sleep 0.5
+    run pgrep -f "sleep $mark"
+    pkill -f "sleep $mark" 2>/dev/null || true
+    assert_failure
+}

@@ -241,6 +241,20 @@ _fake_bats() {
     assert_output --partial "killed after BATS_FILE_TIMEOUT=1s"
 }
 
+# #2165: `timeout --foreground` only timed out bats itself — a grandchild it
+# left behind (a hung git, a daemon) outlived the cap. The whole tree must go.
+@test "_bats_run_file: a timeout also kills the file's grandchildren" {
+    command -v timeout >/dev/null 2>&1 || skip "needs timeout(1)"
+    local mark=$((300000 + RANDOM))
+    _fake_bats "sleep $mark & exec sleep 30"
+    BATS_FILE_TIMEOUT=1 run _bats_run_file "$FAKE_BATS" "$OUT" 0 some.bats
+    assert_equal "$(cat "$OUT/0.status")" "124"
+    sleep 0.5
+    run pgrep -f "sleep $mark"
+    pkill -f "sleep $mark" 2>/dev/null || true
+    assert_failure
+}
+
 @test "_bats_run_file: a passing file records status 0" {
     _fake_bats 'exit 0'
     run _bats_run_file "$FAKE_BATS" "$OUT" 3 some.bats
