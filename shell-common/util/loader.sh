@@ -26,10 +26,7 @@ load_category() {
     local category="$1"
     local base_dir="${2:-${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}}"
     local category_dir="${base_dir}/${category}"
-    local f
-
-    # zsh: an empty category must not abort with "no matches found".
-    [ -n "${ZSH_VERSION-}" ] && setopt localoptions nullglob
+    local f _nullglob_off=0
 
     if [ ! -d "$category_dir" ]; then
         if [ "$LOADER_DEBUG" = "1" ]; then
@@ -42,7 +39,17 @@ load_category() {
         echo "DEBUG: Loading category: $category from $category_dir" >&2
     fi
 
-    for f in "${category_dir}"/*.sh; do
+    # zsh: an empty category must not abort with "no matches found". nullglob
+    # is on only while the glob expands (not via localoptions), so it neither
+    # leaks into the sourced files nor reverts a `setopt` they run.
+    if [ -n "${ZSH_VERSION-}" ] && ! [[ -o nullglob ]]; then
+        _nullglob_off=1
+        setopt nullglob
+    fi
+    set -- "${category_dir}"/*.sh
+    [ "$_nullglob_off" = 1 ] && unsetopt nullglob
+
+    for f in "$@"; do
         [ -f "$f" ] || continue
 
         # Skip .local.sh files (user overrides, not auto-loaded)
@@ -67,7 +74,7 @@ _dotfiles_clear_help_functions() {
         fi
     ); do
         case "$_fn" in
-        my_help) ;;
+        my_help | run-help) ;; # run-help: zsh builtin autoload, not ours
         *help) unset -f "$_fn" 2>/dev/null ;;
         esac
     done
