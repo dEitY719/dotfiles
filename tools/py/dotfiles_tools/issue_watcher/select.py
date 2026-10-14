@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 import re
 import sys
-from collections.abc import Iterable
 from typing import Any, cast
 
 from dotfiles_tools.issue_watcher.models import BlockerNode, OpenPr, SearchIssue
@@ -66,7 +65,7 @@ def search_rows(issues: Any) -> list[str]:
         repo = (issue.get("repository") or {}).get("nameWithOwner")
         labels = US.join(
             "" if label.get("name") is None else _jq_str(label.get("name"))
-            for label in cast(Iterable[Any], _iterate(issue.get("labels")))
+            for label in _iterate(issue.get("labels"))
             if isinstance(label, dict)
         )
         rows.append("\t".join([_tsv_field(repo), _tsv_field(_jq_str(issue.get("number"))), _tsv_field(labels)]))
