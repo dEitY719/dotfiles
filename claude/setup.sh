@@ -752,8 +752,8 @@ _phase_verify() {
 _phase_report() {
     if [ "$_setup_mode" = "internal" ]; then
         # OpenCode / Codex / Gemini / agy / Hermes entry-level 합성은
-        # scripts/setup-skills-ssot.sh 가 책임짐 (#791, #1376, #1731) — 상세는 아래
-        # 멀티 계정 루프 뒤 주석 참고.
+        # scripts/setup-skills-ssot.sh 가 책임짐 (#791, #1376, #1731) — 상세는
+        # _phase_verify 끝 주석 참고.
 
         _print_change_summary  # 변경 요약 한 줄 (#997)
         ux_success "Claude Code dotfiles setup 완료 (internal/single-account)"
