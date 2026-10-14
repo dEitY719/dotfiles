@@ -283,7 +283,7 @@ _path_without() {
     mkdir -p "$iso/bash" "$iso/shell-common/tools/custom" "$iso/shell-common/util" "$iso/shell-common/env"
     cp "$real/$SCRIPT_REL" "$real/shell-common/tools/custom/init.sh" "$iso/shell-common/tools/custom/"
     cp -R "$real/shell-common/tools/ux_lib" "$iso/shell-common/tools/"
-    cp "$real/shell-common/util/setup_mode_read.sh" "$iso/shell-common/util/"
+    cp "$real/shell-common/util/setup_mode_read.sh" "$real/shell-common/util/local_env.sh" "$iso/shell-common/util/"
     cp "$real/shell-common/env/internal.sh" "$iso/shell-common/env/"
     printf 'export DOTFILES_INTERNAL_DOMAIN=corp.test\n' >"$iso/shell-common/env/internal.local.sh"
     run env -u DOTFILES_SKIP_LOCAL_ENV -u DOTFILES_INTERNAL_DOMAIN no_proxy=localhost,.corp.test \

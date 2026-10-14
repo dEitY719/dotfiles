@@ -110,6 +110,7 @@ _setup_mode_help_list_sections() {
     ux_bullet_sub "overview"
     ux_bullet_sub "modes"
     ux_bullet_sub "usage"
+    ux_bullet_sub "policy"
 }
 
 _setup_mode_help_rows_overview() {
@@ -131,6 +132,15 @@ _setup_mode_help_rows_usage() {
     ux_bullet "Check proxy: ${UX_BOLD}check-proxy${UX_RESET}"
 }
 
+_setup_mode_help_rows_policy() {
+    ux_bullet "Policy queries in util/setup_mode_read.sh — use these, not \`= internal\`:"
+    ux_table_row "_dotfiles_setup_mode_is <m>" "true when the current mode is <m>"
+    ux_table_row "_dotfiles_setup_mode_accounts" "single (internal) | multi"
+    ux_table_row "_dotfiles_setup_mode_gh_host" "ghes (internal) | github"
+    ux_table_row "_dotfiles_setup_mode_ca" "custom (internal) | system | none"
+    ux_table_row "_dotfiles_setup_mode_proxy" "required (internal) | forbidden | (empty)"
+}
+
 _setup_mode_help_render_section() {
     ux_section "$1"
     "$2"
@@ -147,6 +157,9 @@ _setup_mode_help_section_rows() {
         usage|use|commands|cmds)
             _setup_mode_help_rows_usage
             ;;
+        policy|policies)
+            _setup_mode_help_rows_policy
+            ;;
         *)
             ux_error "Unknown setup-mode-help section: $1"
             ux_info "Try: setup-mode-help --list"
@@ -160,6 +173,7 @@ _setup_mode_help_full() {
     _setup_mode_help_render_section "Overview" _setup_mode_help_rows_overview
     _setup_mode_help_render_section "Available Modes" _setup_mode_help_rows_modes
     _setup_mode_help_render_section "Usage" _setup_mode_help_rows_usage
+    _setup_mode_help_render_section "Policy Functions" _setup_mode_help_rows_policy
 }
 
 setup_mode_help() {

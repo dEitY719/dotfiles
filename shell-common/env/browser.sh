@@ -49,14 +49,12 @@ unset _browser_helper _browser_wrapper
 # ENVIRONMENT-SPECIFIC SETTINGS (loaded if exists)
 # ============================================================
 #
-# Machine-local override, same house pattern as proxy.local.sh /
-# security.local.sh. It loads *after* the default above, so assigning
-# BROWSER here wins — that is the supported way to keep a different browser
+# Machine-local override (browser.local.sh), same house pattern as proxy /
+# security. It loads *after* the default above, so assigning
+# BROWSER there wins — that is the supported way to keep a different browser
 # on one machine without an "only export if unset" guard here (such a guard
 # would make a stale value sticky across `src` reloads).
-if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_browser_root/env/browser.local.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$_browser_root/env/browser.local.sh"
-fi
+[ -r "$_browser_root/util/local_env.sh" ] && . "$_browser_root/util/local_env.sh" &&
+    _dotfiles_source_local browser "$_browser_root"
 
 unset _browser_root

@@ -89,7 +89,8 @@ teardown() {
 # against a fixture local file, so a CI box without one still catches a
 # regression.
 @test "#2031: DOTFILES_SKIP_LOCAL_ENV keeps env/*.local.sh out, unset loads it" {
-    mkdir -p "$HOME/sc/env"
+    mkdir -p "$HOME/sc/env" "$HOME/sc/util"
+    cp "${DOTFILES_ROOT}/shell-common/util/local_env.sh" "$HOME/sc/util/"
     printf 'export http_proxy=http://corp-proxy:3128\n' > "$HOME/sc/env/proxy.local.sh"
     local cmd=". '${DOTFILES_ROOT}/shell-common/env/proxy.sh'; echo \"[\$http_proxy]\""
     run env SHELL_COMMON="$HOME/sc" bash --noprofile --norc -c "$cmd"
@@ -276,4 +277,79 @@ Internal company PC (Direct connection)"
     run_in_zsh 'get_setup_mode_name'
     assert_success
     assert_output "Internal company PC (Direct connection)"
+}
+
+# --- policy queries (#2158) --------------------------------------------------
+
+@test "#2158: policy functions map every mode (3 modes + unset/unknown)" {
+    run bash --noprofile --norc -c "
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        for m in internal public external '' bogus; do
+            printf '%s=%s,%s,%s\n' \"\$m\" \"\$(_dotfiles_setup_mode_accounts \"\$m\")\" \
+                \"\$(_dotfiles_setup_mode_gh_host \"\$m\")\" \"\$(_dotfiles_setup_mode_ca \"\$m\")\"
+        done
+    "
+    assert_success
+    assert_output "internal=single,ghes,custom
+public=multi,github,system
+external=multi,github,system
+=multi,github,none
+bogus=multi,github,none"
+}
+
+@test "#2158: no argument reads the mode; DOTFILES_SETUP_MODE env wins over the file" {
+    printf '2\r\n' > "$HOME/.dotfiles-setup-mode"
+    local cmd="export HOME='${HOME}'
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        _dotfiles_setup_mode_is internal && echo is-internal || echo not-internal
+        _dotfiles_setup_mode_accounts; _dotfiles_setup_mode_gh_host; _dotfiles_setup_mode_ca"
+    run env -u DOTFILES_SETUP_MODE bash --noprofile --norc -c "$cmd"
+    assert_success
+    assert_output "is-internal
+single
+ghes
+custom"
+    run env DOTFILES_SETUP_MODE=external bash --noprofile --norc -c "$cmd"
+    assert_success
+    assert_output "not-internal
+multi
+github
+system"
+}
+
+@test "#2158: re-source guard keeps a caller's override, old copy does not block new functions" {
+    run bash --noprofile --norc -c "
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        _dotfiles_setup_mode() { echo internal; }
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        _dotfiles_setup_mode_accounts
+    "
+    assert_output "single"
+    # An older vendored reader (only _dotfiles_setup_mode) loaded first.
+    run bash --noprofile --norc -c "
+        _dotfiles_setup_mode() { echo public; }
+        . '${DOTFILES_ROOT}/shell-common/util/setup_mode_read.sh'
+        command -v _dotfiles_setup_mode_ca
+    "
+    assert_success
+    assert_output "_dotfiles_setup_mode_ca"
+}
+
+@test "#2158: _dotfiles_source_local sources <root>/env/<topic>.local.sh unless skipped or missing" {
+    mkdir -p "$HOME/sc/env"
+    printf 'DSL_PROBE=loaded\n' > "$HOME/sc/env/probe.local.sh"
+    local cmd=". '${DOTFILES_ROOT}/shell-common/util/local_env.sh'
+        _dotfiles_source_local probe; _dotfiles_source_local absent
+        echo \"[\${DSL_PROBE-}][\${_dsl_file-unset}]\""
+    run env -u DOTFILES_SKIP_LOCAL_ENV SHELL_COMMON="$HOME/sc" bash --noprofile --norc -c "$cmd"
+    assert_success
+    assert_output "[loaded][unset]"
+    run env DOTFILES_SKIP_LOCAL_ENV=1 SHELL_COMMON="$HOME/sc" bash --noprofile --norc -c "$cmd"
+    assert_success
+    assert_output "[][unset]"
+    # Explicit root argument beats SHELL_COMMON (env/browser.sh passes its own).
+    run env -u DOTFILES_SKIP_LOCAL_ENV SHELL_COMMON=/nonexistent bash --noprofile --norc -c "
+        . '${DOTFILES_ROOT}/shell-common/util/local_env.sh'
+        _dotfiles_source_local probe '$HOME/sc'; echo \"[\${DSL_PROBE-}]\""
+    assert_output "[loaded]"
 }

@@ -118,7 +118,7 @@ main() {
     esac
 
     _mode=$(_dotfiles_setup_mode)
-    if [ "$_mode" != "internal" ]; then
+    if ! _dotfiles_setup_mode_is internal; then
         ux_info "setup-mode='${_mode:-none}' — internal 모드 전용 진단이라 건너뜁니다."
         return 0
     fi
@@ -131,7 +131,7 @@ main() {
     _proxy_fp="${DOTFILES_PROXY_CA_FINGERPRINT:-}"
     _extra_fps="${DOTFILES_EXTRA_CA_FINGERPRINTS:-}"
     _domain="${DOTFILES_INTERNAL_DOMAIN:-}"
-    _unset_hint="internal.local.sh 미설정 → 비교 생략"
+    _unset_hint="${_mode}.local.sh 미설정 → 비교 생략"
 
     ux_section "1) 프록시 인증서 (NODE_EXTRA_CA_CERTS)"
     CERT_FILE="${NODE_EXTRA_CA_CERTS:-}"

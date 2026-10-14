@@ -376,7 +376,7 @@ claude_accounts_status() {
     # internal PC: single account at ~/.claude, claude-accounts unused (#571),
     # so inspect that dir instead of the multi-account ~/.claude-<name> set (#2116).
     _cas_internal=0
-    if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+    if [ "$(_dotfiles_setup_mode_accounts)" = "single" ]; then
         _cas_internal=1
         ux_info "internal mode — single-account (~/.claude), claude-accounts 미사용"
     else
@@ -396,7 +396,7 @@ claude_accounts_status() {
     fi
 
     if [ "$_cas_internal" = "1" ]; then
-        _cas_accts="internal"
+        _cas_accts=$(_dotfiles_setup_mode)
     else
         _cas_accts=$(_claude_resolve_account --list)
     fi
@@ -699,7 +699,7 @@ claude_accounts_rollback() {
     fi
 
     ux_info "Active account:  $_car_active ($_car_src)"
-    if [ "$(_dotfiles_setup_mode)" != "internal" ]; then
+    if ! _dotfiles_setup_mode_is internal; then
         # SC2088: the tilde here is a literal `~` in a user-facing path,
         # not a shell expansion — display form deliberately.
         # shellcheck disable=SC2088

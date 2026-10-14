@@ -39,6 +39,15 @@
 - Reconfigure: cd ~/dotfiles && ./setup.sh
 - Check proxy: check-proxy
 
+### policy
+
+- Policy queries in util/setup_mode_read.sh — use these, not `= internal`:
+- **_dotfiles_setup_mode_is <m>** — true when the current mode is <m>
+- **_dotfiles_setup_mode_accounts** — single (internal) | multi
+- **_dotfiles_setup_mode_gh_host** — ghes (internal) | github
+- **_dotfiles_setup_mode_ca** — custom (internal) | system | none
+- **_dotfiles_setup_mode_proxy** — required (internal) | forbidden | (empty)
+
 ## 엣지케이스 / 의도된 동작
 
 아직 정리된 항목이 없습니다. 소스 주석에만 있는 동작을 발견하면

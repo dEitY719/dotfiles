@@ -135,7 +135,7 @@ _claude_account_auth_kind() {
             return 0
         fi
     fi
-    if [ "$(_dotfiles_setup_mode)" = "internal" ]; then
+    if _dotfiles_setup_mode_is internal; then
         # shortcut: grep, not jq — only "non-empty string value" matters; upgrade if settings ever nest it.
         if grep -qs '"apiKeyHelper"[[:space:]]*:[[:space:]]*"[^"]' \
             "$_caak_dir/settings.json" "$_caak_dir/settings.local.json"; then

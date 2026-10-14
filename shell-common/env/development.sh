@@ -17,8 +17,6 @@ export JAVA_HOME='/usr/lib/jvm/java-11-openjdk-amd64'
 export PATH="$JAVA_HOME/bin:$PATH"
 
 # Machine-specific overrides (gitignored, see development.local.example)
-_dev_root="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"
-if [ -z "${DOTFILES_SKIP_LOCAL_ENV-}" ] && [ -f "$_dev_root/env/development.local.sh" ]; then
-    . "$_dev_root/env/development.local.sh"
-fi
-unset _dev_root
+_local_env_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/util/local_env.sh"
+[ -r "$_local_env_lib" ] && . "$_local_env_lib" && _dotfiles_source_local development
+unset _local_env_lib
