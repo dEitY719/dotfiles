@@ -1,8 +1,9 @@
 """dotfiles_tools.issue_watcher.select (#2157).
 
 Explicit expectations per op. The golden parity check against the legacy jq/awk
-filters left with the IW_SELECT_IMPL=shell rollback (#2173); these cases are what
-it proved the Python ops match.
+filters left with the IW_SELECT_IMPL=shell rollback (#2173), so CASES are now the
+only pin on the jq semantics -- keep the subtle ones covered: the handled-by-pr
+trailing word boundary (#14 vs #145) and the open-blockers exit code.
 """
 
 from __future__ import annotations
