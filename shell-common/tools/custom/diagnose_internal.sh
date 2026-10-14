@@ -131,7 +131,7 @@ main() {
     _proxy_fp="${DOTFILES_PROXY_CA_FINGERPRINT:-}"
     _extra_fps="${DOTFILES_EXTRA_CA_FINGERPRINTS:-}"
     _domain="${DOTFILES_INTERNAL_DOMAIN:-}"
-    _unset_hint="${_mode}.local.sh 미설정 → 비교 생략"
+    _unset_hint="internal.local.sh 미설정 → 비교 생략"
 
     ux_section "1) 프록시 인증서 (NODE_EXTRA_CA_CERTS)"
     CERT_FILE="${NODE_EXTRA_CA_CERTS:-}"
