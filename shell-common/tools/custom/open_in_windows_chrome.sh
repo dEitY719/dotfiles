@@ -26,11 +26,10 @@
 _SELF="$(realpath "${BASH_SOURCE[0]}")" || exit 1
 SHELL_COMMON="${_SELF%/tools/custom/*}"
 
-# ux_lib directly rather than through init.sh: init.sh returns before loading
-# anything under DOTFILES_TEST_MODE, which would leave the bats suite asserting
-# against local stubs instead of the output this script actually ships. ux_lib
-# has no interactive guard and mutes its own ANSI in test mode, so one source
-# covers both. The fallback only matters if ux_lib itself is missing.
+# ux_lib directly rather than through init.sh: this script resolves its own
+# location (above) and never depends on init.sh's DOTFILES_ROOT tree check.
+# ux_lib has no interactive guard and mutes its own ANSI in test mode, so one
+# source covers both. The fallback only matters if ux_lib itself is missing.
 if [ -r "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" ]; then
     # shellcheck source=/dev/null
     . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
