@@ -199,6 +199,7 @@ _path_without() {
     run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
     refute_output --partial "지문을 하나도 읽지 못함"
+    refute_output --partial "지문 형식이 아님"
 }
 
 @test "internal mode: bundle without a final newline still matches the last certificate (#2111)" {
@@ -212,6 +213,16 @@ _path_without() {
     [ "$(tail -c 1 "$BATS_TEST_TMPDIR/bundle.crt")" = "-" ]
     run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
     assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+    refute_output --partial "지문을 하나도 읽지 못함"
+    # Windows 편집기 저장본처럼 CRLF + 마지막 개행 누락이 함께 있어도 PASS.
+    local crlf
+    crlf="$(cat "$BATS_TEST_TMPDIR/other.crt" "$BATS_TEST_TMPDIR/target.crt" | awk '{ printf "%s\r\n", $0 }')"
+    printf '%s' "${crlf%$'\r'}" >"$BATS_TEST_TMPDIR/bundle.crt"
+    grep -q $'\r$' "$BATS_TEST_TMPDIR/bundle.crt"
+    [ "$(tail -c 1 "$BATS_TEST_TMPDIR/bundle.crt")" = "-" ]
+    run env NODE_EXTRA_CA_CERTS="$BATS_TEST_TMPDIR/bundle.crt" DOTFILES_PROXY_CA_FINGERPRINT="$fp" bash "$SCRIPT"
+    assert_output --partial "[PASS] 사내 프록시 인증서 포함됨"
+    refute_output --partial "지문을 하나도 읽지 못함"
 }
 
 @test "internal mode: non-fingerprint CA value falls back to substring with WARN" {
