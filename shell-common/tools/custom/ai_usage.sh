@@ -17,6 +17,7 @@
 # exposes per-model token stats via `--output-format json`; we keep its
 # native fields (total/cached/candidates/...) under `usage` and the
 # per-model breakdown under `modelUsage`, since its cache semantics
+# don't map cleanly onto claude's create/read split.
 #
 # PATH executable since #2155 (~/.local/bin/ai-usage via config/symlinks.conf):
 # recording and summarising usage never changes the caller's shell state
@@ -32,7 +33,6 @@
 # readlink -f: resolve the ~/.local/bin symlink to find init.sh next to the source.
 # shellcheck source=/dev/null
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
-# don't map cleanly onto claude's create/read split.
 
 # ---------------------------------------------------------------------------
 # Internal helpers

@@ -8,6 +8,11 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # gh_pr_reply.sh. Settings reach it only as exported env (AI_USAGE_RETRY_*).
 
 _ai_usage_run() {
+    # The executable runs `codex` as a bare binary, bypassing the codex()
+    # function's pre-run skills sync (integrations/codex.sh); do it here.
+    if [ "${1-}" = "codex" ] && command -v _codex_maybe_auto_sync >/dev/null 2>&1; then
+        _codex_maybe_auto_sync
+    fi
     "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_usage.sh" run "$@"
 }
 
