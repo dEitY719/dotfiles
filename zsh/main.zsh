@@ -34,7 +34,12 @@ esac
 
 # Skip guard (non-interactive / DOTFILES_SKIP_INIT / Codex), canonical root,
 # SHELL_COMMON, counter, safe_source, ux_lib, loader.
-. "${DOTFILES_ROOT}/shell-common/util/bootstrap.sh" || return 0
+. "${DOTFILES_ROOT}/shell-common/util/bootstrap.sh"
+case $? in
+0) ;;
+1) return 0 ;; # skip (or bootstrap.sh missing: the shell already printed why)
+*) printf 'dotfiles: core load failed under %s\n' "${SHELL_COMMON}" >&2; return 1 ;;
+esac
 
 ZSH_DOTFILES="${DOTFILES_ROOT}/zsh"
 export ZSH_DOTFILES

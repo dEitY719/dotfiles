@@ -4,11 +4,11 @@
 #
 # Usage (from an entry point, after the inline MERGE_HEAD diagnostic):
 #   DOTFILES_ROOT=<candidate root>
-#   . "${DOTFILES_ROOT}/shell-common/util/bootstrap.sh" || return 0
+#   . "${DOTFILES_ROOT}/shell-common/util/bootstrap.sh"   # then branch on $?
 #   dotfiles_load_all
 #
-# A non-zero status means "do not initialize" (skip conditions below); the
-# entry point returns. No standard interactive guard line here on purpose:
+# Status: 0 = loaded, 1 = skip (conditions below), 2 = a core file failed to
+# source. The entry point returns quietly on 1 and reports 2. No standard interactive guard line here on purpose:
 # dotfiles_should_skip_init IS the guard, and it must reach the caller as a
 # status rather than a silent `return 0` that would let the caller continue.
 
@@ -48,7 +48,8 @@ export SHELL_COMMON
 # Counter of files sourced through safe_source (shown by dotfiles_init_summary).
 SOURCED_FILES_COUNT=0
 
-. "${SHELL_COMMON}/util/safe_source.sh"
+. "${SHELL_COMMON}/util/safe_source.sh" || return 2
 # UX library first: everything loaded after it may call ux_* functions.
-. "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"
-. "${SHELL_COMMON}/util/loader.sh"
+. "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh" || return 2
+. "${SHELL_COMMON}/util/loader.sh" || return 2
+return 0

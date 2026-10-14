@@ -26,18 +26,25 @@ esac
 # Skip guard (non-interactive / DOTFILES_SKIP_INIT / Codex), canonical root,
 # SHELL_COMMON, counter, safe_source, ux_lib, loader.
 # shellcheck source=../shell-common/util/bootstrap.sh
-. "${DOTFILES_ROOT}/shell-common/util/bootstrap.sh" || return 0
+. "${DOTFILES_ROOT}/shell-common/util/bootstrap.sh"
+case $? in
+0) ;;
+1) return 0 ;; # skip (or bootstrap.sh missing: the shell already printed why)
+*) printf 'dotfiles: core load failed under %s\n' "${SHELL_COMMON}" >&2; return 1 ;;
+esac
 
 DOTFILES_BASH_DIR="$_BASH_SCRIPT_DIR"
 export DOTFILES_BASH_DIR
 
-dotfiles_load_all
-
-# Bash-specific env loads after shell-common so it can override common values.
-# nullglob keeps a literal '*.bash' out of the loop when the glob is empty.
+# nullglob stays on for the whole module load (its pre-#2134 scope), so an
+# empty glob in a sourced file or in the bash/env loop yields no words.
 __NULLGLOB_WAS_ON=0
 shopt -q nullglob && __NULLGLOB_WAS_ON=1
 shopt -s nullglob
+
+dotfiles_load_all
+
+# Bash-specific env loads after shell-common so it can override common values.
 for f in "${DOTFILES_BASH_DIR}/env/"*.bash; do
     safe_source "$f" "Environment variable file not found"
 done

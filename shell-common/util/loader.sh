@@ -100,13 +100,14 @@ dotfiles_load_all() {
 
 # Print the init summary in an interactive shell unless suppressed
 # (DOTFILES_SUPPRESS_MESSAGE=1, set by zsh/zshrc). bash requires a TTY on
-# stdout; zsh requires a TTY on stderr or a top-level shell.
+# stdout; zsh a TTY on stderr. (The old zsh loader's `-z "$ZSH_SUBSHELL"`
+# alternative was dead code: ZSH_SUBSHELL is 0, never empty, at top level.)
 dotfiles_show_init_summary() {
     case $- in *i*) ;; *) return 0 ;; esac
     [ "${DOTFILES_SUPPRESS_MESSAGE:-0}" = "1" ] && return 0
     command -v dotfiles_init_summary >/dev/null 2>&1 || return 0
     if [ -n "${ZSH_VERSION-}" ]; then
-        [ -t 2 ] || [ -z "${ZSH_SUBSHELL-}" ] || return 0
+        [ -t 2 ] || return 0
     else
         [ -t 1 ] || return 0
     fi
