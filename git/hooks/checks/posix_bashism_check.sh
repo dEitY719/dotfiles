@@ -13,7 +13,7 @@ check_posix_bashism() { # <abs_path> <repo_rel_path> <out>
     local hits
     # sed: keep the original line (h/g) only if a ${BASH_ survives the strip.
     hits=$(grep -n '\${BASH_' "$1" | sed -E \
-        -e 'h' -e 's/\[ -[nz] "?\$\{BASH_VERSION(:?-)?\}"? \]//g' \
+        -e 'h' -e 's/\[ -[nz] ("\$\{BASH_VERSION(:?-)?\}"|\$\{BASH_VERSION(:?-)?\}) \]//g' \
         -e '/\$\{BASH_/!d' -e 'g')
     [ -n "$hits" ] || return 0
     printf '%s\n' "$hits" | sed "s|^|$2:|" >>"$3"
