@@ -19,5 +19,5 @@ OBSIDIAN_BIN_SRC="${_SCRIPT_DIR}/bin/obsidian"
 ux_header "Obsidian CLI Wrapper Setup"
 
 # Source must be executable for the symlink to be runnable.
-chmod +x "${OBSIDIAN_BIN_SRC}"
+chmod +x "${OBSIDIAN_BIN_SRC}" || { ux_error "chmod +x failed: ${OBSIDIAN_BIN_SRC}"; exit 1; }
 ux_success "Executable: ${OBSIDIAN_BIN_SRC}"

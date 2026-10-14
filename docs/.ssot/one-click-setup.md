@@ -31,8 +31,8 @@ setup 체인에 편입한다.
   `SHELL_COMMON`(또는 `DOTFILES_ROOT`)을 export 한 뒤 필요한 파일만 source 한다
   (guard-free 라 `DOTFILES_FORCE_INIT=1` 불필요).
 - `link.sh`: `dotfiles_ensure_link <src> <tgt> [--on-mismatch replace|keep] [--allow-dir] [--unmount-legacy]`
-  — 같은 링크면 no-op, 실파일은 `$DOTFILES_ORIGINAL_SUFFIX` 로 1회 백업(기존 백업은
-  덮어쓰지 않음). 실파일로 두어야 하는 설정(settings.json, hermes)은
+  — 같은 링크면 no-op, 실파일은 `$DOTFILES_ORIGINAL_SUFFIX` 로 백업(파일 백업은
+  latest-only 로 교체, 데이터가 든 디렉터리 백업은 덮어쓰지 않음). 실파일로 두어야 하는 설정(settings.json, hermes)은
   `dotfiles_ensure_copy_once`, 디렉터리는 `dotfiles_ensure_dir`.
 - **새 symlink 는 `shell-common/config/symlinks.conf` 에 행을 추가한다** — 모듈
   setup.sh 에 `ln -s` / `dotfiles_ensure_link` 로 링크 코드를 새로 쓰지 않는다.

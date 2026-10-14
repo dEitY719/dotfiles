@@ -75,6 +75,20 @@ EOF
     [ ! -e "${HOME}/.config/herdr/config.toml" ]
 }
 
+@test "config symlink: missing link is warned with the fix command, not fatal" {
+    stub_herdr_all_present
+    run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
+    assert_success
+    assert_output --partial "is not linked to"
+    assert_output --partial "symlink-manager.sh init"
+    # Once linked, the warning goes away.
+    mkdir -p "${HOME}/.config/herdr"
+    ln -s "${_BATS_REAL_DOTFILES_ROOT}/herdr/config.toml" "${HOME}/.config/herdr/config.toml"
+    run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
+    assert_success
+    refute_output --partial "is not linked to"
+}
+
 @test "plugin bootstrap: HERDR_SKIP_PLUGINS=1 skips without touching herdr" {
     # No herdr stub at all — if the skip check didn't run first, `command -v
     # herdr` would fail, which is a different (also-skip) message. Assert the

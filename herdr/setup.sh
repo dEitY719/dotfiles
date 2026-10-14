@@ -46,6 +46,13 @@ if [ ! -f "${HERDR_CONFIG_SRC}" ]; then
 	exit 1
 fi
 
+# The link itself is the `symlinks` step's; say so loudly when it is not in place
+# (that step is optional, so its failure is only a warning in the summary).
+if [ "$(readlink -f "${HOME}/.config/herdr/config.toml" 2>/dev/null)" != "${HERDR_CONFIG_SRC}" ]; then
+	ux_warning "${HOME}/.config/herdr/config.toml is not linked to ${HERDR_CONFIG_SRC} — herdr uses its defaults"
+	ux_bullet "Fix: bash ${SHELL_COMMON}/tools/custom/symlink-manager.sh init"
+fi
+
 # ============================================================================
 # Part 2: plugin bootstrap (soft-fail)
 # ============================================================================

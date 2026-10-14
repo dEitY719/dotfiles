@@ -168,6 +168,7 @@ cd ~/dotfiles
 `symlink-init` 을 직접 실행해야 했던 `~/.tmux.conf`, `~/.config/ghostty/config`,
 `~/.local/bin/schedule-agent-prompt` 가 실파일로 있으면 첫 실행에서
 `<파일>.original` 로 백업된 뒤 dotfiles 링크로 바뀐다(이후 실행은 변경 없음).
+`.original` 은 latest-only 라 같은 이름의 이전 백업 파일이 있으면 교체된다.
 로컬 수정이 있었다면 `.original` 에서 옮겨 담는다.
 
 ### 🟡 특정 shell만 재설정

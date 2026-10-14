@@ -19,7 +19,8 @@ ux_header "SSH Configuration Setup"
 
 # The symlinks step may have created ~/.ssh with the default umask, so set
 # 700 every run rather than only on creation.
-mkdir -p "${HOME}/.ssh"
-chmod 700 "${HOME}/.ssh"
-chmod 600 "${SSH_CONFIG_SRC}"
+if ! { mkdir -p "${HOME}/.ssh" && chmod 700 "${HOME}/.ssh" && chmod 600 "${SSH_CONFIG_SRC}"; }; then
+    ux_error "Could not set ssh permissions (~/.ssh 700, ${SSH_CONFIG_SRC} 600)"
+    exit 1
+fi
 ux_success "Permissions: ~/.ssh (700), ssh/config (600)"
