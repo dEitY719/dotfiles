@@ -255,10 +255,9 @@ _t7_protected_branch_takes_priority() {
 
     set +e
     out=$(cd "$dir" &&
-        UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" \
-            LEAK_PATTERNS_ERE="$_LEAK_PATTERNS_ERE" \
-            printf 'refs/heads/master %s refs/heads/master %s\n' "$local_sha" "$ZERO_SHA" |
-        "$HOOK" upstream "https://github.com/owner/repo.git" 2>&1)
+        printf 'refs/heads/master %s refs/heads/master %s\n' "$local_sha" "$ZERO_SHA" |
+        UPSTREAM_REMOTES_ERE="$_LEAK_UPSTREAM_ERE" LEAK_PATTERNS_ERE="$_LEAK_PATTERNS_ERE" \
+            "$HOOK" upstream "https://github.com/owner/repo.git" 2>&1)
     rc=$?
     set -e
 
