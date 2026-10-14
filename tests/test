@@ -442,7 +442,8 @@ _resolve_bats_file_timeout() {
 # expiry, so grandchildren (a hung git, a daemon) die too — `--foreground`
 # only killed the direct child. That group is outside the runner's phase
 # group, so an interrupt's group kill would miss it: its pgid is registered
-# as a file in $_TEST_TREE_DIR (set by _install_test_traps) for _kill_test_groups to signal.
+# as a file in $_TEST_TREE_DIR (set by _install_test_traps) for
+# _kill_test_groups to signal.
 # A TERM/INT trap forwarding to the group was tried and rejected: inside a
 # nested _spawn_group subshell it looped on bash 5.2 and orphaned timeout,
 # and `trap -` clobbered the caller's traps.
@@ -690,13 +691,14 @@ _kill_test_groups() {
             [ -e "$f" ] && groups="$groups ${f##*/}"
         done
     fi
+    # The pid fallback covers a timeout interrupted before its own setpgid.
     for g in $groups; do
-        kill -TERM -- "-$g" 2>/dev/null && alive=1
+        { kill -TERM -- "-$g" || kill -TERM "$g"; } 2>/dev/null && alive=1
     done
     if [ "$alive" = "1" ]; then
         sleep 1
         for g in $groups; do
-            kill -KILL -- "-$g" 2>/dev/null
+            { kill -KILL -- "-$g" || kill -KILL "$g"; } 2>/dev/null
         done
     fi
     _TEST_GROUPS=""
