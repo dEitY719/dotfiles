@@ -12,7 +12,7 @@
 # is in it; otherwise prints the new keys and exits 1.
 # Contract: git/doc/CHECK_REGISTRY.md.
 
-CHECKS_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+CHECKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$CHECKS_DIR/../../.." && pwd)"
 BASELINE="$CHECKS_DIR/baseline.txt"
 export CHECK_MODE=all
@@ -31,7 +31,10 @@ for check_file in "$CHECKS_DIR"/*_check.sh; do
     unset CHECK_NAME CHECK_SCOPE
     unset -f check_run
     # shellcheck source=/dev/null
-    . "$check_file" || exit 1
+    . "$check_file" || {
+        echo "run_all: failed to load check module $check_file"
+        exit 1
+    }
     case "${CHECK_SCOPE:-}" in per-file | per-shell-file) ;; *) continue ;; esac
     out="$tmpdir/$CHECK_NAME.out"
     : >"$out"
@@ -43,12 +46,19 @@ done
 
 grep -v '^#' "$BASELINE" 2>/dev/null | grep . >"$tmpdir/baseline"
 new=$(grep -vxF -f "$tmpdir/baseline" "$found")
-# A baseline key for a file judged in this run that no longer reproduces is
-# stale: it would hide a later regression, so it fails until removed.
+# A baseline key is stale when its file was judged in this run and no longer
+# reproduces, or when its file is gone: either way it would hide a later
+# regression, so it fails until removed. Keys of files outside this run (other
+# golden-rules chunks) are not judged here.
 printf '%s\n' "$@" >"$tmpdir/files"
 stale=$(awk 'FILENAME == ARGV[1] { judged[$0] = 1; next }
     FILENAME == ARGV[2] { hit[$0] = 1; next }
-    (substr($0, index($0, ":") + 1) in judged) && !($0 in hit)' "$tmpdir/files" "$found" "$tmpdir/baseline")
+    {
+        p = substr($0, index($0, ":") + 1)
+        gone = ((getline line < p) < 0)
+        close(p)
+        if (gone || ((p in judged) && !($0 in hit))) print
+    }' "$tmpdir/files" "$found" "$tmpdir/baseline")
 [ -z "$new$stale" ] && exit 0
 # One write per run so parallel chunks (golden rules) do not interleave lines.
 report=$(

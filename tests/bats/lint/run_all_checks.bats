@@ -68,10 +68,10 @@ verdicts() {
     [[ "$output" == *"emoji:bash/main.bash"* ]]
 }
 
-@test "bash-only \${BASH_*} in a #!/bin/sh util file: both fail" {
+@test "bash-only \${BASH_*} in a #!/bin/sh util file: pre-commit warns, run_all fails" {
     mkdir -p "$REPO/shell-common/util"
     verdicts shell-common/util/x.sh '#!/bin/sh\necho "${BASH_VERSION-}"\n'
-    [ "$PRE" = fail ]
+    [ "$PRE" = pass ]
     [ "$ALL" = fail ]
 }
 
@@ -84,4 +84,19 @@ verdicts() {
     # A key for a file not in this run is never judged stale (chunked runs).
     run "$REPO/git/hooks/checks/run_all.sh" claude/settings.json
     [ "$status" -eq 0 ]
+}
+
+@test "missing interactive guard: pre-commit warns (passes), run_all fails" {
+    mkdir -p "$REPO/shell-common/aliases"
+    verdicts shell-common/aliases/nog.sh '#!/bin/sh\nalias gs="git status"\n'
+    [ "$PRE" = pass ]
+    [ "$ALL" = fail ]
+}
+
+@test "baseline key of a deleted file is stale in any run" {
+    verdicts bash/main.bash '#!/bin/bash\n# clean\n'
+    printf '# comment\n\nemoji:zsh/gone.zsh\n' >"$REPO/git/hooks/checks/baseline.txt"
+    run "$REPO/git/hooks/checks/run_all.sh" bash/main.bash
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"emoji:zsh/gone.zsh  (stale"* ]]
 }
