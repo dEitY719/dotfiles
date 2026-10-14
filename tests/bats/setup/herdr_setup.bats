@@ -79,8 +79,11 @@ EOF
     stub_herdr_all_present
     run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
     assert_success
+    inode_before=$(stat -c %i "${HOME}/.config/herdr/config.toml")
     run env HERDR_SKIP_TOOLS=1 bash "${HERDR_SETUP}"
     assert_success
+    # Same inode: the link was left in place, not removed and re-created.
+    assert_equal "$(stat -c %i "${HOME}/.config/herdr/config.toml")" "$inode_before"
     # dotfiles_ensure_link is a silent no-op on a correct link (#2138).
     refute_output --partial "symlink: "
     refute_output --partial "backed up"

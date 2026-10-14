@@ -75,15 +75,26 @@ _lib() {
     assert_equal "$(find "$SB/home" -name 'f.*' | wc -l | tr -d ' ')" 1
 }
 
-@test "ensure_link: an existing backup is never overwritten (warn, target kept)" {
+@test "ensure_link: an older file backup is replaced, latest-only (#806, #2138)" {
     printf 'old backup\n' >"$SB/home/f.original"
     printf 'new local\n' >"$SB/home/f"
     _lib "dotfiles_ensure_link '$SB/src_file' '$SB/home/f'"
     assert_success
-    assert_output --partial "f.original"
-    [ ! -L "$SB/home/f" ]
-    assert_equal "$(cat "$SB/home/f")" "new local"
-    assert_equal "$(cat "$SB/home/f.original")" "old backup"
+    assert_output --partial "replacing previous backup"
+    assert_equal "$(readlink "$SB/home/f")" "$SB/src_file"
+    assert_equal "$(cat "$SB/home/f.original")" "new local"
+}
+
+@test "ensure_link: a non-empty directory backup is never overwritten (warn, target kept)" {
+    mkdir "$SB/home/d.original" "$SB/home/d"
+    printf 'precious\n' >"$SB/home/d.original/data"
+    printf 'new\n' >"$SB/home/d/data"
+    _lib "dotfiles_ensure_link '$SB/src_dir' '$SB/home/d' --allow-dir"
+    assert_success
+    assert_output --partial "d.original"
+    [ -d "$SB/home/d" ] && [ ! -L "$SB/home/d" ]
+    assert_equal "$(cat "$SB/home/d.original/data")" "precious"
+    assert_equal "$(cat "$SB/home/d/data")" "new"
 }
 
 @test "ensure_link: a real directory is refused without --allow-dir" {
