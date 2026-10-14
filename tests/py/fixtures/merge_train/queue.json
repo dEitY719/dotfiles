@@ -1,0 +1,9 @@
+[
+  {"number": 12, "headRefOid": "bbb", "mergeStateStatus": "CLEAN", "mergeable": "MERGEABLE",
+   "labels": [{"name": "review-passed"}, {"name": "refactor"}, {"name": "reply-pending"}]},
+  {"number": 3, "headRefOid": "aaa", "mergeStateStatus": "BEHIND", "mergeable": "UNKNOWN", "labels": []},
+  {"number": 100, "headRefOid": null, "mergeStateStatus": "DIRTY", "mergeable": false,
+   "labels": [{"name": "보류"}, "stray", null, {"name": "review-blocked"}]},
+  {"headRefOid": "ccc", "labels": null},
+  null
+]

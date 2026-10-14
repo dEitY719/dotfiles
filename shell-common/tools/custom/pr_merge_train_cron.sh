@@ -61,6 +61,24 @@ fi
 # shellcheck source=/dev/null
 . "${_PMT_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" || exit 1
 
+# Queue ops (#2174): Python by default (dotfiles_tools.merge_train.queue, via
+# cron_py), PMT_QUEUE_IMPL=shell rolls back to the legacy jq/shell code for one
+# release. Same op names, same stdin/stdout/exit contract either way.
+case "${PMT_QUEUE_IMPL:-python}" in
+shell)
+    # shellcheck source=/dev/null
+    . "${_PMT_SHELL_COMMON}/tools/custom/lib/merge_train_queue_shell.sh" || exit 1
+    _pmt_q() { _pmt_q_shell "$@"; }
+    ;;
+python)
+    _pmt_q() { cron_py dotfiles_tools.merge_train.queue "$@"; }
+    ;;
+*)
+    ux_error "PMT_QUEUE_IMPL must be python or shell (got: ${PMT_QUEUE_IMPL})."
+    exit 1
+    ;;
+esac
+
 # ============================================================
 # Constants (SSOT for the dispatcher)
 # ============================================================
@@ -342,7 +360,7 @@ _pmt_target_count() {
     _pmt_bind_fingerprint "${_filtered}"
     _pmt_bind_actionable "${_filtered}"
 
-    _PMT_TARGET_COUNT=$(printf '%s' "${_filtered}" | jq -r 'length' 2>/dev/null) ||
+    _PMT_TARGET_COUNT=$(printf '%s' "${_filtered}" | _pmt_q count) ||
         return 1
     case "${_PMT_TARGET_COUNT}" in
     '' | *[!0-9]*) return 1 ;;
@@ -380,18 +398,7 @@ _PMT_FINGERPRINT=""
 _pmt_bind_fingerprint() {
     local _tuples
 
-    _tuples=$(printf '%s' "$1" | jq -r '
-        [ .[]?
-          | [ (.number // "?" | tostring),
-              (.headRefOid // ""),
-              (.mergeStateStatus // ""),
-              (.mergeable // ""),
-              ([ .labels[]?.name?
-                 | select(. == "review-passed" or . == "review-blocked"
-                          or . == "reply-pending") ] | sort | join(","))
-            ] | join(":")
-        ] | sort | join(";")
-    ' 2>/dev/null) || _tuples=""
+    _tuples=$(printf '%s' "$1" | _pmt_q fingerprint) || _tuples=""
 
     if [ -z "${_tuples}" ]; then
         _PMT_FINGERPRINT=""
@@ -442,50 +449,47 @@ _pmt_backoff_write() {
 # re-running an identical failure every three minutes is precisely the waste
 # #1709 was filed about, and the window still expires.
 _pmt_backoff_gate() {
-    local _target="$1" _file _prev_fp="" _window=0 _remaining=0
+    local _target="$1" _file _verdict _action="" _window="" _remaining=""
 
     _file="$(_pmt_backoff_file)"
 
-    # No fingerprint is no evidence. Skipping on a queue this tick could not
-    # summarise would be backing off from a state it never observed.
-    [ -n "${_PMT_FINGERPRINT}" ] || return 1
+    # The verdict itself is the `backoff-next` op (lib/merge_train_queue_shell.sh
+    # or dotfiles_tools.merge_train.queue): no fingerprint -> `run`; a changed one
+    # -> `run 1 1`; an open window -> `skip <window> <remaining - 1>`; an elapsed
+    # one -> `run <doubled, capped window> <same>`. The file I/O stays here.
+    _verdict=$({ [ -r "${_file}" ] && cat "${_file}"; } 2>/dev/null |
+        _pmt_q backoff-next "${_PMT_BACKOFF_MAX}" "${_PMT_FINGERPRINT}") || _verdict=""
+    IFS=' ' read -r _action _window _remaining <<EOF
+${_verdict}
+EOF
+    # A verdict that is not `<action> [<digits> <digits>]` is no verdict.
+    case "${_window}${_remaining}" in *[!0-9]*) _action="" ;; esac
 
-    if [ -r "${_file}" ]; then
-        IFS=' ' read -r _window _remaining _prev_fp <"${_file}" 2>/dev/null || :
-    fi
-    # A truncated or hand-edited file reads as "no window open", never as a
-    # licence to skip — the fingerprint comparison below is what gates that.
-    case "${_window}" in '' | *[!0-9]*) _window=0 ;; esac
-    case "${_remaining}" in '' | *[!0-9]*) _remaining=0 ;; esac
-
-    if [ "${_PMT_FINGERPRINT}" != "${_prev_fp}" ]; then
-        # Reset to the smallest window, and run: something moved.
-        _pmt_backoff_write "${_file}" 1 1
-        return 1
-    fi
-
-    if [ "${_remaining}" -gt 0 ]; then
+    case "${_action}" in
+    skip)
         # A decrement that does not land is a window that never closes: the next
         # tick re-reads this same `remaining`, skips again, and the "the window
         # always expires" guarantee is gone. So an unwritable state file runs the
         # tick instead — "no backoff", the pre-#1709 behaviour and the safe
         # direction (PR #1719 review, codex BLOCKER).
-        _pmt_backoff_write "${_file}" "${_window}" "$((_remaining - 1))" || return 1
+        [ -n "${_remaining}" ] || return 1
+        _pmt_backoff_write "${_file}" "${_window}" "${_remaining}" || return 1
         # Deliberately not the "No target PR" wording: that line means zero
         # candidates, this one means candidates that have not moved. Reading
         # a cron log full of the same sentence for both would hide exactly the
         # state #1709 was filed about.
-        ux_info "Queue unchanged on ${_PMT_REPO} since the last tick (${_target} target PR(s), same fingerprint) — backoff skip, window ${_window}, next wake in ${_remaining} tick(s)."
+        ux_info "Queue unchanged on ${_PMT_REPO} since the last tick (${_target} target PR(s), same fingerprint) — backoff skip, window ${_window}, next wake in $((_remaining + 1)) tick(s)."
         return 0
-    fi
-
-    # The window has elapsed. This tick wakes a session — the fingerprint is a
-    # proxy and cannot see a board promotion or a newly satisfied branch rule —
-    # and arms the next, doubled one.
-    _window=$((_window * 2))
-    [ "${_window}" -ge 1 ] || _window=1
-    [ "${_window}" -le "${_PMT_BACKOFF_MAX}" ] || _window="${_PMT_BACKOFF_MAX}"
-    _pmt_backoff_write "${_file}" "${_window}" "${_window}"
+        ;;
+    run)
+        # Reset (something moved), or an elapsed window — the fingerprint is a
+        # proxy and cannot see a board promotion or a newly satisfied branch
+        # rule — so wake a session and arm the window the verdict names.
+        [ -z "${_remaining}" ] || _pmt_backoff_write "${_file}" "${_window}" "${_remaining}"
+        return 1
+        ;;
+    esac
+    # No fingerprint, or no readable verdict: no evidence — run, record nothing.
     return 1
 }
 
@@ -1026,6 +1030,17 @@ main() {
         ux_error "jq not found in PATH — cannot parse the PR list."
         ux_info "Install jq, or add it to the cron PATH."
         exit 1
+    fi
+
+    # The queue ops run in Python unless rolled back (#2174). No python3 >= 3.10
+    # (RHEL 8 ships 3.6) degrades to the jq rollback rather than stopping the
+    # tick: both paths answer the same (golden parity).
+    if [ "${PMT_QUEUE_IMPL:-python}" = "python" ] &&
+        ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then
+        ux_warning "python3 (>= 3.10) not found in PATH — using the jq queue ops (PMT_QUEUE_IMPL=shell)."
+        # shellcheck source=/dev/null
+        . "${_PMT_SHELL_COMMON}/tools/custom/lib/merge_train_queue_shell.sh" || exit 1
+        _pmt_q() { _pmt_q_shell "$@"; }
     fi
 
     # A dry run reports and touches nothing, so it must stay usable on a
