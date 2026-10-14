@@ -78,6 +78,7 @@ _bundle_fps() {
 
 # $1(지문 값)이 CHECK_CERT 에 있나: 0=포함, 1=미포함, 2=openssl 없어 비교 생략.
 # 지문 형식이 아닌 값은 예전 PEM 부분 문자열 비교로 fallback 하고 WARN 한다.
+# 1 인데 값이 bundle 에 부분 문자열로 있으면 레거시 값 안내 WARN 을 덧붙인다 (#2110).
 _ca_in_bundle() {
     if ! printf '%s' "$1" | grep -qE '^([0-9A-Fa-f]{2}:?){32}$'; then
         warn "$2: SHA-256 지문 형식이 아님 → 부분 문자열 비교로 대체 (openssl x509 -noout -fingerprint -sha256 값으로 교체 권장)"
