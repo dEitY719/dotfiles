@@ -139,6 +139,29 @@ _lib() {
     [ ! -L "$SB/home/c/settings.json" ]
 }
 
+@test "ensure_copy_once: a dangling symlink target is replaced by a real copy" {
+    mkdir -p "$SB/home/c"
+    ln -s "$SB/gone/settings.json" "$SB/home/c/settings.json"
+    _lib "dotfiles_ensure_copy_once '$SB/src_file' '$SB/home/c/settings.json'"
+    assert_success
+    [ ! -L "$SB/home/c/settings.json" ]
+    assert_equal "$(cat "$SB/home/c/settings.json")" "ssot"
+}
+
+@test "common: caller-defined log_* survive sourcing; shims fill the rest" {
+    run sh -c "log_info() { echo custom; }; . '${_BATS_REAL_SHELL_COMMON}/lib/setup/common.sh'; log_info x; log_warning y"
+    assert_success
+    assert_line --index 0 "custom"
+    assert_output --partial "y"
+}
+
+@test "common: _setup_lib_root returns the physical path" {
+    ln -s "$SB/src_dir" "$SB/alias_dir"
+    DOTFILES_ROOT_NO_CANONICALIZE=1 run sh -c ". '${_BATS_REAL_SHELL_COMMON}/lib/setup/common.sh'; _setup_lib_root '$SB/alias_dir'"
+    assert_success
+    assert_output "$(cd -P "$SB/src_dir" && pwd -P)"
+}
+
 @test "ensure_dir: creates once, refuses a non-directory" {
     _lib "dotfiles_ensure_dir '$SB/home/a/b' && dotfiles_ensure_dir '$SB/home/a/b'"
     assert_success
