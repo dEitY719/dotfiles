@@ -330,10 +330,13 @@ _update_plugin() {
 	fi
 	# Plugin installs from parallel marketplace jobs all rewrite the shared
 	# installed_plugins.json, so they take one lock (#2198 fallback); the slow
-	# marketplace refreshes stay parallel. shortcut: no lock where flock is
-	# missing (stock macOS) — add a mkdir lock if a store race shows up there.
+	# marketplace refreshes stay parallel. The lock lives outside $POOL_DIR so
+	# two concurrent runs (--user a / --user b share one store) exclude each
+	# other too. shortcut: no lock where flock is missing (stock macOS) — add a
+	# mkdir lock if a store race shows up there.
 	if command -v flock >/dev/null 2>&1; then
-		out="$(flock "$POOL_DIR/plugin-update.lock" claude plugin update "$id" --json </dev/null 2>&1)"
+		out="$(flock "${TMPDIR:-/tmp}/dotfiles-update-plugins.$(id -u).lock" \
+			claude plugin update "$id" --json </dev/null 2>&1)"
 	else
 		out="$(claude plugin update "$id" --json </dev/null 2>&1)"
 	fi
@@ -519,6 +522,33 @@ trap 'rm -rf "$POOL_DIR"' EXIT
 _update_scope "Public" "$SCRIPT_DIR" true
 if $COMPANY_ACTIVE; then
 	_update_scope "Company" "$PRIV" false
+fi
+
+# Marketplace refreshes run unlocked in parallel and also write the shared
+# store (#2198 review). Measured clean, but a lost or torn write must not pass
+# silently: re-read both store files and fail the run if either is no longer
+# valid JSON or lost a marketplace it listed before.
+_check_store() {
+	local f="$1" before="$2" query="$3" after name
+	[ -r "$STORE_DIR/$f" ] || return 0
+	if ! after="$(jq -r "$query" "$STORE_DIR/$f" 2>/dev/null)"; then
+		ux_error "Plugin store file is not valid JSON after the update: $STORE_DIR/$f"
+		FAILED=$((FAILED + 1))
+		return 0
+	fi
+	while IFS= read -r name; do
+		[ -n "$name" ] || continue
+		if ! _in_list "$name" "$after"; then
+			ux_error "Plugin store lost '$name' during the update: $STORE_DIR/$f"
+			FAILED=$((FAILED + 1))
+		fi
+	done <<EOF
+$before
+EOF
+}
+if ! $DRY_RUN; then
+	_check_store known_marketplaces.json "$KNOWN_MPS" 'keys[]'
+	_check_store installed_plugins.json "$INSTALLED_PLS" '(.plugins // {}) | keys[]'
 fi
 
 ux_section "Summary"
