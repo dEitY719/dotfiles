@@ -79,7 +79,7 @@ python3 >= 3.10 이 없으면 watcher tick 은 후보 선정을 하지 않고 �
 셸에 남은 것: `_iw_select_candidates` 의 오케스트레이션 (예산 계산, per-repo cap,
 lazy 한 gh 호출 순서) — 네트워크 호출 사이에 끼어 있어 순수 함수가 아니다.
 
-이식 시점 수치 (#2157): `issue_watcher_cron.sh` 의 jq 호출 6 → 2 (남은 2건은 watch list·herdr pane 파싱), `grep -c "jq "` 11 → 9 (롤백 안내 문구 포함), 줄 수 3204 → 3209 (선택 로직 −40줄, 롤백·fail-closed 분기 +45줄).
+이식 시점 수치 (#2157): `issue_watcher_cron.sh` 의 jq 호출 6 → 2 (남은 2건은 watch list·herdr pane 파싱), `grep -c "jq "` 11 → 9 (롤백 안내 문구 포함), 줄 수 3204 → 3209 (선택 로직 −40줄, 롤백·fail-closed 분기 +45줄). #2157 당시 스냅샷 — #2173 에서 롤백 분기와 안내 문구가 빠져 지금 수치와는 다르다.
 
 후속: 2순위 이식 (`pr_merge_train_cron.sh`, claude 계정 로직) 은 아래 "2차 이식" (#2174).
 
