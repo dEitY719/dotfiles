@@ -139,7 +139,7 @@ _pool_flush() {
 		n=$POOL_NEXT
 		if ! grep -qx DONE "$POOL_DIR/$n.res" 2>/dev/null; then
 			[ "${1:-}" = all ] || return 0
-			ux_error "$(cat "$POOL_DIR/$n.name"): job exited without a result"
+			ux_error "${POOL_NAMES[n]}: job exited without a result"
 			FAILED=$((FAILED + 1))
 		fi
 		cat "$POOL_DIR/$n.out"
@@ -166,7 +166,7 @@ _run_pool() {
 			_pool_flush
 		done
 		POOL_SEQ=$((POOL_SEQ + 1))
-		printf '%s\n' "${item##*/}" >"$POOL_DIR/$POOL_SEQ.name"
+		POOL_NAMES[POOL_SEQ]="${item##*/}"
 		(
 			RES_FILE="$POOL_DIR/$POOL_SEQ.res"
 			"$worker" "$item"
@@ -179,6 +179,7 @@ _run_pool() {
 
 POOL_SEQ=0
 POOL_NEXT=1
+POOL_NAMES=()
 POOL_DIR="$(mktemp -d)" || {
 	ux_error "mktemp -d failed — cannot buffer job output."
 	exit 1
