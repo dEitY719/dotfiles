@@ -58,14 +58,15 @@ EOF
 @test "git.sh shared functions load in zsh, prompt block stays bash-only" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
     run zsh -f -c "
-        alias gsw='git switch' gf='git fetch'
+        alias gsw='git switch' gf='git fetch' gupa='git pull --rebase --autostash'
         DOTFILES_FORCE_INIT=1
         . '$SHELL_COMMON/tools/integrations/git.sh'
-        whence -w git_lfs_install gf gset _short_pwd gsw
+        whence -w git_lfs_install gf gupa gset _short_pwd gsw
     "
     [ "$status" -eq 0 ] || [ "$status" -eq 1 ]
     [[ "$output" == *"git_lfs_install: function"* ]]
     [[ "$output" == *"gf: function"* ]]
+    [[ "$output" == *"gupa: function"* ]]
     [[ "$output" == *"gset: function"* ]]
     [[ "$output" == *"_short_pwd: none"* ]]
     [[ "$output" == *"gsw: alias"* ]]

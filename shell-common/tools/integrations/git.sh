@@ -44,6 +44,7 @@ git_rm_cached() {
     done
 }
 
+unalias gupa 2>/dev/null || true # oh-my-zsh git plugin alias breaks re-source in zsh
 gupa() {
     case "${1:-}" in -h | --help) git_help upstream; return 0 ;; esac
     if [ $# -eq 0 ]; then
