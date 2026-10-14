@@ -371,7 +371,7 @@ _setup_mode_config() {
 
     case "$environment" in
         internal)
-            _link_config_target "$(_internal_src "$4")" "$_mc_target"
+            _link_config_target "$(_internal_src "$4")" "$_mc_target" || return 1
             ux_success "Created symlink: ~${_mc_target#"$HOME"} → $4"
             ux_info "$5"
             return 0
@@ -390,7 +390,7 @@ _setup_mode_config() {
             ;;
         link\|*)
             _mc_rest="${_mc_action#link|}"
-            _link_config_target "${DOTFILES_ROOT}/${_mc_rest%%|*}" "$_mc_target"
+            _link_config_target "${DOTFILES_ROOT}/${_mc_rest%%|*}" "$_mc_target" || return 1
             ux_success "Created symlink: ~${_mc_target#"$HOME"} → ${_mc_rest%%|*}"
             ux_info "${_mc_rest#*|}"
             ;;
@@ -551,7 +551,7 @@ setup_opencode_config() {
             ;;
         external)
             mkdir -p "$(dirname "$opencode_target")"
-            _link_config_target "${DOTFILES_ROOT}/opencode/opencode.json.external" "$opencode_target"
+            _link_config_target "${DOTFILES_ROOT}/opencode/opencode.json.external" "$opencode_target" || return 1
             ux_success "Created symlink: ~/.config/opencode/opencode.json → opencode/opencode.json.external"
             ux_info "Using: Local LiteLLM proxy (localhost:4444)"
             ;;
@@ -642,7 +642,7 @@ setup_nuget_config() {
         internal)
             for _nuget_conf in "$nuget_primary" "$nuget_secondary"; do
                 mkdir -p "$(dirname "$_nuget_conf")"
-                _link_config_target "$(_internal_src nuget/NuGet.Config.internal)" "$_nuget_conf"
+                _link_config_target "$(_internal_src nuget/NuGet.Config.internal)" "$_nuget_conf" || return 1
             done
             ux_success "Created symlinks: NuGet.Config → nuget/NuGet.Config.internal"
             ux_info "  ~/.nuget/NuGet/ (dotnet CLI) + ~/.config/NuGet/ (mono)"

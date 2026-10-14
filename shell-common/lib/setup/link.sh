@@ -12,7 +12,8 @@
 #       or via an alias path) -> silent
 #       no-op. Link elsewhere -> replaced. Real file (or, with --allow-dir, a
 #       directory) -> moved to tgt$DOTFILES_ORIGINAL_SUFFIX (#806), then
-#       linked; an existing backup is never overwritten (warn, tgt left as is).
+#       linked; an older file backup is replaced (latest-only), a non-empty
+#       directory backup never is (warn, tgt left as is).
 #       --on-mismatch keep: warn and leave any mismatch untouched.
 #       --unmount-legacy: unmount a pre-#575 bind mount at tgt first.
 #   dotfiles_ensure_copy_once <src> <tgt>
@@ -111,9 +112,13 @@ dotfiles_ensure_link() {
             return 1
         fi
         _del_bak=$(dotfiles_backup_path "$_del_tgt" "$DOTFILES_ORIGINAL_SUFFIX")
-        if [ -e "$_del_bak" ] || [ -L "$_del_bak" ]; then
-            ux_warning "backup $_del_bak already exists — not overwriting; $_del_tgt left as is (move one aside, then re-run)"
+        # Latest-only (#806): a file backup is replaced so setup converges;
+        # a non-empty directory backup may hold user data, so never that.
+        if [ -d "$_del_bak" ] && [ ! -L "$_del_bak" ] && [ -n "$(ls -A "$_del_bak" 2>/dev/null)" ]; then
+            ux_warning "backup directory $_del_bak holds data — not overwriting; $_del_tgt left as is (move one aside, then re-run)"
             return 0
+        elif [ -e "$_del_bak" ] || [ -L "$_del_bak" ]; then
+            ux_warning "replacing previous backup (latest-only, #806): $_del_bak"
         fi
         dotfiles_backup_move "$_del_tgt" "$DOTFILES_ORIGINAL_SUFFIX" >/dev/null || {
             ux_error "backup failed: $_del_tgt -> $_del_bak"
