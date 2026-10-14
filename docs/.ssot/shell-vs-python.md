@@ -88,8 +88,9 @@ lazy 한 gh 호출 순서) — 네트워크 호출 사이에 끼어 있어 순�
 ## 2차 이식 — merge train dispatcher (#2174)
 
 `dotfiles_tools.merge_train.queue` 가 `pr_merge_train_cron.sh` 의 큐 판정 순수 로직을
-맡는다. 롤백: `PMT_QUEUE_IMPL=shell` (`shell-common/tools/custom/lib/merge_train_queue_shell.sh`).
-python3 >= 3.10 이 없으면 경고 후 자동으로 롤백 경로를 쓴다.
+맡는다. 1 릴리스 관측 후 jq/셸 롤백 경로(`PMT_QUEUE_IMPL=shell`,
+`lib/merge_train_queue_shell.sh`)와 golden parity 테스트를 제거했다 (#2210).
+python3 >= 3.10 이 없으면 tick 을 에러로 중단한다 (큐 count/fingerprint 를 낼 방법이 없다).
 
 | 셸 함수 | 기준 | op | 바뀐 것 |
 |---------|------|----|---------|
@@ -117,4 +118,4 @@ python3 >= 3.10 이 없으면 경고 후 자동으로 롤백 경로를 쓴다.
 | `_claude_resolve_account` · `_claude_account_auth_kind` · `_claude_validate_login` | 셸 유지 | auth lib 은 부모 셸 상주(`claude_yolo` 가 source), jq 1단계 조회 |
 | `_claude_ensure_settings_copy` | 셸 유지 | (b) 에 해당(model 키 이주·로컬 전용 키 병합)하지만 `./setup.sh` 경로다 — one-click setup 은 python3 >= 3.10 이 없는 PC 에서도 수렴해야 하고(`docs/.ssot/one-click-setup.md`), 이미 jq 부재 시 degrade 경로가 있다 |
 
-후속: 롤백 경로(`PMT_QUEUE_IMPL`) 제거 #2210 (1 릴리스 관측 후, #2173 과 같은 형태).
+롤백 경로(`PMT_QUEUE_IMPL`) 제거: #2210 (#2173 과 같은 형태).

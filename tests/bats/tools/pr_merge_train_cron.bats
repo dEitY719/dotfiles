@@ -382,13 +382,15 @@ _path_without() {
 
     for _b in sh bash env git jq awk sed grep head tail cat cut tr sort \
         uniq date mkdir rmdir rm ln basename dirname sleep mktemp flock tput \
-        uname wc chmod find id stty locale; do
+        uname wc chmod find id stty locale python3; do
         _skip=0
         for _p in "$@"; do
             [ "${_b}" != "${_p}" ] || _skip=1
         done
         [ "${_skip}" -eq 0 ] || continue
         _p=$(command -v "${_b}" 2>/dev/null) || continue
+        # A pyenv/asdf shim needs its manager on PATH: link the real interpreter.
+        [ "${_b}" != python3 ] || _p=$("${_p}" -c 'import sys; print(sys.executable)') || continue
         ln -sf "${_p}" "${_d}/${_b}" 2>/dev/null || true
     done
 
@@ -677,26 +679,13 @@ _hold_lock() {
     assert_equal "$(_backoff_window)" "8"
 }
 
-# The queue ops (count / fingerprint / backoff-next) run in Python by default
-# (#2174); PMT_QUEUE_IMPL=shell is the one-release jq rollback, and a host with
-# no python3 >= 3.10 falls back to it on its own.
-@test "pr_merge_train_cron: PMT_QUEUE_IMPL=shell rollback backs off the same" {
-    _run_tick PMT_QUEUE_IMPL=shell
-    assert_success
-    _assert_logged "herdr agent prompt"
-    assert_equal "$(_backoff_window)" "1"
-
-    _run_tick PMT_QUEUE_IMPL=shell
-    assert_output --partial "Queue unchanged"
-    assert_equal "$(_backoff_remaining)" "0"
-}
-
-@test "pr_merge_train_cron: missing python3 degrades to the jq queue ops" {
-    # _path_without links no python3, so `command -v python3` finds none.
-    _run_tick "PATH=$(_path_without)"
-    assert_success
-    assert_output --partial "PMT_QUEUE_IMPL=shell"
-    _assert_logged "herdr agent prompt"
+# The queue ops (count / fingerprint / backoff-next) run in Python only (#2174);
+# the jq rollback is gone (#2210), so a host with no python3 >= 3.10 stops the tick.
+@test "pr_merge_train_cron: missing python3 fails the tick" {
+    _run_tick "PATH=$(_path_without python3)"
+    assert_failure
+    assert_output --partial "python3 (>= 3.10) not found"
+    _refute_train_started
 }
 
 @test "pr_merge_train_cron: a broken queue op warns and runs the tick" {
@@ -708,13 +697,6 @@ _hold_lock() {
     assert_success
     assert_output --partial "No backoff verdict"
     _assert_logged "herdr agent prompt"
-}
-
-@test "pr_merge_train_cron: an unknown PMT_QUEUE_IMPL fails the tick" {
-    _run_tick PMT_QUEUE_IMPL=perl
-    assert_failure
-    assert_output --partial "PMT_QUEUE_IMPL must be python or shell"
-    _refute_train_started
 }
 
 @test "pr_merge_train_cron: a moved head resets the backoff immediately" {

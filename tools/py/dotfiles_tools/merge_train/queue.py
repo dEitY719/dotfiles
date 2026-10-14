@@ -2,9 +2,8 @@
 
 The shell keeps every gh/herdr call, the lock, the state-file I/O and the logging;
 it pipes what it holds into one of the ops below and reads the answer back. Each
-op mirrors the jq/shell code it replaced -- the legacy code lives in
-shell-common/tools/custom/lib/merge_train_queue_shell.sh (PMT_QUEUE_IMPL=shell)
-and tests/py/test_merge_train_queue.py proves both agree on every fixture.
+op mirrors the jq/shell code it replaced; that rollback path was removed after one
+release (#2210), and tests/py/test_merge_train_queue.py pins every op's answer.
 
 Usage: python3 -s -E -m dotfiles_tools.merge_train.queue <op> [arg...] < input
 
