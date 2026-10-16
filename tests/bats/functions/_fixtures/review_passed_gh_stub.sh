@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/bats/skills/_fixtures/review_passed_gh_stub.sh
+# tests/bats/functions/_fixtures/review_passed_gh_stub.sh
 # Shared bats scaffolding for the two `review-passed` reconcile suites:
 #   gh_pr_resolve_outdated_review_passed.bats  (issue #1698)
 #   gh_pr_resolve_conflict_review_passed.bats  (issue #1700)

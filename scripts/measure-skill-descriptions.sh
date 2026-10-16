@@ -13,9 +13,11 @@
 # 가 실제로 하네스에 연결하는 것과 정확히 같은 목록을 본다. `--skills-dir` 로
 # 단일 디렉토리(`<dir>/<skill>/SKILL.md`)를 직접 지정하면 그쪽이 우선한다.
 #
-# 판정 로직은 중복 구현하지 않고 Check 16 의 실행 가능 미러
-# tests/bats/skills/_fixtures/skill_description_length.sh 를 그대로 재사용한다.
-# 임계값이 바뀌면 그 파일과 checks.md 만 고치면 된다.
+# 판정 로직은 중복 구현하지 않는다. Check 16 의 정본 구현인 authoring-skills
+# repo 의 skills/skill-check/lib/skill_check.sh 를 워크스페이스
+# (\${WORKSPACE_ROOT:-\$HOME/para/project/skills}/authoring-skills) 에서 실행해
+# 그 Check 16 행(판정 + 문자 수)을 그대로 쓴다 (dotfiles#2200). 임계값과
+# justifying-comment 규칙은 그 스크립트와 checks.md 가 SSOT 다.
 #
 # 총량이 중요한 이유: description 은 전 세션의 available_skills 목록에 실리고
 # Codex/Kimi 는 그 목록을 설치된 전체 스킬 합계 약 5,440자로 제한한다.
@@ -81,14 +83,17 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-MIRROR="${DOTFILES_ROOT}/tests/bats/skills/_fixtures/skill_description_length.sh"
-if [ ! -r "$MIRROR" ]; then
-    printf '%s[FAIL]%s Check 16 미러를 찾을 수 없습니다: %s\n' "$UX_ERROR" "$UX_RESET" "$MIRROR" >&2
-    printf 'Next: git status 로 tests/bats/skills/_fixtures/ 누락 여부를 확인하세요.\n' >&2
+CHECK16_SH="${WORKSPACE_ROOT:-$HOME/para/project/skills}/authoring-skills/skills/skill-check/lib/skill_check.sh"
+if [ ! -r "$CHECK16_SH" ]; then
+    printf '%s[FAIL]%s Check 16 정본 구현을 찾을 수 없습니다: %s\n' "$UX_ERROR" "$UX_RESET" "$CHECK16_SH" >&2
+    printf 'Next: dEitY719/authoring-skills 를 워크스페이스에 clone 하거나 WORKSPACE_ROOT 를 지정하세요.\n' >&2
     exit 1
 fi
-# shellcheck source=../tests/bats/skills/_fixtures/skill_description_length.sh
-source "$MIRROR"
+
+# _check16_row <skill_md> -- 정본 skill_check.sh 의 Check 16 행 "<판정>\t<문자수 ...>".
+_check16_row() {
+    sh "$CHECK16_SH" "$1" 2>/dev/null | awk -F '\t' '$1 == "16" { print $2 "\t" $3 }'
+}
 
 # 측정 대상 디렉토리 목록 (한 줄에 하나). --skills-dir 는 평평한
 # `<dir>/<skill>/` 레이아웃, 기본은 워크스페이스 열거 SSOT.
@@ -132,14 +137,19 @@ while IFS= read -r _dir; do
     _md="${_dir}/SKILL.md"
     [ -f "$_md" ] || continue
 
-    if ! _len="$(skill_desc_length "$_md")"; then
-        # description 부재는 Check 3 의 소관 — 여기서는 N/A 로 집계만 한다.
+    _row="$(_check16_row "$_md")"
+    _verdict="${_row%%$'\t'*}"
+    case "$_verdict" in
+    PASS | WARN | FAIL) ;;
+    *)
+        # description 부재(N/A)는 Check 3 의 소관 — 여기서는 N/A 로 집계만 한다.
         printf '%-36s %5s %s\n' "$_name" "-" "N/A"
         missing=$((missing + 1))
         continue
-    fi
-
-    _verdict="$(skill_desc_verdict "$_len")"
+        ;;
+    esac
+    _len="${_row#*$'\t'}"
+    _len="${_len%% *}"
     case "$_verdict" in
     PASS) pass=$((pass + 1)) ;;
     WARN) warn=$((warn + 1)) ;;

@@ -306,9 +306,10 @@ run_in_zsh() {
 # copied: three call sites each carried their own fold, all three were wrong,
 # and 76 dispatches were refused before anyone read the stderr. The producing
 # side is `shell-common/functions/herdr_agent_name.sh`; this is the
-# independent oracle four suites check it against
+# independent oracle three suites check it against
 # (`herdr_agent_name.bats`, `pr_merge_train_cron.bats`,
-# `issue_watcher_cron.bats`, `gh_pr_post_merge_verify.bats`).
+# `issue_watcher_cron.bats`; the post-merge-verify suite moved to
+# dEitY719/gh-verify-skills in #2200).
 assert_valid_herdr_name() {
     [[ "$1" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] ||
         fail "not a valid herdr agent name: '$1'"

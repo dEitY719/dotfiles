@@ -1,7 +1,9 @@
 #!/usr/bin/env bats
-# tests/bats/skills/gh_pr_resolve_outdated_review_passed.bats
+# tests/bats/functions/gh_pr_resolve_outdated_review_passed.bats
 # Issue #1698 — gh:pr-resolve-outdated Step 5's `review-passed` reconciliation:
-#   claude/skills/gh-pr-resolve-outdated/references/verdict-label-removal.sh.md
+#   (the shipped skill, dEitY719/gh-resolve-skills skills/outdated/lib/remove-review-passed.sh,
+#    drops review-passed unconditionally and does NOT call this reconcile helper;
+#    its own bats live in that repo, dEitY719/dotfiles#2200)
 #   shell-common/functions/gh_pr_resolve_outdated.sh
 # Source-of-truth fixture: _fixtures/gh_pr_resolve_outdated_review_passed.sh
 #
@@ -69,8 +71,8 @@
 
 load '../test_helper'
 
-FIXTURE='tests/bats/skills/_fixtures/gh_pr_resolve_outdated_review_passed.sh'
-GH_STUB='tests/bats/skills/_fixtures/review_passed_gh_stub.sh'
+FIXTURE='tests/bats/functions/_fixtures/gh_pr_resolve_outdated_review_passed.sh'
+GH_STUB='tests/bats/functions/_fixtures/review_passed_gh_stub.sh'
 
 setup() {
     setup_isolated_home
