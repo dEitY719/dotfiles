@@ -76,7 +76,7 @@ main() {
     # Check if skill file exists
     if [ ! -f "$skill_file" ]; then
         ux_error "Skill not found: $skill_name"
-        ux_info "Use 'skill-loader --list' to see available skills"
+        ux_info "Use 'skill-loader --list' to see available skills" >&2
         return 1
     fi
 

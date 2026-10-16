@@ -21,6 +21,7 @@
 cron_bootstrap() {
     # readlink -f: $0 may be a ~/.local/bin symlink (#2195); readlink can be
     # missing from a stripped PATH (tests), so fall back to the plain $0.
+    local _cron_self
     _cron_self=$(readlink -f "$0" 2>/dev/null) || _cron_self=$0
     # shellcheck source=/dev/null
     . "$(dirname "$_cron_self")/init.sh"

@@ -47,7 +47,7 @@
 # rejects outright as a bad substitution, and NF-3 requires this file to run
 # under /bin/sh.
 
-# PATH executable since #2195 (~/.local/bin/ai-cron via config/symlinks.conf):
+# PATH executable since #2195 (~/.local/bin/aicron via config/symlinks.conf):
 # $0 may be that symlink, so resolve it first. realpath is not guaranteed to
 # exist; readlink -f is (GNU, busybox, macOS 12.3+), and plain $0 is the
 # fallback when it is missing.
