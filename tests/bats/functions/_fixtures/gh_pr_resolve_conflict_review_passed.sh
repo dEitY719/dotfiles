@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# tests/bats/skills/_fixtures/gh_pr_resolve_conflict_review_passed.sh
+# tests/bats/functions/_fixtures/gh_pr_resolve_conflict_review_passed.sh
 # Source-of-truth mirror for gh:pr-resolve-conflict Step 5's `review-passed`
 # handling:
-#   claude/skills/gh-pr-resolve-conflict/references/verdict-label-removal.sh.md
+#   (the shipped skill, dEitY719/gh-resolve-skills skills/conflict/lib/remove-review-passed.sh,
+#    drops review-passed unconditionally and does NOT call this reconcile helper;
+#    its own bats live in that repo, dEitY719/dotfiles#2200)
 #   shell-common/functions/gh_pr_resolve_outdated.sh
 #
 # Issue #1700. Like its gh:pr-resolve-outdated sibling beside it, this does NOT

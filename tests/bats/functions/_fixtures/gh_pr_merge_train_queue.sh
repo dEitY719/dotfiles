@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # tests/bats/functions/_fixtures/gh_pr_merge_train_queue.sh
 # The claude/skills/ paths below left this repo with #1680 (now the gh-pr-skills
-# marketplace repo). The mirrored half moves there with #2200; the half that
-# sources shell-common/functions stays here.
+# marketplace repo). #2200 moved the other two mixed fixtures' mirror halves
+# there, but NOT this one: gh-pr-skills' merge / merge-train skills never
+# received #1707's text (Step 3 `--auto`, Step 3.5 `[QUEUED]`, Step 3.6 base
+# guard, Step 0 finalize sweep — the split snapshot predates it), so the
+# mirrors below have no shipped canonical to pin to there. They stay here,
+# unpinned, until that text is ported (#2219).
 # Source-of-truth mirror for the merge-queue path added by issue #1707:
 #   claude/skills/gh-pr-merge/SKILL.md            (Step 1 flags, Step 3, Step 3.5)
 #   claude/skills/gh-pr-merge/references/finalize-merged-pr.sh.md
