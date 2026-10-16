@@ -15,7 +15,7 @@
 #
 # 판정 로직은 중복 구현하지 않는다. Check 16 의 정본 구현인 authoring-skills
 # repo 의 skills/skill-check/lib/skill_check.sh 를 워크스페이스
-# (\${WORKSPACE_ROOT:-\$HOME/para/project/skills}/authoring-skills) 에서 실행해
+# (${WORKSPACE_ROOT:-$HOME/para/project/skills}/authoring-skills) 에서 실행해
 # 그 Check 16 행(판정 + 문자 수)을 그대로 쓴다 (dotfiles#2200). 임계값과
 # justifying-comment 규칙은 그 스크립트와 checks.md 가 SSOT 다.
 #
@@ -141,11 +141,16 @@ while IFS= read -r _dir; do
     _verdict="${_row%%$'\t'*}"
     case "$_verdict" in
     PASS | WARN | FAIL) ;;
-    *)
+    N/A)
         # description 부재(N/A)는 Check 3 의 소관 — 여기서는 N/A 로 집계만 한다.
         printf '%-36s %5s %s\n' "$_name" "-" "N/A"
         missing=$((missing + 1))
         continue
+        ;;
+    *)
+        # 행 없음/미지 판정 = 정본 실행 실패 또는 출력 계약(16<TAB>판정<TAB>N chars) 변경.
+        printf '%s[FAIL]%s %s: Check 16 행을 읽지 못했습니다 (%s)\n' "$UX_ERROR" "$UX_RESET" "$_md" "$CHECK16_SH" >&2
+        exit 1
         ;;
     esac
     _len="${_row#*$'\t'}"
