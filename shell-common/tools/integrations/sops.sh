@@ -548,7 +548,11 @@ _senv_key() {
 # .enc.env is ever added, never .env. The PR is not merged.
 _senv_create_pr() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local base cur branch url rc staged host
+    local base cur branch url rc staged host ahead
+    if [ $# -gt 0 ]; then
+        ux_error "create-pr takes no arguments (it always re-encrypts .env -> .enc.env)"
+        return 1
+    fi
     local title="chore(secrets): .enc.env 를 현재 .env 로 다시 암호화한다"
     local body="\`senv create-pr\` 로 \`.env\` 를 다시 암호화했다. 변경은 \`.enc.env\` 한 파일뿐이다."
     if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -572,6 +576,12 @@ _senv_create_pr() {
         ux_info "Next: git switch ${base}"
         return 1
     fi
+    ahead=$(git rev-list --count "origin/${base}..HEAD" 2>/dev/null)
+    if [ "${ahead:-0}" -gt 0 ]; then
+        ux_error "${base} has ${ahead} unpushed commit(s) that would be mixed into the PR"
+        ux_info "Next: git push origin ${base}  (or move them to a branch)"
+        return 1
+    fi
     staged=$(git diff --cached --name-only --relative | grep -vx '\.enc\.env')
     if [ -n "$staged" ]; then
         ux_error "other staged changes would be mixed into the PR:"
@@ -580,15 +590,23 @@ _senv_create_pr() {
         return 1
     fi
 
-    _senv_enc "$@" || return 1
+    branch="chore/reencrypt-env-$(date +%Y%m%d-%H%M%S)"
+    if git show-ref --verify --quiet "refs/heads/${branch}"; then
+        ux_error "branch already exists: ${branch}"
+        return 1
+    fi
+    _senv_enc "$@" || return 1 # "$@" is empty: args were rejected above
     if [ -z "$(git status --porcelain -- .enc.env)" ]; then
         ux_info "no change in .enc.env; nothing to do"
         return 0
     fi
 
-    branch="chore/reencrypt-env-$(date +%Y%m%d-%H%M)"
     git switch -c "$branch" >/dev/null || return 1
-    git add -- .enc.env && git commit -m "$title" -- .enc.env >/dev/null || return 1
+    git add -- .enc.env
+    if ! git commit -m "$title" -- .enc.env >/dev/null; then
+        ux_error "commit failed (now on ${branch}; .enc.env is modified)"
+        return 1
+    fi
     ux_success "committed on ${branch}"
     git push -u origin HEAD || {
         ux_error "push failed (branch ${branch} is committed locally)"
