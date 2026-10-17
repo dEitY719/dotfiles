@@ -2253,3 +2253,31 @@ EOF
     assert_success
     assert_output "${HOME}/.claude-work"
 }
+
+@test "_gh_pr_review_resolve_claude_account: resolves --user non-interactively under zsh (emulate -L sh branch)" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    run zsh -fc "
+        export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
+        DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
+        unset DOTFILES_FORCE_INIT CLAUDE_ENABLED_ACCOUNTS
+        _gh_pr_review_resolve_claude_account work
+    "
+    assert_success
+    assert_output "${HOME}/.claude-work"
+}
+
+@test "_gh_pr_review_resolve_claude_account: a shell-common without env/ (vendored copy) fails cleanly, no source error" {
+    local sc="${TEST_TEMP_HOME}/vendored-shell-common"
+    mkdir -p "$sc"
+    ln -s "${SHELL_COMMON}/functions" "$sc/functions"
+    ln -s "${SHELL_COMMON}/tools" "$sc/tools"
+    ln -s "${SHELL_COMMON}/util" "$sc/util"
+    run env -u CLAUDE_ENABLED_ACCOUNTS bash --noprofile --norc -c "
+        export SHELL_COMMON='$sc' HOME='${HOME}'
+        DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\" 2>/dev/null
+        unset DOTFILES_FORCE_INIT
+        _gh_pr_review_resolve_claude_account work
+    "
+    assert_failure
+    assert_output "Unknown claude account: 'work' (allowed: )"
+}
