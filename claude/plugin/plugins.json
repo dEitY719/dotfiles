@@ -5,7 +5,6 @@
     "caveman@caveman",
     "claude-md-management@claude-plugins-official",
     "claudecode@claudecode-skills",
-    "codex@openai-codex",
     "devenv@devenv-skills",
     "document-skills@anthropic-agent-skills",
     "example-skills@anthropic-agent-skills",
@@ -29,7 +28,6 @@
     "session@session-skills",
     "spec-flow@spec-flow-skills",
     "superpowers@claude-plugins-official",
-    "understand-anything@understand-anything",
     "video@video-skills",
     "visuals@visuals-skills"
   ]

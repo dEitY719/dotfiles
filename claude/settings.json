@@ -3,7 +3,7 @@
   "enabledPlugins": {
     "authoring@authoring-skills": true,
     "claudecode@claudecode-skills": true,
-    "codex@openai-codex": true,
+    "codex@openai-codex": false,
     "devenv@devenv-skills": true,
     "gh-flow@gh-flow-skills": true,
     "gh-issue@gh-issue-skills": true,
@@ -18,7 +18,7 @@
     "session@session-skills": true,
     "spec-flow@spec-flow-skills": true,
     "superpowers@claude-plugins-official": true,
-    "understand-anything@understand-anything": true,
+    "understand-anything@understand-anything": false,
     "video@video-skills": true,
     "visuals@visuals-skills": true
   },
