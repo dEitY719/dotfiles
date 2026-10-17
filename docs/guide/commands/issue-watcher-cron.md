@@ -15,7 +15,7 @@
 - sections
     - usage: run modes (tick, --dry-run, --status)
     - files: watch list and state files
-    - details: issue-watcher-cron --help  (full cycle, caps, rate-limit gate)
+- Full cycle, caps, rate-limit gate: issue-watcher-cron --help
 
 ## 섹션
 
