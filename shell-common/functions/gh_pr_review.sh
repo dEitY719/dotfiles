@@ -310,7 +310,8 @@ _gh_pr_review_resolve_claude_account() {
     fi
     # The whitelist is exported by env/claude.sh at shell init; a non-interactive
     # skill run may not have inherited it, which would reject every --user as
-    # "(allowed: )". Same fallback as tools/custom/claude_accounts.sh.
+    # "(allowed: )". Same fallback as tools/custom/claude_accounts.sh. Its exports
+    # persist in the caller, exactly as if env/claude.sh had run at shell init.
     # [ -f ]: a vendored shell-common (gh-verify-skills) ships no env/ tree.
     local _env="$_sc/env/claude.sh"
     if [ -z "${CLAUDE_ENABLED_ACCOUNTS+x}" ] && [ -f "$_env" ]; then
