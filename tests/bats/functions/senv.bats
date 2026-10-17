@@ -427,3 +427,31 @@ _pr_repo() {
     assert_failure
     [[ "$output" == *"no arguments"* ]]
 }
+
+@test "create-pr: unchanged plaintext is detected even though sops output is non-deterministic" {
+    _pr_repo
+    printf '#!/bin/sh\ncase "$1" in -d) printf "A=1\\n" ;; -e) echo "enc-$$-$(date +%%N)" ;; esac\n' >"$STUB_BIN/sops"
+    printf 'enc-0\n' >"$PROJ/.enc.env"
+    git -C "$PROJ" add .enc.env
+    git -C "$PROJ" commit -q -m enc
+    git -C "$PROJ" push -q origin main
+    _senv "senv create-pr"
+    assert_success
+    [[ "$output" == *"no change"* ]]
+    [ "$(git -C "$PROJ" symbolic-ref --short HEAD)" = main ]
+    [ ! -f "$GH_LOG" ]
+}
+
+@test "create-pr: refuses from a subdirectory and when behind origin" {
+    _pr_repo
+    mkdir "$PROJ/sub"
+    run_in_bash "PATH='$STUB_BIN:/usr/bin:/bin'; cd '$PROJ/sub' && senv create-pr"
+    assert_failure
+    [[ "$output" == *"repository root"* ]]
+    git -C "$PROJ" commit -q --allow-empty -m upstream
+    git -C "$PROJ" push -q origin main
+    git -C "$PROJ" reset -q --hard HEAD~1
+    _senv "senv create-pr"
+    assert_failure
+    [[ "$output" == *"behind"* ]]
+}
