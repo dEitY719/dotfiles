@@ -34,7 +34,7 @@ _PMT_SHELL_COMMON="${SHELL_COMMON}"
 # a dispatcher that guessed the filter would be the duplicated-logic bug #1524
 # removed. Same precedent as the gh_host.sh check in _pmt_bind_target.
 if [ ! -f "${_PMT_SHELL_COMMON}/lib/gh_pr_merge_train.sh" ]; then
-    ux_error "gh_pr_merge_train.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot filter target PRs."
+    ux_error "gh_pr_merge_train.sh not found under ${_PMT_SHELL_COMMON}/lib — cannot filter target PRs."
     exit 1
 fi
 # shellcheck source=/dev/null
@@ -266,7 +266,7 @@ _pmt_bind_target() {
     local _remote_url
 
     if [ ! -f "${_PMT_SHELL_COMMON}/lib/gh_host.sh" ]; then
-        ux_error "gh_host.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot resolve the GitHub target."
+        ux_error "gh_host.sh not found under ${_PMT_SHELL_COMMON}/lib — cannot resolve the GitHub target."
         return 1
     fi
     # shellcheck source=/dev/null
@@ -276,7 +276,7 @@ _pmt_bind_target() {
     # answer the same question — what this tick's target is called — and a
     # missing one is the same class of failure.
     if [ ! -f "${_PMT_SHELL_COMMON}/lib/herdr_agent_name.sh" ]; then
-        ux_error "herdr_agent_name.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot derive the train's agent name."
+        ux_error "herdr_agent_name.sh not found under ${_PMT_SHELL_COMMON}/lib — cannot derive the train's agent name."
         return 1
     fi
     # shellcheck source=/dev/null

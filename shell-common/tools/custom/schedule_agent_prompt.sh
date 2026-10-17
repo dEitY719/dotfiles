@@ -51,7 +51,7 @@ _SAP_SHELL_COMMON="${SHELL_COMMON}"
 # physical-path resolver. Both are reused rather than re-derived — see
 # _sap_resolve_pane for the one predicate this file does NOT take from there.
 if [ ! -f "${_SAP_SHELL_COMMON}/lib/herdr_agent_lookup.sh" ]; then
-    ux_error "herdr_agent_lookup.sh not found under ${_SAP_SHELL_COMMON}/functions — cannot resolve agent panes."
+    ux_error "herdr_agent_lookup.sh not found under ${_SAP_SHELL_COMMON}/lib — cannot resolve agent panes."
     exit 1
 fi
 # shellcheck source=/dev/null
