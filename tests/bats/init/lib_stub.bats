@@ -22,7 +22,8 @@ teardown() {
         [ -f "${SHELL_COMMON}/lib/$name" ] || fail "$name: stub without lib/$name"
         [ "$(wc -l <"$stub")" -le 5 ] || fail "$name: stub longer than 5 lines"
         grep -q "/lib/$name\"\$" "$stub" || fail "$name: stub does not source lib/$name"
-        grep -q 'case \$- in \*i\*) return 0' "$stub" || fail "$name: no reverse guard"
+        grep -q 'case \$- in \*i\*) \[ -n "\${_DOTFILES_LOADING_FUNCTIONS-}" \] && return 0' "$stub" ||
+            fail "$name: no reverse guard"
         n=$((n + 1))
     done
     [ "$n" -eq 20 ] || fail "expected 20 stubs, found $n"
@@ -36,10 +37,15 @@ teardown() {
         echo LIBFNS=\$(declare -F | grep -c '_gh_pr_merge_train\|devx_pr_review_all')
         type _dotfiles_root_guard_self >/dev/null 2>&1 && echo GUARD=yes
         _codex_load_skill_sources 2>>'${TEST_TEMP_HOME}/load.err' && echo LAZY=yes
+        # Outside the loader pass a stub still forwards, interactive or not.
+        . '${SHELL_COMMON}/lib/devx_pr_review_all.sh' 2>>'${TEST_TEMP_HOME}/load.err'
+        type _gh_pr_edit_safe_label >/dev/null 2>&1 || . '${SHELL_COMMON}/functions/gh_pr_edit_safe.sh'
+        type _gh_pr_edit_safe_label >/dev/null 2>&1 && echo DIRECT=yes
     " 2>/dev/null
     assert_output --partial "LIBFNS=0"
     assert_output --partial "GUARD=yes"
     assert_output --partial "LAZY=yes"
+    assert_output --partial "DIRECT=yes"
     # A lib sourced directly in an interactive shell must not reach a sibling
     # through a functions/ stub (which returns there) and warn (PR #2224 review).
     run grep -E 'guard skipped|did not define' "${TEST_TEMP_HOME}/load.err"

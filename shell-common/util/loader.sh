@@ -97,7 +97,11 @@ dotfiles_load_all() {
     # Before functions/: every *_help.sh registers itself at source time (#2135).
     safe_source "${SHELL_COMMON}/util/help_registry.sh" "Failed to load help registry" || true
     load_category aliases
+    # functions/<X>.sh lib stubs (#2154) return only during this pass in an
+    # interactive shell; a direct source anywhere else still reaches lib/.
+    _DOTFILES_LOADING_FUNCTIONS=1
     load_category functions
+    unset _DOTFILES_LOADING_FUNCTIONS
     load_category integrations "${SHELL_COMMON}/tools"
     load_category projects
     return 0
