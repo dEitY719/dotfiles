@@ -4,12 +4,12 @@
 # Supports: online installation (download from GitHub) & offline installation (local file)
 # Handles installation, validation, and port conflict detection
 
-set -e
-
 # PATH executable since #2195 (~/.local/bin/install-ollama via config/symlinks.conf).
 # Resolve the ~/.local/bin symlink so init.sh is found next to the real file.
 # shellcheck source=/dev/null
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
+# set -e only after init.sh: the shared bootstrap is not written for errexit.
+set -e
 . "${SHELL_COMMON}/tools/custom/lib/install_helpers.sh" || exit 1
 
 install_ollama_help() {
