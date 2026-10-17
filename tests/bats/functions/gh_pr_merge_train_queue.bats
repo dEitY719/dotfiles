@@ -278,7 +278,8 @@ _run_json() {
 
 @test "base-ci-red: malformed and empty bodies are not 'red'" {
     # This predicate only ever answers "is there PROOF of red"; classifying an
-    # unreadable response is the caller's job (gh-pr:merge-train Step 3.6, gh-pr-skills).
+    # unreadable response is the caller's job: the Step 3.6 block in dEitY719/gh-pr-skills
+    # skills/merge-train/references/strict-mode-relaxation.md.
     run train_base_ci_red 'not json at all' 'Lint (mise)'
     assert_failure
     run train_base_ci_red '' 'Lint (mise)'
