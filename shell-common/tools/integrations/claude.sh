@@ -436,6 +436,10 @@ unset _ic_claude_lib
 # in-process bodies; same code, so the result is identical either way.
 _claude_accounts_load() {
     _cacl_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/lib"
+    # lib/skill_sources.sh is not auto-sourced in interactive shells (#2154), but
+    # the skills lib needs _skill_workspace_root / _skill_under_workspace.
+    command -v _skill_workspace_root >/dev/null 2>&1 ||
+        . "${_cacl_lib%/tools/custom/lib}/lib/skill_sources.sh" 2>/dev/null
     . "$_cacl_lib/claude_accounts_lifecycle.sh" && . "$_cacl_lib/claude_accounts_skills.sh"
     _cacl_rc=$?
     unset _cacl_lib
