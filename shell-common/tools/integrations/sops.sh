@@ -649,9 +649,11 @@ _senv_create_pr() {
     ux_success "PR: ${url}"
 }
 
-# GH_HOST for gh: shared resolver when loaded (internal vs external PC), else
-# empty so gh falls back to its own default host.
+# GH_HOST for gh: shared resolver (internal vs external PC), else empty so gh
+# falls back to its own default host. lib/ is never auto-sourced (#2154, #2225).
 _senv_gh_host() {
+    command -v _gh_resolve_host >/dev/null 2>&1 ||
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" 2>/dev/null
     if command -v _gh_resolve_host >/dev/null 2>&1; then
         _gh_resolve_host 2>/dev/null
     fi
