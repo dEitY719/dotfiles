@@ -35,7 +35,7 @@ _IW_SHELL_COMMON="${SHELL_COMMON}"
 # summary, and a tick that discovers the helper missing halfway through would
 # have already opened panes it can no longer address.
 if [ ! -f "${_IW_SHELL_COMMON}/lib/herdr_agent_name.sh" ]; then
-    ux_error "herdr_agent_name.sh not found under ${_IW_SHELL_COMMON}/functions — cannot derive agent names."
+    ux_error "herdr_agent_name.sh not found under ${_IW_SHELL_COMMON}/lib — cannot derive agent names."
     exit 1
 fi
 # shellcheck source=/dev/null
@@ -49,7 +49,7 @@ fi
 # tick that discovered it missing halfway through would have already decided
 # what to dispatch on a predicate it no longer has.
 if [ ! -f "${_IW_SHELL_COMMON}/lib/herdr_agent_lookup.sh" ]; then
-    ux_error "herdr_agent_lookup.sh not found under ${_IW_SHELL_COMMON}/functions — cannot tell which worktrees are live."
+    ux_error "herdr_agent_lookup.sh not found under ${_IW_SHELL_COMMON}/lib — cannot tell which worktrees are live."
     exit 1
 fi
 # shellcheck source=/dev/null
