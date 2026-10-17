@@ -277,7 +277,8 @@ def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = Fals
 
 
 # Background-agent reports arrive as user-role text but are not user input (#2231).
-_TASK_NOTIFICATION_RE = re.compile(r"<task-notification>.*?(?:</task-notification>|\Z)", re.DOTALL)
+# Closed spans only: a stray opening tag in typed text must not hide a real command after it.
+_TASK_NOTIFICATION_RE = re.compile(r"<task-notification>.*?</task-notification>", re.DOTALL)
 
 
 def _user_boundary_texts(message: dict[str, Any]) -> list[str]:
