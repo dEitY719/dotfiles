@@ -62,8 +62,10 @@ install_sops_age_via_release() {
 # The script runs in a subprocess, so it cannot fix the parent shell's PATH;
 # print the export when the mise shims dir is not on it (nothing otherwise).
 sops_age_shims_hint() {
-    local shims="${HOME}/.local/share/mise/shims"
+    local shims="${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}/shims"
     sops_age_installed && return 0
+    # shims already on PATH: the miss is not a PATH problem, a hint would mislead
+    case ":${PATH}:" in *":${shims}:"*) return 0 ;; esac
     ux_warning "sops/age not on PATH in this shell (mise shims missing)"
     ux_bullet "export PATH=\"${shims}:\$PATH\""
 }
