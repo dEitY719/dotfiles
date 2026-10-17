@@ -77,3 +77,29 @@ teardown() {
     "
     assert_output --partial "LAZY=ok"
 }
+
+# Caller audit (PR #2224 review): a file the interactive loader sources may
+# name a lib-only function only if it loads that lib itself, or is a helper
+# library whose callers run as non-interactive PATH executables (#2195).
+@test "interactive-loaded files reach lib functions only through a direct lib source" {
+    local sc="${SHELL_COMMON}" stub lib fns f hits bad=""
+    fns=$(for stub in "$sc"/functions/*.sh; do
+        grep -q '^# moved to lib/' "$stub" || continue
+        grep -oE '^[a-zA-Z_][a-zA-Z0-9_]*\(\)' "$sc/lib/$(basename "$stub")" | tr -d '()'
+    done | sort -u | paste -sd'|' -)
+    [ -n "$fns" ]
+    for f in "$sc"/env/*.sh "$sc"/aliases/*.sh "$sc"/functions/*.sh "$sc"/tools/integrations/*.sh; do
+        grep -q '^# moved to lib/' "$f" && continue
+        hits=$(grep -v '^[[:space:]]*#' "$f" | grep -owE "$fns" | sort -u | tr '\n' ' ')
+        [ -n "$hits" ] || continue
+        grep -q '/lib/[a-z_]*\.sh' "$f" && continue   # loads the lib itself
+        case "$(basename "$f")" in
+        # helper libraries run only via tools/custom/<name>.sh executables
+        gh_flow.sh | gh_pr_review.sh | git_branch.sh) continue ;;
+        gh_project_pat_help.sh) continue ;; # names _gh_resolve_host in help text only
+        esac
+        bad="$bad
+$f: $hits"
+    done
+    [ -z "$bad" ] || fail "lib functions referenced without a lib source:$bad"
+}
