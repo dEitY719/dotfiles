@@ -251,8 +251,13 @@ run_prune() {
     local no_lib="$TEST_TEMP_HOME/no-lib.sh"
     grep -v 'lib/skill_sources.sh' "$HELPER_SCRIPT" > "$no_lib"
     chmod +x "$no_lib"
+    # _claude_accounts_load lazy-sources $SHELL_COMMON/lib/skill_sources.sh
+    # (#2154): point SHELL_COMMON at a tree whose lib/ really lacks it.
+    local sc_nolib="$TEST_TEMP_HOME/sc-nolib"
+    mkdir -p "$sc_nolib"
+    ln -s "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools" "$sc_nolib/tools"
 
-    WORKSPACE_ROOT="$WS" run "$no_lib" "$TGT"
+    SHELL_COMMON="$sc_nolib" WORKSPACE_ROOT="$WS" run "$no_lib" "$TGT"
     assert_success
     assert_output --partial "workspace skill sources unavailable"
 
