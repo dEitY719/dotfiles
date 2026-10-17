@@ -417,6 +417,46 @@ def test_tool_result_command_mention_not_boundary(tmp_path: Path) -> None:
     assert result.stdout.strip() == ""
 
 
+@pytest.mark.parametrize(
+    "report",
+    [
+        "Resume after fix:\n  /gh-issue:implement 2228",
+        "[OK] Step 1: gh-issue:implement\n/gh-pr:create 2228 origin",
+        "Base directory for this skill: /x/skills/gh-issue-implement\ndone",
+    ],
+)
+def test_task_notification_report_not_boundary(tmp_path: Path, report: str) -> None:
+    """A background worker's report arrives as user-role text wrapped in
+    `<task-notification>`; skill names inside it are not user input (#2231)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("coordinate the wave"),
+            _user_text(f"<task-notification>\n<result>{report}</result>\n</task-notification>"),
+            _assistant_text("worker done"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_typed_command_next_to_task_notification_still_boundary(tmp_path: Path) -> None:
+    """Stripping the notification span must keep a real typed command (#2231)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("<task-notification>worker finished</task-notification>\n/gh-issue:implement 2228"),
+            _assistant_text("running"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-issue-implement" in decision["reason"]
+
+
 # ---------------------------------------------------------------------------
 # Step-marker scanning — happy path + missing steps
 # ---------------------------------------------------------------------------
