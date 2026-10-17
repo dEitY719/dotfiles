@@ -11,14 +11,14 @@
 # #1680: devx-pr-review-all moved out to its own marketplace repo, so the
 # five doc-guards that pinned SKILL.md / duplicate-review-guard.md to the
 # helper's call shape were dropped — they belong in that repo now. The
-# shared helper in shell-common/functions/devx_pr_review_all.sh is still
+# shared helper in shell-common/lib/devx_pr_review_all.sh is still
 # this repo's code and stays fully covered below; what is no longer
 # checked here is that the skill prose actually calls it.
 load '../test_helper'
 
 setup() {
     # shellcheck disable=SC1090
-    source "${DOTFILES_ROOT:?}/shell-common/functions/devx_pr_review_all.sh"
+    source "${DOTFILES_ROOT:?}/shell-common/lib/devx_pr_review_all.sh"
 }
 
 # Since #1639 the guard takes the PR's RAW COMMENTS JSON on stdin plus a
@@ -179,7 +179,7 @@ EOF
 
 @test "already_reviewed (#1639): a bot login (name[bot]) is accepted" {
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         jq -nc --arg b "<!-- ai-review:agy:deadbeef -->
 Verdict: LGTM
 <!-- /ai-review:agy:deadbeef -->" "[{user: {login: \"github-actions[bot]\"}, body: \$b}]" |
@@ -190,7 +190,7 @@ Verdict: LGTM
 @test "already_reviewed: usable as a plain if-guard in a pipeline" {
     # The documented Step 3 call shape: BODIES piped in, rc drives the skip.
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         BODIES=$(jq -nc --arg b "<!-- ai-review:agy:deadbeef -->
 Verdict: LGTM
 <!-- /ai-review:agy:deadbeef -->" "[{user: {login: \"pipeline-bot\"}, body: \$b}]")
@@ -224,7 +224,7 @@ Verdict: LGTM
     # Passed through the environment, not spliced into the script text: the
     # snapshot is JSON now and its quotes would not survive interpolation.
     run env SNAPSHOT="$shared_snapshot" bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         printf "%s\n" "$SNAPSHOT" | devx_pr_review_all_already_reviewed agy deadbeef pipeline-bot
         session_a=$?
         printf "%s\n" "$SNAPSHOT" | devx_pr_review_all_already_reviewed agy deadbeef pipeline-bot
@@ -293,7 +293,7 @@ EOF
     # The Step 3 call shape with `--lanes "opencode:default,opencode:thorough"`:
     # opencode:default already posted, opencode:thorough has not.
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         BODIES=$(jq -nc --arg b "<!-- ai-review:opencode:deadbeef -->
 Verdict: LGTM
 <!-- /ai-review:opencode:deadbeef -->" "[{user: {login: \"pipeline-bot\"}, body: \$b}]")

@@ -38,9 +38,9 @@ fi
 # this script's own tree rather than $HOME so a foreign checkout stays
 # self-consistent; github.com is the last-resort default, matching
 # _gh_resolve_host's own fail-safe branch.
-GH_HOST_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/functions/gh_host.sh"
+GH_HOST_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/gh_host.sh"
 if [ -r "$GH_HOST_LIB" ]; then
-	# shellcheck source=../../shell-common/functions/gh_host.sh
+	# shellcheck source=../../shell-common/lib/gh_host.sh
 	. "$GH_HOST_LIB"
 fi
 if command -v _gh_resolve_host >/dev/null 2>&1; then

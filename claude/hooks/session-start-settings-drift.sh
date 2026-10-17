@@ -174,7 +174,7 @@ if [ "$_mode" = "internal" ] && [ ! -L "$LIVE" ]; then
 	if [ -n "$_prog" ]; then
 		_backup_dir="${HOME}/.claude-backups"
 		# Latest-only backup (#919); the glob sweeps pre-#919 timestamped
-		# leftovers. SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+		# leftovers. SSOT policy: shell-common/lib/dotfiles_backup.sh (#806).
 		_backup="${_backup_dir}/settings.json.pre-drift-heal.backup"
 		_tmp=""
 		if mkdir -p "$_backup_dir" 2>/dev/null &&

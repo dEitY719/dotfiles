@@ -14,7 +14,7 @@ load '../test_helper'
 setup() {
     setup_isolated_home
     # shellcheck disable=SC1090
-    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh"
 }
 
 teardown() {
@@ -84,10 +84,10 @@ teardown() {
     # every caller that validates against one list. The library's `--ai` case
     # arm must therefore still list exactly the five CLIs.
     run grep -qE '^\s*codex \| agy \| claude \| opencode \| hermes\) ;;' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh"
     assert_success
     run grep -qE '^\s*codex \| agy \| claude \| opencode \| hermes \| gemini' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh"
     assert_failure
 }
 
@@ -107,7 +107,7 @@ teardown() {
         gemini-code-assist:BLOCKER:ACCEPT \
         gemini-code-assist:FOLLOW-UP:DECLINE \
         codex:BLOCKER:ACCEPT \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
     assert_success
     assert_line 'reviewer=codex blocking_total=1 blocking_accepted=1 nonblocking_total=0 nonblocking_declined=0'
     assert_line 'reviewer=gemini-code-assist blocking_total=1 blocking_accepted=1 nonblocking_total=1 nonblocking_declined=1'
@@ -161,14 +161,14 @@ teardown() {
         codex:BLOCKER:ACCEPT-PARTIAL \
         agy:FOLLOW-UP:DECLINE \
         agy:FOLLOW-UP:DECLINE \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
     assert_success
     assert_line 'reviewer=agy blocking_total=0 blocking_accepted=0 nonblocking_total=2 nonblocking_declined=2'
     assert_line 'reviewer=codex blocking_total=2 blocking_accepted=2 nonblocking_total=0 nonblocking_declined=0'
 }
 
 @test "F-1: tally ignores blank lines and reports nothing for empty input" {
-    run bash -c "printf '\n\n' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
+    run bash -c "printf '\n\n' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
     assert_success
     assert_output ''
 }
@@ -279,7 +279,7 @@ agy:BLOCKER:DECLINE'
 
 @test "ledger: origins_block wraps the stream in a sha-suffixed marker pair" {
     run bash -c "printf '%s\n' codex:BLOCKER:DECLINE agy:FOLLOW-UP:ACCEPT \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_origins_block deadbeef; }"
     assert_success
     assert_line --index 0 '<!-- pr-reply-origins:deadbeef -->'
@@ -291,7 +291,7 @@ agy:BLOCKER:DECLINE'
 @test "ledger: origins_block falls back to the unsuffixed marker with no sha" {
     # Same fallback `_gh_pr_review_build_comment_body`'s 8th argument makes.
     run bash -c "printf '%s\n' codex:BLOCKER:DECLINE \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_origins_block; }"
     assert_success
     assert_line --index 0 '<!-- pr-reply-origins -->'
@@ -299,7 +299,7 @@ agy:BLOCKER:DECLINE'
 }
 
 @test "ledger: origins_block round-trips through history_origins" {
-    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '%s\n' codex:BLOCKER:DECLINE agy:FOLLOW-UP:ACCEPT \
             | _gh_pr_reply_origins_block deadbeef \
             | jq -Rs '[{user: {login: \"pipeline-bot\"}, body: .}]' \
@@ -312,14 +312,14 @@ agy:BLOCKER:DECLINE'
 @test "ledger: origins_block prints nothing for an empty stream" {
     # Nothing to remember — an empty block would be noise the reader has to
     # skip on every later pass.
-    run bash -c "printf '' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "printf '' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         _gh_pr_reply_origins_block deadbeef; }"
     assert_success
     assert_output ''
 }
 
 @test "ledger: origins_block refuses to write a malformed line (exit 2)" {
-    run bash -c "printf '%s\n' 'just some prose' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "printf '%s\n' 'just some prose' | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         _gh_pr_reply_origins_block deadbeef; }"
     assert_failure 2
     assert_output --partial 'malformed origin line'
@@ -474,7 +474,7 @@ codex:BLOCKER:ACCEPT
     # Through the environment, not spliced into the script text: the fixture
     # is JSON and its quotes would not survive interpolation.
     run env JSON="$json" bash -c "printf '%s' \"\$JSON\" \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_origins pipeline-bot; }"
     assert_success
     assert_output 'codex:BLOCKER:DECLINE'
@@ -483,7 +483,7 @@ codex:BLOCKER:ACCEPT
 @test "ledger (#1639): an EMPTY expected login reads no history (never 'trust everyone')" {
     run bash -c "printf '%s\n' '<!-- pr-reply-origins -->' 'codex:BLOCKER:ACCEPT' '<!-- /pr-reply-origins -->' \
         | jq -Rs '[{user: {login: \"pipeline-bot\"}, body: .}]' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_origins; }"
     assert_success
     assert_output ''
@@ -492,7 +492,7 @@ codex:BLOCKER:ACCEPT
 @test "ledger (#1639): an invalid login (jq injection attempt) reads no history" {
     run bash -c "printf '%s\n' '<!-- pr-reply-origins -->' 'codex:BLOCKER:ACCEPT' '<!-- /pr-reply-origins -->' \
         | jq -Rs '[{user: {login: \"pipeline-bot\"}, body: .}]' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_origins 'bot\" | .'; }"
     assert_success
     assert_output ''
@@ -501,7 +501,7 @@ codex:BLOCKER:ACCEPT
 @test "ledger (#1639): a bot login (name[bot]) is accepted" {
     run bash -c "printf '%s\n' '<!-- pr-reply-origins -->' 'codex:BLOCKER:ACCEPT' '<!-- /pr-reply-origins -->' \
         | jq -Rs '[{user: {login: \"github-actions[bot]\"}, body: .}]' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_origins 'github-actions[bot]'; }"
     assert_success
     assert_output 'codex:BLOCKER:ACCEPT'
@@ -511,7 +511,7 @@ codex:BLOCKER:ACCEPT
     # The pre-#1639 contract — raw body text — must not silently keep working,
     # or an un-migrated call site would keep trusting every author.
     run bash -c "printf '%s\n' '<!-- pr-reply-origins -->' 'codex:BLOCKER:ACCEPT' '<!-- /pr-reply-origins -->' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_origins pipeline-bot; }"
     assert_success
     assert_output ''
@@ -528,7 +528,7 @@ Verdict: LGTM'
 @test "evidence (#1639): an EMPTY expected login finds no evidence" {
     run bash -c "printf '%s\n' '<!-- ai-review:agy -->' \
         | jq -Rs '[{user: {login: \"pipeline-bot\"}, body: .}]' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_has_review; }"
     assert_failure
 }
@@ -536,14 +536,14 @@ Verdict: LGTM'
 @test "evidence (#1639): a bot login (name[bot]) is accepted" {
     run bash -c "printf '%s\n' '<!-- ai-review:agy -->' \
         | jq -Rs '[{user: {login: \"github-actions[bot]\"}, body: .}]' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_has_review 'github-actions[bot]'; }"
     assert_success
 }
 
 @test "evidence (#1639): non-JSON on stdin is not evidence (fail-closed)" {
     run bash -c "printf '%s\n' '<!-- ai-review:agy -->' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
             _gh_pr_reply_history_has_review pipeline-bot; }"
     assert_failure
 }
@@ -625,7 +625,7 @@ agy:FOLLOW-UP:DECLINE' 'codex:BLOCKER:ACCEPT'
     # The actual consequence of the closed reviewer enum: a DECLINEd
     # gemini-code-assist BLOCKER could not be represented, so the gate never
     # saw it and certified the PR anyway.
-    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         _gh_pr_reply_origin_line gemini-code-assist '[BLOCKER]' DECLINE \
             | _gh_pr_reply_review_passed_gate yes; }"
     assert_success
@@ -637,7 +637,7 @@ agy:FOLLOW-UP:DECLINE' 'codex:BLOCKER:ACCEPT'
 # without the ledger pass 2's ORIGINS carry no BLOCKER and the gate reads
 # `pass=no-blocker` — certifying a PR whose blocker was never fixed.
 @test "F-2 (PR #1637 review, codex BLOCKER): a DECLINEd BLOCKER from an earlier pass still holds" {
-    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '%s\n' agy:FOLLOW-UP:ACCEPT \
             | _gh_pr_reply_origins_merge 'codex:BLOCKER:DECLINE' \
             | _gh_pr_reply_review_passed_gate yes; }"
@@ -696,7 +696,7 @@ _apply_stub() {
     APPLY_LOG="${BATS_TEST_TMPDIR}/apply.log"
     : >"$APPLY_LOG"
     # shellcheck disable=SC1090
-    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh"
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh"
     # shellcheck disable=SC2317  # invoked indirectly by the function under test
     gh() {
         printf 'gh %s [GH_HOST=%s]\n' "$*" "${GH_HOST-}" >>"$APPLY_LOG"
@@ -784,8 +784,8 @@ _apply_stub() {
     _apply_stub
     STUB_ADD_RC=3
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { return 0; }
         _gh_pr_edit_safe_label() { return 3; }
         printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' '' yes
@@ -798,8 +798,8 @@ _apply_stub() {
 
 @test "apply: any other write failure warns instead of claiming the label" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { return 0; }
         _gh_pr_edit_safe_label() { return 1; }
         printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' '' yes
@@ -810,8 +810,8 @@ _apply_stub() {
 
 @test "apply: a marker-post failure adds a second WARN, not silence (#1608 rule)" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { return 1; }
         _gh_pr_edit_safe_label() { return 0; }
         printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609 acme/widget '' newsha yes
@@ -881,7 +881,7 @@ _apply_stub() {
 
 @test "ledger: a failing post WARNs about the lost memory and still returns 0" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         gh() { return 1; }
         printf 'codex:BLOCKER:DECLINE\n' | _gh_pr_reply_post_origins_ledger 1609 acme/widget '' newsha
     "
@@ -893,7 +893,7 @@ _apply_stub() {
 
 @test "ledger: a missing repo arg is a usage error (rc 2)" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf 'codex:BLOCKER:DECLINE\n' | _gh_pr_reply_post_origins_ledger 1609
     "
     assert_failure 2
@@ -902,7 +902,7 @@ _apply_stub() {
 
 @test "apply: a missing repo arg is a usage error (rc 2)" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf 'codex:BLOCKER:ACCEPT\n' | _gh_pr_reply_apply_review_passed 1609
     "
     assert_failure 2
@@ -1074,21 +1074,21 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
     run bash -c "printf '%s\n' \
         'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
         'agy:BLOCKER:ACCEPT' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origin_tally; }"
     assert_success
     assert_output 'reviewer=agy blocking_total=2 blocking_accepted=1 nonblocking_total=0 nonblocking_declined=0'
 }
 
 @test "#1762: origins_block writes a 4-field line without complaint" {
     run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
     assert_success
     assert_output --partial 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
 }
 
 @test "#1762: a 4-field line round-trips through the ledger" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         block=\$(printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
             | _gh_pr_reply_origins_block abc123)
         printf '%s' \"\$block\" | jq -Rs '[{user:{login:\"tester\"},body:.}]' \
@@ -1099,7 +1099,7 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
 }
 
 @test "#1762: merge supersedes a tracked line per reviewer, like any other" {
-    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '%s\n' agy:BLOCKER:ACCEPT \
             | _gh_pr_reply_origins_merge 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'; }"
     assert_success
@@ -1108,7 +1108,7 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
 
 @test "#1762: a tracked history line survives to the gate through merge" {
     # The cross-pass hole PR #1637 closed must stay closed for the new shape.
-    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '%s\n' codex:FOLLOW-UP:ACCEPT \
             | _gh_pr_reply_origins_merge 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
             | _gh_pr_reply_review_passed_gate yes; }"
@@ -1149,14 +1149,14 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
     # ledger. This function IS the write, and its contract is that garbage is
     # never persisted — a hand-built line must not get past it either.
     run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:not a ref' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
     assert_failure 2
     assert_output --partial 'tracking ref'
 }
 
 @test "#1762 (PR #1764, codex BLOCKER): a valid ref still writes fine" {
     run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
     assert_success
     assert_output --partial 'agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
 }
@@ -1166,7 +1166,7 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
     # the gate certify a PR whose blocker still stands — fail-OPEN, the exact
     # hole this ledger closes. The verdict must survive; only the ref goes.
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:not a ref\n<!-- /pr-reply-origins:abc -->\n' \
             | jq -Rs '[{user:{login:\"t\"},body:.}]' \
             | _gh_pr_reply_history_origins t
@@ -1177,7 +1177,7 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
 
 @test "#1762 (PR #1764, codex BLOCKER): the sanitized history still HOLDS the gate" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:not a ref\n<!-- /pr-reply-origins:abc -->\n' \
             | jq -Rs '[{user:{login:\"t\"},body:.}]' \
             | _gh_pr_reply_history_origins t \
@@ -1192,7 +1192,7 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
     # human typing inside the PR comment: one typo must not break the write
     # for every later pass.
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:not a ref\n<!-- /pr-reply-origins:abc -->\n' \
             | jq -Rs '[{user:{login:\"t\"},body:.}]' \
             | _gh_pr_reply_history_origins t \
@@ -1215,14 +1215,14 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
     # ledger. Handing the tail over instead makes the ref fail validation,
     # which is what closes the write here and drives the strip below.
     run bash -c "printf '%s\n' 'agy:BLOCKER:DECLINE:a/b#1:junk' \
-        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
+        | { . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'; _gh_pr_reply_origins_block abc123; }"
     assert_failure 2
     assert_output --partial 'malformed tracking ref'
 }
 
 @test "#1762 (PR #1764, agy FOLLOW-UP): a 5-field ledger line is stripped to 3" {
     run bash -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         printf '<!-- pr-reply-origins:abc -->\nagy:BLOCKER:DECLINE:a/b#1:junk\n<!-- /pr-reply-origins:abc -->\n' \
             | jq -Rs '[{user:{login:\"t\"},body:.}]' \
             | _gh_pr_reply_history_origins t
@@ -1244,7 +1244,7 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
 @test "#1762 (PR #1764): origin_ref returns the verdict for no 4-field line" {
     # The trap the shared extractor exists to close: the same expansion on a
     # 3-field line would hand back DECLINE.
-    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh'
+    run bash -c "{ . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh'
         _gh_pr_reply_origin_ref 'agy:BLOCKER:DECLINE'; }"
     assert_success
     assert_output ''
@@ -1269,7 +1269,7 @@ agy:BLOCKER:DECLINE:dEitY719/harness-skills#22'
 # the relaxation is legible), so these guards read CODE only — comment lines
 # stripped — or they would pin the documentation instead of the behaviour.
 _lib_code_file() {
-    local _lib="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    local _lib="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh"
     LIB_CODE="${BATS_TEST_TMPDIR}/lib_code.sh"
     grep -v '^[[:space:]]*#' "$_lib" >"$LIB_CODE"
 }
@@ -1318,6 +1318,6 @@ _lib_code_file() {
     # interactive guard here would silently define nothing and the gate
     # would never run (#724's failure shape).
     run bash --noprofile --norc -c \
-        ". '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh' && command -v _gh_pr_reply_review_passed_gate"
+        ". '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh' && command -v _gh_pr_reply_review_passed_gate"
     assert_success
 }

@@ -173,8 +173,8 @@ EOF
 # Real-repo regression: every checked-in GraphQL caller is convention-clean
 # ─────────────────────────────────────────────────────────────────────────
 
-@test "real repo: shell-common/functions/gh_project_status.sh is clean" {
-    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_project_status.sh"
+@test "real repo: shell-common/lib/gh_project_status.sh is clean" {
+    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_project_status.sh"
     run check_gh_api_type_mapping "$f" "$WARN_FILE"
     if [ "$status" -ne 0 ]; then
         echo "Findings:"

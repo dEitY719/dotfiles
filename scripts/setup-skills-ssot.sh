@@ -8,7 +8,7 @@
 #
 # 소스는 워크스페이스 하나뿐이다 (issue #1680 — #1410 Phase 4 컷오버). 예전의
 # dotfiles `claude/skills/` SSOT 는 15개 marketplace repo 로 분리된 뒤 삭제됐고,
-# "무엇이 skill 소스인가" 의 SSOT 는 shell-common/functions/skill_sources.sh 다:
+# "무엇이 skill 소스인가" 의 SSOT 는 shell-common/lib/skill_sources.sh 다:
 #
 #     ${WORKSPACE_ROOT:-$HOME/para/project/skills}/<repo>/skills/<skill>/SKILL.md
 #
@@ -72,7 +72,7 @@ fi
 # 인정해야 한다 (#1732). main 체크아웃 해석은 #589 의 canonicalize SSOT 를
 # 그대로 쓴다 — 서브모듈 오탐 가드와 DOTFILES_ROOT_NO_CANONICALIZE 탈출구를
 # 여기서 다시 구현하지 않기 위해서다.
-DOTFILES_ROOT_LIB="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+DOTFILES_ROOT_LIB="${DOTFILES_ROOT}/shell-common/lib/dotfiles_root.sh"
 if [ -f "$DOTFILES_ROOT_LIB" ]; then
     source "$DOTFILES_ROOT_LIB"
 else
@@ -84,7 +84,7 @@ DOTFILES_MAIN_ROOT="$(_resolve_dotfiles_root_canonical "$DOTFILES_ROOT")"
 # 소스 판별/열거의 SSOT (issue #1652 / #1410 F-6 → #1680). Claude Code
 # 계정 쪽(shell-common/tools/custom/lib/claude_accounts_skills.sh)이 같은 파일을 읽으므로
 # "무엇이 skill 소스인가" 규칙이 두 벌로 갈라지지 않는다.
-SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
 if [ -f "$SKILL_SOURCES_LIB" ]; then
     source "$SKILL_SOURCES_LIB"
 else

@@ -22,7 +22,7 @@
 # these helpers' call shapes (Step 3.5 ordering, lane_block arguments, the
 # trusted-login wiring, and the #1636 label-ownership split) were dropped —
 # they belong in that repo now. The helpers in
-# shell-common/functions/devx_pr_review_all.sh remain this repo's code and
+# shell-common/lib/devx_pr_review_all.sh remain this repo's code and
 # stay fully covered below; what is no longer checked here is that the skill
 # prose actually calls them.
 load '../test_helper'
@@ -32,7 +32,7 @@ setup() {
     # file runs from a clone other than ~/dotfiles (#2057).
     setup_isolated_home
     # shellcheck disable=SC1090
-    source "${DOTFILES_ROOT:?}/shell-common/functions/devx_pr_review_all.sh"
+    source "${DOTFILES_ROOT:?}/shell-common/lib/devx_pr_review_all.sh"
 }
 
 teardown() {
@@ -272,7 +272,7 @@ EOF
 
 @test "aggregate: a final verdict with no trailing newline still counts" {
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         printf "lgtm\nblocking" | devx_pr_review_all_aggregate'
     assert_success
     assert_line "label=review-blocked"
@@ -414,7 +414,7 @@ EOF
 
 @test "lane block: end-to-end -> verdict token" {
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         printf "%s\n" "<!-- ai-review:agy -->" "Verdict: BLOCKING" "<!-- /ai-review:agy -->" \
           | jq -Rs "[{user: {login: \"pipeline-bot\"}, body: .}]" \
           | devx_pr_review_all_lane_block agy "" pipeline-bot \
@@ -441,7 +441,7 @@ EOF
 
 @test "lane block (bug 2): a stale block downstream reads as unknown" {
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         printf "%s\n" \
           "<!-- ai-review:agy:0000111122223333 -->" \
           "Verdict: LGTM" \
@@ -725,7 +725,7 @@ _run_in_dash() {
         export DOTFILES_ROOT='${DOTFILES_ROOT}'
         export SHELL_COMMON='${SHELL_COMMON}'
         export HOME='${HOME}'
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         $1
     "
 }
@@ -983,7 +983,7 @@ _apply_stub() {
     run bash -c "
         SHELL_COMMON=/nonexistent
         export SHELL_COMMON
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         unset -f _gh_pr_edit_safe_label 2>/dev/null || :
         gh() { printf 'gh %s\n' \"\$*\" >>'${BATS_TEST_TMPDIR}/nohelper.log'; return 0; }
         printf 'blocking\n' | devx_pr_review_all_apply_label 7 acme/widget
@@ -1002,7 +1002,7 @@ _apply_stub() {
     _apply_stub
     STUB_ADD_RC=1
     run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         _gh_pr_edit_safe_label() { return 1; }
         gh() { return 0; }
         printf 'blocking\n' | devx_pr_review_all_apply_label 7 acme/widget
@@ -1014,7 +1014,7 @@ _apply_stub() {
 @test "apply_label: a missing repo arg is a usage error (rc 2)" {
     _apply_stub
     run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         printf 'lgtm\n' | devx_pr_review_all_apply_label 7
     "
     assert_failure 2
@@ -1110,7 +1110,7 @@ _apply_stub() {
     run bash -c "
         SHELL_COMMON=/nonexistent
         export SHELL_COMMON
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         unset -f _gh_pr_edit_safe_label 2>/dev/null || :
         gh() { printf 'gh %s\n' \"\$*\" >>'${BATS_TEST_TMPDIR}/wl_nohelper.log'; return 0; }
         devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
@@ -1195,7 +1195,7 @@ _apply_stub() {
 
 @test "write_label (#1601, PR #1608 review): a marker-post failure never changes add=" {
     run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { return 1; }
         _gh_pr_edit_safe_label() { return 0; }
         devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
@@ -1244,7 +1244,7 @@ _apply_stub() {
 
 @test "delete_label (PR #1637 review): a 404 is drop=absent, not a failure" {
     run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { printf 'gh: Not Found (HTTP 404)\n' >&2; return 1; }
         _devx_pr_review_all_delete_label review-blocked 7 acme/widget
     "
@@ -1254,7 +1254,7 @@ _apply_stub() {
 
 @test "delete_label (PR #1637 review): a real failure is drop=failed, still rc 0" {
     run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { printf 'gh: connection reset by peer\n' >&2; return 1; }
         _devx_pr_review_all_delete_label review-blocked 7 acme/widget
     "
@@ -1277,7 +1277,7 @@ _apply_stub() {
     run bash -c "
         SHELL_COMMON=/nonexistent
         export SHELL_COMMON
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         unset -f _gh_pr_edit_safe_label 2>/dev/null || :
         gh() { return 0; }
         devx_pr_review_all_write_label review-passed 7 acme/widget '' deadbeef
@@ -1332,7 +1332,7 @@ _apply_stub() {
 
 @test "apply_label (PR #1637 review): a failed clear WARNs instead of claiming 'cleared'" {
     run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { printf 'gh: connection reset by peer\n' >&2; return 1; }
         _gh_pr_edit_safe_label() { return 0; }
         printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget
@@ -1349,7 +1349,7 @@ _apply_stub() {
     # The overwhelmingly common outcome: nothing to delete, nothing to warn
     # about. The [OK] wording is unchanged byte for byte.
     run bash -c "
-        . '${DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh'
         gh() { printf 'gh: Not Found (HTTP 404)\n' >&2; return 1; }
         _gh_pr_edit_safe_label() { return 0; }
         printf '%s\n' lgtm concerns | devx_pr_review_all_apply_label 7 acme/widget
@@ -1465,7 +1465,7 @@ EOF
 
 @test "aggregate (#56): end-to-end — two presets of one AI produce two lanes" {
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         BODIES=$(jq -nc --arg b "<!-- ai-review:opencode:deadbeef -->
 Verdict: CONCERNS
 <!-- /ai-review:opencode:deadbeef -->
@@ -1534,7 +1534,7 @@ EOF
 
 @test "lane rows (#56): a final row with no trailing newline still counts" {
     run bash -c '
-        . "'"${DOTFILES_ROOT}"'/shell-common/functions/devx_pr_review_all.sh"
+        . "'"${DOTFILES_ROOT}"'/shell-common/lib/devx_pr_review_all.sh"
         printf "agy:ok\nopencode:thorough:skip" | devx_pr_review_all_lane_rows'
     assert_success
     assert_line "agy:default:ok"

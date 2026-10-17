@@ -91,7 +91,7 @@ run = "uv run ./tests/test"
 
 [tasks.pr-gate]
 description = "PR 생성 게이트: 전체 테스트 (gh-pr:create lint guard 가 호출)"
-# shell-common/functions/gh_pr_lint.sh runs this after lint when the task
+# shell-common/lib/gh_pr_lint.sh runs this after lint when the task
 # exists (#2054); failure blocks PR creation, GH_PR_TEST_BYPASS=1 skips it.
 depends = ["test"]
 

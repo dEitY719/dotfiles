@@ -1118,7 +1118,7 @@ EOF
 @test "build_comment_body (#56): each preset's marker is harvested by its own lane" {
     _source_module
     # shellcheck disable=SC1090
-    source "${DOTFILES_ROOT:?}/shell-common/functions/devx_pr_review_all.sh"
+    source "${DOTFILES_ROOT:?}/shell-common/lib/devx_pr_review_all.sh"
     local out="$TEST_TEMP_HOME/body.md"
     local ai_out="$TEST_TEMP_HOME/ai-out.txt"
     local bodies

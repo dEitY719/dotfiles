@@ -172,7 +172,7 @@ _run_helper() {
         # The shim logs the GH_HOST it inherited; an ambient one from the
         # developer's shell would make those assertions non-deterministic.
         unset GH_HOST
-        . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/gh_pr_edit_safe.sh'
         ${snippet}
         echo \"rc=\$?\"
     "
@@ -183,21 +183,21 @@ _run_helper() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_pr_edit_safe_label exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_edit_safe.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_pr_edit_safe.sh"; \
                  declare -f _gh_pr_edit_safe_label >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_pr_edit_safe_body exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_edit_safe.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_pr_edit_safe.sh"; \
                  declare -f _gh_pr_edit_safe_body >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_pr_edit_safe_label exists" {
-    run_in_zsh '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_edit_safe.sh"; \
+    run_in_zsh '. "$DOTFILES_ROOT/shell-common/lib/gh_pr_edit_safe.sh"; \
                 typeset -f _gh_pr_edit_safe_label >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
@@ -331,14 +331,14 @@ _run_helper() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_pr_drop_label exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_edit_safe.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_pr_edit_safe.sh"; \
                  declare -f _gh_pr_drop_label >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_pr_drop_label exists" {
-    run_in_zsh '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_edit_safe.sh"; \
+    run_in_zsh '. "$DOTFILES_ROOT/shell-common/lib/gh_pr_edit_safe.sh"; \
                 typeset -f _gh_pr_drop_label >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
@@ -480,7 +480,7 @@ _run_helper() {
     # silent. Catches a future regression where the warning fires on
     # the happy path (false positive).
     run bash --noprofile --norc -c \
-        ". \"${SHELL_COMMON}/functions/gh_pr_edit_safe.sh\" 2>&1; echo \"rc=\$?\""
+        ". \"${SHELL_COMMON}/lib/gh_pr_edit_safe.sh\" 2>&1; echo \"rc=\$?\""
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "BUG: _gh_pr_edit_safe_"
@@ -578,18 +578,18 @@ STUB
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_zsh '. "$SHELL_COMMON/functions/gh_pr_edit_safe.sh"'
+    run_in_zsh '. "$SHELL_COMMON/lib/gh_pr_edit_safe.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/gh_pr_edit_safe.sh"
+    assert_output --partial "shell-common/lib/gh_pr_edit_safe.sh"
 }
 
 @test "bash: #1505 foreign-checkout guard warns when gh_pr_edit_safe.sh is sourced under bash" {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_bash '. "$SHELL_COMMON/functions/gh_pr_edit_safe.sh"'
+    run_in_bash '. "$SHELL_COMMON/lib/gh_pr_edit_safe.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/gh_pr_edit_safe.sh"
+    assert_output --partial "shell-common/lib/gh_pr_edit_safe.sh"
 }

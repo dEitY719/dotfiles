@@ -5,7 +5,7 @@
 PR·이슈 추적: 이슈 [#384](https://github.com/dEitY719/dotfiles/issues/384)
 검토 노트, 이슈 [#395](https://github.com/dEitY719/dotfiles/issues/395) 구현.
 
-`shell-common/functions/gh_project_status.sh`의 projectV2 mutation에서
+`shell-common/lib/gh_project_status.sh`의 projectV2 mutation에서
 `updateProjectV2ItemFieldValue` 호출이 GraphQL `422` 로 silent fail 한
 사례에서 출발. 호출부 변수 매핑(`-f` vs `-F`)이 query의 `String!`/`ID!`/`Int!`
 타입과 맞지 않아도 `gh api`가 stderr에 한 줄 찍고 종료하는데, 보통 helper
@@ -63,7 +63,7 @@ gh api graphql \
 
 ## Related
 
-- 코드: `shell-common/functions/gh_project_status.sh`,
+- 코드: `shell-common/lib/gh_project_status.sh`,
   `shell-common/functions/gh_audit_builtin_workflows.sh`
 - 회귀 가드: `tests/bats/lint/gh_api_type_mapping.bats`
 - pre-commit 훅: `git/hooks/checks/gh_api_type_check.sh`

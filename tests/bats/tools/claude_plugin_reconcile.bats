@@ -267,7 +267,7 @@ JSON
 }
 
 @test "reconcile.sh --apply fails clearly when the plugin_sync_title.sh helper cannot be sourced (#1558 codex review)" {
-    # A half-installed / mid-upgrade checkout: shell-common/functions/plugin_sync_title.sh
+    # A half-installed / mid-upgrade checkout: shell-common/lib/plugin_sync_title.sh
     # is unreachable, so _plugin_sync_title never gets defined. --apply must refuse loudly
     # (empty-subject commits are worse than no commit) rather than silently degrading.
     # 제목 헬퍼는 커밋을 남기는 company/ 스코프에서만 필요하다 (#1685).

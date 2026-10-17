@@ -2,7 +2,7 @@
 # tests/bats/functions/gh_pr_merge_train_queue.bats
 # Issue #1707 — merge the train's PRs through GitHub's merge queue instead of
 # one blocking merge + one full CI cycle per PR:
-#   shell-common/functions/gh_pr_merge_train.sh                 (the predicate)
+#   shell-common/lib/gh_pr_merge_train.sh                 (the predicate)
 # Source-of-truth fixture: _fixtures/gh_pr_merge_train_queue.sh
 #
 # Only the shell-common predicates are tested here. The skill-text half (the
@@ -106,10 +106,10 @@ _pr_json() {
     # #724's rule: the self-check at the bottom of gh_pr_merge_train.sh must
     # cover the new function, or a rename breaks the sweep silently.
     run grep -qF -- '_gh_pr_merge_train_needs_finalize' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh"
     assert_success
     run bash -c "grep -c '_gh_pr_merge_train_needs_finalize' \
-        '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh'"
+        '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh'"
     # header usage line + definition + self-check list = at least 3
     [ "$output" -ge 3 ]
 }
@@ -148,7 +148,7 @@ _pr_json() {
 
 @test "finalize-targets: the shared function is defined by the shipped file" {
     run grep -qF -- '_gh_pr_merge_train_finalize_targets' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh"
     assert_success
 }
 
@@ -309,7 +309,7 @@ _run_json() {
 
 @test "doc-guard: the new predicates are in the shipped self-check list" {
     # #724's rule: a rename that breaks Step 3.6 must be loud, not silent.
-    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh"
     local fn
     for fn in _gh_pr_merge_train_behind_may_merge_directly _gh_pr_merge_train_base_ci_red; do
         run bash -c "sed -n '/^for _gh_pmt_selfcheck_fn in/,/^done/p' '$f' | grep -qF -- '$fn'"
@@ -380,7 +380,7 @@ _run_json() {
 }
 
 @test "doc-guard: the new predicate is in the shipped self-check list" {
-    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+    local f="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh"
     run bash -c "sed -n '/^for _gh_pmt_selfcheck_fn in/,/^done/p' '$f' \
         | grep -qF -- '_gh_pr_merge_train_base_strict_confirmed'"
     assert_success

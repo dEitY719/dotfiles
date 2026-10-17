@@ -11,7 +11,7 @@ setup() {
     # shellcheck disable=SC1090
     source "${_BATS_REAL_SHELL_COMMON:?}/functions/gh_pr_review.sh"
     # shellcheck disable=SC1090
-    source "${_BATS_REAL_SHELL_COMMON:?}/functions/devx_pr_review_all.sh"
+    source "${_BATS_REAL_SHELL_COMMON:?}/lib/devx_pr_review_all.sh"
     export SHELL_COMMON="$TEST_TEMP_HOME/sc"
     mkdir -p "$SHELL_COMMON/functions"
     # Stub: sleeps 1s per lane, then behaves by --ai value. `--ai X --review

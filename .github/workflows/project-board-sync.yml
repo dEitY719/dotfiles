@@ -80,8 +80,8 @@ jobs:
           # soft-skipped for fork PRs). If we're here without a token it
           # means the fork-soft-skip path; nothing more to do.
           [ -n "${GH_TOKEN:-}" ] || exit 0
-          # shellcheck source=shell-common/functions/gh_project_status.sh
-          . shell-common/functions/gh_project_status.sh
+          # shellcheck source=shell-common/lib/gh_project_status.sh
+          . shell-common/lib/gh_project_status.sh
           # --repo "$GH_REPO" is explicit (#1405). The exported GH_REPO alone
           # would already be honored, but naming the repo at the call site
           # keeps the intent in the code instead of in the step's `env:`.
@@ -108,8 +108,8 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "${GH_TOKEN:-}" ] || exit 0
-          # shellcheck source=shell-common/functions/gh_project_status.sh
-          . shell-common/functions/gh_project_status.sh
+          # shellcheck source=shell-common/lib/gh_project_status.sh
+          . shell-common/lib/gh_project_status.sh
           # --repo "$GH_REPO" explicit (#1405) — see the opened-step comment.
           _gh_project_status_sync pr "$PR_NUMBER" "Approved" \
             --only-from "Backlog,In progress,In review" --repo "$GH_REPO"
@@ -127,8 +127,8 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "${GH_TOKEN:-}" ] || exit 0
-          # shellcheck source=shell-common/functions/gh_project_status.sh
-          . shell-common/functions/gh_project_status.sh
+          # shellcheck source=shell-common/lib/gh_project_status.sh
+          . shell-common/lib/gh_project_status.sh
           # --repo "$GH_REPO" explicit (#1405) — see the opened-step comment.
           _gh_project_status_sync pr "$PR_NUMBER" "Done" --repo "$GH_REPO"
           for _issue in $(_gh_pr_closing_issue_numbers "$PR_NUMBER" "$GH_REPO"); do

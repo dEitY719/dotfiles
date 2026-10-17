@@ -11,7 +11,7 @@
 # shipped fences instead of a hand copy.
 
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_merge_train.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_merge_train.sh"
 
 # --- the real shared predicate (gh:pr-merge-train Step 0) -----------------
 #

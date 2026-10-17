@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # tests/bats/functions/dotfiles_root.bats
 #
-# Unit tests for shell-common/functions/dotfiles_root.sh — the worktree
+# Unit tests for shell-common/lib/dotfiles_root.sh — the worktree
 # canonicalization helper that prevents ~/.claude-*/ symlinks from getting
 # baked with a linked-worktree path that goes dangling on worktree removal
 # (issue #589).
@@ -25,7 +25,7 @@ setup() {
         git -c user.email=t@t -c user.name=t commit --allow-empty -q -m init && \
         git worktree add -q -b feat "$WT" >/dev/null 2>&1)
 
-    HELPER="$_BATS_REAL_DOTFILES_ROOT/shell-common/functions/dotfiles_root.sh"
+    HELPER="$_BATS_REAL_DOTFILES_ROOT/shell-common/lib/dotfiles_root.sh"
 }
 
 teardown() {
@@ -324,7 +324,7 @@ _setup_foreign_repo() {
     assert_output --partial "[probe_label]"
     assert_output --partial "did not define _dotfiles_root_warn_if_foreign_source"
     assert_output --partial "#1454 guard skipped (#724)"
-    assert_output --partial "functions/dotfiles_root.sh"
+    assert_output --partial "lib/dotfiles_root.sh"
 }
 
 @test "_dotfiles_root_guard_self: #724 diagnostic falls back to the 'dotfiles' label" {

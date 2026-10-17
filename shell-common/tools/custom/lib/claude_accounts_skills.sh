@@ -9,7 +9,7 @@
 # claude_accounts_lifecycle.sh. Function definitions only.
 #
 # Needs: ux_lib, functions/mount.sh (_is_mounted),
-# functions/skill_sources.sh (_skill_workspace_root, _skill_under_workspace), and
+# lib/skill_sources.sh (_skill_workspace_root, _skill_under_workspace), and
 # claude_accounts_lifecycle.sh (_claude_backup_original, _claude_link_lib,
 # _claude_accounts_help).
 
@@ -107,7 +107,7 @@ _claude_prune_workspace_skills() {
     _claude_prepare_skills_dir "$_cpws_tgt" || return 1
 
     # Defense-in-depth (#724 lesson): a caller that sources this file but not
-    # functions/skill_sources.sh has no workspace rule (_skill_under_workspace),
+    # lib/skill_sources.sh has no workspace rule (_skill_under_workspace),
     # and the workspace cleanup would silently no-op. Say so
     # instead. Dangling links are still pruned (they need no root).
     _cpws_root=""
@@ -118,7 +118,7 @@ _claude_prune_workspace_skills() {
         [ -z "$_cpws_root" ] ||
             _cpws_rroot=$(readlink -f "$_cpws_root" 2>/dev/null || printf '%s' "$_cpws_root")
     else
-        ux_warning "  workspace skill sources unavailable — shell-common/functions/skill_sources.sh not sourced (#1652)"
+        ux_warning "  workspace skill sources unavailable — shell-common/lib/skill_sources.sh not sourced (#1652)"
     fi
 
     # `find` rather than a glob: zsh aborts the enclosing function on an

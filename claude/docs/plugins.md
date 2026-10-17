@@ -33,7 +33,7 @@
 플러그인까지 복원 대상에서 뺀다.
 
 커밋 제목의 변경 키 나열 규칙
-(`... sync manifest (+foo -bar 외 N개)`)은 `shell-common/functions/plugin_sync_title.sh`
+(`... sync manifest (+foo -bar 외 N개)`)은 `shell-common/lib/plugin_sync_title.sh`
 가 SSOT — `plugin-sync.sh` 의 벌크 재동기화 경로와 `claude/plugin/reconcile.sh
 --apply` 가 같은 파일을 source 한다(#1558). 사내 전용
 (non-github source) 항목은 `claude/plugin/company/`(dotfiles 트리 안이지만

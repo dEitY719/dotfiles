@@ -296,7 +296,7 @@ _run_script() { _run_script_at "$SCRIPT" "$@"; }
     _stub_desktop_tools
     local base="${TEST_TEMP_HOME}/dir with space"
     mkdir -p "${base}/tools/custom"
-    ln -sfn "${SHELL_COMMON}/functions" "${base}/functions"
+    ln -sfn "${SHELL_COMMON}/lib" "${base}/lib"
     ln -sfn "${SHELL_COMMON}/tools/ux_lib" "${base}/tools/ux_lib"
     cp "$SCRIPT" "${base}/tools/custom/open_in_windows_chrome.sh"
 

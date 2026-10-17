@@ -58,7 +58,7 @@ Regression: `tests/bats/git/test_hooks_global_wrappers.bats` / `test_hooks_globa
 
 `hooks/pre-push` Layer 0 is off by default: push / `git sync` run no tests.
 The full suite gates PR creation (`mise run pr-gate`, called from
-`shell-common/functions/gh_pr_lint.sh`; bypass `GH_PR_TEST_BYPASS=1`) and
+`shell-common/lib/gh_pr_lint.sh`; bypass `GH_PR_TEST_BYPASS=1`) and
 runs non-blocking in CI (`.github/workflows/test.yml`). Opt in per push:
 `PRE_PUSH_TEST=1` runs `mise run test-smoke` (`scripts/test_smoke.sh`) over
 the push range — changed-shell `bash -n`/`zsh -n`, mapped bats,

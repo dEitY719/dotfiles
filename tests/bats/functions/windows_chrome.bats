@@ -8,7 +8,7 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
-    HELPER="${SHELL_COMMON}/functions/windows_chrome.sh"
+    HELPER="${SHELL_COMMON}/lib/windows_chrome.sh"
     FAKE_DRIVE="${TEST_TEMP_HOME}/mnt/c"
     PROC="${TEST_TEMP_HOME}/proc-version"
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/functions/gh_host.bats
-# Coverage for shell-common/functions/gh_host.sh introduced in issue #703.
+# Coverage for shell-common/lib/gh_host.sh introduced in issue #703.
 #
 # T1-T4 cover `_gh_resolve_host`'s mode → host mapping (with `internal`
 # being the only one that routes to GHE; everything else stays on
@@ -245,7 +245,7 @@ teardown() {
 @test "non-interactive bash -c without DOTFILES_FORCE_INIT defines the helpers" {
     run bash -c "
         unset DOTFILES_FORCE_INIT
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh'
         command -v _gh_resolve_host >/dev/null && echo resolve_ok
         command -v _gh_parse_owner_repo_url >/dev/null && echo parse_ok
         command -v _gh_host_from_url >/dev/null && echo host_from_url_ok
@@ -276,7 +276,7 @@ teardown() {
     run bash --noprofile --norc -c "
         export HOME='$HOME'
         _dotfiles_setup_mode() { echo internal; }
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh'
         _gh_resolve_host
     "
     assert_success
@@ -293,7 +293,7 @@ teardown() {
     # post-gh-pr-create.sh:66), so this test only asserts #718 behavior.
     run env -i "HOME=$HOME" "PATH=$PATH" "DOTFILES_GHES_HOST=ghes.example.invalid" \
         bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh' 2>/dev/null
         _gh_resolve_host
     "
     assert_success
@@ -312,7 +312,7 @@ teardown() {
     printf '%s\n' '# comment' 'export DOTFILES_GHES_HOST="ghes-other.example.invalid"' \
         'echo SOURCED' > "$HOME/sc/env/internal.local.sh"
     run env -i "HOME=$HOME" "PATH=$PATH" "SHELL_COMMON=$HOME/sc" bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh' 2>/dev/null
         _gh_resolve_host
         _gh_parse_owner_repo_url 'git@ghes-other.example.invalid:o/r.git'
     "
@@ -326,7 +326,7 @@ teardown() {
     echo "internal" > "$HOME/.dotfiles-setup-mode"
     mkdir -p "$HOME/sc"
     run env -i "HOME=$HOME" "PATH=$PATH" "SHELL_COMMON=$HOME/sc" bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh' 2>/dev/null
         _gh_resolve_host 2>'$HOME/err'
     "
     assert_success
@@ -339,7 +339,7 @@ teardown() {
     echo "public" > "$HOME/.dotfiles-setup-mode"
     run env -i "HOME=$HOME" "PATH=$PATH" "DOTFILES_GHES_HOST=ghes.example.invalid" \
         bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh' 2>/dev/null
         _gh_resolve_host 2>&1
     "
     assert_success
@@ -356,7 +356,7 @@ teardown() {
     rm -f "$HOME/.dotfiles-setup-mode"
     # See the #724 note in the previous test — same 2>/dev/null reasoning.
     run env -i "HOME=$HOME" "PATH=$PATH" bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh' 2>/dev/null
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh' 2>/dev/null
         _gh_resolve_host
     "
     assert_success
@@ -379,18 +379,18 @@ teardown() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_zsh "$G"'. "$SHELL_COMMON/functions/gh_host.sh"'
+    run_in_zsh "$G"'. "$SHELL_COMMON/lib/gh_host.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/gh_host.sh"
+    assert_output --partial "shell-common/lib/gh_host.sh"
 }
 
 @test "bash: #1505 foreign-checkout guard warns when gh_host.sh is sourced under bash" {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_bash "$G"'. "$SHELL_COMMON/functions/gh_host.sh"'
+    run_in_bash "$G"'. "$SHELL_COMMON/lib/gh_host.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/gh_host.sh"
+    assert_output --partial "shell-common/lib/gh_host.sh"
 }

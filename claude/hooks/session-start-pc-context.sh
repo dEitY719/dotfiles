@@ -43,7 +43,7 @@ _hostname=$(hostname 2>/dev/null || echo "")
 
 _context="Dotfiles PC setup-mode: ${_mode}"
 [ -n "$_hostname" ] && _context="${_context} (host: ${_hostname})"
-_context="${_context}. Mode drives account routing (claude/AGENTS.md) and git host resolution (shell-common/functions/gh_host.sh)."
+_context="${_context}. Mode drives account routing (claude/AGENTS.md) and git host resolution (shell-common/lib/gh_host.sh)."
 
 if command -v jq >/dev/null 2>&1; then
 	jq -n --arg ctx "$_context" \

@@ -34,12 +34,12 @@ _IW_SHELL_COMMON="${SHELL_COMMON}"
 # because _iw_agent_name is called from both the dispatch loop and the tick's
 # summary, and a tick that discovers the helper missing halfway through would
 # have already opened panes it can no longer address.
-if [ ! -f "${_IW_SHELL_COMMON}/functions/herdr_agent_name.sh" ]; then
+if [ ! -f "${_IW_SHELL_COMMON}/lib/herdr_agent_name.sh" ]; then
     ux_error "herdr_agent_name.sh not found under ${_IW_SHELL_COMMON}/functions — cannot derive agent names."
     exit 1
 fi
 # shellcheck source=/dev/null
-. "${_IW_SHELL_COMMON}/functions/herdr_agent_name.sh" || exit 1
+. "${_IW_SHELL_COMMON}/lib/herdr_agent_name.sh" || exit 1
 
 # The herdr agent-lookup SSOT (#1569) — "is an agent sitting on this path?".
 # Same reasoning as the name helper above, and the same failure history: four
@@ -48,12 +48,12 @@ fi
 # The running-now signal below and the collection step both depend on it, so a
 # tick that discovered it missing halfway through would have already decided
 # what to dispatch on a predicate it no longer has.
-if [ ! -f "${_IW_SHELL_COMMON}/functions/herdr_agent_lookup.sh" ]; then
+if [ ! -f "${_IW_SHELL_COMMON}/lib/herdr_agent_lookup.sh" ]; then
     ux_error "herdr_agent_lookup.sh not found under ${_IW_SHELL_COMMON}/functions — cannot tell which worktrees are live."
     exit 1
 fi
 # shellcheck source=/dev/null
-. "${_IW_SHELL_COMMON}/functions/herdr_agent_lookup.sh" || exit 1
+. "${_IW_SHELL_COMMON}/lib/herdr_agent_lookup.sh" || exit 1
 
 # herdr pane helpers shared with pr_merge_train_cron.sh (lock, settle, idle
 # wait, workspace, account routing). Hard failure: without them there is no
@@ -497,7 +497,7 @@ _IW_ISSUE_WORKTREES_LOADED=0
 # Path comparisons in this file are between two sources that need not agree
 # spelling-wise — herdr reports a pane's cwd, git reports a worktree root, and
 # either can have arrived through a symlink. `herdr_agent_physical_path`
-# (shell-common/functions/herdr_agent_lookup.sh, #1569) is the SSOT for that
+# (shell-common/lib/herdr_agent_lookup.sh, #1569) is the SSOT for that
 # resolution; the local `_iw_physical_path` copy it replaced was one of four.
 
 # Emit `<worktree-path><TAB><owner/repo><TAB><number>` for every issue worktree
@@ -1517,7 +1517,7 @@ _iw_tab_create() {
 # Echo the herdr agent name for <owner/repo> issue <number>:
 # `iw-<repo>-issue-<number>`. Composition and the character rules behind it are
 # the SSOT this file shares with pr_merge_train_cron.sh and
-# gh:pr-post-merge-verify — shell-common/functions/herdr_agent_name.sh (#1530).
+# gh:pr-post-merge-verify — shell-common/lib/herdr_agent_name.sh (#1530).
 # Returns non-zero (and echoes nothing) when the repo cannot be normalized;
 # every caller here treats an empty name as a failed dispatch rather than
 # starting an agent with a malformed one.

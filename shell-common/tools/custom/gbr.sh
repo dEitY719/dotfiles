@@ -12,7 +12,7 @@
 # shellcheck source=/dev/null
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
 # shellcheck source=/dev/null
-DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/functions/gh_host.sh" || exit 1 # _gh_host_from_url
+DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/lib/gh_host.sh" || exit 1 # _gh_host_from_url
 # shellcheck source=/dev/null
 DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/functions/git_branch.sh" || exit 1
 

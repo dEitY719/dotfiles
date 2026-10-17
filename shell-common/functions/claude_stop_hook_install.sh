@@ -63,7 +63,7 @@ _claude_install_gh_issue_flow_stop_hook() {
     # bash where alias expansion is enabled.
     # Latest-only backup (issue #919): fixed suffix + legacy sweep so the
     # auto-fire install path does not accumulate one backup per shell start.
-    # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+    # SSOT policy: shell-common/lib/dotfiles_backup.sh (#806).
     _csh_backup="${_csh_source_file}.pre-stop-hook-fix.backup"
     command rm -f "${_csh_source_file}".pre-stop-hook-fix-*
     if ! command cp "$_csh_source_file" "$_csh_backup"; then

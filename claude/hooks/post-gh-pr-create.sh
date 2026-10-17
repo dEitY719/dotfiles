@@ -65,7 +65,7 @@ output=$(printf '%s' "$input" |
 # matching either host so a stale install can still extract the PR
 # number for the common `github.com` case.
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" 2>/dev/null
 if command -v _gh_resolve_host >/dev/null 2>&1; then
     _gh_resolved=$(_gh_resolve_host)
     # Build the URL-match regex from the host `gh` will actually use: when
@@ -96,7 +96,7 @@ unset _gh_host_regex
 [ -n "$pr_num" ] || exit 0
 
 # Source the shared board-sync helper. Failure to source → silent no-op.
-_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_project_status.sh"
+_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_project_status.sh"
 [ -r "$_helper" ] || exit 0
 # shellcheck disable=SC1090
 . "$_helper" 2>/dev/null || exit 0

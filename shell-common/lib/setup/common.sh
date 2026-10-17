@@ -12,15 +12,15 @@
 # Provides
 #   _setup_lib_root [candidate]   canonical dotfiles root (pwd -P, main worktree)
 #   log_info / log_warning / log_error / log_error_and_exit   ux_* shims (only if undefined)
-#   plus everything from functions/dotfiles_root.sh, functions/dotfiles_backup.sh
+#   plus everything from lib/dotfiles_root.sh, lib/dotfiles_backup.sh
 #   and tools/ux_lib/ux_lib.sh (the latter only when not loaded yet).
 
 : "${SHELL_COMMON:=${DOTFILES_ROOT:?export SHELL_COMMON or DOTFILES_ROOT before sourcing lib/setup}/shell-common}"
 
-# shellcheck source=shell-common/functions/dotfiles_root.sh
-. "${SHELL_COMMON}/functions/dotfiles_root.sh"
-# shellcheck source=shell-common/functions/dotfiles_backup.sh
-. "${SHELL_COMMON}/functions/dotfiles_backup.sh"
+# shellcheck source=shell-common/lib/dotfiles_root.sh
+. "${SHELL_COMMON}/lib/dotfiles_root.sh"
+# shellcheck source=shell-common/lib/dotfiles_backup.sh
+. "${SHELL_COMMON}/lib/dotfiles_backup.sh"
 if ! command -v ux_success >/dev/null 2>&1; then
     # shellcheck source=shell-common/tools/ux_lib/ux_lib.sh
     . "${SHELL_COMMON}/tools/ux_lib/ux_lib.sh"

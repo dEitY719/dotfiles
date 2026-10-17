@@ -1131,7 +1131,7 @@ _gh_flow_worker() {
 # ============================================================================
 # Project board Status sync
 # ============================================================================
-# Helper extracted to shell-common/functions/gh_project_status.sh so /gh-pr:create
+# Helper extracted to shell-common/lib/gh_project_status.sh so /gh-pr:create
 # and /gh-pr:commit (single-skill execution paths, not the gh-flow worker) can
 # also push board transitions. The worker calls _gh_project_status_sync at
 # Step 2a (implement → "In progress") and after Step 2c (PR opened →

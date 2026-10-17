@@ -41,8 +41,8 @@ _dotfiles_core="${DOTFILES_ROOT}/shell-common/util"
 # worktree, DOTFILES_ROOT would otherwise point at the worktree path and bleed
 # into ~/.claude-*/ symlinks created by claude_accounts_init. The helper is
 # source-from-candidate-path safe.
-if [ -r "${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh" ]; then
-    . "${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+if [ -r "${DOTFILES_ROOT}/shell-common/lib/dotfiles_root.sh" ]; then
+    . "${DOTFILES_ROOT}/shell-common/lib/dotfiles_root.sh"
     _dotfiles_root_canonicalize
 fi
 export DOTFILES_ROOT

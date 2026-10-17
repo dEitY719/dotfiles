@@ -966,7 +966,7 @@ _run_full_bash() {
     # deliberately message-shape agnostic (`BUG:` alone) so it keeps
     # biting after #1421 renamed the text to name the missing function.
     run bash --noprofile --norc -c \
-        ". \"${SHELL_COMMON}/functions/gh_project_status.sh\" 2>&1; echo \"rc=\$?\""
+        ". \"${SHELL_COMMON}/lib/gh_project_status.sh\" 2>&1; echo \"rc=\$?\""
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "BUG:"
@@ -991,7 +991,7 @@ _run_full_bash() {
         printf '#!/bin/sh\n'
         printf '# Simulate: future regression — every public function removed.\n'
         sed -n '/^for _gh_ps_selfcheck_fn in/,/^done$/p' \
-            "${SHELL_COMMON}/functions/gh_project_status.sh"
+            "${SHELL_COMMON}/lib/gh_project_status.sh"
         printf 'unset _gh_ps_selfcheck_fn\n:\n'
     } >"$BATS_TEST_TMPDIR/regressed_helper.sh"
     # Fixture sanity: the extraction really captured the loop.
@@ -1016,7 +1016,7 @@ _run_full_bash() {
     # defined, so `command -v` passed on each while board sync was
     # functionally dead. Strip just this function out of a copy of the real
     # helper and require the canary to fire, naming the culprit.
-    local helper="${SHELL_COMMON}/functions/gh_project_status.sh"
+    local helper="${SHELL_COMMON}/lib/gh_project_status.sh"
     # Pre-surgery sanity FIRST. The awk pattern below is pinned to the exact
     # `name() {` definition format; if that format ever drifts, awk silently
     # cuts nothing and the post-surgery "is it gone?" check below still reads
@@ -1045,7 +1045,7 @@ _run_full_bash() {
     # The check is a top-level `for` in a *sourced* file, so its loop
     # variable would otherwise persist in the operator's interactive shell.
     run bash --noprofile --norc -c \
-        ". \"${SHELL_COMMON}/functions/gh_project_status.sh\"; \
+        ". \"${SHELL_COMMON}/lib/gh_project_status.sh\"; \
          echo \"leak=[\${_gh_ps_selfcheck_fn-unset}]\""
     assert_success
     assert_output --partial "leak=[unset]"
@@ -1059,7 +1059,7 @@ _run_full_bash() {
     # coverage does not discharge this file's cross-shell requirement
     # (PR #1426 review, codex BLOCKER).
     run zsh -f -c \
-        ". \"${SHELL_COMMON}/functions/gh_project_status.sh\" 2>&1; \
+        ". \"${SHELL_COMMON}/lib/gh_project_status.sh\" 2>&1; \
          echo \"rc=\$?\"; echo \"leak=[\${_gh_ps_selfcheck_fn-unset}]\""
     assert_success
     assert_output --partial "rc=0"
@@ -1071,7 +1071,7 @@ _run_full_bash() {
     # The zsh half of the named-warning case above: the loop must iterate all
     # four names and print the missing one under zsh too, and the file must
     # still return rc 0 so `|| true` callers are unaffected.
-    local helper="${SHELL_COMMON}/functions/gh_project_status.sh"
+    local helper="${SHELL_COMMON}/lib/gh_project_status.sh"
     [ "$(grep -c '^_gh_project_status_normalize_repo() {$' "$helper")" -eq 1 ] || \
         fail "definition-line format drifted — the awk surgery below no longer matches"
 
@@ -1092,7 +1092,7 @@ _run_full_bash() {
     # and referenced from any other *.sh is a public entry point by use, so
     # it must be covered by the canary. Without this, promoting a private
     # helper to cross-file (as #1405 did) silently widens the coverage gap.
-    local helper="${SHELL_COMMON}/functions/gh_project_status.sh"
+    local helper="${SHELL_COMMON}/lib/gh_project_status.sh"
     local listed missing="" fn _f _hit
     listed=$(sed -n '/^for _gh_ps_selfcheck_fn in/,/^done$/p' "$helper")
     [ -n "$listed" ]  # the loop shape this test reads must still exist
@@ -1522,18 +1522,18 @@ _run_marker_bash() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_zsh '. "$SHELL_COMMON/functions/gh_project_status.sh"'
+    run_in_zsh '. "$SHELL_COMMON/lib/gh_project_status.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/gh_project_status.sh"
+    assert_output --partial "shell-common/lib/gh_project_status.sh"
 }
 
 @test "bash: #1505 foreign-checkout guard warns when gh_project_status.sh is sourced under bash" {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_bash '. "$SHELL_COMMON/functions/gh_project_status.sh"'
+    run_in_bash '. "$SHELL_COMMON/lib/gh_project_status.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/gh_project_status.sh"
+    assert_output --partial "shell-common/lib/gh_project_status.sh"
 }

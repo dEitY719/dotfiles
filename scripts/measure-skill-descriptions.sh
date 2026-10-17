@@ -9,7 +9,7 @@
 #
 # 측정 대상은 기본적으로 워크스페이스에 clone 된 marketplace repo 들이다
 # (issue #1680 — dotfiles `claude/skills/` 는 삭제됐다). 열거 규칙은
-# shell-common/functions/skill_sources.sh 가 SSOT 이고, setup-skills-ssot.sh
+# shell-common/lib/skill_sources.sh 가 SSOT 이고, setup-skills-ssot.sh
 # 가 실제로 하네스에 연결하는 것과 정확히 같은 목록을 본다. `--skills-dir` 로
 # 단일 디렉토리(`<dir>/<skill>/SKILL.md`)를 직접 지정하면 그쪽이 우선한다.
 #
@@ -105,12 +105,12 @@ if [ -n "$SKILLS_DIR" ]; then
     SKILL_DIRS="$(find "$SKILLS_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | LC_ALL=C sort)"
     SOURCE_LABEL="$SKILLS_DIR"
 else
-    SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+    SOURCES_LIB="${DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
     if [ ! -r "$SOURCES_LIB" ]; then
         printf '%s[FAIL]%s skill 소스 라이브러리 없음: %s\n' "$UX_ERROR" "$UX_RESET" "$SOURCES_LIB" >&2
         exit 1
     fi
-    # shellcheck source=../shell-common/functions/skill_sources.sh
+    # shellcheck source=../shell-common/lib/skill_sources.sh
     source "$SOURCES_LIB"
 
     if ! WORKSPACE_DIR="$(_skill_workspace_root)"; then

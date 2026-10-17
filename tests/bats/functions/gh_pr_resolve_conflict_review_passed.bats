@@ -4,7 +4,7 @@
 #   (the shipped skill, dEitY719/gh-resolve-skills skills/conflict/lib/remove-review-passed.sh,
 #    drops review-passed unconditionally and does NOT call this reconcile helper;
 #    its own bats live in that repo, dEitY719/dotfiles#2200)
-#   shell-common/functions/gh_pr_resolve_outdated.sh
+#   shell-common/lib/gh_pr_resolve_outdated.sh
 # Source-of-truth fixture: _fixtures/gh_pr_resolve_conflict_review_passed.sh
 #
 # Why this file exists next to the near-identical

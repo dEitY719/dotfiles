@@ -10,10 +10,10 @@ SETUP_SSOT_SCRIPT="${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
 DIAG_SCRIPT="${DOTFILES_ROOT}/scripts/maintenance/check_codex_skills_budget.py"
 UX_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 # Workspace source enumeration is shared with the Claude Code side (#1652).
-SKILL_SOURCES_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+SKILL_SOURCES_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
 # main-worktree canonicalization SSOT (#589) — the script reuses it to widen
 # the legacy-link match to the main checkout when run from a worktree (#1732).
-DOTFILES_ROOT_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+DOTFILES_ROOT_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/lib/dotfiles_root.sh"
 
 setup() {
     setup_isolated_home
@@ -31,15 +31,15 @@ setup() {
         "${BASE_REPO}/skills/beta" \
         "${BASE_REPO}/skills/gamma" \
         "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib" \
-        "${FIXTURE_DOTFILES}/shell-common/functions" \
+        "${FIXTURE_DOTFILES}/shell-common/lib" \
         "${FIXTURE_HOME}/.codex/skills"
 
     cp "$SETUP_SSOT_SCRIPT" "${FIXTURE_DOTFILES}/scripts/setup-skills-ssot.sh"
     cp "$UX_LIB_SOURCE" "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib/ux_lib.sh"
     cp "$SKILL_SOURCES_LIB_SOURCE" \
-        "${FIXTURE_DOTFILES}/shell-common/functions/skill_sources.sh"
+        "${FIXTURE_DOTFILES}/shell-common/lib/skill_sources.sh"
     cp "$DOTFILES_ROOT_LIB_SOURCE" \
-        "${FIXTURE_DOTFILES}/shell-common/functions/dotfiles_root.sh"
+        "${FIXTURE_DOTFILES}/shell-common/lib/dotfiles_root.sh"
 
     for s in alpha beta gamma; do
         cat > "${BASE_REPO}/skills/${s}/SKILL.md" <<EOF
@@ -440,7 +440,7 @@ ${BASE_REPO}/skills"
 # issue #1652 / #1680 — 워크스페이스 루트 스캔이 유일한 소스
 # 로컬에 clone 된 marketplace repo 들
 # (${WORKSPACE_ROOT}/<repo>/skills/<skill>/SKILL.md) 이 소스 전부다.
-# 열거 규칙 자체의 SSOT 는 shell-common/functions/skill_sources.sh 이고,
+# 열거 규칙 자체의 SSOT 는 shell-common/lib/skill_sources.sh 이고,
 # Claude Code 계정은 플러그인 전용이라 합성하지 않는다 — 예전 flat 링크
 # 정리 커버리지는 claude_prune_workspace_skills.bats.
 # ---------------------------------------------------------------------

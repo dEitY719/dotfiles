@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/functions/herdr_agent_lookup_readonly.bats
-# NF-2 read-only guard for shell-common/functions/herdr_agent_lookup.sh, the
+# NF-2 read-only guard for shell-common/lib/herdr_agent_lookup.sh, the
 # "which herdr agent sits on this worktree?" SSOT (#1569).
 #
 # #2200: these two @tests came from tests/bats/skills/gh_pr_merge_herdr_notify.bats.
@@ -10,7 +10,7 @@
 
 load '../test_helper'
 
-LIB="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_lookup.sh"
+LIB="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/herdr_agent_lookup.sh"
 
 @test "herdr lookup (NF-2): the SSOT contains no state-changing invocation" {
     [ -r "$LIB" ]

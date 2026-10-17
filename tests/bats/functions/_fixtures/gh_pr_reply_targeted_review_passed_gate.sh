@@ -8,8 +8,8 @@
 # where the tests run the shipped review-passed-gate.md blocks.
 
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_reply_targeted_review.sh"
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/devx_pr_review_all.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/devx_pr_review_all.sh"
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_edit_safe.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_edit_safe.sh"

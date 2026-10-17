@@ -339,7 +339,7 @@ PR 생성을 건너뛰고 빠르게만 확인하려면 1번 후 바로
   `gh-issue-create`, `gh-commit`, `gh-pr`, `gh-pr-reply`,
   `gh-pr-merge`, `gh-issue-flow`
 - 관련 헬퍼:
-  `shell-common/functions/gh_project_status.sh`
+  `shell-common/lib/gh_project_status.sh`
   (공용 `_gh_project_status_sync` — `/gh-flow`, `/gh-pr`,
   `/gh-commit`, `/gh-pr-reply` 가 모두 호출).
   대상 repo 는 `--repo` 인자 > `$GH_REPO` > `$TARGET_REPO` >

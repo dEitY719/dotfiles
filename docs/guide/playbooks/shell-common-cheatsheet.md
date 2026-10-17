@@ -138,7 +138,7 @@ submodule 체크아웃). Claude Code subagent 처럼 `$SHELL_COMMON` / `$DOTFILE
 (#1454). 3번이 하드코드 경로를 금지한다면 이 항목은 **탐색 자체**를 금지한다.
 
 규칙을 어긴 코드를 위한 advisory 안전망으로
-`_dotfiles_root_warn_if_foreign_source` (`shell-common/functions/dotfiles_root.sh`)
+`_dotfiles_root_warn_if_foreign_source` (`shell-common/lib/dotfiles_root.sh`)
 가 있다. 자신의 실제 load 경로가 `$HOME/dotfiles` 와 다른 git 저장소면 stderr 에
 WARN 한 블록을 찍는다. 같은 저장소의 linked worktree 는 경고하지 않으며, 절대
 실행을 막지 않는다. 비대화형 skill 호출자가 직접 source 하는 shell-common 파일
@@ -163,7 +163,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi

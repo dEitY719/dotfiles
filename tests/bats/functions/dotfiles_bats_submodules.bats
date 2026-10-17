@@ -7,7 +7,7 @@
 
 load '../test_helper'
 
-HELPER="${DOTFILES_ROOT}/shell-common/functions/dotfiles_bats_submodules.sh"
+HELPER="${DOTFILES_ROOT}/shell-common/lib/dotfiles_bats_submodules.sh"
 
 setup() {
     setup_isolated_home

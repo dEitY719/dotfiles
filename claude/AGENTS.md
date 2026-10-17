@@ -17,7 +17,7 @@ marketplace repo 로 분리됐다. 등록은 `claude/plugin/{marketplaces,plugin
   중복 명령). `claude/setup.sh` 의 `_claude_prune_workspace_skills()` 는 예전 링크를 정리만 한다.
 - **나머지 하네스**(Codex / OpenCode / Gemini / agy / Hermes)는 `scripts/setup-skills-ssot.sh` 가
   `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>` 을 entry-level 심볼릭 링크로 합성한다.
-  열거 SSOT: `shell-common/functions/skill_sources.sh`.
+  열거 SSOT: `shell-common/lib/skill_sources.sh`.
 - **절대 하지 말 것**: 합성 대상 디렉토리(`~/.claude*/skills/`, `~/.codex/skills/` 등) 직접 편집,
   Codex `.system/` 삭제. 스킬은 워크스페이스 repo 에서만 생성/수정.
 

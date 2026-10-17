@@ -176,7 +176,7 @@ _run_helper() {
     run bash --noprofile --norc -c "
         $(_run_helper_env_lines "$extra_path")
         cd '${REPO_DIR}' || exit 99
-        . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_lint.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/gh_pr_lint.sh'
         ${snippet}
         echo \"rc=\$?\"
     "
@@ -199,7 +199,7 @@ _run_helper_zsh() {
         export DOTFILES_ROOT_NO_CANONICALIZE=1
         export ZDOTDIR='${HOME}'
         cd '${REPO_DIR}' || exit 99
-        . '${DOTFILES_ROOT}/shell-common/functions/gh_pr_lint.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/gh_pr_lint.sh'
         ${snippet}
         echo \"rc=\$?\"
     "
@@ -210,14 +210,14 @@ _run_helper_zsh() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_pr_lint_run exists after sourcing" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_lint.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_pr_lint.sh"; \
                  declare -f _gh_pr_lint_run >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_pr_lint_run exists after sourcing" {
-    run_in_zsh '. "$DOTFILES_ROOT/shell-common/functions/gh_pr_lint.sh"; \
+    run_in_zsh '. "$DOTFILES_ROOT/shell-common/lib/gh_pr_lint.sh"; \
                 typeset -f _gh_pr_lint_run >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
@@ -566,7 +566,7 @@ TOX
     # silent — guards against a false-positive warning on the happy
     # path.
     run bash --noprofile --norc -c \
-        ". \"${SHELL_COMMON}/functions/gh_pr_lint.sh\" 2>&1; echo \"rc=\$?\""
+        ". \"${SHELL_COMMON}/lib/gh_pr_lint.sh\" 2>&1; echo \"rc=\$?\""
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "BUG: _gh_pr_lint_run undefined"

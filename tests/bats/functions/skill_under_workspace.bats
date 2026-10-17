@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/functions/skill_under_workspace.bats
-# Cover _skill_under_workspace (shell-common/functions/skill_sources.sh), the
+# Cover _skill_under_workspace (shell-common/lib/skill_sources.sh), the
 # one "does this link point into the workspace?" rule shared by
 # scripts/setup-skills-ssot.sh (skill_source_is_managed) and the Claude Code
 # account skills lib (prune / link --list / link fan-out skip) — issue #2147.
@@ -13,7 +13,7 @@ setup() {
     mkdir -p "$WS/repo/skills/one"
     ln -s "$WS" "$TEST_TEMP_HOME/ws-link"
     # shellcheck source=/dev/null
-    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
 }
 
 teardown() {

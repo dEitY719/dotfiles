@@ -29,7 +29,7 @@ setup() {
 export DOTFILES_FORCE_INIT=1
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/mount.sh"
-source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
 source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/integrations/claude.sh"
 if [ "\$1" = "--prune" ]; then
     _claude_prune_workspace_skills "\$2"

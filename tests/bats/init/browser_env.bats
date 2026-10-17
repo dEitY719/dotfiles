@@ -34,11 +34,11 @@ _stub_chrome() {
 }
 
 # A shell-common lookalike whose env/ is ours to plant files in while
-# functions/ and tools/ still point at the real tree.
+# lib/ and tools/ still point at the real tree.
 _fake_shell_common() {
     local root="${TEST_TEMP_HOME}/fake-shell-common"
     mkdir -p "$root/env"
-    ln -sfn "${SHELL_COMMON}/functions" "$root/functions"
+    ln -sfn "${SHELL_COMMON}/lib" "$root/lib"
     ln -sfn "${SHELL_COMMON}/tools" "$root/tools"
     ln -sfn "${SHELL_COMMON}/util" "$root/util"
     printf '%s' "$root"
@@ -126,7 +126,7 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
     _stub_chrome
     local root="${TEST_TEMP_HOME}/no-exec-shell-common"
     mkdir -p "$root/tools/custom"
-    ln -sfn "${SHELL_COMMON}/functions" "$root/functions"
+    ln -sfn "${SHELL_COMMON}/lib" "$root/lib"
     cp "$WRAPPER" "$root/tools/custom/open_in_windows_chrome.sh"
     chmod -x "$root/tools/custom/open_in_windows_chrome.sh"
     WINDOWS_CHROME_EXE="$CHROME" _source_bash "$root"
