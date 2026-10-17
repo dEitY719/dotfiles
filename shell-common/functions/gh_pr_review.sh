@@ -302,8 +302,9 @@ _gh_pr_review_argv_prompt_or_fail() {
 _gh_pr_review_resolve_claude_account() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local user="$1"
+    local _sc="${SHELL_COMMON:-$HOME/dotfiles/shell-common}"
     if ! command -v _claude_resolve_account >/dev/null 2>&1; then
-        local _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/lib/claude_accounts_auth.sh"
+        local _helper="$_sc/tools/custom/lib/claude_accounts_auth.sh"
         # shellcheck disable=SC1090
         [ -f "$_helper" ] && . "$_helper"
     fi
@@ -311,7 +312,7 @@ _gh_pr_review_resolve_claude_account() {
     # skill run may not have inherited it, which would reject every --user as
     # "(allowed: )". Same fallback as tools/custom/claude_accounts.sh.
     # [ -f ]: a vendored shell-common (gh-verify-skills) ships no env/ tree.
-    local _env="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/env/claude.sh"
+    local _env="$_sc/env/claude.sh"
     if [ -z "${CLAUDE_ENABLED_ACCOUNTS+x}" ] && [ -f "$_env" ]; then
         # shellcheck disable=SC1090
         . "$_env"
