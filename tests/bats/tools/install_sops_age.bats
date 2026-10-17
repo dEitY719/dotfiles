@@ -49,3 +49,26 @@ run_sops_tool() {
     assert_success
     assert_output ""
 }
+
+@test "main: mise install path prints the shims hint, release path does not" {
+    mkdir -p "$HOME/stub"
+    printf '#!/bin/sh\nexit 0\n' > "$HOME/stub/mise"
+    chmod +x "$HOME/stub/mise"
+    run_sops_tool '
+        sops_age_installed() { return 1; }
+        PATH="$HOME/stub:/usr/bin:/bin"
+        unset MISE_DATA_DIR XDG_DATA_HOME
+        main
+    '
+    assert_success
+    assert_output --partial "mise/shims"
+
+    run_sops_tool '
+        sops_age_installed() { return 1; }
+        command() { [ "$1" = "-v" ] && [ "$2" = mise ] && return 1; builtin command "$@"; }
+        install_sops_age_via_release() { return 0; }
+        main
+    '
+    assert_success
+    refute_output --partial "mise/shims"
+}

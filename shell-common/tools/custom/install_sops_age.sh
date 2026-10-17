@@ -66,7 +66,7 @@ sops_age_shims_hint() {
     sops_age_installed && return 0
     # shims already on PATH: the miss is not a PATH problem, a hint would mislead
     case ":${PATH}:" in *":${shims}:"*) return 0 ;; esac
-    ux_warning "sops/age not on PATH in this shell (mise shims missing)"
+    ux_warning "sops/age not found on PATH in this shell"
     ux_bullet "export PATH=\"${shims}:\$PATH\""
 }
 
