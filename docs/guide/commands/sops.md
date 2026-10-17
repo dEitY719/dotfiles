@@ -70,6 +70,7 @@
 - **senv edit [file]** — $EDITOR 로 편집 — 저장 시 재암호화
 - **senv run <cmd...>** — 환경변수로 주입해 실행 — 디스크에 평문 없음, eval 안 함
 - **senv check** — 키/권한 600/공개키 일치/복호화 점검 — 평문 미출력, 실패마다 다음 행동
+- **senv create-pr** — enc -> 브랜치 -> 커밋 -> push -> PR — 기본 브랜치에서만, .enc.env 만 add, 머지 안 함
 - **senv key show** — 공개키 + .sops.yaml 일치 여부 — 비밀 출력 없음
 - **senv key export [-o f] [-f]** — 개인키를 비밀번호로 잠금 (~/senv-key.age) — git 작업트리 안 거절, 되풀어 검증
 - **senv key import [f] [-f]** — 잠금 파일 -> keys.txt (600) — 기존 keys.txt 는 -f 없이 안 덮어씀
