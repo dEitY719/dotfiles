@@ -276,6 +276,15 @@ def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = Fals
     return parts
 
 
+# Background-agent reports arrive as user-role text but are not user input (#2231).
+_TASK_NOTIFICATION_RE = re.compile(r"<task-notification>.*?(?:</task-notification>|\Z)", re.DOTALL)
+
+
+def _user_boundary_texts(message: dict[str, Any]) -> list[str]:
+    """User-typed text for boundary detection: text blocks minus task-notification spans."""
+    return [_TASK_NOTIFICATION_RE.sub("", t) for t in _iter_text_blocks(message, include_tool_results=False)]
+
+
 def _iter_skill_uses(message: dict[str, Any]) -> list[str]:
     """Return Skill tool_use names invoked in this message."""
     out: list[str] = []
@@ -326,7 +335,7 @@ def _find_latest_catalog_boundary(
                 if normalized in catalog:
                     return (i, normalized)
         elif role == "user":
-            for text in _iter_text_blocks(msg, include_tool_results=False):
+            for text in _user_boundary_texts(msg):
                 match = boundary_re.search(text)
                 if not match:
                     continue
@@ -355,7 +364,7 @@ def _next_catalog_boundary_after(
                 if _normalize_skill(skill) in catalog:
                     return i
         elif role == "user":
-            for text in _iter_text_blocks(msg, include_tool_results=False):
+            for text in _user_boundary_texts(msg):
                 if boundary_re.search(text):
                     return i
     return len(messages)
