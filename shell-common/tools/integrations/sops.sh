@@ -96,7 +96,7 @@ _senv_usage() {
     ux_bullet "edit [file]       edit the encrypted file in \$EDITOR, re-encrypt on save"
     ux_bullet "run <cmd...>      run cmd with the encrypted values as env vars (no file)"
     ux_bullet "check             key present / mode 600 / matches .sops.yaml / decrypts"
-    ux_bullet "create-pr        enc -> branch -> commit -> push -> PR (default branch only, .enc.env only)"
+    ux_bullet "create-pr         enc -> branch -> commit -> push -> PR (default branch only, .enc.env only)"
     ux_bullet "key show          your public key + whether .sops.yaml lists it"
     ux_bullet "key export [-o file] [-f]   lock the private key with a passphrase (~/senv-key.age)"
     ux_bullet "key import [file] [-f]      unlock it into the sops key file (mode 600)"

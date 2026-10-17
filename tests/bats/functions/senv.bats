@@ -373,7 +373,7 @@ _pr_repo() {
     [[ "$output" == *"https://example.test/pr/1"* ]]
     br=$(git -C "$PROJ" symbolic-ref --short HEAD)
     [[ "$br" == chore/reencrypt-env-* ]]
-    [ "$(git -C "$PROJ" show --name-only --format=%s HEAD | tail -n +1 | tr '\n' '|')" = "chore(secrets): .enc.env 를 현재 .env 로 다시 암호화한다||.enc.env|" ]
+    [ "$(git -C "$PROJ" show --name-only --format=%s HEAD | tr '\n' '|')" = "chore(secrets): .enc.env 를 현재 .env 로 다시 암호화한다||.enc.env|" ]
     git -C "$REMOTE" rev-parse --verify "$br"
     grep -q -- "--base main" "$GH_LOG"
 }
