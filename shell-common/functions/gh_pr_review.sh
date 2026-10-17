@@ -307,6 +307,15 @@ _gh_pr_review_resolve_claude_account() {
         # shellcheck disable=SC1090
         [ -f "$_helper" ] && . "$_helper"
     fi
+    # The whitelist is exported by env/claude.sh at shell init; a non-interactive
+    # skill run may not have inherited it, which would reject every --user as
+    # "(allowed: )". Same fallback as tools/custom/claude_accounts.sh.
+    # [ -f ]: a vendored shell-common (gh-verify-skills) ships no env/ tree.
+    local _env="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/env/claude.sh"
+    if [ -z "${CLAUDE_ENABLED_ACCOUNTS+x}" ] && [ -f "$_env" ]; then
+        # shellcheck disable=SC1090
+        . "$_env"
+    fi
     if ! command -v _claude_resolve_account >/dev/null 2>&1; then
         echo "claude account routing helper not available — load shell-common/tools/custom/lib/claude_accounts_auth.sh" >&2
         return 1
