@@ -307,7 +307,7 @@ LOCAL
     mkdir -p "$HOME/.claude-personal"
     # Simulate the CLI having written a local-only plugin enable into the
     # account real file: SSOT's 3 entries + one extra not committed to SSOT.
-    jq '.enabledPlugins["understand-anything@understand-anything"] = true' \
+    jq '.enabledPlugins["local-only-demo@demo-marketplace"] = true' \
         "${DOTFILES_ROOT}/claude/settings.json" \
         > "$HOME/.claude-personal/settings.json"
 
@@ -315,7 +315,7 @@ LOCAL
     assert_success
 
     # The local-only entry survives the SSOT re-copy...
-    [ "$(jq -r '.enabledPlugins["understand-anything@understand-anything"]' \
+    [ "$(jq -r '.enabledPlugins["local-only-demo@demo-marketplace"]' \
         "$HOME/.claude-personal/settings.json")" = "true" ]
     # ...and the SSOT-committed entries are still present (no regression).
     [ "$(jq -r '.enabledPlugins["superpowers@claude-plugins-official"]' \
