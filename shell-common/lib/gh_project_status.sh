@@ -1,6 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
-# shell-common/functions/gh_project_status.sh
+# shell-common/lib/gh_project_status.sh
 # No interactive guard: sourced by skills and hooks from non-interactive
 # shells; a guard would leave _gh_project_status_sync undefined.
 # Push a projectV2 Status transition for an Issue or PR. Auto-discovers every
@@ -97,7 +97,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi
@@ -126,7 +126,7 @@ _gh_project_status_ensure_host() {
         return 0
     fi
     # shellcheck disable=SC1091
-    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_host.sh" 2>/dev/null || return 0
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" 2>/dev/null || return 0
     if command -v _gh_resolve_host >/dev/null 2>&1; then
         GH_HOST=$(_gh_resolve_host)
         export GH_HOST

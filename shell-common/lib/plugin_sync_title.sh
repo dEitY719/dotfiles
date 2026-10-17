@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/plugin_sync_title.sh
+# shell-common/lib/plugin_sync_title.sh
 # Build the "chore(claude-plugin): sync manifest" commit title from the
 # manifest keys a sync actually changed.
 #
@@ -17,13 +17,13 @@
 # own commits; keeping the logic here means the two paths cannot drift
 # into two different title formats.
 #
-# Like shell-common/functions/gh_host.sh, this file deliberately has NO
+# Like shell-common/lib/gh_host.sh, this file deliberately has NO
 # interactive guard: it only defines functions and produces no output at
 # file scope, so the guard would hide the functions from the very callers
 # that need them (hooks and one-shot scripts sourcing it non-interactively).
 #
-# POSIX only — shell-common/functions/*.sh is auto-sourced by both the bash
-# and the zsh loader, so no bashisms (no arrays, no `mapfile`, no
+# POSIX only — callers source this from bash, zsh and sh alike, so no
+# bashisms (no arrays, no `mapfile`, no
 # `${*:1:3}`) may appear here.
 #
 # Requires: jq.
@@ -52,7 +52,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi
@@ -75,10 +75,10 @@ unset _drg_self _drg_helper
 # happens, exactly the "command not found" failure the other three #1696
 # call sites already guard against.
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/claude_plugin_manifest.sh" 2>/dev/null || true
 
 # Bootstrap fallback, NOT a second implementation to maintain in parallel.
-# Behavior changes belong in shell-common/functions/claude_plugin_manifest.sh;
+# Behavior changes belong in shell-common/lib/claude_plugin_manifest.sh;
 # this copy follows it. POSIX only (no `local`) — this file is sourced by
 # both bash and zsh loaders.
 if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then

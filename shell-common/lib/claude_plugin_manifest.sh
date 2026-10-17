@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/claude_plugin_manifest.sh
+# shell-common/lib/claude_plugin_manifest.sh
 # SSOT for reading a Claude plugin manifest file into a jq-safe JSON value.
 #
 # Every writer and reader of claude/plugin/{marketplaces,plugins}.json needs
@@ -12,7 +12,7 @@
 #   claude/plugin/reconcile.sh      _read_json_or            (local function)
 #   claude/hooks/plugin-sync.sh     _read_json_or            (local function)
 #   claude/plugin/restore.sh        inlined at the call site
-#   shell-common/functions/plugin_sync_title.sh
+#   shell-common/lib/plugin_sync_title.sh
 #                                   _plugin_sync_read_json_or (dropped, #2181)
 #
 # They agreed by accident, not by construction. This file is the one copy the
@@ -26,14 +26,14 @@
 # files through filtered jq programs (`keys`, `.mp_keys // []`), which do not
 # fit this helper's fixed `jq -c '.'`, and keeps its own reads.
 #
-# Like shell-common/functions/plugin_sync_title.sh, this file deliberately has
+# Like shell-common/lib/plugin_sync_title.sh, this file deliberately has
 # NO interactive guard: apart from the advisory diagnostics below it defines a
 # function and produces no output at file scope, so the guard would hide the
 # function from the very callers that need it (hooks and one-shot scripts
 # sourcing it non-interactively).
 #
-# POSIX only — shell-common/functions/*.sh is auto-sourced by both the bash
-# and the zsh loader, so no bashisms (no arrays, no `local`, no double-bracket tests) may
+# POSIX only — callers source this from bash, zsh and sh alike, so no
+# bashisms (no arrays, no `local`, no double-bracket tests) may
 # appear here.
 #
 # Requires: jq.
@@ -83,7 +83,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi

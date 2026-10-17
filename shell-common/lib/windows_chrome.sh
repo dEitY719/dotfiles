@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/windows_chrome.sh
+# shell-common/lib/windows_chrome.sh
 # SSOT for locating the Windows-side Google Chrome from inside WSL (issue #1408).
 #
 # Two consumers share this file so the candidate-path list exists exactly once:

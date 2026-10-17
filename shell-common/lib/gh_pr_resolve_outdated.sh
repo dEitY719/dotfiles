@@ -1,6 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
-# shell-common/functions/gh_pr_resolve_outdated.sh
+# shell-common/lib/gh_pr_resolve_outdated.sh
 # NOTE: This file intentionally has NO interactive guard: pure function
 # definitions with no output at file scope, sourced non-interactively by
 # gh:pr-resolve-outdated / -conflict skills' Bash tool calls.
@@ -133,7 +133,7 @@
 # place; #1700 merely promoted it from second condition to only condition. So
 # the "keep" path calls the existing #1601 freshness check,
 # `_gh_pr_merge_train_review_passed_stale <pr> <repo> <host> <old-head-sha>
-# <trusted-login>` (`shell-common/functions/gh_pr_merge_train.sh`) — only its
+# <trusted-login>` (`shell-common/lib/gh_pr_merge_train.sh`) — only its
 # rc 0 (FRESH: last marker from the trusted login equals `OLD_HEAD_SHA`
 # exactly) proceeds; any other rc (stale, absent, undetermined) falls through
 # to the ordinary drop. Reused as-is, not reimplemented — the marker format,
@@ -303,7 +303,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi
@@ -473,11 +473,11 @@ _gh_pr_resolve_outdated_reconcile_review_passed() {
 
     if ! command -v _gh_pr_drop_label >/dev/null 2>&1; then
         # shellcheck source=/dev/null
-        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh" 2>/dev/null || :
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_pr_edit_safe.sh" 2>/dev/null || :
     fi
     if ! command -v _gh_pr_merge_train_review_passed_stale >/dev/null 2>&1; then
         # shellcheck source=/dev/null
-        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_merge_train.sh" 2>/dev/null || :
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_pr_merge_train.sh" 2>/dev/null || :
     fi
 
     local _old_pid _new_pid _me _fresh_rc _pid_state

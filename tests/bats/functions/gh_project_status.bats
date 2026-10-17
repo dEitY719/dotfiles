@@ -8,6 +8,9 @@
 
 load '../test_helper'
 
+# lib/ is never auto-sourced (#2225): every body loads the library itself.
+L='. "$SHELL_COMMON/lib/gh_project_status.sh"; '
+
 setup() {
     setup_isolated_home
 }
@@ -54,6 +57,7 @@ _run_closing_issues_bash() {
         export PATH='${STUB_BIN}:${PATH}'
         export FAKE_GH_MODE='${mode}'
         source '${DOTFILES_ROOT}/bash/main.bash'
+        . '${SHELL_COMMON}/lib/gh_project_status.sh'
         _gh_pr_closing_issue_numbers ${args}
         echo \"rc=\$?\"
     "
@@ -64,45 +68,45 @@ _run_closing_issues_bash() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_project_status_sync helper exists" {
-    run_in_bash 'declare -f _gh_project_status_sync >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_sync >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_project_status_sync helper exists" {
-    run_in_zsh 'typeset -f _gh_project_status_sync >/dev/null && echo ok'
+    run_in_zsh "$L"'typeset -f _gh_project_status_sync >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_project_status_in_list helper exists" {
-    run_in_bash 'declare -f _gh_project_status_in_list >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_in_list >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_project_status_mutate helper exists" {
     # Extracted in #244 so the mutation can be retried once on flake.
-    run_in_bash 'declare -f _gh_project_status_mutate >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_mutate >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_project_status_mutate helper exists" {
-    run_in_zsh 'typeset -f _gh_project_status_mutate >/dev/null && echo ok'
+    run_in_zsh "$L"'typeset -f _gh_project_status_mutate >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_project_status_resolve_owner_repo helper exists" {
     # Extracted in #341 so the auto-detect step can be retried once on flake.
-    run_in_bash 'declare -f _gh_project_status_resolve_owner_repo >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_resolve_owner_repo >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_project_status_resolve_owner_repo helper exists" {
-    run_in_zsh 'typeset -f _gh_project_status_resolve_owner_repo >/dev/null && echo ok'
+    run_in_zsh "$L"'typeset -f _gh_project_status_resolve_owner_repo >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -117,34 +121,34 @@ _run_closing_issues_bash() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_project_status_ensure_host helper exists" {
-    run_in_bash 'declare -f _gh_project_status_ensure_host >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_ensure_host >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_project_status_ensure_host helper exists" {
-    run_in_zsh 'typeset -f _gh_project_status_ensure_host >/dev/null && echo ok'
+    run_in_zsh "$L"'typeset -f _gh_project_status_ensure_host >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "host: GH_HOST unset + internal mode -> resolves to GHE host" {
     echo "internal" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash 'export DOTFILES_GHES_HOST=ghes.example.invalid; unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
+    run_in_bash "$L"'export DOTFILES_GHES_HOST=ghes.example.invalid; unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
     assert_success
     assert_output --partial "GH_HOST=ghes.example.invalid"
 }
 
 @test "host: GH_HOST unset + external mode -> resolves to github.com" {
     echo "external" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash 'unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
+    run_in_bash "$L"'unset GH_HOST; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
     assert_success
     assert_output --partial "GH_HOST=github.com"
 }
 
 @test "host: explicit GH_HOST is preserved (no overwrite)" {
     echo "internal" > "$HOME/.dotfiles-setup-mode"
-    run_in_bash 'GH_HOST=github.example.com; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
+    run_in_bash "$L"'GH_HOST=github.example.com; _gh_project_status_ensure_host; echo "GH_HOST=$GH_HOST"'
     assert_success
     assert_output --partial "GH_HOST=github.example.com"
 }
@@ -154,7 +158,7 @@ _run_closing_issues_bash() {
 # ---------------------------------------------------------------------------
 
 @test "opt-out: GH_PROJECT_STATUS_SYNC=0 returns silently" {
-    run_in_bash 'GH_PROJECT_STATUS_SYNC=0 _gh_project_status_sync issue 1 "In progress" 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'GH_PROJECT_STATUS_SYNC=0 _gh_project_status_sync issue 1 "In progress" 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "[gh-project-status]"
@@ -163,7 +167,7 @@ _run_closing_issues_bash() {
 @test "opt-out: legacy GH_FLOW_PROJECT_STATUS_SYNC=0 still honored" {
     # Backwards-compat: callers that exported the old name in their env or
     # CI config keep working without churn.
-    run_in_bash 'GH_FLOW_PROJECT_STATUS_SYNC=0 _gh_project_status_sync issue 1 "In progress" 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'GH_FLOW_PROJECT_STATUS_SYNC=0 _gh_project_status_sync issue 1 "In progress" 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "[gh-project-status]"
@@ -174,14 +178,14 @@ _run_closing_issues_bash() {
 # ---------------------------------------------------------------------------
 
 @test "validation: missing args returns silently" {
-    run_in_bash '_gh_project_status_sync 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_sync 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "[gh-project-status]"
 }
 
 @test "validation: invalid kind returns 0 with warning" {
-    run_in_bash '_gh_project_status_sync bogus 42 "In progress" 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_sync bogus 42 "In progress" 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial "invalid kind=bogus"
@@ -192,14 +196,14 @@ _run_closing_issues_bash() {
 # ---------------------------------------------------------------------------
 
 @test "only-from: unknown option rejected with stderr warning" {
-    run_in_bash '_gh_project_status_sync issue 42 "In progress" --bogus 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_sync issue 42 "In progress" --bogus 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial "unknown option: --bogus"
 }
 
 @test "only-from: missing value rejected" {
-    run_in_bash '_gh_project_status_sync issue 42 "In progress" --only-from 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_sync issue 42 "In progress" --only-from 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial "--only-from requires an argument"
@@ -210,25 +214,25 @@ _run_closing_issues_bash() {
 # ---------------------------------------------------------------------------
 
 @test "in_list: single-item match" {
-    run_in_bash '_gh_project_status_in_list "Backlog" "Backlog" && echo MATCH || echo NO'
+    run_in_bash "$L"'_gh_project_status_in_list "Backlog" "Backlog" && echo MATCH || echo NO'
     assert_success
     assert_output --partial "MATCH"
 }
 
 @test "in_list: comma-separated match (first)" {
-    run_in_bash '_gh_project_status_in_list "Backlog" "Backlog,In progress" && echo MATCH || echo NO'
+    run_in_bash "$L"'_gh_project_status_in_list "Backlog" "Backlog,In progress" && echo MATCH || echo NO'
     assert_success
     assert_output --partial "MATCH"
 }
 
 @test "in_list: comma-separated match (last)" {
-    run_in_bash '_gh_project_status_in_list "In progress" "Backlog,In progress" && echo MATCH || echo NO'
+    run_in_bash "$L"'_gh_project_status_in_list "In progress" "Backlog,In progress" && echo MATCH || echo NO'
     assert_success
     assert_output --partial "MATCH"
 }
 
 @test "in_list: no match returns 1" {
-    run_in_bash '_gh_project_status_in_list "In review" "Backlog,In progress" && echo MATCH || echo NO'
+    run_in_bash "$L"'_gh_project_status_in_list "In review" "Backlog,In progress" && echo MATCH || echo NO'
     assert_success
     assert_output --partial "NO"
 }
@@ -236,14 +240,14 @@ _run_closing_issues_bash() {
 @test "in_list: empty current value never matches" {
     # Important guard: items with no Status set should not satisfy
     # --only-from "" or any non-empty whitelist.
-    run_in_bash '_gh_project_status_in_list "" "Backlog" && echo MATCH || echo NO'
+    run_in_bash "$L"'_gh_project_status_in_list "" "Backlog" && echo MATCH || echo NO'
     assert_success
     assert_output --partial "NO"
 }
 
 @test "in_list: status names with internal spaces are preserved" {
     # Regression: a naive trim or word-split would break "In progress".
-    run_in_bash '_gh_project_status_in_list "In progress" "In progress" && echo MATCH || echo NO'
+    run_in_bash "$L"'_gh_project_status_in_list "In progress" "In progress" && echo MATCH || echo NO'
     assert_success
     assert_output --partial "MATCH"
 }
@@ -253,25 +257,25 @@ _run_closing_issues_bash() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_pr_closing_issue_numbers helper exists" {
-    run_in_bash 'declare -f _gh_pr_closing_issue_numbers >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_pr_closing_issue_numbers >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_pr_closing_issue_numbers helper exists" {
-    run_in_zsh 'typeset -f _gh_pr_closing_issue_numbers >/dev/null && echo ok'
+    run_in_zsh "$L"'typeset -f _gh_pr_closing_issue_numbers >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "closing-issues: missing pr arg returns silently" {
-    run_in_bash '_gh_pr_closing_issue_numbers "" "owner/repo" 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_pr_closing_issue_numbers "" "owner/repo" 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
 }
 
 @test "closing-issues: missing repo arg returns silently" {
-    run_in_bash '_gh_pr_closing_issue_numbers 99 "" 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_pr_closing_issue_numbers 99 "" 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
 }
@@ -279,7 +283,7 @@ _run_closing_issues_bash() {
 @test "closing-issues: malformed repo without slash returns silently" {
     # Guards against feeding a bare project name to gh, which would surface
     # as a noisy GraphQL error in the merge report.
-    run_in_bash '_gh_pr_closing_issue_numbers 99 "no-slash" 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_pr_closing_issue_numbers 99 "no-slash" 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     refute_output --partial "248"
@@ -374,6 +378,7 @@ _run_resolve_bash() {
         export _GH_PROJECT_STATUS_RETRY_SLEEP=0
         unset GH_REPO TARGET_REPO
         source '${DOTFILES_ROOT}/bash/main.bash'
+        . '${SHELL_COMMON}/lib/gh_project_status.sh'
         ${snippet}
     "
 }
@@ -602,18 +607,19 @@ _run_full_bash() {
         export _GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS='${_GH_PROJECT_STATUS_GUARD_APPROVED_BYPASS:-0}'
         unset GH_REPO TARGET_REPO
         source '${DOTFILES_ROOT}/bash/main.bash'
+        . '${SHELL_COMMON}/lib/gh_project_status.sh'
         ${snippet}
     "
 }
 
 @test "bash: _gh_project_status_query_current helper exists" {
-    run_in_bash 'declare -f _gh_project_status_query_current >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_query_current >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_project_status_query_current helper exists" {
-    run_in_zsh 'typeset -f _gh_project_status_query_current >/dev/null && echo ok'
+    run_in_zsh "$L"'typeset -f _gh_project_status_query_current >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -708,7 +714,7 @@ _run_full_bash() {
 }
 
 @test "bash: _gh_project_status_set_and_verify helper exists" {
-    run_in_bash 'declare -f _gh_project_status_set_and_verify >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_set_and_verify >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
@@ -1146,19 +1152,19 @@ _run_full_bash() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_project_status_normalize_repo helper exists" {
-    run_in_bash 'declare -f _gh_project_status_normalize_repo >/dev/null && echo ok'
+    run_in_bash "$L"'declare -f _gh_project_status_normalize_repo >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_project_status_normalize_repo helper exists" {
-    run_in_zsh 'typeset -f _gh_project_status_normalize_repo >/dev/null && echo ok'
+    run_in_zsh "$L"'typeset -f _gh_project_status_normalize_repo >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "normalize: owner/repo -> 'owner repo'" {
-    run_in_bash '_gh_project_status_normalize_repo "acme/widgets"; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_normalize_repo "acme/widgets"; echo "rc=$?"'
     assert_success
     assert_output --partial "acme widgets"
     assert_output --partial "rc=0"
@@ -1168,7 +1174,7 @@ _run_full_bash() {
     # The HOST/OWNER/REPO form is what gh's own GH_REPO accepts; host routing
     # is _gh_project_status_ensure_host's job, so the host is validated then
     # discarded.
-    run_in_bash '_gh_project_status_normalize_repo "github.example.com/acme/widgets"; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_normalize_repo "github.example.com/acme/widgets"; echo "rc=$?"'
     assert_success
     assert_output --partial "acme widgets"
     assert_output --partial "rc=0"
@@ -1176,35 +1182,35 @@ _run_full_bash() {
 }
 
 @test "normalize: empty value returns 1" {
-    run_in_bash 'out=$(_gh_project_status_normalize_repo ""); echo "rc=$?"; echo "out=[$out]"'
+    run_in_bash "$L"'out=$(_gh_project_status_normalize_repo ""); echo "rc=$?"; echo "out=[$out]"'
     assert_success
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
 }
 
 @test "normalize: value without a slash returns 1" {
-    run_in_bash 'out=$(_gh_project_status_normalize_repo "norepo"); echo "rc=$?"; echo "out=[$out]"'
+    run_in_bash "$L"'out=$(_gh_project_status_normalize_repo "norepo"); echo "rc=$?"; echo "out=[$out]"'
     assert_success
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
 }
 
 @test "normalize: four segments returns 1" {
-    run_in_bash 'out=$(_gh_project_status_normalize_repo "a/b/c/d"); echo "rc=$?"; echo "out=[$out]"'
+    run_in_bash "$L"'out=$(_gh_project_status_normalize_repo "a/b/c/d"); echo "rc=$?"; echo "out=[$out]"'
     assert_success
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
 }
 
 @test "normalize: trailing empty segment (owner/) returns 1" {
-    run_in_bash 'out=$(_gh_project_status_normalize_repo "owner/"); echo "rc=$?"; echo "out=[$out]"'
+    run_in_bash "$L"'out=$(_gh_project_status_normalize_repo "owner/"); echo "rc=$?"; echo "out=[$out]"'
     assert_success
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
 }
 
 @test "normalize: leading empty segment (/repo) returns 1" {
-    run_in_bash 'out=$(_gh_project_status_normalize_repo "/repo"); echo "rc=$?"; echo "out=[$out]"'
+    run_in_bash "$L"'out=$(_gh_project_status_normalize_repo "/repo"); echo "rc=$?"; echo "out=[$out]"'
     assert_success
     assert_output --partial "rc=1"
     assert_output --partial "out=[]"
@@ -1254,6 +1260,7 @@ _run_marker_bash() {
         export _GH_PROJECT_STATUS_VERIFY_SLEEP=0
         unset GH_REPO TARGET_REPO
         source '${DOTFILES_ROOT}/bash/main.bash'
+        . '${SHELL_COMMON}/lib/gh_project_status.sh'
         ${env_block}
         ${snippet}
     "
@@ -1352,14 +1359,14 @@ _run_marker_bash() {
 # ------- --repo plumbing through _gh_project_status_sync --------------------
 
 @test "repo-opt: --repo with missing value rejected" {
-    run_in_bash '_gh_project_status_sync issue 42 "In progress" --repo 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_sync issue 42 "In progress" --repo 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial "--repo requires an argument"
 }
 
 @test "repo-opt: unknown option after --repo still warns and returns 0" {
-    run_in_bash '_gh_project_status_sync issue 42 "In progress" --repo a/b --bogus 2>&1; echo "rc=$?"'
+    run_in_bash "$L"'_gh_project_status_sync issue 42 "In progress" --repo a/b --bogus 2>&1; echo "rc=$?"'
     assert_success
     assert_output --partial "rc=0"
     assert_output --partial "unknown option: --bogus"
@@ -1522,7 +1529,7 @@ _run_marker_bash() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_zsh '. "$SHELL_COMMON/lib/gh_project_status.sh"'
+    run_in_zsh "$L"'. "$SHELL_COMMON/lib/gh_project_status.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
     assert_output --partial "shell-common/lib/gh_project_status.sh"
@@ -1532,7 +1539,7 @@ _run_marker_bash() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_bash '. "$SHELL_COMMON/lib/gh_project_status.sh"'
+    run_in_bash "$L"'. "$SHELL_COMMON/lib/gh_project_status.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
     assert_output --partial "shell-common/lib/gh_project_status.sh"

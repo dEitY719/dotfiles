@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/dotfiles_bats_submodules.sh
+# shell-common/lib/dotfiles_bats_submodules.sh
 # Ensures the bats-core/bats-support/bats-assert git submodules
 # (tests/bats/lib/*) are checked out during onboarding.
 #

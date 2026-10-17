@@ -261,11 +261,11 @@ WT="/w/wt-issue-1569"
 }
 
 # ---------------------------------------------------------------------------
-# L26: the loader reaches this file
+# L26: lib/ is never auto-sourced (#2225) -- callers source it themselves
 # ---------------------------------------------------------------------------
 
-@test "L26: bash/main.bash auto-sources the helper" {
-    run_in_bash 'command -v herdr_agent_tab_for_cwd >/dev/null && command -v herdr_agent_path_under >/dev/null && echo sourced'
+@test "L26: bash/main.bash does not auto-source the lib helper" {
+    run_in_bash 'command -v herdr_agent_tab_for_cwd >/dev/null || echo absent'
     assert_success
-    assert_output --partial "sourced"
+    assert_output --partial "absent"
 }
