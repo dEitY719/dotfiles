@@ -1,6 +1,6 @@
 #!/bin/sh
 # shellcheck shell=bash
-# shell-common/functions/gh_discussion.sh
+# shell-common/lib/gh_discussion.sh
 # No interactive guard: pure function library, sourced by the gh discussion
 # skills from non-interactive shells.
 # GraphQL wrappers for the GitHub Discussions write API. The REST endpoints

@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/herdr_agent_lookup.sh
+# shell-common/lib/herdr_agent_lookup.sh
 # NOTE: This file intentionally has NO interactive guard: pure function
 # definitions with no output at file scope, sourced non-interactively by
 # issue_watcher_cron.sh, schedule_agent_prompt.sh and skill blocks (see below).

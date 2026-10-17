@@ -1,14 +1,14 @@
 #!/bin/sh
 # shellcheck shell=bash
-# shell-common/functions/devx_pr_verify_merged.sh
+# shell-common/lib/devx_pr_verify_merged.sh
 # Pure arg parser for the devx:pr-verify-merged skill. Mirrors the
 # devx_pr_verify_live_parse contract: one `key=value` line per resolved arg
 # on success, errors to stderr. Exit 0 ok/help, exit 2 arg error. Runtime
 # checks (PR merge state, gh auth, clone/build success) belong to the skill
 # body.
 #
-# This file lives under shell-common/functions/, so it is auto-sourced into
-# the user's interactive shell. Every variable the parser assigns is `local`
+# This file lives under shell-common/lib/, so the loader never sources it;
+# callers source it directly, often into an interactive shell. Every variable the parser assigns is `local`
 # (house style here — see gh_pr_review.sh) so a call cannot clobber the
 # user's `$pr` / `$remote` / `$matrix`. Callers read the stdout `key=value`
 # contract, never the shell variables.
@@ -33,7 +33,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi

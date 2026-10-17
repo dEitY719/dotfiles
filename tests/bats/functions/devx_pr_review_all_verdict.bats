@@ -27,6 +27,10 @@
 # prose actually calls them.
 load '../test_helper'
 
+# lib/ is never auto-sourced (#2225): the bash/zsh bodies load it themselves.
+L='. "$SHELL_COMMON/lib/devx_pr_review_all.sh"
+'
+
 setup() {
     # Isolate $HOME so the #1454 foreign-checkout guard is a no-op when this
     # file runs from a clone other than ~/dotfiles (#2057).
@@ -732,14 +736,14 @@ _run_in_dash() {
 
 @test "bug 1 (bash): two-lane pipeline -> review-blocked, lanes=2" {
     _two_lane_fixture
-    run_in_bash "$(_two_lane_body)"
+    run_in_bash "$L$(_two_lane_body)"
     assert_success
     assert_output --partial "RESULT label=review-blocked lanes=2"
 }
 
 @test "bug 1 (zsh): two-lane pipeline -> review-blocked, lanes=2" {
     _two_lane_fixture
-    run_in_zsh "$(_two_lane_body)"
+    run_in_zsh "$L$(_two_lane_body)"
     assert_success
     assert_output --partial "RESULT label=review-blocked lanes=2"
 }
@@ -792,12 +796,12 @@ _assert_classified() {
 }
 
 @test "bug 3 (bash): template vs answered verdict classification" {
-    run_in_bash "$(_classify_body)"
+    run_in_bash "$L$(_classify_body)"
     _assert_classified
 }
 
 @test "bug 3 (zsh): template vs answered verdict classification" {
-    run_in_zsh "$(_classify_body)"
+    run_in_zsh "$L$(_classify_body)"
     _assert_classified
 }
 
@@ -807,13 +811,13 @@ _assert_classified() {
 }
 
 @test "bug 1 (bash): four passing lanes -> review-passed, lanes=4" {
-    run_in_bash "$(_four_pass_body)"
+    run_in_bash "$L$(_four_pass_body)"
     assert_success
     assert_output --partial "RESULT label=review-passed lanes=4"
 }
 
 @test "bug 1 (zsh): four passing lanes -> review-passed, lanes=4" {
-    run_in_zsh "$(_four_pass_body)"
+    run_in_zsh "$L$(_four_pass_body)"
     assert_success
     assert_output --partial "RESULT label=review-passed lanes=4"
 }
@@ -841,13 +845,13 @@ BODY
 }
 
 @test "bug 1 (bash): every lane skipped -> no label, lanes=0" {
-    run_in_bash "$(_all_skipped_body)"
+    run_in_bash "$L$(_all_skipped_body)"
     assert_success
     assert_output --partial "RESULT label=[] lanes=0"
 }
 
 @test "bug 1 (zsh): every lane skipped -> no label, lanes=0" {
-    run_in_zsh "$(_all_skipped_body)"
+    run_in_zsh "$L$(_all_skipped_body)"
     assert_success
     assert_output --partial "RESULT label=[] lanes=0"
 }

@@ -25,7 +25,7 @@ setup() {
     # command (after main.bash/main.zsh loaded) so a developer's own
     # env/internal.local.sh cannot override it mid-test.
     export DOTFILES_GHES_HOST="ghes.example.invalid"
-    G='export DOTFILES_GHES_HOST=ghes.example.invalid; '
+    G='export DOTFILES_GHES_HOST=ghes.example.invalid; . "$SHELL_COMMON/lib/gh_host.sh"; '
 }
 
 teardown() {

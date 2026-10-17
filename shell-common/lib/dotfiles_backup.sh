@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/dotfiles_backup.sh
+# shell-common/lib/dotfiles_backup.sh
 # Latest-only backup policy (issue #806).
 #
 # Every ./setup.sh run used to stamp backups with a timestamp

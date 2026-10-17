@@ -324,7 +324,7 @@ _setup_foreign_repo() {
     assert_output --partial "[probe_label]"
     assert_output --partial "did not define _dotfiles_root_warn_if_foreign_source"
     assert_output --partial "#1454 guard skipped (#724)"
-    assert_output --partial "functions/dotfiles_root.sh" # lib body is vendored byte-identical; it still names the stub path
+    assert_output --partial "lib/dotfiles_root.sh"
 }
 
 @test "_dotfiles_root_guard_self: #724 diagnostic falls back to the 'dotfiles' label" {

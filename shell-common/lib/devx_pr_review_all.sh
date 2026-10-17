@@ -1,13 +1,13 @@
 #!/bin/sh
 # shellcheck shell=bash
-# shell-common/functions/devx_pr_review_all.sh
+# shell-common/lib/devx_pr_review_all.sh
 # Pure arg parser for the devx:pr-review-all skill. Mirrors the
 # gh_pr_review_parse contract: one `key=value` line per resolved arg on
 # success, errors to stderr. Exit 0 ok/help, exit 2 arg error. Runtime
 # checks (PR state, gh auth, CLI presence) belong to the skill body.
 #
-# This file lives under shell-common/functions/, so it is auto-sourced into
-# the user's interactive shell. Every variable the parser assigns is `local`
+# This file lives under shell-common/lib/, so the loader never sources it;
+# callers source it directly, often into an interactive shell. Every variable the parser assigns is `local`
 # (house style here — see gh_pr_review.sh) so a call cannot clobber the
 # user's `$pr` / `$remote`. Callers read the stdout `key=value` contract,
 # never the shell variables.
@@ -32,7 +32,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi
@@ -833,7 +833,7 @@ devx_pr_review_all_write_label() {
     # assuming the caller did.
     if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
         # shellcheck source=/dev/null
-        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/gh_pr_edit_safe.sh" 2>/dev/null || :
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_pr_edit_safe.sh" 2>/dev/null || :
     fi
     if ! command -v _gh_pr_edit_safe_label >/dev/null 2>&1; then
         # Reported BEFORE any mutation: with no way to add the new label,

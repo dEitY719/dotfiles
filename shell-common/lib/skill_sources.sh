@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/skill_sources.sh
+# shell-common/lib/skill_sources.sh
 # Enumerate the skill sources every harness composes from.
 #
 # SSOT for the skill-source list (issue #1652, completed by #1680 —
@@ -21,7 +21,7 @@
 #     to recognize and prune stale flat workspace links; plugins load the skills)
 #
 # No interactive guard — this file only defines functions and prints
-# nothing when sourced (same posture as functions/gh_host.sh, PR #704).
+# nothing when sourced (same posture as lib/gh_host.sh, PR #704).
 
 # _skill_workspace_root — print the effective workspace root, or nothing.
 #

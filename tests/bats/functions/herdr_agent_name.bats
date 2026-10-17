@@ -190,18 +190,18 @@ run_han() {
 }
 
 # ---------------------------------------------------------------------------
-# T19: the loader reaches this file
+# T19: the loader does not reach this file (#2225)
 #
 # The tests above source the helper directly, which is fast but proves nothing
-# about delivery. `shell-common/functions/*.sh` is auto-sourced by
-# `bash/main.bash` (`load_category "functions"`); this pins that the SSOT
-# actually arrives that way, once, instead of on every assertion.
+# about delivery. `shell-common/lib/*.sh` is never auto-sourced by
+# `bash/main.bash` (#2225): callers source the lib themselves, so this pins
+# that the loader does NOT deliver it.
 # ---------------------------------------------------------------------------
 
-@test "T19: bash/main.bash auto-sources the helper" {
-    run_in_bash 'command -v herdr_agent_name >/dev/null && command -v herdr_agent_repo_slug >/dev/null && echo sourced'
+@test "T19: bash/main.bash does not auto-source the lib helper" {
+    run_in_bash 'command -v herdr_agent_name >/dev/null || echo absent'
     assert_success
-    assert_output --partial "sourced"
+    assert_output --partial "absent"
 }
 
 # ---------------------------------------------------------------------------

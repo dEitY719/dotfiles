@@ -1,5 +1,5 @@
 #!/bin/sh
-# shell-common/functions/gh_host.sh
+# shell-common/lib/gh_host.sh
 # Resolve the active GitHub host and parse owner/repo from remote URLs.
 #
 # SSOT for host routing based on `_dotfiles_setup_mode` (issue #703).
@@ -53,7 +53,7 @@ elif [ -n "${BASH_VERSION-}" ]; then
 else
     _drg_self=""
 fi
-_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/dotfiles_root.sh"
+_drg_helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/dotfiles_root.sh"
 if [ -r "$_drg_helper" ]; then
     . "$_drg_helper" || true
 fi
