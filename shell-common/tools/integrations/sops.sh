@@ -596,7 +596,7 @@ _senv_create_pr() {
         ux_info "Next: git pull --ff-only"
         return 1
     fi
-    staged=$(git diff --cached --name-only --relative | grep -vx '\.enc\.env')
+    staged=$(git diff --cached --name-only --relative | grep -vx '\.enc\.env' || true)
     if [ -n "$staged" ]; then
         ux_error "other staged changes would be mixed into the PR:"
         printf '%s\n' "$staged" | while IFS= read -r f; do ux_bullet_sub "$f"; done
@@ -623,7 +623,11 @@ _senv_create_pr() {
         return 0
     fi
 
-    git switch -c "$branch" >/dev/null || return 1
+    if ! git switch -c "$branch" >/dev/null 2>&1; then
+        git restore -- .enc.env 2>/dev/null
+        ux_error "cannot create branch ${branch}; .enc.env restored"
+        return 1
+    fi
     git add -- .enc.env
     if ! git commit -m "$title" -- .enc.env >/dev/null; then
         ux_error "commit failed (now on ${branch}; .enc.env is modified)"
