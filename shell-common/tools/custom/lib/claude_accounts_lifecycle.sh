@@ -10,7 +10,7 @@
 # the thin wrappers in tools/integrations/claude.sh. Function definitions only.
 #
 # Needs: ux_lib, claude_accounts_auth.sh (sourced below when missing),
-# functions/mount.sh (_is_mounted) and functions/skill_sources.sh for the
+# functions/mount.sh (_is_mounted) and lib/skill_sources.sh for the
 # skills helpers in claude_accounts_skills.sh.
 
 if ! command -v _claude_resolve_account >/dev/null 2>&1; then
@@ -20,7 +20,7 @@ fi
 
 # _claude_backup_original <target> <label> — latest-only backup (#806, #2130).
 # Moves <target> to "<target>${DOTFILES_ORIGINAL_SUFFIX}" via the SSOT helper
-# in shell-common/functions/dotfiles_backup.sh, so repeated init/repair runs
+# in shell-common/lib/dotfiles_backup.sh, so repeated init/repair runs
 # keep at most ONE backup per target instead of accumulating timestamped
 # copies. A prior FILE backup at that path is replaced (one warning line names
 # it). A prior non-empty DIRECTORY backup is never replaced: it can be the only
@@ -33,7 +33,7 @@ _claude_backup_original() {
     _cbo_label="${2:-existing file}"
     if ! command -v dotfiles_backup_move >/dev/null 2>&1; then
         # shellcheck disable=SC1091
-        . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/functions/dotfiles_backup.sh" || return 1
+        . "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/lib/dotfiles_backup.sh" || return 1
     fi
     # Never pass an empty suffix: the helper would fall back to
     # DOTFILES_BACKUP_SUFFIX, and if that is empty too dest == target and its

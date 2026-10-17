@@ -158,11 +158,11 @@ teardown() {
 # tests/bats/git/test_global_hooks.bats.
 _run_git_setup() {
     SB="$TEST_TEMP_HOME/sb"
-    mkdir -p "$SB/shell-common/tools" "$SB/shell-common/functions" "$SB/shell-common/env"
+    mkdir -p "$SB/shell-common/tools" "$SB/shell-common/lib" "$SB/shell-common/env"
     cp -R "$R/git" "$SB/git"
     cp -R "$R/shell-common/tools/ux_lib" "$SB/shell-common/tools/"
-    cp "$R/shell-common/functions/gh_host.sh" "$R/shell-common/functions/dotfiles_root.sh" \
-        "$SB/shell-common/functions/"
+    cp "$R/shell-common/lib/gh_host.sh" "$R/shell-common/lib/dotfiles_root.sh" \
+        "$SB/shell-common/lib/"
     copy_setup_lib "$SB/shell-common"
     git -C "$SB" init -q
     git -C "$SB" remote add origin https://ghes.corp-fake.test/org/repo.git

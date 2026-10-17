@@ -9,6 +9,6 @@
 # tests run the shipped review-verdict-gate.md / routing-table.md blocks.
 
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_merge_train.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_merge_train.sh"
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_edit_safe.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_edit_safe.sh"

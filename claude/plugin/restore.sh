@@ -50,7 +50,7 @@ fi
 # $SCRIPT_DIR because this script is also run from a copy that has no
 # shell-common sibling (bats fixtures).
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/claude_plugin_manifest.sh" 2>/dev/null || true
 # Setup-mode reader SSOT (#1810). Every shell-common convention is tried in
 # turn rather than $SHELL_COMMON alone: a stale/wrong SHELL_COMMON must not
 # silently demote an internal PC to public, which would skip the company/
@@ -68,7 +68,7 @@ done
 # half-installed tree (fresh PC mid-bootstrap — the situation restore.sh exists
 # for) could still run it. Sourcing the shared helper must not weaken that, so
 # an unreachable shell-common leaves the behavior exactly as it was. Behavior
-# changes belong in shell-common/functions/claude_plugin_manifest.sh; this copy
+# changes belong in shell-common/lib/claude_plugin_manifest.sh; this copy
 # follows it.
 if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
 	_claude_plugin_read_json_or() {

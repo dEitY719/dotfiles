@@ -5,18 +5,18 @@
 #   (the shipped skill, dEitY719/gh-resolve-skills skills/outdated/lib/remove-review-passed.sh,
 #    drops review-passed unconditionally and does NOT call this reconcile helper;
 #    its own bats live in that repo, dEitY719/dotfiles#2200)
-#   shell-common/functions/gh_pr_resolve_outdated.sh
+#   shell-common/lib/gh_pr_resolve_outdated.sh
 #
 # Issue #1698. Like the fixtures beside it, this does NOT re-implement the
 # patch-id comparison or the label write/drop — it sources the shipped
 # functions, so a mirror cannot pass while production drifts (#1524's rule).
 
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_resolve_outdated.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_resolve_outdated.sh"
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_edit_safe.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_edit_safe.sh"
 # shellcheck source=/dev/null
-. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_merge_train.sh"
+. "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/lib/gh_pr_merge_train.sh"
 
 # Mirrors Step 5's doc-documented variable names 1:1 — the doc itself pastes
 # a call shaped exactly like this one.

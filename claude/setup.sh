@@ -44,9 +44,9 @@ _phase_load_libs() {
     # and DOTFILES_ROOT becomes the worktree — that path would then be baked
     # into every ~/.claude-*/ symlink we create below. Falling through to the
     # worktree path is acceptable if the helper is missing (no regression).
-    _CLAUDE_DOTFILES_RESOLVER="${DOTFILES_ROOT}/shell-common/functions/dotfiles_root.sh"
+    _CLAUDE_DOTFILES_RESOLVER="${DOTFILES_ROOT}/shell-common/lib/dotfiles_root.sh"
     if [ -r "$_CLAUDE_DOTFILES_RESOLVER" ]; then
-        # shellcheck source=../shell-common/functions/dotfiles_root.sh
+        # shellcheck source=../shell-common/lib/dotfiles_root.sh
         source "$_CLAUDE_DOTFILES_RESOLVER"
         _CLAUDE_CANONICAL=$(_resolve_dotfiles_root_canonical "$DOTFILES_ROOT")
         if [ -n "$_CLAUDE_CANONICAL" ] && [ "$_CLAUDE_CANONICAL" != "$DOTFILES_ROOT" ]; then
@@ -99,7 +99,7 @@ _phase_load_libs() {
     # function library with no interactive guard. The declare-f assertion is
     # the #724 lesson: without it a missing definition makes the cleanup silently
     # no-op rather than fail.
-    SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+    SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
     if [ -f "$SKILL_SOURCES_LIB" ]; then
         . "$SKILL_SOURCES_LIB"
     else
@@ -169,7 +169,7 @@ _migrate_legacy_statusline_command() {
     # Latest-only backup (issue #919): a fixed suffix overwrites the prior
     # backup instead of stamping a new timestamped file each run, and the
     # glob sweeps any legacy timestamped backups left by pre-#919 runs.
-    # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+    # SSOT policy: shell-common/lib/dotfiles_backup.sh (#806).
     local backup
     backup="${backup_dir}/settings.json.pre-statusline-fix.backup"
     rm -f "${backup_dir}/settings.json.pre-statusline-fix-"*
@@ -267,7 +267,7 @@ _migrate_legacy_plugin_paths() {
         local backup tmp
         # Latest-only backup (issue #919): fixed suffix + legacy sweep so
         # repeat multi-account runs do not accumulate one backup per run.
-        # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+        # SSOT policy: shell-common/lib/dotfiles_backup.sh (#806).
         backup="${file}.pre-plugin-path-fix.backup"
         rm -f "${file}".pre-plugin-path-fix-*
         if ! cp "$file" "$backup"; then
@@ -373,7 +373,7 @@ _migrate_install_gh_issue_flow_stop_hook() {
 
     local backup tmp
     # Latest-only backup (issue #919): fixed suffix + legacy sweep.
-    # SSOT policy: shell-common/functions/dotfiles_backup.sh (#806).
+    # SSOT policy: shell-common/lib/dotfiles_backup.sh (#806).
     backup="${source_file}.pre-stop-hook-fix.backup"
     rm -f "${source_file}".pre-stop-hook-fix-*
     if ! cp "$source_file" "$backup"; then

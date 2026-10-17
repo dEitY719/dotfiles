@@ -39,7 +39,7 @@ push 는 동기화 수단이지 검증 지점이 아니므로 테스트를 빼�
 
 Layer 1 (protected-branch) · Layer 2 (leak guard) 는 그대로다.
 
-### PR 생성 게이트 (`shell-common/functions/gh_pr_lint.sh`)
+### PR 생성 게이트 (`shell-common/lib/gh_pr_lint.sh`)
 
 `gh-pr:create` Step 4.5 의 `lint-guard.sh` 가 push 직전에
 `_gh_pr_lint_run <base>` 를 호출한다. 이 함수가 lint 뒤에 test gate 를 돈다.
@@ -211,7 +211,7 @@ Before/After 측정 (#754 당시):
 - `.github/workflows/test.yml` — shell lint + 전체 스위트 (비차단, #2046)
 - `scripts/test_smoke.sh` — smoke 구현 (`mise.toml` `[tasks.test-smoke]`)
 - `git/hooks/pre-push` — Layer 0 구현 (opt-in)
-- `shell-common/functions/gh_pr_lint.sh` — PR 생성 lint + `pr-gate` 게이트
+- `shell-common/lib/gh_pr_lint.sh` — PR 생성 lint + `pr-gate` 게이트
 - `git/hooks/install-hooks.sh` — 사용자 안내 (`--no-verify` 경고)
 - `git/AGENTS.md` — hook 모듈 라우터, 본 정책 링크
 - `mise.toml` `[tasks.test]` — `uv run ./tests/test` 정의, `[tasks.pr-gate]` —

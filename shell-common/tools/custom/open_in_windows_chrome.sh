@@ -43,7 +43,7 @@ else
     ux_usage() { printf 'Usage: %s %s%s\n' "$1" "$2" "${3:+ - $3}"; }
 fi
 
-_CHROME_HELPER="${SHELL_COMMON}/functions/windows_chrome.sh"
+_CHROME_HELPER="${SHELL_COMMON}/lib/windows_chrome.sh"
 if [ ! -r "$_CHROME_HELPER" ]; then
     ux_error "missing helper: ${_CHROME_HELPER}"
     exit 1

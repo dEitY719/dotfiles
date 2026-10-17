@@ -2,7 +2,7 @@
 # tests/bats/functions/gh_pr_merge_train_review_verdict_gate.bats
 # The shell SSOT half of the merge train's review verdict gate (#1564,
 # umbrella #1527; sha freshness #1601): the predicates in
-# shell-common/functions/gh_pr_merge_train.sh that the gate calls.
+# shell-common/lib/gh_pr_merge_train.sh that the gate calls.
 # Fixture: _fixtures/gh_pr_merge_train_review_verdict_gate.sh (sources them).
 #
 # #2200: the gate itself — the decision table, the F-3 re-check and its
@@ -35,7 +35,7 @@ teardown() {
 # listed — which would hide this gate's entire output.
 
 @test "independence: the array filter passes a review-blocked PR through" {
-    run bash -c ". '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh'
+    run bash -c ". '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh'
         printf '%s' '[{\"number\":11,\"updatedAt\":\"2020-01-01T00:00:00Z\",\"isDraft\":false,\"labels\":[{\"name\":\"review-blocked\"}]}]' \
           | _gh_pr_merge_train_filter_targets --now 1800000000 | jq -r '.[].number'"
     assert_success
@@ -54,7 +54,7 @@ teardown() {
 
 @test "doc-guard: no staleness window function exists for the verdict labels" {
     run grep -qE '_gh_pr_merge_train_review_(blocked|passed)_stale_minutes' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh"
     assert_failure
 }
 

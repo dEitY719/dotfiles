@@ -29,9 +29,9 @@ else
     ux_error() { echo "✗ $1" >&2; }
 fi
 
-SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+SKILL_SOURCES_LIB="${DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
 if [ -f "$SKILL_SOURCES_LIB" ]; then
-    # shellcheck source=../shell-common/functions/skill_sources.sh
+    # shellcheck source=../shell-common/lib/skill_sources.sh
     source "$SKILL_SOURCES_LIB"
 else
     echo "Error: skill sources library not found at $SKILL_SOURCES_LIB" >&2

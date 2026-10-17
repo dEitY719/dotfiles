@@ -17,7 +17,7 @@
 # shellcheck source=/dev/null
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
 # shellcheck source=/dev/null
-DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/functions/gh_host.sh"
+DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/lib/gh_host.sh"
 # shellcheck source=/dev/null
 DOTFILES_FORCE_INIT=1 . "${SHELL_COMMON}/functions/gh_project_pat_help.sh"
 

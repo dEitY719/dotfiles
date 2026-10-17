@@ -119,11 +119,11 @@ command -v jq >/dev/null 2>&1 || {
 # Only --apply needs it, so the missing-helper check lives in _run_apply —
 # --check must keep working on a half-installed tree.
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/plugin_sync_title.sh" 2>/dev/null || true
 # The manifest reader (_claude_plugin_read_json_or) is the same helper the
 # hook and restore.sh need, so it has a single home in shell-common (#1696).
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/claude_plugin_manifest.sh" 2>/dev/null || true
 # Setup-mode reader SSOT (#1810). Every shell-common convention is tried in
 # turn rather than $SHELL_COMMON alone: a stale/wrong SHELL_COMMON must not
 # silently demote an internal PC to public, which would skip company/ — and
@@ -143,7 +143,7 @@ done
 # the ... helper cannot be sourced"). Degrading here would not fail loudly: an
 # unread manifest looks exactly like an empty one, so drift would be reported
 # backwards instead of being reported as an error. Behavior changes belong in
-# shell-common/functions/claude_plugin_manifest.sh; this copy follows it.
+# shell-common/lib/claude_plugin_manifest.sh; this copy follows it.
 if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
 	_claude_plugin_read_json_or() {
 		local out=""
@@ -363,7 +363,7 @@ _run_apply() {
 	# Only the company/ scope still commits (#1685) — the public scope writes
 	# an untracked overlay — so the guard is scoped to that branch.
 	if [ "$COMPANY_ACTIVE" -eq 1 ] && ! command -v _plugin_sync_title >/dev/null 2>&1; then
-		ux_error "shell-common/functions/plugin_sync_title.sh 를 불러오지 못했습니다."
+		ux_error "shell-common/lib/plugin_sync_title.sh 를 불러오지 못했습니다."
 		ux_error "  → dotfiles 설치를 확인하거나 SHELL_COMMON 을 설정하세요."
 		exit 1
 	fi

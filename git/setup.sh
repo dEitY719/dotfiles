@@ -162,10 +162,10 @@ generate_ssh_key() {
     fi
 }
 
-# 사내 GHES 호스트 해석: shell-common/functions/gh_host.sh 의 _gh_ghes_host 재사용.
+# 사내 GHES 호스트 해석: shell-common/lib/gh_host.sh 의 _gh_ghes_host 재사용.
 # 파일이 없는 최소 체크아웃에서는 환경변수만 본다.
 _git_setup_ghes_host() {
-    local helper="${DOTFILES_REPO_ROOT}/shell-common/functions/gh_host.sh"
+    local helper="${DOTFILES_REPO_ROOT}/shell-common/lib/gh_host.sh"
     if [ -r "$helper" ]; then
         (SHELL_COMMON="${DOTFILES_REPO_ROOT}/shell-common" && . "$helper" 2>/dev/null && _gh_ghes_host)
     else

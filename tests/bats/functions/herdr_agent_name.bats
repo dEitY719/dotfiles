@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/functions/herdr_agent_name.bats
-# Coverage for shell-common/functions/herdr_agent_name.sh (issue #1530).
+# Coverage for shell-common/lib/herdr_agent_name.sh (issue #1530).
 #
 # herdr validates every agent name against `^[a-z][a-z0-9_-]{0,31}$` and
 # refuses the start outright when it does not match. Three call sites used to
@@ -37,7 +37,7 @@ teardown() {
 # (see the auto-sourcing test at the end).
 run_han() {
     run bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_name.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/herdr_agent_name.sh'
         $1
     "
 }

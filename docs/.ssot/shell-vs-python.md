@@ -100,7 +100,7 @@ python3 >= 3.10 이 없으면 tick 을 에러로 중단한다 (큐 count/fingerp
 
 셸에 남은 것: 상태 파일 읽기/쓰기와 쓰기 실패 시 "skip 대신 run" 결정, lock, gh/herdr 호출,
 `_pmt_bind_actionable` (판정 술어가 `gh:pr-merge-train` 스킬과 공유하는
-`functions/gh_pr_merge_train.sh` 의 SSOT — #1524 가 중복을 없앤 그 로직이라 옮기지 않는다),
+`lib/gh_pr_merge_train.sh` 의 SSOT — #1524 가 중복을 없앤 그 로직이라 옮기지 않는다),
 `_pmt_start_agent_retrying` / `_pmt_prompt_train` 의 재시도 루프 (각 시도가 herdr 호출이고
 분기는 에러 코드 1개 비교라 순수 로직이 남지 않는다).
 

@@ -39,19 +39,19 @@ run_clean_source() {
 }
 
 @test "relative-path source defines every public function in a clean shell" {
-    run run_clean_source "shell-common/functions/devx_pr_review_all.sh"
+    run run_clean_source "shell-common/lib/devx_pr_review_all.sh"
     assert_success
     assert_output --partial "ALL_DEFINED"
 }
 
 @test "absolute-path source defines every public function in a clean shell (positive control)" {
-    run run_clean_source "\"${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_review_all.sh\""
+    run run_clean_source "\"${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/devx_pr_review_all.sh\""
     assert_success
     assert_output --partial "ALL_DEFINED"
 }
 
 @test "\${SHELL_COMMON:-\$HOME/dotfiles/shell-common} fallback idiom defines every public function when SHELL_COMMON is unset" {
-    run run_clean_source '"${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/devx_pr_review_all.sh"'
+    run run_clean_source '"${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/devx_pr_review_all.sh"'
     assert_success
     assert_output --partial "ALL_DEFINED"
 }

@@ -56,13 +56,13 @@ setup() {
     setup_isolated_home
     # Stage a fake shell-common with a stub gh_project_status.sh that
     # records every call into $CALL_LOG. The hook sources via
-    # $SHELL_COMMON/functions/gh_project_status.sh, so wiring SHELL_COMMON
+    # $SHELL_COMMON/lib/gh_project_status.sh, so wiring SHELL_COMMON
     # to a tmp tree lets us observe sync calls without a live projectV2.
     FAKE_SHELL_COMMON="$TEST_TEMP_HOME/shell-common"
-    mkdir -p "$FAKE_SHELL_COMMON/functions"
+    mkdir -p "$FAKE_SHELL_COMMON/lib"
     CALL_LOG="$TEST_TEMP_HOME/calls.log"
     : > "$CALL_LOG"
-    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }  # no linked issues by default
 EOF
@@ -186,9 +186,9 @@ teardown() {
     # gh_host.sh, a stub `_dotfiles_setup_mode` returning `internal`,
     # and the project-status stub from the parent setup().
     HYBRID_SHELL_COMMON="$TEST_TEMP_HOME/hybrid-shell-common"
-    mkdir -p "$HYBRID_SHELL_COMMON/functions"
-    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh" \
-        "$HYBRID_SHELL_COMMON/functions/gh_host.sh"
+    mkdir -p "$HYBRID_SHELL_COMMON/functions" "$HYBRID_SHELL_COMMON/lib"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh" \
+        "$HYBRID_SHELL_COMMON/lib/gh_host.sh"
     # Stub the integrations-layer helper that gh_host.sh consults.
     # File order matters: gh_host.sh sources nothing at file scope, but
     # `_gh_resolve_host` calls `_dotfiles_setup_mode` at runtime — so as
@@ -199,7 +199,7 @@ teardown() {
     cat > "$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" <<'EOF'
 _dotfiles_setup_mode() { echo "internal"; }
 EOF
-    stage_status_helper "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$HYBRID_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
@@ -222,13 +222,13 @@ EOF
     # (resolves to github.com) but export GH_HOST=github.example.com and feed
     # a URL on github.example.com; the sync must still fire.
     HYBRID_SHELL_COMMON="$TEST_TEMP_HOME/hybrid-override"
-    mkdir -p "$HYBRID_SHELL_COMMON/functions"
-    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_host.sh" \
-        "$HYBRID_SHELL_COMMON/functions/gh_host.sh"
+    mkdir -p "$HYBRID_SHELL_COMMON/functions" "$HYBRID_SHELL_COMMON/lib"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_host.sh" \
+        "$HYBRID_SHELL_COMMON/lib/gh_host.sh"
     cat > "$HYBRID_SHELL_COMMON/functions/_setup_mode_stub.sh" <<'EOF'
 _dotfiles_setup_mode() { echo "external"; }
 EOF
-    stage_status_helper "$HYBRID_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$HYBRID_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_pr_closing_issue_numbers() { return 0; }
 EOF
@@ -273,7 +273,7 @@ exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
     # query_current logs every call so its ABSENCE proves the loop was skipped.
-    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { printf 'query %s\n' "\$*" >> "$CALL_LOG"; echo "Backlog"; }
 _gh_pr_closing_issue_numbers() { return 0; }
@@ -300,7 +300,7 @@ exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
     QC_COUNT="$TEST_TEMP_HOME/qc.count"; : > "$QC_COUNT"
-    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() {
     n=\$(cat "$QC_COUNT" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" > "$QC_COUNT"
@@ -333,7 +333,7 @@ EOF
 exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
-    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "Backlog"; }
 _gh_pr_closing_issue_numbers() { return 0; }
@@ -366,7 +366,7 @@ EOF
 exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
-    stage_status_helper "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    stage_status_helper "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "Backlog"; }   # never converges
 _gh_pr_closing_issue_numbers() { return 0; }
@@ -425,7 +425,7 @@ exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
     QC_COUNT="$TEST_TEMP_HOME/qc.count"; : > "$QC_COUNT"
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    cat > "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() {
     n=\$(cat "$QC_COUNT" 2>/dev/null || echo 0); n=\$((n + 1)); echo "\$n" > "$QC_COUNT"
@@ -461,7 +461,7 @@ fi
 exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    cat > "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "In review"; }
 _gh_pr_closing_issue_numbers() { return 0; }
@@ -488,7 +488,7 @@ EOF
     # accepted "owner/", "/repo" and "a/b/c/d", all of which the real
     # normalizer rejects. Compare the two directly instead of trusting a
     # comment to keep them aligned.
-    local _real="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_project_status.sh"
+    local _real="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_project_status.sh"
     [ -r "$_real" ] || skip "real gh_project_status.sh not readable"
     stub_normalize_repo > "$TEST_TEMP_HOME/stub_normalize.sh"
 
@@ -533,7 +533,7 @@ exit 0
 EOF
     chmod +x "$TEST_TEMP_HOME/bin/gh"
     # No normalizer: force the inline-fallback branch.
-    cat > "$FAKE_SHELL_COMMON/functions/gh_project_status.sh" <<EOF
+    cat > "$FAKE_SHELL_COMMON/lib/gh_project_status.sh" <<EOF
 _gh_project_status_sync() { printf 'sync %s\n' "\$*" >> "$CALL_LOG"; return 0; }
 _gh_project_status_query_current() { echo "Backlog"; }
 _gh_pr_closing_issue_numbers() { return 0; }

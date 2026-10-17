@@ -49,7 +49,7 @@ WORKFLOW="${DOTFILES_ROOT}/.github/workflows/project-board-sync.yml"
 @test "sources the shared gh_project_status.sh helper" {
     # SSOT: the workflow must reuse the same helper /gh-pr-merge uses,
     # not inline a copy.
-    grep -q 'shell-common/functions/gh_project_status.sh' "$WORKFLOW"
+    grep -q 'shell-common/lib/gh_project_status.sh' "$WORKFLOW"
 }
 
 @test "PR opened step: syncs PR card to In review" {

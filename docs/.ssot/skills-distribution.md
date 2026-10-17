@@ -13,7 +13,7 @@ GitHub repo ──claude plugin marketplace update + claude plugin update──>
                             └─> Claude Code  (여기서만 로드, 세션 시작 시)
 ```
 
-- 작업 사본 열거 SSOT: `shell-common/functions/skill_sources.sh`. 비-Claude 도구 합성:
+- 작업 사본 열거 SSOT: `shell-common/lib/skill_sources.sh`. 비-Claude 도구 합성:
   `scripts/setup-skills-ssot.sh`.
 - 이 코드들이 사는 위치별 역할표와 "새 기능은 어디에" 결정 트리:
   [`claude/plugin/README.md`](../../claude/plugin/README.md) (#2147).

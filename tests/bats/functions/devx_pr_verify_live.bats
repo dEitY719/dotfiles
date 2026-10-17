@@ -5,7 +5,7 @@ load '../test_helper'
 
 setup() {
     # shellcheck disable=SC1090
-    source "${DOTFILES_ROOT:?}/shell-common/functions/devx_pr_verify_live.sh"
+    source "${DOTFILES_ROOT:?}/shell-common/lib/devx_pr_verify_live.sh"
 }
 
 @test "no args -> defaults, pr empty (auto-detect at runtime)" {
@@ -447,18 +447,18 @@ setup() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_zsh '. "$SHELL_COMMON/functions/devx_pr_verify_live.sh"'
+    run_in_zsh '. "$SHELL_COMMON/lib/devx_pr_verify_live.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/devx_pr_verify_live.sh"
+    assert_output --partial "shell-common/lib/devx_pr_verify_live.sh"
 }
 
 @test "bash: #1505 foreign-checkout guard warns when devx_pr_verify_live.sh is sourced under bash" {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_bash '. "$SHELL_COMMON/functions/devx_pr_verify_live.sh"'
+    run_in_bash '. "$SHELL_COMMON/lib/devx_pr_verify_live.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
-    assert_output --partial "shell-common/functions/devx_pr_verify_live.sh"
+    assert_output --partial "shell-common/lib/devx_pr_verify_live.sh"
 }

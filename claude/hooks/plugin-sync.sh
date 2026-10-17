@@ -115,12 +115,12 @@ MAIN_ROOT="$HOME/dotfiles"
 # Best-effort like the rest of the hook: a missing helper (stale install) just
 # leaves _resolve_sync_title falling back to $SYNC_TITLE.
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/plugin_sync_title.sh" 2>/dev/null || true
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/plugin_sync_title.sh" 2>/dev/null || true
 # The manifest reader (_claude_plugin_read_json_or) is the same helper
 # reconcile.sh and restore.sh need, so it has a single home in shell-common
 # (#1696).
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/functions/claude_plugin_manifest.sh" 2>/dev/null || true
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/claude_plugin_manifest.sh" 2>/dev/null || true
 
 # Bootstrap fallback, NOT a second implementation to maintain in parallel.
 # The title helper may go missing and the hook simply commits under the bare
@@ -129,7 +129,7 @@ MAIN_ROOT="$HOME/dotfiles"
 # manifest update is lost silently. A stale install must still sync (pinned by
 # tests/bats/claude_hooks/plugin_sync_hook.bats "falls back to the bare subject when
 # the title helper is unavailable", which asserts the commit still lands).
-# Behavior changes belong in shell-common/functions/claude_plugin_manifest.sh;
+# Behavior changes belong in shell-common/lib/claude_plugin_manifest.sh;
 # this copy follows it.
 if ! command -v _claude_plugin_read_json_or >/dev/null 2>&1; then
 	_claude_plugin_read_json_or() {

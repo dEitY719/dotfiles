@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/functions/gh_pr_merge_train_quiet_period.bats
-# Tests for shell-common/functions/gh_pr_merge_train.sh — the SSOT merge-train
+# Tests for shell-common/lib/gh_pr_merge_train.sh — the SSOT merge-train
 # target filter (#1524).
 #
 # The filter used to exist twice: as real `jq` in the cron dispatcher and as
@@ -15,7 +15,7 @@
 
 load '../test_helper'
 
-HELPER="${DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+HELPER="${DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh"
 
 setup() {
     # A fixed clock, not `date +%s`: every fixture stamp below is derived from

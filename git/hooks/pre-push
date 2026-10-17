@@ -85,7 +85,7 @@ _resolve_scan_range() {
 # ============================================
 # Off by default (#2054): `git push` / `git sync` run no tests. The full
 # suite gates PR creation instead (`mise run pr-gate`, called from
-# shell-common/functions/gh_pr_lint.sh) and runs non-blocking in CI
+# shell-common/lib/gh_pr_lint.sh) and runs non-blocking in CI
 # (.github/workflows/test.yml). Opt in per push:
 #   PRE_PUSH_TEST=1       `mise run test-smoke` over the pushed ranges:
 #                         syntax check of changed shell files, the bats

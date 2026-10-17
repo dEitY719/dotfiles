@@ -50,12 +50,12 @@ _SAP_SHELL_COMMON="${SHELL_COMMON}"
 # The herdr SSOT (issue #1569): `herdr agent list` behind one wrapper, and the
 # physical-path resolver. Both are reused rather than re-derived — see
 # _sap_resolve_pane for the one predicate this file does NOT take from there.
-if [ ! -f "${_SAP_SHELL_COMMON}/functions/herdr_agent_lookup.sh" ]; then
+if [ ! -f "${_SAP_SHELL_COMMON}/lib/herdr_agent_lookup.sh" ]; then
     ux_error "herdr_agent_lookup.sh not found under ${_SAP_SHELL_COMMON}/functions — cannot resolve agent panes."
     exit 1
 fi
 # shellcheck source=/dev/null
-. "${_SAP_SHELL_COMMON}/functions/herdr_agent_lookup.sh" || exit 1
+. "${_SAP_SHELL_COMMON}/lib/herdr_agent_lookup.sh" || exit 1
 
 # The absolute path of this file, resolved before anything can change the
 # working directory: the detached waiter re-executes it.

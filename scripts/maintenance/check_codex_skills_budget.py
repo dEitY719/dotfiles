@@ -18,7 +18,7 @@ Source: since #1680 skills live in marketplace repos cloned side by side
     <root>/<repo>/skills/<skill>/SKILL.md. `--skills-dir` overrides it with
     a flat <dir>/<skill>/SKILL.md layout (used by tests and one-off checks).
     The shell-side SSOT for the same rule is
-    shell-common/functions/skill_sources.sh.
+    shell-common/lib/skill_sources.sh.
 
 Usage:
     python3 check_codex_skills_budget.py [--budget N] [--top N] [--all]
@@ -139,7 +139,7 @@ def workspace_skill_dirs(root: Path) -> list[Path]:
 
     A linked git worktree (`.git` is a file, not a directory) is skipped so
     a feature checkout cannot double-count its clone's skills — the same
-    rule shell-common/functions/skill_sources.sh applies.
+    rule shell-common/lib/skill_sources.sh applies.
     """
     dirs: list[Path] = []
     for skill_md in sorted(root.glob("*/skills/*/SKILL.md")):

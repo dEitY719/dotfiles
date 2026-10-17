@@ -183,13 +183,13 @@ setup_isolated_dotfiles_root() {
 # for tests that copy a single setup script (shell-common/setup.sh sources
 # lib/setup/link.sh since #2138, lib/setup/mode.sh + setup.d/ since #2140).
 copy_setup_lib() {
-    mkdir -p "$1/lib/setup" "$1/functions" "$1/setup.d" "$1/util" || return 1
+    mkdir -p "$1/lib/setup" "$1/setup.d" "$1/util" || return 1
     cp "$_BATS_REAL_DOTFILES_ROOT"/shell-common/lib/setup/*.sh "$1/lib/setup/" &&
         cp "$_BATS_REAL_DOTFILES_ROOT"/shell-common/setup.d/*.sh "$1/setup.d/" &&
         cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/util/setup_mode_read.sh" "$1/util/" &&
-        cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/functions/dotfiles_root.sh" \
-            "$_BATS_REAL_DOTFILES_ROOT/shell-common/functions/dotfiles_backup.sh" \
-            "$1/functions/"
+        cp "$_BATS_REAL_DOTFILES_ROOT/shell-common/lib/dotfiles_root.sh" \
+            "$_BATS_REAL_DOTFILES_ROOT/shell-common/lib/dotfiles_backup.sh" \
+            "$1/lib/"
 }
 
 # Run a command in bash subprocess with dotfiles loaded.
@@ -305,7 +305,7 @@ run_in_zsh() {
 # in each suite because #1530 is exactly what happens when a naming rule is
 # copied: three call sites each carried their own fold, all three were wrong,
 # and 76 dispatches were refused before anyone read the stderr. The producing
-# side is `shell-common/functions/herdr_agent_name.sh`; this is the
+# side is `shell-common/lib/herdr_agent_name.sh`; this is the
 # independent oracle three suites check it against
 # (`herdr_agent_name.bats`, `pr_merge_train_cron.bats`,
 # `issue_watcher_cron.bats`; the post-merge-verify suite moved to

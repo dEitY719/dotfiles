@@ -17,7 +17,7 @@
 
 load '../test_helper'
 
-HELPER="${DOTFILES_ROOT}/shell-common/functions/gh_pr_merge_train.sh"
+HELPER="${DOTFILES_ROOT}/shell-common/lib/gh_pr_merge_train.sh"
 
 setup() {
     _NOW=1800000000
@@ -330,5 +330,5 @@ _readmit_numbers() {
 # The prose half of this feature (gh-pr-merge-train's SKILL.md, train-loop.md,
 # ordering.md) moved out to its own marketplace repo, so the guards that pinned
 # the skill wiring to these functions now belong there. What survives here is
-# the shell SSOT in shell-common/functions/gh_pr_merge_train.sh — the wiring
+# the shell SSOT in shell-common/lib/gh_pr_merge_train.sh — the wiring
 # that makes it reachable is no longer pinned from this repo.

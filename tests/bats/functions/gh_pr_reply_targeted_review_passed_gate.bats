@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 # tests/bats/functions/gh_pr_reply_targeted_review_passed_gate.bats
 # Issue #1636 — the shell SSOT half of gh-pr:reply Step 6's `review-passed`
-# gate: the invalidation SSOT's doc in shell-common/functions/gh_pr_edit_safe.sh
+# gate: the invalidation SSOT's doc in shell-common/lib/gh_pr_edit_safe.sh
 # and the evidence probe _gh_pr_reply_history_has_review in
-# shell-common/functions/gh_pr_reply_targeted_review.sh.
+# shell-common/lib/gh_pr_reply_targeted_review.sh.
 # Fixture: _fixtures/gh_pr_reply_targeted_review_passed_gate.sh (sources them).
 #
 # #2200: the end-to-end Step 6 tests (AC-1..AC-5, the PR #1637 cross-pass /
@@ -32,22 +32,22 @@ teardown() {
 
 @test "doc-guard: the #1563 invalidation SSOT no longer states the global counter rule" {
     run grep -qE 'ACCEPTED_COUNT > 0 && DECLINED_COUNT == 0' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_edit_safe.sh"
     assert_failure
 }
 
 @test "doc-guard: the #1563 invalidation SSOT points at the current gate" {
     run grep -qF -- '_gh_pr_reply_review_passed_gate' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_edit_safe.sh"
     assert_success
 }
 
 @test "doc-guard: the #1563 invalidation SSOT records the NF-2 relaxation" {
     run grep -qF -- '#1636' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_edit_safe.sh"
     assert_success
     run grep -q 'RELAXED' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_edit_safe.sh"
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_edit_safe.sh"
     assert_success
 }
 
@@ -67,7 +67,7 @@ teardown() {
     local _head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     local _login=dEitY719
     local _json="${BATS_TEST_TMPDIR}/bodies.json"
-    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh"
     jq -nc --arg l "$_login" --arg s "$_stale" \
         '[{user: {login: $l}, body: ("<!-- ai-review:codex:" + $s + " -->")}]' >"$_json"
 
@@ -103,7 +103,7 @@ teardown() {
     local _stale=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     local _login=dEitY719
     local _json="${BATS_TEST_TMPDIR}/bodies.json"
-    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh"
     jq -nc --arg l "$_login" --arg s "$_head" \
         '[{user: {login: $l}, body: ("<!-- ai-review:opencode:thorough:" + $s + " -->")}]' >"$_json"
 
@@ -129,7 +129,7 @@ teardown() {
     local _head=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     local _login=dEitY719
     local _json="${BATS_TEST_TMPDIR}/bodies.json"
-    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_reply_targeted_review.sh"
+    local _fn="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_reply_targeted_review.sh"
     jq -nc --arg l "$_login" --arg s "$_head" \
         '[{user: {login: $l}, body: ("<!-- ai-review: not a marker " + $s + " -->")}]' >"$_json"
 

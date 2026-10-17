@@ -115,9 +115,9 @@ main() {
     # ~/.claude-*/{settings.json, statusline-command.sh, skills, docs, ...}
     # symlink. When the worktree is later removed those symlinks dangle and
     # Claude Code silently reverts to defaults (no statusline, no hooks).
-    if [ -r "${DOTFILES_DIR}/shell-common/functions/dotfiles_root.sh" ]; then
-        # shellcheck source=shell-common/functions/dotfiles_root.sh
-        source "${DOTFILES_DIR}/shell-common/functions/dotfiles_root.sh"
+    if [ -r "${DOTFILES_DIR}/shell-common/lib/dotfiles_root.sh" ]; then
+        # shellcheck source=shell-common/lib/dotfiles_root.sh
+        source "${DOTFILES_DIR}/shell-common/lib/dotfiles_root.sh"
         canonical=$(_resolve_dotfiles_root_canonical "$DOTFILES_DIR")
         if [ -n "$canonical" ] && [ "$canonical" != "$DOTFILES_DIR" ]; then
             ux_info "워크트리에서 실행됨 — 메인 워크트리로 전환: $canonical"
@@ -144,8 +144,8 @@ main() {
     # Neutralize leftover git-crypt smudge/clean config (#594).
     step_run "git-crypt 해제" critical ./scripts/disable-git-crypt-local.sh
     # bats submodules so a fresh clone's ./tests/test doesn't skip bats (#1398).
-    # shellcheck source=shell-common/functions/dotfiles_bats_submodules.sh
-    source "${DOTFILES_DIR}/shell-common/functions/dotfiles_bats_submodules.sh"
+    # shellcheck source=shell-common/lib/dotfiles_bats_submodules.sh
+    source "${DOTFILES_DIR}/shell-common/lib/dotfiles_bats_submodules.sh"
     step_run "bats submodule" optional dotfiles_ensure_bats_submodules "$DOTFILES_DIR"
 
     step_run "$sc_label" critical "${sc_step[@]}"

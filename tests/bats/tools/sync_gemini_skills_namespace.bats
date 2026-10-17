@@ -6,7 +6,7 @@ load '../test_helper'
 
 SYNC_SCRIPT="${DOTFILES_ROOT}/scripts/sync-gemini-skills-namespace.sh"
 UX_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
-SKILL_SOURCES_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/functions/skill_sources.sh"
+SKILL_SOURCES_LIB_SOURCE="${DOTFILES_ROOT}/shell-common/lib/skill_sources.sh"
 
 setup() {
     setup_isolated_home
@@ -18,13 +18,13 @@ setup() {
     mkdir -p \
         "${FIXTURE_DOTFILES}/scripts" \
         "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib" \
-        "${FIXTURE_DOTFILES}/shell-common/functions" \
+        "${FIXTURE_DOTFILES}/shell-common/lib" \
         "${FIXTURE_HOME}/.gemini/config/skills" \
         "${FIXTURE_HOME}/.gemini/skills"
 
     cp "$SYNC_SCRIPT" "${FIXTURE_DOTFILES}/scripts/sync-gemini-skills-namespace.sh"
     cp "$UX_LIB_SOURCE" "${FIXTURE_DOTFILES}/shell-common/tools/ux_lib/ux_lib.sh"
-    cp "$SKILL_SOURCES_LIB_SOURCE" "${FIXTURE_DOTFILES}/shell-common/functions/skill_sources.sh"
+    cp "$SKILL_SOURCES_LIB_SOURCE" "${FIXTURE_DOTFILES}/shell-common/lib/skill_sources.sh"
 
     # Create dummy skill repos (mindepth 4 maxdepth 4: <root>/<repo>/skills/<skill>/SKILL.md)
     mkdir -p \

@@ -10,17 +10,17 @@ gitignored `*.local.json`), 아래 표는 **코드가 어디에 사는가** 를 
 
 ```
 scripts/update-skills.sh                          (skills-sync 5단계 진입점)
- ├─ claude/plugin/git-clone-skills.sh ── marketplaces.json, functions/gh_host.sh
+ ├─ claude/plugin/git-clone-skills.sh ── marketplaces.json, lib/gh_host.sh
  ├─ claude/plugin/git-pull-skills.sh
  ├─ claude/setup.sh ── tools/custom/lib/claude_accounts_skills.sh (_claude_prune_workspace_skills)
  ├─ claude/plugin/update-plugins.sh ── marketplaces.json, plugins.json
- └─ scripts/setup-skills-ssot.sh ── functions/skill_sources.sh ── 워크스페이스 clone
-claude/plugin/restore.sh ── functions/claude_plugin_manifest.sh   (독립: 신규 PC 설치)
-claude/plugin/reconcile.sh ── functions/claude_plugin_manifest.sh, plugin_sync_title.sh   (독립: drift 점검)
+ └─ scripts/setup-skills-ssot.sh ── lib/skill_sources.sh ── 워크스페이스 clone
+claude/plugin/restore.sh ── lib/claude_plugin_manifest.sh   (독립: 신규 PC 설치)
+claude/plugin/reconcile.sh ── lib/claude_plugin_manifest.sh, plugin_sync_title.sh   (독립: drift 점검)
 claude/hooks/plugin-sync-session.sh -> plugin-sync.sh ── claude_plugin_manifest.sh, plugin_sync_title.sh
 claude/plugin/publish-sync.sh                     (독립: 게시)
 functions/marketplace.sh, claude_plugins_core.sh, claude_plugin_list.sh   (대화형 UI, plugin/*.sh 미참조)
-claude-accounts link/unlink ── tools/custom/lib/claude_accounts_skills.sh ── functions/skill_sources.sh
+claude-accounts link/unlink ── tools/custom/lib/claude_accounts_skills.sh ── lib/skill_sources.sh
 ```
 
 ## 역할표
@@ -28,7 +28,7 @@ claude-accounts link/unlink ── tools/custom/lib/claude_accounts_skills.sh �
 | 위치 | 역할 | 포함 |
 |------|------|------|
 | `claude/plugin/*.sh` | 실행 단위 — 한 가지 일을 끝까지 | clone · pull · update · reconcile · restore · publish |
-| `shell-common/functions/claude_plugin_manifest.sh`, `skill_sources.sh` | 데이터 접근 — SSOT 파일·워크스페이스를 읽기만 | 매니페스트 union, 스킬 소스 열거, 워크스페이스 소속 판정 |
+| `shell-common/lib/claude_plugin_manifest.sh`, `skill_sources.sh` | 데이터 접근 — SSOT 파일·워크스페이스를 읽기만 | 매니페스트 union, 스킬 소스 열거, 워크스페이스 소속 판정 |
 | `scripts/update-skills.sh`, `scripts/setup-skills-ssot.sh` | 사용자 / setup 진입점 | skills-sync 오케스트레이션, 비-Claude 하네스 합성 |
 | `shell-common/functions/marketplace.sh`, `claude_plugins_*.sh`, `claude_plugin_list.sh` | 대화형 UI | 목록·검색·설치 메뉴, help |
 | `claude/hooks/plugin-sync*.sh` | 세션 훅 | PostToolUse / SessionStart·Stop SSOT-diff 동기화 |

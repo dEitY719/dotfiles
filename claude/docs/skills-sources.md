@@ -21,7 +21,7 @@ dangling 링크(워크스페이스 밖 포함, #2018)를 `_claude_prune_workspac
 agy / Hermes)에만 적용된다. 소스는 로컬에 나란히 clone 된 marketplace repo 다 —
 소스 경로는 `${WORKSPACE_ROOT:-~/para/project/skills}/<repo>/skills/<skill>/SKILL.md`.
 
-- 판별·열거 규칙 SSOT: `shell-common/functions/skill_sources.sh`
+- 판별·열거 규칙 SSOT: `shell-common/lib/skill_sources.sh`
   (`_skill_workspace_root`, `_skill_workspace_dirs`) — 하네스들이 공유한다
   (Claude Code 쪽은 정리 대상 판정에만 `_skill_workspace_root` 를 쓴다).
 - repo 끼리 이름이 겹치면 정렬 순서상 앞선 repo 가 이긴다 (재현 가능한 결정).
@@ -40,7 +40,7 @@ agy / Hermes)에만 적용된다. 소스는 로컬에 나란히 clone 된 market
 | Claude Code (각 계정) | 플러그인 전용 — `claude/plugin/plugins.json` + `claude/plugin/restore.sh`. `shell-common/tools/custom/lib/claude_accounts_{lifecycle,skills}.sh` → `_claude_account_setup_one()` + `_claude_prune_workspace_skills()` 는 예전 flat 워크스페이스 링크를 **정리만** 한다 (합성 안 함) | `./claude/setup.sh` |
 | OpenCode / Gemini / agy / Hermes | `scripts/setup-skills-ssot.sh` → `link_skills_compose()` (#791, agy 는 #1731) | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
 | Codex | `scripts/setup-skills-ssot.sh` → `link_skills_individual_codex()` | `./setup.sh` 또는 `./scripts/setup-skills-ssot.sh` |
-| 소스 열거 (#1652 / #1680) | `shell-common/functions/skill_sources.sh` + `collect_skill_sources()` (Claude Code 외 하네스) | 위와 동일 |
+| 소스 열거 (#1652 / #1680) | `shell-common/lib/skill_sources.sh` + `collect_skill_sources()` (Claude Code 외 하네스) | 위와 동일 |
 
 ### 신규 스킬 추가 후 동기화
 

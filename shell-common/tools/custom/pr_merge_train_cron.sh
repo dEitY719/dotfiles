@@ -33,12 +33,12 @@ _PMT_SHELL_COMMON="${SHELL_COMMON}"
 # A hard failure, not a degradation: counting targets *is* this tick's job, and
 # a dispatcher that guessed the filter would be the duplicated-logic bug #1524
 # removed. Same precedent as the gh_host.sh check in _pmt_bind_target.
-if [ ! -f "${_PMT_SHELL_COMMON}/functions/gh_pr_merge_train.sh" ]; then
+if [ ! -f "${_PMT_SHELL_COMMON}/lib/gh_pr_merge_train.sh" ]; then
     ux_error "gh_pr_merge_train.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot filter target PRs."
     exit 1
 fi
 # shellcheck source=/dev/null
-. "${_PMT_SHELL_COMMON}/functions/gh_pr_merge_train.sh" || exit 1
+. "${_PMT_SHELL_COMMON}/lib/gh_pr_merge_train.sh" || exit 1
 
 # The aicron job state, for the "nothing actionable" pause (#1714). Hard
 # failure for the same reason as the filter above: a tick that cannot record
@@ -88,7 +88,7 @@ _PMT_BACKOFF_MAX="8"
 
 # D-6 — the quiet period is NOT a constant here. Its SSOT, together with the
 # whole target filter (draft / `reply-pending` label / quiet period), is
-# `shell-common/functions/gh_pr_merge_train.sh` — sourced below and called by
+# `shell-common/lib/gh_pr_merge_train.sh` — sourced below and called by
 # both this dispatcher and the `gh:pr-merge-train` skill, so the two can no
 # longer disagree (issue #1524). Read
 # `_gh_pr_merge_train_quiet_minutes` when the number is needed for output.
@@ -120,7 +120,7 @@ _PMT_PR_LIMIT="50"
 # outright (dot, and uppercase from a real owner), so the train never started
 # once in 56 attempts. Dropping the host is the concession that buys the
 # 32-character budget; the rationale and its expiry condition live in
-# shell-common/functions/herdr_agent_name.sh.
+# shell-common/lib/herdr_agent_name.sh.
 #
 # The prefix also keeps the *workspace label* — the same string since #1549 —
 # clear of issue_watcher_cron.sh, which labels its workspaces with the bare
@@ -265,22 +265,22 @@ _pmt_backoff_file() {
 _pmt_bind_target() {
     local _remote_url
 
-    if [ ! -f "${_PMT_SHELL_COMMON}/functions/gh_host.sh" ]; then
+    if [ ! -f "${_PMT_SHELL_COMMON}/lib/gh_host.sh" ]; then
         ux_error "gh_host.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot resolve the GitHub target."
         return 1
     fi
     # shellcheck source=/dev/null
-    . "${_PMT_SHELL_COMMON}/functions/gh_host.sh" || return 1
+    . "${_PMT_SHELL_COMMON}/lib/gh_host.sh" || return 1
 
     # The herdr name SSOT (#1530). Sourced next to gh_host.sh because both
     # answer the same question — what this tick's target is called — and a
     # missing one is the same class of failure.
-    if [ ! -f "${_PMT_SHELL_COMMON}/functions/herdr_agent_name.sh" ]; then
+    if [ ! -f "${_PMT_SHELL_COMMON}/lib/herdr_agent_name.sh" ]; then
         ux_error "herdr_agent_name.sh not found under ${_PMT_SHELL_COMMON}/functions — cannot derive the train's agent name."
         return 1
     fi
     # shellcheck source=/dev/null
-    . "${_PMT_SHELL_COMMON}/functions/herdr_agent_name.sh" || return 1
+    . "${_PMT_SHELL_COMMON}/lib/herdr_agent_name.sh" || return 1
 
     _remote_url=$(git remote get-url origin 2>/dev/null) || {
         ux_error "No 'origin' remote in ${PWD} — cannot resolve the merge-train target."

@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/functions/herdr_agent_lookup.bats
-# Coverage for shell-common/functions/herdr_agent_lookup.sh (issue #1569).
+# Coverage for shell-common/lib/herdr_agent_lookup.sh (issue #1569).
 #
 # "Is a herdr agent sitting on this worktree?" was asked in four places with
 # four hand-copied answers, and they had already drifted into three different
@@ -37,7 +37,7 @@ teardown() {
 # `herdr` by name rather than through a resolved path.
 run_hal() {
     run bash --noprofile --norc -c "
-        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/herdr_agent_lookup.sh'
+        . '${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/herdr_agent_lookup.sh'
         herdr() {
             printf 'herdr %s\n' \"\$*\" >>\"\${HERDR_LOG:-/dev/null}\"
             [ \"\$1\" = agent ] && [ \"\$2\" = list ] || return 1

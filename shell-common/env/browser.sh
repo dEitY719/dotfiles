@@ -23,7 +23,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # nothing is exported.
 
 _browser_root="${SHELL_COMMON:-$HOME/dotfiles/shell-common}"
-_browser_helper="${_browser_root}/functions/windows_chrome.sh"
+_browser_helper="${_browser_root}/lib/windows_chrome.sh"
 _browser_wrapper="${_browser_root}/tools/custom/open_in_windows_chrome.sh"
 
 if [ -r "$_browser_helper" ]; then

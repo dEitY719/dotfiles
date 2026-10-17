@@ -12,7 +12,7 @@ load '../test_helper'
 
 setup() {
     setup_isolated_home
-    BACKUP_HELPER="${DOTFILES_ROOT}/shell-common/functions/dotfiles_backup.sh"
+    BACKUP_HELPER="${DOTFILES_ROOT}/shell-common/lib/dotfiles_backup.sh"
 }
 
 teardown() {

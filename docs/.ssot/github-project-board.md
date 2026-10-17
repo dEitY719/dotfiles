@@ -153,7 +153,7 @@ GitHub Projects v2의 빌트인 워크플로우 10개 중 9개가 `enabled`
 
 GitHub 빌트인이 커버하지 않거나 누락 시 보강해야 하는 네 전환은
 dotfiles 의 스킬이 공용 헬퍼 `_gh_project_status_sync`
-(`shell-common/functions/gh_project_status.sh`) 를 통해 자동화한다.
+(`shell-common/lib/gh_project_status.sh`) 를 통해 자동화한다.
 보드가 없는 repo (예: `dotfiles` 이외의 사이드 프로젝트) 에선 헬퍼가
 `projectItems` 0건을 감지하고 조용히 no-op 하므로 추가 분기가 필요
 없다.
@@ -396,7 +396,7 @@ gh auth refresh -s project
   - `claude/skills/gh-pr-approve/SKILL.md` (`Approved` 컬럼 단독 소유자, #1350)
   - `claude/skills/gh-pr-merge/SKILL.md`
   - `claude/skills/gh-issue-flow/SKILL.md`
-- 관련 헬퍼: `shell-common/functions/gh_project_status.sh` (공용
+- 관련 헬퍼: `shell-common/lib/gh_project_status.sh` (공용
   `_gh_project_status_sync` — `/gh-flow:issue`, `/gh-pr:create`, `/gh-pr:commit`,
   `/gh-pr:reply`, `/gh-pr:merge` 가 모두 호출). 대상 repo 해석 순서는
   위 "헬퍼의 대상 repo 해석 순서 (#1405)" 참고.

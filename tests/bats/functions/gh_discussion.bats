@@ -194,7 +194,7 @@ _run_helper() {
         export PATH='${STUB_BIN}:${PATH}'
         export FAKE_GH_MODE='${mode}'
         export GH_LOG='${GH_LOG}'
-        . '${DOTFILES_ROOT}/shell-common/functions/gh_discussion.sh'
+        . '${DOTFILES_ROOT}/shell-common/lib/gh_discussion.sh'
         ${snippet}
         echo \"rc=\$?\"
     "
@@ -205,28 +205,28 @@ _run_helper() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_discussion_repo_id exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                  declare -f _gh_discussion_repo_id >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_discussion_category_id exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                  declare -f _gh_discussion_category_id >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_discussion_create exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                  declare -f _gh_discussion_create >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "zsh: _gh_discussion_repo_id exists" {
-    run_in_zsh '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_zsh '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                 typeset -f _gh_discussion_repo_id >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
@@ -369,28 +369,28 @@ _run_helper() {
 # ---------------------------------------------------------------------------
 
 @test "bash: _gh_discussion_fetch exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                  declare -f _gh_discussion_fetch >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_discussion_comment exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                  declare -f _gh_discussion_comment >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_discussion_close exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                  declare -f _gh_discussion_close >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"
 }
 
 @test "bash: _gh_discussion_lock exists" {
-    run_in_bash '. "$DOTFILES_ROOT/shell-common/functions/gh_discussion.sh"; \
+    run_in_bash '. "$DOTFILES_ROOT/shell-common/lib/gh_discussion.sh"; \
                  declare -f _gh_discussion_lock >/dev/null && echo ok'
     assert_success
     assert_output --partial "ok"

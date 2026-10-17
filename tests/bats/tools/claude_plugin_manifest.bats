@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/tools/claude_plugin_manifest.bats
-# shell-common/functions/claude_plugin_manifest.sh — direct unit coverage for
+# shell-common/lib/claude_plugin_manifest.sh — direct unit coverage for
 # _claude_plugin_read_json_or (issue #1696, agy + codex PR #1697 review: the
 # unified helper itself had no dedicated test, only indirect coverage through
 # its four callers).
@@ -15,7 +15,7 @@ teardown() {
     teardown_isolated_home
 }
 
-FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/claude_plugin_manifest.sh"
+FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/claude_plugin_manifest.sh"
 
 @test "claude_plugin_manifest.sh sources cleanly under bash and defines the reader" {
     run bash --noprofile --norc -c "

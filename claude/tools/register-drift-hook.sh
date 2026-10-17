@@ -21,8 +21,8 @@ DOTFILES_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # shellcheck source=../../shell-common/tools/ux_lib/ux_lib.sh
 . "${DOTFILES_DIR}/shell-common/tools/ux_lib/ux_lib.sh"
 # Backup primitives SSOT (#806): fixed-suffix, latest-only backups.
-# shellcheck source=../../shell-common/functions/dotfiles_backup.sh
-. "${DOTFILES_DIR}/shell-common/functions/dotfiles_backup.sh"
+# shellcheck source=../../shell-common/lib/dotfiles_backup.sh
+. "${DOTFILES_DIR}/shell-common/lib/dotfiles_backup.sh"
 # shellcheck source=../../shell-common/util/setup_mode_read.sh
 . "${DOTFILES_DIR}/shell-common/util/setup_mode_read.sh"
 

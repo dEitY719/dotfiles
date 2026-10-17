@@ -2264,7 +2264,7 @@ _two_repo_fixture() {
     # The boundary's negative half (#1569): the running-now match is
     # `<wt>` or `<wt>/...`, never a bare prefix, so an agent parked on
     # `dotfiles-issue-11-10` must not make issue 11 look busy. The shared
-    # predicate lives in shell-common/functions/herdr_agent_lookup.sh — this
+    # predicate lives in shell-common/lib/herdr_agent_lookup.sh — this
     # pins that _iw_live_agents really uses it rather than a wider compare.
     _add_worktree 11
     _set_live_agents "$(_worktree_path 11)0"

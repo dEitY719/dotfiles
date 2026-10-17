@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/tools/plugin_sync_title_smoke.bats
-# shell-common/functions/plugin_sync_title.sh — direct bash/zsh sourcing smoke
+# shell-common/lib/plugin_sync_title.sh — direct bash/zsh sourcing smoke
 # test (#1558 codex review). The indirect coverage from claude_plugin_reconcile.bats
 # and plugin_sync_hook.bats only proves the two *callers* work; this proves the
 # file itself sources cleanly and defines its four functions under both loaders
@@ -16,7 +16,7 @@ teardown() {
     teardown_isolated_home
 }
 
-FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/plugin_sync_title.sh"
+FILE="${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/plugin_sync_title.sh"
 
 @test "plugin_sync_title.sh sources cleanly under bash and defines all four functions" {
     run bash --noprofile --norc -c "

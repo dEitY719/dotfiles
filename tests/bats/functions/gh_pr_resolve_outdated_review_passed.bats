@@ -4,7 +4,7 @@
 #   (the shipped skill, dEitY719/gh-resolve-skills skills/outdated/lib/remove-review-passed.sh,
 #    drops review-passed unconditionally and does NOT call this reconcile helper;
 #    its own bats live in that repo, dEitY719/dotfiles#2200)
-#   shell-common/functions/gh_pr_resolve_outdated.sh
+#   shell-common/lib/gh_pr_resolve_outdated.sh
 # Source-of-truth fixture: _fixtures/gh_pr_resolve_outdated_review_passed.sh
 #
 # The fixture does NOT re-implement the patch-id compare or the label
@@ -35,7 +35,7 @@
 #      some other path -> RE-GRANTED (issue #1700). Before #1700 the gate also
 #      required the label to be attached, so the first path to strip it also
 #      destroyed every other path's standing to re-confirm — see the file
-#      header of `shell-common/functions/gh_pr_resolve_outdated.sh`.
+#      header of `shell-common/lib/gh_pr_resolve_outdated.sh`.
 #  10. Same, but with no marker either -> still drops. Removing the label from
 #      the gate must not weaken PR #1699's self-certification guard.
 #  11-15. F-4 report token: patch-id state and outcome are reported as two

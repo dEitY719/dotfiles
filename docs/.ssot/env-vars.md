@@ -73,7 +73,7 @@ board approval gate to bypass. Setting it has no effect. Rationale:
 | Default | unset (treated as enabled) |
 | Active when | set to `0` |
 | Scope | every `gh:*` skill that calls `_gh_project_status_sync` |
-| Source SSOT | `shell-common/functions/gh_project_status.sh` |
+| Source SSOT | `shell-common/lib/gh_project_status.sh` |
 
 When `0`, skip pushing project-board card status updates. Repos
 without a projectV2 attachment auto-skip without needing the var.
@@ -85,7 +85,7 @@ without a projectV2 attachment auto-skip without needing the var.
 | Default | unset |
 | Active when | set to `OWNER/REPO` or `HOST/OWNER/REPO` |
 | Scope | `_gh_project_status_sync` / `_gh_project_status_query_current` repo resolution |
-| Source SSOT | `shell-common/functions/gh_project_status.sh` |
+| Source SSOT | `shell-common/lib/gh_project_status.sh` |
 | Issue | [#1405](https://github.com/dEitY719/dotfiles/issues/1405) |
 
 Pins the repo whose projectV2 board is read/written, instead of
@@ -135,7 +135,7 @@ attach` hint still prints.
 | Default | unset |
 | Active when | set to `OWNER/REPO` or `HOST/OWNER/REPO` |
 | Scope | `_gh_project_status_sync` / `_gh_project_status_query_current` repo resolution |
-| Source SSOT | `shell-common/functions/gh_project_status.sh` |
+| Source SSOT | `shell-common/lib/gh_project_status.sh` |
 | Issue | [#1405](https://github.com/dEitY719/dotfiles/issues/1405) |
 
 Same meaning as `GH_REPO`, one step lower in the precedence chain above.
