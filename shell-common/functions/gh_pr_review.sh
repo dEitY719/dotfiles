@@ -294,19 +294,21 @@ _gh_pr_review_argv_prompt_or_fail() {
 }
 
 # _gh_pr_review_resolve_claude_account — for --ai claude --user <name>,
-# loads the claude integration helper (`_claude_resolve_account`) and
-# returns the resolved CLAUDE_CONFIG_DIR on stdout. Exits 1 with the
-# canonical "Unknown claude account" line on unknown names.
+# loads `_claude_resolve_account` and returns the resolved CLAUDE_CONFIG_DIR
+# on stdout. Exits 1 with the canonical "Unknown claude account" line on
+# unknown names. Sources the guard-free tools/custom/lib/claude_accounts_auth.sh
+# (#2146), not integrations/claude.sh, whose interactive guard returns early in a
+# non-interactive skill run and leaves the function undefined (#2226).
 _gh_pr_review_resolve_claude_account() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local user="$1"
     if ! command -v _claude_resolve_account >/dev/null 2>&1; then
-        local _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/integrations/claude.sh"
+        local _helper="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/custom/lib/claude_accounts_auth.sh"
         # shellcheck disable=SC1090
         [ -f "$_helper" ] && . "$_helper"
     fi
     if ! command -v _claude_resolve_account >/dev/null 2>&1; then
-        echo "claude account routing helper not available — load shell-common/tools/integrations/claude.sh" >&2
+        echo "claude account routing helper not available — load shell-common/tools/custom/lib/claude_accounts_auth.sh" >&2
         return 1
     fi
     local _cfg
