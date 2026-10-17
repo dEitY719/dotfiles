@@ -2209,3 +2209,36 @@ EOF
     assert_output --partial "TRAP_CLEAN"
     refute_output --partial "TRAP_LEAKED"
 }
+
+# ---------------------------------------------------------------------------
+# --user account resolution, non-interactive (#2226)
+# ---------------------------------------------------------------------------
+
+# A skill run is a non-interactive shell with DOTFILES_FORCE_INIT unset by
+# the time `--user` is resolved. integrations/claude.sh returns early there
+# (interactive guard), so the helper must source the guard-free
+# tools/custom/lib/claude_accounts_auth.sh that defines
+# _claude_resolve_account (#2146) instead.
+@test "_gh_pr_review_resolve_claude_account: resolves --user in a non-interactive shell without DOTFILES_FORCE_INIT" {
+    run bash --noprofile --norc -c "
+        export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
+        DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
+        unset DOTFILES_FORCE_INIT
+        command -v _claude_resolve_account >/dev/null && echo preloaded
+        CLAUDE_ENABLED_ACCOUNTS='work personal' _gh_pr_review_resolve_claude_account work
+    "
+    assert_success
+    refute_output --partial "preloaded"
+    assert_output "${HOME}/.claude-work"
+}
+
+@test "_gh_pr_review_resolve_claude_account: unknown --user lists the allowed accounts, non-interactive" {
+    run bash --noprofile --norc -c "
+        export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
+        DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
+        unset DOTFILES_FORCE_INIT
+        CLAUDE_ENABLED_ACCOUNTS='work personal' _gh_pr_review_resolve_claude_account nope
+    "
+    assert_failure
+    assert_output "Unknown claude account: 'nope' (allowed: work personal)"
+}
