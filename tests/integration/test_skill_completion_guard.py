@@ -425,15 +425,34 @@ def test_tool_result_command_mention_not_boundary(tmp_path: Path) -> None:
         "Base directory for this skill: /x/skills/gh-issue-implement\ndone",
     ],
 )
-def test_task_notification_report_not_boundary(tmp_path: Path, report: str) -> None:
+@pytest.mark.parametrize("open_tag", ["<task-notification>", '<task-notification id="a1">'])
+def test_task_notification_report_not_boundary(tmp_path: Path, report: str, open_tag: str) -> None:
     """A background worker's report arrives as user-role text wrapped in
     `<task-notification>`; skill names inside it are not user input (#2231)."""
     transcript = _write_transcript(
         tmp_path,
         [
             _user_text("coordinate the wave"),
-            _user_text(f"<task-notification>\n<result>{report}</result>\n</task-notification>"),
+            _user_text(f"{open_tag}\n<result>{report}</result>\n</task-notification>"),
             _assistant_text("worker done"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_task_notification_does_not_end_step_window(tmp_path: Path) -> None:
+    """A notification naming another skill mid-flow must not close the running
+    skill's step-scan window (`_next_catalog_boundary_after`, #2231)."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-pr-commit"),
+            _emit_marker("gh-pr-commit", "stage-commit"),
+            _user_text("<task-notification>Resume:\n  /gh-issue:implement 2228</task-notification>"),
+            _emit_marker("gh-pr-commit", "metrics-board-sync"),
+            _emit_marker("gh-pr-commit", "report"),
         ],
     )
     result = _run_hook(_hook_event(transcript))

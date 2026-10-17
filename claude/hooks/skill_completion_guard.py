@@ -125,6 +125,10 @@ _ASYNC_WAIT_RE: re.Pattern[str] = re.compile(
     r'\s+agent\s*=\s*"?[^\s"]+"?\s+reason\s*=\s*"?background-worker-delegated"?\s*$'
 )
 
+# Background-agent reports arrive as user-role text but are not user input (#2231).
+# Closed spans only: a stray opening tag in typed text must not hide a real command after it.
+_TASK_NOTIFICATION_RE: re.Pattern[str] = re.compile(r"<task-notification\b[^>]*>.*?</task-notification>", re.DOTALL)
+
 
 def _trace(message: str, *, layer: str | None = None) -> None:
     """Emit a `[skill-guard]` trace line on stderr when trace mode is on.
@@ -274,11 +278,6 @@ def _iter_text_blocks(message: dict[str, Any], include_tool_results: bool = Fals
                             if isinstance(st, str):
                                 parts.append(st)
     return parts
-
-
-# Background-agent reports arrive as user-role text but are not user input (#2231).
-# Closed spans only: a stray opening tag in typed text must not hide a real command after it.
-_TASK_NOTIFICATION_RE = re.compile(r"<task-notification>.*?</task-notification>", re.DOTALL)
 
 
 def _user_boundary_texts(message: dict[str, Any]) -> list[str]:
