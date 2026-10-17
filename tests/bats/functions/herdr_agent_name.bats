@@ -199,7 +199,7 @@ run_han() {
 # ---------------------------------------------------------------------------
 
 @test "T19: bash/main.bash does not auto-source the lib helper" {
-    run_in_bash 'command -v herdr_agent_name >/dev/null || echo absent'
+    run_in_bash 'command -v load_category >/dev/null && ! command -v herdr_agent_name >/dev/null && echo absent'
     assert_success
     assert_output --partial "absent"
 }

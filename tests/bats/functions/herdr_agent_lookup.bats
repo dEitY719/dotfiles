@@ -265,7 +265,7 @@ WT="/w/wt-issue-1569"
 # ---------------------------------------------------------------------------
 
 @test "L26: bash/main.bash does not auto-source the lib helper" {
-    run_in_bash 'command -v herdr_agent_tab_for_cwd >/dev/null || echo absent'
+    run_in_bash 'command -v load_category >/dev/null && ! command -v herdr_agent_tab_for_cwd >/dev/null && echo absent'
     assert_success
     assert_output --partial "absent"
 }
