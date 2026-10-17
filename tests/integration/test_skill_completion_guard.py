@@ -441,12 +441,20 @@ def test_task_notification_report_not_boundary(tmp_path: Path, report: str) -> N
     assert result.stdout.strip() == ""
 
 
-def test_typed_command_next_to_task_notification_still_boundary(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "text",
+    [
+        "<task-notification>worker finished</task-notification>\n/gh-issue:implement 2228",
+        # Unclosed tag in typed text is not a notification span; nothing is stripped.
+        "I saw a <task-notification> tag\n/gh-issue:implement 2228",
+    ],
+)
+def test_typed_command_next_to_task_notification_still_boundary(tmp_path: Path, text: str) -> None:
     """Stripping the notification span must keep a real typed command (#2231)."""
     transcript = _write_transcript(
         tmp_path,
         [
-            _user_text("<task-notification>worker finished</task-notification>\n/gh-issue:implement 2228"),
+            _user_text(text),
             _assistant_text("running"),
         ],
     )
