@@ -576,10 +576,24 @@ _senv_create_pr() {
         ux_info "Next: git switch ${base}"
         return 1
     fi
-    ahead=$(git rev-list --count "origin/${base}..HEAD" 2>/dev/null)
-    if [ "${ahead:-0}" -gt 0 ]; then
+    if [ -n "$(git rev-parse --show-prefix)" ]; then
+        ux_error "run from the repository root (.enc.env is resolved relative to it)"
+        ux_info "Next: cd \"\$(git rev-parse --show-toplevel)\""
+        return 1
+    fi
+    git fetch -q origin "$base" 2>/dev/null || ux_warning "could not fetch origin/${base}; using the cached ref"
+    ahead=$(git rev-list --count "origin/${base}..HEAD" 2>/dev/null) || {
+        ux_error "cannot compare ${base} with origin/${base}"
+        return 1
+    }
+    if [ "$ahead" -gt 0 ]; then
         ux_error "${base} has ${ahead} unpushed commit(s) that would be mixed into the PR"
         ux_info "Next: git push origin ${base}  (or move them to a branch)"
+        return 1
+    fi
+    if [ "$(git rev-list --count "HEAD..origin/${base}")" -gt 0 ]; then
+        ux_error "${base} is behind origin/${base}"
+        ux_info "Next: git pull --ff-only"
         return 1
     fi
     staged=$(git diff --cached --name-only --relative | grep -vx '\.enc\.env')
@@ -588,6 +602,14 @@ _senv_create_pr() {
         printf '%s\n' "$staged" | while IFS= read -r f; do ux_bullet_sub "$f"; done
         ux_info "Next: git restore --staged <file>  (or commit them first)"
         return 1
+    fi
+
+    # sops output is non-deterministic (fresh nonce/mac each run), so compare the
+    # plaintext: an unchanged .env must not produce an empty-meaning PR.
+    if [ -f .enc.env ] && [ -z "$(git status --porcelain -- .enc.env)" ] &&
+        sops -d --input-type dotenv --output-type dotenv .enc.env 2>/dev/null | cmp -s - .env; then
+        ux_info "no change: .enc.env already matches .env; nothing to do"
+        return 0
     fi
 
     branch="chore/reencrypt-env-$(date +%Y%m%d-%H%M%S)"
@@ -613,8 +635,8 @@ _senv_create_pr() {
         return 1
     }
     host=$(_senv_gh_host)
-    url=$(GH_HOST="${host:-${GH_HOST-}}" gh pr create --base "$base" --head "$branch" \
-        --title "$title" --body "$body")
+    url=$([ -z "$host" ] || export GH_HOST="$host"
+        gh pr create --base "$base" --head "$branch" --title "$title" --body "$body")
     rc=$?
     if [ "$rc" -ne 0 ]; then
         ux_error "gh pr create failed (branch ${branch} is pushed)"
