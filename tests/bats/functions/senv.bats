@@ -342,3 +342,69 @@ TTY_OK='_senv_has_tty() { return 0; };'
     cmp -s "$TEST_TEMP_HOME/senv-key.age" "$KEY_FILE"
     [ "$(stat -c '%a' "$TEST_TEMP_HOME/senv-key.age")" = "600" ]
 }
+
+# --- create-pr (#2228) -------------------------------------------------------
+# Real git against a local bare remote; gh is a logging stub.
+
+_pr_repo() {
+    GH_LOG="$TEST_TEMP_HOME/gh.log"
+    printf '#!/bin/sh\necho "$*" >>"%s"\necho https://example.test/pr/1\n' "$GH_LOG" >"$STUB_BIN/gh"
+    chmod +x "$STUB_BIN/gh"
+    REMOTE="$TEST_TEMP_HOME/remote.git"
+    git init -q --bare -b main "$REMOTE"
+    git init -q -b main "$PROJ"
+    git -C "$PROJ" config user.email t@example.test
+    git -C "$PROJ" config user.name t
+    git -C "$PROJ" config core.hooksPath /dev/null
+    printf 'A=1\n' >"$PROJ/.env"
+    printf 'keep\n' >"$PROJ/README"
+    : >"$PROJ/.sops.yaml"
+    git -C "$PROJ" add README .sops.yaml
+    git -C "$PROJ" commit -q -m init
+    git -C "$PROJ" remote add origin "$REMOTE"
+    git -C "$PROJ" push -q -u origin main
+    git -C "$PROJ" remote set-head origin main
+}
+
+@test "create-pr: branches, commits only .enc.env, pushes, opens PR" {
+    _pr_repo
+    _senv "senv create-pr"
+    assert_success
+    [[ "$output" == *"https://example.test/pr/1"* ]]
+    br=$(git -C "$PROJ" symbolic-ref --short HEAD)
+    [[ "$br" == chore/reencrypt-env-* ]]
+    [ "$(git -C "$PROJ" show --name-only --format=%s HEAD | tail -n +1 | tr '\n' '|')" = "chore(secrets): .enc.env 를 현재 .env 로 다시 암호화한다||.enc.env|" ]
+    git -C "$REMOTE" rev-parse --verify "$br"
+    grep -q -- "--base main" "$GH_LOG"
+}
+
+@test "create-pr: refuses off the default branch" {
+    _pr_repo
+    git -C "$PROJ" switch -q -c feature
+    _senv "senv create-pr"
+    assert_failure
+    [[ "$output" == *"default branch"* ]]
+    [ ! -f "$PROJ/.enc.env" ]
+}
+
+@test "create-pr: refuses other staged changes" {
+    _pr_repo
+    printf 'x\n' >"$PROJ/other"
+    git -C "$PROJ" add other
+    _senv "senv create-pr"
+    assert_failure
+    [[ "$output" == *"other"* ]]
+    [ "$(git -C "$PROJ" symbolic-ref --short HEAD)" = main ]
+}
+
+@test "create-pr: unchanged .enc.env exits 0 without a branch" {
+    _pr_repo
+    cp "$PROJ/.env" "$PROJ/.enc.env"
+    git -C "$PROJ" add .enc.env
+    git -C "$PROJ" commit -q -m enc
+    _senv "senv create-pr"
+    assert_success
+    [[ "$output" == *"no change"* ]]
+    [ "$(git -C "$PROJ" symbolic-ref --short HEAD)" = main ]
+    [ ! -f "$GH_LOG" ]
+}

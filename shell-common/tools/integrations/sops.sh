@@ -96,6 +96,7 @@ _senv_usage() {
     ux_bullet "edit [file]       edit the encrypted file in \$EDITOR, re-encrypt on save"
     ux_bullet "run <cmd...>      run cmd with the encrypted values as env vars (no file)"
     ux_bullet "check             key present / mode 600 / matches .sops.yaml / decrypts"
+    ux_bullet "create-pr        enc -> branch -> commit -> push -> PR (default branch only, .enc.env only)"
     ux_bullet "key show          your public key + whether .sops.yaml lists it"
     ux_bullet "key export [-o file] [-f]   lock the private key with a passphrase (~/senv-key.age)"
     ux_bullet "key import [file] [-f]      unlock it into the sops key file (mode 600)"
@@ -542,6 +543,76 @@ _senv_key() {
     "_senv_key_${sub}" "$@"
 }
 
+# Re-encrypt .env, then branch -> commit -> push -> PR in one go (#2228).
+# Runs from the default branch only, so a PR never mixes in other work; only
+# .enc.env is ever added, never .env. The PR is not merged.
+_senv_create_pr() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local base cur branch url rc staged host
+    local title="chore(secrets): .enc.env 를 현재 .env 로 다시 암호화한다"
+    local body="\`senv create-pr\` 로 \`.env\` 를 다시 암호화했다. 변경은 \`.enc.env\` 한 파일뿐이다."
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        ux_error "not inside a git work tree: $(pwd)"
+        return 1
+    fi
+    if ! command -v gh >/dev/null 2>&1; then
+        ux_error "gh is not installed"
+        return 1
+    fi
+    base=$(git symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)
+    base="${base#origin/}"
+    if [ -z "$base" ]; then
+        ux_error "cannot determine the default branch (origin/HEAD unset)"
+        ux_info "Next: git remote set-head origin -a"
+        return 1
+    fi
+    cur=$(git symbolic-ref -q --short HEAD 2>/dev/null)
+    if [ "$cur" != "$base" ]; then
+        ux_error "run from the default branch (${base}), not '${cur:-detached HEAD}'"
+        ux_info "Next: git switch ${base}"
+        return 1
+    fi
+    staged=$(git diff --cached --name-only --relative | grep -vx '\.enc\.env')
+    if [ -n "$staged" ]; then
+        ux_error "other staged changes would be mixed into the PR:"
+        printf '%s\n' "$staged" | while IFS= read -r f; do ux_bullet_sub "$f"; done
+        ux_info "Next: git restore --staged <file>  (or commit them first)"
+        return 1
+    fi
+
+    _senv_enc "$@" || return 1
+    if [ -z "$(git status --porcelain -- .enc.env)" ]; then
+        ux_info "no change in .enc.env; nothing to do"
+        return 0
+    fi
+
+    branch="chore/reencrypt-env-$(date +%Y%m%d-%H%M)"
+    git switch -c "$branch" >/dev/null || return 1
+    git add -- .enc.env && git commit -m "$title" -- .enc.env >/dev/null || return 1
+    ux_success "committed on ${branch}"
+    git push -u origin HEAD || {
+        ux_error "push failed (branch ${branch} is committed locally)"
+        return 1
+    }
+    host=$(_senv_gh_host)
+    url=$(GH_HOST="${host:-${GH_HOST-}}" gh pr create --base "$base" --head "$branch" \
+        --title "$title" --body "$body")
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        ux_error "gh pr create failed (branch ${branch} is pushed)"
+        return "$rc"
+    fi
+    ux_success "PR: ${url}"
+}
+
+# GH_HOST for gh: shared resolver when loaded (internal vs external PC), else
+# empty so gh falls back to its own default host.
+_senv_gh_host() {
+    if command -v _gh_resolve_host >/dev/null 2>&1; then
+        _gh_resolve_host 2>/dev/null
+    fi
+}
+
 senv() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local cmd="${1:-}"
@@ -550,7 +621,7 @@ senv() {
             _senv_usage
             return 0
             ;;
-        init | enc | dec | edit | run | check | key) ;;
+        init | enc | dec | edit | run | check | key | create-pr) ;;
         *)
             ux_error "unknown senv command: ${cmd}"
             _senv_usage
@@ -559,5 +630,6 @@ senv() {
     esac
     shift
     _senv_need_sops || return 1
+    [ "$cmd" = "create-pr" ] && cmd="create_pr"
     "_senv_${cmd}" "$@"
 }
