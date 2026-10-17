@@ -32,12 +32,18 @@ teardown() {
     run bash --noprofile --norc -i -c "
         export DOTFILES_ROOT='${DOTFILES_ROOT}' SHELL_COMMON='${SHELL_COMMON}'
         export DOTFILES_ROOT_NO_CANONICALIZE=1 HOME='${HOME}' TERM=dumb
-        source '${DOTFILES_ROOT}/bash/main.bash' >/dev/null 2>&1
+        source '${DOTFILES_ROOT}/bash/main.bash' >/dev/null 2>'${TEST_TEMP_HOME}/load.err'
         echo LIBFNS=\$(declare -F | grep -c '_gh_pr_merge_train\|devx_pr_review_all')
         type _dotfiles_root_guard_self >/dev/null 2>&1 && echo GUARD=yes
+        _codex_load_skill_sources 2>>'${TEST_TEMP_HOME}/load.err' && echo LAZY=yes
     " 2>/dev/null
     assert_output --partial "LIBFNS=0"
     assert_output --partial "GUARD=yes"
+    assert_output --partial "LAZY=yes"
+    # A lib sourced directly in an interactive shell must not reach a sibling
+    # through a functions/ stub (which returns there) and warn (PR #2224 review).
+    run grep -E 'guard skipped|did not define' "${TEST_TEMP_HOME}/load.err"
+    assert_failure
 }
 
 @test "zsh -i: library functions are not loaded" {
