@@ -2,7 +2,7 @@
 # shell-common/functions/wcp.sh
 # wcp — thin wrapper (#2195). The logic is the PATH executable
 # tools/custom/wcp.sh (also ~/.local/bin/wcp); this keeps the
-# `wcp` / `wcp` names and tab completion in interactive shells.
+# `wcp` name and tab completion in interactive shells.
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 wcp() {

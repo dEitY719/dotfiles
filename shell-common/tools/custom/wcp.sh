@@ -5,7 +5,7 @@
 # PATH executable since #2195 (~/.local/bin/wcp via config/symlinks.conf):
 # it never changes the parent shell's state (docs/.ssot/command-delivery-model.md
 # §3), so AI agents' non-interactive `bash -c 'wcp'` resolves it.
-# functions/wcp.sh keeps the `wcp` / `wcp` names as a thin wrapper.
+# functions/wcp.sh keeps the `wcp` name as a thin wrapper.
 
 # readlink -f: resolve the ~/.local/bin symlink to find init.sh next to the source.
 # shellcheck source=/dev/null
