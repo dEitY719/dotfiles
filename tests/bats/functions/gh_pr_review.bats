@@ -2242,3 +2242,14 @@ EOF
     assert_failure
     assert_output "Unknown claude account: 'nope' (allowed: work personal)"
 }
+
+@test "_gh_pr_review_resolve_claude_account: loads the whitelist when CLAUDE_ENABLED_ACCOUNTS is not inherited (#2226)" {
+    run env -u CLAUDE_ENABLED_ACCOUNTS bash --noprofile --norc -c "
+        export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
+        DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
+        unset DOTFILES_FORCE_INIT
+        _gh_pr_review_resolve_claude_account work
+    "
+    assert_success
+    assert_output "${HOME}/.claude-work"
+}
