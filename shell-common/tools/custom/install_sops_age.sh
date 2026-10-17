@@ -59,6 +59,15 @@ install_sops_age_via_release() {
     return "$rc"
 }
 
+# The script runs in a subprocess, so it cannot fix the parent shell's PATH;
+# print the export when the mise shims dir is not on it (nothing otherwise).
+sops_age_shims_hint() {
+    local shims="${HOME}/.local/share/mise/shims"
+    sops_age_installed && return 0
+    ux_warning "sops/age not on PATH in this shell (mise shims missing)"
+    ux_bullet "export PATH=\"${shims}:\$PATH\""
+}
+
 sops_age_manual_hints() {
     ux_section "Manual install"
     ux_bullet "mise use -g sops@${SOPS_VERSION} age@${AGE_VERSION}"
@@ -94,6 +103,7 @@ main() {
     ux_success "sops + age installed (${method})"
     [ "$method" = "release" ] && ux_info "Make sure ${SOPS_AGE_BIN_DIR} is on PATH"
     ux_section "Next"
+    [ "$method" = "mise" ] && sops_age_shims_hint
     ux_bullet "Key + status: sops-help setup, then sops-status"
 }
 
