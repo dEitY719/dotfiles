@@ -402,9 +402,28 @@ _pr_repo() {
     cp "$PROJ/.env" "$PROJ/.enc.env"
     git -C "$PROJ" add .enc.env
     git -C "$PROJ" commit -q -m enc
+    git -C "$PROJ" push -q origin main
     _senv "senv create-pr"
     assert_success
     [[ "$output" == *"no change"* ]]
     [ "$(git -C "$PROJ" symbolic-ref --short HEAD)" = main ]
     [ ! -f "$GH_LOG" ]
+}
+
+@test "create-pr: refuses unpushed commits on the default branch" {
+    _pr_repo
+    printf 'y\n' >"$PROJ/local"
+    git -C "$PROJ" add local
+    git -C "$PROJ" commit -q -m local
+    _senv "senv create-pr"
+    assert_failure
+    [[ "$output" == *"unpushed"* ]]
+    [ ! -f "$PROJ/.enc.env" ]
+}
+
+@test "create-pr: rejects arguments" {
+    _pr_repo
+    _senv "senv create-pr other.env"
+    assert_failure
+    [[ "$output" == *"no arguments"* ]]
 }
