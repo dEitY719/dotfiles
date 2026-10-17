@@ -54,7 +54,7 @@ tests/
 - **No Network/Installs**: Tests must not require network access or package installation.
 - **Stable Output**: Assert on stable substrings, not full banners.
 - **Bats for shell units**: New shell function tests go in `tests/bats/functions/`; `claude/hooks/*` tests go in `tests/bats/claude_hooks/`. Name a file `<target-stem>[_<topic>].bats` so `scripts/test_smoke.sh` maps it.
-- **No copy-fixture tests**: Never test a hand copy of code that lives outside this repo (e.g. a marketplace skill) — put the test in that code's repo. #2200 moved the last held mirrors to their marketplace repos; the merge-queue mirror half in `functions/_fixtures/gh_pr_merge_train_queue.sh` waits for its port (#2219). A fixture that sources the real `shell-common/functions/*.sh` it tests is fine.
+- **No copy-fixture tests**: Never test a hand copy of code that lives outside this repo (e.g. a marketplace skill) — put the test in that code's repo. #2200 and #2219 moved the last held mirrors (the merge-queue half of `functions/_fixtures/gh_pr_merge_train_queue.sh` went to gh-pr-skills) to their marketplace repos. A fixture that sources the real `shell-common/functions/*.sh` it tests is fine.
 - **Pytest for integration**: Cross-shell parity and help system tests stay in pytest.
 - **Dry-run only**: Custom tool tests use `bash -n` syntax check or `--help`/`help` mode. Never run actual installations.
 - **Subprocess isolation**: Bats tests run dotfiles in subprocesses (run_in_bash/run_in_zsh), not via direct source.
