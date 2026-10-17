@@ -23,7 +23,7 @@ _issue_watcher_cron_help_summary() {
     ux_bullet "sections"
     ux_bullet_sub "usage: run modes (tick, --dry-run, --status)"
     ux_bullet_sub "files: watch list and state files"
-    ux_bullet_sub "details: issue-watcher-cron --help  (full cycle, caps, rate-limit gate)"
+    ux_info "Full cycle, caps, rate-limit gate: issue-watcher-cron --help"
 }
 
 _issue_watcher_cron_help_list_sections() {
