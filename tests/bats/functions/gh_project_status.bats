@@ -1529,7 +1529,7 @@ _run_marker_bash() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_zsh "$L"'. "$SHELL_COMMON/lib/gh_project_status.sh"'
+    run_in_zsh '. "$SHELL_COMMON/lib/gh_project_status.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
     assert_output --partial "shell-common/lib/gh_project_status.sh"
@@ -1539,7 +1539,7 @@ _run_marker_bash() {
     command -v git >/dev/null 2>&1 || skip "git not available"
 
     _setup_foreign_home_1505
-    run_in_bash "$L"'. "$SHELL_COMMON/lib/gh_project_status.sh"'
+    run_in_bash '. "$SHELL_COMMON/lib/gh_project_status.sh"'
     assert_success
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
     assert_output --partial "shell-common/lib/gh_project_status.sh"
