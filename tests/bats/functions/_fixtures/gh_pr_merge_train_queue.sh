@@ -7,7 +7,8 @@
 # The other half — mirrors of the skill text (gh-pr:merge Step 3 `--auto`,
 # Step 3.5 `[QUEUED]`, gh-pr:merge-train Step 3.6 base guard, Step 0 finalize
 # sweep) — moved to dEitY719/gh-pr-skills tests/bats/gh_pr_merge_train_queue.bats
-# by #2219, where it evals the shipped fences instead of a hand copy.
+# by #2219 (dEitY719/gh-pr-skills#82, merge db48f44), where it evals the
+# shipped fences instead of a hand copy.
 
 # shellcheck source=/dev/null
 . "${_BATS_REAL_DOTFILES_ROOT:-${DOTFILES_ROOT}}/shell-common/functions/gh_pr_merge_train.sh"
