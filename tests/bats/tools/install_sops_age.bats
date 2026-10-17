@@ -21,6 +21,8 @@ run_sops_tool() {
 
 @test "sops_age_shims_hint: prints export when sops/age are not on PATH" {
     run_sops_tool '
+        PATH=/usr/bin:/bin
+        unset MISE_DATA_DIR XDG_DATA_HOME
         sops_age_installed() { return 1; }
         sops_age_shims_hint
     '
@@ -31,6 +33,17 @@ run_sops_tool() {
 @test "sops_age_shims_hint: silent when sops/age already on PATH" {
     run_sops_tool '
         sops_age_installed() { return 0; }
+        sops_age_shims_hint
+    '
+    assert_success
+    assert_output ""
+}
+
+@test "sops_age_shims_hint: silent when shims dir is already on PATH" {
+    run_sops_tool '
+        unset MISE_DATA_DIR XDG_DATA_HOME
+        PATH="$HOME/.local/share/mise/shims:/usr/bin:/bin"
+        sops_age_installed() { return 1; }
         sops_age_shims_hint
     '
     assert_success
