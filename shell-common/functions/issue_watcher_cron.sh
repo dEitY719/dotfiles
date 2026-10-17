@@ -21,35 +21,26 @@ alias issue-watcher-cron='issue_watcher_cron'
 _issue_watcher_cron_help_summary() {
     ux_info "Usage: issue-watcher-cron-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "usage: run modes (tick, --dry-run, --status)"
-    ux_bullet_sub "files: watch list and state files"
-    ux_info "Full cycle, caps, rate-limit gate: issue-watcher-cron --help"
+    ux_bullet_sub "commands: run modes (tick, --dry-run, --status)"
+    ux_info "Full cycle, caps, gate, watch list and state paths: issue-watcher-cron --help"
 }
 
 _issue_watcher_cron_help_list_sections() {
     ux_bullet "sections"
-    ux_bullet_sub "usage"
-    ux_bullet_sub "files"
+    ux_bullet_sub "commands"
 }
 
-_issue_watcher_cron_help_rows_usage() {
+_issue_watcher_cron_help_rows_commands() {
     ux_table_row "issue-watcher-cron" "Tick" "Dispatch assigned open issues to /gh-flow:issue (cron)"
     ux_table_row "issue-watcher-cron --dry-run" "Preview" "Print what a tick would dispatch, change nothing"
     ux_table_row "issue-watcher-cron --status" "Status" "Rate-limit gate, saturation, gh search state"
     ux_table_row "issue-watcher-cron --help" "Help" "Full cycle, caps and gate rules"
 }
 
-_issue_watcher_cron_help_rows_files() {
-    ux_bullet "Watch list: ~/.agent-factory/avatars/issue-watcher/watched-repos.json (or \$IW_WATCHED_REPOS)"
-    ux_bullet "State dir: \${XDG_STATE_HOME:-~/.local/state}/issue-watcher/"
-}
-
 _issue_watcher_cron_help_full() {
     ux_header "issue-watcher-cron"
-    ux_section "Usage"
-    _issue_watcher_cron_help_rows_usage
-    ux_section "Files"
-    _issue_watcher_cron_help_rows_files
+    ux_section "Commands"
+    _issue_watcher_cron_help_rows_commands
 }
 
 issue_watcher_cron_help() {
@@ -57,8 +48,7 @@ issue_watcher_cron_help() {
         "" | -h | --help | help) _issue_watcher_cron_help_summary ;;
         --list | list | section | sections) _issue_watcher_cron_help_list_sections ;;
         --all | all) _issue_watcher_cron_help_full ;;
-        usage) _issue_watcher_cron_help_rows_usage ;;
-        files) _issue_watcher_cron_help_rows_files ;;
+        commands | cmds) _issue_watcher_cron_help_rows_commands ;;
         *)
             ux_error "Unknown issue-watcher-cron-help section: $1"
             ux_info "Try: issue-watcher-cron-help --list"

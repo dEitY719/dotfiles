@@ -147,3 +147,27 @@ FIXTURE_CHECK='
     assert_line "gwt=development"
     refute_line "funcs=0"
 }
+
+# my-help falls back to calling a same-named *function* when no <name>_help
+# exists, so before issue_watcher_cron_help was registered `my-help
+# issue_watcher_cron` ran a real watcher tick. Stub the tick and pin that both
+# spellings now resolve to the help topic instead.
+IWC_SCRIPT='
+    issue_watcher_cron() { echo "TICK-RAN"; }
+    my_help_impl issue-watcher-cron
+    my_help_impl issue_watcher_cron
+'
+
+@test "bash: my-help issue-watcher-cron shows the help topic, never runs the tick" {
+    run_in_bash "$IWC_SCRIPT"
+    assert_success
+    refute_output --partial "TICK-RAN"
+    assert_output --partial "issue-watcher-cron-help"
+}
+
+@test "zsh: my-help issue-watcher-cron shows the help topic, never runs the tick" {
+    run_in_zsh "$IWC_SCRIPT"
+    assert_success
+    refute_output --partial "TICK-RAN"
+    assert_output --partial "issue-watcher-cron-help"
+}

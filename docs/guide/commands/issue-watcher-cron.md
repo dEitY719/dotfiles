@@ -13,23 +13,17 @@
 
 - Usage: issue-watcher-cron-help [section|--list|--all]
 - sections
-    - usage: run modes (tick, --dry-run, --status)
-    - files: watch list and state files
-- Full cycle, caps, rate-limit gate: issue-watcher-cron --help
+    - commands: run modes (tick, --dry-run, --status)
+- Full cycle, caps, gate, watch list and state paths: issue-watcher-cron --help
 
 ## 섹션
 
-### usage
+### commands
 
 - **issue-watcher-cron** — Tick — Dispatch assigned open issues to /gh-flow:issue (cron)
 - **issue-watcher-cron --dry-run** — Preview — Print what a tick would dispatch, change nothing
 - **issue-watcher-cron --status** — Status — Rate-limit gate, saturation, gh search state
 - **issue-watcher-cron --help** — Help — Full cycle, caps and gate rules
-
-### files
-
-- Watch list: ~/.agent-factory/avatars/issue-watcher/watched-repos.json (or $IW_WATCHED_REPOS)
-- State dir: ${XDG_STATE_HOME:-~/.local/state}/issue-watcher/
 
 ## 엣지케이스 / 의도된 동작
 
