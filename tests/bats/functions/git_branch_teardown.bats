@@ -209,9 +209,12 @@ teardown() {
 
 @test "teardown: fully-merged branch tracking base (origin/main) tears down without --force (#1108)" {
     _setup_merged_tracking_main
-    run_in_bash "cd '$CLONE2' && gbr teardown 2>&1"
+    # #2195: gbr runs as a PATH executable; the checkout lands in the repo and the
+    # caller's cwd is untouched (teardown never cd's).
+    run_in_bash "cd '$CLONE2' && gbr teardown 2>&1; echo \"cwd=\$(pwd)\""
     assert_success
     assert_output --partial "Teardown complete"
+    assert_output --partial "cwd=$CLONE2"
     [ "$(git -C "$CLONE2" symbolic-ref --short HEAD)" = "main" ]
     # Branch is gone.
     run git -C "$CLONE2" rev-parse --verify --quiet feat/merged
