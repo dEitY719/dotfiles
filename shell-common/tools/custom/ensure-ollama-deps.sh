@@ -4,12 +4,12 @@
 # Single Responsibility: Install system dependencies required for Ollama
 # Does NOT install Ollama itself - that's install_ollama.sh's job
 
-set -e
-
 # PATH executable since #2195 (~/.local/bin/ensure-ollama-deps via config/symlinks.conf).
 # Resolve the ~/.local/bin symlink so init.sh is found next to the real file.
 # shellcheck source=/dev/null
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
+# set -e only after init.sh: the shared bootstrap is not written for errexit.
+set -e
 
 ensure_ollama_deps_help() {
     ux_usage "ensure-ollama-deps" "" "Install the system packages Ollama needs (zstd, curl)"
