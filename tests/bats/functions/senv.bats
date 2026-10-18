@@ -175,6 +175,13 @@ _senv() {
     assert_output --partial "senv check"
 }
 
+@test "no help, alias or doc still points at the retired ~/para/area/vault path (#2239)" {
+    run grep -rn "para/area/vault" "$DOTFILES_ROOT/shell-common" "$DOTFILES_ROOT/docs/guide/commands"
+    assert_failure 1
+    run_in_bash "alias cd-vault"
+    assert_output --partial "cd ~/para/project/vault"
+}
+
 @test "missing sops hints install-sops-age" {
     rm "$STUB_BIN/sops"
     _senv "senv enc"
