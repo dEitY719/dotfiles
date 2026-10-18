@@ -387,7 +387,7 @@ _dir_help_rows_para() {
     ux_table_row "cd-para" "\$HOME/para" "PARA root"
     ux_table_row "cd-project" "\$HOME/para/project" "Projects workspace"
     ux_table_row "cd-area" "\$HOME/para/area" "Areas of responsibility"
-    ux_table_row "cd-vault" "\$HOME/para/area/vault" "Vault under Areas"
+    ux_table_row "cd-vault" "\$HOME/para/project/vault" "Vault under Projects"
     ux_table_row "cd-resource" "\$HOME/para/resource" "Reference materials"
     ux_table_row "cd-archive" "\$HOME/para/archive" "Archived items"
 }

@@ -170,8 +170,8 @@ _senv() {
     _senv "senv"
     assert_success
     [ "$(printf '%s\n' "$output" | wc -l)" -le 20 ]
-    assert_output --partial "키 백업: senv key export -> cp ~/senv-key.age ~/para/area/vault/secrets/"
-    assert_output --partial "senv key import ~/para/area/vault/secrets/senv-key.age -> senv dec -f (기존 .env 덮어씀)"
+    assert_output --partial "키 백업: senv key export -> cp ~/senv-key.age ~/para/project/vault/secrets/"
+    assert_output --partial "senv key import ~/para/project/vault/secrets/senv-key.age -> senv dec -f (기존 .env 덮어씀)"
     assert_output --partial "senv check"
 }
 
