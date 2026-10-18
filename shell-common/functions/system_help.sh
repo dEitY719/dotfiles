@@ -351,7 +351,7 @@ _dir_help_summary() {
     ux_bullet "sections"
     ux_bullet_sub "core: cd-dot | cd-down | cd-work"
     ux_bullet_sub "windows: cd-wdocu | cd-wobsidian | cd-wdown | cd-wpicture | cd-tilnote | cd-obsidian"
-    ux_bullet_sub "para: mkpara | cd-para | cd-project | cd-area | cd-vault | cd-resource | cd-archive"
+    ux_bullet_sub "para: mk-para | cd-para | cd-project | cd-vault | cd-area | cd-resource | cd-archive"
     ux_bullet_sub "copy: cp_wdown"
     ux_bullet_sub "details: dir-help <section>  (example: dir-help para)"
 }
@@ -383,11 +383,11 @@ _dir_help_rows_windows() {
 
 _dir_help_rows_para() {
     ux_table_header "Command" "Destination" "Purpose"
-    ux_table_row "mkpara" "para/{archive,area,project,resource}" "Create PARA directories"
+    ux_table_row "mk-para" "para/{archive,area,project,resource}" "Create PARA directories"
     ux_table_row "cd-para" "\$HOME/para" "PARA root"
     ux_table_row "cd-project" "\$HOME/para/project" "Projects workspace"
-    ux_table_row "cd-area" "\$HOME/para/area" "Areas of responsibility"
     ux_table_row "cd-vault" "\$HOME/para/project/vault" "Vault under Projects"
+    ux_table_row "cd-area" "\$HOME/para/area" "Areas of responsibility"
     ux_table_row "cd-resource" "\$HOME/para/resource" "Reference materials"
     ux_table_row "cd-archive" "\$HOME/para/archive" "Archived items"
 }

@@ -15,7 +15,7 @@
 - sections
     - core: cd-dot | cd-down | cd-work
     - windows: cd-wdocu | cd-wobsidian | cd-wdown | cd-wpicture | cd-tilnote | cd-obsidian
-    - para: mkpara | cd-para | cd-project | cd-area | cd-vault | cd-resource | cd-archive
+    - para: mk-para | cd-para | cd-project | cd-vault | cd-area | cd-resource | cd-archive
     - copy: cp_wdown
     - details: dir-help <section>  (example: dir-help para)
 
@@ -41,11 +41,11 @@
 ### para
 
 - **Command** — Destination — Purpose
-- **mkpara** — para/{archive,area,project,resource} — Create PARA directories
+- **mk-para** — para/{archive,area,project,resource} — Create PARA directories
 - **cd-para** — $HOME/para — PARA root
 - **cd-project** — $HOME/para/project — Projects workspace
-- **cd-area** — $HOME/para/area — Areas of responsibility
 - **cd-vault** — $HOME/para/project/vault — Vault under Projects
+- **cd-area** — $HOME/para/area — Areas of responsibility
 - **cd-resource** — $HOME/para/resource — Reference materials
 - **cd-archive** — $HOME/para/archive — Archived items
 

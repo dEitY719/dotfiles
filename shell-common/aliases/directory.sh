@@ -70,10 +70,8 @@ alias cd-qf='cd ~/para/project/quantfolio'
 alias cd-sad='cd ~/para/project/slsi-agent-desktop'
 alias cd-sk='cd ~/para/project/skills'
 alias cd-ss='cd ~/para/project/stock-steward'
-# Note: Project-specific CLI commands are defined in project-cli-aliases.sh
-
-# AREA directories
 alias cd-vault='cd ~/para/project/vault'
+# Note: Project-specific CLI commands are defined in project-cli-aliases.sh
 
 # ARCHIVE directories
 alias cd-pb='cd ~/para/archive/playbook'
