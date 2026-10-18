@@ -45,7 +45,7 @@
 - **cd-para** — $HOME/para — PARA root
 - **cd-project** — $HOME/para/project — Projects workspace
 - **cd-area** — $HOME/para/area — Areas of responsibility
-- **cd-vault** — $HOME/para/area/vault — Vault under Areas
+- **cd-vault** — $HOME/para/project/vault — Vault under Projects
 - **cd-resource** — $HOME/para/resource — Reference materials
 - **cd-archive** — $HOME/para/archive — Archived items
 

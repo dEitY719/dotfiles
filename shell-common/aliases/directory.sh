@@ -73,7 +73,7 @@ alias cd-ss='cd ~/para/project/stock-steward'
 # Note: Project-specific CLI commands are defined in project-cli-aliases.sh
 
 # AREA directories
-alias cd-vault='cd ~/para/area/vault'
+alias cd-vault='cd ~/para/project/vault'
 
 # ARCHIVE directories
 alias cd-pb='cd ~/para/archive/playbook'
