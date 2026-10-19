@@ -67,6 +67,8 @@ claude/settings.local.json
 /claude/plugin/removed.local.json
 # git-clone-skills.sh 의 PC별 폴더명 매핑 {"<repo>": "<folder>"} (#2241).
 /claude/plugin/skills-workspace.local.json
+# git-clone-skills.sh 의 PC별 추가 clone 대상 {"<name>": "<owner>/<repo>"} (#2244).
+/claude/plugin/skills-workspace-repos.local.json
 
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json

@@ -38,7 +38,7 @@ GitHub repo ──claude plugin marketplace update + claude plugin update──>
 
 | 단계 | 스크립트 | 갱신 대상 |
 |------|----------|-----------|
-| 1/5 | `claude/plugin/git-clone-skills.sh` | 없는 작업 사본 clone (선택: gitignored `claude/plugin/skills-workspace.local.json` 의 `{"<repo>": "<folder>"}` 로 폴더명 변경, #2241. 폴더를 하드코딩한 `scripts/measure-skill-descriptions.sh` (`authoring-skills`) 는 매핑을 따르지 않는다) |
+| 1/5 | `claude/plugin/git-clone-skills.sh` | 없는 작업 사본 clone (선택: gitignored `claude/plugin/skills-workspace.local.json` 의 `{"<repo>": "<folder>"}` 로 폴더명 변경, #2241. 폴더를 하드코딩한 `scripts/measure-skill-descriptions.sh` (`authoring-skills`) 는 매핑을 따르지 않는다. 추가 clone 대상: gitignored `claude/plugin/skills-workspace-repos.local.json` 의 `{"<name>": "<owner>/<repo>"}` 를 tracked manifest 와 합집합으로 읽고 owner 필터를 거치지 않는다, #2244 — 훅이 쓰고 restore.sh 가 marketplace 로 등록하는 `marketplaces.local.json` 은 읽지 않는다) |
 | 2/5 | `claude/plugin/git-pull-skills.sh` | 작업 사본 `git pull --ff-only` |
 | 3/5 | `claude/setup.sh` | 계정 디렉토리 링크, 남은 평면 스킬 링크 정리 (스킬 자체는 플러그인으로 로드) |
 | 4/5 | `claude/plugin/update-plugins.sh` | **플러그인 저장소** — marketplace clone 갱신 + 플러그인 version 갱신 |
