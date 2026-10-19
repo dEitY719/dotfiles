@@ -4249,3 +4249,12 @@ _watch_json() {
     assert_failure
     assert_output --partial "Unknown watch command: frob"
 }
+
+@test "issue_watcher_cron: watch add edits a symlinked watch list at its target" {
+    mv "${_WATCH_FILE}" "${_WORK_DIR}/real.json"
+    ln -s "${_WORK_DIR}/real.json" "${_WATCH_FILE}"
+    _run_tick -- watch add acme/new --path "${_WORK_DIR}"
+    assert_success
+    [ -L "${_WATCH_FILE}" ]
+    [ "$(jq -c 'length' "${_WORK_DIR}/real.json")" = "2" ]
+}
