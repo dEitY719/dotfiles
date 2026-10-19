@@ -13,7 +13,7 @@
       "schedule": "*/4 * * * *",
       "args": ["--cwd", "$HOME/dotfiles"],
       "env": {},
-      "description": "할당 이슈 감시 후 gh:issue-flow 디스패치"
+      "description": "할당 이슈 감시 후 gh-flow:wave 디스패치"
     },
     {
       "name": "merge-train",

@@ -4,7 +4,7 @@
 #
 # cron 이 주기마다 이 스크립트를 호출하면 tick 1회를 수행한다. tick 은 감시부터
 # 디스패치까지를 직접 수행한다 — 판단이 필요한 지점은 마지막 한 곳,
-# 디스패치된 pane 안에서 도는 `/gh-flow:issue <N>` 뿐이다 (issue #1440):
+# 디스패치된 pane 안에서 도는 `/gh-flow:wave <N>` 뿐이다 (issue #1440):
 #   1) 끝난 이슈의 워크트리 회수 (closed + agent 없음 + 미커밋 변경 없음)
 #   2) 살아있는 per-issue agent 수가 상한이면 이번 tick 보류
 #   3) `gh search issues` 로 할당된 open 이슈를 교차 저장소 한 번에 조회
@@ -12,7 +12,7 @@
 #   5) repo 라운드로빈 · 이슈 번호 오름차순으로 후보 정렬
 #   6) 이미 실행 중 / 이미 처리됨(이슈를 닫는 open PR) / blockedBy OPEN 스킵
 #   7) tick 당 최대 _IW_DISPATCH_PER_TICK 건만 워크트리 + herdr tab + agent 생성
-#   8) `/gh-flow:issue <N>` 프롬프트 전달
+#   8) `/gh-flow:wave <N>` 프롬프트 전달
 # 토큰 한도 게이트가 닫혀 있으면 사이클 전체를 보류한다 (issue #1436, #1444).
 #
 # 워크트리 존재 여부는 어떤 판정에도 쓰이지 않는다 (issue #1453 NF-1) — 순수
@@ -20,7 +20,12 @@
 #
 # 이슈에 어떤 쓰기도 하지 않는다 — 댓글·라벨·assignee 변경 없음. 조회 전용이다.
 #
-# Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | [-h|--help|help]
+# cwd 모드 (issue #2243): `--cwd` 없이 origin remote 가 있는 git 저장소 안에서
+# 실행하면 watch list 파일을 읽지 않고 그 저장소 하나만 대상으로 삼는다.
+# cron 은 `--cwd` 를 주거나 $HOME 에서 시작하므로 기존 watch list 동작 그대로다.
+#
+# Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status
+#        | watch list|add|remove ... | [-h|--help|help]
 
 set -u
 
@@ -335,7 +340,7 @@ _IW_SATURATION_STATE_BASENAME="saturation.json"
 _IW_LIMIT_STRIKES="2"
 _IW_LIMIT_BACKOFF_SECONDS="1800"
 # How long a *confirmed* dispatch has to hold `working` before the tick accepts
-# it as proof the quota is intact (issue #1444). One `/gh-flow:issue` runs for
+# it as proof the quota is intact (issue #1444). One `/gh-flow:wave` runs for
 # minutes — review gate included — so a prompt that provably reached the pane
 # and is idle again a minute later did not finish early, it never started.
 _IW_LIMIT_OBSERVE_SEC="60"
@@ -381,7 +386,7 @@ _IW_LIMIT_GATE_REOPENED=0
 # 1 once _iw_ensure_config_dir has run. Distinct from _IW_CONFIG_DIR being
 # non-empty, because "HOME is unset" resolves to a legitimately empty value.
 _IW_CONFIG_DIR_RESOLVED=0
-# The slash command a pane runs for one issue — `/gh-flow:issue` or an Agent
+# The slash command a pane runs for one issue — `/gh-flow:wave` or an Agent
 # Factory flat copy such as `/issue-af01` (issue #2209). Resolved once per tick
 # by _iw_ensure_flow_command: 0 = not yet asked, 1 = resolved, 2 = failed.
 _IW_FLOW_COMMAND=""
@@ -409,6 +414,9 @@ _iw_repos_file() {
 # mid-tick in any way this run should act on.
 _IW_WATCH_LIST=""
 _IW_WATCH_LIST_LOADED=0
+# cwd mode (#2243): the one `<owner/repo>\t<path>\t<host>` line main() derived
+# from the current checkout. Non-empty replaces the watch-list file entirely.
+_IW_CWD_ENTRY=""
 
 # Emit `<owner/repo><TAB><local-path><TAB><host>` per watched entry.
 #
@@ -426,8 +434,14 @@ _iw_watch_list() {
         return 0
     fi
 
-    _file=$(_iw_repos_file)
     _IW_WATCH_LIST_LOADED=1
+    if [ -n "${_IW_CWD_ENTRY}" ]; then
+        _IW_WATCH_LIST="${_IW_CWD_ENTRY}"
+        printf '%s\n' "${_IW_WATCH_LIST}"
+        return 0
+    fi
+
+    _file=$(_iw_repos_file)
     [ -f "${_file}" ] || return 0
 
     _IW_WATCH_LIST=$(jq -r '
@@ -459,6 +473,295 @@ _iw_repo_host() {
 # Echo every distinct host in the watch list, one per line.
 _iw_watch_hosts() {
     _iw_watch_list | awk -F '\t' '{ print $3 }' | sort -u
+}
+
+# Print `<owner/repo>\t<host>` for a git remote URL (#2243). Accepts the https
+# form (`https://[user@]host[:port]/owner/repo[.git]`), `ssh://[user@]host[:port]/
+# owner/repo[.git]` and scp-like `user@host:owner/repo[.git]` — GHES hosts
+# included. Exit 1 on anything else (a local path, a nested group path).
+_iw_parse_remote_url() {
+    local _u="$1" _rest _host _slug
+    case "${_u}" in
+    *://*)
+        _rest="${_u#*://}"
+        _host="${_rest%%/*}"
+        _host="${_host#*@}"
+        _slug="${_rest#*/}"
+        [ "${_slug}" != "${_rest}" ] || return 1
+        ;;
+    *@*:*)
+        _rest="${_u#*@}"
+        _host="${_rest%%:*}"
+        _slug="${_rest#*:}"
+        ;;
+    *) return 1 ;;
+    esac
+    _host="${_host%%:*}"
+    _slug="${_slug%/}"
+    _slug="${_slug%.git}"
+    case "${_slug}" in
+    */*/* | /* | */ | .*) return 1 ;;
+    ?*/?*) ;;
+    *) return 1 ;;
+    esac
+    [ -n "${_host}" ] || return 1
+    printf '%s\t%s' "${_slug}" "${_host}"
+}
+
+# Print `<owner/repo>\t<toplevel>\t<host>` for the git checkout at the current
+# directory (#2243). Exit 1 when it is not a git repo or has no `origin`
+# (cwd mode does not apply), 2 when `origin` exists but cannot be parsed.
+_iw_cwd_entry() {
+    local _top _url _parsed
+    _top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+    [ -n "${_top}" ] || return 1
+    _url=$(git remote get-url origin 2>/dev/null) || return 1
+    [ -n "${_url}" ] || return 1
+    _parsed=$(_iw_parse_remote_url "${_url}") || {
+        printf '%s' "${_url}"
+        return 2
+    }
+    printf '%s\t%s\t%s' "${_parsed%%"${_IW_TAB}"*}" "${_top}" "${_parsed#*"${_IW_TAB}"}"
+}
+
+# ============================================================
+# `watch` subcommand — manage the watch-list file (#2243)
+# ============================================================
+
+_iw_watch_usage() {
+    ux_info "Usage: issue_watcher_cron.sh watch list"
+    ux_info "       issue_watcher_cron.sh watch add [owner/repo] [--path P] [--host H]"
+    ux_info "       issue_watcher_cron.sh watch remove [owner/repo]"
+    ux_bullet_sub "owner/repo omitted: the current checkout's origin"
+    ux_bullet_sub "file: $(_iw_repos_file)"
+}
+
+# Exit 1 unless <file> holds a bare array or an object whose `repos` is an
+# array (or absent) — the two shapes _iw_watch_list reads.
+_iw_watch_validate() {
+    jq -e 'type == "array" or (type == "object" and ((.repos // []) | type) == "array")' \
+        "$1" >/dev/null 2>&1
+}
+
+# Apply jq filter <2> (with the remaining jq args) to <1> and replace it:
+# backup first, then a temp file swapped in with mv so a failed write never
+# leaves a half-written watch list.
+_iw_watch_write() {
+    local _file="$1" _filter="$2" _tmp _dir
+    shift 2
+    _dir=$(dirname "${_file}")
+    mkdir -p "${_dir}" || return 1
+    if [ -f "${_file}" ]; then
+        cp -p "${_file}" "${_file}.bak-$(date +%Y%m%d)" || return 1
+    fi
+    _tmp=$(mktemp "${_file}.tmp.XXXXXX") || return 1
+    if [ -f "${_file}" ]; then
+        jq "$@" "${_filter}" "${_file}" >"${_tmp}"
+    else
+        printf '[]' | jq "$@" "${_filter}" >"${_tmp}"
+    fi || {
+        rm -f "${_tmp}"
+        return 1
+    }
+    mv "${_tmp}" "${_file}"
+}
+
+# The repo list of either shape, as a bare array.
+_IW_WATCH_JQ_DEFS='def entries: if type == "array" then . else (.repos // []) end;
+def put(f): if type == "array" then f else .repos = ((.repos // []) | f) end;'
+
+_iw_watch_list_cmd() {
+    local _file _rows _repo _path _host
+    _file=$(_iw_repos_file)
+    if [ ! -f "${_file}" ]; then
+        ux_info "Watch list not found: ${_file}"
+        ux_bullet_sub "create it with: issue-watcher-cron watch add"
+        return 0
+    fi
+    if ! _iw_watch_validate "${_file}"; then
+        ux_error "Watch list is not valid JSON (array or {\"repos\": [...]}): ${_file}"
+        return 1
+    fi
+    ux_header "watch list"
+    ux_info "${_file}"
+    _rows=$(jq -r "${_IW_WATCH_JQ_DEFS}"'
+        entries | .[]? | select(type == "object")
+        | [ (.repo // ""), (.path // ""), (.host // "github.com") ] | @tsv' "${_file}")
+    if [ -z "${_rows}" ]; then
+        ux_info "(no entries)"
+        return 0
+    fi
+    while IFS="${_IW_TAB}" read -r _repo _path _host; do
+        ux_bullet "${_repo}  (${_path:-no path}, ${_host})"
+    done <<EOF
+${_rows}
+EOF
+}
+
+# watch add/remove: resolve the target repo — the argument, or the current
+# checkout's origin. Sets _IW_W_REPO, and _IW_W_PATH/_IW_W_HOST when the current
+# checkout is that repo (empty otherwise).
+_iw_watch_target() {
+    local _arg="$1" _entry _rc=0
+    _IW_W_REPO="${_arg}"
+    _IW_W_PATH=""
+    _IW_W_HOST=""
+    _entry=$(_iw_cwd_entry) || _rc=$?
+    if [ "${_rc}" -eq 0 ]; then
+        if [ -z "${_arg}" ] || [ "${_arg}" = "${_entry%%"${_IW_TAB}"*}" ]; then
+            _IW_W_REPO="${_entry%%"${_IW_TAB}"*}"
+            _entry="${_entry#*"${_IW_TAB}"}"
+            _IW_W_PATH="${_entry%%"${_IW_TAB}"*}"
+            _IW_W_HOST="${_entry#*"${_IW_TAB}"}"
+        fi
+    fi
+    if [ -z "${_IW_W_REPO}" ]; then
+        if [ "${_rc}" -eq 2 ]; then
+            ux_error "Cannot read owner/repo from origin URL: ${_entry}"
+        else
+            ux_error "No owner/repo given and the current directory is not a git checkout with an origin remote."
+        fi
+        _iw_watch_usage
+        return 1
+    fi
+    case "${_IW_W_REPO}" in
+    */*/* | /* | */) ;;
+    ?*/?*) return 0 ;;
+    esac
+    ux_error "Not an owner/repo: ${_IW_W_REPO}"
+    return 1
+}
+
+_iw_watch_add_cmd() {
+    local _file _arg="" _path="" _host="" _old_path _old_host _verb
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+        --path | --host)
+            if [ "$#" -lt 2 ]; then
+                ux_error "$1 requires a value."
+                return 1
+            fi
+            case "$1" in
+            --path) _path="$2" ;;
+            *) _host="$2" ;;
+            esac
+            shift 2
+            ;;
+        -*)
+            ux_error "Unknown option: $1"
+            _iw_watch_usage
+            return 1
+            ;;
+        *)
+            if [ -n "${_arg}" ]; then
+                ux_error "Unexpected argument: $1"
+                return 1
+            fi
+            _arg="$1"
+            shift
+            ;;
+        esac
+    done
+    _iw_watch_target "${_arg}" || return 1
+
+    _file=$(_iw_repos_file)
+    if [ -f "${_file}" ] && ! _iw_watch_validate "${_file}"; then
+        ux_error "Watch list is not valid JSON — left untouched: ${_file}"
+        return 1
+    fi
+    _old_path=""
+    _old_host=""
+    if [ -f "${_file}" ]; then
+        _old_path=$(jq -r --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
+            [entries | .[]? | select(type == "object" and .repo == $r)] | first | .path // empty' "${_file}")
+        _old_host=$(jq -r --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
+            [entries | .[]? | select(type == "object" and .repo == $r)] | first | .host // empty' "${_file}")
+    fi
+
+    # An existing directory is stored absolute: the tick may run from anywhere.
+    if [ -n "${_path}" ] && [ -d "${_path}" ]; then
+        _path=$(cd "${_path}" && pwd -P)
+    fi
+    _path="${_path:-${_IW_W_PATH:-${_old_path}}}"
+    _host="${_host:-${_IW_W_HOST:-${_old_host:-github.com}}}"
+    if [ -z "${_path}" ]; then
+        ux_error "No local path for ${_IW_W_REPO} — pass --path, or run from its checkout."
+        return 1
+    fi
+
+    _verb="Added"
+    [ -z "${_old_path}${_old_host}" ] || _verb="Updated"
+    # shellcheck disable=SC2016 # jq variables, not shell ones
+    if ! _iw_watch_write "${_file}" "${_IW_WATCH_JQ_DEFS}"'
+        put(if any(.[]?; type == "object" and .repo == $r)
+            then map(if type == "object" and .repo == $r then .path = $p | .host = $h else . end)
+            else . + [{repo: $r, path: $p, host: $h}] end)' \
+        --arg r "${_IW_W_REPO}" --arg p "${_path}" --arg h "${_host}"; then
+        ux_error "Could not write ${_file}."
+        return 1
+    fi
+    ux_success "${_verb} ${_IW_W_REPO} (${_path}, ${_host}) in ${_file}"
+}
+
+_iw_watch_remove_cmd() {
+    local _file
+    if [ "$#" -gt 1 ]; then
+        ux_error "Unexpected argument: $2"
+        _iw_watch_usage
+        return 1
+    fi
+    _iw_watch_target "${1-}" || return 1
+    _file=$(_iw_repos_file)
+    if [ ! -f "${_file}" ]; then
+        ux_error "Watch list not found: ${_file}"
+        return 1
+    fi
+    if ! _iw_watch_validate "${_file}"; then
+        ux_error "Watch list is not valid JSON — left untouched: ${_file}"
+        return 1
+    fi
+    if ! jq -e --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
+        any(entries | .[]?; type == "object" and .repo == $r)' "${_file}" >/dev/null; then
+        ux_error "${_IW_W_REPO} is not in the watch list: ${_file}"
+        return 1
+    fi
+    # shellcheck disable=SC2016 # jq variables, not shell ones
+    if ! _iw_watch_write "${_file}" "${_IW_WATCH_JQ_DEFS}"'
+        put(map(select((type == "object" and .repo == $r) | not)))' --arg r "${_IW_W_REPO}"; then
+        ux_error "Could not write ${_file}."
+        return 1
+    fi
+    ux_success "Removed ${_IW_W_REPO} from ${_file}"
+}
+
+# Entry point for `watch ...`. Runs ahead of the gh/herdr checks: it only edits
+# a local file, so it must work where a tick cannot.
+_iw_watch_cmd() {
+    if ! command -v jq >/dev/null 2>&1; then
+        ux_error "jq not found in PATH — cannot read or write the watch list."
+        return 1
+    fi
+    case "${1-}" in
+    list)
+        _iw_watch_list_cmd
+        ;;
+    add)
+        shift
+        _iw_watch_add_cmd "$@"
+        ;;
+    remove)
+        shift
+        _iw_watch_remove_cmd "$@"
+        ;;
+    -h | --help | help)
+        _iw_watch_usage
+        ;;
+    *)
+        ux_error "Unknown watch command: ${1-}"
+        _iw_watch_usage
+        return 1
+        ;;
+    esac
 }
 
 # ============================================================
@@ -963,9 +1266,9 @@ _iw_ensure_config_dir() {
 # (issue #2209). A slash command only runs on an exact name match, and the
 # Agent Factory app installs skills as flat `<name>-afNN` copies with an
 # unpredictable NN, so the name is looked up rather than hardcoded:
-#   1) gh-flow plugin installed and not disabled -> /gh-flow:issue
+#   1) gh-flow plugin installed and not disabled -> /gh-flow:wave
 #   2) exactly one skills/*/SKILL.md whose frontmatter says
-#      `Use for /gh-flow:issue` (upstream's alias, which the app keeps)
+#      `Use for /gh-flow:wave` (upstream's alias, which the app keeps)
 #      -> /<that skill's name>
 # Exit 1 when nothing matches, 2 (matching dirs on stdout) when several do —
 # guessing would dispatch the wrong skill.
@@ -981,7 +1284,7 @@ _iw_resolve_flow_command() {
         _on=$(cat "${_cfg}/settings.json" "${_cfg}/settings.local.json" 2>/dev/null |
             jq -rs --arg k "${_key}" 'map(select((.enabledPlugins // {}) | has($k)) | .enabledPlugins[$k]) | last' 2>/dev/null)
         if [ "${_on}" != "false" ]; then
-            printf '/gh-flow:issue'
+            printf '/gh-flow:wave'
             return 0
         fi
     done
@@ -989,9 +1292,9 @@ _iw_resolve_flow_command() {
     for _f in "${_cfg}"/skills/*/SKILL.md; do
         [ -f "${_f}" ] || continue
         # Frontmatter joined onto one line: a folded `description: >-` can put
-        # `Use for` and `/gh-flow:issue` on different lines.
+        # `Use for` and `/gh-flow:wave` on different lines.
         awk 'NR==1 && /^---[[:space:]]*$/ {fm=1; next} fm && /^---[[:space:]]*$/ {exit} fm' "${_f}" |
-            tr -s ' \t\n' '   ' | grep -Eq 'Use for /gh-flow:issue([^[:alnum:]:_-]|$)' || continue
+            tr -s ' \t\n' '   ' | grep -Eq 'Use for /gh-flow:wave([^[:alnum:]:_-]|$)' || continue
         _hits="${_hits}${_f%/SKILL.md}
 "
         _count=$((_count + 1))
@@ -1035,9 +1338,9 @@ _iw_ensure_flow_command() {
 
     _IW_FLOW_RESOLVED=2
     if [ "${_rc}" -eq 2 ]; then
-        ux_error "Pane account (${_cfg}) has several /gh-flow:issue entry points — keep one of: $(printf '%s' "${_out}" | tr '\n' ' ')"
+        ux_error "Pane account (${_cfg}) has several /gh-flow:wave entry points — keep one of: $(printf '%s' "${_out}" | tr '\n' ' ')"
     else
-        ux_error "Pane account (${_cfg}) has no /gh-flow:issue entry point — install the gh-flow plugin or its Agent Factory copy."
+        ux_error "Pane account (${_cfg}) has no /gh-flow:wave entry point — install the gh-flow plugin or its Agent Factory copy."
     fi
     return 1
 }
@@ -1750,7 +2053,7 @@ _iw_escalate_prompt_stall() {
         "issue #${_number} prompt failure" || true
 }
 
-# Send `<flow command> <N>` to the issue's agent — `/gh-flow:issue <N>`, or the
+# Send `<flow command> <N>` to the issue's agent — `/gh-flow:wave <N>`, or the
 # Agent Factory copy's name _iw_ensure_flow_command resolved (issue #2209).
 #
 # The prompt is a slash command, not prose: pre-#1440 this channel carried an
@@ -1839,7 +2142,7 @@ _iw_process_issue() {
     # Before any worktree or pane exists: no entry point is a deterministic
     # failure, and the retry loop below would only rebuild them (#2209).
     if ! _iw_ensure_flow_command; then
-        ux_warning "Not dispatching ${_repo}#${_number} — no /gh-flow:issue entry point to run."
+        ux_warning "Not dispatching ${_repo}#${_number} — no /gh-flow:wave entry point to run."
         return 1
     fi
 
@@ -1953,7 +2256,7 @@ EOF
 #      failed proves nothing about the quota: it is an input-loop or transport
 #      problem, so the gate is left exactly as it was.
 #   2. Did the submitted work hold? A confirmed dispatch is polled for
-#      `_IW_LIMIT_OBSERVE_SEC`. One `/gh-flow:issue` runs for minutes, so an
+#      `_IW_LIMIT_OBSERVE_SEC`. One `/gh-flow:wave` runs for minutes, so an
 #      agent that never reaches `working`, or falls back to `idle`/`done`
 #      inside that window, did not do the work it was handed. That is the
 #      shape quota exhaustion takes, and it earns the strike.
@@ -2927,8 +3230,8 @@ _iw_acquire_lock() {
 
 _iw_usage() {
     ux_header "issue_watcher_cron"
-    ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | [-h|--help|help]"
-    ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:issue (or its Agent Factory copy)."
+    ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | watch ... | [-h|--help|help]"
+    ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:wave (or its Agent Factory copy)."
     ux_bullet "options"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
@@ -2937,6 +3240,11 @@ _iw_usage() {
     ux_bullet_sub "               (takes no lock, changes nothing, always exits 0)"
     ux_bullet_sub "               --status and --help are terminal: the first of the two"
     ux_bullet_sub "               on the line answers and exits, ignoring the rest"
+    ux_bullet_sub "watch list                       print the watch list file and its entries"
+    ux_bullet_sub "watch add [owner/repo] [--path P] [--host H]"
+    ux_bullet_sub "                                 add or update an entry (default: current checkout)"
+    ux_bullet_sub "watch remove [owner/repo]        drop an entry (default: current checkout)"
+    ux_bullet_sub "               writes keep a .bak-YYYYMMDD copy and unknown fields; broken JSON is left untouched"
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "cycle"
     ux_bullet_sub "gh search issues --assignee @me --state open   (one query per watched host)"
@@ -2954,6 +3262,8 @@ _iw_usage() {
     ux_bullet "watch list"
     ux_bullet_sub "${_IW_REPOS_FILE_DEFAULT}"
     ux_bullet_sub "override with \$IW_WATCHED_REPOS; entries are {repo, path, host}"
+    ux_bullet_sub "cwd mode: no --cwd, run inside a checkout with an origin remote"
+    ux_bullet_sub "  -> that repo only, the file is not read (cron passes --cwd or starts in \$HOME)"
     ux_bullet "state"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_LIMIT_STATE_BASENAME}   (rate-limit gate)"
     ux_bullet_sub "\${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/${_IW_SELECT_STATE_BASENAME}       (round-robin cursor; absent = start at the first repo)"
@@ -3022,6 +3332,14 @@ main() {
             _iw_status_report
             exit 0
             ;;
+        watch)
+            # Terminal like --status, and ahead of the gh/herdr checks for the
+            # same reason: it only edits a local file (#2243).
+            shift
+            _rc=0
+            _iw_watch_cmd "$@" || _rc=$?
+            exit "${_rc}"
+            ;;
         *)
             ux_error "Unknown option: $1"
             ux_info "Run 'issue_watcher_cron.sh --help' for usage."
@@ -3066,7 +3384,24 @@ main() {
         exit 1
     fi
 
-    if [ ! -f "$(_iw_repos_file)" ]; then
+    # cwd mode (#2243): no --cwd, and the current directory is a checkout with
+    # an origin remote -> watch that repo only and never read the watch list.
+    # An origin that cannot be parsed is an error, not a fall-back to the file:
+    # the caller clearly meant this repo.
+    if [ -z "${_cwd}" ]; then
+        _rc=0
+        _IW_CWD_ENTRY=$(_iw_cwd_entry) || _rc=$?
+        if [ "${_rc}" -eq 2 ]; then
+            ux_error "cwd mode: cannot read owner/repo from origin URL: ${_IW_CWD_ENTRY}"
+            ux_info "Fix the origin remote, or pass --cwd to use the watch list."
+            exit 1
+        fi
+        [ "${_rc}" -eq 0 ] || _IW_CWD_ENTRY=""
+    fi
+
+    if [ -n "${_IW_CWD_ENTRY}" ]; then
+        ux_info "cwd mode — watching ${_IW_CWD_ENTRY%%"${_IW_TAB}"*} only (watch list not read)."
+    elif [ ! -f "$(_iw_repos_file)" ]; then
         ux_error "Watch list not found: $(_iw_repos_file)"
         ux_info "Create it, or point \$IW_WATCHED_REPOS at one. Entries: {repo, path, host}."
         exit 1

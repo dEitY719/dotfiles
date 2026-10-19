@@ -13,16 +13,19 @@
 
 - Usage: issue-watcher-cron-help [section|--list|--all]
 - sections
-    - commands: run modes (tick, --dry-run, --status)
+    - commands: run modes (tick, --dry-run, --status, watch)
 - Full cycle, caps, gate, watch list and state paths: issue-watcher-cron --help
 
 ## 섹션
 
 ### commands
 
-- **issue-watcher-cron** — Tick — Dispatch assigned open issues to /gh-flow:issue (cron)
+- **issue-watcher-cron** — Tick — Dispatch assigned open issues to /gh-flow:wave (cron)
 - **issue-watcher-cron --dry-run** — Preview — Print what a tick would dispatch, change nothing
 - **issue-watcher-cron --status** — Status — Rate-limit gate, saturation, gh search state
+- **issue-watcher-cron watch list** — Watch — Show the watch list file and its entries
+- **issue-watcher-cron watch add [owner/repo]** — Watch — Add/update an entry (--path P, --host H; default: cwd repo)
+- **issue-watcher-cron watch remove [owner/repo]** — Watch — Drop an entry (default: cwd repo)
 - **issue-watcher-cron --help** — Help — Full cycle, caps and gate rules
 
 ## 엣지케이스 / 의도된 동작
