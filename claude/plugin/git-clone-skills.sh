@@ -202,6 +202,13 @@ if [ -e "$FOLDER_MAP" ]; then
 		while IFS= read -r bad; do ux_error "  $bad"; done <<<"$BAD_FOLDERS"
 		exit 1
 	fi
+	# Reject duplicate targets before anything is cloned, so a bad map never
+	# leaves a half-finished run behind.
+	DUP_FOLDERS="$(jq -r '[.[]] | group_by(.)[] | select(length > 1)[0]' "$FOLDER_MAP")"
+	if [ -n "$DUP_FOLDERS" ]; then
+		ux_error "Folder map maps several repositories to the same folder ($FOLDER_MAP): $(printf '%s' "$DUP_FOLDERS" | tr '\n' ' ')"
+		exit 1
+	fi
 else
 	FOLDER_MAP=""
 fi
@@ -343,6 +350,18 @@ while IFS= read -r slug; do
 		ux_warning "$repo_name: already cloned as '$repo_name' (mapped folder '$folder' not created; rename the folder or drop the map entry)"
 		ALREADY=$((ALREADY + 1))
 		continue
+	fi
+	# A mapped folder holding some other repository's clone must not pass as
+	# "already present": this repo would silently never be cloned.
+	if [ "$folder" != "$repo_name" ] && [ -e "$dest_dir" ]; then
+		case "$(git -C "$dest_dir" config --get remote.origin.url 2>/dev/null)" in
+		*/"$repo_name" | */"$repo_name".git) ;;
+		*)
+			ux_warning "$repo_name: mapped folder $dest_dir holds a different repository (fix ${FOLDER_MAP})"
+			FAILED=$((FAILED + 1))
+			continue
+			;;
+		esac
 	fi
 	if [ -e "$dest_dir" ]; then
 		ux_info "$repo_name: already present (skipped)"

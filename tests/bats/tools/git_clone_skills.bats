@@ -636,3 +636,35 @@ _write_folder_map() {
     assert_output --partial "already cloned as 'alpha-skills'"
     [ ! -e "${target}/alpha" ]
 }
+
+@test "git-clone-skills.sh rejects a map with duplicate folders before cloning anything" {
+    _write_manifest
+    _setup_stub_path
+    _make_fake_remote "alpha-skills"
+    _make_fake_remote "gamma-skills"
+    _write_folder_map '{"alpha-skills": "shared", "gamma-skills": "shared"}'
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_failure
+    assert_output --partial "same folder"
+    [ ! -d "$target" ]
+}
+
+@test "git-clone-skills.sh fails when a mapped folder holds a different repository" {
+    _write_manifest
+    _setup_stub_path
+    _make_fake_remote "gamma-skills"
+    local target="${TEST_TEMP_HOME}/skills"
+    mkdir -p "${target}/alpha"
+    "$REAL_GIT" -C "${target}/alpha" init -q
+    "$REAL_GIT" -C "${target}/alpha" remote add origin "https://github.com/someone/unrelated.git"
+    _write_folder_map '{"alpha-skills": "alpha"}'
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_failure
+    assert_output --partial "holds a different repository"
+    assert_output --partial "Failed: 1"
+}
