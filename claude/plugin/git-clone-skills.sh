@@ -346,6 +346,13 @@ while IFS= read -r slug; do
 
 	repo_owner="${slug%%/*}"
 	repo_name="${slug#*/}"
+	# repo_name becomes a folder under TARGET_DIR when unmapped: reject '..', '.',
+	# leading dots and other non-plain names (overlay entries are free-form).
+	if ! [[ "$repo_name" =~ $FOLDER_RE ]]; then
+		ux_warning "Malformed manifest entry (invalid repository name): $slug"
+		FAILED=$((FAILED + 1))
+		continue
+	fi
 	TOTAL=$((TOTAL + 1))
 
 	folder="$repo_name"
