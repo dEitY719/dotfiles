@@ -518,7 +518,8 @@ _iw_cwd_entry() {
     _url=$(git remote get-url origin 2>/dev/null) || return 1
     [ -n "${_url}" ] || return 1
     _parsed=$(_iw_parse_remote_url "${_url}") || {
-        printf '%s' "${_url}"
+        # Echoed in an error message: drop any `user:token@` credentials.
+        printf '%s' "${_url}" | sed 's#://[^/@]*@#://#'
         return 2
     }
     printf '%s\t%s\t%s' "${_parsed%%"${_IW_TAB}"*}" "${_top}" "${_parsed#*"${_IW_TAB}"}"
@@ -549,9 +550,15 @@ _iw_watch_validate() {
 _iw_watch_write() {
     local _file="$1" _filter="$2" _tmp _dir
     shift 2
+    # A symlinked watch list (e.g. into a dotfiles repo) is edited at its
+    # target: the mv below would otherwise replace the link with a plain file.
+    if [ -L "${_file}" ]; then
+        _file=$(readlink -f "${_file}") || return 1
+    fi
     _dir=$(dirname "${_file}")
     mkdir -p "${_dir}" || return 1
-    if [ -f "${_file}" ]; then
+    # No-clobber: a second edit the same day must not overwrite the pre-edit copy.
+    if [ -f "${_file}" ] && [ ! -e "${_file}.bak-$(date +%Y%m%d)" ]; then
         cp -p "${_file}" "${_file}.bak-$(date +%Y%m%d)" || return 1
     fi
     _tmp=$(mktemp "${_file}.tmp.XXXXXX") || return 1
@@ -571,7 +578,7 @@ _IW_WATCH_JQ_DEFS='def entries: if type == "array" then . else (.repos // []) en
 def put(f): if type == "array" then f else .repos = ((.repos // []) | f) end;'
 
 _iw_watch_list_cmd() {
-    local _file _rows _repo _path _host
+    local _file _rows _line
     _file=$(_iw_repos_file)
     if [ ! -f "${_file}" ]; then
         ux_info "Watch list not found: ${_file}"
@@ -584,15 +591,17 @@ _iw_watch_list_cmd() {
     fi
     ux_header "watch list"
     ux_info "${_file}"
+    # Formatted by jq: splitting a tab row with `read` collapses an empty path.
     _rows=$(jq -r "${_IW_WATCH_JQ_DEFS}"'
         entries | .[]? | select(type == "object")
-        | [ (.repo // ""), (.path // ""), (.host // "github.com") ] | @tsv' "${_file}")
+        | (if (.path // "") == "" then "no path" else .path end) as $p
+        | "\(.repo // "")  (\($p), \(.host // "github.com"))"' "${_file}")
     if [ -z "${_rows}" ]; then
         ux_info "(no entries)"
         return 0
     fi
-    while IFS="${_IW_TAB}" read -r _repo _path _host; do
-        ux_bullet "${_repo}  (${_path:-no path}, ${_host})"
+    while IFS= read -r _line; do
+        ux_bullet "${_line}"
     done <<EOF
 ${_rows}
 EOF
@@ -690,7 +699,10 @@ _iw_watch_add_cmd() {
     fi
 
     _verb="Added"
-    [ -z "${_old_path}${_old_host}" ] || _verb="Updated"
+    if [ -f "${_file}" ] && jq -e --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
+        any(entries | .[]?; type == "object" and .repo == $r)' "${_file}" >/dev/null; then
+        _verb="Updated"
+    fi
     # shellcheck disable=SC2016 # jq variables, not shell ones
     if ! _iw_watch_write "${_file}" "${_IW_WATCH_JQ_DEFS}"'
         put(if any(.[]?; type == "object" and .repo == $r)
@@ -3336,6 +3348,10 @@ main() {
             # Terminal like --status, and ahead of the gh/herdr checks for the
             # same reason: it only edits a local file (#2243).
             shift
+            if [ -n "${_cwd}" ] && ! cd "${_cwd}"; then
+                ux_error "Cannot cd to --cwd ${_cwd}."
+                exit 1
+            fi
             _rc=0
             _iw_watch_cmd "$@" || _rc=$?
             exit "${_rc}"
