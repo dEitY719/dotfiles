@@ -16,7 +16,7 @@ alias issue-watcher-cron='issue_watcher_cron'
 _issue_watcher_cron_help_summary() {
     ux_info "Usage: issue-watcher-cron-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "commands: run modes (tick, --dry-run, --status)"
+    ux_bullet_sub "commands: run modes (tick, --dry-run, --status, watch)"
     ux_info "Full cycle, caps, gate, watch list and state paths: issue-watcher-cron --help"
 }
 
@@ -26,9 +26,12 @@ _issue_watcher_cron_help_list_sections() {
 }
 
 _issue_watcher_cron_help_rows_commands() {
-    ux_table_row "issue-watcher-cron" "Tick" "Dispatch assigned open issues to /gh-flow:issue (cron)"
+    ux_table_row "issue-watcher-cron" "Tick" "Dispatch assigned open issues to /gh-flow:wave (cron)"
     ux_table_row "issue-watcher-cron --dry-run" "Preview" "Print what a tick would dispatch, change nothing"
     ux_table_row "issue-watcher-cron --status" "Status" "Rate-limit gate, saturation, gh search state"
+    ux_table_row "issue-watcher-cron watch list" "Watch" "Show the watch list file and its entries"
+    ux_table_row "issue-watcher-cron watch add [owner/repo]" "Watch" "Add/update an entry (--path P, --host H; default: cwd repo)"
+    ux_table_row "issue-watcher-cron watch remove [owner/repo]" "Watch" "Drop an entry (default: cwd repo)"
     ux_table_row "issue-watcher-cron --help" "Help" "Full cycle, caps and gate rules"
 }
 
@@ -56,4 +59,4 @@ alias issue-watcher-cron-help='issue_watcher_cron_help'
 
 # Help registry (#2135): skipped when sourced without util/help_registry.sh.
 command -v _register_help >/dev/null 2>&1 || return 0
-_register_help issue_watcher_cron_help "[Development] issue-watcher cron tick (assigned issues -> /gh-flow:issue)" development
+_register_help issue_watcher_cron_help "[Development] issue-watcher cron tick (assigned issues -> /gh-flow:wave)" development

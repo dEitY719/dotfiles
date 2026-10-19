@@ -41,6 +41,7 @@ setup() {
     _REPO_DIR="${_WORK_DIR}/dotfiles"
     _WATCH_FILE="${_WORK_DIR}/watched-repos.json"
     _LOCK_HOLDER_PID=""
+    _RUN_DIR=""
     mkdir -p "${_BIN_DIR}"
     : >"${_LOG}"
 
@@ -112,7 +113,7 @@ _write_watch_file() {
 
 # `_make_account` — a logged-in claude account directory, here with the gh-flow
 # plugin installed: since #2209 the tick dispatches only once it has resolved
-# the account's /gh-flow:issue entry point. The base fixture lives in
+# the account's /gh-flow:wave entry point. The base fixture lives in
 # ../test_helper.bash; pr_merge_train_cron.bats fixtures the same rule.
 _make_account() {
     mkdir -p "$1/plugins"
@@ -612,7 +613,7 @@ case "$1 $2" in
         exit 0
     fi
     if [ "$5" = "40" ]; then
-        printf '> /gh-flow:issue 11\n5-hour limit reached. Resets at 3pm.\n'
+        printf '> /gh-flow:wave 11\n5-hour limit reached. Resets at 3pm.\n'
         exit 0
     fi
     _seq="${HERDR_SETTLE_READ_SEQUENCE:-> claude ready}"
@@ -770,6 +771,9 @@ _install_stubs() {
 # per-call-site `</dev/null 3>&-` — so a future call site cannot silently drop
 # the fix by omission.
 _run_script() {
+    # From a non-repo dir by default: inside a checkout with an origin remote
+    # the tick switches to cwd mode (#2243). _RUN_DIR opts a test into a repo.
+    cd "${_RUN_DIR:-${_WORK_DIR}}" || return 1
     "$@" </dev/null 3>&-
 }
 
@@ -1130,13 +1134,13 @@ _assert_not_hung() {
     _assert_logged "gwt spawn --wt-name issue-11"
     _assert_logged "tab create --workspace"
     _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9"
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
 @test "issue_watcher_cron: the prompt is the slash command, not a subagent instruction" {
     _run_tick
     assert_success
-    _assert_logged "/gh-flow:issue 11"
+    _assert_logged "/gh-flow:wave 11"
     # The pre-#1440 prompt told the receiving session to run another agent,
     # which is the ambiguity #1394 was about. Nothing may reintroduce it.
     _refute_logged "issue-watcher:dispatcher"
@@ -2486,7 +2490,7 @@ _two_repo_fixture() {
     # here would mean the outer loop absorbed it, which is the defect.
     [ "$(_log_count 'agent start')" -eq 2 ]
     [ "$(_log_count 'tab create')" -eq 1 ]
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
 # The retry has to be visible: 130 ticks of silent failure is what made this
@@ -2630,7 +2634,7 @@ _two_repo_fixture() {
     _install_failing_mktemp
     _run_tick
     assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
 # Same fallback on the failing side: the tick reports the failure and cleans up
@@ -2655,7 +2659,7 @@ _two_repo_fixture() {
 @test "issue_watcher_cron: a spawn that fails once then succeeds still dispatches" {
     _run_tick "GWT_SPAWN_FAIL_TIMES=1"
     assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
 @test "issue_watcher_cron: a non-stall prompt failure is not retried within the attempt" {
@@ -3121,7 +3125,7 @@ _two_repo_fixture() {
 
 @test "issue_watcher_cron: a confirmed dispatch that never reaches working records a strike" {
     # The prompt landed — `agent prompt` succeeded — and a minute later the pane
-    # is still idle. One /gh-flow:issue runs for minutes, so the work never
+    # is still idle. One /gh-flow:wave runs for minutes, so the work never
     # started.
     _run_tick
     assert_success
@@ -3956,22 +3960,22 @@ PROBE
 # ---------------------------------------------------------------------------
 
 # An Agent Factory copy: renamed `issue-af07`, description kept, with the
-# folded block splitting `Use for` and `/gh-flow:issue` across two lines.
+# folded block splitting `Use for` and `/gh-flow:wave` across two lines.
 _AF_FRONTMATTER='name: issue-af07
 description: >-
   Chain one GitHub issue to a reviewed PR. Use for
-  /gh-flow:issue, "full flow on #42".
+  /gh-flow:wave, "full flow on #42".
 metadata:
   agent-factory:
     kind: item'
 
-@test "issue_watcher_cron: an installed, enabled gh-flow plugin dispatches /gh-flow:issue" {
+@test "issue_watcher_cron: an installed, enabled gh-flow plugin dispatches /gh-flow:wave" {
     printf '{"enabledPlugins":{"gh-flow@test":true}}\n' >"${HOME}/.claude-personal/settings.json"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _run_tick
     assert_success
     # The plugin wins over a flat copy: upstream is the SSOT.
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
 @test "issue_watcher_cron: a disabled gh-flow plugin falls through to the flat copy" {
@@ -3995,7 +3999,7 @@ metadata:
     printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.json"
     _run_tick
     assert_failure
-    assert_output --partial "has no /gh-flow:issue entry point"
+    assert_output --partial "has no /gh-flow:wave entry point"
     _refute_logged "gwt spawn"
 }
 
@@ -4003,7 +4007,7 @@ metadata:
     printf '{not json\n' >"${HOME}/.claude-personal/settings.json"
     _run_tick
     assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:issue 11"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
 @test "issue_watcher_cron: no plugin dispatches the Agent Factory copy by its anchor" {
@@ -4019,10 +4023,10 @@ metadata:
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _write_skill "${HOME}/.claude-personal" issue-af08 "name: issue-af08
-description: Use for /gh-flow:issue."
+description: Use for /gh-flow:wave."
     _run_tick
     assert_failure
-    assert_output --partial "several /gh-flow:issue entry points"
+    assert_output --partial "several /gh-flow:wave entry points"
     _refute_logged "gwt spawn"
     _refute_logged "tab create"
     _refute_logged "agent prompt"
@@ -4032,14 +4036,14 @@ description: Use for /gh-flow:issue."
     rm -rf "${HOME}/.claude-personal/plugins"
     # Mentions the chain without the slash form — must not count as the anchor.
     _write_skill "${HOME}/.claude-personal" wave-af05 "name: wave-af05
-description: Carry one issue through gh-flow:issue, then via gh-flow:issue again."
+description: Carry one issue through gh-flow:wave, then via gh-flow:wave again."
     _run_tick
     assert_failure
-    assert_output --partial "has no /gh-flow:issue entry point"
+    assert_output --partial "has no /gh-flow:wave entry point"
     _refute_logged "gwt spawn"
     _refute_logged "agent prompt"
     # Logged once for the tick, not once per attempt.
-    [ "$(printf '%s\n' "${output}" | grep -c 'has no /gh-flow:issue entry point')" -eq 1 ]
+    [ "$(printf '%s\n' "${output}" | grep -c 'has no /gh-flow:wave entry point')" -eq 1 ]
 }
 
 @test "issue_watcher_cron: a casualty re-prompt sends the resolved entry point" {
@@ -4053,5 +4057,195 @@ description: Carry one issue through gh-flow:issue, then via gh-flow:issue again
     assert_success
     assert_output --partial "Re-prompting acme/dotfiles#11 in its surviving pane"
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
-    _refute_logged "/gh-flow:issue 11"
+    _refute_logged "/gh-flow:wave 11"
+}
+
+@test "issue_watcher_cron: a flat copy anchored on the retired /gh-flow:issue alias is not an entry point" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    _write_skill "${HOME}/.claude-personal" issue-af03 "name: issue-af03
+description: Use for /gh-flow:issue."
+    _run_tick
+    assert_failure
+    assert_output --partial "has no /gh-flow:wave entry point"
+    _refute_logged "agent prompt"
+}
+
+# ---------------------------------------------------------------------------
+# cwd mode (issue #2243)
+# ---------------------------------------------------------------------------
+
+# Give the fixture checkout an origin and run the next tick from inside it.
+_cwd_repo() {
+    git -C "${_REPO_DIR}" remote add origin "$1"
+    _RUN_DIR="${_REPO_DIR}"
+}
+
+@test "issue_watcher_cron: cwd mode dry-runs the current repo with no watch list" {
+    _cwd_repo "https://github.com/acme/dotfiles.git"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_success
+    refute_output --partial "Watch list not found"
+    assert_output --partial "cwd mode"
+    assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
+}
+
+@test "issue_watcher_cron: cwd mode ignores the watch-list file's other repos" {
+    _make_repo "${_WORK_DIR}/other"
+    _write_watch_file '[{"repo":"acme/other","path":"'"${_WORK_DIR}/other"'"}]'
+    _set_issues '[{"number":21,"repository":{"nameWithOwner":"acme/other"},"labels":[]}]'
+    _cwd_repo "https://github.com/acme/dotfiles.git"
+    _run_tick -- --dry-run
+    assert_success
+    assert_output --partial "No dispatchable issue"
+}
+
+@test "issue_watcher_cron: cwd mode reads a GHES scp-style origin from a subdirectory" {
+    _cwd_repo "git@ghes.example.com:acme/dotfiles.git"
+    mkdir -p "${_REPO_DIR}/sub"
+    _RUN_DIR="${_REPO_DIR}/sub"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, ghes.example.com)"
+}
+
+@test "issue_watcher_cron: cwd mode reads an ssh:// origin with a port" {
+    _cwd_repo "ssh://git@ghes.example.com:2222/acme/dotfiles"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, ghes.example.com)"
+}
+
+@test "issue_watcher_cron: cwd mode with an unparsable origin fails without falling back" {
+    _cwd_repo "/srv/git/dotfiles"
+    _run_tick -- --dry-run
+    assert_failure
+    assert_output --partial "cannot read owner/repo from origin URL"
+    refute_output --partial "Dry run"
+}
+
+@test "issue_watcher_cron: --cwd keeps the watch-list mode even inside a repo" {
+    _cwd_repo "https://github.com/acme/dotfiles.git"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --cwd "${_REPO_DIR}" --dry-run
+    assert_failure
+    assert_output --partial "Watch list not found"
+}
+
+@test "issue_watcher_cron: a repo without origin keeps the watch-list mode" {
+    _RUN_DIR="${_REPO_DIR}"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_failure
+    assert_output --partial "Watch list not found"
+}
+
+# ---------------------------------------------------------------------------
+# watch list|add|remove (issue #2243)
+# ---------------------------------------------------------------------------
+
+_watch_json() {
+    jq -c "$1" "${_WATCH_FILE}"
+}
+
+@test "issue_watcher_cron: watch list reports a missing file" {
+    rm -f "${_WATCH_FILE}"
+    _run_tick -- watch list
+    assert_success
+    assert_output --partial "Watch list not found: ${_WATCH_FILE}"
+}
+
+@test "issue_watcher_cron: watch list prints the entries and touches no gh/herdr" {
+    _run_tick -- watch list
+    assert_success
+    assert_output --partial "${_WATCH_FILE}"
+    assert_output --partial "acme/dotfiles  (${_REPO_DIR}, github.com)"
+    [ ! -s "${_LOG}" ]
+}
+
+@test "issue_watcher_cron: watch add creates a missing file as a bare array" {
+    rm -f "${_WATCH_FILE}"
+    _run_tick -- watch add acme/new --path "${_WORK_DIR}" --host ghes.example.com
+    assert_success
+    [ "$(_watch_json '.')" = '[{"repo":"acme/new","path":"'"${_WORK_DIR}"'","host":"ghes.example.com"}]' ]
+}
+
+@test "issue_watcher_cron: watch add with no argument adds the current checkout" {
+    rm -f "${_WATCH_FILE}"
+    _cwd_repo "git@github.com:acme/dotfiles.git"
+    _run_tick -- watch add
+    assert_success
+    [ "$(_watch_json '.[0] | [.repo, .path, .host]')" = '["acme/dotfiles","'"${_REPO_DIR}"'","github.com"]' ]
+}
+
+@test "issue_watcher_cron: watch add of a listed repo updates it without a duplicate" {
+    _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"/old","host":"github.com","verify_skill":"v"}],"note":1}'
+    _run_tick -- watch add acme/dotfiles --path "${_WORK_DIR}" --host ghes.example.com
+    assert_success
+    assert_output --partial "Updated acme/dotfiles"
+    [ "$(_watch_json '.repos | length')" = "1" ]
+    [ "$(_watch_json '.repos[0]')" = '{"repo":"acme/dotfiles","path":"'"${_WORK_DIR}"'","host":"ghes.example.com","verify_skill":"v"}' ]
+    [ "$(_watch_json '.note')" = "1" ]
+}
+
+@test "issue_watcher_cron: watch add backs up the old file and leaves no temp file" {
+    cp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
+    _run_tick -- watch add acme/new --path "${_WORK_DIR}"
+    assert_success
+    cmp "${_WATCH_FILE}.bak-$(date +%Y%m%d)" "${_WORK_DIR}/before.json"
+    [ "$(_watch_json 'length')" = "2" ]
+    [ -z "$(find "${_WORK_DIR}" -maxdepth 1 -name 'watched-repos.json.tmp.*')" ]
+}
+
+@test "issue_watcher_cron: watch add of a new repo needs a path outside its checkout" {
+    _run_tick -- watch add acme/new
+    assert_failure
+    assert_output --partial "pass --path"
+}
+
+@test "issue_watcher_cron: watch add with no argument outside a repo fails with usage" {
+    _run_tick -- watch add
+    assert_failure
+    assert_output --partial "not a git checkout"
+    assert_output --partial "Usage: issue_watcher_cron.sh watch"
+}
+
+@test "issue_watcher_cron: watch add and remove leave broken JSON untouched" {
+    _write_watch_file '{not json'
+    cp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
+    _run_tick -- watch add acme/new --path "${_WORK_DIR}"
+    assert_failure
+    assert_output --partial "not valid JSON"
+    _run_tick -- watch remove acme/dotfiles
+    assert_failure
+    _run_tick -- watch list
+    assert_failure
+    cmp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
+    [ ! -e "${_WATCH_FILE}.bak-$(date +%Y%m%d)" ]
+}
+
+@test "issue_watcher_cron: watch remove drops the repo and keeps the others' fields" {
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"/a"},{"repo":"acme/x","path":"/b","verify_skill":"v"}]'
+    _run_tick -- watch remove acme/dotfiles
+    assert_success
+    [ "$(_watch_json '.')" = '[{"repo":"acme/x","path":"/b","verify_skill":"v"}]' ]
+}
+
+@test "issue_watcher_cron: watch remove with no argument removes the current checkout" {
+    _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"/a"},{"repo":"acme/x","path":"/b"}]}'
+    _cwd_repo "https://github.com/acme/dotfiles"
+    _run_tick -- watch remove
+    assert_success
+    [ "$(_watch_json '.')" = '{"repos":[{"repo":"acme/x","path":"/b"}]}' ]
+}
+
+@test "issue_watcher_cron: watch remove of an unlisted repo fails and changes nothing" {
+    cp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
+    _run_tick -- watch remove acme/nope
+    assert_failure
+    assert_output --partial "acme/nope is not in the watch list"
+    cmp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
+}
+
+@test "issue_watcher_cron: an unknown watch command fails with usage" {
+    _run_tick -- watch frob
+    assert_failure
+    assert_output --partial "Unknown watch command: frob"
 }
