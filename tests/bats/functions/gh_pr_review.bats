@@ -843,7 +843,7 @@ _interrupt_harness_interrupt() {
     _source_module
     _stub_gh_pr_review_preconditions
     local stub_dir="$TEST_TEMP_HOME/bin"
-    printf '#!/bin/sh\necho "[PRAISE] a.sh:1 — ok"\nexit 0\n' >"$stub_dir/codex"
+    printf '#!/bin/sh\necho "[PRAISE] a.sh:1 — ok"\necho "Verdict: LGTM"\nexit 0\n' >"$stub_dir/codex"
     chmod +x "$stub_dir/codex"
 
     local before after rc=0
@@ -1018,6 +1018,7 @@ if [ -e "\$prompt_path" ]; then
     [ ! -e "\$prompt_path" ] && : >"$deleted_marker"
 fi
 echo "[PRAISE] a.sh:1 — ok"
+echo "Verdict: LGTM"
 exit 0
 EOF
     chmod +x "$stub_dir/codex"
@@ -1454,6 +1455,29 @@ STUB
     run _gh_pr_review_main --ai codex 7 origin
     assert_failure
     assert_output --partial "External AI CLI 'codex' returned an empty review"
+    run grep -c '^pr comment' "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "gh_pr_review: exit-0 output with no verdict line is not posted as a review (#2248)" {
+    # The hermes shape: one in-progress sentence, no findings, no `판정:` /
+    # `Verdict:` line. Non-empty, so the #2084 empty guard let it through.
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    printf '#!/bin/sh\ncat >/dev/null\necho "stub: still thinking" >&2\necho "Let me check the restore.sh gate logic and run shellcheck."\nexit 0\n' >"$stub_dir/codex"
+    chmod +x "$stub_dir/codex"
+    _stub_gh_full_flow
+    run _gh_pr_review_main --ai codex 7 origin
+    assert_failure
+    refute_output --partial "[OK]"
+    assert_output --partial "External AI CLI 'codex' returned no verdict line"
+    local saved
+    saved=$(printf '%s\n' "$output" | sed -n 's/^  full stderr saved to: //p')
+    [ -n "$saved" ]
+    run cat "$saved"
+    assert_output --partial "stub: still thinking"
+    rm -f "$saved"
     run grep -c '^pr comment' "$GH_STUB_LOG"
     assert_output "0"
 }
@@ -2185,7 +2209,7 @@ EOF
     run_in_zsh '
         mkdir -p "$HOME/bin"
         printf "#!/bin/sh\nexit 0\n" > "$HOME/bin/gh"
-        printf "#!/bin/sh\necho REVIEW-OK\nexit 0\n" > "$HOME/bin/codex"
+        printf "#!/bin/sh\necho REVIEW-OK\necho Verdict: LGTM\nexit 0\n" > "$HOME/bin/codex"
         chmod +x "$HOME/bin/gh" "$HOME/bin/codex"
         export PATH="$HOME/bin:$PATH"
         rehash 2>/dev/null || true
