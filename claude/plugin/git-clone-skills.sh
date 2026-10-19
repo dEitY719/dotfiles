@@ -14,6 +14,13 @@
 # The repository list is read from the manifest at run time; nothing is
 # hard-coded here, so adding a marketplace to marketplaces.json is the only
 # step needed to have it cloned.
+#
+# Optional per-machine folder map (#2241): skills-workspace.local.json next to
+# the manifest (gitignored) maps a repo name to the folder it is cloned into,
+# e.g. {"alpha-skills": "alpha"}. Repos it does not name keep <repo> as the
+# folder; no file means no renaming. git-pull-skills.sh and
+# _skill_workspace_dirs enumerate folders on disk, so renamed clones stay
+# covered by them without reading this file.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,6 +80,11 @@ Options:
   --no-upstream         Do not query gh for fork parents / add upstream remotes
   --target <dir>        Directory to clone into, created when missing
                         (default: \$SKILLS_DIR, else ~/para/project/skills)
+
+Folder map (optional, per machine, gitignored):
+  skills-workspace.local.json next to the manifest maps a repo name to the
+  folder it is cloned into, e.g. {"alpha-skills": "alpha"}. Folder names must
+  be plain names ([A-Za-z0-9._-], no leading dot); anything else aborts.
   -h, --help, help      Show this help message
 USAGE
 }
@@ -171,6 +183,27 @@ if ! REPO_SLUGS="$(_read_repo_slugs 2>/dev/null | LC_ALL=C sort -u)"; then
 	exit 1
 fi
 
+# Folder map (#2241): validated up front so a bad entry aborts before any
+# directory is created. Plain-name allowlist rejects '/', '..', absolute
+# paths and leading dots (git-pull-skills skips hidden folders).
+FOLDER_MAP="$(dirname "$MANIFEST")/skills-workspace.local.json"
+FOLDER_RE='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+if [ -e "$FOLDER_MAP" ]; then
+	if ! jq -e 'type == "object" and all(.[]; type == "string")' "$FOLDER_MAP" >/dev/null 2>&1; then
+		ux_error "Folder map must be a JSON object of \"<repo>\": \"<folder>\" strings: $FOLDER_MAP"
+		exit 1
+	fi
+	BAD_FOLDERS="$(jq -r --arg re "$FOLDER_RE" \
+		'to_entries[] | select(.value | test($re) | not) | "\(.key) -> \(.value | @json)"' "$FOLDER_MAP")"
+	if [ -n "$BAD_FOLDERS" ]; then
+		ux_error "Invalid folder name in $FOLDER_MAP (plain name only: no '/', '..', absolute path or leading dot):"
+		while IFS= read -r bad; do ux_error "  $bad"; done <<<"$BAD_FOLDERS"
+		exit 1
+	fi
+else
+	FOLDER_MAP=""
+fi
+
 ux_header "Git Clone Skills: $TARGET_DIR"
 ux_info "Manifest: $MANIFEST"
 ux_info "Host: $GH_TARGET_HOST"
@@ -179,6 +212,7 @@ if $ALL_OWNERS; then
 else
 	ux_info "Owner filter: $OWNER_FILTER"
 fi
+[ -z "$FOLDER_MAP" ] || ux_info "Folder map: $FOLDER_MAP"
 if $DRY_RUN; then
 	ux_info "Mode: DRY-RUN (no disk modifications)"
 fi
@@ -188,6 +222,7 @@ CLONED=0
 ALREADY=0
 UPSTREAM_ADDED=0
 FAILED=0
+USED_FOLDERS="|"
 
 # _register_upstream OWNER REPO DIR
 #
@@ -280,7 +315,20 @@ while IFS= read -r slug; do
 	repo_name="${slug#*/}"
 	TOTAL=$((TOTAL + 1))
 
-	dest_dir="$TARGET_DIR/$repo_name"
+	folder="$repo_name"
+	if [ -n "$FOLDER_MAP" ]; then
+		folder="$(jq -r --arg r "$repo_name" '.[$r] // empty' "$FOLDER_MAP")"
+		[ -n "$folder" ] || folder="$repo_name"
+	fi
+	case "$USED_FOLDERS" in
+	*"|$folder|"*)
+		ux_warning "$repo_name: folder '$folder' is already used by another repository (fix ${FOLDER_MAP:-skills-workspace.local.json})"
+		FAILED=$((FAILED + 1))
+		continue
+		;;
+	esac
+	USED_FOLDERS="$USED_FOLDERS$folder|"
+	dest_dir="$TARGET_DIR/$folder"
 	clone_url="https://$GH_TARGET_HOST/$repo_owner/$repo_name.git"
 
 	# Idempotency: an existing git repo is reported and never modified. A

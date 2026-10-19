@@ -65,6 +65,8 @@ claude/settings.local.json
 # 묘비는 스코프마다 따로다 (#1695 라운드2) — company/ 쪽은 `/claude/plugin/company/`
 # 규칙이 이미 통째로 제외하므로 여기서는 공용 스코프만 적으면 된다.
 /claude/plugin/removed.local.json
+# git-clone-skills.sh 의 PC별 폴더명 매핑 {"<repo>": "<folder>"} (#2241).
+/claude/plugin/skills-workspace.local.json
 
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json
