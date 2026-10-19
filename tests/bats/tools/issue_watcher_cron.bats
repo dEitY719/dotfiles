@@ -747,13 +747,15 @@ _install_stubs() {
 
 # ssh: only `ssh -G <host>` (cwd mode's alias resolution, #2243), so the
 # developer's own ~/.ssh/config cannot steer the tests. `gh-work` is a
-# multi-account alias for github.com; every other host resolves to itself.
+# multi-account alias for github.com; github.com itself goes through the
+# port-443 `ssh.github.com` (#2247); every other host resolves to itself.
 _install_ssh_stub() {
     cat >"${_BIN_DIR}/ssh" <<'EOF2'
 #!/bin/sh
 [ "$1" = "-G" ] || exit 255
 case "$2" in
 gh-work) printf 'user git\nhostname github.com\n' ;;
+github.com) printf 'user git\nhostname ssh.github.com\nport 443\n' ;;
 *) printf 'user git\nhostname %s\n' "$2" ;;
 esac
 EOF2
@@ -4280,6 +4282,14 @@ _watch_json() {
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
     assert_success
     assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
+}
+
+@test "issue_watcher_cron: cwd mode keeps github.com when ssh routes it via ssh.github.com" {
+    _cwd_repo "git@github.com:acme/dotfiles.git"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
+    refute_output --partial "ssh.github.com"
 }
 
 @test "issue_watcher_cron: an unparsable origin's error drops embedded credentials" {

@@ -505,6 +505,8 @@ _iw_parse_remote_url() {
         if [ -n "${_host}" ] && command -v ssh >/dev/null 2>&1; then
             _rest=$(ssh -G "${_host}" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }')
             [ -z "${_rest}" ] || _host="${_rest}"
+            # GitHub's port-443 ssh endpoint; gh's API host stays github.com (#2247).
+            [ "${_host}" != "ssh.github.com" ] || _host="github.com"
         fi
         ;;
     esac
