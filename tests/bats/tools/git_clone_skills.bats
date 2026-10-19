@@ -516,3 +516,104 @@ JSON
     assert_output --partial "Cloned: 1"
     [ -f "${target}/alpha-skills/LEFTOVER" ]
 }
+
+# --- folder map (skills-workspace.local.json, #2241) ------------------------
+
+# The map is read from next to the manifest, so writing it beside the
+# temp manifest keeps a developer's real local map out of these tests.
+_write_folder_map() {
+    printf '%s\n' "$1" >"$(dirname "$MANIFEST")/skills-workspace.local.json"
+}
+
+@test "git-clone-skills.sh clones a mapped repo into its mapped folder name" {
+    _write_manifest
+    _setup_stub_path
+    _make_fake_remote "alpha-skills"
+    _make_fake_remote "gamma-skills"
+    _write_folder_map '{"alpha-skills": "alpha"}'
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_success
+    assert_output --partial "Cloned: 2"
+    [ -f "${target}/alpha/README.md" ]
+    [ ! -e "${target}/alpha-skills" ]
+    [ -f "${target}/gamma-skills/README.md" ]
+
+    # Second run finds the mapped folder and skips it.
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_success
+    assert_output --partial "Already present: 2"
+}
+
+@test "git-clone-skills.sh --dry-run shows the mapped destination" {
+    _write_manifest
+    _setup_stub_path
+    _write_folder_map '{"alpha-skills": "alpha"}'
+    local target="${TEST_TEMP_HOME}/skills-dry"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target" --dry-run
+    assert_success
+    assert_output --partial "-> ${target}/alpha (dry-run)"
+    [ ! -d "$target" ]
+}
+
+@test "git-clone-skills.sh rejects a folder map that is not valid JSON" {
+    _write_manifest
+    _setup_stub_path
+    _write_folder_map '{"alpha-skills": '
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_failure
+    assert_output --partial "skills-workspace.local.json"
+    [ ! -d "$target" ]
+}
+
+@test "git-clone-skills.sh rejects a folder map that is not an object of strings" {
+    _write_manifest
+    _setup_stub_path
+    local target="${TEST_TEMP_HOME}/skills" map
+    for map in '["alpha"]' '{"alpha-skills": 1}'; do
+        _write_folder_map "$map"
+        run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+            --manifest "$MANIFEST" --target "$target"
+        assert_failure
+        assert_output --partial "skills-workspace.local.json"
+        [ ! -d "$target" ]
+    done
+}
+
+@test "git-clone-skills.sh rejects unsafe folder names in the map" {
+    _write_manifest
+    _setup_stub_path
+    local target="${TEST_TEMP_HOME}/skills" bad
+    for bad in '../escape' '/abs/path' 'a/b' '..' '.' '' '.hidden'; do
+        _write_folder_map "{\"alpha-skills\": \"${bad}\"}"
+        run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+            --manifest "$MANIFEST" --target "$target"
+        assert_failure
+        assert_output --partial "Invalid folder name"
+        [ ! -d "$target" ]
+        [ ! -e "${TEST_TEMP_HOME}/escape" ]
+    done
+}
+
+@test "git-clone-skills.sh fails when two repos resolve to the same folder" {
+    _write_manifest
+    _setup_stub_path
+    _make_fake_remote "alpha-skills"
+    _make_fake_remote "gamma-skills"
+    _write_folder_map '{"alpha-skills": "gamma-skills"}'
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_failure
+    assert_output --partial "already used by another repository"
+    assert_output --partial "Failed: 1"
+}
