@@ -497,6 +497,17 @@ _iw_parse_remote_url() {
     *) return 1 ;;
     esac
     _host="${_host%%:*}"
+    # An ssh host may be a ~/.ssh/config alias (`git@gh-work:acme/repo`, the
+    # multi-account setup); `ssh -G` resolves it offline to the real HostName.
+    case "${_u}" in
+    http://* | https://*) ;;
+    *)
+        if [ -n "${_host}" ] && command -v ssh >/dev/null 2>&1; then
+            _rest=$(ssh -G "${_host}" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }')
+            [ -z "${_rest}" ] || _host="${_rest}"
+        fi
+        ;;
+    esac
     _slug="${_slug%/}"
     _slug="${_slug%.git}"
     case "${_slug}" in
@@ -699,8 +710,10 @@ _iw_watch_add_cmd() {
     if [ -n "${_path}" ] && [ -d "${_path}" ]; then
         _path=$(cd "${_path}" && pwd -P)
     fi
-    _path="${_path:-${_IW_W_PATH:-${_old_path}}}"
-    _host="${_host:-${_IW_W_HOST:-${_old_host:-github.com}}}"
+    # Explicit flags win; a listed entry keeps its values over the cwd-derived
+    # ones, so `watch add` from a temporary worktree cannot repoint it there.
+    _path="${_path:-${_old_path:-${_IW_W_PATH}}}"
+    _host="${_host:-${_old_host:-${_IW_W_HOST:-github.com}}}"
     if [ -z "${_path}" ]; then
         ux_error "No local path for ${_IW_W_REPO} — pass --path, or run from its checkout."
         return 1
