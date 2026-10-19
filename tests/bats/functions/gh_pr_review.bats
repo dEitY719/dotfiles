@@ -1520,8 +1520,19 @@ STUB
 }
 
 @test "gh_pr_review: a non-empty review is still posted (#2084 guard is not over-eager)" {
+    # Model-authored verdict variant (#2248): the gate must not depend on the
+    # prompt template being echoed back, nor on the key opening the line.
     _source_module
-    _stub_agy_echo
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/agy" <<'STUB'
+#!/bin/sh
+cat >/dev/null
+printf '{"event":"result","result":{"status":"SUCCESS","response":"[PRAISE] a.sh:1 — ok\\n**Final verdict: LGTM**"}}\n'
+exit 0
+STUB
+    chmod +x "$stub_dir/agy"
+    export PATH="$stub_dir:$PATH"
     _stub_gh_full_flow
     run _gh_pr_review_main --ai agy 7 origin
     assert_success
