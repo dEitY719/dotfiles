@@ -742,6 +742,22 @@ _install_stubs() {
     _install_herdr_stub
     _install_gwt_stub
     _install_sleep_stub
+    _install_ssh_stub
+}
+
+# ssh: only `ssh -G <host>` (cwd mode's alias resolution, #2243), so the
+# developer's own ~/.ssh/config cannot steer the tests. `gh-work` is a
+# multi-account alias for github.com; every other host resolves to itself.
+_install_ssh_stub() {
+    cat >"${_BIN_DIR}/ssh" <<'EOF2'
+#!/bin/sh
+[ "$1" = "-G" ] || exit 255
+case "$2" in
+gh-work) printf 'user git\nhostname github.com\n' ;;
+*) printf 'user git\nhostname %s\n' "$2" ;;
+esac
+EOF2
+    chmod +x "${_BIN_DIR}/ssh"
 }
 
 # ---------------------------------------------------------------------------
@@ -4257,4 +4273,29 @@ _watch_json() {
     assert_success
     [ -L "${_WATCH_FILE}" ]
     [ "$(jq -c 'length' "${_WORK_DIR}/real.json")" = "2" ]
+}
+
+@test "issue_watcher_cron: cwd mode resolves an ssh config alias to its real host" {
+    _cwd_repo "git@gh-work:acme/dotfiles.git"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
+}
+
+@test "issue_watcher_cron: an unparsable origin's error drops embedded credentials" {
+    _cwd_repo "https://user:s3cret@ghes.example.com/a/b/c"
+    _run_tick -- --dry-run
+    assert_failure
+    assert_output --partial "https://ghes.example.com/a/b/c"
+    refute_output --partial "s3cret"
+}
+
+@test "issue_watcher_cron: watch add from a worktree keeps a listed entry's path" {
+    _cwd_repo "https://github.com/acme/dotfiles"
+    _add_worktree 11
+    _RUN_DIR="$(_worktree_path 11)"
+    _run_tick -- watch add
+    assert_success
+    assert_output --partial "Updated acme/dotfiles"
+    [ "$(_watch_json '.[0].path')" = "\"${_REPO_DIR}\"" ]
 }
