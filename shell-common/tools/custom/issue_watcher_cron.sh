@@ -502,12 +502,15 @@ _iw_parse_remote_url() {
     case "${_u}" in
     http://* | https://*) ;;
     *)
-        if [ -n "${_host}" ] && command -v ssh >/dev/null 2>&1; then
+        # A leading `-` would be parsed by ssh as an option, not a host.
+        if [ -n "${_host}" ] && [ "${_host#-}" = "${_host}" ] && command -v ssh >/dev/null 2>&1; then
             _rest=$(ssh -G "${_host}" 2>/dev/null | awk '$1 == "hostname" { print $2; exit }')
             [ -z "${_rest}" ] || _host="${_rest}"
-            # GitHub's port-443 ssh endpoint; gh's API host stays github.com (#2247).
-            [ "${_host}" != "ssh.github.com" ] || _host="github.com"
         fi
+        # GitHub's port-443 ssh endpoint; gh's API host stays github.com (#2247).
+        # shortcut: only this one GitHub endpoint is mapped; a GHES / GHE.com
+        # port-443 ssh host still needs `watch add --host`, generalize if one appears.
+        [ "${_host}" != "ssh.github.com" ] || _host="github.com"
         ;;
     esac
     _slug="${_slug%/}"

@@ -4292,6 +4292,14 @@ _watch_json() {
     refute_output --partial "ssh.github.com"
 }
 
+@test "issue_watcher_cron: cwd mode maps an ssh:// origin naming ssh.github.com to github.com" {
+    _cwd_repo "ssh://git@ssh.github.com:443/acme/dotfiles.git"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
+    refute_output --partial "ssh.github.com"
+}
+
 @test "issue_watcher_cron: an unparsable origin's error drops embedded credentials" {
     _cwd_repo "https://user:s3cret@ghes.example.com/a/b/c"
     _run_tick -- --dry-run
