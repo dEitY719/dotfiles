@@ -1612,6 +1612,21 @@ EOF
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
         return 1
     fi
+    # Issue #2248: non-empty is not enough either. Every preset shares
+    # _gh_pr_review_common_prefix, which makes the `판정:` / `Verdict:` line
+    # mandatory; output without one (hermes once exited 0 on a single
+    # "Let me check ..." sentence) is an unfinished run, not a review.
+    # Same line rule as devx_pr_review_all_verdict: fullwidth colon and
+    # markdown stripped, key at line start.
+    if ! sed -e 's/：/:/g' -e 's/[*`_#>]//g' -e 's/^[[:space:]]*-[[:space:]]*//' \
+        -e 's/^[[:space:]]*//' "$AI_OUT" 2>/dev/null |
+        grep -iqE '^(판정|verdict)[[:space:]]*:'; then
+        echo "External AI CLI '$ai' returned no verdict line (판정:/Verdict:) — unfinished review, no comment posted" >&2
+        echo "  full stderr saved to: $AI_STDERR_FILE" >&2
+        _gh_pr_review_disarm_trap
+        rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
+        return 1
+    fi
 
     # ---- Step 6: post PR comment ----
     local TOKENS HUMAN_H ELAPSED
