@@ -1472,14 +1472,35 @@ STUB
     assert_failure
     refute_output --partial "[OK]"
     assert_output --partial "External AI CLI 'codex' returned no verdict line"
-    local saved
-    saved=$(printf '%s\n' "$output" | sed -n 's/^  full stderr saved to: //p')
+    local saved run_out="$output"
+    saved=$(printf '%s\n' "$run_out" | sed -n 's/^  full stderr saved to: //p')
     [ -n "$saved" ]
     run cat "$saved"
     assert_output --partial "stub: still thinking"
     rm -f "$saved"
+    # The unfinished stdout is kept as well: it may hold real findings.
+    saved=$(printf '%s\n' "$run_out" | sed -n 's/^  full stdout saved to: //p')
+    [ -n "$saved" ]
+    run cat "$saved"
+    assert_output --partial "Let me check the restore.sh gate logic"
+    rm -f "$saved"
     run grep -c '^pr comment' "$GH_STUB_LOG"
     assert_output "0"
+}
+
+@test "gh_pr_review: Korean, fullwidth-colon and dash verdict variants are posted (#2248)" {
+    _source_module
+    local stub_dir="$TEST_TEMP_HOME/bin" v
+    mkdir -p "$stub_dir"
+    _stub_gh_full_flow
+    for v in '판정: 우려있음' '**판정**： 블로킹' 'Verdict — LGTM' 'Verdict - LGTM'; do
+        printf '#!/bin/sh\ncat >/dev/null\necho "[FOLLOW-UP] a.sh:1 — x"\necho "%s"\nexit 0\n' "$v" >"$stub_dir/codex"
+        chmod +x "$stub_dir/codex"
+        run _gh_pr_review_main --ai codex 7 origin
+        assert_success
+    done
+    run grep -c '^pr comment' "$GH_STUB_LOG"
+    assert_output "4"
 }
 
 @test "gh_pr_review: empty review keeps the CLI's stderr file — the only clue left (#2084)" {

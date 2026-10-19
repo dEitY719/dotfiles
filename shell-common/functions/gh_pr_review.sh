@@ -1608,22 +1608,30 @@ EOF
     # mandatory; output without one (hermes once exited 0 on a single
     # "Let me check ..." sentence) is an unfinished run, not a review.
     # Deliberately looser than devx_pr_review_all_verdict (key anywhere in a
-    # line, `—` accepted): this gate drops the whole review, so a variant
-    # like "Final verdict: LGTM" must pass here and read as `unknown` there.
+    # line, `—`/`–`/` - ` accepted): this gate drops the whole review, so a
+    # variant like "Final verdict: LGTM" must pass here and read as `unknown`
+    # there. A stray "verdict:" in prose passing is the accepted cost.
     # AI_STDERR_FILE is kept, as on the failure branch above: with an empty
-    # or unfinished stdout it is the only clue to what the CLI did.
+    # or unfinished stdout it is the only clue to what the CLI did. A
+    # verdict-less stdout is kept too — it may hold real findings cut off
+    # before the last line.
     local _reject=""
     if ! grep -q '[^[:space:]]' "$AI_OUT" 2>/dev/null; then
         _reject="returned an empty review"
     elif ! sed -e 's/：/:/g' -e 's/[*`_#>]//g' "$AI_OUT" 2>/dev/null |
-        grep -iqE '(판정|verdict)[[:space:]]*(:|—)'; then
+        grep -iqE '(판정|verdict)[[:space:]]*(:|—|–|-[[:space:]])'; then
         _reject="returned no verdict line (판정:/Verdict:) — unfinished review"
     fi
     if [ -n "$_reject" ]; then
         echo "External AI CLI '$ai' $_reject — no comment posted" >&2
         echo "  full stderr saved to: $AI_STDERR_FILE" >&2
         _gh_pr_review_disarm_trap
-        rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
+        rm -f "$PROMPT_FILE" "$BODY_FILE"
+        if grep -q '[^[:space:]]' "$AI_OUT" 2>/dev/null; then
+            echo "  full stdout saved to: $AI_OUT" >&2
+        else
+            rm -f "$AI_OUT"
+        fi
         return 1
     fi
 
