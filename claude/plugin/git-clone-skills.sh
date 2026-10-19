@@ -86,8 +86,8 @@ Options:
 
 Repo overlay (optional, per machine, gitignored):
   skills-workspace-repos.local.json next to the manifest adds repositories,
-  same shape as the manifest, e.g. {"delta": "corp/delta-skills"}. Its
-  entries skip the owner filter.
+  same shape as the manifest, e.g. {"delta": "corp/delta-skills"}; the key
+  is only a label. Its entries skip the owner filter.
 
 Folder map (optional, per machine, gitignored):
   skills-workspace.local.json next to the manifest maps a repo name to the
@@ -189,7 +189,8 @@ _read_repo_slugs() {
 
 # Repo overlay (#2244): skills-workspace-repos.local.json next to the manifest
 # (gitignored) adds {"<name>": "<owner>/<repo>"} entries on top of the tracked
-# manifest, e.g. repos that must not be named in a public file. Deliberately
+# manifest, e.g. repos that must not be named in a public file. The key is
+# only a label (only the values are read), as in marketplaces.json. Deliberately
 # NOT marketplaces.local.json: the plugin-sync hook writes every installed
 # marketplace there (third-party ones included, all would be cloned) and
 # restore.sh registers every entry there as a plugin marketplace.
@@ -348,8 +349,9 @@ while IFS= read -r slug; do
 	repo_name="${slug#*/}"
 	# repo_name becomes a folder under TARGET_DIR when unmapped: reject '..', '.',
 	# leading dots and other non-plain names (overlay entries are free-form).
-	if ! [[ "$repo_name" =~ $FOLDER_RE ]]; then
-		ux_warning "Malformed manifest entry (invalid repository name): $slug"
+	# The owner lands in the clone URL, so it gets the same plain-name check.
+	if ! [[ "$repo_name" =~ $FOLDER_RE ]] || ! [[ "$repo_owner" =~ $FOLDER_RE ]]; then
+		ux_warning "Malformed manifest entry (invalid owner or repository name): $slug"
 		FAILED=$((FAILED + 1))
 		continue
 	fi
