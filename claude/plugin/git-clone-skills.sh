@@ -84,6 +84,11 @@ Options:
                         (default: \$SKILLS_DIR, else ~/para/project/skills)
   -h, --help, help      Show this help message
 
+Repo overlay (optional, per machine, gitignored):
+  skills-workspace-repos.local.json next to the manifest adds repositories,
+  same shape as the manifest, e.g. {"delta": "corp/delta-skills"}. Its
+  entries skip the owner filter.
+
 Folder map (optional, per machine, gitignored):
   skills-workspace.local.json next to the manifest maps a repo name to the
   folder it is cloned into, e.g. {"alpha-skills": "alpha"}. Folder names must
@@ -172,13 +177,31 @@ fi
 # happen to name the same repository.
 _read_repo_slugs() {
 	if $ALL_OWNERS; then
-		jq -r '.[] | select(type == "string")' "$MANIFEST"
+		jq -r '.[] | select(type == "string")' "$MANIFEST" || return 1
 	else
 		jq -r --arg owner "$OWNER_FILTER" \
 			'.[] | select(type == "string") | select(startswith($owner + "/"))' \
-			"$MANIFEST"
+			"$MANIFEST" || return 1
 	fi
+	# Overlay entries are an explicit per-machine opt-in: no owner filter.
+	[ -z "$REPO_OVERLAY" ] || jq -r '.[]' "$REPO_OVERLAY"
 }
+
+# Repo overlay (#2244): skills-workspace-repos.local.json next to the manifest
+# (gitignored) adds {"<name>": "<owner>/<repo>"} entries on top of the tracked
+# manifest, e.g. repos that must not be named in a public file. Deliberately
+# NOT marketplaces.local.json: the plugin-sync hook writes every installed
+# marketplace there (third-party ones included, all would be cloned) and
+# restore.sh registers every entry there as a plugin marketplace.
+REPO_OVERLAY="$(dirname "$MANIFEST")/skills-workspace-repos.local.json"
+if [ -e "$REPO_OVERLAY" ]; then
+	if ! jq -e 'type == "object" and all(.[]; type == "string")' "$REPO_OVERLAY" >/dev/null 2>&1; then
+		ux_error "Repo overlay must be a JSON object of \"<name>\": \"<owner>/<repo>\" strings: $REPO_OVERLAY"
+		exit 1
+	fi
+else
+	REPO_OVERLAY=""
+fi
 
 if ! REPO_SLUGS="$(_read_repo_slugs 2>/dev/null | LC_ALL=C sort -u)"; then
 	ux_error "Failed to read repository list from manifest: $MANIFEST"
@@ -221,6 +244,7 @@ if $ALL_OWNERS; then
 else
 	ux_info "Owner filter: $OWNER_FILTER"
 fi
+[ -z "$REPO_OVERLAY" ] || ux_info "Repo overlay: $REPO_OVERLAY"
 [ -z "$FOLDER_MAP" ] || ux_info "Folder map: $FOLDER_MAP"
 if $DRY_RUN; then
 	ux_info "Mode: DRY-RUN (no disk modifications)"

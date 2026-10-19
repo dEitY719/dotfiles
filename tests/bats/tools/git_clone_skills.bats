@@ -668,3 +668,72 @@ _write_folder_map() {
     assert_output --partial "holds a different repository"
     assert_output --partial "Failed: 1"
 }
+
+# --- repo overlay (skills-workspace-repos.local.json, #2244) ------------------
+
+# Read from next to the manifest like the folder map, so --manifest pointing
+# at a temp manifest only ever sees the overlay written beside it here.
+_write_repo_overlay() {
+    printf '%s\n' "$1" >"$(dirname "$MANIFEST")/skills-workspace-repos.local.json"
+}
+
+@test "git-clone-skills.sh clones overlay repos past the owner filter" {
+    _write_manifest
+    _setup_stub_path
+    _make_fake_remote "alpha-skills"
+    _make_fake_remote "gamma-skills"
+    _make_fake_remote "delta-skills"
+    _write_repo_overlay '{"delta": "corpowner/delta-skills", "dup": "dEitY719/alpha-skills"}'
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target" --no-upstream
+    assert_success
+    assert_output --partial "Cloned: 3"
+    [ -f "${target}/delta-skills/README.md" ]
+    # Tracked foreign-owner entries keep the filter.
+    [ ! -e "${target}/beta-skills" ]
+}
+
+@test "git-clone-skills.sh overlay repos honour the folder map" {
+    _write_manifest
+    _setup_stub_path
+    _write_repo_overlay '{"delta": "corpowner/delta-skills"}'
+    _write_folder_map '{"delta-skills": "delta"}'
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target" --dry-run
+    assert_success
+    assert_output --partial "-> ${target}/delta (dry-run)"
+}
+
+@test "git-clone-skills.sh without an overlay ignores marketplaces.local.json" {
+    _write_manifest
+    _setup_stub_path
+    # Hook-written plugin overlay: installed marketplaces, not workspace repos.
+    printf '%s\n' '{"official": "anthropics/claude-plugins-official"}' \
+        >"$(dirname "$MANIFEST")/marketplaces.local.json"
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target" --dry-run
+    assert_success
+    assert_output --partial "Total: 2"
+    refute_output --partial "claude-plugins-official"
+    refute_output --partial "Repo overlay"
+}
+
+@test "git-clone-skills.sh rejects an invalid repo overlay with exit 1" {
+    _write_manifest
+    _setup_stub_path
+    local target="${TEST_TEMP_HOME}/skills" bad
+    for bad in '{"delta": ' '["corpowner/delta-skills"]' '{"delta": 1}'; do
+        _write_repo_overlay "$bad"
+        run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+            --manifest "$MANIFEST" --target "$target"
+        [ "$status" -eq 1 ]
+        assert_output --partial "skills-workspace-repos.local.json"
+        [ ! -d "$target" ]
+    done
+}

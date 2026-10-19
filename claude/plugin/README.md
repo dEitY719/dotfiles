@@ -10,7 +10,7 @@ gitignored `*.local.json`), 아래 표는 **코드가 어디에 사는가** 를 
 
 ```
 scripts/update-skills.sh                          (skills-sync 5단계 진입점)
- ├─ claude/plugin/git-clone-skills.sh ── marketplaces.json, skills-workspace.local.json, lib/gh_host.sh
+ ├─ claude/plugin/git-clone-skills.sh ── marketplaces.json, skills-workspace{,-repos}.local.json, lib/gh_host.sh
  ├─ claude/plugin/git-pull-skills.sh
  ├─ claude/setup.sh ── tools/custom/lib/claude_accounts_skills.sh (_claude_prune_workspace_skills)
  ├─ claude/plugin/update-plugins.sh ── marketplaces.json, plugins.json
