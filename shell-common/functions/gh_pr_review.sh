@@ -1603,25 +1603,24 @@ EOF
     # post a marker-only comment that review-all's aggregation and the
     # duplicate-review guard read as "this head sha is already reviewed".
     # Every --ai lane, not just agy — an empty review is never worth posting.
-    # AI_STDERR_FILE is kept, as on the failure branch above: with an empty
-    # stdout it is the only clue to why the CLI produced nothing.
-    if ! grep -q '[^[:space:]]' "$AI_OUT" 2>/dev/null; then
-        echo "External AI CLI '$ai' returned an empty review — no comment posted" >&2
-        echo "  full stderr saved to: $AI_STDERR_FILE" >&2
-        _gh_pr_review_disarm_trap
-        rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
-        return 1
-    fi
     # Issue #2248: non-empty is not enough either. Every preset shares
     # _gh_pr_review_common_prefix, which makes the `판정:` / `Verdict:` line
     # mandatory; output without one (hermes once exited 0 on a single
     # "Let me check ..." sentence) is an unfinished run, not a review.
-    # Same line rule as devx_pr_review_all_verdict: fullwidth colon and
-    # markdown stripped, key at line start.
-    if ! sed -e 's/：/:/g' -e 's/[*`_#>]//g' -e 's/^[[:space:]]*-[[:space:]]*//' \
-        -e 's/^[[:space:]]*//' "$AI_OUT" 2>/dev/null |
-        grep -iqE '^(판정|verdict)[[:space:]]*:'; then
-        echo "External AI CLI '$ai' returned no verdict line (판정:/Verdict:) — unfinished review, no comment posted" >&2
+    # Deliberately looser than devx_pr_review_all_verdict (key anywhere in a
+    # line, `—` accepted): this gate drops the whole review, so a variant
+    # like "Final verdict: LGTM" must pass here and read as `unknown` there.
+    # AI_STDERR_FILE is kept, as on the failure branch above: with an empty
+    # or unfinished stdout it is the only clue to what the CLI did.
+    local _reject=""
+    if ! grep -q '[^[:space:]]' "$AI_OUT" 2>/dev/null; then
+        _reject="returned an empty review"
+    elif ! sed -e 's/：/:/g' -e 's/[*`_#>]//g' "$AI_OUT" 2>/dev/null |
+        grep -iqE '(판정|verdict)[[:space:]]*(:|—)'; then
+        _reject="returned no verdict line (판정:/Verdict:) — unfinished review"
+    fi
+    if [ -n "$_reject" ]; then
+        echo "External AI CLI '$ai' $_reject — no comment posted" >&2
         echo "  full stderr saved to: $AI_STDERR_FILE" >&2
         _gh_pr_review_disarm_trap
         rm -f "$PROMPT_FILE" "$AI_OUT" "$BODY_FILE"
