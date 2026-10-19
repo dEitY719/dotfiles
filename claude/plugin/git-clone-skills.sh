@@ -20,7 +20,9 @@
 # e.g. {"alpha-skills": "alpha"}. Repos it does not name keep <repo> as the
 # folder; no file means no renaming. git-pull-skills.sh and
 # _skill_workspace_dirs enumerate folders on disk, so renamed clones stay
-# covered by them without reading this file.
+# covered by them without reading this file. Limit: a consumer that hard-codes
+# a repo folder (scripts/measure-skill-descriptions.sh -> authoring-skills)
+# does not follow the map, so leave such repos unmapped.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,12 +82,12 @@ Options:
   --no-upstream         Do not query gh for fork parents / add upstream remotes
   --target <dir>        Directory to clone into, created when missing
                         (default: \$SKILLS_DIR, else ~/para/project/skills)
+  -h, --help, help      Show this help message
 
 Folder map (optional, per machine, gitignored):
   skills-workspace.local.json next to the manifest maps a repo name to the
   folder it is cloned into, e.g. {"alpha-skills": "alpha"}. Folder names must
   be plain names ([A-Za-z0-9._-], no leading dot); anything else aborts.
-  -h, --help, help      Show this help message
 USAGE
 }
 
@@ -336,6 +338,13 @@ while IFS= read -r slug; do
 	if [ -e "$dest_dir" ] && [ ! -e "$dest_dir/.git" ]; then
 		ux_warning "$repo_name: $dest_dir exists but is not a git repository (remove it manually and re-run)"
 		FAILED=$((FAILED + 1))
+		continue
+	fi
+	# A clone kept under the default name from before the map existed would
+	# otherwise be cloned a second time, duplicating its skills in the workspace.
+	if [ "$folder" != "$repo_name" ] && [ ! -e "$dest_dir" ] && [ -e "$TARGET_DIR/$repo_name/.git" ]; then
+		ux_warning "$repo_name: already cloned as '$repo_name' (mapped folder '$folder' not created; rename the folder or drop the map entry)"
+		ALREADY=$((ALREADY + 1))
 		continue
 	fi
 	if [ -e "$dest_dir" ]; then
