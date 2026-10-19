@@ -738,16 +738,17 @@ _write_repo_overlay() {
     done
 }
 
-@test "git-clone-skills.sh rejects overlay repo names that are not plain names" {
+@test "git-clone-skills.sh rejects overlay owners and repo names that are not plain names" {
     _write_manifest
     _setup_stub_path
-    _write_repo_overlay '{"up": "corp/..", "hidden": "corp/.hidden"}'
+    _write_repo_overlay '{"up": "corp/..", "hidden": "corp/.hidden", "opt": "-x/delta-skills"}'
     local target="${TEST_TEMP_HOME}/skills"
 
     run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
         --manifest "$MANIFEST" --target "$target" --dry-run
     assert_failure
-    assert_output --partial "invalid repository name): corp/.."
-    assert_output --partial "invalid repository name): corp/.hidden"
-    assert_output --partial "Failed: 2"
+    assert_output --partial "invalid owner or repository name): corp/.."
+    assert_output --partial "invalid owner or repository name): corp/.hidden"
+    assert_output --partial "invalid owner or repository name): -x/delta-skills"
+    assert_output --partial "Failed: 3"
 }
