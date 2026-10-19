@@ -617,3 +617,22 @@ _write_folder_map() {
     assert_output --partial "already used by another repository"
     assert_output --partial "Failed: 1"
 }
+
+@test "git-clone-skills.sh does not re-clone a repo already present under its default name" {
+    _write_manifest
+    _setup_stub_path
+    _make_fake_remote "alpha-skills"
+    _make_fake_remote "gamma-skills"
+    local target="${TEST_TEMP_HOME}/skills"
+
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_success
+
+    _write_folder_map '{"alpha-skills": "alpha"}'
+    run env PATH="$STUB_BIN" bash "$SCRIPT_UNDER_TEST" \
+        --manifest "$MANIFEST" --target "$target"
+    assert_success
+    assert_output --partial "already cloned as 'alpha-skills'"
+    [ ! -e "${target}/alpha" ]
+}
