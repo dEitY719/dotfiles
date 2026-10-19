@@ -548,7 +548,7 @@ _iw_watch_validate() {
 # backup first, then a temp file swapped in with mv so a failed write never
 # leaves a half-written watch list.
 _iw_watch_write() {
-    local _file="$1" _filter="$2" _tmp _dir
+    local _file="$1" _filter="$2" _tmp _dir _bak
     shift 2
     # A symlinked watch list (e.g. into a dotfiles repo) is edited at its
     # target: the mv below would otherwise replace the link with a plain file.
@@ -558,8 +558,9 @@ _iw_watch_write() {
     _dir=$(dirname "${_file}")
     mkdir -p "${_dir}" || return 1
     # No-clobber: a second edit the same day must not overwrite the pre-edit copy.
-    if [ -f "${_file}" ] && [ ! -e "${_file}.bak-$(date +%Y%m%d)" ]; then
-        cp -p "${_file}" "${_file}.bak-$(date +%Y%m%d)" || return 1
+    _bak="${_file}.bak-$(date +%Y%m%d)"
+    if [ -f "${_file}" ] && [ ! -e "${_bak}" ]; then
+        cp -p "${_file}" "${_bak}" || return 1
     fi
     _tmp=$(mktemp "${_file}.tmp.XXXXXX") || return 1
     if [ -f "${_file}" ]; then
@@ -642,7 +643,7 @@ _iw_watch_target() {
 }
 
 _iw_watch_add_cmd() {
-    local _file _arg="" _path="" _host="" _old_path _old_host _verb
+    local _file _arg="" _path="" _host="" _old _old_path _old_host _verb
     while [ "$#" -gt 0 ]; do
         case "$1" in
         --path | --host)
@@ -678,13 +679,20 @@ _iw_watch_add_cmd() {
         ux_error "Watch list is not valid JSON — left untouched: ${_file}"
         return 1
     fi
+    # One read of the listed entry as `<path>\t<host>`; empty when not listed.
+    _old=""
+    if [ -f "${_file}" ]; then
+        _old=$(jq -r --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
+            [entries | .[]? | select(type == "object" and .repo == $r)] | first // empty
+            | "\(.path // "")\t\(.host // "")"' "${_file}")
+    fi
     _old_path=""
     _old_host=""
-    if [ -f "${_file}" ]; then
-        _old_path=$(jq -r --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
-            [entries | .[]? | select(type == "object" and .repo == $r)] | first | .path // empty' "${_file}")
-        _old_host=$(jq -r --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
-            [entries | .[]? | select(type == "object" and .repo == $r)] | first | .host // empty' "${_file}")
+    _verb="Added"
+    if [ -n "${_old}" ]; then
+        _old_path="${_old%%"${_IW_TAB}"*}"
+        _old_host="${_old#*"${_IW_TAB}"}"
+        _verb="Updated"
     fi
 
     # An existing directory is stored absolute: the tick may run from anywhere.
@@ -698,11 +706,6 @@ _iw_watch_add_cmd() {
         return 1
     fi
 
-    _verb="Added"
-    if [ -f "${_file}" ] && jq -e --arg r "${_IW_W_REPO}" "${_IW_WATCH_JQ_DEFS}"'
-        any(entries | .[]?; type == "object" and .repo == $r)' "${_file}" >/dev/null; then
-        _verb="Updated"
-    fi
     # shellcheck disable=SC2016 # jq variables, not shell ones
     if ! _iw_watch_write "${_file}" "${_IW_WATCH_JQ_DEFS}"'
         put(if any(.[]?; type == "object" and .repo == $r)
