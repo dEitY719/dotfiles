@@ -318,10 +318,7 @@ while IFS= read -r slug; do
 	TOTAL=$((TOTAL + 1))
 
 	folder="$repo_name"
-	if [ -n "$FOLDER_MAP" ]; then
-		folder="$(jq -r --arg r "$repo_name" '.[$r] // empty' "$FOLDER_MAP")"
-		[ -n "$folder" ] || folder="$repo_name"
-	fi
+	[ -z "$FOLDER_MAP" ] || folder="$(jq -r --arg r "$repo_name" '.[$r] // $r' "$FOLDER_MAP")"
 	case "$USED_FOLDERS" in
 	*"|$folder|"*)
 		ux_warning "$repo_name: folder '$folder' is already used by another repository (fix ${FOLDER_MAP:-skills-workspace.local.json})"
