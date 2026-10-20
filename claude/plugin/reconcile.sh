@@ -306,7 +306,11 @@ _run_check() {
 			while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 		fi
 	else
-		ux_info "(company/ 건너뜀 — 모드: ${MODE:-미설정})"
+		if [ "$MODE" = "internal" ]; then
+			ux_info "(company/ 건너뜀 — 모드: internal, company/.git 없음: 사내 전용 레포 미클론)"
+		else
+			ux_info "(company/ 건너뜀 — 모드: ${MODE:-미설정})"
+		fi
 	fi
 
 	if [ "$drift" -eq 0 ]; then
