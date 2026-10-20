@@ -34,6 +34,8 @@
 #     between this skill's boundary and the next catalog skill boundary
 #     (or end of transcript), the hook emits a `block` decision listing the
 #     missing IDs.
+#   - A skill that HARD-stopped with its own line-start `[FAIL] <skill>: ...`
+#     (either separator spelling) is treated as finished; no steps demanded (#2252).
 #   - Bypass any check globally with `GH_SKILL_GUARD_BYPASS=1`.
 #   - Trace what the hook is doing with `GH_SKILL_GUARD_TRACE=1` (stderr).
 #   - A step whose work was handed to a background Agent may stand in a

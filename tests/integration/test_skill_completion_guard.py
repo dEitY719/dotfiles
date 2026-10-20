@@ -620,6 +620,58 @@ def test_unrelated_skill_markers_do_not_satisfy(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# #2252 — a skill that HARD-stopped with its own `[FAIL] <skill>:` line is done
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("spelling", ["gh-pr:commit", "gh-pr-commit"])
+def test_own_fail_line_allows_stop_on_later_turns(tmp_path: Path, spelling: str) -> None:
+    """The #2252 repro: `[FAIL] gh-pr:commit: nothing to stage`, then unrelated turns."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-pr:commit"),
+            _user_tool_result(f"[FAIL] {spelling}: nothing to stage — already committed\n"),
+            _assistant_text("Stopped: nothing to commit."),
+            _user_text("now merge the PR"),
+            _assistant_text("merged"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_other_skills_fail_line_does_not_release(tmp_path: Path) -> None:
+    """A `[FAIL]` from a different skill must not count as this skill's stop."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-pr:commit"),
+            _user_tool_result("[FAIL] gh-pr:create: no commits ahead of base\n"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+    assert "gh-pr-commit" in decision["reason"]
+
+
+def test_quoted_fail_line_mid_text_does_not_release(tmp_path: Path) -> None:
+    """A SKILL.md read quoting the printf (not at line start) must not count."""
+    transcript = _write_transcript(
+        tmp_path,
+        [
+            _user_text("/gh-pr:commit"),
+            _user_tool_result("    printf '[FAIL] gh-pr:commit: nothing to stage\\n'\n"),
+        ],
+    )
+    result = _run_hook(_hook_event(transcript))
+    decision = json.loads(result.stdout)
+    assert decision["decision"] == "block"
+
+
+# ---------------------------------------------------------------------------
 # Catalog-level enforce flag
 # ---------------------------------------------------------------------------
 
