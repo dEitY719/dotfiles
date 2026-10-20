@@ -23,6 +23,7 @@ gh_pr_review() {
     case "$2" in
     codex) printf '\n  boom:   it\tbroke  \nsecond line\n' >&2; return 1 ;;
     agy) return 3 ;;
+    uxerr) ux_error "ux failed: no CLI"; return 1 ;;
     hang) sleep 5; return 0 ;;
     *) echo "review posted $2 $4 $5 $6"; return 0 ;;
     esac
@@ -53,6 +54,12 @@ teardown() {
     run devx_pr_review_all_fanout 42 origin "agy:default"
     assert_success
     assert_output "$(printf 'agy:default:skip\texit 3')"
+}
+
+@test "fanout: a ux_error reason reaches the skip line as plain text (#2257)" {
+    run devx_pr_review_all_fanout 42 origin "uxerr:default"
+    assert_success
+    assert_output "$(printf 'uxerr:default:skip\tux failed: no CLI')"
 }
 
 @test "fanout: a hung lane is cut by the timeout and reported as such" {

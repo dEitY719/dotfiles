@@ -60,9 +60,9 @@ if ! command -v ux_error >/dev/null 2>&1; then
     # shellcheck disable=SC1090
     [ -r "$_gpr_ux_lib" ] && . "$_gpr_ux_lib"
     unset _gpr_ux_lib
-fi
-if ! command -v ux_error >/dev/null 2>&1; then
-    ux_error() { printf '%s\n' "$1" >&2; }
+    if ! command -v ux_error >/dev/null 2>&1; then
+        ux_error() { printf '%s\n' "$1" >&2; }
+    fi
 fi
 
 # ============================================================================
@@ -197,8 +197,8 @@ gh_pr_review_parse() {
     case "$review" in
     default | quick | thorough | security | performance) ;;
     *)
+        ux_error "Unknown --review value: '$review'"
         cat >&2 <<EOF
-Unknown --review value: '$review'
 Allowed: default | quick | thorough | security | performance
 Korean aliases: 보통 | 간단 | 꼼꼼 (꼼꼼하게) | 보안 | 성능
 EOF
