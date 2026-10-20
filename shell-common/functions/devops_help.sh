@@ -563,26 +563,13 @@ _proxy_help_section_rows() {
 _proxy_help_full() {
     ux_header "Proxy Configuration & Diagnostics"
 
-    if type ux_section >/dev/null 2>&1; then
-        _proxy_help_render_section "Diagnostic Commands" _proxy_help_rows_diagnostics
-        _proxy_help_render_section "Quick Commands" _proxy_help_rows_commands
-        _proxy_help_render_section "Setting Proxy (Corporate Environment)" _proxy_help_rows_set
-        _proxy_help_render_section "Disabling Proxy" _proxy_help_rows_unset
-        _proxy_help_render_section "Git Configuration" _proxy_help_rows_git
-        _proxy_help_render_section "Related Diagnostics" _proxy_help_rows_related
-        _proxy_help_render_section "Important Notes" _proxy_help_rows_notes
-    else
-        # Fallback for minimal shells without UX library
-        echo "Diagnostic Commands:"
-        echo "  check-proxy          Run full diagnostic"
-        echo "  check-proxy env      Environment variables only"
-        echo "  check-proxy file     proxy.local.sh file check"
-        echo "  check-network quick  General internet access check"
-        echo ""
-        echo "Quick Commands:"
-        echo "  echo \$http_proxy         Current proxy setting"
-        echo "  env | grep -i proxy      Show all proxy vars"
-    fi
+    _proxy_help_render_section "Diagnostic Commands" _proxy_help_rows_diagnostics
+    _proxy_help_render_section "Quick Commands" _proxy_help_rows_commands
+    _proxy_help_render_section "Setting Proxy (Corporate Environment)" _proxy_help_rows_set
+    _proxy_help_render_section "Disabling Proxy" _proxy_help_rows_unset
+    _proxy_help_render_section "Git Configuration" _proxy_help_rows_git
+    _proxy_help_render_section "Related Diagnostics" _proxy_help_rows_related
+    _proxy_help_render_section "Important Notes" _proxy_help_rows_notes
 }
 
 proxy_help() {
