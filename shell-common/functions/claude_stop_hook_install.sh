@@ -81,15 +81,17 @@ _claude_install_gh_issue_flow_stop_hook() {
     if jq --arg cmd "$_csh_hook_command" \
         '.hooks = ((.hooks // {}) | .Stop = ((.Stop // []) + [{"hooks":[{"type":"command","command":$cmd}]}]))' \
         "$_csh_source_file" >"$_csh_tmp" && command mv "$_csh_tmp" "$_csh_source_file"; then
-        echo "claude/settings.json: gh-flow:issue Stop hook 자동 등록 (issue #505 / #383, backup: $_csh_backup)" >&2
+        _csh_msg="claude/settings.json: gh-flow:issue Stop hook 자동 등록 (issue #505 / #383, backup: $_csh_backup)"
+        if command -v ux_info >/dev/null 2>&1; then ux_info "$_csh_msg" >&2; else echo "$_csh_msg" >&2; fi
         _csh_rc=0
     else
         command rm -f "$_csh_tmp"
-        echo "claude/settings.json: Stop hook 등록 실패 — 백업 보존 ($_csh_backup)" >&2
+        _csh_msg="claude/settings.json: Stop hook 등록 실패 — 백업 보존 ($_csh_backup)"
+        if command -v ux_error >/dev/null 2>&1; then ux_error "$_csh_msg"; else echo "$_csh_msg" >&2; fi
         _csh_rc=1
     fi
 
-    unset _csh_dotfiles _csh_source_file _csh_hook_command _csh_count _csh_existing _csh_backup _csh_tmp
+    unset _csh_dotfiles _csh_source_file _csh_hook_command _csh_count _csh_existing _csh_backup _csh_tmp _csh_msg
     return ${_csh_rc:-0}
 }
 
