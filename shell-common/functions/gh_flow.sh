@@ -167,7 +167,8 @@ _gh_flow_pr_view() {
 
 # Print two lines for the given issue:
 #   <verdict-text>
-#   <next-action-text>
+#   <next-action>  one copy-runnable command line, or "-" when there is
+#                  nothing to do (same contract as _gwt_compute_status, #2256)
 # Reads <issue-dir>/state, /pid, /worktree.path, /pr.number, then composes the
 # matrix from the issue spec. Used by `gh-flow status <N>`; `gh-flow prune <N>`
 # can reuse the same source-of-truth in future iterations.
@@ -178,7 +179,7 @@ _gh_flow_verdict() {
     local _pr_view _pr_decision
     _dir=$(_gh_flow_issue_dir "$_issue")
     if [ ! -d "$_dir" ]; then
-        printf 'no state — issue not tracked\n(none)\n'
+        printf 'no state — issue not tracked\n-\n'
         return 0
     fi
     _state="$(cat "$_dir/state" 2>/dev/null || printf 'unknown')"
@@ -236,15 +237,14 @@ EOF
                     ;;
                 esac
             fi
-            _action="(none — still working)"
+            _action="-"
             ;;
         *)
             _verdict="stuck pre-PR — investigate log ($_pr_state)"
-            if [ "$_pid_alive" = "1" ]; then
-                _action="review 'tail -40 $_dir/log', then gh-flow prune --force $_issue"
-            else
-                _action="review 'tail -40 $_dir/log', then gh-flow prune $_issue"
-            fi
+            # Read-only on purpose (#2256): the log decides whether this is a
+            # prune (and whether a live pid needs --force), so the hint never
+            # chains a prune the user has not looked at yet.
+            _action="tail -40 $_dir/log"
             ;;
         esac
         ;;
@@ -255,7 +255,7 @@ EOF
     failed:*)
         if [ -n "$_wt" ] && [ -d "$_wt" ]; then
             _verdict="dead failure, worktree alive"
-            _action="cd $_wt && gwt teardown --force, then gh-flow prune $_issue"
+            _action="cd $_wt && gwt teardown --force && gh-flow prune $_issue"
         else
             _verdict="dead failure — state-only cleanup"
             _action="gh-flow prune $_issue"
@@ -264,7 +264,7 @@ EOF
     spawning | implementing | committing | opening-pr | replying | merging | tearing-down)
         if [ "$_pid_alive" = "1" ]; then
             _verdict="active worker ($_state) — leave alone"
-            _action="(none — still working)"
+            _action="-"
         else
             _verdict="dead worker mid-step ($_state)"
             _action="gh-flow prune $_issue"
@@ -272,7 +272,7 @@ EOF
         ;;
     *)
         _verdict="unknown state ($_state)"
-        _action="inspect $_dir"
+        _action="ls -la $_dir"
         ;;
     esac
 
@@ -645,7 +645,7 @@ _gh_flow_prune() {
                         _torn_down=$((_torn_down + 1))
                     else
                         ux_error "  teardown failed for $_wt; leaving state dir intact"
-                        ux_bullet_sub "manual fix: cd $_wt && gwt teardown --force, then gh-flow prune --force $_issue"
+                        ux_bullet_sub "manual fix: cd $_wt && gwt teardown --force && gh-flow prune --force $_issue"
                     fi
                 else
                     ux_warning "#$_issue $_state — worktree gone, removing state"

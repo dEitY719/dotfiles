@@ -235,7 +235,8 @@ _gh_pr_approve_jq_field() {
 
 # Print two lines for the given PR:
 #   <verdict-text>
-#   <next-action-text>
+#   <next-action>  one copy-runnable command line, or "-" when there is
+#                  nothing to do (same contract as _gwt_compute_status, #2256)
 # Reads <pr-dir>/state, /pid, /worktree.path, then composes the matrix
 # from the issue spec. gh-pr-approve's worker is single-shot (no polling,
 # no reply loop), so the matrix is strictly simpler than gh-flow's.
@@ -245,7 +246,7 @@ _gh_pr_approve_verdict() {
     local _dir _state _wt _pid _pid_alive _verdict _action
     _dir=$(_gh_pr_approve_pr_dir "$_pr")
     if [ ! -d "$_dir" ]; then
-        printf 'no state — PR not tracked\n(none)\n'
+        printf 'no state — PR not tracked\n-\n'
         return 0
     fi
     _state="$(cat "$_dir/state" 2>/dev/null || printf 'unknown')"
@@ -264,7 +265,7 @@ _gh_pr_approve_verdict() {
     failed:*)
         if [ -n "$_wt" ] && [ -d "$_wt" ]; then
             _verdict="dead failure, worktree alive"
-            _action="cd $_wt && gwt teardown --force, then gh-pr-approve prune $_pr"
+            _action="cd $_wt && gwt teardown --force && gh-pr-approve prune $_pr"
         else
             _verdict="dead failure — state-only cleanup"
             _action="gh-pr-approve prune $_pr"
@@ -273,7 +274,7 @@ _gh_pr_approve_verdict() {
     spawning | approving | tearing-down)
         if [ "$_pid_alive" = "1" ]; then
             _verdict="active worker ($_state) — leave alone"
-            _action="(none — still working)"
+            _action="-"
         else
             _verdict="dead worker mid-step ($_state)"
             _action="gh-pr-approve prune $_pr"
@@ -281,7 +282,7 @@ _gh_pr_approve_verdict() {
         ;;
     *)
         _verdict="unknown state ($_state)"
-        _action="inspect $_dir"
+        _action="ls -la $_dir"
         ;;
     esac
 
