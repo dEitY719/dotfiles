@@ -6,8 +6,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 gh_project_pat() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_project_pat.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_project_pat.sh "$@"
 }
 
 alias gh-project-pat='gh_project_pat'

@@ -15,8 +15,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # documented in devx_help.sh and PR body for #726).
 
 devx() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/devx.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/devx.sh "$@"
 }
 
 # Help registry (#2135): skipped when sourced without util/help_registry.sh.

@@ -189,8 +189,7 @@ _grs_main() {
 # grs — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/grs.sh (also ~/.local/bin), never in this shell.
 grs() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/grs.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/grs.sh "$@"
 }
 
 # Help registry (#2135): skipped when sourced without util/help_registry.sh.

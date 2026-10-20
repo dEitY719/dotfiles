@@ -6,8 +6,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # `claude_plugin_list` / `claude-plugin-list` names and tab completion in interactive shells.
 
 claude_plugin_list() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_plugin_list.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_plugin_list.sh "$@"
 }
 
 alias claude-plugin-list='claude_plugin_list'
