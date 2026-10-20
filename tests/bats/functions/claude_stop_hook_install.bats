@@ -59,6 +59,23 @@ _count_hook_entries() {
     [ -f "${SETTINGS}.pre-stop-hook-fix.backup" ]
 }
 
+@test "install message goes through ux_info on stderr when ux_lib is loaded" {
+    tmp="$(mktemp)"
+    jq 'del(.hooks.Stop)' "$SETTINGS" > "$tmp"
+    mv "$tmp" "$SETTINGS"
+
+    run bash -c "
+        export DOTFILES_ROOT='${DOTFILES_ROOT}' DOTFILES_FORCE_INIT=1
+        source '${SHELL_COMMON}/tools/ux_lib/ux_lib.sh'
+        source '${HELPER}'
+        _claude_install_gh_issue_flow_stop_hook 2>&1 >/dev/null
+    "
+    assert_success
+    assert_output --partial "ℹ️"
+    assert_output --partial "자동 등록"
+    [ "$(_count_hook_entries "$SETTINGS")" = "1" ]
+}
+
 @test "no-op when hook is already present (silent fast path)" {
     # Template ships with the hook entry → first call should be silent.
     [ "$(_count_hook_entries "$SETTINGS")" = "1" ]
