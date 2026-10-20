@@ -230,7 +230,6 @@ _claude_skills_marketplace_list() {
         if [ -n "$marketplace_filter" ]; then
             # Show skills for specific marketplace
             ux_header "Marketplace: $marketplace_filter"
-            echo ""
 
             local skills
             skills=$(jq -r --arg mp "$marketplace_filter" \
@@ -251,7 +250,7 @@ _claude_skills_marketplace_list() {
                     *) ux_bullet "${line#  • }" ;;
                 esac
             done
-            echo ""
+            printf '\n'
         else
             # Show all marketplaces with skill counts
             ux_header "Marketplaces"
@@ -259,14 +258,14 @@ _claude_skills_marketplace_list() {
             local total
             total=$(jq -r '.total_skills' "$MANIFEST_CACHE_PATH")
             ux_info "Total: $total skills across"
-            echo ""
+            printf '\n'
 
             # List marketplaces with counts
             jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
             while IFS='|' read -r mp_name count; do
                 ux_table_row "$mp_name" "$count skills" ""
             done
-            echo ""
+            printf '\n'
             ux_info "Run: ${UX_SUCCESS}csm list --all <marketplace>${UX_RESET} to see skills"
         fi
     else
@@ -314,7 +313,7 @@ _claude_skills_marketplace_group() {
         if [ -z "$matched_plugin" ]; then
             # No exact match - show helpful error with partial matches
             ux_error "No exact match for plugin: ${UX_PRIMARY}$category_filter${UX_RESET}"
-            echo ""
+            printf '\n'
 
             if [ -n "$categories" ]; then
                 ux_section "Did you mean one of these?"
@@ -325,7 +324,7 @@ _claude_skills_marketplace_group() {
                         "$MANIFEST_CACHE_PATH")
                     ux_table_row "$plugin" "$count skills" ""
                 done
-                echo ""
+                printf '\n'
             fi
 
             ux_info "Or use: ${UX_SUCCESS}csm search $category_filter${UX_RESET} to find skills"
@@ -333,7 +332,6 @@ _claude_skills_marketplace_group() {
         fi
 
         ux_header "Plugin: $matched_plugin"
-        echo ""
 
         local count
         count=$(jq -r --arg plugin "$matched_plugin" \
@@ -342,7 +340,7 @@ _claude_skills_marketplace_group() {
 
         if [ "$count" -eq 0 ]; then
             ux_warning "No skills found for plugin: $matched_plugin"
-            echo ""
+            printf '\n'
             return 0
         fi
 
@@ -353,12 +351,11 @@ _claude_skills_marketplace_group() {
         while IFS= read -r skill_name; do
             ux_bullet "$skill_name"
         done
-        echo ""
+        printf '\n'
         ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
     else
         # Show header view for all plugins
         ux_header "Plugins"
-        echo ""
 
         while IFS= read -r plugin; do
             local count
@@ -370,7 +367,7 @@ _claude_skills_marketplace_group() {
         done <<EOF
 $categories
 EOF
-        echo ""
+        printf '\n'
 
         ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
         ux_info "Run: ${UX_SUCCESS}csm search <keyword>${UX_RESET} to find skills"
@@ -408,7 +405,7 @@ _claude_skills_marketplace_stats() {
     while IFS='|' read -r plugin count; do
         ux_table_row "$plugin" "$count skills" ""
     done
-    echo ""
+    printf '\n'
 }
 
 # Search marketplace skills — fzf fuzzy picker when interactive, jq substring otherwise
@@ -489,7 +486,7 @@ _claude_skills_marketplace_search() {
         ux_section "$count. $name"
         ux_table_row "Plugin" "$plugin" ""
         ux_table_row "Description" "$desc_short" ""
-        echo ""
+        printf '\n'
     done <<EOF
 $results
 EOF
@@ -529,17 +526,15 @@ _claude_skills_marketplace_info() {
     ux_table_row "Plugin" "$(echo "$skill_json" | jq -r '.plugin')" ""
     ux_table_row "Marketplace" "$(echo "$skill_json" | jq -r '.marketplace')" ""
     ux_table_row "License" "$(echo "$skill_json" | jq -r '.license')" ""
-    echo ""
 
     ux_section "Description"
     echo "$skill_json" | jq -r '.description' | fold -w 70 -s | while read -r line; do
         echo "  $line"
     done
-    echo ""
 
     ux_section "Location"
     ux_bullet "$(echo "$skill_json" | jq -r '.path')"
-    echo ""
+    printf '\n'
 }
 
 # Force rebuild of manifest cache
