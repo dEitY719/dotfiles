@@ -447,7 +447,7 @@ STUB
     assert_success
     assert_output --partial "stuck pre-PR"
     # Read-only hint (#2256): look at the log before deciding to prune.
-    assert_line --index 1 --regexp '^tail -40 .*/203/log$'
+    assert_line --index 1 --regexp "^tail -40 '.*/203/log'$"
 }
 
 @test "verdict: polling + no pr.number + no log → ls of the state dir" {
@@ -456,7 +456,7 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 205"
     assert_success
     assert_output --partial "stuck pre-PR"
-    assert_line --index 1 --regexp '^ls -la .*/205$'
+    assert_line --index 1 --regexp "^ls -la '.*/205'$"
 }
 
 @test "verdict: failed:* + worktree absent → state-only cleanup" {
@@ -475,7 +475,7 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 302"
     assert_success
     assert_output --partial "worktree alive"
-    assert_line --index 1 "cd $TEST_TEMP_HOME/repo-issue-302-1 && gwt teardown --force && gh-flow prune 302"
+    assert_line --index 1 "cd '$TEST_TEMP_HOME/repo-issue-302-1' && gwt teardown --force && gh-flow prune 302"
 }
 
 @test "verdict: unknown state → copy-runnable ls of the state dir (#2256)" {
@@ -484,7 +484,7 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 303"
     assert_success
     assert_line --index 0 "unknown state (bogus)"
-    assert_line --index 1 --regexp '^ls -la .*/303$'
+    assert_line --index 1 --regexp "^ls -la '.*/303'$"
 }
 
 @test "verdict: missing dir → '-' terminal marker (#2256)" {
