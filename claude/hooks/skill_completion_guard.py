@@ -397,6 +397,28 @@ def _scan_steps_in_section(
     return seen
 
 
+def _section_hard_stopped(
+    messages: list[dict[str, Any]],
+    start: int,
+    end: int,
+    skill: str,
+) -> bool:
+    """True when the section carries this skill's own `[FAIL] <skill>:` line (#2252).
+
+    That line is the SKILL.md HARD-stop exit: the skill ended (as a failure),
+    so its remaining steps never ran and must not be demanded as `OK` emits.
+    Line-start anchored so a `Read` quoting the printf mid-line does not count;
+    either separator spelling is accepted (`gh-pr:commit` / `gh-pr-commit`).
+    """
+    fail_re = re.compile(rf"(?m)^\s*\[FAIL\]\s+{_separator_agnostic_pattern(skill)}:")
+    for entry in messages[start + 1 : end]:
+        msg = _message_payload(entry)
+        for text in _iter_text_blocks(msg, include_tool_results=True):
+            if fail_re.search(text):
+                return True
+    return False
+
+
 def _async_wait_grace_limit() -> int:
     """Read the async-wait grace limit from the environment (#1550).
 
@@ -582,6 +604,9 @@ def main() -> int:
     if not outstanding:
         qualifier = " or async-wait-reprieved" if reprieved else ""
         return _allow(f"{skill}: all required steps emitted{qualifier}", layer="L1.5")
+
+    if _section_hard_stopped(messages, boundary_idx, end_idx, skill):
+        return _allow(f"{skill}: stopped with its own [FAIL] line (#2252)", layer="L1.5")
 
     if not enforce:
         return _allow(f"{skill}: missing steps but enforce=false", layer="L1.5")
