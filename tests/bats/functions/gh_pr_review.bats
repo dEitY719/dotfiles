@@ -2296,7 +2296,7 @@ EOF
         CLAUDE_ENABLED_ACCOUNTS='work personal' _gh_pr_review_resolve_claude_account nope
     "
     assert_failure
-    assert_output "Unknown claude account: 'nope' (allowed: work personal)"
+    assert_output "❌ Unknown claude account: 'nope' (allowed: work personal)"
 }
 
 @test "_gh_pr_review_resolve_claude_account: loads the whitelist when CLAUDE_ENABLED_ACCOUNTS is not inherited (#2226)" {
@@ -2335,5 +2335,5 @@ EOF
         _gh_pr_review_resolve_claude_account work
     "
     assert_failure
-    assert_output "Unknown claude account: 'work' (allowed: )"
+    assert_output "❌ Unknown claude account: 'work' (allowed: )"
 }
