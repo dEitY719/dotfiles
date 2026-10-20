@@ -1145,8 +1145,7 @@ _gh_flow_worker() {
 # ~/.local/bin/gh-flow) sources this file and calls _gh_flow_main; this thin
 # wrapper keeps the `gh_flow` / `gh-flow` names in interactive shells.
 gh_flow() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_flow.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_flow.sh "$@"
 }
 
 alias gh-flow='gh_flow'

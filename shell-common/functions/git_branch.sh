@@ -101,8 +101,7 @@ _gbr_main() {
 # gbr — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/gbr.sh (also ~/.local/bin), never in this shell.
 gbr() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gbr.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gbr.sh "$@"
 }
 
 # ============================================================================
@@ -431,8 +430,7 @@ _git_branch_teardown_main() {
 # git_branch_teardown — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/gbr.sh (also ~/.local/bin), never in this shell.
 git_branch_teardown() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gbr.sh
-    "$_exe" teardown "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gbr.sh teardown "$@"
 }
 
 alias gbr-help='gbr_help'

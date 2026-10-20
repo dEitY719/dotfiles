@@ -292,8 +292,7 @@ _gcp_main() {
 # gcp — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/gcp.sh (also ~/.local/bin), never in this shell.
 gcp() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gcp.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gcp.sh "$@"
 }
 
 # Deprecated backward-compat aliases (Phase 1 — see issue #697 "Out of Scope")

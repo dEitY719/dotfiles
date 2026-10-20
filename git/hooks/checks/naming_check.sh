@@ -39,15 +39,18 @@ check_naming_violations() {
         [[ -z "$func_name" ]] && continue
         # Skip short function names (<=3 chars) — too many false positives in help text
         [[ ${#func_name} -le 3 ]] && continue
-        # `/<name>.sh` is a path (a #2195 one-line wrapper running
-        # tools/custom/<name>.sh "$@"), not user-facing text (#2255).
+        # A line that starts with `"${SHELL_COMMON...}"/tools/custom/` runs that
+        # executable (the #2195 one-line wrapper, #2255); it is a command, not
+        # user-facing text, whichever function name the path contains. A
+        # message that merely mentions the path (`"... see tools/custom/x.sh"`)
+        # does not start that way and stays flagged.
         local matches
         matches=$(
             grep -n "\".*$func_name.*\"" "$abs_path" 2>/dev/null |
                 grep -v ":[[:space:]]*#" |
                 grep -v "alias.*=" |
                 grep -v ":[[:space:]]*$func_name()" |
-                grep -v "/$func_name\.sh" |
+                grep -v ':[[:space:]]*"${SHELL_COMMON[^"]*"/tools/custom/' |
                 grep -v "ux_info\|ux_header\|ux_error\|ux_success\|ux_warning\|ux_bullet\|ux_table_row" || true
         )
 
