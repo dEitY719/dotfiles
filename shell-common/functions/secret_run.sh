@@ -86,8 +86,7 @@ _dotfiles_secret_run_main() {
 # dotfiles_secret_run — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/dotfiles_secret_run.sh (also ~/.local/bin), never in this shell.
 dotfiles_secret_run() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/dotfiles_secret_run.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/dotfiles_secret_run.sh "$@"
 }
 
 alias secret-run='dotfiles_secret_run'
@@ -161,8 +160,7 @@ EXA_API_KEY="?*) ;;
 # mcporter_exa_setup — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/mcporter_exa_setup.sh (also ~/.local/bin), never in this shell.
 mcporter_exa_setup() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mcporter_exa_setup.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mcporter_exa_setup.sh "$@"
 }
 
 alias mcporter-exa-setup='mcporter_exa_setup'

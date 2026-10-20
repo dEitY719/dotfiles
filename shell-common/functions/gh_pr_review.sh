@@ -1683,8 +1683,7 @@ EOF
 # ~/.local/bin/gh-pr-review) sources this file and calls _gh_pr_review_main; this thin
 # wrapper keeps the `gh_pr_review` / `gh-pr-review` names in interactive shells.
 gh_pr_review() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_review.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_review.sh "$@"
 }
 
 alias gh-pr-review='gh_pr_review'

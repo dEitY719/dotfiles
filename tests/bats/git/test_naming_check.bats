@@ -37,3 +37,29 @@ SH
     [ "$status" -eq 1 ]
     grep -q 'run demo_tool to start' "$out"
 }
+
+@test "user-facing text that merely mentions tools/custom/<name>.sh is still a violation" {
+    f="${BATS_TEST_TMPDIR}/demo_tool.sh"
+    cat >"$f" <<'SH'
+demo_tool() {
+    printf '%s\n' "demo_tool failed: see tools/custom/demo_tool.sh"
+}
+SH
+    run check_naming_violations "$f" "$out"
+    [ "$status" -eq 1 ]
+    grep -q 'see tools/custom/demo_tool.sh' "$out"
+}
+
+@test "wrapper whose path contains another function's name is not a violation" {
+    # secret_run.sh shape: `demo` (an inner helper) is a prefix of demo_tool.sh.
+    f="${BATS_TEST_TMPDIR}/demo_tool.sh"
+    cat >"$f" <<'SH'
+demo() { demo_tool "$@"; }
+demo_tool() {
+    "${SHELL_COMMON:-$HOME/dotfiles/shell-common}"/tools/custom/demo_tool.sh "$@"
+}
+SH
+    run check_naming_violations "$f" "$out"
+    [ "$status" -eq 0 ]
+    [ ! -s "$out" ]
+}

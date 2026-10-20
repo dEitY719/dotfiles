@@ -418,8 +418,7 @@ _del_file_main() {
 # del_file — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/del_file.sh (also ~/.local/bin), never in this shell.
 del_file() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/del_file.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/del_file.sh "$@"
 }
 
 alias del-file='del_file'

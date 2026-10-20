@@ -709,8 +709,7 @@ _claude_skills_marketplace_main() {
 # claude_skills_marketplace — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/claude_skills_marketplace.sh (also ~/.local/bin), never in this shell.
 claude_skills_marketplace() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_skills_marketplace.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_skills_marketplace.sh "$@"
 }
 
 # Create short alias for convenience

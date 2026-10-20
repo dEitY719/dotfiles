@@ -1425,8 +1425,7 @@ _gh_pr_approve_worker() {
 # ~/.local/bin/gh-pr-approve) sources this file and calls _gh_pr_approve_main; this thin
 # wrapper keeps the `gh_pr_approve` / `gh-pr-approve` names in interactive shells.
 gh_pr_approve() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_approve.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_approve.sh "$@"
 }
 
 alias gh-pr-approve='gh_pr_approve'

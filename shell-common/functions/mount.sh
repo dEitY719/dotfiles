@@ -299,8 +299,7 @@ _mount_add_main() {
 # mount_add — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/mount_add.sh (also ~/.local/bin), never in this shell.
 mount_add() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mount_add.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mount_add.sh "$@"
 }
 
 # Internal: Show help for mount_show function
@@ -420,8 +419,7 @@ _mount_show_main() {
 # mount_show — thin wrapper (#2195): the logic above runs in the PATH executable
 # tools/custom/mount_show.sh (also ~/.local/bin), never in this shell.
 mount_show() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mount_show.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/mount_show.sh "$@"
 }
 
 # ============================================================================

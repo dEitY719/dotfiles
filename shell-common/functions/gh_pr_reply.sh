@@ -524,8 +524,7 @@ _gh_pr_reply_worker() {
 # ~/.local/bin/gh-pr-reply) sources this file and calls _gh_pr_reply_main; this thin
 # wrapper keeps the `gh_pr_reply` / `gh-pr-reply` names in interactive shells.
 gh_pr_reply() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_reply.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_pr_reply.sh "$@"
 }
 
 alias gh-pr-reply='gh_pr_reply'
