@@ -642,48 +642,27 @@ def test_own_fail_line_allows_stop_on_later_turns(tmp_path: Path, spelling: str)
     assert result.stdout.strip() == ""
 
 
-def test_other_skills_fail_line_does_not_release(tmp_path: Path) -> None:
-    """A `[FAIL]` from a different skill must not count as this skill's stop."""
+@pytest.mark.parametrize(
+    "results",
+    [
+        pytest.param(["[FAIL] gh-pr:create: no commits ahead of base\n"], id="other-skill"),
+        pytest.param(
+            ["[FAIL] gh-pr:commit: nothing to stage\n", "[step:gh-pr-commit/stage-commit] OK\n"],
+            id="fail-then-retry",
+        ),
+        pytest.param(["    printf '[FAIL] gh-pr:commit: nothing to stage\\n'\n"], id="quoted-mid-line"),
+    ],
+)
+def test_fail_line_does_not_release(tmp_path: Path, results: list[str]) -> None:
+    """Another skill's `[FAIL]`, a retry after `[FAIL]`, or a mid-line quote stays enforced."""
     transcript = _write_transcript(
         tmp_path,
-        [
-            _user_text("/gh-pr:commit"),
-            _user_tool_result("[FAIL] gh-pr:create: no commits ahead of base\n"),
-        ],
+        [_user_text("/gh-pr:commit"), *(_user_tool_result(r) for r in results)],
     )
     result = _run_hook(_hook_event(transcript))
     decision = json.loads(result.stdout)
     assert decision["decision"] == "block"
     assert "gh-pr-commit" in decision["reason"]
-
-
-def test_fail_then_resumed_steps_still_blocks(tmp_path: Path) -> None:
-    """A `[FAIL]` followed by a later step emit means the skill retried; stay enforced."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-pr:commit"),
-            _user_tool_result("[FAIL] gh-pr:commit: nothing to stage\n"),
-            _user_tool_result("[step:gh-pr-commit/stage-commit] OK\n"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
-
-
-def test_quoted_fail_line_mid_text_does_not_release(tmp_path: Path) -> None:
-    """A SKILL.md read quoting the printf (not at line start) must not count."""
-    transcript = _write_transcript(
-        tmp_path,
-        [
-            _user_text("/gh-pr:commit"),
-            _user_tool_result("    printf '[FAIL] gh-pr:commit: nothing to stage\\n'\n"),
-        ],
-    )
-    result = _run_hook(_hook_event(transcript))
-    decision = json.loads(result.stdout)
-    assert decision["decision"] == "block"
 
 
 # ---------------------------------------------------------------------------

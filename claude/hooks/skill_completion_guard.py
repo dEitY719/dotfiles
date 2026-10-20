@@ -416,8 +416,6 @@ def _section_hard_stopped(
     for entry in messages[start + 1 : end]:
         msg = _message_payload(entry)
         texts = _iter_text_blocks(msg, include_tool_results=True)
-        # A step emitted in a later message means the skill resumed after the
-        # [FAIL] (retry), so the earlier stop no longer releases the guard.
         if any(_normalize_skill(m.group("skill")) == skill for t in texts for m in _STEP_EMIT_RE.finditer(t)):
             stopped = False
         if any(fail_re.search(t) for t in texts):
