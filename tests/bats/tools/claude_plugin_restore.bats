@@ -75,6 +75,15 @@ JSON
     assert_output --partial '사내 전용 레포 미설정'
 }
 
+@test "restore.sh treats an empty (not-yet-cloned) company/ on internal as inactive (#2251)" {
+    echo "internal" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    mkdir -p "$PLUGDIR/company"
+
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial '사내 전용 레포 미설정'
+}
+
 @test "restore.sh --help prints usage and exits 0 without touching CLI" {
     run "$PLUGDIR/restore.sh" --help
     assert_success
