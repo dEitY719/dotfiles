@@ -306,7 +306,9 @@ _run_check() {
 			while IFS= read -r _line; do _color_diff_line "$_line"; done <<<"$out"
 		fi
 	else
-		if [ "$MODE" = "internal" ]; then
+		if [ "$MODE" = "internal" ] && ! command -v _dotfiles_company_active >/dev/null 2>&1; then
+			ux_info "(company/ 건너뜀 — 모드: internal, shell-common setup_mode_read.sh 미로드)"
+		elif [ "$MODE" = "internal" ]; then
 			ux_info "(company/ 건너뜀 — 모드: internal, company/.git 없음: 사내 전용 레포 미클론)"
 		else
 			ux_info "(company/ 건너뜀 — 모드: ${MODE:-미설정})"
