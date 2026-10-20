@@ -187,11 +187,12 @@ PL_SRC="$SHARED_DIR/installed_plugins.json"
 SYNC_MSG="chore(claude-plugin): sync manifest"
 
 # internal PC + cloned company/ repo → the private manifest is in scope.
-# `.git` is a *file* in a worktree, so probe with `git rev-parse --git-dir`
-# rather than `[ -d .git ]` (worktree-safe, matches the repo convention).
+# Rule SSOT: _dotfiles_company_active (#2251). It probes `-e company/.git`, so an
+# empty (not-yet-cloned) company/ no longer false-positives via git's walk-up
+# into the parent repo. Missing shell-common => inactive.
 MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 COMPANY_ACTIVE=0
-if [ "$MODE" = "internal" ] && git -C "$PRIV_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+if command -v _dotfiles_company_active >/dev/null 2>&1 && _dotfiles_company_active "$SCRIPT_DIR"; then
 	COMPANY_ACTIVE=1
 fi
 
