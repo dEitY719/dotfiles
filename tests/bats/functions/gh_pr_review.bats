@@ -2337,3 +2337,18 @@ EOF
     assert_failure
     assert_output "❌ Unknown claude account: 'work' (allowed: )"
 }
+
+@test "ux_error stand-in: a shell-common without tools/ux_lib still prints errors plainly (#2257)" {
+    local sc="${TEST_TEMP_HOME}/no-uxlib-shell-common"
+    mkdir -p "$sc"
+    ln -s "${SHELL_COMMON}/functions" "$sc/functions"
+    run bash --noprofile --norc -c "
+        export SHELL_COMMON='$sc' HOME='${HOME}'
+        DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\" 2>/dev/null
+        unset DOTFILES_FORCE_INIT
+        gh_pr_review_parse 1 --ai nope >/dev/null
+    "
+    assert_failure 2
+    assert_output "Unknown --ai value: 'nope' (allowed: codex, agy, claude, opencode, hermes)"
+    refute_output --partial "command not found"
+}

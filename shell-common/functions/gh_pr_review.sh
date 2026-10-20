@@ -54,9 +54,11 @@ unset _drg_self _drg_helper
 # fixtures source this file into a bare non-interactive shell where the
 # loader never ran, so load ux_lib here when ux_error is missing; a
 # vendored shell-common without tools/ux_lib gets a plain stderr stand-in
-# so no error message is ever lost to "command not found".
+# so no error message is ever lost to "command not found". Any ux_error
+# already defined wins on purpose -- e.g. devx_pr_review_all_fanout defines
+# a plain one first so lane skip reasons carry no glyph.
 if ! command -v ux_error >/dev/null 2>&1; then
-    _gpr_ux_lib="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/tools/ux_lib/ux_lib.sh"
+    _gpr_ux_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/ux_lib/ux_lib.sh"
     # shellcheck disable=SC1090
     [ -r "$_gpr_ux_lib" ] && . "$_gpr_ux_lib"
     unset _gpr_ux_lib
