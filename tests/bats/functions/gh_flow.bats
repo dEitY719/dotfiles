@@ -441,12 +441,22 @@ STUB
 @test "verdict: polling + no pr.number → stuck pre-PR" {
     _seed_state 203 "polling" "" "$$"
     # No pr.number file → _gh_flow_pr_state returns EMPTY → falls through.
+    printf 'worker log\n' >"$HOME/.local/state/gh-flow/repo/203/log"
 
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 203"
     assert_success
     assert_output --partial "stuck pre-PR"
     # Read-only hint (#2256): look at the log before deciding to prune.
     assert_line --index 1 --regexp '^tail -40 .*/203/log$'
+}
+
+@test "verdict: polling + no pr.number + no log → ls of the state dir" {
+    _seed_state 205 "polling" "" "$$"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 205"
+    assert_success
+    assert_output --partial "stuck pre-PR"
+    assert_line --index 1 --regexp '^ls -la .*/205$'
 }
 
 @test "verdict: failed:* + worktree absent → state-only cleanup" {
