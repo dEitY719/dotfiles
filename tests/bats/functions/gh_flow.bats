@@ -363,7 +363,7 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 201"
     assert_success
     assert_output --partial "stuck poller"
-    assert_output --partial "gh-flow prune --force 201"
+    assert_line --index 1 "gh-flow prune --force 201"
 }
 
 @test "verdict: polling + OPEN + no reply.done + no decision → awaiting first review" {
@@ -374,7 +374,7 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 202"
     assert_success
     assert_output --partial "awaiting first review"
-    assert_output --partial "still working"
+    assert_line --index 1 "-"
 }
 
 # Issue #501 polling/OPEN matrix: (reply.done, reviewDecision) → verdict.
@@ -388,7 +388,7 @@ STUB
     assert_success
     assert_output --partial "comments arrived"
     assert_output --partial "/gh-pr:reply"
-    assert_output --partial "still working"
+    assert_line --index 1 "-"
 }
 
 @test "verdict: polling + OPEN + no reply.done + APPROVED → about to merge" {
@@ -445,7 +445,8 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 203"
     assert_success
     assert_output --partial "stuck pre-PR"
-    assert_output --partial "review"
+    # Read-only hint (#2256): look at the log before deciding to prune.
+    assert_line --index 1 --regexp '^tail -40 .*/203/log$'
 }
 
 @test "verdict: failed:* + worktree absent → state-only cleanup" {
@@ -454,7 +455,7 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 301"
     assert_success
     assert_output --partial "dead failure"
-    assert_output --partial "gh-flow prune 301"
+    assert_line --index 1 "gh-flow prune 301"
 }
 
 @test "verdict: failed:* + worktree present → gwt teardown first" {
@@ -464,7 +465,32 @@ STUB
     run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 302"
     assert_success
     assert_output --partial "worktree alive"
-    assert_output --partial "gwt teardown --force"
+    assert_line --index 1 "cd $TEST_TEMP_HOME/repo-issue-302-1 && gwt teardown --force && gh-flow prune 302"
+}
+
+@test "verdict: unknown state → copy-runnable ls of the state dir (#2256)" {
+    _seed_state 303 "bogus" "" ""
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 303"
+    assert_success
+    assert_line --index 0 "unknown state (bogus)"
+    assert_line --index 1 --regexp '^ls -la .*/303$'
+}
+
+@test "verdict: missing dir → '-' terminal marker (#2256)" {
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 998"
+    assert_success
+    assert_line --index 0 "no state — issue not tracked"
+    assert_line --index 1 "-"
+}
+
+@test "verdict: active worker + alive pid → '-' terminal marker (#2256)" {
+    _seed_state 304 "implementing" "" "$$"
+
+    run_in_bash "cd '$REPO_DIR' && _gh_flow_verdict 304"
+    assert_success
+    assert_line --index 0 "active worker (implementing) — leave alone"
+    assert_line --index 1 "-"
 }
 
 # ---------------------------------------------------------------------------

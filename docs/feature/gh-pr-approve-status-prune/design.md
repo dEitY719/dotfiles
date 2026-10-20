@@ -102,17 +102,19 @@ esac
 ### 4.3 Verdict matrix
 
 `_gh_pr_approve_verdict <pr>` — issue dir의 state/pid/worktree를 읽어
-`<verdict>\n<next-action>` 두 줄을 출력. gh-flow와 동일 contract, 매트릭스만 단순:
+`<verdict>\n<next-action>` 두 줄을 출력. gh-flow와 동일 contract, 매트릭스만 단순.
+next action 은 복사해 바로 실행할 수 있는 명령 한 줄, 할 일이 없으면 터미널 마커 `-`
+(`_gwt_compute_status` 와 같은 계약, #2256):
 
 | state | pid | worktree | verdict | next action |
 |---|---|---|---|---|
 | `done` | — | — | `done — safe to prune` | `gh-pr-approve prune <N>` |
-| `spawning` / `approving` / `tearing-down` | alive | — | `active worker (<state>) — leave alone` | `(none — still working)` |
+| `spawning` / `approving` / `tearing-down` | alive | — | `active worker (<state>) — leave alone` | `-` |
 | `spawning` / `approving` / `tearing-down` | dead | — | `dead worker mid-step (<state>)` | `gh-pr-approve prune <N>` |
-| `failed:*` | — | present | `dead failure, worktree alive` | `cd <wt> && gwt teardown --force, then gh-pr-approve prune <N>` |
+| `failed:*` | — | present | `dead failure, worktree alive` | `cd <wt> && gwt teardown --force && gh-pr-approve prune <N>` |
 | `failed:*` | — | absent/none | `dead failure — state-only cleanup` | `gh-pr-approve prune <N>` |
-| (no dir) | — | — | `no state — PR not tracked` | `(none)` |
-| 그 외 | — | — | `unknown state (<state>)` | `inspect <dir>` |
+| (no dir) | — | — | `no state — PR not tracked` | `-` |
+| 그 외 | — | — | `unknown state (<state>)` | `ls -la <dir>` |
 
 polling/reply 분기는 모두 제거 — gh-pr-approve worker엔 그런 단계가 없다.
 
@@ -152,7 +154,7 @@ gh-pr-approve status #42 - <repo>
   ---
 
   Verdict      active worker (approving) — leave alone
-  Next action  (none — still working)
+  Next action  -
 ```
 
 `flags` 파일이 없으면 `Flags  (none)`. `ai` 파일이 없으면 `AI  (unknown)`.
