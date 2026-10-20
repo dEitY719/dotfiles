@@ -409,14 +409,20 @@ def _section_hard_stopped(
     so its remaining steps never ran and must not be demanded as `OK` emits.
     Line-start anchored so a `Read` quoting the printf mid-line does not count;
     either separator spelling is accepted (`gh-pr:commit` / `gh-pr-commit`).
+    Only the latest state counts: a step emit after the `[FAIL]` (retry) clears it.
     """
     fail_re = re.compile(rf"(?m)^\s*\[FAIL\]\s+{_separator_agnostic_pattern(skill)}:")
+    stopped = False
     for entry in messages[start + 1 : end]:
         msg = _message_payload(entry)
-        for text in _iter_text_blocks(msg, include_tool_results=True):
-            if fail_re.search(text):
-                return True
-    return False
+        texts = _iter_text_blocks(msg, include_tool_results=True)
+        # A step emitted in a later message means the skill resumed after the
+        # [FAIL] (retry), so the earlier stop no longer releases the guard.
+        if any(_normalize_skill(m.group("skill")) == skill for t in texts for m in _STEP_EMIT_RE.finditer(t)):
+            stopped = False
+        if any(fail_re.search(t) for t in texts):
+            stopped = True
+    return stopped
 
 
 def _async_wait_grace_limit() -> int:
