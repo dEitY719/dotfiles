@@ -111,10 +111,10 @@ next action 은 복사해 바로 실행할 수 있는 명령 한 줄, 할 일이
 | `done` | — | — | `done — safe to prune` | `gh-pr-approve prune <N>` |
 | `spawning` / `approving` / `tearing-down` | alive | — | `active worker (<state>) — leave alone` | `-` |
 | `spawning` / `approving` / `tearing-down` | dead | — | `dead worker mid-step (<state>)` | `gh-pr-approve prune <N>` |
-| `failed:*` | — | present | `dead failure, worktree alive` | `cd <wt> && gwt teardown --force && gh-pr-approve prune <N>` |
+| `failed:*` | — | present | `dead failure, worktree alive` | `cd '<wt>' && gwt teardown --force && gh-pr-approve prune <N>` |
 | `failed:*` | — | absent/none | `dead failure — state-only cleanup` | `gh-pr-approve prune <N>` |
 | (no dir) | — | — | `no state — PR not tracked` | `-` |
-| 그 외 | — | — | `unknown state (<state>)` | `ls -la <dir>` |
+| 그 외 | — | — | `unknown state (<state>)` | `ls -la '<dir>'` |
 
 polling/reply 분기는 모두 제거 — gh-pr-approve worker엔 그런 단계가 없다.
 

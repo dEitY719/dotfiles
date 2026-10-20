@@ -386,7 +386,7 @@ _seed_pr_state() {
     run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 302"
     assert_success
     assert_output --partial "worktree alive"
-    assert_line --index 1 "cd $TEST_TEMP_HOME/pr-302-wt && gwt teardown --force && gh-pr-approve prune 302"
+    assert_line --index 1 "cd '$TEST_TEMP_HOME/pr-302-wt' && gwt teardown --force && gh-pr-approve prune 302"
 }
 
 @test "verdict: unknown state → copy-runnable ls of the state dir (#2256)" {
@@ -394,7 +394,7 @@ _seed_pr_state() {
     run_in_bash "cd '$FAKE_REPO' && _gh_pr_approve_verdict 303"
     assert_success
     assert_line --index 0 "unknown state (bogus)"
-    assert_line --index 1 --regexp '^ls -la .*/303$'
+    assert_line --index 1 --regexp "^ls -la '.*/303'$"
 }
 
 @test "verdict: missing dir → 'no state — PR not tracked'" {

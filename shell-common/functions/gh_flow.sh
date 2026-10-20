@@ -246,9 +246,9 @@ EOF
             # chains a prune the user has not looked at yet. No log yet →
             # list the state dir instead of a tail that would just error.
             if [ -f "$_dir/log" ]; then
-                _action="tail -40 $_dir/log"
+                _action="tail -40 '$_dir/log'"
             else
-                _action="ls -la $_dir"
+                _action="ls -la '$_dir'"
             fi
             ;;
         esac
@@ -260,7 +260,7 @@ EOF
     failed:*)
         if [ -n "$_wt" ] && [ -d "$_wt" ]; then
             _verdict="dead failure, worktree alive"
-            _action="cd $_wt && gwt teardown --force && gh-flow prune $_issue"
+            _action="cd '$_wt' && gwt teardown --force && gh-flow prune $_issue"
         else
             _verdict="dead failure — state-only cleanup"
             _action="gh-flow prune $_issue"
@@ -277,7 +277,7 @@ EOF
         ;;
     *)
         _verdict="unknown state ($_state)"
-        _action="ls -la $_dir"
+        _action="ls -la '$_dir'"
         ;;
     esac
 
@@ -650,7 +650,7 @@ _gh_flow_prune() {
                         _torn_down=$((_torn_down + 1))
                     else
                         ux_error "  teardown failed for $_wt; leaving state dir intact"
-                        ux_bullet_sub "manual fix: cd $_wt && gwt teardown --force && gh-flow prune --force $_issue"
+                        ux_bullet_sub "manual fix: cd '$_wt' && gwt teardown --force && gh-flow prune --force $_issue"
                     fi
                 else
                     ux_warning "#$_issue $_state — worktree gone, removing state"

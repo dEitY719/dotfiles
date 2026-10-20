@@ -265,7 +265,7 @@ _gh_pr_approve_verdict() {
     failed:*)
         if [ -n "$_wt" ] && [ -d "$_wt" ]; then
             _verdict="dead failure, worktree alive"
-            _action="cd $_wt && gwt teardown --force && gh-pr-approve prune $_pr"
+            _action="cd '$_wt' && gwt teardown --force && gh-pr-approve prune $_pr"
         else
             _verdict="dead failure — state-only cleanup"
             _action="gh-pr-approve prune $_pr"
@@ -282,7 +282,7 @@ _gh_pr_approve_verdict() {
         ;;
     *)
         _verdict="unknown state ($_state)"
-        _action="ls -la $_dir"
+        _action="ls -la '$_dir'"
         ;;
     esac
 
