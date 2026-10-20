@@ -243,8 +243,13 @@ EOF
             _verdict="stuck pre-PR — investigate log ($_pr_state)"
             # Read-only on purpose (#2256): the log decides whether this is a
             # prune (and whether a live pid needs --force), so the hint never
-            # chains a prune the user has not looked at yet.
-            _action="tail -40 $_dir/log"
+            # chains a prune the user has not looked at yet. No log yet →
+            # list the state dir instead of a tail that would just error.
+            if [ -f "$_dir/log" ]; then
+                _action="tail -40 $_dir/log"
+            else
+                _action="ls -la $_dir"
+            fi
             ;;
         esac
         ;;
