@@ -409,17 +409,23 @@ def _section_hard_stopped(
     so its remaining steps never ran and must not be demanded as `OK` emits.
     Line-start anchored so a `Read` quoting the printf mid-line does not count;
     either separator spelling is accepted (`gh-pr:commit` / `gh-pr-commit`).
-    Only the latest state counts: a step emit after the `[FAIL]` (retry) clears it.
+    Only the latest event counts, in transcript and in-text order: a step emit
+    after the `[FAIL]` (retry) clears it. The name must end at `: ` / line end,
+    so a sibling such as `[FAIL] gh-pr:create:` never matches a `gh-pr` key.
     """
-    fail_re = re.compile(rf"(?m)^\s*\[FAIL\]\s+{_separator_agnostic_pattern(skill)}:")
+    fail_re = re.compile(rf"(?m)^[ \t]*\[FAIL\][ \t]+{_separator_agnostic_pattern(skill)}:(?=\s|$)")
     stopped = False
     for entry in messages[start + 1 : end]:
-        msg = _message_payload(entry)
-        texts = _iter_text_blocks(msg, include_tool_results=True)
-        if any(_normalize_skill(m.group("skill")) == skill for t in texts for m in _STEP_EMIT_RE.finditer(t)):
-            stopped = False
-        if any(fail_re.search(t) for t in texts):
-            stopped = True
+        for text in _iter_text_blocks(_message_payload(entry), include_tool_results=True):
+            last_fail = max((m.start() for m in fail_re.finditer(text)), default=-1)
+            last_emit = max(
+                (m.start() for m in _STEP_EMIT_RE.finditer(text) if _normalize_skill(m.group("skill")) == skill),
+                default=-1,
+            )
+            if last_fail > last_emit:
+                stopped = True
+            elif last_emit > last_fail:
+                stopped = False
     return stopped
 
 

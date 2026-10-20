@@ -643,6 +643,24 @@ def test_own_fail_line_allows_stop_on_later_turns(tmp_path: Path, spelling: str)
 
 
 @pytest.mark.parametrize(
+    "message",
+    [
+        pytest.param(
+            _user_tool_result("[step:gh-pr-commit/stage-commit] OK\n[FAIL] gh-pr:commit: hook failed twice\n"),
+            id="partial-then-fail-same-output",
+        ),
+        pytest.param(_assistant_text("[FAIL] gh-pr:commit: nothing to stage"), id="assistant-text"),
+    ],
+)
+def test_fail_after_progress_or_in_assistant_text_allows_stop(tmp_path: Path, message: dict[str, Any]) -> None:
+    """The latest event in the section is the `[FAIL]`, so the skill counts as stopped."""
+    transcript = _write_transcript(tmp_path, [_user_text("/gh-pr:commit"), message])
+    result = _run_hook(_hook_event(transcript))
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+@pytest.mark.parametrize(
     "results",
     [
         pytest.param(["[FAIL] gh-pr:create: no commits ahead of base\n"], id="other-skill"),
@@ -650,7 +668,12 @@ def test_own_fail_line_allows_stop_on_later_turns(tmp_path: Path, spelling: str)
             ["[FAIL] gh-pr:commit: nothing to stage\n", "[step:gh-pr-commit/stage-commit] OK\n"],
             id="fail-then-retry",
         ),
+        pytest.param(
+            ["[FAIL] gh-pr:commit: nothing to stage\n[step:gh-pr-commit/stage-commit] OK\n"],
+            id="fail-then-retry-same-output",
+        ),
         pytest.param(["    printf '[FAIL] gh-pr:commit: nothing to stage\\n'\n"], id="quoted-mid-line"),
+        pytest.param(["[FAIL] gh-pr:commit:extra: other name\n"], id="longer-name"),
     ],
 )
 def test_fail_line_does_not_release(tmp_path: Path, results: list[str]) -> None:
