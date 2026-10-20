@@ -163,8 +163,8 @@ fi
 PRIV="$SCRIPT_DIR/company"
 MODE=$(_dotfiles_setup_mode 2>/dev/null || echo "")
 COMPANY_ACTIVE=false
-# `-e` not `-d`: worktree-safe, and avoids git walking up into dotfiles (see restore.sh).
-if [ "$MODE" = "internal" ] && [ -e "$PRIV/.git" ]; then
+# Rule SSOT: _dotfiles_company_active (#2251); missing shell-common => inactive.
+if command -v _dotfiles_company_active >/dev/null 2>&1 && _dotfiles_company_active "$SCRIPT_DIR"; then
 	COMPANY_ACTIVE=true
 fi
 

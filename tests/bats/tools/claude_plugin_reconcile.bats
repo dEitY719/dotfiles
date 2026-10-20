@@ -266,6 +266,18 @@ JSON
     refute_output --partial 'company/marketplaces.json'
 }
 
+@test "reconcile.sh treats an empty (not-yet-cloned) company/ on internal as inactive (#2251)" {
+    # Old `git -C company rev-parse --git-dir` walked up into the parent repo and
+    # false-positived here; _dotfiles_company_active probes company/.git itself.
+    echo "internal" > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    _seed_in_sync_manifest
+    mkdir -p "$REPO/claude/plugin/company"
+    run "$SCRIPT" --check
+    assert_success
+    assert_output --partial 'company/ 건너뜀'
+    refute_output --partial 'company/marketplaces.json'
+}
+
 @test "reconcile.sh --apply fails clearly when the plugin_sync_title.sh helper cannot be sourced (#1558 codex review)" {
     # A half-installed / mid-upgrade checkout: shell-common/lib/plugin_sync_title.sh
     # is unreachable, so _plugin_sync_title never gets defined. --apply must refuse loudly
