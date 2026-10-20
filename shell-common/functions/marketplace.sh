@@ -250,22 +250,23 @@ _claude_skills_marketplace_list() {
                     *) ux_bullet "${line#  • }" ;;
                 esac
             done
-            printf '\n'
+            ux_info ""
         else
             # Show all marketplaces with skill counts
             ux_header "Marketplaces"
 
-            local total
+            local total mp_total
             total=$(jq -r '.total_skills' "$MANIFEST_CACHE_PATH")
-            ux_info "Total: $total skills across"
-            printf '\n'
+            mp_total=$(jq -r '.skills | map(.marketplace) | unique | length' "$MANIFEST_CACHE_PATH")
+            ux_info "Total: $total skills across $mp_total marketplaces"
+            ux_info ""
 
             # List marketplaces with counts
             jq -r '.skills | group_by(.marketplace) | .[] | "\(.[0].marketplace)|\(length)"' "$MANIFEST_CACHE_PATH" | \
             while IFS='|' read -r mp_name count; do
                 ux_table_row "$mp_name" "$count skills" ""
             done
-            printf '\n'
+            ux_info ""
             ux_info "Run: ${UX_SUCCESS}csm list --all <marketplace>${UX_RESET} to see skills"
         fi
     else
@@ -306,14 +307,13 @@ _claude_skills_marketplace_group() {
         local matched_plugin=""
 
         # Check for exact match only (not substring)
-        if echo "$categories" | grep -q "^${category_filter}$"; then
+        if printf '%s\n' "$categories" | grep -qxF -- "$category_filter"; then
             matched_plugin="$category_filter"
         fi
 
         if [ -z "$matched_plugin" ]; then
             # No exact match - show helpful error with partial matches
             ux_error "No exact match for plugin: ${UX_PRIMARY}$category_filter${UX_RESET}"
-            printf '\n'
 
             if [ -n "$categories" ]; then
                 ux_section "Did you mean one of these?"
@@ -324,7 +324,7 @@ _claude_skills_marketplace_group() {
                         "$MANIFEST_CACHE_PATH")
                     ux_table_row "$plugin" "$count skills" ""
                 done
-                printf '\n'
+                ux_info ""
             fi
 
             ux_info "Or use: ${UX_SUCCESS}csm search $category_filter${UX_RESET} to find skills"
@@ -340,7 +340,7 @@ _claude_skills_marketplace_group() {
 
         if [ "$count" -eq 0 ]; then
             ux_warning "No skills found for plugin: $matched_plugin"
-            printf '\n'
+            ux_info ""
             return 0
         fi
 
@@ -351,7 +351,7 @@ _claude_skills_marketplace_group() {
         while IFS= read -r skill_name; do
             ux_bullet "$skill_name"
         done
-        printf '\n'
+        ux_info ""
         ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
     else
         # Show header view for all plugins
@@ -367,7 +367,7 @@ _claude_skills_marketplace_group() {
         done <<EOF
 $categories
 EOF
-        printf '\n'
+        ux_info ""
 
         ux_info "Run: ${UX_SUCCESS}csm info <skill-name>${UX_RESET} for details"
         ux_info "Run: ${UX_SUCCESS}csm search <keyword>${UX_RESET} to find skills"
@@ -405,7 +405,7 @@ _claude_skills_marketplace_stats() {
     while IFS='|' read -r plugin count; do
         ux_table_row "$plugin" "$count skills" ""
     done
-    printf '\n'
+    ux_info ""
 }
 
 # Search marketplace skills — fzf fuzzy picker when interactive, jq substring otherwise
@@ -486,10 +486,10 @@ _claude_skills_marketplace_search() {
         ux_section "$count. $name"
         ux_table_row "Plugin" "$plugin" ""
         ux_table_row "Description" "$desc_short" ""
-        printf '\n'
     done <<EOF
 $results
 EOF
+    ux_info ""
 
     ux_info "Found $count matching skill(s)"
 }
@@ -534,7 +534,7 @@ _claude_skills_marketplace_info() {
 
     ux_section "Location"
     ux_bullet "$(echo "$skill_json" | jq -r '.path')"
-    printf '\n'
+    ux_info ""
 }
 
 # Force rebuild of manifest cache
