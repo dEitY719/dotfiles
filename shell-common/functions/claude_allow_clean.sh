@@ -6,8 +6,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # `claude_allow_clean` / `claude-allow-clean` names and tab completion in interactive shells.
 
 claude_allow_clean() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_allow_clean.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_allow_clean.sh "$@"
 }
 
 alias claude-allow-clean='claude_allow_clean'

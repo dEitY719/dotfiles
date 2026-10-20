@@ -7,13 +7,11 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # ~/.local/bin/gh-audit-builtin-workflows); these keep the function/alias names.
 
 gh_audit_builtin_workflows() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_audit_builtin_workflows.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_audit_builtin_workflows.sh "$@"
 }
 
 gh_audit_builtin_workflows_help() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_audit_builtin_workflows.sh
-    "$_exe" --help
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/gh_audit_builtin_workflows.sh --help
 }
 
 alias gh-audit-builtin-workflows='gh_audit_builtin_workflows'

@@ -6,8 +6,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # `claude_marketplace_autoupdate` / `claude-marketplace-autoupdate` names and tab completion in interactive shells.
 
 claude_marketplace_autoupdate() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_marketplace_autoupdate.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/claude_marketplace_autoupdate.sh "$@"
 }
 
 alias claude-marketplace-autoupdate='claude_marketplace_autoupdate'

@@ -6,8 +6,7 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # `wsl_check` / `wsl-check` names and tab completion in interactive shells.
 
 wsl_check() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/wsl_check.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/wsl_check.sh "$@"
 }
 
 alias wsl-check='wsl_check'

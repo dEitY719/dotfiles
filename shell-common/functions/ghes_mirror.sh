@@ -9,6 +9,7 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 ghes_mirror() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _gm_exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/ghes_mirror.sh
     local _gm_cd_file _gm_rc
     _gm_cd_file=$(mktemp) || return 1

@@ -39,12 +39,15 @@ check_naming_violations() {
         [[ -z "$func_name" ]] && continue
         # Skip short function names (<=3 chars) — too many false positives in help text
         [[ ${#func_name} -le 3 ]] && continue
+        # `/<name>.sh` is a path (a #2195 one-line wrapper running
+        # tools/custom/<name>.sh "$@"), not user-facing text (#2255).
         local matches
         matches=$(
             grep -n "\".*$func_name.*\"" "$abs_path" 2>/dev/null |
                 grep -v ":[[:space:]]*#" |
                 grep -v "alias.*=" |
                 grep -v ":[[:space:]]*$func_name()" |
+                grep -v "/$func_name\.sh" |
                 grep -v "ux_info\|ux_header\|ux_error\|ux_success\|ux_warning\|ux_bullet\|ux_table_row" || true
         )
 

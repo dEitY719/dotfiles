@@ -62,8 +62,7 @@ unset _UX_LIB_PATH
 # ═══════════════════════════════════════════════════════════════
 
 clear_doc() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/clear_doc.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/clear_doc.sh "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -71,8 +70,7 @@ clear_doc() {
 # ═══════════════════════════════════════════════════════════════
 
 delete_doc() {
-    local _exe="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/delete_doc.sh
-    "$_exe" "$@"
+    "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}"/tools/custom/delete_doc.sh "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
