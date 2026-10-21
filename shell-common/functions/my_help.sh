@@ -653,7 +653,14 @@ EOF
     esac
 
     ux_section "${label}: ${name}"
-    ux_bullet "definition: ${defn}"
+    # F-10 (#2263): `definition: gwt()` carries no information, so a func
+    # prints the read-only source excerpt the preview card shows instead.
+    if [ "$kind" = "func" ]; then
+        _my_help_source_excerpt "$location" 0 24 ||
+            ux_bullet "definition: ${defn}"
+    else
+        ux_bullet "definition: ${defn}"
+    fi
     # Field 4 is always populated for an alias record (see the record layout
     # above), so no emptiness guard is needed here.
     ux_bullet "source:     ${location}"
@@ -843,21 +850,197 @@ _my_help_parse_scope() {
     printf '%s\t%s\n' "$scope" "$rest"
 }
 
+# Internal: print lines [line-before, line+after] of a repo-relative
+# `relpath:line` location, read-only (#2263 F-6/F-10). Returns 1 — printing
+# nothing — when the location is absolute, climbs out with `..`, has no
+# integer line, or the file is unreadable; callers then keep the plain
+# `source:` line. Only sed/bat ever touch the file: nothing is sourced or run.
+_my_help_source_excerpt() {
+    local location="$1" before="${2:-3}" after="${3:-3}"
+    local relpath line root file first last bat_bin width
+
+    relpath="${location%:*}"
+    line="${location##*:}"
+    case "$line" in '' | *[!0-9]*) return 1 ;; esac
+    case "$relpath" in '' | /* | *..*) return 1 ;; esac
+
+    root="${DOTFILES_ROOT:-${SHELL_COMMON%/shell-common}}"
+    file="${root}/${relpath}"
+    [ -f "$file" ] && [ -r "$file" ] || return 1
+
+    first=$((line - before))
+    [ "$first" -ge 1 ] || first=1
+    last=$((line + after))
+
+    # Colour only when ux_lib has colour on; otherwise the plain sed path keeps
+    # NO_COLOR / TERM=dumb / test output free of escape bytes.
+    bat_bin=""
+    if [ -n "${UX_RESET-}" ]; then
+        if command -v bat >/dev/null 2>&1; then
+            bat_bin=bat
+        elif command -v batcat >/dev/null 2>&1; then
+            bat_bin=batcat
+        fi
+    fi
+
+    if [ -n "$bat_bin" ]; then
+        width="${FZF_PREVIEW_COLUMNS:-${COLUMNS:-80}}"
+        "$bat_bin" --style=numbers --color=always --paging=never -l sh \
+            --terminal-width="$width" -r "${first}:${last}" \
+            --highlight-line "$line" -- "$file" 2>/dev/null && return 0
+    fi
+    awk -v a="$first" -v b="$last" \
+        'NR > b { exit } NR >= a { printf "%5d  %s\n", NR, $0 }' "$file"
+}
+
+# Internal: prepend the display column to 5-field records (#2263 F-1..F-3,
+# NF-1). Reads records on stdin, writes `display<TAB>record` — the record
+# itself (P9) is untouched, so every consumer strips field 1 with `cut -f2-`.
+# Aligned with spaces, never tabs: fzf renders a tab as an 8-column tab stop,
+# which is exactly what misaligned `cc-help topic` (#2263 defect A).
+# Colour comes from ux_lib's UX_* variables, which ux_lib empties under
+# NO_COLOR / TERM=dumb / DOTFILES_TEST_MODE, so those streams carry no ESC.
+_my_help_render_rows() {
+    local scope="${1:-topic}"
+    local key
+    {
+        # Topic rows' dim tail tag: "@<category> <label>" once per category,
+        # then "<topic> <category>" pairs. No $(...) per key — the label
+        # function writes straight into the stream, so this costs no fork.
+        case "$scope" in
+            topic | all)
+                for key in $(_my_help_get_category_keys 2>/dev/null); do
+                    printf '@%s\t' "$key"
+                    _my_help_category_label "$key"
+                    printf '\n'
+                done
+                if [ -n "${BASH_VERSION-}" ]; then
+                    # eval: zsh must not parse bash-only ${!array[@]} at source time.
+                    eval 'for key in "${!HELP_COMMAND_TO_CATEGORY[@]}"; do printf "%s\t%s\n" "$key" "${HELP_COMMAND_TO_CATEGORY[$key]}"; done'
+                elif [ -n "${ZSH_VERSION-}" ]; then
+                    eval 'for key in ${(k)HELP_COMMAND_TO_CATEGORY}; do printf "%s\t%s\n" "$key" "${HELP_COMMAND_TO_CATEGORY[$key]}"; done'
+                fi
+                ;;
+        esac
+        # Same sentinel trick as _my_help_function_index.
+        printf '\034\n'
+        cat
+    } | awk -F'\t' -v scope="$scope" -v dim="${UX_DIM-}" \
+        -v muted="${UX_MUTED-}" -v reset="${UX_RESET-}" '
+        function base(p) { sub(/:[0-9]+$/, "", p); sub(/.*\//, "", p); return p }
+        function cut(s, n) { return (length(s) > n) ? substr(s, 1, n - 1) "…" : s }
+        BEGIN { mode = 1; maxw = 0 }
+        mode == 1 {
+            if ($0 == "\034") { mode = 2; next }
+            if (substr($1, 1, 1) == "@") catlabel[substr($1, 2)] = $2
+            else topiccat[$1] = $2
+            next
+        }
+        NF < 3 { next }
+        {
+            n++
+            rec[n] = $0
+            kind = $3
+            dn = $1
+            desc = $2
+            tag = ""
+            if (kind == "topic") {
+                sub(/-help$/, "", dn)
+                sub(/^\[[^]]*\][ \t]*/, "", desc)
+                k = dn
+                gsub(/-/, "_", k)
+                tag = (k in topiccat) ? catlabel[topiccat[k]] : ""
+            } else if (kind == "alias") {
+                desc = cut($5, 40)
+                tag = ($2 != $4) ? $2 : base($4)
+            } else if (kind == "func") {
+                tag = base($4)
+            } else {
+                # category ("21 topics") and scope ("425") carry it in field 4.
+                tag = $4
+            }
+            # Names are ASCII; a truncated one is width 24 with its ellipsis.
+            if (length(dn) > 24) { dn = substr(dn, 1, 23) "…"; dw[n] = 24 }
+            else dw[n] = length(dn)
+            name[n] = dn
+            if (dw[n] > maxw) maxw = dw[n]
+            badge[n] = (kind == "category") ? "cat" : kind
+            body[n] = desc
+            tail[n] = tag
+        }
+        END {
+            for (i = 1; i <= n; i++) {
+                pad = ""
+                for (j = dw[i]; j < maxw; j++) pad = pad " "
+                line = name[i] pad "  "
+                if (scope == "all")
+                    line = line muted sprintf("%-5s", badge[i]) reset "  "
+                if (body[i] != "") line = line dim body[i] reset
+                if (tail[i] != "")
+                    line = line muted (body[i] != "" ? "  · " : "· ") tail[i] reset
+                printf "%s\t%s\n", line, rec[i]
+            }
+        }'
+}
+
+# Internal: fzf --preview-window for a terminal <cols> wide (#2263 F-7).
+# fzf's own `<N(...)` alternative compares against the *preview* width, not
+# the terminal's (defect B), so the tier is picked here once per palette.
+_my_help_palette_layout() {
+    local cols="${1:-}"
+    case "$cols" in '' | *[!0-9]*) cols=120 ;; esac
+    if [ "$cols" -ge 120 ]; then
+        printf '%s\n' 'right,50%,border-left,<45(down,45%,border-top)'
+    elif [ "$cols" -ge 100 ]; then
+        printf '%s\n' 'down,45%,border-top'
+    else
+        # The list comes first on a narrow terminal; alt-p (or ?) opens it.
+        printf '%s\n' 'hidden,down,45%,border-top'
+    fi
+}
+
+# Internal: true (0) when fzf version <have> is at least <want> (#2263 F-8).
+_my_help_fzf_ge() {
+    local want="$1" have="$2"
+    [ -n "$have" ] || return 1
+    [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | head -n 1)" = "$want" ]
+}
+
+# Internal: the scope after (next) or before (prev) <scope> in the Tab cycle
+# topic -> alias -> func -> category -> all (#2263 F-5, D-6).
+_my_help_scope_step() {
+    local dir="$1" scope="$2"
+    if [ "$dir" = "prev" ]; then
+        case "$scope" in
+            topic) scope=all ;; alias) scope=topic ;; func) scope="alias" ;;
+            category) scope=func ;; *) scope=category ;;
+        esac
+    else
+        case "$scope" in
+            topic) scope="alias" ;; alias) scope=func ;; func) scope=category ;;
+            category) scope=all ;; *) scope=topic ;;
+        esac
+    fi
+    printf '%s\n' "$scope"
+}
+
 # Internal: true (0) when the interactive palette can run.
 _my_help_palette_available() {
     command -v fzf >/dev/null 2>&1 && [ -t 0 ] && [ -t 1 ]
 }
 
 # Internal: fzf command palette over help topics, categories, aliases and
-# public functions (#1740).
+# public functions (#1740, redesigned in #2263).
 #
 # Scope switching runs as a loop in *this* function rather than an fzf action:
 # fzf 0.44.1 (the version this repo targets) has no `transform`, and every
 # alternative binding would have to interpolate state into the action string.
-# With `--print-query` the parent simply reads back whatever the user typed,
-# and a leading slash re-invokes fzf with a different candidate stream. `/`
-# therefore stays an ordinary query character — no ZLE/readline binding, so
-# bash and zsh behave identically (NF-5).
+# With `--print-query --expect=tab,btab` the parent reads back what the user
+# typed and which key ended fzf, then re-invokes fzf with a different
+# candidate stream. Inside fzf the only live behaviour is a `change:reload`
+# gate that swaps the list for the pre-rendered scope menu while the query
+# starts with `/` — `cat` of a file, no my_help.sh load per keystroke (F-5).
+# No ZLE/readline binding, so bash and zsh behave identically (NF-5).
 _my_help_search() {
     # Degrade to the static category table when fzf is missing or there is no
     # TTY (piped output, scripts, test harness) — fzf needs an interactive terminal.
@@ -866,13 +1049,29 @@ _my_help_search() {
         return $?
     fi
 
+    # F-8: below the 0.44 baseline the Tier A flags are unsupported. An
+    # unparseable version (a wrapper, a stub) is given the benefit of the doubt.
+    local fzf_ver
+    fzf_ver=$(fzf --version 2>/dev/null < /dev/null | awk 'NR == 1 { print $1; exit }')
+    case "$fzf_ver" in
+        [0-9]*.[0-9]*)
+            if ! _my_help_fzf_ge 0.44.0 "$fzf_ver"; then
+                ux_warning "fzf 0.44+ 필요 (현재 ${fzf_ver}) — 정적 카테고리 목록으로 대체합니다."
+                _my_help_show_categories
+                return $?
+            fi
+            ;;
+        *) fzf_ver="" ;;
+    esac
+
     # Users may run with noclobber set; keep the temp-file redirection below
     # working without leaking the option change (same guard as _my_help_show_all).
     if [ -n "$ZSH_VERSION" ]; then
         setopt localoptions clobber 2>/dev/null || true
     fi
 
-    local preview tmp_dir tmp scope query out rc parsed selected kind count
+    local preview tmp_dir tmp stream menu scope query out rc parsed selected kind
+    local key layout colors
 
     preview="${SHELL_COMMON}/tools/custom/my_help_preview.sh"
     tmp_dir="${TMPDIR:-/tmp}"
@@ -881,7 +1080,11 @@ _my_help_search() {
     # and have the palette truncate a file of their choosing (PR #1745 review,
     # codex BLOCKER + agy). A missing mktemp fails the substitution, so this
     # covers both "no mktemp" and "mktemp refused".
-    if ! tmp=$(mktemp "${tmp_dir%/}/my_help_palette.XXXXXX" 2>/dev/null); then
+    tmp="" stream="" menu=""
+    if ! tmp=$(mktemp "${tmp_dir%/}/my_help_palette.XXXXXX" 2>/dev/null) ||
+        ! stream=$(mktemp "${tmp_dir%/}/my_help_stream.XXXXXX" 2>/dev/null) ||
+        ! menu=$(mktemp "${tmp_dir%/}/my_help_menu.XXXXXX" 2>/dev/null); then
+        rm -f ${tmp:+"$tmp"} ${stream:+"$stream"} 2>/dev/null || true
         ux_warning "임시 파일을 만들 수 없습니다 — 정적 카테고리 목록으로 대체합니다."
         _my_help_show_categories
         return $?
@@ -897,49 +1100,76 @@ _my_help_search() {
     esac
     query=""
 
+    # F-7: one layout decision per palette, from the terminal width.
+    layout=$(_my_help_palette_layout "${COLUMNS:-$(tput cols 2>/dev/null)}")
+    # F-4: fzf chrome follows ux_lib's semantic colours (4 = UX_PRIMARY,
+    # 8 = UX_MUTED); with ux_lib's colour off the streams carry no ESC and fzf
+    # goes monochrome too (F-3).
+    if [ -n "${UX_RESET-}" ]; then
+        colors='pointer:4,prompt:4,hl:4,hl+:4,fg+:-1:bold,bg+:-1,gutter:-1,info:8,border:8,label:8'
+    else
+        colors='bw'
+    fi
+
     while :; do
         # Truncate in place — never `rm` then recreate. Re-opening the path
         # each round reopens the symlink-race window that mktemp closed.
         _my_help_search_candidates "$scope" > "$tmp" 2>/dev/null || true
+        _my_help_render_rows "$scope" < "$tmp" > "$stream" 2>/dev/null || true
+        # The `/` menu is rendered once per round so the per-keystroke reload
+        # below is a bare `cat`.
+        "$preview" --scopes "$tmp" 2>/dev/null |
+            _my_help_render_rows scope > "$menu" 2>/dev/null || true
 
-        # Best-effort count for the header (F-10); "${count:-?}" covers an
-        # empty result.
-        count=$(wc -l < "$tmp" 2>/dev/null | tr -d ' ')
+        # Tier B (F-8, D-9): fzf >= 0.63 replaces the bottom border label with
+        # its own input label, placeholder and footer.
+        set -- --border-label=' ⏎ open · / scope · tab next scope · ? keys · esc quit ' \
+            --border-label-pos=3:bottom
+        if _my_help_fzf_ge 0.63.0 "$fzf_ver"; then
+            set -- --style=full --border=none --highlight-line \
+                --input-label=" my-help · /${scope} " \
+                --ghost='type to search · / scopes · tab cycles' \
+                --footer=' ⏎ open · / scope · tab next scope · ? keys · esc quit '
+        fi
 
         # No path is interpolated into the fzf action strings at all: they are
-        # single-quoted, so the shell fzf spawns expands the three MY_HELP_*
+        # single-quoted, so the shell fzf spawns expands the MY_HELP_*
         # variables itself. A path containing a quote would otherwise break the
         # action's own parsing (PR #1745 review, codex + agy). A candidate value
         # still never reaches a command string (NF-2) — fzf hands the preview
-        # `{n}`, the integer row index, and the helper reads the record back out
-        # of the records file itself.
+        # `{n}`, the integer row index, plus `{q}`, which fzf single-quotes and
+        # which is only ever compared against a `case` pattern.
         # `|| rc=$?` rather than a bare assignment: callers may be running under
         # `set -e` / `err_exit`, where fzf's non-zero abort status would take
         # the whole shell down (PR #1247).
         rc=0
-        # SC2016: the single quotes are the fix, not an oversight — the three
+        # SC2016: the single quotes are the fix, not an oversight — the
         # MY_HELP_* names must reach fzf's own shell unexpanded.
-        # SC2094: `$tmp` is written by the command above and only *read* here;
-        # the env-assignment prefix makes shellcheck read it as one pipeline.
+        # SC2094: `$stream` is written by the command above and only *read*
+        # here; the env-assignment prefix makes shellcheck read it as one pipeline.
         # shellcheck disable=SC2016,SC2094
         out=$(
             MY_HELP_PREVIEW="$preview" \
             MY_HELP_RECORDS="$tmp" \
+            MY_HELP_STREAM="$stream" \
+            MY_HELP_MENU="$menu" \
             MY_HELP_SCOPE="$scope" \
-                fzf --delimiter='\t' --with-nth=1,3,2 \
-                    --height=80% --layout=reverse --border \
-                    --print-query --query="$query" \
-                    --prompt="my-help /${scope}> " \
-                    --header="scope /${scope} · ${count:-?} items · / scope · ? keys · esc quit" \
-                    --preview '"$MY_HELP_PREVIEW" "$MY_HELP_RECORDS" {n}' \
-                    --preview-window='right,55%,border-left,<80(down,60%,border-top)' \
+                fzf --ansi --delimiter='\t' --with-nth=1 --nth=1 --tiebreak=begin,length \
+                    --height=80% --layout=reverse --border=rounded \
+                    --prompt="my-help /${scope} ❯ " --info=inline-right \
+                    --pointer='▌' --ellipsis='…' --color="$colors" \
+                    --print-query --expect=tab,btab --query="$query" \
+                    --bind 'change:reload:case {q} in /*) cat "$MY_HELP_MENU" ;; *) cat "$MY_HELP_STREAM" ;; esac' \
                     --bind '?:preview("$MY_HELP_PREVIEW" --keys "$MY_HELP_SCOPE")' \
-                    < "$tmp"
+                    --bind 'alt-p:toggle-preview' \
+                    --preview '"$MY_HELP_PREVIEW" "$MY_HELP_RECORDS" {n} {q}' \
+                    --preview-window="$layout" \
+                    "$@" < "$stream"
         ) || rc=$?
 
         # 130 = Esc / Ctrl-C — the user quit, print nothing.
         if [ "$rc" -eq 130 ]; then
-            rm -f "$tmp" 2>/dev/null || true
+            rm -f "$tmp" "$stream" "$menu" 2>/dev/null || true
             return 0
         fi
         # 2 (and anything else >= 2) is fzf failing on its own terms: an option
@@ -948,23 +1178,45 @@ _my_help_search() {
         # (PR #1745 review, agy BLOCKER). Degrade to the static table instead —
         # the same fallback the fzf-absent path already uses.
         if [ "$rc" -ge 2 ]; then
-            rm -f "$tmp" 2>/dev/null || true
+            rm -f "$tmp" "$stream" "$menu" 2>/dev/null || true
             ux_warning "fzf 실행 실패 (rc=${rc}) — 정적 카테고리 목록으로 대체합니다."
             _my_help_show_categories
             return $?
         fi
 
-        # --print-query puts the typed query on its own line ahead of the
-        # selection. Split them on the tab rather than the line number: a query
-        # can never contain a tab (fzf's prompt does not accept one) and a
-        # candidate record always does, so this also stays correct for a caller
-        # that stubs fzf and prints the selected record alone.
-        query=$(printf '%s\n' "$out" | awk -F'\t' 'NF == 1 { print; exit }')
-        selected=$(printf '%s\n' "$out" | awk -F'\t' 'NF > 1 { print; exit }')
+        # Output: line 1 = query, line 2 = the --expect key (empty for Enter),
+        # then the selected row. A query or key never contains a tab and a row
+        # always does, so a stub that prints fewer lines still parses.
+        query=$(printf '%s\n' "$out" | awk -F'\t' 'NR == 1 && NF <= 1 { print } { exit }')
+        key=$(printf '%s\n' "$out" | awk -F'\t' 'NR == 2 { if (NF <= 1) print; exit }')
+        selected=$(printf '%s\n' "$out" | awk -F'\t' 'NF > 1 { print; exit }' | cut -f2-)
+
+        # Tab / Shift-Tab cycle the scope and carry the query — except a
+        # half-typed `/` command, which would only reopen the menu.
+        if [ "$key" = "tab" ] || [ "$key" = "btab" ]; then
+            if [ "$key" = "tab" ]; then
+                scope=$(_my_help_scope_step next "$scope")
+            else
+                scope=$(_my_help_scope_step prev "$scope")
+            fi
+            case "$query" in /*) query="" ;; esac
+            continue
+        fi
+
+        # A scope-menu row: its field 5 is the scope key. A `/alias docker`
+        # style query still donates its trailing term.
+        if [ "$(printf '%s' "$selected" | cut -f3)" = "scope" ]; then
+            scope=$(printf '%s' "$selected" | cut -f5)
+            if parsed=$(_my_help_parse_scope "$query"); then
+                query=$(printf '%s' "$parsed" | cut -f2)
+            else
+                query=""
+            fi
+            continue
+        fi
 
         # A slash query is a scope switch even when it happened to fuzzy-match
-        # a row (locations contain slashes), so it is checked before the
-        # selection is honoured.
+        # a row, so it is checked before the selection is honoured.
         if parsed=$(_my_help_parse_scope "$query"); then
             scope=$(printf '%s' "$parsed" | cut -f1)
             query=$(printf '%s' "$parsed" | cut -f2)
@@ -977,7 +1229,7 @@ _my_help_search() {
     # Explicit cleanup rather than `trap ... EXIT`: this runs inside the user's
     # interactive shell, where an EXIT trap would both clobber theirs and only
     # fire when the shell itself exits.
-    rm -f "$tmp" 2>/dev/null || true
+    rm -f "$tmp" "$stream" "$menu" 2>/dev/null || true
 
     # Esc / empty selection: nothing to show.
     if [ -z "$selected" ]; then
