@@ -143,14 +143,11 @@ _myhp_card_topic() {
 
 _myhp_card_alias() {
     local name="$1" desc="$2" location="$3" defn="$4"
-    local note="" bat_bin=""
+    local note="" bat_bin
     [ "$desc" = "$location" ] || note="$desc"
 
     _myhp_title alias "$name" "$location" "${note:-$defn}"
-    if [ -n "${UX_RESET-}" ]; then
-        command -v bat >/dev/null 2>&1 && bat_bin=bat
-        [ -n "$bat_bin" ] || { command -v batcat >/dev/null 2>&1 && bat_bin=batcat; }
-    fi
+    bat_bin=$(_my_help_bat_bin)
     if [ -n "$bat_bin" ]; then
         printf '%s\n' "$defn" | "$bat_bin" --style=plain --color=always \
             --paging=never -l sh 2>/dev/null || ux_bullet "$defn"
