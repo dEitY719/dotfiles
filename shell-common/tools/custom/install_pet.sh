@@ -143,8 +143,14 @@ _show_usage() {
     ux_info ""
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_pet_help() {
+    ux_usage "install-pet" "" "Install pet (command snippet manager) via the package manager or GitHub releases"
+}
+
 # Main installation flow
 install-pet() {
+    case "${1:-}" in -h | --help) install_pet_help; return 0 ;; esac
     ux_header "pet Installation"
 
     if _check_installed; then
@@ -166,5 +172,5 @@ install-pet() {
 
 # Run installation if script is executed directly
 if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
-    install-pet
+    install-pet "$@"
 fi

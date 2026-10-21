@@ -9,6 +9,8 @@ setup() {
     setup_isolated_home
     export DOTFILES_FORCE_INIT=1
     # shellcheck disable=SC1090
+    source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
+    # shellcheck disable=SC1090
     source "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/devx_pr_verify_live_serving_identity.sh"
 
     R="$TEST_TEMP_HOME/repo"
@@ -97,4 +99,16 @@ _si() { printf '%s' "$1" | devx_pr_verify_live_serving_identity "${@:2}" 2>&1; }
 @test "no sha in stdin -> exit 2" {
     run _si '{}'
     assert_failure 2
+}
+
+@test "-h|--help prints usage before reading stdin, exit 0 (#2265)" {
+    local flag
+    for flag in -h --help; do
+        run devx_pr_verify_live_serving_identity "$flag" </dev/null
+        assert_success
+        assert_output --partial "Usage"
+        assert_output --partial "devx-pr-verify-live-serving-identity"
+        refute_output --partial "FATAL"
+        refute_line --regexp '^TARGET_SHA='
+    done
 }

@@ -46,8 +46,14 @@ _show_usage() {
     echo ""
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_fd_help() {
+    ux_usage "install-fd" "" "Install fd (fast file search) via the system package manager"
+}
+
 # Main installation flow
 install-fd() {
+    case "${1:-}" in -h | --help) install_fd_help; return 0 ;; esac
     ux_header "fd Installation"
 
     if _check_installed; then
@@ -68,5 +74,5 @@ install-fd() {
 
 # Run installation if script is executed directly
 if [ "${0##*/}" = "install_fd.sh" ]; then
-    install-fd
+    install-fd "$@"
 fi

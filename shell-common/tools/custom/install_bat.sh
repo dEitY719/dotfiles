@@ -46,8 +46,14 @@ _show_usage() {
     echo ""
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_bat_help() {
+    ux_usage "install-bat" "" "Install bat (cat with syntax highlighting) via the system package manager"
+}
+
 # Main installation flow
 install-bat() {
+    case "${1:-}" in -h | --help) install_bat_help; return 0 ;; esac
     ux_header "bat Installation"
 
     if _check_installed; then
@@ -68,5 +74,5 @@ install-bat() {
 
 # Run installation if script is executed directly
 if [ "${0##*/}" = "install_bat.sh" ]; then
-    install-bat
+    install-bat "$@"
 fi

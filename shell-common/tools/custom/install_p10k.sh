@@ -149,8 +149,14 @@ _check_font_dependencies() {
     return 0
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_p10k_help() {
+    ux_usage "install-p10k" "" "Clone the powerlevel10k zsh theme into ~/.oh-my-zsh/custom/themes"
+}
+
 # Main installation flow
 install-p10k() {
+    case "${1:-}" in -h | --help) install_p10k_help; return 0 ;; esac
     ux_info "Installing powerlevel10k..."
 
     if ! _check_dependencies; then
@@ -189,5 +195,5 @@ install-p10k() {
 
 # Run installation if script is executed directly
 if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
-    install-p10k
+    install-p10k "$@"
 fi
