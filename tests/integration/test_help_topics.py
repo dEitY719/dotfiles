@@ -304,7 +304,9 @@ class TestHelpSearchInteractive:
         exit_code, output, captured = self._spawn(
             # #2263: each fzf line is `display<TAB>record`, so the record's
             # name sits between two tabs rather than at the start of the line.
-            shell, tmp_path, stub_body='grep -m1 "\tgit-help\t" "$FZF_STUB_CAPTURE"\n'
+            shell,
+            tmp_path,
+            stub_body='grep -m1 "\tgit-help\t" "$FZF_STUB_CAPTURE"\n',
         )
         assert exit_code == 0, f"{shell}: my_help_impl search failed\n{output}"
         assert captured, f"{shell}: fzf stub received no candidates"
