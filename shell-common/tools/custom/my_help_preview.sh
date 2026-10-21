@@ -94,22 +94,27 @@ _myhp_enter() {
 }
 
 # Clip every line to the preview width, counting only visible characters
-# (ESC sequences are copied through uncounted).
+# (ESC sequences are copied through uncounted). LC_ALL=C makes gawk, mawk and
+# nawk all walk bytes; a UTF-8 continuation byte (0x80-0xBF) adds no width and
+# follows its lead byte, so a cut never splits a character.
 # shortcut: one column per character, so a wide (CJK) glyph counts as 1 and a
 # Korean line can still overflow — fzf clips it; measure widths if that shows.
 _myhp_clip() {
     local width="${FZF_PREVIEW_COLUMNS:-}"
     case "$width" in '' | *[!0-9]*) cat; return 0 ;; esac
-    awk -v w="$width" '{
-        out = ""; vis = 0; s = $0
+    LC_ALL=C awk -v w="$width" '{
+        out = ""; vis = 0; keep = 1; s = $0
         while (s != "") {
-            if (substr(s, 1, 1) == "\033") {
+            c = substr(s, 1, 1)
+            if (c == "\033") {
                 if (match(s, /^\033\[[0-9;?]*[A-Za-z]/) || match(s, /^\033[()][A-Za-z0-9]/)) {
                     out = out substr(s, 1, RLENGTH); s = substr(s, RLENGTH + 1); continue
                 }
             }
-            if (vis >= w) { s = substr(s, 2); continue }
-            out = out substr(s, 1, 1); vis++; s = substr(s, 2)
+            s = substr(s, 2)
+            if (c ~ /[\200-\277]/) { if (keep) out = out c; continue }
+            if (vis >= w) { keep = 0; continue }
+            out = out c; vis++; keep = 1
         }
         print out
     }'

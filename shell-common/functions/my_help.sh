@@ -862,7 +862,8 @@ _my_help_source_excerpt() {
     relpath="${location%:*}"
     line="${location##*:}"
     case "$line" in '' | *[!0-9]*) return 1 ;; esac
-    case "$relpath" in '' | /* | *..*) return 1 ;; esac
+    # Reject absolute paths and `..` segments; `foo..bar.sh` is a plain name.
+    case "/$relpath/" in //* | */../*) return 1 ;; esac
 
     root="${DOTFILES_ROOT:-${SHELL_COMMON%/shell-common}}"
     file="${root}/${relpath}"
@@ -932,10 +933,24 @@ _my_help_render_rows() {
         # Same sentinel trick as _my_help_function_index.
         printf '\034\n'
         cat
-    } | awk -F'\t' -v scope="$scope" -v dim="${UX_DIM-}" \
+    } | LC_ALL=C awk -F'\t' -v scope="$scope" -v dim="${UX_DIM-}" \
         -v muted="${UX_MUTED-}" -v reset="${UX_RESET-}" '
         function base(p) { sub(/:[0-9]+$/, "", p); sub(/.*\//, "", p); return p }
-        function cut(s, n) { return (length(s) > n) ? substr(s, 1, n - 1) "…" : s }
+        # Byte-walking (LC_ALL=C below) so gawk/mawk agree: a UTF-8
+        # continuation byte adds no width and is never split from its lead.
+        function cut(s, n,   t, i, c, out, v) {
+            t = s
+            gsub(/[\200-\277]/, "", t)
+            if (length(t) <= n) return s
+            out = ""; v = 0
+            for (i = 1; i <= length(s); i++) {
+                c = substr(s, i, 1)
+                if (c ~ /[\200-\277]/) { out = out c; continue }
+                if (v >= n - 1) break
+                out = out c; v++
+            }
+            return out "…"
+        }
         BEGIN { mode = 1; maxw = 0 }
         mode == 1 {
             if ($0 == "\034") { mode = 2; next }
@@ -1010,7 +1025,16 @@ _my_help_palette_layout() {
 _my_help_fzf_ge() {
     local want="$1" have="$2"
     [ -n "$have" ] || return 1
-    [ "$(printf '%s\n%s\n' "$want" "$have" | sort -V | head -n 1)" = "$want" ]
+    # Numeric field compare in awk, not `sort -V`: an older BSD sort has no -V
+    # and would turn every comparison false, disabling the palette.
+    awk -v a="$have" -v b="$want" 'BEGIN {
+        n = split(a, x, "."); m = split(b, y, ".")
+        for (i = 1; i <= (n > m ? n : m); i++) {
+            if (x[i] + 0 > y[i] + 0) exit 0
+            if (x[i] + 0 < y[i] + 0) exit 1
+        }
+        exit 0
+    }'
 }
 
 # Internal: the scope after (next) or before (prev) <scope> in the Tab cycle
