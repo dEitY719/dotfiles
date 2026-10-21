@@ -130,7 +130,7 @@
   },
   "skipDangerousModePermissionPrompt": true,
   "statusLine": {
-    "command": "${HOME}/dotfiles/claude/statusline-command.sh",
+    "command": "${HOME}/dotfiles/claude/statusline-hud-wrapper.sh",
     "refreshInterval": 60,
     "type": "command"
   },
