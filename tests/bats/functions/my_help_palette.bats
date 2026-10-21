@@ -498,11 +498,7 @@ _stub_prelude='
 }
 
 @test "P25: no-colour mode streams carry no ESC and fzf gets --color=bw" {
-    run_in_bash "
-        _my_help_search_candidates all | _my_help_render_rows all | grep -c \$'\\033' || true
-        ${_stub_prelude}"'
-        _install_stub_fzf() { :; }
-    '
+    run_in_bash "_my_help_search_candidates all | _my_help_render_rows all | grep -c \$'\\033' || true"
     assert_success
     assert_line --index 0 "0"
 
@@ -597,12 +593,16 @@ _stub_prelude='
         _my_help_fzf_ge 0.58.0 0.44.1 || echo F2
         _my_help_fzf_ge 0.63.0 0.63.0 && echo T3
         _my_help_fzf_ge 0.44.0 "" || echo F4
+        _my_help_fzf_ge 0.44.0 0.100.0 && echo T5
+        _my_help_fzf_ge 0.63.0 0.9.0 || echo F6
     '
     assert_success
     assert_output "T1
 F2
 T3
-F4"
+F4
+T5
+F6"
 
     run_in_bash "${_stub_prelude}
         $(declare -f _install_stub_fzf)
@@ -684,4 +684,29 @@ F4"
     run_in_zsh "$cmd"
     assert_success
     [ "$output" = "$bash_out" ]
+}
+
+@test "P35: clipping and truncation never split a UTF-8 character" {
+    # Korean is 3 bytes per glyph: a byte-counting cut would land mid-glyph.
+    run bash -c '
+        . "'"$PREVIEW"'"
+        printf "ab가나다라\n" | FZF_PREVIEW_COLUMNS=4 _myhp_clip
+    '
+    assert_success
+    assert_output "ab가나"
+
+    run_in_bash 'printf "k\tx:1\talias\tx:1\t%s\n" "$(printf "가%.0s" $(seq 50))" |
+        _my_help_render_rows alias | cut -f1 | iconv -f UTF-8 -t UTF-8 >/dev/null && echo valid'
+    assert_success
+    assert_output "valid"
+}
+
+@test "P36: an excerpt path may contain '..' inside a name, never as a segment" {
+    mkdir -p "$TEST_TEMP_HOME/repo/d"
+    printf 'one\ntwo\n' > "$TEST_TEMP_HOME/repo/d/a..b.sh"
+    run_in_bash "DOTFILES_ROOT='$TEST_TEMP_HOME/repo' _my_help_source_excerpt d/a..b.sh:1 0 0"
+    assert_success
+    assert_output --partial "one"
+    run_in_bash "DOTFILES_ROOT='$TEST_TEMP_HOME/repo' _my_help_source_excerpt d/../d/a..b.sh:1 0 0 || echo refused"
+    assert_output "refused"
 }
