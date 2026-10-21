@@ -48,8 +48,14 @@ _show_usage() {
     echo ""
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_fasd_help() {
+    ux_usage "install-fasd" "" "Install fasd (fast access to recent files and directories) via the system package manager"
+}
+
 # Main installation flow
 install-fasd() {
+    case "${1:-}" in -h | --help) install_fasd_help; return 0 ;; esac
     ux_header "fasd Installation"
 
     if _check_installed; then
@@ -72,5 +78,5 @@ install-fasd() {
 
 # Run installation if script is executed directly
 if [ "${0##*/}" = "install_fasd.sh" ]; then
-    install-fasd
+    install-fasd "$@"
 fi

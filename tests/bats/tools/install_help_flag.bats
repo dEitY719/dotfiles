@@ -4,6 +4,7 @@
 # external tool (#1913, #1923). Before: install_python cleared the screen and
 # took -h as a Python version, install-ollama as an offline file, install_herdr
 # ignored it and installed, make_jira used it as the week, repo_stats exited 1.
+# #2265: the nine mytool.sh install_* targets (bat ... p10k) started installing.
 
 load '../test_helper'
 
@@ -16,7 +17,7 @@ setup() {
     # Every tool a script would touch logs its call and fails instead of running.
     local tool
     for tool in sudo apt-get git pyenv curl wget ollama tar zstd npm node \
-        claude; do
+        claude mise dnf yum pacman brew dpkg rpm; do
         printf '#!/bin/sh\necho "%s $*" >>"%s"\nexit 1\n' "$tool" "$CALL_LOG" >"$STUB_DIR/$tool"
         chmod +x "$STUB_DIR/$tool"
     done
@@ -39,7 +40,10 @@ _run_script() {
 
 @test "install/util scripts -h|--help: usage, exit 0, no external tool called" {
     local name flag
-    for name in install_python install-ollama install_herdr make_jira repo_stats; do
+    for name in install_python install-ollama install_herdr make_jira repo_stats \
+        install_bat install_fasd install_fd install_fzf install_pet \
+        install_ripgrep install_sops_age install_zsh_autosuggestions \
+        install_p10k; do
         for flag in -h --help; do
             _run_script "$name" "$flag"
             assert_success

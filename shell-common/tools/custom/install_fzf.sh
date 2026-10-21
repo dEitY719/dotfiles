@@ -38,8 +38,14 @@ _show_key_bindings() {
     echo ""
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_fzf_help() {
+    ux_usage "install-fzf" "" "Install fzf (fuzzy finder) via the system package manager"
+}
+
 # Main installation flow
 install-fzf() {
+    case "${1:-}" in -h | --help) install_fzf_help; return 0 ;; esac
     ux_header "fzf Installation"
 
     if _check_installed; then
@@ -62,5 +68,5 @@ install-fzf() {
 
 # Run installation if script is executed directly
 if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
-    install-fzf
+    install-fzf "$@"
 fi

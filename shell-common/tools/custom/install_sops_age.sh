@@ -78,7 +78,13 @@ sops_age_manual_hints() {
     ux_bullet "Debian/Ubuntu: sudo apt install age  (sops is not in apt; use the release binary)"
 }
 
+install_sops_age_help() {
+    ux_usage "install-sops-age" "" "Install sops + age (mise, else pinned GitHub release binaries into ~/.local/bin)"
+    ux_bullet "SOPS_VERSION=${SOPS_VERSION} / AGE_VERSION=${AGE_VERSION} pin the versions (no leading v)"
+}
+
 main() {
+    case "${1:-}" in -h | --help) install_sops_age_help; return 0 ;; esac
     local method
 
     ux_header "sops + age Installation"

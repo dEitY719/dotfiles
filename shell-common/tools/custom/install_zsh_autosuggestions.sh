@@ -97,8 +97,14 @@ _show_usage() {
     ux_info ""
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_zsh_autosuggestions_help() {
+    ux_usage "install-zsh-autosuggestions" "" "Install zsh-autosuggestions via the system package manager, falling back to git"
+}
+
 # Main installation flow
 install-zsh-autosuggestions() {
+    case "${1:-}" in -h | --help) install_zsh_autosuggestions_help; return 0 ;; esac
     ux_header "zsh-autosuggestions Installation"
 
     # Check if zsh is installed
@@ -128,5 +134,5 @@ install-zsh-autosuggestions() {
 
 # Run installation if script is executed directly
 if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
-    install-zsh-autosuggestions
+    install-zsh-autosuggestions "$@"
 fi

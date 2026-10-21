@@ -50,8 +50,14 @@ _show_usage() {
     echo ""
 }
 
+# Usage text for -h/--help (#2265): no install, no external tool call.
+install_ripgrep_help() {
+    ux_usage "install-ripgrep" "" "Install ripgrep (rg, fast text search) via the system package manager"
+}
+
 # Main installation flow
 install-ripgrep() {
+    case "${1:-}" in -h | --help) install_ripgrep_help; return 0 ;; esac
     ux_header "ripgrep Installation"
 
     if _check_installed; then
@@ -72,5 +78,5 @@ install-ripgrep() {
 
 # Run installation if script is executed directly
 if [ "${0##*/}" = "install_ripgrep.sh" ]; then
-    install-ripgrep
+    install-ripgrep "$@"
 fi
