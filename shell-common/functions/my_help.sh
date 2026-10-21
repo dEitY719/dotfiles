@@ -1137,7 +1137,9 @@ _my_help_search() {
     query=""
 
     # F-7: one layout decision per palette, from the terminal width.
-    layout=$(_my_help_palette_layout "${COLUMNS:-$(tput cols 2>/dev/null)}")
+    # stty on /dev/tty, not `tput cols`: inside $(...) tput sees a pipe on
+    # stdout and reports the terminfo default (80) on a wide terminal.
+    layout=$(_my_help_palette_layout "${COLUMNS:-$(stty size 2>/dev/null < /dev/tty | cut -d' ' -f2)}")
     # F-4: fzf chrome follows ux_lib's semantic colours (4 = UX_PRIMARY,
     # 8 = UX_MUTED); with ux_lib's colour off the streams carry no ESC and fzf
     # goes monochrome too (F-3).
