@@ -96,9 +96,10 @@ _myhp_enter() {
 # Clip every line to the preview width, counting only visible characters
 # (ESC sequences are copied through uncounted). LC_ALL=C makes gawk, mawk and
 # nawk all walk bytes; a UTF-8 continuation byte (0x80-0xBF) adds no width and
-# follows its lead byte, so a cut never splits a character.
-# shortcut: one column per character, so a wide (CJK) glyph counts as 1 and a
-# Korean line can still overflow — fzf clips it; measure widths if that shows.
+# follows its lead byte, so a cut never splits a character. A 3-byte lead in
+# 0xE3-0xED (U+3000-U+DFFF: CJK, kana, Hangul) counts two columns.
+# shortcut: that range is the only wide one handled — fullwidth forms and
+# emoji count 1; add ranges if those ever show up in help text.
 _myhp_clip() {
     local width="${FZF_PREVIEW_COLUMNS:-}"
     case "$width" in '' | *[!0-9]*) cat; return 0 ;; esac
@@ -113,8 +114,9 @@ _myhp_clip() {
             }
             s = substr(s, 2)
             if (c ~ /[\200-\277]/) { if (keep) out = out c; continue }
-            if (vis >= w) { keep = 0; continue }
-            out = out c; vis++; keep = 1
+            cw = (c ~ /[\343-\355]/) ? 2 : 1
+            if (vis + cw > w) { keep = 0; w = vis; continue }
+            out = out c; vis += cw; keep = 1
         }
         print out
     }'

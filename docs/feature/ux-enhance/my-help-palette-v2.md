@@ -9,7 +9,7 @@ status: approved
 - 구현: `shell-common/functions/my_help.sh` (`_my_help_search`, `_my_help_render_rows`,
   `_my_help_palette_layout`, `_my_help_fzf_ge`, `_my_help_scope_step`, `_my_help_source_excerpt`),
   `shell-common/tools/custom/my_help_preview.sh` (카드 렌더러, `--scopes`)
-- 테스트: `tests/bats/functions/my_help_palette.bats` P23–P34
+- 테스트: `tests/bats/functions/my_help_palette.bats` P23–P36
 
 Claude Code 의 `/` 메뉴, Codex CLI 의 slash popup 과 같은 문법으로 v1 팔레트를 다듬었다.
 비대화형 출력(NF-4, P1/P2/P17), 읽기 전용 Enter(F-9), 5필드 레코드(P9), 폴백(P18/P22)은 v1 그대로다.

@@ -12,7 +12,7 @@
 # P12-P15 cover the preview helper (F-3/F-9/NF-2/NF-3): it renders records and
 #        never writes a file or runs a candidate's definition.
 # P16-P17 cover bash/zsh parity for the streams and the non-TTY fallback.
-# P23-P34 cover the #2263 redesign: aligned 2-tone rows, the `/` scope menu,
+# P23-P36 cover the #2263 redesign: aligned 2-tone rows, the `/` scope menu,
 #        Tab cycling, preview cards, the responsive layout and fzf tiers.
 
 load '../test_helper'
@@ -431,7 +431,7 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# P23-P32: palette v2 — rows, scope menu, cards, layout, fzf tiers (#2263)
+# P23-P36: palette v2 — rows, scope menu, cards, layout, fzf tiers (#2263)
 # ---------------------------------------------------------------------------
 
 # A stub fzf that answers --version with $STUB_VER, records each round's
@@ -690,10 +690,13 @@ F6"
     # Korean is 3 bytes per glyph: a byte-counting cut would land mid-glyph.
     run bash -c '
         . "'"$PREVIEW"'"
-        printf "ab가나다라\n" | FZF_PREVIEW_COLUMNS=4 _myhp_clip
+        printf "ab가나다라\n" | FZF_PREVIEW_COLUMNS=5 _myhp_clip
+        printf "가a\n" | FZF_PREVIEW_COLUMNS=2 _myhp_clip
     '
     assert_success
-    assert_output "ab가나"
+    # Hangul is two columns wide: 2 + 2 fits in 5, a third glyph would not.
+    assert_line --index 0 "ab가"
+    assert_line --index 1 "가"
 
     run_in_bash 'printf "k\tx:1\talias\tx:1\t%s\n" "$(printf "가%.0s" $(seq 50))" |
         _my_help_render_rows alias | cut -f1 | iconv -f UTF-8 -t UTF-8 >/dev/null && echo valid'
