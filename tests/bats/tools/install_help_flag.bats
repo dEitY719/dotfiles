@@ -17,7 +17,7 @@ setup() {
     # Every tool a script would touch logs its call and fails instead of running.
     local tool
     for tool in sudo apt-get git pyenv curl wget ollama tar zstd npm node \
-        claude mise dnf yum pacman brew dpkg rpm; do
+        claude mise dnf yum pacman brew dpkg rpm fc-cache; do
         printf '#!/bin/sh\necho "%s $*" >>"%s"\nexit 1\n' "$tool" "$CALL_LOG" >"$STUB_DIR/$tool"
         chmod +x "$STUB_DIR/$tool"
     done
@@ -54,6 +54,19 @@ _run_script() {
         _run_script install_notion_mcp "$flag"
         assert_success
         assert_output --partial "Notion MCP Installation Help"
+    done
+    run cat "$CALL_LOG"
+    assert_output ""
+}
+
+@test "#2265 install scripts reject an unknown option: exit 2, no external tool called" {
+    local name
+    for name in install_bat install_fasd install_fd install_fzf install_pet \
+        install_ripgrep install_sops_age install_zsh_autosuggestions \
+        install_p10k; do
+        _run_script "$name" --bogus
+        assert_failure 2
+        assert_output --partial "unknown option: --bogus"
     done
     run cat "$CALL_LOG"
     assert_output ""

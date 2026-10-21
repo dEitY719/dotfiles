@@ -112,3 +112,11 @@ _si() { printf '%s' "$1" | devx_pr_verify_live_serving_identity "${@:2}" 2>&1; }
         refute_line --regexp '^TARGET_SHA='
     done
 }
+
+@test "--help without ux_lib (vendored copy) falls back to plain text" {
+    unset -f ux_usage ux_bullet
+    run devx_pr_verify_live_serving_identity --help </dev/null
+    assert_success
+    assert_line --index 0 --partial "Usage: devx-pr-verify-live-serving-identity"
+    refute_output --partial "command not found"
+}

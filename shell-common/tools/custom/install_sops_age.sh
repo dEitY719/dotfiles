@@ -84,7 +84,11 @@ install_sops_age_help() {
 }
 
 main() {
-    case "${1:-}" in -h | --help) install_sops_age_help; return 0 ;; esac
+    case "${1:-}" in
+        -h | --help) install_sops_age_help; return 0 ;;
+        # An unknown option must not fall through to a privileged install.
+        -*) ux_error "unknown option: $1"; install_sops_age_help; return 2 ;;
+    esac
     local method
 
     ux_header "sops + age Installation"
