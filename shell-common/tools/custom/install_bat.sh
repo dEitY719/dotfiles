@@ -53,7 +53,11 @@ install_bat_help() {
 
 # Main installation flow
 install-bat() {
-    case "${1:-}" in -h | --help) install_bat_help; return 0 ;; esac
+    case "${1:-}" in
+        -h | --help) install_bat_help; return 0 ;;
+        # An unknown option must not fall through to a privileged install.
+        -*) ux_error "unknown option: $1"; install_bat_help; return 2 ;;
+    esac
     ux_header "bat Installation"
 
     if _check_installed; then

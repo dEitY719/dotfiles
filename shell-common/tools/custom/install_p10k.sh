@@ -156,7 +156,11 @@ install_p10k_help() {
 
 # Main installation flow
 install-p10k() {
-    case "${1:-}" in -h | --help) install_p10k_help; return 0 ;; esac
+    case "${1:-}" in
+        -h | --help) install_p10k_help; return 0 ;;
+        # An unknown option must not fall through to a privileged install.
+        -*) ux_error "unknown option: $1"; install_p10k_help; return 2 ;;
+    esac
     ux_info "Installing powerlevel10k..."
 
     if ! _check_dependencies; then

@@ -53,7 +53,11 @@ install_fd_help() {
 
 # Main installation flow
 install-fd() {
-    case "${1:-}" in -h | --help) install_fd_help; return 0 ;; esac
+    case "${1:-}" in
+        -h | --help) install_fd_help; return 0 ;;
+        # An unknown option must not fall through to a privileged install.
+        -*) ux_error "unknown option: $1"; install_fd_help; return 2 ;;
+    esac
     ux_header "fd Installation"
 
     if _check_installed; then

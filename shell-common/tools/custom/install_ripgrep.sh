@@ -57,7 +57,11 @@ install_ripgrep_help() {
 
 # Main installation flow
 install-ripgrep() {
-    case "${1:-}" in -h | --help) install_ripgrep_help; return 0 ;; esac
+    case "${1:-}" in
+        -h | --help) install_ripgrep_help; return 0 ;;
+        # An unknown option must not fall through to a privileged install.
+        -*) ux_error "unknown option: $1"; install_ripgrep_help; return 2 ;;
+    esac
     ux_header "ripgrep Installation"
 
     if _check_installed; then

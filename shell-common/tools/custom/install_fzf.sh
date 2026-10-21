@@ -45,7 +45,11 @@ install_fzf_help() {
 
 # Main installation flow
 install-fzf() {
-    case "${1:-}" in -h | --help) install_fzf_help; return 0 ;; esac
+    case "${1:-}" in
+        -h | --help) install_fzf_help; return 0 ;;
+        # An unknown option must not fall through to a privileged install.
+        -*) ux_error "unknown option: $1"; install_fzf_help; return 2 ;;
+    esac
     ux_header "fzf Installation"
 
     if _check_installed; then
