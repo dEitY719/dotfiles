@@ -302,7 +302,9 @@ class TestHelpSearchInteractive:
         """The fzf candidate stream carries only `topic<TAB>desc` lines, and the
         selected line dispatches to that topic's help output."""
         exit_code, output, captured = self._spawn(
-            shell, tmp_path, stub_body='grep -m1 "^git-help\t" "$FZF_STUB_CAPTURE"\n'
+            # #2263: each fzf line is `display<TAB>record`, so the record's
+            # name sits between two tabs rather than at the start of the line.
+            shell, tmp_path, stub_body='grep -m1 "\tgit-help\t" "$FZF_STUB_CAPTURE"\n'
         )
         assert exit_code == 0, f"{shell}: my_help_impl search failed\n{output}"
         assert captured, f"{shell}: fzf stub received no candidates"

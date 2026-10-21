@@ -1052,7 +1052,9 @@ _my_help_search() {
     # F-8: below the 0.44 baseline the Tier A flags are unsupported. An
     # unparseable version (a wrapper, a stub) is given the benefit of the doubt.
     local fzf_ver
-    fzf_ver=$(fzf --version 2>/dev/null < /dev/null | awk 'NR == 1 { print $1; exit }')
+    # `|| fzf_ver=""`: under the caller's `set -e -o pipefail` a failing
+    # `fzf --version` (a stub, a broken wrapper) must not take the shell down.
+    fzf_ver=$(fzf --version 2>/dev/null < /dev/null | awk 'NR == 1 { print $1; exit }') || fzf_ver=""
     case "$fzf_ver" in
         [0-9]*.[0-9]*)
             if ! _my_help_fzf_ge 0.44.0 "$fzf_ver"; then
