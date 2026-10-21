@@ -4,6 +4,8 @@ status: needs-review
 
 # my-help 명령어 탐색 UX 개선 조사
 
+> v2: 팔레트 화면 재설계(#2263)는 [`my-help-palette-v2.md`](./my-help-palette-v2.md) 가 SSOT 다.
+
 - 작성일: 2026-09-03
 - 상태: 조사 / 설계 제안 (구현 전)
 - 대상: `shell-common/functions/my_help.sh`, `packages/my-cli/`
