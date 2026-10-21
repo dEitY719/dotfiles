@@ -872,6 +872,9 @@ _my_help_source_excerpt() {
     first=$((line - before))
     [ "$first" -ge 1 ] || first=1
     last=$((line + after))
+    # bat exits 0 with no output for a range past EOF, which would skip the
+    # caller's fallback; a stale line number must still fall through.
+    awk -v a="$first" 'NR >= a { f = 1; exit } END { exit !f }' "$file" || return 1
 
     # Colour only when ux_lib has colour on; otherwise the plain sed path keeps
     # NO_COLOR / TERM=dumb / test output free of escape bytes.
@@ -1219,7 +1222,8 @@ _my_help_search() {
 
         # Output: line 1 = query, line 2 = the --expect key (empty for Enter),
         # then the selected row. A query or key never contains a tab and a row
-        # always does, so a stub that prints fewer lines still parses.
+        # always does (every row is `display<TAB>record`, so a stub must echo
+        # the full row, not the bare record).
         query=$(printf '%s\n' "$out" | awk -F'\t' 'NR == 1 && NF <= 1 { print } { exit }')
         key=$(printf '%s\n' "$out" | awk -F'\t' 'NR == 2 { if (NF <= 1) print; exit }')
         selected=$(printf '%s\n' "$out" | awk -F'\t' 'NF > 1 { print; exit }' | cut -f2-)
