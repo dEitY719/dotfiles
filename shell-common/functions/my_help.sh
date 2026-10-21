@@ -874,14 +874,7 @@ _my_help_source_excerpt() {
 
     # Colour only when ux_lib has colour on; otherwise the plain sed path keeps
     # NO_COLOR / TERM=dumb / test output free of escape bytes.
-    bat_bin=""
-    if [ -n "${UX_RESET-}" ]; then
-        if command -v bat >/dev/null 2>&1; then
-            bat_bin=bat
-        elif command -v batcat >/dev/null 2>&1; then
-            bat_bin=batcat
-        fi
-    fi
+    bat_bin=$(_my_help_bat_bin)
 
     if [ -n "$bat_bin" ]; then
         width="${FZF_PREVIEW_COLUMNS:-${COLUMNS:-80}}"
@@ -889,8 +882,22 @@ _my_help_source_excerpt() {
             --terminal-width="$width" -r "${first}:${last}" \
             --highlight-line "$line" -- "$file" 2>/dev/null && return 0
     fi
+    # END exits 1 when nothing printed (line past EOF) so callers fall back to
+    # the plain `source:` line instead of rendering an empty excerpt.
     awk -v a="$first" -v b="$last" \
-        'NR > b { exit } NR >= a { printf "%5d  %s\n", NR, $0 }' "$file"
+        'NR > b { exit } NR >= a { printf "%5d  %s\n", NR, $0; p = 1 } END { exit !p }' "$file"
+}
+
+# Internal: print the syntax-highlighter binary (bat, or Debian's batcat) —
+# only when ux_lib colour is on, so NO_COLOR / TERM=dumb output stays free of
+# escape bytes. Prints nothing when none applies.
+_my_help_bat_bin() {
+    [ -n "${UX_RESET-}" ] || return 0
+    if command -v bat >/dev/null 2>&1; then
+        printf '%s\n' bat
+    elif command -v batcat >/dev/null 2>&1; then
+        printf '%s\n' batcat
+    fi
 }
 
 # Internal: prepend the display column to 5-field records (#2263 F-1..F-3,
