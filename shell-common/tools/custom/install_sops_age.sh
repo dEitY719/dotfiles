@@ -9,7 +9,7 @@
 #                              (Linux x86_64 only)
 # Pins: SOPS_VERSION / AGE_VERSION (no leading v).
 #
-# Usage: install-sops-age
+# Usage: install-sops-age [-h|--help]
 
 set -e
 
