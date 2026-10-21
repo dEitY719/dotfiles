@@ -1080,7 +1080,7 @@ _my_help_search() {
     fi
 
     local preview tmp_dir tmp stream menu scope query out rc parsed selected kind
-    local key layout colors
+    local key layout colors hint
 
     preview="${SHELL_COMMON}/tools/custom/my_help_preview.sh"
     tmp_dir="${TMPDIR:-/tmp}"
@@ -1132,13 +1132,13 @@ _my_help_search() {
 
         # Tier B (F-8, D-9): fzf >= 0.63 replaces the bottom border label with
         # its own input label, placeholder and footer.
-        set -- --border-label=' ⏎ open · / scope · tab next scope · ? keys · esc quit ' \
-            --border-label-pos=3:bottom
+        hint=' ⏎ open · / scope · tab next scope · ? keys · esc quit '
+        set -- --border-label="$hint" --border-label-pos=3:bottom
         if _my_help_fzf_ge 0.63.0 "$fzf_ver"; then
             set -- --style=full --border=none --highlight-line \
                 --input-label=" my-help · /${scope} " \
                 --ghost='type to search · / scopes · tab cycles' \
-                --footer=' ⏎ open · / scope · tab next scope · ? keys · esc quit '
+                --footer="$hint"
         fi
 
         # No path is interpolated into the fzf action strings at all: they are
