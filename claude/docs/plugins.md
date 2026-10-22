@@ -45,6 +45,15 @@ external/public PC에서 사내 GHES 마켓플레이스가 우연히 감지되�
 레포 미clone) hook은 격리 정책상 저장하지 않고 stderr 힌트만 남긴다 — 조용한
 skip이 아니다 (#1080).
 
+**외부(non-`dEitY719`) 마켓플레이스 신뢰 결정** — 계약의 외부 항목(karpathy-skills,
+ponytail, caveman, last30days-skill, taste-skill, impeccable, ui-ux-pro-max-skill 등)은
+ref 고정 없이 upstream 기본 브랜치를 따른다. 매니페스트 형식에 ref 필드가 없으므로,
+등록 PR 이 곧 "이 저장소의 이후 변경도 신뢰한다"는 결정이다. 특히 `impeccable` 은
+Write/Edit/Bash 도구를 쓰는 subagent 를 포함한다(#2271). 마켓플레이스 키는 upstream
+`.claude-plugin/marketplace.json` 의 `name` 과 같아야 한다 — 플러그인 이름과 달라도
+(`ui-ux-pro-max@ui-ux-pro-max-skill`) 키를 플러그인 이름에 맞춰 "고치면" `restore.sh`
+설치가 깨진다.
+
 신규 PC: `./claude/plugin/restore.sh` (mode-aware, `--dry-run` 지원). 대상
 config dir 은 setup-mode 로 라우팅된다 (#1103) — internal → `~/.claude`,
 그 외 → `~/.claude-<account>` (기본 `$CLAUDE_DEFAULT_ACCOUNT`). 특정 계정은
