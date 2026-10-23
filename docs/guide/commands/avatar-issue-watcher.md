@@ -34,7 +34,7 @@
 - **avatar-issue-watcher --dry-run** — Manual — Preview one tick without dispatching
 - **avatar-issue-watcher --status** — Manual — Show gate, saturation and search state
 - **cd ~/dotfiles && avatar-issue-watcher** — Manual — cwd mode: tick only this repo
-- **avatar-issue-watcher --cwd ~/dotfiles** — Manual — Same tick, started from any directory
+- **avatar-issue-watcher --cwd ~/dotfiles** — Manual — Watch-list tick (not cwd mode), started from any directory
 - **avatar-issue-watcher watch list** — Watch — Show the watch list
 - **cd ~/dotfiles && avatar-issue-watcher watch add** — Watch — Add the cwd repo
 - **avatar-issue-watcher watch add dEitY719/gh-verify-skills --path ~/para/project/skills** — Watch — Add a repo with its checkout path
