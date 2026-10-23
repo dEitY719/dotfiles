@@ -1,7 +1,7 @@
 #!/bin/sh
 # shell-common/tools/custom/lib/cron_common.sh
 # Bootstrap and single-instance lock shared by the cron entrypoints (#2144).
-# cron_bootstrap: ../issue_watcher_cron.sh, ../pr_merge_train_cron.sh,
+# cron_bootstrap: ../avatar_issue_watcher.sh, ../pr_merge_train_cron.sh,
 # ../session_doctor_cron.sh, ../schedule_agent_prompt.sh. cron_acquire_lock: the
 # first three (the first two via _hp_acquire_lock). schedule_agent_prompt keeps
 # its own blocking fd-8 write lock — a different job, not a tick guard.

@@ -2,13 +2,13 @@
 # shell-common/lib/herdr_agent_lookup.sh
 # NOTE: This file intentionally has NO interactive guard: pure function
 # definitions with no output at file scope, sourced non-interactively by
-# issue_watcher_cron.sh, schedule_agent_prompt.sh and skill blocks (see below).
+# avatar_issue_watcher.sh, schedule_agent_prompt.sh and skill blocks (see below).
 # SSOT for "is a herdr agent sitting on this worktree?" (issue #1569).
 #
 # Four call sites ask that question and, before this file, each carried its own
 # hand-copied answer:
 #
-#   shell-common/tools/custom/issue_watcher_cron.sh        _iw_live_agents
+#   shell-common/tools/custom/avatar_issue_watcher.sh        _iw_live_agents
 #   dEitY719/gh-verify-skills  skills/post-merge-verify/
 #       references/dispatch.sh.md                          pmv_tab_for_cwd
 #   dEitY719/gh-pr-skills  skills/merge/references/
@@ -89,7 +89,7 @@ herdr_agent_physical_path() {
 
 # herdr_agent_path_under <candidate> <base> — the boundary predicate, as a
 # shell test rather than a jq one, so a pure-shell caller that already holds a
-# `cwd`/`foreground_cwd` pair (e.g. issue_watcher_cron.sh's per-pane join,
+# `cwd`/`foreground_cwd` pair (e.g. avatar_issue_watcher.sh's per-pane join,
 # which also needs each pane's `agent_status` and so cannot use the jq-side
 # lookups below) can call it directly instead of re-deriving the boundary
 # rule in awk or jq.

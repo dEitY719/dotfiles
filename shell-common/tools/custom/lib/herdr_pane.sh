@@ -1,7 +1,7 @@
 #!/bin/sh
 # shell-common/tools/custom/lib/herdr_pane.sh
 # herdr pane helpers shared by the two cron dispatchers (refactor F2):
-# ../issue_watcher_cron.sh (`_iw_*`) and ../pr_merge_train_cron.sh (`_pmt_*`).
+# ../avatar_issue_watcher.sh (`_iw_*`) and ../pr_merge_train_cron.sh (`_pmt_*`).
 #
 # Both scripts used to carry byte-identical copies of everything below under
 # their own prefix. The few real differences — state subdir, lock message,

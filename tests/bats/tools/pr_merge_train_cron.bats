@@ -23,7 +23,7 @@
 #          subcommand is logged and refused: the dispatcher never writes to
 #          GitHub, and this is what makes that a test rather than a claim.
 #   herdr  workspace/tab/agent, with canned JSON matching the shapes
-#          issue_watcher_cron.bats measured on a live herdr server.
+#          avatar_issue_watcher.bats measured on a live herdr server.
 
 load '../test_helper'
 
@@ -146,7 +146,7 @@ _set_prs() {
 }
 
 # `_make_account` — a logged-in claude account directory. Lives in
-# ../test_helper.bash; issue_watcher_cron.bats fixtures the same rule.
+# ../test_helper.bash; avatar_issue_watcher.bats fixtures the same rule.
 
 # ---------------------------------------------------------------------------
 # Stubs
@@ -305,7 +305,7 @@ EOF
 }
 
 # `_install_sleep_stub` — the #1560 settle-wait stub. Lives in
-# ../test_helper.bash; issue_watcher_cron.bats installs the same one.
+# ../test_helper.bash; avatar_issue_watcher.bats installs the same one.
 
 _install_stubs() {
     _install_gh_stub
@@ -1095,7 +1095,7 @@ $(_pr_json 12 30)]"
     _run_tick
     assert_success
     _assert_logged "herdr agent prompt"
-    # Three agreeing reads, not two — see issue_watcher_cron.bats's twin test
+    # Three agreeing reads, not two — see avatar_issue_watcher.bats's twin test
     # (PR #1611 review, 5th pass).
     [ "$(_log_count '^sleep 1$')" -eq 2 ]
     refute_output --partial "never settled"
@@ -1104,7 +1104,7 @@ $(_pr_json 12 30)]"
 @test "pr_merge_train_cron: the settle poll reads the pane" {
     _run_tick
     assert_success
-    # 15 lines, not 3 — see issue_watcher_cron.bats's twin test (PR #1611
+    # 15 lines, not 3 — see avatar_issue_watcher.bats's twin test (PR #1611
     # review, 5th pass).
     _assert_logged "herdr agent read mt-dotfiles --lines 15 --format text"
 }
@@ -1168,7 +1168,7 @@ $(_pr_json 12 30)]"
 }
 
 @test "pr_merge_train_cron: the settle poll interval is overridable" {
-    # 3, not 13/1=13 — see issue_watcher_cron.bats's twin test for the full
+    # 3, not 13/1=13 — see avatar_issue_watcher.bats's twin test for the full
     # rationale (agy/codex, PR #1611 review): the poll count now scales with
     # the gap instead of assuming it is always 1s.
     _run_tick PMT_SETTLE_POLL_SLEEP=4 "HERDR_SETTLE_READ_SEQUENCE=~"
@@ -1185,7 +1185,7 @@ $(_pr_json 12 30)]"
 }
 
 @test "pr_merge_train_cron: a leading-zero PMT_SETTLE_SECONDS does not abort the tick" {
-    # See issue_watcher_cron.bats's twin test — codex, PR #1611 review,
+    # See avatar_issue_watcher.bats's twin test — codex, PR #1611 review,
     # second pass.
     _run_tick PMT_SETTLE_SECONDS=08 "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
@@ -1194,7 +1194,7 @@ $(_pr_json 12 30)]"
 }
 
 @test "pr_merge_train_cron: a non-standard zero poll interval does not crash awk" {
-    # See issue_watcher_cron.bats's twin test — agy, PR #1611 review, second
+    # See avatar_issue_watcher.bats's twin test — agy, PR #1611 review, second
     # pass.
     _run_tick PMT_SETTLE_POLL_SLEEP=.0 "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
@@ -1211,7 +1211,7 @@ $(_pr_json 12 30)]"
 }
 
 @test "pr_merge_train_cron: a pathologically small poll interval is still bounded" {
-    # See issue_watcher_cron.bats's twin test — agy, PR #1611 review, 4th
+    # See avatar_issue_watcher.bats's twin test — agy, PR #1611 review, 4th
     # pass.
     _install_frozen_clock_stub # count-bound only: no 13s deadline under load
     _run_tick PMT_SETTLE_POLL_SLEEP=0.001 "HERDR_SETTLE_READ_SEQUENCE=~"

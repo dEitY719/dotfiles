@@ -1,1 +1,1 @@
-"""Pure candidate-selection logic of shell-common/tools/custom/issue_watcher_cron.sh (#2157)."""
+"""Pure candidate-selection logic of shell-common/tools/custom/avatar_issue_watcher.sh (#2157)."""

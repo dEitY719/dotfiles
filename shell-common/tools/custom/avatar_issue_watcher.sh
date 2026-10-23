@@ -1,22 +1,29 @@
 #!/bin/bash
-# shell-common/tools/custom/issue_watcher_cron.sh
+# shell-common/tools/custom/avatar_issue_watcher.sh
 # issue-watcher 주기 감시 사이클 — 1회 tick (issue #1389, #1440, #1453).
 #
 # cron 이 주기마다 이 스크립트를 호출하면 tick 1회를 수행한다. tick 은 감시부터
 # 디스패치까지를 직접 수행한다 — 판단이 필요한 지점은 마지막 한 곳,
-# 디스패치된 pane 안에서 도는 `/gh-flow:wave <N>` 뿐이다 (issue #1440):
-#   1) 끝난 이슈의 워크트리 회수 (closed + agent 없음 + 미커밋 변경 없음)
-#   2) 살아있는 per-issue agent 수가 상한이면 이번 tick 보류
-#   3) `gh search issues` 로 할당된 open 이슈를 교차 저장소 한 번에 조회
-#   4) 제외 라벨 필터 + watched-repos.json 밖 저장소 제외 + 로컬 경로 매핑
-#   5) repo 라운드로빈 · 이슈 번호 오름차순으로 후보 정렬
-#   6) 이미 실행 중 / 이미 처리됨(이슈를 닫는 open PR) / blockedBy OPEN 스킵
-#   7) tick 당 최대 _IW_DISPATCH_PER_TICK 건만 워크트리 + herdr tab + agent 생성
-#   8) `/gh-flow:wave <N>` 프롬프트 전달
+# 디스패치된 pane 안에서 도는 `/gh-flow:wave <N>` 뿐이다 (issue #1440).
+# 사용자의 수동 절차를 그대로 자동화한다:
+#   1) 살아있는 per-issue 세션 수가 상한이면 이번 tick 보류
+#   2) `gh search issues` 로 할당된 open 이슈를 교차 저장소 한 번에 조회
+#   3) 제외 라벨 필터 + watched-repos.json 밖 저장소 제외 + 로컬 경로 매핑
+#   4) repo 라운드로빈 · 이슈 번호 오름차순으로 후보 정렬
+#   5) 이미 실행 중 / 이미 처리됨(이슈를 닫는 open PR) / blockedBy OPEN 스킵
+#   6) tick 당 최대 _IW_DISPATCH_PER_TICK 건만, watch list 의 repo path 를 cwd 로
+#      herdr tab(`iw-issue-<N>`) + claude agent 생성 — 워크트리는 만들지 않는다
+#   7) `/gh-flow:wave <N>` 프롬프트 전달 — 워크트리(wt/issue-<N>/<idx>)는 스킬이
+#      세션 안에서 만든다
 # 토큰 한도 게이트가 닫혀 있으면 사이클 전체를 보류한다 (issue #1436, #1444).
 #
-# 워크트리 존재 여부는 어떤 판정에도 쓰이지 않는다 (issue #1453 NF-1) — 순수
-# 작업 공간이라 언제 지워도 다음 tick 의 결정이 달라지지 않는다.
+# "실행 중" = repo 의 herdr workspace 안에 label 이 정확히 `issue-<N>`(사용자가
+# 직접 연 탭) 또는 `iw-issue-<N>`(watcher 가 연 탭) 인 tab 이 있고 그 tab 에
+# agent 가 있음. 수동 탭도 인정하므로 사용자가 이미 작업 중인 이슈는 다시
+# 디스패치하지 않는다.
+#
+# 정리(검토 후 /exit, 워크트리 삭제, 탭 종료)는 사용자가 수동으로 한다 — tick 은
+# 워크트리도 탭도 회수하지 않는다(실패한 디스패치 시도의 탭만 닫는다).
 #
 # 이슈에 어떤 쓰기도 하지 않는다 — 댓글·라벨·assignee 변경 없음. 조회 전용이다.
 #
@@ -24,7 +31,7 @@
 # 실행하면 watch list 파일을 읽지 않고 그 저장소 하나만 대상으로 삼는다.
 # cron 은 `--cwd` 를 주거나 $HOME 에서 시작하므로 기존 watch list 동작 그대로다.
 #
-# Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status
+# Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] | --status
 #        | watch list|add|remove ... | [-h|--help|help]
 
 set -u
@@ -46,15 +53,13 @@ fi
 # shellcheck source=/dev/null
 . "${_IW_SHELL_COMMON}/lib/herdr_agent_name.sh" || exit 1
 
-# The herdr agent-lookup SSOT (#1569) — "is an agent sitting on this path?".
-# Same reasoning as the name helper above, and the same failure history: four
-# call sites each carried their own copy of the cwd/foreground_cwd boundary
-# match, and the newest copy had already drifted to a plain `.cwd` equality.
-# The running-now signal below and the collection step both depend on it, so a
-# tick that discovered it missing halfway through would have already decided
-# what to dispatch on a predicate it no longer has.
+# The herdr agent-lookup SSOT (#1569). This tick uses only its `agent list`
+# fetcher (herdr_agent_list_json), which owns the "an empty answer is unknown,
+# not nothing" rule. The running-now signal depends on it, so a tick that
+# discovered it missing halfway through would have already decided what to
+# dispatch on a signal it can no longer read.
 if [ ! -f "${_IW_SHELL_COMMON}/lib/herdr_agent_lookup.sh" ]; then
-    ux_error "herdr_agent_lookup.sh not found under ${_IW_SHELL_COMMON}/lib — cannot tell which worktrees are live."
+    ux_error "herdr_agent_lookup.sh not found under ${_IW_SHELL_COMMON}/lib — cannot tell which issue sessions are live."
     exit 1
 fi
 # shellcheck source=/dev/null
@@ -78,7 +83,7 @@ _iw_sel() { cron_py dotfiles_tools.issue_watcher.select "$@"; }
 # Constants (SSOT for the watch cycle)
 # ============================================================
 
-_IW_STATE_SUBDIR="issue-watcher"
+_IW_STATE_SUBDIR="avatar-issue-watcher"
 _IW_LOCK_BASENAME=".lock"
 
 # Field separators, resolved once. `IFS="$(printf '\t')"` written into a
@@ -91,9 +96,9 @@ _IW_US=$(printf '\037')
 
 # Watch list. Not a list of repos to *query* — `gh search issues` already spans
 # every repo the account can see in one call. It is the result filter (an issue
-# outside it is ignored) plus the repo -> local checkout map the worktree step
-# needs. Overridable so the bats suite can point at a fixture.
-_IW_REPOS_FILE_DEFAULT="${HOME:-/nonexistent}/.agent-factory/avatars/issue-watcher/watched-repos.json"
+# outside it is ignored) plus the repo -> local checkout map the tab step
+# needs (the tab opens on that path). Overridable so the bats suite can point at a fixture.
+_IW_REPOS_FILE_DEFAULT="${HOME:-/nonexistent}/.avatars/issue-watcher/watched-repos.json"
 
 # Labels that park an issue. Exact matches, not substrings.
 _IW_EXCLUDE_LABELS_DEFAULT="wontfix,보류,not-implement"
@@ -112,8 +117,8 @@ _IW_EXCLUDE_LABELS_DEFAULT="wontfix,보류,not-implement"
 # fire-and-forget, so with work taking T minutes and a period of P the steady
 # state was roughly `T/P × intake` sessions at once — i.e. the slower the work,
 # the more of it ran in parallel. The only thing holding that down was a bug
-# (worktrees were never collected, and their presence blocked re-dispatch), so
-# collecting them and capping concurrency had to land together.
+# (a leftover per-issue marker blocked re-dispatch), so dropping that marker
+# and capping concurrency had to land together.
 #
 # The defaults are the policy; the `IW_*` overrides exist so the bats suite can
 # exercise the multi-dispatch paths without waiting out a real cycle, and so a
@@ -167,7 +172,7 @@ _IW_ZOMBIE_GRACE_SECONDS=$(_iw_cap "${IW_ZOMBIE_GRACE_SECONDS-}" 600 IW_ZOMBIE_G
 _IW_SATURATION_ALERT_TICKS=$(_iw_cap "${IW_SATURATION_ALERT_TICKS-}" 20 IW_SATURATION_ALERT_TICKS)
 _IW_SATURATION_COOLDOWN_SECONDS=$(_iw_cap "${IW_SATURATION_COOLDOWN_SECONDS-}" 10800 IW_SATURATION_COOLDOWN_SECONDS)
 # Attempts per issue before giving up on it for this cycle. Every failed
-# attempt cleans its own worktree up first, so a retry starts from scratch.
+# attempt closes its own tab first, so a retry starts from scratch.
 _IW_MAX_ATTEMPTS="3"
 # Upper bound on the search result set. Only _IW_DISPATCH_PER_TICK survivors
 # are ever dispatched, but the filters run before the cap, so the window has to
@@ -277,7 +282,7 @@ _IW_STALL_RECOVER_SLEEP="${IW_STALL_RECOVER_SLEEP:-2}"
 # readiness wait) cannot help; another attempt on the *same* pane can.
 #
 # This is a different layer from _IW_MAX_ATTEMPTS, which cleans the attempt up
-# and builds a new worktree and a new, equally cold tab — three tries at the
+# and builds a new, equally cold tab — three tries at the
 # same race. That is what left 130 consecutive ticks with 0 dispatches. The two
 # bounds are independent and both still hold.
 #
@@ -315,8 +320,8 @@ _IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-13}"
 _IW_LIMIT_STATE_BASENAME="rate-limit.json"
 # The zombie grace clock's backing file, alongside the gate state above. TSV
 # rather than JSON because its records are per-item (<repo> <number> <epoch>)
-# and every tick mutates one row of many — the same shape _iw_issue_worktrees
-# and the awk joins already speak, and one this script can rewrite atomically
+# and every tick mutates one row of many — the shape the awk joins already
+# speak, and one this script can rewrite atomically
 # without a JSON primitive it does not have.
 _IW_ZOMBIE_CANDIDATES_BASENAME="zombie-candidates.tsv"
 # The issues a rate-limit strike killed, alongside the gate state above
@@ -425,7 +430,7 @@ _IW_CWD_ENTRY=""
 # Entries are `{ "repo": "owner/name", "path": "/local/checkout",
 # "host": "github.com" }`; `host` is optional and defaults to github.com.
 # An entry with no usable repo or path is dropped — a repo the tick cannot
-# place on disk has nowhere to put a worktree.
+# place on disk has nowhere to open a tab.
 _iw_watch_list() {
     local _file
 
@@ -546,9 +551,9 @@ _iw_cwd_entry() {
 # ============================================================
 
 _iw_watch_usage() {
-    ux_info "Usage: issue_watcher_cron.sh watch list"
-    ux_info "       issue_watcher_cron.sh watch add [owner/repo] [--path P] [--host H]"
-    ux_info "       issue_watcher_cron.sh watch remove [owner/repo]"
+    ux_info "Usage: avatar_issue_watcher.sh watch list"
+    ux_info "       avatar_issue_watcher.sh watch add [owner/repo] [--path P] [--host H]"
+    ux_info "       avatar_issue_watcher.sh watch remove [owner/repo]"
     ux_bullet_sub "owner/repo omitted: the current checkout's origin"
     ux_bullet_sub "file: $(_iw_repos_file)"
 }
@@ -599,7 +604,7 @@ _iw_watch_list_cmd() {
     _file=$(_iw_repos_file)
     if [ ! -f "${_file}" ]; then
         ux_info "Watch list not found: ${_file}"
-        ux_bullet_sub "create it with: issue-watcher-cron watch add"
+        ux_bullet_sub "create it with: avatar-issue-watcher watch add"
         return 0
     fi
     if ! _iw_watch_validate "${_file}"; then
@@ -808,172 +813,115 @@ _iw_watch_cmd() {
 #   what has already been done  true forever after
 #   what may be collected       true once the work is over
 #
-# A worktree only ever reports that a dispatch *started*, so all three answers
-# were wrong in a different direction: collecting one re-dispatched an issue
-# whose PR was still open, keeping one retired an issue whose session had died
-# unnoticed, and neither bounded how many sessions ran at once. The three
-# questions now get three signals:
+# The questions now get separate signals, and the tick keys on no worktree at
+# all — /gh-flow:wave creates its own `wt/issue-<n>/<idx>` inside the session,
+# and the user removes it after reviewing the result:
 #
-#   running now  -> a live herdr agent pane sitting in the issue's worktree
+#   running now  -> an `issue-<N>` or `iw-issue-<N>` herdr tab with an agent
+#                   in it, inside the repo's workspace
 #   handled      -> GitHub: an open PR that closes the issue
-#   collectable  -> the issue is closed and no agent pane is in its worktree
+#   collectable  -> nothing; closing tabs and removing worktrees is manual
 #
-# The worktree is demoted to a plain workspace. Nothing keys on its existence
-# (NF-1), so it can be removed at any moment without changing what the next
-# tick decides — which is what makes collecting them safe at all.
-
-# Parsed once per tick, like the watch list: both the running-now signal and
-# the collection step walk it, and a `git worktree list` per watched checkout
-# is the most expensive local call in the tick. Nothing re-reads it after
-# _iw_cleanup_worktrees removes entries — the spawn path asks
-# _iw_worktree_for_issue directly — so the cache cannot go stale within a tick.
-_IW_ISSUE_WORKTREES=""
-_IW_ISSUE_WORKTREES_LOADED=0
-
-# Path comparisons in this file are between two sources that need not agree
-# spelling-wise — herdr reports a pane's cwd, git reports a worktree root, and
-# either can have arrived through a symlink. `herdr_agent_physical_path`
-# (shell-common/lib/herdr_agent_lookup.sh, #1569) is the SSOT for that
-# resolution; the local `_iw_physical_path` copy it replaced was one of four.
-
-# Emit `<worktree-path><TAB><owner/repo><TAB><number>` for every issue worktree
-# across every watched checkout.
-#
-# The branch, not the directory name, identifies an issue worktree:
-# `gwt spawn --wt-name issue-<n>` always branches `wt/issue-<n>/<index>`, while
-# the directory carries a project prefix. Reading the number off the path would
-# also hard-code a naming convention `gwt` owns and this script does not.
-_iw_issue_worktrees() {
-    local _repo _path _host
-
-    if [ "${_IW_ISSUE_WORKTREES_LOADED}" -eq 1 ]; then
-        [ -z "${_IW_ISSUE_WORKTREES}" ] || printf '%s\n' "${_IW_ISSUE_WORKTREES}"
-        return 0
-    fi
-
-    _IW_ISSUE_WORKTREES=$(_iw_watch_list | while IFS="${_IW_TAB}" read -r _repo _path _host; do
-        [ -n "${_path}" ] || continue
-        [ -d "${_path}" ] || continue
-        git -C "${_path}" worktree list --porcelain 2>/dev/null |
-            awk -v repo="${_repo}" '
-                /^worktree / { p = substr($0, 10) }
-                /^branch refs\/heads\/wt\/issue-/ {
-                    n = $0
-                    sub(/^branch refs\/heads\/wt\/issue-/, "", n)
-                    sub(/\/.*$/, "", n)
-                    if (n ~ /^[0-9]+$/ && p != "") print p "\t" repo "\t" n
-                }
-            '
-    done)
-
-    _IW_ISSUE_WORKTREES_LOADED=1
-    [ -z "${_IW_ISSUE_WORKTREES}" ] || printf '%s\n' "${_IW_ISSUE_WORKTREES}"
-}
+# Why not join agent cwd against the issue worktree any more: the dispatched
+# pane is opened on the checkout root and the worktree only appears later,
+# inside the session, so the pane's cwd never names the issue.
 
 # Parsed once per tick, like the watch list: every cap check consults it and
-# the herdr round trip must not be paid per candidate. main() primes it in its
+# the herdr round trips must not be paid per candidate. main() primes it in its
 # own shell so the subshells below inherit a warm cache.
 _IW_LIVE_AGENTS=""
 _IW_LIVE_AGENTS_LOADED=0
 
-# Emit `<owner/repo><TAB><number>` for every issue whose worktree currently has
-# a live herdr agent pane. Non-zero when herdr could not be asked at all.
+# Emit `<owner/repo><TAB><number>` for every issue with a live session.
+# Non-zero when herdr could not be asked at all.
 #
-# `herdr agent list` carries no agent-name field, so the `iw-<repo>-issue-<n>` names
-# this tick chooses cannot be matched back by name. What it does carry is each
-# pane's `cwd` and `foreground_cwd`, and every dispatched pane is opened on the
-# issue's worktree (`_iw_tab_create` passes it as --cwd) — so joining those
-# columns against _iw_issue_worktrees recovers the issue number exactly,
-# without depending on how the worktree directory happens to be named.
+# A session is a tab labelled exactly `issue-<N>` (opened by hand) or
+# `iw-issue-<N>` (opened by this tick) inside the repo's workspace
+# (_iw_workspace_label), with at least one agent whose `tab_id` is that tab.
+# Both labels count, so an issue the user is already working by hand is never
+# dispatched a second time.
+#
+# shortcut: two watched repos sharing one workspace (same path) cannot be told
+# apart — an `issue-12` tab there counts as running for #12 of both. Upgrade
+# by putting the repo in the label if that ever bites.
 #
 # Volatility is fine here, unlike for "already handled": the question is what
 # is running *now*, and after a reboot nothing is. The signal and the truth go
 # stale together.
 #
-# A pane's cwd alone answers "a session was opened here", not "it is still
-# working" (issue #1596). When the tab that should have been closed after a
-# merge survives, its pane keeps standing in the worktree with nothing left to
-# do, and every later tick reads it as running: the repo loses a concurrency
-# slot permanently and the worktree is never collected. So a pane is dropped
-# from the live set once *both* of its stop conditions hold — it reports a
-# stopped `agent_status`, and the issue it was opened on is closed on GitHub.
-# Either alone is a normal mid-flight state: an agent is `idle` between two
-# tool calls, and an issue is closed while its session still verifies the merge.
+# A tab alone answers "a session was opened here", not "it is still working"
+# (issue #1596). When a tab that should have been closed after a merge
+# survives, every later tick reads it as running and the repo loses a
+# concurrency slot permanently. So a session is dropped from the live set
+# once *both* of its stop conditions hold — every agent in the tab reports a
+# stopped `agent_status`, and the issue is closed on GitHub. Either alone is a
+# normal mid-flight state: an agent is `idle` between two tool calls, and an
+# issue is closed while its session still verifies the merge.
 #
 # Both together are still not enough on a single tick, though (PR #1597
 # codex/agy review). An agent that delegated to a background subagent — this
 # repo's own standard workflow — reports `idle` for the *minutes* it waits for
 # that subagent, and one snapshot cannot tell that pause apart from a finished
 # session. So the pair has to hold across two observations at least
-# _IW_ZOMBIE_GRACE_SECONDS apart before the pane is believed dead; the first
-# sighting only starts the clock. What the grace window buys is that the two
-# cases stop looking alike: a delegation ends and the pane goes back to
-# `working`, which clears the clock, while a real zombie never moves.
+# _IW_ZOMBIE_GRACE_SECONDS apart before the session is believed dead; the
+# first sighting only starts the clock. A delegation ends and the agent goes
+# back to `working`, which clears the clock, while a real zombie never moves.
 _iw_live_agents() {
-    local _json _panes _repo _number _stopped _ts _now _wt _wt_phys _matched _working _pane_cwd _pane_state
+    local _agents _tabs _wss _map _repo _path _host _number _stopped _ts _now
 
     if [ "${_IW_LIVE_AGENTS_LOADED}" -eq 1 ]; then
         [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
         return 0
     fi
 
-    # ONE herdr round trip for the whole watch list, via the shared SSOT
-    # fetcher (`herdr_agent_list_json`, #1569) — never a second hand-rolled
-    # `herdr agent list` call. Non-zero when herdr could not be asked at all,
-    # which must not read as "nothing running": that is the one mistake this
-    # signal cannot afford, since it would lift the concurrency cap exactly
-    # when herdr is unhealthy.
-    _json=$(herdr_agent_list_json) || return 1
+    # One round trip each for the whole watch list. Any of them failing or
+    # answering nothing must not read as "nothing running": that would lift
+    # the concurrency cap exactly when herdr is unhealthy. `agent list` goes
+    # through the shared SSOT fetcher (#1569).
+    _agents=$(herdr_agent_list_json) || return 1
+    _tabs=$(herdr tab list 2>/dev/null) || return 1
+    _wss=$(herdr workspace list 2>/dev/null) || return 1
+    [ -n "${_tabs}" ] && [ -n "${_wss}" ] || return 1
 
-    # Both columns, because they answer at different moments: `cwd` is where the
-    # pane was opened (stable for the session's whole life) and `foreground_cwd`
-    # is where its shell is standing now. Taking only one loses the session that
-    # `cd`-ed away, and losing it means the collection step reads a live
-    # worktree as idle (PR #1456 agy/codex review). Each carries its own pane's
-    # `agent_status` so the join below still knows which pane it matched.
-    _panes=$(printf '%s' "${_json}" | jq -r '
-        if (.result.agents | type) == "array"
-        then .result.agents[]?
-             | (.agent_status // "") as $st
-             | (.cwd, .foreground_cwd) | select(.)
-             | [ ., $st ] | @tsv
-        else error("no agent list")
-        end
-    ' 2>/dev/null) || return 1
+    # repo -> workspace label, resolved here because the label rule needs the
+    # whole watch list (_iw_workspace_label) and jq cannot call a shell function.
+    _map=$(_iw_watch_list | while IFS="${_IW_TAB}" read -r _repo _path _host; do
+        [ -n "${_path}" ] || continue
+        printf '%s\t%s\n' "${_repo}" "$(_iw_workspace_label "${_repo}" "${_path}")"
+    done)
 
-    # The boundary predicate itself is the shared one (`herdr_agent_path_under`,
-    # #1569) — this join is a plain shell loop, not awk, precisely so it can
-    # call it: awk cannot invoke a shell function, and reimplementing the
-    # predicate in awk again is exactly the duplication #1569 exists to end.
-    #
-    # The stopped flag is 1 only when every pane matching this worktree reports
-    # a status known to mean "not working". An unknown status is never a stop
-    # signal — the set of herdr statuses is not this script's to enumerate, so
-    # anything unrecognised must keep the session alive.
-    _IW_LIVE_AGENTS=$(_iw_issue_worktrees |
-        while IFS="${_IW_TAB}" read -r _wt _repo _number; do
-            _wt_phys=$(herdr_agent_physical_path "${_wt}")
-            _matched=0
-            _working=0
-            while IFS="${_IW_TAB}" read -r _pane_cwd _pane_state; do
-                [ -n "${_pane_cwd}" ] || continue
-                herdr_agent_path_under "${_pane_cwd}" "${_wt_phys}" || continue
-                _matched=1
-                if [ "${_pane_state}" != "idle" ] && [ "${_pane_state}" != "done" ]; then
-                    _working=1
-                    break
-                fi
-            done <<EOF
-${_panes}
-EOF
-            [ "${_matched}" -eq 1 ] || continue
-            _stopped=1
-            [ "${_working}" -eq 0 ] || _stopped=0
-            printf '%s\t%s\t%s\n' "${_repo}" "${_number}" "${_stopped}"
-        done |
+    # Rows: `<repo>\t<number>\t<stopped>`, one per repo+issue. stopped is 1
+    # only when every agent in every matching tab reports a status known to
+    # mean "not working". An unknown status is never a stop signal — the set
+    # of herdr statuses is not this script's to enumerate.
+    _IW_LIVE_AGENTS=$(printf '%s\n%s\n%s\n' "${_wss}" "${_tabs}" "${_agents}" |
+        jq -rs --arg map "${_map}" '
+            .[0].result.workspaces as $ws | .[1].result.tabs as $tabs
+            | .[2].result.agents as $agents
+            | if ([$ws, $tabs, $agents] | all(type == "array")) | not
+              then error("no herdr list") else . end
+            | [ $map | split("\n")[] | select(length > 0) | split("\t")
+                | .[0] as $repo | .[1] as $label
+                | [ $ws[] | select(.label == $label) | .workspace_id ] as $ids
+                | $tabs[]
+                | select(.workspace_id | IN($ids[]))
+                | (.label // "") as $l
+                | select($l | test("^(iw-)?issue-[0-9]+$"))
+                | .tab_id as $tid
+                | [ $agents[] | select(.tab_id == $tid) | (.agent_status // "") ] as $st
+                | select($st | length > 0)
+                | { repo: $repo, n: ($l | sub("^(iw-)?issue-"; "")),
+                    stopped: ($st | all(. == "idle" or . == "done")) } ]
+            | group_by([.repo, .n])[]
+            | [ .[0].repo, .[0].n, (if all(.[]; .stopped) then "1" else "0" end) ]
+            | @tsv
+        ' 2>/dev/null) || return 1
+
+    _IW_LIVE_AGENTS=$(printf '%s\n' "${_IW_LIVE_AGENTS}" |
         while IFS="${_IW_TAB}" read -r _repo _number _stopped; do
-            # The GitHub round trip is paid only for a stopped pane: a working
-            # one is live whatever its issue says, so asking would buy nothing.
+            [ -n "${_repo}" ] || continue
+            # The GitHub round trip is paid only for a stopped session: a
+            # working one is live whatever its issue says.
             if [ "${_stopped}" = "1" ] && _iw_issue_closed "${_repo}" "${_number}"; then
                 _ts=$(_iw_zombie_candidate_ts "${_repo}" "${_number}")
                 _now=$(date +%s)
@@ -996,22 +944,21 @@ EOF
 }
 
 # Raw <owner/repo> issue <number> state fetch. The only place the GH_HOST /
-# --json shape is written, so _iw_issue_closed and _iw_cleanup_worktrees stay
-# in lockstep instead of each keeping its own copy of the same `gh` call.
-# Callers decide what a failed read means for them — this just relays it.
+# --json shape is written. Callers decide what a failed read means for them —
+# this just relays it.
 _iw_issue_state() {
     GH_HOST="$(_iw_repo_host "$1")" gh issue view "$2" --repo "$1" \
         --json state -q .state
 }
 
 # 0 only when GitHub says <owner/repo> issue <number> is CLOSED. A failed or
-# unparsable read answers "no" on purpose: every caller reclaims something on a
-# yes — a concurrency slot, a worktree — and an unanswered question must never
-# be the reason anything is reclaimed.
+# unparsable read answers "no" on purpose: the caller reclaims a concurrency
+# slot on a yes, and an unanswered question must never be the reason anything
+# is reclaimed.
 #
-# stdin is closed for the same reason _iw_cleanup_worktrees reads its list on
-# fd 3: `gh` reads stdin, and this runs inside a `while read` loop fed by a
-# pipe, which it would otherwise swallow (PR #1447 agy review).
+# stdin is closed because `gh` reads stdin, and this runs inside a `while
+# read` loop fed by a pipe, which it would otherwise swallow (PR #1447 agy
+# review).
 _iw_issue_closed() {
     local _state
 
@@ -1186,7 +1133,7 @@ _iw_load_open_prs() {
 #
 # Two independent marks, because each alone has a hole: `gh:pr` writes
 # `Closes #<n>` into the body, which a hand-opened PR may lack, while
-# `gwt spawn --wt-name issue-<n>` always branches `wt/issue-<n>/<index>`, which
+# /gh-flow:wave's own worktree always branches `wt/issue-<n>/<index>`, which
 # a PR raised from a differently-named branch would not have.
 #
 # The `\b` after the number is load-bearing: without it `#14` would match a
@@ -1352,7 +1299,7 @@ _iw_resolve_flow_command() {
 # Resolve _IW_FLOW_COMMAND once per tick for the pane account. Shared by the
 # first dispatch and the casualty retry, so both send the same command. A
 # failure is logged once and is terminal for every dispatch this tick — it is
-# deterministic, so retrying it would only rebuild worktrees and panes.
+# deterministic, so retrying it would only rebuild tabs and panes.
 _iw_ensure_flow_command() {
     local _cfg _out _rc=0
     case "${_IW_FLOW_RESOLVED}" in
@@ -1452,37 +1399,6 @@ _iw_excluded_by_label() {
     done
 
     return 1
-}
-
-# Echo the existing worktree path for issue <2> inside checkout <1>, or
-# nothing.
-#
-# Since #1453 this locates a workspace, it does not judge anything: the spawn
-# step reads back the path `gwt` just created, and the cleanup step needs the
-# path to remove. Whether the issue may be dispatched is decided entirely by
-# the three signals above (NF-1).
-#
-# `gwt spawn --wt-name issue-<n>` always branches `wt/issue-<n>/<index>`, so
-# the branch is what identifies the worktree; the directory name carries a
-# project prefix this script would otherwise have to reconstruct.
-#
-# The *highest* index wins, not the first listed. A cleanup that failed to
-# remove `wt/issue-<n>/1` leaves the next spawn creating `/2`, and handing the
-# tab the stale `/1` path would open the pane on the wrong worktree. The house
-# helper `_gh_pr_approve_locate_own_worktree` picks the highest index for this
-# same reason.
-_iw_worktree_for_issue() {
-    git -C "$1" worktree list --porcelain 2>/dev/null |
-        awk -v pat="^branch refs/heads/wt/issue-$2/" '
-            /^worktree / { p = substr($0, 10) }
-            $0 ~ pat {
-                n = $0
-                sub(pat, "", n)
-                if (n ~ /^[0-9]+$/ && n + 0 >= best) { best = n + 0; bestp = p }
-                else if (bestp == "") { bestp = p }
-            }
-            END { if (bestp != "") print bestp }
-        '
 }
 
 # 0 when the issue has at least one OPEN blocker.
@@ -1697,107 +1613,16 @@ _iw_select_candidates() {
     return 0
 }
 
-# Remove the worktrees of issues that are finished with: the issue is closed
-# and no agent pane is sitting in it (D-1's third signal).
-#
-# Runs *before* dispatch (D-4) for two reasons — the space it frees is usable
-# in the same tick, and a failure here cannot hold up a dispatch. Cleanup is
-# hygiene, not correctness: since NF-1 nothing keys on a worktree's existence,
-# so a worktree that outlives its issue costs disk and nothing else.
-_iw_cleanup_worktrees() {
-    local _wt _repo _number _state _root _here _wt_real
-
-    _here=$(pwd -P)
-
-    # fd 3: the loop body runs `gh`, which reads stdin (PR #1447 agy review).
-    while IFS="${_IW_TAB}" read -r _wt _repo _number <&3; do
-        [ -n "${_wt}" ] || continue
-        [ -n "${_number}" ] || continue
-        # Never collect the worktree this tick is standing in — or any worktree
-        # it is standing *inside*. Comparing the two raw strings missed both a
-        # subdirectory cwd and a path that arrived through a symlink, either of
-        # which let the tick pull the ground out from under itself
-        # (PR #1456 agy/codex review).
-        _wt_real=$(herdr_agent_physical_path "${_wt}")
-        ! herdr_agent_path_under "${_here}" "${_wt_real}" || continue
-        ! _iw_live_has "${_repo}" "${_number}" || continue
-
-        _state=$(_iw_issue_state "${_repo}" "${_number}" 2>/dev/null) || {
-            ux_info "Cannot read ${_repo}#${_number} state — leaving its worktree in place."
-            continue
-        }
-        [ "${_state}" = "CLOSED" ] || continue
-
-        # Deliberately no `--force`. `git worktree remove` refuses a working
-        # tree with modified or untracked files, and that refusal is the whole
-        # safety property here: an issue can be closed by hand while its session
-        # still holds uncommitted work, and forcing would delete that work with
-        # no warning and no recovery — routine hygiene must not be a data-loss
-        # path (PR #1456 agy/codex review). A worktree left behind costs disk
-        # and nothing else, since NF-1 means its existence decides nothing.
-        _root=$(_iw_repo_path "${_repo}")
-        if git -C "${_root}" worktree remove "${_wt}" >/dev/null 2>&1; then
-            ux_info "Collected worktree ${_wt} — ${_repo}#${_number} is closed."
-        else
-            ux_warning "Leaving worktree ${_wt} in place — it has uncommitted or untracked changes (or git refused)."
-        fi
-    done 3<<EOF
-$(_iw_issue_worktrees)
-EOF
-}
-
 # ============================================================
-# Step 4-6 — worktree, pane, dispatch
+# Step 4-6 — tab, agent, dispatch
 # ============================================================
-
-# `gwt` is a shell function in shell-common, not a binary, so it cannot be
-# reached the way `herdr` and `gh` are. A PATH-resolvable `gwt` wins when one
-# exists (that is how the bats suite stubs it); otherwise the function file is
-# sourced inside a subshell, which inherits ux_* from this script and keeps
-# the gwt files' own definitions out of it.
-_iw_gwt() {
-    if command -v gwt >/dev/null 2>&1; then
-        gwt "$@"
-        return
-    fi
-
-    (
-        DOTFILES_FORCE_INIT=1
-        export DOTFILES_FORCE_INIT
-        # spawn/teardown live in git_worktree_spawn.sh since #2156.
-        # shellcheck source=/dev/null
-        . "${_IW_SHELL_COMMON}/functions/git_worktree.sh" || exit 1
-        # shellcheck source=/dev/null
-        . "${_IW_SHELL_COMMON}/functions/git_worktree_spawn.sh" || exit 1
-        # shellcheck source=/dev/null
-        . "${_IW_SHELL_COMMON}/functions/gwt_help.sh" || exit 1
-        gwt "$@"
-    )
-}
-
-# Create the issue's worktree and echo its path. `gwt spawn` refuses to run
-# from inside a worktree, so it runs from the checkout root; its own output
-# goes to stderr because stdout here carries the resulting path.
-_iw_spawn_worktree() {
-    local _path="$1" _number="$2" _wt
-
-    (cd "${_path}" && _iw_gwt spawn --wt-name "issue-${_number}") >&2 || return 1
-
-    _wt=$(_iw_worktree_for_issue "${_path}" "${_number}")
-    [ -n "${_wt}" ] || return 1
-    printf '%s' "${_wt}"
-}
 
 # Best-effort teardown of a half-built dispatch, so the next attempt starts
-# from nothing. Since NF-1 a survivor no longer retires the issue — nothing
-# keys on a worktree's existence — but it still costs: `gwt spawn` skips any
-# index whose branch is still there, so the next attempt builds `issue-<n>/2`
-# and the abandoned `/1` stays on disk until a later tick collects it.
+# from nothing. Only the tab: the tick creates no worktree (/gh-flow:wave makes
+# its own inside the session), and a surviving `iw-issue-<N>` tab with an agent
+# in it would read as a running session and hold the issue.
 _iw_cleanup_attempt() {
-    local _path="$1" _wt="$2" _tab="$3"
-
-    [ -z "${_tab}" ] || herdr tab close "${_tab}" >/dev/null 2>&1 || true
-    [ -z "${_wt}" ] || (cd "${_path}" && _iw_gwt remove "${_wt}" --force) >/dev/null 2>&1 || true
+    [ -z "$1" ] || herdr tab close "$1" >/dev/null 2>&1 || true
 }
 
 # herdr *create* with the shared flags, routed at this tick's account
@@ -1811,17 +1636,19 @@ _iw_herdr_create() {
 #
 # The directory basename is the label users already see (`dotfiles`,
 # `agent-toolbox`), so it stays the default — but only while it identifies one
-# repo. Two watched checkouts whose leaf directory names collide would
-# otherwise be merged onto a single workspace, and the second repo's tabs would
-# open inside the first repo's (PR #1447 codex/agy review). When the watch list
-# contains such a collision, both sides fall back to the unambiguous slug.
+# project directory. Several repos may share one path (gh-verify-skills,
+# gh-flow-skills ... all under ~/para/project/skills): that is one directory,
+# so one workspace, not a collision. Two *different* paths whose leaf names
+# collide would otherwise be merged onto a single workspace, and the second
+# repo's tabs would open inside the first repo's (PR #1447 codex/agy review);
+# then both sides fall back to the unambiguous slug.
 _iw_workspace_label() {
     local _repo="$1" _path="$2" _base _count
 
     _base=$(basename "${_path}")
     _count=$(_iw_watch_list |
         awk -F "${_IW_TAB}" -v b="${_base}" '
-            { n = split($2, parts, "/"); if (parts[n] == b) c++ }
+            { n = split($2, parts, "/"); if (parts[n] == b && !seen[$2]++) c++ }
             END { print c + 0 }
         ')
 
@@ -2155,12 +1982,12 @@ _iw_prompt_issue() {
     return 1
 }
 
-# One issue, end to end: worktree, workspace, tab, agent, prompt. Retries the
+# One issue, end to end: workspace, tab, agent, prompt. Retries the
 # whole sequence up to _IW_MAX_ATTEMPTS times, cleaning up before each retry so
 # no attempt inherits the previous one's half-built state.
 _iw_process_issue() {
     local _repo="$1" _number="$2" _path="$3"
-    local _attempt=1 _agent _label _wt="" _ws="" _pane_tab="" _pane="" _tab=""
+    local _attempt=1 _agent _label _ws="" _pane_tab="" _pane="" _tab=""
     local _cause="" _msg=""
 
     # A repo whose name normalizes to nothing has no addressable agent, so the
@@ -2172,7 +1999,7 @@ _iw_process_issue() {
     }
     _label=$(_iw_workspace_label "${_repo}" "${_path}")
 
-    # Before any worktree or pane exists: no entry point is a deterministic
+    # Before any tab or pane exists: no entry point is a deterministic
     # failure, and the retry loop below would only rebuild them (#2209).
     if ! _iw_ensure_flow_command; then
         ux_warning "Not dispatching ${_repo}#${_number} — no /gh-flow:wave entry point to run."
@@ -2180,18 +2007,15 @@ _iw_process_issue() {
     fi
 
     while [ "${_attempt}" -le "${_IW_MAX_ATTEMPTS}" ]; do
-        _wt=""
         _tab=""
 
-        if ! _wt=$(_iw_spawn_worktree "${_path}" "${_number}"); then
-            ux_warning "Worktree spawn failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
-            # A spawn can fail after `git worktree add` succeeded. Recover the
-            # path so the cleanup below really removes it — a survivor would
-            # push the next attempt onto a fresh index and leak this one.
-            _wt=$(_iw_worktree_for_issue "${_path}" "${_number}")
-        elif ! _ws=$(_iw_workspace_for_label "${_label}" "${_path}"); then
+        # The tab opens on the checkout root and is labelled `iw-issue-<N>` —
+        # the `iw-` keeps it apart from an `issue-<N>` tab the user opened by
+        # hand; _iw_live_agents counts both. /gh-flow:wave creates the
+        # worktree itself, inside the session.
+        if ! _ws=$(_iw_workspace_for_label "${_label}" "${_path}"); then
             ux_warning "No herdr workspace for ${_label} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
-        elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_wt}" "#${_number}"); then
+        elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_path}" "iw-issue-${_number}"); then
             ux_warning "herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
         else
             IFS="${_IW_TAB}" read -r _pane _tab <<EOF
@@ -2215,7 +2039,7 @@ EOF
                 ux_warning "${_msg}"
             elif _iw_wait_for_idle "${_agent}" && _iw_settle "${_agent}"; then
                 if _iw_prompt_issue "${_agent}" "${_number}" "${_tab}" "${_attempt}"; then
-                    ux_success "${_repo}#${_number} dispatched (worktree ${_wt}, pane ${_pane})."
+                    ux_success "${_repo}#${_number} dispatched (tab ${_tab}, pane ${_pane})."
                     return 0
                 elif [ "$(_hp_agent_status "${_agent}")" = "working" ]; then
                     # A `working` agent is never torn down, whatever the dispatch
@@ -2225,7 +2049,7 @@ EOF
                     # failed, the agent had not. Deliberately independent of the
                     # `.error.code` fix in _iw_prompt_once: that parsing is what
                     # silently broke in production, so it is not the only thing
-                    # standing between a live session and `gwt remove`.
+                    # standing between a live session and `tab close`.
                     # Only `working` counts — an empty answer is an unreachable
                     # agent, not evidence of work, and still cleans up below.
                     #
@@ -2237,7 +2061,7 @@ EOF
                     # state) and get reported as delivered. Nesting it here means
                     # the guard only ever fires once a prompt attempt for this
                     # issue was actually made.
-                    ux_warning "${_agent} reports working despite the failed prompt — keeping worktree ${_wt} and pane ${_pane}, not retrying."
+                    ux_warning "${_agent} reports working despite the failed prompt — keeping tab ${_tab} and pane ${_pane}, not retrying."
                     return 0
                 elif [ "${_IW_PROMPT_KEEP_ATTEMPT}" -eq 1 ]; then
                     ux_error "Giving up on ${_repo}#${_number} after ${_IW_MAX_ATTEMPTS} attempts."
@@ -2246,7 +2070,7 @@ EOF
             fi
         fi
 
-        _iw_cleanup_attempt "${_path}" "${_wt}" "${_tab}"
+        _iw_cleanup_attempt "${_tab}"
         _attempt=$((_attempt + 1))
     done
 
@@ -2262,9 +2086,9 @@ EOF
 # prompt` hands the command over and returns, so a claude session that starts
 # and then stops on a spent quota still reads as a delivered dispatch — the
 # tick books a success, the retry never fires, and the issue waits for a whole
-# cycle before the next tick can offer it again. Since NF-1 the worktree left
-# behind no longer retires the issue permanently (that was the pre-#1453
-# failure this gate was written against), so exhaustion now costs a wasted
+# cycle before the next tick can offer it again. Since NF-1 nothing left
+# behind retires the issue permanently (that was the pre-#1453 failure this
+# gate was written against), so exhaustion now costs a wasted
 # dispatch slot rather than a lost issue — still worth holding the cycle for.
 #
 # The gate below holds dispatches after repeated unhealthy cycles and reopens
@@ -2466,7 +2290,7 @@ EOF
         ;;
     esac
 
-    ux_warning "Rate-limit gate closed — holding dispatch for ~$(((_left + 59) / 60))m (no worktree is created this tick)."
+    ux_warning "Rate-limit gate closed — holding dispatch for ~$(((_left + 59) / 60))m (no tab is opened this tick)."
     return 1
 }
 
@@ -2596,7 +2420,7 @@ EOF
 # forgot *which* issues the outage killed. On reopen the tick simply asked
 # `_iw_select_candidates` again, which round-robins on to the next issue — so an
 # outage lasting longer than one backoff window sacrificed a fresh issue every
-# 30 minutes, each one holding a worktree and a concurrency slot forever and
+# 30 minutes, each one holding a tab and a concurrency slot forever and
 # none of them ever retried. A human had to re-prompt every dead pane by hand.
 #
 # The rows below are that missing memory. They are written where the strike is
@@ -2703,11 +2527,11 @@ _iw_limit_casualty_drop() {
 # Re-offer every casualty its pane, once, at gate-reopen time.
 #
 # Two ways back in, and the cheap one is tried first. If herdr still knows the
-# issue's agent the pane and its worktree survived the outage, so all the issue
+# issue's agent the pane and its session survived the outage, so all the issue
 # needs is the prompt it never got to run — the same `herdr agent prompt`
 # _iw_prompt_issue sends on a first dispatch. Only when the agent is gone does
-# this fall back to the full _iw_process_issue path, which rebuilds worktree,
-# workspace, tab and agent from scratch; rebuilding it unconditionally would
+# this fall back to the full _iw_process_issue path, which rebuilds workspace,
+# tab and agent from scratch; rebuilding it unconditionally would
 # throw away a perfectly good session and its branch.
 #
 # Success is verified exactly the way the gate verifies quota recovery, because
@@ -3254,7 +3078,7 @@ EOF
 # Returns non-zero only when another tick holds the lock; a missing flock or an
 # unusable state dir soft-degrades to "no protection" rather than failing.
 _iw_acquire_lock() {
-    _hp_acquire_lock "$(_iw_state_dir)" "${_IW_LOCK_BASENAME}" issue_watcher_cron
+    _hp_acquire_lock "$(_iw_state_dir)" "${_IW_LOCK_BASENAME}" avatar_issue_watcher
 }
 
 # ============================================================
@@ -3262,8 +3086,8 @@ _iw_acquire_lock() {
 # ============================================================
 
 _iw_usage() {
-    ux_header "issue_watcher_cron"
-    ux_info "Usage: issue_watcher_cron.sh [--cwd <PATH>] [--dry-run] | --status | watch ... | [-h|--help|help]"
+    ux_header "avatar_issue_watcher"
+    ux_info "Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] | --status | watch ... | [-h|--help|help]"
     ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:wave (or its Agent Factory copy)."
     ux_bullet "options"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
@@ -3284,14 +3108,16 @@ _iw_usage() {
     ux_bullet_sub "excluded labels: ${_IW_EXCLUDE_LABELS_DEFAULT}"
     ux_bullet_sub "an issue with an OPEN blockedBy is skipped (query failure fails open)"
     ux_bullet_sub "an issue an open PR already closes is skipped (query failure skips the repo)"
-    ux_bullet_sub "a worktree's existence decides nothing — it is a workspace, not a marker"
+    ux_bullet_sub "dispatch opens an iw-issue-<N> tab on the repo path and runs /gh-flow:wave <N>"
+    ux_bullet_sub "  (the skill creates its own worktree; the tick creates none)"
     ux_bullet_sub "at most ${_IW_DISPATCH_PER_TICK} issue(s) per tick, ${_IW_MAX_ATTEMPTS} attempts each"
     ux_bullet_sub "no issue is ever written to — no comment, label or assignee change"
     ux_bullet "concurrency"
-    ux_bullet_sub "a live agent pane in an issue's worktree means that issue is running"
+    ux_bullet_sub "an issue-<N> (by hand) or iw-issue-<N> (by the tick) tab with a live agent"
+    ux_bullet_sub "  in the repo's workspace means that issue is running"
     ux_bullet_sub "${_IW_MAX_CONCURRENT} running in total holds the tick (exit 0); ${_IW_MAX_PER_REPO} in one repo skips that repo"
     ux_bullet_sub "repos take turns (round-robin); within a repo the lowest issue number goes first"
-    ux_bullet_sub "a worktree is collected once its issue is closed and no agent sits in it"
+    ux_bullet_sub "cleanup is manual: after review, /exit, remove the worktree, close the tab"
     ux_bullet "watch list"
     ux_bullet_sub "${_IW_REPOS_FILE_DEFAULT}"
     ux_bullet_sub "override with \$IW_WATCHED_REPOS; entries are {repo, path, host}"
@@ -3307,7 +3133,7 @@ _iw_usage() {
     ux_bullet_sub "${_IW_LIMIT_STRIKES} ticks in a row where no dispatched agent does close the gate"
     ux_bullet_sub "a prompt that never reached the pane leaves the gate exactly as it was"
     ux_bullet_sub "a strike logs the pane tail as evidence — pane text never opens or closes the gate"
-    ux_bullet_sub "while closed the tick holds: no prompt, no worktree, exit 0"
+    ux_bullet_sub "while closed the tick holds: no prompt, no tab, exit 0"
     ux_bullet_sub "it reopens by itself after $((_IW_LIMIT_BACKOFF_SECONDS / 60))m — delete ${_IW_LIMIT_STATE_BASENAME} to reopen it now"
     ux_bullet "saturation alert"
     ux_bullet_sub "${_IW_SATURATION_ALERT_TICKS} consecutive ticks that dispatch nothing because the caps are full raise one herdr notification"
@@ -3324,7 +3150,7 @@ _iw_usage() {
     ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
     ux_bullet_sub "it must also hold a parseable .credentials.json — a logged-out account stalls every prompt"
     ux_bullet "crontab"
-    ux_bullet_sub "*/4 * * * * /path/to/issue_watcher_cron.sh >> ~/.local/state/issue-watcher/cron.log 2>&1"
+    ux_bullet_sub "*/4 * * * * /path/to/avatar_issue_watcher.sh >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1"
 }
 
 # ============================================================
@@ -3379,7 +3205,7 @@ main() {
             ;;
         *)
             ux_error "Unknown option: $1"
-            ux_info "Run 'issue_watcher_cron.sh --help' for usage."
+            ux_info "Run 'avatar_issue_watcher.sh --help' for usage."
             exit 1
             ;;
         esac
@@ -3473,12 +3299,6 @@ main() {
         ux_warning "watch list has repos sharing a basename (${_iw_dup}) — herdr agent names collide (see herdr_agent_name.sh)." >&2
     fi
 
-    # Same reasoning, one signal down: the worktree scan feeds both the
-    # running-now join (inside a pipeline) and the collection loop (inside a
-    # heredoc), so neither call site can warm the memo for the other. Priming
-    # it here holds `git worktree list` to one run per watched checkout.
-    _iw_issue_worktrees >/dev/null
-
     # A dry run reports what it would dispatch and touches nothing, so it must
     # stay usable on a machine with no herdr server.
     if [ "${_IW_DRY_RUN}" -eq 0 ] && ! command -v herdr >/dev/null 2>&1; then
@@ -3519,7 +3339,7 @@ EOF
 
     _iw_acquire_lock || exit 0
 
-    # Before any worktree is created: a closed gate must cost nothing.
+    # Before any tab is opened: a closed gate must cost nothing.
     _iw_limit_gate_check || exit 0
 
     # Primed here, in the tick's own shell, so the subshells below inherit a
@@ -3531,11 +3351,6 @@ EOF
         ux_warning "Cannot list herdr agents — holding this tick rather than dispatching blind."
         exit 0
     fi
-
-    # Before the concurrency check, not after: collecting finished worktrees is
-    # what keeps the disk bounded, and a tick that is at its limit is exactly
-    # the tick that most needs it done (D-4).
-    _iw_cleanup_worktrees
 
     # Before the concurrency ceiling, not just before _iw_select_candidates
     # (PR #1622 codex review), and only on the tick that reopened the gate
@@ -3557,19 +3372,13 @@ EOF
         _iw_limit_retry_casualties
 
         # The retry's missing-pane fallback goes through _iw_process_issue,
-        # which spawns a real worktree and a real pane — neither of which the
-        # memos primed above can know about. Both have to be dropped, not just
-        # the agent one: _iw_live_agents rebuilds its answer by joining herdr's
-        # panes against _iw_issue_worktrees, so clearing only the live memo
-        # would recount against a worktree list that still predates the
-        # redispatch and miss the new session again. Everything downstream that
+        # which opens a real tab and a real pane — neither of which the memo
+        # primed above can know about. Everything downstream that
         # spends a slot — the ceiling check below, _iw_dispatch_budget inside
         # the selector — would otherwise admit fresh work against a count taken
         # before the retry and overshoot _IW_MAX_CONCURRENT.
         _IW_LIVE_AGENTS=""
         _IW_LIVE_AGENTS_LOADED=0
-        _IW_ISSUE_WORKTREES=""
-        _IW_ISSUE_WORKTREES_LOADED=0
 
         # Re-primed here in the tick's own shell for both reasons the first
         # priming gives: the subshells below must inherit a warm cache instead
@@ -3619,7 +3428,7 @@ EOF
     # behind all of them.
     _iw_ensure_config_dir
 
-    # fd 3, not stdin: the loop body runs `gh`, `herdr` and `gwt`, any of which
+    # fd 3, not stdin: the loop body runs `gh` and `herdr`, either of which
     # may read stdin and would otherwise swallow the rest of the candidate list,
     # silently shortening the cycle (PR #1447 agy review).
     while IFS="${_IW_TAB}" read -r _repo _number _path _host <&3; do

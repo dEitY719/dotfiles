@@ -122,9 +122,9 @@ aicron_usage() {
     ux_info ""
     ux_section "Examples"
     ux_bullet_sub "aicron list"
-    ux_bullet_sub "aicron add issue-watcher --schedule '*/4 * * * *'"
+    ux_bullet_sub "aicron add avatar-issue-watcher --schedule '*/4 * * * *'"
     ux_bullet_sub "aicron pause merge-train"
-    ux_bullet_sub "aicron status issue-watcher --json | jq .last_exit"
+    ux_bullet_sub "aicron status avatar-issue-watcher --json | jq .last_exit"
     return 0
 }
 
@@ -136,7 +136,7 @@ aicron_usage() {
 # nothing after it.
 #
 # Rejecting the extra word rather than ignoring it is the point.
-# `aicron run issue-watcher --dry-run` silently dropping the flag is how a run
+# `aicron run avatar-issue-watcher --dry-run` silently dropping the flag is how a run
 # does something other than what was asked, and the same typo on `remove`
 # would edit the crontab the user did not mean to edit.
 aicron_one_job_arg() {

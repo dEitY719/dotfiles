@@ -1,4 +1,4 @@
-"""Candidate selection/filter logic of issue_watcher_cron.sh, ported from jq/awk (#2157).
+"""Candidate selection/filter logic of avatar_issue_watcher.sh, ported from jq/awk (#2157).
 
 The shell keeps every gh/herdr call, the lock and the logging; it pipes the JSON
 gh printed into one of the ops below and reads the answer back. Each op was

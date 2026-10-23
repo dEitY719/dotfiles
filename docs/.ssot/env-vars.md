@@ -8,7 +8,7 @@ a new repo or workspace.
 > 플러그인 네임스페이스(`gh-issue:create`, `gh-pr:create`, `gh-flow:issue` …)로
 > 적는다. dotfiles 의 `claude/skills/` 원본은 #1680 (Phase 4) 에서 삭제됐지만
 > **옛 이름(`/gh-issue-create`, `/gh-pr`, `/gh-issue-flow` …)으로도 계속
-> 호출된다** — `gh_flow.sh` · `issue_watcher_cron.sh` 같은 운영 자동화가
+> 호출된다** — `gh_flow.sh` · `avatar_issue_watcher.sh` 같은 운영 자동화가
 > 아직 옛 슬래시 명령을 dispatch 하기 때문이다 (#1410 NF-1, D-12; 정리는
 > Phase4-3). 본문에 남은 `claude/skills/<dir>/` 경로는 삭제된 원본을 가리키는
 > 이력 표기이며, 실물은 해당 marketplace repo 의 `skills/<name>/` 에 있다.
