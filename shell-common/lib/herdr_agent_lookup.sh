@@ -24,7 +24,7 @@
 # fix), which is why the fix is the same shape: one helper, four callers.
 #
 # The fourth, avatar_issue_watcher.sh's _iw_live_agents, no longer matches on
-# cwd at all: it joins tab labels (`issue-<N>` / `iw-issue-<N>`) to agents by
+# cwd at all: it joins tab labels (`issue-<N>` / `iw-<repo>-issue-<N>`) to agents by
 # `tab_id`, and uses only herdr_agent_list_json from this file. Its dispatched
 # pane opens on the checkout root, so a cwd never names the issue.
 #
