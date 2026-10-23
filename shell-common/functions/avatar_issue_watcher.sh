@@ -40,7 +40,7 @@ _avatar_issue_watcher_help_rows_examples() {
     ux_table_row "avatar-issue-watcher --dry-run" "Manual" "Preview one tick without dispatching"
     ux_table_row "avatar-issue-watcher --status" "Manual" "Show gate, saturation and search state"
     ux_table_row "cd ~/dotfiles && avatar-issue-watcher" "Manual" "cwd mode: tick only this repo"
-    ux_table_row "avatar-issue-watcher --cwd ~/dotfiles" "Manual" "Same tick, started from any directory"
+    ux_table_row "avatar-issue-watcher --cwd ~/dotfiles" "Manual" "Watch-list tick (not cwd mode), started from any directory"
     ux_table_row "avatar-issue-watcher watch list" "Watch" "Show the watch list"
     ux_table_row "cd ~/dotfiles && avatar-issue-watcher watch add" "Watch" "Add the cwd repo"
     ux_table_row "avatar-issue-watcher watch add dEitY719/gh-verify-skills --path ~/para/project/skills" "Watch" "Add a repo with its checkout path"
