@@ -160,6 +160,34 @@ A stale value that is *well-formed but wrong* is still honored. If you
 export `TARGET_REPO` by hand, unset it when you are done — and prefer
 `--repo` over the env tiers in any new caller.
 
+## `avatar-issue-watcher`
+
+### `IW_EXCLUDE_LABELS`
+
+| Field | Value |
+|---|---|
+| Default | unset (then the label file, then `wontfix,not-implement,TODO,manual`) |
+| Active when | set to a non-empty comma-separated label list |
+| Scope | `avatar_issue_watcher.sh` candidate filter (exact label match) |
+| Source SSOT | `shell-common/tools/custom/avatar_issue_watcher.sh` (`_iw_exclude_labels_resolve`) |
+
+Replaces the whole exclude set for the run; it beats the label file below.
+`avatar-issue-watcher label list` shows which source is in effect.
+
+### `IW_EXCLUDE_LABELS_FILE`
+
+| Field | Value |
+|---|---|
+| Default | `excluded-labels.json` next to the watch list (`~/.avatars/issue-watcher/excluded-labels.json`) |
+| Active when | set to a path |
+| Scope | `avatar-issue-watcher label list\|add\|remove` and the tick's exclude filter |
+| Source SSOT | `shell-common/tools/custom/avatar_issue_watcher.sh` (`_iw_exclude_labels_file`) |
+
+A JSON array of label strings. Absent file = the default set; `label add` /
+`label remove` seed it from the default on first write. A file that is not
+an array of strings is never rewritten, and the tick falls back to the
+default set with a warning.
+
 ## How to add a new entry
 
 1. Document the var here first (this file is the catalog SSOT).

@@ -15,8 +15,8 @@ alias avatar-issue-watcher='avatar_issue_watcher'
 _avatar_issue_watcher_help_summary() {
     ux_info "Usage: avatar-issue-watcher-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "commands: run modes (tick, --dry-run, --status, watch)"
-    ux_bullet_sub "examples: manual runs, watch list, periodic runs (aicron/crontab)"
+    ux_bullet_sub "commands: run modes (tick, --dry-run, <issue-ref>, --status, watch, label)"
+    ux_bullet_sub "examples: manual runs, watch list, excluded labels, periodic runs (aicron/crontab)"
     ux_info "Full cycle, caps, gate, watch list and state paths: avatar-issue-watcher --help"
 }
 
@@ -29,22 +29,32 @@ _avatar_issue_watcher_help_list_sections() {
 _avatar_issue_watcher_help_rows_commands() {
     ux_table_row "avatar-issue-watcher" "Tick" "Dispatch assigned open issues to /gh-flow:wave (cron)"
     ux_table_row "avatar-issue-watcher --dry-run" "Preview" "Print what a tick would dispatch, change nothing"
+    ux_table_row "avatar-issue-watcher <issue-ref>" "Target" "Dispatch one issue (URL, owner/repo#N, #N, N) through the tick's guards"
+    ux_table_row "avatar-issue-watcher <issue-ref> --force" "Target" "Same, despite an excluded label"
     ux_table_row "avatar-issue-watcher --status" "Status" "Rate-limit gate, saturation, gh search state"
     ux_table_row "avatar-issue-watcher watch list" "Watch" "Show the watch list file and its entries"
     ux_table_row "avatar-issue-watcher watch add [owner/repo]" "Watch" "Add/update an entry (--path P, --host H; default: cwd repo)"
     ux_table_row "avatar-issue-watcher watch remove [owner/repo]" "Watch" "Drop an entry (default: cwd repo)"
+    ux_table_row "avatar-issue-watcher label list" "Label" "Show the excluded labels and their source (env/file/default)"
+    ux_table_row "avatar-issue-watcher label add <label>..." "Label" "Exclude labels (absent file: seeded from the default)"
+    ux_table_row "avatar-issue-watcher label remove <label>..." "Label" "Stop excluding labels"
     ux_table_row "avatar-issue-watcher --help" "Help" "Full cycle, caps and gate rules"
 }
 
 _avatar_issue_watcher_help_rows_examples() {
     ux_table_row "avatar-issue-watcher --dry-run" "Manual" "Preview one tick without dispatching"
     ux_table_row "avatar-issue-watcher --status" "Manual" "Show gate, saturation and search state"
+    ux_table_row "avatar-issue-watcher --dry-run https://github.com/dEitY719/dotfiles/issues/2275" "Target" "Preview dispatching that one issue"
+    ux_table_row "cd ~/dotfiles && avatar-issue-watcher 2275" "Target" "Dispatch issue 2275 of the cwd repo"
     ux_table_row "cd ~/dotfiles && avatar-issue-watcher" "Manual" "cwd mode: tick only this repo"
     ux_table_row "avatar-issue-watcher --cwd ~/dotfiles" "Manual" "Watch-list tick (not cwd mode), started from any directory"
     ux_table_row "avatar-issue-watcher watch list" "Watch" "Show the watch list"
     ux_table_row "cd ~/dotfiles && avatar-issue-watcher watch add" "Watch" "Add the cwd repo"
     ux_table_row "avatar-issue-watcher watch add dEitY719/gh-verify-skills --path ~/para/project/skills" "Watch" "Add a repo with its checkout path"
     ux_table_row "avatar-issue-watcher watch remove dEitY719/equinest" "Watch" "Drop a repo"
+    ux_table_row "avatar-issue-watcher label list" "Label" "Show the excluded labels"
+    ux_table_row "avatar-issue-watcher label add 보류" "Label" "Also skip issues labelled 보류"
+    ux_table_row "avatar-issue-watcher label remove TODO" "Label" "Dispatch TODO issues again"
     ux_table_row "aicron add avatar-issue-watcher --schedule '*/4 * * * *'" "Periodic" "Install the shipped aicron job"
     ux_table_row "aicron status avatar-issue-watcher --json | jq .last_exit" "Periodic" "Exit code of the last run"
     ux_table_row "aicron run avatar-issue-watcher --dry-run" "Periodic" "Run the job once by hand"

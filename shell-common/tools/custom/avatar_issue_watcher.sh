@@ -32,8 +32,11 @@
 # 실행하면 watch list 파일을 읽지 않고 그 저장소 하나만 대상으로 삼는다.
 # cron 은 `--cwd` 를 주거나 $HOME 에서 시작하므로 기존 watch list 동작 그대로다.
 #
-# Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] | --status
-#        | watch list|add|remove ... | [-h|--help|help]
+# 대상 지정 실행: 이슈 URL / owner/repo#N / #N / N 하나를 주면 검색 없이 그 이슈만
+# 같은 가드(실행 중 탭, 열린 PR, blocker, 상한, gate, lock)를 거쳐 dispatch 한다.
+#
+# Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] [<issue-ref> [--force]]
+#        | --status | watch list|add|remove ... | label ... | [-h|--help|help]
 
 set -u
 
@@ -101,8 +104,10 @@ _IW_US=$(printf '\037')
 # needs (the tab opens on that path). Overridable so the bats suite can point at a fixture.
 _IW_REPOS_FILE_DEFAULT="${HOME:-/nonexistent}/.avatars/issue-watcher/watched-repos.json"
 
-# Labels that park an issue. Exact matches, not substrings.
-_IW_EXCLUDE_LABELS_DEFAULT="wontfix,보류,not-implement"
+# Labels that park an issue. Exact matches, not substrings. The default set;
+# $IW_EXCLUDE_LABELS (comma-separated) and then the excluded-labels.json file
+# next to the watch list replace it — see _iw_exclude_labels_resolve.
+_IW_EXCLUDE_LABELS_DEFAULT="wontfix,not-implement,TODO,manual"
 
 # Concurrency limits (issue #1453 D-2). Three constants, because they bound
 # three different things and no one of them implies the others:
@@ -384,6 +389,9 @@ _IW_ERRF=""
 _IW_CONFIG_DIR=""
 # Set by --dry-run: collect and report candidates, mutate nothing.
 _IW_DRY_RUN=0
+# Set by an issue-reference run: one named issue, so it has taken no repo's
+# round-robin turn and the cursor stays where the last real tick left it.
+_IW_TARGETED=0
 # Set by _iw_limit_gate_check when it clears an expired backoff, and read once
 # by main() (issue #1604). The casualty retry is a gate-reopen event, not a
 # per-tick one: a tick that finds the gate simply `open` has already done its
@@ -545,6 +553,52 @@ _iw_cwd_entry() {
         return 2
     }
     printf '%s\t%s\t%s' "${_parsed%%"${_IW_TAB}"*}" "${_top}" "${_parsed#*"${_IW_TAB}"}"
+}
+
+# Print `<host>\t<owner/repo>\t<number>` for an issue reference — the full
+# `https://<host>/<owner>/<repo>/issues/<N>` URL (trailing slash, ?query and
+# #fragment ignored), `<owner>/<repo>#<N>`, `#<N>` or a bare `<N>`. Host and
+# repo are empty when the reference does not name them. Exit 1 on anything else.
+_iw_parse_issue_ref() {
+    local _r="$1" _host="" _repo="" _num _rest
+    case "${_r}" in
+    http://* | https://*)
+        _rest="${_r#*://}"
+        _rest="${_rest%%\#*}"
+        _rest="${_rest%%\?*}"
+        _rest="${_rest%/}"
+        _host="${_rest%%/*}"
+        _host="${_host##*@}"
+        _host="${_host%%:*}"
+        [ -n "${_host}" ] || return 1
+        _rest="${_rest#*/}"
+        _num="${_rest##*/}"
+        _rest="${_rest%/*}"
+        [ "${_rest##*/}" = "issues" ] || return 1
+        _repo="${_rest%/issues}"
+        [ -n "${_repo}" ] || return 1
+        ;;
+    */*\#*)
+        _repo="${_r%%\#*}"
+        _num="${_r#*\#}"
+        ;;
+    \#*) _num="${_r#\#}" ;;
+    *) _num="${_r}" ;;
+    esac
+    case "${_num}" in
+    '' | 0* | *[!0-9]*) return 1 ;;
+    esac
+    if [ -n "${_repo}" ]; then
+        case "${_repo}" in
+        */*/* | .* | */.* | *[!A-Za-z0-9._/-]*) return 1 ;;
+        ?*/?*) ;;
+        *) return 1 ;;
+        esac
+    fi
+    case "${_host}" in
+    *[!A-Za-z0-9.-]*) return 1 ;;
+    esac
+    printf '%s\t%s\t%s' "${_host}" "${_repo}" "${_num}"
 }
 
 # ============================================================
@@ -798,6 +852,213 @@ _iw_watch_cmd() {
     *)
         ux_error "Unknown watch command: ${1-}"
         _iw_watch_usage
+        return 1
+        ;;
+    esac
+}
+
+# ============================================================
+# `label` subcommand — manage the excluded-labels file
+# ============================================================
+
+# A bare JSON array of label strings, next to the watch list by default.
+_iw_exclude_labels_file() {
+    local _repos
+    if [ -n "${IW_EXCLUDE_LABELS_FILE:-}" ]; then
+        printf '%s' "${IW_EXCLUDE_LABELS_FILE}"
+        return 0
+    fi
+    _repos=$(_iw_repos_file)
+    printf '%s/excluded-labels.json' "${_repos%/*}"
+}
+
+# Exit 1 unless <file> holds a JSON array of strings.
+_iw_exclude_labels_validate() {
+    jq -e 'type == "array" and all(.[]; type == "string")' "$1" >/dev/null 2>&1
+}
+
+# Resolve the effective exclude set once per process: $IW_EXCLUDE_LABELS >
+# the file > the default. Sets _IW_EXCL_SET (US-joined — US because a label
+# may hold a space) and _IW_EXCL_SOURCE (env|file|default). Diagnostics go to
+# stderr: the tick calls this while its stdout is the candidate list.
+_IW_EXCL_LOADED=0
+_IW_EXCL_SET=""
+_IW_EXCL_SOURCE=""
+_iw_exclude_labels_resolve() {
+    local _file
+    [ "${_IW_EXCL_LOADED}" -eq 0 ] || return 0
+    _IW_EXCL_LOADED=1
+    if [ -n "${IW_EXCLUDE_LABELS:-}" ]; then
+        _IW_EXCL_SOURCE="env"
+        _IW_EXCL_SET=$(printf '%s' "${IW_EXCLUDE_LABELS}" | tr ',' '\037')
+        return 0
+    fi
+    _file=$(_iw_exclude_labels_file)
+    if [ -f "${_file}" ]; then
+        if _iw_exclude_labels_validate "${_file}"; then
+            _IW_EXCL_SOURCE="file"
+            _IW_EXCL_SET=$(jq -r 'map(select(. != "")) | join("\u001f")' "${_file}")
+            return 0
+        fi
+        # The default set still parks the usual labels; holding every tick
+        # over a typo in a convenience file would be the bigger loss.
+        ux_warning "Excluded-labels file is not a JSON array of strings — using the default set: ${_file}" >&2
+    fi
+    _IW_EXCL_SOURCE="default"
+    _IW_EXCL_SET=$(printf '%s' "${_IW_EXCLUDE_LABELS_DEFAULT}" | tr ',' '\037')
+}
+
+_iw_label_usage() {
+    ux_info "Usage: avatar_issue_watcher.sh label list"
+    ux_info "       avatar_issue_watcher.sh label add <label>..."
+    ux_info "       avatar_issue_watcher.sh label remove <label>..."
+    ux_bullet_sub "precedence: \$IW_EXCLUDE_LABELS > file > default (${_IW_EXCLUDE_LABELS_DEFAULT})"
+    ux_bullet_sub "file: $(_iw_exclude_labels_file)"
+}
+
+_iw_label_list_cmd() {
+    local _label _oldifs _file
+    _file=$(_iw_exclude_labels_file)
+    if [ -z "${IW_EXCLUDE_LABELS:-}" ] && [ -f "${_file}" ] && ! _iw_exclude_labels_validate "${_file}"; then
+        ux_error "Excluded-labels file is not a JSON array of strings (the tick falls back to the default): ${_file}"
+        return 1
+    fi
+    _iw_exclude_labels_resolve
+    ux_header "excluded labels"
+    case "${_IW_EXCL_SOURCE}" in
+    env) ux_info "source: env (\$IW_EXCLUDE_LABELS)" ;;
+    file) ux_info "source: file (${_file})" ;;
+    *) ux_info "source: default (no file at ${_file})" ;;
+    esac
+    if [ -z "${_IW_EXCL_SET}" ]; then
+        ux_info "(none)"
+        return 0
+    fi
+    _oldifs="$IFS"
+    IFS="${_IW_US}"
+    # shellcheck disable=SC2086 # split on US: the set is a list
+    set -- ${_IW_EXCL_SET}
+    IFS="$_oldifs"
+    for _label in "$@"; do
+        [ -z "${_label}" ] || ux_bullet "${_label}"
+    done
+}
+
+# label add/remove: validate the arguments and the file, then set
+# _IW_L_FILE, _IW_L_BASE (the jq expression for the current list — the file,
+# or the default seed when the file is absent) and _IW_L_CUR (US-joined).
+_iw_label_prepare() {
+    local _verb="$1" _label
+    shift
+    if [ "$#" -eq 0 ]; then
+        ux_error "label ${_verb} needs at least one label."
+        _iw_label_usage
+        return 1
+    fi
+    for _label in "$@"; do
+        case "${_label}" in
+        "" | *,* | *"${_IW_TAB}"* | *"${_IW_US}"* | *"
+"*)
+            ux_error "Invalid label (empty, or holds a comma, TAB, newline or US): '${_label}'"
+            return 1
+            ;;
+        esac
+    done
+    _IW_L_FILE=$(_iw_exclude_labels_file)
+    if [ -f "${_IW_L_FILE}" ]; then
+        if ! _iw_exclude_labels_validate "${_IW_L_FILE}"; then
+            ux_error "Excluded-labels file is not a JSON array of strings — left untouched: ${_IW_L_FILE}"
+            return 1
+        fi
+        _IW_L_BASE='.'
+        _IW_L_CUR=$(jq -r 'join("\u001f")' "${_IW_L_FILE}")
+    else
+        # shellcheck disable=SC2016 # a jq variable, bound by _iw_label_write
+        _IW_L_BASE='$seed'
+        _IW_L_CUR=$(printf '%s' "${_IW_EXCLUDE_LABELS_DEFAULT}" | tr ',' '\037')
+    fi
+    if [ -n "${IW_EXCLUDE_LABELS:-}" ]; then
+        ux_warning "\$IW_EXCLUDE_LABELS is set and overrides the file until it is unset."
+    fi
+}
+
+# Apply jq filter <1> to the label file via _iw_watch_write (backup, atomic
+# swap), with the default set bound as $seed and the labels as $l.
+_iw_label_write() {
+    local _filter="$1" _seed _new
+    shift
+    _seed=$(printf '%s' "${_IW_EXCLUDE_LABELS_DEFAULT}" | jq -Rc 'split(",")') || return 1
+    _new=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(. != ""))') || return 1
+    _iw_watch_write "${_IW_L_FILE}" "${_filter}" --argjson seed "${_seed}" --argjson l "${_new}"
+}
+
+_iw_label_add_cmd() {
+    local _label _added="" _sep=""
+    _iw_label_prepare add "$@" || return 1
+    for _label in "$@"; do
+        case "${_IW_US}${_IW_L_CUR}${_IW_US}" in
+        *"${_IW_US}${_label}${_IW_US}"*)
+            ux_info "Already excluded: ${_label}"
+            continue
+            ;;
+        esac
+        _IW_L_CUR="${_IW_L_CUR}${_IW_US}${_label}"
+        _added="${_added}${_sep}${_label}"
+        _sep=", "
+    done
+    [ -n "${_added}" ] || return 0
+    if ! _iw_label_write "reduce \$l[] as \$x (${_IW_L_BASE}; if any(.[]; . == \$x) then . else . + [\$x] end)" "$@"; then
+        ux_error "Could not write ${_IW_L_FILE}."
+        return 1
+    fi
+    ux_success "Excluded ${_added} in ${_IW_L_FILE}"
+}
+
+_iw_label_remove_cmd() {
+    local _label _removed="" _sep=""
+    _iw_label_prepare remove "$@" || return 1
+    for _label in "$@"; do
+        case "${_IW_US}${_IW_L_CUR}${_IW_US}" in
+        *"${_IW_US}${_label}${_IW_US}"*)
+            _removed="${_removed}${_sep}${_label}"
+            _sep=", "
+            ;;
+        *) ux_warning "Not in the exclude list: ${_label}" ;;
+        esac
+    done
+    [ -n "${_removed}" ] || return 0
+    if ! _iw_label_write "${_IW_L_BASE} - \$l" "$@"; then
+        ux_error "Could not write ${_IW_L_FILE}."
+        return 1
+    fi
+    ux_success "Removed ${_removed} from ${_IW_L_FILE}"
+}
+
+# Entry point for `label ...`. Like `watch`, a local-file edit that runs ahead
+# of the gh/herdr checks.
+_iw_label_cmd() {
+    if ! command -v jq >/dev/null 2>&1; then
+        ux_error "jq not found in PATH — cannot read or write the excluded-labels file."
+        return 1
+    fi
+    case "${1-}" in
+    list)
+        _iw_label_list_cmd
+        ;;
+    add)
+        shift
+        _iw_label_add_cmd "$@"
+        ;;
+    remove)
+        shift
+        _iw_label_remove_cmd "$@"
+        ;;
+    -h | --help | help)
+        _iw_label_usage
+        ;;
+    *)
+        ux_error "Unknown label command: ${1-}"
+        _iw_label_usage
         return 1
         ;;
     esac
@@ -1225,6 +1486,7 @@ _iw_write_last_repo() {
     # advancing the cursor there would make merely *asking* change which repo
     # the next real tick serves.
     [ "${_IW_DRY_RUN}" -eq 0 ] || return 0
+    [ "${_IW_TARGETED}" -eq 0 ] || return 0
 
     _dir=$(_iw_state_dir)
     _file=$(_iw_select_state_file)
@@ -1420,7 +1682,8 @@ _iw_search_issues() {
 _iw_excluded_by_label() {
     local _labels="$1" _excluded _label _oldifs
 
-    _excluded="${IW_EXCLUDE_LABELS:-${_IW_EXCLUDE_LABELS_DEFAULT}}"
+    _iw_exclude_labels_resolve
+    _excluded="${_IW_EXCL_SET}"
 
     _oldifs="$IFS"
     IFS="${_IW_US}"
@@ -1432,8 +1695,8 @@ _iw_excluded_by_label() {
 
     for _label in "$@"; do
         [ -n "${_label}" ] || continue
-        case ",${_excluded}," in
-        *",${_label},"*) return 0 ;;
+        case "${_IW_US}${_excluded}${_IW_US}" in
+        *"${_IW_US}${_label}${_IW_US}"*) return 0 ;;
         esac
     done
 
@@ -3127,9 +3390,11 @@ _iw_acquire_lock() {
 
 _iw_usage() {
     ux_header "avatar_issue_watcher"
-    ux_info "Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] | --status | watch ... | [-h|--help|help]"
+    ux_info "Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] [<issue-ref> [--force]] | --status | watch ... | label ... | [-h|--help|help]"
     ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:wave (or its Agent Factory copy)."
     ux_bullet "options"
+    ux_bullet_sub "<issue-ref>    targeted run: dispatch this one issue instead of searching (see below)"
+    ux_bullet_sub "--force        with <issue-ref> only: dispatch despite an excluded label"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
     ux_bullet_sub "               (takes no lock and does not evaluate the rate-limit gate)"
@@ -3141,11 +3406,16 @@ _iw_usage() {
     ux_bullet_sub "watch add [owner/repo] [--path P] [--host H]"
     ux_bullet_sub "                                 add or update an entry (default: current checkout)"
     ux_bullet_sub "watch remove [owner/repo]        drop an entry (default: current checkout)"
+    ux_bullet_sub "label list                       print the excluded labels and their source"
+    ux_bullet_sub "label add <label>...             exclude labels (absent file: seeded from the default)"
+    ux_bullet_sub "label remove <label>...          stop excluding labels (an unlisted one only warns)"
     ux_bullet_sub "               writes keep a .bak-YYYYMMDD copy and unknown fields; broken JSON is left untouched"
     ux_bullet_sub "-h, --help, help   show this help"
     ux_bullet "cycle"
     ux_bullet_sub "gh search issues --assignee @me --state open   (one query per watched host)"
-    ux_bullet_sub "excluded labels: ${_IW_EXCLUDE_LABELS_DEFAULT}"
+    ux_bullet_sub "excluded labels (exact match): \$IW_EXCLUDE_LABELS (comma-separated) > file > default"
+    ux_bullet_sub "  file: \$IW_EXCLUDE_LABELS_FILE or excluded-labels.json next to the watch list (JSON array)"
+    ux_bullet_sub "  default: ${_IW_EXCLUDE_LABELS_DEFAULT}"
     ux_bullet_sub "an issue with an OPEN blockedBy is skipped (query failure fails open)"
     ux_bullet_sub "an issue an open PR already closes is skipped (query failure skips the repo)"
     ux_bullet_sub "dispatch opens an iw-<repo>-issue-<N> tab (= the agent name) on the repo path"
@@ -3153,6 +3423,14 @@ _iw_usage() {
     ux_bullet_sub "  (the skill creates its own worktree; the tick creates none)"
     ux_bullet_sub "at most ${_IW_DISPATCH_PER_TICK} issue(s) per tick, ${_IW_MAX_ATTEMPTS} attempts each"
     ux_bullet_sub "no issue is ever written to — no comment, label or assignee change"
+    ux_bullet "targeted run (<issue-ref>)"
+    ux_bullet_sub "https://<host>/<owner>/<repo>/issues/<N>, <owner>/<repo>#<N>, #<N> or <N>"
+    ux_bullet_sub "  (#<N> and <N>: the current checkout's origin repo)"
+    ux_bullet_sub "repo: its watch-list entry, else the current checkout; neither -> watch add first"
+    ux_bullet_sub "no search: reads that issue with gh issue view; not OPEN or unreadable -> exit 1"
+    ux_bullet_sub "an excluded label refuses (exit 1) unless --force"
+    ux_bullet_sub "running tab, open PR, open blocker, caps, gate and lock apply as in a tick (skip: exit 0)"
+    ux_bullet_sub "the round-robin cursor and the saturation counter are left untouched"
     ux_bullet "concurrency"
     ux_bullet_sub "an issue-<N> (by hand) or iw-<repo>-issue-<N> (by the tick) tab with a live agent"
     ux_bullet_sub "  in the repo's workspace means that issue is running"
@@ -3196,12 +3474,164 @@ _iw_usage() {
 }
 
 # ============================================================
+# Targeted run — one named issue instead of the search
+# ============================================================
+
+# Dispatch <host> <owner/repo> <number> (host/repo may be empty, see
+# _iw_parse_issue_ref) through the same guards and _iw_process_issue path a tick
+# uses. $4 is --force (1/0), $5 the current checkout's `_iw_cwd_entry` line or
+# empty. Exit 1 only for a hard error (repo unresolvable, issue unreadable or not
+# OPEN, excluded label without --force, a failed dispatch); a guard that skips
+# the issue answers 0, as a tick that dispatches nothing does.
+#
+# Never advances the round-robin cursor (_IW_TARGETED) and never touches the
+# saturation counter: one named issue says nothing about whose turn it is or
+# whether the caps are starving the backlog.
+_iw_targeted_run() {
+    local _url_host="$1" _repo="$2" _number="$3" _force="$4" _cwd_entry="$5"
+    local _path _host _errf _json _cause _state _labels _l _hit="" _oldifs _candidates _live _rc _confirmed=""
+
+    # The watch list wins; the current checkout is the fallback. Appended to the
+    # cached list (never replacing it) so the casualty retry below still sees
+    # every watched repo instead of dropping their rows as "no longer watched".
+    _iw_watch_list >/dev/null
+    if [ -n "${_cwd_entry}" ] && [ -z "$(_iw_repo_path "${_cwd_entry%%"${_IW_TAB}"*}")" ]; then
+        _IW_WATCH_LIST="${_IW_WATCH_LIST:+${_IW_WATCH_LIST}
+}${_cwd_entry}"
+    fi
+
+    if [ -z "${_repo}" ]; then
+        if [ -z "${_cwd_entry}" ]; then
+            ux_error "#${_number} names no repo and the current directory is no checkout with a usable origin."
+            ux_info "Run it inside the checkout, or pass <owner>/<repo>#${_number}."
+            return 1
+        fi
+        _repo="${_cwd_entry%%"${_IW_TAB}"*}"
+    fi
+
+    _path=$(_iw_repo_path "${_repo}")
+    if [ -z "${_path}" ]; then
+        ux_error "${_repo} is neither on the watch list nor the current checkout."
+        ux_info "Run: avatar-issue-watcher watch add ${_repo} --path P"
+        return 1
+    fi
+    _host=$(_iw_repo_host "${_repo}")
+    if [ -n "${_url_host}" ] && [ "${_url_host}" != "${_host}" ]; then
+        ux_error "${_repo}: the URL names host ${_url_host}, but its entry uses ${_host}."
+        return 1
+    fi
+    if [ ! -d "${_path}" ]; then
+        ux_error "${_repo} maps to a missing path (${_path})."
+        return 1
+    fi
+
+    # gh's stderr kept for the error line, beside the state file as in
+    # _iw_search_issues (no mktemp in the tick).
+    _errf=$(_iw_state_dir)
+    mkdir -p "${_errf}" 2>/dev/null || true
+    _errf="${_errf}/issue-view.err.$$"
+    { : >"${_errf}"; } 2>/dev/null || _errf="/dev/null"
+    _rc=0
+    _json=$(GH_HOST="${_host}" gh issue view "${_number}" --repo "${_repo}" \
+        --json number,state,labels </dev/null 2>"${_errf}") || _rc=$?
+    _cause=$(head -n 1 "${_errf}" 2>/dev/null)
+    [ "${_errf}" = "/dev/null" ] || rm -f "${_errf}"
+    _state=""
+    [ "${_rc}" -ne 0 ] || _state=$(printf '%s' "${_json}" | jq -r '.state // empty' 2>/dev/null)
+    if [ -z "${_state}" ]; then
+        ux_error "Cannot read ${_repo}#${_number} on ${_host}${_cause:+: ${_cause}}"
+        return 1
+    fi
+    if [ "${_state}" != "OPEN" ]; then
+        ux_error "${_repo}#${_number} is ${_state} — only an OPEN issue is dispatched."
+        return 1
+    fi
+
+    # Label by label through _iw_excluded_by_label, so the error can name them.
+    _labels=$(printf '%s' "${_json}" | jq -r '[.labels[]?.name] | join("\u001f")' 2>/dev/null)
+    _oldifs="$IFS"
+    IFS="${_IW_US}"
+    # shellcheck disable=SC2086
+    set -- ${_labels}
+    IFS="$_oldifs"
+    for _l in "$@"; do
+        [ -n "${_l}" ] || continue
+        ! _iw_excluded_by_label "${_l}" || _hit="${_hit:+${_hit}, }${_l}"
+    done
+    if [ -n "${_hit}" ]; then
+        if [ "${_force}" -ne 1 ]; then
+            ux_error "${_repo}#${_number} carries an excluded label (${_hit}) — not dispatching."
+            ux_info "Pass --force to dispatch it anyway."
+            return 1
+        fi
+        ux_warning "${_repo}#${_number} carries an excluded label (${_hit}) — dispatching anyway (--force)."
+    fi
+
+    if [ "${_IW_DRY_RUN}" -eq 1 ]; then
+        # Same degradation as the dry-run tick: no lock, no gate, and an
+        # unreachable herdr reads as "nothing is running".
+        if ! _iw_live_agents >/dev/null; then
+            _iw_live_agents_assume_none
+            ux_warning "Cannot list herdr agents — reporting as if nothing were running."
+        fi
+    else
+        _iw_acquire_lock || return 0
+        _iw_limit_gate_check || return 0
+        if ! _iw_live_agents >/dev/null; then
+            ux_warning "Cannot list herdr agents — holding rather than dispatching blind."
+            return 0
+        fi
+        # The gate reopened on this run, so it owns the casualty retry a tick
+        # would have run here (see main()).
+        if [ "${_IW_LIMIT_GATE_REOPENED}" -eq 1 ]; then
+            _iw_limit_retry_casualties
+            _IW_LIVE_AGENTS=""
+            _IW_LIVE_AGENTS_LOADED=0
+            if ! _iw_live_agents >/dev/null; then
+                ux_warning "Cannot list herdr agents after the casualty retry — holding rather than dispatching blind."
+                return 0
+            fi
+        fi
+    fi
+
+    _live=$(_iw_live_count)
+    if [ "${_live}" -ge "${_IW_MAX_CONCURRENT}" ]; then
+        ux_info "Holding ${_repo}#${_number} — ${_live} issue session(s) already running (max ${_IW_MAX_CONCURRENT})."
+        return 0
+    fi
+
+    # The selector with a one-line candidate list: per-repo cap, open-PR
+    # (fail-closed), running tab and blockedBy, each with its own Skipping line.
+    _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}")
+    if [ -z "${_candidates}" ]; then
+        ux_info "Not dispatching ${_repo}#${_number}."
+        return 0
+    fi
+
+    if [ "${_IW_DRY_RUN}" -eq 1 ]; then
+        ux_success "Dry run — would dispatch:"
+        ux_bullet "${_repo}#${_number}  (${_path}, ${_host})"
+        return 0
+    fi
+
+    _iw_ensure_config_dir
+    _rc=0
+    _iw_process_issue "${_repo}" "${_number}" "${_path}" || _rc=$?
+    [ "${_rc}" -ne 0 ] ||
+        _confirmed="$(_iw_agent_name "${_repo}" "${_number}")${_IW_TAB}${_repo}${_IW_TAB}${_number}
+"
+    _iw_limit_record "${_confirmed}"
+    [ "${_rc}" -ne 1 ] || return 1
+    return 0
+}
+
+# ============================================================
 # Main
 # ============================================================
 
 main() {
     local _cwd="" _repo _number _path _host _rc _dispatched=0 _skipped=0 _failed=0 _candidates _live _select_rc
-    local _confirmed=""
+    local _confirmed="" _ref="" _parsed="" _force=0 _ref_host _cwd_entry
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -3245,13 +3675,48 @@ main() {
             _iw_watch_cmd "$@" || _rc=$?
             exit "${_rc}"
             ;;
-        *)
+        label)
+            # Terminal like `watch`: a local-file edit, ahead of gh/herdr.
+            shift
+            _rc=0
+            _iw_label_cmd "$@" || _rc=$?
+            exit "${_rc}"
+            ;;
+        --force)
+            _force=1
+            shift
+            ;;
+        -*)
             ux_error "Unknown option: $1"
             ux_info "Run 'avatar_issue_watcher.sh --help' for usage."
             exit 1
             ;;
+        *)
+            if [ -z "$1" ]; then
+                ux_error "Not an issue reference: (empty)"
+                exit 1
+            fi
+            if [ -n "${_ref}" ]; then
+                ux_error "One issue reference per run — got ${_ref} and $1."
+                exit 1
+            fi
+            _ref="$1"
+            shift
+            ;;
         esac
     done
+
+    # Parsed ahead of every gh/herdr check: a typo needs no network to report.
+    if [ -n "${_ref}" ]; then
+        if ! _parsed=$(_iw_parse_issue_ref "${_ref}"); then
+            ux_error "Not an issue reference: ${_ref}"
+            ux_info "Use https://<host>/<owner>/<repo>/issues/<N>, <owner>/<repo>#<N>, #<N> or <N>."
+            exit 1
+        fi
+    elif [ "${_force}" -eq 1 ]; then
+        ux_error "--force only applies to a targeted run — pass an issue reference with it."
+        exit 1
+    fi
 
     # --cwd is where the tick runs from, which is what a relative `path` in the
     # watch list resolves against. A cron tick starts in $HOME, so a watch list
@@ -3287,6 +3752,25 @@ main() {
         ux_error "python3 (>= 3.10) not found in PATH — cannot run the candidate selection."
         ux_info "Install python3 >= 3.10, or add it to the cron PATH."
         exit 1
+    fi
+
+    # Targeted run: one named issue, no search. The checkout at the (possibly
+    # --cwd) directory is only a fallback for repo resolution, so an origin it
+    # cannot parse is not an error here unless the reference needs it.
+    if [ -n "${_parsed}" ]; then
+        if [ "${_IW_DRY_RUN}" -eq 0 ] && ! command -v herdr >/dev/null 2>&1; then
+            ux_error "herdr not found in PATH — cannot run the issue-watcher tick."
+            ux_info "Install it via ./herdr/setup.sh, or add it to the cron PATH."
+            exit 1
+        fi
+        _IW_TARGETED=1
+        _cwd_entry=$(_iw_cwd_entry 2>/dev/null) || _cwd_entry=""
+        _ref_host="${_parsed%%"${_IW_TAB}"*}"
+        _parsed="${_parsed#*"${_IW_TAB}"}"
+        _rc=0
+        _iw_targeted_run "${_ref_host}" "${_parsed%%"${_IW_TAB}"*}" "${_parsed#*"${_IW_TAB}"}" \
+            "${_force}" "${_cwd_entry}" || _rc=$?
+        exit "${_rc}"
     fi
 
     # cwd mode (#2243): no --cwd, and the current directory is a checkout with
