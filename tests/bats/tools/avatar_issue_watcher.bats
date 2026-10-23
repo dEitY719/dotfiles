@@ -40,6 +40,7 @@ setup() {
     _LOG="${_WORK_DIR}/calls.log"
     _REPO_DIR="${_WORK_DIR}/dotfiles"
     _WATCH_FILE="${_WORK_DIR}/watched-repos.json"
+    _LABEL_FILE="${_WORK_DIR}/excluded-labels.json"
     _LOCK_HOLDER_PID=""
     _RUN_DIR=""
     mkdir -p "${_BIN_DIR}"
@@ -292,6 +293,8 @@ _issues_with_labels() {
 #   GH_PR_LIST_FAIL=1     `pr list` errors (fail-closed path, D-6)
 #   GH_CLOSED_ISSUES      issue numbers `issue view` reports CLOSED for
 #   GH_ISSUE_VIEW_FAIL=1  `issue view` errors (worktree is left in place)
+#   GH_ISSUE_LABELS       label names (space-separated) on the issue a
+#                         targeted run reads with `issue view --json ...`
 _install_gh_stub() {
     cat >"${_BIN_DIR}/gh" <<'EOF'
 #!/bin/sh
@@ -331,13 +334,23 @@ case "$1 $2" in
     # Read-only, like the two above: the cleanup step asks whether an issue is
     # closed before it collects that issue's worktree.
     [ "${GH_ISSUE_VIEW_FAIL:-0}" = "1" ] && exit 1
+    _state=OPEN
     for _c in ${GH_CLOSED_ISSUES:-}; do
-        if [ "${_c}" = "$3" ]; then
-            printf 'CLOSED\n'
-            exit 0
-        fi
+        [ "${_c}" != "$3" ] || _state=CLOSED
     done
-    printf 'OPEN\n'
+    # The targeted run's read (`--json number,state,labels`): the issue as
+    # JSON, labelled with GH_ISSUE_LABELS (space-separated names).
+    case " $* " in
+    *" number,state,labels "*)
+        _labels=""
+        for _l in ${GH_ISSUE_LABELS:-}; do
+            _labels="${_labels:+${_labels},}{\"name\":\"${_l}\"}"
+        done
+        printf '{"number":%s,"state":"%s","labels":[%s]}\n' "$3" "${_state}" "${_labels}"
+        exit 0
+        ;;
+    esac
+    printf '%s\n' "${_state}"
     exit 0
     ;;
 "api graphql")
@@ -762,6 +775,7 @@ _run_tick() {
     [ "$#" -eq 0 ] || shift
 
     run _run_script env \
+        -u IW_EXCLUDE_LABELS \
         "${_unset[@]}" \
         "PATH=${_BIN_DIR}:${PATH}" \
         "CALL_LOG=${_LOG}" \
@@ -772,6 +786,7 @@ _run_tick() {
         "HERDR_WORKSPACES_FILE=${_WORK_DIR}/workspaces.json" \
         "HERDR_TABS_AFTER_CREATE_FILE=${_WORK_DIR}/tabs-after-create.json" \
         "IW_WATCHED_REPOS=${_WATCH_FILE}" \
+        "IW_EXCLUDE_LABELS_FILE=${_LABEL_FILE}" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "IW_IDLE_POLL_SLEEP=0" \
         "IW_STALL_RECOVER_SLEEP=0" \
@@ -1023,7 +1038,8 @@ _assert_not_hung() {
     run bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "gh search issues"
-    assert_output --partial "wontfix"
+    assert_output --partial "default: wontfix,not-implement,TODO,manual"
+    assert_output --partial "IW_EXCLUDE_LABELS_FILE"
     assert_output --partial "blockedBy"
     assert_output --partial "at most 1 issue(s) per tick"
 }
@@ -1350,6 +1366,86 @@ _real_herdr_fixture() {
     _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
+@test "avatar_issue_watcher: one issue tab in a workspace shared by three repos counts once" {
+    # Three repos on one path share one workspace (_iw_workspace_label), so the
+    # one iw-issue-12 tab is seen once per repo. Counted per repo row, it read
+    # as 3 sessions and held a tick capped at 2 forever.
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/two","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/three","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
+    _set_tabs working iw-issue-12
+    _run_tick "IW_MAX_CONCURRENT=2"
+    assert_success
+    refute_output --partial "Holding this tick"
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: a tab with one working agent among stopped ones stays live" {
+    # Stopped means *every* agent in the tab stopped. One still working keeps
+    # the session live even on a closed issue past its grace window.
+    _set_tabs working iw-issue-21
+    printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[{"agent_status":"idle","pane_id":"ws-existing:p1","tab_id":"ws-existing:t1","workspace_id":"ws-existing"},{"agent_status":"working","pane_id":"ws-existing:p2","tab_id":"ws-existing:t1","workspace_id":"ws-existing"},{"agent_status":"done","pane_id":"ws-existing:p3","tab_id":"ws-existing:t1","workspace_id":"ws-existing"}]}}' \
+        >"${_WORK_DIR}/agents.json"
+    _seed_zombie_candidate 21 "$(($(date +%s) - 1200))"
+    _run_tick "IW_MAX_CONCURRENT=1" "GH_CLOSED_ISSUES=21"
+    assert_success
+    assert_output --partial "Holding this tick — 1 issue session(s) already running"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a dispatched issue whose tab survives is not dispatched again" {
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "Dispatched to iw-dotfiles-issue-11"
+    [ "$(_log_count 'tab create')" -eq 1 ]
+
+    # The tab the first tick opened is still there with its agent.
+    _set_live_agents 11
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "acme/dotfiles#11 — already running"
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+# Shapes captured from a live herdr server (2026-10-23), trimmed to the fields
+# the tick reads plus a few it ignores; ids, paths and session ids are fake.
+_real_herdr_fixture() {
+    printf '%s\n' '{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"active_tab_id":"w2A:t3R","agent_status":"idle","focused":true,"label":"dotfiles","number":3,"pane_count":2,"tab_count":2,"workspace_id":"w2A"}]}}' \
+        >"${_WORK_DIR}/workspaces.json"
+    printf '%s\n' '{"id":"cli:tab:list","result":{"tabs":[{"agent_status":"working","focused":false,"label":"review","number":119,"pane_count":1,"tab_id":"w2A:t3Q","workspace_id":"w2A"},{"agent_status":"idle","focused":true,"label":"'"$1"'","number":120,"pane_count":1,"tab_id":"w2A:t3R","workspace_id":"w2A"}]}}' \
+        >"${_WORK_DIR}/tabs.json"
+    printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"00000000-0000-0000-0000-000000000001"},"agent_status":"working","cwd":"/fake/dotfiles","focused":false,"foreground_cwd":"/fake/dotfiles","pane_id":"w2A:p3Q","revision":4,"state_change_seq":303,"tab_id":"'"$2"'","workspace_id":"w2A"},{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"00000000-0000-0000-0000-000000000002"},"agent_status":"idle","cwd":"/fake/dotfiles","focused":true,"foreground_cwd":"/fake/dotfiles","name":"iw-dotfiles-issue-1774","pane_id":"w2A:p3R","revision":4,"state_change_seq":305,"tab_id":"'"$3"'","workspace_id":"w2A"}],"type":"agent_list"}}' \
+        >"${_WORK_DIR}/agents.json"
+}
+
+@test "avatar_issue_watcher: real herdr shapes join an iw-issue tab to its agent" {
+    _real_herdr_fixture iw-issue-11 w2A:t3Q w2A:t3R
+    _run_tick
+    assert_success
+    assert_output --partial "acme/dotfiles#11 — already running"
+    refute_output --partial "matches no agent"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: agents matching no listed tab warn that the issue tabs read as idle" {
+    # Schema drift: the issue tab is there, but no agent's tab_id names any
+    # listed tab. The tick still reads that as nothing running (unchanged) —
+    # the warning is how a lifted cap gets noticed.
+    _real_herdr_fixture iw-issue-11 drift:1 drift:2
+    _run_tick
+    assert_success
+    assert_output --partial "matches no agent"
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: ordinary tabs alone raise no tab/agent mismatch warning" {
+    _real_herdr_fixture review w2A:t3Q w2A:t3R
+    _run_tick
+    assert_success
+    refute_output --partial "matches no agent"
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
 @test "avatar_issue_watcher: an unreachable herdr tab list holds the tick" {
     _run_tick "HERDR_TAB_LIST_FAIL=1"
     assert_success
@@ -1424,11 +1520,26 @@ _real_herdr_fixture() {
     _refute_logged "agent prompt"
 }
 
-@test "avatar_issue_watcher: an issue labelled 보류 is not dispatched" {
-    _issues_with_labels 11 보류
+@test "avatar_issue_watcher: an issue labelled manual is not dispatched" {
+    _issues_with_labels 11 manual
+    _run_tick
+    assert_success
+    assert_output --partial "excluded label"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: an issue labelled TODO is not dispatched" {
+    _issues_with_labels 11 TODO
     _run_tick
     assert_success
     _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: 보류 is no longer in the default exclude set" {
+    _issues_with_labels 11 보류
+    _run_tick
+    assert_success
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an issue labelled not-implement is not dispatched" {
@@ -4267,4 +4378,327 @@ _watch_json() {
     assert_success
     assert_output --partial "Updated acme/dotfiles"
     [ "$(_watch_json '.[0].path')" = "\"${_REPO_DIR}\"" ]
+}
+
+# ---------------------------------------------------------------------------
+# label list|add|remove — the excluded-labels file
+# ---------------------------------------------------------------------------
+
+_label_json() {
+    jq -c "$1" "${_LABEL_FILE}"
+}
+
+@test "avatar_issue_watcher: label list reports the four default labels and its source" {
+    _run_tick -- label list
+    assert_success
+    assert_output --partial "source: default (no file at ${_LABEL_FILE})"
+    assert_output --partial "wontfix"
+    assert_output --partial "not-implement"
+    assert_output --partial "TODO"
+    assert_output --partial "manual"
+    refute_output --partial "보류"
+    [ ! -e "${_LABEL_FILE}" ]
+    [ ! -s "${_LOG}" ]
+}
+
+@test "avatar_issue_watcher: the label file defaults to the watch list's directory" {
+    _run_tick IW_EXCLUDE_LABELS_FILE= -- label add 보류
+    assert_success
+    [ "$(jq -c '.[-1]' "${_WORK_DIR}/excluded-labels.json")" = '"보류"' ]
+}
+
+@test "avatar_issue_watcher: label add seeds an absent file from the default set" {
+    _run_tick -- label add 보류
+    assert_success
+    assert_output --partial "Excluded 보류 in ${_LABEL_FILE}"
+    [ "$(_label_json '.')" = '["wontfix","not-implement","TODO","manual","보류"]' ]
+    _run_tick -- label list
+    assert_success
+    assert_output --partial "source: file (${_LABEL_FILE})"
+    assert_output --partial "보류"
+}
+
+@test "avatar_issue_watcher: label add is idempotent" {
+    printf '%s\n' '["wontfix"]' >"${_LABEL_FILE}"
+    _run_tick -- label add wontfix "on hold" "on hold"
+    assert_success
+    assert_output --partial "Already excluded: wontfix"
+    [ "$(_label_json '.')" = '["wontfix","on hold"]' ]
+    cp "${_LABEL_FILE}" "${_WORK_DIR}/before.json"
+    _run_tick -- label add wontfix
+    assert_success
+    cmp "${_LABEL_FILE}" "${_WORK_DIR}/before.json"
+}
+
+@test "avatar_issue_watcher: label add rejects empty, comma, TAB and US labels" {
+    local _bad
+    for _bad in "" "a,b" "$(printf 'a\tb')" "$(printf 'a\037b')"; do
+        _run_tick -- label add ok "${_bad}"
+        assert_failure
+        assert_output --partial "Invalid label"
+    done
+    _run_tick -- label add
+    assert_failure
+    assert_output --partial "needs at least one label"
+    [ ! -e "${_LABEL_FILE}" ]
+}
+
+@test "avatar_issue_watcher: label remove drops a label and warns on a missing one" {
+    _run_tick -- label remove TODO nope
+    assert_success
+    assert_output --partial "Not in the exclude list: nope"
+    assert_output --partial "Removed TODO"
+    [ "$(_label_json '.')" = '["wontfix","not-implement","manual"]' ]
+}
+
+@test "avatar_issue_watcher: label remove of only missing labels is a no-op" {
+    printf '%s\n' '["wontfix"]' >"${_LABEL_FILE}"
+    cp "${_LABEL_FILE}" "${_WORK_DIR}/before.json"
+    _run_tick -- label remove nope
+    assert_success
+    assert_output --partial "Not in the exclude list: nope"
+    cmp "${_LABEL_FILE}" "${_WORK_DIR}/before.json"
+    [ ! -e "${_LABEL_FILE}.bak-$(date +%Y%m%d)" ]
+}
+
+@test "avatar_issue_watcher: label writes back up the old file and leave no temp file" {
+    printf '%s\n' '["wontfix"]' >"${_LABEL_FILE}"
+    cp "${_LABEL_FILE}" "${_WORK_DIR}/before.json"
+    _run_tick -- label add manual
+    assert_success
+    cmp "${_LABEL_FILE}.bak-$(date +%Y%m%d)" "${_WORK_DIR}/before.json"
+    [ -z "$(find "${_WORK_DIR}" -maxdepth 1 -name 'excluded-labels.json.tmp.*')" ]
+}
+
+@test "avatar_issue_watcher: label add, remove and list leave broken JSON untouched" {
+    printf '%s\n' '{not json' >"${_LABEL_FILE}"
+    cp "${_LABEL_FILE}" "${_WORK_DIR}/before.json"
+    _run_tick -- label add x
+    assert_failure
+    assert_output --partial "left untouched"
+    _run_tick -- label remove wontfix
+    assert_failure
+    _run_tick -- label list
+    assert_failure
+    printf '%s\n' '{"labels":["x"]}' >"${_LABEL_FILE}"
+    _run_tick -- label add x
+    assert_failure
+    printf '%s\n' '{not json' >"${_LABEL_FILE}"
+    cmp "${_LABEL_FILE}" "${_WORK_DIR}/before.json"
+    [ ! -e "${_LABEL_FILE}.bak-$(date +%Y%m%d)" ]
+}
+
+@test "avatar_issue_watcher: label add with \$IW_EXCLUDE_LABELS set writes the file and warns" {
+    _run_tick IW_EXCLUDE_LABELS=x -- label add y
+    assert_success
+    assert_output --partial "overrides the file"
+    [ "$(_label_json '.[-1]')" = '"y"' ]
+    _run_tick IW_EXCLUDE_LABELS=x,z -- label list
+    assert_success
+    assert_output --partial "source: env"
+    refute_output --partial "wontfix"
+}
+
+@test "avatar_issue_watcher: an unknown label command fails with usage" {
+    _run_tick -- label frob
+    assert_failure
+    assert_output --partial "Unknown label command: frob"
+    assert_output --partial "Usage: avatar_issue_watcher.sh label"
+}
+
+@test "avatar_issue_watcher: the label file replaces the default set at selection" {
+    printf '%s\n' '["보류"]' >"${_LABEL_FILE}"
+    _issues_with_labels 11 보류
+    _run_tick
+    assert_success
+    assert_output --partial "excluded label"
+    _refute_logged "tab create"
+    # manual is a default label, but the file no longer lists it.
+    _issues_with_labels 11 manual
+    _run_tick
+    assert_success
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: \$IW_EXCLUDE_LABELS beats the label file at selection" {
+    printf '%s\n' '["manual"]' >"${_LABEL_FILE}"
+    _issues_with_labels 11 manual
+    _run_tick IW_EXCLUDE_LABELS=other
+    assert_success
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: a broken label file falls back to the default set at selection" {
+    printf '%s\n' '{not json' >"${_LABEL_FILE}"
+    _issues_with_labels 11 TODO
+    _run_tick
+    assert_success
+    assert_output --partial "using the default set"
+    _refute_logged "tab create"
+}
+
+# ---------------------------------------------------------------------------
+# Targeted run: one issue reference instead of the search
+# ---------------------------------------------------------------------------
+
+# Run the pure parser alone, extracted from the script: sourcing the script
+# would run main() (its entry guard compares BASH_SOURCE with $0).
+_parse_ref() {
+    run bash -c "$(sed -n '/^_iw_parse_issue_ref()/,/^}/p' "${SCRIPT}")
+_iw_parse_issue_ref \"\$1\"" _ "$1"
+}
+
+@test "avatar_issue_watcher: issue-ref parser reads URL, owner/repo#N, #N and N" {
+    _parse_ref "https://github.com/acme/dotfiles/issues/11"
+    assert_success
+    assert_output "$(printf 'github.com\tacme/dotfiles\t11')"
+    _parse_ref "https://github.com/acme/dotfiles/issues/11/#issuecomment-9"
+    assert_output "$(printf 'github.com\tacme/dotfiles\t11')"
+    _parse_ref "https://ghes.example.com/acme/dotfiles/issues/7?x=1"
+    assert_output "$(printf 'ghes.example.com\tacme/dotfiles\t7')"
+    _parse_ref "acme/dotfiles#11"
+    assert_output "$(printf '\tacme/dotfiles\t11')"
+    _parse_ref "#11"
+    assert_output "$(printf '\t\t11')"
+    _parse_ref "11"
+    assert_output "$(printf '\t\t11')"
+}
+
+@test "avatar_issue_watcher: issue-ref parser rejects garbage" {
+    local _r
+    for _r in "" abc 0 007 "a#5" "a/b/c#5" "acme/dotfiles#5x" \
+        "https://github.com/acme/dotfiles/pull/5" "https://github.com/issues/5" \
+        "https:///acme/dotfiles/issues/1"; do
+        _parse_ref "${_r}"
+        [ "${status}" -eq 1 ] || fail "accepted: ${_r}"
+    done
+}
+
+@test "avatar_issue_watcher: a garbage issue ref fails before any gh call" {
+    _run_tick -- --dry-run "not-an-issue"
+    assert_failure
+    assert_output --partial "Not an issue reference: not-an-issue"
+    [ ! -s "${_LOG}" ]
+}
+
+@test "avatar_issue_watcher: --force without an issue ref is rejected" {
+    _run_tick -- --force
+    assert_failure
+    assert_output --partial "--force only applies to a targeted run"
+    [ ! -s "${_LOG}" ]
+}
+
+@test "avatar_issue_watcher: a targeted run skips the search and dispatches that issue" {
+    _run_tick -- "https://github.com/acme/dotfiles/issues/12"
+    assert_success
+    _refute_logged "search issues"
+    _assert_logged "gh issue view 12 --repo acme/dotfiles --json number,state,labels"
+    _assert_logged "--label iw-issue-12 --no-focus"
+    _assert_logged "/gh-flow:wave 12"
+    _refute_logged "iw-issue-11"
+}
+
+@test "avatar_issue_watcher: targeted dry-run prints the dispatch and touches no state" {
+    _run_tick -- --dry-run "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "Dry run — would dispatch:"
+    assert_output --partial "acme/dotfiles#12  (${_REPO_DIR}, github.com)"
+    _refute_logged "search issues"
+    _refute_logged "tab create"
+    [ ! -f "${_STATE_DIR}/select.json" ]
+    [ ! -f "${_SATURATION_FILE}" ]
+}
+
+@test "avatar_issue_watcher: a targeted run leaves the round-robin cursor alone" {
+    mkdir -p "${_STATE_DIR}"
+    printf '{ "last_repo": "acme/other" }\n' >"${_STATE_DIR}/select.json"
+    _run_tick -- "acme/dotfiles#12"
+    assert_success
+    _assert_logged "--label iw-issue-12 --no-focus"
+    [ "$(cat "${_STATE_DIR}/select.json")" = '{ "last_repo": "acme/other" }' ]
+    [ ! -f "${_SATURATION_FILE}" ]
+}
+
+@test "avatar_issue_watcher: a bare #N resolves to the cwd checkout's origin" {
+    _cwd_repo "git@ghes.example.com:acme/dotfiles.git"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run "#12"
+    assert_success
+    assert_output --partial "acme/dotfiles#12  (${_REPO_DIR}, ghes.example.com)"
+}
+
+@test "avatar_issue_watcher: a GHES URL matches a GHES watch-list entry" {
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"ghes.example.com"}]'
+    _run_tick -- --dry-run "https://ghes.example.com/acme/dotfiles/issues/12/"
+    assert_success
+    assert_output --partial "acme/dotfiles#12  (${_REPO_DIR}, ghes.example.com)"
+    _assert_logged "gh issue view 12 --repo acme/dotfiles"
+}
+
+@test "avatar_issue_watcher: a URL host differing from the entry's host fails" {
+    _run_tick -- --dry-run "https://ghes.example.com/acme/dotfiles/issues/12"
+    assert_failure
+    assert_output --partial "the URL names host ghes.example.com, but its entry uses github.com"
+    _refute_logged "issue view"
+}
+
+@test "avatar_issue_watcher: a repo neither watched nor the cwd checkout fails" {
+    _run_tick -- --dry-run "acme/unknown#3"
+    assert_failure
+    assert_output --partial "acme/unknown is neither on the watch list nor the current checkout"
+    assert_output --partial "watch add acme/unknown --path P"
+    _refute_logged "issue view"
+}
+
+@test "avatar_issue_watcher: a closed targeted issue fails" {
+    _run_tick "GH_CLOSED_ISSUES=12" -- --dry-run "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "acme/dotfiles#12 is CLOSED"
+}
+
+@test "avatar_issue_watcher: an unreadable targeted issue fails" {
+    _run_tick "GH_ISSUE_VIEW_FAIL=1" -- --dry-run "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "Cannot read acme/dotfiles#12 on github.com"
+}
+
+@test "avatar_issue_watcher: an excluded label refuses a targeted run, --force overrides" {
+    _run_tick "GH_ISSUE_LABELS=bug manual" -- "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "carries an excluded label (manual)"
+    _refute_logged "tab create"
+    _run_tick "GH_ISSUE_LABELS=bug manual" -- "acme/dotfiles#12" --force
+    assert_success
+    assert_output --partial "dispatching anyway (--force)"
+    _assert_logged "--label iw-issue-12 --no-focus"
+}
+
+@test "avatar_issue_watcher: a targeted issue already running is skipped with exit 0" {
+    _set_running 12
+    _run_tick -- "acme/dotfiles#12" --force
+    assert_success
+    assert_output --partial "Skipping acme/dotfiles#12 — already running."
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a targeted issue an open PR closes is skipped with exit 0" {
+    _set_open_prs '{"acme/dotfiles":[{"number":40,"headRefName":"feat/x","body":"Closes #12"}]}'
+    _run_tick -- "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "Skipping acme/dotfiles#12 — an open PR already closes it."
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a targeted run with an unreadable PR list skips (fail-closed)" {
+    _run_tick "GH_PR_LIST_FAIL=1" -- "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "Cannot list open PRs for acme/dotfiles"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a targeted run honours the closed rate-limit gate" {
+    _set_limit_state 2 "$(($(date +%s) + 600))"
+    _run_tick -- "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "Rate-limit gate closed"
+    _refute_logged "tab create"
 }
