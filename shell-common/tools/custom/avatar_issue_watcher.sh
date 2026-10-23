@@ -841,9 +841,17 @@ _IW_LIVE_AGENTS_LOADED=0
 # Both labels count, so an issue the user is already working by hand is never
 # dispatched a second time.
 #
-# shortcut: two watched repos sharing one workspace (same path) cannot be told
-# apart — an `issue-12` tab there counts as running for #12 of both. Upgrade
-# by putting the repo in the label if that ever bites.
+# Each row carries the tab id(s) behind it (`<repo>\t<number>\t<tab_ids>`), so
+# the global count is of distinct tabs, not of rows.
+#
+# shortcut: watched repos sharing one workspace (same path) cannot be told
+# apart — one `iw-issue-12` tab there yields a row for #12 of *every* such
+# repo. The global count is fixed (distinct tab ids, so 15 repos under one
+# skills/ path do not read one tab as 15 sessions), but the rest remains: #12
+# of each sharing repo is skipped as "already running", the tab counts once
+# against each sharing repo's per-repo cap, and a stopped tab on a closed issue
+# costs one `gh issue view` per sharing repo. Upgrade by putting the repo slug
+# in the tab label (`iw-<owner>-<repo>-issue-12`) when that bites.
 #
 # Volatility is fine here, unlike for "already handled": the question is what
 # is running *now*, and after a reboot nothing is. The signal and the truth go
@@ -867,7 +875,7 @@ _IW_LIVE_AGENTS_LOADED=0
 # first sighting only starts the clock. A delegation ends and the agent goes
 # back to `working`, which clears the clock, while a real zombie never moves.
 _iw_live_agents() {
-    local _agents _tabs _wss _map _repo _path _host _number _stopped _ts _now
+    local _agents _tabs _wss _map _repo _path _host _number _stopped _tids _ts _now
 
     if [ "${_IW_LIVE_AGENTS_LOADED}" -eq 1 ]; then
         [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
@@ -890,10 +898,11 @@ _iw_live_agents() {
         printf '%s\t%s\n' "${_repo}" "$(_iw_workspace_label "${_repo}" "${_path}")"
     done)
 
-    # Rows: `<repo>\t<number>\t<stopped>`, one per repo+issue. stopped is 1
-    # only when every agent in every matching tab reports a status known to
-    # mean "not working". An unknown status is never a stop signal — the set
-    # of herdr statuses is not this script's to enumerate.
+    # Rows: `<repo>\t<number>\t<stopped>\t<tab_ids>`, one per repo+issue.
+    # stopped is 1 only when every agent in every matching tab reports a status
+    # known to mean "not working". An unknown status is never a stop signal —
+    # the set of herdr statuses is not this script's to enumerate. tab_ids is
+    # the sorted, comma-joined set of tabs behind the row.
     _IW_LIVE_AGENTS=$(printf '%s\n%s\n%s\n' "${_wss}" "${_tabs}" "${_agents}" |
         jq -rs --arg map "${_map}" '
             .[0].result.workspaces as $ws | .[1].result.tabs as $tabs
@@ -910,15 +919,35 @@ _iw_live_agents() {
                 | .tab_id as $tid
                 | [ $agents[] | select(.tab_id == $tid) | (.agent_status // "") ] as $st
                 | select($st | length > 0)
-                | { repo: $repo, n: ($l | sub("^(iw-)?issue-"; "")),
+                | { repo: $repo, n: ($l | sub("^(iw-)?issue-"; "")), tid: $tid,
                     stopped: ($st | all(. == "idle" or . == "done")) } ]
             | group_by([.repo, .n])[]
-            | [ .[0].repo, .[0].n, (if all(.[]; .stopped) then "1" else "0" end) ]
+            | [ .[0].repo, .[0].n, (if all(.[]; .stopped) then "1" else "0" end),
+                ([ .[].tid ] | unique | join(",")) ]
             | @tsv
         ' 2>/dev/null) || return 1
 
+    # Schema guard: issue tabs exist in a watched workspace, agents exist, yet
+    # no agent's tab_id names any listed tab. That reads as "nothing running"
+    # and lifts the cap, so say so — behavior unchanged, only louder. stderr:
+    # this runs inside the substitution that builds the live set.
+    if printf '%s\n%s\n%s\n' "${_wss}" "${_tabs}" "${_agents}" |
+        jq -es --arg map "${_map}" '
+            .[0].result.workspaces as $ws | .[1].result.tabs as $tabs
+            | .[2].result.agents as $agents
+            | [ $map | split("\n")[] | select(length > 0) | split("\t")[1] ] as $labels
+            | [ $ws[] | select(.label | IN($labels[])) | .workspace_id ] as $ids
+            | ($agents | length > 0)
+              and any($tabs[]; (.workspace_id | IN($ids[]))
+                  and ((.label // "") | test("^(iw-)?issue-[0-9]+$")))
+              and ([ $tabs[].tab_id ] as $tids
+                  | all($agents[]; (.tab_id | IN($tids[])) | not))
+        ' >/dev/null 2>&1; then
+        ux_warning "herdr lists issue tabs, but no agent's tab_id names any listed tab: each issue tab matches no agent and reads as idle, lifting the concurrency cap (herdr schema change?)." >&2
+    fi
+
     _IW_LIVE_AGENTS=$(printf '%s\n' "${_IW_LIVE_AGENTS}" |
-        while IFS="${_IW_TAB}" read -r _repo _number _stopped; do
+        while IFS="${_IW_TAB}" read -r _repo _number _stopped _tids; do
             [ -n "${_repo}" ] || continue
             # The GitHub round trip is paid only for a stopped session: a
             # working one is live whatever its issue says.
@@ -932,11 +961,11 @@ _iw_live_agents() {
                     continue
                 fi
                 [ -n "${_ts}" ] || _iw_zombie_candidate_mark "${_repo}" "${_number}" "${_now}"
-                printf '%s\t%s\n' "${_repo}" "${_number}"
+                printf '%s\t%s\t%s\n' "${_repo}" "${_number}" "${_tids}"
                 continue
             fi
             _iw_zombie_candidate_clear "${_repo}" "${_number}"
-            printf '%s\t%s\n' "${_repo}" "${_number}"
+            printf '%s\t%s\t%s\n' "${_repo}" "${_number}" "${_tids}"
         done)
 
     _IW_LIVE_AGENTS_LOADED=1
@@ -1064,9 +1093,11 @@ _iw_live_agents_assume_none() {
     _IW_LIVE_AGENTS_LOADED=1
 }
 
-# How many per-issue sessions are live, in total and per repo.
+# How many per-issue sessions are live, in total and per repo. The total counts
+# distinct tab sets, not rows: repos sharing a workspace each get a row for the
+# same tab (see the shortcut on _iw_live_agents).
 _iw_live_count() {
-    _iw_live_agents | awk 'END { print NR + 0 }'
+    _iw_live_agents | awk -F "${_IW_TAB}" '!seen[$3]++ { n++ } END { print n + 0 }'
 }
 
 _iw_live_count_repo() {
@@ -2811,12 +2842,12 @@ _iw_saturation_clear() {
 # between "everything is genuinely busy" and "a tab nobody closed". Without it
 # the answer costs seven `herdr agent attach` calls by hand.
 _iw_saturation_notify() {
-    local _repo _number _agent _status _body=""
+    local _repo _number _rest _agent _status _body=""
 
     # fd 3, not stdin: `_hp_agent_status` shells out to herdr, which reads stdin
     # and would otherwise swallow the rest of the occupied list — the same
     # hazard main()'s dispatch loop documents.
-    while IFS="${_IW_TAB}" read -r _repo _number <&3; do
+    while IFS="${_IW_TAB}" read -r _repo _number _rest <&3; do
         [ -n "${_repo}" ] || continue
         _status=""
         if _agent=$(_iw_agent_name "${_repo}" "${_number}") && [ -n "${_agent}" ]; then

@@ -5,10 +5,9 @@
 # avatar_issue_watcher.sh, schedule_agent_prompt.sh and skill blocks (see below).
 # SSOT for "is a herdr agent sitting on this worktree?" (issue #1569).
 #
-# Four call sites ask that question and, before this file, each carried its own
-# hand-copied answer:
+# Four call sites asked that question and, before this file, each carried its
+# own hand-copied answer. Three still ask it:
 #
-#   shell-common/tools/custom/avatar_issue_watcher.sh        _iw_live_agents
 #   dEitY719/gh-verify-skills  skills/post-merge-verify/
 #       references/dispatch.sh.md                          pmv_tab_for_cwd
 #   dEitY719/gh-pr-skills  skills/merge/references/
@@ -24,13 +23,19 @@
 # #1530 shape exactly (three copies of a slug helper, all wrong, one file to
 # fix), which is why the fix is the same shape: one helper, four callers.
 #
+# The fourth, avatar_issue_watcher.sh's _iw_live_agents, no longer matches on
+# cwd at all: it joins tab labels (`issue-<N>` / `iw-issue-<N>`) to agents by
+# `tab_id`, and uses only herdr_agent_list_json from this file. Its dispatched
+# pane opens on the checkout root, so a cwd never names the issue.
+#
 # What the predicate has to get right, and why each half is load-bearing:
 #
 #   both columns   `cwd` is where the pane was opened (stable for the session's
 #                  whole life); `foreground_cwd` is where its shell stands now.
 #                  Taking only `cwd` loses the session that `cd`-ed away, and
-#                  losing it makes issue-watcher's collection step read a live
-#                  worktree as idle (PR #1456 review). Taking only
+#                  losing it reads a live worktree as idle (PR #1456 review,
+#                  against issue-watcher's since-removed collection step).
+#                  Taking only
 #                  `foreground_cwd` loses the pane whose shell never moved.
 #   boundary       An agent in `<wt>/docs/.ssot` is still working `<wt>`, so a
 #                  bare equality is too narrow — but a bare `startswith` is too

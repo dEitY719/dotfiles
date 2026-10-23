@@ -1195,6 +1195,86 @@ EOF
     _assert_logged "--label iw-issue-11 --no-focus"
 }
 
+@test "avatar_issue_watcher: one issue tab in a workspace shared by three repos counts once" {
+    # Three repos on one path share one workspace (_iw_workspace_label), so the
+    # one iw-issue-12 tab is seen once per repo. Counted per repo row, it read
+    # as 3 sessions and held a tick capped at 2 forever.
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/two","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/three","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
+    _set_tabs working iw-issue-12
+    _run_tick "IW_MAX_CONCURRENT=2"
+    assert_success
+    refute_output --partial "Holding this tick"
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: a tab with one working agent among stopped ones stays live" {
+    # Stopped means *every* agent in the tab stopped. One still working keeps
+    # the session live even on a closed issue past its grace window.
+    _set_tabs working iw-issue-21
+    printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[{"agent_status":"idle","pane_id":"ws-existing:p1","tab_id":"ws-existing:t1","workspace_id":"ws-existing"},{"agent_status":"working","pane_id":"ws-existing:p2","tab_id":"ws-existing:t1","workspace_id":"ws-existing"},{"agent_status":"done","pane_id":"ws-existing:p3","tab_id":"ws-existing:t1","workspace_id":"ws-existing"}]}}' \
+        >"${_WORK_DIR}/agents.json"
+    _seed_zombie_candidate 21 "$(($(date +%s) - 1200))"
+    _run_tick "IW_MAX_CONCURRENT=1" "GH_CLOSED_ISSUES=21"
+    assert_success
+    assert_output --partial "Holding this tick — 1 issue session(s) already running"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a dispatched issue whose tab survives is not dispatched again" {
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "Dispatched to iw-dotfiles-issue-11"
+    [ "$(_log_count 'tab create')" -eq 1 ]
+
+    # The tab the first tick opened is still there with its agent.
+    _set_live_agents 11
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
+    assert_success
+    assert_output --partial "acme/dotfiles#11 — already running"
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+# Shapes captured from a live herdr server (2026-10-23), trimmed to the fields
+# the tick reads plus a few it ignores; ids, paths and session ids are fake.
+_real_herdr_fixture() {
+    printf '%s\n' '{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"active_tab_id":"w2A:t3R","agent_status":"idle","focused":true,"label":"dotfiles","number":3,"pane_count":2,"tab_count":2,"workspace_id":"w2A"}]}}' \
+        >"${_WORK_DIR}/workspaces.json"
+    printf '%s\n' '{"id":"cli:tab:list","result":{"tabs":[{"agent_status":"working","focused":false,"label":"review","number":119,"pane_count":1,"tab_id":"w2A:t3Q","workspace_id":"w2A"},{"agent_status":"idle","focused":true,"label":"'"$1"'","number":120,"pane_count":1,"tab_id":"w2A:t3R","workspace_id":"w2A"}]}}' \
+        >"${_WORK_DIR}/tabs.json"
+    printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"00000000-0000-0000-0000-000000000001"},"agent_status":"working","cwd":"/fake/dotfiles","focused":false,"foreground_cwd":"/fake/dotfiles","pane_id":"w2A:p3Q","revision":4,"state_change_seq":303,"tab_id":"'"$2"'","workspace_id":"w2A"},{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"00000000-0000-0000-0000-000000000002"},"agent_status":"idle","cwd":"/fake/dotfiles","focused":true,"foreground_cwd":"/fake/dotfiles","name":"iw-dotfiles-issue-1774","pane_id":"w2A:p3R","revision":4,"state_change_seq":305,"tab_id":"'"$3"'","workspace_id":"w2A"}],"type":"agent_list"}}' \
+        >"${_WORK_DIR}/agents.json"
+}
+
+@test "avatar_issue_watcher: real herdr shapes join an iw-issue tab to its agent" {
+    _real_herdr_fixture iw-issue-11 w2A:t3Q w2A:t3R
+    _run_tick
+    assert_success
+    assert_output --partial "acme/dotfiles#11 — already running"
+    refute_output --partial "matches no agent"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: agents matching no listed tab warn that the issue tabs read as idle" {
+    # Schema drift: the issue tab is there, but no agent's tab_id names any
+    # listed tab. The tick still reads that as nothing running (unchanged) —
+    # the warning is how a lifted cap gets noticed.
+    _real_herdr_fixture iw-issue-11 drift:1 drift:2
+    _run_tick
+    assert_success
+    assert_output --partial "matches no agent"
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: ordinary tabs alone raise no tab/agent mismatch warning" {
+    _real_herdr_fixture review w2A:t3Q w2A:t3R
+    _run_tick
+    assert_success
+    refute_output --partial "matches no agent"
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
 @test "avatar_issue_watcher: an unreachable herdr tab list holds the tick" {
     _run_tick "HERDR_TAB_LIST_FAIL=1"
     assert_success
@@ -3822,7 +3902,6 @@ description: Use for /gh-flow:wave."
     _run_tick
     assert_failure
     assert_output --partial "several /gh-flow:wave entry points"
-    _refute_logged "tab create"
     _refute_logged "tab create"
     _refute_logged "agent prompt"
 }
