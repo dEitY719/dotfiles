@@ -730,8 +730,9 @@ teardown() {
 # ---------------------------------------------------------------------------
 # Standalone sourcing (#2156): gwt is split across git_worktree.sh,
 # git_worktree_spawn.sh, gwt_help.sh and lib/agent_launch.sh. A consumer that
-# sources the gwt files without the loader (avatar_issue_watcher's _iw_gwt) must
-# still get spawn, help and the AI launcher.
+# sources the gwt files without the loader (a cron or skill script; the issue
+# watcher used to, via its since-removed _iw_gwt) must still get spawn, help
+# and the AI launcher.
 # ---------------------------------------------------------------------------
 
 _source_gwt_standalone() {
