@@ -14,5 +14,23 @@
         }
       }
     }
+  },
+  "mcp": {
+    "aws-mcp": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "mcp-proxy-for-aws@latest",
+        "https://aws-mcp.us-east-1.api.aws/mcp",
+        "--metadata",
+        "INSTALL_SOURCE=aws-cli"
+      ],
+      "environment": {
+        "AWS_MCP_PROXY_PROFILES": "deity719",
+        "UV_PYTHON": "3.12",
+        "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt",
+        "UV_SYSTEM_CERTS": "1"
+      }
+    }
   }
 }
