@@ -7,7 +7,7 @@
 # and mise trust for a fresh worktree.
 #
 # Guard-free on purpose (no interactive guard, no output on source): it only
-# defines functions, so non-interactive consumers (issue_watcher_cron, the
+# defines functions, so non-interactive consumers (avatar_issue_watcher, the
 # session:worktree-spawn skill) can source it.
 
 _ts_known_agent() {

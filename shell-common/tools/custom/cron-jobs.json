@@ -8,8 +8,8 @@
   },
   "jobs": [
     {
-      "name": "issue-watcher",
-      "script": "shell-common/tools/custom/issue_watcher_cron.sh",
+      "name": "avatar-issue-watcher",
+      "script": "shell-common/tools/custom/avatar_issue_watcher.sh",
       "schedule": "*/4 * * * *",
       "args": ["--cwd", "$HOME/dotfiles"],
       "env": {},

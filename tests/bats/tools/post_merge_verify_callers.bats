@@ -14,7 +14,7 @@ load '../test_helper'
 
 _pmv_wait_files() {
     printf '%s\n' \
-        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/issue_watcher_cron.sh" \
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/avatar_issue_watcher.sh" \
         "${_BATS_REAL_DOTFILES_ROOT}/shell-common/tools/custom/pr_merge_train_cron.sh"
 }
 

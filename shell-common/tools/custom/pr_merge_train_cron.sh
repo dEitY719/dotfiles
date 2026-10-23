@@ -51,7 +51,7 @@ fi
 # shellcheck source=/dev/null
 . "${_PMT_SHELL_COMMON}/tools/custom/lib/aicron_state.sh" || exit 1
 
-# herdr pane helpers shared with issue_watcher_cron.sh (lock, settle, idle
+# herdr pane helpers shared with avatar_issue_watcher.sh (lock, settle, idle
 # wait, workspace, account routing). Hard failure: without them there is no
 # lock and no way to open the train's pane.
 if [ ! -f "${_PMT_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" ]; then
@@ -113,7 +113,7 @@ _PMT_PR_LIMIT="50"
 # herdr agent naming. One train per repo, so the name is deterministic and
 # derived from the repo alone — that is what lets the *next* tick find the
 # session this tick started (see _pmt_train_state). Composed by
-# `herdr_agent_name`, the SSOT this file shares with issue_watcher_cron.sh and
+# `herdr_agent_name`, the SSOT this file shares with avatar_issue_watcher.sh and
 # gh:pr-post-merge-verify (#1530); the prefix carries no trailing dash because
 # the helper joins the parts. Pre-#1530 this was `pmt-` over a host-qualified
 # slug, which produced `pmt-github.com-<owner>-<repo>` — a name herdr rejects
@@ -123,7 +123,7 @@ _PMT_PR_LIMIT="50"
 # shell-common/lib/herdr_agent_name.sh.
 #
 # The prefix also keeps the *workspace label* — the same string since #1549 —
-# clear of issue_watcher_cron.sh, which labels its workspaces with the bare
+# clear of avatar_issue_watcher.sh, which labels its workspaces with the bare
 # checkout basename (`dotfiles`). Drop the `mt` and the train lands in
 # issue-watcher's tabs (#1470, Impact); that collision surfaces as panes opening
 # in the wrong workspace, not as a test failure.
@@ -153,7 +153,7 @@ _PMT_IDLE_POLL_SLEEP="${PMT_IDLE_POLL_SLEEP:-0.5}"
 #
 # 13 is the repo-wide constant for "herdr just brought something up, wait
 # before touching it" (#1571). Its four twins are _PMT_START_RETRY_SLEEP below,
-# _IW_SETTLE_SECONDS / _IW_START_RETRY_SLEEP in issue_watcher_cron.sh, and
+# _IW_SETTLE_SECONDS / _IW_START_RETRY_SLEEP in avatar_issue_watcher.sh, and
 # PMV_SETTLE_SECONDS in dEitY719/gh-verify-skills
 # skills/post-merge-verify/references/dispatch.sh.md (#1659 moved it out of
 # this repo; the old claude/skills/ path is gone). Change one,
@@ -191,7 +191,7 @@ _PMT_PROMPT_ATTEMPT_MAX="3"
 # of wait as _PMT_SETTLE_SECONDS above — herdr answered before the thing it
 # brought up was usable — and 2s was shorter than the 5s already measured to
 # fail. Its twins are _PMT_SETTLE_SECONDS above, _IW_SETTLE_SECONDS /
-# _IW_START_RETRY_SLEEP in issue_watcher_cron.sh, and PMV_SETTLE_SECONDS in
+# _IW_START_RETRY_SLEEP in avatar_issue_watcher.sh, and PMV_SETTLE_SECONDS in
 # dEitY719/gh-verify-skills skills/post-merge-verify/references/dispatch.sh.md;
 # all five move together. The wait and this retry are complements, not
 # substitutes — 13s shrinks the race, the retry survives what is left of it.

@@ -309,7 +309,7 @@ run_in_zsh() {
 # side is `shell-common/lib/herdr_agent_name.sh`; this is the
 # independent oracle three suites check it against
 # (`herdr_agent_name.bats`, `pr_merge_train_cron.bats`,
-# `issue_watcher_cron.bats`; the post-merge-verify suite moved to
+# `avatar_issue_watcher.bats`; the post-merge-verify suite moved to
 # dEitY719/gh-verify-skills in #2200).
 assert_valid_herdr_name() {
     [[ "$1" =~ ^[a-z][a-z0-9_-]{0,31}$ ]] ||
@@ -340,7 +340,7 @@ _setup_foreign_home_1505() {
 # since #1561 a directory without credentials fails the tick fast, so a fixture
 # that only ran `mkdir` would make every dispatch/launch test red.
 #
-# Shared by `issue_watcher_cron.bats` and `pr_merge_train_cron.bats`, which
+# Shared by `avatar_issue_watcher.bats` and `pr_merge_train_cron.bats`, which
 # both fixture the same production rule (`_claude_account_logged_in` in
 # `shell-common/tools/custom/lib/claude_accounts_auth.sh`) — so the fixture tracks that
 # rule from one place rather than two.

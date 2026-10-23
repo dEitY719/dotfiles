@@ -2,7 +2,7 @@
 # tests/bats/functions/tests_test_timeout.bats
 # Unit tests for tests/test's bats per-test timeout containment (#1483).
 #
-# tests/bats/tools/issue_watcher_cron.bats was observed hanging for hours
+# tests/bats/tools/avatar_issue_watcher.bats was observed hanging for hours
 # during full-suite runs — a silent stall, not a red test, because nothing in
 # the runner bounded a single test's runtime. run_bats() now exports
 # BATS_TEST_TIMEOUT (default 300s), so bats-core kills a runaway test and

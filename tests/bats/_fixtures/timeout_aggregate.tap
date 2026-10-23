@@ -15,5 +15,5 @@
 # Either way the count stops being 1.
 1..3
 ok 1 run_bats: ignores a quoted not ok 9 stub # timeout after 2s
-not ok 3 issue_watcher_cron: waits for the pane # timeout after 300s
+not ok 3 avatar_issue_watcher: waits for the pane # timeout after 300s
 # note: a peer run reported timeout after 5s

@@ -1391,16 +1391,16 @@ _shipped_env() {
     _shipped_manifest_call aicron_manifest_env "$1"
 }
 
-@test "aicron: the shipped issue-watcher job runs every 4 minutes (#1627)" {
+@test "aicron: the shipped avatar-issue-watcher job runs every 4 minutes (#1627)" {
     # Installing this is a separate step — the crontab keeps whatever schedule
     # it was added with, and `aicron doctor` is what reports the drift.
-    run _shipped_manifest_call aicron_manifest_schedule issue-watcher
+    run _shipped_manifest_call aicron_manifest_schedule avatar-issue-watcher
     assert_success
     assert_output "*/4 * * * *"
 }
 
-@test "aicron: the shipped issue-watcher job is routed at the work1 account" {
-    run _shipped_env issue-watcher
+@test "aicron: the shipped avatar-issue-watcher job is routed at the work1 account" {
+    run _shipped_env avatar-issue-watcher
     assert_success
     assert_line "CLAUDE_DEFAULT_ACCOUNT=work1"
 }

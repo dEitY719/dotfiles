@@ -39,7 +39,7 @@ HELP_TOPICS = [
     "gwt_help",
     "gpu_help",
     "hermes_help",
-    "issue_watcher_cron_help",
+    "avatar_issue_watcher_help",
     "jetbrain_help",
     "litellm_help",
     "markitdown_help",

@@ -2774,7 +2774,7 @@ def test_async_wait_limit_one_allows_exactly_one(tmp_path: Path, marker_count: i
 #
 # #1410 moved this composition into the `gh-flow-skills` plugin repo as
 # `gh-flow:issue`. Phase 4-1 (#1680) then deleted the dotfiles originals and
-# Phase 4-3 (#1682) switched `gh_flow.sh` / `issue_watcher_cron.sh` to the new
+# Phase 4-3 (#1682) switched `gh_flow.sh` / `avatar_issue_watcher.sh` to the new
 # slash commands, so `gh-flow:issue` / `gh-flow-issue` is now the ONLY
 # namespace the guard answers to. These cases pin the surfaces that only the
 # plugin layout produces (installed base dirs, the `-relay` sibling).

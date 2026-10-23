@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/tools/cron_herdr_helpers.bats
-# Characterization of the herdr-pane helpers issue_watcher_cron.sh and
+# Characterization of the herdr-pane helpers avatar_issue_watcher.sh and
 # pr_merge_train_cron.sh share (refactor F2).
 #
 # Both dispatchers carry the same helpers under their own prefix (`_iw_*` /
@@ -77,7 +77,7 @@ EOF
 
 _script_for() {
     case "$1" in
-    iw) printf '%s' "${CUSTOM_DIR}/issue_watcher_cron.sh" ;;
+    iw) printf '%s' "${CUSTOM_DIR}/avatar_issue_watcher.sh" ;;
     pmt) printf '%s' "${CUSTOM_DIR}/pr_merge_train_cron.sh" ;;
     esac
 }
@@ -108,13 +108,13 @@ _in() {
 @test "cron herdr helpers: state dir honours XDG_STATE_HOME, then HOME" {
     _in iw '_iw_state_dir'
     assert_success
-    assert_output "${_WORK_DIR}/state/issue-watcher"
+    assert_output "${_WORK_DIR}/state/avatar-issue-watcher"
     _in pmt '_pmt_state_dir'
     assert_success
     assert_output "${_WORK_DIR}/state/pr-merge-train"
 
     _in iw 'unset XDG_STATE_HOME; _iw_state_dir'
-    assert_output "${HOME}/.local/state/issue-watcher"
+    assert_output "${HOME}/.local/state/avatar-issue-watcher"
     _in pmt 'unset XDG_STATE_HOME; _pmt_state_dir'
     assert_output "${HOME}/.local/state/pr-merge-train"
 }
@@ -123,7 +123,7 @@ _in() {
     _in iw '_iw_acquire_lock && echo LOCKED'
     assert_success
     assert_output --partial "LOCKED"
-    [ -f "${_WORK_DIR}/state/issue-watcher/.lock" ]
+    [ -f "${_WORK_DIR}/state/avatar-issue-watcher/.lock" ]
 
     _in pmt '_pmt_acquire_lock && echo LOCKED'
     assert_success
@@ -135,7 +135,7 @@ _in() {
     local _p _sub _name
     for _p in iw pmt; do
         case "${_p}" in
-        iw) _sub=issue-watcher _name=issue_watcher_cron ;;
+        iw) _sub=avatar-issue-watcher _name=avatar_issue_watcher ;;
         pmt) _sub=pr-merge-train _name=pr_merge_train_cron ;;
         esac
         mkdir -p "${_WORK_DIR}/state/${_sub}"

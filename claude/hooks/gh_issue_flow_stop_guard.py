@@ -146,7 +146,7 @@ def _trace(message: str, *, layer: str | None = None) -> None:
 # The migration is COMPLETE (#1681, #1410 Phase 4-2): the dotfiles-native
 # originals (`gh-commit`, `gh:pr`, `devx:pr-review-all`, …) were deleted in
 # Phase 4-1 (#1680) and the automation in `shell-common/functions/gh_flow.sh`
-# + `shell-common/tools/custom/issue_watcher_cron.sh` was switched to the new
+# + `shell-common/tools/custom/avatar_issue_watcher.sh` was switched to the new
 # slash commands in Phase 4-3 (#1682), so listing the old forms here would
 # only match names nothing can invoke any more.
 #

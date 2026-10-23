@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
-# tests/bats/tools/issue_watcher_cron.bats
-# Tests for issue_watcher_cron.sh — the issue-watcher tick
+# tests/bats/tools/avatar_issue_watcher.bats
+# Tests for avatar_issue_watcher.sh — the issue-watcher tick
 # (issues #1389, #1436, #1440, #1453).
 #
 # Since #1440 the tick does the watching and dispatching itself, so the suite
-# covers the whole pipeline rather than a single dispatcher prompt. Three PATH
+# covers the whole pipeline rather than a single dispatcher prompt. Two PATH
 # stubs stand in for the outside world and log every invocation to ${_LOG} so
 # the tests can assert on *which* calls were made:
 #
@@ -12,26 +12,26 @@
 #          (the collectable signal) and `api graphql` (blockedBy) — all canned
 #          and steerable per test. Every other subcommand is logged and refused:
 #          the tick must never write to an issue.
-#   herdr  workspace/tab/agent plus `agent list` (the running-now signal), with
-#          canned JSON matching the shapes measured on a live herdr server.
-#   gwt    real `git worktree` calls against a real fixture repo, so worktree
-#          creation and collection are exercised for real rather than mocked.
+#   herdr  workspace/tab/agent plus `workspace list` + `tab list` + `agent list`
+#          (the running-now signal), with canned JSON matching the shapes
+#          measured on a live herdr server.
 #
-# Since #1453 a worktree's existence decides nothing (NF-1). The three signals
-# it used to stand in for are stubbed separately: `herdr agent list` says what
-# is running, `gh pr list` says what is already handled, and `gh issue view`
-# says what may be collected.
+# The tick creates no worktree: the dispatched `/gh-flow:wave` session makes
+# its own (wt/issue-<n>/<idx>), and removing it is the user's manual step. A
+# real fixture repo is still used, so the tests can prove the tick leaves a
+# worktree alone. `gh pr list` says what is already handled and `gh issue view`
+# feeds the zombie check (#1596).
 
 load '../test_helper'
 
-SCRIPT="${DOTFILES_ROOT}/shell-common/tools/custom/issue_watcher_cron.sh"
+SCRIPT="${DOTFILES_ROOT}/shell-common/tools/custom/avatar_issue_watcher.sh"
 
 setup() {
     setup_isolated_home
     _WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/issue-watcher-test.XXXXXX")"
     _BIN_DIR="${_WORK_DIR}/bin"
     _STATE_HOME="${_WORK_DIR}/state"
-    _STATE_DIR="${_STATE_HOME}/issue-watcher"
+    _STATE_DIR="${_STATE_HOME}/avatar-issue-watcher"
     _LIMIT_FILE="${_STATE_DIR}/rate-limit.json"
     _CASUALTY_FILE="${_STATE_DIR}/rate-limit-casualties.tsv"
     _SATURATION_FILE="${_STATE_DIR}/saturation.json"
@@ -138,44 +138,49 @@ _set_open_prs() {
     printf '%s\n' "$1" >"${_WORK_DIR}/prs.json"
 }
 
-# The worktree path `_add_worktree <n>` creates — also what a live agent pane
-# working that issue reports as its cwd.
+# The worktree path `_add_worktree <n>` creates — the shape /gh-flow:wave leaves
+# behind (`wt/issue-<n>/<idx>`). The tick itself never creates or removes one.
 _worktree_path() {
     printf '%s/dotfiles-issue-%s-1' "${_WORK_DIR}" "$1"
 }
 
-# A live herdr agent pane sitting in each given worktree path. This is the
-# whole "is it running" signal: `herdr agent list` has no agent-name field, so
-# the tick recognises its own panes by the worktree they were opened on.
+# _set_tabs <status> <label>... — the running-now signal: one herdr tab per
+# label inside the `dotfiles` workspace, each with one agent pane in the given
+# `agent_status`. The pane stands in the checkout root, as a /gh-flow:wave
+# session does: the worktree is created by the skill, not the tick. `herdr
+# agent list` carries no agent-name field, so the tick recognises a session by
+# its tab label (`issue-<n>` by hand, `iw-issue-<n>` by the watcher) and the
+# tab id the pane reports.
+_set_tabs() {
+    local _status="$1" _tabs="" _agents="" _sep="" _l _i=0
+    shift
+    for _l in "$@"; do
+        _i=$((_i + 1))
+        _tabs="${_tabs}${_sep}{\"agent_status\":\"${_status}\",\"label\":\"${_l}\",\"tab_id\":\"ws-existing:t${_i}\",\"workspace_id\":\"ws-existing\"}"
+        _agents="${_agents}${_sep}{\"agent\":\"claude\",\"agent_status\":\"${_status}\",\"cwd\":\"${_REPO_DIR}\",\"foreground_cwd\":\"${_REPO_DIR}\",\"pane_id\":\"ws-existing:p${_i}\",\"tab_id\":\"ws-existing:t${_i}\",\"workspace_id\":\"ws-existing\"}"
+        _sep=","
+    done
+    printf '{"id":"cli:workspace:list","result":{"workspaces":[{"label":"dotfiles","workspace_id":"ws-existing"}]}}\n' \
+        >"${_WORK_DIR}/workspaces.json"
+    printf '{"id":"cli:tab:list","result":{"tabs":[%s]}}\n' "${_tabs}" >"${_WORK_DIR}/tabs.json"
+    printf '{"id":"cli:agent:list","result":{"agents":[%s]}}\n' "${_agents}" \
+        >"${_WORK_DIR}/agents.json"
+}
+
+# A live watcher-opened session (`iw-issue-<n>` tab) for each given issue.
 _set_live_agents() {
     _set_agents_with_status working "$@"
 }
 
-# The same panes with an explicit `agent_status` (issue #1596). `idle`/`done`
-# is the zombie tab: the pane outlived its work and still sits in the worktree,
-# so cwd alone keeps reading as "running" long after it stopped.
+# The same sessions with an explicit `agent_status` (issue #1596). `idle`/`done`
+# is the zombie tab: the session outlived its work and nobody closed the tab.
 _set_agents_with_status() {
-    local _status="$1" _json="" _sep="" _p
+    local _status="$1" _labels=() _n
     shift
-    for _p in "$@"; do
-        _json="${_json}${_sep}{\"agent\":\"claude\",\"agent_status\":\"${_status}\",\"cwd\":\"${_p}\",\"foreground_cwd\":\"${_p}\",\"pane_id\":\"wV:p1\"}"
-        _sep=","
+    for _n in "$@"; do
+        _labels+=("iw-issue-${_n}")
     done
-    printf '{"id":"cli:agent:list","result":{"agents":[%s]}}\n' "${_json}" \
-        >"${_WORK_DIR}/agents.json"
-}
-
-# A pane whose shell has walked away from where it was opened: `cwd` still says
-# the worktree, `foreground_cwd` says $2.
-_set_live_agent_moved() {
-    printf '{"id":"cli:agent:list","result":{"agents":[{"agent":"claude","agent_status":"working","cwd":"%s","foreground_cwd":"%s","pane_id":"wV:p1"}]}}\n' \
-        "$1" "$2" >"${_WORK_DIR}/agents.json"
-}
-
-# A pane that reports only `foreground_cwd` — inside the worktree, not its root.
-_set_live_agent_subdir() {
-    printf '{"id":"cli:agent:list","result":{"agents":[{"agent":"claude","agent_status":"working","foreground_cwd":"%s","pane_id":"wV:p1"}]}}\n' \
-        "$1" >"${_WORK_DIR}/agents.json"
+    _set_tabs "${_status}" "${_labels[@]}"
 }
 
 # N open PRs in <1>, none of which closes any watched issue — used to fill the
@@ -190,35 +195,19 @@ _set_filler_prs() {
     printf '{"%s":[%s]}\n' "${_repo}" "${_json}" >"${_WORK_DIR}/prs.json"
 }
 
-# The given issues are *running*: a worktree each, with a live pane sitting in
-# it. Both halves are required — that pairing is the running-now signal — so
-# they are set together rather than restated at every concurrency test.
+# The given issues are *running*. Kept as names the concurrency tests read
+# naturally; all three are the tab+agent pair _set_tabs writes.
 _set_running() {
-    _set_running_with_status working "$@"
+    _set_agents_with_status working "$@"
 }
 
-# _set_running's zombie twin (#1596): worktree plus a pane in the given
-# non-working `agent_status`.
 _set_running_with_status() {
-    local _status="$1" _paths=() _n
-    shift
-    for _n in "$@"; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_agents_with_status "${_status}" "${_paths[@]}"
+    _set_agents_with_status "$@"
 }
 
-# _set_running's pane half only, for issues whose worktrees an earlier tick
-# already created. This is how a slot is freed (or refilled) mid-test: the
-# running-now signal is the pane, so dropping one from the list frees exactly
-# one slot without disturbing the worktrees the run so far has left behind.
+# Replace the running set mid-test: dropping one issue frees exactly one slot.
 _set_panes_for() {
-    local _paths=() _n
-    for _n in "$@"; do
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_agents_with_status working "${_paths[@]}"
+    _set_agents_with_status working "$@"
 }
 
 # The rate-limit gate state file: _set_limit_state <strikes> <backoff_until>.
@@ -389,6 +378,11 @@ EOF
 #
 #   HERDR_AGENTS_FILE         canned `agent list` JSON (default: no agents)
 #   HERDR_AGENT_LIST_FAIL=1   `agent list` errors — the tick must hold
+#   HERDR_TABS_FILE           canned `tab list` JSON (default: no tabs)
+#   HERDR_TAB_LIST_FAIL=1     `tab list` errors — the tick must hold
+#   HERDR_TABS_AFTER_CREATE_FILE  `tab list` JSON served once a `tab create`
+#                             has succeeded (a tab this tick opened)
+#   HERDR_WORKSPACES_FILE     canned `workspace list` JSON (wins over the flag)
 #   HERDR_WORKSPACE_EXISTS=1  `workspace list` already carries the repo label
 #   HERDR_TAB_FAIL=1          `tab create` errors
 #   HERDR_TAB_FAIL_AFTER=N    the first N `tab create` calls succeed, the rest
@@ -505,8 +499,23 @@ case "$1 $2" in
         printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[]}}'
     fi
     ;;
+"tab list")
+    if [ "${HERDR_TAB_LIST_FAIL:-0}" = "1" ]; then
+        printf '%s\n' '{"error":{"code":"internal","message":"no server"},"id":"cli:tab:list"}'
+        exit 1
+    fi
+    if [ -f "${CALL_LOG}.tabcreated" ] && [ -f "${HERDR_TABS_AFTER_CREATE_FILE:-}" ]; then
+        cat "${HERDR_TABS_AFTER_CREATE_FILE}"
+    elif [ -f "${HERDR_TABS_FILE:-}" ]; then
+        cat "${HERDR_TABS_FILE}"
+    else
+        printf '%s\n' '{"id":"cli:tab:list","result":{"tabs":[]}}'
+    fi
+    ;;
 "workspace list")
-    if [ "${HERDR_WORKSPACE_EXISTS:-0}" = "1" ]; then
+    if [ -f "${HERDR_WORKSPACES_FILE:-}" ]; then
+        cat "${HERDR_WORKSPACES_FILE}"
+    elif [ "${HERDR_WORKSPACE_EXISTS:-0}" = "1" ]; then
         printf '{"id":"cli:workspace:list","result":{"workspaces":[{"label":"%s","workspace_id":"ws-existing"}]}}\n' \
             "${HERDR_WORKSPACE_LABEL:-dotfiles}"
     else
@@ -518,6 +527,7 @@ case "$1 $2" in
     ;;
 "tab create")
     [ "${HERDR_TAB_FAIL:-0}" = "1" ] && exit 1
+    : >"${CALL_LOG}.tabcreated"
     if [ -n "${HERDR_TAB_FAIL_AFTER:-}" ]; then
         _n=$(_bump "${CALL_LOG}.tabcount")
         [ "${_n}" -gt "${HERDR_TAB_FAIL_AFTER}" ] && exit 1
@@ -651,75 +661,6 @@ EOF
     chmod +x "${_BIN_DIR}/herdr"
 }
 
-# gwt: real `git worktree` work, so `_iw_worktree_for_issue` sees what a real
-# spawn would leave behind.
-#
-#   GWT_SPAWN_MODE=fail        never creates, always exits 1
-#   GWT_SPAWN_MODE=fail-after  creates the worktree, then exits 1 (the case
-#                              where cleanup has to find a worktree the failed
-#                              attempt did not report)
-#   GWT_SPAWN_FAIL_TIMES=N     first N spawns fail, the rest succeed
-_install_gwt_stub() {
-    cat >"${_BIN_DIR}/gwt" <<'EOF'
-#!/bin/sh
-printf 'gwt %s\n' "$*" >>"${CALL_LOG}"
-
-_bump() {
-    _n=$(cat "$1" 2>/dev/null || printf 0)
-    _n=$((_n + 1))
-    printf '%s' "${_n}" >"$1"
-    printf '%s' "${_n}"
-}
-
-case "$1" in
-spawn)
-    shift
-    _name=""
-    while [ $# -gt 0 ]; do
-        case "$1" in
-        --wt-name) _name="$2"; shift 2 ;;
-        *) shift ;;
-        esac
-    done
-    _n="${_name#issue-}"
-
-    _fail=0
-    if [ -n "${GWT_SPAWN_FAIL_TIMES:-}" ]; then
-        _c=$(_bump "${CALL_LOG}.spawncount")
-        [ "${_c}" -le "${GWT_SPAWN_FAIL_TIMES}" ] && _fail=1
-    fi
-    [ "${GWT_SPAWN_MODE:-ok}" = "fail" ] && _fail=1
-
-    [ "${_fail}" = "1" ] && [ "${GWT_SPAWN_MODE:-ok}" != "fail-after" ] && exit 1
-
-    _idx=1
-    while git rev-parse --verify --quiet "refs/heads/wt/issue-${_n}/${_idx}" >/dev/null 2>&1; do
-        _idx=$((_idx + 1))
-    done
-    git worktree add -q -b "wt/issue-${_n}/${_idx}" \
-        "$(git rev-parse --show-toplevel)-issue-${_n}-${_idx}" HEAD >/dev/null 2>&1 || exit 1
-
-    [ "${GWT_SPAWN_MODE:-ok}" = "fail-after" ] && exit 1
-    [ "${_fail}" = "1" ] && exit 1
-    exit 0
-    ;;
-remove)
-    _target="$2"
-    _branch=$(git worktree list --porcelain 2>/dev/null |
-        awk -v p="worktree ${_target}" '
-            $0 == p { found = 1; next }
-            found && /^branch / { print substr($0, 8); exit }
-        ')
-    git worktree remove --force "${_target}" >/dev/null 2>&1 || true
-    [ -z "${_branch}" ] || git branch -D "${_branch#refs/heads/}" >/dev/null 2>&1 || true
-    exit 0
-    ;;
-esac
-exit 0
-EOF
-    chmod +x "${_BIN_DIR}/gwt"
-}
-
 # Make the tick's one `mktemp` call fail. The script has exactly one (the
 # herdr-stderr capture file in _iw_start_agent_retrying), so shadowing the
 # binary for the tick's own PATH exercises that fallback and nothing else —
@@ -740,7 +681,6 @@ EOF
 _install_stubs() {
     _install_gh_stub
     _install_herdr_stub
-    _install_gwt_stub
     _install_sleep_stub
     _install_ssh_stub
 }
@@ -828,6 +768,9 @@ _run_tick() {
         "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
         "GH_PRS_FILE=${_WORK_DIR}/prs.json" \
         "HERDR_AGENTS_FILE=${_WORK_DIR}/agents.json" \
+        "HERDR_TABS_FILE=${_WORK_DIR}/tabs.json" \
+        "HERDR_WORKSPACES_FILE=${_WORK_DIR}/workspaces.json" \
+        "HERDR_TABS_AFTER_CREATE_FILE=${_WORK_DIR}/tabs-after-create.json" \
         "IW_WATCHED_REPOS=${_WATCH_FILE}" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
         "IW_IDLE_POLL_SLEEP=0" \
@@ -1044,38 +987,39 @@ _assert_not_hung() {
 # Syntax & help
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: bash syntax check" {
+@test "avatar_issue_watcher: bash syntax check" {
     run bash -n "${SCRIPT}"
     assert_success
 }
 
-@test "issue_watcher_cron: --help exits 0 and prints usage" {
+@test "avatar_issue_watcher: --help exits 0 and prints usage" {
     run bash "${SCRIPT}" --help
     assert_success
-    assert_output --partial "Usage: issue_watcher_cron.sh"
+    assert_output --partial "Usage: avatar_issue_watcher.sh"
     assert_output --partial "--cwd"
     assert_output --partial "--dry-run"
 }
 
-@test "issue_watcher_cron: --help documents the crontab registration example" {
+@test "avatar_issue_watcher: --help documents the crontab registration example" {
     # #1579 codex review: the example must match the shipped cron-jobs.json
     # cadence (*/4), or a reader following --help literally installs a
     # cron entry running more slowly than the manifest's own default.
     run bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "*/4 * * * *"
-    assert_output --partial "issue_watcher_cron.sh"
+    assert_output --partial "avatar_issue_watcher.sh"
     assert_output --partial "cron.log"
 }
 
-@test "issue_watcher_cron: --help documents the watch list and its override" {
+@test "avatar_issue_watcher: --help documents the watch list and its override" {
     run bash "${SCRIPT}" --help
     assert_success
-    assert_output --partial "watched-repos.json"
+    assert_output --partial "/.avatars/issue-watcher/watched-repos.json"
+    refute_output --partial ".agent-factory"
     assert_output --partial "IW_WATCHED_REPOS"
 }
 
-@test "issue_watcher_cron: --help documents the filters and the per-tick cap" {
+@test "avatar_issue_watcher: --help documents the filters and the per-tick cap" {
     run bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "gh search issues"
@@ -1084,7 +1028,7 @@ _assert_not_hung() {
     assert_output --partial "at most 1 issue(s) per tick"
 }
 
-@test "issue_watcher_cron: --help documents the concurrency limits and the cursor" {
+@test "avatar_issue_watcher: --help documents the concurrency limits and the cursor" {
     # Shipped defaults (5/3 since #1627); unset any operator override so the
     # assertion pins the defaults, not the caller's environment.
     run env -u IW_MAX_CONCURRENT -u IW_MAX_PER_REPO bash "${SCRIPT}" --help
@@ -1095,7 +1039,16 @@ _assert_not_hung() {
     assert_output --partial "select.json"
 }
 
-@test "issue_watcher_cron: --help documents the rate-limit gate and its state file" {
+@test "avatar_issue_watcher: --help documents the two tab labels and the manual cleanup" {
+    run bash "${SCRIPT}" --help
+    assert_success
+    assert_output --partial "iw-issue-<N>"
+    assert_output --partial "issue-<N>"
+    refute_output --partial "a worktree is collected"
+    refute_output --partial "in an issue's worktree"
+}
+
+@test "avatar_issue_watcher: --help documents the rate-limit gate and its state file" {
     run bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "rate-limit gate"
@@ -1103,7 +1056,7 @@ _assert_not_hung() {
     assert_output --partial "30m"
 }
 
-@test "issue_watcher_cron: --help documents the saturation alert and its state file" {
+@test "avatar_issue_watcher: --help documents the saturation alert and its state file" {
     run bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "saturation alert"
@@ -1112,31 +1065,31 @@ _assert_not_hung() {
     assert_output --partial "3h"
 }
 
-@test "issue_watcher_cron: --help documents --status" {
+@test "avatar_issue_watcher: --help documents --status" {
     run bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "--status"
 }
 
-@test "issue_watcher_cron: -h is equivalent to --help" {
+@test "avatar_issue_watcher: -h is equivalent to --help" {
     run bash "${SCRIPT}" -h
     assert_success
-    assert_output --partial "Usage: issue_watcher_cron.sh"
+    assert_output --partial "Usage: avatar_issue_watcher.sh"
 }
 
-@test "issue_watcher_cron: bare 'help' is equivalent to --help" {
+@test "avatar_issue_watcher: bare 'help' is equivalent to --help" {
     run bash "${SCRIPT}" help
     assert_success
-    assert_output --partial "Usage: issue_watcher_cron.sh"
+    assert_output --partial "Usage: avatar_issue_watcher.sh"
 }
 
-@test "issue_watcher_cron: unknown option exits non-zero" {
+@test "avatar_issue_watcher: unknown option exits non-zero" {
     run bash "${SCRIPT}" --nope
     assert_failure
     assert_output --partial "Unknown option"
 }
 
-@test "issue_watcher_cron: --cwd without a value fails" {
+@test "avatar_issue_watcher: --cwd without a value fails" {
     run bash "${SCRIPT}" --cwd
     assert_failure
     assert_output --partial "--cwd requires a PATH"
@@ -1146,16 +1099,16 @@ _assert_not_hung() {
 # The dispatch path (#1440)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: an assigned issue is spawned, tabbed and prompted" {
+@test "avatar_issue_watcher: an assigned issue is tabbed and prompted" {
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
     _assert_logged "tab create --workspace"
     _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9"
     _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
-@test "issue_watcher_cron: the prompt is the slash command, not a subagent instruction" {
+@test "avatar_issue_watcher: the prompt is the slash command, not a subagent instruction" {
     _run_tick
     assert_success
     _assert_logged "/gh-flow:wave 11"
@@ -1165,38 +1118,139 @@ _assert_not_hung() {
     _refute_logged "Agent 도구"
 }
 
-@test "issue_watcher_cron: the dispatched pane runs claude with --dangerously-skip-permissions" {
+@test "avatar_issue_watcher: the dispatched pane runs claude with --dangerously-skip-permissions" {
     _run_tick
     assert_success
     _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9 -- --dangerously-skip-permissions"
 }
 
-@test "issue_watcher_cron: the tab is labelled with the issue number" {
+@test "avatar_issue_watcher: the tab is labelled iw-issue-<N>, apart from a hand-made issue-<N>" {
     _run_tick
     assert_success
-    _assert_logged "--label #11"
+    _assert_logged "--label iw-issue-11 --no-focus"
+    _refute_logged "--label #11"
 }
 
-@test "issue_watcher_cron: the tab opens on the issue's worktree, not the checkout" {
+@test "avatar_issue_watcher: the tab opens on the repo's checkout path" {
     _run_tick
     assert_success
-    _assert_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-1"
+    _assert_logged "tab create --workspace ws-test-1 --cwd ${_REPO_DIR} --label iw-issue-11"
 }
 
-@test "issue_watcher_cron: an existing workspace with the repo label is reused" {
+@test "avatar_issue_watcher: the tick creates no worktree and never calls gwt" {
+    # /gh-flow:wave makes its own wt/issue-<n>/<idx> worktree inside the
+    # session; a second one made here would be left behind unused.
+    cat >"${_BIN_DIR}/gwt" <<'EOF'
+#!/bin/sh
+printf 'gwt %s\n' "$*" >>"${CALL_LOG}"
+exit 0
+EOF
+    chmod +x "${_BIN_DIR}/gwt"
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
+    _refute_logged "gwt "
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    refute_output --partial "wt/issue-"
+    refute_output --partial "worktree ${_WORK_DIR}/dotfiles-"
+}
+
+@test "avatar_issue_watcher: a hand-made issue-<N> tab with an agent counts as running" {
+    _set_tabs working issue-11
+    _run_tick
+    assert_success
+    assert_output --partial "acme/dotfiles#11 — already running"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a watcher-made iw-issue-<N> tab with an agent counts as running" {
+    _set_tabs working iw-issue-11
+    _run_tick
+    assert_success
+    assert_output --partial "acme/dotfiles#11 — already running"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: an issue tab with no agent in it does not count" {
+    _set_tabs working issue-11
+    printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[]}}' >"${_WORK_DIR}/agents.json"
+    _run_tick
+    assert_success
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: only an exact issue-<N> label counts" {
+    _set_tabs working issue-110 xissue-11 issue-11-notes iw-issue-1
+    _run_tick
+    assert_success
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: an issue tab in another repo's workspace does not count" {
+    _set_tabs working issue-11
+    printf '{"id":"cli:workspace:list","result":{"workspaces":[{"label":"elsewhere","workspace_id":"ws-existing"}]}}\n' \
+        >"${_WORK_DIR}/workspaces.json"
+    _run_tick
+    assert_success
+    _assert_logged "--label iw-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: an unreachable herdr tab list holds the tick" {
+    _run_tick "HERDR_TAB_LIST_FAIL=1"
+    assert_success
+    assert_output --partial "holding this tick"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a closed issue's worktree is never touched" {
+    # The worktree belongs to /gh-flow:wave and the user removes it after
+    # review; the session's pane stands in the checkout root, so "no agent in
+    # the worktree" would read as abandoned while the user is still reading it.
+    _add_worktree 21
+    printf 'review notes\n' >"$(_worktree_path 21)/notes.txt"
+    _run_tick "GH_CLOSED_ISSUES=21"
+    assert_success
+    refute_output --partial "Collected worktree"
+    run git -C "${_REPO_DIR}" worktree list --porcelain
+    assert_output --partial "wt/issue-21/"
+    [ -f "$(_worktree_path 21)/notes.txt" ]
+}
+
+@test "avatar_issue_watcher: repos sharing one path share one workspace" {
+    # gh-verify-skills, gh-flow-skills ... all live under ~/para/project/skills:
+    # one project directory, so one herdr workspace named after it.
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/other","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
+    _set_issues '[{"number":11,"repository":{"nameWithOwner":"acme/other"},"labels":[]}]'
+    _run_tick
+    assert_success
+    _assert_logged "workspace create --cwd ${_REPO_DIR} --label dotfiles --no-focus"
+    _refute_logged "--label acme/other"
+}
+
+@test "avatar_issue_watcher: repos at different paths with one leaf name still split" {
+    _make_repo "${_WORK_DIR}/b/dotfiles"
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"other/dotfiles","path":"'"${_WORK_DIR}"'/b/dotfiles","host":"github.com"}]'
+    _run_tick
+    assert_success
+    _assert_logged "workspace create --cwd ${_REPO_DIR} --label acme/dotfiles --no-focus"
+}
+
+@test "avatar_issue_watcher: an existing workspace with the repo label is reused" {
     _run_tick "HERDR_WORKSPACE_EXISTS=1"
     assert_success
     _assert_logged "tab create --workspace ws-existing"
     _refute_logged "workspace create"
 }
 
-@test "issue_watcher_cron: a missing workspace is created against the checkout" {
+@test "avatar_issue_watcher: a missing workspace is created against the checkout" {
     _run_tick
     assert_success
     _assert_logged "workspace create --cwd ${_REPO_DIR} --label dotfiles --no-focus"
 }
 
-@test "issue_watcher_cron: the tick reports how many issues it dispatched" {
+@test "avatar_issue_watcher: the tick reports how many issues it dispatched" {
     _run_tick
     assert_success
     assert_output --partial "1 issue(s) dispatched"
@@ -1206,79 +1260,79 @@ _assert_not_hung() {
 # Filters (issue #1440 verification list)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: an issue labelled wontfix is not dispatched" {
+@test "avatar_issue_watcher: an issue labelled wontfix is not dispatched" {
     _issues_with_labels 11 wontfix
     _run_tick
     assert_success
     assert_output --partial "excluded label"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
     _refute_logged "agent prompt"
 }
 
-@test "issue_watcher_cron: an issue labelled 보류 is not dispatched" {
+@test "avatar_issue_watcher: an issue labelled 보류 is not dispatched" {
     _issues_with_labels 11 보류
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: an issue labelled not-implement is not dispatched" {
+@test "avatar_issue_watcher: an issue labelled not-implement is not dispatched" {
     _issues_with_labels 11 not-implement
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: an excluded label among several still parks the issue" {
+@test "avatar_issue_watcher: an excluded label among several still parks the issue" {
     _issues_with_labels 11 refactor wontfix
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a label that merely starts with an excluded one is not excluded" {
+@test "avatar_issue_watcher: a label that merely starts with an excluded one is not excluded" {
     _issues_with_labels 11 wontfix-later
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: a label containing a space is matched exactly" {
+@test "avatar_issue_watcher: a label containing a space is matched exactly" {
     _issues_with_labels 11 "on hold"
     _run_tick "IW_EXCLUDE_LABELS=on hold"
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: an issue with an OPEN blockedBy is skipped" {
+@test "avatar_issue_watcher: an issue with an OPEN blockedBy is skipped" {
     _run_tick "GH_BLOCKED_BY=11"
     assert_success
     assert_output --partial "blocked by open"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: the same issue dispatches once its blocker closes" {
+@test "avatar_issue_watcher: the same issue dispatches once its blocker closes" {
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: a failing blockedBy query fails open" {
+@test "avatar_issue_watcher: a failing blockedBy query fails open" {
     _run_tick "GH_GRAPHQL_FAIL=1"
     assert_success
     assert_output --partial "fail-open"
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: an issue outside the watch list is never touched" {
+@test "avatar_issue_watcher: an issue outside the watch list is never touched" {
     _set_issues '[{"number":77,"repository":{"nameWithOwner":"other/elsewhere"},"labels":[]}]'
     _run_tick
     assert_success
     assert_output --partial "No dispatchable issue"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: an existing worktree no longer retires the issue" {
+@test "avatar_issue_watcher: an existing worktree no longer retires the issue" {
     # The bug this replaces: /gh-flow:issue stops at "PR opened", so a worktree
     # removed before the merge used to re-dispatch, and one kept until the merge
     # piled up — while an issue whose session had died was never offered again,
@@ -1286,21 +1340,21 @@ _assert_not_hung() {
     _add_worktree 11
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: a watched repo whose path is gone is skipped with a warning" {
+@test "avatar_issue_watcher: a watched repo whose path is gone is skipped with a warning" {
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_WORK_DIR}"'/gone","host":"github.com"}]'
     _run_tick
     assert_success
     assert_output --partial "missing path"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
 # The collision herdr_agent_name.sh documents but cannot see: agent names drop
 # the owner, so two watched repos sharing a basename share `iw-dotfiles-issue-
 # <N>`. Nothing tracked gates this list, so the warning is the only signal.
-@test "issue_watcher_cron: watched repos sharing a basename raise a warning" {
+@test "avatar_issue_watcher: watched repos sharing a basename raise a warning" {
     _make_repo "${_WORK_DIR}/dotfiles2"
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
       {"repo":"other/dotfiles","path":"'"${_WORK_DIR}"'/dotfiles2","host":"github.com"}]'
@@ -1312,7 +1366,7 @@ _assert_not_hung() {
 
 # Advisory guards earn their keep by staying quiet: the one-entry list `setup`
 # writes must not tax every tick with a warning about a collision it cannot have.
-@test "issue_watcher_cron: a watch list without a basename clash stays silent" {
+@test "avatar_issue_watcher: a watch list without a basename clash stays silent" {
     _run_tick
     assert_success
     refute_output --partial "sharing a basename"
@@ -1324,7 +1378,7 @@ _assert_not_hung() {
 # slug to `my-repo`, so herdr would route their dispatches into the same
 # pane even though a literal-basename comparison sees no collision (PR #1584
 # agy/codex review).
-@test "issue_watcher_cron: basenames that only collide after herdr's slug normalization also raise a warning" {
+@test "avatar_issue_watcher: basenames that only collide after herdr's slug normalization also raise a warning" {
     _make_repo "${_WORK_DIR}/dotfiles2"
     _write_watch_file '[{"repo":"acme/My-Repo","path":"'"${_REPO_DIR}"'","host":"github.com"},
       {"repo":"other/my.repo","path":"'"${_WORK_DIR}"'/dotfiles2","host":"github.com"}]'
@@ -1334,28 +1388,28 @@ _assert_not_hung() {
     assert_output --partial "my-repo"
 }
 
-@test "issue_watcher_cron: a watch entry without a path is ignored" {
+@test "avatar_issue_watcher: a watch entry without a path is ignored" {
     _write_watch_file '[{"repo":"acme/dotfiles","host":"github.com"}]'
     _run_tick
     assert_success
     assert_output --partial "No dispatchable issue"
 }
 
-@test "issue_watcher_cron: the watch list also accepts the {repos:[...]} shape" {
+@test "avatar_issue_watcher: the watch list also accepts the {repos:[...]} shape" {
     _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"}]}'
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: a watch entry without a host defaults to github.com" {
+@test "avatar_issue_watcher: a watch entry without a host defaults to github.com" {
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"}]'
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: only one issue is dispatched per tick" {
+@test "avatar_issue_watcher: only one issue is dispatched per tick" {
     # Intake rate, not total load: five ready issues must not all enter their
     # token-heavy implement phase in the same minute.
     _set_issues '[
@@ -1368,10 +1422,10 @@ _assert_not_hung() {
     _run_tick
     assert_success
     assert_output --partial "1 issue(s) dispatched"
-    [ "$(_log_count 'gwt spawn')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: the lowest issue number in a repo goes first" {
+@test "avatar_issue_watcher: the lowest issue number in a repo goes first" {
     _set_issues '[
       {"number":31,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
@@ -1379,28 +1433,28 @@ _assert_not_hung() {
     ]'
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-12"
-    _refute_logged "gwt spawn --wt-name issue-25"
+    _assert_logged "--label iw-issue-12 --no-focus"
+    _refute_logged "--label iw-issue-25 --no-focus"
 }
 
-@test "issue_watcher_cron: a gh without search names gh's own error in the warning (#1849)" {
+@test "avatar_issue_watcher: a gh without search names gh's own error in the warning (#1849)" {
     _run_tick "GH_NO_SEARCH=1"
     assert_success
     assert_output --partial 'gh search issues failed on github.com: unknown command "search" for "gh"'
 }
 
-@test "issue_watcher_cron: a failing issue search leaves the tick a no-op" {
+@test "avatar_issue_watcher: a failing issue search leaves the tick a no-op" {
     _run_tick "GH_SEARCH_FAIL=1"
     assert_success
     assert_output --partial "No dispatchable issue"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
 # ---------------------------------------------------------------------------
 # PR #1447 review regressions
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: the search is scoped to the watched repos" {
+@test "avatar_issue_watcher: the search is scoped to the watched repos" {
     _run_tick
     assert_success
     # Without repo: qualifiers --limit truncates every assigned issue on the
@@ -1408,7 +1462,7 @@ _assert_not_hung() {
     _assert_logged "search issues repo:acme/dotfiles"
 }
 
-@test "issue_watcher_cron: each watched repo contributes its own repo: qualifier" {
+@test "avatar_issue_watcher: each watched repo contributes its own repo: qualifier" {
     mkdir -p "${_WORK_DIR}/other"
     git -C "${_WORK_DIR}/other" init -q
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"},{"repo":"acme/other","path":"'"${_WORK_DIR}"'/other"}]'
@@ -1417,13 +1471,13 @@ _assert_not_hung() {
     _assert_logged "repo:acme/dotfiles repo:acme/other"
 }
 
-@test "issue_watcher_cron: the search result order is pinned, not relevance-ranked" {
+@test "avatar_issue_watcher: the search result order is pinned, not relevance-ranked" {
     _run_tick
     assert_success
     _assert_logged "--sort updated --order desc"
 }
 
-@test "issue_watcher_cron: a stdin-consuming child cannot truncate the candidate loop" {
+@test "avatar_issue_watcher: a stdin-consuming child cannot truncate the candidate loop" {
     # The candidate loop reads on fd 3. On plain stdin a child that drains it —
     # `gh` does — would eat the remaining search results and the tick would pick
     # from a silently shortened list. Blocking #11 proves the loop reached #12.
@@ -1434,10 +1488,10 @@ _assert_not_hung() {
     ]'
     _run_tick "GH_BLOCKED_BY=11"
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-12"
+    _assert_logged "--label iw-issue-12 --no-focus"
 }
 
-@test "issue_watcher_cron: a stdin-consuming child cannot truncate the dispatch loop" {
+@test "avatar_issue_watcher: a stdin-consuming child cannot truncate the dispatch loop" {
     _set_issues '[
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
@@ -1448,21 +1502,7 @@ _assert_not_hung() {
     [ "$(_log_count 'agent prompt')" -eq 3 ]
 }
 
-@test "issue_watcher_cron: a stdin-consuming child cannot truncate the cleanup loop" {
-    # Same hazard one step earlier: the cleanup loop runs `gh issue view` per
-    # worktree, so on plain stdin the first call would eat the rest of the list
-    # and every worktree after the first would survive its closed issue.
-    _add_worktree 11
-    _add_worktree 12
-    _add_worktree 13
-    _run_tick "GH_CLOSED_ISSUES=11 12 13"
-    assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-12/"
-    refute_output --partial "wt/issue-13/"
-}
-
-@test "issue_watcher_cron: the agent name carries the repo, not just the number" {
+@test "avatar_issue_watcher: the agent name carries the repo, not just the number" {
     _run_tick
     assert_success
     # Two watched repos both having an issue #11 would otherwise share one herdr
@@ -1474,7 +1514,7 @@ _assert_not_hung() {
 # Same overrun scenario as `herdr_agent_name.bats` T18b (#1553), run
 # end-to-end here to also pin the permanent-skip WARN wording: the tick must
 # say this is a *permanent* skip, not a transient one.
-@test "issue_watcher_cron: a name overrunning herdr's budget is flagged as a permanent skip" {
+@test "avatar_issue_watcher: a name overrunning herdr's budget is flagged as a permanent skip" {
     _write_watch_file '[{"repo":"acme/sixteen-char-rep","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
     _set_issues '[{"number":1234567,"repository":{"nameWithOwner":"acme/sixteen-char-rep"},"labels":[]}]'
     _run_tick
@@ -1496,7 +1536,7 @@ _assert_not_hung() {
     _refute_logged "agent start"
 }
 
-@test "issue_watcher_cron: a mixed case with one skipped and one failed issue exits with failure" {
+@test "avatar_issue_watcher: a mixed case with one skipped and one failed issue exits with failure" {
     _write_watch_file '[{"repo":"acme/sixteen-char-rep","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
     _set_issues '[
       {"number":1234567,"repository":{"nameWithOwner":"acme/sixteen-char-rep"},"labels":[]},
@@ -1512,7 +1552,7 @@ _assert_not_hung() {
 # `^[a-z][a-z0-9_-]{0,31}$`. The pre-#1530 name folded the owner in verbatim
 # (`iw-<owner>-<repo>-<N>`), so a real owner like `dEitY719` made every name
 # invalid and the watcher dispatched nothing in 21 attempts.
-@test "issue_watcher_cron: the dispatched agent's name satisfies herdr's rule" {
+@test "avatar_issue_watcher: the dispatched agent's name satisfies herdr's rule" {
     _run_tick
     assert_success
 
@@ -1523,7 +1563,7 @@ _assert_not_hung() {
 
 # An owner with uppercase is the exact shape that broke production — the fold
 # has to happen, and the repo (not the owner) has to be what survives.
-@test "issue_watcher_cron: a mixed-case owner still yields a valid name" {
+@test "avatar_issue_watcher: a mixed-case owner still yields a valid name" {
     _write_watch_file '[{"repo":"dEitY719/DotFiles","path":"'"${_REPO_DIR}"'"}]'
     _set_issues '[{"repository":{"nameWithOwner":"dEitY719/DotFiles"},"number":11,"title":"t","labels":[]}]'
     _run_tick
@@ -1531,7 +1571,7 @@ _assert_not_hung() {
     _assert_logged "agent start iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: repos with colliding directory names get distinct workspaces" {
+@test "avatar_issue_watcher: repos with colliding directory names get distinct workspaces" {
     mkdir -p "${_WORK_DIR}/nest/dotfiles"
     git -C "${_WORK_DIR}/nest/dotfiles" init -q
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"},{"repo":"other/dotfiles","path":"'"${_WORK_DIR}"'/nest/dotfiles"}]'
@@ -1543,13 +1583,13 @@ _assert_not_hung() {
     _refute_logged "--label dotfiles "
 }
 
-@test "issue_watcher_cron: a unique directory name still labels the workspace plainly" {
+@test "avatar_issue_watcher: a unique directory name still labels the workspace plainly" {
     _run_tick
     assert_success
     _assert_logged "workspace create --cwd ${_REPO_DIR} --label dotfiles --no-focus"
 }
 
-@test "issue_watcher_cron: a cold agent is polled for idle before it is prompted" {
+@test "avatar_issue_watcher: a cold agent is polled for idle before it is prompted" {
     _run_tick
     assert_success
     # `herdr agent start` returning does not prove the key-input loop accepts
@@ -1575,7 +1615,7 @@ _assert_not_hung() {
 # early, and only one that never does pays the whole budget — and it still
 # prompts when it does, which is the pre-#1570 behaviour kept reachable.
 
-@test "issue_watcher_cron: a pane that reads stable is prompted before the cap" {
+@test "avatar_issue_watcher: a pane that reads stable is prompted before the cap" {
     _run_tick
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11"
@@ -1586,7 +1626,7 @@ _assert_not_hung() {
     refute_output --partial "never settled"
 }
 
-@test "issue_watcher_cron: the settle poll reads the pane, not the sequence counter" {
+@test "avatar_issue_watcher: the settle poll reads the pane, not the sequence counter" {
     _run_tick
     assert_success
     # 15 lines, not 3 (PR #1611 review, 5th pass) — a real pane's banner and
@@ -1594,7 +1634,7 @@ _assert_not_hung() {
     _assert_logged "agent read iw-dotfiles-issue-11 --lines 15 --format text"
 }
 
-@test "issue_watcher_cron: the settle poll happens after the idle check, not before" {
+@test "avatar_issue_watcher: the settle poll happens after the idle check, not before" {
     _run_tick
     assert_success
     _idle_line=$(grep -n "agent get iw-dotfiles-issue-11" "${_LOG}" | head -1 | cut -d: -f1)
@@ -1607,7 +1647,7 @@ _assert_not_hung() {
 # The no-regression case: today's behaviour (wait the whole budget, then prompt
 # regardless) has to stay reachable, because a pane that never stabilises is
 # exactly the one the flat 13s was protecting.
-@test "issue_watcher_cron: a pane that never settles still warns and prompts at the cap" {
+@test "avatar_issue_watcher: a pane that never settles still warns and prompts at the cap" {
     _run_tick "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
     assert_output --partial "never settled within 13s"
@@ -1618,7 +1658,7 @@ _assert_not_hung() {
 # `Not logged in` is perfectly stable and means the opposite of ready (#1561).
 # A bare state_change_seq comparison cannot tell it from a settled prompt,
 # which is why the pane text is the signal.
-@test "issue_watcher_cron: a stable 'Not logged in' pane is not read as ready" {
+@test "avatar_issue_watcher: a stable 'Not logged in' pane is not read as ready" {
     _run_tick "HERDR_SETTLE_READ_SEQUENCE=Not logged in"
     assert_success
     assert_output --partial "never settled within 13s"
@@ -1627,7 +1667,7 @@ _assert_not_hung() {
 
 # An empty frame twice over is not a settled pane either — it is a pane that
 # has not drawn anything yet.
-@test "issue_watcher_cron: two empty reads do not count as a stable pane" {
+@test "avatar_issue_watcher: two empty reads do not count as a stable pane" {
     _run_tick "HERDR_SETTLE_READ_SEQUENCE=~|~|> claude ready"
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11"
@@ -1638,14 +1678,14 @@ _assert_not_hung() {
 }
 
 # A read that herdr refuses is "not ready yet", never a reason to end the tick.
-@test "issue_watcher_cron: an unreadable pane degrades to not-ready, never aborts" {
+@test "avatar_issue_watcher: an unreadable pane degrades to not-ready, never aborts" {
     _run_tick "HERDR_READ_MODE=missing"
     assert_success
     assert_output --partial "never settled within 13s"
     _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: IW_SETTLE_SECONDS=0 removes the settle wait entirely" {
+@test "avatar_issue_watcher: IW_SETTLE_SECONDS=0 removes the settle wait entirely" {
     _run_tick "IW_SETTLE_SECONDS=0"
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11"
@@ -1653,7 +1693,7 @@ _assert_not_hung() {
     _refute_logged "agent read iw-dotfiles-issue-11 --lines 15"
 }
 
-@test "issue_watcher_cron: IW_SETTLE_SECONDS caps the poll, not one flat sleep" {
+@test "avatar_issue_watcher: IW_SETTLE_SECONDS caps the poll, not one flat sleep" {
     _run_tick "IW_SETTLE_SECONDS=7" "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
     assert_output --partial "never settled within 7s"
@@ -1663,7 +1703,7 @@ _assert_not_hung() {
 
 # A fractional override predates the poll and cannot bound a poll count, so it
 # still means the flat wait it always meant.
-@test "issue_watcher_cron: a fractional settle cap stays a flat wait" {
+@test "avatar_issue_watcher: a fractional settle cap stays a flat wait" {
     _run_tick "IW_SETTLE_SECONDS=0.5"
     assert_success
     _assert_logged "sleep 0.5"
@@ -1671,7 +1711,7 @@ _assert_not_hung() {
     _refute_logged "agent read iw-dotfiles-issue-11 --lines 15"
 }
 
-@test "issue_watcher_cron: the settle poll interval is overridable" {
+@test "avatar_issue_watcher: the settle poll interval is overridable" {
     # 3, not 13/1=13: the poll count scales with the gap
     # (ceil(13/4)=4 polls, 3 sleeps) so a wide gap no longer multiplies the
     # cap instead of dividing it — a gap of 4 pre-fix meant 13 polls of 4s
@@ -1683,7 +1723,7 @@ _assert_not_hung() {
     [ "$(_log_count '^sleep 1$')" -eq 0 ]
 }
 
-@test "issue_watcher_cron: a sub-1s poll interval does not cut the wait short" {
+@test "avatar_issue_watcher: a sub-1s poll interval does not cut the wait short" {
     # The inverse of the case above: ceil(13/0.5)=26 polls, 25 sleeps —
     # without the scaling fix the old fixed 13-poll count hit its bound at
     # 6.5s of real sleeping, half the documented cap (agy, PR #1611 review).
@@ -1693,7 +1733,7 @@ _assert_not_hung() {
     assert_output --partial "never settled within 13s"
 }
 
-@test "issue_watcher_cron: a leading-zero IW_SETTLE_SECONDS does not abort the tick" {
+@test "avatar_issue_watcher: a leading-zero IW_SETTLE_SECONDS does not abort the tick" {
     # $(( )) reads a leading-zero numeral as octal; 08/09 is not valid octal
     # and used to abort the whole tick with "value too great for base"
     # (codex, PR #1611 review, second pass). 10# forces base 10.
@@ -1703,7 +1743,7 @@ _assert_not_hung() {
     assert_output --partial "never settled within 08s"
 }
 
-@test "issue_watcher_cron: a non-standard zero poll interval does not crash awk" {
+@test "avatar_issue_watcher: a non-standard zero poll interval does not crash awk" {
     # 'case ... in 0 | 0.0 | 0.00)' missed .0/0.000 and fell through to a
     # fatal awk division-by-zero, leaving _max_polls empty and the loop's
     # `[ -lt ]` erroring on an empty operand (agy, PR #1611 review, second
@@ -1721,7 +1761,7 @@ _assert_not_hung() {
     _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: a poll gap at or above the cap still sleeps once" {
+@test "avatar_issue_watcher: a poll gap at or above the cap still sleeps once" {
     # ceil(13/13)=1 alone gives one read and zero sleeps — an override asking
     # to check every 13s should still wait that one real gap before giving up
     # (agy, PR #1611 review, second pass).
@@ -1731,7 +1771,7 @@ _assert_not_hung() {
     assert_output --partial "never settled within 13s"
 }
 
-@test "issue_watcher_cron: a pathologically small poll interval is still bounded" {
+@test "avatar_issue_watcher: a pathologically small poll interval is still bounded" {
     # ceil(13/0.001)=13000 would otherwise spawn thousands of herdr round
     # trips for one dispatch — a fat-fingered override, not attacker input,
     # but a real self-inflicted resource risk (agy, PR #1611 review, 4th
@@ -1746,7 +1786,7 @@ _assert_not_hung() {
 
 # The same `0` escape _IW_IDLE_POLL_SLEEP has: the suite polls without paying
 # for it, and the poll still runs its full budget and still prompts.
-@test "issue_watcher_cron: IW_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
+@test "avatar_issue_watcher: IW_SETTLE_POLL_SLEEP=0 polls without sleeping at all" {
     _run_tick "IW_SETTLE_POLL_SLEEP=0" "HERDR_SETTLE_READ_SEQUENCE=~"
     assert_success
     _refute_logged "sleep "
@@ -1754,7 +1794,7 @@ _assert_not_hung() {
     _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: a dispatch that fails before agent start never settles" {
+@test "avatar_issue_watcher: a dispatch that fails before agent start never settles" {
     # No pane was opened, so there is nothing to wait for — the budget must not
     # be spent on an attempt that cannot prompt anyway.
     _run_tick "HERDR_TAB_FAIL=1"
@@ -1763,18 +1803,7 @@ _assert_not_hung() {
     _refute_logged "agent read"
 }
 
-@test "issue_watcher_cron: the pane opens on the newest worktree index" {
-    # A cleanup that failed leaves wt/issue-11/1 behind and the next spawn makes
-    # /2. Handing the tab the stale /1 path would open the session on the wrong
-    # worktree, so _iw_worktree_for_issue reads back the highest index.
-    _add_worktree 11
-    _run_tick
-    assert_success
-    _assert_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-2"
-    _refute_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-1"
-}
-
-@test "issue_watcher_cron: a dispatch that never lands is not judged at all" {
+@test "avatar_issue_watcher: a dispatch that never lands is not judged at all" {
     # Attempt 1 stalls, attempts 2-3 die at tab create. Since #1444 the gate no
     # longer classifies *why* a dispatch failed — no error code, from any
     # attempt, can book a strike. Only a prompt confirmed submitted is judged.
@@ -1783,7 +1812,7 @@ _assert_not_hung() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: --dry-run does not take the tick lock" {
+@test "avatar_issue_watcher: --dry-run does not take the tick lock" {
     _hold_lock
     _run_tick -- --dry-run
     assert_success
@@ -1791,7 +1820,7 @@ _assert_not_hung() {
     refute_output --partial "already running"
 }
 
-@test "issue_watcher_cron: --dry-run leaves an expired gate file on disk" {
+@test "avatar_issue_watcher: --dry-run leaves an expired gate file on disk" {
     _set_limit_state "0" "$(($(date +%s) - 60))"
     _run_tick -- --dry-run
     assert_success
@@ -1800,7 +1829,7 @@ _assert_not_hung() {
     [ -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: --dry-run reports even while the gate is closed" {
+@test "avatar_issue_watcher: --dry-run reports even while the gate is closed" {
     _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick -- --dry-run
     assert_success
@@ -1811,7 +1840,7 @@ _assert_not_hung() {
 # The three signals (issue #1453)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: only open issues assigned to me are ever searched" {
+@test "avatar_issue_watcher: only open issues assigned to me are ever searched" {
     # The "already closed" half of the handled signal is the search itself: a
     # closed issue never enters the candidate list to begin with.
     _run_tick
@@ -1819,115 +1848,105 @@ _assert_not_hung() {
     _assert_logged "--assignee @me --state open"
 }
 
-@test "issue_watcher_cron: an issue an open PR closes is skipped" {
+@test "avatar_issue_watcher: an issue an open PR closes is skipped" {
     _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes #11"}]}'
     _run_tick
     assert_success
     assert_output --partial "an open PR already closes it"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: the closing keyword is matched case-insensitively" {
+@test "avatar_issue_watcher: the closing keyword is matched case-insensitively" {
     _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"fixes #11"}]}'
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a PR on the issue branch counts even without the keyword" {
+@test "avatar_issue_watcher: a PR on the issue branch counts even without the keyword" {
     # A PR opened by hand may carry no `Closes #<n>`, but gwt always branches
     # wt/issue-<n>/<index>, so the branch name is the second, independent mark.
     _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"wt/issue-11/1","body":"no keyword here"}]}'
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a PR closing a longer number does not retire this issue" {
+@test "avatar_issue_watcher: a PR closing a longer number does not retire this issue" {
     # Without the word boundary, `Closes #115` would read as closing #11 and
     # retire it for as long as that PR stayed open.
     _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes #115"}]}'
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: an open PR on another repo does not retire this issue" {
+@test "avatar_issue_watcher: an open PR on another repo does not retire this issue" {
     _set_open_prs '{"other/elsewhere":[{"number":90,"headRefName":"wt/issue-11/1","body":"Closes #11"}]}'
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: a worktree with no PR and no session is offered again" {
-    # The failure this closes: dispatch is fire-and-forget, so a claude session
-    # that died after its worktree existed used to retire the issue forever.
-    _add_worktree 11
-    _run_tick
-    assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
-}
-
-@test "issue_watcher_cron: an issue whose session is live is not dispatched again" {
-    _add_worktree 11
-    _set_live_agents "$(_worktree_path 11)"
+@test "avatar_issue_watcher: an issue whose session is live is not dispatched again" {
+    _set_live_agents 11
     _run_tick
     assert_success
     assert_output --partial "already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a failing open-PR query skips the repo, not the tick" {
+@test "avatar_issue_watcher: a failing open-PR query skips the repo, not the tick" {
     # Fail-closed on purpose (D-6): guessing "unhandled" here opens a second PR
     # on an issue that already has one, and the next tick re-evaluates anyway.
     _run_tick "GH_PR_LIST_FAIL=1"
     assert_success
     assert_output --partial "Cannot list open PRs"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
 # ---------------------------------------------------------------------------
 # Concurrency limits (issue #1453 D-2)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: the tick holds once the global limit is reached" {
+@test "avatar_issue_watcher: the tick holds once the global limit is reached" {
     _set_running 21 22 23 24 25 26 27
     _run_tick
     assert_success
     assert_output --partial "7 issue session(s) already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: one session short of the limit still dispatches" {
+@test "avatar_issue_watcher: one session short of the limit still dispatches" {
     _set_running 21 22 23 24 25 26
     _run_tick "IW_MAX_PER_REPO=9"
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: a repo at its own limit is skipped" {
+@test "avatar_issue_watcher: a repo at its own limit is skipped" {
     _set_running 21 22 23
     _run_tick
     assert_success
     assert_output --partial "3 of its issues are already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a repo at its limit does not stop another repo" {
+@test "avatar_issue_watcher: a repo at its limit does not stop another repo" {
     _two_repo_fixture
     _set_running 21 22 23
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-41"
+    _assert_logged "--label iw-issue-41 --no-focus"
 }
 
 # ---------------------------------------------------------------------------
 # Zombie tabs (issue #1596)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: zombie panes on closed issues do not fill the cap" {
-    # The bug: a tab gh:pr-post-merge-verify failed to close keeps sitting in
-    # its worktree, so cwd alone reads it as running forever and the repo's
+@test "avatar_issue_watcher: zombie panes on closed issues do not fill the cap" {
+    # The bug: a tab gh:pr-post-merge-verify failed to close keeps its agent
+    # pane, so the tab alone reads it as running forever and the repo's
     # slots are never freed — the watcher then refuses every new issue,
     # silently.
     #
@@ -1937,16 +1956,16 @@ _assert_not_hung() {
     _set_running_with_status idle 21 22 23 24 25 26 27
     _run_tick "GH_CLOSED_ISSUES=21 22 23 24 25 26 27"
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 
     : >"${_LOG}"
     _age_zombie_candidates
     _run_tick "GH_CLOSED_ISSUES=21 22 23 24 25 26 27"
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: a pane that has only just gone quiet keeps its slot" {
+@test "avatar_issue_watcher: a pane that has only just gone quiet keeps its slot" {
     # The regression the grace period exists for (PR #1597 codex/agy review):
     # an agent waiting on a background subagent reports `idle` for minutes, and
     # one snapshot cannot tell that pause apart from a finished session. Freeing
@@ -1956,16 +1975,14 @@ _assert_not_hung() {
     _run_tick "GH_CLOSED_ISSUES=21 22 23"
     assert_success
     assert_output --partial "already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 
     # Nothing was reclaimed — the tick only wrote down when it first looked.
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
     run wc -l <"${_ZOMBIE_FILE}"
     assert_output "3"
 }
 
-@test "issue_watcher_cron: a pane that resumes work resets its grace clock" {
+@test "avatar_issue_watcher: a pane that resumes work resets its grace clock" {
     # Self-healing: the delegation came back, so the clock the first tick
     # started must be thrown away rather than aged into a reclaim. Otherwise a
     # session that went quiet once would be reclaimed the instant it goes quiet
@@ -1973,11 +1990,11 @@ _assert_not_hung() {
     _set_running_with_status idle 21 22 23
     _run_tick "GH_CLOSED_ISSUES=21 22 23"
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 
     : >"${_LOG}"
     _set_agents_with_status working \
-        "$(_worktree_path 21)" "$(_worktree_path 22)" "$(_worktree_path 23)"
+        21 22 23
     _run_tick "GH_CLOSED_ISSUES=21 22 23"
     assert_success
     assert_output --partial "already running"
@@ -1987,27 +2004,19 @@ _assert_not_hung() {
     # Quiet again — and back at the start of the window, not past its end.
     : >"${_LOG}"
     _set_agents_with_status idle \
-        "$(_worktree_path 21)" "$(_worktree_path 22)" "$(_worktree_path 23)"
+        21 22 23
     _run_tick "GH_CLOSED_ISSUES=21 22 23"
     assert_success
-    _refute_logged "gwt spawn"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: two stopped panes age independently" {
+@test "avatar_issue_watcher: two stopped panes age independently" {
     # The clock is per repo+issue, so one pane crossing the window says nothing
     # about its neighbour's.
     _set_running_with_status idle 21 22
     _seed_zombie_candidate 21 "$(($(date +%s) - 1200))"
     _run_tick "GH_CLOSED_ISSUES=21 22"
     assert_success
-    assert_output --partial "acme/dotfiles#21 is closed"
-    refute_output --partial "acme/dotfiles#22 is closed"
-
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-21/"
-    assert_output --partial "wt/issue-22/"
 
     # 21 is settled, so its row is gone; 22 is still counting.
     run cat "${_ZOMBIE_FILE}"
@@ -2015,47 +2024,43 @@ _assert_not_hung() {
     assert_output --partial "	22	"
 }
 
-@test "issue_watcher_cron: an idle pane on a still-open issue still counts as live" {
+@test "avatar_issue_watcher: an idle pane on a still-open issue still counts as live" {
     # The guard that makes "AND the issue is closed" load-bearing: an agent
     # between two tool calls reports `idle` for a moment, and reclaiming its
     # slot then would dispatch the same issue twice.
-    _add_worktree 11
-    _set_agents_with_status idle "$(_worktree_path 11)"
+    _set_agents_with_status idle 11
     _run_tick
     assert_success
     assert_output --partial "already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: an unreadable issue state keeps an idle pane live" {
-    # Same posture as the collection step: a failed state read must never be
-    # the reason a slot is reclaimed.
-    _add_worktree 11
-    _set_agents_with_status idle "$(_worktree_path 11)"
+@test "avatar_issue_watcher: an unreadable issue state keeps an idle pane live" {
+    # A failed state read must never be the reason a slot is reclaimed.
+    _set_agents_with_status idle 11
     _run_tick "GH_ISSUE_VIEW_FAIL=1"
     assert_success
     assert_output --partial "already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: an unrecognised agent_status counts as live" {
+@test "avatar_issue_watcher: an unrecognised agent_status counts as live" {
     # Only `idle` and `done` are known to mean "stopped"; anything else must
     # fail toward "still running".
-    _add_worktree 11
-    _set_agents_with_status starting "$(_worktree_path 11)"
+    _set_agents_with_status starting 11
     _run_tick "GH_CLOSED_ISSUES=11"
     assert_success
     assert_output --partial "already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: an unreachable herdr holds the tick instead of dispatching" {
+@test "avatar_issue_watcher: an unreachable herdr holds the tick instead of dispatching" {
     # "How many are running" has no safe default: guessing "none" would lift the
     # cap exactly when herdr is unhealthy.
     _run_tick "HERDR_AGENT_LIST_FAIL=1"
     assert_success
     assert_output --partial "holding this tick"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
 # ---------------------------------------------------------------------------
@@ -2073,20 +2078,20 @@ _two_repo_fixture() {
     ]'
 }
 
-@test "issue_watcher_cron: consecutive ticks take turns between repos" {
+@test "avatar_issue_watcher: consecutive ticks take turns between repos" {
     _two_repo_fixture
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 
     : >"${_LOG}"
-    _set_live_agents "$(_worktree_path 11)"
+    _set_live_agents 11
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-41"
+    _assert_logged "--label iw-issue-41 --no-focus"
 }
 
-@test "issue_watcher_cron: the cursor is persisted for the next tick" {
+@test "avatar_issue_watcher: the cursor is persisted for the next tick" {
     _two_repo_fixture
     _run_tick
     assert_success
@@ -2094,25 +2099,25 @@ _two_repo_fixture() {
     assert_output --partial '"last_repo": "acme/dotfiles"'
 }
 
-@test "issue_watcher_cron: a state dir with no cursor starts at the first repo" {
+@test "avatar_issue_watcher: a state dir with no cursor starts at the first repo" {
     _two_repo_fixture
     mkdir -p "${_STATE_DIR}"
     [ ! -f "${_STATE_DIR}/select.json" ]
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: an unwritable state dir does not stop the dispatch" {
+@test "avatar_issue_watcher: an unwritable state dir does not stop the dispatch" {
     _two_repo_fixture
     mkdir -p "${_STATE_DIR}"
     chmod 500 "${_STATE_DIR}"
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: --dry-run does not advance the cursor" {
+@test "avatar_issue_watcher: --dry-run does not advance the cursor" {
     _two_repo_fixture
     _run_tick -- --dry-run
     assert_success
@@ -2120,230 +2125,44 @@ _two_repo_fixture() {
 }
 
 # ---------------------------------------------------------------------------
-# Worktree collection (issue #1453 D-4)
-# ---------------------------------------------------------------------------
-
-@test "issue_watcher_cron: a closed issue's idle worktree is collected" {
-    _add_worktree 21
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    assert_output --partial "Collected worktree"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: an open issue's worktree is left alone" {
-    _add_worktree 21
-    _run_tick
-    assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: a closed issue whose session is still live is left alone" {
-    _add_worktree 21
-    _set_live_agents "$(_worktree_path 21)"
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: a closed issue whose pane has gone idle is collected" {
-    # The inverse of the test above (#1596): the pane is still there, but it
-    # stopped working and the issue is closed, so the worktree is reclaimable —
-    # once the grace period has confirmed it (PR #1597). The first tick must
-    # leave the directory alone: a background subagent between two commits is
-    # `idle` too, and `git worktree remove` would pull the ground out from
-    # under it.
-    _add_worktree 21
-    _set_agents_with_status idle "$(_worktree_path 21)"
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    refute_output --partial "Collected worktree"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-
-    _age_zombie_candidates
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    assert_output --partial "Collected worktree"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: a closed issue whose pane reports done is collected" {
-    _add_worktree 21
-    _set_agents_with_status done "$(_worktree_path 21)"
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    refute_output --partial "Collected worktree"
-
-    _age_zombie_candidates
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    assert_output --partial "Collected worktree"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: an unreadable issue state leaves the worktree in place" {
-    _add_worktree 21
-    _run_tick "GH_ISSUE_VIEW_FAIL=1"
-    assert_success
-    assert_output --partial "leaving its worktree in place"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: a failed collection warns and the tick continues" {
-    _add_worktree 21
-    # git refuses to remove a working tree whose .git link is gone, so this is a
-    # real removal failure rather than a mocked one. Deleting the *admin*
-    # directory instead would drop the entry from `git worktree list` entirely,
-    # and there would be nothing left to fail on.
-    rm -f "$(_worktree_path 21)/.git"
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    assert_output --partial "Leaving worktree"
-    _assert_logged "gwt spawn --wt-name issue-11"
-}
-
-@test "issue_watcher_cron: collection runs before the dispatch it frees room for" {
-    # Ordering matters twice over: the room it frees is usable in the same tick,
-    # and a collection failure must not be able to hold up a dispatch.
-    _add_worktree 21
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    local _collected="${output%%Collected worktree*}"
-    local _dispatched="${output%%dispatched*}"
-    [ "${#_collected}" -lt "${#_dispatched}" ]
-}
-
-@test "issue_watcher_cron: --dry-run collects nothing" {
-    _add_worktree 21
-    _run_tick "GH_CLOSED_ISSUES=21" -- --dry-run
-    assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-}
-
-# ---------------------------------------------------------------------------
 # PR #1456 review regressions
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: a full open-PR window is treated as unknown, not as an answer" {
+@test "avatar_issue_watcher: a full open-PR window is treated as unknown, not as an answer" {
     # 100 open PRs means the window is full; the issue's own PR may sit outside
     # it, so answering "unhandled" would reinstate the duplicate-PR failure.
     _set_filler_prs "acme/dotfiles" 100
     _run_tick
     assert_success
     assert_output --partial "cannot rule out a duplicate"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a window with room to spare still answers" {
+@test "avatar_issue_watcher: a window with room to spare still answers" {
     _set_filler_prs "acme/dotfiles" 99
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: 'Closes: #N' counts as an open PR closing the issue" {
+@test "avatar_issue_watcher: 'Closes: #N' counts as an open PR closing the issue" {
     _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes: #11"}]}'
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a cross-repo 'Closes owner/repo#N' counts too" {
+@test "avatar_issue_watcher: a cross-repo 'Closes owner/repo#N' counts too" {
     _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes acme/dotfiles#11"}]}'
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a session that cd-ed away is still counted as running" {
-    _add_worktree 11
-    _set_live_agent_moved "$(_worktree_path 11)" "${_WORK_DIR}"
-    _run_tick
-    assert_success
-    assert_output --partial "already running"
-    _refute_logged "gwt spawn"
-}
-
-@test "issue_watcher_cron: a session in a subdirectory of its worktree still counts" {
-    _add_worktree 11
-    mkdir -p "$(_worktree_path 11)/sub/dir"
-    _set_live_agent_subdir "$(_worktree_path 11)/sub/dir"
-    _run_tick
-    assert_success
-    assert_output --partial "already running"
-    _refute_logged "gwt spawn"
-}
-
-@test "issue_watcher_cron: a sibling path sharing the prefix is not counted as running" {
-    # The boundary's negative half (#1569): the running-now match is
-    # `<wt>` or `<wt>/...`, never a bare prefix, so an agent parked on
-    # `dotfiles-issue-11-10` must not make issue 11 look busy. The shared
-    # predicate lives in shell-common/lib/herdr_agent_lookup.sh — this
-    # pins that _iw_live_agents really uses it rather than a wider compare.
-    _add_worktree 11
-    _set_live_agents "$(_worktree_path 11)0"
-    _run_tick
-    assert_success
-    refute_output --partial "already running"
-}
-
-@test "issue_watcher_cron: a worktree with uncommitted work is never collected" {
-    # An issue can be closed by hand while its session still holds unsaved work.
-    # Routine hygiene must not be a data-loss path.
-    _add_worktree 21
-    printf 'unsaved\n' >"$(_worktree_path 21)/WIP.txt"
-    git -C "$(_worktree_path 21)" add WIP.txt
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    assert_output --partial "uncommitted or untracked changes"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-    [ -f "${_WORK_DIR}/dotfiles-issue-21-1/WIP.txt" ]
-}
-
-@test "issue_watcher_cron: an untracked file also blocks collection" {
-    _add_worktree 21
-    printf 'scratch\n' >"$(_worktree_path 21)/scratch.txt"
-    _run_tick "GH_CLOSED_ISSUES=21"
-    assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: the tick never collects the worktree it is standing in" {
-    _add_worktree 21
-    _run_tick "GH_CLOSED_ISSUES=21" -- --cwd "$(_worktree_path 21)"
-    assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: nor one it is standing inside" {
-    _add_worktree 21
-    mkdir -p "$(_worktree_path 21)/nested"
-    _run_tick "GH_CLOSED_ISSUES=21" -- --cwd "$(_worktree_path 21)/nested"
-    assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-21/"
-}
-
-@test "issue_watcher_cron: a raised per-tick cap cannot exceed the per-repo cap" {
+@test "avatar_issue_watcher: a raised per-tick cap cannot exceed the per-repo cap" {
     # Two already running plus a per-tick allowance of three: only one slot is
     # left in this repo, so only one issue may start.
-    local _paths=() _n
-    for _n in 21 22; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_live_agents "${_paths[@]}"
+    _set_live_agents 21 22
     _set_issues '[
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
@@ -2351,16 +2170,11 @@ _two_repo_fixture() {
     ]'
     _run_tick "IW_DISPATCH_PER_TICK=3"
     assert_success
-    [ "$(_log_count 'gwt spawn')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: a raised per-tick cap cannot exceed the global cap" {
-    local _paths=() _n
-    for _n in 21 22 23 24 25 26; do
-        _add_worktree "${_n}"
-        _paths+=("$(_worktree_path "${_n}")")
-    done
-    _set_live_agents "${_paths[@]}"
+@test "avatar_issue_watcher: a raised per-tick cap cannot exceed the global cap" {
+    _set_live_agents 21 22 23 24 25 26
     _set_issues '[
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
@@ -2370,32 +2184,32 @@ _two_repo_fixture() {
     # to hold the line: six running, seven allowed, so exactly one may start.
     _run_tick "IW_DISPATCH_PER_TICK=3" "IW_MAX_PER_REPO=9"
     assert_success
-    [ "$(_log_count 'gwt spawn')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: a non-integer cap override falls back to the default" {
+@test "avatar_issue_watcher: a non-integer cap override falls back to the default" {
     _run_tick "IW_MAX_CONCURRENT=abc"
     assert_success
     assert_output --partial "not a positive integer"
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: an empty cap override is silently the default" {
+@test "avatar_issue_watcher: an empty cap override is silently the default" {
     # Unset-vs-empty must not warn: `IW_MAX_CONCURRENT=` in a cron env is the
     # same intent as not setting it at all.
     _run_tick "IW_MAX_CONCURRENT="
     assert_success
     refute_output --partial "not a positive integer"
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
-@test "issue_watcher_cron: --help reports the effective cap, not the default" {
+@test "avatar_issue_watcher: --help reports the effective cap, not the default" {
     run env "IW_MAX_CONCURRENT=5" bash "${SCRIPT}" --help
     assert_success
     assert_output --partial "5 running in total"
 }
 
-@test "issue_watcher_cron: the global cap default stays above the per-repo cap default" {
+@test "avatar_issue_watcher: the global cap default stays above the per-repo cap default" {
     # A global cap at or below the per-repo cap can never fire while only one
     # repo is watched — it would be dead config. Both numbers are read back
     # from --help — the same readout that pins the literal defaults in
@@ -2415,7 +2229,7 @@ _two_repo_fixture() {
 # Read-only on issues
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: the tick never writes to an issue" {
+@test "avatar_issue_watcher: the tick never writes to an issue" {
     _run_tick
     assert_success
     # The gh stub refuses everything but the two read calls, so a write would
@@ -2432,8 +2246,7 @@ _two_repo_fixture() {
     assert_failure
 }
 
-@test "issue_watcher_cron: only the four read calls reach gh" {
-    _add_worktree 11
+@test "avatar_issue_watcher: only the four read calls reach gh" {
     _run_tick
     assert_success
     run grep -cE '^gh (search issues|pr list|issue view|api graphql)' "${_LOG}"
@@ -2446,45 +2259,36 @@ _two_repo_fixture() {
 # Retry + cleanup
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: a failed dispatch is retried up to three times" {
+@test "avatar_issue_watcher: a failed dispatch is retried up to three times" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    [ "$(_log_count 'gwt spawn')" -eq 3 ]
+    [ "$(_log_count 'tab create')" -eq 3 ]
     assert_output --partial "Giving up on acme/dotfiles#11 after 3 attempts"
 }
 
-@test "issue_watcher_cron: each failed attempt removes its worktree before retrying" {
+@test "avatar_issue_watcher: each failed attempt closes its tab before retrying" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    [ "$(_log_count 'gwt remove')" -eq 3 ]
-    # Nothing may survive: a leftover worktree is what the dedup check keys on,
-    # so it would retire the issue without it ever having been worked.
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-11/"
+    # Nothing may survive: a leftover iw-issue-<N> tab with an agent in it is
+    # the running-now signal, so it would hold the issue without working it.
+    [ "$(_log_count 'tab close ws-test-1:t9')" -eq 3 ]
 }
 
-@test "issue_watcher_cron: a spawn that fails after creating the worktree still cleans up" {
-    _run_tick "GWT_SPAWN_MODE=fail-after"
-    assert_failure
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-11/"
-}
-
-@test "issue_watcher_cron: a dispatch that succeeds on the second attempt keeps its worktree" {
+@test "avatar_issue_watcher: a dispatch that succeeds on the second attempt keeps its tab" {
     _run_tick "HERDR_PROMPT_FAIL_TIMES=2" "HERDR_AGENT_STATUS=idle"
     assert_success
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-11/"
+    # Every tab but the one that took the prompt is closed.
+    [ "$(_log_count 'tab close')" -eq $(($(_log_count 'tab create') - 1)) ]
 }
 
-@test "issue_watcher_cron: a tab-create failure is retried and then given up on" {
+@test "avatar_issue_watcher: a tab-create failure is retried and then given up on" {
     _run_tick "HERDR_TAB_FAIL=1"
     assert_failure
     [ "$(_log_count 'tab create')" -eq 3 ]
     assert_output --partial "herdr tab create failed"
 }
 
-@test "issue_watcher_cron: an agent-start failure closes the tab it opened" {
+@test "avatar_issue_watcher: an agent-start failure closes the tab it opened" {
     _run_tick "HERDR_START_FAIL=1"
     assert_failure
     _assert_logged "tab close ws-test-1:t9"
@@ -2499,9 +2303,9 @@ _two_repo_fixture() {
 # In cron that lost every single tick for 130 ticks running. It is a timing
 # race, not a defect in the pane, so another attempt *on the same pane* is the
 # fix — which is exactly what the outer _IW_MAX_ATTEMPTS loop cannot give: it
-# throws the worktree and the tab away and builds a new, equally cold pane.
+# throws the tab away and builds a new, equally cold pane.
 
-@test "issue_watcher_cron: a transient agent_pane_busy is retried and the issue still dispatches" {
+@test "avatar_issue_watcher: a transient agent_pane_busy is retried and the issue still dispatches" {
     _run_tick "HERDR_START_PANE_BUSY=1"
     assert_success
     # The retry is *inner*: the same tab, a second start. A second `tab create`
@@ -2515,7 +2319,7 @@ _two_repo_fixture() {
 # cost a day. The gap comes from IW_START_RETRY_SLEEP, so a hardcoded 2 would
 # read "retrying in 2s" here and fail — the message is the proof the override
 # reached the code, and with it that the bats suite pays no real wait.
-@test "issue_watcher_cron: a retried pane race names itself and its configured gap" {
+@test "avatar_issue_watcher: a retried pane race names itself and its configured gap" {
     _run_tick "HERDR_START_PANE_BUSY=1"
     assert_success
     assert_output --partial "agent_pane_busy"
@@ -2529,7 +2333,7 @@ _two_repo_fixture() {
 # settle into a poll, because only the settle has a pane to read. Asserted
 # through the message rather than a `sleep` line, which is what tells the two
 # waits apart in the call log.
-@test "issue_watcher_cron: the start retry gap defaults to 13s" {
+@test "avatar_issue_watcher: the start retry gap defaults to 13s" {
     # An empty assignment beats _run_tick's own `IW_START_RETRY_SLEEP=0` and
     # still lets `${IW_START_RETRY_SLEEP:-13}` fall through to the default.
     _run_tick "HERDR_START_PANE_BUSY=1" "IW_START_RETRY_SLEEP="
@@ -2537,7 +2341,7 @@ _two_repo_fixture() {
     assert_output --partial "retrying in 13s"
 }
 
-@test "issue_watcher_cron: the start retry gap stays env-overridable" {
+@test "avatar_issue_watcher: the start retry gap stays env-overridable" {
     _run_tick "HERDR_START_PANE_BUSY=1" "IW_START_RETRY_SLEEP=4"
     assert_success
     assert_output --partial "retrying in 4s"
@@ -2547,7 +2351,7 @@ _two_repo_fixture() {
 # The SSOT line itself, so a change that only moves the default out of the
 # ${VAR:-13} form (and with it the `0` escape the suite depends on) is caught
 # here rather than as a mysteriously slow suite.
-@test "issue_watcher_cron: both herdr wait constants are 13 and overridable" {
+@test "avatar_issue_watcher: both herdr wait constants are 13 and overridable" {
     run grep -qF -- '_IW_SETTLE_SECONDS="${IW_SETTLE_SECONDS:-13}"' "${SCRIPT}"
     assert_success
     run grep -qF -- '_IW_START_RETRY_SLEEP="${IW_START_RETRY_SLEEP:-13}"' "${SCRIPT}"
@@ -2556,7 +2360,7 @@ _two_repo_fixture() {
 
 # #1530/#1549 and #1560/#1571 were both "two of the three dispatchers were
 # fixed". The comment naming the other two is the guard against a third round.
-@test "issue_watcher_cron: the wait comments name the other two dispatchers" {
+@test "avatar_issue_watcher: the wait comments name the other two dispatchers" {
     run grep -qF -- '_PMT_SETTLE_SECONDS' "${SCRIPT}"
     assert_success
     run grep -qF -- 'PMV_SETTLE_SECONDS' "${SCRIPT}"
@@ -2567,7 +2371,7 @@ _two_repo_fixture() {
 # 'the input loop is up'" — false even when it was written, since the file was
 # already reading pane text a few hundred lines below (#1570). Pinned as an
 # absence rather than as a replacement sentence so the wording stays free.
-@test "issue_watcher_cron: the settle comment no longer claims herdr exposes no signal" {
+@test "avatar_issue_watcher: the settle comment no longer claims herdr exposes no signal" {
     run grep -qF -- 'herdr exposes no signal' "${SCRIPT}"
     assert_failure
 }
@@ -2575,7 +2379,7 @@ _two_repo_fixture() {
 # The inner retrying is bounded, and the bound is the point: cron re-runs every
 # few minutes anyway. Three inner *attempts* per outer attempt, three outer
 # attempts — the two layers are independent and both still hold.
-@test "issue_watcher_cron: a permanent agent_pane_busy stops after the inner attempt budget" {
+@test "avatar_issue_watcher: a permanent agent_pane_busy stops after the inner attempt budget" {
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
     [ "$(_log_count 'agent start')" -eq 9 ]
@@ -2584,20 +2388,18 @@ _two_repo_fixture() {
 }
 
 # Exhausting the inner budget must still fall through to _iw_cleanup_attempt —
-# a retry loop that swallowed the failure would leak a worktree and a tab per
-# outer attempt, which is the litter the issue's log already shows.
-@test "issue_watcher_cron: a start that never succeeds cleans up its worktree and tab" {
+# a retry loop that swallowed the failure would leak a tab per outer attempt,
+# which is the litter the issue's log already shows.
+@test "avatar_issue_watcher: a start that never succeeds closes its tab" {
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
     [ "$(_log_count 'tab close ws-test-1:t9')" -eq 3 ]
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-11/"
 }
 
 # The #1445/#1458 regression guard. herdr names this race precisely, on stderr;
 # `_hp_agent_start` (lib/herdr_pane.sh) used to throw that stream away, so 21 failures in the cron
 # log said only "start failed". Restoring `2>&1 >/dev/null` must make this red.
-@test "issue_watcher_cron: a failed start reports the cause herdr gave on stderr" {
+@test "avatar_issue_watcher: a failed start reports the cause herdr gave on stderr" {
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
     assert_output --partial "agent_pane_busy"
@@ -2606,7 +2408,7 @@ _two_repo_fixture() {
 
 # What herdr writes to stderr is a JSON document, so dumping it verbatim buries
 # the sentence inside braces exactly where a cron log is read in a hurry.
-@test "issue_watcher_cron: the cause line carries the message, not the raw JSON" {
+@test "avatar_issue_watcher: the cause line carries the message, not the raw JSON" {
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
     refute_output --partial '{"error"'
@@ -2615,7 +2417,7 @@ _two_repo_fixture() {
 # Only the one known race is retried. `agent_name_taken` is a named failure,
 # but it is not a race that a second attempt on the same pane can win, so it
 # ends its outer attempt at once — one start per attempt, three in all.
-@test "issue_watcher_cron: a named failure that is not the pane race is never retried" {
+@test "avatar_issue_watcher: a named failure that is not the pane race is never retried" {
     _run_tick "HERDR_START_NAME_TAKEN=1"
     assert_failure
     [ "$(_log_count 'agent start')" -eq 3 ]
@@ -2624,7 +2426,7 @@ _two_repo_fixture() {
 
 # A failure that does not name itself is not a race we understand either — the
 # same contract #1512 set on the merge-train side.
-@test "issue_watcher_cron: an unexplained start failure is not retried" {
+@test "avatar_issue_watcher: an unexplained start failure is not retried" {
     _run_tick "HERDR_START_FAIL=1"
     assert_failure
     [ "$(_log_count 'agent start')" -eq 3 ]
@@ -2638,7 +2440,7 @@ _two_repo_fixture() {
 # Both halves must survive: the code is what a human greps a cron log for
 # (`grep -c agent_pane_busy` is how #1525 was measured), the sentence is what
 # they read once they find it.
-@test "issue_watcher_cron: a stdout-only failure reports both its code and herdr's sentence" {
+@test "avatar_issue_watcher: a stdout-only failure reports both its code and herdr's sentence" {
     _run_tick "HERDR_START_NAME_TAKEN=1"
     assert_failure
     assert_output --partial "agent_name_taken"
@@ -2648,7 +2450,7 @@ _two_repo_fixture() {
 # PR #1528 review (agy, BLOCKER). When `mktemp` fails there is no capture file,
 # so no error code can be read and nothing is retryable — but the start itself
 # is still worth one attempt, and losing the cause must not cost the dispatch.
-@test "issue_watcher_cron: a start still dispatches when the stderr capture file cannot be opened" {
+@test "avatar_issue_watcher: a start still dispatches when the stderr capture file cannot be opened" {
     _install_failing_mktemp
     _run_tick
     assert_success
@@ -2658,7 +2460,7 @@ _two_repo_fixture() {
 # Same fallback on the failing side: the tick reports the failure and cleans up
 # rather than dying on the unreadable capture file, and it claims no cause it
 # could not actually read.
-@test "issue_watcher_cron: a failed start without a capture file reports no invented cause" {
+@test "avatar_issue_watcher: a failed start without a capture file reports no invented cause" {
     _install_failing_mktemp
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
@@ -2667,20 +2469,7 @@ _two_repo_fixture() {
     _assert_logged "tab close ws-test-1:t9"
 }
 
-@test "issue_watcher_cron: a spawn failure that never resolves gives up without a prompt" {
-    _run_tick "GWT_SPAWN_MODE=fail"
-    assert_failure
-    assert_output --partial "Worktree spawn failed"
-    _refute_logged "agent prompt"
-}
-
-@test "issue_watcher_cron: a spawn that fails once then succeeds still dispatches" {
-    _run_tick "GWT_SPAWN_FAIL_TIMES=1"
-    assert_success
-    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
-}
-
-@test "issue_watcher_cron: a non-stall prompt failure is not retried within the attempt" {
+@test "avatar_issue_watcher: a non-stall prompt failure is not retried within the attempt" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
     # Three attempts, one prompt each — never two prompts inside one attempt.
@@ -2691,7 +2480,7 @@ _two_repo_fixture() {
 # Stall recovery (issue #1443)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: agent_prompt_stalled is recovered by pressing Enter, never retyped" {
+@test "avatar_issue_watcher: agent_prompt_stalled is recovered by pressing Enter, never retyped" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=ok"
     assert_success
     # The stalled command is already sitting in the input box unsubmitted, so a
@@ -2702,14 +2491,14 @@ _two_repo_fixture() {
     [ "$(_log_count 'agent send-keys')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: the Enter recovery stops as soon as state_change_seq moves" {
+@test "avatar_issue_watcher: the Enter recovery stops as soon as state_change_seq moves" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=ok"
     assert_success
     assert_output --partial "state_change_seq"
     assert_output --partial "Dispatched to iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: an unresolved stall presses Enter three times and still reports the stall" {
+@test "avatar_issue_watcher: an unresolved stall presses Enter three times and still reports the stall" {
     # HERDR_SENDKEYS_MODE defaults to nobump: Enter is accepted but the input
     # loop never submits, so the counter never moves.
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
@@ -2726,7 +2515,7 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a final unresolved stall is escalated visibly instead of cleaning up the last tab" {
+@test "avatar_issue_watcher: a final unresolved stall is escalated visibly instead of cleaning up the last tab" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
     assert_failure
     _assert_logged "agent send-keys iw-dotfiles-issue-11 Enter"
@@ -2735,7 +2524,7 @@ _two_repo_fixture() {
     refute_output --partial "(unknown)"
 }
 
-@test "issue_watcher_cron: agent_prompt_stalled recovery is skipped when the agent is already working" {
+@test "avatar_issue_watcher: agent_prompt_stalled recovery is skipped when the agent is already working" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=working"
     assert_success
     [ "$(_log_count 'agent prompt')" -eq 1 ]
@@ -2744,7 +2533,7 @@ _two_repo_fixture() {
     _refute_logged "agent send-keys"
 }
 
-@test "issue_watcher_cron: a blipped seq baseline falls back to the working status" {
+@test "avatar_issue_watcher: a blipped seq baseline falls back to the working status" {
     # Regression (PR #1449 codex review, BLOCKER A): when the pre-prompt
     # `agent get` yields no state_change_seq, a sequence comparison can never
     # succeed afterwards — a one-off local herdr blip would become a permanent
@@ -2759,7 +2548,7 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a failing send-keys abandons recovery instead of burning attempts" {
+@test "avatar_issue_watcher: a failing send-keys abandons recovery instead of burning attempts" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
     assert_failure
     # One press per dispatch attempt, not three: retrying against a pane herdr
@@ -2769,7 +2558,7 @@ _two_repo_fixture() {
     assert_output --partial "pane unreachable"
 }
 
-@test "issue_watcher_cron: a broken pane is named as an outage, not booked as a strike" {
+@test "avatar_issue_watcher: a broken pane is named as an outage, not booked as a strike" {
     # PR #1449 codex review, BLOCKER B: an unreachable pane must not read as a
     # spent quota. Since #1444 that follows from the dispatch failing at all —
     # the distinct code survives only so the cron log names the real fault.
@@ -2779,7 +2568,7 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a broken pane leaves an existing strike count untouched" {
+@test "avatar_issue_watcher: a broken pane leaves an existing strike count untouched" {
     _set_limit_state "1" "0"
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
     assert_failure
@@ -2798,14 +2587,14 @@ _two_repo_fixture() {
 # `(unknown)`. These pin the code back to the name herdr gave it — the whole
 # suite above only ever passed because the stub answered on stdout.
 
-@test "issue_watcher_cron: a stall herdr reported on stderr is still named agent_prompt_stalled" {
+@test "avatar_issue_watcher: a stall herdr reported on stderr is still named agent_prompt_stalled" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle"
     assert_failure
     assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_prompt_stalled)"
     refute_output --partial "(unknown)"
 }
 
-@test "issue_watcher_cron: a stall on stderr still reaches the already-working short-circuit" {
+@test "avatar_issue_watcher: a stall on stderr still reaches the already-working short-circuit" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=working"
     assert_success
     assert_output --partial "treating as delivered"
@@ -2814,21 +2603,21 @@ _two_repo_fixture() {
     _refute_logged "agent send-keys"
 }
 
-@test "issue_watcher_cron: a stall on stderr still triggers the Enter recovery" {
+@test "avatar_issue_watcher: a stall on stderr still triggers the Enter recovery" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=ok"
     assert_success
     _assert_logged "agent send-keys iw-dotfiles-issue-11 Enter"
     assert_output --partial "Dispatched to iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: a failed send-keys outranks the stall code it recovered from" {
+@test "avatar_issue_watcher: a failed send-keys outranks the stall code it recovered from" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" "HERDR_SENDKEYS_MODE=fail"
     assert_failure
     assert_output --partial "herdr_send_keys_failed"
     refute_output --partial "(unknown)"
 }
 
-@test "issue_watcher_cron: a non-stall failure on stderr is named, not reported as unknown" {
+@test "avatar_issue_watcher: a non-stall failure on stderr is named, not reported as unknown" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
     assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_not_found)"
@@ -2844,36 +2633,30 @@ _two_repo_fixture() {
 # unconditionally. Independent of the error-code fix above on purpose — that
 # parsing is what failed in production, so it is not trusted alone.
 
-@test "issue_watcher_cron: a working agent survives a prompt failure instead of being torn down" {
+@test "avatar_issue_watcher: a working agent survives a prompt failure instead of being torn down" {
     _run_tick "HERDR_PROMPT_MODE=fail" "HERDR_AGENT_STATUS=working"
     assert_success
     # One attempt, and no teardown of the pane the agent is working in.
-    [ "$(_log_count 'gwt spawn')" -eq 1 ]
-    _refute_logged "gwt remove"
+    [ "$(_log_count 'tab create')" -eq 1 ]
     _refute_logged "tab close"
     refute_output --partial "Giving up"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    assert_output --partial "wt/issue-11/"
 }
 
-@test "issue_watcher_cron: an idle agent is still torn down and retried after a prompt failure" {
+@test "avatar_issue_watcher: an idle agent is still torn down and retried after a prompt failure" {
     # The negative half: the guard above must not become a blanket skip.
     _run_tick "HERDR_PROMPT_MODE=fail" "HERDR_AGENT_STATUS=idle"
     assert_failure
-    [ "$(_log_count 'gwt spawn')" -eq 3 ]
-    [ "$(_log_count 'gwt remove')" -eq 3 ]
+    [ "$(_log_count 'tab create')" -eq 3 ]
     [ "$(_log_count 'tab close')" -eq 3 ]
     assert_output --partial "Giving up on acme/dotfiles#11 after 3 attempts"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-11/"
 }
 
-@test "issue_watcher_cron: an unreachable agent is torn down rather than assumed working" {
+@test "avatar_issue_watcher: an unreachable agent is torn down rather than assumed working" {
     # `agent get` errors once the agent has been prompted, so the guard has no
     # status at all — an unanswered query is not evidence of work in progress.
     _run_tick "HERDR_PROMPT_MODE=fail" "HERDR_GET_FAIL_AFTER_PROMPT=1"
     assert_failure
-    [ "$(_log_count 'gwt remove')" -eq 3 ]
+    [ "$(_log_count 'tab close')" -eq 3 ]
     assert_output --partial "Giving up on acme/dotfiles#11 after 3 attempts"
 }
 
@@ -2881,31 +2664,28 @@ _two_repo_fixture() {
 # --dry-run
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: --dry-run lists the candidates it would dispatch" {
+@test "avatar_issue_watcher: --dry-run lists the candidates it would dispatch" {
     _run_tick -- --dry-run
     assert_success
     assert_output --partial "Dry run"
     assert_output --partial "acme/dotfiles#11"
 }
 
-@test "issue_watcher_cron: --dry-run creates no worktree and sends no prompt" {
+@test "avatar_issue_watcher: --dry-run opens no tab and sends no prompt" {
     _run_tick -- --dry-run
     assert_success
-    _refute_logged "gwt spawn"
-    _refute_logged "agent prompt"
     _refute_logged "tab create"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-11/"
+    _refute_logged "agent prompt"
 }
 
-@test "issue_watcher_cron: --dry-run applies the same filters as a real tick" {
+@test "avatar_issue_watcher: --dry-run applies the same filters as a real tick" {
     _issues_with_labels 11 wontfix
     _run_tick -- --dry-run
     assert_success
     assert_output --partial "No dispatchable issue"
 }
 
-@test "issue_watcher_cron: --dry-run works without herdr installed" {
+@test "avatar_issue_watcher: --dry-run works without herdr installed" {
     rm -f "${_BIN_DIR}/herdr"
     _run_tick "PATH=$(_path_without herdr)" -- --dry-run
     assert_success
@@ -2916,55 +2696,55 @@ _two_repo_fixture() {
 # Preconditions
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: missing herdr binary fails with a clear error" {
+@test "avatar_issue_watcher: missing herdr binary fails with a clear error" {
     rm -f "${_BIN_DIR}/herdr"
     _run_tick "PATH=$(_path_without herdr)"
     assert_failure
     assert_output --partial "herdr not found"
 }
 
-@test "issue_watcher_cron: a missing watch list fails with a clear error" {
+@test "avatar_issue_watcher: a missing watch list fails with a clear error" {
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json"
     assert_failure
     assert_output --partial "Watch list not found"
 }
 
-@test "issue_watcher_cron: --cwd pointing nowhere fails" {
+@test "avatar_issue_watcher: --cwd pointing nowhere fails" {
     _run_tick -- --cwd "${_WORK_DIR}/nope"
     assert_failure
     assert_output --partial "Cannot cd"
 }
 
-@test "issue_watcher_cron: a relative watch-list path resolves against --cwd" {
+@test "avatar_issue_watcher: a relative watch-list path resolves against --cwd" {
     _write_watch_file '[{"repo":"acme/dotfiles","path":"dotfiles","host":"github.com"}]'
     _run_tick -- --cwd "${_WORK_DIR}"
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 }
 
 # ---------------------------------------------------------------------------
 # Locking
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: a tick is skipped while another instance holds the lock" {
+@test "avatar_issue_watcher: a tick is skipped while another instance holds the lock" {
     _hold_lock
     _run_tick
     assert_success
     assert_output --partial "already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: the lock is released so the next tick runs" {
+@test "avatar_issue_watcher: the lock is released so the next tick runs" {
     _run_tick
     assert_success
     : >"${_LOG}"
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
     _run_tick
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-12"
+    _assert_logged "--label iw-issue-12 --no-focus"
 }
 
-@test "issue_watcher_cron: missing flock degrades to a warning, not a failure" {
+@test "avatar_issue_watcher: missing flock degrades to a warning, not a failure" {
     _run_tick "PATH=$(_path_without flock)"
     assert_success
     assert_output --partial "without single-instance protection"
@@ -2975,7 +2755,7 @@ _two_repo_fixture() {
 # Candidate-selection runtime (issue #2157, rollback removed in #2173)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: missing python3 is refused, not silently skipped" {
+@test "avatar_issue_watcher: missing python3 is refused, not silently skipped" {
     _run_tick "PATH=$(_path_without python3)"
     assert_failure
     assert_output --partial "python3 (>= 3.10) not found"
@@ -2986,20 +2766,20 @@ _two_repo_fixture() {
 # CLAUDE_CONFIG_DIR routing (issue #1393)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: dispatch routes CLAUDE_CONFIG_DIR to the default account" {
+@test "avatar_issue_watcher: dispatch routes CLAUDE_CONFIG_DIR to the default account" {
     _run_tick
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal"
 }
 
-@test "issue_watcher_cron: CLAUDE_DEFAULT_ACCOUNT selects the account dir" {
+@test "avatar_issue_watcher: CLAUDE_DEFAULT_ACCOUNT selects the account dir" {
     _make_account "${HOME}/.claude-work"
     _run_tick "CLAUDE_ENABLED_ACCOUNTS=personal work" "CLAUDE_DEFAULT_ACCOUNT=work"
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-work"
 }
 
-@test "issue_watcher_cron: internal setup mode uses ~/.claude without account resolution" {
+@test "avatar_issue_watcher: internal setup mode uses ~/.claude without account resolution" {
     printf 'internal\n' >"${HOME}/.dotfiles-setup-mode"
     _make_account "${HOME}/.claude"
     _run_tick "CLAUDE_ENABLED_ACCOUNTS="
@@ -3007,7 +2787,7 @@ _two_repo_fixture() {
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
 }
 
-@test "issue_watcher_cron: missing account directory fails fast before opening a tab" {
+@test "avatar_issue_watcher: missing account directory fails fast before opening a tab" {
     rm -rf "${HOME}/.claude-personal"
     _run_tick
     assert_failure
@@ -3021,7 +2801,7 @@ _two_repo_fixture() {
 # `agent_prompt_stalled` — a symptom that names neither the account nor the
 # cause. These pin the failure at the routing step, where the account is still
 # in hand.
-@test "issue_watcher_cron: an account with no credentials fails fast before opening a tab" {
+@test "avatar_issue_watcher: an account with no credentials fails fast before opening a tab" {
     rm -f "${HOME}/.claude-personal/.credentials.json"
     _run_tick
     assert_failure
@@ -3030,7 +2810,7 @@ _two_repo_fixture() {
     _refute_logged "agent start"
 }
 
-@test "issue_watcher_cron: an empty credentials file fails fast the same way" {
+@test "avatar_issue_watcher: an empty credentials file fails fast the same way" {
     : >"${HOME}/.claude-personal/.credentials.json"
     _run_tick
     assert_failure
@@ -3042,7 +2822,7 @@ _two_repo_fixture() {
 # leaves a truncated file that clears `-s` and still opens the pane on
 # `Not logged in` — the exact stall this check exists to name. `jq -e` is the
 # whole of the extra test; no key of the credential format is read.
-@test "issue_watcher_cron: a truncated credentials file fails fast the same way" {
+@test "avatar_issue_watcher: a truncated credentials file fails fast the same way" {
     printf '%s' '{"claudeAiOauth":{"accessToken":"te' \
         >"${HOME}/.claude-personal/.credentials.json"
     _run_tick
@@ -3051,7 +2831,7 @@ _two_repo_fixture() {
     _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a credentials file that is not JSON at all fails fast" {
+@test "avatar_issue_watcher: a credentials file that is not JSON at all fails fast" {
     printf 'not json\n' >"${HOME}/.claude-personal/.credentials.json"
     _run_tick
     assert_failure
@@ -3059,40 +2839,40 @@ _two_repo_fixture() {
     _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: the credentials check names the file it looked at" {
+@test "avatar_issue_watcher: the credentials check names the file it looked at" {
     rm -f "${HOME}/.claude-personal/.credentials.json"
     _run_tick
     assert_failure
     assert_output --partial "${HOME}/.claude-personal/.credentials.json"
 }
 
-@test "issue_watcher_cron: a logged-in account passes the credentials check" {
+@test "avatar_issue_watcher: a logged-in account passes the credentials check" {
     # The mirror of the two above — the guard must not fire on the normal path.
     _run_tick
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal"
 }
 
-@test "issue_watcher_cron: unknown account name fails fast with the available list" {
+@test "avatar_issue_watcher: unknown account name fails fast with the available list" {
     _run_tick "CLAUDE_DEFAULT_ACCOUNT=ghost"
     assert_failure
     assert_output --partial "Unknown claude account: ghost"
 }
 
-@test "issue_watcher_cron: falls back to plain ~/.claude when no multi-account setup exists" {
+@test "avatar_issue_watcher: falls back to plain ~/.claude when no multi-account setup exists" {
     _make_account "${HOME}/.claude"
     _run_tick -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT
     assert_success
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
 }
 
-@test "issue_watcher_cron: the single-account fallback still fails fast without ~/.claude" {
+@test "avatar_issue_watcher: the single-account fallback still fails fast without ~/.claude" {
     rm -rf "${HOME}/.claude" "${HOME}/.claude-personal"
     _run_tick -u CLAUDE_ENABLED_ACCOUNTS -u CLAUDE_DEFAULT_ACCOUNT
     assert_failure
 }
 
-@test "issue_watcher_cron: the account dir is resolved once for the whole cycle" {
+@test "avatar_issue_watcher: the account dir is resolved once for the whole cycle" {
     _set_issues '[
       {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
       {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
@@ -3104,7 +2884,7 @@ _two_repo_fixture() {
     _refute_logged "CLAUDE_CONFIG_DIR=${HOME}/.claude "
 }
 
-@test "issue_watcher_cron: unset HOME and XDG_STATE_HOME does not trip set -u" {
+@test "avatar_issue_watcher: unset HOME and XDG_STATE_HOME does not trip set -u" {
     local _tmp="${_WORK_DIR}/nohome-tmp"
     mkdir -p "${_tmp}"
     # Open-coded rather than via _run_tick: this test needs XDG_STATE_HOME
@@ -3134,14 +2914,14 @@ _two_repo_fixture() {
 # the second half — the default `idle` means "the dispatch landed and then
 # nothing happened", which is the quota signature.
 
-@test "issue_watcher_cron: a dispatch whose agent holds working leaves no gate state" {
+@test "avatar_issue_watcher: a dispatch whose agent holds working leaves no gate state" {
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "held 'working' for 60s"
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a confirmed dispatch that never reaches working records a strike" {
+@test "avatar_issue_watcher: a confirmed dispatch that never reaches working records a strike" {
     # The prompt landed — `agent prompt` succeeded — and a minute later the pane
     # is still idle. One /gh-flow:wave runs for minutes, so the work never
     # started.
@@ -3153,7 +2933,7 @@ _two_repo_fixture() {
     assert_output --partial '"backoff_until": "0"'
 }
 
-@test "issue_watcher_cron: an agent that reaches working and falls back records a strike" {
+@test "avatar_issue_watcher: an agent that reaches working and falls back records a strike" {
     # Working for the first two polls of the window, idle for the remaining
     # four. `working` has to be *held*, not merely touched — and the log has to
     # say which of the two failures this was.
@@ -3164,7 +2944,7 @@ _two_repo_fixture() {
     assert_output --partial '"strikes": "1"'
 }
 
-@test "issue_watcher_cron: a dispatch that never lands leaves the strike count alone" {
+@test "avatar_issue_watcher: a dispatch that never lands leaves the strike count alone" {
     # Not a strike and not a clear: an unsubmitted prompt is evidence about the
     # input loop, not about the quota (issue #1444).
     mkdir -p "${_STATE_DIR}"
@@ -3176,11 +2956,11 @@ _two_repo_fixture() {
     refute_output --partial '"strikes": "2"'
 }
 
-@test "issue_watcher_cron: two consecutive unproductive ticks close the gate" {
+@test "avatar_issue_watcher: two consecutive unproductive ticks close the gate" {
     _run_tick
     assert_success
     # A different issue next tick: strikes count consecutive *ticks*, and the
-    # first one already left a worktree behind for #11.
+    # first one already left a tab behind for #11.
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
     _run_tick
     assert_success
@@ -3190,7 +2970,7 @@ _two_repo_fixture() {
     refute_output --partial '"backoff_until": "0"'
 }
 
-@test "issue_watcher_cron: one healthy agent clears the slate for the whole tick" {
+@test "avatar_issue_watcher: one healthy agent clears the slate for the whole tick" {
     # Issue #1444, 확정 3: one account, one quota. An agent holding `working`
     # proves the account is not spent, so the tick earns no strike even though
     # its other dispatches went nowhere — those are issue-specific failures, not
@@ -3206,7 +2986,7 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: every dispatch in a tick is judged, not just the first" {
+@test "avatar_issue_watcher: every dispatch in a tick is judged, not just the first" {
     # The mirror of the test above: with none of the three holding `working` the
     # tick books exactly one strike, not one per dispatch.
     _set_issues '[
@@ -3220,7 +3000,7 @@ _two_repo_fixture() {
     assert_output --partial '"strikes": "1"'
 }
 
-@test "issue_watcher_cron: an unreadable agent status is not booked as idle" {
+@test "avatar_issue_watcher: an unreadable agent status is not booked as idle" {
     # Regression (PR #1468 codex review, BLOCKER): `_hp_agent_status` reports a
     # failed `herdr agent get` as an empty string, and the gate used to fall
     # through that into the strike branch — so one transient herdr blip during
@@ -3233,7 +3013,7 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: an unreadable deciding poll leaves an existing strike alone" {
+@test "avatar_issue_watcher: an unreadable deciding poll leaves an existing strike alone" {
     # The gate must not accumulate on unreadable evidence either — not a strike
     # and not a clear.
     mkdir -p "${_STATE_DIR}"
@@ -3245,7 +3025,7 @@ _two_repo_fixture() {
     refute_output --partial '"strikes": "2"'
 }
 
-@test "issue_watcher_cron: readable early polls do not rescue an unreadable deciding poll" {
+@test "avatar_issue_watcher: readable early polls do not rescue an unreadable deciding poll" {
     # Intermittent herdr: the first two polls answer `idle`, the remaining four
     # error. Only the poll that decides counts, and it read nothing — so the
     # early `idle` readings must not be promoted into a strike.
@@ -3259,7 +3039,7 @@ _two_repo_fixture() {
 # Evidence capture (issue #1444) — logged, never gated on
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: a strike logs the pane tail as evidence" {
+@test "avatar_issue_watcher: a strike logs the pane tail as evidence" {
     _run_tick
     assert_success
     _assert_logged "agent read iw-dotfiles-issue-11 --lines 40 --format text"
@@ -3267,7 +3047,7 @@ _two_repo_fixture() {
     assert_output --partial "5-hour limit reached"
 }
 
-@test "issue_watcher_cron: a healthy tick captures no pane evidence" {
+@test "avatar_issue_watcher: a healthy tick captures no pane evidence" {
     # The 40-line read is the evidence capture; the short one is the settle
     # poll (#1570) and runs on every fresh dispatch, healthy or not.
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
@@ -3275,7 +3055,7 @@ _two_repo_fixture() {
     _refute_logged "agent read iw-dotfiles-issue-11 --lines 40"
 }
 
-@test "issue_watcher_cron: an unreadable pane does not break the strike" {
+@test "avatar_issue_watcher: an unreadable pane does not break the strike" {
     # `agent read` answers JSON-on-stdout with exit 0 when the target is gone.
     # Logging that as if it were pane content would be worse than saying
     # nothing, and it must not disturb the verdict either way.
@@ -3287,7 +3067,7 @@ _two_repo_fixture() {
     assert_output --partial '"strikes": "1"'
 }
 
-@test "issue_watcher_cron: pane text cannot open the gate" {
+@test "avatar_issue_watcher: pane text cannot open the gate" {
     # The pane is shouting about a rate limit and the agent is working anyway.
     # The behaviour decides; the banner is a log line. A claude release that
     # reworded it changes nothing here — which is the whole reason the wording
@@ -3301,7 +3081,7 @@ _two_repo_fixture() {
 # Backoff, expiry and fail-open (issue #1436 behaviour, preserved)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: a closed gate holds the tick without dispatching" {
+@test "avatar_issue_watcher: a closed gate holds the tick without dispatching" {
     _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick
     assert_success
@@ -3309,16 +3089,14 @@ _two_repo_fixture() {
     _refute_logged "agent prompt"
 }
 
-@test "issue_watcher_cron: a held tick creates no worktree" {
+@test "avatar_issue_watcher: a held tick opens no tab" {
     _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick
     assert_success
-    _refute_logged "gwt spawn"
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-11/"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a held tick leaves the gate deadline untouched" {
+@test "avatar_issue_watcher: a held tick leaves the gate deadline untouched" {
     local _until=$(($(date +%s) + 900))
     _set_limit_state "0" "${_until}"
     _run_tick
@@ -3332,7 +3110,7 @@ _two_repo_fixture() {
     assert_output --partial "\"backoff_until\": \"${_until}\""
 }
 
-@test "issue_watcher_cron: an expired backoff reopens the gate and dispatches" {
+@test "avatar_issue_watcher: an expired backoff reopens the gate and dispatches" {
     _set_limit_state "0" "$(($(date +%s) - 60))"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
@@ -3341,14 +3119,14 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: an out-of-range future deadline is treated as expired" {
+@test "avatar_issue_watcher: an out-of-range future deadline is treated as expired" {
     _set_limit_state "0" "$(($(date +%s) + 999999))"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Rate-limit gate reopened"
 }
 
-@test "issue_watcher_cron: a corrupt gate file fails open" {
+@test "avatar_issue_watcher: a corrupt gate file fails open" {
     mkdir -p "${_STATE_DIR}"
     printf 'not json at all\n' >"${_LIMIT_FILE}"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
@@ -3356,7 +3134,7 @@ _two_repo_fixture() {
     _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: a non-numeric deadline fails open" {
+@test "avatar_issue_watcher: a non-numeric deadline fails open" {
     _set_limit_state "0" "soon"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
@@ -3364,14 +3142,14 @@ _two_repo_fixture() {
     _assert_logged "agent prompt iw-dotfiles-issue-11"
 }
 
-@test "issue_watcher_cron: a productive tick clears accumulated strikes" {
+@test "avatar_issue_watcher: a productive tick clears accumulated strikes" {
     _set_limit_state "1" "0"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a stalled dispatch with the agent working earns no strike" {
+@test "avatar_issue_watcher: a stalled dispatch with the agent working earns no strike" {
     # herdr says `agent_prompt_stalled` but the agent is already working, so
     # _iw_prompt_issue treats it as delivered — and the same `working` carries
     # it through the observation window.
@@ -3380,13 +3158,13 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a non-quota dispatch failure earns no strike" {
+@test "avatar_issue_watcher: a non-quota dispatch failure earns no strike" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: a non-quota failure leaves an existing strike untouched" {
+@test "avatar_issue_watcher: a non-quota failure leaves an existing strike untouched" {
     _set_limit_state "1" "0"
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
@@ -3399,7 +3177,7 @@ _two_repo_fixture() {
     assert_output --partial '"strikes": "1"'
 }
 
-@test "issue_watcher_cron: repeated non-quota failures never close the gate" {
+@test "avatar_issue_watcher: repeated non-quota failures never close the gate" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
     assert_output --partial "nothing to judge, gate untouched"
@@ -3413,7 +3191,7 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: repeated non-quota failures never close a gate holding a strike" {
+@test "avatar_issue_watcher: repeated non-quota failures never close a gate holding a strike" {
     mkdir -p "${_STATE_DIR}"
     printf '{ "strikes": "1", "backoff_until": "0" }\n' >"${_LIMIT_FILE}"
     _run_tick "HERDR_PROMPT_MODE=fail"
@@ -3434,7 +3212,7 @@ _two_repo_fixture() {
     assert_output --partial '"strikes": "1"'
 }
 
-@test "issue_watcher_cron: a state dir with no gate file ticks exactly as before" {
+@test "avatar_issue_watcher: a state dir with no gate file ticks exactly as before" {
     mkdir -p "${_STATE_DIR}"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
@@ -3442,7 +3220,7 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: an unwritable state dir warns but does not change the exit code" {
+@test "avatar_issue_watcher: an unwritable state dir warns but does not change the exit code" {
     mkdir -p "${_STATE_DIR}"
     chmod 500 "${_STATE_DIR}"
     _run_tick
@@ -3462,7 +3240,7 @@ _two_repo_fixture() {
 # halves of the fix: booking the casualty, retrying it ahead of fresh work, and
 # bounding those retries.
 
-@test "issue_watcher_cron: a strike books the issue it killed as a casualty" {
+@test "avatar_issue_watcher: a strike books the issue it killed as a casualty" {
     _run_tick
     assert_success
     assert_output --partial "No dispatched agent reached 'working' within 60s (1/2)"
@@ -3472,7 +3250,7 @@ _two_repo_fixture() {
     assert_output --partial "11"
 }
 
-@test "issue_watcher_cron: a dispatch that holds working is never booked as a casualty" {
+@test "avatar_issue_watcher: a dispatch that holds working is never booked as a casualty" {
     # The mirror of the test above, and the invariant that keeps the retry list
     # from filling up with issues that are perfectly healthy.
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working"
@@ -3480,7 +3258,7 @@ _two_repo_fixture() {
     [ ! -s "${_CASUALTY_FILE}" ]
 }
 
-@test "issue_watcher_cron: a reopened gate retries the casualty before a fresh issue" {
+@test "avatar_issue_watcher: a reopened gate retries the casualty before a fresh issue" {
     # #11 was killed by the outage; #12 is what the round-robin would reach for
     # next. The casualty has to get the tick's attention first — that ordering
     # is the whole fix, since the selector never comes back to a skipped issue.
@@ -3506,7 +3284,7 @@ _two_repo_fixture() {
     [ ! -s "${_CASUALTY_FILE}" ]
 }
 
-@test "issue_watcher_cron: an outage outliving the backoff does not burn the retry budget" {
+@test "avatar_issue_watcher: an outage outliving the backoff does not burn the retry budget" {
     # The regression this whole mechanism exists for. The gate reopens, the
     # quota is still spent, and nothing retried holds `working` — so the row
     # keeps every attempt it had and waits for the next reopen. Burning an
@@ -3526,7 +3304,7 @@ _two_repo_fixture() {
     assert_output --regexp 'acme/dotfiles	11	[0-9]+	0'
 }
 
-@test "issue_watcher_cron: a casualty is given up on after _IW_MAX_ATTEMPTS with the quota recovered" {
+@test "avatar_issue_watcher: a casualty is given up on after _IW_MAX_ATTEMPTS with the quota recovered" {
     # #12 recovers, which is what proves the account has quota again; #11 still
     # will not run, so its failure is now something other than the outage and
     # the attempt budget is allowed to pay for it. Seeded at 2, so this pass is
@@ -3549,10 +3327,10 @@ _two_repo_fixture() {
     [ ! -s "${_CASUALTY_FILE}" ]
 }
 
-@test "issue_watcher_cron: a casualty whose pane is gone is redispatched from scratch" {
+@test "avatar_issue_watcher: a casualty whose pane is gone is redispatched from scratch" {
     # The outage took the tab with it, so there is no pane left to re-prompt.
-    # Falling back to the ordinary dispatch path rebuilds worktree, workspace,
-    # tab and agent — and reaching it also proves the account dir resolves this
+    # Falling back to the ordinary dispatch path rebuilds workspace, tab and
+    # agent — and reaching it also proves the account dir resolves this
     # early in the tick, ahead of the candidate loop that used to own it.
     _set_limit_state "0" "$(($(date +%s) - 60))"
     _seed_casualty 11 0
@@ -3562,13 +3340,13 @@ _two_repo_fixture() {
         "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Pane for acme/dotfiles#11 is gone — redispatching from scratch"
-    _assert_logged "gwt spawn"
+    _assert_logged "tab create"
     _assert_logged "agent prompt iw-dotfiles-issue-11"
     assert_output --partial "acme/dotfiles#11 is working again"
     [ ! -s "${_CASUALTY_FILE}" ]
 }
 
-@test "issue_watcher_cron: a casualty whose repo left the watch list is dropped" {
+@test "avatar_issue_watcher: a casualty whose repo left the watch list is dropped" {
     # Nothing here can act on a repo with no local checkout, and a row that can
     # never be retried would sit in the file forever.
     _set_limit_state "0" "$(($(date +%s) - 60))"
@@ -3582,7 +3360,7 @@ _two_repo_fixture() {
     [ ! -s "${_CASUALTY_FILE}" ]
 }
 
-@test "issue_watcher_cron: an open gate does not retry casualties every tick" {
+@test "avatar_issue_watcher: an open gate does not retry casualties every tick" {
     # The retry is a gate-*reopen* event. A tick that finds the gate merely open
     # — strikes on record, no backoff running — has already had its reopen, and
     # re-prompting the same panes every three minutes would be its own outage.
@@ -3599,7 +3377,7 @@ _two_repo_fixture() {
     assert_output --partial "acme/dotfiles"
 }
 
-@test "issue_watcher_cron: a reopened gate retries its casualty even at the concurrency ceiling" {
+@test "avatar_issue_watcher: a reopened gate retries its casualty even at the concurrency ceiling" {
     # The deadlock (PR #1622 codex review). The casualty's own pane is what
     # fills the last slot: its session died with the quota, but its issue is
     # still OPEN, so the zombie reclaim — which only collects panes on CLOSED
@@ -3621,24 +3399,23 @@ _two_repo_fixture() {
 
     # Exempt, not lifted: fresh work still waits for a real slot.
     assert_output --partial "1 issue session(s) already running"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a redispatched casualty is counted before fresh work is admitted" {
-    # The stale-memo half of the same review. _iw_live_agents and
-    # _iw_issue_worktrees are both memoized once per tick, and the retry's
-    # missing-pane fallback spawns a real worktree and pane that neither memo
-    # can know about — so an uninvalidated tick would size the rest of its
+@test "avatar_issue_watcher: a redispatched casualty is counted before fresh work is admitted" {
+    # The stale-memo half of the same review. _iw_live_agents is memoized once
+    # per tick, and the retry's missing-pane fallback opens a real tab the memo
+    # cannot know about — so an uninvalidated tick would size the rest of its
     # dispatching against a count taken before the redispatch and run one over
     # _IW_MAX_CONCURRENT.
     #
-    # The pane is in `agent list` from the start while its worktree is not:
-    # that pairing is the running-now signal, so the pane only becomes visible
-    # once the redispatch below creates the worktree it is sitting in — which
-    # is precisely the mid-tick change the memos would otherwise miss.
+    # The agent is in `agent list` from the start while its tab is not: the
+    # `iw-issue-11` tab only appears in `tab list` once the redispatch below
+    # creates it — precisely the mid-tick change the memo would otherwise miss.
     _set_limit_state "0" "$(($(date +%s) - 60))"
     _seed_casualty 11 0
-    _set_live_agents "$(_worktree_path 11)"
+    _set_live_agents 11
+    mv "${_WORK_DIR}/tabs.json" "${_WORK_DIR}/tabs-after-create.json"
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
 
     _run_tick "IW_MAX_CONCURRENT=1" \
@@ -3646,12 +3423,12 @@ _two_repo_fixture() {
         "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Pane for acme/dotfiles#11 is gone — redispatching from scratch"
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
 
     # The slot the redispatch just took is visible to the ceiling check, so #12
     # waits for the next tick instead of making two sessions out of one slot.
     assert_output --partial "1 issue session(s) already running"
-    _refute_logged "gwt spawn --wt-name issue-12"
+    _refute_logged "--label iw-issue-12 --no-focus"
 }
 
 # ---------------------------------------------------------------------------
@@ -3664,7 +3441,7 @@ _two_repo_fixture() {
 # looked identical from here, and both were found by a human asking the next
 # morning rather than by the watcher saying anything.
 
-@test "issue_watcher_cron: consecutive saturated ticks notify exactly once at the threshold" {
+@test "avatar_issue_watcher: consecutive saturated ticks notify exactly once at the threshold" {
     _set_running 21 22 23 24 25 26 27
 
     _run_tick "IW_SATURATION_ALERT_TICKS=2"
@@ -3680,7 +3457,7 @@ _two_repo_fixture() {
     [ "$(_log_count 'notification show')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: a saturated tick inside the cooldown window sends no second notification" {
+@test "avatar_issue_watcher: a saturated tick inside the cooldown window sends no second notification" {
     _set_running 21 22 23 24 25 26 27
 
     _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_SATURATION_COOLDOWN_SECONDS=10800"
@@ -3698,7 +3475,7 @@ _two_repo_fixture() {
     assert_output --partial '"ticks": "2"'
 }
 
-@test "issue_watcher_cron: a freed slot clears the counter and a fresh episode alerts again" {
+@test "avatar_issue_watcher: a freed slot clears the counter and a fresh episode alerts again" {
     # The regression that matters most: without the clear, the 3h cooldown from
     # the first episode would swallow the alert for a *second, unrelated* outage
     # that started ten minutes later.
@@ -3712,7 +3489,7 @@ _two_repo_fixture() {
     _set_panes_for 21 22 23 24 25 26
     _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_MAX_PER_REPO=9"
     assert_success
-    _assert_logged "gwt spawn --wt-name issue-11"
+    _assert_logged "--label iw-issue-11 --no-focus"
     [ ! -f "${_SATURATION_FILE}" ]
 
     # Full again, well inside the old cooldown — a new incident, and it says so.
@@ -3723,7 +3500,7 @@ _two_repo_fixture() {
     [ "$(_log_count 'notification show')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: the saturation alert names every occupied issue and its agent status" {
+@test "avatar_issue_watcher: the saturation alert names every occupied issue and its agent status" {
     # F-2. The numbers alone would only restate the count the alert already
     # carries; the per-pane status is what separates "genuinely busy" from the
     # zombie tabs of #1596 without attaching to seven panes by hand.
@@ -3735,7 +3512,7 @@ _two_repo_fixture() {
     _assert_logged "acme/dotfiles#27: done"
 }
 
-@test "issue_watcher_cron: a tick where every offering repo sits at its own cap counts as saturated" {
+@test "avatar_issue_watcher: a tick where every offering repo sits at its own cap counts as saturated" {
     # The second way the slots fill up, and the one the total-concurrency hold
     # never sees: three of seven global slots used, but the only repo with
     # anything to dispatch is at its per-repo cap, so the tick starts nothing.
@@ -3747,7 +3524,7 @@ _two_repo_fixture() {
     [ "$(_log_count 'notification show')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: an alert herdr refused does not start the cooldown" {
+@test "avatar_issue_watcher: an alert herdr refused does not start the cooldown" {
     # The cooldown exists to stop a *delivered* alert repeating. Stamping it on
     # a refused one would trade one noisy warning line for three silent hours,
     # which is the outcome this whole alert exists to prevent.
@@ -3764,7 +3541,7 @@ _two_repo_fixture() {
     [ "$(_log_count 'notification show')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: an empty backlog with no repo capped clears a running episode" {
+@test "avatar_issue_watcher: an empty backlog with no repo capped clears a running episode" {
     # PR #1624 review (agy FOLLOW-UP + codex Assumption): clearing keys off
     # "did a per-repo cap block anything this tick" (_select_rc == 2), not off
     # whether a candidate happened to exist. No candidates at all and no cap
@@ -3784,7 +3561,7 @@ _two_repo_fixture() {
 # --status (issue #1441, AC 11)
 # ---------------------------------------------------------------------------
 
-@test "issue_watcher_cron: --status reports an open gate and runs no tick" {
+@test "avatar_issue_watcher: --status reports an open gate and runs no tick" {
     _run_tick -- --status
     assert_success
     assert_output --partial "Rate-limit gate open"
@@ -3792,32 +3569,32 @@ _two_repo_fixture() {
     _refute_logged "search issues repo:"
 }
 
-@test "issue_watcher_cron: --status reports gh search issues support" {
+@test "avatar_issue_watcher: --status reports gh search issues support" {
     _run_tick -- --status
     assert_success
     assert_output --partial "gh supports 'gh search issues --json'"
 }
 
-@test "issue_watcher_cron: --status reports a gh without search (#1849)" {
+@test "avatar_issue_watcher: --status reports a gh without search (#1849)" {
     _run_tick "GH_NO_SEARCH=1" -- --status
     assert_success
     assert_output --partial "gh lacks 'gh search issues --json'"
 }
 
-@test "issue_watcher_cron: --status tells a missing gh from an outdated one" {
+@test "avatar_issue_watcher: --status tells a missing gh from an outdated one" {
     rm -f "${_BIN_DIR}/gh"
     _run_tick "PATH=$(_path_without gh)" -- --status
     assert_success
     assert_output --partial "gh not found on PATH"
 }
 
-@test "issue_watcher_cron: --status names the state file it read" {
+@test "avatar_issue_watcher: --status names the state file it read" {
     _run_tick -- --status
     assert_success
     assert_output --partial "rate-limit.json"
 }
 
-@test "issue_watcher_cron: --status reports a closed gate with the time left" {
+@test "avatar_issue_watcher: --status reports a closed gate with the time left" {
     _set_limit_state "0" "$(($(date +%s) + 900))"
     _run_tick -- --status
     assert_success
@@ -3826,7 +3603,7 @@ _two_repo_fixture() {
     _refute_logged "agent prompt"
 }
 
-@test "issue_watcher_cron: --status reports accumulated strikes while the gate is open" {
+@test "avatar_issue_watcher: --status reports accumulated strikes while the gate is open" {
     _set_limit_state "1" "0"
     _run_tick -- --status
     assert_success
@@ -3834,7 +3611,7 @@ _two_repo_fixture() {
     assert_output --partial "Rate-limit gate open"
 }
 
-@test "issue_watcher_cron: --status leaves an expired gate file on disk" {
+@test "avatar_issue_watcher: --status leaves an expired gate file on disk" {
     _set_limit_state "0" "$(($(date +%s) - 60))"
     _run_tick -- --status
     assert_success
@@ -3844,14 +3621,14 @@ _two_repo_fixture() {
     [ -f "${_LIMIT_FILE}" ]
 }
 
-@test "issue_watcher_cron: --status treats an out-of-range deadline as expired" {
+@test "avatar_issue_watcher: --status treats an out-of-range deadline as expired" {
     _set_limit_state "0" "$(($(date +%s) + 999999))"
     _run_tick -- --status
     assert_success
     assert_output --partial "Rate-limit gate open"
 }
 
-@test "issue_watcher_cron: --status fails open on a corrupt gate file" {
+@test "avatar_issue_watcher: --status fails open on a corrupt gate file" {
     mkdir -p "${_STATE_DIR}"
     printf 'not json at all\n' >"${_LIMIT_FILE}"
     _run_tick -- --status
@@ -3859,7 +3636,7 @@ _two_repo_fixture() {
     assert_output --partial "unreadable"
 }
 
-@test "issue_watcher_cron: --status reports a saturation episode already in progress" {
+@test "avatar_issue_watcher: --status reports a saturation episode already in progress" {
     # The command a human runs after the alert wakes them: how long have the
     # slots been full, and has the alert already fired for this episode.
     _set_saturation_state 4 0
@@ -3870,7 +3647,7 @@ _two_repo_fixture() {
     assert_output --partial "no alert sent yet"
 }
 
-@test "issue_watcher_cron: --status reports the actual remaining cooldown, not the cooldown's fixed length" {
+@test "avatar_issue_watcher: --status reports the actual remaining cooldown, not the cooldown's fixed length" {
     # PR #1624 review (codex BLOCKER + agy FOLLOW-UP): the line used to print
     # IW_SATURATION_COOLDOWN_SECONDS verbatim regardless of elapsed time, so a
     # cooldown 1h into its 3h window still read as "next after 180m" — never
@@ -3882,27 +3659,27 @@ _two_repo_fixture() {
     refute_output --partial "180m"
 }
 
-@test "issue_watcher_cron: --status reports the cooldown as elapsed once it has passed" {
+@test "avatar_issue_watcher: --status reports the cooldown as elapsed once it has passed" {
     _set_saturation_state 20 "$(($(date +%s) - 20000))"
     _run_tick "IW_SATURATION_ALERT_TICKS=20" "IW_SATURATION_COOLDOWN_SECONDS=10800" -- --status
     assert_success
     assert_output --partial "cooldown elapsed"
 }
 
-@test "issue_watcher_cron: --status reports no saturation episode when there is no counter file" {
+@test "avatar_issue_watcher: --status reports no saturation episode when there is no counter file" {
     _run_tick -- --status
     assert_success
     assert_output --partial "No saturation episode"
 }
 
-@test "issue_watcher_cron: --status does not take the tick lock" {
+@test "avatar_issue_watcher: --status does not take the tick lock" {
     _hold_lock
     _run_tick -- --status
     assert_success
     refute_output --partial "already running"
 }
 
-@test "issue_watcher_cron: --status answers even without herdr on PATH" {
+@test "avatar_issue_watcher: --status answers even without herdr on PATH" {
     rm -f "${_BIN_DIR}/herdr"
     _run_tick "PATH=$(_path_without herdr)" -- --status
     assert_success
@@ -3921,7 +3698,7 @@ _two_repo_fixture() {
 # child suite under exactly that stdin and assert it comes back red *and*
 # bounded, so the harness can never go back to swallowing its own failures.
 
-@test "issue_watcher_cron: a red assertion after a healthy tick reports not ok" {
+@test "avatar_issue_watcher: a red assertion after a healthy tick reports not ok" {
     _run_child_suite <<'PROBE'
 @test "probe: healthy tick then a red assertion" {
     _run_tick
@@ -3933,7 +3710,7 @@ PROBE
     assert_output --partial "not ok 1 probe: healthy tick then a red assertion"
 }
 
-@test "issue_watcher_cron: a red assertion after a failed dispatch reports not ok" {
+@test "avatar_issue_watcher: a red assertion after a failed dispatch reports not ok" {
     _run_child_suite <<'PROBE'
 @test "probe: failed dispatch then a red assertion" {
     _run_tick "HERDR_PROMPT_MODE=fail"
@@ -3945,7 +3722,7 @@ PROBE
     assert_output --partial "not ok 1 probe: failed dispatch then a red assertion"
 }
 
-@test "issue_watcher_cron: a red assertion without a tick still reports not ok" {
+@test "avatar_issue_watcher: a red assertion without a tick still reports not ok" {
     # The control: this shape always reported red, and must keep doing so —
     # it is what proves the two cases above measure the tick, not bats.
     _run_child_suite <<'PROBE'
@@ -3958,7 +3735,7 @@ PROBE
     assert_output --partial "not ok 1 probe: no tick, just a red assertion"
 }
 
-@test "issue_watcher_cron: a green suite stays green on a never-EOF stdin" {
+@test "avatar_issue_watcher: a green suite stays green on a never-EOF stdin" {
     # The other half of the guarantee: the fix must not have bought a bounded
     # red run by breaking the passing path. A full tick, same stdin, still 0.
     _run_child_suite <<'PROBE'
@@ -3987,7 +3764,7 @@ metadata:
   agent-factory:
     kind: item'
 
-@test "issue_watcher_cron: an installed, enabled gh-flow plugin dispatches /gh-flow:wave" {
+@test "avatar_issue_watcher: an installed, enabled gh-flow plugin dispatches /gh-flow:wave" {
     printf '{"enabledPlugins":{"gh-flow@test":true}}\n' >"${HOME}/.claude-personal/settings.json"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _run_tick
@@ -3996,7 +3773,7 @@ metadata:
     _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
-@test "issue_watcher_cron: a disabled gh-flow plugin falls through to the flat copy" {
+@test "avatar_issue_watcher: a disabled gh-flow plugin falls through to the flat copy" {
     printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.json"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _run_tick
@@ -4004,7 +3781,7 @@ metadata:
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
 }
 
-@test "issue_watcher_cron: settings.local.json disabling the plugin falls through to the flat copy" {
+@test "avatar_issue_watcher: settings.local.json disabling the plugin falls through to the flat copy" {
     printf '{"enabledPlugins":{"gh-flow@test":true}}\n' >"${HOME}/.claude-personal/settings.json"
     printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.local.json"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
@@ -4013,22 +3790,22 @@ metadata:
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
 }
 
-@test "issue_watcher_cron: a disabled plugin with no flat copy dispatches nothing" {
+@test "avatar_issue_watcher: a disabled plugin with no flat copy dispatches nothing" {
     printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.json"
     _run_tick
     assert_failure
     assert_output --partial "has no /gh-flow:wave entry point"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
 }
 
-@test "issue_watcher_cron: a malformed settings.json leaves an installed plugin enabled" {
+@test "avatar_issue_watcher: a malformed settings.json leaves an installed plugin enabled" {
     printf '{not json\n' >"${HOME}/.claude-personal/settings.json"
     _run_tick
     assert_success
     _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
-@test "issue_watcher_cron: no plugin dispatches the Agent Factory copy by its anchor" {
+@test "avatar_issue_watcher: no plugin dispatches the Agent Factory copy by its anchor" {
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _run_tick
@@ -4037,7 +3814,7 @@ metadata:
     assert_output --partial "Dispatched to iw-dotfiles-issue-11: /issue-af07 11"
 }
 
-@test "issue_watcher_cron: two anchored copies dispatch nothing and create no worktree" {
+@test "avatar_issue_watcher: two anchored copies dispatch nothing and open no tab" {
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _write_skill "${HOME}/.claude-personal" issue-af08 "name: issue-af08
@@ -4045,12 +3822,12 @@ description: Use for /gh-flow:wave."
     _run_tick
     assert_failure
     assert_output --partial "several /gh-flow:wave entry points"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
     _refute_logged "tab create"
     _refute_logged "agent prompt"
 }
 
-@test "issue_watcher_cron: no anchored copy dispatches nothing and creates no worktree" {
+@test "avatar_issue_watcher: no anchored copy dispatches nothing and opens no tab" {
     rm -rf "${HOME}/.claude-personal/plugins"
     # Mentions the chain without the slash form — must not count as the anchor.
     _write_skill "${HOME}/.claude-personal" wave-af05 "name: wave-af05
@@ -4058,13 +3835,13 @@ description: Carry one issue through gh-flow:wave, then via gh-flow:wave again."
     _run_tick
     assert_failure
     assert_output --partial "has no /gh-flow:wave entry point"
-    _refute_logged "gwt spawn"
+    _refute_logged "tab create"
     _refute_logged "agent prompt"
     # Logged once for the tick, not once per attempt.
     [ "$(printf '%s\n' "${output}" | grep -c 'has no /gh-flow:wave entry point')" -eq 1 ]
 }
 
-@test "issue_watcher_cron: a casualty re-prompt sends the resolved entry point" {
+@test "avatar_issue_watcher: a casualty re-prompt sends the resolved entry point" {
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _set_limit_state "0" "$(($(date +%s) - 60))"
@@ -4078,7 +3855,7 @@ description: Carry one issue through gh-flow:wave, then via gh-flow:wave again."
     _refute_logged "/gh-flow:wave 11"
 }
 
-@test "issue_watcher_cron: a flat copy anchored on the retired /gh-flow:issue alias is not an entry point" {
+@test "avatar_issue_watcher: a flat copy anchored on the retired /gh-flow:issue alias is not an entry point" {
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af03 "name: issue-af03
 description: Use for /gh-flow:issue."
@@ -4098,7 +3875,7 @@ _cwd_repo() {
     _RUN_DIR="${_REPO_DIR}"
 }
 
-@test "issue_watcher_cron: cwd mode dry-runs the current repo with no watch list" {
+@test "avatar_issue_watcher: cwd mode dry-runs the current repo with no watch list" {
     _cwd_repo "https://github.com/acme/dotfiles.git"
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
     assert_success
@@ -4107,7 +3884,7 @@ _cwd_repo() {
     assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
 }
 
-@test "issue_watcher_cron: cwd mode ignores the watch-list file's other repos" {
+@test "avatar_issue_watcher: cwd mode ignores the watch-list file's other repos" {
     _make_repo "${_WORK_DIR}/other"
     _write_watch_file '[{"repo":"acme/other","path":"'"${_WORK_DIR}/other"'"}]'
     _set_issues '[{"number":21,"repository":{"nameWithOwner":"acme/other"},"labels":[]}]'
@@ -4117,7 +3894,7 @@ _cwd_repo() {
     assert_output --partial "No dispatchable issue"
 }
 
-@test "issue_watcher_cron: cwd mode reads a GHES scp-style origin from a subdirectory" {
+@test "avatar_issue_watcher: cwd mode reads a GHES scp-style origin from a subdirectory" {
     _cwd_repo "git@ghes.example.com:acme/dotfiles.git"
     mkdir -p "${_REPO_DIR}/sub"
     _RUN_DIR="${_REPO_DIR}/sub"
@@ -4126,14 +3903,14 @@ _cwd_repo() {
     assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, ghes.example.com)"
 }
 
-@test "issue_watcher_cron: cwd mode reads an ssh:// origin with a port" {
+@test "avatar_issue_watcher: cwd mode reads an ssh:// origin with a port" {
     _cwd_repo "ssh://git@ghes.example.com:2222/acme/dotfiles"
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
     assert_success
     assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, ghes.example.com)"
 }
 
-@test "issue_watcher_cron: cwd mode with an unparsable origin fails without falling back" {
+@test "avatar_issue_watcher: cwd mode with an unparsable origin fails without falling back" {
     _cwd_repo "/srv/git/dotfiles"
     _run_tick -- --dry-run
     assert_failure
@@ -4141,14 +3918,14 @@ _cwd_repo() {
     refute_output --partial "Dry run"
 }
 
-@test "issue_watcher_cron: --cwd keeps the watch-list mode even inside a repo" {
+@test "avatar_issue_watcher: --cwd keeps the watch-list mode even inside a repo" {
     _cwd_repo "https://github.com/acme/dotfiles.git"
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --cwd "${_REPO_DIR}" --dry-run
     assert_failure
     assert_output --partial "Watch list not found"
 }
 
-@test "issue_watcher_cron: a repo without origin keeps the watch-list mode" {
+@test "avatar_issue_watcher: a repo without origin keeps the watch-list mode" {
     _RUN_DIR="${_REPO_DIR}"
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
     assert_failure
@@ -4163,14 +3940,14 @@ _watch_json() {
     jq -c "$1" "${_WATCH_FILE}"
 }
 
-@test "issue_watcher_cron: watch list reports a missing file" {
+@test "avatar_issue_watcher: watch list reports a missing file" {
     rm -f "${_WATCH_FILE}"
     _run_tick -- watch list
     assert_success
     assert_output --partial "Watch list not found: ${_WATCH_FILE}"
 }
 
-@test "issue_watcher_cron: watch list prints the entries and touches no gh/herdr" {
+@test "avatar_issue_watcher: watch list prints the entries and touches no gh/herdr" {
     _run_tick -- watch list
     assert_success
     assert_output --partial "${_WATCH_FILE}"
@@ -4178,14 +3955,34 @@ _watch_json() {
     [ ! -s "${_LOG}" ]
 }
 
-@test "issue_watcher_cron: watch add creates a missing file as a bare array" {
+@test "avatar_issue_watcher: watch add creates a missing file as a bare array" {
     rm -f "${_WATCH_FILE}"
     _run_tick -- watch add acme/new --path "${_WORK_DIR}" --host ghes.example.com
     assert_success
     [ "$(_watch_json '.')" = '[{"repo":"acme/new","path":"'"${_WORK_DIR}"'","host":"ghes.example.com"}]' ]
 }
 
-@test "issue_watcher_cron: watch add with no argument adds the current checkout" {
+@test "avatar_issue_watcher: watch add creates the default file and its parent dirs" {
+    # Empty override = default path, inside the sandbox $HOME.
+    local _default="${HOME}/.avatars/issue-watcher/watched-repos.json"
+    [ ! -e "${HOME}/.avatars" ]
+    _run_tick IW_WATCHED_REPOS= -- watch add acme/new --path "${_WORK_DIR}"
+    assert_success
+    assert_output --partial "in ${_default}"
+    [ "$(jq -c '.[0].repo' "${_default}")" = '"acme/new"' ]
+}
+
+@test "avatar_issue_watcher: the old agent-factory watch list is never read" {
+    local _old="${HOME}/.agent-factory/avatars/issue-watcher/watched-repos.json"
+    mkdir -p "$(dirname "${_old}")"
+    printf '%s' '[{"repo":"acme/legacy","path":"/x","host":"github.com"}]' >"${_old}"
+    _run_tick IW_WATCHED_REPOS= -- watch list
+    assert_success
+    assert_output --partial "Watch list not found: ${HOME}/.avatars/issue-watcher/watched-repos.json"
+    refute_output --partial "acme/legacy"
+}
+
+@test "avatar_issue_watcher: watch add with no argument adds the current checkout" {
     rm -f "${_WATCH_FILE}"
     _cwd_repo "git@github.com:acme/dotfiles.git"
     _run_tick -- watch add
@@ -4193,7 +3990,7 @@ _watch_json() {
     [ "$(_watch_json '.[0] | [.repo, .path, .host]')" = '["acme/dotfiles","'"${_REPO_DIR}"'","github.com"]' ]
 }
 
-@test "issue_watcher_cron: watch add of a listed repo updates it without a duplicate" {
+@test "avatar_issue_watcher: watch add of a listed repo updates it without a duplicate" {
     _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"/old","host":"github.com","verify_skill":"v"}],"note":1}'
     _run_tick -- watch add acme/dotfiles --path "${_WORK_DIR}" --host ghes.example.com
     assert_success
@@ -4203,7 +4000,7 @@ _watch_json() {
     [ "$(_watch_json '.note')" = "1" ]
 }
 
-@test "issue_watcher_cron: watch add backs up the old file and leaves no temp file" {
+@test "avatar_issue_watcher: watch add backs up the old file and leaves no temp file" {
     cp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
     _run_tick -- watch add acme/new --path "${_WORK_DIR}"
     assert_success
@@ -4212,20 +4009,20 @@ _watch_json() {
     [ -z "$(find "${_WORK_DIR}" -maxdepth 1 -name 'watched-repos.json.tmp.*')" ]
 }
 
-@test "issue_watcher_cron: watch add of a new repo needs a path outside its checkout" {
+@test "avatar_issue_watcher: watch add of a new repo needs a path outside its checkout" {
     _run_tick -- watch add acme/new
     assert_failure
     assert_output --partial "pass --path"
 }
 
-@test "issue_watcher_cron: watch add with no argument outside a repo fails with usage" {
+@test "avatar_issue_watcher: watch add with no argument outside a repo fails with usage" {
     _run_tick -- watch add
     assert_failure
     assert_output --partial "not a git checkout"
-    assert_output --partial "Usage: issue_watcher_cron.sh watch"
+    assert_output --partial "Usage: avatar_issue_watcher.sh watch"
 }
 
-@test "issue_watcher_cron: watch add and remove leave broken JSON untouched" {
+@test "avatar_issue_watcher: watch add and remove leave broken JSON untouched" {
     _write_watch_file '{not json'
     cp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
     _run_tick -- watch add acme/new --path "${_WORK_DIR}"
@@ -4239,14 +4036,14 @@ _watch_json() {
     [ ! -e "${_WATCH_FILE}.bak-$(date +%Y%m%d)" ]
 }
 
-@test "issue_watcher_cron: watch remove drops the repo and keeps the others' fields" {
+@test "avatar_issue_watcher: watch remove drops the repo and keeps the others' fields" {
     _write_watch_file '[{"repo":"acme/dotfiles","path":"/a"},{"repo":"acme/x","path":"/b","verify_skill":"v"}]'
     _run_tick -- watch remove acme/dotfiles
     assert_success
     [ "$(_watch_json '.')" = '[{"repo":"acme/x","path":"/b","verify_skill":"v"}]' ]
 }
 
-@test "issue_watcher_cron: watch remove with no argument removes the current checkout" {
+@test "avatar_issue_watcher: watch remove with no argument removes the current checkout" {
     _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"/a"},{"repo":"acme/x","path":"/b"}]}'
     _cwd_repo "https://github.com/acme/dotfiles"
     _run_tick -- watch remove
@@ -4254,7 +4051,7 @@ _watch_json() {
     [ "$(_watch_json '.')" = '{"repos":[{"repo":"acme/x","path":"/b"}]}' ]
 }
 
-@test "issue_watcher_cron: watch remove of an unlisted repo fails and changes nothing" {
+@test "avatar_issue_watcher: watch remove of an unlisted repo fails and changes nothing" {
     cp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
     _run_tick -- watch remove acme/nope
     assert_failure
@@ -4262,13 +4059,13 @@ _watch_json() {
     cmp "${_WATCH_FILE}" "${_WORK_DIR}/before.json"
 }
 
-@test "issue_watcher_cron: an unknown watch command fails with usage" {
+@test "avatar_issue_watcher: an unknown watch command fails with usage" {
     _run_tick -- watch frob
     assert_failure
     assert_output --partial "Unknown watch command: frob"
 }
 
-@test "issue_watcher_cron: watch add edits a symlinked watch list at its target" {
+@test "avatar_issue_watcher: watch add edits a symlinked watch list at its target" {
     mv "${_WATCH_FILE}" "${_WORK_DIR}/real.json"
     ln -s "${_WORK_DIR}/real.json" "${_WATCH_FILE}"
     _run_tick -- watch add acme/new --path "${_WORK_DIR}"
@@ -4277,14 +4074,14 @@ _watch_json() {
     [ "$(jq -c 'length' "${_WORK_DIR}/real.json")" = "2" ]
 }
 
-@test "issue_watcher_cron: cwd mode resolves an ssh config alias to its real host" {
+@test "avatar_issue_watcher: cwd mode resolves an ssh config alias to its real host" {
     _cwd_repo "git@gh-work:acme/dotfiles.git"
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
     assert_success
     assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
 }
 
-@test "issue_watcher_cron: cwd mode keeps github.com when ssh routes it via ssh.github.com" {
+@test "avatar_issue_watcher: cwd mode keeps github.com when ssh routes it via ssh.github.com" {
     _cwd_repo "git@github.com:acme/dotfiles.git"
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
     assert_success
@@ -4292,7 +4089,7 @@ _watch_json() {
     refute_output --partial "ssh.github.com"
 }
 
-@test "issue_watcher_cron: cwd mode maps an ssh:// origin naming ssh.github.com to github.com" {
+@test "avatar_issue_watcher: cwd mode maps an ssh:// origin naming ssh.github.com to github.com" {
     _cwd_repo "ssh://git@ssh.github.com:443/acme/dotfiles.git"
     _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
     assert_success
@@ -4300,7 +4097,7 @@ _watch_json() {
     refute_output --partial "ssh.github.com"
 }
 
-@test "issue_watcher_cron: an unparsable origin's error drops embedded credentials" {
+@test "avatar_issue_watcher: an unparsable origin's error drops embedded credentials" {
     _cwd_repo "https://user:s3cret@ghes.example.com/a/b/c"
     _run_tick -- --dry-run
     assert_failure
@@ -4308,7 +4105,7 @@ _watch_json() {
     refute_output --partial "s3cret"
 }
 
-@test "issue_watcher_cron: watch add from a worktree keeps a listed entry's path" {
+@test "avatar_issue_watcher: watch add from a worktree keeps a listed entry's path" {
     _cwd_repo "https://github.com/acme/dotfiles"
     _add_worktree 11
     _RUN_DIR="$(_worktree_path 11)"

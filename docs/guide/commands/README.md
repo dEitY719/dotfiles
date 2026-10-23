@@ -19,6 +19,7 @@ rg "fzf 피커" docs/guide/commands/
 
 - [agy](./agy.md)
 - [apt](./apt.md)
+- [avatar-issue-watcher](./avatar-issue-watcher.md)
 - [bat](./bat.md)
 - [bun](./bun.md)
 - [category](./category.md)
@@ -49,7 +50,6 @@ rg "fzf 피커" docs/guide/commands/
 - [herdr](./herdr.md)
 - [hermes](./hermes.md)
 - [hook](./hook.md)
-- [issue-watcher-cron](./issue-watcher-cron.md)
 - [jetbrain](./jetbrain.md)
 - [litellm](./litellm.md)
 - [llm-wiki](./llm-wiki.md)

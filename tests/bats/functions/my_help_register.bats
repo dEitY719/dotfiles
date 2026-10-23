@@ -149,25 +149,44 @@ FIXTURE_CHECK='
 }
 
 # my-help falls back to calling a same-named *function* when no <name>_help
-# exists, so before issue_watcher_cron_help was registered `my-help
-# issue_watcher_cron` ran a real watcher tick. Stub the tick and pin that both
+# exists, so before avatar_issue_watcher_help was registered `my-help
+# avatar_issue_watcher` ran a real watcher tick. Stub the tick and pin that both
 # spellings now resolve to the help topic instead.
 IWC_SCRIPT='
-    issue_watcher_cron() { echo "TICK-RAN"; }
-    my_help_impl issue-watcher-cron
-    my_help_impl issue_watcher_cron
+    avatar_issue_watcher() { echo "TICK-RAN"; }
+    my_help_impl avatar-issue-watcher
+    my_help_impl avatar_issue_watcher
 '
 
-@test "bash: my-help issue-watcher-cron shows the help topic, never runs the tick" {
+@test "bash: my-help avatar-issue-watcher shows the help topic, never runs the tick" {
     run_in_bash "$IWC_SCRIPT"
     assert_success
     refute_output --partial "TICK-RAN"
-    assert_output --partial "issue-watcher-cron-help"
+    assert_output --partial "avatar-issue-watcher-help"
 }
 
-@test "zsh: my-help issue-watcher-cron shows the help topic, never runs the tick" {
+@test "zsh: my-help avatar-issue-watcher shows the help topic, never runs the tick" {
     run_in_zsh "$IWC_SCRIPT"
     assert_success
     refute_output --partial "TICK-RAN"
-    assert_output --partial "issue-watcher-cron-help"
+    assert_output --partial "avatar-issue-watcher-help"
+}
+
+# The examples section: listed in the summary and --list, reachable by name,
+# and folded into --all.
+@test "bash: avatar-issue-watcher-help exposes the examples section" {
+    run_in_bash '
+        avatar_issue_watcher_help
+        avatar_issue_watcher_help --list
+        echo "--- examples"
+        avatar_issue_watcher_help examples
+        echo "--- all"
+        avatar_issue_watcher_help --all
+    '
+    assert_success
+    assert_output --partial "examples: manual runs"
+    assert_output --partial "aicron add avatar-issue-watcher --schedule"
+    assert_output --partial "watch remove dEitY719/equinest"
+    assert_output --partial "cwd mode"
+    [ "$(printf '%s\n' "$output" | grep -c "aicron run avatar-issue-watcher --dry-run")" -eq 2 ]
 }
