@@ -943,14 +943,6 @@ _iw_live_agents() {
     [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
 }
 
-# Raw <owner/repo> issue <number> state fetch. The only place the GH_HOST /
-# --json shape is written. Callers decide what a failed read means for them —
-# this just relays it.
-_iw_issue_state() {
-    GH_HOST="$(_iw_repo_host "$1")" gh issue view "$2" --repo "$1" \
-        --json state -q .state
-}
-
 # 0 only when GitHub says <owner/repo> issue <number> is CLOSED. A failed or
 # unparsable read answers "no" on purpose: the caller reclaims a concurrency
 # slot on a yes, and an unanswered question must never be the reason anything
@@ -962,7 +954,8 @@ _iw_issue_state() {
 _iw_issue_closed() {
     local _state
 
-    _state=$(_iw_issue_state "$1" "$2" </dev/null 2>/dev/null) || return 1
+    _state=$(GH_HOST="$(_iw_repo_host "$1")" gh issue view "$2" --repo "$1" \
+        --json state -q .state </dev/null 2>/dev/null) || return 1
     [ "${_state}" = "CLOSED" ]
 }
 
