@@ -12,15 +12,16 @@
 #   4) repo 라운드로빈 · 이슈 번호 오름차순으로 후보 정렬
 #   5) 이미 실행 중 / 이미 처리됨(이슈를 닫는 open PR) / blockedBy OPEN 스킵
 #   6) tick 당 최대 _IW_DISPATCH_PER_TICK 건만, watch list 의 repo path 를 cwd 로
-#      herdr tab(`iw-issue-<N>`) + claude agent 생성 — 워크트리는 만들지 않는다
+#      herdr tab(`iw-<repo>-issue-<N>`, agent 이름과 동일) + claude agent 생성 — 워크트리는 만들지 않는다
 #   7) `/gh-flow:wave <N>` 프롬프트 전달 — 워크트리(wt/issue-<N>/<idx>)는 스킬이
 #      세션 안에서 만든다
 # 토큰 한도 게이트가 닫혀 있으면 사이클 전체를 보류한다 (issue #1436, #1444).
 #
 # "실행 중" = repo 의 herdr workspace 안에 label 이 정확히 `issue-<N>`(사용자가
-# 직접 연 탭) 또는 `iw-issue-<N>`(watcher 가 연 탭) 인 tab 이 있고 그 tab 에
-# agent 가 있음. 수동 탭도 인정하므로 사용자가 이미 작업 중인 이슈는 다시
-# 디스패치하지 않는다.
+# 직접 연 탭) 또는 그 repo 의 `iw-<repo>-issue-<N>`(watcher 가 연 탭) 인 tab 이
+# 있고 그 tab 에 agent 가 있음. 수동 탭도 인정하므로 사용자가 이미 작업 중인
+# 이슈는 다시 디스패치하지 않는다. 수동 탭은 repo 를 모르므로 같은 workspace 를
+# 공유하는 모든 repo 의 #N 을 막고, watcher 탭은 label 의 repo 에만 귀속된다.
 #
 # 정리(검토 후 /exit, 워크트리 삭제, 탭 종료)는 사용자가 수동으로 한다 — tick 은
 # 워크트리도 탭도 회수하지 않는다(실패한 디스패치 시도의 탭만 닫는다).
@@ -817,8 +818,8 @@ _iw_watch_cmd() {
 # all — /gh-flow:wave creates its own `wt/issue-<n>/<idx>` inside the session,
 # and the user removes it after reviewing the result:
 #
-#   running now  -> an `issue-<N>` or `iw-issue-<N>` herdr tab with an agent
-#                   in it, inside the repo's workspace
+#   running now  -> an `issue-<N>` or `iw-<repo>-issue-<N>` herdr tab with an
+#                   agent in it, inside the repo's workspace
 #   handled      -> GitHub: an open PR that closes the issue
 #   collectable  -> nothing; closing tabs and removing worktrees is manual
 #
@@ -835,23 +836,27 @@ _IW_LIVE_AGENTS_LOADED=0
 # Emit `<owner/repo><TAB><number>` for every issue with a live session.
 # Non-zero when herdr could not be asked at all.
 #
-# A session is a tab labelled exactly `issue-<N>` (opened by hand) or
-# `iw-issue-<N>` (opened by this tick) inside the repo's workspace
-# (_iw_workspace_label), with at least one agent whose `tab_id` is that tab.
-# Both labels count, so an issue the user is already working by hand is never
+# A session is a tab inside the repo's workspace (_iw_workspace_label), with at
+# least one agent whose `tab_id` is that tab, labelled exactly either
+#
+#   iw-<repo>-issue-<N>  opened by this tick — the label is the agent name
+#                        (_iw_agent_name), so it belongs to that one repo even
+#                        when several watched repos share the workspace
+#   issue-<N>            opened by hand — names no repo, so it belongs to #N of
+#                        every repo sharing the workspace
+#
+# Both count, so an issue the user is already working by hand is never
 # dispatched a second time.
 #
 # Each row carries the tab id(s) behind it (`<repo>\t<number>\t<tab_ids>`), so
 # the global count is of distinct tabs, not of rows.
 #
-# shortcut: watched repos sharing one workspace (same path) cannot be told
-# apart — one `iw-issue-12` tab there yields a row for #12 of *every* such
-# repo. The global count is fixed (distinct tab ids, so 15 repos under one
-# skills/ path do not read one tab as 15 sessions), but the rest remains: #12
-# of each sharing repo is skipped as "already running", the tab counts once
-# against each sharing repo's per-repo cap, and a stopped tab on a closed issue
-# costs one `gh issue view` per sharing repo. Upgrade by putting the repo slug
-# in the tab label (`iw-<owner>-<repo>-issue-12`) when that bites.
+# shortcut: a hand-made `issue-<N>` tab in a workspace several watched repos
+# share (same path) cannot be told apart — it yields a row for #N of *every*
+# such repo: #N of each is skipped as "already running", the tab counts once
+# against each one's per-repo cap, and a stopped tab on a closed issue costs one
+# `gh issue view` per sharing repo (the global count stays right: distinct tab
+# ids). Name the tab after the agent (`iw-<repo>-issue-<N>`) when that bites.
 #
 # Volatility is fine here, unlike for "already handled": the question is what
 # is running *now*, and after a reboot nothing is. The signal and the truth go
@@ -875,7 +880,7 @@ _IW_LIVE_AGENTS_LOADED=0
 # first sighting only starts the clock. A delegation ends and the agent goes
 # back to `working`, which clears the clock, while a real zombie never moves.
 _iw_live_agents() {
-    local _agents _tabs _wss _map _repo _path _host _number _stopped _tids _ts _now
+    local _agents _tabs _wss _map _repo _path _host _number _stopped _tids _ts _now _pfx
 
     if [ "${_IW_LIVE_AGENTS_LOADED}" -eq 1 ]; then
         [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
@@ -893,9 +898,13 @@ _iw_live_agents() {
 
     # repo -> workspace label, resolved here because the label rule needs the
     # whole watch list (_iw_workspace_label) and jq cannot call a shell function.
+    # The third column is the repo's watcher-tab label minus the number: the
+    # agent name for issue 0 with the 0 cut off, so the slug is the SSOT's. An
+    # unnameable repo gets an empty prefix and only its hand-made tabs match.
     _map=$(_iw_watch_list | while IFS="${_IW_TAB}" read -r _repo _path _host; do
         [ -n "${_path}" ] || continue
-        printf '%s\t%s\n' "${_repo}" "$(_iw_workspace_label "${_repo}" "${_path}")"
+        _pfx=$(_iw_agent_name "${_repo}" 0) && _pfx="${_pfx%0}" || _pfx=""
+        printf '%s\t%s\t%s\n' "${_repo}" "$(_iw_workspace_label "${_repo}" "${_path}")" "${_pfx}"
     done)
 
     # Rows: `<repo>\t<number>\t<stopped>\t<tab_ids>`, one per repo+issue.
@@ -910,16 +919,22 @@ _iw_live_agents() {
             | if ([$ws, $tabs, $agents] | all(type == "array")) | not
               then error("no herdr list") else . end
             | [ $map | split("\n")[] | select(length > 0) | split("\t")
-                | .[0] as $repo | .[1] as $label
+                | .[0] as $repo | .[1] as $label | (.[2] // "") as $pfx
                 | [ $ws[] | select(.label == $label) | .workspace_id ] as $ids
                 | $tabs[]
                 | select(.workspace_id | IN($ids[]))
                 | (.label // "") as $l
-                | select($l | test("^(iw-)?issue-[0-9]+$"))
+                # Legacy `iw-issue-<N>` (pre-repo-label tabs) is read like a
+                # hand-made one, so an upgrade never double-dispatches a live tab.
+                | ( if ($l | test("^(iw-)?issue-[0-9]+$")) then ($l | sub("^(iw-)?issue-"; ""))
+                    elif $pfx != "" and ($l | startswith($pfx))
+                         and ($l[($pfx | length):] | test("^[0-9]+$"))
+                    then $l[($pfx | length):]
+                    else empty end ) as $n
                 | .tab_id as $tid
                 | [ $agents[] | select(.tab_id == $tid) | (.agent_status // "") ] as $st
                 | select($st | length > 0)
-                | { repo: $repo, n: ($l | sub("^(iw-)?issue-"; "")), tid: $tid,
+                | { repo: $repo, n: $n, tid: $tid,
                     stopped: ($st | all(. == "idle" or . == "done")) } ]
             | group_by([.repo, .n])[]
             | [ .[0].repo, .[0].n, (if all(.[]; .stopped) then "1" else "0" end),
@@ -939,7 +954,7 @@ _iw_live_agents() {
             | [ $ws[] | select(.label | IN($labels[])) | .workspace_id ] as $ids
             | ($agents | length > 0)
               and any($tabs[]; (.workspace_id | IN($ids[]))
-                  and ((.label // "") | test("^(iw-)?issue-[0-9]+$")))
+                  and ((.label // "") | test("^(iw-([a-z0-9_-]+-)?)?issue-[0-9]+$")))
               and ([ $tabs[].tab_id ] as $tids
                   | all($agents[]; (.tab_id | IN($tids[])) | not))
         ' >/dev/null 2>&1; then
@@ -1643,7 +1658,7 @@ _iw_select_candidates() {
 
 # Best-effort teardown of a half-built dispatch, so the next attempt starts
 # from nothing. Only the tab: the tick creates no worktree (/gh-flow:wave makes
-# its own inside the session), and a surviving `iw-issue-<N>` tab with an agent
+# its own inside the session), and a surviving `iw-<repo>-issue-<N>` tab with an agent
 # in it would read as a running session and hold the issue.
 _iw_cleanup_attempt() {
     [ -z "$1" ] || herdr tab close "$1" >/dev/null 2>&1 || true
@@ -2033,13 +2048,14 @@ _iw_process_issue() {
     while [ "${_attempt}" -le "${_IW_MAX_ATTEMPTS}" ]; do
         _tab=""
 
-        # The tab opens on the checkout root and is labelled `iw-issue-<N>` —
-        # the `iw-` keeps it apart from an `issue-<N>` tab the user opened by
-        # hand; _iw_live_agents counts both. /gh-flow:wave creates the
-        # worktree itself, inside the session.
+        # The tab opens on the checkout root and is labelled with the agent
+        # name (`iw-<repo>-issue-<N>`) — the repo slug ties it to this repo
+        # alone in a shared workspace, and the `iw-` keeps it apart from an
+        # `issue-<N>` tab the user opened by hand; _iw_live_agents counts both.
+        # /gh-flow:wave creates the worktree itself, inside the session.
         if ! _ws=$(_iw_workspace_for_label "${_label}" "${_path}"); then
             ux_warning "No herdr workspace for ${_label} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
-        elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_path}" "iw-issue-${_number}"); then
+        elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_path}" "${_agent}"); then
             ux_warning "herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
         else
             IFS="${_IW_TAB}" read -r _pane _tab <<EOF
@@ -3132,13 +3148,15 @@ _iw_usage() {
     ux_bullet_sub "excluded labels: ${_IW_EXCLUDE_LABELS_DEFAULT}"
     ux_bullet_sub "an issue with an OPEN blockedBy is skipped (query failure fails open)"
     ux_bullet_sub "an issue an open PR already closes is skipped (query failure skips the repo)"
-    ux_bullet_sub "dispatch opens an iw-issue-<N> tab on the repo path and runs /gh-flow:wave <N>"
+    ux_bullet_sub "dispatch opens an iw-<repo>-issue-<N> tab (= the agent name) on the repo path"
+    ux_bullet_sub "  and runs /gh-flow:wave <N>"
     ux_bullet_sub "  (the skill creates its own worktree; the tick creates none)"
     ux_bullet_sub "at most ${_IW_DISPATCH_PER_TICK} issue(s) per tick, ${_IW_MAX_ATTEMPTS} attempts each"
     ux_bullet_sub "no issue is ever written to — no comment, label or assignee change"
     ux_bullet "concurrency"
-    ux_bullet_sub "an issue-<N> (by hand) or iw-issue-<N> (by the tick) tab with a live agent"
+    ux_bullet_sub "an issue-<N> (by hand) or iw-<repo>-issue-<N> (by the tick) tab with a live agent"
     ux_bullet_sub "  in the repo's workspace means that issue is running"
+    ux_bullet_sub "  repos sharing a path: iw-<repo>-issue-<N> holds only its repo, issue-<N> holds all"
     ux_bullet_sub "${_IW_MAX_CONCURRENT} running in total holds the tick (exit 0); ${_IW_MAX_PER_REPO} in one repo skips that repo"
     ux_bullet_sub "repos take turns (round-robin); within a repo the lowest issue number goes first"
     ux_bullet_sub "cleanup is manual: after review, /exit, remove the worktree, close the tab"

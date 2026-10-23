@@ -149,7 +149,7 @@ _worktree_path() {
 # `agent_status`. The pane stands in the checkout root, as a /gh-flow:wave
 # session does: the worktree is created by the skill, not the tick. `herdr
 # agent list` carries no agent-name field, so the tick recognises a session by
-# its tab label (`issue-<n>` by hand, `iw-issue-<n>` by the watcher) and the
+# its tab label (`issue-<n>` by hand, `iw-<repo>-issue-<n>` by the watcher) and the
 # tab id the pane reports.
 _set_tabs() {
     local _status="$1" _tabs="" _agents="" _sep="" _l _i=0
@@ -167,7 +167,7 @@ _set_tabs() {
         >"${_WORK_DIR}/agents.json"
 }
 
-# A live watcher-opened session (`iw-issue-<n>` tab) for each given issue.
+# A live watcher-opened session (`iw-dotfiles-issue-<n>` tab) for each given issue.
 _set_live_agents() {
     _set_agents_with_status working "$@"
 }
@@ -178,7 +178,7 @@ _set_agents_with_status() {
     local _status="$1" _labels=() _n
     shift
     for _n in "$@"; do
-        _labels+=("iw-issue-${_n}")
+        _labels+=("iw-dotfiles-issue-${_n}")
     done
     _set_tabs "${_status}" "${_labels[@]}"
 }
@@ -1042,7 +1042,7 @@ _assert_not_hung() {
 @test "avatar_issue_watcher: --help documents the two tab labels and the manual cleanup" {
     run bash "${SCRIPT}" --help
     assert_success
-    assert_output --partial "iw-issue-<N>"
+    assert_output --partial "iw-<repo>-issue-<N>"
     assert_output --partial "issue-<N>"
     refute_output --partial "a worktree is collected"
     refute_output --partial "in an issue's worktree"
@@ -1102,7 +1102,7 @@ _assert_not_hung() {
 @test "avatar_issue_watcher: an assigned issue is tabbed and prompted" {
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
     _assert_logged "tab create --workspace"
     _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9"
     _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
@@ -1124,17 +1124,31 @@ _assert_not_hung() {
     _assert_logged "agent start iw-dotfiles-issue-11 --kind claude --pane ws-test-1:p9 -- --dangerously-skip-permissions"
 }
 
-@test "avatar_issue_watcher: the tab is labelled iw-issue-<N>, apart from a hand-made issue-<N>" {
+@test "avatar_issue_watcher: the tab is labelled iw-<repo>-issue-<N>, apart from a hand-made issue-<N>" {
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
     _refute_logged "--label #11"
+    _refute_logged "--label iw-issue-11 "
+}
+
+@test "avatar_issue_watcher: the tab label is the herdr agent name (_iw_agent_name)" {
+    # One SSOT for both: the repo slug in the label is the one the agent name
+    # carries, so _iw_live_agents can attribute the tab to exactly that repo.
+    _run_tick
+    assert_success
+    local _name
+    _name=$(bash -c '. "$1"; herdr_agent_name iw acme/dotfiles issue-11' _ \
+        "${DOTFILES_ROOT}/shell-common/lib/herdr_agent_name.sh")
+    [ "${_name}" = "iw-dotfiles-issue-11" ]
+    _assert_logged "--label ${_name} --no-focus"
+    _assert_logged "agent start ${_name} --kind claude"
 }
 
 @test "avatar_issue_watcher: the tab opens on the repo's checkout path" {
     _run_tick
     assert_success
-    _assert_logged "tab create --workspace ws-test-1 --cwd ${_REPO_DIR} --label iw-issue-11"
+    _assert_logged "tab create --workspace ws-test-1 --cwd ${_REPO_DIR} --label iw-dotfiles-issue-11"
 }
 
 @test "avatar_issue_watcher: the tick creates no worktree and never calls gwt" {
@@ -1163,7 +1177,17 @@ EOF
     _refute_logged "tab create"
 }
 
-@test "avatar_issue_watcher: a watcher-made iw-issue-<N> tab with an agent counts as running" {
+@test "avatar_issue_watcher: a watcher-made iw-<repo>-issue-<N> tab with an agent counts as running" {
+    _set_tabs working iw-dotfiles-issue-11
+    _run_tick
+    assert_success
+    assert_output --partial "acme/dotfiles#11 — already running"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a legacy iw-issue-<N> tab still counts as running" {
+    # Tabs opened before the label carried the repo are read like a hand-made
+    # issue-<N> tab, so an upgrade does not double-dispatch a live session.
     _set_tabs working iw-issue-11
     _run_tick
     assert_success
@@ -1176,14 +1200,15 @@ EOF
     printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[]}}' >"${_WORK_DIR}/agents.json"
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: only an exact issue-<N> label counts" {
-    _set_tabs working issue-110 xissue-11 issue-11-notes iw-issue-1
+    _set_tabs working issue-110 xissue-11 issue-11-notes iw-issue-1 \
+        iw-dotfiles-issue-110 iw-dotfiles-issue-11-x iw-other-issue-11 xiw-dotfiles-issue-11
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an issue tab in another repo's workspace does not count" {
@@ -1192,27 +1217,77 @@ EOF
         >"${_WORK_DIR}/workspaces.json"
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: one issue tab in a workspace shared by three repos counts once" {
-    # Three repos on one path share one workspace (_iw_workspace_label), so the
-    # one iw-issue-12 tab is seen once per repo. Counted per repo row, it read
-    # as 3 sessions and held a tick capped at 2 forever.
+    # Three repos on one path share one workspace (_iw_workspace_label). The
+    # watcher tab names its repo, so it is one session, not one per repo.
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
       {"repo":"acme/two","path":"'"${_REPO_DIR}"'","host":"github.com"},
       {"repo":"acme/three","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
-    _set_tabs working iw-issue-12
+    _set_tabs working iw-dotfiles-issue-12
     _run_tick "IW_MAX_CONCURRENT=2"
     assert_success
     refute_output --partial "Holding this tick"
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
+}
+
+@test "avatar_issue_watcher: one hand-made issue tab shared by three repos counts once" {
+    # A hand-made issue-12 tab names no repo, so every sharing repo gets a row
+    # for it. Counted per row it read as 3 sessions and held a tick capped at 2.
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/two","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/three","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
+    _set_tabs working issue-12
+    _run_tick "IW_MAX_CONCURRENT=2"
+    assert_success
+    refute_output --partial "Holding this tick"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
+}
+
+# Two repos on one path (one shared workspace), each with an issue #12.
+_shared_two_repos() {
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'","host":"github.com"},
+      {"repo":"acme/two","path":"'"${_REPO_DIR}"'","host":"github.com"}]'
+}
+
+@test "avatar_issue_watcher: another sharing repo's watcher tab does not hold the same issue number" {
+    _shared_two_repos
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/two"},"labels":[]}]'
+    _set_tabs working iw-dotfiles-issue-12
+    _run_tick
+    assert_success
+    refute_output --partial "acme/two#12 — already running"
+    _assert_logged "--label iw-two-issue-12 --no-focus"
+}
+
+@test "avatar_issue_watcher: a sharing repo's own watcher tab holds its issue" {
+    _shared_two_repos
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
+    _set_tabs working iw-dotfiles-issue-12
+    _run_tick
+    assert_success
+    assert_output --partial "acme/dotfiles#12 — already running"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a hand-made issue tab holds the number in every sharing repo" {
+    _shared_two_repos
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/two"},"labels":[]}]'
+    _set_tabs working issue-12
+    _run_tick "IW_DISPATCH_PER_TICK=2"
+    assert_success
+    assert_output --partial "acme/dotfiles#12 — already running"
+    assert_output --partial "acme/two#12 — already running"
+    _refute_logged "tab create"
 }
 
 @test "avatar_issue_watcher: a tab with one working agent among stopped ones stays live" {
     # Stopped means *every* agent in the tab stopped. One still working keeps
     # the session live even on a closed issue past its grace window.
-    _set_tabs working iw-issue-21
+    _set_tabs working iw-dotfiles-issue-21
     printf '%s\n' '{"id":"cli:agent:list","result":{"agents":[{"agent_status":"idle","pane_id":"ws-existing:p1","tab_id":"ws-existing:t1","workspace_id":"ws-existing"},{"agent_status":"working","pane_id":"ws-existing:p2","tab_id":"ws-existing:t1","workspace_id":"ws-existing"},{"agent_status":"done","pane_id":"ws-existing:p3","tab_id":"ws-existing:t1","workspace_id":"ws-existing"}]}}' \
         >"${_WORK_DIR}/agents.json"
     _seed_zombie_candidate 21 "$(($(date +%s) - 1200))"
@@ -1248,7 +1323,7 @@ _real_herdr_fixture() {
 }
 
 @test "avatar_issue_watcher: real herdr shapes join an iw-issue tab to its agent" {
-    _real_herdr_fixture iw-issue-11 w2A:t3Q w2A:t3R
+    _real_herdr_fixture iw-dotfiles-issue-11 w2A:t3Q w2A:t3R
     _run_tick
     assert_success
     assert_output --partial "acme/dotfiles#11 — already running"
@@ -1260,11 +1335,11 @@ _real_herdr_fixture() {
     # Schema drift: the issue tab is there, but no agent's tab_id names any
     # listed tab. The tick still reads that as nothing running (unchanged) —
     # the warning is how a lifted cap gets noticed.
-    _real_herdr_fixture iw-issue-11 drift:1 drift:2
+    _real_herdr_fixture iw-dotfiles-issue-11 drift:1 drift:2
     _run_tick
     assert_success
     assert_output --partial "matches no agent"
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: ordinary tabs alone raise no tab/agent mismatch warning" {
@@ -1272,7 +1347,7 @@ _real_herdr_fixture() {
     _run_tick
     assert_success
     refute_output --partial "matches no agent"
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an unreachable herdr tab list holds the tick" {
@@ -1374,7 +1449,7 @@ _real_herdr_fixture() {
     _issues_with_labels 11 wontfix-later
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: a label containing a space is matched exactly" {
@@ -1394,14 +1469,14 @@ _real_herdr_fixture() {
 @test "avatar_issue_watcher: the same issue dispatches once its blocker closes" {
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: a failing blockedBy query fails open" {
     _run_tick "GH_GRAPHQL_FAIL=1"
     assert_success
     assert_output --partial "fail-open"
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an issue outside the watch list is never touched" {
@@ -1420,7 +1495,7 @@ _real_herdr_fixture() {
     _add_worktree 11
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: a watched repo whose path is gone is skipped with a warning" {
@@ -1479,14 +1554,14 @@ _real_herdr_fixture() {
     _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"}]}'
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: a watch entry without a host defaults to github.com" {
     _write_watch_file '[{"repo":"acme/dotfiles","path":"'"${_REPO_DIR}"'"}]'
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: only one issue is dispatched per tick" {
@@ -1513,8 +1588,8 @@ _real_herdr_fixture() {
     ]'
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-12 --no-focus"
-    _refute_logged "--label iw-issue-25 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-12 --no-focus"
+    _refute_logged "--label iw-dotfiles-issue-25 --no-focus"
 }
 
 @test "avatar_issue_watcher: a gh without search names gh's own error in the warning (#1849)" {
@@ -1568,7 +1643,7 @@ _real_herdr_fixture() {
     ]'
     _run_tick "GH_BLOCKED_BY=11"
     assert_success
-    _assert_logged "--label iw-issue-12 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-12 --no-focus"
 }
 
 @test "avatar_issue_watcher: a stdin-consuming child cannot truncate the dispatch loop" {
@@ -1958,14 +2033,14 @@ _real_herdr_fixture() {
     _set_open_prs '{"acme/dotfiles":[{"number":90,"headRefName":"feature/x","body":"Closes #115"}]}'
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an open PR on another repo does not retire this issue" {
     _set_open_prs '{"other/elsewhere":[{"number":90,"headRefName":"wt/issue-11/1","body":"Closes #11"}]}'
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an issue whose session is live is not dispatched again" {
@@ -2001,7 +2076,7 @@ _real_herdr_fixture() {
     _set_running 21 22 23 24 25 26
     _run_tick "IW_MAX_PER_REPO=9"
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: a repo at its own limit is skipped" {
@@ -2017,7 +2092,7 @@ _real_herdr_fixture() {
     _set_running 21 22 23
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-41 --no-focus"
+    _assert_logged "--label iw-other-issue-41 --no-focus"
 }
 
 # ---------------------------------------------------------------------------
@@ -2042,7 +2117,7 @@ _real_herdr_fixture() {
     _age_zombie_candidates
     _run_tick "GH_CLOSED_ISSUES=21 22 23 24 25 26 27"
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: a pane that has only just gone quiet keeps its slot" {
@@ -2162,13 +2237,13 @@ _two_repo_fixture() {
     _two_repo_fixture
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 
     : >"${_LOG}"
     _set_live_agents 11
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-41 --no-focus"
+    _assert_logged "--label iw-other-issue-41 --no-focus"
 }
 
 @test "avatar_issue_watcher: the cursor is persisted for the next tick" {
@@ -2185,7 +2260,7 @@ _two_repo_fixture() {
     [ ! -f "${_STATE_DIR}/select.json" ]
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an unwritable state dir does not stop the dispatch" {
@@ -2194,7 +2269,7 @@ _two_repo_fixture() {
     chmod 500 "${_STATE_DIR}"
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: --dry-run does not advance the cursor" {
@@ -2222,7 +2297,7 @@ _two_repo_fixture() {
     _set_filler_prs "acme/dotfiles" 99
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: 'Closes: #N' counts as an open PR closing the issue" {
@@ -2271,7 +2346,7 @@ _two_repo_fixture() {
     _run_tick "IW_MAX_CONCURRENT=abc"
     assert_success
     assert_output --partial "not a positive integer"
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: an empty cap override is silently the default" {
@@ -2280,7 +2355,7 @@ _two_repo_fixture() {
     _run_tick "IW_MAX_CONCURRENT="
     assert_success
     refute_output --partial "not a positive integer"
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 @test "avatar_issue_watcher: --help reports the effective cap, not the default" {
@@ -2349,7 +2424,7 @@ _two_repo_fixture() {
 @test "avatar_issue_watcher: each failed attempt closes its tab before retrying" {
     _run_tick "HERDR_PROMPT_MODE=fail"
     assert_failure
-    # Nothing may survive: a leftover iw-issue-<N> tab with an agent in it is
+    # Nothing may survive: a leftover iw-<repo>-issue-<N> tab with an agent in it is
     # the running-now signal, so it would hold the issue without working it.
     [ "$(_log_count 'tab close ws-test-1:t9')" -eq 3 ]
 }
@@ -2799,7 +2874,7 @@ _two_repo_fixture() {
     _write_watch_file '[{"repo":"acme/dotfiles","path":"dotfiles","host":"github.com"}]'
     _run_tick -- --cwd "${_WORK_DIR}"
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
 # ---------------------------------------------------------------------------
@@ -2821,7 +2896,7 @@ _two_repo_fixture() {
     _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
     _run_tick
     assert_success
-    _assert_logged "--label iw-issue-12 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-12 --no-focus"
 }
 
 @test "avatar_issue_watcher: missing flock degrades to a warning, not a failure" {
@@ -3490,7 +3565,7 @@ _two_repo_fixture() {
     # _IW_MAX_CONCURRENT.
     #
     # The agent is in `agent list` from the start while its tab is not: the
-    # `iw-issue-11` tab only appears in `tab list` once the redispatch below
+    # `iw-dotfiles-issue-11` tab only appears in `tab list` once the redispatch below
     # creates it — precisely the mid-tick change the memo would otherwise miss.
     _set_limit_state "0" "$(($(date +%s) - 60))"
     _seed_casualty 11 0
@@ -3503,12 +3578,12 @@ _two_repo_fixture() {
         "HERDR_STATUS_AFTER_PROMPT=working"
     assert_success
     assert_output --partial "Pane for acme/dotfiles#11 is gone — redispatching from scratch"
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 
     # The slot the redispatch just took is visible to the ceiling check, so #12
     # waits for the next tick instead of making two sessions out of one slot.
     assert_output --partial "1 issue session(s) already running"
-    _refute_logged "--label iw-issue-12 --no-focus"
+    _refute_logged "--label iw-dotfiles-issue-12 --no-focus"
 }
 
 # ---------------------------------------------------------------------------
@@ -3569,7 +3644,7 @@ _two_repo_fixture() {
     _set_panes_for 21 22 23 24 25 26
     _run_tick "IW_SATURATION_ALERT_TICKS=1" "IW_MAX_PER_REPO=9"
     assert_success
-    _assert_logged "--label iw-issue-11 --no-focus"
+    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
     [ ! -f "${_SATURATION_FILE}" ]
 
     # Full again, well inside the old cooldown — a new incident, and it says so.
