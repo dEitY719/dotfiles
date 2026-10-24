@@ -396,6 +396,11 @@ _IW_DRY_RUN=0
 # Set by an issue-reference run: one named issue, so it has taken no repo's
 # round-robin turn and the cursor stays where the last real tick left it.
 _IW_TARGETED=0
+# 1 in the background child a tty targeted run re-runs itself as (issue #2286):
+# that child must never detach again.
+_IW_DETACHED=0
+# Per-run logs of detached targeted runs: newest N kept (issue #2286).
+_IW_RUN_LOGS_KEEP=20
 # Set by _iw_limit_gate_check when it clears an expired backoff, and read once
 # by main() (issue #1604). The casualty retry is a gate-reopen event, not a
 # per-tick one: a tick that finds the gate simply `open` has already done its
@@ -417,6 +422,74 @@ _IW_FLOW_RESOLVED=0
 # State dir for this dispatcher (lib/herdr_pane.sh _hp_state_dir).
 _iw_state_dir() {
     _hp_state_dir "${_IW_STATE_SUBDIR}"
+}
+
+# ============================================================
+# Detached targeted run (issue #2286)
+# ============================================================
+
+# A targeted run waits on `herdr agent prompt --wait` for up to
+# _IW_TIMEOUT_MS, so on a tty it re-runs itself in the background unless
+# --fg, --dry-run, or it already is that background child. IW_ASSUME_TTY=1 is
+# the test seam for `[ -t 1 ]` — bats never hands the script a tty.
+#   $1 = 1 when --fg was given
+_iw_should_detach() {
+    [ "$1" -eq 0 ] && [ "${_IW_DRY_RUN}" -eq 0 ] && [ "${_IW_DETACHED}" -eq 0 ] || return 1
+    [ -t 1 ] || [ "${IW_ASSUME_TTY:-0}" = "1" ]
+}
+
+# Keep the newest _IW_RUN_LOGS_KEEP *.log files in $1 (by mtime).
+_iw_prune_run_logs() {
+    local _f
+    # shellcheck disable=SC2012 # names are <owner>-<repo>-<N>-<stamp>.log: no spaces
+    ls -1t "$1"/*.log 2>/dev/null | tail -n +"$((_IW_RUN_LOGS_KEEP + 1))" |
+        while IFS= read -r _f; do
+            rm -f "${_f}"
+        done
+}
+
+# Re-run this script as `--_detached <args>` in a new session, stdin from
+# /dev/null and stdout/stderr appended to a per-run log, then report the PID
+# and the log. Never returns.
+#   $1 = owner/repo (empty: unresolved), $2 = issue number, $3.. = child args
+_iw_detach_run() {
+    local _repo="$1" _num="$2" _dir _log _pid _self _last
+    shift 2
+    _dir="$(_iw_state_dir)/logs"
+    _repo=$(printf '%s' "${_repo:-local}" | tr '/' '-')
+    _log="${_dir}/${_repo}-${_num}-$(date +%Y%m%d-%H%M%S).log"
+    # No log, no detach: a background run nobody can read is worse than none.
+    if ! mkdir -p "${_dir}" 2>/dev/null || ! : >>"${_log}" 2>/dev/null; then
+        ux_error "Cannot write the run log ${_log} — not detaching."
+        ux_info "Fix the state dir, or rerun with --fg."
+        exit 1
+    fi
+    _iw_prune_run_logs "${_dir}"
+    _self=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
+    # setsid survives the terminal closing; macOS has none, nohup alone ignores
+    # SIGHUP. NO_COLOR keeps ANSI escapes out of the log.
+    if command -v setsid >/dev/null 2>&1; then
+        NO_COLOR=1 setsid nohup bash "${_self}" --_detached "$@" </dev/null >>"${_log}" 2>&1 &
+    else
+        NO_COLOR=1 nohup bash "${_self}" --_detached "$@" </dev/null >>"${_log}" 2>&1 &
+    fi
+    _pid=$!
+    # A child that dies at once (closed issue, no herdr) has already written
+    # its exit=<rc> line; report it instead of a misleading success.
+    sleep "${IW_DETACH_CHECK_SLEEP:-1}"
+    _last=$(tail -n 1 "${_log}" 2>/dev/null) || _last=""
+    case "${_last}" in
+    exit=0) ;;
+    exit=*)
+        ux_error "Detached run ${_pid} ended at once (${_last}) — see ${_log}"
+        exit 1
+        ;;
+    esac
+    ux_success "Detached — the run continues in the background."
+    ux_info "PID: ${_pid}"
+    ux_info "Log: ${_log}"
+    ux_info "Follow: tail -f ${_log}"
+    exit 0
 }
 
 # ============================================================
@@ -3497,11 +3570,12 @@ _iw_acquire_lock() {
 
 _iw_usage() {
     ux_header "avatar_issue_watcher"
-    ux_info "Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] [<issue-ref> [--force]] | --status | watch ... | label ... | [-h|--help|help]"
+    ux_info "Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] [<issue-ref> [--force] [--fg]] | --status | watch ... | label ... | [-h|--help|help]"
     ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:wave (or its Agent Factory copy)."
     ux_bullet "options"
     ux_bullet_sub "<issue-ref>    targeted run: dispatch this one issue instead of searching (see below)"
     ux_bullet_sub "--force        with <issue-ref> only: dispatch despite an excluded label"
+    ux_bullet_sub "--fg           with <issue-ref> only: stay in the foreground (no detach)"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
     ux_bullet_sub "               (takes no lock and does not evaluate the rate-limit gate)"
@@ -3538,6 +3612,10 @@ _iw_usage() {
     ux_bullet_sub "an excluded label refuses (exit 1) unless --force"
     ux_bullet_sub "running tab, open PR, open blocker, caps, gate and lock apply as in a tick (skip: exit 0)"
     ux_bullet_sub "the round-robin cursor and the saturation counter are left untouched"
+    ux_bullet_sub "on a tty it detaches (unless --fg or --dry-run): prints PID + log path, exits 0"
+    ux_bullet_sub "  log: \${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/logs/<owner>-<repo>-<N>-<stamp>.log"
+    ux_bullet_sub "  last line exit=<rc>; newest ${_IW_RUN_LOGS_KEEP} logs kept; a child dead within 1s -> exit 1"
+    ux_bullet_sub "  non-tty (cron, pipe) runs in the foreground as before"
     ux_bullet "concurrency"
     ux_bullet_sub "an issue-<N> (by hand) or iw-<repo>-issue-<N> (by the tick) tab with a live agent"
     ux_bullet_sub "  in the repo's workspace means that issue is running"
@@ -3783,7 +3861,7 @@ _iw_targeted_run() {
 
 main() {
     local _cwd="" _repo _number _path _host _rc _dispatched=0 _skipped=0 _failed=0 _candidates _live _select_rc
-    local _confirmed="" _ref="" _parsed="" _force=0 _ref_host _cwd_entry
+    local _confirmed="" _ref="" _parsed="" _force=0 _ref_host _cwd_entry _fg=0 _log_repo
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -3838,6 +3916,10 @@ main() {
             _force=1
             shift
             ;;
+        --fg)
+            _fg=1
+            shift
+            ;;
         -*)
             ux_error "Unknown option: $1"
             ux_info "Run 'avatar_issue_watcher.sh --help' for usage."
@@ -3868,6 +3950,21 @@ main() {
     elif [ "${_force}" -eq 1 ]; then
         ux_error "--force only applies to a targeted run — pass an issue reference with it."
         exit 1
+    fi
+
+    # Before the --cwd cd below: the child inherits this cwd, so a relative
+    # --cwd still means the same directory to it (issue #2286).
+    if [ -n "${_parsed}" ] && _iw_should_detach "${_fg}"; then
+        _log_repo="${_parsed#*"${_IW_TAB}"}"
+        _log_repo="${_log_repo%%"${_IW_TAB}"*}"
+        if [ -z "${_log_repo}" ]; then
+            _log_repo=$( { [ -z "${_cwd}" ] || cd "${_cwd}"; } 2>/dev/null && _iw_cwd_entry 2>/dev/null) || _log_repo=""
+            _log_repo="${_log_repo%%"${_IW_TAB}"*}"
+        fi
+        set -- "${_ref}"
+        [ "${_force}" -eq 0 ] || set -- "$@" --force
+        [ -z "${_cwd}" ] || set -- --cwd "${_cwd}" "$@"
+        _iw_detach_run "${_log_repo}" "${_parsed##*"${_IW_TAB}"}" "$@"
     fi
 
     # --cwd is where the tick runs from, which is what a relative `path` in the
@@ -4081,5 +4178,16 @@ EOF
 }
 
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
+    # The background child of a detached targeted run (issue #2286). main runs
+    # in a subshell so every `exit` inside it still lands on the exit=<rc>
+    # line that closes the run log — machine-read data, not a ux message.
+    if [ "${1-}" = "--_detached" ]; then
+        shift
+        _IW_DETACHED=1
+        _iw_rc=0
+        (main "$@") || _iw_rc=$?
+        printf 'exit=%s\n' "${_iw_rc}"
+        exit "${_iw_rc}"
+    fi
     main "$@"
 fi
