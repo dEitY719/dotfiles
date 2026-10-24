@@ -376,8 +376,9 @@ git_worktree_spawn() {
 # Internal: check if current HEAD's commits are safe to discard
 # Returns 0 (safe) if: upstream matches, HEAD is in origin/main,
 # HEAD's tree matches origin/main (squash directly under main HEAD),
-# all patches are already in origin/main (rebase merge), or GitHub reports
-# the branch's PR as MERGED with the merge_commit reachable from main_ref.
+# all patches are already in origin/main (rebase merge), HEAD is reachable
+# from another remote-tracking branch (#2276), or GitHub reports the branch's
+# PR as MERGED with the merge_commit reachable from main_ref.
 # ============================================================================
 _gwt_commits_safe() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
@@ -415,6 +416,17 @@ _gwt_commits_safe() {
     # something already in main_ref → safe. Misses squash-merge (handled in
     # step 3 / 5) because squash maps N commits to a single patch-id on main.
     if ! git cherry "$main_ref" HEAD 2>/dev/null | grep -q '^+'; then
+        return 0
+    fi
+
+    # 4b. HEAD reachable from any remote-tracking branch (#2276): the commits
+    # are already preserved on a remote (e.g. pushed as part of another
+    # branch), so discarding the local branch loses nothing. Fail-closed: a
+    # git error yields an empty list, which is not "safe".
+    local preserved_on
+    preserved_on="$(git branch -r --contains HEAD 2>/dev/null | grep -v ' -> ' | sed 's/^ *//' | head -3 | tr '\n' ' ')"
+    if [ -n "$preserved_on" ]; then
+        ux_info "Commits preserved on remote: ${preserved_on% }"
         return 0
     fi
 
@@ -499,6 +511,45 @@ _gwt_report_unpushed() {
 }
 
 # ============================================================================
+# Internal: verify `git checkout <main_branch>` in the main repo will not be
+# blocked, without changing anything there (--force included — the main
+# repo's changes are never overwritten, same rule as gbr --discard-changes).
+# Blocks on: missing main branch, unmerged paths, or dirty/untracked paths
+# that differ between the main repo's HEAD and <main_branch> (#2276).
+# Usage: _gwt_main_checkout_preflight <main_repo> <main_branch>
+# ============================================================================
+_gwt_main_checkout_preflight() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local main_repo="$1" main_branch="$2" cur dirty changed blocking=""
+
+    if ! git -C "$main_repo" rev-parse --verify --quiet "refs/heads/$main_branch" >/dev/null 2>&1; then
+        ux_error "Main repository has no '$main_branch' branch: $main_repo"
+        return 1
+    fi
+    cur="$(git -C "$main_repo" symbolic-ref --quiet --short HEAD 2>/dev/null)"
+
+    if [ -n "$(git -C "$main_repo" ls-files -u 2>/dev/null)" ]; then
+        blocking="$(git -C "$main_repo" diff --name-only --diff-filter=U 2>/dev/null)"
+        [ -n "$blocking" ] || blocking="(unmerged index)"
+    elif [ "$cur" != "$main_branch" ]; then
+        dirty="$( { git -C "$main_repo" diff --name-only HEAD; git -C "$main_repo" ls-files --others --exclude-standard; } 2>/dev/null)"
+        if [ -n "$dirty" ]; then
+            changed="$(git -C "$main_repo" diff --name-only HEAD "$main_branch" 2>/dev/null)"
+            blocking="$(printf '%s\n' "$changed" | D="$dirty" awk 'BEGIN { n = split(ENVIRON["D"], a, "\n"); for (i = 1; i <= n; i++) s[a[i]] = 1 } $0 != "" && ($0 in s)')"
+        fi
+    fi
+    [ -z "$blocking" ] && return 0
+
+    ux_error "Main repository cannot switch to '$main_branch' — teardown aborted, nothing removed."
+    ux_info "  Main repo: $main_repo (on ${cur:-detached HEAD})"
+    ux_info "  Blocking paths:"
+    printf '%s\n' "$blocking" | head -10 | sed 's/^/    /'
+    ux_info "  Fix:      commit or stash them in $main_repo (or switch it to $main_branch), then rerun"
+    ux_info "  Note:     --force never overwrites the main repo's changes"
+    return 1
+}
+
+# ============================================================================
 # Worktree teardown — remove worktree, sync main, delete branch, log
 # Usage: git_worktree_teardown [--all|-a|all] [--recursive|-r] [--force] [--keep-branch]
 # ============================================================================
@@ -523,6 +574,11 @@ git_worktree_teardown() {
                 ux_info "                 main repo directly under \$PWD (one confirmation)"
                 ux_info "  --force        discard uncommitted changes and force remove"
                 ux_info "  --keep-branch  keep the branch after removing worktree"
+                ux_info ""
+                ux_info "Safety:"
+                ux_info "  Commits count as saved when HEAD is on any remote branch, not just"
+                ux_info "  its upstream or origin/main. The main repo must be able to check out"
+                ux_info "  main before anything is removed; its changes are never overwritten."
                 return 0
                 ;;
             --all|-a|all) all_mode=true; shift ;;
@@ -701,6 +757,15 @@ _gwt_teardown_one_inplace() {
         fi
     fi
 
+    # Pre-flight: the main repo must be able to switch to main. Checked
+    # BEFORE the worktree is removed — a checkout failure afterwards leaves a
+    # half-done teardown (worktree gone, branch left behind) (#2276).
+    local main_branch="main"
+    if ! git rev-parse --verify --quiet "refs/heads/main" >/dev/null 2>&1; then
+        main_branch="master"
+    fi
+    _gwt_main_checkout_preflight "$main_repo" "$main_branch" || return 1
+
     # Switch to main repo
     cd "$main_repo" || { ux_error "Cannot cd to $main_repo"; return 1; }
 
@@ -809,14 +874,17 @@ EOF
     fi
 
     # Sync main BEFORE branch delete.
-    local main_branch="main"
-    if ! git rev-parse --verify --quiet "main" >/dev/null 2>&1; then
-        main_branch="master"
-    fi
     # (F) -q suppresses "Your branch is behind 'origin/<main>' by N commits"
-    # which git checkout prints to stdout (unsilenceable via 2>/dev/null).
-    if ! git checkout -q "$main_branch" 2>/dev/null; then
+    # which git checkout prints to stdout. stderr is surfaced (same pattern
+    # as gbr teardown) so the real reason reaches the user (#2276).
+    local checkout_err
+    if ! checkout_err="$(git checkout -q "$main_branch" 2>&1 1>/dev/null)"; then
         ux_error "Failed to checkout $main_branch in main repository."
+        [ -n "$checkout_err" ] && ux_info "git: $checkout_err"
+        ux_warning "Teardown half-done — worktree already removed: $wt_path"
+        if [ "$branch" != HEAD ]; then
+            ux_info "  Branch '$branch' remains. Clean up: git branch -D $branch"
+        fi
         return 1
     fi
     # (B) Replace `git pull origin <main>` with local `git merge --ff-only

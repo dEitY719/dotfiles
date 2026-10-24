@@ -1051,3 +1051,77 @@ _wt_count() {
     assert_output --partial "wt/test/1"
     git -C "$CLONE" rev-parse --verify --quiet refs/heads/wt/test/1 >/dev/null
 }
+
+# ---------------------------------------------------------------------------
+# Issue #2276: commits preserved on another remote branch; main-repo pre-flight
+# ---------------------------------------------------------------------------
+
+# Give the worktree branch one never-pushed commit with no upstream.
+_wt_commit_no_upstream() {
+    (
+        cd "$WORKTREE"
+        git branch --unset-upstream 2>/dev/null || true
+        echo feat > feat.txt && git add feat.txt && git commit -q -m "feat"
+    )
+}
+
+@test "teardown: commits on another remote branch are safe without upstream (#2276)" {
+    _wt_commit_no_upstream
+    git -C "$WORKTREE" push -q origin HEAD:refs/heads/refactor/x
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_success
+    assert_output --partial "origin/refactor/x"
+    refute_output --partial "git push -u"
+    [ ! -d "$WORKTREE" ]
+}
+
+@test "teardown: commits on no remote branch still block (#2276 regression)" {
+    _wt_commit_no_upstream
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "git push -u origin wt/test/1"
+    [ -d "$WORKTREE" ]
+}
+
+@test "teardown: dirty main repo that blocks checkout — nothing removed (#2276)" {
+    (
+        cd "$CLONE"
+        git checkout -q -b refactor/x
+        echo changed > base.txt && git commit -q -am "change base"
+        echo dirty > base.txt
+    )
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown --force 2>&1"
+    assert_failure
+    assert_output --partial "base.txt"
+    [ -d "$WORKTREE" ]
+    git -C "$CLONE" rev-parse --verify --quiet refs/heads/wt/test/1 >/dev/null
+    # --force never touches the main repo's changes
+    [ "$(cat "$CLONE/base.txt")" = "dirty" ]
+}
+
+@test "teardown: dirty main repo unrelated to main still tears down (#2276)" {
+    (
+        cd "$CLONE"
+        git checkout -q -b refactor/x
+        echo dirty > base.txt
+    )
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_success
+    [ ! -d "$WORKTREE" ]
+    [ "$(git -C "$CLONE" rev-parse --abbrev-ref HEAD)" = "main" ]
+}
+
+@test "teardown: checkout failure after removal shows git stderr + recovery hint (#2276)" {
+    # main held by another worktree: pre-flight passes, checkout then fails.
+    git -C "$CLONE" checkout -q -b refactor/x
+    git -C "$CLONE" worktree add -q "$TEST_TEMP_HOME/clone-main" main
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "git:"
+    assert_output --partial "git branch -D wt/test/1"
+}

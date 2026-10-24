@@ -84,6 +84,8 @@ _gwt_help_rows_teardown() {
     ux_table_row "all mode" "Run from main repo or any worktree" "Tears down every non-main worktree"
     ux_table_row "recursive" "--all --recursive|-r from a parent dir" "Every main repo directly under \$PWD (one prompt)"
     ux_table_row "flags" "--force / --keep-branch" "Discard changes / keep branch"
+    ux_table_row "safe commits" "HEAD on any remote branch" "Counts as saved -- no push needed"
+    ux_table_row "main pre-flight" "Main repo must check out main" "Checked before removal; --force never overwrites it"
 }
 
 _gwt_help_render_section() {
