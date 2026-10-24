@@ -128,7 +128,7 @@ aicron_report_job_json() {
 
 # <1> is "json" or "text".
 aicron_report_list() {
-    local _tmp _table _ok _n _inst _paused _status _any_missing _last _mf _sd
+    local _tmp _table _ok _n _inst _paused _status _any_missing _last _mf _sd _desc
     _tmp=$(aicron_mktemp aicron-list) || {
         ux_error "could not create a temp file for the job list"
         return 1
@@ -159,7 +159,7 @@ aicron_report_list() {
     fi
 
     ux_header "aicron jobs"
-    ux_table_header "JOB" "STATUS" "LAST RUN"
+    ux_table_header "JOB" "STATUS" "LAST RUN" "DESCRIPTION"
     _any_missing=0
     while IFS= read -r _n; do
         [ -n "${_n}" ] || continue
@@ -178,7 +178,8 @@ aicron_report_list() {
             ;;
         esac
         _last=$(aicron_report_last "${_n}")
-        ux_table_row "${_n}" "${_status}" "${_last}"
+        _desc=$(aicron_manifest_description "${_n}")
+        ux_table_row "${_n}" "${_status}" "${_last}" "${_desc:--}"
     done <"${_tmp}"
     rm -f "${_tmp}" "${_table}"
 
