@@ -554,7 +554,9 @@ _iw_parse_remote_url() {
 # Exit 1 when <path> is not inside a git checkout.
 _iw_main_checkout() {
     local _common
-    _common=$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+    # cd + `pwd -P`, not `rev-parse --path-format=absolute` (git >= 2.31 only).
+    _common=$(cd "$1" 2>/dev/null && _c=$(git rev-parse --git-common-dir 2>/dev/null) &&
+        cd "${_c}" && pwd -P) || return 1
     case "${_common}" in
     */.git) dirname "${_common}" ;;
     # A submodule's common dir is not `<checkout>/.git`; keep its toplevel.
