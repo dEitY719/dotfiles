@@ -2000,7 +2000,9 @@ _iw_gwt_spawn() {
 _iw_issue_worktree() {
     local _main="$1" _n="$2" _wt
     _wt=$(_iw_find_issue_worktree "${_main}" "${_n}")
-    if [ -z "${_wt}" ] || [ ! -d "${_wt}" ]; then
+    # An empty index means a half-built worktree (spawn failed after `worktree
+    # add --no-checkout`): do not dispatch into it, spawn a fresh one.
+    if [ -z "${_wt}" ] || [ ! -d "${_wt}" ] || [ -z "$(git -C "${_wt}" ls-files 2>/dev/null | head -n 1)" ]; then
         _iw_gwt_spawn "${_main}" "issue-${_n}" >&2 || return 1
         _wt=$(_iw_find_issue_worktree "${_main}" "${_n}")
     fi
@@ -2026,8 +2028,11 @@ _iw_herdr_create() {
 # repo's tabs would open inside the first repo's (PR #1447 codex/agy review);
 # then both sides fall back to the unambiguous slug.
 _iw_workspace_label() {
-    local _repo="$1" _path="$2" _base _count
+    local _repo="$1" _path="$2" _base _count _main
 
+    # A legacy watch-list entry may name a worktree; tabs are opened in the
+    # main checkout's workspace (_iw_process_issue), so label it the same way.
+    _main=$(_iw_main_checkout "${_path}") && _path="${_main}"
     _base=$(basename "${_path}")
     _count=$(_iw_watch_list |
         awk -F "${_IW_TAB}" -v b="${_base}" '
