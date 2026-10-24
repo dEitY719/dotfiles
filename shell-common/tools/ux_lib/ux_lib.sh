@@ -426,12 +426,15 @@ ux_menu() {
 # Table Formatting
 # =============================================================================
 
-# Display a table row with 3 columns
-# Usage: ux_table_row "Column 1" "Column 2" "Column 3"
+# Display a table row with 2-4 columns. A 4th column switches to the narrow
+# 20/13/44 layout; the last column is never padded, so wide characters
+# (Korean descriptions) cannot misalign anything.
+# Usage: ux_table_row "Column 1" "Column 2" "Column 3" ["Column 4"]
 ux_table_row() {
     local col1="$1"
     local col2="$2"
     local col3="${3:-}"
+    local col4="${4:-}"
     local label="$col1"
 
     # 20자를 넘는 라벨은 %-20s 가 자르지 않고 그대로 밀어내 구분자와 뒤 컬럼의
@@ -447,7 +450,9 @@ ux_table_row() {
         label=""
     fi
 
-    if [ -n "$col3" ]; then
+    if [ -n "$col4" ]; then
+        printf "  ${UX_PRIMARY}%-20s${UX_RESET} ${UX_MUTED}│${UX_RESET} %-13s ${UX_MUTED}│${UX_RESET} %-44s ${UX_MUTED}│${UX_RESET} %s\n" "$label" "$col2" "$col3" "$col4"
+    elif [ -n "$col3" ]; then
         printf "  ${UX_PRIMARY}%-20s${UX_RESET} ${UX_MUTED}│${UX_RESET} %-30s ${UX_MUTED}│${UX_RESET} %s\n" "$label" "$col2" "$col3"
     else
         printf "  ${UX_PRIMARY}%-20s${UX_RESET} ${UX_MUTED}:${UX_RESET} %s\n" "$label" "$col2"
@@ -455,13 +460,18 @@ ux_table_row() {
 }
 
 # Display table header
-# Usage: ux_table_header "Column 1" "Column 2" "Column 3"
+# Usage: ux_table_header "Column 1" "Column 2" "Column 3" ["Column 4"]
 ux_table_header() {
     local col1="$1"
     local col2="$2"
     local col3="${3:-}"
+    local col4="${4:-}"
 
-    if [ -n "$col3" ]; then
+    if [ -n "$col4" ]; then
+        printf "  ${UX_BOLD}%-20s${UX_RESET} ${UX_MUTED}│${UX_RESET} ${UX_BOLD}%-13s${UX_RESET} ${UX_MUTED}│${UX_RESET} ${UX_BOLD}%-44s${UX_RESET} ${UX_MUTED}│${UX_RESET} ${UX_BOLD}%s${UX_RESET}\n" "$col1" "$col2" "$col3" "$col4"
+
+        printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 98))"
+    elif [ -n "$col3" ]; then
         printf "  ${UX_BOLD}%-20s${UX_RESET} ${UX_MUTED}│${UX_RESET} ${UX_BOLD}%-30s${UX_RESET} ${UX_MUTED}│${UX_RESET} ${UX_BOLD}%s${UX_RESET}\n" "$col1" "$col2" "$col3"
 
         printf "  ${UX_MUTED}%s${UX_RESET}\n" "$(printf '─%.0s' $(seq 1 80))"
