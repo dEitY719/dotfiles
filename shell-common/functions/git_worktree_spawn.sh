@@ -520,7 +520,7 @@ _gwt_report_unpushed() {
 # ============================================================================
 _gwt_main_checkout_preflight() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local main_repo="$1" main_branch="$2" cur dirty changed blocking=""
+    local main_repo="$1" main_branch="$2" cur dirty holder blocking="" line
 
     if ! git -C "$main_repo" rev-parse --verify --quiet "refs/heads/$main_branch" >/dev/null 2>&1; then
         ux_error "Main repository has no '$main_branch' branch: $main_repo"
@@ -531,11 +531,22 @@ _gwt_main_checkout_preflight() {
     if [ -n "$(git -C "$main_repo" ls-files -u 2>/dev/null)" ]; then
         blocking="$(git -C "$main_repo" diff --name-only --diff-filter=U 2>/dev/null)"
         [ -n "$blocking" ] || blocking="(unmerged index)"
+    elif [ "$cur" != "$main_branch" ] && holder="$(git -C "$main_repo" worktree list --porcelain 2>/dev/null \
+            | awk -v b="branch refs/heads/$main_branch" '/^worktree /{w=substr($0,10)} $0==b{print w; exit}')" \
+            && [ -n "$holder" ]; then
+        # git refuses to check out a branch another worktree already holds.
+        blocking="(checked out in another worktree: $holder)"
     elif [ "$cur" != "$main_branch" ]; then
-        dirty="$( { git -C "$main_repo" diff --name-only HEAD; git -C "$main_repo" ls-files --others --exclude-standard; } 2>/dev/null)"
+        # --no-renames: a rename must list BOTH paths (the old one is dirty too).
+        # The dirty list goes through a temp file, not an env var: with many
+        # untracked files it would exceed the exec arg limit (E2BIG) and the
+        # intersection would silently come back empty (fail-open).
+        dirty="$( { git -C "$main_repo" diff --name-only --no-renames HEAD; git -C "$main_repo" ls-files --others --exclude-standard; } 2>/dev/null)"
         if [ -n "$dirty" ]; then
-            changed="$(git -C "$main_repo" diff --name-only HEAD "$main_branch" 2>/dev/null)"
-            blocking="$(printf '%s\n' "$changed" | D="$dirty" awk 'BEGIN { n = split(ENVIRON["D"], a, "\n"); for (i = 1; i <= n; i++) s[a[i]] = 1 } $0 != "" && ($0 in s)')"
+            local dirty_file="${TMPDIR:-/tmp}/gwt-dirty.$$.lst"
+            printf '%s\n' "$dirty" > "$dirty_file"
+            blocking="$(git -C "$main_repo" diff --name-only --no-renames HEAD "$main_branch" 2>/dev/null | grep -Fx -f "$dirty_file")"
+            rm -f "$dirty_file"
         fi
     fi
     [ -z "$blocking" ] && return 0
@@ -543,7 +554,7 @@ _gwt_main_checkout_preflight() {
     ux_error "Main repository cannot switch to '$main_branch' — teardown aborted, nothing removed."
     ux_info "  Main repo: $main_repo (on ${cur:-detached HEAD})"
     ux_info "  Blocking paths:"
-    printf '%s\n' "$blocking" | head -10 | sed 's/^/    /'
+    printf '%s\n' "$blocking" | head -10 | while IFS= read -r line; do ux_info "    $line"; done
     ux_info "  Fix:      commit or stash them in $main_repo (or switch it to $main_branch), then rerun"
     ux_info "  Note:     --force never overwrites the main repo's changes"
     return 1
@@ -738,7 +749,9 @@ _gwt_teardown_one_inplace() {
     # (A) Capture fetch stderr so failures surface the actual cause, not a
     # misleading "network?" blurb. Real reason (auth, hook, URL, etc.) wins.
     local _gwt_fetch_err_file="${TMPDIR:-/tmp}/gwt-fetch.$$.err"
-    if ! git fetch origin 2>"$_gwt_fetch_err_file" >/dev/null; then
+    # --prune: a remote branch deleted upstream must not linger as a stale
+    # ref that _gwt_commits_safe step 4b would trust (#2276).
+    if ! git fetch --prune origin 2>"$_gwt_fetch_err_file" >/dev/null; then
         ux_warning "git fetch origin failed (non-blocking); using local refs for safety checks."
         if [ -s "$_gwt_fetch_err_file" ]; then
             sed 's/^/    /' "$_gwt_fetch_err_file" >&2

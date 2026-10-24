@@ -1115,13 +1115,36 @@ _wt_commit_no_upstream() {
     [ "$(git -C "$CLONE" rev-parse --abbrev-ref HEAD)" = "main" ]
 }
 
-@test "teardown: checkout failure after removal shows git stderr + recovery hint (#2276)" {
-    # main held by another worktree: pre-flight passes, checkout then fails.
+@test "teardown: main held by another worktree — nothing removed (#2276)" {
     git -C "$CLONE" checkout -q -b refactor/x
     git -C "$CLONE" worktree add -q "$TEST_TEMP_HOME/clone-main" main
 
     run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
     assert_failure
+    assert_output --partial "checked out in another worktree"
+    [ -d "$WORKTREE" ]
+}
+
+@test "teardown: stale remote ref of a deleted branch is not trusted (#2276)" {
+    _wt_commit_no_upstream
+    git -C "$WORKTREE" push -q origin HEAD:refs/heads/gone
+    git -C "$WORKTREE" fetch -q origin
+    git --git-dir="$ORIGIN" branch -q -D gone
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "git push -u origin wt/test/1"
+    [ -d "$WORKTREE" ]
+}
+
+@test "teardown: checkout failure after removal shows git stderr + recovery hint (#2276)" {
+    # Pre-flight passes; a held index lock in the main repo then fails checkout.
+    git -C "$CLONE" checkout -q -b refactor/x
+    : > "$CLONE/.git/index.lock"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
     assert_output --partial "git:"
+    assert_output --partial "index.lock"
     assert_output --partial "git branch -D wt/test/1"
 }
