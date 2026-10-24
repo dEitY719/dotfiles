@@ -85,8 +85,7 @@ def merge(
             continue
         t = by_repo[repo.lower()]
         out = {k: v for k, v in entry.items() if k not in _TRACKED_FIELDS}
-        out.update({k: t[k] for k in _TRACKED_FIELDS if k in t})
-        merged.append(out)
+        merged.append({**out, **{k: t[k] for k in _TRACKED_FIELDS if k in t}})
         done.add(repo.lower())
     skipped: list[tuple[str, str]] = []
     for t in tracked:
@@ -96,9 +95,7 @@ def merge(
         if not isdir(path):
             skipped.append((t["repo"], path))
             continue
-        new = {"repo": t["repo"], "path": path}
-        new.update({k: t[k] for k in _TRACKED_FIELDS if k in t})
-        merged.append(new)
+        merged.append({"repo": t["repo"], "path": path, **{k: t[k] for k in _TRACKED_FIELDS if k in t}})
     return merged, skipped
 
 
@@ -126,8 +123,8 @@ def render(tracked_path: str, target_path: str, home: str, dry_run: bool) -> lis
     # The watcher accepts a bare array or an object with a `repos` array.
     if isinstance(current_doc, list):
         current = current_doc
-    elif isinstance(current_doc, dict) and isinstance(current_doc.get("repos") or [], list):
-        current = current_doc.get("repos") or []  # null == absent, like jq `.repos // []`
+    elif isinstance(current_doc, dict) and isinstance(repos := current_doc.get("repos") or [], list):
+        current = repos  # null == absent, like jq `.repos // []`
     else:
         raise InputError("target file must be an array or an object with a repos array")
 
