@@ -24,3 +24,24 @@
   (`git rev-parse --git-common-dir` 의 부모). worktree 안에서 cwd 모드로 실행하거나
   `watch add` 를 실행해도, watch list 에 이미 worktree 경로가 저장돼 있어도
   main 체크아웃 기준으로 동작한다.
+
+### 다른 PC 적용 (#2285)
+
+watch list 원본(`~/.avatars/issue-watcher/watched-repos.json`)은 PC 고유
+절대경로를 담고 있어 PUBLIC dotfiles 에 그대로 올리지 않는다. 대신 repo 목록과
+HOME 상대경로(`rel`)만 `avatar/watched-repos.public.json` 으로 추적하고, 각 PC
+에서 렌더해 실제 파일로 병합한다.
+
+- `./setup.sh` 의 optional 스텝 `avatar-watched-repos` 가 렌더를 실행한다.
+  단독 실행은 `avatar-watched-repos` (미리보기는 `--dry-run`, diff 만 출력).
+- 병합 키는 `repo`. 로컬 파일에만 있는 엔트리(비공개 repo 등)는 그대로 남는다.
+  양쪽에 있는 repo 는 로컬 `path` 를 유지하고 `host`/`verify_skill` 만 추적
+  파일 값으로 맞춘다. 추적 파일에만 있는 repo 는 `$HOME/<rel>` 디렉터리가
+  있을 때만 추가되고, 없으면 경고 후 건너뛴다.
+- 워크스페이스 루트가 다른 PC 는 렌더 후 로컬 파일의 `path` 를 직접 고치면
+  다음 렌더에서도 유지된다.
+- 결과가 같으면 쓰지 않는다(백업도 없음). 바뀔 때만
+  `watched-repos.json.bak-<timestamp>` 백업 후 0600 으로 쓴다.
+- 어느 쪽 파일이든 JSON 이 깨져 있으면 로컬 파일을 건드리지 않고 에러로 끝난다.
+- 새 공개 repo 를 공유하려면 추적 파일에 `{repo, rel[, host, verify_skill]}`
+  를 추가한다. 이후 추가하는 비공개 repo 는 로컬 파일에만 둔다.

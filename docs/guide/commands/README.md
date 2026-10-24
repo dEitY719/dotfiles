@@ -20,6 +20,7 @@ rg "fzf 피커" docs/guide/commands/
 - [agy](./agy.md)
 - [apt](./apt.md)
 - [avatar-issue-watcher](./avatar-issue-watcher.md)
+- [avatar-watched-repos](./avatar-watched-repos.md)
 - [bat](./bat.md)
 - [bun](./bun.md)
 - [category](./category.md)

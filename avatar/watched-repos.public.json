@@ -1,0 +1,139 @@
+[
+  {
+    "repo": "dEitY719/dotfiles",
+    "rel": "dotfiles",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/gh-pr-skills",
+    "rel": "para/project/skills/gh-pr-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/authoring-skills",
+    "rel": "para/project/skills/authoring-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/claudecode-skills",
+    "rel": "para/project/skills/claudecode-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/devenv-skills",
+    "rel": "para/project/skills/devenv-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/gh-flow-skills",
+    "rel": "para/project/skills/gh-flow-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/gh-issue-skills",
+    "rel": "para/project/skills/gh-issue-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/gh-resolve-skills",
+    "rel": "para/project/skills/gh-resolve-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/gh-setup-skills",
+    "rel": "para/project/skills/gh-setup-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/gh-verify-skills",
+    "rel": "para/project/skills/gh-verify-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/harness-skills",
+    "rel": "para/project/skills/harness-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/notes-skills",
+    "rel": "para/project/skills/notes-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/packaging-skills",
+    "rel": "para/project/skills/packaging-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/pkm-skills",
+    "rel": "para/project/skills/pkm-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/session-skills",
+    "rel": "para/project/skills/session-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/spec-flow-skills",
+    "rel": "para/project/skills/spec-flow-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/video-skills",
+    "rel": "para/project/skills/video-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/visuals-skills",
+    "rel": "para/project/skills/visuals-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/equinest",
+    "rel": "para/project/equinest",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dev-team-404/AgentToolbox",
+    "rel": "para/project/agent-toolbox",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dev-team-404/slsi-agent-desktop",
+    "rel": "para/project/slsi-agent-desktop",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
+    "repo": "dEitY719/obsidian-para",
+    "rel": "para/project/obsidian-para",
+    "host": "github.com"
+  },
+  {
+    "repo": "dEitY719/llm-agent-kit",
+    "rel": "para/project/llm-agent-kit",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  }
+]
