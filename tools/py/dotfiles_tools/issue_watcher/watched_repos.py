@@ -61,9 +61,9 @@ def load_tracked(raw: str) -> list[dict[str, str]]:
             raise InputError(f"tracked entry needs string repo and rel: {entry}")
         if os.path.isabs(rel) or ".." in rel.split("/"):
             raise InputError(f"rel must be HOME-relative: {repo} -> {rel}")
-        if repo in seen:
+        if repo.lower() in seen:
             raise InputError(f"duplicate repo in tracked file: {repo}")
-        seen.add(repo)
+        seen.add(repo.lower())
     return data
 
 
@@ -74,22 +74,23 @@ def merge(
     isdir: Callable[[str], bool] = os.path.isdir,
 ) -> tuple[list[Any], list[tuple[str, str]]]:
     """Return (merged entries, skipped (repo, path) pairs)."""
-    by_repo = {t["repo"]: t for t in tracked}
+    # GitHub repo names are case-insensitive; match on the folded name.
+    by_repo = {t["repo"].lower(): t for t in tracked}
     merged: list[Any] = []
     done: set[str] = set()
     for entry in current:
         repo = entry.get("repo") if isinstance(entry, dict) else None
-        if not isinstance(repo, str) or repo not in by_repo:
+        if not isinstance(repo, str) or repo.lower() not in by_repo:
             merged.append(entry)
             continue
-        t = by_repo[repo]
+        t = by_repo[repo.lower()]
         out = {k: v for k, v in entry.items() if k not in _TRACKED_FIELDS}
         out.update({k: t[k] for k in _TRACKED_FIELDS if k in t})
         merged.append(out)
-        done.add(repo)
+        done.add(repo.lower())
     skipped: list[tuple[str, str]] = []
     for t in tracked:
-        if t["repo"] in done:
+        if t["repo"].lower() in done:
             continue
         path = os.path.join(home, t["rel"])
         if not isdir(path):
@@ -125,8 +126,8 @@ def render(tracked_path: str, target_path: str, home: str, dry_run: bool) -> lis
     # The watcher accepts a bare array or an object with a `repos` array.
     if isinstance(current_doc, list):
         current = current_doc
-    elif isinstance(current_doc, dict) and isinstance(current_doc.get("repos", []), list):
-        current = current_doc.get("repos", [])
+    elif isinstance(current_doc, dict) and isinstance(current_doc.get("repos") or [], list):
+        current = current_doc.get("repos") or []  # null == absent, like jq `.repos // []`
     else:
         raise InputError("target file must be an array or an object with a repos array")
 
@@ -134,13 +135,15 @@ def render(tracked_path: str, target_path: str, home: str, dry_run: bool) -> lis
     lines = [f"skip\t{repo}\t{path}" for repo, path in skipped]
     new_doc: Any = merged if isinstance(current_doc, list) else {**current_doc, "repos": merged}
 
-    if old_text and new_doc == current_doc:
+    # Compare the entries, not the doc: an object without `repos` stays as is.
+    if old_text and merged == current:
         return [*lines, "unchanged"]
     new_text = _dump(new_doc)
     if dry_run:
         diff = difflib.unified_diff(old_text.splitlines(), new_text.splitlines(), target_path, target_path, lineterm="")
         return [*lines, *(f"diff\t{d}" for d in diff), "would-write"]
 
+    target_path = os.path.realpath(target_path)  # keep a symlinked target a symlink
     target_dir = os.path.dirname(target_path) or "."
     os.makedirs(target_dir, mode=0o700, exist_ok=True)
     backup = "-"

@@ -46,6 +46,12 @@ def test_merge_keeps_local_only_and_path_override() -> None:
     assert skipped == [("a/z", "/h/z")]
 
 
+def test_merge_matches_repo_case_insensitively() -> None:
+    merged, skipped = merge([{"repo": "Own/Repo", "rel": "r"}], [{"repo": "own/repo", "path": "/p"}], "/h")
+    assert merged == [{"repo": "own/repo", "path": "/p"}]
+    assert skipped == []
+
+
 def test_merge_drops_field_the_tracked_entry_omits() -> None:
     merged, _ = merge([{"repo": "a/x", "rel": "x"}], [{"repo": "a/x", "path": "/p", "verify_skill": "v"}], "/h")
     assert merged == [{"repo": "a/x", "path": "/p"}]
@@ -136,3 +142,13 @@ def test_render_broken_json_exits_2_and_leaves_target(tmp_path: Path, which: str
     assert res.stdout == ""
     assert target.read_text() == before
     assert list(tmp_path.glob("*.bak-*")) == []
+
+
+def test_render_object_without_repos_and_nothing_to_add_is_unchanged(tmp_path: Path) -> None:
+    tracked = tmp_path / "t.json"
+    tracked.write_text(json.dumps([{"repo": "a/x", "rel": "missing"}]))
+    target = tmp_path / "w.json"
+    target.write_text(json.dumps({"x": 1}))
+    res = run_render(str(tracked), str(target), str(tmp_path))
+    assert res.stdout.splitlines()[-1] == "unchanged"
+    assert json.loads(target.read_text()) == {"x": 1}

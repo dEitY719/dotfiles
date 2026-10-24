@@ -14,7 +14,7 @@
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
 
 avatar_watched_repos_main() {
-    local _dry="" _tracked _target _out _rc _kind _a _b
+    local _dry="" _tracked _target _out _rc _kind _a _b _line
 
     case "${1:-}" in
     -h | --help | help)
@@ -48,11 +48,15 @@ avatar_watched_repos_main() {
         return 1
     fi
 
-    while IFS="$(printf '\t')" read -r _kind _a _b; do
+    while IFS= read -r _line; do
+        _kind="${_line%%$'\t'*}"
+        _a="${_line#*$'\t'}"
+        _b="${_a#*$'\t'}"
+        _a="${_a%%$'\t'*}"
         case "${_kind}" in
         skip) ux_warning "skip ${_a}: ${_b} not found" ;;
         # Raw diff body is data (like git diff), not decorated status output.
-        diff) printf '%s\n' "${_a}" ;;
+        diff) printf '%s\n' "${_line#*$'\t'}" ;;
         unchanged) ux_success "watch list already up to date: ${_target}" ;;
         would-write) ux_info "dry-run: ${_target} would change (not written)" ;;
         written)
