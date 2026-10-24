@@ -52,6 +52,13 @@ def test_merge_matches_repo_case_insensitively() -> None:
     assert skipped == []
 
 
+def test_merge_keeps_entry_on_another_host() -> None:
+    local = {"repo": "a/x", "path": "/p", "host": "ghes.example", "verify_skill": "v"}
+    merged, skipped = merge([{"repo": "a/x", "rel": "x", "host": "github.com"}], [local], "/h", isdir=lambda _: True)
+    assert merged == [local]
+    assert skipped == []
+
+
 def test_merge_drops_field_the_tracked_entry_omits() -> None:
     merged, _ = merge([{"repo": "a/x", "rel": "x"}], [{"repo": "a/x", "path": "/p", "verify_skill": "v"}], "/h")
     assert merged == [{"repo": "a/x", "path": "/p"}]
@@ -152,3 +159,22 @@ def test_render_object_without_repos_and_nothing_to_add_is_unchanged(tmp_path: P
     res = run_render(str(tracked), str(target), str(tmp_path))
     assert res.stdout.splitlines()[-1] == "unchanged"
     assert json.loads(target.read_text()) == {"x": 1}
+
+
+def test_render_same_second_backups_do_not_collide(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from dotfiles_tools.issue_watcher import watched_repos
+
+    monkeypatch.setattr(watched_repos.time, "strftime", lambda _fmt: "20260101-000000")
+    (tmp_path / "x").mkdir()
+    (tmp_path / "y").mkdir()
+    tracked = tmp_path / "t.json"
+    target = tmp_path / "w.json"
+    target.write_text("[]")
+    tracked.write_text(json.dumps([{"repo": "a/x", "rel": "x"}]))
+    watched_repos.render(str(tracked), str(target), str(tmp_path), False)
+    tracked.write_text(json.dumps([{"repo": "a/x", "rel": "x"}, {"repo": "a/y", "rel": "y"}]))
+    watched_repos.render(str(tracked), str(target), str(tmp_path), False)
+    assert sorted(p.name for p in tmp_path.glob("w.json.bak-*")) == [
+        "w.json.bak-20260101-000000",
+        "w.json.bak-20260101-000000.1",
+    ]

@@ -27,6 +27,7 @@ _avatar_watched_repos_help_rows_commands() {
 _avatar_watched_repos_help_rows_rules() {
     ux_table_row "local-only entry" "Keep" "Repos only in the local file (private repos) stay as they are"
     ux_table_row "repo in both" "Merge" "Local path wins (per-PC override); host/verify_skill come from the tracked file"
+    ux_table_row "repo on another host" "Keep" "A local entry whose host differs (GHES mirror) is left as it is"
     ux_table_row "tracked-only repo" "Add" "Added as \$HOME/<rel> when that directory exists, else skipped with a warning"
     ux_table_row "same result" "Idempotent" "No write, no backup; on change: watched-repos.json.bak-<ts> then write (0600)"
     ux_table_row "broken JSON" "Abort" "Either file unreadable: error, local file left untouched"
