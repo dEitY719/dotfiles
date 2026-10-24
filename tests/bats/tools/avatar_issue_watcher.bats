@@ -1205,6 +1205,15 @@ _issue_worktree_branches() {
     _assert_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-3 --label iw-dotfiles-issue-11"
 }
 
+@test "avatar_issue_watcher: a half-built issue worktree (empty index) is not reused" {
+    # What a spawn that failed after `worktree add --no-checkout` leaves behind.
+    git -C "${_REPO_DIR}" worktree add -q --no-checkout -b wt/issue-11/1 "$(_worktree_path 11)" HEAD
+    git -C "$(_worktree_path 11)" read-tree --empty
+    _run_tick
+    assert_success
+    _assert_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-2 --label iw-dotfiles-issue-11"
+}
+
 @test "avatar_issue_watcher: a second tick reuses the worktree the first one spawned" {
     _run_tick
     assert_success
