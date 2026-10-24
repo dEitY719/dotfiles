@@ -25,6 +25,7 @@
 - **avatar-issue-watcher --dry-run** — Preview — Print what a tick would dispatch, change nothing
 - **avatar-issue-watcher <issue-ref>** — Target — Dispatch one issue (URL, owner/repo#N, #N, N) through the tick's guards
 - **avatar-issue-watcher <issue-ref> --force** — Target — Same, despite an excluded label
+- **avatar-issue-watcher <issue-ref> --fg** — Target — Stay in the foreground (a tty run detaches: PID + per-run log, exit=<rc> last line)
 - **avatar-issue-watcher --status** — Status — Rate-limit gate, saturation, gh search state
 - **avatar-issue-watcher watch list** — Watch — Show the watch list file and its entries
 - **avatar-issue-watcher watch add [owner/repo]** — Watch — Add/update an entry (--path P, --host H; default: cwd repo; stored as the main checkout)
@@ -39,7 +40,9 @@
 - **avatar-issue-watcher --dry-run** — Manual — Preview one tick without dispatching
 - **avatar-issue-watcher --status** — Manual — Show gate, saturation and search state
 - **avatar-issue-watcher --dry-run https://github.com/dEitY719/dotfiles/issues/2275** — Target — Preview dispatching that one issue
-- **cd ~/dotfiles && avatar-issue-watcher 2275** — Target — Dispatch issue 2275 of the cwd repo
+- **cd ~/dotfiles && avatar-issue-watcher 2275** — Target — Dispatch issue 2275 of the cwd repo (detached on a tty; prints PID + log)
+- **tail -f ~/.local/state/avatar-issue-watcher/logs/<owner>-<repo>-<N>-<stamp>.log** — Target — Follow a detached run (newest 20 logs kept)
+- **cd ~/dotfiles && avatar-issue-watcher 2275 --fg** — Target — Same, in the foreground
 - **cd ~/dotfiles && avatar-issue-watcher** — Manual — cwd mode: tick only this repo
 - **avatar-issue-watcher --cwd ~/dotfiles** — Manual — Watch-list tick (not cwd mode), started from any directory
 - **avatar-issue-watcher watch list** — Watch — Show the watch list

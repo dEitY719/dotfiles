@@ -4757,3 +4757,102 @@ _iw_parse_issue_ref \"\$1\"" _ "$1"
     _refute_logged "pane send-keys"
     assert_output --partial "agent_not_ready"
 }
+
+# ---------------------------------------------------------------------------
+# Detached targeted run (#2286): on a tty an issue-ref run re-runs itself in
+# the background with its output in a per-run log. bats never gives the script
+# a tty, so IW_ASSUME_TTY=1 is the test seam standing in for `[ -t 1 ]`.
+# ---------------------------------------------------------------------------
+
+_LOGS_DIR_REL="avatar-issue-watcher/logs"
+
+# Wait (max ~10s) for the detached child to write its closing exit=<rc> line.
+_wait_exit_line() {
+    local _i=0
+    while [ "${_i}" -lt 100 ]; do
+        tail -n 1 "$1" 2>/dev/null | grep -q '^exit=' && return 0
+        sleep 0.1
+        _i=$((_i + 1))
+    done
+    fail "no exit= line in $1"
+}
+
+_only_run_log() {
+    ls "${_STATE_HOME}/${_LOGS_DIR_REL}"/acme-dotfiles-12-*.log
+}
+
+@test "avatar_issue_watcher: a tty targeted run detaches and logs to a per-run file" {
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0" -- "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "PID"
+    assert_output --partial "${_STATE_HOME}/${_LOGS_DIR_REL}/acme-dotfiles-12-"
+    assert_output --partial "tail -f"
+    refute_output --partial "issue-watcher tick"
+    local _log
+    _log=$(_only_run_log)
+    _wait_exit_line "${_log}"
+    grep -q "issue-watcher tick" "${_log}"
+    [ "$(tail -n 1 "${_log}")" = "exit=0" ]
+    _assert_logged "/gh-flow:wave 12"
+}
+
+@test "avatar_issue_watcher: a detached child that fails at once fails the parent" {
+    # The suite's sleep stub returns at once; this check needs the real wait.
+    printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v sleep)" >"${_BIN_DIR}/sleep"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=3" "GH_CLOSED_ISSUES=12" -- "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "ended at once (exit=1)"
+    grep -q "acme/dotfiles#12 is CLOSED" "$(_only_run_log)"
+    [ "$(tail -n 1 "$(_only_run_log)")" = "exit=1" ]
+}
+
+@test "avatar_issue_watcher: --fg keeps a tty targeted run in the foreground" {
+    _run_tick "IW_ASSUME_TTY=1" -- "acme/dotfiles#12" --fg
+    assert_success
+    assert_output --partial "issue-watcher tick"
+    _assert_logged "/gh-flow:wave 12"
+    [ ! -d "${_STATE_HOME}/${_LOGS_DIR_REL}" ]
+}
+
+@test "avatar_issue_watcher: dry-run, plain tick and a non-tty run never detach" {
+    _run_tick "IW_ASSUME_TTY=1" -- --dry-run "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "Dry run — would dispatch:"
+    _run_tick "IW_ASSUME_TTY=1" -- --dry-run
+    assert_success
+    _run_tick -- "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "issue-watcher tick"
+    [ ! -d "${_STATE_HOME}/${_LOGS_DIR_REL}" ]
+}
+
+@test "avatar_issue_watcher: the --_detached marker is internal and not in --help" {
+    _run_tick -- --help
+    assert_success
+    assert_output --partial "--fg"
+    refute_output --partial "_detached"
+}
+
+@test "avatar_issue_watcher: run logs keep only the newest 20" {
+    local _d="${_STATE_HOME}/${_LOGS_DIR_REL}" _i
+    mkdir -p "${_d}"
+    for _i in $(seq 1 20); do
+        : >"${_d}/acme-old-${_i}-20200101-0000$(printf '%02d' "${_i}").log"
+        touch -d "2020-01-01 00:00:${_i}" "${_d}/acme-old-${_i}-20200101-0000$(printf '%02d' "${_i}").log"
+    done
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0" -- "acme/dotfiles#12"
+    assert_success
+    _wait_exit_line "$(_only_run_log)"
+    [ "$(ls "${_d}" | wc -l)" -eq 20 ]
+    [ ! -e "${_d}/acme-old-1-20200101-000001.log" ]
+    [ -e "${_d}/acme-old-2-20200101-000002.log" ]
+}
+
+@test "avatar_issue_watcher: an unwritable log dir refuses to detach" {
+    mkdir -p "${_STATE_DIR}"
+    : >"${_STATE_DIR}/logs"
+    _run_tick "IW_ASSUME_TTY=1" -- "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "Cannot write the run log"
+    _refute_logged "issue view"
+}
