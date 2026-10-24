@@ -96,6 +96,8 @@ Where this guidance conflicts with the project's own instructions, the project's
 
 You CAN update this rule file to save a user's help_level.
 
+**Saved help_level: HIGH** (2026-10-23) — user is new to AWS and asked Claude to do all the work, flagging only steps that need them.
+
 Constraints for each level:
 
 **LOW:**
