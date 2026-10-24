@@ -71,8 +71,8 @@ Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design s
 - **[Python Tests](./tests/AGENTS.md)** — pytest suite and cross-shell compatibility checks
 - **[Documentation](./docs/AGENTS.md)** — Project docs: policy SSOT, requirements, ADR, guides
 - **[Hermes](./hermes/AGENTS.md)** — Hermes Agent install + config SSOT
-- **[Obsidian](./obsidian/AGENTS.md)** — standalone `obsidian` command
-- **[agy](./agy/AGENTS.md)** — Antigravity CLI integration
+- **[Obsidian](./obsidian/AGENTS.md)** — standalone `obsidian` command · **[agy](./agy/AGENTS.md)** — Antigravity CLI integration
+- **avatar/** — public-safe issue-watcher watch list (`watched-repos.public.json`, HOME-relative `rel`); `avatar-watched-repos` renders it per PC (#2285)
 - **[Global Packages](./global-packages/AGENTS.md)** — global CLI tool sync across PCs (uv tools)
 - **[mcporter](./mcporter/AGENTS.md)** — mcporter exa server key injection
 

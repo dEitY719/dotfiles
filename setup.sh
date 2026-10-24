@@ -167,6 +167,8 @@ main() {
     step_run mcporter optional ./mcporter/setup.sh               # exa 키를 .enc.env placeholder 로 (#2106)
     step_run ssh optional ./ssh/setup.sh
     step_run gh optional ./gh/setup.sh
+    # Tracked watch list -> ~/.avatars/issue-watcher/watched-repos.json (#2285).
+    step_run avatar-watched-repos optional ./shell-common/tools/custom/avatar_watched_repos.sh
     step_run windows optional ./windows/setup.sh # WSL only
     # Post-setup integrity check (#594): JSON parse + NBSP/BOM/NUL scan.
     step_run verify-config critical ./scripts/verify-config-files.sh
