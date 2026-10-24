@@ -480,8 +480,8 @@ _iw_detach_run() {
     # its line, so a dead child without one died abnormally (SIGKILL, bootstrap).
     sleep "${IW_DETACH_CHECK_SLEEP:-1}"
     _alive=0
-    ! kill -0 "${_pid}" 2>/dev/null || _alive=1
-    _last=$(tail -n 1 "${_log}" 2>/dev/null) || _last=""
+    kill -0 "${_pid}" 2>/dev/null && _alive=1
+    _last=$(tail -n 1 "${_log}" 2>/dev/null)
     case "${_last}" in
     exit=0) ;;
     exit=*)
