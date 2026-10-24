@@ -520,7 +520,7 @@ _gwt_report_unpushed() {
 # ============================================================================
 _gwt_main_checkout_preflight() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local main_repo="$1" main_branch="$2" cur dirty holder blocking="" line
+    local main_repo="$1" main_branch="$2" cur holder blocking="" line
 
     if ! git -C "$main_repo" rev-parse --verify --quiet "refs/heads/$main_branch" >/dev/null 2>&1; then
         ux_error "Main repository has no '$main_branch' branch: $main_repo"
@@ -538,16 +538,14 @@ _gwt_main_checkout_preflight() {
         blocking="(checked out in another worktree: $holder)"
     elif [ "$cur" != "$main_branch" ]; then
         # --no-renames: a rename must list BOTH paths (the old one is dirty too).
-        # The dirty list goes through a temp file, not an env var: with many
-        # untracked files it would exceed the exec arg limit (E2BIG) and the
-        # intersection would silently come back empty (fail-open).
-        dirty="$( { git -C "$main_repo" diff --name-only --no-renames HEAD; git -C "$main_repo" ls-files --others --exclude-standard; } 2>/dev/null)"
-        if [ -n "$dirty" ]; then
-            local dirty_file="${TMPDIR:-/tmp}/gwt-dirty.$$.lst"
-            printf '%s\n' "$dirty" > "$dirty_file"
-            blocking="$(git -C "$main_repo" diff --name-only --no-renames HEAD "$main_branch" 2>/dev/null | grep -Fx -f "$dirty_file")"
-            rm -f "$dirty_file"
-        fi
+        # Intersection = paths listed twice: each list is duplicate-free and
+        # tracked-dirty vs untracked are disjoint, so `uniq -d` keeps exactly
+        # dirty paths that also differ on main. Streamed, so no E2BIG limit.
+        blocking="$( {
+            git -C "$main_repo" diff --name-only --no-renames HEAD
+            git -C "$main_repo" ls-files --others --exclude-standard
+            git -C "$main_repo" diff --name-only --no-renames HEAD "$main_branch"
+        } 2>/dev/null | sort | uniq -d)"
     fi
     [ -z "$blocking" ] && return 0
 
