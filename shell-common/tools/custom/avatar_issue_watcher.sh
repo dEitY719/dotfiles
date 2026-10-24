@@ -2066,6 +2066,14 @@ _iw_start_agent_retrying() {
         fi
         _IW_START_CODE=$(_hp_herdr_error_code "${_json}" "${_IW_ERRF}")
 
+        # A pane stopped at claude's trust dialog is not a failed start: accept
+        # it and let the idle/settle checks downstream judge the result.
+        if [ "${_IW_START_CODE}" = "agent_not_ready" ] && _hp_accept_trust_dialog "${_pane}"; then
+            ux_info "Accepted the trust-folder dialog on pane ${_pane} for ${_agent}."
+            _rc=0
+            break
+        fi
+
         # The one failure worth another attempt (#1525): the pane was created
         # moments ago and its shell is not interactive yet. Only this code — a
         # failure that does not name itself is not a race we understand, and
