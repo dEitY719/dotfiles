@@ -869,7 +869,7 @@ _iw_exclude_labels_file() {
         return 0
     fi
     _repos=$(_iw_repos_file)
-    printf '%s/excluded-labels.json' "${_repos%/*}"
+    printf '%s/excluded-labels.json' "$(dirname "${_repos}")"
 }
 
 # Exit 1 unless <file> holds a JSON array of strings.
