@@ -11,10 +11,11 @@
 #   3) 제외 라벨 필터 + watched-repos.json 밖 저장소 제외 + 로컬 경로 매핑
 #   4) repo 라운드로빈 · 이슈 번호 오름차순으로 후보 정렬
 #   5) 이미 실행 중 / 이미 처리됨(이슈를 닫는 open PR) / blockedBy OPEN 스킵
-#   6) tick 당 최대 _IW_DISPATCH_PER_TICK 건만, watch list 의 repo path 를 cwd 로
-#      herdr tab(`iw-<repo>-issue-<N>`, agent 이름과 동일) + claude agent 생성 — 워크트리는 만들지 않는다
-#   7) `/gh-flow:wave <N>` 프롬프트 전달 — 워크트리(wt/issue-<N>/<idx>)는 스킬이
-#      세션 안에서 만든다
+#   6) tick 당 최대 _IW_DISPATCH_PER_TICK 건만, 탭을 열기 전에 이슈 worktree
+#      (wt/issue-<N>/<idx>) 를 확보한다 — 있으면 재사용, 없으면 main 체크아웃에서
+#      `gwt spawn --wt-name issue-<N>` (#2281). 그 worktree 를 cwd 로 herdr
+#      tab(`iw-<repo>-issue-<N>`, agent 이름과 동일) + claude agent 생성
+#   7) `/gh-flow:wave <N>` 프롬프트 전달 — wave 는 그 worktree 를 재사용 모드로 채택한다
 # 토큰 한도 게이트가 닫혀 있으면 사이클 전체를 보류한다 (issue #1436, #1444).
 #
 # "실행 중" = repo 의 herdr workspace 안에 label 이 정확히 `issue-<N>`(사용자가
@@ -23,8 +24,11 @@
 # 이슈는 다시 디스패치하지 않는다. 수동 탭은 repo 를 모르므로 같은 workspace 를
 # 공유하는 모든 repo 의 #N 을 막고, watcher 탭은 label 의 repo 에만 귀속된다.
 #
-# 정리(검토 후 /exit, 워크트리 삭제, 탭 종료)는 사용자가 수동으로 한다 — tick 은
+# 정리(검토 후 /exit, `gwt teardown`, 탭 종료)는 사용자가 수동으로 한다 — tick 은
 # 워크트리도 탭도 회수하지 않는다(실패한 디스패치 시도의 탭만 닫는다).
+#
+# repo 경로는 언제나 main 체크아웃이다 (#2281): worktree 안에서 실행하거나
+# watch list 에 worktree 경로가 있어도 `--git-common-dir` 의 부모로 정규화한다.
 #
 # 이슈에 어떤 쓰기도 하지 않는다 — 댓글·라벨·assignee 변경 없음. 조회 전용이다.
 #
@@ -538,12 +542,27 @@ _iw_parse_remote_url() {
     printf '%s\t%s' "${_slug}" "${_host}"
 }
 
-# Print `<owner/repo>\t<toplevel>\t<host>` for the git checkout at the current
-# directory (#2243). Exit 1 when it is not a git repo or has no `origin`
-# (cwd mode does not apply), 2 when `origin` exists but cannot be parsed.
+# Echo the main checkout of the git checkout at <path> (#2281): a linked
+# worktree resolves to the checkout that owns it, so a watcher started inside
+# a worktree still records and dispatches from the main checkout (otherwise
+# the session starts in the wrong worktree and wave stops on `not on <base>`).
+# Exit 1 when <path> is not inside a git checkout.
+_iw_main_checkout() {
+    local _common
+    _common=$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+    case "${_common}" in
+    */.git) dirname "${_common}" ;;
+    # A submodule's common dir is not `<checkout>/.git`; keep its toplevel.
+    *) git -C "$1" rev-parse --show-toplevel 2>/dev/null ;;
+    esac
+}
+
+# Print `<owner/repo>\t<main checkout>\t<host>` for the git checkout at the
+# current directory (#2243, #2281). Exit 1 when it is not a git repo or has no
+# `origin` (cwd mode does not apply), 2 when `origin` exists but cannot be parsed.
 _iw_cwd_entry() {
     local _top _url _parsed
-    _top=$(git rev-parse --show-toplevel 2>/dev/null) || return 1
+    _top=$(_iw_main_checkout .) || return 1
     [ -n "${_top}" ] || return 1
     _url=$(git remote get-url origin 2>/dev/null) || return 1
     [ -n "${_url}" ] || return 1
@@ -719,7 +738,7 @@ _iw_watch_target() {
 }
 
 _iw_watch_add_cmd() {
-    local _file _arg="" _path="" _host="" _old _old_path _old_host _verb
+    local _file _arg="" _path="" _host="" _old _old_path _old_host _verb _main
     while [ "$#" -gt 0 ]; do
         case "$1" in
         --path | --host)
@@ -772,8 +791,10 @@ _iw_watch_add_cmd() {
     fi
 
     # An existing directory is stored absolute: the tick may run from anywhere.
+    # A worktree path is stored as its main checkout (#2281).
     if [ -n "${_path}" ] && [ -d "${_path}" ]; then
         _path=$(cd "${_path}" && pwd -P)
+        _main=$(_iw_main_checkout "${_path}") && _path="${_main}"
     fi
     # Explicit flags win; a listed entry keeps its values over the cwd-derived
     # ones, so `watch add` from a temporary worktree cannot repoint it there.
@@ -1078,17 +1099,17 @@ _iw_label_cmd() {
 #   what may be collected       true once the work is over
 #
 # The questions now get separate signals, and the tick keys on no worktree at
-# all — /gh-flow:wave creates its own `wt/issue-<n>/<idx>` inside the session,
-# and the user removes it after reviewing the result:
+# all — the tick prepares (or reuses) `wt/issue-<n>/<idx>` before the tab
+# opens (#2281), and the user removes it after reviewing the result:
 #
 #   running now  -> an `issue-<N>` or `iw-<repo>-issue-<N>` herdr tab with an
 #                   agent in it, inside the repo's workspace
 #   handled      -> GitHub: an open PR that closes the issue
 #   collectable  -> nothing; closing tabs and removing worktrees is manual
 #
-# Why not join agent cwd against the issue worktree any more: the dispatched
-# pane is opened on the checkout root and the worktree only appears later,
-# inside the session, so the pane's cwd never names the issue.
+# Why not join agent cwd against the issue worktree: a hand-opened
+# `issue-<N>` tab may stand anywhere, and the tab label already names the
+# issue, so the label stays the one signal.
 
 # Parsed once per tick, like the watch list: every cap check consults it and
 # the herdr round trips must not be paid per candidate. main() primes it in its
@@ -1924,11 +1945,67 @@ _iw_select_candidates() {
 # ============================================================
 
 # Best-effort teardown of a half-built dispatch, so the next attempt starts
-# from nothing. Only the tab: the tick creates no worktree (/gh-flow:wave makes
-# its own inside the session), and a surviving `iw-<repo>-issue-<N>` tab with an agent
-# in it would read as a running session and hold the issue.
+# from nothing. Only the tab: a surviving `iw-<repo>-issue-<N>` tab with an
+# agent in it would read as a running session and hold the issue. The issue
+# worktree stays (#2281) — it may hold work, the next attempt reuses it, and
+# removing it is `gwt teardown`'s job.
 _iw_cleanup_attempt() {
     [ -z "$1" ] || herdr tab close "$1" >/dev/null 2>&1 || true
+}
+
+# Echo the worktree of main checkout <1> on `wt/issue-<2>/<index>` with the
+# highest index, or nothing. The trailing `/` keeps issue 11 off issue 110.
+_iw_find_issue_worktree() {
+    git -C "$1" worktree list --porcelain 2>/dev/null | awk -v p="refs/heads/wt/issue-$2/" '
+        /^worktree / { wt = substr($0, 10) }
+        /^branch / {
+            b = substr($0, 8)
+            if (index(b, p) != 1) next
+            k = substr(b, length(p) + 1)
+            if (k ~ /^[0-9]+$/ && (best == "" || k + 0 > best + 0)) { best = k; path = wt }
+        }
+        END { if (path != "") print path }'
+}
+
+# `gwt spawn --wt-name <2>` from main checkout <1>, cron-safe (#2281). gwt is a
+# shell function behind the interactive guard, so it is sourced here with
+# DOTFILES_FORCE_INIT=1, inside a subshell that keeps the watcher's cwd and
+# namespace. No --ai/--user/--launch: the herdr pane starts the agent and
+# picks the account. git-crypt handling is git_worktree_add's.
+_iw_gwt_spawn() {
+    local _f
+    for _f in functions/git_worktree.sh functions/git_worktree_spawn.sh; do
+        if [ ! -f "${_IW_SHELL_COMMON}/${_f}" ]; then
+            ux_error "${_f} not found under ${_IW_SHELL_COMMON} — cannot spawn a worktree."
+            return 1
+        fi
+    done
+    (
+        set +u # the gwt files are written for interactive shells, not nounset
+        export DOTFILES_FORCE_INIT=1
+        cd "$1" || exit 1
+        # shellcheck source=/dev/null
+        . "${_IW_SHELL_COMMON}/functions/git_worktree.sh" || exit 1
+        # shellcheck source=/dev/null
+        . "${_IW_SHELL_COMMON}/functions/git_worktree_spawn.sh" || exit 1
+        git_worktree_spawn --wt-name "$2"
+    )
+}
+
+# Echo the worktree issue <2> is dispatched into, under main checkout <1>: the
+# existing `wt/issue-<2>/*` one (highest index) when there is one, else a fresh
+# `gwt spawn` (<parent>/<project>-issue-<2>-<k>, branch wt/issue-<2>/<k>).
+# gwt's own output goes to stderr (the cron log); stdout is the path alone.
+# Non-zero, echoing nothing, when no worktree could be had.
+_iw_issue_worktree() {
+    local _main="$1" _n="$2" _wt
+    _wt=$(_iw_find_issue_worktree "${_main}" "${_n}")
+    if [ -z "${_wt}" ] || [ ! -d "${_wt}" ]; then
+        _iw_gwt_spawn "${_main}" "issue-${_n}" >&2 || return 1
+        _wt=$(_iw_find_issue_worktree "${_main}" "${_n}")
+    fi
+    [ -n "${_wt}" ] && [ -d "${_wt}" ] || return 1
+    printf '%s' "${_wt}"
 }
 
 # herdr *create* with the shared flags, routed at this tick's account
@@ -2302,7 +2379,11 @@ _iw_prompt_issue() {
 _iw_process_issue() {
     local _repo="$1" _number="$2" _path="$3"
     local _attempt=1 _agent _label _ws="" _pane_tab="" _pane="" _tab=""
-    local _cause="" _msg=""
+    local _cause="" _msg="" _main _wt
+
+    # A watch list written before #2281 may hold a worktree path: dispatch
+    # from its main checkout all the same.
+    _main=$(_iw_main_checkout "${_path}") && _path="${_main}"
 
     # A repo whose name normalizes to nothing has no addressable agent, so the
     # dispatch fails here rather than starting a session under a name no later
@@ -2320,17 +2401,26 @@ _iw_process_issue() {
         return 1
     fi
 
+    # The worktree comes before any tab, once per issue and outside the retry
+    # loop: a retry or a later tick reuses it instead of spawning
+    # issue-<N>-2 (#2281). No worktree, no dispatch — starting the session on
+    # the main checkout instead is exactly what this guards against.
+    if ! _wt=$(_iw_issue_worktree "${_path}" "${_number}"); then
+        ux_error "Not dispatching ${_repo}#${_number} — could not acquire a wt/issue-${_number} worktree from ${_path}."
+        return 1
+    fi
+
     while [ "${_attempt}" -le "${_IW_MAX_ATTEMPTS}" ]; do
         _tab=""
 
-        # The tab opens on the checkout root and is labelled with the agent
+        # The tab opens on the issue worktree and is labelled with the agent
         # name (`iw-<repo>-issue-<N>`) — the repo slug ties it to this repo
         # alone in a shared workspace, and the `iw-` keeps it apart from an
         # `issue-<N>` tab the user opened by hand; _iw_live_agents counts both.
-        # /gh-flow:wave creates the worktree itself, inside the session.
+        # /gh-flow:wave adopts that worktree in its reuse mode.
         if ! _ws=$(_iw_workspace_for_label "${_label}" "${_path}"); then
             ux_warning "No herdr workspace for ${_label} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
-        elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_path}" "${_agent}"); then
+        elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_wt}" "${_agent}"); then
             ux_warning "herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
         else
             IFS="${_IW_TAB}" read -r _pane _tab <<EOF
@@ -3430,9 +3520,9 @@ _iw_usage() {
     ux_bullet_sub "  default: ${_IW_EXCLUDE_LABELS_DEFAULT}"
     ux_bullet_sub "an issue with an OPEN blockedBy is skipped (query failure fails open)"
     ux_bullet_sub "an issue an open PR already closes is skipped (query failure skips the repo)"
-    ux_bullet_sub "dispatch opens an iw-<repo>-issue-<N> tab (= the agent name) on the repo path"
-    ux_bullet_sub "  and runs /gh-flow:wave <N>"
-    ux_bullet_sub "  (the skill creates its own worktree; the tick creates none)"
+    ux_bullet_sub "dispatch first reuses the wt/issue-<N>/* worktree, else runs gwt spawn --wt-name issue-<N>"
+    ux_bullet_sub "  from the main checkout (no worktree -> no dispatch), then opens an"
+    ux_bullet_sub "  iw-<repo>-issue-<N> tab (= the agent name) on it and runs /gh-flow:wave <N>"
     ux_bullet_sub "at most ${_IW_DISPATCH_PER_TICK} issue(s) per tick, ${_IW_MAX_ATTEMPTS} attempts each"
     ux_bullet_sub "no issue is ever written to — no comment, label or assignee change"
     ux_bullet "targeted run (<issue-ref>)"
@@ -3449,7 +3539,7 @@ _iw_usage() {
     ux_bullet_sub "  repos sharing a path: iw-<repo>-issue-<N> holds only its repo, issue-<N> holds all"
     ux_bullet_sub "${_IW_MAX_CONCURRENT} running in total holds the tick (exit 0); ${_IW_MAX_PER_REPO} in one repo skips that repo"
     ux_bullet_sub "repos take turns (round-robin); within a repo the lowest issue number goes first"
-    ux_bullet_sub "cleanup is manual: after review, /exit, remove the worktree, close the tab"
+    ux_bullet_sub "cleanup is manual: after review, /exit, gwt teardown, close the tab"
     ux_bullet "watch list"
     ux_bullet_sub "${_IW_REPOS_FILE_DEFAULT}"
     ux_bullet_sub "override with \$IW_WATCHED_REPOS; entries are {repo, path, host}"

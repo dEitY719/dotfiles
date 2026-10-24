@@ -27,13 +27,13 @@ _avatar_issue_watcher_help_list_sections() {
 }
 
 _avatar_issue_watcher_help_rows_commands() {
-    ux_table_row "avatar-issue-watcher" "Tick" "Dispatch assigned open issues to /gh-flow:wave (cron)"
+    ux_table_row "avatar-issue-watcher" "Tick" "Dispatch assigned open issues to /gh-flow:wave in a wt/issue-<N> worktree (cron)"
     ux_table_row "avatar-issue-watcher --dry-run" "Preview" "Print what a tick would dispatch, change nothing"
     ux_table_row "avatar-issue-watcher <issue-ref>" "Target" "Dispatch one issue (URL, owner/repo#N, #N, N) through the tick's guards"
     ux_table_row "avatar-issue-watcher <issue-ref> --force" "Target" "Same, despite an excluded label"
     ux_table_row "avatar-issue-watcher --status" "Status" "Rate-limit gate, saturation, gh search state"
     ux_table_row "avatar-issue-watcher watch list" "Watch" "Show the watch list file and its entries"
-    ux_table_row "avatar-issue-watcher watch add [owner/repo]" "Watch" "Add/update an entry (--path P, --host H; default: cwd repo)"
+    ux_table_row "avatar-issue-watcher watch add [owner/repo]" "Watch" "Add/update an entry (--path P, --host H; default: cwd repo; stored as the main checkout)"
     ux_table_row "avatar-issue-watcher watch remove [owner/repo]" "Watch" "Drop an entry (default: cwd repo)"
     ux_table_row "avatar-issue-watcher label list" "Label" "Show the excluded labels and their source (env/file/default)"
     ux_table_row "avatar-issue-watcher label add <label>..." "Label" "Exclude labels (absent file: seeded from the default)"
