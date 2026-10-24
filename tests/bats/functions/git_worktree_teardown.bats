@@ -1146,5 +1146,46 @@ _wt_commit_no_upstream() {
     assert_failure
     assert_output --partial "git:"
     assert_output --partial "index.lock"
-    assert_output --partial "git branch -D wt/test/1"
+    assert_output --partial "git branch -d wt/test/1"
+}
+
+@test "teardown: unmerged paths in main repo block teardown (#2276)" {
+    (
+        cd "$CLONE"
+        git checkout -q -b refactor/x
+        echo ours > base.txt && git commit -q -am ours
+        git checkout -q -b refactor/y main
+        echo theirs > base.txt && git commit -q -am theirs
+        git merge -q refactor/x >/dev/null 2>&1 || true
+    )
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "base.txt"
+    [ -d "$WORKTREE" ]
+}
+
+@test "teardown: staged rename of a path main changes blocks teardown (#2276)" {
+    (
+        cd "$CLONE"
+        git checkout -q -b refactor/x
+        echo changed > base.txt && git commit -q -am "change base"
+        git mv base.txt moved.txt
+    )
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    assert_output --partial "base.txt"
+    [ -d "$WORKTREE" ]
+}
+
+@test "teardown: fetch failure — remote-branch signal is not trusted (#2276)" {
+    _wt_commit_no_upstream
+    git -C "$WORKTREE" push -q origin HEAD:refs/heads/refactor/x
+    git -C "$CLONE" remote set-url origin "$TEST_TEMP_HOME/missing.git"
+
+    run_in_bash "cd '$WORKTREE' && gwt teardown 2>&1"
+    assert_failure
+    refute_output --partial "preserved on remote"
+    [ -d "$WORKTREE" ]
 }
