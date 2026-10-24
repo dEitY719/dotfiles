@@ -16,11 +16,12 @@
 #          (the running-now signal), with canned JSON matching the shapes
 #          measured on a live herdr server.
 #
-# The tick creates no worktree: the dispatched `/gh-flow:wave` session makes
-# its own (wt/issue-<n>/<idx>), and removing it is the user's manual step. A
-# real fixture repo is still used, so the tests can prove the tick leaves a
-# worktree alone. `gh pr list` says what is already handled and `gh issue view`
-# feeds the zombie check (#1596).
+# Before the tab opens the tick acquires the issue worktree (#2281): it reuses
+# a `wt/issue-<n>/*` one, else runs the real `gwt spawn --wt-name issue-<n>`
+# against a real fixture repo, so the tests prove which worktree the pane
+# starts in and that the main checkout is left alone. Removing it is the
+# user's manual step. `gh pr list` says what is already handled and
+# `gh issue view` feeds the zombie check (#1596).
 
 load '../test_helper'
 
@@ -139,16 +140,15 @@ _set_open_prs() {
     printf '%s\n' "$1" >"${_WORK_DIR}/prs.json"
 }
 
-# The worktree path `_add_worktree <n>` creates — the shape /gh-flow:wave leaves
-# behind (`wt/issue-<n>/<idx>`). The tick itself never creates or removes one.
+# The worktree path `_add_worktree <n>` creates — the same shape the tick's
+# `gwt spawn` leaves behind (`wt/issue-<n>/<idx>`). The tick never removes one.
 _worktree_path() {
     printf '%s/dotfiles-issue-%s-1' "${_WORK_DIR}" "$1"
 }
 
 # _set_tabs <status> <label>... — the running-now signal: one herdr tab per
 # label inside the `dotfiles` workspace, each with one agent pane in the given
-# `agent_status`. The pane stands in the checkout root, as a /gh-flow:wave
-# session does: the worktree is created by the skill, not the tick. `herdr
+# `agent_status`. The pane's cwd is not what identifies the session: `herdr
 # agent list` carries no agent-name field, so the tick recognises a session by
 # its tab label (`issue-<n>` by hand, `iw-<repo>-issue-<n>` by the watcher) and the
 # tab id the pane reports.
@@ -1161,28 +1161,108 @@ _assert_not_hung() {
     _assert_logged "agent start ${_name} --kind claude"
 }
 
-@test "avatar_issue_watcher: the tab opens on the repo's checkout path" {
-    _run_tick
-    assert_success
-    _assert_logged "tab create --workspace ws-test-1 --cwd ${_REPO_DIR} --label iw-dotfiles-issue-11"
+# ---------------------------------------------------------------------------
+# The issue worktree, acquired before the tab (#2281)
+# ---------------------------------------------------------------------------
+
+# Every `wt/issue-<1>/*` branch the fixture repo has a worktree on, one per line.
+_issue_worktree_branches() {
+    git -C "${_REPO_DIR}" worktree list --porcelain |
+        awk -v p="branch refs/heads/wt/issue-$1/" 'index($0, p) == 1'
 }
 
-@test "avatar_issue_watcher: the tick creates no worktree and never calls gwt" {
-    # /gh-flow:wave makes its own wt/issue-<n>/<idx> worktree inside the
-    # session; a second one made here would be left behind unused.
-    cat >"${_BIN_DIR}/gwt" <<'EOF'
-#!/bin/sh
-printf 'gwt %s\n' "$*" >>"${CALL_LOG}"
-exit 0
-EOF
-    chmod +x "${_BIN_DIR}/gwt"
+@test "avatar_issue_watcher: the tab opens on a gwt-spawned issue worktree, not the checkout" {
+    local _main_branch
+    _main_branch=$(git -C "${_REPO_DIR}" symbolic-ref --short HEAD)
     _run_tick
     assert_success
+    # gwt spawn's layout: <parent>/<project>-issue-<N>-<k> on wt/issue-<N>/<k>.
+    _assert_logged "tab create --workspace ws-test-1 --cwd $(_worktree_path 11) --label iw-dotfiles-issue-11"
+    _refute_logged "--cwd ${_REPO_DIR} --label iw-"
     _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
-    _refute_logged "gwt "
-    run git -C "${_REPO_DIR}" worktree list --porcelain
-    refute_output --partial "wt/issue-"
-    refute_output --partial "worktree ${_WORK_DIR}/dotfiles-"
+    [ "$(_issue_worktree_branches 11)" = "branch refs/heads/wt/issue-11/1" ]
+    # The main checkout is left exactly as it was: same branch, clean tree.
+    [ "$(git -C "${_REPO_DIR}" symbolic-ref --short HEAD)" = "${_main_branch}" ]
+    [ -z "$(git -C "${_REPO_DIR}" status --porcelain)" ]
+}
+
+@test "avatar_issue_watcher: an existing wt/issue-<N> worktree is reused, not duplicated" {
+    _add_worktree 11
+    _run_tick
+    assert_success
+    _assert_logged "--cwd $(_worktree_path 11) --label iw-dotfiles-issue-11"
+    [ "$(_issue_worktree_branches 11 | wc -l)" -eq 1 ]
+    [ ! -e "${_WORK_DIR}/dotfiles-issue-11-2" ]
+}
+
+@test "avatar_issue_watcher: of several issue worktrees the highest index is reused" {
+    _add_worktree 11
+    git -C "${_REPO_DIR}" worktree add -q -b wt/issue-11/3 "${_WORK_DIR}/dotfiles-issue-11-3" HEAD
+    # Issue 110 shares the prefix `issue-11` and must not be mistaken for it.
+    git -C "${_REPO_DIR}" worktree add -q -b wt/issue-110/9 "${_WORK_DIR}/dotfiles-issue-110-9" HEAD
+    _run_tick
+    assert_success
+    _assert_logged "--cwd ${_WORK_DIR}/dotfiles-issue-11-3 --label iw-dotfiles-issue-11"
+}
+
+@test "avatar_issue_watcher: a second tick reuses the worktree the first one spawned" {
+    _run_tick
+    assert_success
+    _set_tabs idle
+    : >"${_LOG}"
+    _run_tick
+    assert_success
+    _assert_logged "--cwd $(_worktree_path 11) --label iw-dotfiles-issue-11"
+    [ "$(_issue_worktree_branches 11 | wc -l)" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: failed attempts share one worktree and leave it in place" {
+    _run_tick HERDR_TAB_FAIL=1
+    assert_output --partial "Giving up on acme/dotfiles#11 after 3 attempts."
+    [ "$(_log_count 'tab create')" -eq 3 ]
+    [ "$(_log_count "--cwd $(_worktree_path 11) ")" -eq 3 ]
+    # Spawned once, outside the retry loop, and not removed by the cleanup.
+    [ "$(_issue_worktree_branches 11)" = "branch refs/heads/wt/issue-11/1" ]
+    [ -d "$(_worktree_path 11)" ]
+}
+
+@test "avatar_issue_watcher: no worktree means no dispatch, never the main checkout" {
+    # A file where gwt spawn would put the worktree makes `git worktree add` fail.
+    : >"$(_worktree_path 11)"
+    _run_tick
+    assert_output --partial "Not dispatching acme/dotfiles#11 — could not acquire a wt/issue-11 worktree"
+    _refute_logged "tab create"
+    _refute_logged "agent start"
+    [ -z "$(_issue_worktree_branches 11)" ]
+}
+
+@test "avatar_issue_watcher: a worktree path on the watch list dispatches from its main checkout" {
+    _add_worktree 7
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"'"$(_worktree_path 7)"'","host":"github.com"}]'
+    _run_tick
+    assert_success
+    _assert_logged "--cwd $(_worktree_path 11) --label iw-dotfiles-issue-11"
+    # The workspace is the main checkout's, labelled by its basename.
+    _assert_logged "--label dotfiles"
+}
+
+@test "avatar_issue_watcher: cwd mode inside a worktree records the main checkout" {
+    _cwd_repo "https://github.com/acme/dotfiles.git"
+    _add_worktree 7
+    _RUN_DIR="$(_worktree_path 7)"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json" -- --dry-run
+    assert_success
+    assert_output --partial "acme/dotfiles#11  (${_REPO_DIR}, github.com)"
+}
+
+@test "avatar_issue_watcher: cwd mode inside a worktree dispatches into the issue worktree" {
+    _cwd_repo "https://github.com/acme/dotfiles.git"
+    _add_worktree 7
+    _RUN_DIR="$(_worktree_path 7)"
+    _run_tick "IW_WATCHED_REPOS=${_WORK_DIR}/nope.json"
+    assert_success
+    _assert_logged "--cwd $(_worktree_path 11) --label iw-dotfiles-issue-11"
+    [ "$(_issue_worktree_branches 11)" = "branch refs/heads/wt/issue-11/1" ]
 }
 
 @test "avatar_issue_watcher: a hand-made issue-<N> tab with an agent counts as running" {
@@ -4297,6 +4377,24 @@ _watch_json() {
     _run_tick -- watch add
     assert_success
     assert_output --partial "Updated acme/dotfiles"
+    [ "$(_watch_json '.[0].path')" = "\"${_REPO_DIR}\"" ]
+}
+
+@test "avatar_issue_watcher: watch add --path of a worktree stores its main checkout" {
+    rm -f "${_WATCH_FILE}"
+    _add_worktree 11
+    _run_tick -- watch add acme/dotfiles --path "$(_worktree_path 11)"
+    assert_success
+    [ "$(_watch_json '.[0].path')" = "\"${_REPO_DIR}\"" ]
+}
+
+@test "avatar_issue_watcher: watch add from a worktree of an unlisted repo stores the main checkout" {
+    rm -f "${_WATCH_FILE}"
+    _cwd_repo "https://github.com/acme/dotfiles"
+    _add_worktree 11
+    _RUN_DIR="$(_worktree_path 11)"
+    _run_tick -- watch add
+    assert_success
     [ "$(_watch_json '.[0].path')" = "\"${_REPO_DIR}\"" ]
 }
 
