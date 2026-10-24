@@ -380,8 +380,11 @@ git_worktree_spawn() {
 # from another remote-tracking branch (#2276), or GitHub reports the branch's
 # PR as MERGED with the merge_commit reachable from main_ref.
 # ============================================================================
+# Arg: [fetch_ok] — "false" skips step 4b: without a fresh `fetch --prune`
+# a remote-tracking ref may be stale (branch already deleted upstream).
 _gwt_commits_safe() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local fetch_ok="${1:-true}"
     local local_rev remote_rev
     local_rev="$(git rev-parse HEAD)"
 
@@ -424,8 +427,8 @@ _gwt_commits_safe() {
     # branch), so discarding the local branch loses nothing. Fail-closed: a
     # git error yields an empty list, which is not "safe".
     local preserved_on
-    preserved_on="$(git branch -r --contains HEAD 2>/dev/null | grep -v ' -> ' | sed 's/^ *//' | head -3 | tr '\n' ' ')"
-    if [ -n "$preserved_on" ]; then
+    [ "$fetch_ok" = true ] && preserved_on="$(git branch -r --contains HEAD 2>/dev/null | grep -v ' -> ' | sed 's/^ *//' | head -3 | tr '\n' ' ')"
+    if [ "$fetch_ok" = true ] && [ -n "$preserved_on" ]; then
         ux_info "Commits preserved on remote: ${preserved_on% }"
         return 0
     fi
@@ -520,21 +523,23 @@ _gwt_report_unpushed() {
 # ============================================================================
 _gwt_main_checkout_preflight() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local main_repo="$1" main_branch="$2" cur holder blocking="" line
+    local main_repo="$1" main_branch="$2" cur holder="" blocking="" line
 
     if ! git -C "$main_repo" rev-parse --verify --quiet "refs/heads/$main_branch" >/dev/null 2>&1; then
         ux_error "Main repository has no '$main_branch' branch: $main_repo"
         return 1
     fi
     cur="$(git -C "$main_repo" symbolic-ref --quiet --short HEAD 2>/dev/null)"
+    # git refuses to check out a branch another worktree already holds.
+    if [ "$cur" != "$main_branch" ]; then
+        holder="$(git -C "$main_repo" worktree list --porcelain 2>/dev/null \
+            | awk -v b="branch refs/heads/$main_branch" '/^worktree /{w=substr($0,10)} $0==b{print w; exit}')"
+    fi
 
     if [ -n "$(git -C "$main_repo" ls-files -u 2>/dev/null)" ]; then
         blocking="$(git -C "$main_repo" diff --name-only --diff-filter=U 2>/dev/null)"
         [ -n "$blocking" ] || blocking="(unmerged index)"
-    elif [ "$cur" != "$main_branch" ] && holder="$(git -C "$main_repo" worktree list --porcelain 2>/dev/null \
-            | awk -v b="branch refs/heads/$main_branch" '/^worktree /{w=substr($0,10)} $0==b{print w; exit}')" \
-            && [ -n "$holder" ]; then
-        # git refuses to check out a branch another worktree already holds.
+    elif [ -n "$holder" ]; then
         blocking="(checked out in another worktree: $holder)"
     elif [ "$cur" != "$main_branch" ]; then
         # --no-renames: a rename must list BOTH paths (the old one is dirty too).
@@ -749,7 +754,9 @@ _gwt_teardown_one_inplace() {
     local _gwt_fetch_err_file="${TMPDIR:-/tmp}/gwt-fetch.$$.err"
     # --prune: a remote branch deleted upstream must not linger as a stale
     # ref that _gwt_commits_safe step 4b would trust (#2276).
+    local _gwt_fetch_ok=true
     if ! git fetch --prune origin 2>"$_gwt_fetch_err_file" >/dev/null; then
+        _gwt_fetch_ok=false
         ux_warning "git fetch origin failed (non-blocking); using local refs for safety checks."
         if [ -s "$_gwt_fetch_err_file" ]; then
             sed 's/^/    /' "$_gwt_fetch_err_file" >&2
@@ -757,7 +764,7 @@ _gwt_teardown_one_inplace() {
     fi
     rm -f "$_gwt_fetch_err_file"
     # Checks (in order): upstream match → ancestor of origin/main → patch-id (rebase merge)
-    if ! _gwt_commits_safe; then
+    if ! _gwt_commits_safe "$_gwt_fetch_ok"; then
         if [ "$force" = true ]; then
             ux_warning "Discarding unpushed commits (--force)"
         else
@@ -772,7 +779,7 @@ _gwt_teardown_one_inplace() {
     # BEFORE the worktree is removed — a checkout failure afterwards leaves a
     # half-done teardown (worktree gone, branch left behind) (#2276).
     local main_branch="main"
-    if ! git rev-parse --verify --quiet "refs/heads/main" >/dev/null 2>&1; then
+    if ! git -C "$main_repo" rev-parse --verify --quiet "refs/heads/main" >/dev/null 2>&1; then
         main_branch="master"
     fi
     _gwt_main_checkout_preflight "$main_repo" "$main_branch" || return 1
@@ -894,7 +901,8 @@ EOF
         [ -n "$checkout_err" ] && ux_info "git: $checkout_err"
         ux_warning "Teardown half-done — worktree already removed: $wt_path"
         if [ "$branch" != HEAD ]; then
-            ux_info "  Branch '$branch' remains. Clean up: git branch -D $branch"
+            ux_info "  Branch '$branch' remains. Clean up: git branch -d $branch"
+            ux_info "  (-D also works but discards any commits not on a remote)"
         fi
         return 1
     fi
