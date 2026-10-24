@@ -4863,3 +4863,16 @@ _only_run_log() {
     assert_output --partial "--fg only applies to a targeted run"
     [ ! -s "${_LOG}" ]
 }
+
+# The child is re-run as `bash <self> --_detached "$@"`: each argument must
+# reach it as one word, a --cwd path with a space included (PR #2288 review).
+@test "avatar_issue_watcher: a detached run keeps a --cwd path with a space intact" {
+    mkdir -p "${_WORK_DIR}/with space"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0" -- --cwd "${_WORK_DIR}/with space" "acme/dotfiles#12"
+    assert_success
+    local _log
+    _log=$(_only_run_log)
+    _wait_exit_line "${_log}"
+    [ "$(tail -n 1 "${_log}")" = "exit=0" ]
+    _assert_logged "/gh-flow:wave 12"
+}
