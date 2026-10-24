@@ -4856,3 +4856,10 @@ _only_run_log() {
     assert_output --partial "Cannot write the run log"
     _refute_logged "issue view"
 }
+
+@test "avatar_issue_watcher: --fg without an issue ref is rejected" {
+    _run_tick -- --fg
+    assert_failure
+    assert_output --partial "--fg only applies to a targeted run"
+    [ ! -s "${_LOG}" ]
+}
