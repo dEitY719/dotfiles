@@ -98,6 +98,10 @@ HOME 상대경로(`rel`)만 `avatar/watched-repos.public.json` 으로 추적하�
   양쪽에 있는 repo 는 로컬 `path` 를 유지하고 `host`/`verify_skill` 만 추적
   파일 값으로 맞춘다. 추적 파일에만 있는 repo 는 `$HOME/<rel>` 디렉터리가
   있을 때만 추가되고, 없으면 경고 후 건너뛴다.
+  같은 이름이라도 로컬 엔트리의 `host` 가 다르면(사내 GHES 미러 등) PC 별
+  override 로 보고 그대로 둔다.
+- 새 PC 에서 아직 clone 하지 않은 repo 는 건너뛴다. clone 후 `./setup.sh` 나
+  `avatar-watched-repos` 를 다시 실행하면 추가된다.
 - 워크스페이스 루트가 다른 PC 는 렌더 후 로컬 파일의 `path` 를 직접 고치면
   다음 렌더에서도 유지된다.
 - 결과가 같으면 쓰지 않는다(백업도 없음). 바뀔 때만

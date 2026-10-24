@@ -6,7 +6,9 @@ file avatar_issue_watcher.sh reads, keyed on `repo`:
 
   - an entry only the target has (a private repo, say) is kept as it is;
   - a repo both have keeps the target's `path` (a per-PC override) and takes
-    every other field from the tracked entry;
+    every other field from the tracked entry -- unless the target names a
+    different `host` (an internal GHES mirror, say): that entry is a per-PC
+    override and is kept as it is;
   - a repo only the tracked file has is added as `$HOME/<rel>` when that
     directory exists, and reported as skipped otherwise.
 
@@ -84,9 +86,12 @@ def merge(
             merged.append(entry)
             continue
         t = by_repo[repo.lower()]
+        done.add(repo.lower())
+        if (entry.get("host") or "github.com") != t.get("host", "github.com"):
+            merged.append(entry)  # same name on another host: leave it alone
+            continue
         out = {k: v for k, v in entry.items() if k not in _TRACKED_FIELDS}
         merged.append({**out, **{k: t[k] for k in _TRACKED_FIELDS if k in t}})
-        done.add(repo.lower())
     skipped: list[tuple[str, str]] = []
     for t in tracked:
         if t["repo"].lower() in done:
@@ -145,7 +150,10 @@ def render(tracked_path: str, target_path: str, home: str, dry_run: bool) -> lis
     os.makedirs(target_dir, mode=0o700, exist_ok=True)
     backup = "-"
     if old_text:
-        backup = f"{target_path}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
+        backup = base = f"{target_path}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
+        n = 1
+        while os.path.exists(backup):  # two renders in one second keep both backups
+            backup, n = f"{base}.{n}", n + 1
         shutil.copy2(target_path, backup)
     fd, tmp = tempfile.mkstemp(dir=target_dir, prefix=".watched-repos.")
     try:

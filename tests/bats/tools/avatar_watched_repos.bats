@@ -96,7 +96,10 @@ dEitY719/equinest ${HOME}/para/project/equinest"
     assert_success
     run grep -nE '/home/|/Users/|[A-Za-z]:\\' "$TRACKED"
     assert_failure
-    run grep -nwF "$(id -un)" "$TRACKED"
+    # Match the user name only as a whole JSON value or path segment, so a
+    # short name like `dev` does not trip on `dev-team-404`.
+    u="$(id -un)"
+    run grep -nF -e "\"$u\"" -e "/$u/" -e "\"$u/" -e "/$u\"" "$TRACKED"
     assert_failure
     # Same patterns the pre-push leak guard uses, when this PC defines them.
     if [ -n "${LEAK_PATTERNS_ERE-}" ]; then
