@@ -453,7 +453,7 @@ _iw_prune_run_logs() {
 # and the log. Never returns.
 #   $1 = owner/repo (empty: unresolved), $2 = issue number, $3.. = child args
 _iw_detach_run() {
-    local _repo="$1" _num="$2" _dir _log _pid _self _last
+    local _repo="$1" _num="$2" _dir _log _pid _self _last _alive
     shift 2
     _dir="$(_iw_state_dir)/logs"
     _repo=$(printf '%s' "${_repo:-local}" | tr '/' '-')
@@ -475,14 +475,24 @@ _iw_detach_run() {
     fi
     _pid=$!
     # A child that dies at once (closed issue, no herdr) has already written
-    # its exit=<rc> line; report it instead of a misleading success.
+    # its exit=<rc> line; report it instead of a misleading success. Liveness is
+    # sampled before the log is read: a child that is dead by then has written
+    # its line, so a dead child without one died abnormally (SIGKILL, bootstrap).
     sleep "${IW_DETACH_CHECK_SLEEP:-1}"
+    _alive=0
+    ! kill -0 "${_pid}" 2>/dev/null || _alive=1
     _last=$(tail -n 1 "${_log}" 2>/dev/null) || _last=""
     case "${_last}" in
     exit=0) ;;
     exit=*)
         ux_error "Detached run ${_pid} ended at once (${_last}) — see ${_log}"
         exit 1
+        ;;
+    *)
+        if [ "${_alive}" -eq 0 ]; then
+            ux_error "Detached run ${_pid} died without an exit line — see ${_log}"
+            exit 1
+        fi
         ;;
     esac
     ux_success "Detached — the run continues in the background."
@@ -3949,6 +3959,9 @@ main() {
         fi
     elif [ "${_force}" -eq 1 ]; then
         ux_error "--force only applies to a targeted run — pass an issue reference with it."
+        exit 1
+    elif [ "${_fg}" -eq 1 ]; then
+        ux_error "--fg only applies to a targeted run — pass an issue reference with it."
         exit 1
     fi
 
