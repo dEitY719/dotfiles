@@ -938,8 +938,10 @@ _iw_label_list_cmd() {
     fi
     _oldifs="$IFS"
     IFS="${_IW_US}"
+    set -f # a label such as '*' must not glob against the cwd
     # shellcheck disable=SC2086 # split on US: the set is a list
     set -- ${_IW_EXCL_SET}
+    set +f
     IFS="$_oldifs"
     for _label in "$@"; do
         [ -z "${_label}" ] || ux_bullet "${_label}"
@@ -1689,8 +1691,10 @@ _iw_excluded_by_label() {
     IFS="${_IW_US}"
     # Word splitting on US is the point: the label list is a list. US is the
     # separator precisely because a label may contain a comma or a space.
+    set -f # a label such as '*' must not glob against the cwd
     # shellcheck disable=SC2086
     set -- ${_labels}
+    set +f
     IFS="$_oldifs"
 
     for _label in "$@"; do
@@ -3665,7 +3669,8 @@ _iw_targeted_run() {
         _confirmed="$(_iw_agent_name "${_repo}" "${_number}")${_IW_TAB}${_repo}${_IW_TAB}${_number}
 "
     _iw_limit_record "${_confirmed}"
-    [ "${_rc}" -ne 1 ] || return 1
+    # Any failed dispatch (rc 1 or 2) is a non-zero exit: the user asked for this one.
+    [ "${_rc}" -eq 0 ] || return 1
     return 0
 }
 

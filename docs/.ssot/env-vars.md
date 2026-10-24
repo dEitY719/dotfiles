@@ -188,6 +188,11 @@ A JSON array of label strings. Absent file = the default set; `label add` /
 an array of strings is never rewritten, and the tick falls back to the
 default set with a warning.
 
+The seed is a snapshot: a later change to the built-in default never reaches a
+file that already exists. The default no longer contains `보류` (it was
+`wontfix,보류,not-implement`); to keep skipping it, run
+`avatar-issue-watcher label add 보류`.
+
 ## How to add a new entry
 
 1. Document the var here first (this file is the catalog SSOT).
