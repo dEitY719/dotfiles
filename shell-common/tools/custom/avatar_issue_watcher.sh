@@ -863,41 +863,41 @@ _iw_watch_cmd() {
 
 # A bare JSON array of label strings, next to the watch list by default.
 _iw_exclude_labels_file() {
-    local _repos
     if [ -n "${IW_EXCLUDE_LABELS_FILE:-}" ]; then
         printf '%s' "${IW_EXCLUDE_LABELS_FILE}"
         return 0
     fi
-    _repos=$(_iw_repos_file)
-    printf '%s/excluded-labels.json' "$(dirname "${_repos}")"
+    printf '%s/excluded-labels.json' "$(dirname "$(_iw_repos_file)")"
 }
 
-# Exit 1 unless <file> holds a JSON array of strings.
-_iw_exclude_labels_validate() {
-    jq -e 'type == "array" and all(.[]; type == "string")' "$1" >/dev/null 2>&1
+# Print <file>'s labels US-joined; exit 1 unless it holds a JSON array of strings.
+_iw_exclude_labels_read() {
+    jq -er 'if type == "array" and all(.[]; type == "string") then join("\u001f") else error end' "$1" 2>/dev/null
+}
+
+# A comma-separated label list ($IW_EXCLUDE_LABELS, the default), US-joined.
+_iw_csv_to_us() {
+    printf '%s' "$1" | tr ',' '\037'
 }
 
 # Resolve the effective exclude set once per process: $IW_EXCLUDE_LABELS >
 # the file > the default. Sets _IW_EXCL_SET (US-joined — US because a label
 # may hold a space) and _IW_EXCL_SOURCE (env|file|default). Diagnostics go to
 # stderr: the tick calls this while its stdout is the candidate list.
-_IW_EXCL_LOADED=0
 _IW_EXCL_SET=""
 _IW_EXCL_SOURCE=""
 _iw_exclude_labels_resolve() {
     local _file
-    [ "${_IW_EXCL_LOADED}" -eq 0 ] || return 0
-    _IW_EXCL_LOADED=1
+    [ -z "${_IW_EXCL_SOURCE}" ] || return 0
     if [ -n "${IW_EXCLUDE_LABELS:-}" ]; then
         _IW_EXCL_SOURCE="env"
-        _IW_EXCL_SET=$(printf '%s' "${IW_EXCLUDE_LABELS}" | tr ',' '\037')
+        _IW_EXCL_SET=$(_iw_csv_to_us "${IW_EXCLUDE_LABELS}")
         return 0
     fi
     _file=$(_iw_exclude_labels_file)
     if [ -f "${_file}" ]; then
-        if _iw_exclude_labels_validate "${_file}"; then
+        if _IW_EXCL_SET=$(_iw_exclude_labels_read "${_file}"); then
             _IW_EXCL_SOURCE="file"
-            _IW_EXCL_SET=$(jq -r 'map(select(. != "")) | join("\u001f")' "${_file}")
             return 0
         fi
         # The default set still parks the usual labels; holding every tick
@@ -905,7 +905,7 @@ _iw_exclude_labels_resolve() {
         ux_warning "Excluded-labels file is not a JSON array of strings — using the default set: ${_file}" >&2
     fi
     _IW_EXCL_SOURCE="default"
-    _IW_EXCL_SET=$(printf '%s' "${_IW_EXCLUDE_LABELS_DEFAULT}" | tr ',' '\037')
+    _IW_EXCL_SET=$(_iw_csv_to_us "${_IW_EXCLUDE_LABELS_DEFAULT}")
 }
 
 _iw_label_usage() {
@@ -919,11 +919,13 @@ _iw_label_usage() {
 _iw_label_list_cmd() {
     local _label _oldifs _file
     _file=$(_iw_exclude_labels_file)
-    if [ -z "${IW_EXCLUDE_LABELS:-}" ] && [ -f "${_file}" ] && ! _iw_exclude_labels_validate "${_file}"; then
+    # Its own warning is replaced by the error below.
+    _iw_exclude_labels_resolve 2>/dev/null
+    # A default source with a file present means the file did not parse.
+    if [ "${_IW_EXCL_SOURCE}" = "default" ] && [ -f "${_file}" ]; then
         ux_error "Excluded-labels file is not a JSON array of strings (the tick falls back to the default): ${_file}"
         return 1
     fi
-    _iw_exclude_labels_resolve
     ux_header "excluded labels"
     case "${_IW_EXCL_SOURCE}" in
     env) ux_info "source: env (\$IW_EXCLUDE_LABELS)" ;;
@@ -944,9 +946,9 @@ _iw_label_list_cmd() {
     done
 }
 
-# label add/remove: validate the arguments and the file, then set
-# _IW_L_FILE, _IW_L_BASE (the jq expression for the current list — the file,
-# or the default seed when the file is absent) and _IW_L_CUR (US-joined).
+# label add/remove: validate the arguments and the file, then set _IW_L_FILE
+# and _IW_L_CUR (the current list US-joined — the file, or the default seed
+# when the file is absent).
 _iw_label_prepare() {
     local _verb="$1" _label
     shift
@@ -966,30 +968,26 @@ _iw_label_prepare() {
     done
     _IW_L_FILE=$(_iw_exclude_labels_file)
     if [ -f "${_IW_L_FILE}" ]; then
-        if ! _iw_exclude_labels_validate "${_IW_L_FILE}"; then
+        if ! _IW_L_CUR=$(_iw_exclude_labels_read "${_IW_L_FILE}"); then
             ux_error "Excluded-labels file is not a JSON array of strings — left untouched: ${_IW_L_FILE}"
             return 1
         fi
-        _IW_L_BASE='.'
-        _IW_L_CUR=$(jq -r 'join("\u001f")' "${_IW_L_FILE}")
     else
-        # shellcheck disable=SC2016 # a jq variable, bound by _iw_label_write
-        _IW_L_BASE='$seed'
-        _IW_L_CUR=$(printf '%s' "${_IW_EXCLUDE_LABELS_DEFAULT}" | tr ',' '\037')
+        _IW_L_CUR=$(_iw_csv_to_us "${_IW_EXCLUDE_LABELS_DEFAULT}")
     fi
     if [ -n "${IW_EXCLUDE_LABELS:-}" ]; then
         ux_warning "\$IW_EXCLUDE_LABELS is set and overrides the file until it is unset."
     fi
 }
 
-# Apply jq filter <1> to the label file via _iw_watch_write (backup, atomic
-# swap), with the default set bound as $seed and the labels as $l.
+# Write jq filter <1> as the label file via _iw_watch_write (backup, atomic
+# swap), with _IW_L_CUR bound as $cur and the labels as $l.
 _iw_label_write() {
-    local _filter="$1" _seed _new
+    local _filter="$1" _cur _new
     shift
-    _seed=$(printf '%s' "${_IW_EXCLUDE_LABELS_DEFAULT}" | jq -Rc 'split(",")') || return 1
+    _cur=$(printf '%s' "${_IW_L_CUR}" | jq -Rsc 'split("\u001f")') || return 1
     _new=$(printf '%s\n' "$@" | jq -Rsc 'split("\n") | map(select(. != ""))') || return 1
-    _iw_watch_write "${_IW_L_FILE}" "${_filter}" --argjson seed "${_seed}" --argjson l "${_new}"
+    _iw_watch_write "${_IW_L_FILE}" "${_filter}" --argjson cur "${_cur}" --argjson l "${_new}"
 }
 
 _iw_label_add_cmd() {
@@ -1002,12 +1000,13 @@ _iw_label_add_cmd() {
             continue
             ;;
         esac
-        _IW_L_CUR="${_IW_L_CUR}${_IW_US}${_label}"
+        _IW_L_CUR="${_IW_L_CUR:+${_IW_L_CUR}${_IW_US}}${_label}"
         _added="${_added}${_sep}${_label}"
         _sep=", "
     done
     [ -n "${_added}" ] || return 0
-    if ! _iw_label_write "reduce \$l[] as \$x (${_IW_L_BASE}; if any(.[]; . == \$x) then . else . + [\$x] end)" "$@"; then
+    # shellcheck disable=SC2016 # a jq variable, bound by _iw_label_write
+    if ! _iw_label_write '$cur' "$@"; then
         ux_error "Could not write ${_IW_L_FILE}."
         return 1
     fi
@@ -1027,7 +1026,8 @@ _iw_label_remove_cmd() {
         esac
     done
     [ -n "${_removed}" ] || return 0
-    if ! _iw_label_write "${_IW_L_BASE} - \$l" "$@"; then
+    # shellcheck disable=SC2016 # jq variables, bound by _iw_label_write
+    if ! _iw_label_write '$cur - $l' "$@"; then
         ux_error "Could not write ${_IW_L_FILE}."
         return 1
     fi
@@ -3473,6 +3473,82 @@ _iw_usage() {
     ux_bullet_sub "*/4 * * * * /path/to/avatar_issue_watcher.sh >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1"
 }
 
+# The guards a tick and a targeted run both pass before they select: 0 to go
+# on, 1 to hold (the caller then exits or returns 0, as nothing was wrong).
+#
+# The dry run answers ahead of the lock and the gate, and deliberately so.
+# Taking the lock would make a dry run silently no-op while a real tick is
+# mid-cycle — exactly when a human is most likely to be asking what the watcher
+# sees — and evaluating the gate would *clear* an expired `rate-limit.json`,
+# which is a state change in a mode documented as changing nothing
+# (PR #1447 codex/agy review).
+_iw_tick_guards() {
+    if [ "${_IW_DRY_RUN}" -eq 1 ]; then
+        # A dry run must stay usable where a real tick cannot run at all, so an
+        # unreachable herdr degrades to "nothing is running" here instead of
+        # holding the tick.
+        if ! _iw_live_agents >/dev/null; then
+            _iw_live_agents_assume_none
+            ux_warning "Cannot list herdr agents — reporting as if nothing were running."
+        fi
+        return 0
+    fi
+
+    _iw_acquire_lock || return 1
+
+    # Before any tab is opened: a closed gate must cost nothing.
+    _iw_limit_gate_check || return 1
+
+    # Primed here, in the tick's own shell, so the subshells below inherit a
+    # warm cache — the same reason the watch list is primed above. Failure is
+    # terminal for the tick: "how many are running" has no safe default, and
+    # guessing "none" would lift the concurrency cap exactly when herdr is
+    # unhealthy (issue #1453, Error Cases).
+    if ! _iw_live_agents >/dev/null; then
+        ux_warning "Cannot list herdr agents — holding this tick rather than dispatching blind."
+        return 1
+    fi
+
+    # Before the concurrency ceiling, not just before _iw_select_candidates
+    # (PR #1622 codex review), and only on the tick that reopened the gate
+    # (issue #1604).
+    #
+    # A casualty's own pane is routinely what fills the last slot: its session
+    # died with the quota but its issue is still OPEN, and the zombie reclaim
+    # above only collects panes whose issue is CLOSED — so that slot is never
+    # given back. Leaving the retry behind the ceiling therefore starves
+    # precisely the issue the ceiling is full *because of*, on every tick,
+    # forever. And the cheap path the retry takes in that very case is a
+    # re-prompt into the surviving pane, which opens no session and consumes no
+    # slot at all, so the ceiling has no claim on it to begin with.
+    #
+    # It still has to run before the selector, which round-robins: asking that
+    # first would hand this tick's slot to whichever issue is next in the queue
+    # and leave the one the outage killed waiting for a turn that never comes.
+    if [ "${_IW_LIMIT_GATE_REOPENED}" -eq 1 ]; then
+        _iw_limit_retry_casualties
+
+        # The retry's missing-pane fallback goes through _iw_process_issue,
+        # which opens a real tab and a real pane — neither of which the memo
+        # primed above can know about. Everything downstream that
+        # spends a slot — the ceiling check below, _iw_dispatch_budget inside
+        # the selector — would otherwise admit fresh work against a count taken
+        # before the retry and overshoot _IW_MAX_CONCURRENT.
+        _IW_LIVE_AGENTS=""
+        _IW_LIVE_AGENTS_LOADED=0
+
+        # Re-primed here in the tick's own shell for both reasons the first
+        # priming gives: the subshells below must inherit a warm cache instead
+        # of paying a herdr round trip apiece, and a lookup that fails now is
+        # as terminal as one that failed then — an unknown count must never be
+        # read as "nothing running".
+        if ! _iw_live_agents >/dev/null; then
+            ux_warning "Cannot list herdr agents after the casualty retry — holding this tick rather than dispatching blind."
+            return 1
+        fi
+    fi
+}
+
 # ============================================================
 # Targeted run — one named issue instead of the search
 # ============================================================
@@ -3489,7 +3565,7 @@ _iw_usage() {
 # whether the caps are starving the backlog.
 _iw_targeted_run() {
     local _url_host="$1" _repo="$2" _number="$3" _force="$4" _cwd_entry="$5"
-    local _path _host _errf _json _cause _state _labels _l _hit="" _oldifs _candidates _live _rc _confirmed=""
+    local _path _host _errf _json _cause _state _hit _candidates _live _rc _confirmed=""
 
     # The watch list wins; the current checkout is the fallback. Appended to the
     # cached list (never replacing it) so the casualty retry below still sees
@@ -3547,17 +3623,10 @@ _iw_targeted_run() {
         return 1
     fi
 
-    # Label by label through _iw_excluded_by_label, so the error can name them.
-    _labels=$(printf '%s' "${_json}" | jq -r '[.labels[]?.name] | join("\u001f")' 2>/dev/null)
-    _oldifs="$IFS"
-    IFS="${_IW_US}"
-    # shellcheck disable=SC2086
-    set -- ${_labels}
-    IFS="$_oldifs"
-    for _l in "$@"; do
-        [ -n "${_l}" ] || continue
-        ! _iw_excluded_by_label "${_l}" || _hit="${_hit:+${_hit}, }${_l}"
-    done
+    # The excluded labels it carries, by name, so the error can list them.
+    _iw_exclude_labels_resolve
+    _hit=$(printf '%s' "${_json}" | jq -r --arg ex "${_IW_EXCL_SET}" \
+        '($ex | split("\u001f")) as $x | [.labels[]?.name | select(. as $n | any($x[]; . == $n))] | join(", ")' 2>/dev/null)
     if [ -n "${_hit}" ]; then
         if [ "${_force}" -ne 1 ]; then
             ux_error "${_repo}#${_number} carries an excluded label (${_hit}) — not dispatching."
@@ -3567,32 +3636,7 @@ _iw_targeted_run() {
         ux_warning "${_repo}#${_number} carries an excluded label (${_hit}) — dispatching anyway (--force)."
     fi
 
-    if [ "${_IW_DRY_RUN}" -eq 1 ]; then
-        # Same degradation as the dry-run tick: no lock, no gate, and an
-        # unreachable herdr reads as "nothing is running".
-        if ! _iw_live_agents >/dev/null; then
-            _iw_live_agents_assume_none
-            ux_warning "Cannot list herdr agents — reporting as if nothing were running."
-        fi
-    else
-        _iw_acquire_lock || return 0
-        _iw_limit_gate_check || return 0
-        if ! _iw_live_agents >/dev/null; then
-            ux_warning "Cannot list herdr agents — holding rather than dispatching blind."
-            return 0
-        fi
-        # The gate reopened on this run, so it owns the casualty retry a tick
-        # would have run here (see main()).
-        if [ "${_IW_LIMIT_GATE_REOPENED}" -eq 1 ]; then
-            _iw_limit_retry_casualties
-            _IW_LIVE_AGENTS=""
-            _IW_LIVE_AGENTS_LOADED=0
-            if ! _iw_live_agents >/dev/null; then
-                ux_warning "Cannot list herdr agents after the casualty retry — holding rather than dispatching blind."
-                return 0
-            fi
-        fi
-    fi
+    _iw_tick_guards || return 0
 
     _live=$(_iw_live_count)
     if [ "${_live}" -ge "${_IW_MAX_CONCURRENT}" ]; then
@@ -3754,15 +3798,18 @@ main() {
         exit 1
     fi
 
+    # A dry run reports what it would dispatch and touches nothing, so it must
+    # stay usable on a machine with no herdr server.
+    if [ "${_IW_DRY_RUN}" -eq 0 ] && ! command -v herdr >/dev/null 2>&1; then
+        ux_error "herdr not found in PATH — cannot run the issue-watcher tick."
+        ux_info "Install it via ./herdr/setup.sh, or add it to the cron PATH."
+        exit 1
+    fi
+
     # Targeted run: one named issue, no search. The checkout at the (possibly
     # --cwd) directory is only a fallback for repo resolution, so an origin it
     # cannot parse is not an error here unless the reference needs it.
     if [ -n "${_parsed}" ]; then
-        if [ "${_IW_DRY_RUN}" -eq 0 ] && ! command -v herdr >/dev/null 2>&1; then
-            ux_error "herdr not found in PATH — cannot run the issue-watcher tick."
-            ux_info "Install it via ./herdr/setup.sh, or add it to the cron PATH."
-            exit 1
-        fi
         _IW_TARGETED=1
         _cwd_entry=$(_iw_cwd_entry 2>/dev/null) || _cwd_entry=""
         _ref_host="${_parsed%%"${_IW_TAB}"*}"
@@ -3825,29 +3872,9 @@ main() {
         ux_warning "watch list has repos sharing a basename (${_iw_dup}) — herdr agent names collide (see herdr_agent_name.sh)." >&2
     fi
 
-    # A dry run reports what it would dispatch and touches nothing, so it must
-    # stay usable on a machine with no herdr server.
-    if [ "${_IW_DRY_RUN}" -eq 0 ] && ! command -v herdr >/dev/null 2>&1; then
-        ux_error "herdr not found in PATH — cannot run the issue-watcher tick."
-        ux_info "Install it via ./herdr/setup.sh, or add it to the cron PATH."
-        exit 1
-    fi
+    _iw_tick_guards || exit 0
 
-    # The dry run answers ahead of both guards, and deliberately so. Taking the
-    # lock would make a dry run silently no-op while a real tick is mid-cycle —
-    # exactly when a human is most likely to be asking what the watcher sees —
-    # and evaluating the gate would *clear* an expired `rate-limit.json`, which
-    # is a state change in a mode documented as changing nothing
-    # (PR #1447 codex/agy review).
     if [ "${_IW_DRY_RUN}" -eq 1 ]; then
-        # A dry run must stay usable where a real tick cannot run at all, so an
-        # unreachable herdr degrades to "nothing is running" here instead of
-        # holding the tick.
-        if ! _iw_live_agents >/dev/null; then
-            _iw_live_agents_assume_none
-            ux_warning "Cannot list herdr agents — reporting as if nothing were running."
-        fi
-
         _candidates=$(_iw_select_candidates "$(_iw_collect_candidates)")
         if [ -z "${_candidates}" ]; then
             ux_info "No dispatchable issue this tick."
@@ -3861,60 +3888,6 @@ main() {
 ${_candidates}
 EOF
         exit 0
-    fi
-
-    _iw_acquire_lock || exit 0
-
-    # Before any tab is opened: a closed gate must cost nothing.
-    _iw_limit_gate_check || exit 0
-
-    # Primed here, in the tick's own shell, so the subshells below inherit a
-    # warm cache — the same reason the watch list is primed above. Failure is
-    # terminal for the tick: "how many are running" has no safe default, and
-    # guessing "none" would lift the concurrency cap exactly when herdr is
-    # unhealthy (issue #1453, Error Cases).
-    if ! _iw_live_agents >/dev/null; then
-        ux_warning "Cannot list herdr agents — holding this tick rather than dispatching blind."
-        exit 0
-    fi
-
-    # Before the concurrency ceiling, not just before _iw_select_candidates
-    # (PR #1622 codex review), and only on the tick that reopened the gate
-    # (issue #1604).
-    #
-    # A casualty's own pane is routinely what fills the last slot: its session
-    # died with the quota but its issue is still OPEN, and the zombie reclaim
-    # above only collects panes whose issue is CLOSED — so that slot is never
-    # given back. Leaving the retry behind the ceiling therefore starves
-    # precisely the issue the ceiling is full *because of*, on every tick,
-    # forever. And the cheap path the retry takes in that very case is a
-    # re-prompt into the surviving pane, which opens no session and consumes no
-    # slot at all, so the ceiling has no claim on it to begin with.
-    #
-    # It still has to run before the selector, which round-robins: asking that
-    # first would hand this tick's slot to whichever issue is next in the queue
-    # and leave the one the outage killed waiting for a turn that never comes.
-    if [ "${_IW_LIMIT_GATE_REOPENED}" -eq 1 ]; then
-        _iw_limit_retry_casualties
-
-        # The retry's missing-pane fallback goes through _iw_process_issue,
-        # which opens a real tab and a real pane — neither of which the memo
-        # primed above can know about. Everything downstream that
-        # spends a slot — the ceiling check below, _iw_dispatch_budget inside
-        # the selector — would otherwise admit fresh work against a count taken
-        # before the retry and overshoot _IW_MAX_CONCURRENT.
-        _IW_LIVE_AGENTS=""
-        _IW_LIVE_AGENTS_LOADED=0
-
-        # Re-primed here in the tick's own shell for both reasons the first
-        # priming gives: the subshells below must inherit a warm cache instead
-        # of paying a herdr round trip apiece, and a lookup that fails now is
-        # as terminal as one that failed then — an unknown count must never be
-        # read as "nothing running".
-        if ! _iw_live_agents >/dev/null; then
-            ux_warning "Cannot list herdr agents after the casualty retry — holding this tick rather than dispatching blind."
-            exit 0
-        fi
     fi
 
     _live=$(_iw_live_count)
