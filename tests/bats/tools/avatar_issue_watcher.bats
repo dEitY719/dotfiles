@@ -413,6 +413,9 @@ EOF
 #                             where herdr really put it — a dispatcher that
 #                             redirects that stream to /dev/null sees an
 #                             unexplained failure instead of a named race.
+#   HERDR_START_NOT_READY=1   `agent start` answers `agent_not_ready` (claude is
+#                             stopped at a startup dialog); HERDR_PANE_TEXT is
+#                             what `pane read` then shows
 #   HERDR_TAB_RENAME_FAIL=1   `tab rename` errors during final prompt escalation
 #   HERDR_NOTIFY_FAIL=1       `notification show` errors during final prompt escalation
 #   HERDR_AGENT_STATUS        status reported by `agent get` (default: idle)
@@ -564,6 +567,10 @@ case "$1 $2" in
         printf '%s\n' '{"error":{"code":"agent_name_taken","message":"agent name is already used; candidates: status=Idle"},"id":"cli:agent:start"}'
         exit 1
     fi
+    if [ "${HERDR_START_NOT_READY:-0}" = "1" ]; then
+        printf '%s\n' '{"error":{"code":"agent_not_ready","message":"agent is blocked during startup and is not ready for prompts"},"id":"cli:agent:start"}'
+        exit 1
+    fi
     if [ "${HERDR_START_PANE_BUSY:-0}" != "0" ]; then
         _n=$(_bump "${CALL_LOG}.startbusy")
         if [ "${_n}" -le "${HERDR_START_PANE_BUSY}" ]; then
@@ -572,6 +579,11 @@ case "$1 $2" in
         fi
     fi
     printf '%s\n' '{"id":"cli:agent:start","result":{"agent":{"agent_status":"idle","pane_id":"ws-test-1:p9"}}}'
+    ;;
+"pane read")
+    printf '%s\n' "${HERDR_PANE_TEXT:-}"
+    ;;
+"pane send-keys")
     ;;
 "agent get")
     if [ "${HERDR_AGENT_GET_FAIL:-0}" = "1" ]; then
@@ -4621,4 +4633,20 @@ _iw_parse_issue_ref \"\$1\"" _ "$1"
     assert_success
     assert_output --partial "Rate-limit gate closed"
     _refute_logged "tab create"
+}
+
+# `agent_not_ready` is claude parked at its first-run trust dialog for a repo it
+# has never opened. Retrying the start cannot pass it; confirming the dialog can.
+@test "avatar_issue_watcher: a trust-folder dialog is accepted instead of failing the start" {
+    _run_tick "HERDR_START_NOT_READY=1" "HERDR_PANE_TEXT=Quick safety check: Yes, I trust this folder"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    _assert_logged "pane send-keys ws-test-1:p9 Down Enter"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
+}
+
+@test "avatar_issue_watcher: agent_not_ready without a trust dialog still fails the start" {
+    _run_tick "HERDR_START_NOT_READY=1" "HERDR_PANE_TEXT=some other blocker"
+    _refute_logged "pane send-keys"
+    assert_output --partial "agent_not_ready"
 }

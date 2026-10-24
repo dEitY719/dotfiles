@@ -256,6 +256,19 @@ _hp_agent_start() {
         -- --dangerously-skip-permissions 2>"$3"
 }
 
+# Accept claude's first-run "trust this folder" dialog on pane <1>.
+# 0 = the dialog was on screen and the confirming keys were sent, 1 = no dialog.
+#
+# A repo claude has never opened (a freshly cloned marketplace repo) stops at
+# this dialog, and herdr answers `agent start` with `agent_not_ready` ("blocked
+# during startup") — no retry of the same call can pass it. The cursor starts
+# on "No, exit", so Enter alone would quit claude: Down first. The choice is
+# persisted by claude, so this fires once per directory.
+_hp_accept_trust_dialog() {
+    herdr pane read "$1" 2>/dev/null | grep -qi 'trust this folder' || return 1
+    herdr pane send-keys "$1" Down Enter >/dev/null 2>&1
+}
+
 # Echo the herdr error code behind a failed call: <1> is herdr's stdout, <2> the
 # file its stderr was captured to. stdout first, stderr as the fallback. Both
 # are consulted because the stream herdr picks is not ours to choose — and in
