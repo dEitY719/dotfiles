@@ -469,7 +469,12 @@ _iw_watch_list() {
         | select((.repo // "") != "" and (.path // "") != "")
         | [ .repo, .path, (.host // "github.com") ]
         | @tsv
-    ' "${_file}" 2>/dev/null)
+    ' "${_file}" 2>/dev/null | while IFS="${_IW_TAB}" read -r _repo _path _host; do
+        # A list written before #2281 may name a worktree: every tick consumer
+        # (workspace label, dispatch) works from its main checkout instead.
+        _main=$(_iw_main_checkout "${_path}") && _path="${_main}"
+        printf '%s\t%s\t%s\n' "${_repo}" "${_path}" "${_host}"
+    done)
 
     [ -z "${_IW_WATCH_LIST}" ] || printf '%s\n' "${_IW_WATCH_LIST}"
 }
@@ -2028,11 +2033,8 @@ _iw_herdr_create() {
 # repo's tabs would open inside the first repo's (PR #1447 codex/agy review);
 # then both sides fall back to the unambiguous slug.
 _iw_workspace_label() {
-    local _repo="$1" _path="$2" _base _count _main
+    local _repo="$1" _path="$2" _base _count
 
-    # A legacy watch-list entry may name a worktree; tabs are opened in the
-    # main checkout's workspace (_iw_process_issue), so label it the same way.
-    _main=$(_iw_main_checkout "${_path}") && _path="${_main}"
     _base=$(basename "${_path}")
     _count=$(_iw_watch_list |
         awk -F "${_IW_TAB}" -v b="${_base}" '
@@ -2384,11 +2386,7 @@ _iw_prompt_issue() {
 _iw_process_issue() {
     local _repo="$1" _number="$2" _path="$3"
     local _attempt=1 _agent _label _ws="" _pane_tab="" _pane="" _tab=""
-    local _cause="" _msg="" _main _wt
-
-    # A watch list written before #2281 may hold a worktree path: dispatch
-    # from its main checkout all the same.
-    _main=$(_iw_main_checkout "${_path}") && _path="${_main}"
+    local _cause="" _msg="" _wt
 
     # A repo whose name normalizes to nothing has no addressable agent, so the
     # dispatch fails here rather than starting a session under a name no later
