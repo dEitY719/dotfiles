@@ -58,7 +58,8 @@ list_snapshot_files() {
             {
                 tab = index($0, "\t"); if (!tab) next
                 meta = substr($0, 1, tab - 1); path = substr($0, tab + 1)
-                if (meta ~ /[iw]\/-text/ || path ~ /^"/ || path ~ /(^|\/)\.venv\//) next
+                # "w/ " (blank worktree eol) = deleted file, symlink or submodule: awk cannot read it.
+                if (meta ~ /[iw]\/-text/ || meta ~ /w\/ / || path ~ /^"/ || path ~ /(^|\/)\.venv\//) next
                 base = path; sub(/.*\//, "", base)
                 if (base !~ /.\./) next
                 ext = base; sub(/.*\./, "", ext)
@@ -108,14 +109,20 @@ main() {
         gitcfg=(-c "mailmap.file=$xdg_mailmap")
     fi
 
+    if ! git -C "$TARGET_DIR" rev-parse --verify -q HEAD >/dev/null; then
+        ux_error "'${TARGET_DIR}' has no commits yet" >&2
+        exit 1
+    fi
+
     # --- Commits (range-aware) ---
     local commit_dates git_commits start_date="-" end_date="-" duration_days=0 avg_commits_per_day="0.00"
-    commit_dates=$(git -C "$TARGET_DIR" log --format=%cs "${range[@]}" HEAD)
+    # Sorted: committer dates are not monotonic in log order after rebases/clock skew.
+    commit_dates=$(git -C "$TARGET_DIR" log --format=%cs "${range[@]}" HEAD | sort)
     git_commits=$(printf '%s' "$commit_dates" | grep -c . || true)
     if ((git_commits > 0)); then
         # Expansions, not head/tail: head would SIGPIPE printf under pipefail.
-        end_date=${commit_dates%%$'\n'*}
-        start_date=${commit_dates##*$'\n'}
+        start_date=${commit_dates%%$'\n'*}
+        end_date=${commit_dates##*$'\n'}
         local start_epoch end_epoch days_for_avg
         start_epoch=$(date -d "$start_date" +%s)
         end_epoch=$(date -d "$end_date" +%s)
@@ -132,7 +139,7 @@ main() {
     churn=$(git -C "$TARGET_DIR" "${gitcfg[@]}" log --no-renames --numstat --format='@%aN' "${range[@]}" HEAD |
         awk -F'\t' -v ex="$CHURN_EXCLUDE_RE" '
             /^@/ { who = substr($0, 2); commits[who]++; next }
-            NF == 3 && $1 != "-" && $3 !~ ex { add += $1; del += $2; a[who] += $1 }
+            NF == 3 && $1 != "-" && tolower($3) !~ ex { add += $1; del += $2; a[who] += $1 }
             END {
                 printf "T\t%d\t%d\n", add, del
                 for (w in commits) printf "A\t%d\t%d\t%s\n", a[w], commits[w], w
@@ -147,8 +154,9 @@ main() {
     snapshot=""
     if [[ -n $files ]]; then
         # Per-file line counts summed per extension ("<ext>\t<files>\t<loc>").
-        snapshot=$(cut -f2- <<<"$files" | tr '\n' '\0' |
-            (cd "$TARGET_DIR" || exit; xargs -0 -r awk '{ n[FILENAME]++ } END { for (f in n) print f "\t" n[f] }' 2>/dev/null || true) |
+        # "./" prefix: awk would read a "a=b.js" argument as a variable assignment.
+        snapshot=$(cut -f2- <<<"$files" | sed 's|^|./|' | tr '\n' '\0' |
+            (cd "$TARGET_DIR" || exit; xargs -0 -r awk '{ n[substr(FILENAME, 3)]++ } END { for (f in n) print f "\t" n[f] }' 2>/dev/null || true) |
             awk -F'\t' 'NR == FNR { ext[$2] = $1; files[$1]++; next }
                 { loc[ext[$1]] += $2 }
                 END { for (e in files) printf "%s\t%d\t%d\n", e, files[e], loc[e] }' <(printf '%s\n' "$files") - |
@@ -161,7 +169,7 @@ main() {
     # Test Statistics (Heuristic: count 'def test_' in python test files)
     local test_count=0
     test_count=$(awk -F'\t' '$1 == "py" && $2 ~ /(^|\/)(test_[^\/]*|[^\/]*_test)\.py$/ { print $2 }' <<<"$files" |
-        tr '\n' '\0' | (cd "$TARGET_DIR" || exit; xargs -0 -r grep -h "def test_" 2>/dev/null || true) | wc -l)
+        tr '\n' '\0' | (cd "$TARGET_DIR" || exit; xargs -0 -r grep -h "def test_" 2>/dev/null || true) | wc -l | tr -d ' ')
 
     # --- Display ---
     if [[ -t 1 ]]; then clear || true; fi
