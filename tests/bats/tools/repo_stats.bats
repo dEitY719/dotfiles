@@ -117,6 +117,21 @@ _fixture() {
     assert_output --regexp 'Dev12 +│'
 }
 
+@test "edge paths: deleted file, a=b name, upper-case DATA.JSON, empty repo" {
+    _stat
+    assert_failure 1
+    assert_output --partial 'has no commits yet'
+    _fixture
+    _commit "Bob" "bob@ext.io" 2026-08-05 "a=b.js" 4
+    _commit "Bob" "bob@ext.io" 2026-08-06 DATA.JSON 7
+    rm "$REPO/util.py"
+    _stat
+    assert_success
+    assert_output --regexp '\.js +│ 1 +│ 4'
+    refute_output --regexp '\.py +│'
+    assert_output --regexp 'Additions +: \+22'
+}
+
 @test "option errors exit 1" {
     _fixture
     _stat --bogus
