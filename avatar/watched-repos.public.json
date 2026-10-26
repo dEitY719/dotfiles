@@ -66,6 +66,12 @@
     "verify_skill": "gh-verify:merged"
   },
   {
+    "repo": "dEitY719/herdr-skills",
+    "rel": "para/project/skills/herdr-skills",
+    "host": "github.com",
+    "verify_skill": "gh-verify:merged"
+  },
+  {
     "repo": "dEitY719/notes-skills",
     "rel": "para/project/skills/notes-skills",
     "host": "github.com",
