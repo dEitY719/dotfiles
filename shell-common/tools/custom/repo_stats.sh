@@ -7,6 +7,18 @@ set -euo pipefail
 # Load initialization (which includes UX library)
 source "$(dirname "$0")/init.sh" || exit 1
 
+# Snapshot LOC skips these extensions (data / generated / lockfiles), plus
+# binaries (git sees them as -text) and extensionless files.
+SNAPSHOT_IGNORE_EXTS="json snap lock"
+SNAPSHOT_TOP=15
+AUTHOR_TOP=10
+
+# Churn/author exclusion set: awk regex on the numstat path (--no-renames keeps
+# it a plain path) and the human list printed under the Churn section.
+# [.] not \. : awk -v would eat the backslash.
+CHURN_EXCLUDE_RE='[.](md|json|snap|lock)$|(^|/)generated/|(^|/)pnpm-lock[.]yaml$'
+CHURN_EXCLUDE_DESC="*.md, *.json (openapi.json), *.snap, *.lock, pnpm-lock.yaml, generated/"
+
 format_number() {
     local num=$1
     local sign=""
@@ -25,118 +37,183 @@ format_number() {
 }
 
 repo_stats_help() {
-    ux_usage "devx stat" "[dir]" "Show git commit, test and LOC statistics for a repository"
+    ux_usage "devx stat" "[dir] [options]" "Show git commit, churn, author, test and LOC statistics for a repository"
     ux_bullet "dir defaults to the current directory"
+    ux_bullet "--since <date>        limit commit/churn/author stats (git log --since)"
+    ux_bullet "--until <date>        limit commit/churn/author stats (git log --until)"
+    ux_bullet "--include-untracked   add untracked (non-ignored) files to snapshot LOC"
+    ux_bullet "--by-author           list every author instead of the top ${AUTHOR_TOP}"
+    ux_bullet ".mailmap (repo root, or ~/.config/git/mailmap) merges author identities"
+}
+
+# Tracked (optionally untracked) text files with an extension, one per line,
+# as "<ext>\t<path>". shortcut: paths with newlines/tabs are git-quoted and
+# skipped; switch to a NUL-safe parser if such repos show up.
+list_snapshot_files() {
+    local -a others=()
+    [[ $include_untracked == 1 ]] && others=(--others --exclude-standard)
+    git -C "$TARGET_DIR" -c core.quotepath=off ls-files --eol --cached "${others[@]}" |
+        awk -v ignore="$SNAPSHOT_IGNORE_EXTS" '
+            BEGIN { n = split(ignore, a, " "); for (i = 1; i <= n; i++) skip[a[i]] = 1 }
+            {
+                tab = index($0, "\t"); if (!tab) next
+                meta = substr($0, 1, tab - 1); path = substr($0, tab + 1)
+                if (meta ~ /[iw]\/-text/ || path ~ /^"/ || path ~ /(^|\/)\.venv\//) next
+                base = path; sub(/.*\//, "", base)
+                if (base !~ /.\./) next
+                ext = base; sub(/.*\./, "", ext)
+                if (ext in skip) next
+                print ext "\t" path
+            }'
 }
 
 main() {
-    case "${1:-}" in -h | --help) repo_stats_help; return 0 ;; esac
-TARGET_DIR=${1:-.}
-if [[ ! -d $TARGET_DIR ]]; then
-    ux_error "'${TARGET_DIR}' is not a directory" >&2
-    exit 1
-fi
+    local TARGET_DIR="" include_untracked=0 by_author=0
+    local -a range=()
+    while (($#)); do
+        case "$1" in
+            -h | --help) repo_stats_help; return 0 ;;
+            --since | --until)
+                if [[ $# -lt 2 ]]; then
+                    ux_error "$1 requires a date" >&2
+                    exit 1
+                fi
+                range+=("$1=$2"); shift ;;
+            --since=* | --until=*) range+=("$1") ;;
+            --include-untracked) include_untracked=1 ;;
+            --by-author) by_author=1 ;;
+            -*) ux_error "Unknown option: $1" >&2; exit 1 ;;
+            *) TARGET_DIR=$1 ;;
+        esac
+        shift
+    done
+    TARGET_DIR=${TARGET_DIR:-.}
 
-TARGET_DIR=$(realpath "$TARGET_DIR")
+    if [[ ! -d $TARGET_DIR ]]; then
+        ux_error "'${TARGET_DIR}' is not a directory" >&2
+        exit 1
+    fi
 
-if ! git -C "$TARGET_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    ux_error "'${TARGET_DIR}' is not a git repository" >&2
-    exit 1
-fi
+    TARGET_DIR=$(realpath "$TARGET_DIR")
 
-git_commits=$(git -C "$TARGET_DIR" rev-list --count HEAD)
+    if ! git -C "$TARGET_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        ux_error "'${TARGET_DIR}' is not a git repository" >&2
+        exit 1
+    fi
 
-start_date="-"
-end_date="-"
-duration_days=0
-avg_commits_per_day="0.00"
+    # git reads only the repo .mailmap by default; honour the XDG one too.
+    local -a gitcfg=()
+    local xdg_mailmap="${XDG_CONFIG_HOME:-$HOME/.config}/git/mailmap"
+    if [[ -f $xdg_mailmap ]] && ! git -C "$TARGET_DIR" config mailmap.file >/dev/null 2>&1; then
+        gitcfg=(-c "mailmap.file=$xdg_mailmap")
+    fi
 
-if (( git_commits > 0 )); then
-    start_commit=$(git -C "$TARGET_DIR" rev-list HEAD | tail -n 1)
-    start_date=$(git -C "$TARGET_DIR" show -s --format=%cs "$start_commit")
-    end_date=$(git -C "$TARGET_DIR" log -1 --format=%cs)
-    if [[ -n $start_date && -n $end_date ]]; then
+    # --- Commits (range-aware) ---
+    local commit_dates git_commits start_date="-" end_date="-" duration_days=0 avg_commits_per_day="0.00"
+    commit_dates=$(git -C "$TARGET_DIR" log --format=%cs "${range[@]}" HEAD)
+    git_commits=$(printf '%s' "$commit_dates" | grep -c . || true)
+    if ((git_commits > 0)); then
+        # Expansions, not head/tail: head would SIGPIPE printf under pipefail.
+        end_date=${commit_dates%%$'\n'*}
+        start_date=${commit_dates##*$'\n'}
+        local start_epoch end_epoch days_for_avg
         start_epoch=$(date -d "$start_date" +%s)
         end_epoch=$(date -d "$end_date" +%s)
-        if (( end_epoch >= start_epoch )); then
-            duration_days=$(( (end_epoch - start_epoch) / 86400 ))
+        if ((end_epoch >= start_epoch)); then
+            duration_days=$(((end_epoch - start_epoch) / 86400))
         fi
-        days_for_avg=$duration_days
-        if (( days_for_avg < 1 )); then
-            days_for_avg=1
-        fi
+        days_for_avg=$((duration_days < 1 ? 1 : duration_days))
         avg_commits_per_day=$(awk -v commits="$git_commits" -v days="$days_for_avg" 'BEGIN { printf "%.2f", commits / days }')
     fi
-fi
 
-declare -a exts=(py js css tsx)
-declare -A counts
-declare -A locs
+    # --- Churn + authors: one numstat pass, merges carry no numstat ---
+    # Output: "T <adds> <dels>" then "A <adds> <commits> <name>" per author.
+    local churn
+    churn=$(git -C "$TARGET_DIR" "${gitcfg[@]}" log --no-renames --numstat --format='@%aN' "${range[@]}" HEAD |
+        awk -F'\t' -v ex="$CHURN_EXCLUDE_RE" '
+            /^@/ { who = substr($0, 2); commits[who]++; next }
+            NF == 3 && $1 != "-" && $3 !~ ex { add += $1; del += $2; a[who] += $1 }
+            END {
+                printf "T\t%d\t%d\n", add, del
+                for (w in commits) printf "A\t%d\t%d\t%s\n", a[w], commits[w], w
+            }')
+    local churn_add churn_del
+    churn_add=$(awk -F'\t' '$1 == "T" { print $2 }' <<<"$churn")
+    churn_del=$(awk -F'\t' '$1 == "T" { print $3 }' <<<"$churn")
 
-total_files=0
-total_loc=0
+    # --- Snapshot LOC by discovered extension ---
+    local files snapshot
+    files=$(list_snapshot_files)
+    snapshot=""
+    if [[ -n $files ]]; then
+        # Per-file line counts summed per extension ("<ext>\t<files>\t<loc>").
+        snapshot=$(cut -f2- <<<"$files" | tr '\n' '\0' |
+            (cd "$TARGET_DIR" || exit; xargs -0 -r awk '{ n[FILENAME]++ } END { for (f in n) print f "\t" n[f] }' 2>/dev/null || true) |
+            awk -F'\t' 'NR == FNR { ext[$2] = $1; files[$1]++; next }
+                { loc[ext[$1]] += $2 }
+                END { for (e in files) printf "%s\t%d\t%d\n", e, files[e], loc[e] }' <(printf '%s\n' "$files") - |
+            sort -t$'\t' -k3,3nr -k1,1)
+    fi
+    local total_files total_loc
+    total_files=$(awk -F'\t' '{ s += $2 } END { print s + 0 }' <<<"$snapshot")
+    total_loc=$(awk -F'\t' '{ s += $3 } END { print s + 0 }' <<<"$snapshot")
 
-for ext in "${exts[@]}"; do
-    # Use git ls-files to respect .gitignore
-    # Explicitly filter out .venv directory (anchored at start or inside path)
-    # ( ... || true ) is needed because grep exits with 1 if no lines match, which triggers set -e with pipefail
-    count=$(git -C "$TARGET_DIR" ls-files --cached --others --exclude-standard -- "*.${ext}" | (grep -vE "(^|/)\.venv/" || true) | wc -l)
-    
-    loc=0
-    if (( count > 0 )); then
-        # Calculate LOC using -z for safety with special characters
-        # grep -z filters null-terminated stream
-        loc=$(cd "$TARGET_DIR" && git ls-files -z --cached --others --exclude-standard -- "*.${ext}" | (grep -z -vE "(^|/)\.venv/" || true) | xargs -0 cat 2>/dev/null | wc -l)
+    # Test Statistics (Heuristic: count 'def test_' in python test files)
+    local test_count=0
+    test_count=$(awk -F'\t' '$1 == "py" && $2 ~ /(^|\/)(test_[^\/]*|[^\/]*_test)\.py$/ { print $2 }' <<<"$files" |
+        tr '\n' '\0' | (cd "$TARGET_DIR" || exit; xargs -0 -r grep -h "def test_" 2>/dev/null || true) | wc -l)
+
+    # --- Display ---
+    if [[ -t 1 ]]; then clear || true; fi
+    ux_header "Repository Statistics: $(basename "$TARGET_DIR")"
+    if ((${#range[@]})); then
+        ux_info "Range: ${range[*]}"
     fi
 
-    counts[$ext]=$count
-    locs[$ext]=$loc
-    total_files=$((total_files + count))
-    total_loc=$((total_loc + loc))
-done
+    ux_section "Git Commit Statistics"
+    ux_table_row "Total Commits" "$(format_number "$git_commits")"
+    ux_table_row "Project Period" "${start_date} ~ ${end_date} (${duration_days} days)"
+    ux_table_row "Commit Rate" "${avg_commits_per_day} commits/day"
 
-# Test Statistics (Heuristic: count 'def test_' in python test files)
-test_count=0
-# check if any python files exist first to avoid unnecessary work
-if [[ ${counts[py]} -gt 0 ]]; then
-    test_count=$(cd "$TARGET_DIR" && git ls-files -z --cached --others --exclude-standard -- "*.py" \
-        | (grep -z -vE "(^|/)\.venv/" || true) \
-        | (grep -z -E "test_.*\.py$|.*_test\.py$" || true) \
-        | (xargs -0 grep -h "def test_" 2>/dev/null || true) \
-        | wc -l)
-fi
+    ux_section "Git Churn Statistics"
+    ux_table_row "Additions" "+$(format_number "$churn_add")"
+    ux_table_row "Deletions" "-$(format_number "$churn_del")"
+    ux_table_row "Net" "$(format_number $((churn_add - churn_del)))"
+    ux_bullet "Excluded: ${CHURN_EXCLUDE_DESC}, binary files, merge commits"
 
+    ux_section "Author Contributions"
+    ux_table_header "Author" "Commits" "Additions (share)"
+    awk -F'\t' '$1 == "A"' <<<"$churn" | cut -f2- | sort -t$'\t' -k1,1nr -k2,2nr -k3,3 |
+        awk -F'\t' -v top="$AUTHOR_TOP" -v all="$by_author" -v total="$churn_add" '
+            function pct(x) { return total > 0 ? sprintf("%.2f%%", 100 * x / total) : "0.00%" }
+            all == 1 || NR <= top { printf "%s\t%d\t%d\t%s\n", $3, $2, $1, pct($1); next }
+            { oa += $1; oc += $2; on++ }
+            END { if (on) printf "(%d others)\t%d\t%d\t%s\n", on, oc, oa, pct(oa) }' |
+        while IFS=$'\t' read -r name commits adds share; do
+            ux_table_row "$name" "$(format_number "$commits")" "+$(format_number "$adds") (${share})"
+        done
 
-# --- Display ---
-clear
-ux_header "Repository Statistics: $(basename "$TARGET_DIR")"
-
-# Git Commit Statistics
-ux_section "Git Commit Statistics"
-ux_table_row "Total Commits" "$(format_number "$git_commits")"
-ux_table_row "Project Period" "${start_date} ~ ${end_date} (${duration_days} days)"
-ux_table_row "Commit Rate" "${avg_commits_per_day} commits/day"
-
-# Test Statistics
-if (( test_count > 0 )); then
-    ux_section "Test Statistics"
-    ux_table_row "Estimated Tests" "$(format_number "$test_count")"
-fi
-
-# File Statistics
-ux_section "File & Code Statistics"
-ux_table_row "${UX_BOLD}Total Files${UX_RESET}" "$(format_number "$total_files")"
-ux_table_row "${UX_BOLD}Total LOC${UX_RESET}" "$(format_number "$total_loc")"
-echo ""
-ux_table_header "Extension" "Files" "Lines of Code"
-for ext in "${exts[@]}"; do
-    count=${counts[$ext]}
-    loc=${locs[$ext]}
-    if (( count > 0 )); then
-        ux_table_row ".${ext}" "$(format_number "$count")" "$(format_number "$loc")"
+    if ((test_count > 0)); then
+        ux_section "Test Statistics"
+        ux_table_row "Estimated Tests" "$(format_number "$test_count")"
     fi
-done
-echo ""
+
+    ux_section "File & Code Statistics"
+    ux_table_row "${UX_BOLD}Total Files${UX_RESET}" "$(format_number "$total_files")"
+    ux_table_row "${UX_BOLD}Total LOC${UX_RESET}" "$(format_number "$total_loc")"
+    echo ""
+    ux_table_header "Extension" "Files" "Lines of Code"
+    awk -F'\t' -v top="$SNAPSHOT_TOP" '
+        NF < 3 { next }
+        NR <= top { print "." $1 "\t" $2 "\t" $3; next }
+        { of += $2; ol += $3; on++ }
+        END { if (on) printf "(%d others)\t%d\t%d\n", on, of, ol }' <<<"$snapshot" |
+        while IFS=$'\t' read -r ext count loc; do
+            ux_table_row "$ext" "$(format_number "$count")" "$(format_number "$loc")"
+        done
+    echo ""
+    ux_bullet "Total LOC = current tracked code (snapshot, untracked $( ((include_untracked)) && echo included || echo excluded); ignores .${SNAPSHOT_IGNORE_EXTS// /, .}, binaries)"
+    ux_bullet "Churn additions = lines added by commits in the range (cumulative history)"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
