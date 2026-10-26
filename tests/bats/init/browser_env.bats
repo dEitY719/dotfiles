@@ -66,9 +66,13 @@ printenv BROWSER || true"
 _source_bash() { _source_run "${1-}" bash --noprofile --norc; }
 _source_zsh() { _source_run "${1-}" zsh -f; }
 # Interactive (-i) variants: the register hint is interactive-only (#2294).
-# bash -i without a tty adds job-control noise on stderr, so hint tests use
-# --partial / refute_output --partial rather than an exact match.
-_source_bash_i() { _source_run "${1-}" bash --noprofile --norc -i; }
+# bash -i without a tty prints job-control warnings on stderr; drop exactly
+# those lines so the silent-path tests can keep an exact assert_output.
+_source_bash_i() {
+    _source_run "${1-}" bash --noprofile --norc -i
+    output=$(printf '%s\n' "$output" |
+        grep -Ev '^bash: (cannot set terminal process group|no job control in this shell)' || true)
+}
 _source_zsh_i() { _source_run "${1-}" zsh -f -i; }
 
 _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
@@ -119,13 +123,19 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
     assert_output "$WRAPPER"
 }
 
-@test "zsh: interactive init prints the register hint, non-interactive does not" {
+@test "zsh: interactive init prints the register hint" {
     _need_zsh
     _wsl_proc
     _stub_chrome
     DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_zsh_i
     assert_success
     assert_output --partial "--register"
+}
+
+@test "zsh: non-interactive init never prints the register hint" {
+    _need_zsh
+    _wsl_proc
+    _stub_chrome
     DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_zsh
     assert_success
     assert_output "$WRAPPER"
@@ -138,8 +148,7 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
     : > "${TEST_TEMP_HOME}/xdg/applications/windows-chrome.desktop"
     DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash_i
     assert_success
-    assert_output --partial "$WRAPPER"
-    refute_output --partial "--register"
+    assert_output "$WRAPPER"
 }
 
 @test "bash: DOTFILES_NO_BROWSER_HINT silences the register hint" {
@@ -147,8 +156,7 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
     _stub_chrome
     DOTFILES_NO_BROWSER_HINT=1 WINDOWS_CHROME_EXE="$CHROME" _source_bash_i
     assert_success
-    assert_output --partial "$WRAPPER"
-    refute_output --partial "--register"
+    assert_output "$WRAPPER"
 }
 
 @test "bash: non-WSL exports nothing even when Chrome is reachable" {
