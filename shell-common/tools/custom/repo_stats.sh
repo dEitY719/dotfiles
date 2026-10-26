@@ -126,9 +126,7 @@ main() {
         local start_epoch end_epoch days_for_avg
         start_epoch=$(date -d "$start_date" +%s)
         end_epoch=$(date -d "$end_date" +%s)
-        if ((end_epoch >= start_epoch)); then
-            duration_days=$(((end_epoch - start_epoch) / 86400))
-        fi
+        duration_days=$(((end_epoch - start_epoch) / 86400))
         days_for_avg=$((duration_days < 1 ? 1 : duration_days))
         avg_commits_per_day=$(awk -v commits="$git_commits" -v days="$days_for_avg" 'BEGIN { printf "%.2f", commits / days }')
     fi
@@ -145,8 +143,8 @@ main() {
                 for (w in commits) printf "A\t%d\t%d\t%s\n", a[w], commits[w], w
             }')
     local churn_add churn_del
-    churn_add=$(awk -F'\t' '$1 == "T" { print $2 }' <<<"$churn")
-    churn_del=$(awk -F'\t' '$1 == "T" { print $3 }' <<<"$churn")
+    # The "T" totals row is always the first line.
+    IFS=$'\t' read -r _ churn_add churn_del <<<"$churn"
 
     # --- Snapshot LOC by discovered extension ---
     local files snapshot
@@ -163,8 +161,7 @@ main() {
             sort -t$'\t' -k3,3nr -k1,1)
     fi
     local total_files total_loc
-    total_files=$(awk -F'\t' '{ s += $2 } END { print s + 0 }' <<<"$snapshot")
-    total_loc=$(awk -F'\t' '{ s += $3 } END { print s + 0 }' <<<"$snapshot")
+    read -r total_files total_loc < <(awk -F'\t' '{ f += $2; l += $3 } END { print f + 0, l + 0 }' <<<"$snapshot")
 
     # Test Statistics (Heuristic: count 'def test_' in python test files)
     local test_count=0
