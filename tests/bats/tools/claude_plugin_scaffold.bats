@@ -86,6 +86,7 @@ gh-pr-skills|dEitY719/gh-pr-skills|gh-pr
 gh-flow-skills|dEitY719/gh-flow-skills|gh-flow
 claudecode-skills|dEitY719/claudecode-skills|claudecode
 video-skills|dEitY719/video-skills|video
+herdr-skills|dEitY719/herdr-skills|herdr
 TABLE
 }
 
