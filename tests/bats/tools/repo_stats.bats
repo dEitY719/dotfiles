@@ -124,12 +124,22 @@ _fixture() {
     _fixture
     _commit "Bob" "bob@ext.io" 2026-08-05 "a=b.js" 4
     _commit "Bob" "bob@ext.io" 2026-08-06 DATA.JSON 7
+    _commit "Bob" "bob@ext.io" 2026-08-07 "한글.md" 9
     rm "$REPO/util.py"
     _stat
     assert_success
     assert_output --regexp '\.js +│ 1 +│ 4'
     refute_output --regexp '\.py +│'
+    refute_output --regexp '\.json +│'
     assert_output --regexp 'Additions +: \+22'
+}
+
+@test "XDG git/mailmap merges identities when the repo has none" {
+    _fixture
+    mkdir -p "$XDG_CONFIG_HOME/git"
+    printf 'Alice <alice@team.io> alice <alice@home.net>\n' >"$XDG_CONFIG_HOME/git/mailmap"
+    _stat
+    assert_output --regexp 'Alice +│ 4 +│ \+15 '
 }
 
 @test "option errors exit 1" {

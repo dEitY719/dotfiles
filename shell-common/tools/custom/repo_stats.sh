@@ -42,7 +42,7 @@ repo_stats_help() {
     ux_bullet "--since <date>        limit commit/churn/author stats (git log --since)"
     ux_bullet "--until <date>        limit commit/churn/author stats (git log --until)"
     ux_bullet "--include-untracked   add untracked (non-ignored) files to snapshot LOC"
-    ux_bullet "--by-author           list every author instead of the top ${AUTHOR_TOP}"
+    ux_bullet "--by-author           list every author instead of the top ${AUTHOR_TOP} (ranked by churn additions)"
     ux_bullet ".mailmap (repo root, or ~/.config/git/mailmap) merges author identities"
 }
 
@@ -62,7 +62,7 @@ list_snapshot_files() {
                 if (meta ~ /[iw]\/-text/ || meta ~ /w\/ / || path ~ /^"/ || path ~ /(^|\/)\.venv\//) next
                 base = path; sub(/.*\//, "", base)
                 if (base !~ /.\./) next
-                ext = base; sub(/.*\./, "", ext)
+                ext = base; sub(/.*\./, "", ext); ext = tolower(ext)
                 if (ext in skip) next
                 print ext "\t" path
             }'
@@ -134,7 +134,7 @@ main() {
     # --- Churn + authors: one numstat pass, merges carry no numstat ---
     # Output: "T <adds> <dels>" then "A <adds> <commits> <name>" per author.
     local churn
-    churn=$(git -C "$TARGET_DIR" "${gitcfg[@]}" log --no-renames --numstat --format='@%aN' "${range[@]}" HEAD |
+    churn=$(git -C "$TARGET_DIR" "${gitcfg[@]}" -c core.quotepath=off log --no-renames --numstat --format='@%aN' "${range[@]}" HEAD |
         awk -F'\t' -v ex="$CHURN_EXCLUDE_RE" '
             /^@/ { who = substr($0, 2); commits[who]++; next }
             NF == 3 && $1 != "-" && tolower($3) !~ ex { add += $1; del += $2; a[who] += $1 }
@@ -186,7 +186,7 @@ main() {
     ux_table_row "Net" "$(format_number $((churn_add - churn_del)))"
     ux_bullet "Excluded: ${CHURN_EXCLUDE_DESC}, binary files, merge commits"
 
-    ux_section "Author Contributions"
+    ux_section "Author Contributions (by additions)"
     ux_table_header "Author" "Commits" "Additions (share)"
     awk -F'\t' '$1 == "A"' <<<"$churn" | cut -f2- | sort -t$'\t' -k1,1nr -k2,2nr -k3,3 |
         awk -F'\t' -v top="$AUTHOR_TOP" -v all="$by_author" -v total="$churn_add" '
@@ -217,7 +217,7 @@ main() {
             ux_table_row "$ext" "$(format_number "$count")" "$(format_number "$loc")"
         done
     echo ""
-    ux_bullet "Total LOC = current tracked code (snapshot, untracked $( ((include_untracked)) && echo included || echo excluded); ignores .${SNAPSHOT_IGNORE_EXTS// /, .}, binaries)"
+    ux_bullet "Total LOC = current tracked text files, docs included (snapshot, untracked $( ((include_untracked)) && echo included || echo excluded); ignores .${SNAPSHOT_IGNORE_EXTS// /, .}, binaries)"
     ux_bullet "Churn additions = lines added by commits in the range (cumulative history)"
 }
 
