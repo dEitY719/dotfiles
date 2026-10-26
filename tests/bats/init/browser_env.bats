@@ -57,6 +57,8 @@ _source_run() {
         "_WINDOWS_CHROME_PROC_VERSION=${PROC}" \
         "WINDOWS_CHROME_EXE=${WINDOWS_CHROME_EXE:-}" \
         "WINDOWS_CHROME_DRIVE=${TEST_TEMP_HOME}/no-such-drive" \
+        "DOTFILES_NO_BROWSER_HINT=${DOTFILES_NO_BROWSER_HINT-1}" \
+        "XDG_DATA_HOME=${TEST_TEMP_HOME}/xdg" \
         "$@" -c ". '${BROWSER_ENV}'
 printenv BROWSER || true"
 }
@@ -91,6 +93,33 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
     case "$output" in
     *" "*) fail "BROWSER must not contain a space: ${output}" ;;
     esac
+}
+
+# xdg-open registration is machine-local; a fresh WSL lacks it, so say how to fix it.
+@test "bash: WSL + Chrome without the xdg desktop entry prints a register hint" {
+    _wsl_proc
+    _stub_chrome
+    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash
+    assert_success
+    assert_output --partial "--register"
+}
+
+@test "bash: the register hint is silent once windows-chrome.desktop exists" {
+    _wsl_proc
+    _stub_chrome
+    mkdir -p "${TEST_TEMP_HOME}/xdg/applications"
+    : > "${TEST_TEMP_HOME}/xdg/applications/windows-chrome.desktop"
+    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash
+    assert_success
+    assert_output "$WRAPPER"
+}
+
+@test "bash: DOTFILES_NO_BROWSER_HINT silences the register hint" {
+    _wsl_proc
+    _stub_chrome
+    DOTFILES_NO_BROWSER_HINT=1 WINDOWS_CHROME_EXE="$CHROME" _source_bash
+    assert_success
+    assert_output "$WRAPPER"
 }
 
 @test "bash: non-WSL exports nothing even when Chrome is reachable" {
