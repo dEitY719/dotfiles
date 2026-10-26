@@ -65,6 +65,11 @@ printenv BROWSER || true"
 
 _source_bash() { _source_run "${1-}" bash --noprofile --norc; }
 _source_zsh() { _source_run "${1-}" zsh -f; }
+# Interactive (-i) variants: the register hint is interactive-only (#2294).
+# bash -i without a tty adds job-control noise on stderr, so hint tests use
+# --partial / refute_output --partial rather than an exact match.
+_source_bash_i() { _source_run "${1-}" bash --noprofile --norc -i; }
+_source_zsh_i() { _source_run "${1-}" zsh -f -i; }
 
 _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
 
@@ -99,9 +104,31 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
 @test "bash: WSL + Chrome without the xdg desktop entry prints a register hint" {
     _wsl_proc
     _stub_chrome
-    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash
+    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash_i
     assert_success
     assert_output --partial "--register"
+}
+
+# #2294: forced non-interactive init (bats `run`, pytest pty, scripts) must not
+# leak the hint into captured output — the exact repro of a WSL dev PC.
+@test "bash: non-interactive init never prints the register hint" {
+    _wsl_proc
+    _stub_chrome
+    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash
+    assert_success
+    assert_output "$WRAPPER"
+}
+
+@test "zsh: interactive init prints the register hint, non-interactive does not" {
+    _need_zsh
+    _wsl_proc
+    _stub_chrome
+    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_zsh_i
+    assert_success
+    assert_output --partial "--register"
+    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_zsh
+    assert_success
+    assert_output "$WRAPPER"
 }
 
 @test "bash: the register hint is silent once windows-chrome.desktop exists" {
@@ -109,17 +136,19 @@ _need_zsh() { command -v zsh > /dev/null 2>&1 || skip "zsh not available"; }
     _stub_chrome
     mkdir -p "${TEST_TEMP_HOME}/xdg/applications"
     : > "${TEST_TEMP_HOME}/xdg/applications/windows-chrome.desktop"
-    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash
+    DOTFILES_NO_BROWSER_HINT= WINDOWS_CHROME_EXE="$CHROME" _source_bash_i
     assert_success
-    assert_output "$WRAPPER"
+    assert_output --partial "$WRAPPER"
+    refute_output --partial "--register"
 }
 
 @test "bash: DOTFILES_NO_BROWSER_HINT silences the register hint" {
     _wsl_proc
     _stub_chrome
-    DOTFILES_NO_BROWSER_HINT=1 WINDOWS_CHROME_EXE="$CHROME" _source_bash
+    DOTFILES_NO_BROWSER_HINT=1 WINDOWS_CHROME_EXE="$CHROME" _source_bash_i
     assert_success
-    assert_output "$WRAPPER"
+    assert_output --partial "$WRAPPER"
+    refute_output --partial "--register"
 }
 
 @test "bash: non-WSL exports nothing even when Chrome is reachable" {

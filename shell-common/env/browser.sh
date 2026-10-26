@@ -43,7 +43,10 @@ if [ -r "$_browser_helper" ]; then
             # fresh WSL install lacks, so links land in the Linux Chrome and die on a
             # proxy-resigned cert. Hint only — registering rewrites desktop defaults,
             # so it stays an explicit step. Silence: DOTFILES_NO_BROWSER_HINT=1.
+            # Interactive shells only (#2294): a forced non-interactive init (bats
+            # `run`, pytest pty, scripts) would leak the line into captured output.
             if [ -z "${DOTFILES_NO_BROWSER_HINT-}" ] &&
+                case $- in *i*) true ;; *) false ;; esac &&
                 [ ! -e "${XDG_DATA_HOME:-$HOME/.local/share}/applications/windows-chrome.desktop" ]; then
                 printf '[hint] xdg-open is not on Windows Chrome yet - run: %s --register\n' \
                     "$_browser_wrapper" >&2
