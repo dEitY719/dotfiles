@@ -39,6 +39,15 @@ if [ -r "$_browser_helper" ]; then
         # same story: exporting it would hand every consumer a broken spec.
         if _windows_chrome_exe >/dev/null 2>&1 && [ -x "$_browser_wrapper" ]; then
             export BROWSER="$_browser_wrapper"
+            # xdg-open (what terminal link clicks use) is machine-local state that a
+            # fresh WSL install lacks, so links land in the Linux Chrome and die on a
+            # proxy-resigned cert. Hint only — registering rewrites desktop defaults,
+            # so it stays an explicit step. Silence: DOTFILES_NO_BROWSER_HINT=1.
+            if [ -z "${DOTFILES_NO_BROWSER_HINT-}" ] &&
+                [ ! -e "${XDG_DATA_HOME:-$HOME/.local/share}/applications/windows-chrome.desktop" ]; then
+                printf '[hint] xdg-open is not on Windows Chrome yet - run: %s --register\n' \
+                    "$_browser_wrapper" >&2
+            fi
         fi
     fi
 fi
