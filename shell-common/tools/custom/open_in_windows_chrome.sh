@@ -263,7 +263,7 @@ _register() {
         if "${xdg_default[@]}" >/dev/null 2>&1; then
             ux_success "xdg default-web-browser -> ${_DESKTOP_ID}"
         else
-            ux_warning "xdg-settings refused ${_DESKTOP_ID}; xdg-open may still use the old browser."
+            ux_info "xdg-settings refused ${_DESKTOP_ID} (common without a desktop environment); relying on the mimeapps defaults below."
         fi
     else
         ux_warning "xdg-settings not found - skipped the xdg-open default."
