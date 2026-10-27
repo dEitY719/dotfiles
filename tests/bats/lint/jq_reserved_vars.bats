@@ -5,7 +5,7 @@
 # ("syntax error, unexpected label, expecting IDENT"). jq 1.7+ accepts them,
 # so every other test passes on a 1.7 box and only this scan catches it.
 # Supersedes the ai_usage.sh-only check from #2052 with a repo-wide scan.
-# lib/ is the vendored bats-core submodule and stays out of scope.
+# The vendored bats-* submodules stay out of scope (not every lib/ — shell-common/lib etc. are ours).
 
 load '../test_helper'
 
@@ -27,7 +27,9 @@ EOF
 
     run grep -rnE "$JQ_KEYWORD_VAR_ERE" \
         --include='*.sh' --include='*.bash' --include='*.zsh' --include='*.bats' \
-        --exclude-dir=lib --exclude-dir=.git --exclude=jq_reserved_vars.bats \
+        --exclude-dir=bats-core --exclude-dir=bats-assert --exclude-dir=bats-support \
+        --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules \
+        --exclude=jq_reserved_vars.bats \
         "${_BATS_REAL_DOTFILES_ROOT}"
     assert_output ""
 }
