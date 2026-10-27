@@ -55,7 +55,7 @@ avatar_watched_repos_main() {
         _a="${_a%%$'\t'*}"
         case "${_kind}" in
         skip) ux_warning "skip ${_a}: ${_b} not found" ;;
-        warn) ux_warning "keep ${_a}: verify_skill '${_b}' is not gh-verify:merged|gh-verify:live, not migrated" ;;
+        warn) ux_warning "keep ${_a}: verify_skill '${_b}' is not an allowed verify skill, not migrated" ;;
         # Raw diff body is data (like git diff), not decorated status output.
         diff) printf '%s\n' "${_line#*$'\t'}" ;;
         unchanged) ux_success "watch list already up to date: ${_target}" ;;
