@@ -2827,6 +2827,7 @@ _two_repo_fixture() {
         "HERDR_READ_AFTER_PROMPT=● Unknown command: /gh-flow:wave"
     assert_failure
     assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_unknown_command)."
+    assert_output --partial "answered '● Unknown command: /gh-flow:wave' to '/gh-flow:wave 11'"
     assert_output --partial "plugin is installed"
     _refute_logged "agent send-keys"
 }

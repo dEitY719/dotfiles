@@ -2413,7 +2413,7 @@ _iw_escalate_prompt_stall() {
 # the command runs top-level rather than inside a subagent, which is what took
 # this path out of the `SubagentStop` guard gap (#1434).
 _iw_prompt_issue() {
-    local _agent="$1" _number="$2" _tab="${3-}" _attempt="${4-}" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code
+    local _agent="$1" _number="$2" _tab="${3-}" _attempt="${4-}" _prompt _json _code _rc=0 _seq0 _post_stall_status _fail_code _unknown
 
     _IW_STALL_RECOVER_ERROR=""
     _IW_PROMPT_KEEP_ATTEMPT=0
@@ -2446,12 +2446,13 @@ _iw_prompt_issue() {
             if [ "${_post_stall_status}" = "working" ]; then
                 ux_warning "herdr reported agent_prompt_stalled but ${_agent} is already working — treating as delivered, not retrying."
                 _rc=0
-            elif _hp_pane_text "${_agent}" "${_IW_SETTLE_READ_LINES}" |
-                grep -qF "${_IW_UNKNOWN_COMMAND_MARK}"; then
+            elif _unknown=$(_hp_pane_text "${_agent}" "${_IW_SETTLE_READ_LINES}" |
+                grep -F "${_IW_UNKNOWN_COMMAND_MARK}" | tail -n 1) &&
+                [ -n "${_unknown}" ]; then
                 # Submitted and rejected, not unsubmitted (#2300): no Enter.
                 _code="agent_unknown_command"
                 _IW_PROMPT_FATAL=1
-                ux_error "${_agent} answered '${_IW_UNKNOWN_COMMAND_MARK} ${_IW_FLOW_COMMAND}' — the prompt was submitted but the command is missing in the pane environment. Check that its plugin is installed and enabled for that account."
+                ux_error "${_agent} answered '${_unknown}' to '${_prompt}' — the prompt was submitted but the command is missing in the pane environment. Check that its plugin is installed and enabled for that account."
             elif _iw_stall_recover_via_enter "${_agent}" "${_seq0}"; then
                 _rc=0
             fi
