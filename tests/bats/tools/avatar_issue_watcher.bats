@@ -3689,6 +3689,20 @@ _two_repo_fixture() {
     [ ! -s "${_CASUALTY_FILE}" ]
 }
 
+@test "avatar_issue_watcher: a casualty whose re-prompt hits Unknown command is dropped" {
+    # #2300: the surviving pane would give the same answer on every reopen.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_READ_AFTER_PROMPT=● Unknown command: /gh-flow:wave"
+    assert_output --partial "Re-prompting acme/dotfiles#11 in its surviving pane"
+    assert_output --partial "Dropping rate-limit casualty acme/dotfiles#11"
+    _refute_logged "agent send-keys"
+    [ ! -s "${_CASUALTY_FILE}" ]
+}
+
 @test "avatar_issue_watcher: an open gate does not retry casualties every tick" {
     # The retry is a gate-*reopen* event. A tick that finds the gate merely open
     # — strikes on record, no backoff running — has already had its reopen, and

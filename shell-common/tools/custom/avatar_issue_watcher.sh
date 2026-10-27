@@ -3104,6 +3104,11 @@ _iw_limit_retry_casualties() {
         if [ -n "$(_hp_agent_status "${_agent}")" ]; then
             ux_info "Re-prompting ${_repo}#${_number} in its surviving pane (${_agent})."
             if ! _iw_prompt_issue "${_agent}" "${_number}"; then
+                if [ "${_IW_PROMPT_FATAL}" -eq 1 ]; then
+                    # Re-prompting would get the same answer every reopen (#2300).
+                    _iw_limit_casualty_drop "${_repo}" "${_number}" "the flow command is missing in its pane."
+                    continue
+                fi
                 # A prompt that never landed is a transport or input-loop
                 # failure, not evidence about anything this function judges —
                 # the same reading _iw_limit_record gives it. The row waits.
