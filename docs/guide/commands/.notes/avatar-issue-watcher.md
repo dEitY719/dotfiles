@@ -36,8 +36,8 @@ HOME 상대경로(`rel`)만 `avatar/watched-repos.public.json` 으로 추적하�
   단독 실행은 `avatar-watched-repos` (미리보기는 `--dry-run`, diff 만 출력).
 - 병합 키는 `repo`. 로컬 파일에만 있는 엔트리(비공개 repo 등)는 그대로 남는다.
   양쪽에 있는 repo 는 로컬 `path` 를 유지하고 `host`/`post_merge_verify`/
-  `post_merge_verify_skill` 만 추적 파일 값으로 맞춘다. 추적 파일에만 있는 repo 는 `$HOME/<rel>` 디렉터리가
-  있을 때만 추가되고, 없으면 경고 후 건너뛴다.
+  `post_merge_verify_skill` 만 추적 파일 값으로 맞춘다.
+  추적 파일에만 있는 repo 는 `$HOME/<rel>` 디렉터리가 있을 때만 추가되고, 없으면 경고 후 건너뛴다.
   같은 이름이라도 로컬 엔트리의 `host` 가 다르면(사내 GHES 미러 등) PC 별
   override 로 보고 그대로 둔다.
 - 새 PC 에서 아직 clone 하지 않은 repo 는 건너뛴다. clone 후 `./setup.sh` 나
@@ -50,8 +50,9 @@ HOME 상대경로(`rel`)만 `avatar/watched-repos.public.json` 으로 추적하�
 - 머지 후 검증 스키마(#2296): `post_merge_verify`(JSON `true`/`false`, 키
   없으면 `false`) 가 검증 탭을 열지 정하고, `post_merge_verify_skill`
   (`gh-verify:merged` | `gh-verify:live`, 기본 `gh-verify:merged`) 이 스킬을 고른다.
-- 로컬 파일에 남은 옛 키 `verify_skill: X` 는 렌더 때 `post_merge_verify: true`
-  + `post_merge_verify_skill: X` 로 이관되고 옛 키는 지워진다(재실행해도 같다).
+- 로컬 파일에 남은 옛 키 `verify_skill: X` 는 렌더 때 `post_merge_verify: true` 와
+  `post_merge_verify_skill: X` 로 이관되고 옛 키는 지워진다(재실행해도 같다).
   새 키가 이미 있으면 새 키가 이기고, 값이 위 두 스킬이 아니면 경고 후 그대로 둔다.
 - 새 공개 repo 를 공유하려면 추적 파일에
-  `{repo, rel[, host, post_merge_verify, post_merge_verify_skill]}` 를 추가한다. 이후 추가하는 비공개 repo 는 로컬 파일에만 둔다.
+  `{repo, rel[, host, post_merge_verify, post_merge_verify_skill]}` 를 추가한다.
+  이후 추가하는 비공개 repo 는 로컬 파일에만 둔다.
