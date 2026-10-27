@@ -274,6 +274,11 @@ _IW_SETTLE_NOT_READY_MARK="Not logged in"
 # reports `agent_prompt_stalled` — but the prompt *was* submitted and pressing
 # Enter or starting a new attempt can only repeat the same answer.
 _IW_UNKNOWN_COMMAND_MARK="Unknown command:"
+# How long an issue that hit it is held back from dispatch. Closing the tab
+# makes the issue look idle to the next tick, so without the hold every tick
+# would rebuild a tab for the same answer. Long enough to stop that churn,
+# short enough that installing the plugin is picked up without a manual step.
+_IW_UNKNOWN_COMMAND_HOLD_SECONDS="${IW_UNKNOWN_COMMAND_HOLD_SECONDS:-21600}"
 
 # Round-robin cursor (issue #1453 D-3). Its own file, so `rate-limit.json` and
 # every pre-#1453 state directory stay untouched; a missing file simply means
@@ -2001,6 +2006,11 @@ _iw_select_candidates() {
                 continue
             fi
 
+            if _iw_unknown_command_held "${_repo}" "${_number}"; then
+                ux_info "Skipping ${_repo}#${_number} — its last dispatch answered Unknown command; held for $((_IW_UNKNOWN_COMMAND_HOLD_SECONDS / 3600))h (check the plugin install)." >&2
+                continue
+            fi
+
             _iw_handled_by_pr "${_number}"
             _rc=$?
             if [ "${_rc}" -eq 0 ]; then
@@ -2481,6 +2491,29 @@ _iw_prompt_issue() {
     return 1
 }
 
+# Hold file for <owner/repo> <number>: the epoch of its last Unknown command.
+_iw_unknown_command_file() {
+    printf '%s/unknown-command/%s-%s' "$(_iw_state_dir)" "$(printf '%s' "$1" | tr '/' '_')" "$2"
+}
+
+_iw_unknown_command_hold() {
+    local _f
+    _f=$(_iw_unknown_command_file "$1" "$2")
+    mkdir -p "${_f%/*}" 2>/dev/null && _hp_now >"${_f}" 2>/dev/null
+}
+
+# 0 while <owner/repo> <number> is inside its hold window. A missing or
+# unreadable file, or no clock, is "not held": the hold only saves churn.
+_iw_unknown_command_held() {
+    local _at _now
+    _at=$(cat "$(_iw_unknown_command_file "$1" "$2")" 2>/dev/null) || return 1
+    _now=$(_hp_now)
+    case "${_at}:${_now}" in
+    *[!0-9:]* | :* | *:) return 1 ;;
+    esac
+    [ $((_now - _at)) -lt "${_IW_UNKNOWN_COMMAND_HOLD_SECONDS}" ]
+}
+
 # One issue, end to end: workspace, tab, agent, prompt. Retries the
 # whole sequence up to _IW_MAX_ATTEMPTS times, cleaning up before each retry so
 # no attempt inherits the previous one's half-built state.
@@ -2578,6 +2611,7 @@ EOF
                 elif [ "${_IW_PROMPT_FATAL}" -eq 1 ]; then
                     # Another attempt would get the same answer (#2300).
                     _iw_cleanup_attempt "${_tab}"
+                    _iw_unknown_command_hold "${_repo}" "${_number}" || true
                     ux_error "Giving up on ${_repo}#${_number} after attempt ${_attempt} — the failure is deterministic, not retrying."
                     return 1
                 fi
@@ -3106,6 +3140,7 @@ _iw_limit_retry_casualties() {
             if ! _iw_prompt_issue "${_agent}" "${_number}"; then
                 if [ "${_IW_PROMPT_FATAL}" -eq 1 ]; then
                     # Re-prompting would get the same answer every reopen (#2300).
+                    _iw_unknown_command_hold "${_repo}" "${_number}" || true
                     _iw_limit_casualty_drop "${_repo}" "${_number}" "its pane answered Unknown command to the re-prompt."
                     continue
                 fi

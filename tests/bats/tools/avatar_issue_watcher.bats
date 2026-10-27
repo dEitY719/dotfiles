@@ -2843,6 +2843,28 @@ _two_repo_fixture() {
     assert_output --partial "after attempt 1"
 }
 
+@test "avatar_issue_watcher: an issue that hit Unknown command is held on the next tick" {
+    # The tab is closed, so without the hold the next tick would see an idle
+    # issue and rebuild a tab for the same answer (PR #2301 review).
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_READ_AFTER_PROMPT=● Unknown command: /gh-flow:wave"
+    assert_failure
+    [ -s "${_STATE_DIR}/unknown-command/acme_dotfiles-11" ]
+
+    : >"${_LOG}"
+    _run_tick
+    assert_output --partial "Skipping acme/dotfiles#11 — its last dispatch answered Unknown command"
+    _refute_logged "agent prompt"
+}
+
+@test "avatar_issue_watcher: an Unknown command hold expires" {
+    mkdir -p "${_STATE_DIR}/unknown-command"
+    printf '%s' "$(($(date +%s) - 21601))" >"${_STATE_DIR}/unknown-command/acme_dotfiles-11"
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
+}
+
 @test "avatar_issue_watcher: a working agent wins over an Unknown command line in its pane" {
     # `working` is positive evidence the prompt landed; the pane read is never reached.
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=working" \
