@@ -480,6 +480,9 @@ EOF
 #                                   out, and `~` stands for an empty read. The
 #                                   40-line evidence read (#1444) is a separate
 #                                   call and is not scripted by this
+#   HERDR_READ_AFTER_PROMPT=TEXT    the short read answers TEXT once that agent
+#                                   has been prompted — the pane claude leaves
+#                                   behind after it rejects the command (#2300)
 #   HERDR_GET_FAIL_AFTER_PROMPT=1   `agent get` errors once that agent has been
 #                                   prompted — herdr unreachable during the
 #                                   observation window only, leaving dispatch
@@ -649,6 +652,10 @@ case "$1 $2" in
     fi
     if [ "$5" = "40" ]; then
         printf '> /gh-flow:wave 11\n5-hour limit reached. Resets at 3pm.\n'
+        exit 0
+    fi
+    if [ -n "${HERDR_READ_AFTER_PROMPT:-}" ] && [ -f "${CALL_LOG}.prompt.$3" ]; then
+        printf '%s\n' "${HERDR_READ_AFTER_PROMPT}"
         exit 0
     fi
     _seq="${HERDR_SETTLE_READ_SEQUENCE:-> claude ready}"
@@ -2809,6 +2816,40 @@ _two_repo_fixture() {
     _assert_logged "tab rename ws-test-1:t9 issue-11-STUCK"
     _assert_logged "notification show issue watcher prompt stalled --body #11 dispatch stalled repeatedly — herdr agent attach iw-dotfiles-issue-11 --sound request"
     refute_output --partial "(unknown)"
+}
+
+# ---------------------------------------------------------------------------
+# Unknown command (issue #2300)
+# ---------------------------------------------------------------------------
+
+@test "avatar_issue_watcher: a stall over an Unknown command pane fails as agent_unknown_command without Enter" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_READ_AFTER_PROMPT=● Unknown command: /gh-flow:wave"
+    assert_failure
+    assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_unknown_command)."
+    assert_output --partial "plugin is installed"
+    _refute_logged "agent send-keys"
+}
+
+@test "avatar_issue_watcher: an Unknown command stops after attempt 1 with cleanup and no STUCK escalation" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_READ_AFTER_PROMPT=● Unknown command: /gh-flow:wave"
+    assert_failure
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+    _assert_logged "tab close ws-test-1:t9"
+    _refute_logged "tab rename"
+    _refute_logged "notification show"
+    assert_output --partial "after attempt 1"
+}
+
+@test "avatar_issue_watcher: a stall pane without Unknown command keeps the Enter recovery" {
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_READ_AFTER_PROMPT=> /gh-flow:wave 11"
+    assert_failure
+    [ "$(_log_count 'agent send-keys')" -eq 9 ]
+    [ "$(_log_count 'agent prompt')" -eq 3 ]
+    _assert_logged "tab rename ws-test-1:t9 issue-11-STUCK"
+    refute_output --partial "agent_unknown_command"
 }
 
 @test "avatar_issue_watcher: agent_prompt_stalled recovery is skipped when the agent is already working" {

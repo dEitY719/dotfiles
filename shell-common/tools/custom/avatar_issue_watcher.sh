@@ -269,6 +269,11 @@ _IW_SETTLE_READ_LINES="15"
 # across reads, so the "frames agree" test alone would take it for ready —
 # and a bare state_change_seq comparison could not tell it apart at all.
 _IW_SETTLE_NOT_READY_MARK="Not logged in"
+# What claude prints when the dispatched slash command does not exist in the
+# pane's environment (#2300). It answers at once and goes back to idle, so herdr
+# reports `agent_prompt_stalled` — but the prompt *was* submitted and pressing
+# Enter or starting a new attempt can only repeat the same answer.
+_IW_UNKNOWN_COMMAND_MARK="Unknown command:"
 
 # Round-robin cursor (issue #1453 D-3). Its own file, so `rate-limit.json` and
 # every pre-#1453 state directory stay untouched; a missing file simply means
@@ -379,6 +384,9 @@ _IW_LIMIT_EVIDENCE_LINES="40"
 # otherwise.
 _IW_STALL_RECOVER_ERROR=""
 _IW_PROMPT_KEEP_ATTEMPT=0
+# Set by _iw_prompt_issue when the failure is deterministic (#2300): the caller
+# stops the remaining attempts instead of rebuilding the same tab.
+_IW_PROMPT_FATAL=0
 # Set by _iw_start_agent_retrying to the herdr error code and the human sentence
 # behind the start it gave up on — empty when herdr named neither on either
 # stream (issue #1525). Log inputs only; nothing branches on them.
@@ -2359,6 +2367,7 @@ _iw_stall_recover_via_enter() {
 _iw_prompt_retryable() {
     case "$1" in
     timeout | agent_prompt_stalled | herdr_send_keys_failed) return 0 ;;
+    agent_unknown_command) return 1 ;; # deterministic: the command is missing (#2300)
     esac
     return 1
 }
@@ -2409,6 +2418,7 @@ _iw_prompt_issue() {
 
     _IW_STALL_RECOVER_ERROR=""
     _IW_PROMPT_KEEP_ATTEMPT=0
+    _IW_PROMPT_FATAL=0
     # After the resets: a caller reading them on this failure must not see a
     # previous issue's values.
     _iw_ensure_flow_command || return 1
@@ -2437,6 +2447,12 @@ _iw_prompt_issue() {
             if [ "${_post_stall_status}" = "working" ]; then
                 ux_warning "herdr reported agent_prompt_stalled but ${_agent} is already working — treating as delivered, not retrying."
                 _rc=0
+            elif _hp_pane_text "${_agent}" "${_IW_SETTLE_READ_LINES}" |
+                grep -qF "${_IW_UNKNOWN_COMMAND_MARK}"; then
+                # Submitted and rejected, not unsubmitted (#2300): no Enter.
+                _code="agent_unknown_command"
+                _IW_PROMPT_FATAL=1
+                ux_error "${_agent} answered '${_IW_UNKNOWN_COMMAND_MARK} ${_IW_FLOW_COMMAND}' — the prompt was submitted but the command is missing in the pane environment. Check that its plugin is installed and enabled for that account."
             elif _iw_stall_recover_via_enter "${_agent}" "${_seq0}"; then
                 _rc=0
             fi
@@ -2558,6 +2574,11 @@ EOF
                     return 0
                 elif [ "${_IW_PROMPT_KEEP_ATTEMPT}" -eq 1 ]; then
                     ux_error "Giving up on ${_repo}#${_number} after ${_IW_MAX_ATTEMPTS} attempts."
+                    return 1
+                elif [ "${_IW_PROMPT_FATAL}" -eq 1 ]; then
+                    # Another attempt would get the same answer (#2300).
+                    _iw_cleanup_attempt "${_tab}"
+                    ux_error "Giving up on ${_repo}#${_number} after attempt ${_attempt} — the failure is deterministic, not retrying."
                     return 1
                 fi
             fi
