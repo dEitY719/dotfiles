@@ -156,7 +156,7 @@ def test_tracked_file_is_public_safe() -> None:
     assert entries
     for e in entries:
         assert set(e) <= {"repo", "rel", "host", "post_merge_verify", "post_merge_verify_skill"}
-        assert e.get("post_merge_verify", False) in (True, False)
+        assert isinstance(e.get("post_merge_verify", False), bool)
         assert e.get("post_merge_verify_skill", "gh-verify:merged") in ("gh-verify:merged", "gh-verify:live")
         assert e.get("host", "github.com") == "github.com"
     text = TRACKED.read_text(encoding="utf-8")
