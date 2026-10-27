@@ -2843,6 +2843,15 @@ _two_repo_fixture() {
     assert_output --partial "after attempt 1"
 }
 
+@test "avatar_issue_watcher: a working agent wins over an Unknown command line in its pane" {
+    # `working` is positive evidence the prompt landed; the pane read is never reached.
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=working" \
+        "HERDR_READ_AFTER_PROMPT=● Unknown command: /gh-flow:wave"
+    assert_success
+    assert_output --partial "treating as delivered"
+    refute_output --partial "agent_unknown_command"
+}
+
 @test "avatar_issue_watcher: a stall pane without Unknown command keeps the Enter recovery" {
     _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
         "HERDR_READ_AFTER_PROMPT=> /gh-flow:wave 11"
