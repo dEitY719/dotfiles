@@ -9,8 +9,11 @@
 
 load '../test_helper'
 
-JQ_KEYWORDS='label|def|if|then|elif|else|end|as|reduce|foreach|try|catch|import|include|and|or|not|__loc__'
-JQ_KEYWORD_VAR_ERE="(as[[:space:]]+[\$]|--arg(json)?[[:space:]]+)(${JQ_KEYWORDS})([^A-Za-z0-9_]|\$)"
+# The jq 1.6 lexer's keyword list (src/lexer.l). `not` is a builtin, not a keyword.
+JQ_KEYWORDS='label|def|if|then|elif|else|end|as|reduce|foreach|try|catch|import|include|module|and|or|__loc__'
+# Binding sites: `as $kw`, `--arg/--argjson/--slurpfile/--rawfile kw`, `def f($kw)` / `def f(a; $kw)`.
+JQ_BINDING='(^|[^A-Za-z0-9_])as[[:space:]]+[$]|--(arg|argjson|slurpfile|rawfile)[[:space:]]+|def[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[(]([^)]*;)?[[:space:]]*[$]?'
+JQ_KEYWORD_VAR_ERE="(${JQ_BINDING})(${JQ_KEYWORDS})([^A-Za-z0-9_]|\$)"
 
 @test "no shell code binds a jq variable named after a jq 1.6 keyword" {
     # Positive control: the pattern must catch keyword bindings and spare
@@ -19,11 +22,17 @@ JQ_KEYWORD_VAR_ERE="(as[[:space:]]+[\$]|--arg(json)?[[:space:]]+)(${JQ_KEYWORDS}
     .[1] as $label | .
     jq --arg label x
     jq --argjson if 1 '.'
+    jq --slurpfile __loc__ f.json
+    def f($label): .;
+    def g(a; $end): .;
     .[1] as $wslabel | .
     .[1] as $labels | .
     jq --arg endpoint x
+    jq --arg not x
+    has $end
+    def f($labels): .;
 EOF
-    assert_output "3"
+    assert_output "6"
 
     run grep -rnE "$JQ_KEYWORD_VAR_ERE" \
         --include='*.sh' --include='*.bash' --include='*.zsh' --include='*.bats' \
