@@ -12,12 +12,19 @@ file avatar_issue_watcher.sh reads, keyed on `repo`:
   - a repo only the tracked file has is added as `$HOME/<rel>` when that
     directory exists, and reported as skipped otherwise.
 
+A kept target entry still carrying the old `verify_skill` key (#2296) is
+migrated to `post_merge_verify: true` + `post_merge_verify_skill: <value>`;
+new keys already present win and the old key is dropped. A value outside the
+allowlist is left as it is and reported. A merged entry drops the old key,
+since the tracked entry owns the new ones.
+
 Usage: python3 -s -E -m dotfiles_tools.issue_watcher.watched_repos \
            render <tracked> <target> <home> [--dry-run]
 
 stdout is TSV the shell turns into ux_lib output:
 
   skip<TAB><repo><TAB><path>   tracked repo whose checkout does not exist
+  warn<TAB><repo><TAB><value>  old verify_skill outside the allowlist, kept
   diff<TAB><line>              unified diff line (--dry-run only)
   unchanged                    target already matches; nothing written
   would-write                  --dry-run and the target would change
@@ -40,7 +47,9 @@ from collections.abc import Callable
 from typing import Any
 
 # Fields the tracked entry owns; anything else in a target entry is kept.
-_TRACKED_FIELDS = ("host", "verify_skill")
+_TRACKED_FIELDS = ("host", "post_merge_verify", "post_merge_verify_skill")
+_OLD_FIELD = "verify_skill"  # pre-#2296 schema; migrated on render
+_VERIFY_SKILLS = ("gh-verify:merged", "gh-verify:live")
 
 
 class InputError(Exception):
@@ -69,28 +78,43 @@ def load_tracked(raw: str) -> list[dict[str, str]]:
     return data
 
 
+def _migrate(entry: Any, warnings: list[tuple[str, str]]) -> Any:
+    """Rewrite a kept entry's old `verify_skill` into the two-key schema."""
+    if not isinstance(entry, dict) or _OLD_FIELD not in entry:
+        return entry
+    old = entry[_OLD_FIELD]
+    out = {k: v for k, v in entry.items() if k != _OLD_FIELD}
+    if "post_merge_verify" in entry or "post_merge_verify_skill" in entry:
+        return out  # new keys win
+    if old not in _VERIFY_SKILLS:
+        warnings.append((str(entry.get("repo", "?")), str(old)))
+        return entry
+    return {**out, "post_merge_verify": True, "post_merge_verify_skill": old}
+
+
 def merge(
     tracked: list[dict[str, str]],
     current: list[Any],
     home: str,
     isdir: Callable[[str], bool] = os.path.isdir,
-) -> tuple[list[Any], list[tuple[str, str]]]:
-    """Return (merged entries, skipped (repo, path) pairs)."""
+) -> tuple[list[Any], list[tuple[str, str]], list[tuple[str, str]]]:
+    """Return (merged entries, skipped (repo, path), unmigrated (repo, verify_skill))."""
     # GitHub repo names are case-insensitive; match on the folded name.
     by_repo = {t["repo"].lower(): t for t in tracked}
     merged: list[Any] = []
     done: set[str] = set()
+    warnings: list[tuple[str, str]] = []
     for entry in current:
         repo = entry.get("repo") if isinstance(entry, dict) else None
         if not isinstance(repo, str) or repo.lower() not in by_repo:
-            merged.append(entry)
+            merged.append(_migrate(entry, warnings))
             continue
         t = by_repo[repo.lower()]
         done.add(repo.lower())
         if (entry.get("host") or "github.com") != t.get("host", "github.com"):
-            merged.append(entry)  # same name on another host: leave it alone
+            merged.append(_migrate(entry, warnings))  # same name on another host: keep it
             continue
-        out = {k: v for k, v in entry.items() if k not in _TRACKED_FIELDS}
+        out = {k: v for k, v in entry.items() if k not in (*_TRACKED_FIELDS, _OLD_FIELD)}
         merged.append({**out, **{k: t[k] for k in _TRACKED_FIELDS if k in t}})
     skipped: list[tuple[str, str]] = []
     for t in tracked:
@@ -101,7 +125,7 @@ def merge(
             skipped.append((t["repo"], path))
             continue
         merged.append({"repo": t["repo"], "path": path, **{k: t[k] for k in _TRACKED_FIELDS if k in t}})
-    return merged, skipped
+    return merged, skipped, warnings
 
 
 def _dump(data: Any) -> str:
@@ -133,8 +157,9 @@ def render(tracked_path: str, target_path: str, home: str, dry_run: bool) -> lis
     else:
         raise InputError("target file must be an array or an object with a repos array")
 
-    merged, skipped = merge(tracked, current, home)
-    lines = [f"skip\t{repo}\t{path}" for repo, path in skipped]
+    merged, skipped, warnings = merge(tracked, current, home)
+    lines = [f"warn\t{repo}\t{old}" for repo, old in warnings]
+    lines += [f"skip\t{repo}\t{path}" for repo, path in skipped]
     new_doc: Any = merged if isinstance(current_doc, list) else {**current_doc, "repos": merged}
 
     # Compare the entries, not the doc: an object without `repos` stays as is.

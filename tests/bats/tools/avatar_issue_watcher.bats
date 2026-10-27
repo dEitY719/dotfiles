@@ -4277,12 +4277,12 @@ _watch_json() {
 }
 
 @test "avatar_issue_watcher: watch add of a listed repo updates it without a duplicate" {
-    _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"/old","host":"github.com","verify_skill":"v"}],"note":1}'
+    _write_watch_file '{"repos":[{"repo":"acme/dotfiles","path":"/old","host":"github.com","post_merge_verify":true,"post_merge_verify_skill":"gh-verify:live"}],"note":1}'
     _run_tick -- watch add acme/dotfiles --path "${_WORK_DIR}" --host ghes.example.com
     assert_success
     assert_output --partial "Updated acme/dotfiles"
     [ "$(_watch_json '.repos | length')" = "1" ]
-    [ "$(_watch_json '.repos[0]')" = '{"repo":"acme/dotfiles","path":"'"${_WORK_DIR}"'","host":"ghes.example.com","verify_skill":"v"}' ]
+    [ "$(_watch_json '.repos[0]')" = '{"repo":"acme/dotfiles","path":"'"${_WORK_DIR}"'","host":"ghes.example.com","post_merge_verify":true,"post_merge_verify_skill":"gh-verify:live"}' ]
     [ "$(_watch_json '.note')" = "1" ]
 }
 
@@ -4323,10 +4323,10 @@ _watch_json() {
 }
 
 @test "avatar_issue_watcher: watch remove drops the repo and keeps the others' fields" {
-    _write_watch_file '[{"repo":"acme/dotfiles","path":"/a"},{"repo":"acme/x","path":"/b","verify_skill":"v"}]'
+    _write_watch_file '[{"repo":"acme/dotfiles","path":"/a"},{"repo":"acme/x","path":"/b","post_merge_verify":true,"post_merge_verify_skill":"gh-verify:live"}]'
     _run_tick -- watch remove acme/dotfiles
     assert_success
-    [ "$(_watch_json '.')" = '[{"repo":"acme/x","path":"/b","verify_skill":"v"}]' ]
+    [ "$(_watch_json '.')" = '[{"repo":"acme/x","path":"/b","post_merge_verify":true,"post_merge_verify_skill":"gh-verify:live"}]' ]
 }
 
 @test "avatar_issue_watcher: watch remove with no argument removes the current checkout" {

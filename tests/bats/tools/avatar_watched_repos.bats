@@ -44,10 +44,27 @@ dEitY719/equinest ${HOME}/para/project/equinest"
     run bash "$SCRIPT"
     assert_success
     assert_output --partial "backup:"
-    run jq -r '.[] | "\(.repo) \(.path) \(.verify_skill // "-")"' "$IW_WATCHED_REPOS"
-    assert_line --index 0 "me/private /srv/private -"
-    assert_line --index 1 "dEitY719/dotfiles /opt/dots gh-verify:merged"
+    run jq -r '.[] | "\(.repo) \(.path) \(.post_merge_verify // "-") \(.post_merge_verify_skill // "-")"' "$IW_WATCHED_REPOS"
+    assert_line --index 0 "me/private /srv/private - -"
+    assert_line --index 1 "dEitY719/dotfiles /opt/dots true gh-verify:merged"
     [ "$(_backups)" = 1 ]
+}
+
+@test "avatar_watched_repos: old verify_skill is migrated and the watcher still reads the file" {
+    mkdir -p "${HOME}/.avatars/issue-watcher"
+    printf '%s\n' '[{"repo":"me/live","path":"/srv/live","verify_skill":"gh-verify:live"},{"repo":"me/odd","path":"/srv/odd","verify_skill":"bogus"},{"repo":"dEitY719/dotfiles","path":"/opt/dots","verify_skill":"gh-verify:live"}]' >"$IW_WATCHED_REPOS"
+    run bash "$SCRIPT"
+    assert_success
+    assert_output --partial "me/odd: verify_skill 'bogus'"
+    run jq -c '.[] | [.repo, .post_merge_verify, .post_merge_verify_skill, .verify_skill]' "$IW_WATCHED_REPOS"
+    assert_line --index 0 '["me/live",true,"gh-verify:live",null]'
+    assert_line --index 1 '["me/odd",null,null,"bogus"]'
+    assert_line --index 2 '["dEitY719/dotfiles",true,"gh-verify:merged",null]'
+    run bash "$SCRIPT"
+    assert_output --partial "already up to date"
+    run bash "${DOTFILES_ROOT}/shell-common/tools/custom/avatar_issue_watcher.sh" watch list
+    assert_success
+    assert_output --partial "me/live"
 }
 
 @test "avatar_watched_repos: second run changes neither the file nor the backups" {

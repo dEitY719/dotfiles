@@ -29,39 +29,110 @@ def run_render(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_merge_keeps_local_only_and_path_override() -> None:
     tracked = [
-        {"repo": "a/x", "rel": "x", "host": "github.com", "verify_skill": "gh-verify:merged"},
+        {
+            "repo": "a/x",
+            "rel": "x",
+            "host": "github.com",
+            "post_merge_verify": True,
+            "post_merge_verify_skill": "gh-verify:merged",
+        },
         {"repo": "a/y", "rel": "y"},
         {"repo": "a/z", "rel": "z"},
     ]
     current = [
         {"repo": "me/private", "path": "/srv/p"},
-        {"repo": "a/x", "path": "/opt/x", "verify_skill": "old", "extra": 1},
+        {"repo": "a/x", "path": "/opt/x", "post_merge_verify": False, "verify_skill": "gh-verify:live", "extra": 1},
     ]
-    merged, skipped = merge(tracked, current, "/h", isdir=lambda p: p == "/h/y")
+    merged, skipped, _ = merge(tracked, current, "/h", isdir=lambda p: p == "/h/y")
     assert merged == [
         {"repo": "me/private", "path": "/srv/p"},
-        {"repo": "a/x", "path": "/opt/x", "extra": 1, "host": "github.com", "verify_skill": "gh-verify:merged"},
+        {
+            "repo": "a/x",
+            "path": "/opt/x",
+            "extra": 1,
+            "host": "github.com",
+            "post_merge_verify": True,
+            "post_merge_verify_skill": "gh-verify:merged",
+        },
         {"repo": "a/y", "path": "/h/y"},
     ]
     assert skipped == [("a/z", "/h/z")]
 
 
 def test_merge_matches_repo_case_insensitively() -> None:
-    merged, skipped = merge([{"repo": "Own/Repo", "rel": "r"}], [{"repo": "own/repo", "path": "/p"}], "/h")
+    merged, skipped, _ = merge([{"repo": "Own/Repo", "rel": "r"}], [{"repo": "own/repo", "path": "/p"}], "/h")
     assert merged == [{"repo": "own/repo", "path": "/p"}]
     assert skipped == []
 
 
 def test_merge_keeps_entry_on_another_host() -> None:
-    local = {"repo": "a/x", "path": "/p", "host": "ghes.example", "verify_skill": "v"}
-    merged, skipped = merge([{"repo": "a/x", "rel": "x", "host": "github.com"}], [local], "/h", isdir=lambda _: True)
+    local = {"repo": "a/x", "path": "/p", "host": "ghes.example", "post_merge_verify": True}
+    merged, skipped, _ = merge([{"repo": "a/x", "rel": "x", "host": "github.com"}], [local], "/h", isdir=lambda _: True)
     assert merged == [local]
     assert skipped == []
 
 
 def test_merge_drops_field_the_tracked_entry_omits() -> None:
-    merged, _ = merge([{"repo": "a/x", "rel": "x"}], [{"repo": "a/x", "path": "/p", "verify_skill": "v"}], "/h")
+    local = {"repo": "a/x", "path": "/p", "post_merge_verify": True, "verify_skill": "gh-verify:live"}
+    merged, _, _ = merge([{"repo": "a/x", "rel": "x"}], [local], "/h")
     assert merged == [{"repo": "a/x", "path": "/p"}]
+
+
+# #2296: a local entry the tracked file does not own still carries the old
+# `verify_skill` key; the render migrates it to the two-key schema.
+@pytest.mark.parametrize(
+    ("local", "want"),
+    [
+        (
+            {"repo": "me/p", "path": "/p", "verify_skill": "gh-verify:live", "x": 1},
+            {
+                "repo": "me/p",
+                "path": "/p",
+                "x": 1,
+                "post_merge_verify": True,
+                "post_merge_verify_skill": "gh-verify:live",
+            },
+        ),
+        (
+            {"repo": "me/p", "path": "/p", "verify_skill": "gh-verify:merged"},
+            {"repo": "me/p", "path": "/p", "post_merge_verify": True, "post_merge_verify_skill": "gh-verify:merged"},
+        ),
+        # new keys already there win; the old key is only removed
+        (
+            {"repo": "me/p", "path": "/p", "post_merge_verify": False, "verify_skill": "gh-verify:live"},
+            {"repo": "me/p", "path": "/p", "post_merge_verify": False},
+        ),
+        # no old key: no post_merge_verify is invented
+        ({"repo": "me/p", "path": "/p"}, {"repo": "me/p", "path": "/p"}),
+    ],
+)
+def test_merge_migrates_old_verify_skill(local: dict[str, object], want: dict[str, object]) -> None:
+    merged, _, warnings = merge([], [local], "/h")
+    assert merged == [want]
+    assert warnings == []
+    again, _, _ = merge([], merged, "/h")
+    assert again == merged
+
+
+def test_merge_migrates_entry_on_another_host() -> None:
+    local = {"repo": "a/x", "path": "/p", "host": "ghes.example", "verify_skill": "gh-verify:merged"}
+    merged, _, _ = merge([{"repo": "a/x", "rel": "x"}], [local], "/h", isdir=lambda _: True)
+    assert merged == [
+        {
+            "repo": "a/x",
+            "path": "/p",
+            "host": "ghes.example",
+            "post_merge_verify": True,
+            "post_merge_verify_skill": "gh-verify:merged",
+        }
+    ]
+
+
+def test_merge_keeps_unknown_verify_skill_and_warns() -> None:
+    local = {"repo": "me/p", "path": "/p", "verify_skill": "gh-pr:custom"}
+    merged, _, warnings = merge([], [local], "/h")
+    assert merged == [local]
+    assert warnings == [("me/p", "gh-pr:custom")]
 
 
 @pytest.mark.parametrize(
@@ -84,7 +155,9 @@ def test_tracked_file_is_public_safe() -> None:
     entries = load_tracked(TRACKED.read_text(encoding="utf-8"))
     assert entries
     for e in entries:
-        assert set(e) <= {"repo", "rel", "host", "verify_skill"}
+        assert set(e) <= {"repo", "rel", "host", "post_merge_verify", "post_merge_verify_skill"}
+        assert e.get("post_merge_verify", False) in (True, False)
+        assert e.get("post_merge_verify_skill", "gh-verify:merged") in ("gh-verify:merged", "gh-verify:live")
         assert e.get("host", "github.com") == "github.com"
     text = TRACKED.read_text(encoding="utf-8")
     assert "/home/" not in text and "/Users/" not in text
@@ -113,6 +186,28 @@ def test_render_writes_backs_up_and_is_idempotent(tmp_path: Path) -> None:
     kind, backup = third.stdout.splitlines()[-1].split("\t")
     assert kind == "written"
     assert json.loads(Path(backup).read_text()) == [{"repo": "a/x", "path": f"{home}/x"}]
+
+
+def test_render_migrates_local_file_and_reports_unknown_value(tmp_path: Path) -> None:
+    tracked = tmp_path / "t.json"
+    tracked.write_text("[]")
+    target = tmp_path / "w.json"
+    target.write_text(
+        json.dumps(
+            [
+                {"repo": "me/a", "path": "/a", "verify_skill": "gh-verify:live"},
+                {"repo": "me/b", "path": "/b", "verify_skill": "bogus"},
+            ]
+        )
+    )
+    res = run_render(str(tracked), str(target), str(tmp_path))
+    assert res.returncode == 0
+    assert res.stdout.splitlines()[0] == "warn\tme/b\tbogus"
+    assert json.loads(target.read_text()) == [
+        {"repo": "me/a", "path": "/a", "post_merge_verify": True, "post_merge_verify_skill": "gh-verify:live"},
+        {"repo": "me/b", "path": "/b", "verify_skill": "bogus"},
+    ]
+    assert run_render(str(tracked), str(target), str(tmp_path)).stdout.splitlines()[-1] == "unchanged"
 
 
 def test_render_dry_run_writes_nothing(tmp_path: Path) -> None:

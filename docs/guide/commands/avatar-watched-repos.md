@@ -27,7 +27,8 @@
 ### rules
 
 - **local-only entry** — Keep — Repos only in the local file (private repos) stay as they are
-- **repo in both** — Merge — Local path wins (per-PC override); host/verify_skill come from the tracked file
+- **repo in both** — Merge — Local path wins (per-PC override); host/post_merge_verify/post_merge_verify_skill come from the tracked file
+- **old verify_skill** — Migrate — Local verify_skill: X becomes post_merge_verify: true + post_merge_verify_skill: X (new keys win)
 - **repo on another host** — Keep — A local entry whose host differs (GHES mirror) is left as it is
 - **tracked-only repo** — Add — Added as $HOME/<rel> when that directory exists, else skipped with a warning
 - **same result** — Idempotent — No write, no backup; on change: watched-repos.json.bak-<ts> then write (0600)
