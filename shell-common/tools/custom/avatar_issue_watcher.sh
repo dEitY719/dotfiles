@@ -3106,7 +3106,7 @@ _iw_limit_retry_casualties() {
             if ! _iw_prompt_issue "${_agent}" "${_number}"; then
                 if [ "${_IW_PROMPT_FATAL}" -eq 1 ]; then
                     # Re-prompting would get the same answer every reopen (#2300).
-                    _iw_limit_casualty_drop "${_repo}" "${_number}" "the flow command is missing in its pane."
+                    _iw_limit_casualty_drop "${_repo}" "${_number}" "its pane answered Unknown command to the re-prompt."
                     continue
                 fi
                 # A prompt that never landed is a transport or input-loop
