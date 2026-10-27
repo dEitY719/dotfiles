@@ -273,7 +273,7 @@ aicron_doctor_scan() {
         uniq "${_tmp}.all" | grep -F -x -v -f "${_tmp}.jobs" >"${_tmp}.orphan" 2>/dev/null || true
         while IFS= read -r _n; do
             [ -n "${_n}" ] || continue
-            printf 'orphan crontab block: aicron:%s is installed but absent from the manifest\n' "${_n}"
+            printf 'orphan crontab block: aicron:%s is installed but absent from the manifest (a job installed from another branch also looks orphaned here; otherwise aicron remove %s)\n' "${_n}" "${_n}"
         done <"${_tmp}.orphan"
 
         # (d) two blocks claiming the same job.

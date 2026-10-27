@@ -1306,8 +1306,8 @@ _iw_live_agents() {
             | if ([$ws, $tabs, $agents] | all(type == "array")) | not
               then error("no herdr list") else . end
             | [ $map | split("\n")[] | select(length > 0) | split("\t")
-                | .[0] as $repo | .[1] as $label | (.[2] // "") as $pfx
-                | [ $ws[] | select(.label == $label) | .workspace_id ] as $ids
+                | .[0] as $repo | .[1] as $wslabel | (.[2] // "") as $pfx
+                | [ $ws[] | select(.label == $wslabel) | .workspace_id ] as $ids
                 | $tabs[]
                 | select(.workspace_id | IN($ids[]))
                 | (.label // "") as $l

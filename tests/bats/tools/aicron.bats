@@ -1168,6 +1168,7 @@ KILLER
     _aicron doctor
     assert_success
     assert_output --partial "orphan crontab block"
+    assert_output --partial "another branch also looks orphaned here; otherwise aicron remove hello"
 
     _aicron remove hello
     assert_success
