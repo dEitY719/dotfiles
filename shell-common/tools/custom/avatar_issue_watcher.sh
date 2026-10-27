@@ -2367,7 +2367,6 @@ _iw_stall_recover_via_enter() {
 _iw_prompt_retryable() {
     case "$1" in
     timeout | agent_prompt_stalled | herdr_send_keys_failed) return 0 ;;
-    agent_unknown_command) return 1 ;; # deterministic: the command is missing (#2300)
     esac
     return 1
 }
