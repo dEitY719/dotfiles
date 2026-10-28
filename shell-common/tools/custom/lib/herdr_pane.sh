@@ -64,7 +64,8 @@ _hp_now() {
 }
 
 # Single-instance guard for one cron tick.
-#   $1 = state dir, $2 = lock basename, $3 = tick name for the skip warning
+#   $1 = state dir, $2 = lock basename, $3 = tick name for the skip warning,
+#   $4 = optional wait in seconds (empty: non-blocking, see cron_acquire_lock)
 #
 # Thin wrapper kept for its name and signature (#1530): the lock itself moved to
 # lib/cron_common.sh (cron_acquire_lock, #2144). Sourced here on first use when
@@ -80,7 +81,7 @@ _hp_acquire_lock() {
             return 0
         }
     fi
-    cron_acquire_lock "$1" "$2" "$3"
+    cron_acquire_lock "$1" "$2" "$3" "${4:-}"
 }
 
 # CLAUDE_CONFIG_DIR for a dispatcher's pane (issue #571 / #1393) — the same

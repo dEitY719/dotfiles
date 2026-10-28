@@ -165,6 +165,11 @@ _IW_DISPATCH_PER_TICK=$(_iw_cap "${IW_DISPATCH_PER_TICK-}" 1 IW_DISPATCH_PER_TIC
 # couple of ticks (cron runs every ~3 minutes) plus a typical delegation, which
 # runs for minutes rather than the milliseconds between two tool calls.
 _IW_ZOMBIE_GRACE_SECONDS=$(_iw_cap "${IW_ZOMBIE_GRACE_SECONDS-}" 600 IW_ZOMBIE_GRACE_SECONDS)
+# How long a targeted run waits for a tick that holds the lock (#2315). A cron
+# tick skips at once and retries next period; a targeted run has no retry, so
+# it queues instead. Ten minutes covers a tick's tab create + start wait +
+# prompt injection with room to spare.
+_IW_TARGETED_LOCK_WAIT_SECONDS=$(_iw_cap "${IW_TARGETED_LOCK_WAIT_SECONDS-}" 600 IW_TARGETED_LOCK_WAIT_SECONDS)
 # Saturation alert (issue #1606). How many consecutive ticks may skip dispatch
 # purely because the caps above are full before the watcher says so out loud,
 # and how long it then stays quiet about a state that has not changed.
@@ -3675,8 +3680,9 @@ EOF
 # Deliberately non-blocking: a skipped tick just retries 5 minutes later.
 # Returns non-zero only when another tick holds the lock; a missing flock or an
 # unusable state dir soft-degrades to "no protection" rather than failing.
+# $1 = optional wait in seconds (targeted run only, #2315); empty: non-blocking.
 _iw_acquire_lock() {
-    _hp_acquire_lock "$(_iw_state_dir)" "${_IW_LOCK_BASENAME}" avatar_issue_watcher
+    _hp_acquire_lock "$(_iw_state_dir)" "${_IW_LOCK_BASENAME}" avatar_issue_watcher "${1:-}"
 }
 
 # ============================================================
@@ -3795,7 +3801,14 @@ _iw_tick_guards() {
         return 0
     fi
 
-    _iw_acquire_lock || return 1
+    # A targeted run waits for the lock instead of skipping (#2315): nothing
+    # retries it, so a skip would silently drop the issue a human asked for.
+    # rc 2 = the wait timed out, which the targeted run reports as a failure.
+    if [ "${_IW_TARGETED}" -eq 1 ]; then
+        _iw_acquire_lock "${_IW_TARGETED_LOCK_WAIT_SECONDS}" || return 2
+    else
+        _iw_acquire_lock || return 1
+    fi
 
     # Before any tab is opened: a closed gate must cost nothing.
     _iw_limit_gate_check || return 1
@@ -3937,7 +3950,10 @@ _iw_targeted_run() {
         ux_warning "${_repo}#${_number} carries an excluded label (${_hit}) — dispatching anyway (--force)."
     fi
 
-    _iw_tick_guards || return 0
+    _rc=0
+    _iw_tick_guards || _rc=$?
+    [ "${_rc}" -ne 2 ] || return 1
+    [ "${_rc}" -eq 0 ] || return 0
 
     _live=$(_iw_live_count)
     if [ "${_live}" -ge "${_IW_MAX_CONCURRENT}" ]; then

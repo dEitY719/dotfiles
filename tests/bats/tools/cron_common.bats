@@ -40,6 +40,31 @@ _lock() {
     assert_output "rc=1"
 }
 
+@test "cron_common: with a wait, a held lock is acquired once its holder releases it (#2315)" {
+    mkdir -p "${_WORK_DIR}/st"
+    flock -x "${_WORK_DIR}/st/.lock" sleep 1 3>&- &
+    local _holder=$!
+    sleep 0.3
+    _lock 'cron_acquire_lock "$D" .lock my_tick 20; echo "rc=$?"'
+    wait "${_holder}" || true
+    assert_output --partial "waiting for the running my_tick tick (<=20s)"
+    assert_output --partial "rc=0"
+    refute_output --partial "skip"
+}
+
+@test "cron_common: with a wait, a lock still held at the timeout fails with an error (#2315)" {
+    _lock 'cron_acquire_lock "$D" .lock my_tick; ( exec 9>&-; cron_acquire_lock "$D" .lock my_tick 1; echo "rc=$?" )'
+    assert_output --partial "timed out after 1s waiting for the running my_tick tick"
+    assert_output --partial "rc=1"
+}
+
+@test "cron_common: a non-numeric or zero wait keeps the non-blocking skip (#2315)" {
+    _lock 'cron_acquire_lock "$D" .lock my_tick; ( exec 9>&-; cron_acquire_lock "$D" .lock my_tick 0; echo "rc=$?"; cron_acquire_lock "$D" .lock my_tick abc; echo "rc=$?" )'
+    assert_output --partial "another my_tick tick is already running — skip"
+    refute_output --partial "waiting"
+    assert_output --partial "rc=1"
+}
+
 @test "cron_common: no flock warns and proceeds unprotected" {
     mkdir -p "${_WORK_DIR}/bin"
     for c in bash mkdir; do ln -s "$(command -v "$c")" "${_WORK_DIR}/bin/$c"; done
