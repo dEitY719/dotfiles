@@ -3792,7 +3792,9 @@ _iw_usage() {
 }
 
 # The guards a tick and a targeted run both pass before they select: 0 to go
-# on, 1 to hold (the caller then exits or returns 0, as nothing was wrong).
+# on, 1 to hold (the caller then exits or returns 0, as nothing was wrong), 2
+# when a targeted run's wait for the tick lock timed out (#2315; the caller
+# reports it as a failure).
 #
 # The dry run answers ahead of the lock and the gate, and deliberately so.
 # Taking the lock would make a dry run silently no-op while a real tick is
