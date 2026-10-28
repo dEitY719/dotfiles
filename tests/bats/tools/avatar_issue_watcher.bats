@@ -666,7 +666,7 @@ case "$1 $2" in
                 if [ $((_i % 2)) -eq 0 ]; then printf '\n'; else printf '  status line %s\n' "${_i}"; fi
                 _i=$((_i + 1))
             done
-        } | tail -n "$5"
+        } | tail -n "${5:-1000}"
         exit 0
     fi
     _seq="${HERDR_SETTLE_READ_SEQUENCE:-> claude ready}"
@@ -2853,6 +2853,17 @@ _two_repo_fixture() {
     assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_unknown_command)."
     [ -s "${_STATE_DIR}/unknown-command/acme_dotfiles-11" ]
     _refute_logged "agent send-keys"
+}
+
+@test "avatar_issue_watcher: an Unknown command line for another command keeps the Enter recovery" {
+    # The 80-line window reaches old history; only a rejection of the
+    # dispatched command counts (PR #2310 review).
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_READ_AFTER_PROMPT=● Unknown command: /some-other-skill" \
+        "HERDR_READ_AFTER_PROMPT_PAD=39"
+    assert_failure
+    refute_output --partial "agent_unknown_command"
+    _assert_logged "agent send-keys iw-dotfiles-issue-11 Enter"
 }
 
 @test "avatar_issue_watcher: an Unknown command stops after attempt 1 with cleanup and no STUCK escalation" {
