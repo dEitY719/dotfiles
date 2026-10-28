@@ -383,3 +383,109 @@ _t13_delete_remote_master_blocks() {
     [ "$PUSH_RC" -eq 1 ] && grep -q "protected branch" <<<"$LEAK_OUT" && ok=1
     _assert_eq "T-13 delete remote master is BLOCKED" 1 "$ok"
 }
+
+# ============================================
+# GLOBAL WRAPPER — scripts/hooks/ candidate (G-1 .. G-6, issue #2305)
+# ============================================
+# git/global-hooks/pre-push (via lib/delegate.sh) searches .githooks/ ->
+# git/hooks/ -> scripts/hooks/ -> <git-common-dir>/hooks/. These cases drive
+# the wrapper directly, like the cases above drive the project hook.
+
+GLOBAL_PRE_PUSH="${DOTFILES_ROOT}/git/global-hooks/pre-push"
+
+# Stub project hook at <dir>/<relpath>: records "<tag>:<argv>|<stdin>" in
+# <dir>/.ran and exits <rc>. Pass mode 644 to leave the exec bit off.
+_stub_hook() {
+    local dir="$1" rel="$2" tag="$3" rc="${4:-0}" mode="${5:-755}"
+    mkdir -p "$dir/$(dirname "$rel")"
+    cat >"$dir/$rel" <<STUB
+#!/bin/bash
+printf '%s:%s|%s\n' "$tag" "\$*" "\$(cat)" >>"$dir/.ran"
+exit $rc
+STUB
+    chmod "$mode" "$dir/$rel"
+}
+
+# Run the global wrapper in <dir> with argv "origin <url>" and one stdin
+# line. Sets WRAP_RC and LEAK_OUT (stdout+stderr).
+_run_global_pre_push() {
+    local dir="$1"
+    LEAK_OUT=$(cd "$dir" &&
+        "$GLOBAL_PRE_PUSH" origin "git@example.com:owner/repo.git" 2>&1 \
+            <<<"refs/heads/x ${ZERO_SHA} refs/heads/x ${ZERO_SHA}") && WRAP_RC=0 || WRAP_RC=$?
+}
+
+_ran() { cat "$1/.ran" 2>/dev/null || true; }
+
+_g1_scripts_hooks_only_is_exec_with_passthrough() {
+    local dir
+    dir=$(_setup_repo)
+    _stub_hook "$dir" scripts/hooks/pre-push SCRIPTS 7
+    _run_global_pre_push "$dir"
+    local want="SCRIPTS:origin git@example.com:owner/repo.git|refs/heads/x ${ZERO_SHA} refs/heads/x ${ZERO_SHA}"
+    _assert_eq "G-1 scripts/hooks/pre-push exit code passed through" 7 "$WRAP_RC" &&
+        _assert_eq "G-1 argv + stdin passed through" "$want" "$(_ran "$dir")" &&
+        _assert_eq "G-1 delegation notice names scripts/hooks/pre-push" 1 \
+            "$(grep -c "Delegating to project hook: .*scripts/hooks/pre-push" <<<"$LEAK_OUT" || true)"
+    local ok=$?
+    rm -rf "$dir"
+    return "$ok"
+}
+
+_g2_githooks_beats_scripts_hooks() {
+    local dir
+    dir=$(_setup_repo)
+    _stub_hook "$dir" .githooks/pre-push GITHOOKS
+    _stub_hook "$dir" scripts/hooks/pre-push SCRIPTS
+    _run_global_pre_push "$dir"
+    local got
+    got=$(_ran "$dir" | cut -d: -f1)
+    rm -rf "$dir"
+    _assert_eq "G-2 .githooks/ wins over scripts/hooks/" GITHOOKS "$got"
+}
+
+_g3_git_hooks_beats_scripts_hooks() {
+    local dir
+    dir=$(_setup_repo)
+    _stub_hook "$dir" git/hooks/pre-push GITHOOKS_DIR
+    _stub_hook "$dir" scripts/hooks/pre-push SCRIPTS
+    _run_global_pre_push "$dir"
+    local got
+    got=$(_ran "$dir" | cut -d: -f1)
+    rm -rf "$dir"
+    _assert_eq "G-3 git/hooks/ wins over scripts/hooks/" GITHOOKS_DIR "$got"
+}
+
+_g4_scripts_hooks_without_exec_bit_is_skipped() {
+    local dir
+    dir=$(_setup_repo)
+    _stub_hook "$dir" scripts/hooks/pre-push SCRIPTS 7 644
+    _run_global_pre_push "$dir"
+    local got
+    got="${WRAP_RC}:$(_ran "$dir")"
+    rm -rf "$dir"
+    _assert_eq "G-4 non-executable scripts/hooks/pre-push is skipped" "0:" "$got"
+}
+
+# scripts/hooks/pre-push is a symlink to the wrapper itself (as if a repo
+# pointed it at ~/.config/git/hooks). `-ef` must skip it, not recurse.
+_g5_scripts_hooks_self_link_is_skipped() {
+    local dir
+    dir=$(_setup_repo)
+    mkdir -p "$dir/scripts/hooks"
+    ln -s "$GLOBAL_PRE_PUSH" "$dir/scripts/hooks/pre-push"
+    _run_global_pre_push "$dir"
+    local got="${WRAP_RC}:${LEAK_OUT}"
+    rm -rf "$dir"
+    _assert_eq "G-5 self-link under scripts/hooks/ is skipped silently" "0:" "$got"
+}
+
+_g6_no_project_hook_is_noop() {
+    local dir
+    dir=$(_setup_repo)
+    mkdir -p "$dir/scripts/hooks"
+    _run_global_pre_push "$dir"
+    local got="${WRAP_RC}:${LEAK_OUT}"
+    rm -rf "$dir"
+    _assert_eq "G-6 no project pre-push -> silent no-op" "0:" "$got"
+}

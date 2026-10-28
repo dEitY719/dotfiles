@@ -11,7 +11,8 @@
 #    - Trailing Whitespace
 #    - Large Files (>10MB)
 #    - Email Identity Warning
-# 2. Project-Specific Hook Delegation (.githooks, git/hooks, .git/hooks)
+# 2. Project-Specific Hook Delegation (.githooks, git/hooks, scripts/hooks,
+#    .git/hooks)
 #
 # To bypass: git commit --no-verify
 # To skip global checks: export GIT_HOOKS_SKIP_GLOBAL=1
@@ -418,10 +419,11 @@ fi
 
 [ "$DEBUG" = "1" ] && echo "[Debug] Searching for project-level hooks..."
 
-# Candidate hooks in priority order
+# Candidate hooks in priority order (same order as lib/delegate.sh)
 CANDIDATE_HOOKS=(
-    ".githooks/pre-commit" # Team shared hook (highest priority)
-    "git/hooks/pre-commit" # Dotfiles/Custom structure
+    ".githooks/pre-commit"     # Team shared hook (highest priority)
+    "git/hooks/pre-commit"     # Dotfiles/Custom structure
+    "scripts/hooks/pre-commit" # Project scripts/ layout (issue #2305)
 )
 
 RUN_HOOK=""

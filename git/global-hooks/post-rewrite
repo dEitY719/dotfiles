@@ -11,8 +11,8 @@
 #      graphify-out/graph.json, only for $1 = rebase (a rebase pull).
 #      See lib/graphify-refresh.sh.
 #   2. Delegation to the project-level hook (.githooks/ -> git/hooks/ ->
-#      .git/hooks/), passing argv, stdin and the exit code through; a silent
-#      no-op when the repo ships none. See lib/delegate.sh.
+#      scripts/hooks/ -> .git/hooks/), passing argv, stdin and the exit code
+#      through; a silent no-op when the repo ships none. See lib/delegate.sh.
 #
 # Hook protocol (git commit --amend / git rebase post-rewrite):
 #   $1 = amend | rebase; stdin lists "<old-sha> <new-sha>" rewritten pairs —

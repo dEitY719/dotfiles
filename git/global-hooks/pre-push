@@ -12,8 +12,9 @@
 # WHAT IT DOES — DELEGATION ONLY
 #   Unlike the pre-commit wrapper, this file carries NO checks of its own.
 #   It forwards the hook to the project-level hook of the repository currently
-#   being pushed from (.githooks/ -> git/hooks/ -> .git/hooks/), passing
-#   through arguments, stdin and the exit code unchanged. In a repository that
+#   being pushed from (.githooks/pre-push -> git/hooks/pre-push ->
+#   scripts/hooks/pre-push -> .git/hooks/pre-push), passing through
+#   arguments, stdin and the exit code unchanged. In a repository that
 #   ships no pre-push hook it is a silent no-op — repo-specific logic (this
 #   dotfiles repo's `mise run test`, protected-branch block and leak guard)
 #   must never fire in unrelated repositories. Shared forwarding logic:

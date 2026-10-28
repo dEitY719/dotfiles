@@ -114,3 +114,27 @@ teardown() {
 @test "T-13 delete_remote_master_blocks" {
     _t13_delete_remote_master_blocks
 }
+
+@test "G-1 global wrapper execs scripts/hooks/pre-push with argv, stdin, exit code" {
+    _g1_scripts_hooks_only_is_exec_with_passthrough
+}
+
+@test "G-2 global wrapper: .githooks/ beats scripts/hooks/" {
+    _g2_githooks_beats_scripts_hooks
+}
+
+@test "G-3 global wrapper: git/hooks/ beats scripts/hooks/" {
+    _g3_git_hooks_beats_scripts_hooks
+}
+
+@test "G-4 global wrapper skips scripts/hooks/pre-push without exec bit" {
+    _g4_scripts_hooks_without_exec_bit_is_skipped
+}
+
+@test "G-5 global wrapper skips a scripts/hooks/ self-link (-ef)" {
+    _g5_scripts_hooks_self_link_is_skipped
+}
+
+@test "G-6 global wrapper is a no-op without a project pre-push" {
+    _g6_no_project_hook_is_noop
+}
