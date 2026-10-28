@@ -3104,8 +3104,8 @@ _iw_limit_casualty_book() {
 }
 
 # Warn and drop <repo> <number> from the casualty file for <reason> — shared
-# by _iw_limit_retry_casualties's two guard clauses that find a casualty they
-# cannot act on at all (repo gone, agent name invalid).
+# by _iw_limit_retry_casualties's guard clauses that find a casualty they
+# cannot act on at all (repo gone, issue closed, agent name invalid).
 _iw_limit_casualty_drop() {
     ux_warning "Dropping rate-limit casualty $1#$2 — $3"
     _iw_limit_casualty_clear "$1" "$2"
@@ -3162,6 +3162,14 @@ _iw_limit_retry_casualties() {
             # The repo left the watch list while the gate was shut. Nothing
             # here can act on it, and keeping the row would retry it forever.
             _iw_limit_casualty_drop "${_repo}" "${_number}" "the repo is no longer watched."
+            continue
+        fi
+
+        # Closed while the gate was shut: a redispatch would build a worktree
+        # and tab for nothing (#2314). A failed lookup reads as "not closed",
+        # so a flaky network keeps the row instead of losing an open issue.
+        if _iw_issue_closed "${_repo}" "${_number}"; then
+            _iw_limit_casualty_drop "${_repo}" "${_number}" "the issue is closed."
             continue
         fi
 

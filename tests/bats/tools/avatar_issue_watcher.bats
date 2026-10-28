@@ -3813,6 +3813,36 @@ _two_repo_fixture() {
     [ ! -s "${_CASUALTY_FILE}" ]
 }
 
+@test "avatar_issue_watcher: a casualty whose issue closed is dropped without a redispatch (#2314)" {
+    # Closed while the gate was shut: no worktree, no tab, no prompt for it.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick "GH_CLOSED_ISSUES=11" "HERDR_AGENT_MISSING=iw-dotfiles-issue-11"
+    assert_success
+    assert_output --partial "Dropping rate-limit casualty acme/dotfiles#11 — the issue is closed."
+    refute_output --partial "redispatching from scratch"
+    _refute_logged "tab create"
+    _refute_logged "agent prompt iw-dotfiles-issue-11"
+    [ ! -s "${_CASUALTY_FILE}" ]
+}
+
+@test "avatar_issue_watcher: a casualty whose state lookup fails keeps its row (#2314)" {
+    # A failed read is not "closed": dropping on it would lose an open issue.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick "GH_ISSUE_VIEW_FAIL=1"
+    assert_success
+    _assert_logged "gh issue view 11 --repo acme/dotfiles --json state"
+    refute_output --partial "the issue is closed"
+    assert_output --partial "Re-prompting acme/dotfiles#11 in its surviving pane"
+    run cat "${_CASUALTY_FILE}"
+    assert_output --regexp 'acme/dotfiles	11	[0-9]+	0'
+}
+
 @test "avatar_issue_watcher: a casualty whose re-prompt hits Unknown command is dropped" {
     # #2300: the surviving pane would give the same answer on every reopen.
     _set_limit_state "0" "$(($(date +%s) - 60))"
