@@ -12,8 +12,8 @@
 #   acted on (.githooks/ -> git/hooks/ -> scripts/hooks/ ->
 #   .git/hooks/), passing through arguments, stdin and the exit code
 #   unchanged. In a repository that ships no hook of this type it is a
-#   silent no-op — repo-specific logic must
-#   never fire in unrelated repositories.
+#   silent no-op — repo-specific logic must never fire in unrelated
+#   repositories.
 #
 #   Single exception (issue #1838): post-checkout / post-merge / post-rewrite
 #   first run lib/graphify-refresh.sh, a background `graphify update .` opt-in

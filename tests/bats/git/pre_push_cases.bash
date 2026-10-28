@@ -385,7 +385,7 @@ _t13_delete_remote_master_blocks() {
 }
 
 # ============================================
-# GLOBAL WRAPPER — scripts/hooks/ candidate (G-1 .. G-6, issue #2305)
+# GLOBAL WRAPPER — scripts/hooks/ candidate (G-1 .. G-7, issue #2305)
 # ============================================
 # git/global-hooks/pre-push (via lib/delegate.sh) searches .githooks/ ->
 # git/hooks/ -> scripts/hooks/ -> <git-common-dir>/hooks/. These cases drive
@@ -488,4 +488,23 @@ _g6_no_project_hook_is_noop() {
     local got="${WRAP_RC}:${LEAK_OUT}"
     rm -rf "$dir"
     _assert_eq "G-6 no project pre-push -> silent no-op" "0:" "$got"
+}
+
+# The pre-commit wrapper keeps its own CANDIDATE_HOOKS (and a get_realpath
+# self-skip), so the scripts/hooks/ candidate is pinned there too.
+_g7_pre_commit_wrapper_finds_scripts_hooks_below_git_hooks() {
+    local dir rc got
+    dir=$(_setup_repo)
+    git -C "$dir" checkout -q -b hook-fixture
+    _stub_hook "$dir" scripts/hooks/pre-commit SCRIPTS 5
+    echo "change" >"$dir/new.txt"
+    git -C "$dir" add new.txt
+    (cd "$dir" && "${DOTFILES_ROOT}/git/global-hooks/pre-commit" </dev/null >/dev/null 2>&1) && rc=0 || rc=$?
+    got="${rc}:$(_ran "$dir" | cut -d: -f1)"
+    : >"$dir/.ran"
+    _stub_hook "$dir" git/hooks/pre-commit GITHOOKS_DIR
+    (cd "$dir" && "${DOTFILES_ROOT}/git/global-hooks/pre-commit" </dev/null >/dev/null 2>&1) && rc=0 || rc=$?
+    got="${got} ${rc}:$(_ran "$dir" | cut -d: -f1)"
+    rm -rf "$dir"
+    _assert_eq "G-7 pre-commit wrapper: scripts/hooks/ runs, git/hooks/ wins" "5:SCRIPTS 0:GITHOOKS_DIR" "$got"
 }

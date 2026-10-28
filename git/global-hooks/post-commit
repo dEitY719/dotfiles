@@ -15,9 +15,8 @@
 #   committed to (.githooks/ -> git/hooks/ -> scripts/hooks/ ->
 #   .git/hooks/), passing through arguments, stdin and the exit code
 #   unchanged. In a repository that ships no post-commit hook it is a
-#   silent no-op — repo-specific bookkeeping
-#   (work-log append, playbook auto-commit) must never fire in unrelated
-#   repositories. Shared forwarding logic: git/global-hooks/lib/delegate.sh.
+#   silent no-op — repo-specific bookkeeping (work-log append, playbook
+#   auto-commit) must never fire in unrelated repositories. Shared forwarding logic: git/global-hooks/lib/delegate.sh.
 #
 # Hook protocol (git commit post-commit):
 #   No arguments. git ignores the exit code; it is still propagated so a
