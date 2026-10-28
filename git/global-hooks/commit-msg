@@ -15,9 +15,9 @@
 #   committed to (.githooks/ -> git/hooks/ -> scripts/hooks/ ->
 #   .git/hooks/), passing through arguments, stdin and the exit code
 #   unchanged. In a repository that ships no commit-msg hook it is a
-#   silent no-op — repo-specific message rules
-#   (conventional commits, closing-keyword policy) must never fire in
-#   unrelated repositories. Shared forwarding logic: git/global-hooks/lib/delegate.sh.
+#   silent no-op — repo-specific message rules (conventional commits,
+#   closing-keyword policy) must never fire in unrelated repositories.
+#   Shared forwarding logic: git/global-hooks/lib/delegate.sh.
 #
 # Hook protocol (git commit commit-msg):
 #   $1 = path of the file holding the proposed commit message

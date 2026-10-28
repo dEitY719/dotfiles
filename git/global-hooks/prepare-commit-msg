@@ -16,9 +16,8 @@
 #   committed to (.githooks/ -> git/hooks/ -> scripts/hooks/ ->
 #   .git/hooks/), passing through arguments, stdin and the exit code
 #   unchanged. In a repository that ships no prepare-commit-msg hook it is a
-#   silent no-op — repo-specific message
-#   templating must never fire in unrelated repositories. Shared forwarding
-#   logic: git/global-hooks/lib/delegate.sh.
+#   silent no-op — repo-specific message templating must never fire in
+#   unrelated repositories. Shared forwarding logic: git/global-hooks/lib/delegate.sh.
 #
 # Hook protocol (git commit prepare-commit-msg):
 #   $1 = commit message file, $2 = message source, $3 = commit sha (amend)

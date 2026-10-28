@@ -138,3 +138,7 @@ teardown() {
 @test "G-6 global wrapper is a no-op without a project pre-push" {
     _g6_no_project_hook_is_noop
 }
+
+@test "G-7 global pre-commit wrapper finds scripts/hooks/pre-commit below git/hooks/" {
+    _g7_pre_commit_wrapper_finds_scripts_hooks_below_git_hooks
+}
