@@ -2693,9 +2693,11 @@ EOF
 #      problem, so the gate is left exactly as it was.
 #   2. Did the submitted work hold? A confirmed dispatch is polled for
 #      `_IW_LIMIT_OBSERVE_SEC`. One `/gh-flow:wave` runs for minutes, so an
-#      agent that never reaches `working`, or falls back to `idle`/`done`
-#      inside that window, did not do the work it was handed. That is the
-#      shape quota exhaustion takes, and it earns the strike.
+#      agent that never reaches `working` inside that window did not do the
+#      work it was handed. That is the shape quota exhaustion takes, and it
+#      earns the strike. An agent seen `working` on a poll that then falls
+#      back to `idle`/`done` ran first — a spent quota stops it on the first
+#      API call — so it ended on its own and earns nothing (issue #2308).
 #
 # `blocked` counts as alive alongside `working`: an agent waiting on a human is
 # positive evidence the account still has quota, and booking it as exhaustion
@@ -2893,21 +2895,24 @@ EOF
 #
 #   rc 0  one of them is alive at the end of the window — quota intact.
 #         Echoes that agent.
-#   rc 1  the window ended with a readable, non-alive status — the strike
-#         verdict. Echoes an agent that *did* reach `working` earlier in the
-#         window if there was one, so the caller can say "fell back" rather
-#         than "never started"; echoes nothing when none of them ever moved.
+#   rc 1  the window ended with a readable, non-alive status and none of them
+#         was ever seen alive — the strike verdict. Echoes nothing.
 #   rc 2  the deciding poll produced no readable status at all (every
 #         `herdr agent get` errored, or answered without the field). No
 #         evidence either way — the caller leaves the gate untouched.
+#   rc 3  the window ended non-alive, but some agent *was* alive on an earlier
+#         poll — echoes it. A spent quota stops the session on its first API
+#         call, well inside one poll interval, so a session caught working at a
+#         poll ran and then ended on its own (an error, or done): no strike, no
+#         casualty (issue #2308). Not a clear either — see below.
 #
 # `_hp_agent_status` reports both of its failure modes as an empty string, so
 # emptiness is the absence of evidence, never evidence of idleness. A strike
 # needs a status we actually read.
 #
-# The last poll is the one that decides: `working` has to be *held*, not merely
-# touched. The earlier polls exist only to tell those two failures apart in the
-# log.
+# Only the last poll can clear the gate: `working` has to be *held*, not merely
+# touched, before a strike already on file is wiped (#1468). The earlier polls
+# decide whether a non-alive end is quota evidence at all (rc 1 vs rc 3).
 _iw_limit_observe() {
     local _agents="$1" _failed_file="${2-}" _i=0 _agent _repo _number _status
     local _alive="" _seen="" _readable=0
@@ -2948,8 +2953,8 @@ _iw_limit_observe() {
 ${_agents}
 EOF
         # `_alive` is this poll's answer and is cleared above every round;
-        # `_seen` latches so the caller can tell "fell back" from "never
-        # started".
+        # `_seen` latches so a run that ended on its own (rc 3) is not booked
+        # as one that never started (rc 1).
         [ -z "${_alive}" ] || _seen="${_alive}"
     done
 
@@ -2960,7 +2965,10 @@ EOF
 
     [ "${_readable}" -eq 1 ] || return 2
 
-    printf '%s' "${_seen}"
+    if [ -n "${_seen}" ]; then
+        printf '%s' "${_seen}"
+        return 3
+    fi
     return 1
 }
 
@@ -3192,7 +3200,8 @@ _iw_limit_retry_casualties() {
 
         _rc=0
         _iw_limit_observe "${_agent}${_IW_TAB}${_repo}${_IW_TAB}${_number}" >/dev/null || _rc=$?
-        [ "${_rc}" -ne 0 ] || _quota_ok=1
+        # rc 3 ran before it stopped — proof the quota is back, like rc 0.
+        case "${_rc}" in 0 | 3) _quota_ok=1 ;; esac
         _rows="${_rows}${_rc}${_IW_TAB}${_repo}${_IW_TAB}${_number}${_IW_TAB}${_attempts:-0}
 "
     done 3<<EOF
@@ -3268,9 +3277,9 @@ _iw_limit_record() {
     _failed_file="$(_iw_limit_casualties_file).failed.$$"
     mkdir -p "$(_iw_state_dir)" 2>/dev/null || true
 
-    # Three-way, not a boolean: `rc 2` is "herdr never answered", which must not
-    # be booked as idleness. On `rc 1` `_alive` carries the agent that reached
-    # `working` earlier in the window, if any — see _iw_limit_observe.
+    # Not a boolean: `rc 2` is "herdr never answered", which must not be booked
+    # as idleness, and `rc 3` is "ran, then ended on its own" — see
+    # _iw_limit_observe.
     _alive=$(_iw_limit_observe "${_agents}" "${_failed_file}") || _rc=$?
     if [ "${_rc}" -eq 0 ]; then
         rm -f "${_failed_file}" 2>/dev/null || true
@@ -3281,6 +3290,11 @@ _iw_limit_record() {
     if [ "${_rc}" -eq 2 ]; then
         rm -f "${_failed_file}" 2>/dev/null || true
         ux_warning "No dispatched agent's status could be read after ${_IW_LIMIT_OBSERVE_SEC}s — herdr unreachable, gate untouched."
+        return 0
+    fi
+    if [ "${_rc}" -eq 3 ]; then
+        rm -f "${_failed_file}" 2>/dev/null || true
+        ux_warning "Agent ${_alive} reached 'working' and then stopped inside ${_IW_LIMIT_OBSERVE_SEC}s — it ran, so this is not quota evidence; no strike, gate untouched."
         return 0
     fi
 
@@ -3298,11 +3312,7 @@ _iw_limit_record() {
     esac
     _strikes=$((_strikes + 1))
 
-    if [ -n "${_alive}" ]; then
-        ux_warning "Agent ${_alive} reached 'working' and fell back inside ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
-    else
-        ux_warning "No dispatched agent reached 'working' within ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
-    fi
+    ux_warning "No dispatched agent reached 'working' within ${_IW_LIMIT_OBSERVE_SEC}s (${_strikes}/${_IW_LIMIT_STRIKES}) — possible token-limit exhaustion."
     _iw_limit_evidence "${_agents}"
 
     if [ "${_strikes}" -lt "${_IW_LIMIT_STRIKES}" ]; then
@@ -3737,6 +3747,7 @@ _iw_usage() {
     ux_bullet "rate-limit gate"
     ux_bullet_sub "a dispatch is judged only once its prompt is confirmed submitted"
     ux_bullet_sub "healthy means its agent still holds 'working' ${_IW_LIMIT_OBSERVE_SEC}s later"
+    ux_bullet_sub "an agent seen working that then stops is no strike: it ran, so the quota was there"
     ux_bullet_sub "${_IW_LIMIT_STRIKES} ticks in a row where no dispatched agent does close the gate"
     ux_bullet_sub "a prompt that never reached the pane leaves the gate exactly as it was"
     ux_bullet_sub "a strike logs the pane tail as evidence — pane text never opens or closes the gate"
