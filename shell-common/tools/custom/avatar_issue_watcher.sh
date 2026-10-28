@@ -3113,6 +3113,9 @@ _iw_limit_casualty_drop() {
 
 # Re-offer every casualty its pane, once, at gate-reopen time.
 #
+# A casualty whose issue has closed since it was booked is dropped first,
+# before either way back in is tried (#2314).
+#
 # Two ways back in, and the cheap one is tried first. If herdr still knows the
 # issue's agent the pane and its session survived the outage, so all the issue
 # needs is the prompt it never got to run — the same `herdr agent prompt`

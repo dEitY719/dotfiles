@@ -3830,6 +3830,9 @@ _two_repo_fixture() {
 
 @test "avatar_issue_watcher: a casualty whose state lookup fails keeps its row (#2314)" {
     # A failed read is not "closed": dropping on it would lose an open issue.
+    # The herdr stub defaults to an alive agent, so the kept row takes the
+    # re-prompt path; no HERDR_STATUS_AFTER_PROMPT means it never holds
+    # `working`, so the quota looks spent and the row stays untouched.
     _set_limit_state "0" "$(($(date +%s) - 60))"
     _seed_casualty 11 0
     _set_issues '[]'
