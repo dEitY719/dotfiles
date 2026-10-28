@@ -1743,22 +1743,21 @@ _iw_ensure_flow_command() {
     _iw_ensure_config_dir
     _cfg="${_IW_CONFIG_DIR:-${HOME-}/.claude}"
     _out=$(_iw_resolve_flow_command "${_cfg}") || _rc=$?
-    if [ "${_rc}" -eq 0 ] && [ "${_out}" != "/gh-flow:wave" ]; then
-        # A flat copy runs with CLAUDE_PLUGIN_ROOT unset, and its tier-2
-        # fallback (<skill-base-dir>/../..) lands on the account dir, which has
-        # no skills/issue/lib — the pane would stop on "gh-flow plugin
-        # incomplete" (#2307). Point it at the workspace checkout instead.
-        _root=$(_skill_workspace_root) || _root=""
-        _root="${_root:+${_root}/gh-flow-skills}"
-        if [ -n "${_root}" ] && [ -f "${_root}/skills/issue/lib/target-binding.sh" ]; then
-            _IW_PLUGIN_ROOT="${_root}"
-        else
-            _IW_FLOW_RESOLVED=2
-            ux_error "${_out} is an Agent Factory copy and needs CLAUDE_PLUGIN_ROOT, but no gh-flow-skills checkout with skills/issue/lib/target-binding.sh was found under the skill workspace (\${WORKSPACE_ROOT:-\$HOME/para/project/skills}) — clone it there or install the gh-flow plugin."
-            return 1
-        fi
-    fi
     if [ "${_rc}" -eq 0 ]; then
+        if [ "${_out}" != "/gh-flow:wave" ]; then
+            # A flat copy runs with CLAUDE_PLUGIN_ROOT unset, and its tier-2
+            # fallback (<skill-base-dir>/../..) lands on the account dir, which
+            # has no skills/issue/lib — the pane would stop on "gh-flow plugin
+            # incomplete" (#2307). Point it at the workspace checkout instead.
+            _root=$(_skill_workspace_root) || _root=""
+            _root="${_root:+${_root}/gh-flow-skills}"
+            if [ -z "${_root}" ] || [ ! -f "${_root}/skills/issue/lib/target-binding.sh" ]; then
+                _IW_FLOW_RESOLVED=2
+                ux_error "${_out} is an Agent Factory copy and needs CLAUDE_PLUGIN_ROOT, but no gh-flow-skills checkout with skills/issue/lib/target-binding.sh was found under the skill workspace (\${WORKSPACE_ROOT:-\$HOME/para/project/skills}) — clone it there, or install or enable the gh-flow plugin."
+                return 1
+            fi
+            _IW_PLUGIN_ROOT="${_root}"
+        fi
         _IW_FLOW_COMMAND="${_out}"
         _IW_FLOW_RESOLVED=1
         return 0
