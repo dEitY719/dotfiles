@@ -201,6 +201,72 @@ _fake_repo_with_origin() {
 }
 
 # ---------------------------------------------------------------------------
+# GH_HOST pin from <remote>'s URL host with an explicit PR number (#2313)
+# ---------------------------------------------------------------------------
+
+# Stub `gh`: `auth status` passes; `pr view` records the GH_HOST it received,
+# then fails like a PR looked up on the wrong server.
+_stub_gh_record_host() {
+    local stub_dir="$TEST_TEMP_HOME/bin"
+    mkdir -p "$stub_dir"
+    cat >"$stub_dir/gh" <<EOF
+#!/bin/sh
+if [ "\$1 \$2" = "pr view" ]; then
+    printf '%s\n' "\${GH_HOST-<unset>}" >"$TEST_TEMP_HOME/gh_host.log"
+    printf 'GraphQL: Could not resolve to a PullRequest (repository.pullRequest)\nsecond line\n' >&2
+    exit 1
+fi
+exit 0
+EOF
+    chmod +x "$stub_dir/gh"
+    export PATH="$stub_dir:$PATH"
+    export DOTFILES_GHES_HOST="ghes.example.com"
+    _gh_pr_review_require_ai_cli() { return 0; }
+}
+
+@test "pin_host: GHES remote + unset GH_HOST + explicit PR → fetch goes to GHES (#2313)" {
+    _source_module
+    _stub_gh_record_host
+    _fake_repo_with_origin git@ghes.example.com:owner/repo.git
+    unset GH_HOST
+    run _gh_pr_review_main --ai codex 7 origin
+    assert_failure 1
+    run cat "$TEST_TEMP_HOME/gh_host.log"
+    assert_output "ghes.example.com"
+}
+
+@test "pin_host: a preset GH_HOST is not overwritten (#2313)" {
+    _source_module
+    _stub_gh_record_host
+    _fake_repo_with_origin git@ghes.example.com:owner/repo.git
+    GH_HOST=preset.example.com run _gh_pr_review_main --ai codex 7 origin
+    assert_failure 1
+    run cat "$TEST_TEMP_HOME/gh_host.log"
+    assert_output "preset.example.com"
+}
+
+@test "pin_host: github.com remote keeps github.com (#2313)" {
+    _source_module
+    _stub_gh_record_host
+    _fake_repo_with_origin git@github.com:owner/repo.git
+    unset GH_HOST
+    run _gh_pr_review_main --ai codex 7 origin
+    assert_failure 1
+    run cat "$TEST_TEMP_HOME/gh_host.log"
+    assert_output "github.com"
+}
+
+@test "fetch_meta: failure message carries gh's first stderr line (#2313)" {
+    _source_module
+    _stub_gh_record_host
+    _fake_repo_with_origin git@github.com:owner/repo.git
+    run _gh_pr_review_main --ai codex 7 origin
+    assert_failure 1
+    assert_output --partial "PR #7 could not be fetched from owner/repo: GraphQL: Could not resolve to a PullRequest"
+    refute_output --partial "second line"
+}
+
+# ---------------------------------------------------------------------------
 # _gh_pr_review_require_ai_cli — PATH pre-flight
 # ---------------------------------------------------------------------------
 

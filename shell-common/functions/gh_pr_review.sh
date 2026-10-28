@@ -1180,6 +1180,32 @@ _gh_pr_review_ensure_host() {
     fi
 }
 
+# _gh_pr_review_remote_host — print the GitHub host of <remote>'s URL, or
+# nothing when the remote or its host cannot be resolved. Shared by the auth
+# gate (#1905) and the GH_HOST pin (#2313) so both read the same host.
+_gh_pr_review_remote_host() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local _url
+    _url=$(git remote get-url "${1:-origin}" 2>/dev/null) || return 0
+    # shellcheck disable=SC1091
+    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" 2>/dev/null || :
+    _gh_host_from_url "$_url" 2>/dev/null || :
+}
+
+# _gh_pr_review_pin_host — export GH_HOST as <remote>'s URL host so every
+# later `gh` call (meta fetch, diff, comment) talks to the PR's server even
+# when the PR number is explicit and the caller logged into several hosts
+# (#2313). An already-set GH_HOST wins and is only re-exported.
+_gh_pr_review_pin_host() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    if [ -z "${GH_HOST-}" ]; then
+        GH_HOST=$(_gh_pr_review_remote_host "$1")
+        [ -n "$GH_HOST" ] || unset GH_HOST
+    fi
+    [ -z "${GH_HOST-}" ] || export GH_HOST
+    return 0
+}
+
 # _gh_pr_review_require_auth — fail unless gh is authenticated for the host of
 # <remote>'s URL. A bare `gh auth status` checks EVERY host in hosts.yml, so a
 # dead login for an unrelated host (e.g. a stale internal-GHES stub on a public
@@ -1187,11 +1213,8 @@ _gh_pr_review_ensure_host() {
 # unscoped check when the host cannot be derived from the remote.
 _gh_pr_review_require_auth() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local _remote="${1:-origin}" _url _host
-    _url=$(git remote get-url "$_remote" 2>/dev/null) || _url=""
-    # shellcheck disable=SC1091
-    . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" 2>/dev/null || :
-    _host=$(_gh_host_from_url "$_url" 2>/dev/null) || _host=""
+    local _remote="${1:-origin}" _host
+    _host=$(_gh_pr_review_remote_host "$_remote")
     if [ -n "$_host" ]; then
         if ! gh auth status --hostname "$_host" >/dev/null 2>&1; then
             ux_error "gh CLI not authenticated for $_host; run 'gh auth login -h $_host'"
@@ -1232,18 +1255,26 @@ _gh_pr_review_resolve_pr_number() {
 # entrypoint needs (state, isDraft, baseRefName, headRefName,
 # headRefOid). One network round-trip beats five. The raw JSON is echoed
 # verbatim so the caller can extract whichever subset it cares about; on
-# fetch failure (network blip, no permission, deleted PR) it returns 1
-# with the raw `gh` stderr suppressed — the caller surfaces the
-# user-facing error.
+# fetch failure (network blip, no permission, deleted PR, wrong host) it
+# reports the error with gh's first stderr line as the cause and
+# returns 1 (#2313).
 #
 # `headRefOid` rides along rather than costing a second `gh pr view`: it
 # is only needed to tag the Step 6 comment marker (#1564), which is the
 # same reason the other four are consolidated here.
 _gh_pr_review_fetch_meta() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local pr="$1" repo="$2"
-    gh pr view "$pr" --repo "$repo" \
-        --json state,isDraft,baseRefName,headRefName,headRefOid 2>/dev/null
+    local pr="$1" repo="$2" _err _rc
+    # stdout (the JSON) passes through on fd 3; only stderr is captured.
+    {
+        _err=$(gh pr view "$pr" --repo "$repo" \
+            --json state,isDraft,baseRefName,headRefName,headRefOid 2>&1 >&3 3>&-)
+        _rc=$?
+    } 3>&1
+    [ "$_rc" -eq 0 ] && return 0
+    _err=$(printf '%s\n' "$_err" | sed -n 1p)
+    ux_error "PR #$pr could not be fetched from $repo${_err:+: $_err}"
+    return 1
 }
 
 # _gh_pr_review_preflight_pr_state — pure-shell gate on pre-fetched
@@ -1439,6 +1470,7 @@ EOF
     if ! TARGET_REPO=$(_gh_pr_review_resolve_target_repo "$remote"); then
         return 1
     fi
+    _gh_pr_review_pin_host "$remote"
 
     # Resolve PR number — explicit arg wins, otherwise auto-detect.
     local PR_NUMBER
@@ -1452,7 +1484,9 @@ EOF
     # single JSON blob (Rule 19 — fewer process forks, fewer network
     # calls).
     local _meta state isDraft base head head_sha
-    _meta=$(_gh_pr_review_fetch_meta "$PR_NUMBER" "$TARGET_REPO")
+    if ! _meta=$(_gh_pr_review_fetch_meta "$PR_NUMBER" "$TARGET_REPO"); then
+        return 1
+    fi
     if [ -z "$_meta" ]; then
         ux_error "PR #$PR_NUMBER could not be fetched from $TARGET_REPO"
         return 1
