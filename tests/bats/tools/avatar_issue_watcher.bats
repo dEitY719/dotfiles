@@ -4285,6 +4285,9 @@ description: Carry one issue through gh-flow:wave, then via gh-flow:wave again."
     _assert_logged "tab create --workspace ws-test-1"
     grep -F "tab create" "${_LOG}" | grep -qF -- "--env CLAUDE_PLUGIN_ROOT=${_WORK_DIR}/${_GH_FLOW_ROOT_REL}" ||
         fail "tab create lacks --env CLAUDE_PLUGIN_ROOT"
+    # Next to the account routing, not instead of it.
+    grep -F "tab create" "${_LOG}" | grep -qF -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal" ||
+        fail "tab create lost --env CLAUDE_CONFIG_DIR"
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
 }
 

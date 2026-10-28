@@ -2564,7 +2564,7 @@ _iw_process_issue() {
     # Before any tab or pane exists: no entry point is a deterministic
     # failure, and the retry loop below would only rebuild them (#2209).
     if ! _iw_ensure_flow_command; then
-        ux_warning "Not dispatching ${_repo}#${_number} — no /gh-flow:wave entry point to run."
+        ux_warning "Not dispatching ${_repo}#${_number} — no usable /gh-flow:wave entry point (see the error above)."
         return 1
     fi
 
