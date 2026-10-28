@@ -256,6 +256,14 @@ EOF
     assert_output "github.com"
 }
 
+@test "pin_host: an unresolvable remote leaves GH_HOST unset (#2313)" {
+    _source_module
+    _fake_repo_with_origin git@github.com:owner/repo.git
+    unset GH_HOST
+    _gh_pr_review_pin_host no-such-remote
+    [ -z "${GH_HOST+set}" ]
+}
+
 @test "fetch_meta: failure message carries gh's first non-empty stderr line (#2313)" {
     _source_module
     _stub_gh_record_host
