@@ -9,9 +9,10 @@
 #
 # WHAT IT DOES — DELEGATION ONLY
 #   Forwards the hook to the project-level hook of the repository being
-#   acted on (.githooks/ -> git/hooks/ -> .git/hooks/), passing through
-#   arguments, stdin and the exit code unchanged. In a repository that ships
-#   no hook of this type it is a silent no-op — repo-specific logic must
+#   acted on (.githooks/ -> git/hooks/ -> scripts/hooks/ ->
+#   .git/hooks/), passing through arguments, stdin and the exit code
+#   unchanged. In a repository that ships no hook of this type it is a
+#   silent no-op — repo-specific logic must
 #   never fire in unrelated repositories.
 #
 #   Single exception (issue #1838): post-checkout / post-merge / post-rewrite
@@ -48,8 +49,9 @@ fi
 
 # Candidate hooks in priority order (same order as the pre-commit wrapper)
 CANDIDATE_HOOKS=(
-    ".githooks/${HOOK_NAME}" # Team shared hook (highest priority)
-    "git/hooks/${HOOK_NAME}" # Dotfiles/Custom structure
+    ".githooks/${HOOK_NAME}"     # Team shared hook (highest priority)
+    "git/hooks/${HOOK_NAME}"     # Dotfiles/Custom structure
+    "scripts/hooks/${HOOK_NAME}" # Project scripts/ layout (issue #2305)
 )
 
 RUN_HOOK=""

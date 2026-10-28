@@ -36,7 +36,7 @@ dead code, not a fallback.
 `global-hooks/pre-commit` carries universal safety checks **and** delegates.
 The other wrappers (`pre-push`, `commit-msg`, `prepare-commit-msg`, `post-commit`,
 `post-checkout`, `post-merge`, `post-rewrite`) are delegation-only: they forward to the first of
-`.githooks/<name>` → `git/hooks/<name>` → `.git/hooks/<name>` **relative to
+`.githooks/<name>` → `git/hooks/<name>` → `scripts/hooks/<name>` → `.git/hooks/<name>` **relative to
 the repo being operated on**, passing argv, stdin and the exit code through,
 and are a silent no-op anywhere that path does not exist (never link
 `git/hooks/*` into the global dir directly). One exception (#1838):

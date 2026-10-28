@@ -10,8 +10,8 @@
 #   1. graphify refresh — the one exception to delegation-only, opt-in by
 #      graphify-out/graph.json. See lib/graphify-refresh.sh.
 #   2. Delegation to the project-level hook (.githooks/ -> git/hooks/ ->
-#      .git/hooks/), passing argv, stdin and the exit code through; a silent
-#      no-op when the repo ships none. See lib/delegate.sh.
+#      scripts/hooks/ -> .git/hooks/), passing argv, stdin and the exit code
+#      through; a silent no-op when the repo ships none. See lib/delegate.sh.
 #
 # Hook protocol (git merge / git pull post-merge):
 #   $1 = 1 for a squash merge, else 0. git ignores the exit code; it is still
