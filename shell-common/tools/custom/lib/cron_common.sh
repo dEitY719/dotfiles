@@ -30,11 +30,16 @@ cron_bootstrap() {
 # Single-instance guard for one cron tick.
 #   $1 = state dir, $2 = lock basename,
 #   $3 = tick name for the skip warning (empty: skip silently)
+#   $4 = optional wait in seconds (#2315): a positive integer waits up to that
+#        long for the holder (flock -w) instead of skipping; empty or anything
+#        else keeps the non-blocking default every cron tick relies on
 #
 # A cron tick can fire while the previous one is still running; without a lock
-# both would observe the same work and both act. Deliberately non-blocking: a
-# skipped tick just retries on the next period. Returns non-zero only when
-# another tick holds the lock; a missing flock or an unusable state dir
+# both would observe the same work and both act. Non-blocking by default: a
+# skipped tick just retries on the next period. A caller with no retry behind
+# it (a targeted run a human started) passes $4 instead, so its request is
+# queued rather than lost. Returns non-zero only when another tick holds the
+# lock (or still holds it after the wait); a missing flock or an unusable state dir
 # soft-degrades to "no protection" rather than failing (#1440).
 # Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
 cron_acquire_lock() {
@@ -60,8 +65,18 @@ cron_acquire_lock() {
         return 0
     fi
 
-    if ! flock -n 9; then
+    flock -n 9 && return 0
+
+    case "${4:-}" in
+    '' | *[!0-9]* | 0)
         [ -z "${3:-}" ] || ux_warning "another $3 tick is already running — skip"
+        return 1
+        ;;
+    esac
+
+    ux_info "waiting for the running ${3:-cron} tick (<=${4}s)..."
+    if ! flock -w "$4" 9; then
+        ux_error "timed out after ${4}s waiting for the running ${3:-cron} tick"
         return 1
     fi
 }

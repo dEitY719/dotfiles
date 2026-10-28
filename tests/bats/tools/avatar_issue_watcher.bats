@@ -880,7 +880,8 @@ _path_without() {
 
 # Hold an exclusive flock on the tick's lock file in a background process
 # until teardown kills it, so the script under test sees a contended lock.
-# Blocks until the holder has actually acquired the lock.
+# Blocks until the holder has actually acquired the lock. $1 = seconds to hold
+# it (default 30, i.e. for the whole test).
 #
 # `3>&-` is load-bearing, not tidiness: bats streams TAP on fd 3 and will not
 # finish a test until every inheritor closes it. teardown kills the `flock`
@@ -890,7 +891,7 @@ _hold_lock() {
     local _ready="${_WORK_DIR}/lock-held"
     mkdir -p "${_STATE_DIR}"
     flock -x "${_LOCK_FILE}" \
-        sh -c "printf held >'${_ready}'; sleep 30" >/dev/null 2>&1 3>&- &
+        sh -c "printf held >'${_ready}'; sleep ${1:-30}" >/dev/null 2>&1 3>&- &
     _LOCK_HOLDER_PID=$!
 
     local _i=0
@@ -3129,6 +3130,31 @@ _two_repo_fixture() {
     _run_tick
     assert_success
     assert_output --partial "already running"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a held lock skips a cron tick at once, without waiting (#2315)" {
+    _hold_lock
+    _run_tick "IW_TARGETED_LOCK_WAIT_SECONDS=20"
+    assert_success
+    assert_output --partial "already running — skip"
+    refute_output --partial "waiting for the running"
+}
+
+@test "avatar_issue_watcher: a targeted run waits for a held lock, then dispatches (#2315)" {
+    _hold_lock 1
+    _run_tick "IW_TARGETED_LOCK_WAIT_SECONDS=20" -- "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "waiting for the running avatar_issue_watcher tick (<=20s)"
+    refute_output --partial "already running — skip"
+    _assert_logged "--label iw-dotfiles-issue-12 --no-focus"
+}
+
+@test "avatar_issue_watcher: a targeted run that times out on the lock fails loudly (#2315)" {
+    _hold_lock
+    _run_tick "IW_TARGETED_LOCK_WAIT_SECONDS=1" -- "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "timed out after 1s waiting for the running avatar_issue_watcher tick"
     _refute_logged "tab create"
 }
 
