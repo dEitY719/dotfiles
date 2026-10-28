@@ -42,9 +42,12 @@ _lock() {
 
 @test "cron_common: with a wait, a held lock is acquired once its holder releases it (#2315)" {
     mkdir -p "${_WORK_DIR}/st"
-    flock -x "${_WORK_DIR}/st/.lock" sleep 1 3>&- &
-    local _holder=$!
-    sleep 0.3
+    flock -x "${_WORK_DIR}/st/.lock" sh -c "touch '${_WORK_DIR}/held'; sleep 1" 3>&- &
+    local _holder=$! _i=0
+    while [ ! -e "${_WORK_DIR}/held" ] && [ "${_i}" -lt 200 ]; do
+        sleep 0.05
+        _i=$((_i + 1))
+    done
     _lock 'cron_acquire_lock "$D" .lock my_tick 20; echo "rc=$?"'
     wait "${_holder}" || true
     assert_output --partial "waiting for the running my_tick tick (<=20s)"
