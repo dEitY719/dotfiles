@@ -3327,13 +3327,19 @@ _two_repo_fixture() {
     assert_output --partial '"backoff_until": "0"'
 }
 
-@test "avatar_issue_watcher: an agent that reaches working and falls back records a strike" {
+@test "avatar_issue_watcher: an agent that worked and then stopped is not a strike (#2308)" {
     # Working for the first two polls of the window, idle for the remaining
-    # four. `working` has to be *held*, not merely touched — and the log has to
-    # say which of the two failures this was.
+    # four. A spent quota never lets the session work through a poll, so this
+    # is a run that ended on its own (often an error) — not quota evidence.
+    # Neither a strike nor a clear: `working` still has to be *held* to wipe
+    # the slate (#1468), so a strike already on file stays exactly where it was.
+    _set_limit_state "1" "0"
     _run_tick "HERDR_STATUS_AFTER_PROMPT=working" "HERDR_STATUS_AFTER_PROMPT_GETS=2"
     assert_success
-    assert_output --partial "reached 'working' and fell back inside 60s (1/2)"
+    assert_output --partial "reached 'working' and then stopped inside 60s"
+    refute_output --partial "possible token-limit exhaustion"
+    refute_output --partial "as a rate-limit casualty"
+    [ ! -s "${_CASUALTY_FILE}" ]
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
 }
@@ -3696,6 +3702,21 @@ _two_repo_fixture() {
     assert_output --partial "acme/dotfiles"
     # Still zero attempts spent — the fourth column never moved.
     assert_output --regexp 'acme/dotfiles	11	[0-9]+	0'
+}
+
+@test "avatar_issue_watcher: a retried casualty that works then stops spends an attempt (#2308)" {
+    # It ran, so the quota is back; it stopped anyway, so the failure is its
+    # own — the "reason other than quota" the retry budget exists to bound.
+    _set_limit_state "0" "$(($(date +%s) - 60))"
+    _seed_casualty 11 0
+    _set_issues '[]'
+
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working" "HERDR_STATUS_AFTER_PROMPT_GETS=2"
+    assert_success
+    refute_output --partial "the quota looks spent"
+    assert_output --partial "acme/dotfiles#11 failed to hold 'working' with the quota recovered (1/3)"
+    run cat "${_CASUALTY_FILE}"
+    assert_output --regexp 'acme/dotfiles	11	[0-9]+	1'
 }
 
 @test "avatar_issue_watcher: a casualty is given up on after _IW_MAX_ATTEMPTS with the quota recovered" {
