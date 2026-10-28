@@ -483,6 +483,10 @@ EOF
 #   HERDR_READ_AFTER_PROMPT=TEXT    the short read answers TEXT once that agent
 #                                   has been prompted — the pane claude leaves
 #                                   behind after it rejects the command (#2300)
+#   HERDR_READ_AFTER_PROMPT_PAD=N   follow that TEXT with N blank/status lines,
+#                                   and answer only the last `--lines` of the
+#                                   result — a real 66-row pane where the
+#                                   rejection sits far above the bottom (#2306)
 #   HERDR_GET_FAIL_AFTER_PROMPT=1   `agent get` errors once that agent has been
 #                                   prompted — herdr unreachable during the
 #                                   observation window only, leaving dispatch
@@ -655,7 +659,14 @@ case "$1 $2" in
         exit 0
     fi
     if [ -n "${HERDR_READ_AFTER_PROMPT:-}" ] && [ -f "${CALL_LOG}.prompt.$3" ]; then
-        printf '%s\n' "${HERDR_READ_AFTER_PROMPT}"
+        {
+            printf '%s\n' "${HERDR_READ_AFTER_PROMPT}"
+            _i=0
+            while [ "${_i}" -lt "${HERDR_READ_AFTER_PROMPT_PAD:-0}" ]; do
+                if [ $((_i % 2)) -eq 0 ]; then printf '\n'; else printf '  status line %s\n' "${_i}"; fi
+                _i=$((_i + 1))
+            done
+        } | tail -n "$5"
         exit 0
     fi
     _seq="${HERDR_SETTLE_READ_SEQUENCE:-> claude ready}"
@@ -2829,6 +2840,18 @@ _two_repo_fixture() {
     assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_unknown_command)."
     assert_output --partial "answered '● Unknown command: /gh-flow:wave' to '/gh-flow:wave 11'"
     assert_output --partial "plugin is installed"
+    _refute_logged "agent send-keys"
+}
+
+@test "avatar_issue_watcher: an Unknown command line 40 rows above the pane bottom is still detected" {
+    # A real 66-row herdr pane stacks blank and status lines under the
+    # rejection, pushing it out of the 15-line settle window (#2306).
+    _run_tick "HERDR_PROMPT_MODE=stall" "HERDR_AGENT_STATUS=idle" \
+        "HERDR_READ_AFTER_PROMPT=● Unknown command: /gh-flow:wave" \
+        "HERDR_READ_AFTER_PROMPT_PAD=39"
+    assert_failure
+    assert_output --partial "herdr agent prompt failed for agent iw-dotfiles-issue-11 (agent_unknown_command)."
+    [ -s "${_STATE_DIR}/unknown-command/acme_dotfiles-11" ]
     _refute_logged "agent send-keys"
 }
 
