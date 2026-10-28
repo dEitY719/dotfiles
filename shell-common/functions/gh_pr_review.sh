@@ -1256,7 +1256,7 @@ _gh_pr_review_resolve_pr_number() {
 # headRefOid). One network round-trip beats five. The raw JSON is echoed
 # verbatim so the caller can extract whichever subset it cares about; on
 # fetch failure (network blip, no permission, deleted PR, wrong host) it
-# reports the error with gh's first stderr line as the cause and
+# reports the error with gh's first non-empty stderr line as the cause and
 # returns 1 (#2313).
 #
 # `headRefOid` rides along rather than costing a second `gh pr view`: it
@@ -1272,7 +1272,7 @@ _gh_pr_review_fetch_meta() {
         _rc=$?
     } 3>&1
     [ "$_rc" -eq 0 ] && return 0
-    _err=$(printf '%s\n' "$_err" | sed -n 1p)
+    _err=$(printf '%s\n' "$_err" | sed -n '/[^[:space:]]/{p;q;}')
     ux_error "PR #$pr could not be fetched from $repo${_err:+: $_err}"
     return 1
 }
