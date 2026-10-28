@@ -3229,7 +3229,9 @@ EOF
 # prompt says nothing about the quota (issue #1444).
 #
 # Two consecutive unproductive ticks shut the gate; one productive tick wipes
-# the slate, so `_IW_LIMIT_STRIKES` really does count consecutive failures. 1
+# the slate, so `_IW_LIMIT_STRIKES` really does count consecutive failures. A
+# tick whose agent worked then stopped (rc 3) is neither: a strike on file
+# stays as it was (#2308). 1
 # would hold the watcher over a single transient herdr blip; 2 buys that
 # evidence for one extra tick (~5 min).
 _iw_limit_record() {
@@ -3257,20 +3259,21 @@ _iw_limit_record() {
     # as idleness, and `rc 3` is "ran, then ended on its own" — see
     # _iw_limit_observe.
     _alive=$(_iw_limit_observe "${_agents}" "${_failed_file}") || _rc=$?
+    # Only a strike (rc 1) books casualties from the failed file.
+    [ "${_rc}" -eq 1 ] || rm -f "${_failed_file}" 2>/dev/null || true
     if [ "${_rc}" -eq 0 ]; then
-        rm -f "${_failed_file}" 2>/dev/null || true
         ux_info "Agent ${_alive} held 'working' for ${_IW_LIMIT_OBSERVE_SEC}s — quota is not exhausted, gate cleared."
         _iw_limit_clear
         return 0
     fi
     if [ "${_rc}" -eq 2 ]; then
-        rm -f "${_failed_file}" 2>/dev/null || true
         ux_warning "No dispatched agent's status could be read after ${_IW_LIMIT_OBSERVE_SEC}s — herdr unreachable, gate untouched."
         return 0
     fi
     if [ "${_rc}" -eq 3 ]; then
-        rm -f "${_failed_file}" 2>/dev/null || true
         ux_warning "Agent ${_alive} reached 'working' and then stopped inside ${_IW_LIMIT_OBSERVE_SEC}s — it ran, so this is not quota evidence; no strike, gate untouched."
+        # The pane tail is the only record of why a session that ran then died.
+        _iw_limit_evidence "${_agents}"
         return 0
     fi
 
