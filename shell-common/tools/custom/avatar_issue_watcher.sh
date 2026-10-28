@@ -274,6 +274,10 @@ _IW_SETTLE_NOT_READY_MARK="Not logged in"
 # reports `agent_prompt_stalled` — but the prompt *was* submitted and pressing
 # Enter or starting a new attempt can only repeat the same answer.
 _IW_UNKNOWN_COMMAND_MARK="Unknown command:"
+# How far up the pane to look for it (#2306). Not _IW_SETTLE_READ_LINES: on a
+# real 66-row pane blank and status lines stack under the rejection and push it
+# out of a 15-line window. 80 covers the whole pane; only the last match is kept.
+_IW_UNKNOWN_COMMAND_READ_LINES="80"
 # How long an issue that hit it is held back from dispatch. Closing the tab
 # makes the issue look idle to the next tick, so without the hold every tick
 # would rebuild a tab for the same answer. Long enough to stop that churn,
@@ -2456,7 +2460,7 @@ _iw_prompt_issue() {
             if [ "${_post_stall_status}" = "working" ]; then
                 ux_warning "herdr reported agent_prompt_stalled but ${_agent} is already working — treating as delivered, not retrying."
                 _rc=0
-            elif _unknown=$(_hp_pane_text "${_agent}" "${_IW_SETTLE_READ_LINES}" |
+            elif _unknown=$(_hp_pane_text "${_agent}" "${_IW_UNKNOWN_COMMAND_READ_LINES}" |
                 grep -F "${_IW_UNKNOWN_COMMAND_MARK}" | tail -n 1) &&
                 [ -n "${_unknown}" ]; then
                 # Submitted and rejected, not unsubmitted (#2300): no Enter.
