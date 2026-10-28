@@ -1470,6 +1470,9 @@ EOF
     if ! TARGET_REPO=$(_gh_pr_review_resolve_target_repo "$remote"); then
         return 1
     fi
+    # Function-local copy: the pin reaches every gh child but is restored on
+    # return, so a caller that sources this file keeps its own GH_HOST.
+    local GH_HOST="${GH_HOST-}"
     _gh_pr_review_pin_host "$remote"
 
     # Resolve PR number — explicit arg wins, otherwise auto-detect.

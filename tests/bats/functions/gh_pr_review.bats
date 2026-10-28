@@ -256,6 +256,29 @@ EOF
     assert_output "github.com"
 }
 
+@test "pin_host: the pin does not leak into a caller that sourced the file (#2313)" {
+    _source_module
+    _stub_gh_record_host
+    _fake_repo_with_origin git@ghes.example.com:owner/repo.git
+    unset GH_HOST
+    _gh_pr_review_main --ai codex 7 origin 2>/dev/null || true
+    [ "$(cat "$TEST_TEMP_HOME/gh_host.log")" = "ghes.example.com" ]
+    [ -z "${GH_HOST+set}" ]
+}
+
+@test "zsh: the pin does not leak into a caller that sourced the file (#2313)" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not available"
+    _stub_gh_record_host
+    _fake_repo_with_origin git@ghes.example.com:owner/repo.git
+    unset GH_HOST
+    run_in_zsh '_gh_pr_review_require_ai_cli() { return 0; }
+        _gh_pr_review_main --ai codex 7 origin 2>/dev/null
+        printf "after=%s\n" "${GH_HOST-<unset>}"'
+    assert_output --partial "after=<unset>"
+    run cat "$TEST_TEMP_HOME/gh_host.log"
+    assert_output "ghes.example.com"
+}
+
 @test "pin_host: an unresolvable remote leaves GH_HOST unset (#2313)" {
     _source_module
     _fake_repo_with_origin git@github.com:owner/repo.git
