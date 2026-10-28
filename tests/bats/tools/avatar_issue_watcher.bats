@@ -468,6 +468,8 @@ EOF
 #                                   back to HERDR_AGENT_STATUS — this is how an
 #                                   agent that reaches `working` and then drops
 #                                   out of it inside the window is staged
+#   HERDR_STATUS_AFTER_PROMPT_AGENTS  limit the two settings above to these
+#                                   space-separated agents (unset = all)
 #   HERDR_WORKING_AGENTS            space-separated agent names that report
 #                                   `working` once prompted, whatever the
 #                                   settings above say
@@ -613,7 +615,8 @@ case "$1 $2" in
                 exit 1
             fi
         fi
-        if [ -n "${HERDR_STATUS_AFTER_PROMPT:-}" ]; then
+        if [ -n "${HERDR_STATUS_AFTER_PROMPT:-}" ] &&
+            case " ${HERDR_STATUS_AFTER_PROMPT_AGENTS:-$3} " in *" $3 "*) true ;; *) false ;; esac; then
             _n=$(_bump "${CALL_LOG}.postget.$3")
             if [ -z "${HERDR_STATUS_AFTER_PROMPT_GETS:-}" ] ||
                 [ "${_n}" -le "${HERDR_STATUS_AFTER_PROMPT_GETS}" ]; then
@@ -3342,6 +3345,40 @@ _two_repo_fixture() {
     [ ! -s "${_CASUALTY_FILE}" ]
     run cat "${_LIMIT_FILE}"
     assert_output --partial '"strikes": "1"'
+}
+
+@test "avatar_issue_watcher: a quota spent mid-run still closes the gate on the next ticks (#2308)" {
+    # PR #2312 review: an agent that worked and then hit the wall earns no
+    # strike, but the quota is one account's — every later dispatch hits the
+    # wall on its first call and never reaches `working`, so those ticks strike
+    # and the gate closes one tick later than before, not never.
+    _run_tick "HERDR_STATUS_AFTER_PROMPT=working" "HERDR_STATUS_AFTER_PROMPT_GETS=2"
+    assert_success
+    assert_output --partial "then stopped inside 60s"
+    _set_issues '[{"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
+    _run_tick
+    assert_success
+    assert_output --partial "(1/2)"
+    _set_issues '[{"number":13,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}]'
+    _run_tick
+    assert_success
+    assert_output --partial "Rate-limit gate closed for 30m"
+}
+
+@test "avatar_issue_watcher: one agent that worked spares its never-started sibling the strike (#2308)" {
+    # Same tick-level rule as a held `working` (#1444): one account, one quota,
+    # so one agent caught working proves the quota for the whole tick.
+    _set_issues '[
+      {"number":11,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]},
+      {"number":12,"repository":{"nameWithOwner":"acme/dotfiles"},"labels":[]}
+    ]'
+    _run_tick "IW_DISPATCH_PER_TICK=2" "HERDR_STATUS_AFTER_PROMPT=working" \
+        "HERDR_STATUS_AFTER_PROMPT_GETS=2" "HERDR_STATUS_AFTER_PROMPT_AGENTS=iw-dotfiles-issue-11"
+    assert_success
+    assert_output --partial "Agent iw-dotfiles-issue-11 reached 'working' and then stopped"
+    refute_output --partial "possible token-limit exhaustion"
+    [ ! -s "${_CASUALTY_FILE}" ]
+    [ ! -f "${_LIMIT_FILE}" ]
 }
 
 @test "avatar_issue_watcher: a dispatch that never lands leaves the strike count alone" {
