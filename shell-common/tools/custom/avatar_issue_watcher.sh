@@ -82,6 +82,9 @@ if [ ! -f "${_IW_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" ]; then
 fi
 # shellcheck source=/dev/null
 . "${_IW_SHELL_COMMON}/tools/custom/lib/herdr_pane.sh" || exit 1
+# _skill_workspace_root: where an Agent Factory copy's gh-flow lib/ lives (#2307).
+# shellcheck source=/dev/null
+. "${_IW_SHELL_COMMON}/lib/skill_sources.sh" || exit 1
 
 # Candidate-selection ops (#2157): dotfiles_tools.issue_watcher.select via cron_py.
 # The legacy jq/awk rollback path was removed after one release (#2173).
@@ -434,6 +437,9 @@ _IW_CONFIG_DIR_RESOLVED=0
 # by _iw_ensure_flow_command: 0 = not yet asked, 1 = resolved, 2 = failed.
 _IW_FLOW_COMMAND=""
 _IW_FLOW_RESOLVED=0
+# CLAUDE_PLUGIN_ROOT for the pane when _IW_FLOW_COMMAND is an Agent Factory
+# copy (issue #2307); empty for /gh-flow:wave, whose harness sets it itself.
+_IW_PLUGIN_ROOT=""
 
 # ============================================================
 # Helpers — state paths and JSON
@@ -1735,7 +1741,7 @@ _iw_resolve_flow_command() {
 # failure is logged once and is terminal for every dispatch this tick — it is
 # deterministic, so retrying it would only rebuild tabs and panes.
 _iw_ensure_flow_command() {
-    local _cfg _out _rc=0
+    local _cfg _out _rc=0 _root
     case "${_IW_FLOW_RESOLVED}" in
     1) return 0 ;;
     2) return 1 ;;
@@ -1744,6 +1750,21 @@ _iw_ensure_flow_command() {
     _iw_ensure_config_dir
     _cfg="${_IW_CONFIG_DIR:-${HOME-}/.claude}"
     _out=$(_iw_resolve_flow_command "${_cfg}") || _rc=$?
+    if [ "${_rc}" -eq 0 ] && [ "${_out}" != "/gh-flow:wave" ]; then
+        # A flat copy runs with CLAUDE_PLUGIN_ROOT unset, and its tier-2
+        # fallback (<skill-base-dir>/../..) lands on the account dir, which has
+        # no skills/issue/lib — the pane would stop on "gh-flow plugin
+        # incomplete" (#2307). Point it at the workspace checkout instead.
+        _root=$(_skill_workspace_root) || _root=""
+        _root="${_root:+${_root}/gh-flow-skills}"
+        if [ -n "${_root}" ] && [ -f "${_root}/skills/issue/lib/target-binding.sh" ]; then
+            _IW_PLUGIN_ROOT="${_root}"
+        else
+            _IW_FLOW_RESOLVED=2
+            ux_error "${_out} is an Agent Factory copy and needs CLAUDE_PLUGIN_ROOT, but no gh-flow-skills checkout with skills/issue/lib/target-binding.sh was found under the skill workspace (\${WORKSPACE_ROOT:-\$HOME/para/project/skills}) — clone it there or install the gh-flow plugin."
+            return 1
+        fi
+    fi
     if [ "${_rc}" -eq 0 ]; then
         _IW_FLOW_COMMAND="${_out}"
         _IW_FLOW_RESOLVED=1
@@ -2129,6 +2150,8 @@ _iw_issue_worktree() {
 # (lib/herdr_pane.sh _hp_herdr_create). Read at call time: _IW_CONFIG_DIR is
 # resolved after the file is sourced.
 _iw_herdr_create() {
+    # Set only for an Agent Factory copy (#2307); herdr takes flags in any order.
+    [ -z "${_IW_PLUGIN_ROOT}" ] || set -- "$@" --env "CLAUDE_PLUGIN_ROOT=${_IW_PLUGIN_ROOT}"
     _hp_herdr_create "${_IW_CONFIG_DIR}" "$@"
 }
 
