@@ -4288,6 +4288,10 @@ description: Carry one issue through gh-flow:wave, then via gh-flow:wave again."
     # Next to the account routing, not instead of it.
     grep -F "tab create" "${_LOG}" | grep -qF -- "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-personal" ||
         fail "tab create lost --env CLAUDE_CONFIG_DIR"
+    # The pane the agent runs in is the tab's; the workspace root pane gets none.
+    _assert_logged "workspace create"
+    ! grep -F "workspace create" "${_LOG}" | grep -qF "CLAUDE_PLUGIN_ROOT" ||
+        fail "workspace create got CLAUDE_PLUGIN_ROOT"
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
 }
 

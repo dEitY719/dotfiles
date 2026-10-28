@@ -2149,7 +2149,9 @@ _iw_issue_worktree() {
 # (lib/herdr_pane.sh _hp_herdr_create). Read at call time: _IW_CONFIG_DIR is
 # resolved after the file is sourced.
 _iw_herdr_create() {
-    # Set only for an Agent Factory copy (#2307); herdr takes flags in any order.
+    # Set only for an Agent Factory copy (#2307); herdr takes flags in any order
+    # and applies each repeated --env. Sole caller: _iw_tab_create — workspace
+    # creation goes through _hp_workspace_for_label and never gets it.
     [ -z "${_IW_PLUGIN_ROOT}" ] || set -- "$@" --env "CLAUDE_PLUGIN_ROOT=${_IW_PLUGIN_ROOT}"
     _hp_herdr_create "${_IW_CONFIG_DIR}" "$@"
 }
