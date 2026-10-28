@@ -39,8 +39,8 @@ cron_bootstrap() {
 # skipped tick just retries on the next period. A caller with no retry behind
 # it (a targeted run a human started) passes $4 instead, so its request is
 # queued rather than lost. Returns non-zero only when another tick holds the
-# lock (or still holds it after the wait); a missing flock or an unusable state dir
-# soft-degrades to "no protection" rather than failing (#1440).
+# lock (or still holds it after the wait); a missing flock or an unusable state
+# dir soft-degrades to "no protection" rather than failing (#1440).
 # Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
 cron_acquire_lock() {
     local _dir="$1" _lock
