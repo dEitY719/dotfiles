@@ -276,7 +276,10 @@ _IW_SETTLE_NOT_READY_MARK="Not logged in"
 _IW_UNKNOWN_COMMAND_MARK="Unknown command:"
 # How far up the pane to look for it (#2306). Not _IW_SETTLE_READ_LINES: on a
 # real 66-row pane blank and status lines stack under the rejection and push it
-# out of a 15-line window. 80 covers the whole pane; only the last match is kept.
+# out of a 15-line window. 80 covers the whole pane; only the last match is kept,
+# and only one naming the dispatched command, so an unrelated rejection or a
+# quoted mark elsewhere in that history cannot end the dispatch. Keep it at or
+# above the tallest pane rows.
 _IW_UNKNOWN_COMMAND_READ_LINES="80"
 # How long an issue that hit it is held back from dispatch. Closing the tab
 # makes the issue look idle to the next tick, so without the hold every tick
@@ -2461,7 +2464,7 @@ _iw_prompt_issue() {
                 ux_warning "herdr reported agent_prompt_stalled but ${_agent} is already working — treating as delivered, not retrying."
                 _rc=0
             elif _unknown=$(_hp_pane_text "${_agent}" "${_IW_UNKNOWN_COMMAND_READ_LINES}" |
-                grep -F "${_IW_UNKNOWN_COMMAND_MARK}" | tail -n 1) &&
+                grep -F "${_IW_UNKNOWN_COMMAND_MARK} ${_IW_FLOW_COMMAND}" | tail -n 1) &&
                 [ -n "${_unknown}" ]; then
                 # Submitted and rejected, not unsubmitted (#2300): no Enter.
                 _code="agent_unknown_command"
