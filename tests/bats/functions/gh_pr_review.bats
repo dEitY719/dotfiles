@@ -213,7 +213,7 @@ _stub_gh_record_host() {
 #!/bin/sh
 if [ "\$1 \$2" = "pr view" ]; then
     printf '%s\n' "\${GH_HOST-<unset>}" >"$TEST_TEMP_HOME/gh_host.log"
-    printf 'GraphQL: Could not resolve to a PullRequest (repository.pullRequest)\nsecond line\n' >&2
+    printf '\nGraphQL: Could not resolve to a PullRequest (repository.pullRequest)\nsecond line\n' >&2
     exit 1
 fi
 exit 0
@@ -256,7 +256,7 @@ EOF
     assert_output "github.com"
 }
 
-@test "fetch_meta: failure message carries gh's first stderr line (#2313)" {
+@test "fetch_meta: failure message carries gh's first non-empty stderr line (#2313)" {
     _source_module
     _stub_gh_record_host
     _fake_repo_with_origin git@github.com:owner/repo.git
