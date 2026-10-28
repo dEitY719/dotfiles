@@ -813,6 +813,7 @@ _run_tick() {
         "IW_LIMIT_OBSERVE_SLEEP=0" \
         "IW_MAX_PER_REPO=3" \
         "IW_MAX_CONCURRENT=7" \
+        "WORKSPACE_ROOT=${_WORK_DIR}/skills" \
         "${_env[@]}" \
         bash "${SCRIPT}" "$@"
 }
@@ -4138,6 +4139,15 @@ metadata:
   agent-factory:
     kind: item'
 
+# The workspace gh-flow-skills checkout an Agent Factory copy's pane borrows its
+# lib/ from (#2307): the copy's own tier-2 root is the account dir, which has
+# no skills/issue/.
+_GH_FLOW_ROOT_REL="skills/gh-flow-skills"
+_make_gh_flow_checkout() {
+    mkdir -p "${_WORK_DIR}/${_GH_FLOW_ROOT_REL}/skills/issue/lib"
+    : >"${_WORK_DIR}/${_GH_FLOW_ROOT_REL}/skills/issue/lib/target-binding.sh"
+}
+
 @test "avatar_issue_watcher: an installed, enabled gh-flow plugin dispatches /gh-flow:wave" {
     printf '{"enabledPlugins":{"gh-flow@test":true}}\n' >"${HOME}/.claude-personal/settings.json"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
@@ -4148,6 +4158,7 @@ metadata:
 }
 
 @test "avatar_issue_watcher: a disabled gh-flow plugin falls through to the flat copy" {
+    _make_gh_flow_checkout
     printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.json"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _run_tick
@@ -4156,6 +4167,7 @@ metadata:
 }
 
 @test "avatar_issue_watcher: settings.local.json disabling the plugin falls through to the flat copy" {
+    _make_gh_flow_checkout
     printf '{"enabledPlugins":{"gh-flow@test":true}}\n' >"${HOME}/.claude-personal/settings.json"
     printf '{"enabledPlugins":{"gh-flow@test":false}}\n' >"${HOME}/.claude-personal/settings.local.json"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
@@ -4180,6 +4192,7 @@ metadata:
 }
 
 @test "avatar_issue_watcher: no plugin dispatches the Agent Factory copy by its anchor" {
+    _make_gh_flow_checkout
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _run_tick
@@ -4215,6 +4228,7 @@ description: Carry one issue through gh-flow:wave, then via gh-flow:wave again."
 }
 
 @test "avatar_issue_watcher: a casualty re-prompt sends the resolved entry point" {
+    _make_gh_flow_checkout
     rm -rf "${HOME}/.claude-personal/plugins"
     _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
     _set_limit_state "0" "$(($(date +%s) - 60))"
@@ -4226,6 +4240,45 @@ description: Carry one issue through gh-flow:wave, then via gh-flow:wave again."
     assert_output --partial "Re-prompting acme/dotfiles#11 in its surviving pane"
     _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
     _refute_logged "/gh-flow:wave 11"
+}
+
+@test "avatar_issue_watcher: an Agent Factory dispatch passes CLAUDE_PLUGIN_ROOT to the pane" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _make_gh_flow_checkout
+    _run_tick
+    assert_success
+    _assert_logged "tab create --workspace ws-test-1"
+    grep -F "tab create" "${_LOG}" | grep -qF -- "--env CLAUDE_PLUGIN_ROOT=${_WORK_DIR}/${_GH_FLOW_ROOT_REL}" ||
+        fail "tab create lacks --env CLAUDE_PLUGIN_ROOT"
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /issue-af07 11"
+}
+
+@test "avatar_issue_watcher: a /gh-flow:wave dispatch leaves CLAUDE_PLUGIN_ROOT to the harness" {
+    _make_gh_flow_checkout
+    _run_tick
+    assert_success
+    _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
+    _refute_logged "CLAUDE_PLUGIN_ROOT"
+}
+
+@test "avatar_issue_watcher: an Agent Factory copy without a gh-flow-skills checkout dispatches nothing" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _run_tick
+    assert_failure
+    assert_output --partial "skills/issue/lib/target-binding.sh"
+    _refute_logged "tab create"
+    _refute_logged "agent prompt"
+}
+
+@test "avatar_issue_watcher: an Agent Factory copy with no workspace root dispatches nothing" {
+    rm -rf "${HOME}/.claude-personal/plugins"
+    _write_skill "${HOME}/.claude-personal" issue-af07 "${_AF_FRONTMATTER}"
+    _run_tick "WORKSPACE_ROOT=${_WORK_DIR}/nope"
+    assert_failure
+    assert_output --partial "gh-flow-skills"
+    _refute_logged "tab create"
 }
 
 @test "avatar_issue_watcher: a flat copy anchored on the retired /gh-flow:issue alias is not an entry point" {
