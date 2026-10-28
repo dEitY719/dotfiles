@@ -3928,6 +3928,14 @@ _iw_targeted_run() {
         return 1
     fi
 
+    # Guards (and the lock wait) before the issue read, so the state and label
+    # checks below describe the issue as it is once the lock is held, not as it
+    # was up to IW_TARGETED_LOCK_WAIT_SECONDS earlier (#2315).
+    _rc=0
+    _iw_tick_guards || _rc=$?
+    [ "${_rc}" -ne 2 ] || return 1
+    [ "${_rc}" -eq 0 ] || return 0
+
     # gh's stderr kept for the error line, beside the state file as in
     # _iw_search_issues (no mktemp in the tick).
     _errf=$(_iw_state_dir)
@@ -3962,11 +3970,6 @@ _iw_targeted_run() {
         fi
         ux_warning "${_repo}#${_number} carries an excluded label (${_hit}) — dispatching anyway (--force)."
     fi
-
-    _rc=0
-    _iw_tick_guards || _rc=$?
-    [ "${_rc}" -ne 2 ] || return 1
-    [ "${_rc}" -eq 0 ] || return 0
 
     _live=$(_iw_live_count)
     if [ "${_live}" -ge "${_IW_MAX_CONCURRENT}" ]; then
