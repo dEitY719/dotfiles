@@ -160,10 +160,17 @@ gitignore_pr() {
         | while IFS= read -r p; do _gitignore_pr_key "$p"; done)"
     for p in "$@"; do
         norm="$p"
-        if [ -d "$root/${p#/}" ]; then
-            norm=$(_gitignore_pr_key "$p")/
+        # ./foo and <root>/foo are not valid gitignore spellings: make root-relative.
+        while [ "${norm#./}" != "$norm" ]; do norm="${norm#./}"; done
+        case $norm in "$root"/*) norm="${norm#"$root"/}" ;; esac
+        if [ -d "$root/${norm#/}" ]; then
+            norm=$(_gitignore_pr_key "$norm")/
         fi
         key=$(_gitignore_pr_key "$norm")
+        if [ -z "$key" ]; then
+            ux_warning "Ignoring empty pattern: $p"
+            continue
+        fi
         if printf '%s\n' "$existing" "$keys" | grep -qxF -- "$key"; then
             ux_info "Already in .gitignore: $norm (skipped)"
             continue
@@ -192,7 +199,8 @@ $key"
     title="chore: ignore $(printf '%s\n' "$added" | paste -sd' ' -)"
     if [ "${#title}" -gt 72 ]; then
         n=$(($(printf '%s\n' "$added" | wc -l) - 1))
-        title="chore: ignore $(printf '%s\n' "$added" | sed -n '1p') and $n more"
+        title="chore: ignore $(printf '%s\n' "$added" | sed -n '1p')"
+        [ "$n" -gt 0 ] && title="$title and $n more"
     fi
 
     # F-4c: remember where we were; detached HEAD returns to the same commit.
