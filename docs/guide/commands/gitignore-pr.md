@@ -26,6 +26,9 @@
 - gitignore-pr                   # list untracked entries, change nothing
 - gitignore-pr <pattern>...      # add to repo-root .gitignore and open a PR
 - An existing directory gets a trailing / (.omo -> .omo/); anything else is added as typed
+- Patterns are root-relative: written to the repo-root .gitignore as given (./ and <root>/ stripped), even when run from a subdirectory
+- Only the root .gitignore of origin/<default> is checked; the PR always targets origin (a fork's origin gets the PR, not upstream)
+- Rejected: patterns containing a newline or starting with #
 
 ### flow
 
