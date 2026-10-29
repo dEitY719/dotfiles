@@ -15,6 +15,16 @@ rg "fzf 피커" docs/guide/commands/
 
 이름 자체가 기억나지 않을 때는 `my-help search` (fzf topic finder) 를 쓰세요.
 
+## 병합 충돌 시
+
+이 디렉토리의 문서는 생성물이라 `git sync` 등으로 병합할 때 `Total: N` 같은
+카운터 라인이 충돌할 수 있습니다. 충돌 줄을 손으로 고치지 말고 어느 한 쪽을
+택한 뒤 해당 topic 을 재생성해 해결하세요 (issue #2325).
+
+```bash
+bash shell-common/tools/custom/gen_command_docs.sh --topic mytool --force
+```
+
 ## 문서 목록
 
 - [agy](./agy.md)
