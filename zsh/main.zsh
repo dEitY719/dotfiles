@@ -64,3 +64,6 @@ _load_zsh_apps
 _apply_setup_mode_config
 
 dotfiles_show_init_summary
+
+# Clean up duplicate PATH entries (defined in env/path.sh; mirrors bash/main.bash)
+command -v clean_paths >/dev/null 2>&1 && clean_paths

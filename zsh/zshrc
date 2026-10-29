@@ -141,3 +141,6 @@ fi
 # to ~/.zshrc; routing those through ~/.zshrc.local (untracked) plus the
 # pre-commit hardcoded-home-path guard prevents the drift from landing here.
 [ -f "$HOME/.zshrc.local" ] && source "$HOME/.zshrc.local"
+
+# Re-dedupe PATH: installers append to ~/.zshrc.local after main.zsh ran clean_paths
+command -v clean_paths >/dev/null 2>&1 && clean_paths
