@@ -116,6 +116,10 @@ gitignore_pr() {
     # change which host we pin.
     command -v _gh_host_from_url >/dev/null 2>&1 ||
         . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" 2>/dev/null
+    if ! command -v _gh_host_from_url >/dev/null 2>&1; then
+        ux_error "gitignore-pr: cannot load shell-common/lib/gh_host.sh"
+        return 1
+    fi
     local url host slug repo
     url="$(git -C "$root" config --get remote.origin.url)"
     if [ -z "$url" ]; then
@@ -154,6 +158,16 @@ gitignore_pr() {
     local existing p norm key added=""
     # Same normalization as _gitignore_pr_key, one sed for the whole file.
     existing="$(git -C "$root" show "origin/$def:.gitignore" 2>/dev/null | sed 's#/*$##')"
+    # A newline would split one arg into several lines; a leading # is a comment.
+    for p in "$@"; do
+        case $p in
+            *'
+'* | '#'*)
+                ux_error "gitignore-pr: invalid pattern (newline or leading #): $p"
+                return 1
+                ;;
+        esac
+    done
     for p in "$@"; do
         norm="$p"
         # ./foo and <root>/foo are not valid gitignore spellings: make root-relative.
@@ -216,8 +230,13 @@ $key"
         git -C "$root" switch -q --detach "$orig"
     else
         git -C "$root" switch -q "$orig"
-    fi || ux_warning "gitignore-pr: could not switch back to $orig"
-    if [ "$rc" -eq 3 ]; then
+    fi
+    # shellcheck disable=SC2181 # status of the if/else switch above
+    if [ $? -ne 0 ]; then
+        ux_warning "gitignore-pr: could not switch back — still on $branch"
+        ux_info "Return manually: git switch $orig (add --detach for a commit)"
+        [ "$rc" -eq 3 ] && rc=1 # chore branch is checked out: keep it
+    elif [ "$rc" -eq 3 ]; then
         git -C "$root" branch -q -D "$branch"
         rc=1
     fi

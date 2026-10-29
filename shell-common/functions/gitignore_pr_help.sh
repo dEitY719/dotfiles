@@ -7,6 +7,9 @@ _gitignore_pr_help_rows_usage() {
     ux_bullet "gitignore-pr                   # list untracked entries, change nothing"
     ux_bullet "gitignore-pr <pattern>...      # add to repo-root .gitignore and open a PR"
     ux_bullet "An existing directory gets a trailing / (.omo -> .omo/); anything else is added as typed"
+    ux_bullet "Patterns are root-relative: written to the repo-root .gitignore as given (./ and <root>/ stripped), even when run from a subdirectory"
+    ux_bullet "Only the root .gitignore of origin/<default> is checked; the PR always targets origin (a fork's origin gets the PR, not upstream)"
+    ux_bullet "Rejected: patterns containing a newline or starting with #"
 }
 
 _gitignore_pr_help_rows_flow() {

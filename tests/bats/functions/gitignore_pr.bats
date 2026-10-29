@@ -146,3 +146,53 @@ chore/gitignore-omo"
     assert_output --partial "gitignore-pr <pattern>"
     refute_output --partial "gitignore_pr"
 }
+
+@test "./ prefix is stripped before normalization" {
+    run_in_bash "cd '$REPO' && gitignore_pr ./.omo"
+    assert_success
+    run _origin_gitignore chore/gitignore-omo
+    assert_output --partial ".omo/"
+    refute_output --partial "./.omo"
+}
+
+@test "pattern starting with # is rejected before any change" {
+    run_in_bash "cd '$REPO' && gitignore_pr '#x'"
+    assert_failure
+    assert_output --partial "invalid pattern"
+    run git -C "$REPO" branch --list 'chore/*'
+    assert_output ""
+}
+
+@test "detached HEAD: returns to the same commit" {
+    sha="$(git -C "$REPO" rev-parse HEAD)"
+    git -C "$REPO" switch -q --detach "$sha"
+    run_in_bash "cd '$REPO' && gitignore_pr .omo"
+    assert_success
+    run git -C "$REPO" symbolic-ref -q HEAD
+    assert_failure
+    run git -C "$REPO" rev-parse HEAD
+    assert_output "$sha"
+}
+
+@test "push failure: commit kept on chore branch, retry hint, back on main" {
+    printf '#!/bin/sh\nexit 1\n' >"$BARE/hooks/pre-receive"
+    chmod +x "$BARE/hooks/pre-receive"
+    run_in_bash "cd '$REPO' && gitignore_pr .omo"
+    assert_failure
+    assert_output --partial "git push -u origin chore/gitignore-omo"
+    run git -C "$REPO" show chore/gitignore-omo:.gitignore
+    assert_output --partial ".omo/"
+    run git -C "$REPO" symbolic-ref --short HEAD
+    assert_output "main"
+    [ ! -e "$HOME/gh.args" ]
+}
+
+@test "gh pr create failure: branch pushed and kept, manual hint printed" {
+    printf '#!/bin/sh\necho "boom: no auth" >&2\nexit 1\n' >"$TEST_TEMP_HOME/bin/gh"
+    run_in_bash "cd '$REPO' && gitignore_pr .omo"
+    assert_failure
+    assert_output --partial "boom: no auth"
+    assert_output --partial "gh pr create --repo github.com/test/repo"
+    run git -C "$BARE" rev-parse --verify -q chore/gitignore-omo
+    assert_success
+}
