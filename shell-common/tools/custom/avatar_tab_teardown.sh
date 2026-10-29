@@ -42,7 +42,15 @@ _att_load_watch_list() {
     _ATT_WATCH=$(jq -r '
         (if type == "array" then . else (.repos // []) end) | .[]?
         | select(type == "object" and (.repo // "") != "" and (.path // "") != "")
-        | [.repo, .path, (.host // "github.com")] | @tsv' "${_file}" 2>/dev/null)
+        | [.repo, .path, (.host // "github.com")] | @tsv' "${_file}" 2>/dev/null |
+        while IFS=$'\t' read -r _r _p _h; do printf '%s\t%s\t%s\n' "${_r}" "$(_att_phys "${_p}")" "${_h}"; done)
+}
+
+# Echo the physical path of directory <1> (symlinks, trailing `/` resolved), or
+# <1> itself when it is not a directory: herdr cwds and `pwd -P` are physical,
+# a hand-written watch list or a worktree registration may not be.
+_att_phys() {
+    (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"
 }
 
 # Echo the watch-list row whose repo normalizes to slug <1>. rc 1 none, 3 ambiguous.
@@ -114,9 +122,20 @@ _att_find_worktree() {
         return 0
     fi
     # iw: a wt/issue-<N>/* worktree the tab's cwd sits in (trailing / keeps 11 off 110).
-    git -C "${_main}" worktree list --porcelain 2>/dev/null | awk -v p="refs/heads/wt/issue-${_n}/" -v c="${_cwd}" '
+    local _w _pw
+    [ -n "${_cwd}" ] || return 0
+    while IFS= read -r _w; do
+        _pw=$(_att_phys "${_w}")
+        case "${_cwd}" in "${_pw}" | "${_pw}"/*)
+            printf '%s' "${_w}"
+            return 0
+            ;;
+        esac
+    done <<EOF
+$(git -C "${_main}" worktree list --porcelain 2>/dev/null | awk -v p="refs/heads/wt/issue-${_n}/" '
         /^worktree / { wt = substr($0, 10) }
-        /^branch / && index(substr($0, 8), p) == 1 && c != "" && (c == wt || index(c, wt "/") == 1) { print wt; exit }'
+        /^branch / && index(substr($0, 8), p) == 1 { print wt }')
+EOF
 }
 
 # Pre-checks + gwt remove for one closed candidate. rc 0 removed, 1 kept.
@@ -138,8 +157,12 @@ _att_remove_worktree() {
             if ! git -C "${_wt}" rev-parse --verify -q '@{u}' >/dev/null 2>&1 ||
                 [ "$(git -C "${_wt}" rev-list --count '@{u}..HEAD' 2>/dev/null)" != 0 ]; then
                 _merged=$(GH_HOST="${_host}" gh pr list --repo "${_repo}" --head "${_br}" --state merged \
-                    --json number -q length </dev/null 2>/dev/null)
-                case "${_merged}" in '' | 0 | *[!0-9]*)
+                    --json number -q length </dev/null 2>/dev/null) || _merged="?"
+                case "${_merged}" in '' | '?' | *[!0-9]*)
+                    ux_warning "[WARN] ${_where} worktree kept (merge state of ${_br} unknown: gh lookup failed): ${_wt}"
+                    return 1
+                    ;;
+                0)
                     ux_warning "[WARN] ${_where} worktree kept (branch ${_br} neither pushed nor merged): ${_wt}"
                     return 1
                     ;;
@@ -258,6 +281,8 @@ avatar_tab_teardown_main() {
 ${_cls}
 EOF
         _where="${_ws}/${_label}"
+        # A physical cwd, so it compares with `pwd -P` and the normalized watch list.
+        [ -z "${_cwd}" ] || _cwd=$(_att_phys "${_cwd}")
 
         # F-2: repo. mv found by cwd carries no slug: its main checkout names it.
         _row="" _rc=0
@@ -297,6 +322,13 @@ ${_row}
 EOF
         # F-3 (bypassed by --force).
         if [ "${_ATT_FORCE}" != 1 ]; then
+            # The -STUCK rename is merge-train's "a human must look" signal:
+            # closing it would erase the evidence, so only --force does.
+            if [ "${_kind}" = mt ] && [ "${_label%-STUCK}" != "${_label}" ]; then
+                ux_warning "[SKIP] ${_where} merge train STUCK — inspect it; --force closes it"
+                _skipped=$((_skipped + 1))
+                continue
+            fi
             if [ "${_busy}" = 1 ]; then
                 ux_info "[SKIP] ${_where} agent working/blocked"
                 _skipped=$((_skipped + 1))

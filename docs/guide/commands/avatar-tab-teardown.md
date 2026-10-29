@@ -34,7 +34,7 @@
 - **all kinds** — Idle — No agent in the tab is working or blocked
 - **iw** — Closed — Issue <N> is CLOSED on GitHub (lookup failure: WARN, not closed)
 - **mv** — Merged — PR <N> is MERGED
-- **mt** — Idle only — The next merge-train tick recreates the tab
+- **mt** — Idle only — The next merge-train tick recreates the tab; a -STUCK tab needs --force
 - **current tab** — Skip — The tab this command runs in is never closed
 - **repo** — Watch list — Slug resolved via avatar-watched-repos list; mt falls back to its checkout's origin
 

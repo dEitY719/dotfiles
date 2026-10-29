@@ -113,14 +113,39 @@ t2" ]
 }
 
 @test "avatar_tab_teardown: an idle mt tab closes and --worktree leaves the main checkout alone" {
-    _tab t1 mt-dotfiles-STUCK - - "${MAIN}"
     _tab t2 mt-dotfiles mt-dotfiles unknown "${MAIN}"
     run bash "$SCRIPT" --yes --worktree
     assert_success
-    [ "$(_closed)" = "t1
-t2" ]
+    [ "$(_closed)" = "t2" ]
     [ -d "${MAIN}/.git" ]
     assert_output --partial "worktrees removed 0"
+}
+
+@test "avatar_tab_teardown: a -STUCK mt tab is kept for a human unless --force" {
+    _tab t1 mt-dotfiles-STUCK - - "${MAIN}"
+    run bash "$SCRIPT" --yes
+    assert_success
+    assert_output --partial "[SKIP] dotfiles/mt-dotfiles-STUCK merge train STUCK"
+    [ -z "$(_closed)" ]
+    run bash "$SCRIPT" --yes --force
+    assert_success
+    [ "$(_closed)" = "t1" ]
+}
+
+@test "avatar_tab_teardown: ambiguous slug, mismatched mt checkout and an unmatched --repo close nothing" {
+    printf '[{"repo":"acme/dotfiles","path":"%s"},{"repo":"other/dotfiles","path":"/srv/x"}]\n' "${MAIN}" >"${IW_WATCHED_REPOS}"
+    printf 'CLOSED\n' >"${FIX}/issue-11"
+    _tab t1 iw-dotfiles-issue-11 iw-dotfiles-issue-11 idle "${MAIN}"
+    # MAIN's origin is ${HOME}/origin.git -> slug "origin", not "notes".
+    _tab t2 mt-notes mt-notes idle "${MAIN}"
+    run bash "$SCRIPT" --yes
+    assert_success
+    assert_output --partial "[SKIP] dotfiles/iw-dotfiles-issue-11 ambiguous repo dotfiles"
+    assert_output --partial "[SKIP] dotfiles/mt-notes unknown repo notes"
+    run bash "$SCRIPT" --yes --force --repo acme/elsewhere
+    assert_success
+    assert_output --partial "closed 0 / skipped 0"
+    [ -z "$(_closed)" ]
 }
 
 @test "avatar_tab_teardown: a working or blocked mt tab stays open" {
@@ -199,6 +224,21 @@ t2" ]
     run bash "$SCRIPT" --yes --worktree
     assert_success
     [ ! -d "${unpushed}" ]
+}
+
+@test "avatar_tab_teardown: --worktree keeps an unpushed worktree when the merge lookup fails, and matches a symlinked watch path" {
+    printf 'CLOSED\n' >"${FIX}/issue-14"
+    ln -s "${MAIN}" "${HOME}/link"
+    printf '[{"repo":"acme/dotfiles","path":"%s/"}]\n' "${HOME}/link" >"${IW_WATCHED_REPOS}"
+    wt=$(_iw_worktree 14)
+    git -C "${wt}" commit -q --allow-empty -m wip
+    printf '#!/bin/sh\ncase "$1 $2" in "issue view") cat "${FIX}/issue-$3" ;; *) exit 1 ;; esac\n' >"${BIN}/gh"
+    _tab t1 iw-dotfiles-issue-14 iw-dotfiles-issue-14 idle "${wt}"
+    run bash "$SCRIPT" --yes --worktree
+    assert_success
+    assert_output --partial "[CLOSED] dotfiles/iw-dotfiles-issue-14"
+    assert_output --partial "merge state of wt/issue-14/1 unknown"
+    [ -d "${wt}" ]
 }
 
 @test "avatar_tab_teardown: missing herdr or an unresponsive server exits 0 with a warning" {
