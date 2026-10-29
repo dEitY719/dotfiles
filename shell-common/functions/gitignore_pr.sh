@@ -19,8 +19,8 @@ _gitignore_pr_key() {
 # F-4a: strip leading ./ and trailing /, non [A-Za-z0-9-] -> -, join with -, cap 40.
 _gitignore_pr_slug() {
     printf '%s\n' "$1" \
-        | sed -e 's#^[./]*##' -e 's#/*$##' -e 's#[^A-Za-z0-9-]#-#g' \
-        | sed '/^$/d' | paste -sd- - | cut -c1-40
+        | sed -e 's#^[./]*##' -e 's#/*$##' -e 's#[^A-Za-z0-9-]#-#g' -e '/^$/d' \
+        | paste -sd- - | cut -c1-40
 }
 
 # F-5: origin/HEAD, then origin/main, then origin/master. Empty on failure.
@@ -44,7 +44,7 @@ _gitignore_pr_default_branch() {
 # branch. Args: <root> <default> <branch> <repo> <added-newline-list> <title>
 _gitignore_pr_commit_push_pr() {
     local root="$1" def="$2" branch="$3" repo="$4" added="$5" title="$6"
-    local gi="$root/.gitignore" p out body
+    local gi="$root/.gitignore" out body
 
     if [ -s "$gi" ] && [ -n "$(tail -c1 "$gi")" ]; then
         printf '\n' >>"$gi"
@@ -69,13 +69,9 @@ _gitignore_pr_commit_push_pr() {
         return 1
     fi
 
-    body="Add to .gitignore:"
-    while IFS= read -r p; do
-        body="$body
-- \`$p\`"
-    done <<EOF
-$added
-EOF
+    # shellcheck disable=SC2016 # backticks are literal Markdown
+    body="Add to .gitignore:
+$(printf '%s\n' "$added" | sed 's/.*/- `&`/')"
     if ! out="$(gh pr create --repo "$repo" --base "$def" --head "$branch" \
         --title "$title" --body "$body" --assignee @me 2>&1)"; then
         ux_error "gitignore-pr: gh pr create failed: $(printf '%s\n' "$out" | sed -n '1p')"
@@ -155,27 +151,25 @@ gitignore_pr() {
     # F-1 + F-3: normalize, then skip what origin/<default>'s .gitignore (and
     # earlier args) already hold. Read via `git show` so no branch is created
     # when everything is skipped.
-    local existing p norm key added="" keys=""
-    existing="$(git -C "$root" show "origin/$def:.gitignore" 2>/dev/null \
-        | while IFS= read -r p; do _gitignore_pr_key "$p"; done)"
+    local existing p norm key added=""
+    # Same normalization as _gitignore_pr_key, one sed for the whole file.
+    existing="$(git -C "$root" show "origin/$def:.gitignore" 2>/dev/null | sed 's#/*$##')"
     for p in "$@"; do
         norm="$p"
         # ./foo and <root>/foo are not valid gitignore spellings: make root-relative.
         while [ "${norm#./}" != "$norm" ]; do norm="${norm#./}"; done
         case $norm in "$root"/*) norm="${norm#"$root"/}" ;; esac
-        if [ -d "$root/${norm#/}" ]; then
-            norm=$(_gitignore_pr_key "$norm")/
-        fi
         key=$(_gitignore_pr_key "$norm")
+        [ -d "$root/${norm#/}" ] && norm=$key/
         if [ -z "$key" ]; then
             ux_warning "Ignoring empty pattern: $p"
             continue
         fi
-        if printf '%s\n' "$existing" "$keys" | grep -qxF -- "$key"; then
+        if printf '%s\n' "$existing" | grep -qxF -- "$key"; then
             ux_info "Already in .gitignore: $norm (skipped)"
             continue
         fi
-        keys="$keys
+        existing="$existing
 $key"
         added="${added:+$added
 }$norm"
