@@ -94,6 +94,9 @@ _iw_worktree() {
     assert_output --partial "[CLOSABLE] dotfiles/iw-dotfiles-issue-85 iw acme/dotfiles#85 (dry-run)"
     assert_output --partial "[SKIP] dotfiles/iw-dotfiles-issue-86 acme/dotfiles#86 is OPEN"
     [ -z "$(_closed)" ]
+    run bash "$SCRIPT" --yes
+    assert_success
+    [ "$(_closed)" = "t1" ]
 }
 
 @test "avatar_tab_teardown: tabs without an ownership signal are never candidates" {
