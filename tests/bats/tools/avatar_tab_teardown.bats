@@ -102,7 +102,7 @@ _iw_worktree() {
     scratch="${MAIN}/.git/pr-post-merge-verify/pr-8"
     git -C "${MAIN}" worktree add -q --detach "${scratch}" 2>/dev/null
     _tab t1 pr-7 mv-dotfiles-pr-7 done "${MAIN}"
-    _tab t2 pr-8 - - "${scratch}"
+    _tab t2 pr-8 ~ idle "${scratch}"
     run bash "$SCRIPT" --yes --worktree
     assert_success
     assert_output --partial "[CLOSED] dotfiles/pr-7 mv acme/dotfiles#7"
@@ -166,6 +166,29 @@ t2" ]
     assert_success
     assert_output --partial "[SKIP] dotfiles/iw-dotfiles-issue-11 acme/dotfiles#11 is OPEN"
     assert_output --partial "[SKIP] dotfiles/iw-dotfiles-issue-12 agent working/blocked"
+    [ -z "$(_closed)" ]
+    run bash "$SCRIPT" --yes --force
+    assert_success
+    [ "$(_closed)" = "t1
+t2" ]
+}
+
+@test "avatar_tab_teardown: a tab with no agent is skipped unless --force (#2322)" {
+    printf 'CLOSED\n' >"${FIX}/issue-11"
+    _tab t1 iw-dotfiles-issue-11 - - "${MAIN}"
+    _tab t2 mt-dotfiles - - "${MAIN}"
+    run bash "$SCRIPT"
+    assert_success
+    assert_output --partial "[SKIP] dotfiles/iw-dotfiles-issue-11 no agent (can't confirm finished)"
+    assert_output --partial "[SKIP] dotfiles/mt-dotfiles no agent (can't confirm finished)"
+    refute_output --partial "[CLOSABLE]"
+    run bash "$SCRIPT" --yes
+    assert_success
+    [ -z "$(_closed)" ]
+    run bash "$SCRIPT" --force
+    assert_success
+    assert_output --partial "[CLOSABLE] dotfiles/iw-dotfiles-issue-11 iw acme/dotfiles#11 (dry-run)"
+    assert_output --partial "[CLOSABLE] dotfiles/mt-dotfiles mt acme/dotfiles (dry-run)"
     [ -z "$(_closed)" ]
     run bash "$SCRIPT" --yes --force
     assert_success

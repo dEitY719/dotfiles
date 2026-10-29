@@ -23,7 +23,7 @@
 - **avatar-tab-teardown** — Dry run — List closable and skipped tabs, change nothing
 - **--yes** — Close — herdr tab close every closable tab
 - **--worktree** — Remove — After closing: gwt remove the iw/mv worktree when clean and pushed/merged (never mt)
-- **--force** — Override — Ignore agent status and issue/PR state; gwt remove --force (current tab still skipped)
+- **--force** — Override — Ignore agent status (incl. no-agent tabs) and issue/PR state; gwt remove --force (current tab still skipped)
 - **--repo <slug>** — Scope — Only tabs of this repo (owner/repo or repo)
 - **--issue <N>** — Scope — Only tabs of issue/PR <N> (excludes mt)
 
@@ -32,6 +32,7 @@
 - **ownership** — Agent name — iw-<repo>-issue-<N> / mt-<repo> / mv-<repo>-pr-<N>; label or mv scratch cwd as fallback
 - **hand-made tab** — Never — issue-<N> / pr-<N> labels alone are not candidates
 - **all kinds** — Idle — No agent in the tab is working or blocked
+- **no agent** — Skip — A tab with no agent may be a human's shell: closed only with --force
 - **iw** — Closed — Issue <N> is CLOSED on GitHub (lookup failure: WARN, not closed)
 - **mv** — Merged — PR <N> is MERGED
 - **mt** — Idle only — The next merge-train tick recreates the tab; a -STUCK tab needs --force

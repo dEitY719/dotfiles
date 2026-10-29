@@ -21,7 +21,7 @@ _avatar_tab_teardown_help_rows_options() {
     ux_table_row "avatar-tab-teardown" "Dry run" "List closable and skipped tabs, change nothing"
     ux_table_row "--yes" "Close" "herdr tab close every closable tab"
     ux_table_row "--worktree" "Remove" "After closing: gwt remove the iw/mv worktree when clean and pushed/merged (never mt)"
-    ux_table_row "--force" "Override" "Ignore agent status and issue/PR state; gwt remove --force (current tab still skipped)"
+    ux_table_row "--force" "Override" "Ignore agent status (incl. no-agent tabs) and issue/PR state; gwt remove --force (current tab still skipped)"
     ux_table_row "--repo <slug>" "Scope" "Only tabs of this repo (owner/repo or repo)"
     ux_table_row "--issue <N>" "Scope" "Only tabs of issue/PR <N> (excludes mt)"
 }
@@ -30,6 +30,7 @@ _avatar_tab_teardown_help_rows_rules() {
     ux_table_row "ownership" "Agent name" "iw-<repo>-issue-<N> / mt-<repo> / mv-<repo>-pr-<N>; label or mv scratch cwd as fallback"
     ux_table_row "hand-made tab" "Never" "issue-<N> / pr-<N> labels alone are not candidates"
     ux_table_row "all kinds" "Idle" "No agent in the tab is working or blocked"
+    ux_table_row "no agent" "Skip" "A tab with no agent may be a human's shell: closed only with --force"
     ux_table_row "iw" "Closed" "Issue <N> is CLOSED on GitHub (lookup failure: WARN, not closed)"
     ux_table_row "mv" "Merged" "PR <N> is MERGED"
     ux_table_row "mt" "Idle only" "The next merge-train tick recreates the tab; a -STUCK tab needs --force"
