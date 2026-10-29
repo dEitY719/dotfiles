@@ -9,10 +9,11 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # Python Package Management
 # alias pp_freeze: pyproject.toml에서 프로젝트 이름을 읽어와 pip freeze 목록에서 제외하고, -e .을 추가하여 requirements.txt를 생성하는 명령어입니다.
 # 1. PROJECT_NAME=$(...): pyproject.toml에서 'name = "프로젝트명"' 부분을 찾아 프로젝트 이름만 추출하여 PROJECT_NAME 변수에 저장합니다.
+#    이름을 못 찾으면 [ -n ] 에서 멈춥니다 — 대입의 상태는 cut 의 것이라 실패를 알려주지 않고, 빈 패턴의 grep -v 는 모든 줄을 지워 requirements.txt 를 비웁니다 (#2332).
 # 2. pip freeze | grep -v "$PROJECT_NAME": 설치된 패키지 목록(pip freeze)에서 현재 프로젝트 이름($PROJECT_NAME)을 제외합니다.
 # 3. > requirements.txt: 필터링된 패키지 목록을 requirements.txt 파일에 새로 작성합니다.
 # 4. && echo "-e ." >> requirements.txt: 앞의 명령어가 성공적으로 실행되면, '-e .'를 requirements.txt 파일의 마지막 줄에 추가합니다.
-alias pp_freeze='PROJECT_NAME=$(grep "name =" pyproject.toml | cut -d "\"" -f 2) && pip freeze | grep -v "$PROJECT_NAME" > requirements.txt && echo "-e ." >> requirements.txt'
+alias pp_freeze='PROJECT_NAME=$(grep "name =" pyproject.toml | cut -d "\"" -f 2) && [ -n "$PROJECT_NAME" ] && pip freeze | grep -v "$PROJECT_NAME" > requirements.txt && echo "-e ." >> requirements.txt'
 
 alias pp_install='pip install'                                 # 일반 패키지 설치
 alias pp_install_up='pip install --upgrade pip && pip install' # pip 업그레이드 후 설치
