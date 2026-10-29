@@ -581,9 +581,8 @@ _internal_apikeyhelper_home() {
     echo "creds" > "$HOME/.claude/.credentials.json"
     echo "history" > "$HOME/.claude/history.jsonl"
 
-    # printf instead of `yes` because dotfiles bootstrap enables pipefail —
-    # `yes` gets SIGPIPE (141) when the function returns, masking the
-    # function's true exit status.
+    # printf instead of `yes`: under a shell with pipefail on, `yes` gets
+    # SIGPIPE (141) when the function returns, masking its true exit status.
     run_in_bash 'export CLAUDE_SKIP_BIND_MOUNT=1; printf "y\n" | claude_accounts_migrate'
     assert_success
 

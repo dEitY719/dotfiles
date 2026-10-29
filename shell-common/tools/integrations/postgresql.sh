@@ -6,15 +6,6 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 # -------------------------------------------------
-# Strict mode
-# -------------------------------------------------
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    set -euo pipefail
-else
-    set -o pipefail
-fi
-
-# -------------------------------------------------
 # 0) Configuration & Data Persistence
 # -------------------------------------------------
 PG_SERVICES_FILE="$HOME/.config/pg_services.list"
