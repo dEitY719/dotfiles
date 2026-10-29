@@ -93,6 +93,29 @@ alias 를 자동으로 덮으므로, 자체 `git sync` 를 가진 프로젝트�
 
 회귀 테스트: `tests/bats/git/test_git_sync.bats`
 
+### 충돌 예방 원칙 (issue #2325)
+
+git 3-way merge 는 줄 단위다. 두 리모트가 서로 다른 항목을 추가해도 **같은 줄**을
+고치면 무조건 충돌한다. 릴레이 지연으로 `origin` 과 `upstream` 이 발산하는 것은
+워크플로상 불가피하므로, 충돌 예방은 파일 포맷에서 한다.
+
+1. **집계 라인 금지** — 목록을 한 줄 문자열에 몰아넣지 않는다. 항목당 한 줄로 쓴다
+   (예: `tests/bats/tools/custom_tools.bats` 의 `DISPATCHERS`, 대조군
+   `shell-common/config/symlinks.conf`). 테스트 계약인 명시 목록은 다른 파일에서
+   파생하지 않고 그대로 유지한다 — 파생하면 검사가 순환 논리가 된다.
+2. **bash 배열 대신 여러 줄 문자열** — 기존 `for x in $LIST` 단어 분할이 줄바꿈도
+   처리하므로 루프를 고칠 필요가 없다. 배열로 바꾸고 루프 하나라도 `$LIST` 로 남으면
+   bash 는 첫 원소만 순회하고 테스트는 초록으로 남는다. 항목에 공백·glob 문자가 없을
+   때만 쓴다.
+3. **꼬리 append 금지** — 새 항목은 관련 항목 옆(같은 접두사 그룹, 예: `avatar_*`)에
+   삽입한다. 항목당 한 줄이어도 양측이 같은 지점(목록 끝)에 삽입하면 충돌한다.
+4. **생성 문서는 재생성으로 해결** — `docs/guide/commands/*.md` 의 `Total: N` 같은
+   카운터 라인 충돌은 생성물을 커밋하는 한 불가피하다. 손으로 병합하지 말고 어느 한
+   쪽을 택한 뒤 `bash shell-common/tools/custom/gen_command_docs.sh --topic mytool --force`
+   로 재생성한다. 생성 문서 구조는 바꾸지 않는다.
+5. **`git-sync.sh` 는 self-contained 로 유지** — merge 후 자동 재생성 같은 결합은
+   넣지 않는다(#1958). 예방은 포맷과 삽입 규칙, 해결은 위 절차로 한다.
+
 ---
 
 ## 🚀 빠른 시작

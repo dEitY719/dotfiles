@@ -468,6 +468,13 @@ write_index() {
         printf './shell-common/tools/custom/gen_command_docs.sh --force\n'
         printf '```\n\n'
         printf '이름 자체가 기억나지 않을 때는 `my-help search` (fzf topic finder) 를 쓰세요.\n\n'
+        printf '## 병합 충돌 시\n\n'
+        printf '이 디렉토리의 문서는 생성물이라 `git sync` 등으로 병합할 때 `Total: N` 같은\n'
+        printf '카운터 라인이 충돌할 수 있습니다. 충돌 줄을 손으로 고치지 말고 어느 한 쪽을\n'
+        printf '택한 뒤 해당 topic 을 재생성해 해결하세요 (issue #2325).\n\n'
+        printf '```bash\n'
+        printf 'bash shell-common/tools/custom/gen_command_docs.sh --topic mytool --force\n'
+        printf '```\n\n'
         printf '## 문서 목록\n\n'
         for entry in "$@"; do
             printf -- '- [%s](./%s.md)\n' "$entry" "$entry"
