@@ -26,6 +26,7 @@
 #
 # 정리(검토 후 /exit, `gwt teardown`, 탭 종료)는 사용자가 수동으로 한다 — tick 은
 # 워크트리도 탭도 회수하지 않는다(실패한 디스패치 시도의 탭만 닫는다).
+# 끝난 세션의 탭·worktree 일괄 정리는 수동 명령 `avatar-tab-teardown` 이 한다 (#2320).
 #
 # repo 경로는 언제나 main 체크아웃이다 (#2281): worktree 안에서 실행하거나
 # watch list 에 worktree 경로가 있어도 `--git-common-dir` 의 부모로 정규화한다.

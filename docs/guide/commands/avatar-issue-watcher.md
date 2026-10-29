@@ -79,6 +79,9 @@
   만 남긴다. main 체크아웃에서 세션을 여는 폴백은 없다.
 - 실패한 attempt 정리는 **탭만 닫는다.** worktree 는 작업 보존을 위해 남기며,
   제거는 `gwt teardown` 몫이다.
+- 끝난 세션(이슈 CLOSED + agent 비활성)의 탭과 worktree 는 tick 이 회수하지 않는다.
+  수동으로 `avatar-tab-teardown` (기본 dry-run, `--yes` 로 탭 close, `--worktree` 로
+  clean·push/머지된 worktree 제거)을 실행한다 — 상세는 `avatar-tab-teardown.md`.
 - `gwt` 는 interactive guard 뒤의 셸 함수라 cron 에서는 그냥 부를 수 없다.
   watcher 는 서브셸 안에서 `DOTFILES_FORCE_INIT=1` 로 `functions/git_worktree.sh`
   와 `git_worktree_spawn.sh` 를 source 해 실행하므로 watcher 의 cwd 는 바뀌지 않는다.

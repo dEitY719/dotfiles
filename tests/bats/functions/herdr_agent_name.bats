@@ -238,3 +238,45 @@ run_han() {
     assert_success
     assert_output "mt-dotfiles"
 }
+
+# ---------------------------------------------------------------------------
+# T21-T24: herdr_agent_parse_name — the inverse avatar-tab-teardown reads
+# (#2320). It must accept exactly what the composer emits and nothing else.
+# ---------------------------------------------------------------------------
+
+@test "T21: parse inverts the composer for all three shapes (roundtrip)" {
+    run_han '
+        for spec in "iw dEitY719/dotfiles issue-2320" "mv acme/My.Repo pr-7" \
+            "mt dEitY719/dotfiles" "iw acme/foo-issue-bar issue-3" \
+            "mv acme/x-pr-y pr-12"; do
+            set -- $spec
+            n=$(herdr_agent_name "$1" "$2" "${3-}") || exit 1
+            printf "%s\n" "$(herdr_agent_parse_name "$n")"
+        done'
+    assert_success
+    assert_line --index 0 "$(printf 'iw\tdotfiles\t2320')"
+    assert_line --index 1 "$(printf 'mv\tmy-repo\t7')"
+    assert_line --index 2 "$(printf 'mt\tdotfiles\t')"
+    assert_line --index 3 "$(printf 'iw\tfoo-issue-bar\t3')"
+    assert_line --index 4 "$(printf 'mv\tx-pr-y\t12')"
+}
+
+@test "T22: hand-made and junk labels are not parsed" {
+    for label in issue-12 pr-12 null 1 '#3574' iw-issue-12 mt- iw-dotfiles-issue- \
+        iw-dotfiles-issue-1a mv-dotfiles-pr-x MT-dotfiles mt-dotfiles-STUCK \
+        iw--issue-3 mt-abcdefghijklmnopq; do
+        run_han "herdr_agent_parse_name '$label'"
+        assert_failure
+        assert_output ""
+    done
+}
+
+@test "T23: an iw name with a pr marker is not read as mv" {
+    run_han 'herdr_agent_parse_name iw-dotfiles-pr-3'
+    assert_failure
+}
+
+@test "T24: parse leaves no _hap_ variables behind" {
+    run_han 'herdr_agent_parse_name iw-dotfiles-issue-3 >/dev/null; herdr_agent_parse_name nope; set | grep -c "^_hap_" || true'
+    assert_output "0"
+}
