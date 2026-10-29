@@ -22,7 +22,8 @@ rg "fzf 피커" docs/guide/commands/
 택한 뒤 해당 topic 을 재생성해 해결하세요 (issue #2325).
 
 ```bash
-bash shell-common/tools/custom/gen_command_docs.sh --topic mytool --force
+# 예: mytool.md 충돌이면 --topic mytool
+bash shell-common/tools/custom/gen_command_docs.sh --topic <topic> --force
 ```
 
 ## 문서 목록
