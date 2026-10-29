@@ -31,7 +31,7 @@ _avatar_tab_teardown_help_rows_rules() {
     ux_table_row "hand-made tab" "Never" "issue-<N> / pr-<N> labels alone are not candidates"
     ux_table_row "all kinds" "Idle" "No agent in the tab is working or blocked"
     ux_table_row "no agent" "Skip" "A tab with no agent may be a human's shell: closed only with --force"
-    ux_table_row "iw" "Closed" "Issue <N> is CLOSED on GitHub (lookup failure: WARN, not closed)"
+    ux_table_row "iw" "Closed" "Issue <N> is CLOSED or MERGED on GitHub (lookup failure: WARN, not closed)"
     ux_table_row "mv" "Merged" "PR <N> is MERGED"
     ux_table_row "mt" "Idle only" "The next merge-train tick recreates the tab; a -STUCK tab needs --force"
     ux_table_row "current tab" "Skip" "The tab this command runs in is never closed"

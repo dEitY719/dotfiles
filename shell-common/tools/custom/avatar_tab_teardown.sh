@@ -15,9 +15,10 @@
 #
 # A candidate closes only when it has an agent (#2322: an agent-less tab may
 # hold a human's shell, so "finished" cannot be confirmed), none of its agents
-# is working/blocked AND (iw) its issue is CLOSED / (mv) its PR is MERGED; mt
-# needs nothing more. --force bypasses all of these, so the label and mv
-# scratch-cwd fallbacks below only yield a closable agent-less tab under it.
+# is working/blocked AND (iw) its issue is CLOSED or MERGED / (mv) its PR is
+# MERGED; mt needs nothing more. --force bypasses all of these, so the label
+# and mv scratch-cwd fallbacks below only yield a closable agent-less tab
+# under it.
 # No zombie grace: the human running this is the second observation. The
 # calling pane's own tab is always skipped, --force included. Default is a
 # dry run.
@@ -356,7 +357,8 @@ EOF
                 _skipped=$((_skipped + 1))
                 continue
             fi
-            if { [ "${_kind}" = iw ] && [ "${_state}" != CLOSED ]; } || { [ "${_kind}" = mv ] && [ "${_state}" != MERGED ]; }; then
+            # #2328: an iw number may be a PR (shared number space), so MERGED is done.
+            if { [ "${_kind}" = iw ] && [ "${_state}" != CLOSED ] && [ "${_state}" != MERGED ]; } || { [ "${_kind}" = mv ] && [ "${_state}" != MERGED ]; }; then
                 ux_info "[SKIP] ${_where} ${_rrepo}#${_num} is ${_state}"
                 _skipped=$((_skipped + 1))
                 continue
