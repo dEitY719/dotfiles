@@ -19,6 +19,7 @@ if [ "$1" = ps ]; then
     exit 0
 fi
 printf 'argc=%s argv=%s\n' "$#" "$*" >>"$DOCKER_LOG"
+[ -z "${STUB_EXEC_FAIL-}" ] || exit 1
 STUB
     chmod +x "$STUB_BIN/docker"
 }
@@ -74,4 +75,14 @@ _run_denv() {
         assert_output --partial 'No running containers found.'
     done
     [ ! -e "$DOCKER_LOG" ]
+}
+
+@test "bash+zsh: a failed docker exec is reported, not masked by sort" {
+    local _sh
+    for _sh in bash zsh; do
+        _run_denv "$_sh" '1\n' 'export STUB_EXEC_FAIL=1'
+        assert_failure
+        assert_output --partial 'Failed to retrieve environment variables'
+        refute_output --partial 'Successfully listed'
+    done
 }

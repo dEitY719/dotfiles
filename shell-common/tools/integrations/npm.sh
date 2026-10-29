@@ -69,7 +69,14 @@ npm_list() {
     ux_header "NPM Packages Installed"
 
     ux_section "System Global NPM (/usr/lib)"
-    npm list -g --depth=0 2>/dev/null | head -10 || ux_info "No global npm packages"
+    # Test the captured list: `npm list | head` reports head's status (#2332).
+    _npm_global=$(npm list -g --depth=0 2>/dev/null)
+    if [ -n "$_npm_global" ]; then
+        printf '%s\n' "$_npm_global" | head -10
+    else
+        ux_info "No global npm packages"
+    fi
+    unset _npm_global
     ux_info ""
 
     ux_section "User Global (~/.npm-global/bin)"

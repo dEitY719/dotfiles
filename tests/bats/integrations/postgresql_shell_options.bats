@@ -37,20 +37,19 @@ teardown() {
     assert_success
 }
 
-@test "bash: pipefail is off after the full dotfiles load" {
-    run_in_bash 'set -o | grep -w pipefail'
+# Any auto-sourced file can leak these, not only postgresql.sh.
+_assert_strict_options_off() {
     assert_success
     assert_output --regexp 'pipefail[[:space:]]+off'
+    refute_output --regexp '(errexit|nounset|pipefail)[[:space:]]+on'
 }
 
-@test "zsh: pipefail is off after the full dotfiles load" {
-    run_in_zsh 'set -o | grep -w pipefail'
-    assert_success
-    assert_output --regexp 'pipefail[[:space:]]+off'
+@test "bash: strict options are off after the full dotfiles load" {
+    run_in_bash 'set -o'
+    _assert_strict_options_off
 }
 
-@test "bash: a pipeline reports its last stage's status after the full load" {
-    run_in_bash '(false | true); printf "rc=%s\n" "$?"'
-    assert_success
-    assert_output --partial 'rc=0'
+@test "zsh: strict options are off after the full dotfiles load" {
+    run_in_zsh 'set -o'
+    _assert_strict_options_off
 }

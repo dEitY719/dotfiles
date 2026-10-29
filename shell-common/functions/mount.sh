@@ -378,15 +378,19 @@ _mount_show_main() {
             echo "Mount Status: $mount_path"
         fi
 
-        # Display mount information with indentation
-        findmnt "$mount_path" 2>/dev/null | sed 's/^/  /' || {
+        # Check first: `findmnt | sed` reports sed's status, so it can never
+        # reach a "not mounted" branch (#2332).
+        if ! _is_mounted "$mount_path"; then
             if type ux_info >/dev/null 2>&1; then
                 ux_info "Not mounted: $mount_path"
             else
                 echo "(not mounted)" >&2
             fi
             return 1
-        }
+        fi
+
+        # Display mount information with indentation
+        findmnt "$mount_path" 2>/dev/null | sed 's/^/  /'
     else
         # Show all Claude-related mounts under ~/.claude
         if type ux_section >/dev/null 2>&1; then

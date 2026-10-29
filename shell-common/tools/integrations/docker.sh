@@ -48,12 +48,17 @@ dcl() {
         ux_info ""
 
         ux_section "Currently Running Containers"
-        if docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null | tail -n +2 | head -20; then
+        # Test the captured rows: the pipeline's own status is head's, which
+        # stays 0 when docker is down or nothing is running (#2332).
+        _dcl_rows=$(docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}" 2>/dev/null | tail -n +2)
+        if [ -n "$_dcl_rows" ]; then
+            printf '%s\n' "$_dcl_rows" | head -20
             ux_info ""
         else
             ux_warning "No running containers found"
             ux_info ""
         fi
+        unset _dcl_rows
 
         ux_info "Run ${UX_BOLD}docker-help${UX_RESET} for more Docker commands"
         ux_info ""
@@ -410,9 +415,14 @@ EOF
     fi
 
     ux_header "Environment Variables: $container_name"
-    if docker exec "$container_name" env | sort; then
+    # Capture first: `docker exec | sort` reports sort's status, so a failed
+    # exec would look like success (#2332). Unset: the output can hold secrets.
+    if _denv_env=$(docker exec "$container_name" env); then
+        printf '%s\n' "$_denv_env" | sort
+        unset _denv_env
         ux_success "Successfully listed environment variables for $container_name."
     else
+        unset _denv_env
         ux_error "Failed to retrieve environment variables for $container_name."
         return 1
     fi
