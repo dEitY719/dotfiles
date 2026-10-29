@@ -175,12 +175,18 @@ t2" ]
 
 @test "avatar_tab_teardown: a tab with no agent is skipped unless --force (#2322)" {
     printf 'CLOSED\n' >"${FIX}/issue-11"
+    printf 'MERGED\n' >"${FIX}/pr-8"
+    scratch="${MAIN}/.git/pr-post-merge-verify/pr-8"
+    git -C "${MAIN}" worktree add -q --detach "${scratch}" 2>/dev/null
     _tab t1 iw-dotfiles-issue-11 - - "${MAIN}"
     _tab t2 mt-dotfiles - - "${MAIN}"
+    # mv found only by its scratch cwd (no agent name to read).
+    _tab t3 pr-8 - - "${scratch}"
     run bash "$SCRIPT"
     assert_success
     assert_output --partial "[SKIP] dotfiles/iw-dotfiles-issue-11 no agent (can't confirm finished)"
     assert_output --partial "[SKIP] dotfiles/mt-dotfiles no agent (can't confirm finished)"
+    assert_output --partial "[SKIP] dotfiles/pr-8 no agent (can't confirm finished)"
     refute_output --partial "[CLOSABLE]"
     run bash "$SCRIPT" --yes
     assert_success
@@ -189,11 +195,13 @@ t2" ]
     assert_success
     assert_output --partial "[CLOSABLE] dotfiles/iw-dotfiles-issue-11 iw acme/dotfiles#11 (dry-run)"
     assert_output --partial "[CLOSABLE] dotfiles/mt-dotfiles mt acme/dotfiles (dry-run)"
+    assert_output --partial "[CLOSABLE] dotfiles/pr-8 mv acme/dotfiles#8 (dry-run)"
     [ -z "$(_closed)" ]
     run bash "$SCRIPT" --yes --force
     assert_success
     [ "$(_closed)" = "t1
-t2" ]
+t2
+t3" ]
 }
 
 @test "avatar_tab_teardown: the calling pane's tab survives --force --yes" {
