@@ -13,8 +13,10 @@
 # scratch cwd. A tab with none of those signals (a hand-made `issue-<N>` or
 # `pr-<N>` tab) is never a candidate.
 #
-# A candidate closes only when no agent in it is working/blocked AND (iw) its
-# issue is CLOSED / (mv) its PR is MERGED; mt needs nothing more. No zombie
+# A candidate closes only when it has an agent (#2322: an agent-less tab may
+# hold a human's shell, so "finished" cannot be confirmed), none of its agents
+# is working/blocked AND (iw) its issue is CLOSED / (mv) its PR is MERGED; mt
+# needs nothing more. --force bypasses all of these. No zombie
 # grace: the human running this is the second observation. The calling pane's
 # own tab is always skipped, --force included. Default is a dry run.
 #
@@ -187,7 +189,8 @@ _att_remove_worktree() {
 }
 
 # The herdr join: one `<tab_id>US<ws label>US<tab label>US<agent names>US<busy>US<cwd>`
-# line per tab. busy=1 when any agent in the tab is working/blocked.
+# line per tab. busy=1 when any agent in the tab is working/blocked, `none`
+# when the tab has no agent at all (#2322), else 0.
 _att_tab_rows() {
     jq -rs '
         .[0].result.workspaces as $ws | .[1].result.tabs as $tabs
@@ -199,7 +202,8 @@ _att_tab_rows() {
             ([ $ws[] | select(.workspace_id == $w) | (.label // "") ] | first // $w // ""),
             ((.label // "") | tostring),
             ([ $a[] | .name // empty ] | join(",")),
-            (if any($a[]; .agent_status == "working" or .agent_status == "blocked") then "1" else "0" end),
+            (if ($a | length) == 0 then "none"
+             elif any($a[]; .agent_status == "working" or .agent_status == "blocked") then "1" else "0" end),
             (([ $a[] | .cwd // empty ] + [ $panes[] | select(.tab_id == $t) | .cwd // empty ]) | first // "") ]
         | join("\u001f")'
 }
@@ -331,6 +335,12 @@ EOF
             fi
             if [ "${_busy}" = 1 ]; then
                 ux_info "[SKIP] ${_where} agent working/blocked"
+                _skipped=$((_skipped + 1))
+                continue
+            fi
+            # #2322: no agent may mean a human's shell, not a finished session.
+            if [ "${_busy}" = none ]; then
+                ux_info "[SKIP] ${_where} no agent (can't confirm finished)"
                 _skipped=$((_skipped + 1))
                 continue
             fi
