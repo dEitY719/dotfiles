@@ -13,10 +13,10 @@ setup() {
     STUB_BIN="$HOME/stub-bin"
     CALL_LOG="$HOME/calls.log"
     mkdir -p "$STUB_BIN"
-    # Each stub drains a piped stdin like the real psql: _admin_sql probes
-    # with `printf '\q' | psql` under pipefail, and a stub that exits unread
-    # lets that printf die of SIGPIPE under load ("Cannot connect to
-    # PostgreSQL as superuser" flake in a parallel run, #2054).
+    # Each stub drains a piped stdin like the real psql, which _admin_sql's
+    # `printf '\q' | psql` probe feeds. Under the global pipefail removed in
+    # #2332, a stub that exited unread let that printf die of SIGPIPE
+    # ("Cannot connect to PostgreSQL as superuser" flake, #2054).
     for bin in psql sudo; do
         printf '#!/bin/sh\n[ -t 0 ] || cat >/dev/null\necho "%s $*" >>"%s"\n' "$bin" "$CALL_LOG" >"$STUB_BIN/$bin"
         chmod +x "$STUB_BIN/$bin"
