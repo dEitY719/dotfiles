@@ -195,12 +195,13 @@ avatar_tab_teardown_main() {
         --yes | -y) _yes=1 ;;
         --worktree) _wt=1 ;;
         --force) _ATT_FORCE=1 ;;
-        --repo)
-            _repo_f="${2-}"
-            shift
-            ;;
-        --issue)
-            _issue_f="${2-}"
+        --repo | --issue)
+            # A missing value must not silently widen the scope to every tab.
+            if [ $# -lt 2 ] || [ -z "$2" ]; then
+                ux_error "$1 needs a value (see --help)"
+                return 2
+            fi
+            if [ "$1" = --repo ]; then _repo_f="$2"; else _issue_f="$2"; fi
             shift
             ;;
         *)
@@ -241,6 +242,11 @@ avatar_tab_teardown_main() {
     # F-4: the calling pane's own tab.
     [ -z "${HERDR_PANE_ID-}" ] ||
         _self=$(herdr pane get "${HERDR_PANE_ID}" 2>/dev/null | jq -r '.result.pane.tab_id // empty' 2>/dev/null)
+    # Fail closed: a set pane id we cannot resolve would let --yes close our own tab.
+    if [ "${_yes}" = 1 ] && [ -n "${HERDR_PANE_ID-}" ] && [ -z "${_self}" ]; then
+        ux_warning "cannot resolve the current tab (herdr pane get ${HERDR_PANE_ID}) — nothing torn down"
+        return 1
+    fi
     _att_load_watch_list
 
     local _tid _ws _label _names _busy _cwd _cls _kind _slug _num _row _rrepo _rpath _rhost _where _state _rc
@@ -263,6 +269,9 @@ EOF
             _row=$(_att_repo_for_slug "${_slug}") || _rc=$?
             if [ -z "${_row}" ] && [ "${_kind}" = mt ] && [ -n "${_cwd}" ]; then
                 _row=$(_att_repo_from_checkout "${_cwd}") || _row=""
+                # The checkout must be the repo the agent name claims, else any
+                # hand-made `mt-*` tab in some checkout would qualify.
+                [ -z "${_row}" ] || [ "$(herdr_agent_repo_slug "${_row%%$'\t'*}")" = "${_slug}" ] || _row=""
             fi
         fi
         # Scope filters drop a row silently: it was not asked about.
