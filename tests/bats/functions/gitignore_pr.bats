@@ -141,7 +141,7 @@ chore/gitignore-omo"
 }
 
 @test "help: dash-form usage" {
-    run_in_bash "gitignore_pr_help"
+    run_in_bash "gitignore_pr_help --all"
     assert_success
     assert_output --partial "gitignore-pr <pattern>"
     refute_output --partial "gitignore_pr"

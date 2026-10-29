@@ -28,6 +28,24 @@ _gitignore_pr_help_rows_example() {
     ux_bullet "gitignore-pr .omo .superpowers   # -> chore/gitignore-omo-superpowers"
 }
 
+_gitignore_pr_help_summary() {
+    ux_info "Usage: gitignore-pr-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "usage: gitignore-pr <pattern>... | no args lists untracked"
+    ux_bullet_sub "flow: origin/<default> branch | commit | push | PR | switch back"
+    ux_bullet_sub "safety: dirty tree | branch exists | hook/push/PR failure"
+    ux_bullet_sub "example"
+    ux_bullet_sub "details: gitignore-pr-help <section>  (example: gitignore-pr-help flow)"
+}
+
+_gitignore_pr_help_list_sections() {
+    ux_bullet "sections"
+    ux_bullet_sub "usage"
+    ux_bullet_sub "flow"
+    ux_bullet_sub "safety"
+    ux_bullet_sub "example"
+}
+
 _gitignore_pr_help_full() {
     ux_header "gitignore-pr - .gitignore entry to PR in one shot"
     ux_section "Usage"
@@ -42,18 +60,16 @@ _gitignore_pr_help_full() {
 
 gitignore_pr_help() {
     case "${1:-}" in
-        "" | -h | --help | help | --all | all) _gitignore_pr_help_full ;;
-        --list | list | section | sections)
-            ux_bullet "sections"
-            ux_bullet_sub "usage | flow | safety | example"
-            ;;
+        "" | -h | --help | help) _gitignore_pr_help_summary ;;
+        --list | list | section | sections) _gitignore_pr_help_list_sections ;;
+        --all | all) _gitignore_pr_help_full ;;
         usage) _gitignore_pr_help_rows_usage ;;
         flow) _gitignore_pr_help_rows_flow ;;
         safety) _gitignore_pr_help_rows_safety ;;
         example | examples) _gitignore_pr_help_rows_example ;;
         *)
             ux_error "Unknown gitignore-pr-help section: $1"
-            ux_info "Try: gitignore-pr-help --list"
+            _gitignore_pr_help_list_sections
             return 1
             ;;
     esac
