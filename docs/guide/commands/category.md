@@ -27,7 +27,7 @@
 - **AI/LLM (12)** — agy, cc, claude, claude_plugins, claude_skills_marketplace, +7 more
 - **CLI Utilities (13)** — bat, del_file, fasd, fd, fzf, +8 more
 - **Configuration (6)** — apt, crt, ghostty, p10k, pip, +1 more
-- **Development (23)** — avatar_issue_watcher, avatar_tab_teardown, avatar_watched_repos, bun, cli, +18 more
+- **Development (24)** — avatar_issue_watcher, avatar_tab_teardown, avatar_watched_repos, bun, cli, +19 more
 - **DevOps/Infra (14)** — docker, dproxy, gpu, mount, mysql, +9 more
 - **Documentation (5)** — dot, notion, show_doc, work, work_log
 - **Meta/Help (3)** — category, register, setup_mode
