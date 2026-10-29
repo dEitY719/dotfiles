@@ -9,6 +9,16 @@
 - 통합 라우팅: `my-help gitignore_pr [section]`
 - Alias: `gitignore-pr-help`
 
+## 요약 (gitignore-pr-help)
+
+- Usage: gitignore-pr-help [section|--list|--all]
+- sections
+    - usage: gitignore-pr <pattern>... | no args lists untracked
+    - flow: origin/<default> branch | commit | push | PR | switch back
+    - safety: dirty tree | branch exists | hook/push/PR failure
+    - example
+    - details: gitignore-pr-help <section>  (example: gitignore-pr-help flow)
+
 ## 섹션
 
 ### usage
