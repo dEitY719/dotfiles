@@ -33,7 +33,7 @@
 - **hand-made tab** — Never — issue-<N> / pr-<N> labels alone are not candidates
 - **all kinds** — Idle — No agent in the tab is working or blocked
 - **no agent** — Skip — A tab with no agent may be a human's shell: closed only with --force
-- **iw** — Closed — Issue <N> is CLOSED on GitHub (lookup failure: WARN, not closed)
+- **iw** — Closed — Issue <N> is CLOSED or MERGED on GitHub (lookup failure: WARN, not closed)
 - **mv** — Merged — PR <N> is MERGED
 - **mt** — Idle only — The next merge-train tick recreates the tab; a -STUCK tab needs --force
 - **current tab** — Skip — The tab this command runs in is never closed

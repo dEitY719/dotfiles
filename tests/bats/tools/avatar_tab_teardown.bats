@@ -83,6 +83,19 @@ _iw_worktree() {
     [ -z "$(_closed)" ]
 }
 
+@test "avatar_tab_teardown: an iw tab whose number is a MERGED PR is closable, an open one is not (#2328)" {
+    # `gh issue view <PR number>` answers the PR's state: MERGED or OPEN.
+    printf 'MERGED\n' >"${FIX}/issue-85"
+    printf 'OPEN\n' >"${FIX}/issue-86"
+    _tab t1 iw-dotfiles-issue-85 iw-dotfiles-issue-85 idle "${MAIN}"
+    _tab t2 iw-dotfiles-issue-86 iw-dotfiles-issue-86 idle "${MAIN}"
+    run bash "$SCRIPT"
+    assert_success
+    assert_output --partial "[CLOSABLE] dotfiles/iw-dotfiles-issue-85 iw acme/dotfiles#85 (dry-run)"
+    assert_output --partial "[SKIP] dotfiles/iw-dotfiles-issue-86 acme/dotfiles#86 is OPEN"
+    [ -z "$(_closed)" ]
+}
+
 @test "avatar_tab_teardown: tabs without an ownership signal are never candidates" {
     _tab t1 issue-12 - - "${MAIN}"
     _tab t2 pr-12 ~ idle "${MAIN}"
