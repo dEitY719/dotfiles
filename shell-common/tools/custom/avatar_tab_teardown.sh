@@ -16,9 +16,11 @@
 # A candidate closes only when it has an agent (#2322: an agent-less tab may
 # hold a human's shell, so "finished" cannot be confirmed), none of its agents
 # is working/blocked AND (iw) its issue is CLOSED / (mv) its PR is MERGED; mt
-# needs nothing more. --force bypasses all of these. No zombie
-# grace: the human running this is the second observation. The calling pane's
-# own tab is always skipped, --force included. Default is a dry run.
+# needs nothing more. --force bypasses all of these, so the label and mv
+# scratch-cwd fallbacks below only yield a closable agent-less tab under it.
+# No zombie grace: the human running this is the second observation. The
+# calling pane's own tab is always skipped, --force included. Default is a
+# dry run.
 #
 # Only `herdr tab close` and `gwt remove` mutate anything — no pane, workspace
 # or session is closed and nothing is deleted with rm.
