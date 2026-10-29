@@ -473,8 +473,10 @@ write_index() {
         printf '카운터 라인이 충돌할 수 있습니다. 충돌 줄을 손으로 고치지 말고 어느 한 쪽을\n'
         printf '택한 뒤 해당 topic 을 재생성해 해결하세요 (issue #2325).\n\n'
         printf '```bash\n'
-        printf '# 예: mytool.md 충돌이면 --topic mytool\n'
-        printf 'bash shell-common/tools/custom/gen_command_docs.sh --topic <topic> --force\n'
+        printf '# 예: mytool.md 충돌이면 --topic mytool (topic 이름은 --list 로 확인)\n'
+        printf 'bash shell-common/tools/custom/gen_command_docs.sh --topic <topic> --force\n\n'
+        printf '# 이 인덱스(README.md) 충돌은 --topic 없이 전체 재생성\n'
+        printf 'bash shell-common/tools/custom/gen_command_docs.sh --force\n'
         printf '```\n\n'
         printf '## 문서 목록\n\n'
         for entry in "$@"; do

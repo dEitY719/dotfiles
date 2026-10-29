@@ -161,6 +161,17 @@ DISPATCHERS="
     mcporter_exa_setup:mcporter-exa-setup
 "
 
+@test "#2325 DISPATCHERS: word splitting yields one entry per non-empty line" {
+    # Guards the multi-line format: an array or a quoted "$DISPATCHERS" would
+    # iterate once and leave every other test green.
+    local n lines
+    set -- $DISPATCHERS
+    n=$#
+    lines=$(printf '%s\n' "$DISPATCHERS" | grep -c .)
+    [ "$n" -gt 1 ] || fail "DISPATCHERS splits into $n entry"
+    [ "$n" -eq "$lines" ] || fail "split $n entries but $lines non-empty lines"
+}
+
 # Link each dispatcher the way symlinks.conf does, into a bin dir on PATH.
 _link_dispatchers() {
     LINK_BIN="$TEST_TEMP_HOME/.local/bin"

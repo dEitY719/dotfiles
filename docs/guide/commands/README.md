@@ -22,8 +22,11 @@ rg "fzf 피커" docs/guide/commands/
 택한 뒤 해당 topic 을 재생성해 해결하세요 (issue #2325).
 
 ```bash
-# 예: mytool.md 충돌이면 --topic mytool
+# 예: mytool.md 충돌이면 --topic mytool (topic 이름은 --list 로 확인)
 bash shell-common/tools/custom/gen_command_docs.sh --topic <topic> --force
+
+# 이 인덱스(README.md) 충돌은 --topic 없이 전체 재생성
+bash shell-common/tools/custom/gen_command_docs.sh --force
 ```
 
 ## 문서 목록
