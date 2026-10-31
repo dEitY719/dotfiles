@@ -274,3 +274,69 @@ claude-setup"
     run grep -c 'jobs=1' "$CALL_LOG"
     assert_output "2"
 }
+
+# --- #2337: STEP_DETAIL — updated / cloned items as dim indented lines ---
+
+@test "summary mode: update-plugins lists each updated plugin under its step line (#2337)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 0 '✅   gh-flow@gh-flow-skills: updated 0.3.1 -> 0.3.2\nℹ️    notes@notes-skills: up to date (1.0.0)\nOK:   bare@mkt: updated\n  ◆ Plugins updated: 2\n  ◆ Plugins up to date: 1\n  ◆ Failed: 0\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    local step_line next
+    step_line=$(grep -n '✅ update-plugins' <<<"$output" | cut -d: -f1)
+    next=$(sed -n "$((step_line + 1))p;$((step_line + 2))p" <<<"$output")
+    assert_equal "$next" "  gh-flow@gh-flow-skills: 0.3.1 -> 0.3.2
+  bare@mkt"
+    refute_output --partial "notes@notes-skills"
+}
+
+@test "summary mode: git-pull-skills and git-clone-skills list updated / cloned repos (#2337)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/git-clone-skills.sh" clone 0 'ℹ️  old-skills: already present (skipped)\n✅ new-skills: cloned from git@github.com:o/new-skills.git\n  ◆ Cloned: 1\n'
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 '✅ a-skills: updated via ff-only (main)\n✅ b-skills: updated via rebase (upstream/main)\n✅ c-skills: synced and pushed to origin (main)\n✅ d-skills: up-to-date (main)\n  ◆ Updated: 3\n  ◆ Up to date: 1\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --regexp '✅ git-clone-skills \([0-9]+\.[0-9]s\) — 신규 clone 1
+  new-skills
+✅ git-pull-skills \([0-9]+\.[0-9]s\) — 갱신 3 / 최신 1
+  a-skills
+  b-skills
+  c-skills
+✅ claude/setup.sh'
+    refute_output --partial "d-skills"
+    refute_output --partial "old-skills"
+}
+
+@test "summary mode: more than 10 updated items cap at 9 + '... 외 N개' (#2337)" {
+    _make_fake_root 0
+    local body="" i
+    for i in $(seq 1 12); do body="${body}✅ r$i-skills: updated via ff-only (main)\\n"; done
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 "${body}  ◆ Updated: 12\n  ◆ Up to date: 0\n"
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    local detail
+    detail=$(grep -E '^  (r[0-9]+-skills|\.\.\. )' <<<"$output")
+    run printf '%s\n' "$detail"
+    assert_equal "${#lines[@]}" 10
+    assert_line --index 0 "  r1-skills"
+    assert_line --index 8 "  r9-skills"
+    assert_line --index 9 "  ... 외 3개"
+}
+
+@test "summary mode: a warning step prints no detail lines (#2337)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 '✅ a-skills: updated via ff-only (main)\nWARN: b-skills: dirty\n  ◆ Updated: 1\n  ◆ Up to date: 0\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "WARN: b-skills: dirty"
+    [ "$(grep -cx '  a-skills' <<<"$output")" = 0 ]
+}
+
+@test "-v mode: no STEP_DETAIL lines are added (#2337)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 '✅ a-skills: updated via ff-only (main)\n  ◆ Updated: 1\n  ◆ Up to date: 0\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh" -v
+    assert_success
+    assert_output --partial "✅ a-skills: updated via ff-only (main)"
+    [ "$(grep -cx '  a-skills' <<<"$output")" = 0 ]
+}

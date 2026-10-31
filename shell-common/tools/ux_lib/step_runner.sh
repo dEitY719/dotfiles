@@ -28,6 +28,11 @@
 #   STEP_HINT_FN     on failure: "$STEP_HINT_FN" "<label>" prints extra hints
 #   STEP_DIGEST_FN   on clean success: "$STEP_DIGEST_FN" "<label>" may set
 #                    STEP_DIGEST from $STEP_OUT -> "✅ <label> (<t>s) — <digest>"
+#                    and STEP_DETAIL (newline-separated items) -> one dim,
+#                    2-space indented ux_detail line per item under the
+#                    success line, capped at STEP_DETAIL_MAX (#2337)
+#   STEP_DETAIL_MAX  max detail lines per step (default 10); past it the last
+#                    line becomes "... 외 N개"
 #   STEP_LOG_ALWAYS  1 (default) prints the log path in the summary even when
 #                    all green; 0 prints it only on warnings/failures and
 #                    deletes an all-green log
@@ -36,7 +41,7 @@
 #   STEP_LOG STEP_OUT STEP_VERBOSE STEP_TOTAL STEP_WARNED[] STEP_FAILED[]
 #   STEP_LAST_RC     exit code of the most recent step_run
 
-if ! command -v ux_success >/dev/null 2>&1; then
+if ! command -v ux_detail >/dev/null 2>&1; then
     # shellcheck source=ux_lib.sh
     source "$(dirname "${BASH_SOURCE[0]}")/ux_lib.sh"
 fi
@@ -52,6 +57,8 @@ STEP_HINT_FN=""
 STEP_DIGEST_FN=""
 STEP_LOG_ALWAYS=1
 STEP_DIGEST=""
+STEP_DETAIL=""
+STEP_DETAIL_MAX=10
 STEP_LAST_RC=0
 STEP_TOTAL=0
 STEP_WARNED=()
@@ -84,6 +91,22 @@ step_init() {
     STEP_OUT="${STEP_LOG}.step"
 }
 
+# _step_print_detail — STEP_DETAIL as ux_detail lines, at most STEP_DETAIL_MAX;
+# an overflow replaces the last slot with "... 외 N개" (N = items not shown).
+_step_print_detail() {
+    local max="$STEP_DETAIL_MAX" items=() line i
+    case "$max" in '' | *[!0-9]* | 0) max=10 ;; esac
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then items+=("$line"); fi
+    done <<<"$STEP_DETAIL"
+    if [ ${#items[@]} -le "$max" ]; then
+        for line in ${items[@]+"${items[@]}"}; do ux_detail "$line"; done
+        return 0
+    fi
+    for ((i = 0; i < max - 1; i++)); do ux_detail "${items[i]}"; done
+    ux_detail "... 외 $((${#items[@]} - max + 1))개"
+}
+
 # step_run <label> <critical|optional> <cmd...>
 step_run() {
     local label="$1" level="$2" rc=0 t0 dt d miss="" warns suffix="" is_path=0
@@ -114,9 +137,13 @@ step_run() {
         warns=$(grep -E '⚠|❌|^WARN:|^ERR:' "$STEP_OUT" || true)
         if [ -z "$warns" ]; then
             STEP_DIGEST=""
-            if [ -n "$STEP_DIGEST_FN" ]; then "$STEP_DIGEST_FN" "$label" || STEP_DIGEST=""; fi
+            STEP_DETAIL=""
+            if [ -n "$STEP_DIGEST_FN" ]; then
+                "$STEP_DIGEST_FN" "$label" || { STEP_DIGEST=""; STEP_DETAIL=""; }
+            fi
             if [ -n "$STEP_DIGEST" ]; then suffix=" — $STEP_DIGEST"; fi
             ux_success "$label ($dt)$suffix"
+            if [ -n "$STEP_DETAIL" ]; then _step_print_detail; fi
             return 0
         fi
         ux_warning "$label ($dt) — 경고 $(grep -c . <<<"$warns")줄"

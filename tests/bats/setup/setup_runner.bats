@@ -123,3 +123,27 @@ _runner() {
     assert_failure
     assert_output --partial "DOTFILES_SETUP_CHOICE"
 }
+
+@test "runner: STEP_DETAIL prints dim 2-space detail lines after a clean success (#2337)" {
+    _runner "UX_DIM=\$'\\e[2m'; UX_RESET=\$'\\e[0m'; _dg() { STEP_DIGEST=x; STEP_DETAIL=\$'a: 1 -> 2\\nb'; }; STEP_DIGEST_FN=_dg; step_run d critical '$STUBS/ok.sh'"
+    assert_success
+    assert_line --index 1 $'  \e[2ma: 1 -> 2\e[0m'
+    assert_line --index 2 $'  \e[2mb\e[0m'
+}
+
+@test "runner: STEP_DETAIL without colour is indent only, and resets per step (#2337)" {
+    _runner "_dg() { if [ \"\$1\" = d1 ]; then STEP_DETAIL=item; fi; }; STEP_DIGEST_FN=_dg; step_run d1 critical '$STUBS/ok.sh'; step_run d2 critical '$STUBS/ok2.sh'"
+    assert_success
+    assert_equal "${#lines[@]}" 3
+    assert_line --index 1 "  item"
+    assert_line --index 2 --regexp '^✅ d2 \('
+    refute_output --partial $'\e'
+}
+
+@test "runner: STEP_DETAIL_MAX caps detail lines with '... 외 N개' (#2337)" {
+    _runner "_dg() { STEP_DETAIL=\$(seq 1 5); }; STEP_DIGEST_FN=_dg; STEP_DETAIL_MAX=3; step_run d critical '$STUBS/ok.sh'"
+    assert_success
+    assert_equal "${#lines[@]}" 4
+    assert_line --index 2 "  2"
+    assert_line --index 3 "  ... 외 3개"
+}

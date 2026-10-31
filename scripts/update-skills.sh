@@ -89,8 +89,20 @@ _us_count() {
     sed -En "s/^[[:space:]]*(◆|\*) $1: ([0-9]+).*$/\2/p" <<<"$_US_CLEAN" | tail -n 1
 }
 
-# STEP_DIGEST_FN: change counts from the sub-script's Summary block (F-3).
-# A missing/changed Summary format just drops the digest.
+# Per-item success lines ("✅ <msg>", or ux_lib-fallback "OK: <msg>") in
+# $_US_CLEAN: the <msg> part, rewritten by the sed ERE "<pattern>/<replacement>"
+# pair(s) in "$@" (each run as s/^<pattern>/<replacement>/p) — the STEP_DETAIL
+# source (#2337). No match -> empty.
+# shellcheck disable=SC2317  # reached only via the STEP_*_FN callbacks
+_us_items() {
+    local args=() e
+    for e in "$@"; do args+=(-e "s/^$e/p"); done
+    sed -En 's/^[[:space:]]*(✅|OK:)[[:space:]]+//p' <<<"$_US_CLEAN" | sed -En "${args[@]}"
+}
+
+# STEP_DIGEST_FN: change counts from the sub-script's Summary block (F-3),
+# plus STEP_DETAIL — one line per updated / cloned item (#2337).
+# A missing/changed Summary or per-item format just drops the digest/detail.
 # shellcheck disable=SC2317  # reached only via the STEP_*_FN callbacks
 _us_digest() {
     local n up odd
@@ -101,13 +113,20 @@ _us_digest() {
     git-clone-skills*)
         n=$(_us_count Cloned)
         if [ -z "$n" ]; then n=$(_us_count "Would clone"); fi
-        if [ -n "$n" ] && [ "$n" != 0 ]; then STEP_DIGEST="신규 clone $n"; fi
+        if [ -n "$n" ] && [ "$n" != 0 ]; then
+            STEP_DIGEST="신규 clone $n"
+            STEP_DETAIL=$(_us_items '([^[:space:]]+): cloned from .*$/\1')
+        fi
         ;;
     git-pull-skills*)
         n=$(_us_count Updated)
         if [ -z "$n" ]; then n=$(_us_count "Updates available"); fi
         up=$(_us_count "Up to date")
         if [ -n "$n" ] && [ -n "$up" ]; then STEP_DIGEST="갱신 $n / 최신 $up"; fi
+        if [ -n "$n" ] && [ "$n" != 0 ]; then
+            STEP_DETAIL=$(_us_items \
+                '([^[:space:]]+): (updated via (ff-only|rebase)|synced and pushed to origin) .*$/\1')
+        fi
         ;;
     update-plugins*)
         # Failed>0 exits 1, so a digest (rc 0 only) never needs a failure count.
@@ -116,7 +135,11 @@ _us_digest() {
         if [ -n "$n" ] && [ -n "$up" ]; then
             STEP_DIGEST="갱신 $n / 최신 $up"
             # update-plugins' restart hint is ux_info, so summary mode would hide it.
-            if [ "$n" != 0 ]; then STEP_DIGEST="$STEP_DIGEST (실행 중인 Claude Code 세션 재시작 필요)"; fi
+            if [ "$n" != 0 ]; then
+                STEP_DIGEST="$STEP_DIGEST (실행 중인 Claude Code 세션 재시작 필요)"
+                STEP_DETAIL=$(_us_items '([^[:space:]]+): updated (.+)$/\1: \2' \
+                    '([^[:space:]]+): updated$/\1')
+            fi
         else
             n=$(_us_count "Plugins \\(would update\\)")
             if [ -n "$n" ]; then STEP_DIGEST="갱신 예정 $n"; fi
