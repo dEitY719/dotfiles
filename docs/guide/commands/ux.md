@@ -14,10 +14,10 @@
 - Usage: ux-help [section|--list|--all]
 - sections
     - colors: semantic color variables
-    - output: ux_header | ux_section | ux_success | ux_error
+    - output: ux_header | ux_section | ux_success | ux_error | ux_detail
     - progress: ux_spinner | ux_with_spinner
     - interactive: ux_confirm | ux_input
-    - tables: ux_table_header | ux_table_row | ux_bullet | ux_detail
+    - tables: ux_table_header | ux_table_row | ux_bullet
     - utilities: ux_divider | ux_usage | ux_require
     - example: usage example template
     - quickstart: load library and use
@@ -47,6 +47,7 @@
 - **ux_warning** — Warning message
 - **ux_info** — Info message
 - **ux_step** — Step indicator with number
+- **ux_detail** — Dim 2-space indented detail line under a status line
 
 ### progress
 
@@ -67,7 +68,6 @@
 - **ux_table_row** — ux_table_row "val1" "val2" ["val3"]
 - **ux_bullet** — ux_bullet "Item description"
 - **ux_numbered** — ux_numbered 1 "First item"
-- **ux_detail** — ux_detail "dim 2-space indented detail line"
 
 ### utilities
 

@@ -77,3 +77,4 @@ The library automatically handles the paths for its internal Python dependencies
 *   **Provide clear feedback**: Inform the user about the state of operations.
 *   **Keep it clean**: Remove commented-out `tput` definitions after migration.
 *   **Error gracefully**: Use `ux_error` for failures and consider `ux_enable_error_trap`.
+*   **Sub-detail under a status line**: Use `ux_detail` (2-space indent + `UX_DIM`, indent only when colour is off) for item lines that belong to the `ux_success` line above them, e.g. the step runner's `STEP_DETAIL`.
