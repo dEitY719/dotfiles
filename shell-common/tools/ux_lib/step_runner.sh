@@ -95,7 +95,10 @@ step_init() {
 # an overflow replaces the last slot with "... 외 N개" (N = items not shown).
 _step_print_detail() {
     local max="$STEP_DETAIL_MAX" items=() line i
-    case "$max" in '' | *[!0-9]* | 0) max=10 ;; esac
+    case "$max" in '' | *[!0-9]*) max=10 ;; esac
+    # 10#: "08" is not an octal error; "00" is 0 and falls back like "0".
+    max=$((10#$max))
+    if [ "$max" -eq 0 ]; then max=10; fi
     while IFS= read -r line; do
         if [ -n "$line" ]; then items+=("$line"); fi
     done <<<"$STEP_DETAIL"
