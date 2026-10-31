@@ -499,6 +499,13 @@ ux_bullet_sub() {
     printf "    ${UX_INFO}•${UX_RESET} %s\n" "$1"
 }
 
+# Display a dim, 2-space indented detail line under a status line (#2337).
+# No bullet; with colour off (UX_DIM empty) only the indent remains.
+# Usage: ux_detail "plugin@mkt: 0.3.1 -> 0.3.2"
+ux_detail() {
+    printf "  %s%s%s\n" "${UX_DIM}" "$1" "${UX_RESET}"
+}
+
 # Display a numbered item
 # Usage: ux_numbered 1 "First item"
 ux_numbered() {

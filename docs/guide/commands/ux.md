@@ -17,7 +17,7 @@
     - output: ux_header | ux_section | ux_success | ux_error
     - progress: ux_spinner | ux_with_spinner
     - interactive: ux_confirm | ux_input
-    - tables: ux_table_header | ux_table_row | ux_bullet
+    - tables: ux_table_header | ux_table_row | ux_bullet | ux_detail
     - utilities: ux_divider | ux_usage | ux_require
     - example: usage example template
     - quickstart: load library and use
@@ -67,6 +67,7 @@
 - **ux_table_row** — ux_table_row "val1" "val2" ["val3"]
 - **ux_bullet** — ux_bullet "Item description"
 - **ux_numbered** — ux_numbered 1 "First item"
+- **ux_detail** — ux_detail "dim 2-space indented detail line"
 
 ### utilities
 
