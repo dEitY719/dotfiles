@@ -19,10 +19,10 @@ _ux_help_summary() {
     ux_info "Usage: ux-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "colors: semantic color variables"
-    ux_bullet_sub "output: ux_header | ux_section | ux_success | ux_error"
+    ux_bullet_sub "output: ux_header | ux_section | ux_success | ux_error | ux_detail"
     ux_bullet_sub "progress: ux_spinner | ux_with_spinner"
     ux_bullet_sub "interactive: ux_confirm | ux_input"
-    ux_bullet_sub "tables: ux_table_header | ux_table_row | ux_bullet | ux_detail"
+    ux_bullet_sub "tables: ux_table_header | ux_table_row | ux_bullet"
     ux_bullet_sub "utilities: ux_divider | ux_usage | ux_require"
     ux_bullet_sub "example: usage example template"
     ux_bullet_sub "quickstart: load library and use"
@@ -64,6 +64,7 @@ _ux_help_rows_output() {
     ux_table_row "ux_warning" "Warning message"
     ux_table_row "ux_info" "Info message"
     ux_table_row "ux_step" "Step indicator with number"
+    ux_table_row "ux_detail" "Dim 2-space indented detail line under a status line"
 }
 
 _ux_help_rows_progress() {
@@ -84,7 +85,6 @@ _ux_help_rows_tables() {
     ux_table_row "ux_table_row" "ux_table_row \"val1\" \"val2\" [\"val3\"]"
     ux_table_row "ux_bullet" "ux_bullet \"Item description\""
     ux_table_row "ux_numbered" "ux_numbered 1 \"First item\""
-    ux_table_row "ux_detail" "ux_detail \"dim 2-space indented detail line\""
 }
 
 _ux_help_rows_utilities() {

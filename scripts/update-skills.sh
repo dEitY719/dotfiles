@@ -91,12 +91,14 @@ _us_count() {
 
 # Per-item success lines ("✅ <msg>", or ux_lib-fallback "OK: <msg>") in
 # $_US_CLEAN: the <msg> part, rewritten by the sed ERE "<pattern>/<replacement>"
-# pair(s) in "$@" (each run as s/^<pattern>/<replacement>/p) — the STEP_DETAIL
-# source (#2337). No match -> empty.
+# pair(s) in "$@" (each run as s/^<pattern>/<replacement>/p, first match wins:
+# `t` ends the cycle so a rewritten line is never re-matched) — the STEP_DETAIL
+# source (#2337). No match -> empty. The patterns mirror the sub-scripts'
+# ux_success wording; tests/bats/scripts/update_skills.bats pins that wording.
 # shellcheck disable=SC2317  # reached only via the STEP_*_FN callbacks
 _us_items() {
     local args=() e
-    for e in "$@"; do args+=(-e "s/^$e/p"); done
+    for e in "$@"; do args+=(-e "s/^$e/p" -e t); done
     sed -En 's/^[[:space:]]*(✅|OK:)[[:space:]]+//p' <<<"$_US_CLEAN" | sed -En "${args[@]}"
 }
 
@@ -115,6 +117,7 @@ _us_digest() {
         if [ -z "$n" ]; then n=$(_us_count "Would clone"); fi
         if [ -n "$n" ] && [ "$n" != 0 ]; then
             STEP_DIGEST="신규 clone $n"
+            # Dry-run ("Would clone") prints no "cloned from" line, so no detail.
             STEP_DETAIL=$(_us_items '([^[:space:]]+): cloned from .*$/\1')
         fi
         ;;
@@ -122,10 +125,14 @@ _us_digest() {
         n=$(_us_count Updated)
         if [ -z "$n" ]; then n=$(_us_count "Updates available"); fi
         up=$(_us_count "Up to date")
-        if [ -n "$n" ] && [ -n "$up" ]; then STEP_DIGEST="갱신 $n / 최신 $up"; fi
-        if [ -n "$n" ] && [ "$n" != 0 ]; then
-            STEP_DETAIL=$(_us_items \
-                '([^[:space:]]+): (updated via (ff-only|rebase)|synced and pushed to origin) .*$/\1')
+        if [ -n "$n" ] && [ -n "$up" ]; then
+            STEP_DIGEST="갱신 $n / 최신 $up"
+            # Detail only under a digest; dry-run ("Updates available") has no
+            # "updated via" lines, so it shows the count alone.
+            if [ "$n" != 0 ]; then
+                STEP_DETAIL=$(_us_items \
+                    '([^[:space:]]+): (updated via (ff-only|rebase)|synced and pushed to origin) .*$/\1')
+            fi
         fi
         ;;
     update-plugins*)

@@ -340,3 +340,28 @@ claude-setup"
     assert_output --partial "✅ a-skills: updated via ff-only (main)"
     [ "$(grep -cx '  a-skills' <<<"$output")" = 0 ]
 }
+
+@test "update-plugins detail: a line matched by one pattern is not re-matched by the next (#2337)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 0 '✅   x@m: updated updated\n  ◆ Plugins updated: 1\n  ◆ Plugins up to date: 0\n  ◆ Failed: 0\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    [ "$(grep -c '^  x@m' <<<"$output")" = 1 ]
+}
+
+@test "git-pull-skills detail needs the digest: no 'Up to date' count, no detail lines (#2337)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 '✅ a-skills: updated via ff-only (main)\n  ◆ Updated: 1\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    [ "$(grep -cx '  a-skills' <<<"$output")" = 0 ]
+}
+
+@test "the per-item wording the detail patterns parse still exists in the real sub-scripts (#2337)" {
+    local p="${DOTFILES_ROOT}/claude/plugin"
+    grep -qF 'ux_success "  $id: updated${old:+ $old -> $new}"' "$p/update-plugins.sh"
+    grep -qF 'ux_success "$repo_name: updated via ff-only (' "$p/git-pull-skills.sh"
+    grep -qF 'ux_success "$repo_name: updated via rebase (' "$p/git-pull-skills.sh"
+    grep -qF 'ux_success "$repo_name: synced and pushed to origin (' "$p/git-pull-skills.sh"
+    grep -qF 'ux_success "$repo_name: cloned from ' "$p/git-clone-skills.sh"
+}

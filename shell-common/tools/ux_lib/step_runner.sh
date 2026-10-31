@@ -32,7 +32,8 @@
 #                    2-space indented ux_detail line per item under the
 #                    success line, capped at STEP_DETAIL_MAX (#2337)
 #   STEP_DETAIL_MAX  max detail lines per step (default 10); past it the last
-#                    line becomes "... 외 N개"
+#                    line becomes "... 외 N개". 0 / empty / non-numeric falls
+#                    back to 10 — to show no detail, leave STEP_DETAIL empty
 #   STEP_LOG_ALWAYS  1 (default) prints the log path in the summary even when
 #                    all green; 0 prints it only on warnings/failures and
 #                    deletes an all-green log
