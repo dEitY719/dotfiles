@@ -14,9 +14,8 @@ setup() {
     CALL_LOG="$HOME/calls.log"
     mkdir -p "$STUB_BIN"
     # Each stub drains a piped stdin like the real psql, which _admin_sql's
-    # `printf '\q' | psql` probe feeds. Under the global pipefail removed in
-    # #2332, a stub that exited unread let that printf die of SIGPIPE
-    # ("Cannot connect to PostgreSQL as superuser" flake, #2054).
+    # `printf '\q' | psql` probe feeds. Only mimicry since #2332: without the
+    # global pipefail an undrained printf can no longer fail the probe (#2054).
     for bin in psql sudo; do
         printf '#!/bin/sh\n[ -t 0 ] || cat >/dev/null\necho "%s $*" >>"%s"\n' "$bin" "$CALL_LOG" >"$STUB_BIN/$bin"
         chmod +x "$STUB_BIN/$bin"
