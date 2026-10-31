@@ -94,7 +94,7 @@ step_init() {
 # _step_print_detail — STEP_DETAIL as ux_detail lines, at most STEP_DETAIL_MAX;
 # an overflow replaces the last slot with "... 외 N개" (N = items not shown).
 _step_print_detail() {
-    local max="$STEP_DETAIL_MAX" items=() line i
+    local max="$STEP_DETAIL_MAX" items=() line i shown
     case "$max" in '' | *[!0-9]*) max=10 ;; esac
     # 10#: "08" is not an octal error; "00" is 0 and falls back like "0".
     max=$((10#$max))
@@ -102,12 +102,10 @@ _step_print_detail() {
     while IFS= read -r line; do
         if [ -n "$line" ]; then items+=("$line"); fi
     done <<<"$STEP_DETAIL"
-    if [ ${#items[@]} -le "$max" ]; then
-        for line in ${items[@]+"${items[@]}"}; do ux_detail "$line"; done
-        return 0
-    fi
-    for ((i = 0; i < max - 1; i++)); do ux_detail "${items[i]}"; done
-    ux_detail "... 외 $((${#items[@]} - max + 1))개"
+    shown=${#items[@]}
+    if [ "$shown" -gt "$max" ]; then shown=$((max - 1)); fi
+    for ((i = 0; i < shown; i++)); do ux_detail "${items[i]}"; done
+    if [ "$shown" -lt ${#items[@]} ]; then ux_detail "... 외 $((${#items[@]} - shown))개"; fi
 }
 
 # step_run <label> <critical|optional> <cmd...>
