@@ -147,3 +147,30 @@ _runner() {
     assert_line --index 2 "  2"
     assert_line --index 3 "  ... 외 3개"
 }
+
+@test "runner: notice failure continues with hint and summary mention, not a failure (#2343)" {
+    _runner "_h() { ux_bullet_sub \"fix \$1\"; }; STEP_HINT_FN=_h; step_run n notice '$STUBS/bad.sh'; step_run b critical '$STUBS/ok.sh'; step_summary setup"
+    assert_success
+    assert_output --partial "n ("
+    assert_output --partial "안내 (exit 3)"
+    assert_output --partial "fix n"
+    assert_output --partial "총 2 / 성공 1 / 안내 1"
+    assert_output --partial "안내 스텝: n"
+    refute_output --partial "실패"
+    refute_output --partial "확인 필요"
+}
+
+@test "runner: notice step with warning lines is not counted as a warning (#2343)" {
+    _runner "step_run n notice '$STUBS/warn.sh'; step_run b critical '$STUBS/ok.sh'; step_run bad optional '$STUBS/bad.sh'; step_summary setup"
+    assert_success
+    assert_output --partial "fix me with X"
+    assert_output --partial "경고 0 / 실패 1 / 안내 1"
+    refute_output --partial "경고 스텝"
+}
+
+@test "runner: step_skip prints one line and leaves the tally alone (#2343)" {
+    _runner "step_run a critical '$STUBS/ok.sh'; step_skip vs 'VS Code 없음'; step_summary setup"
+    assert_success
+    assert_output --partial "vs 건너뜀 — VS Code 없음"
+    assert_output --partial "setup 완료: 1개 스텝 모두 정상"
+}

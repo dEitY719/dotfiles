@@ -26,9 +26,9 @@ cd ~/dotfiles
 ./setup.sh
 ```
 
-**이 스크립트가 하는 일:**
+**이 스크립트가 하는 일 (7단계, 진행 중 `[N/7]` 표시, #2343):**
 
-1. **shell-common/setup.sh** 실행 (환경 선택)
+1. **모드 선택, 네트워크 설정** — `shell-common/setup.sh` 실행 (환경 선택)
    ```
    Select your environment:
    1) Public PC (home environment)
@@ -38,21 +38,33 @@ cd ~/dotfiles
    - **1) Public PC**: 환경별 설정 제거 (집 환경)
    - **2) Internal PC**: *.local.sh 생성 + System CA Bundle 활성화
    - **3) External PC**: *.local.sh 생성 + Custom Certificate 활성화
+   - 프록시, CA 를 여기서 맞추므로 이후 다운로드 단계가 같은 네트워크 설정을 쓴다.
 
-2. `bash/setup.sh` 실행
-   - `~/.bashrc` → `bash/main.bash` symlink 생성
-   - `DOTFILES_BASH_DIR`, `SHELL_COMMON` 환경변수 설정
-   - `~/.bash_profile` symlink (선택사항)
+2. **Claude Code 설치** — `claude` 가 없으면 `install_claude.sh --yes` 로 설치한다.
+   설치 후 다른 터미널에서 `claude` 로 대화하며 나머지 단계를 진행할 수 있다.
+   internal PC 는 claude.ai 설치 프로그램을 자동 실행하지 않고 사내 절차를 안내한다.
 
-3. `zsh/setup.sh` 실행
-   - `~/.zshrc` → `zsh/zshrc` symlink 생성
-   - 완료 메시지 및 다음 단계 안내
+3. **사전 조건 확인** — 표 하나(`shell-common/lib/setup/bootstrap.sh` 의
+   `_setup_prereq_table`, SSOT)로 `zsh`, `en_US.UTF-8`, `jq`, `gh`, `socat`, `mise`,
+   `uv`, `sops`, `age` 를 확인한다. sudo 없이 되는 항목(`mise`, `uv`, `sops`, `age`)은
+   자동 설치하고, sudo 가 필요한 항목은 명령만 출력한다. 빠진 항목은 **한 번에 모두**
+   출력한 뒤 중단한다.
 
-4. `git/setup.sh` 실행
-   - `~/.gitconfig` 를 실파일로 두고 최상단에 `[include] path = <dotfiles>/git/.gitconfig` 보장
-     (symlink 아님 — `git config --global` 쓰기가 SSOT 를 오염시키지 않도록)
+4. **인증과 키 확인** — `gh auth login` 여부와 age 키(`~/.config/sops/age/keys.txt`).
+   빠지면 다음에 할 일을 출력하고 중단한다.
 
-5. `claude/setup.sh` 등 나머지 단계 실행 (Claude Code 설정, gh, ssh 등)
+5. **설정 단계** — `bash/setup.sh`(`~/.bashrc` → `bash/main.bash`), `zsh/setup.sh`
+   (`~/.zshrc`), `git/setup.sh`(`~/.gitconfig` 실파일 + `[include]`), `symlinks`,
+   `claude/setup.sh`, gh, ssh 등. VS Code 가 없으면 `vscode-settings` 는 조용히 건너뛴다.
+
+6. **스킬 clone, 플러그인 복원** — `claude/plugin/git-clone-skills.sh`,
+   `scripts/setup-skills-ssot.sh`, 빠진 플러그인이 있을 때만 `claude/plugin/restore.sh`.
+
+7. **검증과 요약** — `scripts/verify-config-files.sh` 와 최종 집계.
+
+**멈췄을 때:** 출력된 명령을 실행한 뒤 `./setup.sh` 를 다시 실행하면 이어서 진행한다.
+단계가 모두 멱등이라 별도 상태 파일은 없다. 2-4 단계는 public PC 에서는 필수(중단),
+internal/external PC 에서는 안내(요약에 표시하고 계속)다.
 
 **결과:** 환경에 맞는 설정으로 초기화 완료
 

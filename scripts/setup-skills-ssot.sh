@@ -601,7 +601,7 @@ log_info "[workspace] ${workspace_skill_count}개 skill 발견 (루트: $WORKSPA
 # 1. OpenCode: entry-level 합성 (issue #791 — 5 CLI 공통 layout)
 OPENCODE_SKILLS="${HOME}/.config/opencode/skills"
 if [ ! -d "${HOME}/.config/opencode" ]; then
-    log_warning "OpenCode 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.config/opencode"
+    log_dim "OpenCode 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.config/opencode"
 else
     link_skills_compose "opencode" "$OPENCODE_SKILLS"
 fi
@@ -609,7 +609,7 @@ fi
 # 2. Codex: .system 보존 + custom skill 디렉토리 symlink
 CODEX_HOME_LIST="$(collect_codex_homes)"
 if [ -z "$CODEX_HOME_LIST" ]; then
-    log_warning "Codex 설정 디렉토리가 없습니다. 건너뜁니다: ~/.codex 또는 ~/.config/codex"
+    log_dim "Codex 설정 디렉토리가 없습니다. 건너뜁니다: ~/.codex 또는 ~/.config/codex"
 else
     while IFS= read -r codex_home; do
         [ -n "$codex_home" ] || continue
@@ -792,7 +792,7 @@ hermes_sync_external_dirs() {
 }
 
 if [ ! -d "${HOME}/.hermes" ]; then
-    log_warning "Hermes 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.hermes"
+    log_dim "Hermes 설정 디렉토리가 없습니다. 건너뜁니다: ${HOME}/.hermes"
 else
     hermes_sync_external_dirs
 fi

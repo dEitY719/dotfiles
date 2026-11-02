@@ -23,8 +23,9 @@
 # get detail + a fix hint. Full sub-script output goes to $STEP_LOG.
 # `./setup.sh -v` or DOTFILES_SETUP_VERBOSE=1 streams everything as before.
 # DOTFILES_SETUP_CHOICE=1|2|3 answers the environment menu non-interactively.
-# Critical vs optional classification lives in main() below; the runner itself
-# is shell-common/tools/ux_lib/step_runner.sh (#2126).
+# Step levels (critical / optional / notice) and the seven phases live in main()
+# below (#2343); the runner itself is shell-common/tools/ux_lib/step_runner.sh
+# (#2126), the gate steps are shell-common/lib/setup/bootstrap.sh.
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -46,11 +47,29 @@ STEP_NAME=setup
 STEP_RERUN=./setup.sh
 STEP_HINT_FN=_step_hint
 
+# shellcheck source=shell-common/util/setup_mode_read.sh
+source "${DOTFILES_DIR}/shell-common/util/setup_mode_read.sh"
+# Gate steps: Claude Code, prerequisites, auth/keys, skills, plugins (#2343).
+# shellcheck source=shell-common/lib/setup/bootstrap.sh
+source "${DOTFILES_DIR}/shell-common/lib/setup/bootstrap.sh"
+
+SETUP_PHASE_TOTAL=7
+
+_setup_phase() {
+    ux_step "$1/$SETUP_PHASE_TOTAL" "$2"
+}
+
 _step_hint() {
     case "$1" in
     shell-common*) ux_bullet_sub "sudo(APT) 단계 확인 — 단독 재현: ./shell-common/setup.sh --mode <public|internal|external>" ;;
     "bats submodule") ux_bullet_sub "git submodule update --init --recursive tests/bats/lib" ;;
     verify-config) ux_bullet_sub "로그에 표시된 손상 파일(JSON/NBSP/BOM/NUL)을 고친 뒤 재실행" ;;
+    "Claude Code") _setup_hint_claude ;;
+    "사전 조건" | "인증과 키" | plugins)
+        local fix
+        for fix in "${SETUP_FIXES[@]}"; do ux_bullet_sub "$fix"; done
+        ;;
+    skills-clone) ux_bullet_sub "다시 실행: ./claude/plugin/git-clone-skills.sh" ;;
     esac
 }
 
@@ -62,8 +81,6 @@ _setup_resolve_choice() {
     "") ;;
     *) ux_error "DOTFILES_SETUP_CHOICE 는 1|2|3 이어야 합니다 (현재: ${DOTFILES_SETUP_CHOICE})" && return 1 ;;
     esac
-    # shellcheck source=shell-common/util/setup_mode_read.sh
-    . "${DOTFILES_DIR}/shell-common/util/setup_mode_read.sh"
     saved=$(_dotfiles_setup_mode)
     case "$saved" in
     public) def=1 ;;
@@ -98,6 +115,7 @@ setup_help() {
     ux_bullet "-v, --verbose: stream full sub-script output (default: one line per step, log under \$TMPDIR)"
     ux_bullet "DOTFILES_SETUP_VERBOSE=1: same as -v"
     ux_bullet "DOTFILES_SETUP_CHOICE=1|2|3: answer the environment menu (public/internal/external) non-interactively"
+    ux_bullet "Stops with the exact fix commands when something required is missing; re-run ./setup.sh to continue"
 }
 
 main() {
@@ -131,6 +149,7 @@ main() {
         ux_info "dotfiles setup (요약 모드 — 전체 출력은 ./setup.sh -v)"
     fi
 
+    _setup_phase 1 "모드 선택, 네트워크 설정"
     # Verbose without DOTFILES_SETUP_CHOICE keeps the original interactive menu
     # (and shell-common's tty-only account ID / account e-mail prompts).
     local sc_step=(_setup_run_shell_common) sc_label="shell-common"
@@ -140,15 +159,28 @@ main() {
         _setup_resolve_choice || exit 1
         case "$SETUP_CHOICE" in 1) sc_label+=" (public)" ;; 2) sc_label+=" (internal)" ;; 3) sc_label+=" (external)" ;; esac
     fi
-
     # Neutralize leftover git-crypt smudge/clean config (#594).
     step_run "git-crypt 해제" critical ./scripts/disable-git-crypt-local.sh
+    # Writes proxy.local.sh / security.local.sh, so it stays ahead of every
+    # download below. Every gate level past here depends on the saved mode.
+    step_run "$sc_label" critical "${sc_step[@]}"
+    _setup_resolve_gate
+
+    _setup_phase 2 "Claude Code 설치"
+    step_run "Claude Code" "$SETUP_GATE_LEVEL" _setup_ensure_claude
+    _setup_claude_next_steps
+
+    _setup_phase 3 "사전 조건 확인"
+    step_run "사전 조건" "$SETUP_GATE_LEVEL" _setup_prereq_check
+
+    _setup_phase 4 "인증과 키 확인"
+    step_run "인증과 키" "$SETUP_GATE_LEVEL" _setup_auth_check
+
+    _setup_phase 5 "설정 단계"
     # bats submodules so a fresh clone's ./tests/test doesn't skip bats (#1398).
     # shellcheck source=shell-common/lib/dotfiles_bats_submodules.sh
     source "${DOTFILES_DIR}/shell-common/lib/dotfiles_bats_submodules.sh"
     step_run "bats submodule" optional dotfiles_ensure_bats_submodules "$DOTFILES_DIR"
-
-    step_run "$sc_label" critical "${sc_step[@]}"
     step_run bash critical ./bash/setup.sh
     step_run zsh critical ./zsh/setup.sh
     step_run git critical ./git/setup.sh
@@ -159,17 +191,27 @@ main() {
     step_run hermes optional ./hermes/setup.sh # 1회 복사 (#1373)
     step_run claude critical ./claude/setup.sh
     step_run agy optional ./agy/setup.sh # Antigravity CLI 확인 (#1180)
-    step_run skills-ssot critical ./scripts/setup-skills-ssot.sh
     step_run vscode-extensions optional ./vscode-extensions/setup.sh
     # .vscode/base.json → live VS Code settings (#586); exits 1 without VS Code.
-    step_run vscode-settings optional ./.vscode/sync-push.sh
+    if _setup_has_vscode; then
+        step_run vscode-settings optional ./.vscode/sync-push.sh
+    else
+        step_skip vscode-settings "VS Code 없음"
+    fi
     step_run global-packages optional ./global-packages/setup.sh # global uv tools 동기화, 삭제 안 함
     step_run mcporter optional ./mcporter/setup.sh               # exa 키를 .enc.env placeholder 로 (#2106)
     step_run ssh optional ./ssh/setup.sh
     step_run gh optional ./gh/setup.sh
-    # Tracked watch list -> ~/.avatars/issue-watcher/watched-repos.json (#2285).
-    step_run avatar-watched-repos optional ./shell-common/tools/custom/avatar_watched_repos.sh
     step_run windows optional ./windows/setup.sh # WSL only
+
+    _setup_phase 6 "스킬 clone, 플러그인 복원"
+    step_run skills-clone notice _setup_clone_skills
+    step_run skills-ssot critical ./scripts/setup-skills-ssot.sh
+    step_run plugins notice _setup_restore_plugins
+    # Tracked watch list -> ~/.avatars/issue-watcher/watched-repos.json (#2285).
+    step_run avatar-watched-repos notice ./shell-common/tools/custom/avatar_watched_repos.sh
+
+    _setup_phase 7 "검증과 요약"
     # Post-setup integrity check (#594): JSON parse + NBSP/BOM/NUL scan.
     step_run verify-config critical ./scripts/verify-config-files.sh
 

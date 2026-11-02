@@ -12,12 +12,16 @@ source "$(dirname "$0")/init.sh" || exit 1
 
 # Main script
 main() {
-    clear
+    # --yes: no screen clear and no prompt, for ./setup.sh (#2343). Its summary
+    # mode hides output, so a prompt here would wait unseen.
+    local assume_yes=0
+    case "${1:-}" in -y | --yes) assume_yes=1 ;; esac
+    [ "$assume_yes" = 1 ] || clear
     ux_header "UV Installer"
     ux_info "This script installs 'uv', the fast Python package installer and resolver from Astral."
     echo ""
 
-    if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
+    if [ "$assume_yes" != 1 ] && ! ux_confirm "Do you want to proceed with the installation?" "y"; then
         ux_warning "Installation cancelled."
         exit 0
     fi
@@ -27,7 +31,7 @@ main() {
     # ========================================
     ux_step "1/1" "Installing or updating uv..."
     
-    if command -v uv &>/dev/null; then
+    if [ "$assume_yes" != 1 ] && command -v uv &>/dev/null; then
         ux_warning "uv appears to be already installed."
         if ! ux_confirm "Do you want to run the installer again to check for updates?" "n"; then
             ux_info "Skipping uv installation."

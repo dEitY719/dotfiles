@@ -32,12 +32,16 @@ install_claude_platform_branch() {
 }
 
 main() {
-    clear
+    # --yes: no screen clear and no prompt, for ./setup.sh (#2343). Its summary
+    # mode hides output, so a prompt here would wait unseen.
+    local assume_yes=0
+    case "${1:-}" in -y | --yes) assume_yes=1 ;; esac
+    [ "$assume_yes" = 1 ] || clear
     ux_header "Claude Code CLI Installer"
     ux_info "Installing Claude Code using official native installer..."
     echo ""
 
-    if ! ux_confirm "Do you want to proceed with the installation?" "y"; then
+    if [ "$assume_yes" != 1 ] && ! ux_confirm "Do you want to proceed with the installation?" "y"; then
         ux_warning "Installation cancelled."
         exit 0
     fi
@@ -47,7 +51,7 @@ main() {
     # ========================================
     ux_step "1/2" "Detecting operating system..."
 
-    if command -v claude &>/dev/null; then
+    if [ "$assume_yes" != 1 ] && command -v claude &>/dev/null; then
         ux_warning "Claude Code CLI seems to be already installed."
         if ! ux_confirm "Do you want to reinstall/update it?" "y"; then
             ux_info "Installation skipped."

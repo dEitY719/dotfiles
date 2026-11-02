@@ -17,9 +17,14 @@
 #   step_init <log-prefix> <verbose>   verbose=1 streams everything; else log
 #                                      to ${TMPDIR:-/tmp}/<prefix>-<ts>.log
 #                                      (unwritable -> verbose fallback + warning)
-#   step_run <label> <critical|optional> <cmd...>
+#   step_run <label> <critical|optional|notice> <cmd...>
 #                                      critical failure -> exit 1;
-#                                      optional failure -> recorded, return 0
+#                                      optional failure -> recorded, return 0;
+#                                      notice: failure or warning lines are an
+#                                      info block + summary mention, never a
+#                                      warning or failure (#2343 F-9)
+#   step_skip <label> <why>            one dim line for a step that does not
+#                                      apply to this PC; not counted anywhere
 #   step_summary <name>                final tally line(s); removes $STEP_OUT
 #
 # Knobs (set by the caller)
@@ -40,6 +45,7 @@
 #
 # State (read by the caller)
 #   STEP_LOG STEP_OUT STEP_VERBOSE STEP_TOTAL STEP_WARNED[] STEP_FAILED[]
+#   STEP_NOTICED[]
 #   STEP_LAST_RC     exit code of the most recent step_run
 
 if ! command -v ux_detail >/dev/null 2>&1; then
@@ -64,6 +70,7 @@ STEP_LAST_RC=0
 STEP_TOTAL=0
 STEP_WARNED=()
 STEP_FAILED=()
+STEP_NOTICED=()
 
 # Deciseconds since epoch into _STEP_NOW_DS (bash 5 EPOCHREALTIME; whole seconds otherwise).
 _step_now_ds() {
@@ -109,7 +116,26 @@ _step_print_detail() {
     if [ "$shown" -lt ${#items[@]} ]; then ux_detail "... 외 $((${#items[@]} - shown))개"; fi
 }
 
-# step_run <label> <critical|optional> <cmd...>
+# step_skip <label> <why>
+step_skip() {
+    ux_detail "$1 건너뜀 — $2"
+}
+
+# _step_notice <label> <dt> <exit> <miss> <warns> — the notice-level outcome.
+_step_notice() {
+    local label="$1" dt="$2" rc="$3" miss="$4" warns="$5" line
+    ux_info "$label ($dt) — 안내 (exit $rc)"
+    if [ -n "$miss" ]; then ux_bullet_sub "$miss"; fi
+    if [ -n "$warns" ]; then
+        while IFS= read -r line; do
+            ux_bullet_sub "${line#"${line%%[![:space:]]*}"}"
+        done < <(head -n 10 <<<"$warns")
+    fi
+    if [ "$rc" -ne 0 ] && [ -n "$STEP_HINT_FN" ]; then "$STEP_HINT_FN" "$label" || true; fi
+    STEP_NOTICED+=("$label")
+}
+
+# step_run <label> <critical|optional|notice> <cmd...>
 step_run() {
     local label="$1" level="$2" rc=0 t0 dt d miss="" warns suffix="" is_path=0
     shift 2
@@ -148,11 +174,20 @@ step_run() {
             if [ -n "$STEP_DETAIL" ]; then _step_print_detail; fi
             return 0
         fi
+        if [ "$level" = notice ]; then
+            _step_notice "$label" "$dt" 0 "" "$warns"
+            return 0
+        fi
         ux_warning "$label ($dt) — 경고 $(grep -c . <<<"$warns")줄"
         while IFS= read -r line; do
             ux_bullet_sub "${line#"${line%%[![:space:]]*}"}"
         done < <(head -n 10 <<<"$warns")
         STEP_WARNED+=("$label")
+        return 0
+    fi
+
+    if [ "$level" = notice ]; then
+        _step_notice "$label" "$dt" "$rc" "$miss" ""
         return 0
     fi
 
@@ -182,19 +217,26 @@ step_run() {
 
 # step_summary <name>
 step_summary() {
-    local name="$1" ok=$((STEP_TOTAL - ${#STEP_WARNED[@]} - ${#STEP_FAILED[@]}))
+    local name="$1" notes=${#STEP_NOTICED[@]} notes_tally=""
+    local ok=$((STEP_TOTAL - ${#STEP_WARNED[@]} - ${#STEP_FAILED[@]} - notes))
     if [ "$STEP_OUT" != /dev/null ]; then rm -f "$STEP_OUT"; fi
     ux_info ""
-    if [ "$ok" -eq "$STEP_TOTAL" ]; then
-        ux_success "$name 완료: ${STEP_TOTAL}개 스텝 모두 정상"
+    if [ "$notes" -gt 0 ]; then notes_tally=" / 안내 ${notes}"; fi
+    if [ $((ok + notes)) -eq "$STEP_TOTAL" ]; then
+        if [ "$notes" -eq 0 ]; then
+            ux_success "$name 완료: ${STEP_TOTAL}개 스텝 모두 정상"
+        else
+            ux_success "$name 완료: 총 ${STEP_TOTAL} / 성공 ${ok}${notes_tally}"
+        fi
         if [ "$STEP_LOG_ALWAYS" != 1 ] && [ "$STEP_LOG" != /dev/null ]; then
             rm -f "$STEP_LOG"
             return 0
         fi
     else
-        ux_warning "$name 완료(확인 필요): 총 ${STEP_TOTAL} / 성공 ${ok} / 경고 ${#STEP_WARNED[@]} / 실패 ${#STEP_FAILED[@]}"
+        ux_warning "$name 완료(확인 필요): 총 ${STEP_TOTAL} / 성공 ${ok} / 경고 ${#STEP_WARNED[@]} / 실패 ${#STEP_FAILED[@]}${notes_tally}"
         if [ ${#STEP_WARNED[@]} -gt 0 ]; then ux_warning "경고 스텝: ${STEP_WARNED[*]}"; fi
         if [ ${#STEP_FAILED[@]} -gt 0 ]; then ux_error "실패 스텝(optional): ${STEP_FAILED[*]}"; fi
     fi
+    if [ "$notes" -gt 0 ]; then ux_info "안내 스텝: ${STEP_NOTICED[*]}"; fi
     if [ "$STEP_LOG" != /dev/null ]; then ux_info "전체 로그: $STEP_LOG"; fi
 }

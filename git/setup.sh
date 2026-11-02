@@ -214,7 +214,7 @@ setup_ssh_auto() {
 
     # 1. SSH 키 확인 및 생성
     if ! check_ssh_key_exists; then
-        ux_warning "SSH 키가 없습니다"
+        ux_info "SSH 키가 없어 새로 생성합니다"
         generate_ssh_key || return 1
     else
         ux_success "SSH 키 존재: ${HOME}/.ssh/id_ed25519"
@@ -222,7 +222,7 @@ setup_ssh_auto() {
 
     # 2. SSH 에이전트 확인 및 시작
     if ! check_ssh_agent_running; then
-        ux_warning "SSH 에이전트가 실행 중이 아닙니다"
+        ux_info "SSH 에이전트가 실행 중이 아니어서 시작합니다"
         start_ssh_agent || return 1
     else
         ux_success "SSH 에이전트 실행 중"

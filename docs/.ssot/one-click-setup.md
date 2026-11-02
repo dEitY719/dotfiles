@@ -10,8 +10,21 @@ setup 체인에 편입한다.
 
 - **멱등**: 재실행해도 수렴 후에는 아무것도 바꾸지 않는다. 먼저 상태를 확인한다
   (파일 존재, 링크 대상 일치 등).
-- **soft-fail**: 네트워크·선택적 바이너리 의존 단계는 경고와 수동 재시도 명령만
-  출력하고 상위 `set -e` 를 깨지 않는다.
+- **단계 결과 3구분 (#2343 F-9)**: 단계마다 수준을 하나 고른다.
+  - **critical(필수)**: 즉시 중단하고 해결 명령을 출력한다(zsh 없음, Claude Code
+    설치 실패, `gh` 미인증 — public PC 기준).
+  - **optional(선택)**: 사용자가 쓰지 않는 도구면 조용히 건너뛴다(`step_skip` 한 줄,
+    예: VS Code, OpenCode, Hermes 초기 설정). 실패만 요약에 모은다.
+  - **notice(안내)**: 요약에 표시만 하고 계속한다(예: 이 PC 에 없는 저장소의 watch
+    항목, 플러그인 복원 잔여). 경고·실패로 집계하지 않는다.
+  사용자가 의도한 부재(설정 디렉터리 없음)는 경고가 아닌 dim/info 로 출력한다.
+- **멈추면 재실행이 재개**: 조치가 필요한 항목은 그 자리에서 멈추고 명령을 출력한다.
+  사전 조건처럼 여러 항목을 검사하는 단계는 빠진 항목을 한 번에 모두 출력한다.
+  진행 상태 파일은 두지 않는다 — 단계가 멱등이라 `./setup.sh` 재실행이 곧 재개다.
+- **게이트 단계 (`shell-common/lib/setup/bootstrap.sh`)**: Claude Code 설치, 사전
+  조건 표(`_setup_prereq_table` SSOT), 인증과 키, 스킬 clone, 플러그인 복원. public
+  은 critical, internal/external 은 notice 로 실행한다(사내망 설치 경로 미확정).
+  캡처된 단계는 프롬프트와 sudo 를 쓰지 않는다 — sudo 명령은 출력만 한다.
 - **양쪽 모드 반영**: `~/.dotfiles-setup-mode` 를 확인한다. internal PC 는 단일
   계정이며 `~/.claude/settings.json` 을 gateway-cli 가 소유한다
   (`claude/setup.sh` internal 분기는 `_claude_account_setup_one` 을 타지 않는다).
@@ -50,8 +63,9 @@ setup 체인에 편입한다.
 
 ## 출력 규약 (root `setup.sh` 러너)
 
-- 각 서브스크립트는 `run_step <label> <critical|optional> <cmd...>` 로 실행한다.
-  분류 SSOT 는 `setup.sh` 의 `main()` 스텝 목록 — 새 스텝도 거기에 등록한다.
+- 각 서브스크립트는 `step_run <label> <critical|optional|notice> <cmd...>` 로 실행한다.
+  분류와 7단계(`_setup_phase N`, `[N/7]` 진행표) SSOT 는 `setup.sh` 의 `main()`
+  스텝 목록 — 새 스텝도 거기에 등록한다.
 - **드리프트 lint** (`scripts/lint_setup_steps.sh`, `mise run lint-docs`, #2142):
   `<module>/setup.sh` 는 `main()` 에 `./<module>/setup.sh` 로 등록하거나, 일부러
   빼는 모듈이면 `<module>/.setup-optin` 에 사유 1줄을 둔다(예: graphify — pip 수동
@@ -65,7 +79,8 @@ setup 체인에 편입한다.
   한 줄에 조치까지 담는다. 서브스크립트 전체 출력은
   `${TMPDIR:-/tmp}/dotfiles-setup-<timestamp>.log` 에 보존되고 경로는 마지막에 출력.
 - **실패**: 빨강 블록(exit code, 로그 마지막 20줄, `bash -x` 재현 명령). critical
-  은 즉시 `exit 1`, optional 은 계속 진행 후 최종 요약에 모은다.
+  은 즉시 `exit 1`, optional 은 계속 진행 후 최종 요약에 모은다. notice 는 실패해도
+  info 블록 + 힌트만 출력하고 요약의 `안내 스텝:` 줄에 모은다.
 - `./setup.sh -v` / `DOTFILES_SETUP_VERBOSE=1`: 캡처 없이 기존 전체 출력.
 - `DOTFILES_SETUP_CHOICE=1|2|3`: 환경 메뉴(public/internal/external)를 묻지 않는다.
   미지정이면 러너가 묻고 `~/.dotfiles-setup-mode` 를 Enter 기본값으로 제시한다

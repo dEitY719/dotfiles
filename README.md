@@ -28,12 +28,17 @@ cd ~/dotfiles
 
 If you install to a different location, use that path instead of `~/dotfiles`. Most scripts resolve paths via `DOTFILES_ROOT`/`SHELL_COMMON`.
 
-The setup script will:
+The setup script runs seven phases and prints `[N/7]` as it goes (#2343):
 
-1. **Ask for your environment** (Public PC / Internal company PC / External company PC)
-2. **Configure environment-specific files** (.local.sh files)
-3. **Create shell symlinks** (~/.bashrc, ~/.zshrc, ~/.gitconfig)
-4. **Set up environment variables**
+1. **Mode and network** — ask for your environment (Public PC / Internal company PC / External company PC), then write the proxy/CA files
+2. **Claude Code** — install it first, so you can work through the remaining steps with `claude` in another terminal
+3. **Prerequisites** — `zsh`, `en_US.UTF-8`, `jq`, `gh`, `socat`, `mise`, `uv`, `sops`, `age`; tools that need no sudo are installed automatically, and every missing item is printed at once with its install command
+4. **Auth and keys** — `gh auth login`, age key
+5. **Configuration** — shell symlinks (~/.bashrc, ~/.zshrc, ~/.gitconfig), git, claude, and the other modules
+6. **Skills and plugins** — clone the skill repos, restore Claude Code plugins
+7. **Verification and summary**
+
+When something required is missing, setup stops and prints the exact commands to run. Run them, then run `./setup.sh` again — it picks up where it stopped (every step is idempotent, there is no state file). On public PCs a missing item in phases 2-4 stops the run; internal/external PCs show it as a notice and continue. See [docs/guide/setup.md](docs/guide/setup.md).
 
 After setup, reload your shell:
 
