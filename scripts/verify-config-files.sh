@@ -131,9 +131,7 @@ EOF
 
 if [ "$_fail" -ne 0 ]; then
     ux_error "Config file verification FAILED — see messages above."
-    ux_info "Likely cause: leftover git-crypt smudge filter (#594)."
-    ux_info "Recovery:    rerun ./setup.sh after a fresh checkout, or"
-    ux_info "             ./scripts/disable-git-crypt-local.sh && reset target file."
+    ux_info "Recovery:    rerun ./setup.sh after a fresh checkout."
     exit 1
 fi
 

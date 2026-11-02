@@ -26,7 +26,7 @@
           "main is fast-forward synced from origin before the worktree's branch is deleted"
         ],
         "crossDomainInteractions": [
-          "spawn delegates actual worktree creation to git_worktree_add in the CRUD domain for git-crypt-safe sparse checkout",
+          "spawn delegates actual worktree creation to git_worktree_add in the CRUD domain",
           "teardown's merge-safety checks reuse the same verdict/merge-detection primitives (_gwt_branch_merged, gh PR lookup) that the Observability domain uses to compute list/status verdicts",
           "teardown's lock detection (_gwt_claude_lock_pid) is the same signal the Observability domain surfaces as the 'locked' state"
         ]
@@ -58,19 +58,18 @@
       "id": "domain:worktree-crud",
       "type": "domain",
       "name": "Worktree CRUD Primitives",
-      "summary": "The lower-level git-worktree operations that the Lifecycle and Observability domains build on top of: creating a git-crypt-safe sparse-checkout worktree, removing a worktree plus its branch (by path, name-glob, or 'all'), and pruning stale registry entries.",
-      "tags": ["git-worktree", "crud", "git-crypt", "sparse-checkout"],
+      "summary": "The lower-level git-worktree operations that the Lifecycle and Observability domains build on top of: creating a full-checkout worktree, removing a worktree plus its branch (by path, name-glob, or 'all'), and pruning stale registry entries.",
+      "tags": ["git-worktree", "crud"],
       "complexity": "moderate",
       "domainMeta": {
-        "entities": ["sparse-checkout exclude list", ".gitattributes filter=git-crypt patterns", "worktree registry (.git/worktrees/)"],
+        "entities": ["worktree registry (.git/worktrees/)"],
         "businessRules": [
-          "any path tagged filter=git-crypt in .gitattributes is dynamically excluded from the new worktree's sparse-checkout so encrypted content never lands unencrypted on disk",
           "remove refuses bare wildcard targets and routes users to the explicit 'all' keyword instead",
           "remove never deletes the main or master branch even when it matches a name pattern",
           "prune only touches .git/worktrees/ registry metadata — it never accepts a path argument, and points users at remove/teardown for actual deletions"
         ],
         "crossDomainInteractions": [
-          "git_worktree_add is called directly by the Lifecycle domain's spawn flow to get git-crypt-safe checkout for free",
+          "git_worktree_add is called directly by the Lifecycle domain's spawn flow to create the worktree",
           "remove's orphan-cleanup fallback and prune both feed the same 'registered but missing on disk' condition the Observability domain warns about in list output"
         ]
       }
@@ -157,9 +156,9 @@
     {
       "id": "flow:add-worktree",
       "type": "flow",
-      "name": "Add Git-Crypt-Safe Worktree",
-      "summary": "Creates a raw git worktree with sparse-checkout dynamically configured to exclude any path tagged filter=git-crypt in .gitattributes, so encrypted content is never checked out unencrypted.",
-      "tags": ["add", "git-crypt", "sparse-checkout"],
+      "name": "Add Worktree",
+      "summary": "Creates a git worktree with a plain full checkout (no sparse-checkout) for a path, optional new branch and optional start point.",
+      "tags": ["add"],
       "complexity": "simple",
       "domainMeta": {
         "entryPoint": "gwt add <path> [<branch> [<start-point>]]",
@@ -268,7 +267,7 @@
       "id": "step:spawn-worktree:create-worktree",
       "type": "step",
       "name": "Create the worktree",
-      "summary": "Delegates to git_worktree_add to physically create the worktree with git-crypt-safe sparse checkout.",
+      "summary": "Delegates to git_worktree_add to physically create the worktree.",
       "tags": ["delegation"],
       "complexity": "simple",
       "filePath": "shell-common/functions/git_worktree.sh",
@@ -587,38 +586,18 @@
     {
       "id": "step:add-worktree:create-no-checkout",
       "type": "step",
-      "name": "Create worktree without checkout",
-      "summary": "Runs `git worktree add --no-checkout` with the appropriate branch/start-point combination so files aren't populated before sparse-checkout is configured.",
+      "name": "Create worktree with checkout",
+      "summary": "Runs git worktree add for the path, optional new branch and optional start point, checking out every tracked file.",
       "tags": ["git-worktree"],
       "complexity": "simple",
       "filePath": "shell-common/functions/git_worktree.sh",
       "lineRange": [1320, 1327]
     },
     {
-      "id": "step:add-worktree:parse-gitattributes",
-      "type": "step",
-      "name": "Parse git-crypt exclude patterns",
-      "summary": "Scans .gitattributes for any pattern tagged filter=git-crypt and builds the corresponding sparse-checkout exclude list.",
-      "tags": ["git-crypt", "parsing"],
-      "complexity": "moderate",
-      "filePath": "shell-common/functions/git_worktree.sh",
-      "lineRange": [1329, 1344]
-    },
-    {
-      "id": "step:add-worktree:configure-sparse-checkout",
-      "type": "step",
-      "name": "Configure sparse-checkout excludes",
-      "summary": "Initializes non-cone sparse-checkout and feeds it '/*' plus the git-crypt exclude patterns so encrypted paths are never checked out.",
-      "tags": ["sparse-checkout"],
-      "complexity": "simple",
-      "filePath": "shell-common/functions/git_worktree.sh",
-      "lineRange": [1346, 1347]
-    },
-    {
       "id": "step:add-worktree:checkout-files",
       "type": "step",
       "name": "Checkout files into worktree",
-      "summary": "Runs the actual checkout against the configured sparse-checkout set, failing loudly if it errors.",
+      "summary": "git worktree add checks out every tracked file directly; no sparse-checkout is configured.",
       "tags": ["git-worktree"],
       "complexity": "simple",
       "filePath": "shell-common/functions/git_worktree.sh",
@@ -627,8 +606,8 @@
     {
       "id": "step:add-worktree:report-success",
       "type": "step",
-      "name": "Report success and exclusions",
-      "summary": "Confirms the worktree is ready and lists which git-crypt-tagged paths were excluded, if any.",
+      "name": "Report success",
+      "summary": "Confirms the worktree is ready.",
       "tags": ["reporting"],
       "complexity": "simple",
       "filePath": "shell-common/functions/git_worktree.sh",
@@ -850,8 +829,6 @@
 
     { "source": "flow:add-worktree", "target": "step:add-worktree:validate-args", "type": "flow_step", "direction": "forward", "weight": 0.2 },
     { "source": "flow:add-worktree", "target": "step:add-worktree:create-no-checkout", "type": "flow_step", "direction": "forward", "weight": 0.4 },
-    { "source": "flow:add-worktree", "target": "step:add-worktree:parse-gitattributes", "type": "flow_step", "direction": "forward", "weight": 0.5 },
-    { "source": "flow:add-worktree", "target": "step:add-worktree:configure-sparse-checkout", "type": "flow_step", "direction": "forward", "weight": 0.7 },
     { "source": "flow:add-worktree", "target": "step:add-worktree:checkout-files", "type": "flow_step", "direction": "forward", "weight": 0.8 },
     { "source": "flow:add-worktree", "target": "step:add-worktree:report-success", "type": "flow_step", "direction": "forward", "weight": 1.0 },
 
@@ -878,7 +855,7 @@
     { "source": "domain:cli-interface", "target": "domain:worktree-lifecycle-management", "type": "cross_domain", "direction": "forward", "description": "gwt() dispatches 'spawn' and 'teardown' subcommands directly into the Lifecycle domain's entry functions.", "weight": 0.8 },
     { "source": "domain:cli-interface", "target": "domain:worktree-observability", "type": "cross_domain", "direction": "forward", "description": "gwt() dispatches 'list' and 'status' subcommands into the Observability domain's entry functions.", "weight": 0.8 },
     { "source": "domain:cli-interface", "target": "domain:worktree-crud", "type": "cross_domain", "direction": "forward", "description": "gwt() dispatches 'add', 'remove', and 'prune' subcommands into the CRUD domain's entry functions.", "weight": 0.8 },
-    { "source": "domain:worktree-lifecycle-management", "target": "domain:worktree-crud", "type": "cross_domain", "direction": "forward", "description": "Spawn reuses git_worktree_add for git-crypt-safe worktree creation; teardown's removal step mirrors the same git-worktree-remove primitives as the CRUD domain's remove flow.", "weight": 0.7 },
+    { "source": "domain:worktree-lifecycle-management", "target": "domain:worktree-crud", "type": "cross_domain", "direction": "forward", "description": "Spawn reuses git_worktree_add for worktree creation; teardown's removal step mirrors the same git-worktree-remove primitives as the CRUD domain's remove flow.", "weight": 0.7 },
     { "source": "domain:worktree-lifecycle-management", "target": "domain:worktree-observability", "type": "cross_domain", "direction": "forward", "description": "Teardown's unpushed-commit and merge-safety pre-flight checks reuse the same verdict/merge-detection primitives (_gwt_branch_merged, PR-merged lookup) and Claude-lock detector that the Observability domain surfaces as list/status state.", "weight": 0.6 },
     { "source": "domain:worktree-observability", "target": "domain:worktree-crud", "type": "cross_domain", "direction": "forward", "description": "List and status read the same `git worktree list --porcelain` registry that add/remove/prune mutate, and surface orphan states created by manual deletions that prune would clean up.", "weight": 0.5 }
   ],
