@@ -118,7 +118,53 @@ _hermes_ensure_config_copy
 # Part 2: CLI install (soft-fail, idempotent)
 # ============================================================================
 
+# The installer's `products` stage appends a PATH line to the login shell's rc
+# files with a plain `>>`, whatever flags it was given: --non-interactive only
+# skips the setup/gateway stages. Those rc files are symlinks into this repo, so
+# the append lands on tracked files (#2340). Nothing needs that line, since
+# shell-common/env/path.sh already puts ~/.local/bin on PATH: snapshot the
+# symlinked ones, then take the appended bytes back off.
+# Content rather than git state (cf. install_agy.sh): a target with uncommitted
+# edits still gets reverted, and without running git in the main checkout.
+HERMES_RC_FILES=(.bashrc .bash_profile .bash_login .profile .zshrc .zprofile)
+HERMES_RC_SNAPSHOT=""
+
+_hermes_rc_snapshot() {
+	local rc
+	HERMES_RC_SNAPSHOT="$(mktemp -d)" || return 1
+	for rc in "${HERMES_RC_FILES[@]}"; do
+		if [ -L "${HOME}/${rc}" ] && [ -f "${HOME}/${rc}" ]; then
+			cp "${HOME}/${rc}" "${HERMES_RC_SNAPSHOT}/${rc}" || return 1
+		fi
+	done
+}
+
+# Restores only a pure append: anything else is somebody's real change (a pull
+# in the main checkout during a minutes-long install), so warn and leave it.
+_hermes_rc_restore() {
+	local rc snapshot target size
+	[ -n "$HERMES_RC_SNAPSHOT" ] || return 0
+	for rc in "${HERMES_RC_FILES[@]}"; do
+		snapshot="${HERMES_RC_SNAPSHOT}/${rc}"
+		target="${HOME}/${rc}"
+		[ -f "$snapshot" ] || continue
+		cmp -s "$snapshot" "$target" && continue
+		size=$(($(wc -c <"$snapshot")))
+		if head -c "$size" "$target" | cmp -s - "$snapshot"; then
+			# `>` writes through the symlink; cp/mv could replace it.
+			cat "$snapshot" >"$target"
+			ux_warning "reverted the Hermes installer's edit to ~/${rc} (tracked file; PATH is managed by shell-common/env/path.sh)"
+		else
+			ux_warning "rc file ~/${rc} changed during the Hermes install and is not a plain append — left as is, review it"
+		fi
+	done
+	rm -rf "$HERMES_RC_SNAPSHOT"
+	HERMES_RC_SNAPSHOT=""
+}
+
 _hermes_install_cli() {
+	local rc=0
+
 	if [ "${HERMES_SKIP_INSTALL:-0}" = "1" ]; then
 		ux_info "Hermes CLI install skipped (HERMES_SKIP_INSTALL=1)"
 		return 0
@@ -143,7 +189,19 @@ _hermes_install_cli() {
 	# file with bash -- see lib/install_helpers.sh for why both matter (#1801).
 	# This is also the one step that reaches the public internet, so a
 	# proxied/offline machine fails here too — say what to retry and move on.
-	if run_remote_installer "${HERMES_INSTALL_URL}"; then
+	# --non-interactive: the installer otherwise ends in `hermes setup </dev/tty`,
+	# an unseen question under step_run that waits forever (#2340). The EXIT trap
+	# covers Ctrl-C, the one way out of a long install that skips the line below.
+	if ! _hermes_rc_snapshot; then
+		ux_warning "cannot snapshot rc files — Hermes CLI install skipped so tracked files stay clean"
+		return 0
+	fi
+	trap _hermes_rc_restore EXIT
+	run_remote_installer "${HERMES_INSTALL_URL}" --non-interactive || rc=$?
+	_hermes_rc_restore
+	trap - EXIT
+
+	if [ "$rc" -eq 0 ]; then
 		if command -v hermes >/dev/null 2>&1; then
 			ux_success "installed: $(hermes --version 2>&1 | head -1)"
 		else
@@ -151,9 +209,12 @@ _hermes_install_cli() {
 			# picked up before the install ran; a new shell resolves it.
 			ux_success "installer finished — open a new shell so PATH picks up hermes"
 		fi
+		# ux_warning, not ux_info: only warnings survive step_run's summary mode.
+		ux_warning "Hermes initial setup is not done — run it yourself: hermes setup"
+		ux_bullet "It offers to import Claude Code settings, memory, skills and MCP servers: read before answering"
 	else
 		ux_warning "Hermes CLI install failed (network or proxy is the usual cause)"
-		ux_bullet "Retry: curl -fsSL ${HERMES_INSTALL_URL} | bash"
+		ux_bullet "Retry: ./hermes/setup.sh"
 		ux_bullet "Details: hermes-help install"
 	fi
 

@@ -36,14 +36,15 @@ _hermes_help_rows_concept() {
 }
 
 _hermes_help_rows_install() {
-    ux_bullet "공식 설치: ${UX_BOLD}curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash${UX_RESET}"
+    ux_bullet "공식 설치: ${UX_BOLD}curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash${UX_RESET} (추적 rc 파일을 수정하므로 비권장)"
     ux_bullet "dotfiles 경유(권장): ${UX_BOLD}./setup.sh${UX_RESET} 또는 ${UX_BOLD}./hermes/setup.sh${UX_RESET} — 멱등, 이미 설치돼 있으면 스킵"
+    ux_bullet "설치 후 초기 설정은 직접: ${UX_BOLD}hermes setup${UX_RESET} (dotfiles 경유 설치는 --non-interactive)"
     ux_bullet "확인: ${UX_BOLD}hermes --version${UX_RESET} · ${UX_BOLD}hermes doctor${UX_RESET} (alias ${UX_BOLD}hermes-doctor${UX_RESET})"
 
     ux_section "./hermes/setup.sh 가 하는 일 (6단계)"
     ux_table_header "Part" "동작" "실패 정책"
     ux_table_row "1" "hermes/config.yaml → ~/.hermes/config.yaml 1회 복사" "hard-fail"
-    ux_table_row "2" "공식 install.sh 실행 (설치돼 있으면 스킵)" "soft-fail"
+    ux_table_row "2" "공식 install.sh --non-interactive 실행 (설치돼 있으면 스킵), rc 심링크 수정은 되돌림" "soft-fail"
     ux_table_row "3" "llm_endpoint.local.sh 읽어 base_url/api_key 주입" "soft-fail, 옵션"
     ux_table_row "4" "agent-browser npm 의존성 설치" "soft-fail, 옵션"
     ux_table_row "5" "root CA 를 Chromium NSS 저장소에 임포트" "soft-fail, 옵션"

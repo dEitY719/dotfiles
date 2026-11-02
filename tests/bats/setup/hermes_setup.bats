@@ -185,3 +185,140 @@ STUB
     assert_output --partial "No custom LLM endpoint configured"
     [ ! -e "${HOME}/hermes-set.log" ]
 }
+
+# --- Part 2: CLI install (#2340) ---------------------------------------------
+# hermes is absent and curl is stubbed, so run_remote_installer executes
+# ${HOME}/installer.sh instead of the real one. Its body mimics the upstream
+# wire_shell_path: a plain `>>`, which writes through a symlinked rc file and
+# which no flag of the real installer disables.
+
+_part2_stubs() {
+    rm "${STUB_BIN}/hermes"
+    cat > "${STUB_BIN}/curl" <<STUB
+#!/bin/sh
+while [ \$# -gt 0 ]; do
+    [ "\$1" = "-o" ] && cp "${HOME}/installer.sh" "\$2"
+    shift
+done
+exit 0
+STUB
+    chmod +x "${STUB_BIN}/curl"
+    cat > "${HOME}/installer.sh" <<STUB
+printf '%s\n' "\$*" > "${HOME}/installer-args"
+for rc in .bashrc .bash_profile .zshrc .profile; do
+    printf '\n# Hermes Agent command\nexport PATH=hermes\n' >> "${HOME}/\$rc"
+done
+${1:-}
+exit 0
+STUB
+}
+
+# ~/.bashrc, ~/.bash_profile and ~/.zshrc as setup.sh leaves them: symlinks into
+# the repo (a stand-in dir here). ~/.profile is a real, untracked file.
+_tracked_rc_links() {
+    mkdir -p "${HOME}/dots"
+    printf 'bash main\n' > "${HOME}/dots/main.bash"
+    printf 'bash profile\n' > "${HOME}/dots/profile.bash"
+    printf 'zsh main\n' > "${HOME}/dots/zshrc"
+    ln -s "${HOME}/dots/main.bash" "${HOME}/.bashrc"
+    ln -s "${HOME}/dots/profile.bash" "${HOME}/.bash_profile"
+    ln -s "${HOME}/dots/zshrc" "${HOME}/.zshrc"
+    printf 'local profile\n' > "${HOME}/.profile"
+}
+
+_assert_tracked_rc_clean() {
+    [ "$(cat "${HOME}/dots/main.bash")" = "bash main" ]
+    [ "$(cat "${HOME}/dots/profile.bash")" = "bash profile" ]
+    [ "$(cat "${HOME}/dots/zshrc")" = "zsh main" ]
+    [ -L "${HOME}/.bashrc" ]
+    [ -L "${HOME}/.bash_profile" ]
+    [ -L "${HOME}/.zshrc" ]
+}
+
+@test "install: the installer gets --non-interactive, so hermes setup never blocks" {
+    _part2_stubs
+    run bash "${HERMES_SETUP}"
+    assert_success
+    [ "$(cat "${HOME}/installer-args")" = "--non-interactive" ]
+}
+
+@test "install: a finished install tells the user to run hermes setup by hand" {
+    _part2_stubs
+    run bash "${HERMES_SETUP}"
+    assert_success
+    assert_output --partial "run it yourself: hermes setup"
+    # A warning line, because step_run hides everything else in summary mode.
+    assert_output --partial "⚠"
+}
+
+@test "install: an already-installed hermes gets no hermes setup prompt" {
+    run bash "${HERMES_SETUP}"
+    assert_success
+    refute_output --partial "hermes setup"
+}
+
+@test "install: a failed install prints no hermes setup prompt and a safe retry" {
+    _part2_stubs 'exit 1'
+    run bash "${HERMES_SETUP}"
+    assert_success
+    refute_output --partial "run it yourself"
+    assert_output --partial "Retry: ./hermes/setup.sh"
+    refute_output --partial "| bash"
+}
+
+@test "install: lines appended through rc symlinks are reverted, with a warning" {
+    _part2_stubs
+    _tracked_rc_links
+    run bash "${HERMES_SETUP}"
+    assert_success
+    _assert_tracked_rc_clean
+    assert_output --partial "reverted the Hermes installer's edit to ~/.bashrc"
+    assert_output --partial "reverted the Hermes installer's edit to ~/.bash_profile"
+    assert_output --partial "reverted the Hermes installer's edit to ~/.zshrc"
+}
+
+@test "install: a real, untracked rc file keeps the installer's line" {
+    _part2_stubs
+    _tracked_rc_links
+    run bash "${HERMES_SETUP}"
+    assert_success
+    grep -q 'export PATH=hermes' "${HOME}/.profile"
+    refute_output --partial "edit to ~/.profile"
+}
+
+@test "install: uncommitted user edits already in the rc target survive the revert" {
+    _part2_stubs
+    _tracked_rc_links
+    printf 'my unstaged edit\n' >> "${HOME}/dots/main.bash"
+    run bash "${HERMES_SETUP}"
+    assert_success
+    [ "$(cat "${HOME}/dots/main.bash")" = "bash main
+my unstaged edit" ]
+}
+
+@test "install: a failed installer still has its rc edits reverted" {
+    _part2_stubs 'exit 1'
+    _tracked_rc_links
+    run bash "${HERMES_SETUP}"
+    assert_success
+    _assert_tracked_rc_clean
+}
+
+@test "install: an interrupted setup still has its rc edits reverted" {
+    # $PPID is hermes/setup.sh: run_remote_installer runs `bash <file>` in-process.
+    _part2_stubs 'kill -TERM $PPID; sleep 1'
+    _tracked_rc_links
+    run bash "${HERMES_SETUP}"
+    [ "$status" -ne 0 ]
+    _assert_tracked_rc_clean
+}
+
+@test "install: an rc change that is not a plain append is left alone, with a warning" {
+    # git pull in the main checkout mid-install, say: restoring would undo it.
+    _part2_stubs 'printf "rewritten\n" > "${HOME}/dots/main.bash"'
+    _tracked_rc_links
+    run bash "${HERMES_SETUP}"
+    assert_success
+    [ "$(cat "${HOME}/dots/main.bash")" = "rewritten" ]
+    assert_output --partial "~/.bashrc changed during the Hermes install"
+}
