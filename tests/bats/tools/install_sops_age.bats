@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tests/bats/tools/install_sops_age.bats
-# install_sops_age.sh: mise shims PATH hint (#2234).
+# install_sops_age.sh: new-shell hint after a mise install (#2234, #2342).
 
 load '../test_helper'
 
@@ -19,7 +19,7 @@ run_sops_tool() {
     run_sourced_tool_script "$TOOLS_DIR" "$INSTALL_SOPS_AGE_SCRIPT" "$1"
 }
 
-@test "sops_age_shims_hint: prints export when sops/age are not on PATH" {
+@test "sops_age_shims_hint: asks for a new shell, no manual PATH edit (#2342)" {
     run_sops_tool '
         PATH=/usr/bin:/bin
         unset MISE_DATA_DIR XDG_DATA_HOME
@@ -27,7 +27,8 @@ run_sops_tool() {
         sops_age_shims_hint
     '
     assert_success
-    assert_output --partial "export PATH=\"${HOME}/.local/share/mise/shims:\$PATH\""
+    assert_output --partial "new shell"
+    refute_output --partial "export PATH"
 }
 
 @test "sops_age_shims_hint: silent when sops/age already on PATH" {
@@ -61,7 +62,7 @@ run_sops_tool() {
         main
     '
     assert_success
-    assert_output --partial "mise/shims"
+    assert_output --partial "new shell"
 
     run_sops_tool '
         sops_age_installed() { return 1; }
@@ -70,5 +71,5 @@ run_sops_tool() {
         main
     '
     assert_success
-    refute_output --partial "mise/shims"
+    refute_output --partial "new shell"
 }

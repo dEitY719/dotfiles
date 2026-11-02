@@ -59,15 +59,15 @@ install_sops_age_via_release() {
     return "$rc"
 }
 
-# The script runs in a subprocess, so it cannot fix the parent shell's PATH;
-# print the export when the mise shims dir is not on it (nothing otherwise).
+# The script runs in a subprocess, so it cannot fix the parent shell's PATH:
+# env/mise.sh does that for the next shell (#2342), so just point there
+# (nothing when this shell already has the tools or the shims dir).
 sops_age_shims_hint() {
     local shims="${MISE_DATA_DIR:-${XDG_DATA_HOME:-${HOME}/.local/share}/mise}/shims"
     sops_age_installed && return 0
     # shims already on PATH: the miss is not a PATH problem, a hint would mislead
     case ":${PATH}:" in *":${shims}:"*) return 0 ;; esac
-    ux_warning "sops/age not found on PATH in this shell"
-    ux_bullet "export PATH=\"${shims}:\$PATH\""
+    ux_bullet "Open a new shell to pick up sops/age (mise shims load automatically)"
 }
 
 sops_age_manual_hints() {

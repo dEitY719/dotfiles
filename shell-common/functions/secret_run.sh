@@ -15,6 +15,11 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 #
 # Details: sops-help secrets
 
+# Non-interactive callers skip the env/ loader; mise-installed sops is on the
+# shims dir (#2342). Idempotent for interactive shells, which already ran it.
+# shellcheck source=/dev/null
+. "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/env/mise.sh"
+
 # Repo-wide ciphertext. DOTFILES_ENC_ENV overrides it (tests, other repos).
 _dotfiles_enc_env() {
     printf '%s' "${DOTFILES_ENC_ENV:-${DOTFILES_ROOT:-$HOME/dotfiles}/.enc.env}"
