@@ -1,18 +1,22 @@
 #!/bin/bash
 
-# scripts/update-skills.sh: skills 업데이트 5단계를 한 번에 실행 (#1825, #1903)
+# scripts/update-skills.sh: skills 업데이트 6단계를 한 번에 실행 (#1825, #1903, #2344)
 #
 #   1. claude/plugin/git-clone-skills.sh      — manifest 의 누락 repo clone (idempotent, --dry-run 만 전달)
 #   2. claude/plugin/git-pull-skills.sh "$@"  — workspace repo pull
 #   3. claude/setup.sh                        — 계정 디렉토리 링크 + 남은 평면 스킬 링크 정리
-#                                               (스킬 자체는 4단계 plugin store 에서 로드)
-#   4. claude/plugin/update-plugins.sh        — Claude Code plugin store 갱신
+#                                               (스킬 자체는 4·5단계 plugin store 에서 로드)
+#   4. claude/plugin/restore.sh               — manifest 에 있는데 plugin store 에 없는 항목만
+#                                               add/install. 누락이 없으면 claude 호출 0회 (#2344)
+#   5. claude/plugin/update-plugins.sh        — Claude Code plugin store 갱신
 #                                               (marketplace update + plugin update)
-#   5. scripts/setup-skills-ssot.sh           — OpenCode/Codex/agy 합성 + Hermes external_dirs (#1829)
+#   6. scripts/setup-skills-ssot.sh           — OpenCode/Codex/agy 합성 + Hermes external_dirs (#1829)
 #
-# 4단계가 필요한 이유: Claude Code 는 workspace clone 이 아니라 plugin store
+# 4·5단계가 필요한 이유: Claude Code 는 workspace clone 이 아니라 plugin store
 # (plugins/marketplaces, plugins/cache/<mkt>/<plugin>/<ver>) 에서 스킬을 로드한다.
-# 2단계 pull 만으로는 설치 버전이 갱신되지 않는다.
+# 2단계 pull 만으로는 설치도 버전 갱신도 되지 않는다. 4단계는 3단계 뒤여야 한다 —
+# 계정 plugins 링크가 맞춰지기 전에 claude 를 부르면 실제 폴더가 생긴다.
+# plugin store 는 계정끼리 공유이므로 4단계는 --all-accounts 없이 한 번만 돈다.
 #
 # 출력 (#2126): 기본은 요약 모드 — shared step runner
 # (shell-common/tools/ux_lib/step_runner.sh) 로 스텝당 1줄, 경고/실패만 상세,
@@ -20,10 +24,11 @@
 # -v / --verbose 또는 SKILLS_SYNC_VERBOSE=1 이면 하위 스크립트 출력을 전부 흘린다.
 # -v 는 여기서 소비하고 2단계로 넘기지 않는다.
 #
-# 종료 코드: 1·2·3·5단계 실패는 즉시 비0 종료 (critical). 4단계 실패는 5단계를
-# 막지 않고 (optional), 마지막에 그 종료 코드로 끝난다. 나머지 인자는 2단계로
-# 전달되고, clone/update-plugins 단계에는 --dry-run 만 전달된다. --dry-run 이
-# 있으면 clone/pull/update-plugins dry-run 만 실행하고 합성은 건너뛴다.
+# 종료 코드: 1·2·3·6단계 실패는 즉시 비0 종료 (critical). 4·5단계 실패는 이후
+# 단계를 막지 않고 (optional), 마지막에 첫 비0 종료 코드로 끝난다. 나머지 인자는
+# 2단계로 전달되고, clone/restore/update-plugins 단계에는 --dry-run 만 전달된다.
+# --dry-run 이 있으면 clone/pull/restore/update-plugins dry-run 만 실행하고
+# 합성은 건너뛴다.
 # Alias: skills-sync (shell-common/aliases/skills_sync.sh)
 
 set -euo pipefail
@@ -38,9 +43,9 @@ source "${DOTFILES_ROOT}/shell-common/tools/ux_lib/step_runner.sh"
 
 _us_help() {
     ux_usage "skills-sync" "[-v|--verbose] [--dry-run] [git-pull-skills options]" \
-        "clone -> pull -> claude/setup.sh -> update-plugins -> setup-skills-ssot.sh"
+        "clone -> pull -> claude/setup.sh -> restore-plugins -> update-plugins -> setup-skills-ssot.sh"
     ux_bullet "-v, --verbose: stream full sub-script output (SKILLS_SYNC_VERBOSE=1 is the same)"
-    ux_bullet "--dry-run: preview clone/pull/update-plugins only, skip synthesis"
+    ux_bullet "--dry-run: preview clone/pull/restore/update-plugins only, skip synthesis"
     ux_bullet "--jobs <N>: repos / marketplaces synced in parallel by pull and update-plugins (default 4, DOTFILES_SKILLS_JOBS)"
     ux_bullet "other options go to git-pull-skills.sh (see: claude/plugin/git-pull-skills.sh --help)"
 }
@@ -135,6 +140,25 @@ _us_digest() {
             fi
         fi
         ;;
+    restore-plugins*)
+        # Failed>0 exits 1, so a digest (rc 0 only) never needs a failure count.
+        # restore.sh prints plain "  add: ..." / "  install: ..." when piped, so
+        # the detail cannot come from _us_items' success-line filter.
+        n=$(_us_count "Plugins installed")
+        up=$(_us_count "Marketplaces added")
+        if [ -n "$n" ]; then
+            STEP_DIGEST="신규 설치 $n"
+            if [ "$n" != 0 ]; then STEP_DIGEST="$STEP_DIGEST (실행 중인 Claude Code 세션 재시작 필요)"; fi
+        else
+            n=$(_us_count "Plugins \\(would install\\)")
+            up=$(_us_count "Marketplaces \\(would add\\)")
+            if [ -n "$n" ]; then STEP_DIGEST="설치 예정 $n"; fi
+        fi
+        if [ -n "$up" ] && [ "$up" != 0 ]; then STEP_DIGEST="${STEP_DIGEST:+$STEP_DIGEST / }마켓플레이스 $up"; fi
+        if [ -n "$STEP_DIGEST" ]; then
+            STEP_DETAIL=$(sed -En 's/^[[:space:]]*(install: [^[:space:]]+)$/\1/p; s/^[[:space:]]*add: ([^[:space:]]+) \(.*$/add: \1/p' <<<"$_US_CLEAN")
+        fi
+        ;;
     update-plugins*)
         # Failed>0 exits 1, so a digest (rc 0 only) never needs a failure count.
         n=$(_us_count "Plugins updated")
@@ -151,7 +175,7 @@ _us_digest() {
             n=$(_us_count "Plugins \\(would update\\)")
             if [ -n "$n" ]; then STEP_DIGEST="갱신 예정 $n"; fi
         fi
-        for odd in "Plugins with an unrecognized result:미인식" "Plugins skipped \\(not installed\\):미설치 skip"; do
+        for odd in "Plugins with an unrecognized result:미인식" "Plugins skipped \\(not installed\\):미설치 skip" "Marketplaces skipped \\(not registered\\):미등록 skip"; do
             n=$(_us_count "${odd%%:*}")
             if [ -n "$n" ] && [ "$n" != 0 ]; then STEP_DIGEST="${STEP_DIGEST:+$STEP_DIGEST / }${odd#*:} $n"; fi
         done
@@ -166,7 +190,8 @@ _us_hint() {
     case "$1" in
     git-clone-skills*) ux_bullet_sub "manifest(claude/plugin/marketplaces.json) 와 네트워크/인증 확인" ;;
     git-pull-skills*) ux_bullet_sub "충돌/분기된 repo 확인 — skills-sync --dry-run 으로 대상 미리보기" ;;
-    update-plugins*) ux_bullet_sub "네트워크/claude CLI 확인 후 skills-sync 재실행 (5단계는 이미 진행됨)" ;;
+    restore-plugins*) ux_bullet_sub "네트워크/claude CLI 확인 후 skills-sync 재실행 — 남은 항목만 다시 시도 (이후 단계는 이미 진행됨)" ;;
+    update-plugins*) ux_bullet_sub "네트워크/claude CLI 확인 후 skills-sync 재실행 (6단계는 이미 진행됨)" ;;
     esac
     return 0
 }
@@ -176,7 +201,7 @@ _us_hint() {
 _us_step() {
     local n="$1"
     shift
-    if [ "$STEP_VERBOSE" = 1 ]; then ux_section "$n/5 $1"; fi
+    if [ "$STEP_VERBOSE" = 1 ]; then ux_section "$n/6 $1"; fi
     step_run "$@"
 }
 
@@ -190,7 +215,7 @@ if [ "$STEP_VERBOSE" != 1 ]; then
     ux_info "skills-sync (요약 모드 — 전체 출력은 skills-sync -v)"
 fi
 
-# --dry-run: steps 1/2/4 preview only; synthesis (3/5) is skipped.
+# --dry-run: steps 1/2/4/5 preview only; synthesis (3/6) is skipped.
 clone_args=()
 plugins_args=()
 sfx=""
@@ -207,16 +232,19 @@ _us_step 2 "git-pull-skills$sfx" critical \
 if [ "$dry_run" != 1 ]; then
     _us_step 3 claude/setup.sh critical "${DOTFILES_ROOT}/claude/setup.sh"
 fi
-# plugin 갱신 실패(네트워크 등)는 5단계 합성을 막지 않는다 — 끝까지 진행한 뒤
-# 그 종료 코드로 끝낸다.
-_us_step 4 "update-plugins$sfx" optional \
+# plugin 복원·갱신 실패(네트워크 등)는 이후 단계를 막지 않는다 — 끝까지 진행한 뒤
+# 첫 비0 종료 코드로 끝낸다. claude 가 없는 PC 는 실패가 아니라 건너뜀이다.
+_us_step 4 "restore-plugins$sfx" optional \
+    "${DOTFILES_ROOT}/claude/plugin/restore.sh" --skip-if-no-claude ${plugins_args[@]+"${plugins_args[@]}"}
+final_rc=$STEP_LAST_RC
+_us_step 5 "update-plugins$sfx" optional \
     "${DOTFILES_ROOT}/claude/plugin/update-plugins.sh" ${plugins_args[@]+"${plugins_args[@]}"}
-plugins_rc=$STEP_LAST_RC
+if [ "$final_rc" = 0 ]; then final_rc=$STEP_LAST_RC; fi
 if [ "$dry_run" = 1 ]; then
     ux_info "--dry-run: 합성 단계(claude/setup.sh, setup-skills-ssot.sh)를 건너뜁니다"
 else
-    _us_step 5 setup-skills-ssot critical "${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
+    _us_step 6 setup-skills-ssot critical "${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
 fi
 
 step_summary "skills-sync$sfx"
-exit "$plugins_rc"
+exit "$final_rc"

@@ -487,3 +487,277 @@ gh-pr-skills|dEitY719/gh-pr-skills|gh-pr
 gh-flow-skills|dEitY719/gh-flow-skills|gh-flow
 TABLE
 }
+
+# --- #2344: store diff — only what the store lacks reaches the CLI ----------
+#
+# A fake `claude` on PATH logs every call and, like the real CLI, records what
+# it added/installed in the store files. PATH keeps /usr/bin:/bin for jq/flock
+# but never the real claude binary. Every test below needs the account's
+# plugins dir, which claude/setup.sh links in real life.
+
+_fake_claude() {
+    FAKEBIN="$TEST_TEMP_HOME/bin"
+    CLAUDE_LOG="$TEST_TEMP_HOME/claude.log"
+    STORE="$TEST_TEMP_HOME/.claude-personal/plugins"
+    export CLAUDE_LOG STORE
+    mkdir -p "$FAKEBIN" "$STORE"
+    : >"$CLAUDE_LOG"
+    cat >"$FAKEBIN/claude" <<'SH'
+#!/bin/bash
+echo "$* [cfg=${CLAUDE_CONFIG_DIR:-}]" >>"$CLAUDE_LOG"
+if [ -n "${FAKE_CLAUDE_FAIL:-}" ]; then
+    case " $* " in *" $FAKE_CLAUDE_FAIL "*) echo "boom" >&2; exit 1 ;; esac
+fi
+_store_add() { # <file> <jq filter>
+    local f="$STORE/$1"
+    [ -f "$f" ] || echo '{}' >"$f"
+    jq --arg k "$3" "$2" "$f" >"$f.new" && mv "$f.new" "$f"
+}
+case "$1 $2 $3" in
+"plugin marketplace add") _store_add known_marketplaces.json '.[$k] = {}' "${4##*/}" ;;
+"plugin install "*) _store_add installed_plugins.json '.plugins[$k] = [{"scope": "user"}]' "$3" ;;
+esac
+exit 0
+SH
+    chmod +x "$FAKEBIN/claude"
+    export PATH="$FAKEBIN:/usr/bin:/bin"
+    unset CLAUDE_DEFAULT_ACCOUNT
+    cat >"$PLUGDIR/marketplaces.json" <<'JSON'
+{"mp-a": "o/mp-a", "mp-b": "o/mp-b"}
+JSON
+    cat >"$PLUGDIR/plugins.json" <<'JSON'
+{"plugins": ["a@mp-a", "b@mp-b"]}
+JSON
+}
+
+_seed_full_store() {
+    cat >"$STORE/known_marketplaces.json" <<'JSON'
+{"mp-a": {"lastUpdated": "T0"}, "mp-b": {"lastUpdated": "T0"}}
+JSON
+    cat >"$STORE/installed_plugins.json" <<'JSON'
+{"version": 2, "plugins": {"a@mp-a": [{"scope": "user"}], "b@mp-b": [{"scope": "user"}]}}
+JSON
+}
+
+@test "restore.sh installs everything into a store that has no state files yet (#2344 F-2)" {
+    _fake_claude
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    run cat "$CLAUDE_LOG"
+    assert_output "plugin marketplace add o/mp-a [cfg=$TEST_TEMP_HOME/.claude-personal]
+plugin marketplace add o/mp-b [cfg=$TEST_TEMP_HOME/.claude-personal]
+plugin install a@mp-a [cfg=$TEST_TEMP_HOME/.claude-personal]
+plugin install b@mp-b [cfg=$TEST_TEMP_HOME/.claude-personal]"
+}
+
+@test "restore.sh re-run makes no CLI call and leaves the store files alone (#2344 F-1)" {
+    _fake_claude
+    "$PLUGDIR/restore.sh" >/dev/null
+    local before
+    before=$(cat "$STORE/known_marketplaces.json" "$STORE/installed_plugins.json" | sha256sum)
+    : >"$CLAUDE_LOG"
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    assert_output --partial 'Marketplaces added: 0'
+    assert_output --partial 'Plugins installed: 0'
+    assert_output --partial 'Already present: 4'
+    assert_output --partial 'Failed: 0'
+    [ ! -s "$CLAUDE_LOG" ]
+    assert_equal "$(cat "$STORE/known_marketplaces.json" "$STORE/installed_plugins.json" | sha256sum)" "$before"
+}
+
+@test "restore.sh handles only the entry newly added to the manifest (#2344)" {
+    _fake_claude
+    _seed_full_store
+    cat >"$PLUGDIR/marketplaces.local.json" <<'JSON'
+{"mp-c": "o/mp-c"}
+JSON
+    cat >"$PLUGDIR/plugins.local.json" <<'JSON'
+{"plugins": ["c@mp-c"]}
+JSON
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    assert_output --partial 'Marketplaces added: 1'
+    assert_output --partial 'Plugins installed: 1'
+    assert_output --partial 'Already present: 4'
+    run cat "$CLAUDE_LOG"
+    assert_output "plugin marketplace add o/mp-c [cfg=$TEST_TEMP_HOME/.claude-personal]
+plugin install c@mp-c [cfg=$TEST_TEMP_HOME/.claude-personal]"
+}
+
+@test "restore.sh calls only install when the marketplace is known but the plugin is not (#2344)" {
+    _fake_claude
+    _seed_full_store
+    jq 'del(.plugins["b@mp-b"])' "$STORE/installed_plugins.json" >"$STORE/x" && mv "$STORE/x" "$STORE/installed_plugins.json"
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    run cat "$CLAUDE_LOG"
+    assert_output "plugin install b@mp-b [cfg=$TEST_TEMP_HOME/.claude-personal]"
+}
+
+@test "restore.sh does not reinstall a tombstoned plugin missing from the store (#2344 F-6)" {
+    _fake_claude
+    _seed_full_store
+    jq 'del(.plugins["b@mp-b"])' "$STORE/installed_plugins.json" >"$STORE/x" && mv "$STORE/x" "$STORE/installed_plugins.json"
+    cat >"$PLUGDIR/removed.local.json" <<'JSON'
+{"plugins": ["b@mp-b"]}
+JSON
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    [ ! -s "$CLAUDE_LOG" ]
+}
+
+@test "restore.sh --dry-run lists only what a real run would call (#2344 F-3)" {
+    _fake_claude
+    _seed_full_store
+    jq 'del(.plugins["b@mp-b"])' "$STORE/installed_plugins.json" >"$STORE/x" && mv "$STORE/x" "$STORE/installed_plugins.json"
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    assert_output --partial 'install: b@mp-b'
+    refute_output --partial 'install: a@mp-a'
+    refute_output --partial 'add: mp-a'
+    assert_output --partial 'Plugins (would install): 1'
+    assert_output --partial 'Marketplaces (would add): 0'
+    assert_output --partial 'Already present: 3'
+    [ ! -s "$CLAUDE_LOG" ]
+}
+
+@test "restore.sh: a broken store file fails before any CLI call, dry-run included (#2344 F-2)" {
+    _fake_claude
+    _seed_full_store
+    local f
+    for f in installed_plugins.json known_marketplaces.json; do
+        _seed_full_store
+        printf '{"plugins": {' >"$STORE/$f"
+        run "$PLUGDIR/restore.sh"
+        assert_failure 1
+        assert_output --partial "$STORE/$f"
+        [ ! -s "$CLAUDE_LOG" ]
+        run "$PLUGDIR/restore.sh" --dry-run
+        assert_failure 1
+    done
+}
+
+@test "restore.sh: an empty or wrongly shaped store file is broken, not an empty store (#2344 F-2)" {
+    _fake_claude
+    _seed_full_store
+    : >"$STORE/installed_plugins.json"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    [ ! -s "$CLAUDE_LOG" ]
+    echo '{"plugins": ["a@mp-a"]}' >"$STORE/installed_plugins.json"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    [ ! -s "$CLAUDE_LOG" ]
+    echo '[]' >"$STORE/installed_plugins.json"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    [ ! -s "$CLAUDE_LOG" ]
+}
+
+@test "restore.sh keeps going past a failed install, then reports it and exits 1 (#2344 F-4)" {
+    _fake_claude
+    export FAKE_CLAUDE_FAIL="a@mp-a"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial 'Plugins installed: 1'
+    assert_output --partial 'Failed: 1'
+    run grep -c 'plugin install' "$CLAUDE_LOG"
+    assert_output "2"
+}
+
+@test "restore.sh counts a failed marketplace's plugins as failed without calling install (#2344)" {
+    _fake_claude
+    export FAKE_CLAUDE_FAIL="o/mp-a"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial 'Marketplaces added: 1'
+    assert_output --partial 'Plugins installed: 1'
+    assert_output --partial 'Failed: 2'
+    run cat "$CLAUDE_LOG"
+    refute_output --partial 'plugin install a@mp-a'
+    assert_output --partial 'plugin install b@mp-b'
+}
+
+@test "restore.sh retries what failed on the next run (#2344)" {
+    _fake_claude
+    FAKE_CLAUDE_FAIL="a@mp-a" "$PLUGDIR/restore.sh" >/dev/null 2>&1 || true
+    : >"$CLAUDE_LOG"
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    run cat "$CLAUDE_LOG"
+    assert_output "plugin install a@mp-a [cfg=$TEST_TEMP_HOME/.claude-personal]"
+}
+
+@test "restore.sh install runs under update-plugins' flock file (#2344 F-7)" {
+    _fake_claude
+    cat >"$FAKEBIN/flock" <<'SH'
+#!/bin/bash
+echo "flock $1" >>"$CLAUDE_LOG.flock"
+shift
+exec "$@"
+SH
+    chmod +x "$FAKEBIN/flock"
+    export TMPDIR="$TEST_TEMP_HOME"
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    run sort -u "$CLAUDE_LOG.flock"
+    assert_output "flock $TEST_TEMP_HOME/dotfiles-update-plugins.$(id -u).lock"
+    # The two scripts must keep naming the same file.
+    grep -qF 'dotfiles-update-plugins.$(id -u).lock' "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/update-plugins.sh"
+}
+
+@test "restore.sh skips without a CLI call when the account has no plugins path (#2344 F-11)" {
+    _fake_claude
+    rm -rf "$STORE"
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    assert_output --partial 'WARN: '
+    assert_output --partial 'claude/setup.sh'
+    [ ! -s "$CLAUDE_LOG" ]
+    [ ! -e "$STORE" ]
+}
+
+@test "restore.sh without claude still fails when run directly, skips with --skip-if-no-claude (#2344 F-10)" {
+    export PATH="$TEST_TEMP_HOME/nobin:/usr/bin:/bin"
+    command -v claude >/dev/null && skip "a real claude lives in /usr/bin"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial 'claude CLI가 없습니다'
+    run "$PLUGDIR/restore.sh" --skip-if-no-claude
+    assert_success
+    assert_output --partial 'WARN: '
+    assert_output --partial 'clinstall'
+}
+
+@test "restore.sh --sync still prunes after the store diff (#2344)" {
+    _fake_claude
+    _seed_full_store
+    jq '.["surplus-mp"] = {"source": {"source": "github"}}' "$STORE/known_marketplaces.json" >"$STORE/x" && mv "$STORE/x" "$STORE/known_marketplaces.json"
+    run "$PLUGDIR/restore.sh" --sync
+    assert_success
+    run cat "$CLAUDE_LOG"
+    assert_output "plugin marketplace remove surplus-mp [cfg=$TEST_TEMP_HOME/.claude-personal]"
+}
+
+@test "restore.sh: the company scope gets the same diff on internal (#2344)" {
+    _fake_claude
+    echo internal >"$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    STORE="$TEST_TEMP_HOME/.claude/plugins"
+    export STORE
+    mkdir -p "$STORE"
+    _seed_full_store
+    mkdir -p "$PLUGDIR/company"
+    git -C "$PLUGDIR/company" init -q
+    cat >"$PLUGDIR/company/marketplaces.json" <<'JSON'
+{"mp-a": "o/mp-a", "internal-tools": "git@ghes.example.com:team/internal-tools"}
+JSON
+    cat >"$PLUGDIR/company/plugins.json" <<'JSON'
+{"plugins": ["secret@internal-tools"]}
+JSON
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    run cat "$CLAUDE_LOG"
+    assert_output "plugin marketplace add git@ghes.example.com:team/internal-tools [cfg=$TEST_TEMP_HOME/.claude]
+plugin install secret@internal-tools [cfg=$TEST_TEMP_HOME/.claude]"
+}

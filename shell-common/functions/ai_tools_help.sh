@@ -91,7 +91,8 @@ _claude_help_rows_skills() {
 
 _claude_help_rows_plugin() {
     ux_table_row "claude plugin marketplace add/remove, install/uninstall" "자동으로 claude/plugin/*.json에 동기화됨 (hook)" ""
-    ux_table_row "./claude/plugin/restore.sh" "신규 PC에서 manifest 기반 일괄 재설치 (add-only)" ""
+    ux_table_row "skills-sync" "manifest 누락분 설치(restore.sh) + 갱신(update-plugins.sh) 한 번에" ""
+    ux_table_row "./claude/plugin/restore.sh" "저장소에 없는 manifest 항목만 add/install (멱등, 실패 시 exit 1)" ""
     ux_table_row "./claude/plugin/restore.sh --sync" "양방향 sync — SSOT에 없는 잉여 로컬 항목까지 제거" ""
     ux_table_row "./claude/plugin/restore.sh --dry-run" "실행 없이 계획만 출력 (--sync와 조합 가능)" ""
     ux_table_row "./claude/plugin/publish-sync.sh" "로컬에 쌓인 manifest sync 커밋을 PR로 origin에 게시" ""
