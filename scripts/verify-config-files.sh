@@ -131,6 +131,7 @@ EOF
 
 if [ "$_fail" -ne 0 ]; then
     ux_error "Config file verification FAILED — see messages above."
+    ux_info "Recovery: restore the target file from git, then rerun ./setup.sh."
     exit 1
 fi
 

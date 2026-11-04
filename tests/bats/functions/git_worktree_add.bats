@@ -58,6 +58,14 @@ _assert_full_checkout() {
     assert_output "feat-y"
 }
 
+@test "zsh: gwt add <path> checks out every file without sparse-checkout" {
+    command -v zsh >/dev/null || skip "zsh not installed"
+    run_in_zsh "cd '$REPO' && git_worktree_add '$FIXTURE/wt5'"
+    assert_success
+    assert_output --partial "Worktree ready: $FIXTURE/wt5"
+    _assert_full_checkout "$FIXTURE/wt5"
+}
+
 @test "zsh: gwt add <path> <branch> <start> checks out every file without sparse-checkout" {
     command -v zsh >/dev/null || skip "zsh not installed"
     run_in_zsh "cd '$REPO' && git_worktree_add '$FIXTURE/wt4' feat-z main"
