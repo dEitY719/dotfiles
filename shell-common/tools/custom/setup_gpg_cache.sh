@@ -15,7 +15,6 @@ main() {
 
     ux_section "Benefits of Caching"
     ux_bullet "Enter passphrase only once per day"
-    ux_bullet "Auto-unlock for git-crypt"
     ux_bullet "Balance between security and convenience"
     echo ""
 
@@ -125,7 +124,7 @@ main() {
     echo ""
 
     ux_section "Next Steps"
-    ux_numbered 1 "Use GPG or git-crypt unlock to enter passphrase"
+    ux_numbered 1 "Use GPG to enter passphrase"
     ux_numbered 2 "Passphrase automatically cached for 24 hours"
     ux_numbered 3 "You will only need to enter it once per day"
     echo ""

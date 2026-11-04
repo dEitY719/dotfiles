@@ -34,8 +34,8 @@ _gwt_help_list_sections() {
 }
 
 _gwt_help_rows_add() {
-    ux_table_row "syntax" "gwt add <path> [<new-branch> [<start-point>]]" "Create git-crypt-safe worktree"
-    ux_table_row "behavior" "Sparse checkout excludes encrypted paths" "Keeps encrypted layout safe"
+    ux_table_row "syntax" "gwt add <path> [<new-branch> [<start-point>]]" "Create worktree"
+    ux_table_row "behavior" "Plain git worktree add" "Full checkout, no sparse-checkout"
 }
 
 _gwt_help_rows_list() {

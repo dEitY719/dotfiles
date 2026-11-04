@@ -328,7 +328,7 @@ git_worktree_spawn() {
         break
     done
 
-    # Create worktree (reuse git_worktree_add for git-crypt safety)
+    # Create worktree (reuse git_worktree_add)
     git_worktree_add "$wt_path" "$branch" "$base" || return 1
 
     # Log

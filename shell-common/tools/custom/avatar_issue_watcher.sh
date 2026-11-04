@@ -2120,7 +2120,7 @@ _iw_find_issue_worktree() {
 # shell function behind the interactive guard, so it is sourced here with
 # DOTFILES_FORCE_INIT=1, inside a subshell that keeps the watcher's cwd and
 # namespace. No --ai/--user/--launch: the herdr pane starts the agent and
-# picks the account. git-crypt handling is git_worktree_add's.
+# picks the account.
 _iw_gwt_spawn() {
     local _f
     for _f in functions/git_worktree.sh functions/git_worktree_spawn.sh; do

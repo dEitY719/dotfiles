@@ -94,16 +94,7 @@ inline diff 코멘트는 `/pulls/{n}/comments/{id}/replies` (스레드 유지),
 리뷰 요약·이슈 코멘트는 `/issues/{n}/comments` (top-level) 로 POST 해야
 하는 이유와 선택 기준.
 
-### 4. git-crypt + worktree 부트스트랩 함정
-
-**파일**: [`git-crypt-worktree-bootstrap.md`](./git-crypt-worktree-bootstrap.md)
-
-`.gitattributes`에 `filter=git-crypt` 매핑이 있으면 `git worktree add`가
-새 worktree에서 smudge filter를 통과 못해 `fatal: .env: smudge filter
-git-crypt failed`로 막힌다. AI 에이전트의 `isolation: "worktree"` 병렬
-디스패치 실패 시 sequential 전환 또는 `--no-checkout` + 수동 unlock.
-
-### 5. `gh api graphql`의 `-f` vs `-F` 타입 캐스팅 함정
+### 4. `gh api graphql`의 `-f` vs `-F` 타입 캐스팅 함정
 
 **파일**: [`gh-api-type-casting.md`](./gh-api-type-casting.md)
 
@@ -112,7 +103,7 @@ git-crypt failed`로 막힌다. AI 에이전트의 `isolation: "worktree"` 병�
 호출부에 `# Variables: $x Type!, ...` 주석으로 사람-가독 타입 계약 박기 +
 bats 휴리스틱 + pre-commit warning 으로 회귀 가드.
 
-### 6. p10k frozen prompt — 1줄 진단과 캐시 cleanup 계약
+### 5. p10k frozen prompt — 1줄 진단과 캐시 cleanup 계약
 
 **파일**: [`p10k-frozen-prompt-diagnosis.md`](./p10k-frozen-prompt-diagnosis.md)
 
@@ -122,7 +113,7 @@ bats 휴리스틱 + pre-commit warning 으로 회귀 가드.
 디렉터리 모두 cover) + `exec zsh`. 단일 cache 파일만 지우는 cleanup 은
 회귀 원인.
 
-### 7. gcp-scan phantom 커밋 자기참조 루프
+### 6. gcp-scan phantom 커밋 자기참조 루프
 
 **파일**: [`gcp-scan-phantom-commits.md`](./gcp-scan-phantom-commits.md)
 
@@ -131,7 +122,7 @@ fix 앞에 있으면 무한 충돌 루프에 빠진다. `git diff --quiet HEAD` 
 net-zero(빈 커밋) 판별 후 `--skip`, 수동 우회 절차, `git cherry-pick -n`
 preflight probe 패턴. Discussion #927 기반.
 
-### 8. SKILL.md description 축소의 트리거 회귀 실측
+### 7. SKILL.md description 축소의 트리거 회귀 실측
 
 **파일**: [`skill-description-trigger-eval.md`](./skill-description-trigger-eval.md)
 

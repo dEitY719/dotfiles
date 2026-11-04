@@ -19,7 +19,6 @@ ssh/*.local
 aws/aws-config.local
 .env
 .secrets/
-.git-crypt/
 claude/settings.json.backup.*
 claude/settings.local.json
 

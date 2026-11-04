@@ -5,7 +5,6 @@
 # Purpose:
 #   - Block any commit that adds .env or *.local files. Secrets must live
 #     outside the repo (1Password / ~/.config/dotfiles-secrets/ / USB).
-#   - git-crypt support removed in #594.
 #
 # Installation:
 #   ln -sf "../../shell-common/tools/hooks/pre-commit-env-security.sh" .git/hooks/pre-commit

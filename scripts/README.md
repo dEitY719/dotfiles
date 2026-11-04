@@ -20,7 +20,7 @@
   `lint_docs_status.sh`, `lint_setup_steps.sh` (`mise run lint-docs`),
   `lint_changelog_fragments.sh`(중단), `lint_shell_common_fallback.sh`(수동),
   `check_port_registry.sh`, `test_smoke.sh` (`mise run test-smoke`)
-- **setup 체인 스텝**: `disable-git-crypt-local.sh`, `setup-skills-ssot.sh`,
+- **setup 체인 스텝**: `remove-git-crypt-local-config.sh`(임시), `setup-skills-ssot.sh`,
   `verify-config-files.sh` (root `setup.sh main()`)
 - **internal PC 1회 이관** (dry-run 후 `--apply`, `docs/.ssot/pc-environment.md`):
   `internal-config-migrate.sh`, `internal-ssh-git-migrate.sh`
