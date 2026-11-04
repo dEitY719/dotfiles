@@ -40,7 +40,7 @@
 # 대상 지정 실행: 이슈 URL / owner/repo#N / #N / N 하나를 주면 검색 없이 그 이슈만
 # 같은 가드(실행 중 탭, 열린 PR, blocker, 상한, gate, lock)를 거쳐 dispatch 한다.
 #
-# Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] [<issue-ref> [--force]]
+# Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--account <NAME>] [--dry-run] [<issue-ref> [--force]]
 #        | --status | watch list|add|remove ... | label ... | [-h|--help|help]
 
 set -u
@@ -518,6 +518,10 @@ _iw_detach_run() {
     exit=0) ;;
     exit=*)
         ux_error "Detached run ${_pid} ended at once (${_last}) — see ${_log}"
+        # The child's own reason, so the log need not be opened (#2348). NO_COLOR
+        # leaves ux_error lines as `❌ <message>`.
+        _last=$(grep '^❌' "${_log}" 2>/dev/null | tail -n 1)
+        [ -z "${_last}" ] || ux_error "Last error: ${_last#❌ }"
         exit 1
         ;;
     *)
@@ -1659,7 +1663,9 @@ _iw_repo_order() {
 # CLAUDE_CONFIG_DIR for this dispatcher's panes — account routing, exit codes
 # and rationale live in lib/herdr_pane.sh _hp_resolve_config_dir.
 _iw_resolve_config_dir() {
-    _hp_resolve_config_dir "${_IW_SHELL_COMMON}" watcher stdout
+    # stderr: a targeted run resolves this before it detaches (#2348), and the
+    # recovery hints must reach the terminal, not the discarded capture.
+    _hp_resolve_config_dir "${_IW_SHELL_COMMON}" watcher stderr
 }
 
 # Resolve _IW_CONFIG_DIR once per tick, wherever the tick first needs it.
@@ -3703,13 +3709,15 @@ _iw_acquire_lock() {
 
 _iw_usage() {
     ux_header "avatar_issue_watcher"
-    ux_info "Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--dry-run] [<issue-ref> [--force] [--fg]] | --status | watch ... | label ... | [-h|--help|help]"
+    ux_info "Usage: avatar_issue_watcher.sh [--cwd <PATH>] [--account <NAME>] [--dry-run] [<issue-ref> [--force] [--fg]] | --status | watch ... | label ... | [-h|--help|help]"
     ux_info "Runs one issue-watcher tick: find assigned issues, dispatch /gh-flow:wave (or its Agent Factory copy)."
     ux_bullet "options"
     ux_bullet_sub "<issue-ref>    targeted run: dispatch this one issue instead of searching (see below)"
     ux_bullet_sub "--force        with <issue-ref> only: dispatch despite an excluded label"
     ux_bullet_sub "--fg           with <issue-ref> only: stay in the foreground (no detach)"
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
+    ux_bullet_sub "--account <NAME>  claude account for every pane of this run (alias: --user, as claude-yolo)"
+    ux_bullet_sub "               -> CLAUDE_CONFIG_DIR=\$HOME/.claude-<NAME>; unknown, disabled or logged out -> exit 1"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
     ux_bullet_sub "               (takes no lock and does not evaluate the rate-limit gate)"
     ux_bullet_sub "--status       print the rate-limit gate state and exit; runs no tick"
@@ -3748,6 +3756,8 @@ _iw_usage() {
     ux_bullet_sub "on a tty it detaches (unless --fg or --dry-run): prints PID + log path, exits 0"
     ux_bullet_sub "  log: \${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/logs/<owner>-<repo>-<N>-<stamp>.log"
     ux_bullet_sub "  last line exit=<rc>; newest ${_IW_RUN_LOGS_KEEP} logs kept; a child dead within 1s -> exit 1"
+    ux_bullet_sub "  (its last error line is printed); the account is checked before detaching:"
+    ux_bullet_sub "  logged out -> error + 'claude-yolo --user <NAME>' then /login, exit 1, no detach"
     ux_bullet_sub "  non-tty (cron, pipe) runs in the foreground as before"
     ux_bullet "concurrency"
     ux_bullet_sub "an issue-<N> (by hand) or iw-<repo>-issue-<N> (by the tick) tab with a live agent"
@@ -3783,7 +3793,7 @@ _iw_usage() {
     ux_bullet "claude session (claude-yolo parity)"
     ux_bullet_sub "each pane runs claude --dangerously-skip-permissions (unattended cron)"
     ux_bullet_sub "internal setup mode  → CLAUDE_CONFIG_DIR=\$HOME/.claude"
-    ux_bullet_sub "otherwise            → CLAUDE_CONFIG_DIR=\$HOME/.claude-\${CLAUDE_DEFAULT_ACCOUNT:-personal}"
+    ux_bullet_sub "otherwise            → CLAUDE_CONFIG_DIR=\$HOME/.claude-<--account, else \${CLAUDE_DEFAULT_ACCOUNT:-personal}>"
     ux_bullet_sub "  (that account must be listed in \$CLAUDE_ENABLED_ACCOUNTS)"
     ux_bullet_sub "no \$CLAUDE_ENABLED_ACCOUNTS and no \$CLAUDE_DEFAULT_ACCOUNT → \$HOME/.claude if it exists"
     ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
@@ -4010,7 +4020,7 @@ _iw_targeted_run() {
 
 main() {
     local _cwd="" _repo _number _path _host _rc _dispatched=0 _skipped=0 _failed=0 _candidates _live _select_rc
-    local _confirmed="" _ref="" _parsed="" _force=0 _ref_host _cwd_entry _fg=0 _log_repo
+    local _confirmed="" _ref="" _parsed="" _force=0 _ref_host _cwd_entry _fg=0 _log_repo _account_opt=0
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -4069,6 +4079,21 @@ main() {
             _fg=1
             shift
             ;;
+        --account | --user)
+            # --user: claude-yolo's name for the same choice (#2348).
+            case "${2-}" in
+            '' | -*)
+                ux_error "$1 requires an account NAME (e.g. personal, work, work1)."
+                exit 1
+                ;;
+            esac
+            # The resolver (_hp_resolve_config_dir) reads it, and the detached
+            # child inherits it: one account for every pane of the run.
+            CLAUDE_DEFAULT_ACCOUNT="$2"
+            export CLAUDE_DEFAULT_ACCOUNT
+            _account_opt=1
+            shift 2
+            ;;
         -*)
             ux_error "Unknown option: $1"
             ux_info "Run 'avatar_issue_watcher.sh --help' for usage."
@@ -4104,9 +4129,16 @@ main() {
         exit 1
     fi
 
+    # An explicit account is checked now: an unknown, disabled or logged-out
+    # one exits 1 here, ahead of any gh/herdr call (#2348).
+    [ "${_account_opt}" -eq 0 ] || _iw_ensure_config_dir
+
     # Before the --cwd cd below: the child inherits this cwd, so a relative
     # --cwd still means the same directory to it (issue #2286).
     if [ -n "${_parsed}" ] && _iw_should_detach "${_fg}"; then
+        # The account guard runs here, on the terminal, not in the child whose
+        # stderr only reaches the log (#2348). Exits 1 itself on failure.
+        _iw_ensure_config_dir
         _log_repo="${_parsed#*"${_IW_TAB}"}"
         _log_repo="${_log_repo%%"${_IW_TAB}"*}"
         if [ -z "${_log_repo}" ]; then

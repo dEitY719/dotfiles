@@ -120,6 +120,7 @@ _hp_resolve_config_dir() {
     (
         _shell_common="$1"
         _pane="$2"
+        _account=""
         # fd 4 carries the account hints; see $3 above.
         if [ "$3" = "stderr" ]; then
             exec 4>&2
@@ -183,6 +184,8 @@ _hp_resolve_config_dir() {
         if ! _claude_account_logged_in "${_cfg_dir}"; then
             ux_error "Claude account not logged in: ${_cfg_dir}/.credentials.json is missing, empty, or not valid JSON (internal mode also accepts apiKeyHelper or ANTHROPIC_API_KEY) — the pane would open on 'Not logged in' and every prompt would stall."
             ux_info "Run: claude-accounts status   (then log that account in)" >&4
+            # _account is unset in internal single-account mode: plain claude-yolo.
+            ux_info "Log in: claude-yolo${_account:+ --user ${_account}}   then run /login inside it" >&4
             exit 1
         fi
 
