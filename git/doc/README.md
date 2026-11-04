@@ -125,7 +125,10 @@ git 3-way merge 는 줄 단위다. 두 리모트가 서로 다른 항목을 추�
    byte-identical하면 어느 쪽도 그 파일을 서로 다르게 수정하지 않으므로 3-way merge가
    충돌할 대상 자체가 없다. 규칙 1~3(포맷·삽입 규칙)은 충돌을 "줄이는" 완화책이지만
    이 규칙은 충돌을 "없애는" 근본책이다 — 공유 파일에 있어야 하는 항목(양측 모두에
-   존재)에는 적용되지 않는다.
+   존재)에는 적용되지 않는다. 단 `tests/bats/tools/custom_tools.bats`의 dispatcher 검사는
+   `shell-common/config/symlinks.conf` 행 존재도 요구하므로, 분리한 `<tool>.bats`에
+   그 검사를 복제하고 `symlinks.conf`·생성 문서(`docs/guide/commands/*.md`) 같은
+   다른 공유 파일의 충돌 면은 별도로 남는다(규칙 3·4로 대응).
 
 ---
 
