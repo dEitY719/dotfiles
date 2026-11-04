@@ -462,7 +462,6 @@ $ my-cli help ai --json
 │  git-push      - Push changes to remote        │
 │                                                  │
 │ Tips:                                           │
-│  • Use 'gc' for git-crypt operations          │
 │  • See: git-help for more details             │
 │                                                  │
 │ Run: my-cli help git --detail                  │

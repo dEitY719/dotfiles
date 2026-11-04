@@ -208,8 +208,3 @@ ai-worktree-teardown/
 
 `agent-detection.md`는 불필요 (teardown은 agent 이름을 감지할 필요 없음 —
 현재 워크트리의 branch/path에서 정보를 추출).
-
-## git-crypt Consideration
-
-teardown에서는 git-crypt 문제 없음. worktree를 제거하고 main repo로 돌아가는
-과정에서 filter가 개입하지 않음. main repo는 이미 unlock 상태.

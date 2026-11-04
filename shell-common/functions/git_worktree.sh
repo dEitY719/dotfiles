@@ -1176,9 +1176,9 @@ git_worktree_add() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in
         -h|--help)
-            ux_header "gwt add - git-crypt safe worktree"
+            ux_header "gwt add - create a worktree"
             ux_info "Usage: gwt add <path> [<new-branch> [<start-point>]]"
-            ux_info "  Creates a worktree with git-crypt encrypted files excluded"
+            ux_info "  Creates a worktree with a full checkout"
             return 0
             ;;
         "")
@@ -1191,46 +1191,15 @@ git_worktree_add() {
     local branch="$2"
     local start_point="$3"
 
-    # Build worktree add command
     if [ -n "$branch" ] && [ -n "$start_point" ]; then
-        git worktree add --no-checkout -b "$branch" "$wt_path" "$start_point"
+        git worktree add -b "$branch" "$wt_path" "$start_point"
     elif [ -n "$branch" ]; then
-        git worktree add --no-checkout -b "$branch" "$wt_path"
+        git worktree add -b "$branch" "$wt_path"
     else
-        git worktree add --no-checkout "$wt_path"
+        git worktree add "$wt_path"
     fi || return 1
 
-    # Sparse-checkout: include everything except git-crypt encrypted files
-    # Dynamically parse .gitattributes for filter=git-crypt patterns
-    local repo_root excludes="" exclude_display=""
-    repo_root="$(git rev-parse --show-toplevel)"
-    if [ -f "$repo_root/.gitattributes" ]; then
-        while IFS= read -r line; do
-            case "$line" in
-                *filter=git-crypt*)
-                    local pattern
-                    pattern="$(printf '%s' "$line" | awk '{print $1}')"
-                    excludes="${excludes}!/${pattern}\n"
-                    exclude_display="${exclude_display} ${pattern}"
-                    ;;
-            esac
-        done < "$repo_root/.gitattributes"
-    fi
-
-    git -C "$wt_path" sparse-checkout init --no-cone
-    # %b (not the format string) expands the literal "\n" separators that
-    # $excludes accumulates above, without treating patterns as a format.
-    printf '/*\n%b' "$excludes" | git -C "$wt_path" sparse-checkout set --stdin
-
-    git -C "$wt_path" checkout || {
-        ux_error "Checkout failed in worktree: $wt_path"
-        return 1
-    }
-
     ux_success "Worktree ready: $wt_path"
-    if [ -n "$exclude_display" ]; then
-        ux_info "  git-crypt excluded:${exclude_display}"
-    fi
 }
 
 # ============================================================================

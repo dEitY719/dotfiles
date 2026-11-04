@@ -22,13 +22,13 @@ JIRA/PR 각각 코드블럭으로 감싸서 복사/붙여넣기가 용이한 형
 
 ---
 
-### 13:50 | dotfiles | rm -rf ~ 홈 디렉터리 복구 및 git-crypt 키 백업
+### 13:50 | dotfiles | rm -rf ~ 홈 디렉터리 복구 및 SSH 키 재발급
 
 #### JIRA Ticket
 
 ```text
 [Title]
-[dotfiles] rm -rf ~ 사고 복구 및 git-crypt 대칭키 백업 체계 구축
+[dotfiles] rm -rf ~ 사고 복구 및 SSH 키 재발급
 
 [Description]
 > 배경
@@ -40,8 +40,8 @@ JIRA/PR 각각 코드블럭으로 감싸서 복사/붙여넣기가 용이한 형
 - dotfiles setup.sh 실행하여 셸 환경 복구 (bash, zsh, git, npm, pip 등 symlink 재생성)
 - oh-my-zsh + powerlevel10k + zsh-autosuggestions 재설치
 - pyenv + pyenv-virtualenv 재설치
-- git-crypt 대칭키 export 및 Obsidian 로컬 백업
-- GPG 키 복구 시도 (비밀번호 불일치로 실패, 대칭키로 대체)
+- SSH 키 재생성
+- GPG 키 복구 시도 (비밀번호 불일치로 실패)
 - fasd, uv 재설치
 - gh auth login 재인증
 - 리터럴 ~ 디렉터리를 git 추적에서 제거
@@ -49,13 +49,12 @@ JIRA/PR 각각 코드블럭으로 감싸서 복사/붙여넣기가 용이한 형
 
 > 결과
 - 셸 환경 전체 정상 복구 (bash, zsh 모두 동작 확인)
-- git-crypt 대칭키 Obsidian 로컬 백업 완료 (SHA256 해시 포함)
 - 재해 복구 가이드 문서 작성: docs/todo/disaster-recovery-rm-rf-home.md
 - PR #32 생성 및 머지 완료
 
 > 비고
 - SSH 키가 새로 생성됨 (사내 서버 사용 시 공개키 재등록 필요)
-- GPG 비밀키는 분실 상태 (git-crypt 대칭키로 기능 대체)
+- GPG 비밀키는 분실 상태
 ```
 
 #### PR

@@ -142,7 +142,7 @@
       "type": "document",
       "name": "README.md",
       "filePath": "README.md",
-      "summary": "Project overview and onboarding guide covering features, quick-start installation, directory structure, git-crypt secret management, development/lint commands, and troubleshooting.",
+      "summary": "Project overview and onboarding guide covering features, quick-start installation, directory structure, development/lint commands, and troubleshooting.",
       "tags": [
         "documentation",
         "entry-point",
@@ -2147,20 +2147,6 @@
         "learning",
         "github-cli",
         "type-casting"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "document:docs/guide/learnings/git-crypt-worktree-bootstrap.md",
-      "type": "document",
-      "name": "git-crypt-worktree-bootstrap.md",
-      "filePath": "docs/guide/learnings/git-crypt-worktree-bootstrap.md",
-      "summary": "Learning on the git-crypt + worktree bootstrap pitfall, covering candidate fix approaches (auto-unlock hook, --no-checkout + manual unlock, AGENTS.md workaround, per-repo export-key import) and pointing to the paired worktree-detection pattern.",
-      "tags": [
-        "documentation",
-        "learning",
-        "git-crypt",
-        "worktree"
       ],
       "complexity": "simple"
     },
@@ -4319,20 +4305,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:scripts/disable-git-crypt-local.sh",
-      "type": "file",
-      "name": "disable-git-crypt-local.sh",
-      "filePath": "scripts/disable-git-crypt-local.sh",
-      "summary": "Neutralizes leftover local git-crypt smudge/clean/required config on the dotfiles repo so historical git-crypt filters can't corrupt checkouts (host-side safety net for issue #594); idempotent and always exits 0.",
-      "tags": [
-        "git-crypt",
-        "safety-net",
-        "idempotent",
-        "setup-hook"
-      ],
-      "complexity": "simple"
-    },
-    {
       "id": "file:scripts/lint_docs_filenames.sh",
       "type": "file",
       "name": "lint_docs_filenames.sh",
@@ -4495,7 +4467,7 @@
       "type": "file",
       "name": "verify-config-files.sh",
       "filePath": "scripts/verify-config-files.sh",
-      "summary": "Post-setup.sh integrity check that parses each deployed config symlink target as JSON (where applicable) and scans for invisible corruption bytes (BOM/NBSP/NUL), guarding against a known git-crypt smudge corruption pattern (#594).",
+      "summary": "Post-setup.sh integrity check that parses each deployed config symlink target as JSON (where applicable) and scans for invisible corruption bytes (BOM/NBSP/NUL) (#594).",
       "tags": [
         "validation",
         "config-integrity",
@@ -5292,11 +5264,10 @@
       "type": "file",
       "name": "dotenv.sh",
       "filePath": "shell-common/env/dotenv.sh",
-      "summary": "Sources the repo-root .env file at shell startup, first detecting whether it is still git-crypt encrypted (via strings/od/file fallbacks) to avoid sourcing binary data and breaking the shell.",
+      "summary": "Sources the repo-root .env file at shell startup, staying silent on syntax errors unless DEBUG_DOTFILES=1.",
       "tags": [
         "configuration",
         "env-vars",
-        "git-crypt",
         "shell-init"
       ],
       "complexity": "moderate",
@@ -5414,24 +5385,6 @@
         "shell-init"
       ],
       "complexity": "simple"
-    },
-    {
-      "id": "function:shell-common/env/dotenv.sh:_is_gitcrypt_encrypted",
-      "type": "function",
-      "name": "_is_gitcrypt_encrypted",
-      "filePath": "shell-common/env/dotenv.sh",
-      "lineRange": [
-        15,
-        40
-      ],
-      "summary": "Detects whether a file is still git-crypt encrypted by checking for the GITCRYPT magic header, trying strings, then od, then file as successive fallbacks.",
-      "tags": [
-        "utility",
-        "git-crypt",
-        "detection",
-        "portability"
-      ],
-      "complexity": "moderate"
     },
     {
       "id": "function:shell-common/env/path.sh:clean_paths",
@@ -15197,7 +15150,7 @@
       "type": "file",
       "name": "setup_gpg_cache.sh",
       "filePath": "shell-common/tools/custom/setup_gpg_cache.sh",
-      "summary": "Configures GPG agent passphrase caching so users only enter their passphrase once per day, including auto-unlock for git-crypt.",
+      "summary": "Configures GPG agent passphrase caching so users only enter their passphrase once per day.",
       "tags": [
         "security",
         "gpg",
@@ -21777,7 +21730,7 @@
       "type": "file",
       "name": "pre-commit",
       "filePath": "git/global-hooks/pre-commit",
-      "summary": "User-level global git pre-commit hook (wired via core.hooksPath) that runs lightweight universal safety checks — secret/key detection, conflict markers, forbidden filenames with git-crypt and .env allowlist awareness, trailing whitespace, debug-code and large-file warnings, and a work/personal email-vs-directory mismatch warning — then delegates to whichever project-specific hook it finds among .githooks, git/hooks, or .git/hooks.",
+      "summary": "User-level global git pre-commit hook (wired via core.hooksPath) that runs lightweight universal safety checks — secret/key detection, conflict markers, forbidden filenames with .env allowlist awareness, trailing whitespace, debug-code and large-file warnings, and a work/personal email-vs-directory mismatch warning — then delegates to whichever project-specific hook it finds among .githooks, git/hooks, or .git/hooks.",
       "tags": [
         "git-hook",
         "security",
@@ -21852,7 +21805,7 @@
         120,
         152
       ],
-      "summary": "Determines whether a staged path must block the commit — exempts git-crypt-managed files, then checks path-based rules (.aws/credentials), forbidden basenames (id_rsa, *.pem, credentials.json), and .env files against an example/sample/template/dist allowlist.",
+      "summary": "Determines whether a staged path must block the commit — checks path-based rules (.aws/credentials), forbidden basenames (id_rsa, *.pem, credentials.json), and .env files against an example/sample/template/dist allowlist.",
       "tags": [
         "security",
         "validation",
@@ -26233,13 +26186,6 @@
     },
     {
       "source": "document:docs/guide/learnings/README.md",
-      "target": "document:docs/guide/learnings/git-crypt-worktree-bootstrap.md",
-      "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/guide/learnings/README.md",
       "target": "document:docs/guide/learnings/gh-api-type-casting.md",
       "type": "documents",
       "direction": "forward",
@@ -26256,13 +26202,6 @@
       "source": "document:docs/guide/learnings/README.md",
       "target": "document:docs/guide/learnings/gcp-scan-phantom-commits.md",
       "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:docs/guide/learnings/git-crypt-worktree-bootstrap.md",
-      "target": "document:docs/guide/learnings/git-worktree-detection.md",
-      "type": "related",
       "direction": "forward",
       "weight": 0.5
     },
@@ -27553,13 +27492,6 @@
       "type": "calls",
       "direction": "forward",
       "weight": 0.8
-    },
-    {
-      "source": "file:shell-common/env/dotenv.sh",
-      "target": "function:shell-common/env/dotenv.sh:_is_gitcrypt_encrypted",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1.0
     },
     {
       "source": "file:shell-common/env/path.sh",
@@ -36667,7 +36599,6 @@
         "document:docs/guide/learnings/README.md",
         "document:docs/guide/learnings/gcp-scan-phantom-commits.md",
         "document:docs/guide/learnings/gh-api-type-casting.md",
-        "document:docs/guide/learnings/git-crypt-worktree-bootstrap.md",
         "document:docs/guide/learnings/git-worktree-detection.md",
         "document:docs/guide/learnings/github-pr-review-reply-api.md",
         "document:docs/guide/learnings/p10k-frozen-prompt-diagnosis.md",
@@ -37066,7 +36997,6 @@
         "config:.shellcheckrc",
         "file:scripts/check_port_registry.sh",
         "file:scripts/debug_pip_config.sh",
-        "file:scripts/disable-git-crypt-local.sh",
         "file:scripts/lint_docs_filenames.sh",
         "file:scripts/setup-skills-ssot.sh",
         "file:scripts/verify-config-files.sh",

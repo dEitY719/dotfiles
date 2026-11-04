@@ -26,8 +26,8 @@
 
 ### add
 
-- **syntax** — gwt add <path> [<new-branch> [<start-point>]] — Create git-crypt-safe worktree
-- **behavior** — Sparse checkout excludes encrypted paths — Keeps encrypted layout safe
+- **syntax** — gwt add <path> [<new-branch> [<start-point>]] — Create worktree
+- **behavior** — Plain git worktree add — Full checkout, no sparse-checkout
 
 ### list
 
