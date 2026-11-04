@@ -36,6 +36,10 @@ fi
 git -C "$DOTFILES_ROOT" config --remove-section filter.git-crypt 2>/dev/null || :
 git -C "$DOTFILES_ROOT" config --remove-section diff.git-crypt 2>/dev/null || :
 
-ux_success "filter.git-crypt + diff.git-crypt sections absent from local config"
+if git -C "$DOTFILES_ROOT" config --local --get-regexp 'git-crypt' >/dev/null 2>&1; then
+    ux_warning "git-crypt keys still present in local config (locked/read-only .git/config?) — remove manually"
+else
+    ux_success "filter.git-crypt + diff.git-crypt sections absent from local config"
+fi
 
 exit 0
