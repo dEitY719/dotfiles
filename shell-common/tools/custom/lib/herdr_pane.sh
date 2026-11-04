@@ -93,6 +93,8 @@ _hp_acquire_lock() {
 #   $2 = pane noun for the error wording ("watcher", "merge-train")
 #   $3 = where the account hints go: `stderr` (both callers since #2348), or
 #        `stdout`, which lands them in the caller's discarded capture
+#   $4 = optional account the user named explicitly (--account, #2348); only
+#        used to warn that internal single-account mode ignores it
 # Exit:
 #   0  directory echoed on stdout
 #   1  unknown account / missing directory (fail-fast, message already printed)
@@ -149,6 +151,8 @@ _hp_resolve_config_dir() {
         # resolution — an empty CLAUDE_ENABLED_ACCOUNTS must not fail the tick.
         if [ "$(_dotfiles_setup_mode_accounts)" = "single" ]; then
             _cfg_dir="$HOME/.claude"
+            [ -z "${4:-}" ] ||
+                ux_warning "Account '$4' ignored — internal setup mode always uses \$HOME/.claude." >&2
         else
             _account="${CLAUDE_DEFAULT_ACCOUNT:-personal}"
             _cfg_dir=$(_claude_resolve_account "${_account}") || {

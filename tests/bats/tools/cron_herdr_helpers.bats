@@ -424,6 +424,8 @@ _in() {
         _in "${_p}" 'out=$(@P@_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"; @P@_resolve_config_dir 2>&1 >/dev/null' \
             "CLAUDE_ENABLED_ACCOUNTS=personal"
         assert_output --partial "Claude account not logged in"
+        # The recovery hint is on stderr (the `2>&1 >/dev/null` probe).
+        assert_output --partial "Log in: claude-yolo --user personal"
     done
     # Both scripts keep the account hint off stdout, so the capture stays
     # empty and the hint reaches the terminal (#2348).
