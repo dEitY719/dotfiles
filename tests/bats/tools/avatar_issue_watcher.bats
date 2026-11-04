@@ -5258,3 +5258,12 @@ _only_run_log() {
     assert_output --partial "[--account <NAME>]"
     assert_output --partial "alias: --user"
 }
+
+@test "avatar_issue_watcher: --account in internal setup mode warns that it is ignored" {
+    printf 'internal\n' >"${HOME}/.dotfiles-setup-mode"
+    _make_account "${HOME}/.claude"
+    _run_tick "CLAUDE_ENABLED_ACCOUNTS=" -- --account work
+    assert_success
+    assert_output --partial "Account 'work' ignored"
+    _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
+}

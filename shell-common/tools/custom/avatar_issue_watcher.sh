@@ -438,6 +438,8 @@ _IW_LIMIT_GATE_REOPENED=0
 # 1 once _iw_ensure_config_dir has run. Distinct from _IW_CONFIG_DIR being
 # non-empty, because "HOME is unset" resolves to a legitimately empty value.
 _IW_CONFIG_DIR_RESOLVED=0
+# The account named by --account/--user, empty when none was given (#2348).
+_IW_ACCOUNT_OPT=""
 # The slash command a pane runs for one issue — `/gh-flow:wave` or an Agent
 # Factory flat copy such as `/issue-af01` (issue #2209). Resolved once per tick
 # by _iw_ensure_flow_command: 0 = not yet asked, 1 = resolved, 2 = failed.
@@ -518,10 +520,10 @@ _iw_detach_run() {
     exit=0) ;;
     exit=*)
         ux_error "Detached run ${_pid} ended at once (${_last}) — see ${_log}"
-        # The child's own reason, so the log need not be opened (#2348). NO_COLOR
-        # leaves ux_error lines as `❌ <message>`.
-        _last=$(grep '^❌' "${_log}" 2>/dev/null | tail -n 1)
-        [ -z "${_last}" ] || ux_error "Last error: ${_last#❌ }"
+        # The child's own reason, so the log need not be opened (#2348). Unanchored
+        # so a stray escape ahead of ux_error's `❌` glyph cannot hide the line.
+        _last=$(grep '❌' "${_log}" 2>/dev/null | tail -n 1)
+        [ -z "${_last}" ] || ux_error "Last error: ${_last#*❌ }"
         exit 1
         ;;
     *)
@@ -1665,7 +1667,7 @@ _iw_repo_order() {
 _iw_resolve_config_dir() {
     # stderr: a targeted run resolves this before it detaches (#2348), and the
     # recovery hints must reach the terminal, not the discarded capture.
-    _hp_resolve_config_dir "${_IW_SHELL_COMMON}" watcher stderr
+    _hp_resolve_config_dir "${_IW_SHELL_COMMON}" watcher stderr "${_IW_ACCOUNT_OPT}"
 }
 
 # Resolve _IW_CONFIG_DIR once per tick, wherever the tick first needs it.
@@ -3718,6 +3720,7 @@ _iw_usage() {
     ux_bullet_sub "--cwd <PATH>   run the tick from PATH; relative watch-list paths resolve against it"
     ux_bullet_sub "--account <NAME>  claude account for every pane of this run (alias: --user, as claude-yolo)"
     ux_bullet_sub "               -> CLAUDE_CONFIG_DIR=\$HOME/.claude-<NAME>; unknown, disabled or logged out -> exit 1"
+    ux_bullet_sub "               (internal setup mode always uses \$HOME/.claude and warns that NAME is ignored)"
     ux_bullet_sub "--dry-run      print the issues this tick would dispatch, change nothing"
     ux_bullet_sub "               (takes no lock and does not evaluate the rate-limit gate)"
     ux_bullet_sub "--status       print the rate-limit gate state and exit; runs no tick"
@@ -4103,6 +4106,7 @@ main() {
             CLAUDE_DEFAULT_ACCOUNT="${_acct_val}"
             export CLAUDE_DEFAULT_ACCOUNT
             _account_opt=1
+            _IW_ACCOUNT_OPT="${_acct_val}"
             shift "${_acct_shift}"
             ;;
         -*)
