@@ -121,14 +121,17 @@ git 3-way merge 는 줄 단위다. 두 리모트가 서로 다른 항목을 추�
    넣지 않는다(#1958). 예방은 포맷과 삽입 규칙, 해결은 위 절차로 한다.
 6. **fork 전용 항목은 파일 단위 분리** — fork/특정 환경에서만 쓰는 도구의 목록·검사는
    공유 파일(예: `tests/bats/tools/custom_tools.bats`의 `DISPATCHERS`)에 추가하지 않고
-   그 항목 전용 파일(예: `<tool>.bats`)로 옮긴다. 공유 파일이 upstream과
-   byte-identical하면 어느 쪽도 그 파일을 서로 다르게 수정하지 않으므로 3-way merge가
-   충돌할 대상 자체가 없다. 규칙 1~3(포맷·삽입 규칙)은 충돌을 "줄이는" 완화책이지만
-   이 규칙은 충돌을 "없애는" 근본책이다 — 공유 파일에 있어야 하는 항목(양측 모두에
-   존재)에는 적용되지 않는다. 단 `tests/bats/tools/custom_tools.bats`의 dispatcher 검사는
-   `shell-common/config/symlinks.conf` 행 존재도 요구하므로, 분리한 `<tool>.bats`에
-   그 검사를 복제하고 `symlinks.conf`·생성 문서(`docs/guide/commands/*.md`) 같은
-   다른 공유 파일의 충돌 면은 별도로 남는다(규칙 3·4로 대응).
+   그 항목 전용 파일(예: `<tool>.bats`)로 옮긴다.
+   - 근거: 공유 파일이 upstream과 byte-identical하면 어느 쪽도 그 파일을 서로 다르게
+     수정하지 않으므로 3-way merge가 **그 파일에서는** 충돌할 대상 자체가 없다. 규칙
+     1~3(포맷·삽입 규칙)이 충돌을 "줄이는" 완화책이라면 이 규칙은 해당 공유 파일의
+     충돌을 "없애는" 근본책이다.
+   - 한계: 공유 파일에 있어야 하는 항목(양측 모두에 존재)에는 적용되지 않는다.
+     dispatcher 검사는 `shell-common/config/symlinks.conf` 행 존재도 요구하므로
+     분리한 `<tool>.bats`에도 같은 검사가 필요하다 — 공유 파일의 검사 로직이 바뀌면
+     복제본이 어긋날 수 있으니 함께 갱신한다. `symlinks.conf`·생성
+     문서(`docs/guide/commands/*.md`) 같은 다른 공유 파일의 충돌 면은 그대로 남는다
+     (규칙 3·4로 대응).
 
 ---
 
