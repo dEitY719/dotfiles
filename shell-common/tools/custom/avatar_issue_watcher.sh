@@ -4020,7 +4020,7 @@ _iw_targeted_run() {
 
 main() {
     local _cwd="" _repo _number _path _host _rc _dispatched=0 _skipped=0 _failed=0 _candidates _live _select_rc
-    local _confirmed="" _ref="" _parsed="" _force=0 _ref_host _cwd_entry _fg=0 _log_repo _account_opt=0
+    local _confirmed="" _ref="" _parsed="" _force=0 _ref_host _cwd_entry _fg=0 _log_repo _account_opt=0 _acct_val _acct_shift
 
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -4079,20 +4079,31 @@ main() {
             _fg=1
             shift
             ;;
-        --account | --user)
-            # --user: claude-yolo's name for the same choice (#2348).
-            case "${2-}" in
+        --account | --user | --account=* | --user=*)
+            # --user: claude-yolo's name for the same choice (#2348); the
+            # --opt=NAME form is accepted as claude-yolo does.
+            case "$1" in
+            *=*)
+                _acct_val="${1#*=}"
+                _acct_shift=1
+                ;;
+            *)
+                _acct_val="${2-}"
+                _acct_shift=2
+                ;;
+            esac
+            case "${_acct_val}" in
             '' | -*)
-                ux_error "$1 requires an account NAME (e.g. personal, work, work1)."
+                ux_error "${1%%=*} requires an account NAME (e.g. personal, work, work1)."
                 exit 1
                 ;;
             esac
             # The resolver (_hp_resolve_config_dir) reads it, and the detached
             # child inherits it: one account for every pane of the run.
-            CLAUDE_DEFAULT_ACCOUNT="$2"
+            CLAUDE_DEFAULT_ACCOUNT="${_acct_val}"
             export CLAUDE_DEFAULT_ACCOUNT
             _account_opt=1
-            shift 2
+            shift "${_acct_shift}"
             ;;
         -*)
             ux_error "Unknown option: $1"

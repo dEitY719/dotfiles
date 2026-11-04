@@ -5203,6 +5203,16 @@ _only_run_log() {
     [ ! -s "${_LOG}" ]
 }
 
+@test "avatar_issue_watcher: --account=NAME and --user=NAME forms work like claude-yolo" {
+    _make_account "${HOME}/.claude-work"
+    _run_tick "CLAUDE_ENABLED_ACCOUNTS=personal work" -- --account=work
+    assert_success
+    _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-work"
+    _run_tick -- --user=
+    assert_failure
+    assert_output --partial "--user requires an account NAME"
+}
+
 @test "avatar_issue_watcher: --account without a name is rejected" {
     _run_tick -- --account
     assert_failure
