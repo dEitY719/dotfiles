@@ -27,6 +27,14 @@
   (`git rev-parse --git-common-dir` 의 부모). worktree 안에서 cwd 모드로 실행하거나
   `watch add` 를 실행해도, watch list 에 이미 worktree 경로가 저장돼 있어도
   main 체크아웃 기준으로 동작한다.
+- 계정은 `--account <name>` (`claude-yolo` 와 같은 이름의 별칭 `--user`) 로 run
+  단위로 고른다 (#2348). 미지정이면 `CLAUDE_DEFAULT_ACCOUNT` (없으면 personal).
+  값은 `CLAUDE_ENABLED_ACCOUNTS` 화이트리스트를 그대로 통과해야 하고, 한 run 의
+  모든 pane 이 같은 `CLAUDE_CONFIG_DIR=~/.claude-<name>` 을 쓴다.
+- tty 에서 detach 하는 targeted run 은 **detach 전에 부모에서** 계정을 검사한다.
+  미등록·디렉토리 없음·로그아웃이면 터미널(stderr)에 에러와 복구 안내
+  (`claude-yolo --user <name>` 실행 후 `/login`)를 찍고 detach 없이 exit 1.
+  detach 된 자식이 곧바로 죽으면 로그의 마지막 에러 줄도 함께 출력한다.
 
 ### 다른 PC 적용 (#2285)
 

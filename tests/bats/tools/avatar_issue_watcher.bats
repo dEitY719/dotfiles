@@ -5174,3 +5174,77 @@ _only_run_log() {
     [ "$(tail -n 1 "${_log}")" = "exit=0" ]
     _assert_logged "/gh-flow:wave 12"
 }
+
+# ---------------------------------------------------------------------------
+# --account / --user (#2348): pick the claude account per run, and check it on
+# the terminal before a targeted run detaches.
+# ---------------------------------------------------------------------------
+
+@test "avatar_issue_watcher: --account routes every pane to ~/.claude-<name>" {
+    _make_account "${HOME}/.claude-work"
+    _run_tick "CLAUDE_ENABLED_ACCOUNTS=personal work" -- --account work
+    assert_success
+    _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-work"
+    _refute_logged "CLAUDE_CONFIG_DIR=${HOME}/.claude-personal"
+}
+
+@test "avatar_issue_watcher: --user is an alias of --account and beats CLAUDE_DEFAULT_ACCOUNT" {
+    _make_account "${HOME}/.claude-work1"
+    _run_tick "CLAUDE_ENABLED_ACCOUNTS=personal work1" "CLAUDE_DEFAULT_ACCOUNT=personal" -- --user work1
+    assert_success
+    _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude-work1"
+}
+
+@test "avatar_issue_watcher: an account outside CLAUDE_ENABLED_ACCOUNTS fails before any gh call" {
+    _make_account "${HOME}/.claude-work"
+    _run_tick -- --account work
+    assert_failure
+    assert_output --partial "Unknown claude account: work"
+    [ ! -s "${_LOG}" ]
+}
+
+@test "avatar_issue_watcher: --account without a name is rejected" {
+    _run_tick -- --account
+    assert_failure
+    assert_output --partial "--account requires an account NAME"
+    _run_tick -- --user --dry-run
+    assert_failure
+    assert_output --partial "--user requires an account NAME"
+}
+
+@test "avatar_issue_watcher: a logged-out account refuses to detach and names the fix" {
+    _make_account "${HOME}/.claude-work"
+    rm -f "${HOME}/.claude-work/.credentials.json"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0" "CLAUDE_ENABLED_ACCOUNTS=personal work" \
+        -- --account work "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "not logged in"
+    assert_output --partial "claude-yolo --user work"
+    assert_output --partial "/login"
+    refute_output --partial "Detached"
+    [ ! -d "${_STATE_HOME}/${_LOGS_DIR_REL}" ]
+    [ ! -s "${_LOG}" ]
+}
+
+@test "avatar_issue_watcher: the default account is checked before detaching too" {
+    rm -f "${HOME}/.claude-personal/.credentials.json"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0" -- "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "claude-yolo --user personal"
+    refute_output --partial "Detached"
+    [ ! -d "${_STATE_HOME}/${_LOGS_DIR_REL}" ]
+}
+
+@test "avatar_issue_watcher: a detached run that ends at once prints the child's last error" {
+    printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v sleep)" >"${_BIN_DIR}/sleep"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=3" "GH_CLOSED_ISSUES=12" -- "acme/dotfiles#12"
+    assert_failure
+    assert_output --partial "Last error: acme/dotfiles#12 is CLOSED"
+}
+
+@test "avatar_issue_watcher: --help documents --account and its --user alias" {
+    _run_tick -- --help
+    assert_success
+    assert_output --partial "[--account <NAME>]"
+    assert_output --partial "alias: --user"
+}
