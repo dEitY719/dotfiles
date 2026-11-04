@@ -91,8 +91,8 @@ _hp_acquire_lock() {
 # _hp_agent_start.
 #   $1 = shell-common dir (claude.sh is sourced from it)
 #   $2 = pane noun for the error wording ("watcher", "merge-train")
-#   $3 = where the account hints go: `stderr`, or `stdout` — issue_watcher's
-#        historical stream, which lands them in the caller's discarded capture
+#   $3 = where the account hints go: `stderr` (both callers since #2348), or
+#        `stdout`, which lands them in the caller's discarded capture
 # Exit:
 #   0  directory echoed on stdout
 #   1  unknown account / missing directory (fail-fast, message already printed)

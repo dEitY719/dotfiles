@@ -397,9 +397,10 @@ _in() {
     _in iw 'out=$(_iw_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"; _iw_resolve_config_dir 2>&1 >/dev/null' \
         "CLAUDE_ENABLED_ACCOUNTS=personal" "CLAUDE_DEFAULT_ACCOUNT=bogus"
     assert_output --partial "Unknown claude account: bogus — cannot set CLAUDE_CONFIG_DIR for the watcher pane."
-    assert_output --partial "rc=1"
-    # issue_watcher's "Available:" hint goes to stdout (the discarded capture).
-    assert_output --partial "out=[ℹ"
+    # Both scripts send the "Available:" hint to stderr (#2348: the watcher's
+    # used to land in the discarded stdout capture).
+    assert_output --partial "rc=1 out=[]"
+    assert_output --partial "Available:"
     _in pmt 'out=$(_pmt_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"; _pmt_resolve_config_dir 2>&1 >/dev/null' \
         "CLAUDE_ENABLED_ACCOUNTS=personal" "CLAUDE_DEFAULT_ACCOUNT=bogus"
     assert_output --partial "Unknown claude account: bogus — cannot set CLAUDE_CONFIG_DIR for the merge-train pane."
@@ -424,14 +425,12 @@ _in() {
             "CLAUDE_ENABLED_ACCOUNTS=personal"
         assert_output --partial "Claude account not logged in"
     done
-    # Same stream split as the unknown-account case above: issue_watcher's
-    # account hint goes to stdout (the discarded capture), merge-train's to
-    # stderr. Asserted per script, not in the loop, so the iw half cannot
-    # demand the pmt contract.
-    _in iw 'out=$(_iw_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"' "CLAUDE_ENABLED_ACCOUNTS=personal"
-    assert_output --partial "rc=1 out=[ℹ"
-    _in pmt 'out=$(_pmt_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"' "CLAUDE_ENABLED_ACCOUNTS=personal"
-    assert_output --partial "rc=1 out=[]"
+    # Both scripts keep the account hint off stdout, so the capture stays
+    # empty and the hint reaches the terminal (#2348).
+    for _p in iw pmt; do
+        _in "${_p}" 'out=$(@P@_resolve_config_dir 2>/dev/null); echo "rc=$? out=[${out}]"' "CLAUDE_ENABLED_ACCOUNTS=personal"
+        assert_output --partial "rc=1 out=[]"
+    done
 }
 
 @test "cron herdr helpers: resolve_config_dir falls back to ~/.claude for a pre-#1393 user" {
