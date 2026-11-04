@@ -5,6 +5,8 @@
 # .git/config and always exits 0. The script edits the config of the repo it
 # lives in, so it only ever runs from a copy inside a mktemp fixture repo --
 # never the real checkout.
+# Temporary: delete this suite together with the script (removal condition
+# in the script header).
 
 load '../test_helper'
 
@@ -62,4 +64,11 @@ _seed_git_crypt_sections() {
     assert_success
     run git -C "$FIXTURE/repo" config --local --get-regexp 'git-crypt'
     assert_output ""
+}
+
+@test "remove-git-crypt-local-config: unrelated git-crypt-named keys do not trigger the warning" {
+    git -C "$FIXTURE/repo" config alias.git-crypt-note '!true'
+    run bash "$FIXTURE_SCRIPT"
+    assert_success
+    assert_output --partial "sections absent"
 }
