@@ -205,8 +205,46 @@ Before/After 측정 (#754 당시):
    `SKIP_LOCAL_PYTEST=1` 환경 기본화).
 4. 이 문서 갱신 — 정책 변경 이력 추가.
 
+## 로컬 CI — `scripts/ci.sh` (dEitY719/* repo 공용)
+
+GitHub Actions 가 결제 잠금 상태라 marketplace repo 들의 `validate` / `bats`
+워크플로를 로컬에서 대신 돌린다. 한 스크립트가 모든 repo 를 맡는다.
+
+```bash
+scripts/ci.sh --repo ~/para/project/skills/gh-verify-skills   # dry: 네트워크 없음
+scripts/ci.sh --repo <path> --only validate                    # 한 suite 만
+scripts/ci.sh --repo <path> --post                             # commit status 게시
+```
+
+- **측정 대상**: `<sha>` (기본 HEAD) 의 `git clone --shared` 깨끗한 사본.
+  커밋 안 된 변경은 측정하지 않는다 (actions/checkout 과 동일, note 1 줄).
+- **validate**: `scripts/ci/validate/NN_*.sh` = harness-skills
+  `skill-check.yml` 의 step 별 `run:` 본문 그대로 (포팅 SHA 는 `ci.sh` 헤더).
+  check 로직의 upstream 은 계속 harness-skills 다 — 여기서 고치지 말고 다시
+  포팅한다. 입력은 `.github/workflows/*.yml` 중 `uses:` 가 `skill-check.yml`
+  인 job 의 `with:`, 빠진 입력은 skill-check.yml 기본값. 호출자가 없으면
+  `.claude-plugin/plugin.json` 의 `name` 을 plugin-name 으로 쓰고, 그것도
+  없으면 skip.
+- **bats**: `tests/bats` 가 있을 때만 `BATS_LIB_PATH=tests/bats/lib bats -r
+  tests/bats` (dotfiles 의 vendored bats 라이브러리, clone/네트워크 없음).
+- **판정**: step 마다 1 줄 (`ok`/`FAIL`/`skip`), 실패 step 만 로그 출력.
+  upstream 과 달리 첫 실패 뒤에도 남은 step 을 모두 돈다 (gate 판정은 동일).
+  skip 된 suite 는 pass 로 세지도, 게시하지도 않는다. 도구 부재
+  (shellcheck 등) 는 FAIL (미측정) 이다. exit 0 = 측정한 suite 전부 통과,
+  1 = 실패, 2 = 사용법 오류.
+- **`--post`**: 측정한 suite 마다 `GH_HOST=<host> gh api
+  repos/<owner>/<repo>/statuses/<sha>` 로 `local-ci/validate`,
+  `local-ci/bats` (`--context-prefix` 로 변경) 를 `success|failure` 로 게시.
+  host/owner/repo 는 origin URL 에서 (ssh alias 는 `ssh -G`,
+  `ssh.github.com` → `github.com`). `--post` 없이는 게시 예정만 출력한다.
+- **upstream 과의 차이**: shellcheck 은 apt 설치 대신 PATH 의 것을 쓴다
+  (버전이 Actions runner 와 다를 수 있다). YAML step 은 upstream 그대로
+  `rglob` 이라 clone 안의 미추적 파일도 본다 (깨끗한 clone 이라 실제로는 없음).
+- 회귀 테스트: `tests/bats/scripts/ci.bats`.
+
 ## 관련 위치
 
+- `scripts/ci.sh`, `scripts/ci/validate/` — dEitY719/* repo 로컬 CI (위 절)
 - `.github/workflows/ci.yml` — lint
 - `.github/workflows/test.yml` — shell lint + 전체 스위트 (비차단, #2046)
 - `scripts/test_smoke.sh` — smoke 구현 (`mise.toml` `[tasks.test-smoke]`)
