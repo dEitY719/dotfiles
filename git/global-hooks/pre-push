@@ -9,10 +9,10 @@
 #   git does not merge the two and does not fall back. Without a wrapper here,
 #   a project-level git/hooks/pre-push is never invoked: it is dead code.
 #
-# WHAT IT DOES — DELEGATION ONLY
-#   Unlike the pre-commit wrapper, this file carries NO checks of its own.
-#   It forwards the hook to the project-level hook of the repository currently
-#   being pushed from (.githooks/pre-push -> git/hooks/pre-push ->
+# WHAT IT DOES — DELEGATION (+ warn-only local CI)
+#   Unlike the pre-commit wrapper, this file carries no blocking checks of
+#   its own. It forwards the hook to the project-level hook of the
+#   repository currently being pushed from (.githooks/pre-push -> git/hooks/pre-push ->
 #   scripts/hooks/pre-push -> .git/hooks/pre-push), passing through
 #   arguments, stdin and the exit code unchanged. In a repository that
 #   ships no pre-push hook it is a silent no-op — repo-specific logic (this
@@ -28,6 +28,13 @@
 #   `git lfs pre-push` both get every line; a failing delegate aborts the
 #   push before git-lfs uploads anything, and an lfs failure aborts it too.
 #
+# Local CI (lib/local-ci.sh): when the push URL's owner is dEitY719 (or in
+#   CI_LOCAL_OWNERS), stdin is buffered, the delegation above runs as a child,
+#   and only if it passed scripts/ci.sh (dry, never --post) measures the
+#   pushed commit. Its failure only warns; the exit code stays the
+#   delegation's. Other owners: plain delegation, unchanged.
+#   Skip with CI_LOCAL_SKIP=1; time limit CI_LOCAL_TIMEOUT (default 300s).
+#
 # To bypass: git push --no-verify
 # To debug:  export GIT_HOOKS_DEBUG=1
 
@@ -38,5 +45,9 @@ HOOK_NAME="pre-push"
 # Resolve this wrapper's real location (it is installed as a symlink under
 # ~/.config/git/hooks, so "$0"'s directory is not where lib/ lives).
 SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
+# shellcheck source=./lib/local-ci.sh
+source "$(dirname "$SELF")/lib/local-ci.sh"
+local_ci_applies "${2:-}" && local_ci_wrap "$@"
+
 # shellcheck source=./lib/delegate.sh
 source "$(dirname "$SELF")/lib/delegate.sh"

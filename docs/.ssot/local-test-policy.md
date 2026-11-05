@@ -242,6 +242,24 @@ scripts/ci.sh --repo <path> --post                             # commit status �
   `rglob` 이라 clone 안의 미추적 파일도 본다 (깨끗한 clone 이라 실제로는 없음).
 - 회귀 테스트: `tests/bats/scripts/ci.bats`.
 
+### pre-push 자동 실행 (warn-only, `git/global-hooks/lib/local-ci.sh`)
+
+전역 pre-push wrapper 가 push 때 `ci.sh` 를 자동으로 돌린다. **push 를 막지
+않는다** — 실패해도 stderr 경고만 내고 exit code 는 위임 결과 그대로다.
+
+- **owner 게이트**: push URL (`$2`, scp/ssh/https, github.com·GHES·ssh alias)
+  의 첫 path segment 가 allowlist 일 때만. 기본 `dEitY719`, `CI_LOCAL_OWNERS`
+  (쉼표/공백 구분) 로 추가, 대소문자 무시. 그 외 owner (협업 org) 는 아무것도
+  하지 않는다 — stdin 버퍼링도, 출력도 없이 기존 위임 그대로.
+- **순서**: stdin 을 한 번 버퍼링 → 프로젝트 hook (+git-lfs) 위임을 자식으로
+  실행 → 그것이 성공했을 때만 `ci.sh --repo <root> --sha <첫 push local sha>`.
+  위임 실패면 ci.sh 를 건너뛰고 그 exit code 로 push 가 막힌다.
+- **`--post` 는 넘기지 않는다** — 게시는 수동 `ci.sh --post` 로만.
+- **skip**: `CI_LOCAL_SKIP=1`, `git push --no-verify`, 브랜치 삭제만 push,
+  ci.sh 부재 (경고만). `CI_LOCAL_TIMEOUT` (기본 300 초, `timeout` 있을 때)
+  를 넘기면 끊고 경고.
+- 회귀 테스트: `tests/bats/git/test_hooks_global_local_ci.bats`.
+
 ## 관련 위치
 
 - `scripts/ci.sh`, `scripts/ci/validate/` — dEitY719/* repo 로컬 CI (위 절)
