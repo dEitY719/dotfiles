@@ -17,7 +17,8 @@
     - list     gwt list|ls [--quick|--remote]               list worktrees
     - remove   gwt remove <path|name|all> [--force]         delete worktree dir + branch
     - prune    gwt prune                                    clean stale .git/worktrees/ refs (no path)
-    - spawn    gwt spawn <name> [--task|--base|--tmux|...]  create named worktree (AI workflow)
+    - spawn    gwt spawn --wt-name <slug> [--launch|...]    create named worktree (AI workflow)
+    - at       gwt at <HH:MM> --wt-name <slug> [...]        one-shot unattended spawn + claude
     - status   gwt status [<name>]                          per-worktree diagnostic
     - teardown gwt teardown [--all [-r]] [--force] [...]    cleanup current/all worktree(s)
     - details: gwt-help <section>  (example: gwt-help spawn)
@@ -58,16 +59,30 @@
 
 ### spawn
 
-- **syntax** — gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--ai <agent>]] [--user <account>] — Create named worktree
+- **syntax** — gwt spawn --wt-name <slug> [--base <ref>] [--launch [--bg] [--ai <agent>] [--user <account>]] [--prompt <text...>] — Create named worktree
 - **context** — Run from main repo only — Fails inside a worktree
 - **name** — Free-form slug (required) — e.g. issue-11, login-fix
 - **--ai** — AI agent (default: claude) — claude, codex, agy, opencode, cursor, copilot
-- **--user** — Claude account for --tmux/--launch (only with --ai claude) — personal, work — default: $CLAUDE_DEFAULT_ACCOUNT
-- **--tmux** — Runs <agent>-yolo in new tmux pane — Mutually exclusive with --launch
-- **--launch** — cd into worktree + run <agent>-yolo inline — Current shell, no tmux
-- **example** — gwt spawn issue-11 --tmux --ai codex — Free-form name + codex agent
-- **example** — gwt spawn feat --launch — spawn -> cd -> claude-yolo (one shot)
-- **example** — gwt spawn feat --launch --user work — spawn -> cd -> claude-yolo --user work
+- **--user** — Claude account for --launch (only with --ai claude) — personal, work — default: $CLAUDE_DEFAULT_ACCOUNT
+- **--launch** — cd into worktree + run <agent>-yolo inline — Current shell
+- **example** — gwt spawn --wt-name issue-11 --launch --ai codex — Named worktree + codex agent
+- **example** — gwt spawn --wt-name feat --launch — spawn -> cd -> claude-yolo (one shot)
+- **example** — gwt spawn --wt-name feat --launch --user work — spawn -> cd -> claude-yolo --user work
+
+### at
+
+- **syntax** — gwt at <HH:MM> --wt-name <slug> [--base <ref>] [--user <account>] [--prompt <text...>] — One-shot unattended run
+- **time** — Local 24h HH:MM only (8pm, 20, tomorrow rejected) — Passed today (or now) -> tomorrow
+- **fires** — gwt spawn -> herdr tab -> claude -> prompt — Fresh worktree per job
+- **warning** — claude runs WITHOUT permission prompts — --dangerously-skip-permissions
+- **agent** — herdr agent ga-<repo>-<slug> (max 32 chars) — Same live name -> rejected at schedule time
+- **--user** — Claude account (external multi-account PC) — Internal PC: warning, default account
+- **lifetime** — Survives terminal close + logout — Lost on reboot (list: lost)
+- **late** — Wake-up > 30m after HH:MM is skipped — list: missed
+- **list** — gwt at list [--all] — pending/running/done/failed/cancelled/missed/lost
+- **cancel** — gwt at cancel <id> — Pending only; fired jobs refused
+- **state** — ${XDG_STATE_HOME:-~/.local/state}/gwt-at/<id>.json|.log — dir 700, files 600
+- **example** — gwt at 20:00 --wt-name issue-92 --prompt /gh-flow:wave 92 — Tonight at 20:00
 
 ### teardown
 

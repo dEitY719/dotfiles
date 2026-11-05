@@ -18,6 +18,16 @@ unalias gwt 2>/dev/null || true
 gwt() {
     case "${1:-}" in
         add)       shift; git_worktree_add "$@" ;;
+        at)
+            # dotfiles-only (#2355): vendored gwt copies have no git_worktree_at.sh.
+            shift
+            if command -v git_worktree_at >/dev/null 2>&1; then
+                git_worktree_at "$@"
+            else
+                ux_error "gwt at is not available here (dotfiles-only: functions/git_worktree_at.sh)"
+                return 1
+            fi
+            ;;
         list|ls)   shift; git_worktree_list "$@" ;;
         remove|rm) shift; git_worktree_remove "$@" ;;
         prune)     shift; git_worktree_prune "$@" ;;

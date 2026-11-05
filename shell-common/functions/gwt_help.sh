@@ -16,7 +16,8 @@ _gwt_help_summary() {
     ux_bullet_sub "list     gwt list|ls [--quick|--remote]               list worktrees"
     ux_bullet_sub "remove   gwt remove <path|name|all> [--force]         delete worktree dir + branch"
     ux_bullet_sub "prune    gwt prune                                    clean stale .git/worktrees/ refs (no path)"
-    ux_bullet_sub "spawn    gwt spawn <name> [--task|--base|--tmux|...]  create named worktree (AI workflow)"
+    ux_bullet_sub "spawn    gwt spawn --wt-name <slug> [--launch|...]    create named worktree (AI workflow)"
+    ux_bullet_sub "at       gwt at <HH:MM> --wt-name <slug> [...]        one-shot unattended spawn + claude"
     ux_bullet_sub "status   gwt status [<name>]                          per-worktree diagnostic"
     ux_bullet_sub "teardown gwt teardown [--all [-r]] [--force] [...]    cleanup current/all worktree(s)"
     ux_bullet_sub "details: gwt-help <section>  (example: gwt-help spawn)"
@@ -29,6 +30,7 @@ _gwt_help_list_sections() {
     ux_bullet_sub "remove"
     ux_bullet_sub "prune"
     ux_bullet_sub "spawn"
+    ux_bullet_sub "at"
     ux_bullet_sub "status"
     ux_bullet_sub "teardown"
 }
@@ -66,16 +68,30 @@ _gwt_help_rows_prune() {
 }
 
 _gwt_help_rows_spawn() {
-    ux_table_row "syntax" "gwt spawn <name> [--task <slug>] [--base <ref>] [--tmux|--launch [--ai <agent>]] [--user <account>]" "Create named worktree"
+    ux_table_row "syntax" "gwt spawn --wt-name <slug> [--base <ref>] [--launch [--bg] [--ai <agent>] [--user <account>]] [--prompt <text...>]" "Create named worktree"
     ux_table_row "context" "Run from main repo only" "Fails inside a worktree"
     ux_table_row "name" "Free-form slug (required)" "e.g. issue-11, login-fix"
     ux_table_row "--ai" "AI agent (default: claude)" "claude, codex, agy, opencode, cursor, copilot"
-    ux_table_row "--user" "Claude account for --tmux/--launch (only with --ai claude)" "personal, work — default: \$CLAUDE_DEFAULT_ACCOUNT"
-    ux_table_row "--tmux" "Runs <agent>-yolo in new tmux pane" "Mutually exclusive with --launch"
-    ux_table_row "--launch" "cd into worktree + run <agent>-yolo inline" "Current shell, no tmux"
-    ux_table_row "example" "gwt spawn issue-11 --tmux --ai codex" "Free-form name + codex agent"
-    ux_table_row "example" "gwt spawn feat --launch" "spawn -> cd -> claude-yolo (one shot)"
-    ux_table_row "example" "gwt spawn feat --launch --user work" "spawn -> cd -> claude-yolo --user work"
+    ux_table_row "--user" "Claude account for --launch (only with --ai claude)" "personal, work — default: \$CLAUDE_DEFAULT_ACCOUNT"
+    ux_table_row "--launch" "cd into worktree + run <agent>-yolo inline" "Current shell"
+    ux_table_row "example" "gwt spawn --wt-name issue-11 --launch --ai codex" "Named worktree + codex agent"
+    ux_table_row "example" "gwt spawn --wt-name feat --launch" "spawn -> cd -> claude-yolo (one shot)"
+    ux_table_row "example" "gwt spawn --wt-name feat --launch --user work" "spawn -> cd -> claude-yolo --user work"
+}
+
+_gwt_help_rows_at() {
+    ux_table_row "syntax" "gwt at <HH:MM> --wt-name <slug> [--base <ref>] [--user <account>] [--prompt <text...>]" "One-shot unattended run"
+    ux_table_row "time" "Local 24h HH:MM only (8pm, 20, tomorrow rejected)" "Passed today (or now) -> tomorrow"
+    ux_table_row "fires" "gwt spawn -> herdr tab -> claude -> prompt" "Fresh worktree per job"
+    ux_table_row "warning" "claude runs WITHOUT permission prompts" "--dangerously-skip-permissions"
+    ux_table_row "agent" "herdr agent ga-<repo>-<slug> (max 32 chars)" "Same live name -> rejected at schedule time"
+    ux_table_row "--user" "Claude account (external multi-account PC)" "Internal PC: warning, default account"
+    ux_table_row "lifetime" "Survives terminal close + logout" "Lost on reboot (list: lost)"
+    ux_table_row "late" "Wake-up > 30m after HH:MM is skipped" "list: missed"
+    ux_table_row "list" "gwt at list [--all]" "pending/running/done/failed/cancelled/missed/lost"
+    ux_table_row "cancel" "gwt at cancel <id>" "Pending only; fired jobs refused"
+    ux_table_row "state" "\${XDG_STATE_HOME:-~/.local/state}/gwt-at/<id>.json|.log" "dir 700, files 600"
+    ux_table_row "example" "gwt at 20:00 --wt-name issue-92 --prompt /gh-flow:wave 92" "Tonight at 20:00"
 }
 
 _gwt_help_rows_teardown() {
@@ -110,6 +126,9 @@ _gwt_help_section_rows() {
         spawn)
             _gwt_help_rows_spawn
             ;;
+        at)
+            _gwt_help_rows_at
+            ;;
         status)
             _gwt_help_rows_status
             ;;
@@ -132,6 +151,7 @@ _gwt_help_full() {
     _gwt_help_render_section "Remove" _gwt_help_rows_remove
     _gwt_help_render_section "Prune" _gwt_help_rows_prune
     _gwt_help_render_section "Spawn" _gwt_help_rows_spawn
+    _gwt_help_render_section "At" _gwt_help_rows_at
     _gwt_help_render_section "Status" _gwt_help_rows_status
     _gwt_help_render_section "Teardown" _gwt_help_rows_teardown
 }

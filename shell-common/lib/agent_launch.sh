@@ -3,8 +3,9 @@
 # shell-common/lib/agent_launch.sh
 # AI agent launch helpers shared by `gwt spawn` (functions/git_worktree_spawn.sh)
 # and `tmux-spawn` (functions/tmux_spawn.sh), split out in #2156: the known
-# agent list, the yolo command each launch path runs, the 3-pane tmux window,
-# and mise trust for a fresh worktree.
+# agent list, the yolo command each launch path runs, the 3-pane tmux window
+# (tmux-spawn / ai_setup only — gwt spawn dropped --tmux in #2355), and mise
+# trust for a fresh worktree.
 #
 # Guard-free on purpose (no interactive guard, no output on source): it only
 # defines functions, so non-interactive consumers (avatar_issue_watcher, the
@@ -137,15 +138,6 @@ _agent_launch_cmd() {
     local cmd
     cmd=$(_gwt_yolo_command "$1" "${2-}") || return 1
     printf '%s%s\n' "$cmd" "$(_agent_prompt_suffix "$1" "${3-0}" "${4-}")"
-}
-
-# _agent_tmux_focus <session> <window> — attach from outside tmux, else switch.
-_agent_tmux_focus() {
-    if [ -z "${TMUX-}" ]; then
-        tmux attach -t "$1"
-    else
-        tmux switch-client -t "${1}:${2}" 2>/dev/null || true
-    fi
 }
 
 # _agent_mise_trust <dir> — mise keys trust per config-file path, so a fresh
