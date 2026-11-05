@@ -4,7 +4,7 @@
 # gwt spawn / teardown — split from git_worktree.sh (#2156). The gwt
 # dispatcher and the helpers both use (git_worktree_add, _gwt_report_no_git,
 # _gwt_branch_merged, _gwt_claude_lock_pid) stay in git_worktree.sh; AI
-# launch (agent command, tmux window, mise trust) is lib/agent_launch.sh.
+# launch (agent command, mise trust) is lib/agent_launch.sh.
 
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
@@ -27,15 +27,13 @@ _git_worktree_spawn_show_help() {
     ux_info ""
     ux_info "Optional (order-independent):"
     ux_info "  --base <ref>     Base branch/commit (default: origin/main)"
-    ux_info "  --tmux           Auto-create tmux session/window with 3-pane layout"
     ux_info "  --launch         cd into the new worktree and run the agent's yolo"
     ux_info "                   command in the current shell."
-    ux_info "                   Mutually exclusive with --tmux."
     ux_info "  --bg             Dispatch claude in background mode (Agent View, #640)."
-    ux_info "                   Requires --launch or --tmux. Only with --ai claude."
+    ux_info "                   Requires --launch. Only with --ai claude."
     ux_info "  --ai <agent>     AI agent (default: claude)."
     ux_info "                   Known: claude, codex, agy, opencode, cursor, copilot"
-    ux_info "  --user <account> Claude account for --tmux/--launch (issue #295)."
+    ux_info "  --user <account> Claude account for --launch (issue #295)."
     ux_info "                   Only valid with --ai claude."
     ux_info ""
     ux_info "Trailing (must be LAST if used):"
@@ -49,7 +47,6 @@ _git_worktree_spawn_show_help() {
     ux_info "  gwt spawn --launch --ai claude --user work --wt-name issue-717 --prompt 이슈 717 요약해"
     ux_info "  gwt spawn --launch --bg --wt-name issue-718"
     ux_info "  gwt spawn --launch --bg --wt-name issue-718 --prompt 오늘의 날씨 검색해"
-    ux_info "  gwt spawn --tmux   --user work --wt-name feat-x"
     ux_info ""
     ux_info "Removed (#650):"
     ux_info "  Positional <name>     -> use --wt-name <slug>"
@@ -63,7 +60,7 @@ git_worktree_spawn() {
         emulate -L sh
     fi
 
-    local base="" name="" use_tmux=0 use_launch=0 use_bg=0 \
+    local base="" name="" use_launch=0 use_bg=0 \
           agent="claude" account="" prompt="" prompt_set=0 prompt_warned=0
 
     # Parse arguments. New grammar (#650): option-only; --wt-name is the
@@ -126,7 +123,14 @@ git_worktree_spawn() {
                 fi
                 account="$2"; shift 2
                 ;;
-            --tmux) use_tmux=1; shift ;;
+            --tmux)
+                # Removed in #2355: herdr replaced tmux. Unattended runs are
+                # `gwt at` / issue-watcher; interactive ones are --launch.
+                ux_error "--tmux has been removed (#2355)."
+                ux_info  "Use --launch to run the agent in this shell,"
+                ux_info  "or 'gwt at <HH:MM> --wt-name <slug>' for an unattended herdr run."
+                return 1
+                ;;
             --launch) use_launch=1; shift ;;
             --bg)
                 # Boolean since #650 — the optional positional task was
@@ -190,20 +194,11 @@ git_worktree_spawn() {
             ;;
     esac
 
-    # --tmux and --launch are mutually exclusive (tmux opens a new pane,
-    # --launch runs in the current shell — combining them is incoherent).
-    if [ "$use_tmux" = 1 ] && [ "$use_launch" = 1 ]; then
-        ux_error "--tmux and --launch are mutually exclusive"
-        echo ""
-        _git_worktree_spawn_show_help
-        return 1
-    fi
-
-    # --bg dispatches the agent in background mode, so it needs --launch or
-    # --tmux to actually run something. Without either, the worktree is
-    # created but nothing is dispatched (#640).
-    if [ "$use_bg" = 1 ] && [ "$use_tmux" != 1 ] && [ "$use_launch" != 1 ]; then
-        ux_error "--bg requires --launch or --tmux"
+    # --bg dispatches the agent in background mode, so it needs --launch to
+    # actually run something. Without it, the worktree is created but
+    # nothing is dispatched (#640).
+    if [ "$use_bg" = 1 ] && [ "$use_launch" != 1 ]; then
+        ux_error "--bg requires --launch"
         return 1
     fi
 
@@ -214,25 +209,19 @@ git_worktree_spawn() {
         return 1
     fi
 
-    # Validate --tmux dependency
-    if [ "$use_tmux" = 1 ] && ! command -v tmux >/dev/null 2>&1; then
-        ux_error "tmux is not installed (required for --tmux)"
-        return 1
-    fi
-
-    # Validate --ai: must be a known AI agent (only when tmux/launch will use it)
-    if { [ "$use_tmux" = 1 ] || [ "$use_launch" = 1 ]; } && ! _ts_known_agent "$agent"; then
+    # Validate --ai: must be a known AI agent (only when --launch will use it)
+    if [ "$use_launch" = 1 ] && ! _ts_known_agent "$agent"; then
         ux_error "Unknown agent: $agent"
         ux_info "Available: claude, codex, agy, opencode, cursor, copilot"
         return 1
     fi
 
-    # Validate --user (issue #295): only meaningful with claude + tmux/launch.
+    # Validate --user (issue #295): only meaningful with claude + --launch.
     # Other agents have no multi-account support so combining them is a typo
     # we want to surface, not silently ignore.
     if [ -n "$account" ]; then
-        if [ "$use_tmux" != 1 ] && [ "$use_launch" != 1 ]; then
-            ux_error "--user requires --tmux or --launch"
+        if [ "$use_launch" != 1 ]; then
+            ux_error "--user requires --launch"
             return 1
         fi
         if [ "$agent" != "claude" ]; then
@@ -343,15 +332,7 @@ git_worktree_spawn() {
 
     _agent_mise_trust "$wt_path"
 
-    # --- Optional tmux integration ---
-    if [ "$use_tmux" = 1 ]; then
-        # New 6-arg signature (#650): pass use_bg + prompt as a pair so the
-        # window can decide whether to wrap in --bg or pass the prompt as a
-        # plain TUI first-message.
-        _tmux_add_agent_window "$project" "$agent" "$wt_path" "$account" "$use_bg" "$prompt"
-        ux_info "  tmux:   session '$project', window '$agent' (runs ${agent}-yolo${account:+ --user $account}$([ "$use_bg" = 1 ] && printf ' --bg'))"
-        _agent_tmux_focus "$project" "$agent"
-    elif [ "$use_launch" = 1 ]; then
+    if [ "$use_launch" = 1 ]; then
         # cd in the caller's shell (gwt is a function, not a subshell), then
         # run the agent's yolo command. Resolved via _gwt_yolo_command (inside
         # _agent_launch_cmd) rather than `eval "<agent>-yolo"`, because zsh

@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 # tests/bats/functions/git_worktree_spawn.bats
 # Tests for `gwt spawn --ai` flag (issue #162).
-# Focuses on argument parsing + validation paths that do NOT require tmux
-# or a real worktree layout — the interesting behavioral change is the
-# decoupling of worktree <name> from the tmux agent name.
+# Focuses on argument parsing + validation paths that do NOT require a real
+# worktree layout — the interesting behavioral change is the decoupling of
+# worktree <name> from the agent name.
 
 load '../test_helper'
 
@@ -45,23 +45,26 @@ teardown() {
 
 @test "bash: spawn --help no longer shows the <name>-yolo caveat" {
     # The old caveat read "The pane runs '<name>-yolo'". After the agent
-    # decoupling, tmux windows run '<agent>-yolo' regardless of <name>.
+    # decoupling, agents run '<agent>-yolo' regardless of <name>.
     run_in_bash 'git_worktree_spawn --help'
     assert_success
     refute_output --partial "<name>-yolo"
 }
 
-@test "bash: spawn rejects unknown agent when --tmux is used" {
-    # --tmux triggers the agent validation path. Use a name inside an
-    # isolated dir so we reach validation without spawning anything real.
-    # The key assertion: an unknown agent must produce a helpful error.
+@test "bash: spawn --tmux is removed with a migration hint (#2355)" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn --wt-name issue-xyz --tmux --ai notarealagent 2>&1
+        git_worktree_spawn --wt-name issue-xyz --tmux 2>&1
     "
     assert_failure
-    assert_output --partial "Unknown agent: notarealagent"
-    assert_output --partial "claude"
+    assert_output --partial "--tmux has been removed"
+    assert_output --partial "gwt at"
+}
+
+@test "bash: spawn --help no longer mentions tmux (#2355)" {
+    run_in_bash 'git_worktree_spawn --help'
+    assert_success
+    refute_output --partial "tmux"
 }
 
 @test "zsh: git_worktree_spawn function exists" {
@@ -82,22 +85,13 @@ teardown() {
     assert_output --partial "--launch"
 }
 
-@test "bash: spawn rejects --tmux and --launch together" {
-    run_in_bash "
-        cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn --wt-name issue-xyz --tmux --launch 2>&1
-    "
-    assert_failure
-    assert_output --partial "mutually exclusive"
-}
-
-@test "zsh: spawn rejects --tmux and --launch together" {
+@test "zsh: spawn --tmux is removed with a migration hint (#2355)" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn --wt-name issue-xyz --tmux --launch 2>&1
+        git_worktree_spawn --wt-name issue-xyz --tmux 2>&1
     "
     assert_failure
-    assert_output --partial "mutually exclusive"
+    assert_output --partial "--tmux has been removed"
 }
 
 @test "bash: spawn rejects unknown agent when --launch is used" {
@@ -297,7 +291,7 @@ teardown() {
 # ---------------------------------------------------------------------------
 # Issue #295: gwt spawn --user <account> wires multi-account dispatch.
 # Phase 1 (PR #292) introduced `claude_yolo --user <account>`. Phase 2 here
-# threads --user through gwt spawn's --tmux/--launch paths so worktree
+# threads --user through gwt spawn's --launch path so worktree
 # creation can pick a non-default account in one shot.
 # ---------------------------------------------------------------------------
 
@@ -344,28 +338,19 @@ teardown() {
     assert_output "codex --dangerously-bypass-approvals-and-sandbox"
 }
 
-@test "bash: spawn rejects --user without --tmux or --launch" {
+@test "bash: spawn rejects --user without --launch" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
         git_worktree_spawn --wt-name issue-xyz --user work 2>&1
     "
     assert_failure
-    assert_output --partial "--user requires --tmux or --launch"
+    assert_output --partial "--user requires --launch"
 }
 
 @test "bash: spawn rejects --user with non-claude agent (--launch)" {
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
         git_worktree_spawn --wt-name issue-xyz --launch --ai codex --user work 2>&1
-    "
-    assert_failure
-    assert_output --partial "--user is only supported with --ai claude"
-}
-
-@test "bash: spawn rejects --user with non-claude agent (--tmux)" {
-    run_in_bash "
-        cd '${DOTFILES_ROOT}' || exit 1
-        git_worktree_spawn --wt-name issue-xyz --tmux --ai agy --user work 2>&1
     "
     assert_failure
     assert_output --partial "--user is only supported with --ai claude"
@@ -420,16 +405,16 @@ teardown() {
     assert_output --partial "--bg"
 }
 
-@test "bash: spawn rejects --bg without --launch or --tmux" {
+@test "bash: spawn rejects --bg without --launch" {
     # --bg only makes sense when something is being dispatched. Without
-    # --launch/--tmux the worktree is created but nothing runs, so flag
+    # --launch the worktree is created but nothing runs, so flag
     # the typo loudly.
     run_in_bash "
         cd '${DOTFILES_ROOT}' || exit 1
         git_worktree_spawn --wt-name issue-xyz --bg 2>&1
     "
     assert_failure
-    assert_output --partial "--bg requires --launch or --tmux"
+    assert_output --partial "--bg requires --launch"
 }
 
 @test "bash: spawn rejects --bg with --ai codex" {
@@ -442,13 +427,13 @@ teardown() {
     assert_output --partial "--bg is only supported with --ai claude"
 }
 
-@test "zsh: spawn rejects --bg without --launch or --tmux" {
+@test "zsh: spawn rejects --bg without --launch" {
     run_in_zsh "
         cd '${DOTFILES_ROOT}' || exit 1
         git_worktree_spawn --wt-name issue-xyz --bg 2>&1
     "
     assert_failure
-    assert_output --partial "--bg requires --launch or --tmux"
+    assert_output --partial "--bg requires --launch"
 }
 
 @test "bash: spawn --launch --bg dispatches claude_yolo --bg with empty task" {

@@ -63,13 +63,6 @@ run_lib() {
     assert_output --partial "codex-yolo Enter"
 }
 
-@test "_agent_tmux_focus attaches outside tmux, switches inside" {
-    # stdout stub: switch-client's stderr is discarded by design.
-    run_lib 'tmux() { echo "TMUX $*"; }; unset TMUX; _agent_tmux_focus s w; TMUX=x _agent_tmux_focus s w'
-    assert_line --index 0 "TMUX attach -t s"
-    assert_line --index 1 "TMUX switch-client -t s:w"
-}
-
 @test "_agent_mise_trust trusts only an existing mise.toml" {
     d="$(mktemp -d)"
     run_lib "mise() { echo \"\$*\" >> '$d/log'; }; _agent_mise_trust '$d'; [ -e '$d/log' ] && echo early; : > '$d/mise.toml'; _agent_mise_trust '$d' && cat '$d/log'"
