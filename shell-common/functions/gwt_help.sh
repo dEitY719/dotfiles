@@ -90,6 +90,7 @@ _gwt_help_rows_at() {
     ux_table_row "late" "Wake-up > 30m after HH:MM is skipped" "list: missed"
     ux_table_row "list" "gwt at list [--all]" "pending/running/done/failed/cancelled/missed/lost"
     ux_table_row "cancel" "gwt at cancel <id>" "Pending only; fired jobs refused"
+    ux_table_row "remove" "gwt at remove <id> | --all|-A" "Delete finished jobs from list; pending/running kept"
     ux_table_row "state" "\${XDG_STATE_HOME:-~/.local/state}/gwt-at/<id>.json|.log" "dir 700, files 600"
     ux_table_row "example" "gwt at 20:00 --wt-name issue-92 --prompt /gh-flow:wave 92" "Tonight at 20:00"
 }
