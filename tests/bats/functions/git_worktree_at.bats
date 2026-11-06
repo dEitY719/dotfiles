@@ -301,7 +301,7 @@ _status() { jq -r .status "${_STATE}/$1.json"; }
     assert_output --partial "[--cwd][${_WORK}/proj/repo-issue-92-1][--label][ga-repo-issue-92]"
     assert_output --partial "[--env][CLAUDE_CONFIG_DIR=${HOME}/.claude]"
     run grep -F "[agent][prompt]" "${HERDR_LOG}"
-    assert_output --partial "[ga-repo-issue-92][do the thing now][--wait]"
+    assert_output --partial "[ga-repo-issue-92][do the thing now][--wait][--until][working][--until][blocked]"
 }
 
 @test "dispatch failure records failed with herdr's code and sentence" {
