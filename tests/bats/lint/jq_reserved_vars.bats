@@ -35,13 +35,17 @@ EOF
     assert_output "6"
 
     # scripts/ci/validate/ holds verbatim harness-skills workflow bodies whose python3
-    # heredocs (`def check(label, got):`) are not jq (#2357). --exclude-dir matches the
-    # basename, and scripts/ci/validate is the repo's only `validate` dir.
-    run grep -rnE "$JQ_KEYWORD_VAR_ERE" \
-        --include='*.sh' --include='*.bash' --include='*.zsh' --include='*.bats' \
-        --exclude-dir=bats-core --exclude-dir=bats-assert --exclude-dir=bats-support \
-        --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=validate \
-        --exclude=jq_reserved_vars.bats \
-        "${_BATS_REAL_DOTFILES_ROOT}"
+    # heredocs (`def check(label, got):`) are not jq (#2357). Filter that one path
+    # instead of --exclude-dir=validate, which matches the basename and would also
+    # blind the scan to any other (future) dir named `validate`.
+    _scan_jq_keyword_vars() {
+        grep -rnE "$JQ_KEYWORD_VAR_ERE" \
+            --include='*.sh' --include='*.bash' --include='*.zsh' --include='*.bats' \
+            --exclude-dir=bats-core --exclude-dir=bats-assert --exclude-dir=bats-support \
+            --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules \
+            --exclude=jq_reserved_vars.bats \
+            "${_BATS_REAL_DOTFILES_ROOT}" | grep -v '/scripts/ci/validate/' || true
+    }
+    run _scan_jq_keyword_vars
     assert_output ""
 }
