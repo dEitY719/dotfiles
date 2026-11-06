@@ -26,10 +26,12 @@
 
 set -u
 
+_GA_SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+
 # DOTFILES_ROOT / SHELL_COMMON + ux_lib, the same bootstrap as the cron
 # entrypoints (#2144) — the detached copy has no interactive shell behind it.
 # shellcheck source=/dev/null
-. "$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")/lib/cron_common.sh" && cron_bootstrap || exit 1
+. "$(dirname "${_GA_SELF}")/lib/cron_common.sh" && cron_bootstrap || exit 1
 _GA_SHELL_COMMON="${SHELL_COMMON}"
 
 for _ga_lib in lib/herdr_agent_name.sh lib/herdr_agent_lookup.sh tools/custom/lib/herdr_pane.sh; do
@@ -40,8 +42,6 @@ for _ga_lib in lib/herdr_agent_name.sh lib/herdr_agent_lookup.sh tools/custom/li
     # shellcheck source=/dev/null
     . "${_GA_SHELL_COMMON}/${_ga_lib}" || exit 1
 done
-
-_GA_SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
 # ============================================================
 # Constants (env overrides exist for the bats suite)
@@ -112,9 +112,10 @@ _ga_valid_hhmm() {
 # Field 22 of /proc/<pid>/stat (process start time), parsed after the last
 # `)` because comm may itself contain spaces or parens. Empty when gone.
 _ga_pid_starttime() {
-    local _s
-    _s=$(cat "/proc/$1/stat" 2>/dev/null) || return 0
-    printf '%s' "${_s##*) }" | awk '{print $20}'
+    local _s _fields
+    read -r _s 2>/dev/null <"/proc/$1/stat" || return 0
+    read -r -a _fields <<<"${_s##*) }"
+    printf '%s' "${_fields[19]-}"
 }
 
 # True when <pid> is alive AND is the same process that recorded <starttime>.
@@ -190,10 +191,20 @@ _ga_effective_status() {
     pending | running)
         _pid=$(_ga_field "$1" .pid)
         _start=$(_ga_field "$1" .pid_starttime)
-        _ga_pid_alive "${_pid}" "${_start}" || _st="lost"
         ;;
     esac
-    printf '%s' "${_st}"
+    _ga_live_status "${_st}" "${_pid:-}" "${_start:-}"
+}
+
+# _ga_effective_status from already-read <status> <pid> <starttime>.
+_ga_live_status() {
+    case "$1" in
+    pending | running) _ga_pid_alive "$2" "$3" || {
+        printf 'lost'
+        return 0
+    } ;;
+    esac
+    printf '%s' "$1"
 }
 
 # ============================================================
@@ -237,11 +248,7 @@ _ga_gwt_spawn() {
         . "${_GA_SHELL_COMMON}/functions/git_worktree.sh" || exit 1
         # shellcheck source=/dev/null
         . "${_GA_SHELL_COMMON}/functions/git_worktree_spawn.sh" || exit 1
-        if [ -n "${3:-}" ]; then
-            git_worktree_spawn --wt-name "$2" --base "$3"
-        else
-            git_worktree_spawn --wt-name "$2"
-        fi
+        git_worktree_spawn --wt-name "$2" ${3:+--base "$3"}
     )
 }
 
@@ -308,12 +315,8 @@ _ga_schedule() {
         ux_error "--wt-name <slug> is required"
         return 2
     fi
-    case "${_name}" in
-    -* | */* | *" "*)
-        ux_error "Invalid --wt-name: '${_name}' (no '/', no spaces, no leading dash)"
-        return 2
-        ;;
-    esac
+    # Slug shape (no '/', spaces, leading dash) is enforced by the parser
+    # above and herdr_agent_name below.
 
     local _c
     for _c in jq setsid herdr; do
@@ -445,18 +448,23 @@ _ga_schedule() {
 
 _ga_list() {
     local _all=0 _dir _f _st _now _fin _any=0 _p
+    local _id _pid _start _fire _repo _wt
     [ "${1:-}" = "--all" ] && _all=1
     _dir=$(_ga_state_dir)
     _now=$(_ga_now)
 
     for _f in "${_dir}"/*.json; do
         [ -f "${_f}" ] || continue
-        _st=$(_ga_effective_status "${_f}")
+        # One jq per job; \u001f (not tab) so empty fields are not collapsed.
+        IFS=$'\x1f' read -r _id _st _pid _start _fire _fin _repo _wt _p < <(jq -r \
+            '[.id, .status, .pid, .pid_starttime, .fire_at, .finished_at, .repo, .wt_name, .prompt]
+             | map(. // "" | tostring | gsub("[\n\u001f]"; " ")) | join("\u001f")' \
+            "${_f}" 2>/dev/null) || continue
+        _st=$(_ga_live_status "${_st}" "${_pid}" "${_start}")
         case "${_st}" in
         pending | running) ;;
         *)
-            _fin=$(_ga_field "${_f}" .finished_at)
-            [ -n "${_fin}" ] || _fin=$(_ga_field "${_f}" .fire_at)
+            [ -n "${_fin}" ] || _fin="${_fire}"
             if [ "${_all}" = 0 ] && [ -n "${_fin}" ] &&
                 [ $((_now - _fin)) -gt $((_GA_LIST_DAYS * 86400)) ]; then
                 continue
@@ -468,12 +476,11 @@ _ga_list() {
             ux_table_header "ID" "FIRES" "STATUS" "REPO/WT-NAME  PROMPT"
             _any=1
         fi
-        _p=$(_ga_field "${_f}" .prompt)
         [ "${#_p}" -le 30 ] || _p="${_p:0:27}..."
-        ux_table_row "$(_ga_field "${_f}" .id)" \
-            "$(date -d "@$(_ga_field "${_f}" .fire_at)" '+%m-%d %H:%M' 2>/dev/null)" \
+        ux_table_row "${_id}" \
+            "$(date -d "@${_fire}" '+%m-%d %H:%M' 2>/dev/null)" \
             "${_st}" \
-            "$(basename "$(_ga_field "${_f}" .repo)")/$(_ga_field "${_f}" .wt_name)  ${_p:--}"
+            "${_repo##*/}/${_wt}  ${_p:--}"
     done
 
     if [ "${_any}" = 0 ]; then
@@ -543,29 +550,29 @@ _ga_herdr_message() {
 # Start agent <1> on pane <2>; retries only agent_pane_busy, accepts the
 # trust dialog. On failure _GA_FAIL holds `<code>: <herdr sentence>`.
 _ga_start_agent() {
-    local _agent="$1" _pane="$2" _errf _json _code _i=1
+    local _agent="$1" _pane="$2" _errf _json _code _i=1 _rc=1
     _errf=$(mktemp) || _errf=/dev/null
     while :; do
         if _json=$(_hp_agent_start "${_agent}" "${_pane}" "${_errf}"); then
-            [ "${_errf}" = /dev/null ] || rm -f "${_errf}"
-            return 0
+            _rc=0
+            break
         fi
         _code=$(_hp_herdr_error_code "${_json}" "${_errf}")
         if [ "${_code}" = "agent_not_ready" ] && _hp_accept_trust_dialog "${_pane}"; then
             ux_info "Accepted the trust-folder dialog on pane ${_pane}."
-            [ "${_errf}" = /dev/null ] || rm -f "${_errf}"
-            return 0
+            _rc=0
+            break
         fi
         if [ "${_code}" != "agent_pane_busy" ] || [ "${_i}" -ge "${_GA_START_ATTEMPTS}" ]; then
+            _GA_FAIL="${_code:-unknown}: $(_ga_herdr_message "${_json}" "${_errf}")"
             break
         fi
         ux_warning "agent start hit agent_pane_busy (${_i}/${_GA_START_ATTEMPTS}) — retrying in ${_GA_START_RETRY_SLEEP}s."
         [ "${_GA_START_RETRY_SLEEP}" = 0 ] || sleep "${_GA_START_RETRY_SLEEP}"
         _i=$((_i + 1))
     done
-    _GA_FAIL="${_code:-unknown}: $(_ga_herdr_message "${_json}" "${_errf}")"
     [ "${_errf}" = /dev/null ] || rm -f "${_errf}"
-    return 1
+    return "${_rc}"
 }
 
 # Send <2> to agent <1> and confirm it landed. One Enter recovery on

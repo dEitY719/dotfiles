@@ -50,17 +50,11 @@ run_lib() {
     assert_output "done"
 }
 
-@test "_tmux_add_agent_window sends <agent>-yolo with --user/--bg tail" {
-    run_lib '_tmux_add_agent_window sess claude /tmp work 1 "a b"'
+@test "_tmux_add_agent_window sends plain <agent>-yolo" {
+    run_lib '_tmux_add_agent_window sess claude /tmp'
     assert_success
     assert_output --partial "TMUX new-session -d -P -F #{window_index} -s sess -n claude -c /tmp"
-    assert_output --partial "claude-yolo --user work --bg 'a b' Enter"
-}
-
-@test "_tmux_add_agent_window: non-claude agent gets no prompt tail" {
-    run_lib '_tmux_add_agent_window sess codex /tmp "" 0 hi'
-    assert_success
-    assert_output --partial "codex-yolo Enter"
+    assert_output --partial "claude-yolo Enter"
 }
 
 @test "_agent_mise_trust trusts only an existing mise.toml" {

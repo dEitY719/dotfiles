@@ -18,35 +18,14 @@ _ts_known_agent() {
     esac
 }
 
-# _tmux_add_agent_window <session> <agent> <dir> [account] [use_bg] [prompt]
+# _tmux_add_agent_window <session> <agent> <dir>
 # Add a 3-pane window to a tmux session (creates session if needed).
 # Layout: LEFT (agent-yolo) | RIGHT-TOP / RIGHT-BOTTOM
-#
-# Optional 4th arg `account` (issue #295): when set with agent=claude, the
-# left pane runs `claude-yolo --user <account>` instead of plain
-# `claude-yolo`. Other agents have no multi-account support so the value is
-# ignored — the caller is responsible for rejecting that combination.
-#
-# Optional 5th arg `use_bg` (issue #640, signature changed in #650):
-# when "1" and agent=claude, append `--bg "<prompt>"` so Agent View picks up
-# the dispatched session. Empty prompt yields `--bg ''` and lets claude itself
-# emit any task-too-short error. Other agents lack a --bg flag and the
-# caller must reject the combination.
-#
-# Optional 6th arg `prompt` (issue #650): the AI initial-task text. If
-# `use_bg` is 1, the prompt becomes the --bg payload. Otherwise (claude
-# only) it is appended as the first positional arg so claude TUI opens
-# with that text as the first message.
+# The account / --bg / prompt args went with `gwt spawn --tmux` (#2355).
 _tmux_add_agent_window() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local session="$1" agent="$2" dir="$3" account="${4-}" use_bg="${5-0}" prompt="${6-}"
-    local yolo win
-    if [ "$agent" = "claude" ] && [ -n "$account" ]; then
-        yolo="${agent}-yolo --user ${account}"
-    else
-        yolo="${agent}-yolo"
-    fi
-    yolo="${yolo}$(_agent_prompt_suffix "$agent" "$use_bg" "$prompt")"
+    local session="$1" agent="$2" dir="$3"
+    local yolo="${agent}-yolo" win
 
     if tmux has-session -t "=$session" 2>/dev/null; then
         win=$(tmux new-window -P -F '#{window_index}' \
