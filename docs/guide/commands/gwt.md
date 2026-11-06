@@ -77,7 +77,7 @@
 - **warning** — claude runs WITHOUT permission prompts — --dangerously-skip-permissions
 - **agent** — herdr agent ga-<repo>-<slug> (max 32 chars) — Same live name -> rejected at schedule time
 - **--user** — Claude account (external multi-account PC) — Internal PC: warning, default account
-- **lifetime** — Survives terminal close + logout — Lost on reboot (list: lost)
+- **lifetime** — Survives terminal close + logout — Lost on reboot / WSL VM shutdown (list: lost)
 - **late** — Wake-up > 30m after HH:MM is skipped — list: missed
 - **list** — gwt at list [--all] — pending/running/done/failed/cancelled/missed/lost
 - **cancel** — gwt at cancel <id> — Pending only; fired jobs refused

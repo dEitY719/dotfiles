@@ -39,6 +39,8 @@ _git_worktree_at_show_help() {
     ux_info ""
     ux_info "Lifetime: survives terminal close and logout; lost on reboot (list"
     ux_info "shows 'lost'); a wake-up more than 30m late is skipped as 'missed'."
+    ux_info "WSL: the distro must keep running until <HH:MM> — an idle VM"
+    ux_info "shutdown (wsl --shutdown, vmIdleTimeout) kills the runner too (lost)."
     ux_info ""
     ux_info "Examples:"
     ux_info "  gwt at 20:00 --wt-name issue-92 --prompt /gh-flow:wave 92"
