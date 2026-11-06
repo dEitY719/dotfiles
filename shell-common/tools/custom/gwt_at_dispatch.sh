@@ -11,6 +11,7 @@
 #   list      job table; `lost` = pending/running whose runner pid is gone
 #   cancel    <id> — pending jobs only; kills the runner after a pid+starttime
 #             +cmdline check so a recycled pid is never signalled
+#   remove    <id> | --all|-A — delete finished jobs' json+log (never pending/running)
 #   --run     <job.json> — internal, the detached half: wall-clock wait, late
 #             check, then the avatar-issue-watcher sequence (#2281):
 #             gwt spawn -> CLAUDE_CONFIG_DIR -> herdr workspace/tab -> agent
@@ -531,6 +532,52 @@ _ga_cancel() {
     ux_success "Cancelled job ${_id}."
 }
 
+# Delete one finished job's <id>.json + <id>.log. rc 1 for a live job: pending
+# or running still owns a runner, so it must be cancelled (or finish) first.
+_ga_remove_one() {
+    local _id="$1" _job _st _dir
+    _dir=$(_ga_state_dir)
+    _job="${_dir}/${_id}.json"
+    [ -f "${_job}" ] || {
+        ux_error "No such job: ${_id}"
+        return 1
+    }
+    _st=$(_ga_effective_status "${_job}")
+    case "${_st}" in
+    pending | running)
+        ux_error "Job ${_id} is ${_st} — cancel it first (gwt at cancel ${_id}); running jobs cannot be removed."
+        return 1
+        ;;
+    esac
+    rm -f "${_job}" "${_dir}/${_id}.log"
+}
+
+# remove <id> | remove --all|-A  (--all skips pending/running jobs).
+_ga_remove() {
+    local _id="${1:-}" _f _n=0 _skipped=0
+    case "${_id}" in
+    --all | -A)
+        for _f in "$(_ga_state_dir)"/*.json; do
+            [ -f "${_f}" ] || continue
+            _id=$(basename "${_f}" .json)
+            if _ga_remove_one "${_id}" 2>/dev/null; then
+                _n=$((_n + 1))
+            else
+                _skipped=$((_skipped + 1))
+            fi
+        done
+        ux_success "Removed ${_n} job(s)."
+        [ "${_skipped}" = 0 ] || ux_info "Kept ${_skipped} pending/running job(s) (gwt at cancel <id> first)."
+        return 0
+        ;;
+    '' | */* | .*)
+        ux_error "Usage: gwt at remove <id> | --all|-A   (ids: gwt at list --all)"
+        return 2
+        ;;
+    esac
+    _ga_remove_one "${_id}" && ux_success "Removed job ${_id}."
+}
+
 # ============================================================
 # --run (the detached half)
 # ============================================================
@@ -753,7 +800,7 @@ _ga_run() {
 main() {
     case "${1:-}" in
     -h | --help | help)
-        ux_info "Usage: gwt_at_dispatch.sh <HH:MM> --wt-name <slug> [...] | list [--all] | cancel <id>"
+        ux_info "Usage: gwt_at_dispatch.sh <HH:MM> --wt-name <slug> [...] | list [--all] | cancel <id> | remove <id>|--all|-A"
         ux_info "Front end and full help: gwt at --help"
         ;;
     --run)
@@ -763,7 +810,7 @@ main() {
         }
         _ga_run "$2"
         ;;
-    list | ls | cancel)
+    list | ls | cancel | remove | rm)
         # Every field read goes through jq; without it list shows blanks.
         command -v jq >/dev/null 2>&1 || {
             ux_error "jq not found in PATH — gwt at needs it."
@@ -771,6 +818,7 @@ main() {
         }
         case "$1" in
         cancel) shift; _ga_cancel "$@" ;;
+        remove | rm) shift; _ga_remove "$@" ;;
         *) shift; _ga_list "$@" ;;
         esac
         ;;
