@@ -578,11 +578,19 @@ _ga_start_agent() {
 # second prompt, so the task cannot run twice.
 _ga_prompt() {
     local _agent="$1" _prompt="$2" _json _rc=0 _code
+    # --until working|blocked: confirm the prompt LANDED. Bare --wait matches
+    # idle/done/blocked, i.e. turn completion, so a long task (/wave) hit the
+    # timeout and a started job was recorded `failed`.
     _json=$(herdr agent prompt "${_agent}" "${_prompt}" --wait \
+        --until working --until blocked \
         --timeout "${_GA_PROMPT_TIMEOUT_MS}" 2>&1) || _rc=$?
     [ "${_rc}" -eq 0 ] && return 0
 
     _code=$(printf '%s' "${_json}" | _hp_json_value '.error.code')
+    # A caller timeout with the agent already working = prompt landed.
+    if [ "${_code}" = "timeout" ] && [ "$(_hp_agent_status "${_agent}")" = "working" ]; then
+        return 0
+    fi
     if [ "${_code}" = "agent_prompt_stalled" ]; then
         [ "$(_hp_agent_status "${_agent}")" = "working" ] && return 0
         herdr agent send-keys "${_agent}" Enter >/dev/null 2>&1 || true
