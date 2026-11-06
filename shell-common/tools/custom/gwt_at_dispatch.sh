@@ -746,13 +746,16 @@ main() {
         }
         _ga_run "$2"
         ;;
-    list | ls)
-        shift
-        _ga_list "$@"
-        ;;
-    cancel)
-        shift
-        _ga_cancel "$@"
+    list | ls | cancel)
+        # Every field read goes through jq; without it list shows blanks.
+        command -v jq >/dev/null 2>&1 || {
+            ux_error "jq not found in PATH — gwt at needs it."
+            return 1
+        }
+        case "$1" in
+        cancel) shift; _ga_cancel "$@" ;;
+        *) shift; _ga_list "$@" ;;
+        esac
         ;;
     *)
         _ga_schedule "$@"

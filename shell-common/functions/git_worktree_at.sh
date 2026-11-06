@@ -55,6 +55,11 @@ git_worktree_at() {
         _git_worktree_at_show_help
         return 0
         ;;
+    --run)
+        # Internal detached half of the runner; never a user entry point.
+        ux_error "Unknown argument: --run"
+        return 2
+        ;;
     esac
 
     local _ga_runner
