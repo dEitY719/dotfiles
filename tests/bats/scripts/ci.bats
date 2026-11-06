@@ -15,6 +15,11 @@ setup() {
         command -v "$tool" >/dev/null || skip "needs $tool"
     done
     python3 -c 'import yaml' 2>/dev/null || skip "needs python3 + PyYAML"
+    # tests/test exports BATS_TEST_TIMEOUT=300; ci.sh's nested bats would inherit it,
+    # and its watchdog for the failing fixture test holds the output pipe open for the
+    # full 300s, so the outer test times out (#2357). export -n keeps the value for
+    # this bats process's own countdown and only stops children inheriting it.
+    export -n BATS_TEST_TIMEOUT
     setup_isolated_home
     REPO="${TEST_TEMP_HOME}/fx"
     GH_LOG="${TEST_TEMP_HOME}/gh.log"

@@ -34,10 +34,13 @@ JQ_KEYWORD_VAR_ERE="(${JQ_BINDING})(${JQ_KEYWORDS})([^A-Za-z0-9_]|\$)"
 EOF
     assert_output "6"
 
+    # scripts/ci/validate/ holds verbatim harness-skills workflow bodies whose python3
+    # heredocs (`def check(label, got):`) are not jq (#2357). --exclude-dir matches the
+    # basename, and scripts/ci/validate is the repo's only `validate` dir.
     run grep -rnE "$JQ_KEYWORD_VAR_ERE" \
         --include='*.sh' --include='*.bash' --include='*.zsh' --include='*.bats' \
         --exclude-dir=bats-core --exclude-dir=bats-assert --exclude-dir=bats-support \
-        --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules \
+        --exclude-dir=.git --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=validate \
         --exclude=jq_reserved_vars.bats \
         "${_BATS_REAL_DOTFILES_ROOT}"
     assert_output ""
