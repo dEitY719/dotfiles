@@ -142,7 +142,8 @@ _ga_job_apply() {
     _lock="$(_ga_state_dir)/.job.lock"
     if command -v flock >/dev/null 2>&1 && (umask 077 && : >>"${_lock}") 2>/dev/null; then
         {
-            flock -w 10 8 2>/dev/null || true
+            # Never fall through unlocked: that reopens the cancel-vs-fire race.
+            flock -w 10 8 2>/dev/null || return 1
             _ga_job_swap "${_f}" "$@"
         } 8>>"${_lock}"
         return $?
@@ -223,17 +224,14 @@ _ga_main_checkout() {
     esac
 }
 
-# Worktree of main checkout <1> on `wt/<2>/<index>` with the highest index.
-_ga_find_worktree() {
+# Every worktree of main checkout <1> on a `wt/<2>/<index>` branch, one per line.
+_ga_name_worktrees() {
     git -C "$1" worktree list --porcelain 2>/dev/null | awk -v p="refs/heads/wt/$2/" '
         /^worktree / { wt = substr($0, 10) }
         /^branch / {
             b = substr($0, 8)
-            if (index(b, p) != 1) next
-            k = substr(b, length(p) + 1)
-            if (k ~ /^[0-9]+$/ && (best == "" || k + 0 > best + 0)) { best = k; path = wt }
-        }
-        END { if (path != "") print path }'
+            if (index(b, p) == 1 && substr(b, length(p) + 1) ~ /^[0-9]+$/) print wt
+        }'
 }
 
 # `gwt spawn --wt-name <2> [--base <3>]` from main checkout <1>, cron-safe.
@@ -633,15 +631,19 @@ _ga_dispatch() {
         return 1
     }
 
+    # The new worktree is the one that was not there before the spawn — never
+    # "the highest index", which could be an older tree of the same name.
+    local _before
+    _before=$(_ga_name_worktrees "${_repo}" "${_name}")
     if ! _ga_gwt_spawn "${_repo}" "${_name}" "${_base}"; then
         _ga_unlock
         _GA_FAIL="gwt_spawn_failed: ${_repo} --wt-name ${_name}"
         return 1
     fi
-    _wt=$(_ga_find_worktree "${_repo}" "${_name}")
-    if [ -z "${_wt}" ] || [ ! -d "${_wt}" ]; then
+    _wt=$(_ga_name_worktrees "${_repo}" "${_name}" | grep -vxF -f <(printf '%s\n' "${_before}"))
+    if [ -z "${_wt}" ] || [ "$(printf '%s\n' "${_wt}" | wc -l)" -ne 1 ] || [ ! -d "${_wt}" ]; then
         _ga_unlock
-        _GA_FAIL="worktree_missing: no wt/${_name}/* after spawn"
+        _GA_FAIL="worktree_missing: no new wt/${_name}/* worktree after spawn"
         return 1
     fi
     ux_info "Worktree: ${_wt}"

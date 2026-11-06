@@ -86,7 +86,7 @@ _gwt_help_rows_at() {
     ux_table_row "warning" "claude runs WITHOUT permission prompts" "--dangerously-skip-permissions"
     ux_table_row "agent" "herdr agent ga-<repo>-<slug> (max 32 chars)" "Same live name -> rejected at schedule time"
     ux_table_row "--user" "Claude account (external multi-account PC)" "Internal PC: warning, default account"
-    ux_table_row "lifetime" "Survives terminal close + logout" "Lost on reboot (list: lost)"
+    ux_table_row "lifetime" "Survives terminal close + logout" "Lost on reboot / WSL VM shutdown (list: lost)"
     ux_table_row "late" "Wake-up > 30m after HH:MM is skipped" "list: missed"
     ux_table_row "list" "gwt at list [--all]" "pending/running/done/failed/cancelled/missed/lost"
     ux_table_row "cancel" "gwt at cancel <id>" "Pending only; fired jobs refused"

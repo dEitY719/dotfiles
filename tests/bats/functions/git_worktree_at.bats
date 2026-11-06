@@ -99,6 +99,22 @@ _status() { jq -r .status "${_STATE}/$1.json"; }
     done
 }
 
+@test "gwt at without git_worktree_at (vendored copy) fails with a clear message" {
+    run_in_bash "unset -f git_worktree_at; gwt at list"
+    assert_failure
+    assert_output --partial "gwt at is not available here"
+}
+
+@test "dispatch picks the newly spawned worktree, not an older higher index" {
+    git -C "${_REPO}" worktree add -q -b wt/issue-92/7 "${_WORK}/proj/old-tree"
+    _job pick pending "${GWT_AT_NOW}"
+    _run "${_REPO}" --run "${_STATE}/pick.json"
+    assert_success
+    run grep -F "[tab][create]" "${HERDR_LOG}"
+    assert_output --partial "[--cwd][${_WORK}/proj/repo-issue-92-"
+    refute_output --partial "old-tree"
+}
+
 @test "zsh: gwt at --help prints the help, rc 0" {
     run_in_zsh "gwt at --help"
     assert_success
