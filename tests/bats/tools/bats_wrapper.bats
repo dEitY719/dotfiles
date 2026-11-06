@@ -60,7 +60,7 @@ EOF
 @test "#2361 an existing BATS_LIB_PATH is kept after the vendored lib dir" {
     cat >"${WORK}/env.bats" <<EOF
 @test "lib path" {
-    [ "\$BATS_LIB_PATH" = "${DOTFILES_ROOT}/tests/bats/lib:/opt/extra" ]
+    [ "\$BATS_LIB_PATH" = "$(readlink -f "$DOTFILES_ROOT")/tests/bats/lib:/opt/extra" ]
 }
 EOF
     run env -i HOME="$HOME" PATH="${LINK_BIN}:/usr/bin:/bin" TERM=dumb \
@@ -77,5 +77,6 @@ EOF
     ln -sf "${fake}/shell-common/tools/custom/bats.sh" "${LINK_BIN}/bats"
     _bare bats --version
     assert_failure 1
-    assert_output --partial "${fake}/tests/bats/lib/bats-core/bin/bats"
+    # The wrapper resolves symlinks (readlink -f), e.g. /var -> /private/var on macOS.
+    assert_output --partial "$(readlink -f "$fake")/tests/bats/lib/bats-core/bin/bats"
 }
