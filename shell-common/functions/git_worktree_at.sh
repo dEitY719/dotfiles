@@ -36,6 +36,8 @@ _git_worktree_at_show_help() {
     ux_info "Subcommands:"
     ux_info "  list [--all]     Jobs: pending/running/done/failed/cancelled/missed/lost"
     ux_info "  cancel <id>      Cancel a pending job (a fired job is refused)"
+    ux_info "  remove <id>      Delete a finished job from the list (pending/running refused)"
+    ux_info "  remove --all|-A  Delete every finished job; pending/running are kept"
     ux_info ""
     ux_info "Lifetime: survives terminal close and logout; lost on reboot (list"
     ux_info "shows 'lost'); a wake-up more than 30m late is skipped as 'missed'."
@@ -48,6 +50,8 @@ _git_worktree_at_show_help() {
     ux_info "  gwt at 20:00 --wt-name review --user work --prompt PR 리뷰 반영해"
     ux_info "  gwt at list"
     ux_info "  gwt at cancel 1106-174501-12345"
+    ux_info "  gwt at remove 1106-174501-12345"
+    ux_info "  gwt at remove --all"
 }
 
 git_worktree_at() {

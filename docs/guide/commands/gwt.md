@@ -81,6 +81,7 @@
 - **late** — Wake-up > 30m after HH:MM is skipped — list: missed
 - **list** — gwt at list [--all] — pending/running/done/failed/cancelled/missed/lost
 - **cancel** — gwt at cancel <id> — Pending only; fired jobs refused
+- **remove** — gwt at remove <id> | --all|-A — Delete finished jobs from list; pending/running kept
 - **state** — ${XDG_STATE_HOME:-~/.local/state}/gwt-at/<id>.json|.log — dir 700, files 600
 - **example** — gwt at 20:00 --wt-name issue-92 --prompt /gh-flow:wave 92 — Tonight at 20:00
 

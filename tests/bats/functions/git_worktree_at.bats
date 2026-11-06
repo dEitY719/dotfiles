@@ -272,6 +272,47 @@ _status() { jq -r .status "${_STATE}/$1.json"; }
     assert_output --partial "already fired"
 }
 
+@test "remove <id> deletes a finished job + log; live and unknown ids are refused" {
+    _job done1 done 1800000000
+    : >"${_STATE}/done1.log"
+    _run "${_REPO}" remove done1
+    assert_success
+    [ ! -e "${_STATE}/done1.json" ]
+    [ ! -e "${_STATE}/done1.log" ]
+
+    sleep 300 &
+    _BG_PID=$!
+    _job fired running 1800000000 "${_BG_PID}" "$(awk '{print $22}' "/proc/${_BG_PID}/stat")"
+    _run "${_REPO}" remove fired
+    assert_failure
+    assert_output --partial "cancel it first"
+    [ -f "${_STATE}/fired.json" ]
+
+    _run "${_REPO}" remove nope
+    assert_failure
+    assert_output --partial "No such job"
+    _run "${_REPO}" remove
+    assert_failure
+}
+
+@test "remove --all and -A drop finished jobs, keep running ones" {
+    sleep 300 &
+    _BG_PID=$!
+    _job keep running 1800000000 "${_BG_PID}" "$(awk '{print $22}' "/proc/${_BG_PID}/stat")"
+    _job a failed 1800000000
+    _job b cancelled 1800000000
+    _run "${_REPO}" remove --all
+    assert_success
+    assert_output --partial "Removed 2"
+    [ ! -e "${_STATE}/a.json" ] && [ ! -e "${_STATE}/b.json" ]
+    [ -f "${_STATE}/keep.json" ]
+
+    _job c missed 1800000000
+    _run "${_REPO}" remove -A
+    assert_success
+    [ ! -e "${_STATE}/c.json" ]
+}
+
 # --- --run --------------------------------------------------------------------
 
 @test "a runner waking more than 30m late records missed and dispatches nothing" {
