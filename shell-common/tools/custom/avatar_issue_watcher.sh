@@ -2633,7 +2633,7 @@ _iw_process_issue() {
         if ! _ws=$(_iw_workspace_for_label "${_label}" "${_path}"); then
             ux_warning "No herdr workspace for ${_label} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
         elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_wt}" "${_agent}"); then
-            # herdr's own stderr under the error line, as for agent start (#2363).
+            # herdr's own stderr under the error line, in agent start's `원인:` idiom (#2363).
             _cause=$(head -n 1 "$(_iw_tab_create_errf)" 2>/dev/null)
             rm -f "$(_iw_tab_create_errf)"
             _msg="herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
@@ -4047,12 +4047,15 @@ _iw_targeted_run() {
     # (fail-closed), running tab and blockedBy, each with its own Skipping line
     # on stderr — kept in a file so the last one can name the skip (#2363).
     _errf="$(_iw_state_dir)/select.err.$$"
-    { : >"${_errf}"; } 2>/dev/null || _errf="/dev/null"
+    # No state dir to write to: stderr passes straight through, no cause to quote.
+    { : >"${_errf}"; } 2>/dev/null || _errf="/dev/stderr"
     _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}" 2>"${_errf}")
-    _cause=$(grep 'Skipping ' "${_errf}" 2>/dev/null | tail -n 1)
-    if [ "${_errf}" != "/dev/null" ]; then
+    if [ "${_errf}" != "/dev/stderr" ]; then
+        _cause=$(grep 'Skipping ' "${_errf}" 2>/dev/null | tail -n 1)
         cat "${_errf}" >&2
         rm -f "${_errf}"
+    else
+        _cause=""
     fi
     if [ -z "${_candidates}" ]; then
         _cause="${_cause#*Skipping * — }"
