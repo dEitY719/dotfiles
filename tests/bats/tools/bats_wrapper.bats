@@ -63,8 +63,7 @@ EOF
     [ "\$BATS_LIB_PATH" = "$(readlink -f "$DOTFILES_ROOT")/tests/bats/lib:/opt/extra" ]
 }
 EOF
-    run env -i HOME="$HOME" PATH="${LINK_BIN}:/usr/bin:/bin" TERM=dumb \
-        BATS_LIB_PATH=/opt/extra bats "${WORK}/env.bats"
+    _bare BATS_LIB_PATH=/opt/extra bats "${WORK}/env.bats"
     assert_success
 }
 
