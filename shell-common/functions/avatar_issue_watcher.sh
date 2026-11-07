@@ -31,7 +31,7 @@ _avatar_issue_watcher_help_rows_commands() {
     ux_table_row "avatar-issue-watcher --dry-run" "Preview" "Print what a tick would dispatch, change nothing"
     ux_table_row "avatar-issue-watcher <issue-ref>" "Target" "Dispatch one issue (URL, owner/repo#N, #N, N) through the tick's guards"
     ux_table_row "avatar-issue-watcher <issue-ref> --force" "Target" "Same, despite an excluded label"
-    ux_table_row "avatar-issue-watcher <issue-ref> --fg" "Target" "Stay in the foreground (a tty run detaches: PID + per-run log, exit=<rc> last line)"
+    ux_table_row "avatar-issue-watcher <issue-ref> --fg" "Target" "Stay in the foreground (a tty run detaches: PID + per-run log, exit=<rc> last line; skipped -> Not dispatched, exit 3)"
     ux_table_row "avatar-issue-watcher --account <name> [<issue-ref>]" "Account" "Run on ~/.claude-<name> (alias --user); unknown/disabled/logged out -> error, exit 1, no detach"
     ux_table_row "avatar-issue-watcher --status" "Status" "Rate-limit gate, saturation, gh search state"
     ux_table_row "avatar-issue-watcher watch list" "Watch" "Show the watch list file and its entries"

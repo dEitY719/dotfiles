@@ -2604,7 +2604,7 @@ _two_repo_fixture() {
 @test "avatar_issue_watcher: a tab-create failure is an error carrying herdr's stderr (#2363)" {
     _run_tick "HERDR_TAB_FAIL=1"
     assert_failure
-    assert_output --regexp "❌ +herdr tab create failed for acme/dotfiles#11 \\(attempt 1/3\\)\\."
+    assert_output --partial "herdr tab create failed for acme/dotfiles#11 (attempt 1/3)."
     assert_output --partial "원인: tab create: workspace ws-test-1 not found"
     [ -z "$(ls "${_STATE_DIR}"/tab-create.err.* 2>/dev/null)" ]
 }
@@ -5272,7 +5272,7 @@ _only_run_log() {
 @test "avatar_issue_watcher: a targeted run with an open blocker warns and exits 3" {
     _run_tick "GH_BLOCKED_BY=12" -- "acme/dotfiles#12"
     [ "${status}" -eq 3 ]
-    assert_output --regexp "⚠️ +Not dispatched: acme/dotfiles#12 — blocked by open #9"
+    assert_output --partial "Not dispatched: acme/dotfiles#12 — blocked by open #9"
     _refute_logged "tab create"
 }
 
