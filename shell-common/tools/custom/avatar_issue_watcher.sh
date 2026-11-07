@@ -430,6 +430,9 @@ _IW_TARGETED=0
 _IW_DETACHED=0
 # Per-run logs of detached targeted runs: newest N kept (issue #2286).
 _IW_RUN_LOGS_KEEP=20
+# Exit code of a targeted run that ended without dispatching (a guard skipped
+# the named issue): not a success, not a hard error either (issue #2363).
+_IW_RC_NOT_DISPATCHED=3
 # Set by _iw_limit_gate_check when it clears an expired backoff, and read once
 # by main() (issue #1604). The casualty retry is a gate-reopen event, not a
 # per-tick one: a tick that finds the gate simply `open` has already done its
@@ -487,7 +490,7 @@ _iw_prune_run_logs() {
 # and the log. Never returns.
 #   $1 = owner/repo (empty: unresolved), $2 = issue number, $3.. = child args
 _iw_detach_run() {
-    local _repo="$1" _num="$2" _dir _log _pid _self _last _alive
+    local _repo="$1" _num="$2" _dir _log _pid _self _last _alive _checks
     shift 2
     _dir="$(_iw_state_dir)/logs"
     _repo=$(printf '%s' "${_repo:-local}" | tr '/' '-')
@@ -508,16 +511,33 @@ _iw_detach_run() {
         NO_COLOR=1 nohup bash "${_self}" --_detached "$@" </dev/null >>"${_log}" 2>&1 &
     fi
     _pid=$!
-    # A child that dies at once (closed issue, no herdr) has already written
-    # its exit=<rc> line; report it instead of a misleading success. Liveness is
-    # sampled before the log is read: a child that is dead by then has written
-    # its line, so a dead child without one died abnormally (SIGKILL, bootstrap).
-    sleep "${IW_DETACH_CHECK_SLEEP:-1}"
-    _alive=0
-    kill -0 "${_pid}" 2>/dev/null && _alive=1
-    _last=$(tail -n 1 "${_log}" 2>/dev/null)
+    # Wait until the child has either opened its herdr tab (the tab=<id> line
+    # _iw_process_issue writes) or ended (its exit=<rc> line), so a skip is not
+    # reported as a run that continues (#2363). A child that dies at once
+    # (closed issue, no herdr) has already written its exit=<rc> line; report it
+    # instead of a misleading success. Liveness is sampled before the log is
+    # read: a child that is dead by then has written its line, so a dead child
+    # without one died abnormally (SIGKILL, bootstrap).
+    _checks=0
+    while :; do
+        sleep "${IW_DETACH_CHECK_SLEEP:-1}"
+        _checks=$((_checks + 1))
+        _alive=0
+        kill -0 "${_pid}" 2>/dev/null && _alive=1
+        _last=$(tail -n 1 "${_log}" 2>/dev/null)
+        case "${_last}" in exit=*) break ;; esac
+        [ "${_alive}" -eq 1 ] || break
+        grep -q '^tab=' "${_log}" 2>/dev/null && break
+        [ "${_checks}" -lt "${IW_DETACH_CHECKS:-30}" ] || break
+    done
     case "${_last}" in
     exit=0) ;;
+    "exit=${_IW_RC_NOT_DISPATCHED}")
+        # The child's own skip reason, quoted like the #2348 `Last error:` line.
+        _last=$(grep 'Not dispatched: ' "${_log}" 2>/dev/null | tail -n 1)
+        ux_warning "Not dispatched: ${_last:+${_last#*Not dispatched: } }— see ${_log}"
+        exit "${_IW_RC_NOT_DISPATCHED}"
+        ;;
     exit=*)
         ux_error "Detached run ${_pid} ended at once (${_last}) — see ${_log}"
         # The child's own reason, so the log need not be opened (#2348). Unanchored
@@ -2203,11 +2223,21 @@ _iw_workspace_for_label() {
     _hp_workspace_for_label "${_IW_CONFIG_DIR}" "$@"
 }
 
+# Where _iw_tab_create leaves herdr's stderr for its caller (#2363). `$$` is the
+# tick's pid in every subshell too, so both sides name the same file.
+_iw_tab_create_errf() {
+    printf '%s/tab-create.err.%s' "$(_iw_state_dir)" "$$"
+}
+
 # Open the issue's tab and echo `<pane_id><TAB><tab_id>`.
 _iw_tab_create() {
-    local _ws="$1" _cwd="$2" _label="$3" _json _pane _tab
+    local _ws="$1" _cwd="$2" _label="$3" _json _pane _tab _errf
 
-    _json=$(_iw_herdr_create "${_cwd}" "${_label}" tab create --workspace "${_ws}") || return 1
+    _errf=$(_iw_tab_create_errf)
+    mkdir -p "${_errf%/*}" 2>/dev/null || true
+    { : >"${_errf}"; } 2>/dev/null || _errf="/dev/null"
+    _json=$(_HP_HERDR_ERR="${_errf}" _iw_herdr_create "${_cwd}" "${_label}" tab create --workspace "${_ws}") || return 1
+    [ "${_errf}" = "/dev/null" ] || rm -f "${_errf}"
 
     _pane=$(printf '%s' "${_json}" | _hp_json_first pane_id)
     _tab=$(printf '%s' "${_json}" | _hp_json_first tab_id)
@@ -2603,11 +2633,20 @@ _iw_process_issue() {
         if ! _ws=$(_iw_workspace_for_label "${_label}" "${_path}"); then
             ux_warning "No herdr workspace for ${_label} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
         elif ! _pane_tab=$(_iw_tab_create "${_ws}" "${_wt}" "${_agent}"); then
-            ux_warning "herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
+            # herdr's own stderr under the error line, as for agent start (#2363).
+            _cause=$(head -n 1 "$(_iw_tab_create_errf)" 2>/dev/null)
+            rm -f "$(_iw_tab_create_errf)"
+            _msg="herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
+            [ -z "${_cause}" ] || _msg="${_msg}
+    원인: ${_cause}"
+            ux_error "${_msg}"
         else
             IFS="${_IW_TAB}" read -r _pane _tab <<EOF
 ${_pane_tab}
 EOF
+            # Machine-read by a detached run's parent (#2363): the tab exists,
+            # so it may report the run as continuing.
+            [ "${_IW_DETACHED}" -eq 0 ] || printf 'tab=%s\n' "${_tab}"
             if ! _iw_start_agent_retrying "${_agent}" "${_pane}"; then
                 # One line, plus the sentence herdr actually gave, indented
                 # under it (#1445's idiom). Without it every cause — a busy
@@ -3754,12 +3793,14 @@ _iw_usage() {
     ux_bullet_sub "repo: its watch-list entry, else the current checkout; neither -> watch add first"
     ux_bullet_sub "no search: reads that issue with gh issue view; not OPEN or unreadable -> exit 1"
     ux_bullet_sub "an excluded label refuses (exit 1) unless --force"
-    ux_bullet_sub "running tab, open PR, open blocker, caps, gate and lock apply as in a tick (skip: exit 0)"
+    ux_bullet_sub "running tab, open PR, open blocker, caps, gate and lock apply as in a tick"
+    ux_bullet_sub "  skip: 'Not dispatched: <issue> — <reason>' warning, exit ${_IW_RC_NOT_DISPATCHED}"
     ux_bullet_sub "the round-robin cursor and the saturation counter are left untouched"
     ux_bullet_sub "on a tty it detaches (unless --fg or --dry-run): prints PID + log path, exits 0"
     ux_bullet_sub "  log: \${XDG_STATE_HOME:-\$HOME/.local/state}/${_IW_STATE_SUBDIR}/logs/<owner>-<repo>-<N>-<stamp>.log"
-    ux_bullet_sub "  last line exit=<rc>; newest ${_IW_RUN_LOGS_KEEP} logs kept; a child dead within 1s -> exit 1"
-    ux_bullet_sub "  (its last error line is printed); the account is checked before detaching:"
+    ux_bullet_sub "  last line exit=<rc>; newest ${_IW_RUN_LOGS_KEEP} logs kept; waits (up to ~30s) for the herdr"
+    ux_bullet_sub "  tab or the child's end: failed -> exit 1 (its last error line is printed),"
+    ux_bullet_sub "  skipped -> the 'Not dispatched' reason, exit ${_IW_RC_NOT_DISPATCHED}; the account is checked before detaching:"
     ux_bullet_sub "  logged out -> error + 'claude-yolo --user <NAME>' then /login, exit 1, no detach"
     ux_bullet_sub "  non-tty (cron, pipe) runs in the foreground as before"
     ux_bullet "concurrency"
@@ -3894,12 +3935,20 @@ _iw_tick_guards() {
 # Targeted run — one named issue instead of the search
 # ============================================================
 
+# The one line a targeted run that dispatched nothing ends on; a detached
+# run's parent quotes it from the log (#2363).
+#   $1 = owner/repo, $2 = issue number, $3 = why (empty: see the lines above)
+_iw_not_dispatched() {
+    ux_warning "Not dispatched: $1#$2 — ${3:-skipped by a guard (see above)}"
+}
+
 # Dispatch <host> <owner/repo> <number> (host/repo may be empty, see
 # _iw_parse_issue_ref) through the same guards and _iw_process_issue path a tick
 # uses. $4 is --force (1/0), $5 the current checkout's `_iw_cwd_entry` line or
-# empty. Exit 1 only for a hard error (repo unresolvable, issue unreadable or not
+# empty. Exit 1 for a hard error (repo unresolvable, issue unreadable or not
 # OPEN, excluded label without --force, a failed dispatch); a guard that skips
-# the issue answers 0, as a tick that dispatches nothing does.
+# the issue answers _IW_RC_NOT_DISPATCHED with a `Not dispatched:` warning —
+# the user named this issue, so a skip is no success (#2363).
 #
 # Never advances the round-robin cursor (_IW_TARGETED) and never touches the
 # saturation counter: one named issue says nothing about whose turn it is or
@@ -3948,7 +3997,10 @@ _iw_targeted_run() {
     _rc=0
     _iw_tick_guards || _rc=$?
     [ "${_rc}" -ne 2 ] || return 1
-    [ "${_rc}" -eq 0 ] || return 0
+    if [ "${_rc}" -ne 0 ]; then
+        _iw_not_dispatched "${_repo}" "${_number}" "held by the tick guards (see above)"
+        return "${_IW_RC_NOT_DISPATCHED}"
+    fi
 
     # gh's stderr kept for the error line, beside the state file as in
     # _iw_search_issues (no mktemp in the tick).
@@ -3987,16 +4039,25 @@ _iw_targeted_run() {
 
     _live=$(_iw_live_count)
     if [ "${_live}" -ge "${_IW_MAX_CONCURRENT}" ]; then
-        ux_info "Holding ${_repo}#${_number} — ${_live} issue session(s) already running (max ${_IW_MAX_CONCURRENT})."
-        return 0
+        _iw_not_dispatched "${_repo}" "${_number}" "${_live} issue session(s) already running (max ${_IW_MAX_CONCURRENT})"
+        return "${_IW_RC_NOT_DISPATCHED}"
     fi
 
     # The selector with a one-line candidate list: per-repo cap, open-PR
-    # (fail-closed), running tab and blockedBy, each with its own Skipping line.
-    _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}")
+    # (fail-closed), running tab and blockedBy, each with its own Skipping line
+    # on stderr — kept in a file so the last one can name the skip (#2363).
+    _errf="$(_iw_state_dir)/select.err.$$"
+    { : >"${_errf}"; } 2>/dev/null || _errf="/dev/null"
+    _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}" 2>"${_errf}")
+    _cause=$(grep 'Skipping ' "${_errf}" 2>/dev/null | tail -n 1)
+    if [ "${_errf}" != "/dev/null" ]; then
+        cat "${_errf}" >&2
+        rm -f "${_errf}"
+    fi
     if [ -z "${_candidates}" ]; then
-        ux_info "Not dispatching ${_repo}#${_number}."
-        return 0
+        _cause="${_cause#*Skipping * — }"
+        _iw_not_dispatched "${_repo}" "${_number}" "${_cause%.}"
+        return "${_IW_RC_NOT_DISPATCHED}"
     fi
 
     if [ "${_IW_DRY_RUN}" -eq 1 ]; then
