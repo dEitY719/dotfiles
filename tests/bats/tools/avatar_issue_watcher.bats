@@ -2607,6 +2607,7 @@ _two_repo_fixture() {
     assert_output --partial "herdr tab create failed for acme/dotfiles#11 (attempt 1/3)."
     assert_output --partial "원인: tab create: workspace ws-test-1 not found"
     [ -z "$(ls "${_STATE_DIR}"/tab-create.err.* 2>/dev/null)" ]
+    [ "$(printf '%s\n' "${output}" | grep -c 'herdr tab create failed')" -eq 3 ]
 }
 
 @test "avatar_issue_watcher: an agent-start failure closes the tab it opened" {
@@ -5308,6 +5309,23 @@ _only_run_log() {
     assert_output --partial "Last error: Giving up on acme/dotfiles#12"
     grep -q "herdr tab create failed for acme/dotfiles#12" "$(_only_run_log)"
     grep -q "원인: tab create: workspace ws-test-1 not found" "$(_only_run_log)"
+}
+
+@test "avatar_issue_watcher: a detached run whose agent start fails is not reported as Detached" {
+    printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v sleep)" >"${_BIN_DIR}/sleep"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0.2" "IW_DETACH_CHECKS=300" "HERDR_START_FAIL=1" \
+        -- "acme/dotfiles#12"
+    assert_failure
+    refute_output --partial "Detached —"
+    ! grep -q '^tab=' "$(_only_run_log)"
+}
+
+@test "avatar_issue_watcher: a targeted run at the concurrency cap is not dispatched (exit 3)" {
+    _set_running 13
+    _run_tick "IW_MAX_CONCURRENT=1" -- "acme/dotfiles#12"
+    [ "${status}" -eq 3 ]
+    assert_output --partial "Not dispatched: acme/dotfiles#12 — 1 issue session(s) already running (max 1)"
+    _refute_logged "tab create"
 }
 
 @test "avatar_issue_watcher: --help documents --account and its --user alias" {

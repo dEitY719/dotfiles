@@ -2226,6 +2226,14 @@ _iw_workspace_for_label() {
     _hp_workspace_for_label "${_IW_CONFIG_DIR}" "$@"
 }
 
+# Write the tab=<id> line a detached run's parent waits for (#2363), once the
+# agent has started in that tab; a no-op outside that dispatch. Always 0, so it
+# can lead the `elif` chain in _iw_process_issue.
+_iw_mark_tab() {
+    [ "${_IW_TAB_MARK}" -eq 0 ] || printf 'tab=%s\n' "$1"
+    return 0
+}
+
 # Where _iw_tab_create leaves herdr's stderr for its caller (#2363). `$$` is the
 # tick's pid in every subshell too, so both sides name the same file.
 _iw_tab_create_errf() {
@@ -2642,14 +2650,16 @@ _iw_process_issue() {
             _msg="herdr tab create failed for ${_repo}#${_number} (attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
             [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
-            ux_error "${_msg}"
+            # A warning while a retry is left, an error once none is (#2363).
+            if [ "${_attempt}" -lt "${_IW_MAX_ATTEMPTS}" ]; then
+                ux_warning "${_msg}"
+            else
+                ux_error "${_msg}"
+            fi
         else
             IFS="${_IW_TAB}" read -r _pane _tab <<EOF
 ${_pane_tab}
 EOF
-            # Machine-read by a detached run's parent (#2363): the tab exists,
-            # so it may report the run as continuing.
-            [ "${_IW_TAB_MARK}" -eq 0 ] || printf 'tab=%s\n' "${_tab}"
             if ! _iw_start_agent_retrying "${_agent}" "${_pane}"; then
                 # One line, plus the sentence herdr actually gave, indented
                 # under it (#1445's idiom). Without it every cause — a busy
@@ -2666,7 +2676,7 @@ EOF
                 [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
                 ux_warning "${_msg}"
-            elif _iw_wait_for_idle "${_agent}" && _iw_settle "${_agent}"; then
+            elif _iw_mark_tab "${_tab}" && _iw_wait_for_idle "${_agent}" && _iw_settle "${_agent}"; then
                 if _iw_prompt_issue "${_agent}" "${_number}" "${_tab}" "${_attempt}"; then
                     ux_success "${_repo}#${_number} dispatched (tab ${_tab}, pane ${_pane})."
                     return 0
@@ -4049,15 +4059,17 @@ _iw_targeted_run() {
     # The selector with a one-line candidate list: per-repo cap, open-PR
     # (fail-closed), running tab and blockedBy, each with its own Skipping line
     # on stderr — kept in a file so the last one can name the skip (#2363).
+    # No state dir to write to: stderr passes straight through (never a `2>`
+    # onto /dev/stderr, which would truncate an append-mode run log), no cause.
     _errf="$(_iw_state_dir)/select.err.$$"
-    # No state dir to write to: stderr passes straight through, no cause to quote.
-    { : >"${_errf}"; } 2>/dev/null || _errf="/dev/stderr"
-    _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}" 2>"${_errf}")
     _cause=""
-    if [ "${_errf}" != "/dev/stderr" ]; then
+    if { : >"${_errf}"; } 2>/dev/null; then
+        _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}" 2>"${_errf}")
         _cause=$(grep 'Skipping ' "${_errf}" 2>/dev/null | tail -n 1)
         cat "${_errf}" >&2
         rm -f "${_errf}"
+    else
+        _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}")
     fi
     if [ -z "${_candidates}" ]; then
         _cause="${_cause#*Skipping * — }"
