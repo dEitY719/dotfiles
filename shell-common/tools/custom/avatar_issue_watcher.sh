@@ -428,6 +428,9 @@ _IW_TARGETED=0
 # 1 in the background child a tty targeted run re-runs itself as (issue #2286):
 # that child must never detach again.
 _IW_DETACHED=0
+# 1 only while a detached child dispatches its named issue, so a casualty
+# retry's tab cannot pass for that issue's tab=<id> marker (#2363).
+_IW_TAB_MARK=0
 # Per-run logs of detached targeted runs: newest N kept (issue #2286).
 _IW_RUN_LOGS_KEEP=20
 # Exit code of a targeted run that ended without dispatching (a guard skipped
@@ -2646,7 +2649,7 @@ ${_pane_tab}
 EOF
             # Machine-read by a detached run's parent (#2363): the tab exists,
             # so it may report the run as continuing.
-            [ "${_IW_DETACHED}" -eq 0 ] || printf 'tab=%s\n' "${_tab}"
+            [ "${_IW_TAB_MARK}" -eq 0 ] || printf 'tab=%s\n' "${_tab}"
             if ! _iw_start_agent_retrying "${_agent}" "${_pane}"; then
                 # One line, plus the sentence herdr actually gave, indented
                 # under it (#1445's idiom). Without it every cause — a busy
@@ -4071,7 +4074,9 @@ _iw_targeted_run() {
 
     _iw_ensure_config_dir
     _rc=0
+    _IW_TAB_MARK="${_IW_DETACHED}"
     _iw_process_issue "${_repo}" "${_number}" "${_path}" || _rc=$?
+    _IW_TAB_MARK=0
     [ "${_rc}" -ne 0 ] ||
         _confirmed="$(_iw_agent_name "${_repo}" "${_number}")${_IW_TAB}${_repo}${_IW_TAB}${_number}
 "

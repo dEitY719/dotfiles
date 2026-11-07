@@ -35,6 +35,15 @@
   미등록·디렉토리 없음·로그아웃이면 터미널(stderr)에 에러와 복구 안내
   (`claude-yolo --user <name>` 실행 후 `/login`)를 찍고 detach 없이 exit 1.
   detach 된 자식이 곧바로 죽으면 로그의 마지막 에러 줄도 함께 출력한다.
+- detach 한 부모는 자식이 herdr 탭을 열거나(로그의 `tab=<id>` 줄) 끝날 때까지
+  최대 ~30초 기다린 뒤에만 `Detached` 를 출력한다 (#2363).
+- targeted run 이 가드(open blocker, open PR, 실행 중 탭, cap, rate-limit gate,
+  herdr 미응답)로 디스패치하지 않으면 성공이 아니다:
+  `Not dispatched: <repo>#<N> — <사유>` 경고(ux_warning)와 exit 3. detach 된 run 이면
+  부모가 그 사유와 로그 경로를 터미널에 출력하고 exit 3 으로 끝난다.
+  하드 에러(이슈 CLOSED·읽기 실패, excluded label, 디스패치 실패)는 그대로 exit 1.
+- `herdr tab create` 실패는 에러 줄로 남고, herdr 의 stderr 가 그 아래
+  `원인:` 줄로 붙는다.
 
 ### 다른 PC 적용 (#2285)
 
