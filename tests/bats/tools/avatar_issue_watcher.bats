@@ -551,7 +551,10 @@ case "$1 $2" in
     printf '%s\n' '{"id":"cli:workspace:create","result":{"workspace":{"workspace_id":"ws-test-1"},"root_pane":{"pane_id":"ws-test-1:p1"}}}'
     ;;
 "tab create")
-    [ "${HERDR_TAB_FAIL:-0}" = "1" ] && exit 1
+    if [ "${HERDR_TAB_FAIL:-0}" = "1" ]; then
+        printf '%s\n' 'tab create: workspace ws-test-1 not found' >&2
+        exit 1
+    fi
     : >"${CALL_LOG}.tabcreated"
     if [ -n "${HERDR_TAB_FAIL_AFTER:-}" ]; then
         _n=$(_bump "${CALL_LOG}.tabcount")
@@ -2596,6 +2599,14 @@ _two_repo_fixture() {
     assert_failure
     [ "$(_log_count 'tab create')" -eq 3 ]
     assert_output --partial "herdr tab create failed"
+}
+
+@test "avatar_issue_watcher: a tab-create failure is an error carrying herdr's stderr (#2363)" {
+    _run_tick "HERDR_TAB_FAIL=1"
+    assert_failure
+    assert_output --regexp "❌ +herdr tab create failed for acme/dotfiles#11 \\(attempt 1/3\\)\\."
+    assert_output --partial "원인: tab create: workspace ws-test-1 not found"
+    [ -z "$(ls "${_STATE_DIR}"/tab-create.err.* 2>/dev/null)" ]
 }
 
 @test "avatar_issue_watcher: an agent-start failure closes the tab it opened" {
@@ -5009,25 +5020,28 @@ _iw_parse_issue_ref \"\$1\"" _ "$1"
     _assert_logged "--label iw-dotfiles-issue-12 --no-focus"
 }
 
-@test "avatar_issue_watcher: a targeted issue already running is skipped with exit 0" {
+@test "avatar_issue_watcher: a targeted issue already running is not dispatched (exit 3, #2363)" {
     _set_running 12
     _run_tick -- "acme/dotfiles#12" --force
-    assert_success
+    [ "${status}" -eq 3 ]
     assert_output --partial "Skipping acme/dotfiles#12 — already running."
+    assert_output --partial "Not dispatched: acme/dotfiles#12 — already running"
     _refute_logged "tab create"
 }
 
-@test "avatar_issue_watcher: a targeted issue an open PR closes is skipped with exit 0" {
+@test "avatar_issue_watcher: a targeted issue an open PR closes is not dispatched (exit 3)" {
     _set_open_prs '{"acme/dotfiles":[{"number":40,"headRefName":"feat/x","body":"Closes #12"}]}'
     _run_tick -- "acme/dotfiles#12"
-    assert_success
+    [ "${status}" -eq 3 ]
+    assert_output --partial "Not dispatched: acme/dotfiles#12 — an open PR already closes it"
     assert_output --partial "Skipping acme/dotfiles#12 — an open PR already closes it."
     _refute_logged "tab create"
 }
 
 @test "avatar_issue_watcher: a targeted run with an unreadable PR list skips (fail-closed)" {
     _run_tick "GH_PR_LIST_FAIL=1" -- "acme/dotfiles#12"
-    assert_success
+    [ "${status}" -eq 3 ]
+    assert_output --partial "Not dispatched: acme/dotfiles#12"
     assert_output --partial "Cannot list open PRs for acme/dotfiles"
     _refute_logged "tab create"
 }
@@ -5035,7 +5049,8 @@ _iw_parse_issue_ref \"\$1\"" _ "$1"
 @test "avatar_issue_watcher: a targeted run honours the closed rate-limit gate" {
     _set_limit_state 2 "$(($(date +%s) + 600))"
     _run_tick -- "acme/dotfiles#12"
-    assert_success
+    [ "${status}" -eq 3 ]
+    assert_output --partial "Not dispatched: acme/dotfiles#12 — held by the tick guards"
     assert_output --partial "Rate-limit gate closed"
     _refute_logged "tab create"
 }
@@ -5250,6 +5265,49 @@ _only_run_log() {
     _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=3" "GH_CLOSED_ISSUES=12" -- "acme/dotfiles#12"
     assert_failure
     assert_output --partial "Last error: acme/dotfiles#12 is CLOSED"
+}
+
+# #2363: a targeted run that dispatches nothing must not look like success,
+# in the foreground or detached; a real dispatch keeps its Detached output.
+@test "avatar_issue_watcher: a targeted run with an open blocker warns and exits 3" {
+    _run_tick "GH_BLOCKED_BY=12" -- "acme/dotfiles#12"
+    [ "${status}" -eq 3 ]
+    assert_output --regexp "⚠️ +Not dispatched: acme/dotfiles#12 — blocked by open #9"
+    _refute_logged "tab create"
+}
+
+@test "avatar_issue_watcher: a detached run whose issue is blocked reports Not dispatched, not Detached" {
+    printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v sleep)" >"${_BIN_DIR}/sleep"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0.2" "IW_DETACH_CHECKS=100" "GH_BLOCKED_BY=12" \
+        -- "acme/dotfiles#12"
+    [ "${status}" -eq 3 ]
+    assert_output --partial "Not dispatched: acme/dotfiles#12 — blocked by open #9 — see ${_STATE_HOME}/${_LOGS_DIR_REL}/acme-dotfiles-12-"
+    refute_output --partial "Detached"
+    [ "$(tail -n 1 "$(_only_run_log)")" = "exit=3" ]
+}
+
+@test "avatar_issue_watcher: a detached run that dispatches still prints Detached" {
+    printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v sleep)" >"${_BIN_DIR}/sleep"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0.2" "IW_DETACH_CHECKS=100" -- "acme/dotfiles#12"
+    assert_success
+    assert_output --partial "Detached — the run continues in the background."
+    refute_output --partial "Not dispatched"
+    local _log
+    _log=$(_only_run_log)
+    _wait_exit_line "${_log}"
+    grep -q '^tab=ws-test-1:t9$' "${_log}"
+    [ "$(tail -n 1 "${_log}")" = "exit=0" ]
+}
+
+@test "avatar_issue_watcher: a detached run whose tab create fails prints the error on the terminal" {
+    printf '#!/bin/sh\nexec %s "$@"\n' "$(command -v sleep)" >"${_BIN_DIR}/sleep"
+    _run_tick "IW_ASSUME_TTY=1" "IW_DETACH_CHECK_SLEEP=0.2" "IW_DETACH_CHECKS=100" "HERDR_TAB_FAIL=1" \
+        -- "acme/dotfiles#12"
+    assert_failure
+    refute_output --partial "Detached —"
+    assert_output --partial "Last error: Giving up on acme/dotfiles#12"
+    grep -q "herdr tab create failed for acme/dotfiles#12" "$(_only_run_log)"
+    grep -q "원인: tab create: workspace ws-test-1 not found" "$(_only_run_log)"
 }
 
 @test "avatar_issue_watcher: --help documents --account and its --user alias" {

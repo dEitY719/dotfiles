@@ -213,7 +213,8 @@ _hp_herdr_create() {
     set -- "$@" --cwd "${_cwd}" --label "${_label}" --no-focus
     [ -z "${_cfg}" ] || set -- "$@" --env "CLAUDE_CONFIG_DIR=${_cfg}"
 
-    herdr "$@" 2>/dev/null
+    # _HP_HERDR_ERR: a file to keep herdr's stderr in, for a caller that reports it.
+    herdr "$@" 2>"${_HP_HERDR_ERR:-/dev/null}"
 }
 
 # Echo the workspace id whose label is <2>, creating it against cwd <3> when no
