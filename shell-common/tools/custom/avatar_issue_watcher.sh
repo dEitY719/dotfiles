@@ -4053,12 +4053,11 @@ _iw_targeted_run() {
     # No state dir to write to: stderr passes straight through, no cause to quote.
     { : >"${_errf}"; } 2>/dev/null || _errf="/dev/stderr"
     _candidates=$(_iw_select_candidates "${_repo}${_IW_TAB}${_number}" 2>"${_errf}")
+    _cause=""
     if [ "${_errf}" != "/dev/stderr" ]; then
         _cause=$(grep 'Skipping ' "${_errf}" 2>/dev/null | tail -n 1)
         cat "${_errf}" >&2
         rm -f "${_errf}"
-    else
-        _cause=""
     fi
     if [ -z "${_candidates}" ]; then
         _cause="${_cause#*Skipping * — }"
