@@ -65,8 +65,7 @@ setup_isolated_home() {
     # short-circuit plugin-sync hook tests. Suites that need it set do so
     # themselves.
     unset DOTFILES_PLUGIN_SYNC_DISABLED
-    # Machine-local setup mode and host must not steer isolated tests. Tests
-    # that exercise these settings export them explicitly for each case.
+    # Clear inherited setup mode and host; tests can set them for each case.
     unset DOTFILES_SETUP_MODE DOTFILES_GHES_HOST
     export ZDOTDIR="$TEST_TEMP_HOME"
     export XDG_CONFIG_HOME="$TEST_TEMP_HOME"
