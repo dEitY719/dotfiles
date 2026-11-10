@@ -41,7 +41,8 @@ cron_bootstrap() {
 # queued rather than lost. Returns non-zero only when another tick holds the
 # lock (or still holds it after the wait); a missing flock or an unusable state
 # dir soft-degrades to "no protection" rather than failing (#1440).
-# Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
+# Must run in the caller's shell (not a subshell): the lock lives as long as it.
+# Release early with cron_release_lock.
 cron_acquire_lock() {
     local _dir="$1" _lock
     _lock="${_dir}/$2"
@@ -65,20 +66,73 @@ cron_acquire_lock() {
         return 0
     fi
 
-    flock -n 9 && return 0
+    if ! flock -n 9; then
+        case "${4:-}" in
+        '' | *[!0-9]* | 0)
+            { exec 9>&-; } 2>/dev/null
+            [ -z "${3:-}" ] || {
+                ux_warning "another $3 tick is already running — skip"
+                _cron_lock_holders "${_lock}"
+            }
+            return 1
+            ;;
+        esac
 
-    case "${4:-}" in
-    '' | *[!0-9]* | 0)
-        [ -z "${3:-}" ] || ux_warning "another $3 tick is already running — skip"
-        return 1
-        ;;
-    esac
-
-    ux_info "waiting for the running ${3:-cron} tick (<=${4}s)..."
-    if ! flock -w "$4" 9; then
-        ux_error "timed out after ${4}s waiting for the running ${3:-cron} tick"
-        return 1
+        ux_info "waiting for the running ${3:-cron} tick (<=${4}s)..."
+        if ! flock -w "$4" 9; then
+            { exec 9>&-; } 2>/dev/null
+            ux_error "timed out after ${4}s waiting for the running ${3:-cron} tick"
+            _cron_lock_holders "${_lock}"
+            return 1
+        fi
     fi
+    _cron_lock_detach
+}
+
+# Hand the lock on fd 9 to a holder process and close fd 9 here (#2365).
+# bash cannot mark fd 9 close-on-exec, so every child of the tick inherited
+# it, and flock belongs to the open file description: a long-lived child
+# (herdr -> claude -> a session dbus-daemon) kept the lock after the tick
+# ended, and every later tick skipped. The holder is the only other process
+# with the description; setpriv --pdeathsig kills it when this shell exits,
+# so the lock still ends with the tick, while children spawned from here on
+# carry no lock fd. The PPID check closes the window where the shell exits
+# before the death signal is armed. No setpriv (non-Linux): keep fd 9 — the
+# old behavior, leak-prone but still a working lock.
+_cron_lock_detach() {
+    # shellcheck disable=SC3028  # bash callers; $$ is the fallback
+    local _owner="${BASHPID:-$$}"
+    _CRON_LOCK_PID=""
+    setpriv --pdeathsig KILL true 2>/dev/null || return 0
+    # shellcheck disable=SC2016  # $PPID/$1 expand in the holder's sh
+    setpriv --pdeathsig KILL sh -c '[ "$PPID" = "$1" ] && exec sleep 2147483647' \
+        _ "${_owner}" </dev/null >/dev/null 2>&1 &
+    _CRON_LOCK_PID=$!
+    { exec 9>&-; } 2>/dev/null
+}
+
+# Release a lock taken by cron_acquire_lock before the tick ends (a caller
+# that only needs it around part of its work). Safe to call twice.
+cron_release_lock() {
+    if [ -n "${_CRON_LOCK_PID:-}" ]; then
+        kill -KILL "${_CRON_LOCK_PID}" 2>/dev/null
+        wait "${_CRON_LOCK_PID}" 2>/dev/null
+        _CRON_LOCK_PID=""
+    fi
+    { exec 9>&-; } 2>/dev/null
+    return 0
+}
+
+# Name who holds a busy lock, so a stuck lock is diagnosable from the cron
+# log alone (#2365). Best effort: silent without fuser or when it finds none.
+_cron_lock_holders() {
+    local _pids _pid _list=""
+    command -v fuser >/dev/null 2>&1 || return 0
+    _pids=$(fuser "$1" 2>/dev/null) || return 0
+    for _pid in ${_pids}; do
+        _list="${_list} ${_pid}($(ps -o comm= -p "${_pid}" 2>/dev/null))"
+    done
+    [ -z "${_list}" ] || ux_info "lock ${1} held by:${_list}"
 }
 
 # Run a dotfiles_tools module: cron_py <module> [args...] (#2157).

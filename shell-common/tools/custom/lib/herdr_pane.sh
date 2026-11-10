@@ -72,7 +72,7 @@ _hp_now() {
 # the caller has not, so a sourcer of this file alone never hits rc 127 — the
 # callers' `|| exit 0` would turn that into a silently idle tick. BASH_SOURCE is
 # fine: only bash entrypoints source this file (see header).
-# Must run in the caller's shell (not a subshell): fd 9 has to outlive it.
+# Must run in the caller's shell (not a subshell): the lock lives as long as it.
 _hp_acquire_lock() {
     if ! command -v cron_acquire_lock >/dev/null 2>&1; then
         # shellcheck source=/dev/null disable=SC3028,SC3054  # bash-only callers
