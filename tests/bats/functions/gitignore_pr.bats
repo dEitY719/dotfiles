@@ -202,7 +202,7 @@ chore/gitignore-omo"
     git -C "$REPO" update-ref -d refs/remotes/origin/main
     run_in_bash "cd '$REPO' && export DOTFILES_SETUP_MODE=internal && gitignore_pr .omo"
     assert_failure
-    assert_output --partial "github.com origin"
+    assert_output --partial "push to github.com"
     assert_output --partial ".git/info/exclude"
     run git -C "$REPO" show-ref --verify -q refs/remotes/origin/main
     assert_failure
@@ -240,7 +240,7 @@ chore/gitignore-omo"
     # GIT_SSH_COMMAND=false: should the guard regress, the push still never leaves the host.
     run_in_bash "cd '$REPO' && export GIT_SSH_COMMAND=false DOTFILES_SETUP_MODE=internal DOTFILES_GHES_HOST=ghes.example.com && gitignore_pr .omo"
     assert_failure
-    assert_output --partial "github.com origin"
+    assert_output --partial "push to github.com"
     run git -C "$REPO" branch --list 'chore/*'
     assert_output ""
 }
@@ -252,7 +252,17 @@ chore/gitignore-omo"
     git -C "$REPO" remote set-url --add --push origin "ssh://git@SSH.GitHub.com:443/test/repo.git"
     run_in_bash "cd '$REPO' && export GIT_SSH_COMMAND=false DOTFILES_SETUP_MODE=internal DOTFILES_GHES_HOST=ghes.example.com && gitignore_pr .omo"
     assert_failure
-    assert_output --partial "github.com origin"
+    assert_output --partial "push to github.com"
+    run git -C "$REPO" branch --list 'chore/*'
+    assert_output ""
+}
+
+@test "internal mode + scp-style github.com pushurl without user: refused" {
+    git -C "$REPO" remote set-url origin "https://ghes.example.com/test/repo.git"
+    git -C "$REPO" remote set-url --push origin "github.com:test/repo.git"
+    run_in_bash "cd '$REPO' && export GIT_SSH_COMMAND=false DOTFILES_SETUP_MODE=internal DOTFILES_GHES_HOST=ghes.example.com && gitignore_pr .omo"
+    assert_failure
+    assert_output --partial "push to github.com"
     run git -C "$REPO" branch --list 'chore/*'
     assert_output ""
 }

@@ -256,12 +256,17 @@ _gh_host_from_url() {
 
 # Guard predicates share host matching and fail-closed policy across callers.
 # Accept bare hosts and remote URLs, including GitHub's ssh subdomains.
-_gh_host_is_github_com() {
-    case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
-        github.com | *[@./]github.com | *[@./]github.com[:/]*) return 0 ;;
+_gh_host_is_github_com() (
+    _ghig_url=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+    case "$_ghig_url" in *://*) _ghig_url=${_ghig_url#*://} ;; esac
+    _ghig_url=${_ghig_url%%/*}
+    _ghig_url=${_ghig_url##*@}
+    _ghig_url=${_ghig_url%%:*}
+    case "$_ghig_url" in
+        github.com | *.github.com) return 0 ;;
         *) return 1 ;;
     esac
-}
+)
 
 # A missing policy reader must never allow a github.com push.
 _gh_push_github_com_forbidden() {

@@ -145,15 +145,23 @@ gitignore_pr() {
     fi
     repo="$host/$slug"
 
-    # Check both the API host and effective push URL before any fetch or commit.
-    local push_url
-    push_url="$(git -C "$root" remote get-url --push --all origin 2>/dev/null)"
-    if _gitignore_pr_push_forbidden "$host" \
-        || _gitignore_pr_push_forbidden "$push_url"; then
-        ux_error "gitignore-pr: internal PC에서 github.com origin으로는 push할 수 없습니다 (사내 보안 정책)"
+    # Check the API host and each effective push URL before fetch or commit.
+    local push_url push_urls
+    push_urls="$(git -C "$root" remote get-url --push --all origin 2>/dev/null)"
+    if _gitignore_pr_push_forbidden "$host"; then
+        ux_error "gitignore-pr: internal policy forbids a push to github.com"
         ux_info "Run it from an external/public PC, or ignore locally via .git/info/exclude"
         return 1
     fi
+    while IFS= read -r push_url; do
+        if _gitignore_pr_push_forbidden "$push_url"; then
+            ux_error "gitignore-pr: internal policy forbids a push to github.com"
+            ux_info "Run it from an external/public PC, or ignore locally via .git/info/exclude"
+            return 1
+        fi
+    done <<EOF
+$push_urls
+EOF
 
     # NF-1: no staged/unstaged tracked changes (untracked files are fine).
     if [ -n "$(git -C "$root" status --porcelain --untracked-files=no)" ]; then
