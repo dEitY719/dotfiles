@@ -85,7 +85,7 @@
 - **install_agy** — Antigravity CLI (agy) 설치 스크립트 (대화형)
 - **install_bat** — Install and configure bat (cat replacement with syntax hi...
 - **install_claude** — Claude Code CLI Install Script
-- **install_codex** — Codex CLI 설치 스크립트 (대화형)
+- **install_codex** — Codex CLI standalone installer and updater (official curl...
 - **install_docker** — WSL Docker 설치 스크립트 (대화형)
 - **install_fasd** — Install and configure fasd (fast access to directories an...
 - **install_fd** — Install and configure fd (fast file search tool)
@@ -128,7 +128,7 @@
 - **skill_loader** — Cross-CLI skill loader for Claude Code, Codex, Gemini, etc.
 - **symlink-manager** — Symbolic Link Manager for Dotfiles
 - **uninstall_agy** — Antigravity CLI (agy) 제거 스크립트 (대화형)
-- **uninstall_codex** — Codex CLI 제거 스크립트 (대화형)
+- **uninstall_codex** — Codex CLI uninstaller for standalone and legacy npm insta...
 - **uninstall_docker** — WSL Docker 제거 스크립트 (대화형)
 - **uninstall_npm** — Node.js & npm 제거 스크립트 (대화형)
 - **wcp** — cp that accepts Windows paths (WSL): "C:\Users\me\Videos"...

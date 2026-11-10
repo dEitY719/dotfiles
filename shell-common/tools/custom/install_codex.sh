@@ -1,4 +1,5 @@
 #!/bin/bash
+# Codex CLI standalone installer and updater (official curl installer).
 # Direct-exec installer; no interactive sourcing guard is needed.
 set -e
 
