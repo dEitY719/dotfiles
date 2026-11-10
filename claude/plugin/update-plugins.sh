@@ -312,6 +312,7 @@ PL_UPDATED=0
 PL_UPTODATE=0
 PL_UNKNOWN=0
 PL_SKIPPED=0
+MP_SKIPPED=0
 FAILED=0
 
 # _update_plugin <id> — `claude plugin update --json` and classify the outcome.
@@ -417,6 +418,7 @@ _update_marketplace() {
 	if $KNOWN_MPS_SET && ! _in_list "$name" "$KNOWN_MPS"; then
 		# Its plugins cannot be installed without it either — skip both.
 		ux_info "$name: marketplace not registered — skipped (restore.sh adds it)"
+		_count MP_SKIPPED
 		return 0
 	fi
 	_count MP_TOTAL
@@ -439,7 +441,7 @@ $(_plugins_of "$SCOPE_PL_JSON" "$name")
 EOF
 }
 
-POOL_COUNTERS="MP_TOTAL MP_REFRESHED PL_TOTAL PL_UPDATED PL_UPTODATE PL_UNKNOWN PL_SKIPPED FAILED"
+POOL_COUNTERS="MP_TOTAL MP_REFRESHED MP_SKIPPED PL_TOTAL PL_UPDATED PL_UPTODATE PL_UNKNOWN PL_SKIPPED FAILED"
 # --- job pool (#2198) -------------------------------------------------------
 # Same block in git-pull-skills.sh and update-plugins.sh: each script must stay
 # runnable as a single copied file (the bats fixtures copy it alone).
@@ -566,6 +568,11 @@ if [ "$PL_UNKNOWN" -gt 0 ]; then
 fi
 if [ "$PL_SKIPPED" -gt 0 ]; then
 	ux_bullet "Plugins skipped (not installed): $PL_SKIPPED"
+fi
+# Still unregistered after skills-sync's restore step = something the user
+# has to look at (#2344 F-14), so it is counted, not just logged.
+if [ "$MP_SKIPPED" -gt 0 ]; then
+	ux_bullet "Marketplaces skipped (not registered): $MP_SKIPPED"
 fi
 
 if [ "$PL_UPDATED" -gt 0 ]; then

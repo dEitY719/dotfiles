@@ -487,3 +487,164 @@ gh-pr-skills|dEitY719/gh-pr-skills|gh-pr
 gh-flow-skills|dEitY719/gh-flow-skills|gh-flow
 TABLE
 }
+
+# --- #2344: store-aware idempotent restore (real runs against a fake claude) ---
+#
+# A fake `claude` on PATH logs every call to $CLAUDE_CALLS and fails the call
+# whose argv contains $CLAUDE_FAIL_ON. The store is the default account's
+# plugins/ dir, exactly what skills-sync points restore.sh at.
+
+_fake_claude() {
+    FAKEBIN="$TEST_TEMP_HOME/fakebin"
+    mkdir -p "$FAKEBIN"
+    export CLAUDE_CALLS="$TEST_TEMP_HOME/claude-calls.log"
+    : >"$CLAUDE_CALLS"
+    cat >"$FAKEBIN/claude" <<'SH'
+#!/bin/bash
+echo "$*" >>"$CLAUDE_CALLS"
+case " $* " in *" ${CLAUDE_FAIL_ON:-@none@} "*) exit 1 ;; esac
+exit 0
+SH
+    chmod +x "$FAKEBIN/claude"
+    export PATH="$FAKEBIN:$PATH"
+    export TMPDIR="$TEST_TEMP_HOME"
+    unset CLAUDE_SHARED_PLUGINS_DIR CLAUDE_DEFAULT_ACCOUNT
+    STORE="$TEST_TEMP_HOME/.claude-personal/plugins"
+    mkdir -p "$STORE"
+}
+
+# _store <marketplace keys...> -- <plugin ids...>
+_store() {
+    local mps="{}" pls="{}" in_pl=0 k
+    for k in "$@"; do
+        if [ "$k" = -- ]; then in_pl=1; continue; fi
+        if [ "$in_pl" = 1 ]; then
+            pls=$(jq -c --arg k "$k" '.[$k] = [{"scope":"user"}]' <<<"$pls")
+        else
+            mps=$(jq -c --arg k "$k" '.[$k] = {"source":{"source":"github"}}' <<<"$mps")
+        fi
+    done
+    printf '%s\n' "$mps" >"$STORE/known_marketplaces.json"
+    jq -c '{plugins: .}' <<<"$pls" >"$STORE/installed_plugins.json"
+}
+
+@test "restore.sh: nothing missing -> zero claude calls, store files unchanged (#2344)" {
+    _fake_claude
+    _store understand-anything -- understand-anything@understand-anything
+    local before
+    before=$(cat "$STORE"/*.json | sha256sum)
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    [ ! -s "$CLAUDE_CALLS" ]
+    assert_equal "$(cat "$STORE"/*.json | sha256sum)" "$before"
+    assert_output --partial 'Marketplaces added: 0'
+    assert_output --partial 'Plugins installed: 0'
+    assert_output --partial 'Already present: 2'
+    assert_output --partial 'Failed: 0'
+}
+
+@test "restore.sh: an empty store dir (no files) adds and installs everything (#2344 F-2)" {
+    _fake_claude
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    run cat "$CLAUDE_CALLS"
+    assert_output "plugin marketplace add Egonex-AI/Understand-Anything
+plugin install understand-anything@understand-anything"
+}
+
+@test "restore.sh: marketplace present, plugin missing -> install only (#2344)" {
+    _fake_claude
+    _store understand-anything --
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    run cat "$CLAUDE_CALLS"
+    assert_output "plugin install understand-anything@understand-anything"
+}
+
+@test "restore.sh: a newly added manifest plugin is the only one installed (#2344)" {
+    _fake_claude
+    _store understand-anything -- understand-anything@understand-anything
+    cat >"$PLUGDIR/plugins.json" <<'JSON'
+{"plugins": ["understand-anything@understand-anything", "extra@understand-anything"]}
+JSON
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    assert_output --partial 'Plugins installed: 1'
+    run cat "$CLAUDE_CALLS"
+    assert_output "plugin install extra@understand-anything"
+}
+
+@test "restore.sh: a tombstoned plugin is not installed on a real run (#2344 F-6)" {
+    _fake_claude
+    _store understand-anything --
+    printf '{"plugins":["understand-anything@understand-anything"]}\n' >"$PLUGDIR/removed.local.json"
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    [ ! -s "$CLAUDE_CALLS" ]
+}
+
+@test "restore.sh: one failed install is counted, the rest continue, exit 1 (#2344 F-4)" {
+    _fake_claude
+    _store understand-anything --
+    cat >"$PLUGDIR/plugins.json" <<'JSON'
+{"plugins": ["bad@understand-anything", "good@understand-anything"]}
+JSON
+    CLAUDE_FAIL_ON=bad@understand-anything run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial '실패: install bad@understand-anything'
+    assert_output --partial 'Plugins installed: 1'
+    assert_output --partial 'Failed: 1'
+    run cat "$CLAUDE_CALLS"
+    assert_line "plugin install good@understand-anything"
+}
+
+@test "restore.sh: a failed marketplace add fails its plugins without calling install (#2344)" {
+    _fake_claude
+    CLAUDE_FAIL_ON=Egonex-AI/Understand-Anything run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial 'Failed: 2'
+    run cat "$CLAUDE_CALLS"
+    assert_output "plugin marketplace add Egonex-AI/Understand-Anything"
+}
+
+@test "restore.sh: a corrupt installed_plugins.json fails with zero claude calls (#2344 F-2)" {
+    _fake_claude
+    printf '{not json' >"$STORE/installed_plugins.json"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial '플러그인 저장소 파일을 읽을 수 없음'
+    [ ! -s "$CLAUDE_CALLS" ]
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_failure 1
+}
+
+@test "restore.sh: a missing plugins/ path is skipped without calling claude (#2344 F-11)" {
+    _fake_claude
+    rm -rf "$STORE"
+    run "$PLUGDIR/restore.sh"
+    assert_success
+    assert_output --partial '플러그인 저장소 없음'
+    [ ! -s "$CLAUDE_CALLS" ]
+    [ ! -e "$STORE" ]
+}
+
+@test "restore.sh --dry-run prints only the items a real run would execute (#2344 F-3)" {
+    _fake_claude
+    _store understand-anything --
+    run "$PLUGDIR/restore.sh" --dry-run
+    assert_success
+    refute_output --partial 'add: understand-anything'
+    assert_output --partial 'install: understand-anything@understand-anything'
+    assert_output --partial 'Plugins (would install): 1'
+    [ ! -s "$CLAUDE_CALLS" ]
+}
+
+@test "restore.sh without claude: error by default, skip with --skip-without-claude (#2344 F-10)" {
+    mkdir -p "$TEST_TEMP_HOME/nobin"
+    PATH="$TEST_TEMP_HOME/nobin:/usr/bin:/bin" run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial 'claude CLI가 없습니다'
+    PATH="$TEST_TEMP_HOME/nobin:/usr/bin:/bin" run "$PLUGDIR/restore.sh" --skip-without-claude
+    assert_success
+    assert_output --partial '플러그인 복원 건너뜀'
+}

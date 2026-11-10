@@ -1,19 +1,20 @@
 #!/usr/bin/env bats
 # tests/bats/scripts/update_skills.bats
 # Validate scripts/update-skills.sh (#1825): runs git-clone-skills -> git-pull-skills ->
-# claude/setup.sh -> update-plugins -> setup-skills-ssot.sh in order (#1903), stops on
-# clone/pull failure, --dry-run clones/pulls/update-plugins in dry-run only.
+# claude/setup.sh -> restore-plugins (#2344) -> update-plugins -> setup-skills-ssot.sh in
+# order (#1903), stops on clone/pull failure, --dry-run clones/pulls/restores/updates in
+# dry-run only.
 # #2126: summary mode (shared step runner) vs -v / SKILLS_SYNC_VERBOSE=1 streaming.
 
 load '../test_helper'
 
 SCRIPT_UNDER_TEST="${DOTFILES_ROOT}/scripts/update-skills.sh"
 
-# Build a fake dotfiles tree: a copy of the wrapper plus 5 stub steps that
+# Build a fake dotfiles tree: a copy of the wrapper plus 6 stub steps that
 # append their name (and args) to $CALL_LOG. The wrapper resolves its root
 # from its own (realpath'd) location, so the copy drives the stubs.
 _make_fake_root() {
-    local pull_rc="$1" clone_rc="${2:-0}" plugins_rc="${3:-0}"
+    local pull_rc="$1" clone_rc="${2:-0}" plugins_rc="${3:-0}" restore_rc="${4:-0}"
     FAKE_ROOT="${TEST_TEMP_HOME}/fake-dotfiles"
     CALL_LOG="${TEST_TEMP_HOME}/calls.log"
     export CALL_LOG
@@ -24,6 +25,7 @@ _make_fake_root() {
     _stub "$FAKE_ROOT/claude/plugin/git-clone-skills.sh" clone "$clone_rc"
     _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull "$pull_rc"
     _stub "$FAKE_ROOT/claude/setup.sh" claude-setup 0
+    _stub "$FAKE_ROOT/claude/plugin/restore.sh" restore "$restore_rc"
     _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins "$plugins_rc"
     _stub "$FAKE_ROOT/scripts/setup-skills-ssot.sh" skills-ssot 0
 }
@@ -53,7 +55,7 @@ teardown() {
     [ -x "$SCRIPT_UNDER_TEST" ]
 }
 
-@test "update-skills.sh runs the 5 steps in order, passing args to pull only" {
+@test "update-skills.sh runs the 6 steps in order, passing args to pull only" {
     _make_fake_root 0
     cd /
     run "$FAKE_ROOT/scripts/update-skills.sh" --all-branches
@@ -62,6 +64,7 @@ teardown() {
     assert_output "clone
 pull --all-branches
 claude-setup
+restore --skip-without-claude
 update-plugins
 skills-ssot"
 }
@@ -74,6 +77,7 @@ skills-ssot"
     assert_output "clone
 pull
 claude-setup
+restore --skip-without-claude
 update-plugins
 skills-ssot"
 }
@@ -95,13 +99,14 @@ pull"
     assert_output "clone"
 }
 
-@test "update-skills.sh --dry-run runs only the clone, pull and update-plugins dry-runs" {
+@test "update-skills.sh --dry-run runs only the clone, pull, restore and update-plugins dry-runs" {
     _make_fake_root 0
     run "$FAKE_ROOT/scripts/update-skills.sh" --dry-run
     assert_success
     run cat "$CALL_LOG"
     assert_output "clone --dry-run
 pull --dry-run
+restore --dry-run
 update-plugins --dry-run"
 }
 
@@ -111,20 +116,21 @@ update-plugins --dry-run"
     assert_output --partial '${HOME}/dotfiles/scripts/update-skills.sh'
 }
 
-@test "summary mode: all-green run is header + 5 step lines + 1 summary line" {
+@test "summary mode: all-green run is header + 6 step lines + 1 summary line" {
     _make_fake_root 0
     _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 'noise up-to-date\n  ◆ Updated: 0\n  ◆ Up to date: 17\n'
     _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 0 'marketplace refreshed\n  ◆ Plugins updated: 2\n  ◆ Plugins up to date: 15\n  ◆ Failed: 0\n'
     run "$FAKE_ROOT/scripts/update-skills.sh"
     assert_success
-    assert_equal "$(grep -c . <<<"$output")" 7
+    assert_equal "$(grep -c . <<<"$output")" 8
     assert_output --partial "skills-sync (요약 모드"
     assert_output --regexp '✅ git-clone-skills \([0-9]+\.[0-9]s\)'
     assert_output --regexp '✅ git-pull-skills \([0-9]+\.[0-9]s\) — 갱신 0 / 최신 17'
     assert_output --regexp '✅ claude/setup.sh \('
+    assert_output --regexp '✅ restore-plugins \('
     assert_output --regexp '✅ update-plugins \([0-9]+\.[0-9]s\) — 갱신 2 / 최신 15'
     assert_output --regexp '✅ setup-skills-ssot \('
-    assert_output --partial "skills-sync 완료: 5개 스텝 모두 정상"
+    assert_output --partial "skills-sync 완료: 6개 스텝 모두 정상"
     refute_output --partial "noise"
     refute_output --partial "전체 로그"
 }
@@ -157,7 +163,7 @@ update-plugins --dry-run"
     assert_output --partial "전체 로그: $TMPDIR/skills-sync-"
 }
 
-@test "summary mode: update-plugins failure runs step 5, lists it, exits with its rc" {
+@test "summary mode: update-plugins failure runs step 6, lists it, exits with its rc" {
     _make_fake_root 0 0 7
     run "$FAKE_ROOT/scripts/update-skills.sh"
     assert_failure 7
@@ -191,7 +197,7 @@ claude-setup"
     run "$FAKE_ROOT/scripts/update-skills.sh" -v --all-branches
     assert_success
     assert_output --partial "pull-detail-line"
-    assert_output --partial "2/5 git-pull-skills"
+    assert_output --partial "2/6 git-pull-skills"
     refute_output --partial "요약 모드"
     run grep '^pull' "$CALL_LOG"
     assert_output "pull --all-branches"
@@ -213,8 +219,9 @@ claude-setup"
     assert_output --partial "skills-sync (요약 모드"
     assert_output --regexp '✅ git-clone-skills \(dry-run\) \('
     assert_output --regexp '✅ git-pull-skills \(dry-run\) \('
+    assert_output --regexp '✅ restore-plugins \(dry-run\) \('
     assert_output --regexp '✅ update-plugins \(dry-run\) \('
-    assert_output --partial "skills-sync (dry-run) 완료: 3개 스텝 모두 정상"
+    assert_output --partial "skills-sync (dry-run) 완료: 4개 스텝 모두 정상"
 }
 
 @test "--dry-run: update-plugins failure is reported as optional and becomes the exit code" {
@@ -364,4 +371,56 @@ claude-setup"
     grep -qF 'ux_success "$repo_name: updated via rebase (' "$p/git-pull-skills.sh"
     grep -qF 'ux_success "$repo_name: synced and pushed to origin (' "$p/git-pull-skills.sh"
     grep -qF 'ux_success "$repo_name: cloned from ' "$p/git-clone-skills.sh"
+    grep -qF 'ux_success "  install: ${plugin}"' "$p/restore.sh"
+    grep -qF 'ux_bullet "Plugins installed: $PL_INSTALLED"' "$p/restore.sh"
+    grep -qF 'ux_bullet "Marketplaces skipped (not registered): $MP_SKIPPED"' "$p/update-plugins.sh"
+}
+
+# --- #2344: restore-plugins step ---
+
+@test "restore-plugins failure still runs update-plugins + synthesis, and its rc wins (#2344 F-9)" {
+    _make_fake_root 0 0 7 3
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure 3
+    assert_output --partial "restore-plugins 실패 [optional] (exit 3"
+    run cat "$CALL_LOG"
+    assert_line "update-plugins"
+    assert_line "skills-ssot"
+}
+
+@test "restore-plugins digest: new installs, marketplaces, item detail and session hint (#2344 F-12)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/restore.sh" restore 0 '== 공용 marketplaces ==\n  add: gh-flow-skills (dEitY719/gh-flow-skills)\n  install: gh-flow@gh-flow-skills\n  install: notes@notes-skills\n  * Marketplaces added: 1\n  * Plugins installed: 2\n  * Already present: 30\n  * Failed: 0\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --regexp '✅ restore-plugins \([0-9]+\.[0-9]s\) — 신규 설치 2 / 마켓플레이스 1 \(새 Claude Code 세션 시작 필요\)
+  gh-flow@gh-flow-skills
+  notes@notes-skills'
+}
+
+@test "restore-plugins --dry-run digest previews the would-install count (#2344 F-13)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/restore.sh" restore 0 '  install: gh-flow@gh-flow-skills\n  * Marketplaces (would add): 0\n  * Plugins (would install): 1\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh" --dry-run
+    assert_success
+    assert_output --regexp '✅ restore-plugins \(dry-run\) \([0-9]+\.[0-9]s\) — 설치 예정 1
+  gh-flow@gh-flow-skills'
+    refute_output --partial "세션 시작 필요"
+}
+
+@test "restore-plugins digest names a skip for a PC without claude (#2344 F-10)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/restore.sh" restore 0 'claude CLI 없음 — 플러그인 복원 건너뜀 (clinstall 후 재실행)\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "restore-plugins"
+    assert_output --partial "— claude CLI 없음 — 건너뜀"
+}
+
+@test "update-plugins digest shows still-unregistered marketplaces (#2344 F-14)" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 0 '  ◆ Plugins updated: 0\n  ◆ Plugins up to date: 5\n  ◆ Failed: 0\n  ◆ Marketplaces skipped (not registered): 2\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "— 갱신 0 / 최신 5 / 미등록 skip 2"
 }

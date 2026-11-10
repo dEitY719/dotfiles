@@ -8,9 +8,13 @@
 # (cloned there manually once — see the design doc).
 #
 # Default is add-only (backward compatible): SSOT items missing locally are
-# added/installed, but surplus local items are left untouched. Pass --sync to
-# also PRUNE local marketplaces/plugins that are absent from the SSOT, making
-# the local set exactly match the manifest (two-way sync).
+# added/installed, but surplus local items are left untouched. "Missing" is
+# read from the plugin store itself (known_marketplaces.json /
+# installed_plugins.json, #2344), so a re-run with nothing missing makes no
+# `claude` call at all and leaves the store files untouched. Any failed add or
+# install is counted and makes the script exit 1 after the Summary block.
+# Pass --sync to also PRUNE local marketplaces/plugins that are absent from
+# the SSOT, making the local set exactly match the manifest (two-way sync).
 #
 # TARGET CONFIG DIR (#1103): raw `claude` installs into ~/.claude when
 # CLAUDE_CONFIG_DIR is unset. In public/external (multi-account) mode the
@@ -42,6 +46,7 @@ else
 	ux_error() { printf '%s\n' "$1" >&2; }
 	ux_warning() { printf '%s\n' "$1"; }
 	ux_info() { printf '%s\n' "$1"; }
+	ux_bullet() { printf '  * %s\n' "$1"; }
 fi
 
 # The manifest reader (_claude_plugin_read_json_or) is shared with
@@ -88,16 +93,20 @@ DRY_RUN=0
 SYNC=0
 ALL_ACCOUNTS=0
 USER_ACCOUNT=""
+SKIP_NO_CLAUDE=0
 
 _usage() {
 	cat <<'EOF'
-Usage: restore.sh [--user <account>|--all-accounts] [--sync] [--dry-run] [-h|--help]
+Usage: restore.sh [--user <account>|--all-accounts] [--sync] [--dry-run] [--skip-without-claude] [-h|--help]
 
-  (no flags)        add-only 복원 — SSOT 에 있으나 로컬에 없는 항목만 add/install (하위호환)
+  (no flags)        add-only 복원 — SSOT 에 있으나 플러그인 저장소에 없는 항목만 add/install
+                    (누락이 없으면 claude 를 호출하지 않는다, 실패가 있으면 exit 1)
   --user <account>  이 계정의 config dir (~/.claude-<account>) 로 복원 (public/external 모드)
   --all-accounts    CLAUDE_ENABLED_ACCOUNTS 의 모든 계정 config dir 로 복원
   --sync            양방향 sync — 위에 더해, SSOT 에 없는 잉여 로컬 항목을 remove/uninstall
   --dry-run         실제 실행 없이 계획만 출력 (add + (--sync 시) prune 계획 모두)
+  --skip-without-claude
+                    claude CLI 가 없으면 오류 대신 건너뜀 (skills-sync 용, exit 0)
   -h, --help        이 도움말 출력 후 종료
 
 대상 config dir (#1103):
@@ -123,6 +132,7 @@ while [ $# -gt 0 ]; do
 	--dry-run) DRY_RUN=1 ;;
 	--sync) SYNC=1 ;;
 	--all-accounts) ALL_ACCOUNTS=1 ;;
+	--skip-without-claude) SKIP_NO_CLAUDE=1 ;;
 	--user)
 		shift
 		[ $# -gt 0 ] || {
@@ -154,10 +164,16 @@ command -v jq >/dev/null 2>&1 || {
 # so this also works as a preview before clinstall, and so CI (which has
 # no claude binary) can exercise --dry-run in tests without it.
 if [ "$DRY_RUN" -eq 0 ]; then
-	command -v claude >/dev/null 2>&1 || {
+	if ! command -v claude >/dev/null 2>&1; then
+		# skills-sync must not fail on a PC that never installed claude
+		# (same policy as update-plugins.sh); a direct run still errors.
+		if [ "$SKIP_NO_CLAUDE" -eq 1 ]; then
+			ux_warning "claude CLI 없음 — 플러그인 복원 건너뜀 (clinstall 후 재실행)"
+			exit 0
+		fi
 		ux_error "claude CLI가 없습니다. 먼저 clinstall 하세요."
 		exit 1
-	}
+	fi
 fi
 
 # --- setup-mode + company gating (computed once) --------------------------
@@ -278,32 +294,92 @@ PUB_PL_JSON=$(_merged_plugins "$SCRIPT_DIR/plugins.json" "$SCRIPT_DIR/plugins.lo
 PRIV_MP_JSON=$(_merged_marketplaces "$PRIV/marketplaces.json" "$PRIV/marketplaces.local.json" "$PRIV")
 PRIV_PL_JSON=$(_merged_plugins "$PRIV/plugins.json" "$PRIV/plugins.local.json" "$PRIV")
 
+MP_ADDED=0
+PL_INSTALLED=0
+PRESENT=0
+FAILED=0
+
+_in_list() { printf '%s\n' "$2" | grep -Fxq -- "$1"; }
+
+# _load_store — STORE_MPS / STORE_PLS (newline key lists) from $STORE_DIR.
+# An absent file means "nothing installed yet" (every entry is missing); a file
+# that exists but does not parse fails the config dir instead, so a corrupt
+# store is never mistaken for an empty one and re-installed wholesale (#2344 F-2).
+_load_store() {
+	local f
+	STORE_MPS=""
+	STORE_PLS=""
+	f="$STORE_DIR/known_marketplaces.json"
+	if [ -e "$f" ] && ! STORE_MPS=$(jq -r 'keys[]' "$f" 2>/dev/null); then
+		ux_error "플러그인 저장소 파일을 읽을 수 없음: $f — 복원하지 않음"
+		return 1
+	fi
+	f="$STORE_DIR/installed_plugins.json"
+	if [ -e "$f" ] && ! STORE_PLS=$(jq -r '(.plugins // {}) | keys[]' "$f" 2>/dev/null); then
+		ux_error "플러그인 저장소 파일을 읽을 수 없음: $f — 복원하지 않음"
+		return 1
+	fi
+	return 0
+}
+
+# _install_plugin <id> — takes update-plugins.sh's lock: both scripts rewrite
+# the shared installed_plugins.json, so a concurrent skills-sync must not race
+# (#2344 F-7). shortcut: no lock where flock is missing (stock macOS), as there.
+_install_plugin() {
+	if command -v flock >/dev/null 2>&1; then
+		flock "${TMPDIR:-/tmp}/dotfiles-update-plugins.$(id -u).lock" \
+			claude plugin install "$1" </dev/null
+	else
+		claude plugin install "$1" </dev/null
+	fi
+}
+
 # $1/$2 are merged manifest CONTENT (from _merged_*), not file paths — an
-# empty string means "this scope has no manifest at all".
+# empty string means "this scope has no manifest at all". Only entries absent
+# from the store (_load_store) reach the CLI. Here-docs, not `jq | while`, so
+# the counters survive the loops (a pipe runs them in a subshell).
 _restore_from() {
-	local mp_json="$1" pl_json="$2" label="$3" name repo plugin
+	local mp_json="$1" pl_json="$2" label="$3" name repo plugin failed_mps=""
 	if [ -z "$mp_json" ] || [ -z "$pl_json" ]; then
 		ux_info "  (${label} manifest 없음 — 건너뜀)"
 		return 0
 	fi
 	ux_section "${label} marketplaces"
-	# `</dev/null` on the CLI calls: without it, `claude` reading stdin would
-	# drain the `jq | while read` pipe and cut the loop short.
-	printf '%s' "$mp_json" | jq -r 'to_entries[] | "\(.key)\t\(.value)"' |
-		while IFS=$'\t' read -r name repo; do
+	# `</dev/null` on the CLI calls: claude must not drain the here-doc.
+	while IFS=$'\t' read -r name repo; do
+		[ -n "$name" ] || continue
+		if _in_list "$name" "$STORE_MPS"; then
+			PRESENT=$((PRESENT + 1))
+		elif [ "$DRY_RUN" -eq 1 ] || claude plugin marketplace add "$repo" </dev/null; then
 			ux_success "  add: ${name} (${repo})"
-			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin marketplace add "$repo" </dev/null || ux_error "    실패 — 계속 진행"
-			fi
-		done
+			MP_ADDED=$((MP_ADDED + 1))
+		else
+			ux_error "  실패: marketplace add ${name} (${repo}) — 계속 진행"
+			FAILED=$((FAILED + 1))
+			failed_mps="${failed_mps}${name}"$'\n'
+		fi
+	done <<EOF
+$(printf '%s' "$mp_json" | jq -r 'to_entries[] | "\(.key)\t\(.value)"')
+EOF
 	ux_section "${label} plugins"
-	printf '%s' "$pl_json" | jq -r '(.plugins // [])[]' |
-		while read -r plugin; do
+	while read -r plugin; do
+		[ -n "$plugin" ] || continue
+		if _in_list "$plugin" "$STORE_PLS"; then
+			PRESENT=$((PRESENT + 1))
+		elif _in_list "${plugin##*@}" "$failed_mps"; then
+			# Its marketplace was not added, so the install could only fail too.
+			ux_error "  실패: install ${plugin} (마켓플레이스 추가 실패)"
+			FAILED=$((FAILED + 1))
+		elif [ "$DRY_RUN" -eq 1 ] || _install_plugin "$plugin"; then
 			ux_success "  install: ${plugin}"
-			if [ "$DRY_RUN" -eq 0 ]; then
-				claude plugin install "$plugin" </dev/null || ux_error "    실패 — 계속 진행"
-			fi
-		done
+			PL_INSTALLED=$((PL_INSTALLED + 1))
+		else
+			ux_error "  실패: install ${plugin} — 계속 진행"
+			FAILED=$((FAILED + 1))
+		fi
+	done <<EOF
+$(printf '%s' "$pl_json" | jq -r '(.plugins // [])[]')
+EOF
 }
 
 # --- --sync prune pass helpers --------------------------------------------
@@ -398,8 +474,17 @@ _prune_pass() {
 # _run_for_config_dir — one full restore against the exported CLAUDE_CONFIG_DIR.
 _run_for_config_dir() {
 	ux_section "대상 config dir: ${CLAUDE_CONFIG_DIR}"
-	if [ "$DRY_RUN" -eq 0 ] && [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
-		ux_info "  (참고: 대상 dir 없음 — claude CLI 가 첫 실행 시 생성)"
+	STORE_DIR="${CLAUDE_SHARED_PLUGINS_DIR:-$CLAUDE_CONFIG_DIR/plugins}"
+	# No store path yet = claude/setup.sh has not linked this account to the
+	# shared store. Calling claude now would create a real plugins/ dir that
+	# the link then collides with (update-plugins.sh policy, #2344 F-11).
+	if [ "$DRY_RUN" -eq 0 ] && [ ! -e "$STORE_DIR" ]; then
+		ux_warning "  플러그인 저장소 없음: $STORE_DIR — 먼저 ./claude/setup.sh 실행. 건너뜀."
+		return 0
+	fi
+	if ! _load_store; then
+		FAILED=$((FAILED + 1))
+		return 0
 	fi
 
 	_restore_from "$PUB_MP_JSON" "$PUB_PL_JSON" "공용"
@@ -426,4 +511,18 @@ while IFS= read -r _cfg; do
 	_run_for_config_dir
 done < <(_target_config_dirs)
 
+ux_section "Summary"
+if [ "$DRY_RUN" -eq 1 ]; then
+	ux_bullet "Marketplaces (would add): $MP_ADDED"
+	ux_bullet "Plugins (would install): $PL_INSTALLED"
+else
+	ux_bullet "Marketplaces added: $MP_ADDED"
+	ux_bullet "Plugins installed: $PL_INSTALLED"
+fi
+ux_bullet "Already present: $PRESENT"
+ux_bullet "Failed: $FAILED"
+if [ "$FAILED" -gt 0 ]; then
+	ux_error "복원 실패 ${FAILED}건 — 네트워크/인증 확인 후 다시 실행하면 남은 항목만 재시도합니다."
+	exit 1
+fi
 ux_success "완료. 새 Claude Code 세션을 시작해 스킬이 로드됐는지 확인하세요."

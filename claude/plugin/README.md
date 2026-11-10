@@ -9,13 +9,14 @@ gitignored `*.local.json`), 아래 표는 **코드가 어디에 사는가** 를 
 ## 호출 그래프
 
 ```
-scripts/update-skills.sh                          (skills-sync 5단계 진입점)
+scripts/update-skills.sh                          (skills-sync 6단계 진입점)
  ├─ claude/plugin/git-clone-skills.sh ── marketplaces.json, skills-workspace{,-repos}.local.json, lib/gh_host.sh
  ├─ claude/plugin/git-pull-skills.sh
  ├─ claude/setup.sh ── tools/custom/lib/claude_accounts_skills.sh (_claude_prune_workspace_skills)
+ ├─ claude/plugin/restore.sh ── lib/claude_plugin_manifest.sh   (누락분만 설치, #2344)
  ├─ claude/plugin/update-plugins.sh ── marketplaces.json, plugins.json
  └─ scripts/setup-skills-ssot.sh ── lib/skill_sources.sh ── 워크스페이스 clone
-claude/plugin/restore.sh ── lib/claude_plugin_manifest.sh   (독립: 신규 PC 설치)
+claude/plugin/restore.sh --sync / --all-accounts             (단독 실행: 양방향 sync, 계정별)
 claude/plugin/reconcile.sh ── lib/claude_plugin_manifest.sh, plugin_sync_title.sh   (독립: drift 점검)
 claude/hooks/plugin-sync-session.sh -> plugin-sync.sh ── claude_plugin_manifest.sh, plugin_sync_title.sh
 claude/plugin/publish-sync.sh                     (독립: 게시)

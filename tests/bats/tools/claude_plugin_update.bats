@@ -181,6 +181,8 @@ plugin update notes@notes-skills --json [cfg=$TEST_TEMP_HOME/.claude-personal]"
     assert_output --partial "gh-flow@gh-flow-skills: not installed"
     assert_output --partial "notes-skills: marketplace not registered"
     assert_output --partial "Plugins skipped (not installed): 1"
+    # #2344 F-14: an unregistered marketplace is counted in the Summary too.
+    assert_output --partial "Marketplaces skipped (not registered): 1"
     run cat "$CLAUDE_LOG"
     assert_output "plugin marketplace update gh-flow-skills [cfg=$TEST_TEMP_HOME/.claude-personal]"
 }

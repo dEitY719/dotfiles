@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Skills Sync Alias
-# One-shot skills update: git-clone-skills -> git-pull-skills -> claude/setup.sh -> update-plugins -> setup-skills-ssot.sh (#1825, #1903)
+# One-shot skills update: git-clone-skills -> git-pull-skills -> claude/setup.sh -> restore-plugins -> update-plugins -> setup-skills-ssot.sh (#1825, #1903, #2344)
 # Output: summary mode by default (one line per step, #2126); full output with
 # `skills-sync -v` or SKILLS_SYNC_VERBOSE=1. Preview: `skills-sync --dry-run`.
 
