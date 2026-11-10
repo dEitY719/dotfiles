@@ -369,8 +369,10 @@ _codex_help_rows_basic() {
 }
 
 _codex_help_rows_setup() {
-    ux_table_row "codex-install" "Install Script" "Install Codex CLI"
-    ux_table_row "codex-uninstall" "Uninstall Script" "Remove Codex CLI"
+    ux_table_row "codex-install" "Official standalone installer" "Install or update (curl + sh)"
+    ux_table_row "Installer URL" "https://chatgpt.com/codex/install.sh" "Download with curl; run with sh"
+    ux_table_row "codex-uninstall" "Standalone + legacy npm" "Remove CLI; keep config, auth, sessions, skills"
+    ux_table_row "Preview changes" "codex-install/uninstall --dry-run" "Show actions without changes"
     ux_table_row "codex-status" "Status Check" "Show installation status"
     ux_table_row "codex-skills-sync" "Skills Sync" "Sync skills symlinks"
     ux_table_row "Auto skill sync" "Enabled by default" "Before codex command"

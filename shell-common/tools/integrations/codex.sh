@@ -9,11 +9,10 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 # Installation & Setup Guide
 # ═══════════════════════════════════════════════════════════════
 
-# 1) npm 전역 설치
-#    npm config set prefix '~/.npm-global'
+# 1) 공식 standalone 설치 (기본 실행 파일: ~/.local/bin/codex)
 #    bash shell-common/tools/custom/install_codex.sh
 #    또는 수동 설치:
-#    npm install -g <codex-package-name>
+#    curl -fsSL https://chatgpt.com/codex/install.sh | sh
 #
 # 2) API 키 또는 웹 로그인 인증
 #    설정 파일 또는 환경 변수로 인증 필요
@@ -378,7 +377,7 @@ codex() {
 # ═══════════════════════════════════════════════════════════════
 
 codex_install() {
-    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_codex.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_codex.sh" "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -386,7 +385,7 @@ codex_install() {
 # ═══════════════════════════════════════════════════════════════
 
 codex_uninstall() {
-    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_codex.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/uninstall_codex.sh" "$@"
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -394,23 +393,25 @@ codex_uninstall() {
 # ═══════════════════════════════════════════════════════════════
 
 codex_status() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local codex_bin
+    codex_bin="$(unset -f codex; command -v codex || true)"
     ux_header "Codex Status"
 
-    if command -v codex > /dev/null 2>&1; then
+    if [ -n "$codex_bin" ]; then
         ux_success "Codex installed"
-        ux_table_row "Version" "$(codex --version 2>/dev/null || echo 'unknown')" ""
-        ux_table_row "Location" "$(which codex)" ""
+        ux_table_row "Version" "$("$codex_bin" --version 2>/dev/null || echo 'unknown')" ""
+        ux_table_row "Location" "$codex_bin" ""
     else
         ux_warning "Codex not found"
-        ux_info "To install: bash shell-common/tools/custom/install_codex.sh"
+        ux_info "To install: codex-install"
         return 1
     fi
 
     ux_info ""
-    ux_section "npm Global Packages"
-    if ! npm list -g --depth=0 | grep -i codex > /dev/null 2>&1; then
-        ux_info "No codex packages found"
-    fi
+    ux_section "Standalone Installation"
+    ux_info "Binary directory: ${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
+    ux_info "Packages: ${CODEX_HOME:-$HOME/.codex}/packages/standalone"
 }
 
 # No source-time sync (#2129): it cost ~0.4s per shell start. The codex()

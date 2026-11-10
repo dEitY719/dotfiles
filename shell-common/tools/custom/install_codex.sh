@@ -1,109 +1,72 @@
 #!/bin/bash
-# mytool/install_codex.sh
-# Codex CLI 설치 스크립트 (대화형)
-# npm 전역 패키지: codex-cli (또는 해당 패키지명)
-
+# Direct-exec installer; no interactive sourcing guard is needed.
 set -e
-
-# Initialize common tools environment
 
 source "$(dirname "$0")/init.sh" || exit 1
 . "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
-# Main script
-main() {
-    clear
-    ux_header "Codex CLI Installer"
-    ux_info "This script installs the '@openai/codex' CLI using npm."
-
-    ux_section "Setup Process"
-    ux_numbered 1 "Check for Node.js and npm."
-    ux_numbered 2 "Check npm global prefix (set by ~/.npmrc)."
-    ux_numbered 3 "Install the '@openai/codex' npm package."
-    ux_numbered 4 "Verify the installation."
-    echo ""
-
-    if ! ux_confirm "Do you want to proceed?" "y"; then
-        ux_warning "Installation cancelled."
-        exit 0
-    fi
-
-    # ========================================
-    # Step 1: Check Node.js & npm
-    # ========================================
-    ux_step "1/4" "Checking for Node.js and npm..."
-    if ! ux_require "node"; then exit 1; fi
-    ux_success "Node.js is installed: $(node --version)"
-    if ! ux_require "npm"; then exit 1; fi
-    ux_success "npm is installed: $(npm --version)"
-    echo ""
-
-    # ========================================
-    # Step 2: Check npm global prefix
-    # ========================================
-    # ~/.npmrc is a symlink to the tracked npm/npmrc.*, which already pins
-    # prefix. `npm config set` would rewrite that file through the link (#1802).
-    ux_step "2/4" "Checking npm global prefix..."
-    local npm_prefix="$HOME/.npm-global"
-    local current_prefix
-    current_prefix="$(npm config get prefix 2>/dev/null || true)"
-    if [ "$current_prefix" = "$npm_prefix" ]; then
-        ux_success "npm global prefix: $npm_prefix"
-    else
-        ux_warning "npm global prefix is '${current_prefix}', expected '${npm_prefix}'."
-        ux_info "$HOME/.npmrc is a dotfiles symlink (npm/npmrc.*); re-run ./setup.sh to restore it."
-    fi
-    echo ""
-
-    # ========================================
-    # Step 3: Install Codex CLI
-    # ========================================
-    ux_step "3/4" "Installing Codex CLI..."
-    local codex_package="@openai/codex"
-    if ux_confirm "Install the '${codex_package}' npm package globally?" "y"; then
-        if ! ux_with_spinner "Installing ${codex_package}" npm install -g "$codex_package"; then
-            ux_error "Codex CLI installation failed."
-            exit 1
-        fi
-    else
-        ux_info "Step 3 skipped by user."
-        echo ""
-        ux_header "✅ Codex CLI Setup Complete!"
-        exit 0
-    fi
-
-    # ========================================
-    # Step 4: Verify installation
-    # ========================================
-    ux_step "4/4" "Verifying installation..."
-
-    local codex_bin codex_version
-    codex_bin="$(npm prefix -g)/bin/codex"
-    if codex_version=$(verify_installed_binary "$codex_bin" 2>&1); then
-        ux_success "Codex CLI is working: $codex_version ($codex_bin)"
-    else
-        ux_error "Codex CLI binary is not runnable: $codex_bin"
-        printf '%s\n' "$codex_version" | sed 's/^/  /'
-        exit 1
-    fi
-    case ":$PATH:" in
-        *":$(dirname "$codex_bin"):"*) ;;
-        *) ux_info "Open a new terminal (or run 'rehash' in zsh) so $(dirname "$codex_bin") is on PATH." ;;
-    esac
-
-    # ========================================
-    # Completion
-    # ========================================
-    echo ""
-    ux_header "✅ Codex CLI Setup Complete!"
-    ux_section "Next Steps"
-    ux_bullet "Check your PATH if the command is not found: ${UX_PRIMARY}echo \$PATH${UX_RESET}"
-    ux_bullet "View help: ${UX_PRIMARY}codex --help${UX_RESET}"
-    echo ""
-    ux_info "For more project-specific commands, run: ${UX_PRIMARY}codex-help${UX_RESET}"
-    echo ""
+codex_install_help() {
+    ux_info "Usage: codex-install [-h|--help|help] [--dry-run]"
+    ux_bullet "Install or update using https://chatgpt.com/codex/install.sh (curl + sh)."
+    ux_bullet "Binary: CODEX_INSTALL_DIR (default: ~/.local/bin)."
+    ux_bullet "Packages: CODEX_HOME/packages/standalone (CODEX_HOME defaults to ~/.codex)."
+    ux_bullet "Remove an existing npm installation with codex-uninstall first."
+    ux_bullet "--dry-run: show actions without downloading or installing."
 }
 
-if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then
+main() {
+    local dry_run=0 bin_dir codex_bin existing codex_version
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            help|-h|--help) codex_install_help; return 0 ;;
+            --dry-run) dry_run=1 ;;
+            *) ux_error "Unknown argument: $1"; codex_install_help; return 2 ;;
+        esac
+        shift
+    done
+
+    bin_dir="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
+    codex_bin="$bin_dir/codex"
+    ux_header "Codex CLI Standalone Installer"
+    ux_info "Installer: https://chatgpt.com/codex/install.sh (curl + sh)"
+    ux_info "Binary: $codex_bin"
+    if [ "$dry_run" = 1 ]; then
+        ux_info "[dry-run] Download the official installer, run with sh, then verify $codex_bin --version."
+        return 0
+    fi
+    ux_require curl || return 1
+
+    # Prepending BIN_DIR avoids upstream editing symlinked shell rc files.
+    # Upstream also edits them on a package-manager conflict, so stop before it.
+    existing="$(PATH="$bin_dir:$PATH" type -P codex || true)"
+    if [ -n "$existing" ] && [ "$existing" != "$codex_bin" ]; then
+        ux_error "Another Codex installation exists: $existing"
+        ux_info "Run codex-uninstall first (use its package manager for Homebrew/Bun installs)."
+        return 1
+    fi
+    if ! ux_confirm "Install or update standalone Codex CLI?" "y"; then
+        ux_info "Installation cancelled."
+        return 0
+    fi
+
+    _codex_installer_temp="$(mktemp)" || return 1
+    trap 'rm -f "$_codex_installer_temp"' EXIT
+    if ! curl -fsSL https://chatgpt.com/codex/install.sh -o "$_codex_installer_temp"; then
+        ux_error "Failed to download the official Codex installer."
+        return 1
+    fi
+    if ! PATH="$bin_dir:$PATH" sh "$_codex_installer_temp"; then
+        ux_error "Codex CLI installation failed."
+        return 1
+    fi
+    if ! codex_version="$(verify_installed_binary "$codex_bin" 2>&1)"; then
+        ux_error "Codex CLI binary is not runnable: $codex_bin ($codex_version)"
+        return 1
+    fi
+    ux_success "Codex CLI is working: $codex_version ($codex_bin)"
+    ux_info "Reload your shell, then run codex-version or codex-help."
+}
+
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     main "$@"
 fi

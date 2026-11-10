@@ -31,8 +31,10 @@
 
 ### setup
 
-- **codex-install** — Install Script — Install Codex CLI
-- **codex-uninstall** — Uninstall Script — Remove Codex CLI
+- **codex-install** — Official standalone installer — Install or update (curl + sh)
+- **Installer URL** — https://chatgpt.com/codex/install.sh — Download with curl; run with sh
+- **codex-uninstall** — Standalone + legacy npm — Remove CLI; keep config, auth, sessions, skills
+- **Preview changes** — codex-install/uninstall --dry-run — Show actions without changes
 - **codex-status** — Status Check — Show installation status
 - **codex-skills-sync** — Skills Sync — Sync skills symlinks
 - **Auto skill sync** — Enabled by default — Before codex command
