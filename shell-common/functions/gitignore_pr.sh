@@ -147,7 +147,7 @@ gitignore_pr() {
 
     # Check both the API host and effective push URL before any fetch or commit.
     local push_url
-    push_url="$(git -C "$root" remote get-url --push origin 2>/dev/null)"
+    push_url="$(git -C "$root" remote get-url --push --all origin 2>/dev/null)"
     if _gitignore_pr_push_forbidden "$host" \
         || _gitignore_pr_push_forbidden "$push_url"; then
         ux_error "gitignore-pr: internal PC에서 github.com origin으로는 push할 수 없습니다 (사내 보안 정책)"
