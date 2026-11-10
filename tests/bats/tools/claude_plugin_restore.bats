@@ -618,6 +618,18 @@ JSON
     assert_failure 1
 }
 
+@test "restore.sh: a zero-byte or non-object store file is corrupt, not empty (#2344 F-2)" {
+    _fake_claude
+    : >"$STORE/known_marketplaces.json"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    [ ! -s "$CLAUDE_CALLS" ]
+    printf '[]\n' >"$STORE/known_marketplaces.json"
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    [ ! -s "$CLAUDE_CALLS" ]
+}
+
 @test "restore.sh: a missing plugins/ path is skipped without calling claude (#2344 F-11)" {
     _fake_claude
     rm -rf "$STORE"

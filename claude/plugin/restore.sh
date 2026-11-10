@@ -305,17 +305,23 @@ _in_list() { printf '%s\n' "$2" | grep -Fxq -- "$1"; }
 # An absent file means "nothing installed yet" (every entry is missing); a file
 # that exists but does not parse fails the config dir instead, so a corrupt
 # store is never mistaken for an empty one and re-installed wholesale (#2344 F-2).
+# A zero-byte file or a non-object counts as corrupt too: jq reads an empty file
+# as no input and exits 0, which would otherwise look like an empty store.
+_store_keys() {
+	[ -s "$1" ] || return 1
+	jq -r "$2"' | if type == "object" then keys[] else error("not an object") end' "$1" 2>/dev/null
+}
 _load_store() {
 	local f
 	STORE_MPS=""
 	STORE_PLS=""
 	f="$STORE_DIR/known_marketplaces.json"
-	if [ -e "$f" ] && ! STORE_MPS=$(jq -r 'keys[]' "$f" 2>/dev/null); then
+	if [ -e "$f" ] && ! STORE_MPS=$(_store_keys "$f" '.'); then
 		ux_error "플러그인 저장소 파일을 읽을 수 없음: $f — 복원하지 않음"
 		return 1
 	fi
 	f="$STORE_DIR/installed_plugins.json"
-	if [ -e "$f" ] && ! STORE_PLS=$(jq -r '(.plugins // {}) | keys[]' "$f" 2>/dev/null); then
+	if [ -e "$f" ] && ! STORE_PLS=$(_store_keys "$f" '(.plugins // {})'); then
 		ux_error "플러그인 저장소 파일을 읽을 수 없음: $f — 복원하지 않음"
 		return 1
 	fi
