@@ -37,7 +37,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 - **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`) for ALL output, and snake_case for all Bash functions and filenames.
 - **DO**: Run `mise run lint` before committing; the full test suite gates PR creation (`mise run pr-gate`), not commits — see `docs/.ssot/local-test-policy.md`.
 - **DO**: Use environment variables (e.g., `$SHELL_COMMON`) for sourcing files across shell contexts; test scripts in both bash and zsh.
-- **DO**: Follow directory placement rules — see **[Shell Common](./shell-common/AGENTS.md)**.
+- **DO**: Follow directory placement rules — see **[Shell Common](./shell-common/AGENTS.md)** (also Direct-Exec Guard pattern, Bash/Zsh compatibility rules, diagnostic design standards).
 - **DON'T**: Use raw `echo`, `printf` or `tput` for user-facing output, or hardcode paths — use `ux_lib` and `$HOME`/relative paths.
 - **DON'T**: Commit secrets or sensitive data.
 - **DON'T**: Use `${BASH_SOURCE[0]%/*}` for sourcing (bash-only, fails in zsh); use `${SHELL_COMMON}/path`.
