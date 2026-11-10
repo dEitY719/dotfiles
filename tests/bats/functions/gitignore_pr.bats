@@ -196,3 +196,51 @@ chore/gitignore-omo"
     run git -C "$BARE" rev-parse --verify -q chore/gitignore-omo
     assert_success
 }
+
+@test "internal mode + github.com origin: refused before fetch or branch (#96)" {
+    git -C "$REPO" update-ref -d refs/remotes/origin/HEAD
+    git -C "$REPO" update-ref -d refs/remotes/origin/main
+    run_in_bash "cd '$REPO' && export DOTFILES_SETUP_MODE=internal && gitignore_pr .omo"
+    assert_failure
+    assert_output --partial "github.com origin"
+    assert_output --partial ".git/info/exclude"
+    run git -C "$REPO" show-ref --verify -q refs/remotes/origin/main
+    assert_failure
+    run git -C "$REPO" branch --list 'chore/*'
+    assert_output ""
+    [ ! -e "$HOME/gh.args" ]
+}
+
+@test "internal mode + GHES origin: not refused (#96)" {
+    ghes_url="https://ghes.example.com/test/repo.git"
+    git -C "$REPO" config url."$BARE".insteadOf "$ghes_url"
+    git -C "$REPO" remote set-url origin "$ghes_url"
+    run_in_bash "cd '$REPO' && export DOTFILES_SETUP_MODE=internal DOTFILES_GHES_HOST=ghes.example.com && gitignore_pr .omo"
+    assert_success
+    run cat "$HOME/gh.args"
+    assert_output --partial "ghes.example.com/test/repo"
+}
+
+@test "internal mode push failure toward github.com: no retry hint (#96)" {
+    printf '#!/bin/sh\nexit 1\n' >"$BARE/hooks/pre-receive"
+    chmod +x "$BARE/hooks/pre-receive"
+    git -C "$REPO" switch -q -c chore/gitignore-omo origin/main
+    run_in_bash "cd '$REPO' && export DOTFILES_SETUP_MODE=internal && _gitignore_pr_commit_push_pr '$REPO' main chore/gitignore-omo github.com/test/repo .omo/ 'chore: ignore .omo/'"
+    assert_failure
+    assert_output --partial "external PC"
+    refute_output --partial "Retry: git push"
+}
+
+@test "internal mode + github.com pushurl (subdomain, mixed case) behind a GHES origin: refused (#96)" {
+    ghes_url="https://ghes.example.com/test/repo.git"
+    git -C "$REPO" config --unset url."$BARE".insteadOf
+    git -C "$REPO" config url."$BARE".insteadOf "$ghes_url"
+    git -C "$REPO" remote set-url origin "$ghes_url"
+    git -C "$REPO" remote set-url --push origin "ssh://git@SSH.GitHub.com:443/test/repo.git"
+    # GIT_SSH_COMMAND=false: should the guard regress, the push still never leaves the host.
+    run_in_bash "cd '$REPO' && export GIT_SSH_COMMAND=false DOTFILES_SETUP_MODE=internal DOTFILES_GHES_HOST=ghes.example.com && gitignore_pr .omo"
+    assert_failure
+    assert_output --partial "github.com origin"
+    run git -C "$REPO" branch --list 'chore/*'
+    assert_output ""
+}
