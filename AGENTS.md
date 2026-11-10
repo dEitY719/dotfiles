@@ -20,8 +20,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 | RPM | `rpm/` | `/etc/yum.repos.d/ds.repo` | sudo copy | RHEL 8.x + yum/dnf |
 | APT | `apt/` | `/etc/apt/sources.list` | sudo copy | Ubuntu + codename match |
 
-- **User-level** (npm/pip/uv/cargo/nuget): symlink to `{dir}/{config}.internal`, backup+restore on switch.
-- **System-level** (rpm/apt): sudo copy with 3-gate safety (tool exists, OS match, privilege), `MANAGED_BY_DOTFILES` marker.
+- **User-level** (npm/pip/uv/cargo/nuget): symlink to `{dir}/{config}.internal`, backup+restore on switch. **System-level** (rpm/apt): sudo copy with 3-gate safety (tool exists, OS match, privilege), `MANAGED_BY_DOTFILES` marker.
 - **Adding new manager**: create `{dir}/{config}.internal`, add `setup_<name>_config <mode>` in `shell-common/setup.d/`, add one word to `SETUP_REGISTRY_TOOLS` in `shell-common/setup.sh`.
 
 # Golden Rules
@@ -31,33 +30,34 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 - **100-Line Limit**: Every AGENTS.md file must be under 100 lines (enforced by `scripts/lint_agents_md_lines.sh` in `mise run lint-docs`) — use nested AGENTS.md files for detail.
 - **No emojis**: Strictly prohibited everywhere (token efficiency). Single exception: the `📊 👤 🤖` glyphs inside the `ai-metrics` footer (`<details>` wrapper + `<!-- ai-metrics -->` block) of GitHub Issue/PR cards (#317 F-2, PR #320, #367).
 - **Interactive Guards**: Every file that produces output starts with `case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac` (exceptions: `shell-common/AGENTS.md`).
-- **Loading Order**: Respect `bash/main.bash` priority (Env -> UX -> Alias -> App).
-- **No Direct Writes**: Do not write to `~/.bashrc` directly; use symlinks via `setup.sh`.
+- **Loading Order**: Respect `bash/main.bash` priority (Env -> UX -> Alias -> App). **No Direct Writes**: never write `~/.bashrc` directly; symlinks via `setup.sh` only.
 
 ## Do's & Don'ts
 
-- **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`) for ALL output.
-- **DO**: Use snake_case for all Bash functions and filenames.
+- **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`) for ALL output, and snake_case for all Bash functions and filenames.
 - **DO**: Run `mise run lint` before committing; the full test suite gates PR creation (`mise run pr-gate`), not commits — see `docs/.ssot/local-test-policy.md`.
-- **DO**: Use environment variables (e.g., `$SHELL_COMMON`) for sourcing files across shell contexts.
-- **DO**: Test scripts in both bash and zsh for cross-shell compatibility.
+- **DO**: Use environment variables (e.g., `$SHELL_COMMON`) for sourcing files across shell contexts; test scripts in both bash and zsh.
 - **DO**: Follow directory placement rules — see **[Shell Common](./shell-common/AGENTS.md)**.
-- **DON'T**: Use raw `echo`, `printf` or `tput` for user-facing output (violates UX consistency).
-- **DON'T**: Hardcode paths; use `$HOME` or relative paths.
+- **DON'T**: Use raw `echo`, `printf` or `tput` for user-facing output, or hardcode paths — use `ux_lib` and `$HOME`/relative paths.
 - **DON'T**: Commit secrets or sensitive data.
 - **DON'T**: Use `${BASH_SOURCE[0]%/*}` for sourcing (bash-only, fails in zsh); use `${SHELL_COMMON}/path`.
-
-See **[Shell Common](./shell-common/AGENTS.md)** for directory placement guide (aliases/ vs functions/ vs tools/),
-Direct-Exec Guard pattern, Bash/Zsh compatibility rules, and diagnostic design standards.
 
 # Standards & References
 
 - **Coding Style**: See `shell-common/tools/ux_lib/UX_GUIDELINES.md`, `pyproject.toml`, and `mise.toml`.
-- **Git Strategy**: Semantic commits (`Type: Summary`).
-- **Shell vs Python**: logic past the shell threshold goes to `tools/py/dotfiles_tools` behind a thin shell entrypoint — see `docs/.ssot/shell-vs-python.md`.
-- **One-click Setup**: `./setup.sh` must converge every PC idempotently (internal + external) — see `docs/.ssot/one-click-setup.md`.
-  Output: one line per step (`run_step` in `setup.sh`, critical/optional list in `main()`), full log in `${TMPDIR:-/tmp}/dotfiles-setup-*.log`; `-v` streams all; `DOTFILES_SETUP_CHOICE=1|2|3` skips the env menu.
+- **Git Strategy**: Semantic commits (`Type: Summary`). **Shell vs Python**: logic past the shell threshold goes to `tools/py/dotfiles_tools` behind a thin shell entrypoint — see `docs/.ssot/shell-vs-python.md`.
+- **One-click Setup**: `./setup.sh` must converge every PC idempotently (internal + external) — SSOT `docs/.ssot/one-click-setup.md`; one line per step (`run_step`), full log `${TMPDIR:-/tmp}/dotfiles-setup-*.log`, `-v` streams, `DOTFILES_SETUP_CHOICE=1|2|3` skips the env menu.
 - **Maintenance**: Update AGENTS.md when adding new modules.
+
+# Correction Rules
+
+From the /correct audit (#2367, #2368) — each rule pairs with the check that fails when it regresses:
+
+| Rule | Enforcement | Past failures |
+|------|-------------|---------------|
+| github.com host matching and push policy exist only as `lib/gh_host.sh` predicates (`_gh_host_is_github_com`, `_gh_push_github_com_forbidden`); guards lazy-load them, never re-implement | `gh_host.bats` T18-T25: past URL shapes pinned + tree scan forbids a second glob copy | #1403, #2247, #2367 |
+| Security guards fail closed when their policy reader cannot load (missing reader reads as forbidden, never allowed) | `gh_host.bats` T24 (reader absent -> forbidden) | 5x fail-open guards, fixed in #2367 (f4080406a) |
+| bats suites never unset machine-local env per-file; `setup_isolated_home` in `test_helper.bash` owns it | every suite loads `test_helper.bash`; red/green proof: exported env broke 4 tests on the old helper | leak patched per-suite first, centralized in #2368 (417bf60b4) |
 
 # Context Map
 
