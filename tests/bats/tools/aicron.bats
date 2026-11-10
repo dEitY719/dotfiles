@@ -1129,6 +1129,30 @@ PLANT
     assert_success
 }
 
+@test "aicron: a child the job leaves running does not keep the run lock (#2365)" {
+    cat >"${_JOB_DIR}/spawner.sh" <<'SPAWN'
+#!/usr/bin/env bash
+sleep 30 </dev/null >/dev/null 2>&1 &
+printf '%s' "$!" >"${CHILD_PID}"
+exit 0
+SPAWN
+    chmod +x "${_JOB_DIR}/spawner.sh"
+    jq --arg s "${_JOB_DIR}/spawner.sh" --arg p "${_WORK_DIR}/child.pid" \
+        '.jobs += [{name:"spawner",script:$s,schedule:"0 0 * * *",args:[],
+                    env:{CHILD_PID:$p},description:"leaves a child behind"}]' \
+        "${_MANIFEST}" >"${_MANIFEST}.tmp"
+    mv "${_MANIFEST}.tmp" "${_MANIFEST}"
+
+    _aicron run spawner
+    assert_success
+    local _child
+    _child=$(cat "${_WORK_DIR}/child.pid")
+    kill -0 "${_child}"
+    run flock -n "${_STATE_DIR}/spawner.lock" true
+    kill "${_child}" 2>/dev/null || true
+    assert_success
+}
+
 # ---------------------------------------------------------------------------
 # a run that is killed mid-flight (B3)
 # ---------------------------------------------------------------------------
