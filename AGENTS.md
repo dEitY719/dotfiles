@@ -37,7 +37,7 @@ All managed by `shell-common/setup.sh` (environment menu: public / internal / ex
 - **DO**: Use `ux_lib` functions (`ux_header`, `ux_success`) for ALL output, and snake_case for all Bash functions and filenames.
 - **DO**: Run `mise run lint` before committing; the full test suite gates PR creation (`mise run pr-gate`), not commits — see `docs/.ssot/local-test-policy.md`.
 - **DO**: Use environment variables (e.g., `$SHELL_COMMON`) for sourcing files across shell contexts; test scripts in both bash and zsh.
-- **DO**: Follow directory placement rules — see **[Shell Common](./shell-common/AGENTS.md)** (also Direct-Exec Guard pattern, Bash/Zsh compatibility rules, diagnostic design standards).
+- **DO**: Follow directory placement rules — see **[Shell Common](./shell-common/AGENTS.md)** (`aliases/` vs `functions/` vs `tools/`, Direct-Exec Guard pattern, Bash/Zsh compatibility rules, diagnostic design standards).
 - **DON'T**: Use raw `echo`, `printf` or `tput` for user-facing output, or hardcode paths — use `ux_lib` and `$HOME`/relative paths.
 - **DON'T**: Commit secrets or sensitive data.
 - **DON'T**: Use `${BASH_SOURCE[0]%/*}` for sourcing (bash-only, fails in zsh); use `${SHELL_COMMON}/path`.
@@ -55,8 +55,8 @@ From the /correct audit (#2367, #2368) — each rule pairs with the check that f
 
 | Rule | Enforcement | Past failures |
 |------|-------------|---------------|
-| github.com host matching and push policy exist only as `lib/gh_host.sh` predicates (`_gh_host_is_github_com`, `_gh_push_github_com_forbidden`); guards lazy-load them, never re-implement | `gh_host.bats` T18-T25: past URL shapes pinned + tree scan forbids a second glob copy | #1403, #2247, #2367 |
-| Security guards fail closed when their policy reader cannot load (missing reader reads as forbidden, never allowed) | `gh_host.bats` T24 (reader absent -> forbidden) | 5x fail-open guards, fixed in #2367 (f4080406a) |
+| github.com host matching and push policy exist only as `lib/gh_host.sh` predicates (`_gh_host_is_github_com`, `_gh_push_github_com_forbidden`); guards lazy-load them, never re-implement | `gh_host.bats` T18-T25: past URL shapes pinned + T25 scan forbids a second glob copy in tracked `*.sh` | #1403, #2247, #2367 |
+| Security guards fail closed when their policy reader cannot load (missing reader reads as forbidden, never allowed) | `gh_host.bats` T24 (gh_host policy reader only: absent -> forbidden) | 5x fail-open guards, fixed in #2367 (f4080406a) |
 | bats suites never unset machine-local env per-file; `setup_isolated_home` in `test_helper.bash` owns it | every suite loads `test_helper.bash`; red/green proof: exported env broke 4 tests on the old helper | leak patched per-suite first, centralized in #2368 (417bf60b4) |
 
 # Context Map
