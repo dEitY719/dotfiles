@@ -40,6 +40,14 @@ _gitignore_pr_default_branch() {
     return 1
 }
 
+# Lazily load the policy library for direct callers; fail closed on load failure.
+_gitignore_pr_push_forbidden() {
+    command -v _gh_push_github_com_forbidden >/dev/null 2>&1 ||
+        . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" 2>/dev/null
+    command -v _gh_push_github_com_forbidden >/dev/null 2>&1 || return 0
+    _gh_push_github_com_forbidden "$1"
+}
+
 # Work done on the chore branch. The caller owns returning to the original
 # branch. Args: <root> <default> <branch> <repo> <added-newline-list> <title>
 _gitignore_pr_commit_push_pr() {
@@ -65,7 +73,11 @@ _gitignore_pr_commit_push_pr() {
 
     if ! git -C "$root" push -q -u origin "$branch"; then
         ux_error "gitignore-pr: push failed — commit kept on $branch"
-        ux_info "Retry: git push -u origin $branch"
+        if _gitignore_pr_push_forbidden "${repo%%/*}"; then
+            ux_info "Do not retry from this PC (internal policy) — resume from an external PC"
+        else
+            ux_info "Retry: git push -u origin $branch"
+        fi
         return 1
     fi
 
@@ -132,6 +144,16 @@ gitignore_pr() {
         return 1
     fi
     repo="$host/$slug"
+
+    # Check both the API host and effective push URL before any fetch or commit.
+    local push_url
+    push_url="$(git -C "$root" remote get-url --push origin 2>/dev/null)"
+    if _gitignore_pr_push_forbidden "$host" \
+        || _gitignore_pr_push_forbidden "$push_url"; then
+        ux_error "gitignore-pr: internal PC에서 github.com origin으로는 push할 수 없습니다 (사내 보안 정책)"
+        ux_info "Run it from an external/public PC, or ignore locally via .git/info/exclude"
+        return 1
+    fi
 
     # NF-1: no staged/unstaged tracked changes (untracked files are fine).
     if [ -n "$(git -C "$root" status --porcelain --untracked-files=no)" ]; then
