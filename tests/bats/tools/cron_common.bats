@@ -68,6 +68,34 @@ _lock() {
     assert_output --partial "rc=1"
 }
 
+@test "cron_common: a child the tick spawns does not keep the lock after the tick (#2365)" {
+    command -v setpriv >/dev/null 2>&1 || skip "setpriv (util-linux) not installed"
+    # The child outlives the tick, as herdr -> claude -> dbus-daemon did. Its
+    # stdio goes to /dev/null so run's capture does not wait for it.
+    _lock 'cron_acquire_lock "$D" .lock my_tick || exit 1; sleep 30 </dev/null >/dev/null 2>&1 & echo "$!" >"$D/child.pid"; echo acquired'
+    assert_output "acquired"
+    local _child
+    _child=$(cat "${_WORK_DIR}/st/child.pid")
+    kill -0 "${_child}"
+    run flock -w 5 "${_WORK_DIR}/st/.lock" true
+    kill "${_child}" 2>/dev/null || true
+    assert_success
+}
+
+@test "cron_common: cron_release_lock frees the lock before the tick ends (#2365)" {
+    _lock 'cron_acquire_lock "$D" .lock my_tick || exit 1; flock -n "$D/.lock" true || echo held; cron_release_lock; cron_release_lock; flock -n "$D/.lock" true && echo free'
+    assert_output --partial "held"
+    assert_output --partial "free"
+}
+
+@test "cron_common: a skipped tick names the lock holder when fuser exists (#2365)" {
+    command -v fuser >/dev/null 2>&1 || skip "fuser not installed"
+    _lock 'cron_acquire_lock "$D" .lock my_tick; ( cron_acquire_lock "$D" .lock my_tick; echo "rc=$?" )'
+    assert_output --partial "another my_tick tick is already running — skip"
+    assert_output --regexp "lock .*/st/\.lock held by: [0-9]+\("
+    assert_output --partial "rc=1"
+}
+
 @test "cron_common: no flock warns and proceeds unprotected" {
     mkdir -p "${_WORK_DIR}/bin"
     for c in bash mkdir; do ln -s "$(command -v "$c")" "${_WORK_DIR}/bin/$c"; done

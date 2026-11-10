@@ -648,10 +648,9 @@ _ga_prompt() {
     return 1
 }
 
-# Release the dispatch lock (fd 9). Grouped so the 2>/dev/null does not stick
-# to the whole script the way a bare `exec ... 2>/dev/null` would.
+# Release the dispatch lock (lib/cron_common.sh owns how it is held, #2365).
 _ga_unlock() {
-    { exec 9>&-; } 2>/dev/null
+    cron_release_lock
 }
 
 # The dispatch proper. rc 0 = done; rc 1 = failed with _GA_FAIL set.
@@ -680,7 +679,7 @@ _ga_dispatch() {
     esac
 
     # spawn -> tab create, one job at a time (workspace label race, quota).
-    # fd 9 is released before the long prompt wait.
+    # The lock is released before the long prompt wait.
     _hp_acquire_lock "$(_ga_state_dir)" .dispatch.lock gwt-at "${_GA_LOCK_WAIT_S}" || {
         _GA_FAIL="dispatch_lock_timeout: another gwt at job held the lock >${_GA_LOCK_WAIT_S}s"
         return 1
