@@ -394,3 +394,81 @@ teardown() {
     assert_output --partial "[WARN] dotfiles: loaded from a foreign checkout"
     assert_output --partial "shell-common/lib/gh_host.sh"
 }
+
+# ---------------------------------------------------------------------------
+# T18-T25: the guard predicates (Class A+B of the /correct audit) —
+# `_gh_host_is_github_com` and `_gh_push_github_com_forbidden`.
+#
+# PR #98 shipped an exact-match push guard that missed
+# `ssh://git@SSH.GitHub.com:443/...` (case + subdomain), and PR #76/#1689-era
+# guards read "reader missing" as "not internal". The predicates in
+# gh_host.sh are the single copy of both behaviors; T25 scans the tree so
+# no second copy of the github.com glob can drift back in.
+# ---------------------------------------------------------------------------
+
+@test "T18: _gh_host_is_github_com: ssh://git@SSH.GitHub.com:443 (the PR #98 missed shape) is github.com" {
+    run_in_bash "$G"'_gh_host_is_github_com "ssh://git@SSH.GitHub.com:443/test/repo.git"'
+    assert_success
+}
+
+@test "T19: _gh_host_is_github_com: bare host, mixed case" {
+    run_in_bash "$G"'_gh_host_is_github_com "GITHUB.COM"'
+    assert_success
+    run_in_bash "$G"'_gh_host_is_github_com "github.com"'
+    assert_success
+}
+
+@test "T20: _gh_host_is_github_com: near-miss hosts are not github.com (#1403)" {
+    run_in_bash "$G"'_gh_host_is_github_com "https://notgithub.com/owner/repo.git"'
+    assert_failure
+    run_in_bash "$G"'_gh_host_is_github_com "https://github.com.evil.net/owner/repo.git"'
+    assert_failure
+}
+
+@test "T21: internal mode + github.com URL -> push forbidden (exit 0)" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash "$G"'_gh_push_github_com_forbidden "ssh://git@github.com/test/repo.git"'
+    assert_success
+}
+
+@test "T22: external mode + github.com URL -> allowed (exit 1)" {
+    echo "external" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash "$G"'_gh_push_github_com_forbidden "github.com"'
+    assert_failure
+}
+
+@test "T23: internal mode + GHES URL -> allowed (not github.com)" {
+    echo "internal" > "$HOME/.dotfiles-setup-mode"
+    run_in_bash "$G"'_gh_push_github_com_forbidden "https://ghes.example.invalid/owner/repo.git"'
+    assert_failure
+}
+
+@test "T24: fail-closed — missing policy reader reads as forbidden, never allowed" {
+    run_in_bash "$G"'unset -f _dotfiles_setup_mode _dotfiles_setup_mode_is _dotfiles_setup_mode_gh_host; _gh_push_github_com_forbidden github.com'
+    assert_success
+}
+
+@test "T25: the github.com guard glob lives only in lib/gh_host.sh (single copy)" {
+    offenders="$(git -C "$_BATS_REAL_DOTFILES_ROOT" ls-files '*.sh' |
+        while IFS= read -r f; do
+            grep -lE '\*github\.com|\[@\./\]github\.com' "$_BATS_REAL_DOTFILES_ROOT/$f" 2>/dev/null
+        done | grep -v 'shell-common/lib/gh_host\.sh' || true)"
+    [ -z "$offenders" ] || {
+        echo "second copy of the github.com glob in: $offenders" >&2
+        return 1
+    }
+    # The SSOT copy itself must still exist — guards against the predicate
+    # being renamed away while the scan above passes vacuously.
+    grep -q '_gh_host_is_github_com' "$_BATS_REAL_DOTFILES_ROOT/shell-common/lib/gh_host.sh"
+}
+
+@test "guard matches SCP host without user and ignores github.com in a URL path" {
+    run_in_bash "$G"'_gh_host_is_github_com "github.com:owner/repo.git"'
+    assert_success
+    run_in_bash "$G"'_gh_host_is_github_com "https://ghes.example.com/mirrors/github.com/x.git"'
+    assert_failure
+    run_in_zsh "$G"'_gh_host_is_github_com "github.com:owner/repo.git"'
+    assert_success
+    run_in_zsh "$G"'_gh_host_is_github_com "https://ghes.example.com/mirrors/github.com/x.git"'
+    assert_failure
+}
