@@ -110,6 +110,12 @@ _cron_lock_detach() {
     setpriv --pdeathsig KILL sh -c '[ "$PPID" = "$1" ] && exec "$2" 2147483647' \
         _ "${_owner}" "${_sleep}" </dev/null >/dev/null 2>&1 &
     _CRON_LOCK_PID=$!
+    # A holder that already died (exec failed) would take the lock with it once
+    # fd 9 closes below: keep fd 9 instead, the unprotected-children fallback.
+    kill -0 "${_CRON_LOCK_PID}" 2>/dev/null || {
+        _CRON_LOCK_PID=""
+        return 0
+    }
     # Off the job table: a caller's bare `wait` (session_doctor_cron's
     # injections) must not block on a holder that never exits by itself.
     # shellcheck disable=SC3044  # bash callers
@@ -136,7 +142,8 @@ _cron_lock_holders() {
     command -v fuser >/dev/null 2>&1 || return 0
     _pids=$(fuser "$1" 2>/dev/null) || return 0
     for _pid in ${_pids}; do
-        _list="${_list} ${_pid}($(ps -o comm= -p "${_pid}" 2>/dev/null))"
+        # ppid: the lock holder is a `sleep` whose parent is the real tick.
+        _list="${_list} ${_pid}($(ps -o comm= -p "${_pid}" 2>/dev/null) ppid=$(ps -o ppid= -p "${_pid}" 2>/dev/null | tr -d ' '))"
     done
     [ -z "${_list}" ] || ux_info "lock ${1} held by:${_list}"
 }
