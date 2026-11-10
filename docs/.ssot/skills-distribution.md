@@ -36,21 +36,21 @@ GitHub repo ──claude plugin marketplace update + claude plugin update──>
 공유이므로 계정 하나로 돌리면 충분하다. 모드 판별: `cat ~/.dotfiles-setup-mode`
 ([pc-environment.md](./pc-environment.md) §4).
 
-## 3. `skills-sync` 6단계 (`scripts/update-skills.sh`)
+## 3. `skills-sync` 기본 6단계 (`scripts/update-skills.sh`)
 
 | 단계 | 스크립트 | 갱신 대상 |
 |------|----------|-----------|
 | 1/6 | `claude/plugin/git-clone-skills.sh` | 없는 작업 사본 clone (선택: gitignored `claude/plugin/skills-workspace.local.json` 의 `{"<repo>": "<folder>"}` 로 폴더명 변경, #2241. 폴더를 하드코딩한 `scripts/measure-skill-descriptions.sh` (`authoring-skills`) 는 매핑을 따르지 않는다. 추가 clone 대상: gitignored `claude/plugin/skills-workspace-repos.local.json` 의 `{"<name>": "<owner>/<repo>"}` 를 tracked manifest 와 합집합으로 읽고 owner 필터를 거치지 않는다, #2244 — 훅이 쓰고 restore.sh 가 marketplace 로 등록하는 `marketplaces.local.json` 은 읽지 않는다) |
 | 2/6 | `claude/plugin/git-pull-skills.sh` | 작업 사본 `git pull --ff-only` |
 | 3/6 | `claude/setup.sh` | 계정 디렉토리 링크, 남은 평면 스킬 링크 정리 (스킬 자체는 플러그인으로 로드) |
-| 4/6 | `claude/plugin/restore.sh --skip-without-claude` | **플러그인 저장소** — 매니페스트에 있는데 `known_marketplaces.json` / `installed_plugins.json` 에 없는 항목만 `marketplace add` / `plugin install` (#2344). 누락이 없으면 `claude` 호출 0회, 저장소 파일 불변. 묘비(`removed.local.json`) 항목 제외. 계정 `plugins` 경로가 없거나 `claude` 가 없으면 건너뜀, 저장소 파일이 깨졌으면 CLI 호출 없이 실패 |
-| 5/6 | `claude/plugin/update-plugins.sh` | **플러그인 저장소** — marketplace clone 갱신 + 플러그인 version 갱신. 복원 뒤에도 미등록인 마켓플레이스는 digest 의 `미등록 skip N` |
+| 4/6 | `claude/plugin/update-plugins.sh` | **플러그인 저장소** — marketplace clone 갱신 + 플러그인 version 갱신. 미등록인 마켓플레이스는 digest 의 `미등록 skip N` |
+| 5/6 | `claude/plugin/restore.sh --check` | **읽기 전용 drift 점검** — 매니페스트에 있지만 설치되지 않은 marketplace/plugin, 등록·묘비 결정이 없는 workspace marketplace를 `WARN:`으로 보고한다. 설치·파일 변경·`claude` 호출은 하지 않으며 drift면 exit 1(요약에서는 경고)이다. |
 | 6/6 | `scripts/setup-skills-ssot.sh` | Codex / agy / OpenCode / Hermes 합성 + 작업 폴더 루트 라우터 링크 |
 
-4/6·5/6 이 실패해도 이후 단계는 진행하고, 마지막에 둘 중 첫 비0 종료 코드로 끝난다.
-`--dry-run` 이면 1/6·2/6·4/6·5/6 을 미리보기로만 실행하고(4/6 은 설치 예정 항목만 출력)
-3/6·6/6 은 건너뛴다. 4/6 의 `install` 은 5/6 과 같은 `flock` 파일로 직렬화된다.
-플러그인 저장소는 계정끼리 공유하므로 4/6 은 `--all-accounts` 없이 기본 계정으로 한 번만 돈다.
+`--restore`를 지정하면 설치가 필요한 PC에서만 4a `claude/plugin/restore.sh --skip-without-claude`를 update 전에 실행한다. 기본 실행은 설치하지 않고 5/6의 점검만 한다.
+선택 설치·4/6·5/6 이 실패해도 이후 단계는 진행하고, 마지막에 그중 첫 비0 종료 코드로 끝난다.
+`--dry-run` 이면 1/6·2/6·4/6·5/6 을 미리보기/점검으로만 실행하고, `--restore`를 함께 준 경우에만 설치 예정 항목도 출력한다. 3/6·6/6 은 건너뛴다. 설치는 update와 같은 `flock` 파일로 직렬화된다.
+플러그인 저장소는 계정끼리 공유하므로 선택 설치는 `--all-accounts` 없이 기본 계정으로 한 번만 돈다.
 출력은 기본 요약 모드(스텝당 1줄 + 변경 건수 digest, 경고/실패만 상세, 전체 로그는
 `${TMPDIR:-/tmp}/skills-sync-*.log`, 경고/실패 시에만 경로 표시)이고, `-v` 또는 `SKILLS_SYNC_VERBOSE=1` 이면 전부 흘린다 (#2126).
 요약 모드는 stdout 이 tty 가 아니므로 하위 스크립트의 대화형 확인(예: `claude/setup.sh` 의 stale sudoers 정리)이 뜨지 않는다 — 필요하면 `-v` 로 실행.
@@ -67,9 +67,9 @@ GitHub repo ──claude plugin marketplace update + claude plugin update──>
    (그리고 `gitCommitSha`) 를 비교한다.
 2. **캐시 확인** — `ls ~/.claude-shared/plugins/cache/<mkt>/<plugin>/<version>/skills/` 에
    해당 스킬 디렉토리가 있는지 본다.
-3. **설치·갱신** — `skills-sync` 한 번이면 누락 설치(4/6)와 갱신(5/6)이 모두 돈다. 미리보기는
-   `skills-sync --dry-run` (`restore-plugins` 줄의 `설치 예정 N`). 요약의 `restore-plugins`
-   가 실패면 `skills-sync -v` 로 실패 항목을 보고 재실행한다 — 남은 항목만 다시 시도한다.
+3. **설치·갱신** — 기본 `skills-sync`는 drift만 경고하고 갱신한다. 누락 설치까지 하려면
+   `skills-sync --restore`를 명시한다(설치 후 update). 미리보기는 `skills-sync --dry-run --restore`다.
+   선택 설치가 실패하면 `skills-sync -v --restore`로 실패 항목을 보고 재실행한다 — 남은 항목만 다시 시도한다.
    `update-plugins` 의 `미등록 skip N` 이 남아 있으면 그 마켓플레이스가 매니페스트에 없거나
    묘비에 있다.
 4. **세션 재시작** — 플러그인은 세션 시작 시 로드된다.
