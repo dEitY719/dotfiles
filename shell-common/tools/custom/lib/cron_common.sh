@@ -128,7 +128,9 @@ _cron_lock_detach() {
 cron_release_lock() {
     if [ -n "${_CRON_LOCK_PID:-}" ]; then
         # Disowned, so no `wait`: the kernel closes the lock fd as it dies.
-        kill -KILL "${_CRON_LOCK_PID}" 2>/dev/null
+        # The comm check keeps a reused pid (holder already gone) unharmed.
+        [ "$(ps -o comm= -p "${_CRON_LOCK_PID}" 2>/dev/null)" != sleep ] ||
+            kill -KILL "${_CRON_LOCK_PID}" 2>/dev/null
         _CRON_LOCK_PID=""
     fi
     { exec 9>&-; } 2>/dev/null

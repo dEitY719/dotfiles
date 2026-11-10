@@ -103,6 +103,21 @@ _lock() {
     assert_output --partial "rc=1"
 }
 
+@test "cron_common: a SIGKILLed tick does not leave the lock held (#2365)" {
+    command -v setpriv >/dev/null 2>&1 || skip "setpriv (util-linux) not installed"
+    _lock 'cron_acquire_lock "$D" .lock my_tick || exit 1; kill -KILL "$$"'
+    run flock -w 5 "${_WORK_DIR}/st/.lock" true
+    assert_success
+}
+
+@test "cron_common: without setpriv the lock still excludes a second tick (#2365)" {
+    mkdir -p "${_WORK_DIR}/bin"
+    for c in bash mkdir flock; do ln -s "$(command -v "$c")" "${_WORK_DIR}/bin/$c"; done
+    _lock 'cron_acquire_lock "$D" .lock my_tick && echo first; ( exec 9>&-; cron_acquire_lock "$D" .lock my_tick; echo "rc=$?" )' "PATH=${_WORK_DIR}/bin"
+    assert_output --partial "first"
+    assert_output --partial "rc=1"
+}
+
 @test "cron_common: no flock warns and proceeds unprotected" {
     mkdir -p "${_WORK_DIR}/bin"
     for c in bash mkdir; do ln -s "$(command -v "$c")" "${_WORK_DIR}/bin/$c"; done
