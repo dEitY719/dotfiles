@@ -119,13 +119,17 @@ aicron_run_exec() {
     rm -f "${_envfile}" "${_argfile}"
 
     _start=$(date -u +%s)
+    # 9>&-: the job must not inherit aicron_run's run-lock fd. A long-lived
+    # child of the job (herdr -> claude -> dbus-daemon) would otherwise hold
+    # the lock after the job exits and every later run would skip (#2365).
+    # The lock stays held by aicron_run's subshell while the job runs.
     if [ "${_rec}" = "1" ] && : >>"${_log}" 2>/dev/null; then
-        env "$@" >>"${_log}" 2>&1
+        env "$@" >>"${_log}" 2>&1 9>&-
         _rc=$?
     else
         # No usable log: let the output through so cron mails it instead of
         # dropping the only record of what happened.
-        env "$@"
+        env "$@" 9>&-
         _rc=$?
     fi
     # One `date`: the epoch seconds and the stamp describe the same instant,
