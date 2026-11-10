@@ -97,6 +97,25 @@ JSON
     assert_output --partial '알 수 없는 인자: --bogus'
 }
 
+@test "restore.sh --check is read-only and reports missing manifest entries" {
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    run "$PLUGDIR/restore.sh" --check
+    assert_failure 1
+    assert_output --partial 'WARN: marketplace not installed: understand-anything'
+    assert_output --partial 'WARN: plugin not installed: understand-anything@understand-anything'
+}
+
+@test "restore.sh --check reports no drift when the store matches the manifest" {
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    echo '{"understand-anything": {}}' >"$CLAUDE_SHARED_PLUGINS_DIR/known_marketplaces.json"
+    echo '{"plugins": {"understand-anything@understand-anything": []}}' >"$CLAUDE_SHARED_PLUGINS_DIR/installed_plugins.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_success
+    assert_output --partial 'drift 없음'
+}
+
 # --- 머신 로컬 오버레이 union (#1685) ---------------------------------------
 # tracked {marketplaces,plugins}.json 은 upstream 등록 계약, *.local.json 은 이
 # PC 가 설치한 것. 복원은 둘의 union 이어야 하고, --sync 는 오버레이 항목을

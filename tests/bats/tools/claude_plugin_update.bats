@@ -187,6 +187,16 @@ plugin update notes@notes-skills --json [cfg=$TEST_TEMP_HOME/.claude-personal]"
     assert_output "plugin marketplace update gh-flow-skills [cfg=$TEST_TEMP_HOME/.claude-personal]"
 }
 
+@test "update-plugins.sh classifies tombstoned missing plugins separately" {
+    echo '{"gh-flow-skills": {}}' >"$TEST_TEMP_HOME/.claude-personal/plugins/known_marketplaces.json"
+    echo '{"plugins": {}}' >"$TEST_TEMP_HOME/.claude-personal/plugins/installed_plugins.json"
+    echo '{"plugins": ["gh-flow@gh-flow-skills"]}' >"$PLUGDIR/removed.local.json"
+    run "$PLUGDIR/update-plugins.sh"
+    assert_success
+    assert_output --partial 'gh-flow@gh-flow-skills: removed on purpose (tombstone) — skipped'
+    assert_output --partial 'Plugins skipped (removed on purpose): 1'
+}
+
 @test "update-plugins.sh includes the machine-local overlay manifests" {
     echo '{"local-skills": "dEitY719/local-skills"}' >"$PLUGDIR/marketplaces.local.json"
     echo '{"plugins": ["local@local-skills"]}' >"$PLUGDIR/plugins.local.json"

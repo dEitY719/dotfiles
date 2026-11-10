@@ -312,6 +312,7 @@ PL_UPDATED=0
 PL_UPTODATE=0
 PL_UNKNOWN=0
 PL_SKIPPED=0
+PL_REMOVED=0
 MP_SKIPPED=0
 FAILED=0
 
@@ -320,6 +321,11 @@ FAILED=0
 _update_plugin() {
 	local id="$1" out rc json outcome="" old="" new="" line
 	if $INSTALLED_PLS_SET && ! _in_list "$id" "$INSTALLED_PLS"; then
+		if jq -e --arg id "$id" '(.plugins // []) | index($id)' "$SCRIPT_DIR/removed.local.json" >/dev/null 2>&1; then
+			ux_info "  $id: removed on purpose (tombstone) — skipped"
+			_count PL_REMOVED
+			return 0
+		fi
 		ux_info "  $id: not installed — skipped (restore.sh installs it)"
 		_count PL_SKIPPED
 		return 0
@@ -441,7 +447,7 @@ $(_plugins_of "$SCOPE_PL_JSON" "$name")
 EOF
 }
 
-POOL_COUNTERS="MP_TOTAL MP_REFRESHED MP_SKIPPED PL_TOTAL PL_UPDATED PL_UPTODATE PL_UNKNOWN PL_SKIPPED FAILED"
+POOL_COUNTERS="MP_TOTAL MP_REFRESHED MP_SKIPPED PL_TOTAL PL_UPDATED PL_UPTODATE PL_UNKNOWN PL_SKIPPED PL_REMOVED FAILED"
 # --- job pool (#2198) -------------------------------------------------------
 # Same block in git-pull-skills.sh and update-plugins.sh: each script must stay
 # runnable as a single copied file (the bats fixtures copy it alone).
@@ -568,6 +574,9 @@ if [ "$PL_UNKNOWN" -gt 0 ]; then
 fi
 if [ "$PL_SKIPPED" -gt 0 ]; then
 	ux_bullet "Plugins skipped (not installed): $PL_SKIPPED"
+fi
+if [ "$PL_REMOVED" -gt 0 ]; then
+	ux_bullet "Plugins skipped (removed on purpose): $PL_REMOVED"
 fi
 # Still unregistered after skills-sync's restore step = something the user
 # has to look at (#2344 F-14), so it is counted, not just logged.
