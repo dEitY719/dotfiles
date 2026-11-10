@@ -10,7 +10,6 @@ GH_URL="https://github.com/test/repo.git"
 
 setup() {
     setup_isolated_home
-    unset DOTFILES_GHES_HOST
     export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@test \
         GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@test
     BARE="$TEST_TEMP_HOME/origin.git"
