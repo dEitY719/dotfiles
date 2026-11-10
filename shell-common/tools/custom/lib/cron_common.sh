@@ -101,13 +101,19 @@ cron_acquire_lock() {
 # old behavior, leak-prone but still a working lock.
 _cron_lock_detach() {
     # shellcheck disable=SC3028  # bash callers; $$ is the fallback
-    local _owner="${BASHPID:-$$}"
+    local _owner="${BASHPID:-$$}" _sleep
     _CRON_LOCK_PID=""
     setpriv --pdeathsig KILL true 2>/dev/null || return 0
-    # shellcheck disable=SC2016  # $PPID/$1 expand in the holder's sh
-    setpriv --pdeathsig KILL sh -c '[ "$PPID" = "$1" ] && exec sleep 2147483647' \
-        _ "${_owner}" </dev/null >/dev/null 2>&1 &
+    # The system sleep, not a PATH shim: a stub that returns would drop the lock.
+    _sleep=$(command -pv sleep 2>/dev/null) || return 0
+    # shellcheck disable=SC2016  # $PPID/$1/$2 expand in the holder's sh
+    setpriv --pdeathsig KILL sh -c '[ "$PPID" = "$1" ] && exec "$2" 2147483647' \
+        _ "${_owner}" "${_sleep}" </dev/null >/dev/null 2>&1 &
     _CRON_LOCK_PID=$!
+    # Off the job table: a caller's bare `wait` (session_doctor_cron's
+    # injections) must not block on a holder that never exits by itself.
+    # shellcheck disable=SC3044  # bash callers
+    disown "${_CRON_LOCK_PID}" 2>/dev/null
     { exec 9>&-; } 2>/dev/null
 }
 
@@ -115,8 +121,8 @@ _cron_lock_detach() {
 # that only needs it around part of its work). Safe to call twice.
 cron_release_lock() {
     if [ -n "${_CRON_LOCK_PID:-}" ]; then
+        # Disowned, so no `wait`: the kernel closes the lock fd as it dies.
         kill -KILL "${_CRON_LOCK_PID}" 2>/dev/null
-        wait "${_CRON_LOCK_PID}" 2>/dev/null
         _CRON_LOCK_PID=""
     fi
     { exec 9>&-; } 2>/dev/null

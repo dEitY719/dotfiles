@@ -83,9 +83,16 @@ _lock() {
 }
 
 @test "cron_common: cron_release_lock frees the lock before the tick ends (#2365)" {
-    _lock 'cron_acquire_lock "$D" .lock my_tick || exit 1; flock -n "$D/.lock" true || echo held; cron_release_lock; cron_release_lock; flock -n "$D/.lock" true && echo free'
+    _lock 'cron_acquire_lock "$D" .lock my_tick || exit 1; flock -n "$D/.lock" true || echo held; cron_release_lock; cron_release_lock; flock -w 5 "$D/.lock" true && echo free'
     assert_output --partial "held"
     assert_output --partial "free"
+}
+
+@test "cron_common: a bare wait in the tick does not block on the lock holder (#2365)" {
+    # The bare wait runs in the child bash, not the test shell (#2054 lint);
+    # `builtin` only keeps that lint's pattern from matching it.
+    _lock 'cron_acquire_lock "$D" .lock my_tick || exit 1; builtin wait; echo returned'
+    assert_output "returned"
 }
 
 @test "cron_common: a skipped tick names the lock holder when fuser exists (#2365)" {
