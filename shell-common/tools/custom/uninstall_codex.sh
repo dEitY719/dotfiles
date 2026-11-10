@@ -1,4 +1,5 @@
 #!/bin/bash
+# Codex CLI uninstaller for standalone and legacy npm installations.
 # Direct-exec uninstaller; no interactive sourcing guard is needed.
 set -e
 
