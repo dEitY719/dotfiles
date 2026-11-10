@@ -461,3 +461,14 @@ teardown() {
     # being renamed away while the scan above passes vacuously.
     grep -q '_gh_host_is_github_com' "$_BATS_REAL_DOTFILES_ROOT/shell-common/lib/gh_host.sh"
 }
+
+@test "guard matches SCP host without user and ignores github.com in a URL path" {
+    run_in_bash "$G"'_gh_host_is_github_com "github.com:owner/repo.git"'
+    assert_success
+    run_in_bash "$G"'_gh_host_is_github_com "https://ghes.example.com/mirrors/github.com/x.git"'
+    assert_failure
+    run_in_zsh "$G"'_gh_host_is_github_com "github.com:owner/repo.git"'
+    assert_success
+    run_in_zsh "$G"'_gh_host_is_github_com "https://ghes.example.com/mirrors/github.com/x.git"'
+    assert_failure
+}
