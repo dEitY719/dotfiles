@@ -244,3 +244,15 @@ chore/gitignore-omo"
     run git -C "$REPO" branch --list 'chore/*'
     assert_output ""
 }
+
+@test "internal mode + second github.com pushurl: refused before branching" {
+    ghes_url="https://ghes.example.com/test/repo.git"
+    git -C "$REPO" remote set-url origin "$ghes_url"
+    git -C "$REPO" remote set-url --add --push origin "$ghes_url"
+    git -C "$REPO" remote set-url --add --push origin "ssh://git@SSH.GitHub.com:443/test/repo.git"
+    run_in_bash "cd '$REPO' && export GIT_SSH_COMMAND=false DOTFILES_SETUP_MODE=internal DOTFILES_GHES_HOST=ghes.example.com && gitignore_pr .omo"
+    assert_failure
+    assert_output --partial "github.com origin"
+    run git -C "$REPO" branch --list 'chore/*'
+    assert_output ""
+}
