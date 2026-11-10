@@ -9,7 +9,6 @@ MODE_LIB="${_BATS_REAL_SHELL_COMMON}/lib/setup/mode.sh"
 
 setup() {
     setup_isolated_home
-    unset DOTFILES_SETUP_MODE
 }
 
 teardown() {

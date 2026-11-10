@@ -9,7 +9,6 @@ LIB="${_BATS_REAL_SHELL_COMMON}/util/setup_mode_read.sh"
 
 setup() {
     setup_isolated_home
-    unset DOTFILES_SETUP_MODE
     PD="$TEST_TEMP_HOME/plugin"
     mkdir -p "$PD/company"
 }
