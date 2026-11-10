@@ -9,13 +9,14 @@ gitignored `*.local.json`), 아래 표는 **코드가 어디에 사는가** 를 
 ## 호출 그래프
 
 ```
-scripts/update-skills.sh                          (skills-sync 6단계 진입점)
+scripts/update-skills.sh                          (skills-sync: 기본 6단계 + --restore 시 설치 단계)
  ├─ claude/plugin/git-clone-skills.sh ── marketplaces.json, skills-workspace{,-repos}.local.json, lib/gh_host.sh
  ├─ claude/plugin/git-pull-skills.sh
  ├─ claude/setup.sh ── tools/custom/lib/claude_accounts_skills.sh (_claude_prune_workspace_skills)
- ├─ claude/plugin/restore.sh ── lib/claude_plugin_manifest.sh   (누락분만 설치, #2344)
  ├─ claude/plugin/update-plugins.sh ── marketplaces.json, plugins.json
+ ├─ claude/plugin/restore.sh --check ── lib/claude_plugin_manifest.sh (읽기 전용 drift 점검, #2366)
  └─ scripts/setup-skills-ssot.sh ── lib/skill_sources.sh ── 워크스페이스 clone
+scripts/update-skills.sh --restore -> claude/plugin/restore.sh --skip-without-claude (명시적 누락 설치, update 전)
 claude/plugin/restore.sh --sync / --all-accounts             (단독 실행: 양방향 sync, 계정별)
 claude/plugin/reconcile.sh ── lib/claude_plugin_manifest.sh, plugin_sync_title.sh   (독립: drift 점검)
 claude/hooks/plugin-sync-session.sh -> plugin-sync.sh ── claude_plugin_manifest.sh, plugin_sync_title.sh

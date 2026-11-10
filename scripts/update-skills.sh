@@ -1,21 +1,22 @@
 #!/bin/bash
 
-# scripts/update-skills.sh: skills 업데이트 6단계를 한 번에 실행 (#1825, #1903, #2344)
+# scripts/update-skills.sh: skills 업데이트와 drift 점검을 한 번에 실행 (#1825, #1903, #2344, #2366)
 #
 #   1. claude/plugin/git-clone-skills.sh      — manifest 의 누락 repo clone (idempotent, --dry-run 만 전달)
 #   2. claude/plugin/git-pull-skills.sh "$@"  — workspace repo pull
 #   3. claude/setup.sh                        — 계정 디렉토리 링크 + 남은 평면 스킬 링크 정리
 #                                               (스킬 자체는 4·5단계 plugin store 에서 로드)
-#   4. claude/plugin/restore.sh               — manifest 에 있는데 plugin store 에 없는 항목만
-#                                               marketplace add / plugin install (#2344, 누락 없으면 claude 호출 0회)
-#   5. claude/plugin/update-plugins.sh        — Claude Code plugin store 갱신
+#   4. claude/plugin/update-plugins.sh        — Claude Code plugin store 갱신
 #                                               (marketplace update + plugin update)
+#   5. claude/plugin/restore.sh --check       — 읽기 전용 설치 drift 경고
 #   6. scripts/setup-skills-ssot.sh           — OpenCode/Codex/agy 합성 + Hermes external_dirs (#1829)
+#   --restore 시 4a. restore.sh               — 명시적으로 누락 항목 add/install, update 전에 실행
 #
 # 4·5단계가 필요한 이유: Claude Code 는 workspace clone 이 아니라 plugin store
 # (plugins/marketplaces, plugins/cache/<mkt>/<plugin>/<ver>) 에서 스킬을 로드한다.
-# 2단계 pull 만으로는 설치도 설치 버전 갱신도 일어나지 않는다. 4단계는 3단계가
-# 계정 plugins 링크를 맞춘 뒤에 돌아야 실제 폴더를 만들지 않는다.
+# 2단계 pull 만으로는 설치도 설치 버전 갱신도 일어나지 않는다. 설치는 느리고 인증을
+# 요구하므로 기본은 5단계의 읽기 전용 점검만 한다. --restore 는 3단계가 계정 plugins
+# 링크를 맞춘 뒤, update 전에 명시적으로 설치를 수행한다.
 #
 # 출력 (#2126): 기본은 요약 모드 — shared step runner
 # (shell-common/tools/ux_lib/step_runner.sh) 로 스텝당 1줄, 경고/실패만 상세,
@@ -23,7 +24,7 @@
 # -v / --verbose 또는 SKILLS_SYNC_VERBOSE=1 이면 하위 스크립트 출력을 전부 흘린다.
 # -v 는 여기서 소비하고 2단계로 넘기지 않는다.
 #
-# 종료 코드: 1·2·3·6단계 실패는 즉시 비0 종료 (critical). 4·5단계 실패는 이후
+# 종료 코드: 1·2·3·6단계 실패는 즉시 비0 종료 (critical). 선택 설치·갱신·점검 실패는 이후
 # 단계를 막지 않고 (optional), 마지막에 그중 첫 비0 종료 코드로 끝난다. 나머지
 # 인자는 2단계로 전달되고, clone/restore/update-plugins 단계에는 --dry-run 만
 # 전달된다. --dry-run 이 있으면 clone/pull/restore/update-plugins dry-run 만
@@ -42,16 +43,18 @@ source "${DOTFILES_ROOT}/shell-common/tools/ux_lib/ux_lib.sh"
 source "${DOTFILES_ROOT}/shell-common/tools/ux_lib/step_runner.sh"
 
 _us_help() {
-    ux_usage "skills-sync" "[-v|--verbose] [--dry-run] [git-pull-skills options]" \
-        "clone -> pull -> claude/setup.sh -> restore-plugins -> update-plugins -> setup-skills-ssot.sh"
+    ux_usage "skills-sync" "[-v|--verbose] [--dry-run] [--restore] [git-pull-skills options]" \
+        "clone -> pull -> claude/setup.sh -> update-plugins -> restore --check -> setup-skills-ssot.sh"
     ux_bullet "-v, --verbose: stream full sub-script output (SKILLS_SYNC_VERBOSE=1 is the same)"
-    ux_bullet "--dry-run: preview clone/pull/restore-plugins/update-plugins only, skip synthesis"
+    ux_bullet "--restore: restore missing plugins before update (default is read-only drift check only)"
+    ux_bullet "--dry-run: preview clone/pull/update/check; with --restore, preview installation too; skip synthesis"
     ux_bullet "--jobs <N>: repos / marketplaces synced in parallel by pull and update-plugins (default 4, DOTFILES_SKILLS_JOBS)"
     ux_bullet "other options go to git-pull-skills.sh (see: claude/plugin/git-pull-skills.sh --help)"
 }
 
 verbose="${SKILLS_SYNC_VERBOSE:-0}"
 dry_run=0
+restore=0
 pull_args=()
 prev=""
 for arg in "$@"; do
@@ -79,6 +82,7 @@ for arg in "$@"; do
         exit 0
         ;;
     -v | --verbose) verbose=1 ;;
+    --restore) restore=1 ;;
     *)
         if [ "$arg" = --dry-run ]; then dry_run=1; fi
         pull_args+=("$arg")
@@ -204,10 +208,11 @@ _us_hint() {
 
 # _us_step <n> <label> <critical|optional> <cmd...> — verbose mode keeps the
 # per-step section header so the streamed output reads as before.
+step_total=6
 _us_step() {
     local n="$1"
     shift
-    if [ "$STEP_VERBOSE" = 1 ]; then ux_section "$n/6 $1"; fi
+    if [ "$STEP_VERBOSE" = 1 ]; then ux_section "$n/$step_total $1"; fi
     step_run "$@"
 }
 
@@ -221,17 +226,16 @@ if [ "$STEP_VERBOSE" != 1 ]; then
     ux_info "skills-sync (요약 모드 — 전체 출력은 skills-sync -v)"
 fi
 
-# --dry-run: steps 1/2/4/5 preview only; synthesis (3/6) is skipped.
+# --dry-run: clone/pull/update/check preview; synthesis (3/6) is skipped.
 clone_args=()
 plugins_args=()
-restore_args=(--skip-without-claude)
 sfx=""
 if [ "$dry_run" = 1 ]; then
     clone_args=(--dry-run)
     plugins_args=(--dry-run)
-    restore_args=(--dry-run)
     sfx=" (dry-run)"
 fi
+[ "$restore" = 1 ] && step_total=7
 
 _us_step 1 "git-clone-skills$sfx" critical \
     "${DOTFILES_ROOT}/claude/plugin/git-clone-skills.sh" ${clone_args[@]+"${clone_args[@]}"}
@@ -240,12 +244,19 @@ _us_step 2 "git-pull-skills$sfx" critical \
 if [ "$dry_run" != 1 ]; then
     _us_step 3 claude/setup.sh critical "${DOTFILES_ROOT}/claude/setup.sh"
 fi
-# plugin 복원/갱신 실패(네트워크 등)는 6단계 합성을 막지 않는다 — 끝까지 진행한
+# 선택 설치/갱신/점검 실패(네트워크 등)는 합성을 막지 않는다 — 끝까지 진행한
 # 뒤 첫 비0 종료 코드로 끝낸다.
-_us_step 4 "restore-plugins$sfx" optional \
-    "${DOTFILES_ROOT}/claude/plugin/restore.sh" "${restore_args[@]}"
-final_rc=$STEP_LAST_RC
-_us_step 5 "update-plugins$sfx" optional \
+final_rc=0
+if [ "$restore" = 1 ]; then
+    restore_args=(--skip-without-claude)
+    [ "$dry_run" = 1 ] && restore_args=(--dry-run)
+    _us_step 4 "restore-plugins$sfx" optional \
+        "${DOTFILES_ROOT}/claude/plugin/restore.sh" "${restore_args[@]}"
+    final_rc=$STEP_LAST_RC
+fi
+update_step=4
+[ "$restore" = 1 ] && update_step=5
+_us_step "$update_step" "update-plugins$sfx" optional \
     "${DOTFILES_ROOT}/claude/plugin/update-plugins.sh" ${plugins_args[@]+"${plugins_args[@]}"}
 if [ "$final_rc" = 0 ]; then final_rc=$STEP_LAST_RC; fi
 _us_restore_check() {
@@ -254,11 +265,16 @@ _us_restore_check() {
     [ "$rc" -eq 1 ] && return 0
     return "$rc"
 }
-_us_step 5b "restore --check" optional _us_restore_check
+check_step=5
+[ "$restore" = 1 ] && check_step=6
+_us_step "$check_step" "restore --check" optional _us_restore_check
+if [ "$final_rc" = 0 ]; then final_rc=$STEP_LAST_RC; fi
 if [ "$dry_run" = 1 ]; then
     ux_info "--dry-run: 합성 단계(claude/setup.sh, setup-skills-ssot.sh)를 건너뜁니다"
 else
-    _us_step 6 setup-skills-ssot critical "${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
+    synthesis_step=6
+    [ "$restore" = 1 ] && synthesis_step=7
+    _us_step "$synthesis_step" setup-skills-ssot critical "${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
 fi
 
 step_summary "skills-sync$sfx"
