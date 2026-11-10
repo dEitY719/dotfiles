@@ -630,12 +630,15 @@ JSON
     [ ! -s "$CLAUDE_CALLS" ]
 }
 
-@test "restore.sh: a missing plugins/ path is skipped without calling claude (#2344 F-11)" {
+@test "restore.sh: a missing plugins/ path never calls claude; skip in skills-sync, fail direct (#2344 F-11)" {
     _fake_claude
     rm -rf "$STORE"
-    run "$PLUGDIR/restore.sh"
+    run "$PLUGDIR/restore.sh" --skip-without-claude
     assert_success
     assert_output --partial '플러그인 저장소 없음'
+    run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial './claude/setup.sh 를 실행하세요'
     [ ! -s "$CLAUDE_CALLS" ]
     [ ! -e "$STORE" ]
 }
