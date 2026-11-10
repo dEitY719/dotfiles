@@ -525,4 +525,8 @@ if [ "$FAILED" -gt 0 ]; then
 	ux_error "복원 실패 ${FAILED}건 — 네트워크/인증 확인 후 다시 실행하면 남은 항목만 재시도합니다."
 	exit 1
 fi
-ux_success "완료. 새 Claude Code 세션을 시작해 스킬이 로드됐는지 확인하세요."
+if [ "$DRY_RUN" -eq 0 ] && [ $((MP_ADDED + PL_INSTALLED)) -gt 0 ]; then
+	ux_success "완료. 새 Claude Code 세션을 시작해 스킬이 로드됐는지 확인하세요."
+else
+	ux_success "완료."
+fi
