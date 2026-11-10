@@ -248,6 +248,13 @@ final_rc=$STEP_LAST_RC
 _us_step 5 "update-plugins$sfx" optional \
     "${DOTFILES_ROOT}/claude/plugin/update-plugins.sh" ${plugins_args[@]+"${plugins_args[@]}"}
 if [ "$final_rc" = 0 ]; then final_rc=$STEP_LAST_RC; fi
+_us_restore_check() {
+    "${DOTFILES_ROOT}/claude/plugin/restore.sh" --check
+    local rc=$?
+    [ "$rc" -eq 1 ] && return 0
+    return "$rc"
+}
+_us_step 5b "restore --check" optional _us_restore_check
 if [ "$dry_run" = 1 ]; then
     ux_info "--dry-run: 합성 단계(claude/setup.sh, setup-skills-ssot.sh)를 건너뜁니다"
 else

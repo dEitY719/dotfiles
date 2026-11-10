@@ -91,19 +91,22 @@ fi
 
 DRY_RUN=0
 SYNC=0
+CHECK=0
+CHECK_RC=0
 ALL_ACCOUNTS=0
 USER_ACCOUNT=""
 SKIP_NO_CLAUDE=0
 
 _usage() {
 	cat <<'EOF'
-Usage: restore.sh [--user <account>|--all-accounts] [--sync] [--dry-run] [--skip-without-claude] [-h|--help]
+Usage: restore.sh [--user <account>|--all-accounts] [--sync] [--check] [--dry-run] [--skip-without-claude] [-h|--help]
 
   (no flags)        add-only 복원 — SSOT 에 있으나 플러그인 저장소에 없는 항목만 add/install
                     (누락이 없으면 claude 를 호출하지 않는다, 실패가 있으면 exit 1)
   --user <account>  이 계정의 config dir (~/.claude-<account>) 로 복원 (public/external 모드)
   --all-accounts    CLAUDE_ENABLED_ACCOUNTS 의 모든 계정 config dir 로 복원
   --sync            양방향 sync — 위에 더해, SSOT 에 없는 잉여 로컬 항목을 remove/uninstall
+  --check           읽기 전용 drift 점검 — 누락 설치를 WARN 으로 보고
   --dry-run         실제 실행 없이 계획만 출력 (add + (--sync 시) prune 계획 모두)
   --skip-without-claude
                     claude CLI 또는 계정 plugins 경로가 없으면 오류 대신 건너뜀
@@ -132,6 +135,7 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 	--dry-run) DRY_RUN=1 ;;
 	--sync) SYNC=1 ;;
+	--check) CHECK=1 ;;
 	--all-accounts) ALL_ACCOUNTS=1 ;;
 	--skip-without-claude) SKIP_NO_CLAUDE=1 ;;
 	--user)
@@ -164,7 +168,7 @@ command -v jq >/dev/null 2>&1 || {
 # --dry-run only prints the plan — don't require the claude CLI for that,
 # so this also works as a preview before clinstall, and so CI (which has
 # no claude binary) can exercise --dry-run in tests without it.
-if [ "$DRY_RUN" -eq 0 ]; then
+if [ "$DRY_RUN" -eq 0 ] && [ "$CHECK" -eq 0 ]; then
 	if ! command -v claude >/dev/null 2>&1; then
 		# skills-sync must not fail on a PC that never installed claude
 		# (same policy as update-plugins.sh); a direct run still errors.
@@ -327,6 +331,16 @@ _load_store() {
 		return 1
 	fi
 	return 0
+}
+
+_check_pass() {
+	local name drift=0 expected_mps expected_pls
+	expected_mps=$(printf '%s' "$PUB_MP_JSON" | jq -r 'keys[]' 2>/dev/null)
+	expected_pls=$(printf '%s' "$PUB_PL_JSON" | jq -r '(.plugins // [])[]' 2>/dev/null)
+	while IFS= read -r name; do _in_list "$name" "$STORE_MPS" || { printf 'WARN: marketplace not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_mps"
+	while IFS= read -r name; do _in_list "$name" "$STORE_PLS" || { printf 'WARN: plugin not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_pls"
+	[ "$drift" -eq 0 ] && ux_success "drift 없음"
+	return "$drift"
 }
 
 # _install_plugin <id> — takes update-plugins.sh's lock: both scripts rewrite
@@ -500,6 +514,10 @@ _run_for_config_dir() {
 		FAILED=$((FAILED + 1))
 		return 0
 	fi
+	if [ "$CHECK" -eq 1 ]; then
+		_check_pass || CHECK_RC=1
+		return 0
+	fi
 
 	_restore_from "$PUB_MP_JSON" "$PUB_PL_JSON" "공용"
 
@@ -539,6 +557,7 @@ if [ "$FAILED" -gt 0 ]; then
 	ux_error "복원 실패 ${FAILED}건 — 네트워크/인증 확인 후 다시 실행하면 남은 항목만 재시도합니다."
 	exit 1
 fi
+if [ "$CHECK" -eq 1 ]; then exit "$CHECK_RC"; fi
 if [ "$DRY_RUN" -eq 0 ] && [ $((MP_ADDED + PL_INSTALLED)) -gt 0 ]; then
 	ux_success "완료. 새 Claude Code 세션을 시작해 스킬이 로드됐는지 확인하세요."
 else
