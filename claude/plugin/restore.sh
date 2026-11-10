@@ -106,7 +106,8 @@ Usage: restore.sh [--user <account>|--all-accounts] [--sync] [--dry-run] [--skip
   --sync            양방향 sync — 위에 더해, SSOT 에 없는 잉여 로컬 항목을 remove/uninstall
   --dry-run         실제 실행 없이 계획만 출력 (add + (--sync 시) prune 계획 모두)
   --skip-without-claude
-                    claude CLI 가 없으면 오류 대신 건너뜀 (skills-sync 용, exit 0)
+                    claude CLI 또는 계정 plugins 경로가 없으면 오류 대신 건너뜀
+                    (skills-sync 용, exit 0)
   -h, --help        이 도움말 출력 후 종료
 
 대상 config dir (#1103):
@@ -484,8 +485,15 @@ _run_for_config_dir() {
 	# No store path yet = claude/setup.sh has not linked this account to the
 	# shared store. Calling claude now would create a real plugins/ dir that
 	# the link then collides with (update-plugins.sh policy, #2344 F-11).
+	# skills-sync (--skip-without-claude) skips; a direct run fails instead, so a
+	# bootstrap run before setup is never mistaken for a successful restore.
 	if [ "$DRY_RUN" -eq 0 ] && [ ! -e "$STORE_DIR" ]; then
-		ux_warning "  플러그인 저장소 없음: $STORE_DIR — 먼저 ./claude/setup.sh 실행. 건너뜀."
+		if [ "$SKIP_NO_CLAUDE" -eq 1 ]; then
+			ux_warning "  플러그인 저장소 없음: $STORE_DIR — 먼저 ./claude/setup.sh 실행. 건너뜀."
+		else
+			ux_error "  플러그인 저장소 없음: $STORE_DIR — 먼저 ./claude/setup.sh 를 실행하세요."
+			FAILED=$((FAILED + 1))
+		fi
 		return 0
 	fi
 	if ! _load_store; then
