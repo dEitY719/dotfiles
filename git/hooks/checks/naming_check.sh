@@ -45,7 +45,8 @@ check_naming_violations() {
         # message that merely mentions the path (`"... see tools/custom/x.sh"`)
         # does not start that way and stays flagged. Likewise a line that IS a
         # quoted `"${SHELL_COMMON...}/lib/<file>.sh"` path (a module list a
-        # loader sources, #2382) is a source path, not text.
+        # loader sources, #2382) is a source path, not text -- only when the
+        # path is the whole line, optionally ending in ` \` or `; do`.
         local matches
         matches=$(
             grep -n "\".*$func_name.*\"" "$abs_path" 2>/dev/null |
@@ -53,7 +54,7 @@ check_naming_violations() {
                 grep -v "alias.*=" |
                 grep -v ":[[:space:]]*$func_name()" |
                 grep -v '^[0-9][0-9]*:[[:space:]]*"${SHELL_COMMON[^"]*"/tools/custom/' |
-                grep -v '^[0-9][0-9]*:[[:space:]]*"${SHELL_COMMON[^"]*/lib/[a-z0-9_]*\.sh"' |
+                grep -v '^[0-9][0-9]*:[[:space:]]*"${SHELL_COMMON[^"]*/lib/[a-z0-9_]*\.sh"\( \\\|; do\)\{0,1\}[[:space:]]*$' |
                 grep -v "ux_info\|ux_header\|ux_error\|ux_success\|ux_warning\|ux_bullet\|ux_table_row" || true
         )
 

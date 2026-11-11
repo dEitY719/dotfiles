@@ -39,6 +39,7 @@ _gh_pr_review_disarm_trap() {
 # ignored. `eval "$_parsed"` would be shorter but would let a shell
 # metacharacter inside a user-supplied value (e.g. `--review "$(rm -rf …)"`)
 # execute — the `while read` loop treats each value as data, not code.
+#   writes: ai review user post_comment pr remote paths
 _gh_pr_review_stage_read_args() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _k _v
@@ -59,6 +60,7 @@ EOT
 
 # Step 2 — tool pre-flight: gh, git, the requested AI CLI, and gh auth for
 # the remote's host.
+#   reads: ai remote. writes: nothing.
 _gh_pr_review_stage_preflight() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     if ! command -v gh >/dev/null 2>&1; then
@@ -76,6 +78,8 @@ _gh_pr_review_stage_preflight() {
 # Step 2b — resolve the target: TARGET_REPO, the GH_HOST pin, PR_NUMBER, the
 # PR metadata (state/isDraft/base/head/head_sha), its state gate, and the
 # claude account dir (CFG_DIR).
+#   reads: ai user remote pr. writes: TARGET_REPO GH_HOST PR_NUMBER base head
+#   head_sha CFG_DIR. GH_HOST MUST be a local of the caller, or the pin leaks.
 _gh_pr_review_stage_resolve() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     # Resolve target repo by parsing the user-supplied remote's URL
@@ -130,6 +134,8 @@ _gh_pr_review_stage_resolve() {
 }
 
 # Step 6 + 7 — metrics, comment body, post, and the `[OK]` report line.
+#   reads: PROMPT_BYTES review START_TS BODY_FILE ai AI_OUT head_sha PR_NUMBER
+#   TARGET_REPO post_comment. writes: nothing outside its own locals.
 _gh_pr_review_stage_post() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local TOKENS HUMAN_H ELAPSED

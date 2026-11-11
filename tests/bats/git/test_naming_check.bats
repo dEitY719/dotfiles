@@ -72,11 +72,16 @@ _assert_flagged() {
 
 @test "a quoted lib/<file>.sh source path naming the function is not a violation (#2382)" {
     _write 'for f in \' '"${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/demo_tool_args.sh" \' \
-        '"${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/demo_tool_run.sh"; do . "$f"; done'
+        '"${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/demo_tool_run.sh"; do' '. "$f"' 'done'
     _assert_clean
 }
 
 @test "text that mentions a lib/<file>.sh path is still a violation (#2382)" {
     _write "printf '%s\\n' \"demo_tool: see \${SHELL_COMMON}/lib/demo_tool_run.sh\""
     _assert_flagged 'demo_tool: see'
+}
+
+@test "a lib/<file>.sh path line followed by more text is still checked (#2382)" {
+    _write '"${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/demo_tool_run.sh" "demo_tool: hi"'
+    _assert_flagged 'demo_tool: hi'
 }
