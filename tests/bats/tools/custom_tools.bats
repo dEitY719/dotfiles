@@ -124,6 +124,7 @@ DISPATCHERS="
     gh_pr_approve:gh-pr-approve
     gh_pr_reply:gh-pr-reply
     gh_pr_review:gh-pr-review
+    gh_issue_review:gh-issue-review
     aicron:aicron
     avatar_issue_watcher:avatar-issue-watcher
     avatar_watched_repos:avatar-watched-repos
