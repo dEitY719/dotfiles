@@ -69,16 +69,8 @@ _gh_pr_review_stage_preflight() {
         ux_error "Required CLI 'git' not found in PATH"
         return 1
     fi
-    local _ai_cli_rc
-    _ai_cli_require "$ai"
-    _ai_cli_rc=$?
-    if [ "$_ai_cli_rc" -ne 0 ]; then
-        return "$_ai_cli_rc"
-    fi
-    if ! _gh_pr_review_require_auth "$remote"; then
-        return 1
-    fi
-    return 0
+    _ai_cli_require "$ai" || return $?
+    _gh_pr_review_require_auth "$remote" || return 1
 }
 
 # Step 2b — resolve the target: TARGET_REPO, the GH_HOST pin, PR_NUMBER, the
