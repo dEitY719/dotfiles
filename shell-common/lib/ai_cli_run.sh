@@ -588,3 +588,21 @@ _gh_pr_review_check_output() {
     fi
     return 0
 }
+
+# 4-bytes-per-token heuristic, rounded to nearest 500, floor 1000.
+# Args: $1 = prompt size in bytes (a number, NOT a path).
+#
+# Issue #1474 — this used to `wc -c` the PROMPT_FILE path itself, in Step 6,
+# long after the file could have vanished; the floor rule then dressed the
+# resulting 0 up as a plausible "~1000 tokens". The caller now measures the
+# file while it still exists and owns reporting a read failure — see the
+# measurement right after _gh_pr_review_build_prompt.
+_gh_pr_review_estimate_tokens() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local raw="$1"
+    local tokens
+    tokens=$((raw / 4))
+    tokens=$(((tokens + 250) / 500 * 500))
+    [ "$tokens" -lt 1000 ] && tokens=1000
+    printf '%s\n' "$tokens"
+}
