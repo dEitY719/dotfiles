@@ -250,6 +250,18 @@ skill_source_path_for() {
     return 1
 }
 
+# 충돌 때 `<repo>__<skill>` 로 합성됐다가 충돌이 사라져 목록에서 빠진 링크인가 (#2389).
+# 타깃이 managed 인 것은 호출부가 이미 확인했다. 이름이 타깃 경로
+# (<root>/<repo>/skills/<skill>) 에서 다시 합성한 `<repo>__<skill>` 와 같고,
+# 현재 목록에 그 이름이 없을 때만 참 — 사용자가 만든 `*__*` 링크는 보존된다.
+# Usage: _skill_entry_is_resolved_mangle <link_path> <raw_link_target>
+_skill_entry_is_resolved_mangle() {
+    local name="${1##*/}" target="${2%/}"
+    local skill="${target##*/}" repo="${target%/skills/*}"
+    [ "$name" = "${repo##*/}__${skill}" ] || return 1
+    ! skill_source_path_for "$name" >/dev/null
+}
+
 collect_codex_homes() {
     local default_config_home
     local -a candidates=()
@@ -380,6 +392,10 @@ link_skills_compose() {
             log_info "[$tool] stale entry 정리: $existing"
             rm -f "$existing"
             pruned=$((pruned + 1))
+        elif _skill_entry_is_resolved_mangle "$existing" "$existing_target_path"; then
+            log_info "[$tool] 충돌 해소된 mangled entry 정리: $existing"
+            rm -f "$existing"
+            pruned=$((pruned + 1))
         fi
     done
 
@@ -422,8 +438,10 @@ link_skills_individual_codex() {
                 continue
             fi
 
-            # compose 쪽과 동일한 레거시 판정 (#1732).
-            if _ssot_link_is_legacy_stale "$skill_target"; then
+            # compose 쪽과 동일한 판정 (#1732): managed 소스를 가리키던 링크는
+            # 충돌 해소로 bare 이름의 주인이 바뀌어도 갱신한다 (#2389).
+            if skill_source_is_managed "$(readlink "$skill_target")" ||
+                _ssot_link_is_legacy_stale "$skill_target"; then
                 rm -f "$skill_target"
                 migrated=$((migrated + 1))
             else
