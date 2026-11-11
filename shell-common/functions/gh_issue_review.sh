@@ -61,7 +61,32 @@ fi
 [ -r "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/util/setup_mode_read.sh" ] &&
     . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/util/setup_mode_read.sh"
 
+# Native help (#2136): summary by default, `--list`, `--all`/`usage` = full.
 gh_issue_review_help() {
+    case "${1-}" in
+    "" | -h | --help | help) _gh_issue_review_help_summary ;;
+    --list | list | section | sections) _gh_issue_review_help_list_sections ;;
+    --all | all | usage) _gh_issue_review_help_full ;;
+    *)
+        ux_error "Unknown section: $1"
+        _gh_issue_review_help_list_sections
+        return 1
+        ;;
+    esac
+}
+
+_gh_issue_review_help_summary() {
+    ux_info "Usage: gh-issue-review-help [section|--list|--all]"
+    ux_bullet "sections"
+    ux_bullet_sub "usage: gh-issue-review --ai <ai> --repo <owner/repo> --host <host> [--workdir <dir>] <issue#>"
+    ux_bullet_sub "details: gh-issue-review-help usage"
+}
+
+_gh_issue_review_help_list_sections() {
+    printf '%s\n' "usage"
+}
+
+_gh_issue_review_help_full() {
     cat <<'EOF'
 gh-issue-review — have an external AI CLI review one GitHub issue (the spec,
 not code) and post the review as one issue comment.
@@ -298,7 +323,7 @@ _gh_issue_review_build_comment() {
 _gh_issue_review_main() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     case "${1:-}" in "" | -h | --help | help)
-        gh_issue_review_help
+        _gh_issue_review_help_full
         return 0
         ;;
     esac
@@ -306,7 +331,7 @@ _gh_issue_review_main() {
     _start=$(date +%s)
     _parsed=$(gh_issue_review_parse "$@") || return $?
     case "$_parsed" in *help_requested=1*)
-        gh_issue_review_help
+        _gh_issue_review_help_full
         return 0
         ;;
     esac
