@@ -394,11 +394,23 @@ EOF
 
     # ---- review basis: <branch>@<short-sha> of the tree the CLI reads ----
     local _ref _br _sha
-    _br=$(git -C "${workdir:-.}" rev-parse --abbrev-ref HEAD 2>/dev/null) || _br="unknown"
-    _sha=$(git -C "${workdir:-.}" rev-parse --short HEAD 2>/dev/null) || _sha="unknown"
-    _ref="$_br@$_sha"
+    # Without --workdir the CLI reads no code of ours, so the caller's cwd
+    # branch/sha would be a false basis: say so instead.
+    if [ -n "$workdir" ]; then
+        _br=$(git -C "$workdir" rev-parse --abbrev-ref HEAD 2>/dev/null) || _br="unknown"
+        _sha=$(git -C "$workdir" rev-parse --short HEAD 2>/dev/null) || _sha="unknown"
+        _ref="$_br@$_sha"
+    else
+        _ref="no-workdir"
+    fi
 
     local _prompt="" _out="" _err="" _bodyf="" _rc=0 _reject _why _kind
+    # Fail before the (minutes-long, token-spending) CLI run when the leak
+    # guard would hold the comment anyway; an empty file never matches.
+    _why=$(_gh_issue_review_leak_check "$host" /dev/null) || {
+        ux_error "$_why — no comment posted"
+        return 3
+    }
     _kind=$(_gh_issue_review_perspective "$_title")
     if ! { _prompt=$(_gh_pr_review_mktemp_safe "/tmp/gh-issue-review-prompt.$ai.$issue.XXXXXX") &&
         _out=$(_gh_pr_review_mktemp_safe "/tmp/gh-issue-review-out.XXXXXX") &&
