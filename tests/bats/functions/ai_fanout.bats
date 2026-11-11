@@ -65,4 +65,7 @@ teardown() {
     assert_failure 2
     run ai_fanout_run "$TEST_TEMP_HOME/missing" 30 "ok1" "$ENTRY"
     assert_failure 2
+    run ai_fanout_run "" 30 "ok1,ok2,ok1" "$ENTRY"
+    assert_failure 2
+    assert_output --partial "lane repeated: 'ok1'"
 }

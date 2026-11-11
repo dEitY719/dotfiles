@@ -24,7 +24,7 @@
 #   Each lane's stdout / stderr / rc goes to its own file under one private
 #   mktemp dir (#1276), removed afterwards; lane stdout never reaches the
 #   result lines. Returns 0; 2 on an argument error (a lane outside
-#   [A-Za-z0-9_:-], an empty lane list, a missing entry command, a workdir
+#   [A-Za-z0-9_:-], a repeated lane, an empty lane list, a missing entry command, a workdir
 #   that is not a directory); 1 when the temp dir cannot be created.
 ai_fanout_run() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
@@ -42,6 +42,17 @@ ai_fanout_run() {
         return 2
         ;;
     esac
+    # A repeated lane would share its result files with its twin and race.
+    _rest="$lanes"
+    while [ -n "$_rest" ]; do
+        _lane="${_rest%%,*}"
+        case "$_rest" in *,*) _rest="${_rest#*,}" ;; *) _rest="" ;; esac
+        case ",$_rest," in *",$_lane,"*)
+            echo "ai_fanout_run: lane repeated: '$_lane'" >&2
+            return 2
+            ;;
+        esac
+    done
     if [ -n "$workdir" ] && [ ! -d "$workdir" ]; then
         echo "ai_fanout_run: workdir '$workdir' is not a directory" >&2
         return 2

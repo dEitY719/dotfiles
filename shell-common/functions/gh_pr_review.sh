@@ -73,12 +73,13 @@ fi
 # fixtures link only functions/) falls back to the lib beside this file's
 # real location, so the runner can never silently go missing.
 _gpr_cli_lib="${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/ai_cli_run.sh"
-if [ ! -r "$_gpr_cli_lib" ] && [ -n "$_drg_self" ]; then
-    _gpr_cli_lib="$(cd -P -- "$(dirname -- "$_drg_self")/../lib" 2>/dev/null && pwd)/ai_cli_run.sh"
+if [ ! -r "$_gpr_cli_lib" ] && [ -n "$_drg_self" ] &&
+    _gpr_cli_dir=$(cd -P -- "$(dirname -- "$_drg_self")/../lib" 2>/dev/null && pwd); then
+    _gpr_cli_lib="$_gpr_cli_dir/ai_cli_run.sh"
 fi
 # shellcheck disable=SC1090
 . "$_gpr_cli_lib" || ux_error "[gh-pr-review] could not load $_gpr_cli_lib (#2381)"
-unset _gpr_cli_lib _drg_self
+unset _gpr_cli_lib _gpr_cli_dir _drg_self
 
 # ============================================================================
 # Section 1 — Argument parser (SSOT, mirrors SKILL.md Step 1)

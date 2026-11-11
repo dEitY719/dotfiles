@@ -52,8 +52,10 @@ fi
 # the leak guard below treats either one's absence as "check required"
 # (fail closed, AGENTS.md Correction Rules).
 # shellcheck disable=SC1091
-. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/ai_cli_run.sh" ||
+. "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/ai_cli_run.sh" || {
     ux_error "[gh-issue-review] could not load lib/ai_cli_run.sh (#2381)"
+    return 1
+}
 # shellcheck disable=SC1091
 [ -r "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh" ] &&
     . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_host.sh"
@@ -107,9 +109,16 @@ Behavior:
   - Comments carrying <!-- ai-issue-review: are left out of the material.
   - Perspective from the title prefix: feat / fix / common.
   - Skips (exit 0) when this gh login already posted the same <ai> review
-    for the same issue body (marker <!-- ai-issue-review:<ai>:<body-hash12> -->).
+    for the same material (marker <!-- ai-issue-review:<ai>:<body-hash12> -->;
+    the hash covers title, body and the non-marker comments).
   - Leak guard: setup-mode internal (or unreadable) + github.com target ->
     the comment must not match LEAK_PATTERNS_ERE; an empty variable blocks.
+    It is a regex over the posted text, nothing more: external mode and GHES
+    targets are not checked, and with --workdir the CLI can read that tree.
+  - With --workdir, codex runs under `--sandbox read-only` and claude with
+    Bash/Edit/Write/web tools disallowed. The issue text is untrusted input;
+    the prompt's "read only" line is not the only barrier, but other CLIs
+    (agy, hermes, opencode) get no extra sandbox flag.
 
 Exit: 0 posted or skipped | 1 runtime / output gate / CLI failure (CLI rc
       passes through, 124 = timeout) | 2 argument error | 3 leak-guard
@@ -361,8 +370,15 @@ EOF
         ux_error "Could not read the body of issue #$issue"
         return 1
     }
-    _hash=$(printf '%s' "$_body" | _gh_issue_review_hash12) || {
-        ux_error "Neither sha256sum nor shasum is available for the body hash"
+    _comments=$(gh issue view "$issue" --repo "$repo" --json comments \
+        --jq '.comments[] | select(.body | contains("<!-- ai-issue-review:") | not) | "--- comment by @\(.author.login) at \(.createdAt) ---\n\(.body)\n"') || {
+        ux_error "Could not read the comments of issue #$issue"
+        return 1
+    }
+    # The hash covers all review material, not the body alone: a new human
+    # comment must make the issue reviewable again.
+    _hash=$(printf '%s\n%s\n%s' "$_title" "$_body" "$_comments" | _gh_issue_review_hash12) || {
+        ux_error "Neither sha256sum nor shasum is available for the material hash"
         return 1
     }
 
@@ -383,14 +399,9 @@ EOF
         return 1
     }
     if [ "${_seen:-0}" != 0 ]; then
-        printf '[SKIP] issue #%s already reviewed by %s for body %s\n' "$issue" "$ai" "$_hash"
+        printf '[SKIP] issue #%s already reviewed by %s for material %s\n' "$issue" "$ai" "$_hash"
         return 0
     fi
-    _comments=$(gh issue view "$issue" --repo "$repo" --json comments \
-        --jq '.comments[] | select(.body | contains("<!-- ai-issue-review:") | not) | "--- comment by @\(.author.login) at \(.createdAt) ---\n\(.body)\n"') || {
-        ux_error "Could not read the comments of issue #$issue"
-        return 1
-    }
 
     # ---- review basis: <branch>@<short-sha> of the tree the CLI reads ----
     local _ref _br _sha

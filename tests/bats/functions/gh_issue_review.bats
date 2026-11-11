@@ -41,6 +41,7 @@ EOF
     cat >"$STUB/codex" <<'EOF'
 #!/bin/sh
 pwd -P >"$AI_SEEN/cwd"
+printf '%s\n' "$*" >"$AI_SEEN/codex_args"
 cat >"$AI_SEEN/prompt"
 printf '%s\n' "$AI_REPLY"
 EOF
@@ -68,7 +69,12 @@ teardown() {
     teardown_isolated_home
 }
 
-_hash() { printf '%s' "Body text" | sha256sum | cut -c1-12; }
+# Material hash: title, body and the non-marker comments, as the engine builds them.
+_hash() {
+    local c
+    c=$(jq -r '.comments[] | select(.body | contains("<!-- ai-issue-review:") | not) | "--- comment by @\(.author.login) at \(.createdAt) ---\n\(.body)\n"' "$GH_FIXTURE")
+    printf '%s\n%s\n%s' "$(jq -r .title "$GH_FIXTURE")" "$(jq -r .body "$GH_FIXTURE")" "$c" | sha256sum | cut -c1-12
+}
 
 @test "args: missing --repo or --host is refused with rc 2, no gh call" {
     run _gh_issue_review_main --ai codex --host github.com 7
@@ -232,4 +238,60 @@ _hash() { printf '%s' "Body text" | sha256sum | cut -c1-12; }
     assert_output --partial "[OK] issue #7 reviewed by codex"
     assert_output --partial "rc=0 pwd=$PWD"
     [ "$(cat "$AI_SEEN/cwd")" = "$WD_REAL" ]
+}
+
+@test "dedupe: a new human comment makes the issue reviewable again" {
+    local h
+    h=$(_hash)
+    jq --arg m "<!-- ai-issue-review:codex:$h -->" \
+        '.comments += [{"author":{"login":"me"},"createdAt":"x","body":$m}]
+         | .comments += [{"author":{"login":"bob"},"createdAt":"y","body":"new point"}]' \
+        "$GH_FIXTURE" >"$GH_FIXTURE.new" && mv "$GH_FIXTURE.new" "$GH_FIXTURE"
+    run _gh_issue_review_main --ai codex --repo o/r --host github.com 7
+    assert_success
+    assert_output --partial "[OK] issue #7"
+    grep -q "new point" "$AI_SEEN/prompt"
+}
+
+@test "workdir: codex runs read-only sandboxed; no workdir keeps the PR argv" {
+    _gh_issue_review_main --ai codex --repo o/r --host github.com --workdir "$WD" 7 >/dev/null
+    [ "$(cat "$AI_SEEN/codex_args")" = "exec --color=never --sandbox read-only" ]
+    local f="$TEST_TEMP_HOME/p.txt"
+    printf 'x' >"$f"
+    _gh_pr_review_run_ai codex "$f" >/dev/null
+    [ "$(cat "$AI_SEEN/codex_args")" = "exec --color=never" ]
+}
+
+@test "workdir: claude gets write/exec/web tools disallowed" {
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >"$AI_SEEN/claude_args"\ncat >/dev/null\nprintf "%%s\\n" "$AI_REPLY"\n' >"$STUB/claude"
+    chmod +x "$STUB/claude"
+    run _gh_issue_review_main --ai claude --repo o/r --host github.com --workdir "$WD" 7
+    assert_success
+    [ "$(cat "$AI_SEEN/claude_args")" = "-p --disallowedTools Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch" ]
+}
+
+@test "run_ai: a workdir that vanished fails cleanly and leaves no stderr temp file" {
+    local f="$TEST_TEMP_HOME/p.txt" before
+    printf 'x' >"$f"
+    before=$(ls /tmp | grep -c '^gh-pr-review-stderr\.codex\.' || true)
+    run _gh_pr_review_run_ai codex "$f" "" "" "$TEST_TEMP_HOME/gone"
+    assert_failure 1
+    assert_output --partial "cannot enter workdir"
+    [ "$(ls /tmp | grep -c '^gh-pr-review-stderr\.codex\.' || true)" = "$before" ]
+}
+
+@test "check_output: empty, verdict-less and finished outputs" {
+    local f="$TEST_TEMP_HOME/o.txt"
+    printf '  \n' >"$f"
+    run _gh_pr_review_check_output "$f"
+    assert_failure
+    assert_output "returned an empty review"
+    printf 'Let me check the repo first.\n' >"$f"
+    run _gh_pr_review_check_output "$f"
+    assert_failure
+    assert_output --partial "no verdict line"
+    printf 'finding\n**Verdict**: LGTM\n' >"$f"
+    run _gh_pr_review_check_output "$f"
+    assert_success
+    assert_output ""
 }
