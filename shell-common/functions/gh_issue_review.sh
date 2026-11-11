@@ -354,7 +354,7 @@ $_parsed
 EOF
     command -v gh >/dev/null 2>&1 || { ux_error "Required CLI 'gh' not found in PATH"; return 1; }
     local _cli_rc=0
-    _gh_pr_review_require_ai_cli "$ai" || _cli_rc=$?
+    _ai_cli_require "$ai" || _cli_rc=$?
     [ "$_cli_rc" -eq 0 ] || return "$_cli_rc"
     # Function-local: every gh child is pinned, the caller's GH_HOST survives.
     local GH_HOST="$host"
@@ -423,10 +423,10 @@ EOF
         return 3
     }
     _kind=$(_gh_issue_review_perspective "$_title")
-    if ! { _prompt=$(_gh_pr_review_mktemp_safe "/tmp/gh-issue-review-prompt.$ai.$issue.XXXXXX") &&
-        _out=$(_gh_pr_review_mktemp_safe "/tmp/gh-issue-review-out.XXXXXX") &&
-        _err=$(_gh_pr_review_mktemp_safe "/tmp/gh-issue-review-stderr.$ai.XXXXXX") &&
-        _bodyf=$(_gh_pr_review_mktemp_safe "/tmp/gh-issue-review-body.XXXXXX"); }; then
+    if ! { _prompt=$(_ai_cli_mktemp_safe "/tmp/gh-issue-review-prompt.$ai.$issue.XXXXXX") &&
+        _out=$(_ai_cli_mktemp_safe "/tmp/gh-issue-review-out.XXXXXX") &&
+        _err=$(_ai_cli_mktemp_safe "/tmp/gh-issue-review-stderr.$ai.XXXXXX") &&
+        _bodyf=$(_ai_cli_mktemp_safe "/tmp/gh-issue-review-body.XXXXXX"); }; then
         ux_error "Could not create temp files under /tmp"
         rm -f "$_prompt" "$_out" "$_err"
         return 1
@@ -446,13 +446,13 @@ EOF
         printf -- '--- END ISSUE ---\n'
     } >"$_prompt"
 
-    _gh_pr_review_run_ai "$ai" "$_prompt" "" "$_err" "$workdir" \
+    _ai_cli_run "$ai" "$_prompt" "" "$_err" "$workdir" \
         "첨부 파일의 지시사항에 따라 이슈를 리뷰해줘." >"$_out" || _rc=$?
     if [ "$_rc" -ne 0 ]; then
         rm -f "$_prompt" "$_out" "$_bodyf"
         return "$_rc"
     fi
-    _reject=$(_gh_pr_review_check_output "$_out") || :
+    _reject=$(_ai_cli_check_output "$_out") || :
     if [ -n "$_reject" ]; then
         ux_error "External AI CLI '$ai' $_reject — no comment posted"
         echo "  full stderr saved to: $_err" >&2
@@ -466,7 +466,7 @@ EOF
     fi
 
     local _tokens _elapsed
-    _tokens=$(_gh_pr_review_estimate_tokens "$(wc -c <"$_prompt")")
+    _tokens=$(_ai_cli_estimate_tokens "$(wc -c <"$_prompt")")
     _elapsed=$((($(date +%s) - _start) / 60))
     _gh_issue_review_build_comment "$_bodyf" "$ai" "$_hash" "$_ref" "$_out" "$_tokens" "$_elapsed"
     rm -f "$_prompt" "$_out" "$_err"

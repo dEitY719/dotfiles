@@ -221,7 +221,7 @@ EOF
     chmod +x "$stub_dir/gh"
     export PATH="$stub_dir:$PATH"
     export DOTFILES_GHES_HOST="ghes.example.com"
-    _gh_pr_review_require_ai_cli() { return 0; }
+    _ai_cli_require() { return 0; }
 }
 
 @test "pin_host: GHES remote + unset GH_HOST + explicit PR → fetch goes to GHES (#2313)" {
@@ -271,7 +271,7 @@ EOF
     _stub_gh_record_host
     _fake_repo_with_origin git@ghes.example.com:owner/repo.git
     unset GH_HOST
-    run_in_zsh '_gh_pr_review_require_ai_cli() { return 0; }
+    run_in_zsh '_ai_cli_require() { return 0; }
         _gh_pr_review_main --ai codex 7 origin 2>/dev/null
         printf "after=%s\n" "${GH_HOST-<unset>}"'
     assert_output --partial "after=<unset>"
@@ -298,12 +298,12 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_require_ai_cli — PATH pre-flight
+# _ai_cli_require — PATH pre-flight
 # ---------------------------------------------------------------------------
 
 @test "require_ai_cli: unknown value → exit 2" {
     _source_module
-    run _gh_pr_review_require_ai_cli chatgpt
+    run _ai_cli_require chatgpt
     assert_failure 2
     assert_output --partial "Unknown --ai value: 'chatgpt'"
 }
@@ -312,7 +312,7 @@ EOF
     # Force an empty PATH so no AI CLI can possibly be found. The bash
     # builtins still resolve because `command -v` is a shell builtin.
     _source_module
-    PATH="" run _gh_pr_review_require_ai_cli codex
+    PATH="" run _ai_cli_require codex
     assert_failure 1
     assert_output --partial "Required CLI 'codex' not found in PATH"
 }
@@ -328,7 +328,7 @@ EOF
 exit 0
 EOF
     chmod +x "$stub_dir/codex"
-    PATH="$stub_dir:$PATH" run _gh_pr_review_require_ai_cli codex
+    PATH="$stub_dir:$PATH" run _ai_cli_require codex
     assert_success
 }
 
@@ -341,7 +341,7 @@ EOF
     printf '#!/bin/sh\nexit 0\n' >"$stub_dir/agy"
     chmod +x "$stub_dir/agy"
     # agy present, jq absent — the PATH holds the stub and nothing else.
-    PATH="$stub_dir" run _gh_pr_review_require_ai_cli agy
+    PATH="$stub_dir" run _ai_cli_require agy
     assert_failure 1
     assert_output --partial "Required CLI 'jq' not found in PATH"
     refute_output --partial "Required CLI 'agy'"
@@ -358,7 +358,7 @@ EOF
     printf '#!/bin/sh\nexit 0\n' >"$stub_dir/opencode"
     chmod +x "$stub_dir/opencode"
 
-    PATH="$stub_dir" run _gh_pr_review_require_ai_cli opencode
+    PATH="$stub_dir" run _ai_cli_require opencode
     assert_success
     refute_output --partial "internal-PC"
 }
@@ -366,7 +366,7 @@ EOF
 @test "require_ai_cli: opencode still requires the CLI" {
     _source_module
 
-    PATH="" run _gh_pr_review_require_ai_cli opencode
+    PATH="" run _ai_cli_require opencode
     assert_failure 1
     assert_output --partial "Required CLI 'opencode' not found in PATH"
     refute_output --partial "internal-PC"
@@ -390,7 +390,7 @@ EOF
     printf '#!/bin/sh\nexit 0\n' >"$stub_dir/hermes"
     chmod +x "$stub_dir/hermes"
 
-    PATH="$stub_dir" run _gh_pr_review_require_ai_cli hermes
+    PATH="$stub_dir" run _ai_cli_require hermes
     assert_success
     refute_output --partial "internal-PC"
 }
@@ -398,7 +398,7 @@ EOF
 @test "require_ai_cli: hermes still requires the CLI" {
     _source_module
 
-    PATH="" run _gh_pr_review_require_ai_cli hermes
+    PATH="" run _ai_cli_require hermes
     assert_failure 1
     assert_output --partial "Required CLI 'hermes' not found in PATH"
     refute_output --partial "internal-PC"
@@ -483,8 +483,8 @@ EOF
 @test "mktemp_prompt: different ai, same PR → two distinct lane-tagged paths" {
     _source_module
     local agy_path codex_path
-    agy_path=$(_gh_pr_review_mktemp_prompt agy 99)
-    codex_path=$(_gh_pr_review_mktemp_prompt codex 99)
+    agy_path=$(_ai_cli_mktemp_prompt agy 99)
+    codex_path=$(_ai_cli_mktemp_prompt codex 99)
     [ -n "$agy_path" ]
     [ -n "$codex_path" ]
     [ "$agy_path" != "$codex_path" ]
@@ -496,7 +496,7 @@ EOF
 @test "mktemp_prompt: PR token with path-traversal chars is sanitized, never escapes /tmp" {
     _source_module
     local p
-    p=$(_gh_pr_review_mktemp_prompt codex "../../etc/passwd")
+    p=$(_ai_cli_mktemp_prompt codex "../../etc/passwd")
     [ -n "$p" ]
     case "$p" in /tmp/gh-pr-review-prompt.codex.*) ;; *) false ;; esac
     case "$p" in *..* | */etc/*) false ;; esac
@@ -506,8 +506,8 @@ EOF
 @test "mktemp_prompt: same ai + PR twice → still distinct (retries never collide)" {
     _source_module
     local first second
-    first=$(_gh_pr_review_mktemp_prompt codex 99)
-    second=$(_gh_pr_review_mktemp_prompt codex 99)
+    first=$(_ai_cli_mktemp_prompt codex 99)
+    second=$(_ai_cli_mktemp_prompt codex 99)
     [ "$first" != "$second" ]
     rm -f "$first" "$second"
 }
@@ -515,7 +515,7 @@ EOF
 @test "mktemp_prompt: returned path exists as a file" {
     _source_module
     local p
-    p=$(_gh_pr_review_mktemp_prompt claude 1276)
+    p=$(_ai_cli_mktemp_prompt claude 1276)
     [ -f "$p" ]
     case "$p" in /tmp/gh-pr-review-prompt.claude.1276.*) ;; *) false ;; esac
     rm -f "$p"
@@ -560,7 +560,7 @@ _prompt_fallback_path() {
     rm -f "$fallback"
     ln -s "$victim" "$fallback"
 
-    run _gh_pr_review_mktemp_prompt codex 1283
+    run _ai_cli_mktemp_prompt codex 1283
     assert_failure
     refute_output --partial "/tmp/gh-pr-review-prompt"
 
@@ -578,7 +578,7 @@ _prompt_fallback_path() {
     fallback=$(_prompt_fallback_path)
     printf 'squatted\n' >"$fallback"
 
-    run _gh_pr_review_mktemp_prompt codex 1283
+    run _ai_cli_mktemp_prompt codex 1283
     assert_failure
     refute_output --partial "/tmp/gh-pr-review-prompt"
 
@@ -594,7 +594,7 @@ _prompt_fallback_path() {
     fallback=$(_prompt_fallback_path)
     rm -f "$fallback"
 
-    run _gh_pr_review_mktemp_prompt codex 1283
+    run _ai_cli_mktemp_prompt codex 1283
     assert_success
     assert_output "$fallback"
     [ -f "$fallback" ]
@@ -607,8 +607,8 @@ _prompt_fallback_path() {
     _stub_mktemp_failing
     local out body
     rm -f "/tmp/gh-pr-review-out.$$" "/tmp/gh-pr-review-body.$$"
-    out=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
-    body=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX")
+    out=$(_ai_cli_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
+    body=$(_ai_cli_mktemp_safe "/tmp/gh-pr-review-body.XXXXXX")
     [ "$out" = "/tmp/gh-pr-review-out.$$" ]
     [ "$body" = "/tmp/gh-pr-review-body.$$" ]
     [ -f "$out" ]
@@ -629,7 +629,7 @@ _prompt_fallback_path() {
     local _prev_umask
     _prev_umask=$(umask)
     umask 022
-    run _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"
+    run _ai_cli_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"
     umask "$_prev_umask"
 
     assert_success
@@ -659,7 +659,7 @@ _prompt_fallback_path() {
     local i racers=()
     for i in 1 2; do
         (
-            if p=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
+            if p=$(_ai_cli_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"); then
                 printf 'racer-%s\n' "$i" >>"$p"
                 printf '%s' "$p" >"$race_dir/$i.path"
                 echo 0 >"$race_dir/$i.rc"
@@ -722,7 +722,7 @@ _prompt_fallback_path() {
 
 _stub_gh_pr_review_preconditions() {
     _stub_gh_noop # satisfies `command -v gh` and `gh auth status`
-    _gh_pr_review_require_ai_cli() { return 0; }
+    _ai_cli_require() { return 0; }
     _gh_pr_review_resolve_target_repo() { echo "owner/repo"; }
     _gh_pr_review_resolve_pr_number() { echo "1283"; }
     _gh_pr_review_fetch_meta() {
@@ -826,7 +826,7 @@ EOF
 export DOTFILES_FORCE_INIT=1
 export PATH="$stub_dir:\$PATH"
 . "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh"
-_gh_pr_review_require_ai_cli() { return 0; }
+_ai_cli_require() { return 0; }
 _gh_pr_review_resolve_target_repo() { echo "owner/repo"; }
 _gh_pr_review_resolve_pr_number() { echo "1286"; }
 _gh_pr_review_fetch_meta() {
@@ -855,7 +855,7 @@ EOF
     _HARNESS_OUT_FB="/tmp/gh-pr-review-out.$_HARNESS_PID"
     _HARNESS_BODY_FB="/tmp/gh-pr-review-body.$_HARNESS_PID"
     # The AI CLI's stderr capture (issue #1294): allocated by gh_pr_review
-    # itself, not by _gh_pr_review_run_ai, so the handler can reach it.
+    # itself, not by _ai_cli_run, so the handler can reach it.
     _HARNESS_STDERR_FB="/tmp/gh-pr-review-stderr.codex.$_HARNESS_PID"
 }
 
@@ -891,7 +891,7 @@ _interrupt_harness_interrupt() {
     [ ! -e "$_HARNESS_OUT_FB" ]
     [ ! -e "$_HARNESS_BODY_FB" ]
     # Issue #1294: the CLI's stderr capture used to be a local of
-    # _gh_pr_review_run_ai, invisible to the handler, and leaked on Ctrl-C.
+    # _ai_cli_run, invisible to the handler, and leaked on Ctrl-C.
     [ ! -e "$_HARNESS_STDERR_FB" ]
 
     # The run must abort, not resume: Step 7's report would mean Step 6
@@ -1009,7 +1009,7 @@ set -e
 export DOTFILES_FORCE_INIT=1
 export PATH="$stub_dir:\$PATH"
 . "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh"
-_gh_pr_review_require_ai_cli() { return 0; }
+_ai_cli_require() { return 0; }
 _gh_pr_review_resolve_target_repo() { echo "owner/repo"; }
 _gh_pr_review_resolve_pr_number() { echo "1294"; }
 _gh_pr_review_fetch_meta() {
@@ -1052,7 +1052,7 @@ EOF
 
 @test "estimate_tokens: tiny byte count rounds up to floor 1000" {
     _source_module
-    run _gh_pr_review_estimate_tokens 2
+    run _ai_cli_estimate_tokens 2
     assert_success
     assert_output "1000"
 }
@@ -1060,7 +1060,7 @@ EOF
 @test "estimate_tokens: large byte count rounds to nearest 500" {
     _source_module
     # 12 000 bytes / 4 = 3000, already on a 500 boundary — exact, not a range.
-    run _gh_pr_review_estimate_tokens 12000
+    run _ai_cli_estimate_tokens 12000
     assert_success
     assert_output "3000"
 }
@@ -1090,9 +1090,9 @@ EOF
     # silently no-op (and this test would still pass) if the template ever
     # changes (issue #1502). The wrapper records whatever path the real
     # function allocates, so the stub can delete that exact path.
-    eval "$(declare -f _gh_pr_review_mktemp_prompt | sed "1s/^_gh_pr_review_mktemp_prompt/_gh_pr_review_mktemp_prompt_real/")"
+    eval "$(declare -f _ai_cli_mktemp_prompt | sed "1s/^_ai_cli_mktemp_prompt/_gh_pr_review_mktemp_prompt_real/")"
     local pathfile="$TEST_TEMP_HOME/promptfile_path.txt"
-    _gh_pr_review_mktemp_prompt() {
+    _ai_cli_mktemp_prompt() {
         local p
         p=$(_gh_pr_review_mktemp_prompt_real "$@") || return 1
         printf '%s\n' "$p" >"$pathfile"
@@ -1329,7 +1329,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_run_ai — agy transport (issue #1244 / PR #1245 review; moved
+# _ai_cli_run — agy transport (issue #1244 / PR #1245 review; moved
 # from the `--print <value>` argv path to `--input-format stream-json` on
 # stdin in issue #1761, which removed the MAX_ARG_STRLEN ceiling)
 # ---------------------------------------------------------------------------
@@ -1361,7 +1361,7 @@ EOF
     _stub_agy_echo
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_success
     # The `result` event's `response` is what reaches the PR comment body.
     assert_output "agy reviewed: review this diff"
@@ -1379,7 +1379,7 @@ EOF
     # `prompt 131746B > 131072B argv limit` and no review at all.
     local size=131746 prefix="agy reviewed: "
     head -c "$size" /dev/zero | tr '\0' 'x' >"$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_success
     # The stub's prefix + the whole prompt — proves nothing was truncated.
     # Derived from $prefix/$size rather than hardcoded so changing either
@@ -1393,7 +1393,7 @@ EOF
     local f="$TEST_TEMP_HOME/unreadable.txt"
     printf 'x' >"$f"
     chmod 000 "$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_failure
     refute_output --partial "agy reviewed"
     chmod 644 "$f" # restore so bats can clean up TEST_TEMP_HOME
@@ -1416,7 +1416,7 @@ EOF
     export PATH="$stub_dir:$PATH"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_failure
     assert_output --partial "context window exceeded"
     assert_output --partial "status=ERROR"
@@ -1437,7 +1437,7 @@ EOF
     export PATH="$stub_dir:$PATH"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_failure 1
     assert_output --partial "model quota exhausted"
 }
@@ -1460,7 +1460,7 @@ EOF
     export PATH="$stub_dir:$PATH"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_failure 3
     assert_output --partial "(exit 3)"
     assert_output --partial "upstream 503"
@@ -1521,7 +1521,7 @@ STUB
     _stub_agy_empty_success
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_failure
     assert_output --partial "agy returned SUCCESS with an empty or non-string response"
 }
@@ -1631,7 +1631,7 @@ STUB
     export PATH="$stub_dir:$PATH"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_failure
     assert_output --partial "empty or non-string response"
     refute_output --partial "cannot be matched"
@@ -1660,7 +1660,7 @@ STUB
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_run_ai — opencode transport (issue #1334)
+# _ai_cli_run — opencode transport (issue #1334)
 # ---------------------------------------------------------------------------
 
 _stub_opencode_echo() {
@@ -1686,7 +1686,7 @@ EOF
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai opencode "$f"
+    run _ai_cli_run opencode "$f"
     assert_success
     assert_output --partial "opencode args: [run]"
     assert_output --partial "[--model] [example-corp/example-model]"
@@ -1704,7 +1704,7 @@ EOF
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    SHELL_COMMON="$TEST_TEMP_HOME/sc" run _gh_pr_review_run_ai opencode "$f"
+    SHELL_COMMON="$TEST_TEMP_HOME/sc" run _ai_cli_run opencode "$f"
     assert_success
     assert_output --partial "[--model] [example-corp/example-model]"
 }
@@ -1724,7 +1724,7 @@ EOF
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    SHELL_COMMON="$TEST_TEMP_HOME/sc" run _gh_pr_review_run_ai opencode "$f"
+    SHELL_COMMON="$TEST_TEMP_HOME/sc" run _ai_cli_run opencode "$f"
     assert_failure 1
     assert_output --partial "DOTFILES_OPENCODE_REVIEW_MODEL is not set"
     refute_output --partial "SHOULD_NOT_RUN"
@@ -1761,7 +1761,7 @@ EOF
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai opencode "$f"
+    run _ai_cli_run opencode "$f"
     assert_success
     assert_output --partial "review this diff"
     refute_output --partial "REFUSED"
@@ -1781,7 +1781,7 @@ EOF
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai opencode "$f"
+    run _ai_cli_run opencode "$f"
     assert_success
     assert_output --partial "opencode RAN"
     refute_output --partial "internal-PC"
@@ -1823,7 +1823,7 @@ EOF
 
     (
         cd "$repo"
-        run _gh_pr_review_run_ai opencode "$f"
+        run _ai_cli_run opencode "$f"
         assert_success
         assert_output --partial "review output"
         assert_equal "$(cat tracked.txt)" "before"
@@ -1834,7 +1834,7 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_run_ai — hermes transport (issue #1377, corrected in #1452:
+# _ai_cli_run — hermes transport (issue #1377, corrected in #1452:
 # hermes has no `exec` subcommand — the one-shot flag is `-z` and it takes the
 # prompt as a value argument, so it is the sole user of the MAX_ARG_STRLEN
 # guard since #1761 moved agy onto stdin)
@@ -1862,7 +1862,7 @@ EOF
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai hermes "$f"
+    run _ai_cli_run hermes "$f"
     assert_success
     assert_output --partial "hermes args: [-z] [review this diff]"
     refute_output --partial "[--file]"
@@ -1876,7 +1876,7 @@ EOF
     # 131071 bytes — one under the guard's `-ge 131072` boundary.
     head -c 131071 /dev/zero | tr '\0' 'x' >"$f"
 
-    run _gh_pr_review_run_ai hermes "$f"
+    run _ai_cli_run hermes "$f"
     assert_success
     assert_output --partial "hermes args: [-z]"
     refute_output --partial "over the 131072-byte argv limit"
@@ -1889,7 +1889,7 @@ EOF
     # 131072 bytes exactly — the guard's `-ge` boundary.
     head -c 131072 /dev/zero | tr '\0' 'x' >"$f"
 
-    run _gh_pr_review_run_ai hermes "$f"
+    run _ai_cli_run hermes "$f"
     assert_failure
     assert_output --partial "over the 131072-byte argv limit"
     refute_output --partial "hermes args:"
@@ -1909,14 +1909,14 @@ EOF
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai hermes "$f"
+    run _ai_cli_run hermes "$f"
     assert_success
     assert_output --partial "hermes RAN"
     refute_output --partial "internal-PC"
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_run_ai — slow-CLI timeout bound (issue #1506). opencode and
+# _ai_cli_run — slow-CLI timeout bound (issue #1506). opencode and
 # hermes routinely run 8-10 minutes and previously had no bounded exit path,
 # so an ambient caller-side timeout could SIGKILL the tree before the
 # `_rc -ne 0` gate in gh_pr_review() could skip Step 6 comment-posting.
@@ -1953,7 +1953,7 @@ _assert_slow_cli_timeout() {
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai "$ai" "$f"
+    run _ai_cli_run "$ai" "$f"
     assert_failure 124
     assert_output --partial "timed out after 0.1s"
     assert_output --partial "no review posted (issue #1506)"
@@ -1968,7 +1968,7 @@ _assert_slow_cli_within_bound() {
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai "$ai" "$f"
+    run _ai_cli_run "$ai" "$f"
     assert_success
     assert_output --partial "SLOW_CLI_REVIEW_OUTPUT"
     refute_output --partial "timed out after"
@@ -1993,15 +1993,15 @@ _assert_slow_cli_within_bound() {
 # PR #1542 review (codex BLOCKER): the two tests above both `skip` whenever
 # GNU `timeout` is unavailable, so the degrade-path itself — the branch stock
 # macOS actually runs — had zero coverage on any machine. This exercises
-# `_gh_pr_review_timeout` directly (not through `_gh_pr_review_run_ai`, which
+# `_ai_cli_timeout` directly (not through `_ai_cli_run`, which
 # needs no unrelated CLI/network mocking) with a PATH that has no `timeout`
 # binary at all, regardless of what the real test host provides.
-@test "_gh_pr_review_timeout: no timeout binary and no sleep on PATH still runs the wrapped command" {
+@test "_ai_cli_timeout: no timeout binary and no sleep on PATH still runs the wrapped command" {
     _source_module
     local no_timeout_dir="$TEST_TEMP_HOME/bin_no_timeout"
     mkdir -p "$no_timeout_dir"
 
-    PATH="$no_timeout_dir" run _gh_pr_review_timeout 5 echo "degrade path ran"
+    PATH="$no_timeout_dir" run _ai_cli_timeout 5 echo "degrade path ran"
     assert_success
     assert_output "degrade path ran"
 }
@@ -2024,37 +2024,37 @@ _stub_posix_timeout_path() {
     printf '%s' "$dir"
 }
 
-@test "_gh_pr_review_timeout: no timeout/gtimeout → POSIX fallback kills a hang with rc 124 (#2074)" {
+@test "_ai_cli_timeout: no timeout/gtimeout → POSIX fallback kills a hang with rc 124 (#2074)" {
     _source_module
     local dir start
     dir=$(_stub_posix_timeout_path)
     start=$SECONDS
 
-    PATH="$dir" run _gh_pr_review_timeout 1 hang
+    PATH="$dir" run _ai_cli_timeout 1 hang
     assert_failure 124
     refute_output --partial "SHOULD_NOT_PRINT"
     [ $((SECONDS - start)) -lt 10 ]
 }
 
-@test "_gh_pr_review_timeout: POSIX fallback passes through output and rc of a command inside the bound (#2074)" {
+@test "_ai_cli_timeout: POSIX fallback passes through output and rc of a command inside the bound (#2074)" {
     _source_module
     local dir start
     dir=$(_stub_posix_timeout_path)
     start=$SECONDS
 
-    PATH="$dir" run _gh_pr_review_timeout 20 fast
+    PATH="$dir" run _ai_cli_timeout 20 fast
     assert_failure 3
     assert_output "fast ran"
     # The watcher is reaped, not left to sleep out its 20s.
     [ $((SECONDS - start)) -lt 10 ]
 }
 
-@test "_gh_pr_review_timeout: POSIX fallback kills a hang under zsh too (#2074)" {
+@test "_ai_cli_timeout: POSIX fallback kills a hang under zsh too (#2074)" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
     local dir
     dir=$(_stub_posix_timeout_path)
 
-    run zsh -f -c "DOTFILES_FORCE_INIT=1 source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh'; PATH='$dir'; _gh_pr_review_timeout 1 hang"
+    run zsh -f -c "DOTFILES_FORCE_INIT=1 source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh'; PATH='$dir'; _ai_cli_timeout 1 hang"
     assert_failure 124
     refute_output --partial "SHOULD_NOT_PRINT"
 }
@@ -2073,12 +2073,12 @@ _posix_timeout_pid_alive() {
     return 0
 }
 
-@test "_gh_pr_review_timeout: POSIX fallback kills the command's process group, grandchildren included (#2077)" {
+@test "_ai_cli_timeout: POSIX fallback kills the command's process group, grandchildren included (#2077)" {
     _source_module
     local dir alive=no
     dir=$(_stub_posix_timeout_path)
 
-    PATH="$dir" run _gh_pr_review_timeout 1 grandkid
+    PATH="$dir" run _ai_cli_timeout 1 grandkid
     _posix_timeout_pid_alive "$dir/grandkid.pid" && alive=yes
     assert_failure 124
     [ "$alive" = no ]
@@ -2097,7 +2097,7 @@ _assert_posix_timeout_forwards_int() {
 echo \$\$ >"$dir/harness.pid"
 # Survive the group INT ourselves (zsh would die before recording rc).
 trap : INT
-PATH="$dir" _gh_pr_review_timeout 30 hangpid
+PATH="$dir" _ai_cli_timeout 30 hangpid
 echo "\$?" >"$dir/harness.rc"
 HARNESS
     DOTFILES_FORCE_INIT=1 setsid --fork "$shell_bin" "$harness" </dev/null >/dev/null 2>&1
@@ -2117,16 +2117,16 @@ HARNESS
     [ "$(cat "$dir/harness.rc")" = 130 ]
 }
 
-@test "_gh_pr_review_timeout: POSIX fallback forwards Ctrl-C (INT) to the command (#2077)" {
+@test "_ai_cli_timeout: POSIX fallback forwards Ctrl-C (INT) to the command (#2077)" {
     _assert_posix_timeout_forwards_int bash
 }
 
-@test "_gh_pr_review_timeout: POSIX fallback forwards Ctrl-C (INT) under zsh too (#2077)" {
+@test "_ai_cli_timeout: POSIX fallback forwards Ctrl-C (INT) under zsh too (#2077)" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
     _assert_posix_timeout_forwards_int zsh
 }
 
-@test "_gh_pr_review_timeout: POSIX fallback expiry is rc 124 even when the watcher is cancelled mid-kill (#2077)" {
+@test "_ai_cli_timeout: POSIX fallback expiry is rc 124 even when the watcher is cancelled mid-kill (#2077)" {
     _source_module
     local dir i
     dir=$(_stub_posix_timeout_path)
@@ -2136,13 +2136,13 @@ HARNESS
     kill() { builtin kill "$@"; local r=$?; sleep 0.3; return "$r"; }
 
     for i in 1 2 3 4 5; do
-        PATH="$dir" run _gh_pr_review_timeout 0.2 hang
+        PATH="$dir" run _ai_cli_timeout 0.2 hang
         [ "$status" -eq 124 ] || { unset -f kill; false; }
     done
     unset -f kill
 }
 
-@test "_gh_pr_review_timeout: POSIX fallback expiry is rc 124 under zsh when the watcher is cancelled mid-kill (#2077)" {
+@test "_ai_cli_timeout: POSIX fallback expiry is rc 124 under zsh when the watcher is cancelled mid-kill (#2077)" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
     local dir
     dir=$(_stub_posix_timeout_path)
@@ -2150,13 +2150,13 @@ HARNESS
     run zsh -f -c "DOTFILES_FORCE_INIT=1 source '${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh'
 kill() { builtin kill \"\$@\"; local r=\$?; sleep 0.3; return \$r; }
 PATH='$dir'
-for i in 1 2 3 4 5; do _gh_pr_review_timeout 0.2 hang; echo \"rc=\$?\"; done"
+for i in 1 2 3 4 5; do _ai_cli_timeout 0.2 hang; echo \"rc=\$?\"; done"
     assert_success
     assert_output "$(printf 'rc=124\n%.0s' 1 2 3 4 5)"
 }
 
 # ---------------------------------------------------------------------------
-# _gh_pr_review_run_ai — stderr temp file uses the SSOT allocator (issue #1286
+# _ai_cli_run — stderr temp file uses the SSOT allocator (issue #1286
 # item 1). It used to call `mktemp` raw, so an unwritable /tmp aborted the
 # whole review even though the module already had a safe fallback; and the
 # fallback it does now use has to keep #1283's refuse-don't-clobber contract.
@@ -2171,7 +2171,7 @@ for i in 1 2 3 4 5; do _gh_pr_review_timeout 0.2 hang; echo \"rc=\$?\"; done"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_success
     assert_output --partial "agy reviewed: review this diff"
     # The success path still cleans the stderr file up after itself.
@@ -2190,7 +2190,7 @@ for i in 1 2 3 4 5; do _gh_pr_review_timeout 0.2 hang; echo \"rc=\$?\"; done"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai agy "$f"
+    run _ai_cli_run agy "$f"
     assert_failure 1
     assert_output --partial "Could not create stderr temp file under /tmp"
     # Aborts before invoking the CLI — nothing is written through the link.
@@ -2223,7 +2223,7 @@ for i in 1 2 3 4 5; do _gh_pr_review_timeout 0.2 hang; echo \"rc=\$?\"; done"
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
 
-    run _gh_pr_review_run_ai agy "$f" "" "$caller_path"
+    run _ai_cli_run agy "$f" "" "$caller_path"
     assert_failure 3
     assert_output --partial "full stderr saved to: $caller_path"
     [ ! -e "$self_fb" ]
@@ -2269,7 +2269,7 @@ EOF
         printf "original\n" > "$victim"
         rm -f "$fallback"
         ln -s "$victim" "$fallback"
-        if _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"; then
+        if _ai_cli_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"; then
             echo "ALLOCATED"
         else
             echo "REFUSED"
@@ -2289,7 +2289,7 @@ EOF
     run_in_zsh "$(_zsh_mktemp_stub_preamble)"'
         rm -f "$fallback"
         printf "squatted\n" > "$fallback"
-        if _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"; then
+        if _ai_cli_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX"; then
             echo "ALLOCATED"
         else
             echo "REFUSED"
@@ -2306,7 +2306,7 @@ EOF
 @test "zsh: mktemp_safe on a clear fallback path → exclusive create succeeds" {
     run_in_zsh "$(_zsh_mktemp_stub_preamble)"'
         rm -f "$fallback"
-        p=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
+        p=$(_ai_cli_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
         [ "$?" -eq 0 ] && echo "ALLOCATED"
         [ "$p" = "$fallback" ] && echo "PATH_IS_FALLBACK"
         [ -f "$p" ] && echo "IS_REGULAR_FILE"
@@ -2324,7 +2324,7 @@ EOF
     run_in_zsh "$(_zsh_mktemp_stub_preamble)"'
         rm -f "$fallback"
         umask 022
-        p=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
+        p=$(_ai_cli_mktemp_safe "/tmp/gh-pr-review-out.XXXXXX")
         printf "mode=%s\n" "$(stat -c "%a" "$p")"
         rm -f "$fallback"
     '
@@ -2372,54 +2372,54 @@ EOF
 # (interactive guard), so the helper must source the guard-free
 # tools/custom/lib/claude_accounts_auth.sh that defines
 # _claude_resolve_account (#2146) instead.
-@test "_gh_pr_review_resolve_claude_account: resolves --user in a non-interactive shell without DOTFILES_FORCE_INIT" {
+@test "_ai_cli_resolve_claude_account: resolves --user in a non-interactive shell without DOTFILES_FORCE_INIT" {
     run bash --noprofile --norc -c "
         export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
         DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
         unset DOTFILES_FORCE_INIT
         command -v _claude_resolve_account >/dev/null && echo preloaded
-        CLAUDE_ENABLED_ACCOUNTS='work personal' _gh_pr_review_resolve_claude_account work
+        CLAUDE_ENABLED_ACCOUNTS='work personal' _ai_cli_resolve_claude_account work
     "
     assert_success
     refute_output --partial "preloaded"
     assert_output "${HOME}/.claude-work"
 }
 
-@test "_gh_pr_review_resolve_claude_account: unknown --user lists the allowed accounts, non-interactive" {
+@test "_ai_cli_resolve_claude_account: unknown --user lists the allowed accounts, non-interactive" {
     run bash --noprofile --norc -c "
         export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
         DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
         unset DOTFILES_FORCE_INIT
-        CLAUDE_ENABLED_ACCOUNTS='work personal' _gh_pr_review_resolve_claude_account nope
+        CLAUDE_ENABLED_ACCOUNTS='work personal' _ai_cli_resolve_claude_account nope
     "
     assert_failure
     assert_output "❌ Unknown claude account: 'nope' (allowed: work personal)"
 }
 
-@test "_gh_pr_review_resolve_claude_account: loads the whitelist when CLAUDE_ENABLED_ACCOUNTS is not inherited (#2226)" {
+@test "_ai_cli_resolve_claude_account: loads the whitelist when CLAUDE_ENABLED_ACCOUNTS is not inherited (#2226)" {
     run env -u CLAUDE_ENABLED_ACCOUNTS bash --noprofile --norc -c "
         export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
         DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
         unset DOTFILES_FORCE_INIT
-        _gh_pr_review_resolve_claude_account work
+        _ai_cli_resolve_claude_account work
     "
     assert_success
     assert_output "${HOME}/.claude-work"
 }
 
-@test "_gh_pr_review_resolve_claude_account: resolves --user non-interactively under zsh (emulate -L sh branch)" {
+@test "_ai_cli_resolve_claude_account: resolves --user non-interactively under zsh (emulate -L sh branch)" {
     command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
     run zsh -fc "
         export SHELL_COMMON='${SHELL_COMMON}' HOME='${HOME}'
         DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\"
         unset DOTFILES_FORCE_INIT CLAUDE_ENABLED_ACCOUNTS
-        _gh_pr_review_resolve_claude_account work
+        _ai_cli_resolve_claude_account work
     "
     assert_success
     assert_output "${HOME}/.claude-work"
 }
 
-@test "_gh_pr_review_resolve_claude_account: a shell-common without env/ (vendored copy) fails cleanly, no source error" {
+@test "_ai_cli_resolve_claude_account: a shell-common without env/ (vendored copy) fails cleanly, no source error" {
     local sc="${TEST_TEMP_HOME}/vendored-shell-common"
     mkdir -p "$sc"
     ln -s "${SHELL_COMMON}/functions" "$sc/functions"
@@ -2429,7 +2429,7 @@ EOF
         export SHELL_COMMON='$sc' HOME='${HOME}'
         DOTFILES_FORCE_INIT=1 . \"\$SHELL_COMMON/functions/gh_pr_review.sh\" 2>/dev/null
         unset DOTFILES_FORCE_INIT
-        _gh_pr_review_resolve_claude_account work
+        _ai_cli_resolve_claude_account work
     "
     assert_failure
     assert_output "❌ Unknown claude account: 'work' (allowed: )"

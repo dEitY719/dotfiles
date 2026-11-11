@@ -13,7 +13,7 @@
 # ai_fanout_run <workdir> <timeout-sec> <lanes> <entry-cmd> [<arg>...]
 #   Runs `<entry-cmd> [<arg>...] <lane>` for every comma-separated lane at
 #   once, each in a subshell whose cwd is <workdir> (empty: the caller's
-#   cwd), bounded by _gh_pr_review_timeout at <timeout-sec> (non-numeric or
+#   cwd), bounded by _ai_cli_timeout at <timeout-sec> (non-numeric or
 #   empty: 540). stdin is /dev/null. Once every lane has exited, prints one
 #   line per lane, in <lanes> order:
 #     <lane>:ok               rc 0
@@ -58,7 +58,7 @@ ai_fanout_run() {
         return 2
     fi
     case "$sec" in "" | *[!0-9]*) sec=540 ;; esac
-    if ! command -v _gh_pr_review_timeout >/dev/null 2>&1; then
+    if ! command -v _ai_cli_timeout >/dev/null 2>&1; then
         # shellcheck disable=SC1090,SC1091
         . "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/ai_cli_run.sh" || return 1
     fi
@@ -80,7 +80,7 @@ ai_fanout_run() {
                     exit 0
                 }
             fi
-            _gh_pr_review_timeout "$sec" "$@" "$_lane" </dev/null >"$_f.out" 2>"$_f.err"
+            _ai_cli_timeout "$sec" "$@" "$_lane" </dev/null >"$_f.out" 2>"$_f.err"
             echo "$?" >"$_f.rc"
         ) &
         _pids="$_pids $!"

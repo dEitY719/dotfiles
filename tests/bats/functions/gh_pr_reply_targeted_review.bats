@@ -1276,7 +1276,7 @@ _lib_code_file() {
 
 @test "#1636: the library's code no longer re-invokes any reviewer CLI" {
     _lib_code_file
-    run grep -qF -- '_gh_pr_review_require_ai_cli' "$LIB_CODE"
+    run grep -qF -- '_ai_cli_' "$LIB_CODE"
     assert_failure
     run grep -qF -- '--paths' "$LIB_CODE"
     assert_failure

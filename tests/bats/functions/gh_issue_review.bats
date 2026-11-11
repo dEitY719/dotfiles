@@ -214,7 +214,7 @@ _hash() {
 @test "run_ai without workdir (PR path): opencode keeps a private temp --dir and the PR sentence" {
     local f="$TEST_TEMP_HOME/prompt.txt"
     printf 'review this diff' >"$f"
-    run _gh_pr_review_run_ai opencode "$f"
+    run _ai_cli_run opencode "$f"
     assert_success
     grep -qxF "[첨부 파일의 지시사항에 따라 위 PR diff를 리뷰해줘.]" "$AI_SEEN/args"
     ! grep -qxF "[$WD_REAL]" "$AI_SEEN/args" || false
@@ -258,7 +258,7 @@ _hash() {
     [ "$(cat "$AI_SEEN/codex_args")" = "exec --color=never --sandbox read-only" ]
     local f="$TEST_TEMP_HOME/p.txt"
     printf 'x' >"$f"
-    _gh_pr_review_run_ai codex "$f" >/dev/null
+    _ai_cli_run codex "$f" >/dev/null
     [ "$(cat "$AI_SEEN/codex_args")" = "exec --color=never" ]
 }
 
@@ -274,7 +274,7 @@ _hash() {
     local f="$TEST_TEMP_HOME/p.txt" before
     printf 'x' >"$f"
     before=$(ls /tmp | grep -c '^gh-pr-review-stderr\.codex\.' || true)
-    run _gh_pr_review_run_ai codex "$f" "" "" "$TEST_TEMP_HOME/gone"
+    run _ai_cli_run codex "$f" "" "" "$TEST_TEMP_HOME/gone"
     assert_failure 1
     assert_output --partial "cannot enter workdir"
     [ "$(ls /tmp | grep -c '^gh-pr-review-stderr\.codex\.' || true)" = "$before" ]
@@ -283,15 +283,15 @@ _hash() {
 @test "check_output: empty, verdict-less and finished outputs" {
     local f="$TEST_TEMP_HOME/o.txt"
     printf '  \n' >"$f"
-    run _gh_pr_review_check_output "$f"
+    run _ai_cli_check_output "$f"
     assert_failure
     assert_output "returned an empty review"
     printf 'Let me check the repo first.\n' >"$f"
-    run _gh_pr_review_check_output "$f"
+    run _ai_cli_check_output "$f"
     assert_failure
     assert_output --partial "no verdict line"
     printf 'finding\n**Verdict**: LGTM\n' >"$f"
-    run _gh_pr_review_check_output "$f"
+    run _ai_cli_check_output "$f"
     assert_success
     assert_output ""
 }
