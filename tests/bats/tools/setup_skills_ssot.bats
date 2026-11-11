@@ -801,13 +801,18 @@ run_setup_with_workspace() {
     for d in "${dirs[@]}"; do
         [ -L "${d}/${mangled}" ]
     done
-    # User-made `*__*` links: one outside the workspace, one managed whose
-    # name does not decompose to its own target's <repo>__<skill>.
+    # User-made links: a `*__*` one outside the workspace in every harness,
+    # a managed one whose name does not decompose to its own target's
+    # <repo>__<skill> (compose layout), and a codex bare name pointing
+    # outside the workspace (the codex refresh branch must keep it).
     mkdir -p "${TEST_TEMP_HOME}/private/thing"
-    ln -s "${TEST_TEMP_HOME}/private/thing" \
-        "${FIXTURE_HOME}/.config/opencode/skills/mine__thing"
+    for d in "${dirs[@]}"; do
+        ln -s "${TEST_TEMP_HOME}/private/thing" "${d}/mine__thing"
+    done
     ln -s "${BASE_REPO}/skills/alpha" \
         "${FIXTURE_HOME}/.config/opencode/skills/my__alpha"
+    rm -f "${FIXTURE_HOME}/.codex/skills/beta"
+    ln -s "${TEST_TEMP_HOME}/private/thing" "${FIXTURE_HOME}/.codex/skills/beta"
 
     mv "${ws}/gh-issue-skills/skills/review-all" \
         "${ws}/gh-issue-skills/skills/issue-review-all"
@@ -819,9 +824,11 @@ run_setup_with_workspace() {
         [ "$(readlink -f "${d}/review-all")" \
             = "$(readlink -f "${ws}/gh-verify-skills/skills/review-all")" ]
         [ -L "${d}/issue-review-all" ]
+        [ -L "${d}/mine__thing" ]
     done
-    [ -L "${FIXTURE_HOME}/.config/opencode/skills/mine__thing" ]
     [ -L "${FIXTURE_HOME}/.config/opencode/skills/my__alpha" ]
+    [ "$(readlink "${FIXTURE_HOME}/.codex/skills/beta")" \
+        = "${TEST_TEMP_HOME}/private/thing" ]
 }
 
 @test "workspace: SKILL.md edits are live through the composed link (#1652 NF-2)" {
