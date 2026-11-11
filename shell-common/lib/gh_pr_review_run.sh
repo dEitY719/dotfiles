@@ -190,8 +190,10 @@ _gh_pr_review_main() {
 
     # ---- Step 2: pre-flight + target resolution ----
     # Every local a stage writes is declared here, so it dies with this frame.
-    _gh_pr_review_stage_preflight
-    _stage_rc=$?
+    # `|| _stage_rc=$?`, not a bare call + `$?`: the INT/TERM trap is not armed
+    # yet, and a caller's ambient `set -e` must not exit on a failing stage.
+    _stage_rc=0
+    _gh_pr_review_stage_preflight || _stage_rc=$?
     [ "$_stage_rc" -eq 0 ] || return "$_stage_rc"
     local TARGET_REPO="" PR_NUMBER="" base="" head="" head_sha="" CFG_DIR=""
     local GH_HOST="${GH_HOST-}"
