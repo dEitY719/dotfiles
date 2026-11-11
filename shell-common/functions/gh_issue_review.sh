@@ -455,9 +455,7 @@ EOF
     fi
 
     local _tokens _elapsed
-    _tokens=$(($(wc -c <"$_prompt") / 4))
-    _tokens=$(((_tokens + 250) / 500 * 500))
-    [ "$_tokens" -lt 1000 ] && _tokens=1000
+    _tokens=$(_gh_pr_review_estimate_tokens "$(wc -c <"$_prompt")")
     _elapsed=$((($(date +%s) - _start) / 60))
     _gh_issue_review_build_comment "$_bodyf" "$ai" "$_hash" "$_ref" "$_out" "$_tokens" "$_elapsed"
     rm -f "$_prompt" "$_out" "$_err"
