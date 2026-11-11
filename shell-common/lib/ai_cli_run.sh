@@ -4,22 +4,22 @@
 # AI CLI runner shared by the PR review engine (functions/gh_pr_review.sh)
 # and the issue review engine (functions/gh_issue_review.sh) — issue #2381.
 #
-# Moved out of gh_pr_review.sh UNDER THE SAME NAMES so every caller and every
-# existing bats keeps working; a neutral rename is #2382's job. Also owns
-# _gh_pr_review_check_output, the "exit 0 is not a review" gate (#2084,
-# #2248) both engines apply to the CLI's stdout.
+# Moved out of gh_pr_review.sh by #2381 under its old `_gh_pr_review_*`
+# names; #2382 gave them the neutral `_ai_cli_*` prefix, since neither
+# engine owns them. Also owns _ai_cli_check_output, the "exit 0 is not a
+# review" gate (#2084, #2248) both engines apply to the CLI's stdout.
 #
 # Pure function library: no interactive guard, because it is only ever
 # sourced by non-interactive consumers (the two engines, the fanout core,
 # skills, bats) — same rationale as lib/gh_host.sh. It needs `ux_error`;
 # the engines define it (or a plain stand-in) before sourcing this file.
 
-# _gh_pr_review_require_ai_cli — validates that the requested AI CLI is
+# _ai_cli_require — validates that the requested AI CLI is
 # one of the five allowed values AND that its binary is on PATH.
 # Exits 1 with `Required CLI '<name>' not found in PATH` if the binary
 # is missing (matches references/ai-cli-invocation.md § "PATH pre-flight").
 # Exits 2 with `Unknown --ai value: '...'` if the value is unknown.
-_gh_pr_review_require_ai_cli() {
+_ai_cli_require() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local ai="$1"
     case "$ai" in
@@ -51,12 +51,12 @@ _gh_pr_review_require_ai_cli() {
     return 0
 }
 
-# _gh_pr_review_opencode_model — print the opencode review model, or
+# _ai_cli_opencode_model — print the opencode review model, or
 # nothing when unconfigured (issue #2007). Same lookup as _gh_ghes_host in
 # gh_host.sh, copied locally because this file is vendored standalone:
 # `$DOTFILES_OPENCODE_REVIEW_MODEL` wins, else the assignment is parsed (never
 # sourced) out of the gitignored env/internal.local.sh.
-_gh_pr_review_opencode_model() {
+_ai_cli_opencode_model() {
     if [ -n "${DOTFILES_OPENCODE_REVIEW_MODEL-}" ]; then
         printf '%s\n' "$DOTFILES_OPENCODE_REVIEW_MODEL"
         return 0
@@ -69,7 +69,7 @@ _gh_pr_review_opencode_model() {
     unset _gpom_file
 }
 
-# _gh_pr_review_argv_prompt_or_fail — MAX_ARG_STRLEN guard for AI CLIs that
+# _ai_cli_argv_prompt_or_fail — MAX_ARG_STRLEN guard for AI CLIs that
 # take the whole prompt as a value argument instead of --file or stdin. The
 # kernel caps a single argv string at MAX_ARG_STRLEN (32 pages = 131072 bytes
 # on Linux) — passing an oversized prompt straight through would blow past
@@ -84,7 +84,7 @@ _gh_pr_review_opencode_model() {
 #       read-error message to.
 # On success prints the prompt content on stdout and returns 0; on
 # failure returns 1 with nothing on stdout.
-_gh_pr_review_argv_prompt_or_fail() {
+_ai_cli_argv_prompt_or_fail() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _cli_label="$1"
     local _prompt_file="$2"
@@ -102,13 +102,13 @@ _gh_pr_review_argv_prompt_or_fail() {
     cat "$_prompt_file" 2>"$_err_file"
 }
 
-# _gh_pr_review_resolve_claude_account — for --ai claude --user <name>,
+# _ai_cli_resolve_claude_account — for --ai claude --user <name>,
 # loads `_claude_resolve_account` and returns the resolved CLAUDE_CONFIG_DIR
 # on stdout. Exits 1 with the canonical "Unknown claude account" line on
 # unknown names. Sources the guard-free tools/custom/lib/claude_accounts_auth.sh
 # (#2146), not integrations/claude.sh, whose interactive guard returns early in a
 # non-interactive skill run and leaves the function undefined (#2226).
-_gh_pr_review_resolve_claude_account() {
+_ai_cli_resolve_claude_account() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local user="$1"
     local _sc="${SHELL_COMMON:-$HOME/dotfiles/shell-common}"
@@ -142,11 +142,11 @@ _gh_pr_review_resolve_claude_account() {
     return 0
 }
 
-# _gh_pr_review_stderr_is_noise — returns 0 (true) when a stderr line is
+# _ai_cli_stderr_is_noise — returns 0 (true) when a stderr line is
 # known informational/startup output from one of the supported CLIs, not
 # an actual failure cause. Keeps the noise list explicit so future CLI
 # updates can extend it without rewriting the dispatcher.
-_gh_pr_review_stderr_is_noise() {
+_ai_cli_stderr_is_noise() {
     case "$1" in
     "Reading prompt from stdin"*) return 0 ;; # codex exec startup banner
     "Loaded prompt"*) return 0 ;;             # codex exec follow-up banner
@@ -155,7 +155,7 @@ _gh_pr_review_stderr_is_noise() {
     return 1
 }
 
-# _gh_pr_review_mktemp_safe — SSOT for temp-path allocation in this module.
+# _ai_cli_mktemp_safe — SSOT for temp-path allocation in this module.
 # Args: $1 = mktemp template ending in `XXXXXX` (e.g. /tmp/foo.XXXXXX).
 # Prints the allocated path on stdout and returns 0; prints nothing and
 # returns 1 when no path could be allocated safely.
@@ -169,7 +169,7 @@ _gh_pr_review_stderr_is_noise() {
 # pre-existing file *or* symlink makes the create fail, and the caller
 # aborts instead of writing through it. A genuine PID-reuse collision
 # fails the same way, which is the safe outcome.
-_gh_pr_review_mktemp_safe() {
+_ai_cli_mktemp_safe() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local _template="$1"
     # Fallback is derived from the template so the two can never drift:
@@ -196,9 +196,9 @@ _gh_pr_review_mktemp_safe() {
     return 1
 }
 
-# _gh_pr_review_mktemp_prompt — lane-discriminated unique prompt-file path.
+# _ai_cli_mktemp_prompt — lane-discriminated unique prompt-file path.
 # SSOT for PROMPT_FILE naming (issue #1276). Mirrors the `$ai`-discriminated
-# mktemp template used for the stderr file in _gh_pr_review_run_ai: the
+# mktemp template used for the stderr file in _ai_cli_run: the
 # `XXXXXX` suffix avoids the predictable-PID symlink-attack class, and the
 # `$ai` + PR discriminators keep parallel lanes apart. devx:pr-review-all
 # dispatches agy and codex as separate subagents in the same turn — a shared
@@ -206,23 +206,23 @@ _gh_pr_review_mktemp_safe() {
 # CLIs review byte-identical input and the run silently false-passes.
 # Args: $1 = ai (codex|agy|claude|opencode), $2 = PR number (for debuggability).
 # Prints a path on stdout; returns non-zero and prints nothing when no
-# path could be allocated safely (see _gh_pr_review_mktemp_safe for the
+# path could be allocated safely (see _ai_cli_mktemp_safe for the
 # noclobber fallback), so this stays the single place that knows the
 # PROMPT_FILE naming template.
 # Both args are sanitized to `[A-Za-z0-9_-]` before touching the path —
 # an unvalidated PR token (e.g. containing `/`) could otherwise steer
 # the mktemp template outside /tmp (codex review, PR #1282 / issue #1276).
-_gh_pr_review_mktemp_prompt() {
+_ai_cli_mktemp_prompt() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local ai pr
     ai=$(printf '%s' "${1:-unknown}" | tr -cd 'A-Za-z0-9_-')
     pr=$(printf '%s' "${2:-0}" | tr -cd 'A-Za-z0-9_-')
     [ -n "$ai" ] || ai="unknown"
     [ -n "$pr" ] || pr="0"
-    _gh_pr_review_mktemp_safe "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX"
+    _ai_cli_mktemp_safe "/tmp/gh-pr-review-prompt.$ai.$pr.XXXXXX"
 }
 
-# _gh_pr_review_timeout — bounded-run wrapper for the slow CLIs (issue
+# _ai_cli_timeout — bounded-run wrapper for the slow CLIs (issue
 # #1506); devx_pr_review_all_fanout bounds every lane with it (#2069).
 # Args: $1 = seconds, $2.. = command + argv.
 #
@@ -239,7 +239,7 @@ _gh_pr_review_mktemp_prompt() {
 #
 # Deliberately no `--preserve-status`: the default exit code 124 is what makes
 # "we killed it" distinguishable from any exit code the CLI produces itself.
-_gh_pr_review_timeout() {
+_ai_cli_timeout() {
     if command -v timeout >/dev/null 2>&1; then
         timeout "$@"
     elif command -v gtimeout >/dev/null 2>&1; then
@@ -260,7 +260,7 @@ _gh_pr_review_timeout() {
             fi
             # Expiry is decided by this flag (written by the watcher BEFORE it
             # kills), never by trap timing, so expiry always returns 124 (#2077).
-            _gprt_flag=$(_gh_pr_review_mktemp_safe "${TMPDIR:-/tmp}/gh-pr-review-timeout.XXXXXX") || _gprt_flag=""
+            _gprt_flag=$(_ai_cli_mktemp_safe "${TMPDIR:-/tmp}/gh-pr-review-timeout.XXXXXX") || _gprt_flag=""
             # Signal the command's whole process group like GNU timeout, so
             # grandchildren (`bash -c` → hermes) die too; plain pid if the
             # group kill fails (no job control, e.g. zsh without a tty).
@@ -314,7 +314,7 @@ _gh_pr_review_timeout() {
     fi
 }
 
-# _gh_pr_review_run_ai — pipes PROMPT_FILE into the chosen AI CLI per
+# _ai_cli_run — pipes PROMPT_FILE into the chosen AI CLI per
 # references/ai-cli-invocation.md. Returns the CLI's exit code. On
 # non-zero exit, prints the full captured stderr (indented) to the
 # caller's stderr AND keeps the temp stderr file at a predictable path
@@ -343,14 +343,14 @@ _gh_pr_review_timeout() {
 #        opencode keeps its private empty mktemp dir.
 #   $6 = opencode instruction — the short argv sentence opencode gets next to
 #        the attached prompt file. Empty: the PR review sentence.
-_gh_pr_review_run_ai() {
+_ai_cli_run() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local ai="$1"
     local prompt_file="$2"
     local cfg_dir="${3:-}"
     local workdir="${5:-}"
     local _prev_pwd=""
-    # Temp path comes from `_gh_pr_review_mktemp_safe`, this module's SSOT
+    # Temp path comes from `_ai_cli_mktemp_safe`, this module's SSOT
     # allocator (issue #1283): mktemp first, then a noclobber fallback that
     # refuses a pre-planted symlink or regular file instead of writing
     # through it. Routed through the helper for consistency with the other
@@ -368,7 +368,7 @@ _gh_pr_review_run_ai() {
     local _stderr_file="${4:-}" _stderr_owned=0
     if [ -z "$_stderr_file" ]; then
         _stderr_owned=1
-        _stderr_file=$(_gh_pr_review_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX") || {
+        _stderr_file=$(_ai_cli_mktemp_safe "/tmp/gh-pr-review-stderr.$ai.XXXXXX") || {
             ux_error "Could not create stderr temp file under /tmp"
             return 1
         }
@@ -459,10 +459,10 @@ _gh_pr_review_run_ai() {
         # (issue #1452): there is no `exec` subcommand — the one-shot
         # non-interactive flag is `-z` / `--oneshot`, and it takes the prompt
         # as a value argument rather than --file/stdin, guarded by
-        # _gh_pr_review_argv_prompt_or_fail — see that helper's header for why
+        # _ai_cli_argv_prompt_or_fail — see that helper's header for why
         # this lane still has an argv ceiling.
-        if _prompt_content=$(_gh_pr_review_argv_prompt_or_fail "hermes -z" "$prompt_file" "$_stderr_file"); then
-            _gh_pr_review_timeout "$_slow_cli_timeout_sec" \
+        if _prompt_content=$(_ai_cli_argv_prompt_or_fail "hermes -z" "$prompt_file" "$_stderr_file"); then
+            _ai_cli_timeout "$_slow_cli_timeout_sec" \
                 hermes -z "$_prompt_content" 2>>"$_stderr_file" || _rc=$?
         else
             _rc=1
@@ -479,7 +479,7 @@ _gh_pr_review_run_ai() {
             _opencode_dir="$_opencode_workdir"
         fi
         if [ "$_rc" -eq 0 ]; then
-            _opencode_model=$(_gh_pr_review_opencode_model)
+            _opencode_model=$(_ai_cli_opencode_model)
             if [ -z "$_opencode_model" ]; then
                 # Unconfigured: skip like any unavailable reviewer rather
                 # than silently fall back to opencode's default model.
@@ -495,7 +495,7 @@ _gh_pr_review_run_ai() {
             # is the caller's tree: the copy is a private dot-file there,
             # removed below, never a fixed name that could clobber a file.
             if [ -n "$workdir" ]; then
-                _opencode_prompt=$(_gh_pr_review_mktemp_safe "$_opencode_dir/.ai-cli-prompt.XXXXXX") || {
+                _opencode_prompt=$(_ai_cli_mktemp_safe "$_opencode_dir/.ai-cli-prompt.XXXXXX") || {
                     echo "Could not create the opencode prompt copy in $_opencode_dir" >"$_stderr_file"
                     _opencode_prompt=""
                     _rc=1
@@ -508,7 +508,7 @@ _gh_pr_review_run_ai() {
             fi
         fi
         if [ "$_rc" -eq 0 ]; then
-            _gh_pr_review_timeout "$_slow_cli_timeout_sec" \
+            _ai_cli_timeout "$_slow_cli_timeout_sec" \
                 opencode run "$_ai_file_instruction" \
                 --model "$_opencode_model" \
                 --dir "$_opencode_dir" \
@@ -530,9 +530,9 @@ _gh_pr_review_run_ai() {
         # banner. Falls back to the literal first line so an unknown
         # CLI startup message still produces something.
         local _summary="" _line
-        # Issue #1506: exit 124 is _gh_pr_review_timeout's "I killed it"
+        # Issue #1506: exit 124 is _ai_cli_timeout's "I killed it"
         # signal, only ever produced by the opencode/hermes branches above
-        # (the only callers of _gh_pr_review_timeout), so no further
+        # (the only callers of _ai_cli_timeout), so no further
         # per-$ai gate is needed here. Whatever the CLI managed to write to
         # stderr before the kill is a fragment, not a cause, so name the
         # timeout outright instead of letting the generic
@@ -543,7 +543,7 @@ _gh_pr_review_run_ai() {
         fi
         if [ -z "$_summary" ]; then
             while IFS= read -r _line; do
-                if ! _gh_pr_review_stderr_is_noise "$_line"; then
+                if ! _ai_cli_stderr_is_noise "$_line"; then
                     _summary="$_line"
                     break
                 fi
@@ -566,7 +566,7 @@ _gh_pr_review_run_ai() {
     return 0
 }
 
-# _gh_pr_review_check_output <ai-stdout-file> — the "exit 0 is not a review"
+# _ai_cli_check_output <ai-stdout-file> — the "exit 0 is not a review"
 # gate, shared by the PR and issue engines (moved out of _gh_pr_review_main,
 # #2381). Prints nothing and returns 0 when the output is a finished review;
 # otherwise prints the reject reason on stdout and returns 1.
@@ -584,7 +584,7 @@ _gh_pr_review_run_ai() {
 # line, `—`/`–`/` - ` accepted): this gate drops the whole review, so a
 # variant like "Final verdict: LGTM" must pass here and read as `unknown`
 # there. A stray "verdict:" in prose passing is the accepted cost.
-_gh_pr_review_check_output() {
+_ai_cli_check_output() {
     if ! grep -q '[^[:space:]]' "${1-}" 2>/dev/null; then
         printf '%s\n' "returned an empty review"
         return 1
@@ -605,7 +605,7 @@ _gh_pr_review_check_output() {
 # resulting 0 up as a plausible "~1000 tokens". The caller now measures the
 # file while it still exists and owns reporting a read failure — see the
 # measurement right after _gh_pr_review_build_prompt.
-_gh_pr_review_estimate_tokens() {
+_ai_cli_estimate_tokens() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     local raw="$1"
     local tokens

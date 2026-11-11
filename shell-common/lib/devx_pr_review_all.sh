@@ -256,7 +256,7 @@ devx_pr_review_all_parse() {
 # Runs `gh_pr_review --ai <ai> --review <preset> <pr> <remote>` for every
 # `<ai>:<preset>` lane at once, each in a fresh `bash` that sources
 # gh_pr_review.sh (bash, not sh: it needs `set -o pipefail`, which dash
-# rejects — #2072), bounded by _gh_pr_review_timeout at the same cap as the
+# rejects — #2072), bounded by _ai_cli_timeout at the same cap as the
 # opencode / hermes CLIs (GH_PR_REVIEW_SLOW_CLI_TIMEOUT_SEC, default 540s) —
 # so a hung codex / agy / claude cannot outlive the caller's 600s Bash budget.
 # Once every lane has exited, prints one line per lane, in <lanes> order:
@@ -285,7 +285,7 @@ devx_pr_review_all_fanout() {
         echo "usage: <pr> <remote> <ai>:<preset>[,<ai>:<preset>...]" >&2
         return 2
     fi
-    if ! command -v _gh_pr_review_timeout >/dev/null 2>&1 && [ -r "$_src" ]; then
+    if ! command -v _ai_cli_timeout >/dev/null 2>&1 && [ -r "$_src" ]; then
         # shellcheck disable=SC1090
         DOTFILES_FORCE_INIT=1 . "$_src"
     fi
