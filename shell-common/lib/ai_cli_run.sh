@@ -412,12 +412,19 @@ _gh_pr_review_run_ai() {
         _prev_pwd="$PWD"
         CDPATH='' cd -P -- "$workdir" 2>"$_stderr_file" || {
             ux_error "External AI CLI '$ai' failed (exit 1): cannot enter workdir '$workdir'"
+            [ "$_stderr_owned" -eq 1 ] && rm -f "$_stderr_file"
             return 1
         }
     fi
+    # A workdir is a real tree read by a CLI fed untrusted text (an issue body):
+    # codex and claude get an explicit read-only stance there, beyond the
+    # prompt's own "read only" line. No workdir (the PR path): argv unchanged.
+    # All positional args were read above, so `set --` is free to reuse.
+    set --
     case "$ai" in
     codex)
-        codex exec --color=never <"$prompt_file" 2>"$_stderr_file" || _rc=$?
+        [ -n "$workdir" ] && set -- --sandbox read-only
+        codex exec --color=never "$@" <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         ;;
     agy)
         # Transport (stream-json on stdin, and the reason for every flag)
@@ -440,10 +447,11 @@ _gh_pr_review_run_ai() {
         _agy_run_stream 2>>"$_stderr_file" <"$prompt_file" || _rc=$?
         ;;
     claude)
+        [ -n "$workdir" ] && set -- --disallowedTools "Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch"
         if [ -n "$cfg_dir" ]; then
-            CLAUDE_CONFIG_DIR="$cfg_dir" claude -p <"$prompt_file" 2>"$_stderr_file" || _rc=$?
+            CLAUDE_CONFIG_DIR="$cfg_dir" claude -p "$@" <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         else
-            claude -p <"$prompt_file" 2>"$_stderr_file" || _rc=$?
+            claude -p "$@" <"$prompt_file" 2>"$_stderr_file" || _rc=$?
         fi
         ;;
     hermes)
