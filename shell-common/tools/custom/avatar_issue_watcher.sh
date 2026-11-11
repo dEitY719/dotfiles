@@ -169,7 +169,8 @@ _IW_ZOMBIE_GRACE_SECONDS=$(_iw_cap "${IW_ZOMBIE_GRACE_SECONDS-}" 600 IW_ZOMBIE_G
 # How long a targeted run waits for a tick that holds the lock (#2315). A cron
 # tick skips at once and retries next period; a targeted run has no retry, so
 # it queues instead. Ten minutes covers a tick's tab create + start wait +
-# prompt injection with room to spare.
+# prompt injection with room to spare. The lock is released once the tab and
+# its agent exist, before the potentially long prompt acknowledgement wait.
 _IW_TARGETED_LOCK_WAIT_SECONDS=$(_iw_cap "${IW_TARGETED_LOCK_WAIT_SECONDS-}" 600 IW_TARGETED_LOCK_WAIT_SECONDS)
 # Saturation alert (issue #1606). How many consecutive ticks may skip dispatch
 # purely because the caps above are full before the watcher says so out loud,
@@ -213,9 +214,11 @@ _IW_PR_LIMIT="100"
 # `^[a-z][a-z0-9_-]{0,31}$` rejects for any owner carrying uppercase — so the
 # watcher dispatched nothing at all in 21 attempts.
 _IW_AGENT_PREFIX="iw"
-# `herdr agent prompt --wait` 한 번의 상한 — 4분. tick 이 겹치지 않게 막는 것은
-# flock 이므로 이 값은 cron 주기와 무관하다. 무응답 pane 하나가 tick 을 무한정
-# 붙들지 않게 하는 것이 목적이다.
+# `herdr agent prompt --wait` 한 번의 상한 — 4분. The tick lock is released
+# before this wait begins: the already-created tab and agent make the dispatch
+# visible to a later tick, so they remain the duplicate-dispatch guard. This
+# value is therefore independent of the cron period and only bounds an
+# unresponsive pane.
 _IW_TIMEOUT_MS="240000"
 # Post-start idle checks (see _iw_wait_for_idle): at most 10 checks, this far
 # apart. The gap is overridable so the bats suite does not pay real sleep on
@@ -2676,8 +2679,13 @@ EOF
                 [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
                 ux_warning "${_msg}"
-            elif _iw_mark_tab "${_tab}" && _iw_wait_for_idle "${_agent}" && _iw_settle "${_agent}"; then
-                if _iw_prompt_issue "${_agent}" "${_number}" "${_tab}" "${_attempt}"; then
+            elif _iw_mark_tab "${_tab}"; then
+                # Do not serialize unrelated (or later same-repo) dispatches
+                # behind herdr's acknowledgement wait. The tab and agent were
+                # created under the lock and are the duplicate-dispatch marker.
+                _iw_release_lock
+                if _iw_wait_for_idle "${_agent}" && _iw_settle "${_agent}" &&
+                    _iw_prompt_issue "${_agent}" "${_number}" "${_tab}" "${_attempt}"; then
                     ux_success "${_repo}#${_number} dispatched (tab ${_tab}, pane ${_pane})."
                     return 0
                 elif [ "$(_hp_agent_status "${_agent}")" = "working" ]; then
@@ -3744,17 +3752,25 @@ EOF
 # Locking
 # ============================================================
 
-# Single-instance guard. A cron tick can fire while the previous one is still
-# blocked in `herdr agent prompt --wait`; without a lock both would observe the
-# same candidate set and both dispatch, breaking the one-cycle-at-a-time
-# invariant. Since #1440 this is the *only* overlap guard — the resident
-# watcher agent whose idle/working status used to double as one is gone.
+# Single-instance guard. A cron tick can fire while another is selecting a
+# candidate or creating its tab and agent; without a lock both can dispatch
+# that same issue. Once the tab and agent exist, they are the durable
+# per-issue guard, so the lock is released before `herdr agent prompt --wait`.
+# Since #1440 this is the only guard during that short setup window — the
+# resident watcher agent whose idle/working status used to double as one is
+# gone.
 # Deliberately non-blocking: a skipped tick just retries 5 minutes later.
 # Returns non-zero only when another tick holds the lock; a missing flock or an
 # unusable state dir soft-degrades to "no protection" rather than failing.
 # $1 = optional wait in seconds (targeted run only, #2315); empty: non-blocking.
 _iw_acquire_lock() {
     _hp_acquire_lock "$(_iw_state_dir)" "${_IW_LOCK_BASENAME}" avatar_issue_watcher "${1:-}"
+}
+
+# The tab label plus its live agent is now visible to candidate selection, so
+# later ticks reject this issue without needing to wait for prompt delivery.
+_iw_release_lock() {
+    cron_release_lock
 }
 
 # ============================================================

@@ -43,6 +43,7 @@ setup() {
     _WATCH_FILE="${_WORK_DIR}/watched-repos.json"
     _LABEL_FILE="${_WORK_DIR}/excluded-labels.json"
     _LOCK_HOLDER_PID=""
+    _BACKGROUND_TICK_PID=""
     _RUN_DIR=""
     mkdir -p "${_BIN_DIR}"
     : >"${_LOG}"
@@ -73,6 +74,10 @@ teardown() {
     if [ -n "${_LOCK_HOLDER_PID}" ]; then
         kill "${_LOCK_HOLDER_PID}" 2>/dev/null || true
         wait "${_LOCK_HOLDER_PID}" 2>/dev/null || true
+    fi
+    if [ -n "${_BACKGROUND_TICK_PID}" ]; then
+        kill "${_BACKGROUND_TICK_PID}" 2>/dev/null || true
+        wait "${_BACKGROUND_TICK_PID}" 2>/dev/null || true
     fi
     # The unwritable-state-dir test chmods ${_STATE_DIR} to 500. A `bats`
     # assertion aborts the test body at the failing line, so restoring the mode
@@ -431,6 +436,8 @@ EOF
 #   HERDR_PROMPT_MODE         `agent prompt` behaviour (default: always ok)
 #                               stall       every call stalled
 #                               fail        every call a non-stall error
+#                               hold        keep the acknowledgement wait open
+#                                           for HERDR_PROMPT_HOLD_SECONDS
 #   HERDR_PROMPT_FAIL_TIMES   first N `agent prompt` calls stall, then ok
 #
 # Every one of those failures writes its error document to **stderr** and only
@@ -701,6 +708,9 @@ case "$1 $2" in
         printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:prompt"}' >&2
         exit 1
         ;;
+    hold)
+        command -p sleep "${HERDR_PROMPT_HOLD_SECONDS:-2}"
+        ;;
     esac
     printf '%s\n' '{"id":"cli:agent:prompt","result":{"ok":true}}'
     ;;
@@ -833,6 +843,38 @@ _run_tick() {
         "WORKSPACE_ROOT=${_WORK_DIR}/skills" \
         "${_env[@]}" \
         bash "${SCRIPT}" "$@"
+}
+
+# Start one foreground targeted run without Bats' output capture, so another
+# invocation can prove that its prompt acknowledgement wait no longer owns the
+# tick lock. $1 is the issue ref; remaining arguments are env assignments.
+_start_targeted_tick() {
+    local _ref="$1"
+    shift
+    (
+        cd "${_WORK_DIR}" || exit 1
+        env \
+            "PATH=${_BIN_DIR}:${PATH}" \
+            "CALL_LOG=${_LOG}" \
+            "GH_ISSUES_FILE=${_WORK_DIR}/issues.json" \
+            "GH_PRS_FILE=${_WORK_DIR}/prs.json" \
+            "HERDR_AGENTS_FILE=${_WORK_DIR}/agents.json" \
+            "HERDR_TABS_FILE=${_WORK_DIR}/tabs.json" \
+            "HERDR_WORKSPACES_FILE=${_WORK_DIR}/workspaces.json" \
+            "HERDR_TABS_AFTER_CREATE_FILE=${_WORK_DIR}/tabs-after-create.json" \
+            "IW_WATCHED_REPOS=${_WATCH_FILE}" \
+            "IW_EXCLUDE_LABELS_FILE=${_LABEL_FILE}" \
+            "XDG_STATE_HOME=${_STATE_HOME}" \
+            "IW_IDLE_POLL_SLEEP=0" \
+            "IW_STALL_RECOVER_SLEEP=0" \
+            "IW_START_RETRY_SLEEP=0" \
+            "IW_LIMIT_OBSERVE_SLEEP=0" \
+            "IW_MAX_PER_REPO=3" \
+            "IW_MAX_CONCURRENT=7" \
+            "WORKSPACE_ROOT=${_WORK_DIR}/skills" \
+            "$@" bash "${SCRIPT}" "${_ref}"
+    ) >"${_WORK_DIR}/background-tick.out" 2>&1 </dev/null 3>&- &
+    _BACKGROUND_TICK_PID=$!
 }
 
 _log_count() {
@@ -3178,6 +3220,26 @@ _two_repo_fixture() {
     _run_tick
     assert_success
     _assert_logged "--label iw-dotfiles-issue-12 --no-focus"
+}
+
+@test "avatar_issue_watcher: a targeted run does not wait for another prompt acknowledgement" {
+    _start_targeted_tick "acme/dotfiles#11" \
+        "HERDR_PROMPT_MODE=hold" "HERDR_PROMPT_HOLD_SECONDS=2"
+
+    local _i=0
+    while [ ! -f "${_LOG}.prompt.iw-dotfiles-issue-11" ] && [ "${_i}" -lt 200 ]; do
+        sleep 0.01
+        _i=$((_i + 1))
+    done
+    [ -f "${_LOG}.prompt.iw-dotfiles-issue-11" ] || fail "first prompt did not begin"
+
+    _run_tick -- "acme/dotfiles#12"
+    assert_success
+    refute_output --partial "waiting for the running avatar_issue_watcher tick"
+    _assert_logged "--label iw-dotfiles-issue-12 --no-focus"
+
+    wait "${_BACKGROUND_TICK_PID}"
+    _BACKGROUND_TICK_PID=""
 }
 
 @test "avatar_issue_watcher: missing flock degrades to a warning, not a failure" {
