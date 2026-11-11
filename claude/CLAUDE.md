@@ -43,6 +43,13 @@ yolo 무인 세션에서 `rm` 이 `sh -c`/`xargs ... sh -c`/`eval`/`$(...)` 안�
 - `$sh -c "..."`·`env -i ... zsh -c "..."` 처럼 스크립트가 불투명한 `-c` 도 같은 프롬프트를 띄운다 — 임시 스크립트 파일로 쓰고 `bash file.sh` 로 실행한다.
 - 대상이 불확실하면(`$HOME`, `~`, `..`, 미할당 변수) 지우지 말고 사용자 결정 사항으로 남긴다.
 
+## 반복 실수 원장 (session:close C-5)
+
+원장 경로는 손으로 만들지 말고 `bash <dir>/lib/check-correct.sh --ledger-path <현재 저장소 경로>` 로 얻는다. `<dir>` 은 session 플러그인의 close 스킬 디렉터리다 (Claude Code: `ls -d ~/.claude*/plugins/cache/*/session/*/skills/close` 중 최신 버전). 못 찾으면 원장에 쓰지 말고 사용자에게 알린다. 첫 기록 전 `mkdir -p "$(dirname "<원장 경로>")"`.
+1. 실수를 목격하면 `- [<ISO8601>] <class-slug>: <한 줄 설명>` 을 append 한다. class-slug 는 `[A-Za-z0-9._-]+` 만 쓴다. 기존 줄은 고치지 않는다. 설명에 토큰·비밀값을 적지 않는다.
+2. 같은 class-slug 2회차 -> 즉시 `/correct` 실행을 제안한다.
+3. `swept: <now> <HEAD-sha>` 는 (a) `/session:close` 가 보고한 open 항목을 전부 해소했거나 (b) open 0건이고 규칙 테스트 확인이 끝났을 때만 append 한다. 사용자가 보류한 항목이 하나라도 있으면 찍지 않는다.
+
 <!-- BEGIN AWS Agent Toolkit rules -->
 # AWS Guidance for the new AWS experience
 

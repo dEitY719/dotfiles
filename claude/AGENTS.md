@@ -35,6 +35,8 @@ marketplace repo 로 분리됐다. 등록은 `claude/plugin/{marketplaces,plugin
   (`~/.dotfiles-setup-mode` 가 `internal` 이면 `claude_yolo` 가 강제, #571).
 - symlink: `statusline-command.sh`, `docs/`, `plugins -> ~/.claude-shared/plugins`, `CLAUDE.md`(글로벌 지침),
   `keybindings.json`, `projects/GLOBAL/memory`.
+- 매 세션 로드되는 전역 지침은 `claude/CLAUDE.md` 뿐이다(이 `AGENTS.md` 는 계정 dir 에 링크되지 않는다).
+  session:close C-5 반복 실수 원장 작성자 규약도 거기 둔다 (#2387).
 - 훅(SessionStart drift 자동복구, statusline override, plugin path normalize, PostToolUse 디스패처,
   PreToolUse 가드 3종, Stop 가드 공용 헬퍼)과 `mods/cache-watch`, `claude-accounts link`.
 
