@@ -776,6 +776,54 @@ run_setup_with_workspace() {
     [ -L "${FIXTURE_HOME}/.codex/skills/delta" ]
 }
 
+# The review-all case (#2389): the collision resolves by a rename, so the
+# loser's source still exists and only its mangled name went away. Every
+# harness must drop the leftover qualified link, keep the restored bare name
+# and the renamed skill, and leave user-made `*__*` links alone.
+@test "workspace: a mangled entry is pruned once its collision resolves (#2389)" {
+    seed_opencode_home
+    seed_hermes_home
+    mkdir -p "${FIXTURE_HOME}/.gemini/antigravity-cli"
+    export HERMES_STUB_SET_FAIL=1 # hermes falls back to compose (#1829)
+    local ws d mangled="gh-verify-skills__review-all"
+    ws="$(default_workspace_root)"
+    seed_workspace_skill "$ws" "gh-issue-skills" "review-all"
+    seed_workspace_skill "$ws" "gh-verify-skills" "review-all"
+    local dirs=(
+        "${FIXTURE_HOME}/.config/opencode/skills"
+        "${FIXTURE_HOME}/.codex/skills"
+        "${FIXTURE_HOME}/.gemini/config/skills"
+        "${FIXTURE_HOME}/.hermes/skills/dotfiles"
+    )
+
+    run_setup
+    assert_success
+    for d in "${dirs[@]}"; do
+        [ -L "${d}/${mangled}" ]
+    done
+    # User-made `*__*` links: one outside the workspace, one managed whose
+    # name does not decompose to its own target's <repo>__<skill>.
+    mkdir -p "${TEST_TEMP_HOME}/private/thing"
+    ln -s "${TEST_TEMP_HOME}/private/thing" \
+        "${FIXTURE_HOME}/.config/opencode/skills/mine__thing"
+    ln -s "${BASE_REPO}/skills/alpha" \
+        "${FIXTURE_HOME}/.config/opencode/skills/my__alpha"
+
+    mv "${ws}/gh-issue-skills/skills/review-all" \
+        "${ws}/gh-issue-skills/skills/issue-review-all"
+
+    run_setup
+    assert_success
+    for d in "${dirs[@]}"; do
+        [ ! -L "${d}/${mangled}" ]
+        [ "$(readlink -f "${d}/review-all")" \
+            = "$(readlink -f "${ws}/gh-verify-skills/skills/review-all")" ]
+        [ -L "${d}/issue-review-all" ]
+    done
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/mine__thing" ]
+    [ -L "${FIXTURE_HOME}/.config/opencode/skills/my__alpha" ]
+}
+
 @test "workspace: SKILL.md edits are live through the composed link (#1652 NF-2)" {
     seed_opencode_home
     local ws
