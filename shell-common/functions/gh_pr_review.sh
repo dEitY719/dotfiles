@@ -75,12 +75,15 @@ fi
 # is spelled out, not built from a loop variable, so a vendoring repo's
 # closure check sees every file this one reaches. A shell-common without
 # lib/ (the vendored-copy bats fixtures link only functions/) falls back to
-# the lib beside this file's real location, so no module can silently go
-# missing.
+# the lib beside this file's real location. The root is picked ONCE, so the
+# modules never mix two checkouts (an old ai_cli_run.sh with new callers),
+# and a module that is still missing fails the source with status 1 instead
+# of leaving a half-defined command behind (PR #2386 review).
 _gpr_lib_dir=""
-[ -z "$_drg_self" ] ||
+if [ ! -d "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib" ] && [ -n "$_drg_self" ]; then
     _gpr_lib_dir=$(cd -P -- "$(dirname -- "$_drg_self")/../lib" 2>/dev/null && pwd) ||
-    _gpr_lib_dir=""
+        _gpr_lib_dir=""
+fi
 for _gpr_lib in \
     "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/ai_cli_run.sh" \
     "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_pr_review_args.sh" \
@@ -89,11 +92,13 @@ for _gpr_lib in \
     "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_pr_review_prompt.sh" \
     "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_pr_review_comment.sh" \
     "${SHELL_COMMON:-$HOME/dotfiles/shell-common}/lib/gh_pr_review_run.sh"; do
-    if [ ! -r "$_gpr_lib" ] && [ -n "$_gpr_lib_dir" ]; then
-        _gpr_lib="$_gpr_lib_dir/${_gpr_lib##*/}"
-    fi
+    [ -z "$_gpr_lib_dir" ] || _gpr_lib="$_gpr_lib_dir/${_gpr_lib##*/}"
     # shellcheck disable=SC1090
-    . "$_gpr_lib" || ux_error "[gh-pr-review] could not load $_gpr_lib (#2382)"
+    if [ ! -r "$_gpr_lib" ] || ! . "$_gpr_lib"; then
+        ux_error "[gh-pr-review] could not load $_gpr_lib (#2382)"
+        unset _gpr_lib _gpr_lib_dir _drg_self
+        return 1
+    fi
 done
 unset _gpr_lib _gpr_lib_dir _drg_self
 

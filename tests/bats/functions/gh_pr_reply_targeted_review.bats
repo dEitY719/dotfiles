@@ -1278,6 +1278,8 @@ _lib_code_file() {
     _lib_code_file
     run grep -qF -- '_ai_cli_' "$LIB_CODE"
     assert_failure
+    run grep -qF -- '_gh_pr_review_require_ai_cli' "$LIB_CODE"
+    assert_failure
     run grep -qF -- '--paths' "$LIB_CODE"
     assert_failure
     run grep -qF -- 'gh_pr_review.sh' "$LIB_CODE"

@@ -799,24 +799,36 @@ _stub_gh_pr_review_preconditions() {
 # and blocks there with all three temp files allocated. `mktemp` is forced
 # to fail so the three land on their deterministic `$$` fallback paths —
 # the harness reports its own PID so the test can compute them.
-# Args: $1 = shell to run the harness under (bash|zsh).
+# Args: $1 = shell to run the harness under (bash|zsh); $2 = `post` to block
+# in the Step 6 `gh pr comment` instead of the CLI run (#2382: the post stage
+# is a function boundary on the signal path).
 # Sets: _HARNESS_PID, _HARNESS_PROMPT_FB, _HARNESS_OUT_FB, _HARNESS_BODY_FB,
 # _HARNESS_STDERR_FB.
 _interrupt_harness_start() {
     local shell_bin="$1"
     local stub_dir="$TEST_TEMP_HOME/bin"
     mkdir -p "$stub_dir"
-    printf '#!/bin/sh\nexit 0\n' >"$stub_dir/gh"
     printf '#!/bin/sh\nexit 1\n' >"$stub_dir/mktemp"
     local marker="$TEST_TEMP_HOME/codex-started"
     rm -f "$marker"
-    # The fake CLI announces itself, then blocks — that is the window in
-    # which the interrupt has to arrive.
-    cat >"$stub_dir/codex" <<EOF
+    if [ "${2-}" = post ]; then
+        # The CLI answers at once; `gh pr comment` announces itself and blocks.
+        printf '#!/bin/sh\ncat >/dev/null\necho "Verdict: LGTM"\n' >"$stub_dir/codex"
+        cat >"$stub_dir/gh" <<EOF
+#!/bin/sh
+case "\$*" in *comment*) : >"$marker"; sleep 30 ;; esac
+exit 0
+EOF
+    else
+        printf '#!/bin/sh\nexit 0\n' >"$stub_dir/gh"
+        # The fake CLI announces itself, then blocks — that is the window in
+        # which the interrupt has to arrive.
+        cat >"$stub_dir/codex" <<EOF
 #!/bin/sh
 : >"$marker"
 sleep 30
 EOF
+    fi
     chmod +x "$stub_dir/gh" "$stub_dir/mktemp" "$stub_dir/codex"
 
     local pidfile="$TEST_TEMP_HOME/harness.pid"
@@ -931,6 +943,26 @@ _interrupt_harness_interrupt() {
     # subshell standalone and reads `$?` on the next line, which propagates
     # the handler's 130 in zsh exactly as it always did in bash.
     assert_output --partial "FUNC-RC=130"
+}
+
+@test "bash/zsh: SIGINT during the Step 6 post stage aborts with 130 and cleans up (#2382)" {
+    command -v setsid >/dev/null 2>&1 || skip "setsid (util-linux) not available"
+    _source_module
+    local sh
+    for sh in bash zsh; do
+        command -v "$sh" >/dev/null 2>&1 || continue
+        _interrupt_harness_start "$sh" post
+        [ -f "$_HARNESS_PROMPT_FB" ]
+        [ -f "$_HARNESS_BODY_FB" ]
+        _interrupt_harness_interrupt
+        [ ! -e "$_HARNESS_PROMPT_FB" ]
+        [ ! -e "$_HARNESS_OUT_FB" ]
+        [ ! -e "$_HARNESS_BODY_FB" ]
+        [ ! -e "$_HARNESS_STDERR_FB" ]
+        run cat "$_HARNESS_OUT"
+        refute_output --partial "[OK] PR #1286 reviewed"
+        assert_output --partial "FUNC-RC=130"
+    done
 }
 
 @test "bash: INT/TERM traps do not leak to the caller after a successful run" {
@@ -2448,4 +2480,19 @@ EOF
     assert_failure 2
     assert_output "Unknown --ai value: 'nope' (allowed: codex, agy, claude, opencode, hermes)"
     refute_output --partial "command not found"
+}
+
+@test "a missing lib module fails the source with 1 instead of half-loading (#2382)" {
+    # A copy of the entry file whose own ../lib lacks gh_pr_review_run.sh, with
+    # SHELL_COMMON pointing at the same incomplete tree.
+    local sc="$TEST_TEMP_HOME/sc"
+    mkdir -p "$sc/functions" "$sc/lib"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/functions/gh_pr_review.sh" "$sc/functions/"
+    cp "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/ai_cli_run.sh" \
+        "${_BATS_REAL_DOTFILES_ROOT}/shell-common/lib/gh_pr_review_args.sh" "$sc/lib/"
+    run bash -c "export SHELL_COMMON='$sc' DOTFILES_FORCE_INIT=1
+        ux_error() { printf '%s\n' \"\$1\" >&2; }
+        . '$sc/functions/gh_pr_review.sh'; echo SOURCE-RC=\$?"
+    assert_output --partial "could not load $sc/lib/gh_pr_review_target.sh"
+    assert_output --partial "SOURCE-RC=1"
 }
