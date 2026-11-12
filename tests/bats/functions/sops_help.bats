@@ -169,3 +169,18 @@ _write_key() {
     assert_success
     assert_output --partial "비밀번호 강도"
 }
+
+@test "commands sops-help advertises are findable in my-help search (#2392)" {
+    # func is a registry (_register_func), alias is a file scan: a public
+    # command the topic tells users to type must land in one of them.
+    run_in_bash '_my_help_search_candidates all | awk -F"\t" "
+        \$1==\"senv\" && \$3==\"func\" { print \"senv \" \$4 }
+        \$1==\"install-sops-age\" && \$3==\"alias\" { print \$1 }
+        \$1==\"sops-status\" && \$3==\"alias\" { print \$1 }
+        \$1==\"sops-help\" && \$3==\"topic\" && \$2 ~ /senv/ { print \"topic\" }"'
+    assert_success
+    assert_line --partial "senv shell-common/tools/integrations/sops.sh:"
+    assert_line "install-sops-age"
+    assert_line "sops-status"
+    assert_line "topic"
+}
