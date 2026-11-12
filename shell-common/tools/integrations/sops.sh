@@ -682,5 +682,6 @@ senv() {
 
 # Help registry (#2135, #2392): senv is a function, so my-help search finds it
 # only through this row. Skipped when sourced without util/help_registry.sh.
+# Keep this block last: the `return 0` skips anything appended below it.
 command -v _register_func >/dev/null 2>&1 || return 0
 _register_func senv "Encrypt/decrypt/run the current directory .env with sops + age (sops-help)"

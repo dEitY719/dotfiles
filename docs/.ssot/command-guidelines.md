@@ -103,7 +103,7 @@ row 함수는 화면 출력뿐 아니라 **커맨드 레퍼런스 문서의 데�
 
 - help topic 은 정의 파일 끝에서 스스로 등록한다: `_register_help <topic>_help "[Category] 설명" <category>` (#2135). 중앙 테이블(`my_help.sh`)은 없다 — 배열과 등록 함수는 `shell-common/util/help_registry.sh` 가 `functions/` 보다 먼저 로드한다.
 - 사용자가 직접 치는 함수(팔레트 `/func`)는 `_register_func <name> "설명"`. `_` 접두사·`*_help` 이름은 넣지 않는다.
-- `my-help search` 의 func 행은 `_register_func` 등록분만 검색된다 — `tools/integrations/` 등 도구 통합 파일의 함수(`senv`)도 등록 대상이고, 토픽 설명에 대표 명령 이름을 넣으면(`sops + age ... (senv)`) 토픽 행으로도 찾힌다 (#2392).
+- `tools/integrations/` 등 도구 통합 파일에 정의된 공개 함수(`senv`)도 `_register_func` 로 등록한다 — `my-help search` 의 func 행은 등록분만 검색된다. 사용자가 치는 명령과 토픽 이름이 다르면(`senv` / `sops-help`) 토픽 설명 끝에 `(senv)` 처럼 명령 이름을 덧붙여 토픽 행으로도 찾히게 한다 (#2392).
 - 등록 줄 앞에 `command -v _register_help >/dev/null 2>&1 || return 0` 가드를 둔다 — 파일을 단독 source 하는 테스트에서 레지스트리가 없어도 조용히 넘어가게.
 - 자동 전체 스캔은 하지 않는다 (private helper 소음 차단, #1740). 누락은 `tests/bats/functions/my_help_register.bats` 의 "every public *_help function is registered" 가 잡는다. 카테고리 페이지의 topic 순서는 이름순 정렬이다.
 
