@@ -142,10 +142,13 @@ FIXTURE_CHECK='
         . '$DOTFILES_ROOT/shell-common/functions/my_help.sh' >/dev/null 2>&1
         echo \"gwt=\${HELP_COMMAND_TO_CATEGORY[gwt]-none}\"
         echo \"funcs=\$(_my_help_func_registry | wc -l)\"
+        _my_help_func_registry | cut -f1 | grep -x senv
     "
     assert_success
     assert_line "gwt=development"
     refute_line "funcs=0"
+    # integration files register too (#2392)
+    assert_line "senv"
 }
 
 # my-help falls back to calling a same-named *function* when no <name>_help
