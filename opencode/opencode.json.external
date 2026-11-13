@@ -30,7 +30,7 @@
         "UV_PYTHON": "3.12",
         "SSL_CERT_FILE": "/etc/ssl/certs/ca-certificates.crt",
         "UV_SYSTEM_CERTS": "1"
-      }
+      }, "enabled": true
     }
   }
 }
