@@ -26,6 +26,7 @@
 #   STEP_NAME        abort message subject   (default: "작업")
 #   STEP_RERUN       re-run command for non-script steps (default: "")
 #   STEP_HINT_FN     on failure: "$STEP_HINT_FN" "<label>" prints extra hints
+#                    (STEP_LAST_RC already holds the step's exit code)
 #   STEP_DIGEST_FN   on clean success: "$STEP_DIGEST_FN" "<label>" may set
 #                    STEP_DIGEST from $STEP_OUT -> "✅ <label> (<t>s) — <digest>"
 #                    and STEP_DETAIL (newline-separated items) -> one dim,

@@ -53,6 +53,10 @@ GitHub repo ──claude plugin marketplace update + claude plugin update──>
 플러그인 저장소는 계정끼리 공유하므로 선택 설치는 `--all-accounts` 없이 기본 계정으로 한 번만 돈다.
 출력은 기본 요약 모드(스텝당 1줄 + 변경 건수 digest, 경고/실패만 상세, 전체 로그는
 `${TMPDIR:-/tmp}/skills-sync-*.log`, 경고/실패 시에만 경로 표시)이고, `-v` 또는 `SKILLS_SYNC_VERBOSE=1` 이면 전부 흘린다 (#2126).
+`--only <step>` 은 한 스텝만 실행한다 (`clone`, `pull`, `setup`, `restore-plugins`, `update-plugins`, `restore-check`, `ssot` — 예: `skills-sync --only restore-check`; 번호는 `1/1`). `--dry-run` 과 합성 스텝(`setup`, `ssot`)은 같이 쓸 수 없다.
+인자는 시작 시(부작용 전) 검증한다 — 위 옵션과 git-pull-skills 옵션(`--all-branches`, `--target <dir>`) 외의 인자는 exit 2 로 끝나고, 스텝 이름(`skills-sync restore --check` 처럼)이면 `--only <step>` 을 안내한다. 하위 스크립트가 exit 2(사용법 오류)로 실패하면 힌트는 "인자 확인 — skills-sync -h" 다.
+요약 끝의 `repo 갱신 N / 플러그인 갱신 M — ...` 줄은 두 수가 어긋나는 이유다: pull 됐지만 같은 이름 마켓플레이스의 플러그인 버전이 그대로인 repo(version bump 없음 — §5)와, pull 대상이 아닌 외부 마켓플레이스에서 갱신된 플러그인.
+이 PC 에서 의도적으로 설치하지 않는 계약 항목은 `claude/plugin/removed.local.json` 묘비(`{"marketplaces":["x-skills"],"plugins":["x@x-skills"]}`)에 넣는다 — 5/6 점검이 `WARN:` 대신 `INFO: ... not installed on purpose` 로 보고하고, restore/update 도 건너뛴다. 나중에 설치하면 훅이 묘비를 지운다.
 요약 모드는 stdout 이 tty 가 아니므로 하위 스크립트의 대화형 확인(예: `claude/setup.sh` 의 stale sudoers 정리)이 뜨지 않는다 — 필요하면 `-v` 로 실행.
 
 작업 폴더 루트 라우터: `scripts/setup-skills-ssot.sh` 가 `${WORKSPACE_ROOT}/AGENTS.md`,

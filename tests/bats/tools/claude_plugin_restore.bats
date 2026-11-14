@@ -116,6 +116,20 @@ JSON
     assert_output --partial 'drift 없음'
 }
 
+@test "restore.sh --check reports a tombstoned (removed.local.json) contract entry as INFO, not WARN drift" {
+    # 이 PC 에서 의도적으로 설치하지 않는 계약 항목은 skills-sync 를 매번
+    # "확인 필요" 로 끝내면 안 된다 — 묘비로 내리고, 숨기지 않고 INFO 로 보인다.
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    echo '{"marketplaces": ["understand-anything"]}' >"$PLUGDIR/removed.local.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_success
+    refute_output --partial 'WARN:'
+    assert_output --partial 'INFO: marketplace not installed on purpose (removed.local.json): understand-anything'
+    assert_output --partial 'INFO: plugin not installed on purpose (removed.local.json): understand-anything@understand-anything'
+    assert_output --partial 'drift 없음'
+}
+
 # --- 머신 로컬 오버레이 union (#1685) ---------------------------------------
 # tracked {marketplaces,plugins}.json 은 upstream 등록 계약, *.local.json 은 이
 # PC 가 설치한 것. 복원은 둘의 union 이어야 하고, --sync 는 오버레이 항목을

@@ -18,6 +18,7 @@ _make_fake_root() {
     FAKE_ROOT="${TEST_TEMP_HOME}/fake-dotfiles"
     CALL_LOG="${TEST_TEMP_HOME}/calls.log"
     export CALL_LOG
+    : >"$CALL_LOG"
     rm -rf "$FAKE_ROOT"
     mkdir -p "$FAKE_ROOT/scripts" "$FAKE_ROOT/claude/plugin" "$FAKE_ROOT/shell-common/tools"
     cp "$SCRIPT_UNDER_TEST" "$FAKE_ROOT/scripts/update-skills.sh"
@@ -437,4 +438,117 @@ claude-setup"
     run "$FAKE_ROOT/scripts/update-skills.sh"
     assert_success
     assert_output --partial "— 갱신 0 / 최신 5 / 미등록 skip 2"
+}
+
+# --- argument pre-validation / --only / exit-2 hint / repo-vs-plugin note ---
+
+@test "an unknown positional arg (step name) exits 2 before any step and points at --only" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" restore --check
+    assert_failure 2
+    assert_output --partial "알 수 없는 인자: restore"
+    assert_output --partial "--only restore-check"
+    assert_output --partial "skills-sync"
+    [ ! -s "$CALL_LOG" ]
+}
+
+@test "an unknown option exits 2 with usage and runs no step" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" --bogus
+    assert_failure 2
+    assert_output --partial "알 수 없는 인자: --bogus"
+    refute_output --partial "--only restore-check"
+    assert_output --partial "--dry-run"
+    [ ! -s "$CALL_LOG" ]
+}
+
+@test "every option git-pull-skills.sh parses is still accepted and forwarded by update-skills.sh" {
+    # Drift guard: update-skills.sh mirrors git-pull-skills.sh's option case.
+    local opts
+    opts=$(sed -En 's/^\t(-[-a-z| ]+(=\*)?)\)$/\1/p' "${DOTFILES_ROOT}/claude/plugin/git-pull-skills.sh" | tr -d ' ' | tr '|' '\n')
+    assert_equal "$(tr '\n' ' ' <<<"$opts")" "--dry-run --all-branches --target --target=* --jobs --jobs=* -h --help help "
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" --all-branches --target /x --target=/y
+    assert_success
+    run grep '^pull' "$CALL_LOG"
+    assert_output "pull --all-branches --target /x --target=/y"
+}
+
+@test "a step exiting 2 (usage error) gets the argument hint, not the conflict hint" {
+    _make_fake_root 2
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure
+    assert_output --partial "인자 확인 — skills-sync -h"
+    refute_output --partial "충돌/분기된 repo 확인"
+    _make_fake_root 1
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure
+    assert_output --partial "충돌/분기된 repo 확인"
+    refute_output --partial "인자 확인 — skills-sync -h"
+}
+
+@test "--only restore-check runs that single step as 1/1" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_success
+    assert_output --partial "skills-sync 완료: 1개 스텝 모두 정상"
+    run cat "$CALL_LOG"
+    assert_output "restore --check"
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" -v --only=pull --all-branches
+    assert_success
+    assert_output --partial "1/1 git-pull-skills"
+    run cat "$CALL_LOG"
+    assert_output "pull --all-branches"
+}
+
+@test "--only maps every step name to its sub-script" {
+    local pair
+    for pair in clone:clone pull:pull setup:claude-setup update-plugins:update-plugins \
+        "restore-check:restore --check" "restore-plugins:restore --skip-without-claude" ssot:skills-ssot; do
+        _make_fake_root 0
+        run "$FAKE_ROOT/scripts/update-skills.sh" --only "${pair%%:*}"
+        assert_success
+        run cat "$CALL_LOG"
+        assert_output "${pair#*:}"
+    done
+}
+
+@test "--only rejects an unknown step, a missing value, and synthesis under --dry-run" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only nope
+    assert_failure 2
+    assert_output --partial "알 수 없는 스텝: nope"
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only
+    assert_failure 2
+    run "$FAKE_ROOT/scripts/update-skills.sh" --dry-run --only ssot
+    assert_failure 2
+    [ ! -s "$CALL_LOG" ]
+}
+
+@test "--help lists the --only step names" {
+    _make_fake_root 0
+    run "$FAKE_ROOT/scripts/update-skills.sh" -h
+    assert_success
+    assert_output --partial "--only <step>"
+    assert_output --partial "clone, pull, setup, restore-plugins, update-plugins, restore-check, ssot"
+}
+
+@test "summary explains repo-vs-plugin update mismatch in one info line" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 '✅ a-skills: updated via ff-only (main)\n✅ harness-skills: updated via rebase (upstream/main)\n  ◆ Updated: 2\n  ◆ Up to date: 5\n'
+    _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 0 '✅   a@a-skills: updated 1.0.0 -> 1.0.1\n✅   ext@claude-plugins-official: updated 2.0 -> 2.1\n  ◆ Plugins updated: 2\n  ◆ Plugins up to date: 15\n  ◆ Failed: 0\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "repo 갱신 2 / 플러그인 갱신 2 — pull 됐으나 플러그인 버전 불변: harness-skills · pull 없이 갱신(외부 marketplace): ext@claude-plugins-official"
+    [ "$(grep -c 'repo 갱신' <<<"$output")" = 1 ]
+}
+
+@test "no repo-vs-plugin line when every pulled repo's plugin was updated" {
+    _make_fake_root 0
+    _stub "$FAKE_ROOT/claude/plugin/git-pull-skills.sh" pull 0 '✅ a-skills: updated via ff-only (main)\n  ◆ Updated: 1\n  ◆ Up to date: 5\n'
+    _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 0 '✅   a@a-skills: updated 1.0.0 -> 1.0.1\n✅   a2@a-skills: updated 1.0.0 -> 1.0.1\n  ◆ Plugins updated: 2\n  ◆ Plugins up to date: 15\n  ◆ Failed: 0\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    refute_output --partial "repo 갱신"
 }
