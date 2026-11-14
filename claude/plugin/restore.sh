@@ -255,7 +255,10 @@ _target_config_dirs() {
 # 하나를 전역으로 쓰면 공용에서 uninstall 한 이름이 같은 이름의 사내
 # 마켓플레이스/플러그인까지 company/ 복원에서 조용히 지워 버린다 — 두 스코프는
 # 이름공간을 공유하지 않으므로 삭제 이력도 공유하면 안 된다.
-_tombstone_for() { printf '%s/removed.local.json' "$1"; }
+#
+# 빈 스코프 dir 은 "묘비 없음" 이다 — _check_pass 가 묘비 적용 전 집합을 얻어
+# 의도적 미설치 항목을 INFO 로 보일 때 쓴다.
+_tombstone_for() { [ -z "$1" ] || printf '%s/removed.local.json' "$1"; }
 
 # Merged {name: repo} map of tracked $1 + overlay $2, minus the tombstones in
 # scope dir $3. Prints NOTHING when neither manifest exists, which is what lets
@@ -333,12 +336,29 @@ _load_store() {
 	return 0
 }
 
+# _check_tombstoned <kind> <store-list> <expected-list> <untombstoned-list> —
+# INFO line per entry the tombstone dropped from <expected> that is not installed.
+_check_tombstoned() {
+	local name
+	while IFS= read -r name; do
+		[ -n "$name" ] || continue
+		_in_list "$name" "$3" || _in_list "$name" "$2" ||
+			printf 'INFO: %s not installed on purpose (removed.local.json): %s\n' "$1" "$name"
+	done <<<"$4"
+}
+
 _check_pass() {
 	local name drift=0 expected_mps expected_pls
 	expected_mps=$(printf '%s' "$PUB_MP_JSON" | jq -r 'keys[]' 2>/dev/null)
 	expected_pls=$(printf '%s' "$PUB_PL_JSON" | jq -r '(.plugins // [])[]' 2>/dev/null)
 	while IFS= read -r name; do _in_list "$name" "$STORE_MPS" || { printf 'WARN: marketplace not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_mps"
 	while IFS= read -r name; do _in_list "$name" "$STORE_PLS" || { printf 'WARN: plugin not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_pls"
+	# 묘비(removed.local.json)로 뺀 계약 항목 = 이 PC 에서 의도적 미설치. drift 가
+	# 아니므로 WARN 대신 INFO — 조용히 사라지지 않도록 이름은 보인다.
+	_check_tombstoned marketplace "$STORE_MPS" "$expected_mps" \
+		"$(_merged_marketplaces "$SCRIPT_DIR/marketplaces.json" "$SCRIPT_DIR/marketplaces.local.json" "" | jq -r 'keys[]' 2>/dev/null)"
+	_check_tombstoned plugin "$STORE_PLS" "$expected_pls" \
+		"$(_merged_plugins "$SCRIPT_DIR/plugins.json" "$SCRIPT_DIR/plugins.local.json" "" | jq -r '(.plugins // [])[]' 2>/dev/null)"
 	[ "$drift" -eq 0 ] && ux_success "drift 없음"
 	return "$drift"
 }
