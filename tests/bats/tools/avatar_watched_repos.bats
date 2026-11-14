@@ -29,6 +29,8 @@ _backups() {
     assert_success
     assert_output --partial "watch list written"
     assert_output --partial "skip dEitY719/gh-pr-skills"
+    assert_output --partial "not on this PC (skipped):"
+    refute_output --partial "⚠"
     run jq -r '.[] | "\(.repo) \(.path)"' "$IW_WATCHED_REPOS"
     assert_output "dEitY719/dotfiles ${HOME}/dotfiles
 dEitY719/equinest ${HOME}/para/project/equinest"

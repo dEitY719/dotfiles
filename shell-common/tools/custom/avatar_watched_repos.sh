@@ -14,7 +14,7 @@
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/init.sh" || exit 1
 
 avatar_watched_repos_main() {
-    local _dry="" _tracked _target _out _rc _kind _a _b _line
+    local _dry="" _tracked _target _out _rc _kind _a _b _line _skipped=""
 
     case "${1:-}" in
     -h | --help | help)
@@ -54,7 +54,11 @@ avatar_watched_repos_main() {
         _b="${_a#*$'\t'}"
         _a="${_a%%$'\t'*}"
         case "${_kind}" in
-        skip) ux_warning "skip ${_a}: ${_b} not found" ;;
+        # Absent checkout = normal on a PC that does not use that repo: info, not warning.
+        skip)
+            ux_info "skip ${_a}: ${_b} not found"
+            _skipped="${_skipped:+${_skipped}, }${_a}"
+            ;;
         warn) ux_warning "keep ${_a}: verify_skill '${_b}' is not an allowed verify skill, not migrated" ;;
         # Raw diff body is data (like git diff), not decorated status output.
         diff) printf '%s\n' "${_line#*$'\t'}" ;;
@@ -68,6 +72,7 @@ avatar_watched_repos_main() {
     done <<EOF
 ${_out}
 EOF
+    [ -z "${_skipped}" ] || ux_info "not on this PC (skipped): ${_skipped}"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ] || [ -z "${BASH_SOURCE[0]}" ]; then

@@ -22,7 +22,7 @@
   `check_port_registry.sh`, `test_smoke.sh` (`mise run test-smoke`)
 - **로컬 CI (dEitY719/* repo, Actions 대체)**: `ci.sh` + `ci/validate/`
   (harness-skills `skill-check.yml` step 포팅, `docs/.ssot/local-test-policy.md`)
-- **setup 체인 스텝**: `remove-git-crypt-local-config.sh`(임시), `setup-skills-ssot.sh`,
+- **setup 체인 스텝**: `setup-skills-ssot.sh`,
   `verify-config-files.sh` (root `setup.sh main()`)
 - **internal PC 1회 이관** (dry-run 후 `--apply`, `docs/.ssot/pc-environment.md`):
   `internal-config-migrate.sh`, `internal-ssh-git-migrate.sh`

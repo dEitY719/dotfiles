@@ -141,9 +141,6 @@ main() {
         case "$SETUP_CHOICE" in 1) sc_label+=" (public)" ;; 2) sc_label+=" (internal)" ;; 3) sc_label+=" (external)" ;; esac
     fi
 
-    # Temporary: delete leftover git-crypt sections from .git/config (#2345).
-    # Removal condition lives in the script header.
-    step_run "git-crypt 설정 삭제" critical ./scripts/remove-git-crypt-local-config.sh
     # bats submodules so a fresh clone's ./tests/test doesn't skip bats (#1398).
     # shellcheck source=shell-common/lib/dotfiles_bats_submodules.sh
     source "${DOTFILES_DIR}/shell-common/lib/dotfiles_bats_submodules.sh"
