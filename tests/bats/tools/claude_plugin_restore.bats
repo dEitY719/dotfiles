@@ -720,7 +720,7 @@ JSON
     export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
     echo invalid > "$CLAUDE_SHARED_PLUGINS_DIR/known_marketplaces.json"
     run "$PLUGDIR/restore.sh" --check
-    assert_failure 2
+    assert_failure 3
     assert_output --partial '플러그인 저장소 파일을 읽을 수 없음'
 }
 
