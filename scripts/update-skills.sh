@@ -393,6 +393,9 @@ if _us_want restore-check; then
     if [ "$STEP_VERBOSE" = 1 ]; then STEP_OUT=$(mktemp); fi
     STEP_VERBOSE=0
     _us_step "restore --check" optional _us_restore_check
+    if grep -q "WARN: .* not installed:" "$STEP_OUT"; then
+        ux_warning "누락 항목 설치: skills-sync --restore"
+    fi
     if [ "$_us_check_verbose" = 1 ]; then
         cat "$STEP_OUT"
         rm -f "$STEP_OUT"

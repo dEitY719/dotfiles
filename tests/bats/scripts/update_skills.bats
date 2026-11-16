@@ -563,9 +563,9 @@ claude-setup"
 }
 
 @test "restore check store failure remains a failure without restore hint" {
-    _make_fake_root 0 0 0 2
+    _make_fake_root 0 0 0 3
     run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
-    assert_failure 2
+    assert_failure 3
     refute_output --partial 'skills-sync --restore'
 }
 
@@ -577,4 +577,14 @@ claude-setup"
     assert_output --partial 'secret@private'
     assert_output --partial 'skills-sync --restore'
     assert_output --partial '경고 스텝: restore --check'
+}
+
+@test "restore hint survives more warnings than the summary displays" {
+    _make_fake_root 0 0 0 1
+    local warnings="" i
+    for i in {1..12}; do warnings+="WARN: plugin not installed: item$i\\n"; done
+    _stub "$FAKE_ROOT/claude/plugin/restore.sh" restore 1 "$warnings"
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_success
+    assert_output --partial '누락 항목 설치: skills-sync --restore'
 }

@@ -163,7 +163,7 @@ done
 
 command -v jq >/dev/null 2>&1 || {
 	ux_error "jq가 필요합니다."
-	[ "$CHECK" -eq 1 ] && exit 2
+	[ "$CHECK" -eq 1 ] && exit 3
 	exit 1
 }
 # --dry-run only prints the plan — don't require the claude CLI for that,
@@ -589,7 +589,7 @@ ux_bullet "Already present: $PRESENT"
 ux_bullet "Failed: $FAILED"
 if [ "$FAILED" -gt 0 ]; then
 	ux_error "복원 실패 ${FAILED}건 — 네트워크/인증 확인 후 다시 실행하면 남은 항목만 재시도합니다."
-	[ "$CHECK" -eq 1 ] && exit 2
+	[ "$CHECK" -eq 1 ] && exit 3
 	exit 1
 fi
 if [ "$CHECK" -eq 1 ]; then exit "$CHECK_RC"; fi
