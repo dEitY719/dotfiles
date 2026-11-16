@@ -389,8 +389,15 @@ _us_restore_check() {
 if _us_want restore-check; then
     # Capture this check even in verbose mode so its drift reaches the summary.
     _us_check_verbose=$STEP_VERBOSE
+    _us_check_out=$STEP_OUT
+    if [ "$STEP_VERBOSE" = 1 ]; then STEP_OUT=$(mktemp); fi
     STEP_VERBOSE=0
     _us_step "restore --check" optional _us_restore_check
+    if [ "$_us_check_verbose" = 1 ]; then
+        cat "$STEP_OUT"
+        rm -f "$STEP_OUT"
+    fi
+    STEP_OUT=$_us_check_out
     STEP_VERBOSE=$_us_check_verbose
     if [ "$final_rc" = 0 ]; then final_rc=$STEP_LAST_RC; fi
 fi
