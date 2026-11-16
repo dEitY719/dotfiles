@@ -20,7 +20,7 @@
     - overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .enc.env 커밋
     - setup: install-sops-age | age-keygen | sops-status
     - newproject: senv init | senv enc | 커밋
-    - usage: senv init|enc|dec|edit|run|check|key + senv 가 실행하는 sops 명령
+    - usage: senv init|enc|dec|edit|run|check|key|set|get|push|keys + senv 가 실행하는 sops 명령
     - newpc: senv key export -> senv key import -> senv check
     - risks: 분실=복구 불가 | 유출=원본 비밀값 교체
     - trouble: unmarshal 오류 | no master key | 권한
@@ -70,6 +70,10 @@
 - **senv edit [file]** — $EDITOR 로 편집 — 저장 시 재암호화
 - **senv run <cmd...>** — 환경변수로 주입해 실행 — 디스크에 평문 없음, eval 안 함
 - **senv check** — 키/권한 600/공개키 일치/복호화 점검 — 평문 미출력, 실패마다 다음 행동
+- **senv set KEY [--stdin]** — dotfiles .enc.env 에 키 저장 (숨김 입력, enc -> commit -> push) — 기본 브랜치에서만, .enc.env 만 커밋, 값은 stdout/로그에 안 남음
+- **senv get KEY** — dotfiles 에서 pull+복호화해 해당 값만 stdout — 파이프·클립보드용: senv get KEY | pbcopy
+- **senv keys** — dotfiles .enc.env 의 키 이름만 한 줄씩 — 값은 미출력, 인자 없음
+- **senv push** — 수동 .env 편집을 .enc.env 로 commit+push — 변경 없으면 no-op, 기본 브랜치에서만
 - **senv create-pr** — enc -> 브랜치 -> 커밋 -> push -> PR — 기본 브랜치에서만, .enc.env 만 add, 머지 안 함
 - **senv key show** — 공개키 + .sops.yaml 일치 여부 — 비밀 출력 없음
 - **senv key export [-o f] [-f]** — 개인키를 비밀번호로 잠금 (~/senv-key.age) — git 작업트리 안 거절, 되풀어 검증
@@ -118,7 +122,8 @@
 - **./hermes/setup.sh** — HERMES_LLM_BASE_URL / HERMES_LLM_API_KEY — 둘 다 없을 때만 hermes/llm_endpoint.local.sh (키별 병합 없음)
 - 실패(키 없음, 권한 600 아님, 복호화 실패)는 경고 후 값 없이 실행 -> 기존 fallback 그대로
 - mcporter/twitter 는 셸 함수: timeout/xargs 로 감싸면 래퍼를 건너뛴다 -> secret-run -k KEY timeout 60 twitter status
-- 새 키 추가 절차
+- 새 키 추가: senv set KEY   # 키 하나면 이 한 방으로 enc -> commit -> push 까지 (값은 숨김 입력; 파이프: printf '%s' "$V" | senv set KEY --stdin)
+- 새 키 추가 절차 (수동: 한 줄 넘는 편집)
     - 1. cd ~/dotfiles && senv edit   # $EDITOR 에 KEY=value 한 줄 추가, 저장 시 재암호화
     - 2. senv check && git diff .enc.env   # 키 이름만 평문, 값은 ENC[...]
     - 3. 소비 명령: secret-run -k KEY <cmd>, 자주 쓰면 functions/secret_run.sh 에 -k KEY 래퍼 추가
