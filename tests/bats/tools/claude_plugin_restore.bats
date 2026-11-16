@@ -782,3 +782,13 @@ JSON
     run "$PLUGDIR/restore.sh" --check
     assert_failure 3
 }
+
+@test "restore check accepts an empty optional plugin overlay" {
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    echo '{}' > "$PLUGDIR/plugins.local.json"
+    echo '{"understand-anything": {}}' > "$CLAUDE_SHARED_PLUGINS_DIR/known_marketplaces.json"
+    echo '{"plugins": {"understand-anything@understand-anything": []}}' > "$CLAUDE_SHARED_PLUGINS_DIR/installed_plugins.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_success
+}
