@@ -308,7 +308,8 @@ if [ "$CHECK" -eq 1 ]; then
 			[ -e "$_check_path" ] || continue
 			case "$_check_file" in
 			marketplaces*) _check_filter='type == "object" and all(.[]; type == "string")' ;;
-			plugins*) _check_filter='type == "object" and has("plugins") and (.plugins | type == "array" and all(.[]; type == "string"))' ;;
+			plugins.json) _check_filter='type == "object" and has("plugins") and (.plugins | type == "array" and all(.[]; type == "string"))' ;;
+			plugins.local.json) _check_filter='type == "object" and ((if has("plugins") then .plugins else [] end) | type == "array" and all(.[]; type == "string"))' ;;
 			*) _check_filter='type == "object" and ((if has("plugins") then .plugins else [] end) | type == "array" and all(.[]; type == "string")) and ((if has("marketplaces") then .marketplaces else [] end) | type == "array" and all(.[]; type == "string"))' ;;
 			esac
 			if [ ! -s "$_check_path" ] || ! jq -se "length == 1 and (.[0] | ($_check_filter))" "$_check_path" >/dev/null 2>&1; then
