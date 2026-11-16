@@ -736,3 +736,14 @@ JSON
     assert_output --partial 'WARN: marketplace not installed: understand-anything'
     assert_output --partial 'INFO: marketplace not installed on purpose (removed.local.json): understand-anything'
 }
+
+@test "restore check rejects a corrupt active company manifest" {
+    echo internal > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    mkdir -p "$PLUGDIR/company/.git" "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    echo invalid > "$PLUGDIR/company/plugins.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_failure 3
+    assert_output --partial '매니페스트 파일을 읽을 수 없음'
+    refute_output --partial 'drift 없음'
+}

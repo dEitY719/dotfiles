@@ -298,6 +298,22 @@ _merged_plugins() {
 # so `--all-accounts` would otherwise recompute an identical result N times.
 # company/ has no overlay today — passing its (absent) overlay path anyway
 # keeps every scope on the same code path instead of a "no overlay" sentinel.
+# A malformed manifest cannot prove that the installation is complete.
+if [ "$CHECK" -eq 1 ]; then
+	_check_dirs=("$SCRIPT_DIR")
+	[ "$COMPANY_ACTIVE" -eq 1 ] && _check_dirs+=("$PRIV")
+	for _check_dir in "${_check_dirs[@]}"; do
+		for _check_file in marketplaces.json marketplaces.local.json plugins.json plugins.local.json removed.local.json; do
+			_check_path="$_check_dir/$_check_file"
+			[ -e "$_check_path" ] || continue
+			if [ ! -s "$_check_path" ] || ! jq -e 'type == "object"' "$_check_path" >/dev/null 2>&1; then
+				ux_error "매니페스트 파일을 읽을 수 없음: $_check_path"
+				exit 3
+			fi
+		done
+	done
+fi
+
 PUB_MP_JSON=$(_merged_marketplaces "$SCRIPT_DIR/marketplaces.json" "$SCRIPT_DIR/marketplaces.local.json" "$SCRIPT_DIR")
 PUB_PL_JSON=$(_merged_plugins "$SCRIPT_DIR/plugins.json" "$SCRIPT_DIR/plugins.local.json" "$SCRIPT_DIR")
 PRIV_MP_JSON=$(_merged_marketplaces "$PRIV/marketplaces.json" "$PRIV/marketplaces.local.json" "$PRIV")
