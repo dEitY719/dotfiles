@@ -774,3 +774,11 @@ JSON
         assert_failure 3
     done
 }
+
+@test "restore check rejects a plugin manifest without its plugins field" {
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    echo '{}' > "$PLUGDIR/plugins.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_failure 3
+}
