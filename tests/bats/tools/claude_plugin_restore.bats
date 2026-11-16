@@ -764,3 +764,13 @@ JSON
     run "$PLUGDIR/restore.sh" --check
     assert_failure 3
 }
+
+@test "restore check rejects null and false plugin lists" {
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    for value in false null; do
+        printf '{"plugins": %s}\n' "$value" > "$PLUGDIR/plugins.json"
+        run "$PLUGDIR/restore.sh" --check
+        assert_failure 3
+    done
+}
