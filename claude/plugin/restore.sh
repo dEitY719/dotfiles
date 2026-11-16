@@ -306,7 +306,12 @@ if [ "$CHECK" -eq 1 ]; then
 		for _check_file in marketplaces.json marketplaces.local.json plugins.json plugins.local.json removed.local.json; do
 			_check_path="$_check_dir/$_check_file"
 			[ -e "$_check_path" ] || continue
-			if [ ! -s "$_check_path" ] || ! jq -e 'type == "object"' "$_check_path" >/dev/null 2>&1; then
+			case "$_check_file" in
+			marketplaces*) _check_filter='type == "object" and all(.[]; type == "string")' ;;
+			plugins*) _check_filter='type == "object" and ((.plugins // []) | type == "array" and all(.[]; type == "string"))' ;;
+			*) _check_filter='type == "object" and ((.plugins // []) | type == "array" and all(.[]; type == "string")) and ((.marketplaces // []) | type == "array" and all(.[]; type == "string"))' ;;
+			esac
+			if [ ! -s "$_check_path" ] || ! jq -e "$_check_filter" "$_check_path" >/dev/null 2>&1; then
 				ux_error "매니페스트 파일을 읽을 수 없음: $_check_path"
 				exit 3
 			fi
