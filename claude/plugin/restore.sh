@@ -311,7 +311,7 @@ if [ "$CHECK" -eq 1 ]; then
 			plugins*) _check_filter='type == "object" and ((.plugins // []) | type == "array" and all(.[]; type == "string"))' ;;
 			*) _check_filter='type == "object" and ((.plugins // []) | type == "array" and all(.[]; type == "string")) and ((.marketplaces // []) | type == "array" and all(.[]; type == "string"))' ;;
 			esac
-			if [ ! -s "$_check_path" ] || ! jq -e "$_check_filter" "$_check_path" >/dev/null 2>&1; then
+			if [ ! -s "$_check_path" ] || ! jq -se "length == 1 and (.[0] | ($_check_filter))" "$_check_path" >/dev/null 2>&1; then
 				ux_error "매니페스트 파일을 읽을 수 없음: $_check_path"
 				exit 3
 			fi

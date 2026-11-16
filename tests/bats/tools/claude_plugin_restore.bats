@@ -756,3 +756,11 @@ JSON
     assert_failure 3
     assert_output --partial '매니페스트 파일을 읽을 수 없음'
 }
+
+@test "restore check rejects multiple JSON documents" {
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    printf '%s\n' '{"plugins":"bad"}' '{"plugins":[]}' > "$PLUGDIR/plugins.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_failure 3
+}
