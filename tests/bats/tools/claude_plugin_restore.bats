@@ -714,3 +714,25 @@ JSON
     assert_success
     refute_output --partial 'WARN:'
 }
+
+@test "restore --check distinguishes corrupt store from missing entries" {
+    mkdir -p "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    echo invalid > "$CLAUDE_SHARED_PLUGINS_DIR/known_marketplaces.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_failure 2
+    assert_output --partial '플러그인 저장소 파일을 읽을 수 없음'
+}
+
+@test "restore check reports tombstones in their own scope when names overlap" {
+    echo internal > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    mkdir -p "$PLUGDIR/company/.git" "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    cp "$PLUGDIR/marketplaces.json" "$PLUGDIR/company/marketplaces.json"
+    cp "$PLUGDIR/plugins.json" "$PLUGDIR/company/plugins.json"
+    echo '{"marketplaces": ["understand-anything"]}' > "$PLUGDIR/company/removed.local.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_failure 1
+    assert_output --partial 'WARN: marketplace not installed: understand-anything'
+    assert_output --partial 'INFO: marketplace not installed on purpose (removed.local.json): understand-anything'
+}

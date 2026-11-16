@@ -561,3 +561,20 @@ claude-setup"
     assert_output --partial '경고 스텝: restore --check'
     assert_output --partial 'skills-sync --restore'
 }
+
+@test "restore check store failure remains a failure without restore hint" {
+    _make_fake_root 0 0 0 2
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_failure 2
+    refute_output --partial 'skills-sync --restore'
+}
+
+@test "verbose restore check shows drift and records a warning" {
+    _make_fake_root 0 0 0 1
+    _stub "$FAKE_ROOT/claude/plugin/restore.sh" restore 1 'WARN: plugin not installed: secret@private\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh" -v --only restore-check
+    assert_success
+    assert_output --partial 'secret@private'
+    assert_output --partial 'skills-sync --restore'
+    assert_output --partial '경고 스텝: restore --check'
+}
