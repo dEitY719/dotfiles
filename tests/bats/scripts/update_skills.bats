@@ -552,3 +552,12 @@ claude-setup"
     assert_success
     refute_output --partial "repo 갱신"
 }
+
+@test "restore check drift warns and recommends restore without failing sync" {
+    _make_fake_root 0 0 0 1
+    _stub "$FAKE_ROOT/claude/plugin/restore.sh" restore 1 'WARN: plugin not installed: secret@private\n'
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_success
+    assert_output --partial '경고 스텝: restore --check'
+    assert_output --partial 'skills-sync --restore'
+}

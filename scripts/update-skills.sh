@@ -380,11 +380,18 @@ fi
 _us_restore_check() {
     "${DOTFILES_ROOT}/claude/plugin/restore.sh" --check
     local rc=$?
-    [ "$rc" -eq 1 ] && return 0
+    if [ "$rc" -eq 1 ]; then
+        ux_warning "누락 항목을 설치하려면 skills-sync --restore 를 실행하세요"
+        return 0
+    fi
     return "$rc"
 }
 if _us_want restore-check; then
+    # Capture this check even in verbose mode so its drift reaches the summary.
+    _us_check_verbose=$STEP_VERBOSE
+    STEP_VERBOSE=0
     _us_step "restore --check" optional _us_restore_check
+    STEP_VERBOSE=$_us_check_verbose
     if [ "$final_rc" = 0 ]; then final_rc=$STEP_LAST_RC; fi
 fi
 if _us_want ssot; then
