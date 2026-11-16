@@ -87,6 +87,7 @@ _senv_usage() {
     ux_info "Usage: senv <command> [args]   (acts on the current directory)"
     ux_bullet "workflow"
     ux_bullet_sub "키가 있는 PC: senv init -> senv enc -> git commit"
+    ux_bullet_sub "시크릿 저장·추출 (dotfiles .enc.env): senv set KEY -> 자동 commit+push, senv get KEY / senv keys"
     ux_bullet_sub "키 백업: senv key export -> cp ~/senv-key.age ~/para/project/vault/secrets/ -> vault 에서 git commit && git push"
     ux_bullet_sub "새 PC: cd ~/para/project/vault && git pull -> senv key import ~/para/project/vault/secrets/senv-key.age -> senv dec -f (기존 .env 덮어씀) -> senv check"
     ux_bullet_sub "점검: senv check"
@@ -96,6 +97,8 @@ _senv_usage() {
     ux_bullet "edit [file]       edit the encrypted file in \$EDITOR, re-encrypt on save"
     ux_bullet "run <cmd...>      run cmd with the encrypted values as env vars (no file)"
     ux_bullet "check             key present / mode 600 / matches .sops.yaml / decrypts"
+    ux_bullet "set KEY [--stdin]  dotfiles .enc.env 에 키 저장: enc -> commit -> push (값은 숨김 입력)"
+    ux_bullet "get KEY|keys|push  dotfiles 에서 pull+복호화해 값/키 이름만 출력, push 는 수동 편집 반영"
     ux_bullet "create-pr         enc -> branch -> commit -> push -> PR (default branch only, .enc.env only)"
     ux_bullet "key show          your public key + whether .sops.yaml lists it"
     ux_bullet "key export [-o file] [-f]   lock the private key with a passphrase (~/senv-key.age)"
@@ -649,6 +652,322 @@ _senv_create_pr() {
     ux_success "PR: ${url}"
 }
 
+# ---------------------------------------------------------------------------
+# senv set/get/push/keys: the dotfiles .enc.env store cycle (#2096 저장소).
+#
+# The commands above act on the CWD project; these four act on the dotfiles
+# root — the parent of $SHELL_COMMON — where the personal .enc.env lives:
+#   set KEY   hidden prompt -> .env 갱신 -> enc -> commit(.enc.env 만) -> push
+#   get KEY   git pull -> 복호화 -> 해당 값만 stdout (파이프/클립보드용)
+#   push      수동 .env 편집 후 enc -> commit -> push (변경 시만)
+#   keys      복호화 -> 키 이름만 한 줄씩 (값 없음)
+# The value lives only in a shell variable: never echoed, logged or passed as
+# an argument. `--stdin` reads it from stdin instead of the hidden terminal
+# prompt (printf '%s' "$V" | senv set KEY --stdin) — the value still never
+# touches argv or the environment. main 에 직접 commit+push 한다 (사용자 결정).
+# ---------------------------------------------------------------------------
+
+# The dotfiles root the store subcommands act on: the parent of $SHELL_COMMON.
+# CWD-independent, and tests point SHELL_COMMON at an isolated tree, so both
+# sides resolve the same way.
+_senv_dotfiles_root() {
+    dirname "${SHELL_COMMON:-$HOME/dotfiles/shell-common}"
+}
+
+# Git preflight shared by `senv set` / `senv push` ($1 = dotfiles root): a
+# work tree, on the default branch, nothing staged except .enc.env — the same
+# invariants create-pr enforces. This path pushes main directly (no PR), so
+# the guard runs before the secret is even read.
+_senv_git_guard() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local root="$1" base cur staged
+    if ! git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        ux_error "not a git work tree: ${root}"
+        return 1
+    fi
+    base=$(git -C "$root" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)
+    base="${base#origin/}"
+    if [ -z "$base" ]; then
+        ux_error "cannot determine the default branch (origin/HEAD unset)"
+        ux_info "Next: git -C ${root} remote set-head origin -a"
+        return 1
+    fi
+    cur=$(git -C "$root" symbolic-ref -q --short HEAD 2>/dev/null)
+    if [ "$cur" != "$base" ]; then
+        ux_error "run from the default branch (${base}), not '${cur:-detached HEAD}'"
+        ux_info "Next: git -C ${root} switch ${base}"
+        return 1
+    fi
+    staged=$(git -C "$root" diff --cached --name-only | grep -vx '\.enc\.env' || true)
+    if [ -n "$staged" ]; then
+        ux_error "other staged changes would be mixed into the commit:"
+        printf '%s\n' "$staged" | while IFS= read -r f; do ux_bullet_sub "$f"; done
+        ux_info "Next: git -C ${root} restore --staged <file>  (or commit them first)"
+        return 1
+    fi
+}
+
+# Commit .enc.env (pathspec 고정 — 평문 .env 는 절대 staging/commit 되지
+# 않는다) and push the default branch to origin. Shared tail of `senv set` /
+# `senv push`. $1 = dotfiles root, $2 = commit message. The commit is the
+# user's own terminal action, so it deliberately carries no Co-Authored-By
+# trailer.
+_senv_commit_push() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local root="$1" msg="$2" branch
+    git -C "$root" add -- .enc.env || {
+        ux_error "git add failed: ${root}/.enc.env"
+        return 1
+    }
+    if ! git -C "$root" commit -m "$msg" -- .enc.env >/dev/null; then
+        ux_error "commit failed (.enc.env stays staged)"
+        return 1
+    fi
+    ux_success "committed: ${msg}"
+    branch=$(git -C "$root" symbolic-ref -q --short HEAD 2>/dev/null)
+    if ! git -C "$root" push origin HEAD; then
+        ux_error "push failed (the commit stays local on ${branch:-HEAD})"
+        ux_info "Next: git -C ${root} pull --rebase && git -C ${root} push origin HEAD"
+        return 1
+    fi
+    ux_success "pushed ${branch:-HEAD} to origin"
+}
+
+_senv_set() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local key="" use_stdin=0 root value msg tmp
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --stdin) use_stdin=1 ;;
+            *)
+                if [ -n "$key" ]; then
+                    ux_error "usage: senv set KEY [--stdin]"
+                    return 2
+                fi
+                key="$1"
+                ;;
+        esac
+        shift
+    done
+    if [ -z "$key" ]; then
+        ux_error "senv set needs a KEY name"
+        ux_info "Usage: senv set KEY [--stdin]"
+        return 2
+    fi
+    case "$key" in
+        [!A-Za-z_]* | *[!A-Za-z0-9_]*)
+            ux_error "invalid KEY name: ${key} (regex ^[A-Za-z_][A-Za-z0-9_]*$)"
+            return 2
+            ;;
+    esac
+    root=$(_senv_dotfiles_root)
+    if [ ! -f "$root/.sops.yaml" ]; then
+        ux_error ".sops.yaml not found in ${root}"
+        ux_info "Next: cd ${root} && senv init"
+        return 1
+    fi
+    if [ ! -f "$root/.env" ] && [ ! -f "$root/.enc.env" ]; then
+        ux_error "neither .env nor .enc.env found in ${root}"
+        ux_info "Next: git -C ${root} pull && cd ${root} && senv dec -f"
+        return 1
+    fi
+    # The git guard runs before the secret is read: a refused set must not
+    # make the user type the value for nothing.
+    _senv_git_guard "$root" || return 1
+    if [ "$use_stdin" -eq 0 ] && ! _senv_has_tty; then
+        ux_error "no terminal for the hidden prompt"
+        ux_info "Pipe the value instead: senv set ${key} --stdin"
+        return 1
+    fi
+    [ "$use_stdin" -eq 1 ] || printf 'value for %s (hidden): ' "$key" >&2
+    # read -rs: bash and zsh both hide the echo (-s); the value stays in this
+    # local and never reaches argv, the environment or a log. read returns 1
+    # on EOF without a trailing newline (`printf '%s' "$V" | ...`), so the
+    # emptiness of $value — not the exit status — is what rejects "no input".
+    value=""
+    # shellcheck disable=SC3045  # read -s (hidden echo) is a bash/zsh extension, same as _senv_need_tty's tty
+    read -rs value || true
+    if [ -z "$value" ]; then
+        ux_error "empty input; nothing written"
+        return 1
+    fi
+    msg="chore(secrets): .enc.env 에 ${key} 추가"
+    (
+        cd "$root" || exit 1
+        if [ ! -f .env ]; then
+            ux_info "no .env here; decrypting .enc.env first (senv dec -f)"
+            _senv_dec -f || exit 1
+        fi
+        tmp=$(mktemp .env.XXXXXX) || exit 1
+        cur=""
+        if grep -q "^${key}=" .env; then
+            msg="chore(secrets): .enc.env 에 ${key} 갱신"
+            cur=$(grep "^${key}=" .env)
+        fi
+        # Drop the old KEY line (if any), keep the rest, append the new line
+        # verbatim (dotenv 원문 그대로 — no quoting or escaping).
+        grep -v "^${key}=" .env >"$tmp" || true
+        printf '%s=%s\n' "$key" "$value" >>"$tmp"
+        # Defensive no-change: the store already holds this KEY at this value
+        # and the rest of .env still matches the store. Moving the KEY line to
+        # the end must not look like a change, and a manual edit of another
+        # key must not be swallowed by a no-op — hence the two-part check.
+        if [ -f .enc.env ] &&
+            [ "$cur" = "$key=$value" ] &&
+            [ "$(sops -d --input-type dotenv --output-type dotenv .enc.env 2>/dev/null | grep -v "^${key}=")" = "$(grep -v "^${key}=" .env)" ]; then
+            rm -f "$tmp"
+            ux_info "no change: ${key} 값이 이미 .enc.env 와 같다; nothing to do"
+            exit 0
+        fi
+        mv -f "$tmp" .env
+        _senv_enc || exit 1
+        _senv_commit_push "$root" "$msg" || exit 1
+    )
+}
+
+# Locate and decrypt the dotfiles store's ciphertext, printing the plaintext
+# dotenv to stdout for the caller to capture. Diagnoses missing config/file
+# and decrypt failures itself. Shared by `senv get` / `senv keys`.
+_senv_store_plain() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local root in plain
+    root=$(_senv_dotfiles_root)
+    # Diagnostics must go to stderr: callers capture stdout ($(...)), and a
+    # hint swallowed into the capture is a hint never shown.
+    if [ ! -f "$root/.sops.yaml" ]; then
+        ux_error ".sops.yaml not found in ${root}"
+        ux_info "Next: cd ${root} && senv init" >&2
+        return 1
+    fi
+    if [ -f "$root/.enc.env" ]; then
+        in="$root/.enc.env"
+    elif [ -f "$root/.env.enc" ]; then
+        in="$root/.env.enc"
+    else
+        ux_error ".enc.env not found in ${root}"
+        ux_info "Next: git -C ${root} pull" >&2
+        return 1
+    fi
+    if ! plain=$(sops -d --input-type dotenv --output-type dotenv "$in" 2>/dev/null); then
+        ux_error "sops failed to decrypt: ${in}"
+        ux_info "Next: senv check  (개인키가 이 파일을 여는지)" >&2
+        return 1
+    fi
+    printf '%s' "$plain"
+}
+
+_senv_get() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local key="${1-}" root plain nl rest line val found=""
+    if [ $# -ne 1 ]; then
+        ux_error "usage: senv get KEY"
+        return 2
+    fi
+    root=$(_senv_dotfiles_root)
+    # Fresh store first; offline or a diverged branch must not block
+    # extraction, so a failed pull only warns (stdout stays pure: stderr).
+    if git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        git -C "$root" pull --ff-only >/dev/null 2>&1 ||
+            ux_warning "git pull failed (offline?); using the local .enc.env" >&2
+    fi
+    if ! plain=$(_senv_store_plain); then
+        return 1
+    fi
+    # Walk the decrypted dotenv without eval; print only the named KEY's
+    # value on stdout — other keys and metadata never reach the output.
+    nl='
+'
+    rest="$plain"
+    while [ -n "$rest" ]; do
+        line="${rest%%"$nl"*}"
+        case "$rest" in
+            *"$nl"*) rest="${rest#*"$nl"}" ;;
+            *) rest="" ;;
+        esac
+        case "$line" in
+            "" | "#"*) continue ;;
+            [A-Za-z_]*=*) ;;
+            *) continue ;;
+        esac
+        [ "${line%%=*}" = "$key" ] || continue
+        val="${line#*=}"
+        found=1
+        break
+    done
+    if [ -z "$found" ]; then
+        ux_error "${key} not found in the dotfiles .enc.env"
+        ux_info "Next: senv keys   # 키 목록"
+        return 1
+    fi
+    printf '%s\n' "$val"
+}
+
+_senv_keys() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local plain nl rest line
+    if [ $# -gt 0 ]; then
+        ux_error "senv keys takes no arguments"
+        return 2
+    fi
+    if ! plain=$(_senv_store_plain); then
+        return 1
+    fi
+    nl='
+'
+    rest="$plain"
+    while [ -n "$rest" ]; do
+        line="${rest%%"$nl"*}"
+        case "$rest" in
+            *"$nl"*) rest="${rest#*"$nl"}" ;;
+            *) rest="" ;;
+        esac
+        case "$line" in
+            "" | "#"*) continue ;;
+            [A-Za-z_]*=*) ;;
+            *) continue ;;
+        esac
+        case "${line%%=*}" in
+            *[!A-Za-z0-9_]*) continue ;;
+        esac
+        printf '%s\n' "${line%%=*}"
+    done
+}
+
+_senv_push() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local root
+    if [ $# -gt 0 ]; then
+        ux_error "senv push takes no arguments (수동 .env 편집 후 실행)"
+        return 2
+    fi
+    root=$(_senv_dotfiles_root)
+    if [ ! -f "$root/.sops.yaml" ]; then
+        ux_error ".sops.yaml not found in ${root}"
+        ux_info "Next: cd ${root} && senv init"
+        return 1
+    fi
+    if [ ! -f "$root/.env" ]; then
+        ux_error ".env not found in ${root}"
+        ux_info "Next: cd ${root} && senv dec -f   (기존 .env 를 덮어쓴다)"
+        return 1
+    fi
+    _senv_git_guard "$root" || return 1
+    (
+        cd "$root" || exit 1
+        # sops output is non-deterministic (fresh nonce/mac each run), so
+        # compare the plaintext: an unchanged .env must not produce an
+        # empty-meaning commit (create-pr pattern).
+        if [ -f .enc.env ] && [ -z "$(git status --porcelain -- .enc.env)" ] &&
+            sops -d --input-type dotenv --output-type dotenv .enc.env 2>/dev/null | cmp -s - .env; then
+            ux_info "no change: .enc.env already matches .env; nothing to do"
+            exit 0
+        fi
+        _senv_enc || exit 1
+        _senv_commit_push "$root" "chore(secrets): .enc.env 를 현재 .env 로 다시 암호화한다" ||
+            exit 1
+    )
+}
+
 # GH_HOST for gh: shared resolver (internal vs external PC), else empty so gh
 # falls back to its own default host. lib/ is never auto-sourced (#2154, #2225).
 _senv_gh_host() {
@@ -667,7 +986,7 @@ senv() {
             _senv_usage
             return 0
             ;;
-        init | enc | dec | edit | run | check | key | create-pr) ;;
+        init | enc | dec | edit | run | check | key | create-pr | set | get | push | keys) ;;
         *)
             ux_error "unknown senv command: ${cmd}"
             _senv_usage
