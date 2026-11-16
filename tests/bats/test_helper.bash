@@ -67,6 +67,9 @@ setup_isolated_home() {
     unset DOTFILES_PLUGIN_SYNC_DISABLED
     # Clear inherited setup mode and host; tests can set them for each case.
     unset DOTFILES_SETUP_MODE DOTFILES_GHES_HOST
+    # A test may exercise the Codex guard explicitly; the invoking agent must
+    # not cause unrelated interactive-shell tests to skip initialization.
+    unset CODEX_CLI CODEX_MANAGED_BY_NPM CODEX_SANDBOX_NETWORK_DISABLED
     export ZDOTDIR="$TEST_TEMP_HOME"
     export XDG_CONFIG_HOME="$TEST_TEMP_HOME"
     export XDG_CACHE_HOME="$TEST_TEMP_HOME"
