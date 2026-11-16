@@ -351,14 +351,24 @@ _check_pass() {
 	local name drift=0 expected_mps expected_pls
 	expected_mps=$(printf '%s' "$PUB_MP_JSON" | jq -r 'keys[]' 2>/dev/null)
 	expected_pls=$(printf '%s' "$PUB_PL_JSON" | jq -r '(.plugins // [])[]' 2>/dev/null)
-	while IFS= read -r name; do _in_list "$name" "$STORE_MPS" || { printf 'WARN: marketplace not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_mps"
-	while IFS= read -r name; do _in_list "$name" "$STORE_PLS" || { printf 'WARN: plugin not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_pls"
+	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
+		expected_mps=$(printf '%s\n%s\n' "$expected_mps" "$(printf '%s' "$PRIV_MP_JSON" | jq -r 'keys[]' 2>/dev/null)" | sed '/^$/d' | sort -u)
+		expected_pls=$(printf '%s\n%s\n' "$expected_pls" "$(printf '%s' "$PRIV_PL_JSON" | jq -r '(.plugins // [])[]' 2>/dev/null)" | sed '/^$/d' | sort -u)
+	fi
+	while IFS= read -r name; do [ -n "$name" ] || continue; _in_list "$name" "$STORE_MPS" || { printf 'WARN: marketplace not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_mps"
+	while IFS= read -r name; do [ -n "$name" ] || continue; _in_list "$name" "$STORE_PLS" || { printf 'WARN: plugin not installed: %s\n' "$name"; drift=1; }; done <<<"$expected_pls"
 	# 묘비(removed.local.json)로 뺀 계약 항목 = 이 PC 에서 의도적 미설치. drift 가
 	# 아니므로 WARN 대신 INFO — 조용히 사라지지 않도록 이름은 보인다.
 	_check_tombstoned marketplace "$STORE_MPS" "$expected_mps" \
 		"$(_merged_marketplaces "$SCRIPT_DIR/marketplaces.json" "$SCRIPT_DIR/marketplaces.local.json" "" | jq -r 'keys[]' 2>/dev/null)"
 	_check_tombstoned plugin "$STORE_PLS" "$expected_pls" \
 		"$(_merged_plugins "$SCRIPT_DIR/plugins.json" "$SCRIPT_DIR/plugins.local.json" "" | jq -r '(.plugins // [])[]' 2>/dev/null)"
+	if [ "$COMPANY_ACTIVE" -eq 1 ]; then
+		_check_tombstoned marketplace "$STORE_MPS" "$expected_mps" \
+			"$(_merged_marketplaces "$PRIV/marketplaces.json" "$PRIV/marketplaces.local.json" "" | jq -r 'keys[]' 2>/dev/null)"
+		_check_tombstoned plugin "$STORE_PLS" "$expected_pls" \
+			"$(_merged_plugins "$PRIV/plugins.json" "$PRIV/plugins.local.json" "" | jq -r '(.plugins // [])[]' 2>/dev/null)"
+	fi
 	[ "$drift" -eq 0 ] && ux_success "drift 없음"
 	return "$drift"
 }

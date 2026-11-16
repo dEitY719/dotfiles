@@ -696,3 +696,21 @@ JSON
     assert_success
     assert_output --partial '플러그인 복원 건너뜀'
 }
+
+@test "restore --check includes active company manifests and honors tombstones" {
+    echo internal > "$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    mkdir -p "$PLUGDIR/company/.git" "$TEST_TEMP_HOME/shared"
+    export CLAUDE_SHARED_PLUGINS_DIR="$TEST_TEMP_HOME/shared"
+    echo '{"private": "team/private"}' > "$PLUGDIR/company/marketplaces.json"
+    echo '{"plugins": ["secret@private"]}' > "$PLUGDIR/company/plugins.json"
+    echo '{"understand-anything": {}}' > "$CLAUDE_SHARED_PLUGINS_DIR/known_marketplaces.json"
+    echo '{"plugins": {"understand-anything@understand-anything": []}}' > "$CLAUDE_SHARED_PLUGINS_DIR/installed_plugins.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_failure 1
+    assert_output --partial 'WARN: marketplace not installed: private'
+    assert_output --partial 'WARN: plugin not installed: secret@private'
+    echo '{"marketplaces": ["private"]}' > "$PLUGDIR/company/removed.local.json"
+    run "$PLUGDIR/restore.sh" --check
+    assert_success
+    refute_output --partial 'WARN:'
+}
