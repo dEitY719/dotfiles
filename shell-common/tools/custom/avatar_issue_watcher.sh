@@ -2309,7 +2309,7 @@ _iw_herdr_error_message() {
     printf '%s' "${_msg}"
 }
 
-# Start agent <1> on pane <2>, retrying only the #1525 `agent_pane_busy` race.
+# Start agent <1> on pane <2>, retrying understood shell startup races.
 # 0 = an agent is running on the pane, 1 = gave up, with _IW_START_CODE naming
 # the last failure and _IW_START_MESSAGE carrying herdr's sentence about it.
 #
@@ -2350,16 +2350,19 @@ _iw_start_agent_retrying() {
             break
         fi
 
-        # The one failure worth another attempt (#1525): the pane was created
-        # moments ago and its shell is not interactive yet. Only this code — a
-        # failure that does not name itself is not a race we understand, and
-        # ending the attempt immediately keeps that contract intact.
-        if [ "${_IW_START_CODE}" != "agent_pane_busy" ] ||
-            [ "${_attempt}" -ge "${_IW_START_ATTEMPT_MAX}" ]; then
+        # Retry a busy pane, or a timeout with evidence that the shell lost
+        # part of the launch command. Other timeouts retain the outer retry.
+        if [ "${_attempt}" -ge "${_IW_START_ATTEMPT_MAX}" ]; then
             break
         fi
+        if [ "${_IW_START_CODE}" != "agent_pane_busy" ]; then
+            if [ "${_IW_START_CODE}" != "timeout" ] ||
+                ! _hp_shell_pane_text "${_pane}" | grep -qi 'command not found'; then
+                break
+            fi
+        fi
 
-        ux_warning "herdr agent start ${_agent} hit agent_pane_busy on pane ${_pane} (start ${_attempt}/${_IW_START_ATTEMPT_MAX}) — retrying in ${_IW_START_RETRY_SLEEP}s."
+        ux_warning "herdr agent start ${_agent} hit ${_IW_START_CODE} on pane ${_pane} (start ${_attempt}/${_IW_START_ATTEMPT_MAX}) — retrying in ${_IW_START_RETRY_SLEEP}s."
         [ "${_IW_START_RETRY_SLEEP}" = "0" ] || sleep "${_IW_START_RETRY_SLEEP}"
         _attempt=$((_attempt + 1))
     done
@@ -2609,7 +2612,7 @@ _iw_unknown_command_held() {
 _iw_process_issue() {
     local _repo="$1" _number="$2" _path="$3"
     local _attempt=1 _agent _label _ws="" _pane_tab="" _pane="" _tab=""
-    local _cause="" _msg="" _wt
+    local _cause="" _msg="" _wt _pane_tail
 
     # A repo whose name normalizes to nothing has no addressable agent, so the
     # dispatch fails here rather than starting a session under a name no later
@@ -2678,6 +2681,9 @@ EOF
                 _msg="herdr agent start ${_agent} failed on pane ${_pane} (${_IW_START_CODE:-unknown}, attempt ${_attempt}/${_IW_MAX_ATTEMPTS})."
                 [ -z "${_cause}" ] || _msg="${_msg}
     원인: ${_cause}"
+                _pane_tail=$(_hp_shell_pane_text "${_pane}" | awk 'NF { lines[++n]=$0 } END { for (i=(n>3?n-2:1); i<=n; i++) print "    pane: " lines[i] }')
+                [ -z "${_pane_tail}" ] || _msg="${_msg}
+${_pane_tail}"
                 ux_warning "${_msg}"
             elif _iw_mark_tab "${_tab}"; then
                 # Do not serialize unrelated (or later same-repo) dispatches

@@ -581,6 +581,13 @@ case "$1 $2" in
     printf '%s\n' '{"id":"cli:notification:show","result":{"ok":true}}'
     ;;
 "agent start")
+    if [ "${HERDR_START_TIMEOUT:-0}" != "0" ]; then
+        _n=$(_bump "${CALL_LOG}.starttimeout")
+        if [ "${_n}" -le "${HERDR_START_TIMEOUT}" ]; then
+            printf '%s\n' '{"error":{"code":"timeout","message":"timed out waiting for agent startup"}}'
+            exit 1
+        fi
+    fi
     [ "${HERDR_START_FAIL:-0}" = "1" ] && exit 1
     if [ "${HERDR_START_NAME_TAKEN:-0}" = "1" ]; then
         printf '%s\n' '{"error":{"code":"agent_name_taken","message":"agent name is already used; candidates: status=Idle"},"id":"cli:agent:start"}'
@@ -837,6 +844,7 @@ _run_tick() {
         "IW_IDLE_POLL_SLEEP=0" \
         "IW_STALL_RECOVER_SLEEP=0" \
         "IW_START_RETRY_SLEEP=0" \
+        "HP_SHELL_SETTLE_SECONDS=0" \
         "IW_LIMIT_OBSERVE_SLEEP=0" \
         "IW_MAX_PER_REPO=3" \
         "IW_MAX_CONCURRENT=7" \
@@ -5404,4 +5412,19 @@ _only_run_log() {
     assert_success
     assert_output --partial "Account 'work' ignored"
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
+}
+
+@test "avatar_issue_watcher: timeout with missing command retries the same pane" {
+    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT=zsh: command not found: laude"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 2 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: timeout without missing command does not retry same pane" {
+    _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_TEXT=still starting"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 3 ]
+    assert_output --partial 'pane: still starting'
+    assert_output --partial '원인: timed out waiting for agent startup'
 }

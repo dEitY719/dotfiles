@@ -20,6 +20,10 @@ setup() {
 #!/bin/sh
 printf 'herdr %s\n' "$*" >>"${CALL_LOG}"
 case "$1 $2" in
+"pane read")
+    n=$(grep -c "^herdr pane read" "${CALL_LOG}")
+    if [ "${HERDR_SHELL_CHANGING:-0}" = 1 ] && [ "$n" -lt 3 ]; then printf 'boot %s\n' "$n"; else printf '%s\n' "${HERDR_SHELL_TEXT-ready}"; fi
+    ;;
 "agent read")
     [ "${HERDR_READ_TEXT:-ready}" = "~" ] || printf '%s\n' "${HERDR_READ_TEXT:-ready}"
     ;;
@@ -165,4 +169,24 @@ _lib() {
     _lib '_hp_resolve_config_dir /nonexistent job-x stderr 2>&1; echo "rc=$?"'
     assert_output --partial "Cannot load /nonexistent/tools/integrations/claude.sh"
     assert_output --partial "rc=1"
+}
+
+@test "herdr_pane: shell settles through three identical frames before start" {
+    _lib '_hp_agent_start agent pane /dev/null' "HERDR_SHELL_CHANGING=1" "HP_SHELL_SETTLE_SECONDS=15"
+    assert_success
+    run grep '^herdr ' "${_LOG}"
+    assert_line --index 4 "herdr pane read pane"
+    assert_line --index 5 "herdr agent start agent --kind claude --pane pane -- --dangerously-skip-permissions"
+}
+
+@test "herdr_pane: shell settle cap and zero both proceed" {
+    _lib '_hp_agent_start agent pane /dev/null' "HERDR_SHELL_TEXT=" "HP_SHELL_SETTLE_SECONDS=2"
+    assert_success
+    run grep -c 'pane read' "${_LOG}"
+    assert_output 2
+    : >"${_LOG}"
+    _lib '_hp_agent_start agent pane /dev/null' "HP_SHELL_SETTLE_SECONDS=0"
+    assert_success
+    run grep -c 'pane read' "${_LOG}"
+    assert_output 0
 }

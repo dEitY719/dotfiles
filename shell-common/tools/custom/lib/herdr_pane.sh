@@ -261,8 +261,42 @@ _hp_agent_status() {
 # named the failure — `agent_pane_busy`. stdout stays on the pipe because the
 # caller reads `.error.code` off it, which is why this is a file and not `2>&1`.
 _hp_agent_start() {
+    _hp_shell_settle "$2"
     herdr agent start "$1" --kind claude --pane "$2" \
         -- --dangerously-skip-permissions 2>"$3"
+}
+
+# Wait for a stable, non-empty shell pane before typing the launch command.
+# This is best-effort: unreadable panes and a spent budget never block startup.
+_hp_shell_settle() {
+    local _pane="$1" _seconds="${HP_SHELL_SETTLE_SECONDS:-15}"
+    local _prev="" _prev2="" _text _i=0 _now _deadline=""
+    case "${_seconds}" in ''|*[!0-9]*) return 0 ;; esac
+    [ "${_seconds}" -gt 0 ] || return 0
+    _now=$(_hp_now)
+    # shellcheck disable=SC3052 # bash-only callers; see the file header.
+    [ -z "${_now}" ] || _deadline=$((_now + 10#${_seconds}))
+    while [ "${_i}" -lt "${_seconds}" ]; do
+        if [ -n "${_deadline}" ]; then
+            _now=$(_hp_now)
+            [ -z "${_now}" ] || [ "${_now}" -lt "${_deadline}" ] || break
+        fi
+        _text=$(_hp_shell_pane_text "${_pane}")
+        # A nonempty sentinel is required: an empty mark matches every string.
+        ! _hp_pane_settled "${_text}" "${_prev}" "${_prev2}" '__HP_NO_SHELL_MARK__' || return 0
+        _prev2="${_prev}"
+        _prev="${_text}"
+        _i=$((_i + 1))
+        [ "${_i}" -ge "${_seconds}" ] || sleep 1
+    done
+    return 0
+}
+
+_hp_shell_pane_text() {
+    local _text
+    _text=$(herdr pane read "$1" 2>/dev/null) || return 0
+    [ -z "$(printf '%s' "${_text}" | _hp_json_value '.error.code')" ] || return 0
+    printf '%s' "${_text}"
 }
 
 # Accept claude's first-run "trust this folder" dialog on pane <1>.
