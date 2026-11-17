@@ -608,8 +608,12 @@ case "$1 $2" in
     ;;
 "pane read")
     if [ "${HERDR_PANE_TEXT_AFTER_TIMEOUT:-0}" = 1 ] && [ ! -f "${CALL_LOG}.starttimeout" ]; then
-        printf '%s\n' 'ready'
+        printf '%s\n' "${HERDR_PANE_BEFORE-ready}"
     else
+        [ "${HERDR_PANE_READ_FAIL:-0}" != 1 ] || exit 1
+        if [ "${HERDR_PANE_TEXT_AFTER_TIMEOUT:-0}" = 1 ]; then
+            printf '%s\n' "${HERDR_PANE_BEFORE-ready}"
+        fi
         printf '%s\n' "${HERDR_PANE_TEXT:-}"
     fi
     ;;
@@ -5437,4 +5441,33 @@ _only_run_log() {
     _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_TEXT=zsh: command not found: old-command"
     assert_failure
     [ "$(_log_count 'agent start')" -eq 3 ]
+}
+
+@test "avatar_issue_watcher: new error after stale error retries the same pane" {
+    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_BEFORE=zsh: command not found: old" "HERDR_PANE_TEXT=zsh: command not found: new"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 2 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: French bash missing command retries the same pane" {
+    # Ubuntu language-pack-fr-base bash.mo: %s : commande introuvable.
+    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=bash: laude : commande introuvable"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 2 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: unreadable pane does not trigger same-pane retry" {
+    _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_READ_FAIL=1"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 3 ]
+    [ "$(_log_count 'tab create')" -eq 3 ]
+}
+
+@test "avatar_issue_watcher: new error after empty pane retries the same pane" {
+    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_BEFORE=" "HERDR_PANE_TEXT=bash: laude: command not found"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 2 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
 }
