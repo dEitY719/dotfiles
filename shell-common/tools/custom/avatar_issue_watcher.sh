@@ -2316,7 +2316,7 @@ _iw_herdr_error_message() {
 # Each attempt truncates the capture file, so a retry that fails differently can
 # never be reported with the previous attempt's cause.
 _iw_start_agent_retrying() {
-    local _agent="$1" _pane="$2" _json _attempt=1 _rc=1
+    local _agent="$1" _pane="$2" _json _attempt=1 _rc=1 _before
 
     _IW_START_CODE=""
     _IW_START_MESSAGE=""
@@ -2336,6 +2336,7 @@ _iw_start_agent_retrying() {
     fi
 
     while :; do
+        _before=$(_hp_shell_pane_text "${_pane}")
         if _json=$(_hp_agent_start "${_agent}" "${_pane}" "${_IW_ERRF}"); then
             _rc=0
             break
@@ -2357,7 +2358,8 @@ _iw_start_agent_retrying() {
         fi
         if [ "${_IW_START_CODE}" != "agent_pane_busy" ]; then
             if [ "${_IW_START_CODE}" != "timeout" ] ||
-                ! _hp_shell_pane_text "${_pane}" | grep -qi 'command not found'; then
+                printf '%s' "${_before}" | grep -i 'command not found' >/dev/null ||
+                ! _hp_shell_pane_text "${_pane}" | grep -i 'command not found' >/dev/null; then
                 break
             fi
         fi

@@ -607,7 +607,11 @@ case "$1 $2" in
     printf '%s\n' '{"id":"cli:agent:start","result":{"agent":{"agent_status":"idle","pane_id":"ws-test-1:p9"}}}'
     ;;
 "pane read")
-    printf '%s\n' "${HERDR_PANE_TEXT:-}"
+    if [ "${HERDR_PANE_TEXT_AFTER_TIMEOUT:-0}" = 1 ] && [ ! -f "${CALL_LOG}.starttimeout" ]; then
+        printf '%s\n' 'ready'
+    else
+        printf '%s\n' "${HERDR_PANE_TEXT:-}"
+    fi
     ;;
 "pane send-keys")
     ;;
@@ -5415,7 +5419,7 @@ _only_run_log() {
 }
 
 @test "avatar_issue_watcher: timeout with missing command retries the same pane" {
-    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT=zsh: command not found: laude"
+    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=zsh: command not found: laude"
     assert_success
     [ "$(_log_count 'agent start')" -eq 2 ]
     [ "$(_log_count 'tab create')" -eq 1 ]
@@ -5427,4 +5431,10 @@ _only_run_log() {
     [ "$(_log_count 'agent start')" -eq 3 ]
     assert_output --partial 'pane: still starting'
     assert_output --partial '원인: timed out waiting for agent startup'
+}
+
+@test "avatar_issue_watcher: stale missing-command output does not trigger timeout retry" {
+    _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_TEXT=zsh: command not found: old-command"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 3 ]
 }
