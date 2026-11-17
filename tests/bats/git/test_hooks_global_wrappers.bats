@@ -69,3 +69,13 @@ teardown() {
     assert_success
     assert_output --partial 'PMC-RAN'
 }
+
+@test "pre-merge-commit forwards stdin to the project hook" {
+    local repo="$TEST_TEMP_HOME/stdin-repo"
+    make_plain_repo "$repo"
+    mkdir -p "$repo/scripts/hooks"
+    printf '#!/bin/sh\ncat > "%s/stdin-captured"\n' "$repo" >"$repo/scripts/hooks/pre-merge-commit"
+    chmod +x "$repo/scripts/hooks/pre-merge-commit"
+    run_global_hook "$repo" pre-merge-commit <<<"hook input"
+    [ "$(cat "$repo/stdin-captured")" = 'hook input' ]
+}
