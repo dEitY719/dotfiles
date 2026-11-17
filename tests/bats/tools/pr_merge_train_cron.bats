@@ -336,6 +336,7 @@ _run_tick() {
         "CALL_LOG=${_LOG}" \
         "GH_PRS_FILE=${_WORK_DIR}/prs.json" \
         "XDG_STATE_HOME=${_STATE_HOME}" \
+        "HP_SHELL_SETTLE_SECONDS=0" \
         "PMT_IDLE_POLL_SLEEP=0" \
         "PMT_START_RETRY_SLEEP=0" \
         "${_env[@]}" \
