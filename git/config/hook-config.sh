@@ -27,6 +27,7 @@
 GIT_GLOBAL_HOOKS=(
     pre-commit
     pre-push
+    pre-merge-commit
     commit-msg
     prepare-commit-msg
     post-commit
