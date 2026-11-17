@@ -237,7 +237,7 @@ _in() {
     local _p
     for _p in iw pmt; do
         : >"${_LOG}"
-        _in "${_p}" "_hp_agent_start name1 pane1 ${_WORK_DIR}/err.${_p}"
+        _in "${_p}" "_hp_agent_start name1 pane1 ${_WORK_DIR}/err.${_p}" "HP_SHELL_SETTLE_SECONDS=0"
         assert_success
         run cat "${_LOG}"
         assert_output "herdr agent start name1 --kind claude --pane pane1 -- --dangerously-skip-permissions"
