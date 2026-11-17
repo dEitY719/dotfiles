@@ -34,7 +34,7 @@ name exists in the global dir. `git/setup.sh` links every name in
 dead code, not a fallback.
 
 `global-hooks/pre-commit` carries universal safety checks **and** delegates.
-The other wrappers (`pre-push`, `commit-msg`, `prepare-commit-msg`, `post-commit`,
+The other wrappers (`pre-push`, `pre-merge-commit`, `commit-msg`, `prepare-commit-msg`, `post-commit`,
 `post-checkout`, `post-merge`, `post-rewrite`) are delegation-only: they forward to the first of
 `.githooks/<name>` → `git/hooks/<name>` → `scripts/hooks/<name>` → `.git/hooks/<name>` **relative to
 the repo being operated on**, passing argv, stdin and the exit code through,

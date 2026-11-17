@@ -812,7 +812,7 @@ EOF
 # Every wrapper forwards argv to the project hook of the current repo.
 test_global_wrappers_delegate_argv() {
     local hook_name repo_dir
-    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+    for hook_name in pre-push pre-merge-commit commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
         repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_plain_repo "$repo_dir"
         install_recording_project_hook "$repo_dir" "$hook_name" 0
@@ -830,7 +830,7 @@ test_global_wrappers_delegate_argv() {
 # Every wrapper propagates the project hook's exit code verbatim.
 test_global_wrappers_propagate_exit_code() {
     local hook_name repo_dir rc
-    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+    for hook_name in pre-push pre-merge-commit commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
         repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_plain_repo "$repo_dir"
         install_recording_project_hook "$repo_dir" "$hook_name" 42
@@ -848,7 +848,7 @@ test_global_wrappers_propagate_exit_code() {
 # No project hook of that type -> silent no-op for every wrapper.
 test_global_wrappers_are_noop_without_project_hook() {
     local hook_name repo_dir
-    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+    for hook_name in pre-push pre-merge-commit commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
         repo_dir="$(mktemp -d "${TEST_TEMP_HOME}"/hook-test.XXXXXX)"
         make_plain_repo "$repo_dir"
 
@@ -869,7 +869,7 @@ test_global_wrappers_are_noop_outside_git_repo() {
     # Detach from any enclosing repository (mktemp dirs live under /tmp).
     export GIT_CEILING_DIRECTORIES="$work_dir"
 
-    for hook_name in pre-push commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
+    for hook_name in pre-push pre-merge-commit commit-msg prepare-commit-msg post-commit post-merge post-rewrite; do
         run_global_hook "$work_dir" "$hook_name" </dev/null ||
             die "Expected ${hook_name} wrapper to exit 0 outside a repo: $WRAPPER_OUT"
         [ -z "$WRAPPER_OUT" ] ||

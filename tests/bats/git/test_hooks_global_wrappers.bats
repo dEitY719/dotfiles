@@ -48,3 +48,24 @@ teardown() {
 @test "test_global_wrappers_are_noop_outside_git_repo" {
     test_global_wrappers_are_noop_outside_git_repo
 }
+
+@test "pre-merge-commit runs through global hooksPath during a merge" {
+    local repo="$TEST_TEMP_HOME/merge-repo" hooks="$TEST_TEMP_HOME/global-hooks"
+    make_plain_repo "$repo"
+    mkdir -p "$hooks" "$repo/scripts/hooks"
+    ln -s "$GLOBAL_HOOKS_DIR/pre-merge-commit" "$hooks/pre-merge-commit"
+    git -C "$repo" config core.hooksPath "$hooks"
+    git -C "$repo" checkout -qb feature
+    printf 'feature\n' >"$repo/feature"
+    git -C "$repo" add feature
+    git -C "$repo" commit -qm feature
+    git -C "$repo" checkout -q -
+    printf 'main\n' >"$repo/main-file"
+    git -C "$repo" add main-file
+    git -C "$repo" commit -qm main
+    printf '#!/bin/sh\nprintf "PMC-RAN\\n" >&2\n' >"$repo/scripts/hooks/pre-merge-commit"
+    chmod +x "$repo/scripts/hooks/pre-merge-commit"
+    run git -C "$repo" merge --no-ff -m merge feature
+    assert_success
+    assert_output --partial 'PMC-RAN'
+}

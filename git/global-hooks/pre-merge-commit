@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Global pre-merge-commit wrapper: forward to the project's hook, if present.
+# Installed by git/setup.sh because core.hooksPath replaces .git/hooks.
+
+set -u
+
+HOOK_NAME="pre-merge-commit"
+SELF=$(readlink -f "$0" 2>/dev/null || echo "$0")
+# shellcheck source=./lib/delegate.sh
+source "$(dirname "$SELF")/lib/delegate.sh"
