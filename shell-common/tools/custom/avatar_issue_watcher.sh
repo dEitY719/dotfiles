@@ -2309,21 +2309,6 @@ _iw_herdr_error_message() {
     printf '%s' "${_msg}"
 }
 
-# Compare only appended pane output. A cleared/scrolled pane, a failed read, or
-# an unrecognized locale cannot provide reliable evidence and is not retried.
-# French wording comes from Ubuntu language-pack-fr-base's bash catalog; zsh's
-# English message is also supported. Other translations are intentionally unknown.
-_iw_new_missing_command() {
-    local _pane="$1" _before="$2" _after _new
-    _after=$(herdr pane read "${_pane}" 2>/dev/null) || return 1
-    [ -z "$(printf '%s' "${_after}" | _hp_json_value '.error.code')" ] || return 1
-    case "${_after}" in
-        "${_before}"*) _new=${_after#"${_before}"} ;;
-        *) return 1 ;;
-    esac
-    printf '%s' "${_new}" | grep -Ei 'command not found|commande introuvable' >/dev/null
-}
-
 # Start agent <1> on pane <2>, retrying understood shell startup races.
 # 0 = an agent is running on the pane, 1 = gave up, with _IW_START_CODE naming
 # the last failure and _IW_START_MESSAGE carrying herdr's sentence about it.
@@ -2331,7 +2316,7 @@ _iw_new_missing_command() {
 # Each attempt truncates the capture file, so a retry that fails differently can
 # never be reported with the previous attempt's cause.
 _iw_start_agent_retrying() {
-    local _agent="$1" _pane="$2" _json _attempt=1 _rc=1 _before _before_ok
+    local _agent="$1" _pane="$2" _json _attempt=1 _rc=1
 
     _IW_START_CODE=""
     _IW_START_MESSAGE=""
@@ -2351,11 +2336,6 @@ _iw_start_agent_retrying() {
     fi
 
     while :; do
-        _before_ok=1
-        _before=$(herdr pane read "${_pane}" 2>/dev/null) || _before_ok=0
-        if [ -n "$(printf '%s' "${_before}" | _hp_json_value '.error.code')" ]; then
-            _before_ok=0
-        fi
         if _json=$(_hp_agent_start "${_agent}" "${_pane}" "${_IW_ERRF}"); then
             _rc=0
             break
@@ -2370,18 +2350,14 @@ _iw_start_agent_retrying() {
             break
         fi
 
-        # Retry a busy pane, or a timeout with evidence that the shell lost
-        # part of the launch command. Other timeouts retain the outer retry.
+        # Only a busy response identifies a retryable start failure. Pane text
+        # cannot attribute a shell error to this request: another process may
+        # have printed it while an agent is still starting. Timeouts therefore
+        # use the outer cleanup/retry, even for a visibly truncated command.
         if [ "${_attempt}" -ge "${_IW_START_ATTEMPT_MAX}" ]; then
             break
         fi
-        if [ "${_IW_START_CODE}" != "agent_pane_busy" ]; then
-            if [ "${_IW_START_CODE}" != "timeout" ] ||
-                [ "${_before_ok}" -ne 1 ] ||
-                ! _iw_new_missing_command "${_pane}" "${_before}"; then
-                break
-            fi
-        fi
+        [ "${_IW_START_CODE}" = "agent_pane_busy" ] || break
 
         ux_warning "herdr agent start ${_agent} hit ${_IW_START_CODE} on pane ${_pane} (start ${_attempt}/${_IW_START_ATTEMPT_MAX}) — retrying in ${_IW_START_RETRY_SLEEP}s."
         [ "${_IW_START_RETRY_SLEEP}" = "0" ] || sleep "${_IW_START_RETRY_SLEEP}"
