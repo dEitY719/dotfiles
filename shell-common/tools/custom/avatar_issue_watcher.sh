@@ -2167,16 +2167,35 @@ _iw_start_pending_write() {
     return 1
 }
 
+# The watcher normally holds flock, but it also runs on machines without it.
+# noclobber reserves the issue atomically before either contender may start.
+_iw_start_pending_create() {
+    local _file="$1"
+    shift
+    mkdir -p "${_file%/*}" || return 1
+    (set -C; printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$@" >"${_file}") 2>/dev/null
+}
+
 # A pending start occupies a slot even before herdr detects an agent. A later
 # tick may resume only an idle agent in the original pane. A missing or
 # unreachable agent is not proof that the launch failed, so it stays pending.
 _iw_resume_pending_starts() {
-    local _file _repo _number _pane _tab _phase _flow _status _json _state _host _saved_flow _saved_resolved _rc
+    local _file _repo _number _pane _tab _phase _flow _status _json _state _labels _host _saved_flow _saved_resolved _rc _claim
     for _file in "$(_iw_state_dir)"/start-pending/*; do
         [ -f "${_file}" ] || continue
         IFS="${_IW_TAB}" read -r _repo _number _pane _tab _phase _flow <"${_file}" || return 1
         [ -n "${_repo}" ] && [ -n "${_number}" ] && [ -n "${_pane}" ] && [ -n "${_tab}" ] || return 1
         case "${_flow}" in /*) ;; *) return 1 ;; esac
+        if [ "${_phase}" = ambiguous ]; then
+            # A name collision or unknown error does not identify the pane's
+            # agent as ours. Never send it a prompt merely because it is idle.
+            _json=$(herdr pane get "${_pane}" 2>/dev/null) || true
+            if [ "$(printf '%s' "${_json}" | _hp_json_value '.error.code')" = pane_not_found ]; then
+                rm -f "${_file}" || return 1
+                ux_warning "Pending pane ${_pane} no longer exists; ${_repo}#${_number} may be retried."
+            fi
+            continue
+        fi
         [ "${_phase}" = starting ] || continue
         if ! _json=$(herdr agent get "${_pane}" 2>/dev/null); then
             # Only an explicit pane-not-found response proves that this
@@ -2194,12 +2213,32 @@ _iw_resume_pending_starts() {
         [ "${_status}" = idle ] || continue
         [ -n "$(_iw_repo_path "${_repo}")" ] || continue
         _host=$(_iw_repo_host "${_repo}")
-        _state=$(GH_HOST="${_host}" gh issue view "${_number}" --repo "${_repo}" --json state -q .state </dev/null 2>/dev/null) || continue
+        _json=$(GH_HOST="${_host}" gh issue view "${_number}" --repo "${_repo}" --json number,state,labels </dev/null 2>/dev/null) || continue
+        _state=$(printf '%s' "${_json}" | jq -er '.state' 2>/dev/null) || continue
         [ "${_state}" = OPEN ] || continue
+        _labels=$(printf '%s' "${_json}" | jq -er '[.labels[].name] | join("\u001f")' 2>/dev/null) || continue
+        _iw_excluded_by_label "${_labels}" && continue
+        _iw_load_open_prs "${_repo}" "${_host}" || continue
+        _rc=0
+        _iw_handled_by_pr "${_number}" || _rc=$?
+        [ "${_rc}" -eq 1 ] || continue
+        _iw_blocked_by_open "${_repo}" "${_number}" "${_host}" && continue
         _iw_settle "${_pane}" || continue
         # Persist before sending: if the caller dies during prompt, a later
         # tick cannot know whether it landed and must not send it twice.
-        _iw_start_pending_write "${_file}" "${_repo}" "${_number}" "${_pane}" "${_tab}" submitting "${_flow}" || return 1
+        # The tick lock can be unavailable. Claim this record atomically and
+        # re-read it after the claim so two ticks cannot submit the same work.
+        _claim="${_file}.resume"
+        mkdir "${_claim}" 2>/dev/null || continue
+        if ! IFS="${_IW_TAB}" read -r _repo _number _pane _tab _phase _flow <"${_file}" || [ "${_phase}" != starting ]; then
+            rmdir "${_claim}" 2>/dev/null || true
+            continue
+        fi
+        if ! _iw_start_pending_write "${_file}" "${_repo}" "${_number}" "${_pane}" "${_tab}" submitting "${_flow}"; then
+            rmdir "${_claim}" 2>/dev/null || true
+            return 1
+        fi
+        rmdir "${_claim}" || return 1
         _saved_flow="${_IW_FLOW_COMMAND}" _saved_resolved="${_IW_FLOW_RESOLVED}"
         _IW_FLOW_COMMAND="${_flow}" _IW_FLOW_RESOLVED=1
         _rc=0
@@ -2750,7 +2789,7 @@ _iw_process_issue() {
 ${_pane_tab}
 EOF
             if ! _pending=$(_iw_start_pending_file "${_repo}" "${_number}") ||
-                [ -e "${_pending}" ] || ! _iw_start_pending_write "${_pending}" "${_repo}" "${_number}" "${_pane}" "${_tab}" starting "${_IW_FLOW_COMMAND}"; then
+                ! _iw_start_pending_create "${_pending}" "${_repo}" "${_number}" "${_pane}" "${_tab}" ambiguous "${_IW_FLOW_COMMAND}"; then
                 ux_error "Cannot record a safe start for ${_repo}#${_number}; not starting its agent."
                 _iw_cleanup_attempt "${_tab}"
                 return 1
@@ -2774,14 +2813,13 @@ EOF
                 [ -z "${_pane_tail}" ] || _msg="${_msg}
 ${_pane_tail}"
                 ux_warning "${_msg}"
-                # A name collision rejects this request before its pane is
-                # started. Busy, blocked, timed-out and unknown responses do
-                # not prove the pane is safe to destroy.
-                if [ "${_IW_START_CODE}" != agent_name_taken ]; then
-                    ux_warning "Start outcome is uncertain — keeping tab ${_tab} for a later tick."
-                    return 1
+                # Even a name collision can identify an agent already running
+                # in this pane. None of these errors proves it safe to close.
+                if [ "${_IW_START_CODE}" = timeout ]; then
+                    _iw_start_pending_write "${_pending}" "${_repo}" "${_number}" "${_pane}" "${_tab}" starting "${_IW_FLOW_COMMAND}" || return 1
                 fi
-                rm -f "${_pending}" || return 1
+                ux_warning "Start outcome is uncertain — keeping tab ${_tab} for a later tick."
+                return 1
             elif _iw_mark_tab "${_tab}"; then
                 rm -f "${_pending}" || return 1
                 # Do not serialize unrelated (or later same-repo) dispatches
@@ -4016,10 +4054,12 @@ _iw_tick_guards() {
 
     # Reconcile before taking the live snapshot. Taking it twice also advances
     # the stopped-session grace state twice in one tick.
-    _iw_resume_pending_starts || {
-        ux_warning "Cannot reconcile pending starts — holding this tick."
-        return 1
-    }
+    if [ "${_IW_TARGETED}" -eq 0 ]; then
+        _iw_resume_pending_starts || {
+            ux_warning "Cannot reconcile pending starts — holding this tick."
+            return 1
+        }
+    fi
 
     # Primed here, in the tick's own shell, so the subshells below inherit a
     # warm cache — the same reason the watch list is primed above. Failure is
