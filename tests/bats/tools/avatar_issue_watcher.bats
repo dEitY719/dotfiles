@@ -619,6 +619,13 @@ case "$1 $2" in
     ;;
 "pane send-keys")
     ;;
+"pane get")
+    if [ "${HERDR_PANE_MISSING:-0}" = 1 ]; then
+        printf '%s\n' '{"error":{"code":"pane_not_found","message":"pane not found"}}'
+        exit 1
+    fi
+    printf '%s\n' '{"id":"cli:pane:get","result":{"pane":{"pane_id":"ws-test-1:p9"}}}'
+    ;;
 "agent get")
     if [ "${HERDR_AGENT_GET_FAIL:-0}" = "1" ]; then
         printf '%s\n' '{"error":{"code":"agent_not_found","message":"agent target not found"},"id":"cli:agent:get"}'
@@ -656,11 +663,11 @@ case "$1 $2" in
         _status="${HERDR_STATUS_AFTER_SENDKEYS}"
     fi
     if [ "${HERDR_SEQ_MODE:-ok}" = "absent" ]; then
-        printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s"}}}\n' "${_status}"
+        printf '{"id":"cli:agent:get","result":{"agent":{"agent":"claude","pane_id":"%s","agent_status":"%s"}}}\n' "$3" "${_status}"
     else
         _seq=$(cat "${CALL_LOG}.seq" 2>/dev/null || printf 0)
-        printf '{"id":"cli:agent:get","result":{"agent":{"agent_status":"%s","state_change_seq":%s}}}\n' \
-            "${_status}" "${_seq:-0}"
+        printf '{"id":"cli:agent:get","result":{"agent":{"agent":"claude","pane_id":"%s","agent_status":"%s","state_change_seq":%s}}}\n' \
+            "$3" "${_status}" "${_seq:-0}"
     fi
     ;;
 "agent send-keys")
@@ -743,6 +750,7 @@ _install_failing_mktemp() {
     cat >"${_BIN_DIR}/mktemp" <<'EOF'
 #!/bin/sh
 printf 'mktemp %s\n' "$*" >>"${CALL_LOG}"
+[ "$#" -eq 0 ] || { command -p mktemp "$@"; exit "$?"; }
 printf 'mktemp: failed to create file\n' >&2
 exit 1
 EOF
@@ -920,7 +928,7 @@ _path_without() {
     rm -rf "${_d}"
     mkdir -p "${_d}"
 
-    for _b in sh bash env git jq awk sed grep egrep head tail cat cut tr sort \
+    for _b in sh bash env git jq awk sed grep egrep head tail cat cut tr sort od mv \
         uniq date mkdir rmdir rm ln basename dirname sleep mktemp flock tput \
         uname wc chmod find id stty locale python3; do
         _skip=0
@@ -2479,13 +2487,14 @@ _two_repo_fixture() {
     _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
 }
 
-@test "avatar_issue_watcher: an unwritable state dir does not stop the dispatch" {
+@test "avatar_issue_watcher: an unwritable state dir prevents an unrecorded start" {
     _two_repo_fixture
     mkdir -p "${_STATE_DIR}"
     chmod 500 "${_STATE_DIR}"
     _run_tick
-    assert_success
-    _assert_logged "--label iw-dotfiles-issue-11 --no-focus"
+    assert_failure
+    assert_output --partial "Cannot record a safe start"
+    _refute_logged "agent start"
 }
 
 @test "avatar_issue_watcher: --dry-run does not advance the cursor" {
@@ -2668,8 +2677,8 @@ _two_repo_fixture() {
     [ "$(printf '%s\n' "${output}" | grep -c 'herdr tab create failed')" -eq 3 ]
 }
 
-@test "avatar_issue_watcher: an agent-start failure closes the tab it opened" {
-    _run_tick "HERDR_START_FAIL=1"
+@test "avatar_issue_watcher: a confirmed name rejection closes the unused tab" {
+    _run_tick "HERDR_START_NAME_TAKEN=1"
     assert_failure
     _assert_logged "tab close ws-test-1:t9"
 }
@@ -2756,24 +2765,20 @@ _two_repo_fixture() {
     assert_failure
 }
 
-# The inner retrying is bounded, and the bound is the point: cron re-runs every
-# few minutes anyway. Three inner *attempts* per outer attempt, three outer
-# attempts — the two layers are independent and both still hold.
+# The busy-pane race gets three bounded checks in the original pane. A busy
+# pane may contain a process, so exhausting that budget must not close it.
 @test "avatar_issue_watcher: a permanent agent_pane_busy stops after the inner attempt budget" {
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 9 ]
-    [ "$(_log_count 'tab create')" -eq 3 ]
+    [ "$(_log_count 'agent start')" -eq 3 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
     _refute_logged "agent prompt"
 }
 
-# Exhausting the inner budget must still fall through to _iw_cleanup_attempt —
-# a retry loop that swallowed the failure would leak a tab per outer attempt,
-# which is the litter the issue's log already shows.
-@test "avatar_issue_watcher: a start that never succeeds closes its tab" {
+@test "avatar_issue_watcher: an occupied pane is kept after busy retries" {
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
-    [ "$(_log_count 'tab close ws-test-1:t9')" -eq 3 ]
+    [ "$(_log_count 'tab close ws-test-1:t9')" -eq 0 ]
 }
 
 # The #1445/#1458 regression guard. herdr names this race precisely, on stderr;
@@ -2809,7 +2814,7 @@ _two_repo_fixture() {
 @test "avatar_issue_watcher: an unexplained start failure is not retried" {
     _run_tick "HERDR_START_FAIL=1"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 3 ]
+    [ "$(_log_count 'agent start')" -eq 1 ]
 }
 
 # PR #1528 review (codex, FOLLOW-UP). herdr picks the stream, not us — that is
@@ -2837,16 +2842,23 @@ _two_repo_fixture() {
     _assert_logged "agent prompt iw-dotfiles-issue-11 /gh-flow:wave 11"
 }
 
-# Same fallback on the failing side: the tick reports the failure and cleans up
-# rather than dying on the unreadable capture file, and it claims no cause it
-# could not actually read.
+# Without an error code the outcome is uncertain, so the pane is preserved.
 @test "avatar_issue_watcher: a failed start without a capture file reports no invented cause" {
     _install_failing_mktemp
     _run_tick "HERDR_START_PANE_BUSY=99"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 3 ]
+    [ "$(_log_count 'agent start')" -eq 1 ]
     refute_output --partial "원인:"
-    _assert_logged "tab close ws-test-1:t9"
+    [ "$(_log_count 'tab close')" -eq 0 ]
+}
+
+@test "avatar_issue_watcher: an unrecordable start never launches an agent" {
+    printf '#!/bin/sh\nexit 1\n' >"${_BIN_DIR}/mktemp"
+    chmod +x "${_BIN_DIR}/mktemp"
+    _run_tick
+    assert_failure
+    _refute_logged 'agent start'
+    _assert_logged 'tab close ws-test-1:t9'
 }
 
 @test "avatar_issue_watcher: a non-stall prompt failure is not retried within the attempt" {
@@ -3774,12 +3786,13 @@ _two_repo_fixture() {
     [ ! -f "${_LIMIT_FILE}" ]
 }
 
-@test "avatar_issue_watcher: an unwritable state dir warns but does not change the exit code" {
+@test "avatar_issue_watcher: an unwritable state dir fails closed before agent start" {
     mkdir -p "${_STATE_DIR}"
     chmod 500 "${_STATE_DIR}"
     _run_tick
-    assert_success
-    assert_output --partial "rate-limit gate will not survive this tick"
+    assert_failure
+    assert_output --partial "Cannot record a safe start"
+    _refute_logged "agent start"
     chmod 700 "${_STATE_DIR}"
 }
 
@@ -5422,66 +5435,84 @@ _only_run_log() {
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
 }
 
-@test "avatar_issue_watcher: timeout with truncated command uses a new pane" {
-    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=zsh: command not found: laude"
-    assert_success
-    [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 2 ]
-}
-
-@test "avatar_issue_watcher: timeout without missing command does not retry same pane" {
+@test "avatar_issue_watcher: startup timeout preserves the pane without retrying" {
     _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_TEXT=still starting"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 3 ]
-    assert_output --partial 'pane: still starting'
-    assert_output --partial '원인: timed out waiting for agent startup'
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+    [ "$(_log_count 'tab close')" -eq 0 ]
+    assert_output --partial 'Start outcome is uncertain'
 }
 
-@test "avatar_issue_watcher: stale missing-command output does not trigger timeout retry" {
-    _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_TEXT=zsh: command not found: old-command"
+@test "avatar_issue_watcher: a late idle agent resumes in the original pane" {
+    _run_tick "HERDR_START_TIMEOUT=1"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 3 ]
-}
-
-@test "avatar_issue_watcher: new error after stale error uses a new pane" {
-    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_BEFORE=zsh: command not found: old" "HERDR_PANE_TEXT=zsh: command not found: new"
+    # The pane retains its original account and command even if the current
+    # account no longer has the plugin by the time the next tick runs.
+    printf '{"plugins":{}}\n' >"${HOME}/.claude-personal/plugins/installed_plugins.json"
+    _run_tick "IW_SETTLE_SECONDS=0"
     assert_success
-    [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 2 ]
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+    [ "$(_log_count 'tab close')" -eq 0 ]
+    _assert_logged 'agent prompt ws-test-1:p9'
+    assert_output --partial 'Resumed'
 }
 
-@test "avatar_issue_watcher: French bash missing command uses a new pane" {
-    # Ubuntu language-pack-fr-base bash.mo: %s : commande introuvable.
-    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=bash: laude : commande introuvable"
-    assert_success
-    [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 2 ]
-}
-
-@test "avatar_issue_watcher: unreadable pane does not trigger same-pane retry" {
-    _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_READ_FAIL=1"
+@test "avatar_issue_watcher: unreachable startup remains held across ticks" {
+    _run_tick "HERDR_START_TIMEOUT=1"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 3 ]
-    [ "$(_log_count 'tab create')" -eq 3 ]
+    _run_tick "HERDR_AGENT_GET_FAIL=1"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+    [ "$(_log_count 'tab close')" -eq 0 ]
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
 }
 
-@test "avatar_issue_watcher: rewritten pane does not trigger same-pane retry" {
-    _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_REWRITTEN=1" "HERDR_PANE_TEXT=zsh: command not found: new"
+@test "avatar_issue_watcher: busy startup remains held across ticks" {
+    _run_tick "HERDR_START_TIMEOUT=1"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 3 ]
-    [ "$(_log_count 'tab create')" -eq 3 ]
+    _run_tick "HERDR_AGENT_STATUS=working"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    [ "$(_log_count 'tab close')" -eq 0 ]
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
 }
 
-@test "avatar_issue_watcher: new error after empty pane uses a new pane" {
-    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_BEFORE=" "HERDR_PANE_TEXT=bash: laude: command not found"
-    assert_success
+@test "avatar_issue_watcher: a confirmed missing pane permits a later retry" {
+    _run_tick "HERDR_START_TIMEOUT=1"
+    assert_failure
+    _run_tick "HERDR_AGENT_GET_FAIL=1" "HERDR_PANE_MISSING=1"
     [ "$(_log_count 'agent start')" -eq 2 ]
     [ "$(_log_count 'tab create')" -eq 2 ]
+    assert_output --partial 'no longer exists'
 }
 
-@test "avatar_issue_watcher: unrelated new shell error during slow startup uses a new pane" {
-    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=zsh: command not found: background-job"
+@test "avatar_issue_watcher: an uncertain resumed prompt is never sent again" {
+    _run_tick "HERDR_START_TIMEOUT=1"
+    assert_failure
+    _run_tick "IW_SETTLE_SECONDS=0" "HERDR_PROMPT_MODE=fail"
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+    _run_tick "IW_SETTLE_SECONDS=0"
+    [ "$(_log_count 'agent prompt')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: a pending start is not prompted when the issue is closed or unreadable" {
+    _run_tick "HERDR_START_TIMEOUT=1"
+    assert_failure
+    _run_tick "GH_CLOSED_ISSUES=11" "IW_SETTLE_SECONDS=0"
+    _run_tick "GH_ISSUE_VIEW_FAIL=1" "IW_SETTLE_SECONDS=0"
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: dry run does not remove a completed pending record" {
+    _set_tabs working iw-dotfiles-issue-11
+    mkdir -p "${_STATE_DIR}/start-pending"
+    printf 'acme/dotfiles\t11\tws-existing:p1\tws-existing:t1\tsubmitted\t/gh-flow:wave\n' >"${_STATE_DIR}/start-pending/test"
+    _run_tick -- --dry-run
     assert_success
-    [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 2 ]
+    [ -f "${_STATE_DIR}/start-pending/test" ]
 }
