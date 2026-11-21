@@ -1421,6 +1421,23 @@ _iw_live_agents() {
             printf '%s\t%s\t%s\n' "${_repo}" "${_number}" "${_tids}"
         done)
 
+    # A timed-out start may not yet appear in agent list. Its durable record
+    # still reserves the issue and the tab's concurrency slot.
+    local _pending _pending_repo _pending_number _pending_pane _pending_tab _pending_phase _pending_flow
+    for _pending in "$(_iw_state_dir)"/start-pending/*; do
+        [ -f "${_pending}" ] || continue
+        IFS="${_IW_TAB}" read -r _pending_repo _pending_number _pending_pane _pending_tab _pending_phase _pending_flow <"${_pending}" || return 1
+        [ -n "${_pending_repo}" ] && [ -n "${_pending_number}" ] && [ -n "${_pending_tab}" ] || return 1
+        if printf '%s\n' "${_IW_LIVE_AGENTS}" | awk -F "${_IW_TAB}" -v r="${_pending_repo}" -v n="${_pending_number}" -v t="${_pending_tab}" '$1 == r && $2 == n { count=split($3, tabs, ","); for (i=1; i<=count; i++) if (tabs[i] == t) found=1 } END { exit !found }'; then
+            if [ "${_pending_phase}" = submitted ] && [ "${_IW_DRY_RUN}" -eq 0 ]; then
+                rm -f "${_pending}" || return 1
+            fi
+        else
+            [ -z "${_IW_LIVE_AGENTS}" ] || _IW_LIVE_AGENTS="${_IW_LIVE_AGENTS}
+"
+            _IW_LIVE_AGENTS="${_IW_LIVE_AGENTS}${_pending_repo}${_IW_TAB}${_pending_number}${_IW_TAB}${_pending_tab}"
+        fi
+    done
     _IW_LIVE_AGENTS_LOADED=1
     [ -z "${_IW_LIVE_AGENTS}" ] || printf '%s\n' "${_IW_LIVE_AGENTS}"
 }
@@ -2128,6 +2145,75 @@ _iw_cleanup_attempt() {
     [ -z "$1" ] || herdr tab close "$1" >/dev/null 2>&1 || true
 }
 
+# Record the pane before asking herdr to start: an interrupted request, like a
+# timeout, says nothing about whether the command will eventually run. Keep
+# one file per issue under the tick lock; never start if it cannot be recorded.
+_iw_start_pending_file() {
+    local _key
+    command -v od >/dev/null 2>&1 && command -v tr >/dev/null 2>&1 || return 1
+    _key=$(printf '%s' "$1" | od -An -tx1 | tr -d ' \n')
+    [ -n "${_key}" ] || return 1
+    printf '%s/start-pending/%s-%s' "$(_iw_state_dir)" "${_key}" "$2"
+}
+
+_iw_start_pending_write() {
+    local _file="$1" _repo="$2" _number="$3" _pane="$4" _tab="$5" _phase="$6" _flow="$7" _tmp
+    mkdir -p "${_file%/*}" || return 1
+    _tmp=$(mktemp "${_file}.tmp.XXXXXX") || return 1
+    if printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${_repo}" "${_number}" "${_pane}" "${_tab}" "${_phase}" "${_flow}" >"${_tmp}" && mv -f "${_tmp}" "${_file}"; then
+        return 0
+    fi
+    rm -f "${_tmp}"
+    return 1
+}
+
+# A pending start occupies a slot even before herdr detects an agent. A later
+# tick may resume only an idle agent in the original pane. A missing or
+# unreachable agent is not proof that the launch failed, so it stays pending.
+_iw_resume_pending_starts() {
+    local _file _repo _number _pane _tab _phase _flow _status _json _state _host _saved_flow _saved_resolved _rc
+    for _file in "$(_iw_state_dir)"/start-pending/*; do
+        [ -f "${_file}" ] || continue
+        IFS="${_IW_TAB}" read -r _repo _number _pane _tab _phase _flow <"${_file}" || return 1
+        [ -n "${_repo}" ] && [ -n "${_number}" ] && [ -n "${_pane}" ] && [ -n "${_tab}" ] || return 1
+        case "${_flow}" in /*) ;; *) return 1 ;; esac
+        [ "${_phase}" = starting ] || continue
+        if ! _json=$(herdr agent get "${_pane}" 2>/dev/null); then
+            # Only an explicit pane-not-found response proves that this
+            # particular terminal has gone. An agent-not-found response alone
+            # may mean that the process is still starting.
+            _json=$(herdr pane get "${_pane}" 2>/dev/null) || true
+            if [ "$(printf '%s' "${_json}" | _hp_json_value '.error.code')" = pane_not_found ]; then
+                rm -f "${_file}" || return 1
+                ux_warning "Pending pane ${_pane} no longer exists; ${_repo}#${_number} may be retried."
+            fi
+            continue
+        fi
+        _status=$(printf '%s' "${_json}" | jq -er --arg pane "${_pane}" \
+            '.result.agent | select(.pane_id == $pane and .agent == "claude") | .agent_status' 2>/dev/null) || continue
+        [ "${_status}" = idle ] || continue
+        [ -n "$(_iw_repo_path "${_repo}")" ] || continue
+        _host=$(_iw_repo_host "${_repo}")
+        _state=$(GH_HOST="${_host}" gh issue view "${_number}" --repo "${_repo}" --json state -q .state </dev/null 2>/dev/null) || continue
+        [ "${_state}" = OPEN ] || continue
+        _iw_settle "${_pane}" || continue
+        # Persist before sending: if the caller dies during prompt, a later
+        # tick cannot know whether it landed and must not send it twice.
+        _iw_start_pending_write "${_file}" "${_repo}" "${_number}" "${_pane}" "${_tab}" submitting "${_flow}" || return 1
+        _saved_flow="${_IW_FLOW_COMMAND}" _saved_resolved="${_IW_FLOW_RESOLVED}"
+        _IW_FLOW_COMMAND="${_flow}" _IW_FLOW_RESOLVED=1
+        _rc=0
+        _iw_prompt_issue "${_pane}" "${_number}" "${_tab}" 1 || _rc=$?
+        _IW_FLOW_COMMAND="${_saved_flow}" _IW_FLOW_RESOLVED="${_saved_resolved}"
+        if [ "${_rc}" -eq 0 ]; then
+            _iw_start_pending_write "${_file}" "${_repo}" "${_number}" "${_pane}" "${_tab}" submitted "${_flow}" || return 1
+            ux_success "Resumed ${_repo}#${_number} in pane ${_pane}."
+        else
+            ux_warning "Prompt outcome for ${_repo}#${_number} is uncertain — keeping pane ${_pane}."
+        fi
+    done
+}
+
 # Echo the worktree of main checkout <1> on `wt/issue-<2>/<index>` with the
 # highest index, or nothing. The trailing `/` keeps issue 11 off issue 110.
 _iw_find_issue_worktree() {
@@ -2352,8 +2438,8 @@ _iw_start_agent_retrying() {
 
         # Only a busy response identifies a retryable start failure. Pane text
         # cannot attribute a shell error to this request: another process may
-        # have printed it while an agent is still starting. Timeouts therefore
-        # use the outer cleanup/retry, even for a visibly truncated command.
+        # have printed it while an agent is still starting. A timeout never
+        # proves that destroying the pane is safe.
         if [ "${_attempt}" -ge "${_IW_START_ATTEMPT_MAX}" ]; then
             break
         fi
@@ -2609,7 +2695,7 @@ _iw_unknown_command_held() {
 _iw_process_issue() {
     local _repo="$1" _number="$2" _path="$3"
     local _attempt=1 _agent _label _ws="" _pane_tab="" _pane="" _tab=""
-    local _cause="" _msg="" _wt _pane_tail
+    local _cause="" _msg="" _wt _pane_tail _pending
 
     # A repo whose name normalizes to nothing has no addressable agent, so the
     # dispatch fails here rather than starting a session under a name no later
@@ -2663,6 +2749,12 @@ _iw_process_issue() {
             IFS="${_IW_TAB}" read -r _pane _tab <<EOF
 ${_pane_tab}
 EOF
+            if ! _pending=$(_iw_start_pending_file "${_repo}" "${_number}") ||
+                [ -e "${_pending}" ] || ! _iw_start_pending_write "${_pending}" "${_repo}" "${_number}" "${_pane}" "${_tab}" starting "${_IW_FLOW_COMMAND}"; then
+                ux_error "Cannot record a safe start for ${_repo}#${_number}; not starting its agent."
+                _iw_cleanup_attempt "${_tab}"
+                return 1
+            fi
             if ! _iw_start_agent_retrying "${_agent}" "${_pane}"; then
                 # One line, plus the sentence herdr actually gave, indented
                 # under it (#1445's idiom). Without it every cause — a busy
@@ -2682,7 +2774,16 @@ EOF
                 [ -z "${_pane_tail}" ] || _msg="${_msg}
 ${_pane_tail}"
                 ux_warning "${_msg}"
+                # A name collision rejects this request before its pane is
+                # started. Busy, blocked, timed-out and unknown responses do
+                # not prove the pane is safe to destroy.
+                if [ "${_IW_START_CODE}" != agent_name_taken ]; then
+                    ux_warning "Start outcome is uncertain — keeping tab ${_tab} for a later tick."
+                    return 1
+                fi
+                rm -f "${_pending}" || return 1
             elif _iw_mark_tab "${_tab}"; then
+                rm -f "${_pending}" || return 1
                 # Do not serialize unrelated (or later same-repo) dispatches
                 # behind herdr's acknowledgement wait. The tab and agent were
                 # created under the lock and are the duplicate-dispatch marker.
@@ -3912,6 +4013,13 @@ _iw_tick_guards() {
 
     # Before any tab is opened: a closed gate must cost nothing.
     _iw_limit_gate_check || return 1
+
+    # Reconcile before taking the live snapshot. Taking it twice also advances
+    # the stopped-session grace state twice in one tick.
+    _iw_resume_pending_starts || {
+        ux_warning "Cannot reconcile pending starts — holding this tick."
+        return 1
+    }
 
     # Primed here, in the tick's own shell, so the subshells below inherit a
     # warm cache — the same reason the watch list is primed above. Failure is
