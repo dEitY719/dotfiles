@@ -611,7 +611,7 @@ case "$1 $2" in
         printf '%s\n' "${HERDR_PANE_BEFORE-ready}"
     else
         [ "${HERDR_PANE_READ_FAIL:-0}" != 1 ] || exit 1
-        if [ "${HERDR_PANE_TEXT_AFTER_TIMEOUT:-0}" = 1 ]; then
+        if [ "${HERDR_PANE_TEXT_AFTER_TIMEOUT:-0}" = 1 ] && [ "${HERDR_PANE_REWRITTEN:-0}" != 1 ]; then
             printf '%s\n' "${HERDR_PANE_BEFORE-ready}"
         fi
         printf '%s\n' "${HERDR_PANE_TEXT:-}"
@@ -5460,6 +5460,13 @@ _only_run_log() {
 
 @test "avatar_issue_watcher: unreadable pane does not trigger same-pane retry" {
     _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_READ_FAIL=1"
+    assert_failure
+    [ "$(_log_count 'agent start')" -eq 3 ]
+    [ "$(_log_count 'tab create')" -eq 3 ]
+}
+
+@test "avatar_issue_watcher: rewritten pane does not trigger same-pane retry" {
+    _run_tick "HERDR_START_TIMEOUT=99" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_REWRITTEN=1" "HERDR_PANE_TEXT=zsh: command not found: new"
     assert_failure
     [ "$(_log_count 'agent start')" -eq 3 ]
     [ "$(_log_count 'tab create')" -eq 3 ]
