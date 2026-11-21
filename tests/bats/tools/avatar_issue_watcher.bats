@@ -2677,10 +2677,14 @@ _two_repo_fixture() {
     [ "$(printf '%s\n' "${output}" | grep -c 'herdr tab create failed')" -eq 3 ]
 }
 
-@test "avatar_issue_watcher: a confirmed name rejection closes the unused tab" {
+@test "avatar_issue_watcher: a name collision preserves the pane" {
     _run_tick "HERDR_START_NAME_TAKEN=1"
     assert_failure
-    _assert_logged "tab close ws-test-1:t9"
+    [ "$(_log_count 'tab close')" -eq 0 ]
+    _run_tick "IW_SETTLE_SECONDS=0"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
@@ -2799,13 +2803,11 @@ _two_repo_fixture() {
     refute_output --partial '{"error"'
 }
 
-# Only the one known race is retried. `agent_name_taken` is a named failure,
-# but it is not a race that a second attempt on the same pane can win, so it
-# ends its outer attempt at once — one start per attempt, three in all.
+# A name collision could belong to a live agent in this pane. Do not retry.
 @test "avatar_issue_watcher: a named failure that is not the pane race is never retried" {
     _run_tick "HERDR_START_NAME_TAKEN=1"
     assert_failure
-    [ "$(_log_count 'agent start')" -eq 3 ]
+    [ "$(_log_count 'agent start')" -eq 1 ]
     assert_output --partial "agent_name_taken"
 }
 
@@ -2852,13 +2854,55 @@ _two_repo_fixture() {
     [ "$(_log_count 'tab close')" -eq 0 ]
 }
 
-@test "avatar_issue_watcher: an unrecordable start never launches an agent" {
+@test "avatar_issue_watcher: a failed timeout update leaves the pane held" {
     printf '#!/bin/sh\nexit 1\n' >"${_BIN_DIR}/mktemp"
     chmod +x "${_BIN_DIR}/mktemp"
-    _run_tick
+    _run_tick "HERDR_START_TIMEOUT=1"
     assert_failure
-    _refute_logged 'agent start'
-    _assert_logged 'tab close ws-test-1:t9'
+    _run_tick "IW_SETTLE_SECONDS=0"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    [ "$(_log_count 'tab close')" -eq 0 ]
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
+}
+
+@test "avatar_issue_watcher: two starts cannot reserve the same issue without flock" {
+    local _alternate="${SCRIPT%/*}/../custom/avatar_issue_watcher.sh"
+    run env "PATH=${_BIN_DIR}:${PATH}" "CALL_LOG=${_LOG}" \
+        "XDG_STATE_HOME=${_STATE_HOME}" "IW_WATCHED_REPOS=${_WATCH_FILE}" \
+        bash -c '
+            source "$1"
+            _iw_start_pending_create "$2" acme/dotfiles 11 pane-a tab-a ambiguous /gh-flow:wave &
+            first=$!
+            _iw_start_pending_create "$2" acme/dotfiles 11 pane-b tab-b ambiguous /gh-flow:wave &
+            second=$!
+            wait "$first"; first_rc=$?
+            wait "$second"; second_rc=$?
+            [ "$((first_rc + second_rc))" -eq 1 ]
+        ' "${_alternate}" "${SCRIPT}" "${_STATE_DIR}/start-pending/race"
+    assert_success
+    _refute_logged 'herdr '
+    _refute_logged 'gh '
+}
+
+@test "avatar_issue_watcher: two recovery ticks submit the pending prompt only once" {
+    local _alternate="${SCRIPT%/*}/../custom/avatar_issue_watcher.sh"
+    mkdir -p "${_STATE_DIR}/start-pending"
+    printf 'acme/dotfiles\t11\tws-test-1:p9\tws-test-1:t9\tstarting\t/gh-flow:wave\n' >"${_STATE_DIR}/start-pending/race"
+    run env "PATH=${_BIN_DIR}:${PATH}" "CALL_LOG=${_LOG}" \
+        "XDG_STATE_HOME=${_STATE_HOME}" "IW_WATCHED_REPOS=${_WATCH_FILE}" \
+        "IW_SETTLE_SECONDS=0" "IW_STALL_RECOVER_SLEEP=0" \
+        bash -c '
+            source "$1"
+            _iw_watch_list >/dev/null
+            _iw_resume_pending_starts & first=$!
+            _iw_resume_pending_starts & second=$!
+            wait "$first"; first_rc=$?
+            wait "$second"; second_rc=$?
+            [ "$((first_rc + second_rc))" -eq 0 ]
+        ' "${_alternate}" "${SCRIPT}"
+    assert_success
+    [ "$(_log_count 'agent prompt ws-test-1:p9')" -eq 1 ]
 }
 
 @test "avatar_issue_watcher: a non-stall prompt failure is not retried within the attempt" {
@@ -5506,6 +5550,34 @@ _only_run_log() {
     _run_tick "GH_ISSUE_VIEW_FAIL=1" "IW_SETTLE_SECONDS=0"
     [ "$(_log_count 'agent prompt')" -eq 0 ]
     [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: recovery respects newly excluded labels and open PRs" {
+    _run_tick "HERDR_START_TIMEOUT=1"
+    assert_failure
+    _run_tick "GH_ISSUE_LABELS=manual" "IW_SETTLE_SECONDS=0"
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
+    _set_open_prs '{"acme/dotfiles":[{"number":42,"headRefName":"feature","body":"Fixes #11"}]}'
+    _run_tick "IW_SETTLE_SECONDS=0"
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: recovery respects new open blockers" {
+    _run_tick "HERDR_START_TIMEOUT=1"
+    assert_failure
+    _run_tick "GH_BLOCKED_BY=11" "IW_SETTLE_SECONDS=0"
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
+    [ "$(_log_count 'tab create')" -eq 1 ]
+}
+
+@test "avatar_issue_watcher: targeting another issue does not resume a pending start" {
+    _run_tick "HERDR_START_TIMEOUT=1"
+    assert_failure
+    _run_tick "IW_SETTLE_SECONDS=0" -- "acme/dotfiles#12"
+    assert_success
+    _assert_logged 'agent prompt iw-dotfiles-issue-12'
+    [ "$(_log_count 'agent prompt ws-test-1:p9')" -eq 0 ]
 }
 
 @test "avatar_issue_watcher: dry run does not remove a completed pending record" {
