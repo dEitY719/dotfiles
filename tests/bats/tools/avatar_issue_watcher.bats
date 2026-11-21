@@ -5422,11 +5422,11 @@ _only_run_log() {
     _assert_logged "--env CLAUDE_CONFIG_DIR=${HOME}/.claude"
 }
 
-@test "avatar_issue_watcher: timeout with missing command retries the same pane" {
+@test "avatar_issue_watcher: timeout with truncated command uses a new pane" {
     _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=zsh: command not found: laude"
     assert_success
     [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 2 ]
 }
 
 @test "avatar_issue_watcher: timeout without missing command does not retry same pane" {
@@ -5443,19 +5443,19 @@ _only_run_log() {
     [ "$(_log_count 'agent start')" -eq 3 ]
 }
 
-@test "avatar_issue_watcher: new error after stale error retries the same pane" {
+@test "avatar_issue_watcher: new error after stale error uses a new pane" {
     _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_BEFORE=zsh: command not found: old" "HERDR_PANE_TEXT=zsh: command not found: new"
     assert_success
     [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 2 ]
 }
 
-@test "avatar_issue_watcher: French bash missing command retries the same pane" {
+@test "avatar_issue_watcher: French bash missing command uses a new pane" {
     # Ubuntu language-pack-fr-base bash.mo: %s : commande introuvable.
     _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=bash: laude : commande introuvable"
     assert_success
     [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 2 ]
 }
 
 @test "avatar_issue_watcher: unreadable pane does not trigger same-pane retry" {
@@ -5472,9 +5472,16 @@ _only_run_log() {
     [ "$(_log_count 'tab create')" -eq 3 ]
 }
 
-@test "avatar_issue_watcher: new error after empty pane retries the same pane" {
+@test "avatar_issue_watcher: new error after empty pane uses a new pane" {
     _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_BEFORE=" "HERDR_PANE_TEXT=bash: laude: command not found"
     assert_success
     [ "$(_log_count 'agent start')" -eq 2 ]
-    [ "$(_log_count 'tab create')" -eq 1 ]
+    [ "$(_log_count 'tab create')" -eq 2 ]
+}
+
+@test "avatar_issue_watcher: unrelated new shell error during slow startup uses a new pane" {
+    _run_tick "HERDR_START_TIMEOUT=1" "HERDR_PANE_TEXT_AFTER_TIMEOUT=1" "HERDR_PANE_TEXT=zsh: command not found: background-job"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 2 ]
+    [ "$(_log_count 'tab create')" -eq 2 ]
 }
