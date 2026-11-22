@@ -620,8 +620,12 @@ case "$1 $2" in
 "pane send-keys")
     ;;
 "pane get")
+    if [ "${HERDR_PANE_GET_FAIL:-0}" = 1 ]; then
+        printf '%s\n' '{"error":{"code":"internal","message":"no server"}}'
+        exit 1
+    fi
     if [ "${HERDR_PANE_MISSING:-0}" = 1 ]; then
-        printf '%s\n' '{"error":{"code":"pane_not_found","message":"pane not found"}}'
+        printf '%s\n' '{"error":{"code":"pane_not_found","message":"pane not found"}}' >&2
         exit 1
     fi
     printf '%s\n' '{"id":"cli:pane:get","result":{"pane":{"pane_id":"ws-test-1:p9"}}}'
@@ -5514,6 +5518,16 @@ _only_run_log() {
     [ "$(_log_count 'agent prompt')" -eq 0 ]
 }
 
+@test "avatar_issue_watcher: a failed pane lookup keeps the pending start" {
+    _run_tick "HERDR_START_TIMEOUT=1"
+    assert_failure
+    _run_tick "HERDR_PANE_GET_FAIL=1"
+    assert_success
+    [ "$(_log_count 'agent start')" -eq 1 ]
+    [ "$(_log_count 'tab close')" -eq 0 ]
+    [ "$(_log_count 'agent prompt')" -eq 0 ]
+}
+
 @test "avatar_issue_watcher: busy startup remains held across ticks" {
     _run_tick "HERDR_START_TIMEOUT=1"
     assert_failure
@@ -5531,6 +5545,29 @@ _only_run_log() {
     [ "$(_log_count 'agent start')" -eq 2 ]
     [ "$(_log_count 'tab create')" -eq 2 ]
     assert_output --partial 'no longer exists'
+}
+
+@test "avatar_issue_watcher: vanished panes clear every pending phase and stale claims" {
+    local _phase
+    _set_issues '[]'
+    mkdir -p "${_STATE_DIR}/start-pending"
+    for _phase in ambiguous starting submitting submitted; do
+        printf 'acme/dotfiles\t11\tws-test-1:p9\tws-test-1:t9\t%s\t/gh-flow:wave\n' "${_phase}" >"${_STATE_DIR}/start-pending/race"
+        mkdir "${_STATE_DIR}/start-pending/race.resume"
+        _run_tick "HERDR_PANE_MISSING=1"
+        assert_success
+        [ ! -e "${_STATE_DIR}/start-pending/race" ]
+        [ ! -d "${_STATE_DIR}/start-pending/race.resume" ]
+    done
+    [ "$(_log_count 'tab close')" -eq 0 ]
+}
+
+@test "avatar_issue_watcher: a partial temporary record cannot block the tick" {
+    mkdir -p "${_STATE_DIR}/start-pending"
+    : >"${_STATE_DIR}/start-pending/.pending.crashed"
+    _run_tick
+    assert_success
+    _assert_logged 'agent prompt iw-dotfiles-issue-11'
 }
 
 @test "avatar_issue_watcher: an uncertain resumed prompt is never sent again" {

@@ -811,7 +811,9 @@ _iw_watch_write() {
     if [ -f "${_file}" ] && [ ! -e "${_bak}" ]; then
         cp -p "${_file}" "${_bak}" || return 1
     fi
-    _tmp=$(mktemp "${_file}.tmp.XXXXXX") || return 1
+    # The scanner ignores dotfiles: a crash during this write must not leave
+    # a partial record that blocks all future ticks.
+    _tmp=$(mktemp "${_file%/*}/.pending.XXXXXX") || return 1
     if [ -f "${_file}" ]; then
         jq "$@" "${_filter}" "${_file}" >"${_tmp}"
     else
@@ -2180,34 +2182,28 @@ _iw_start_pending_create() {
 # tick may resume only an idle agent in the original pane. A missing or
 # unreachable agent is not proof that the launch failed, so it stays pending.
 _iw_resume_pending_starts() {
-    local _file _repo _number _pane _tab _phase _flow _status _json _state _labels _host _saved_flow _saved_resolved _rc _claim
+    local _file _repo _number _pane _tab _phase _flow _status _json _pane_json _pane_rc _state _labels _host _saved_flow _saved_resolved _rc _claim _snapshot
     for _file in "$(_iw_state_dir)"/start-pending/*; do
         [ -f "${_file}" ] || continue
         IFS="${_IW_TAB}" read -r _repo _number _pane _tab _phase _flow <"${_file}" || return 1
         [ -n "${_repo}" ] && [ -n "${_number}" ] && [ -n "${_pane}" ] && [ -n "${_tab}" ] || return 1
         case "${_flow}" in /*) ;; *) return 1 ;; esac
-        if [ "${_phase}" = ambiguous ]; then
-            # A name collision or unknown error does not identify the pane's
-            # agent as ours. Never send it a prompt merely because it is idle.
-            _json=$(herdr pane get "${_pane}" 2>/dev/null) || true
-            if [ "$(printf '%s' "${_json}" | _hp_json_value '.error.code')" = pane_not_found ]; then
-                rm -f "${_file}" || return 1
-                ux_warning "Pending pane ${_pane} no longer exists; ${_repo}#${_number} may be retried."
+        _pane_rc=0
+        _pane_json=$(herdr pane get "${_pane}" 2>&1) || _pane_rc=$?
+        if [ "$(printf '%s' "${_pane_json}" | _hp_json_value '.error.code')" = pane_not_found ]; then
+            if [ -d "${_file}.resume" ]; then
+                rmdir "${_file}.resume" 2>/dev/null || [ ! -d "${_file}.resume" ] || return 1
             fi
+            rm -f "${_file}" || return 1
+            ux_warning "Pending pane ${_pane} no longer exists; ${_repo}#${_number} may be retried."
             continue
         fi
+        [ "${_pane_rc}" -eq 0 ] || continue
+        printf '%s' "${_pane_json}" | jq -e --arg pane "${_pane}" '.result.pane.pane_id == $pane' >/dev/null 2>&1 || continue
+        # A name collision or unknown prompt outcome does not identify the
+        # pane's agent or prove that a prompt was not delivered.
         [ "${_phase}" = starting ] || continue
-        if ! _json=$(herdr agent get "${_pane}" 2>/dev/null); then
-            # Only an explicit pane-not-found response proves that this
-            # particular terminal has gone. An agent-not-found response alone
-            # may mean that the process is still starting.
-            _json=$(herdr pane get "${_pane}" 2>/dev/null) || true
-            if [ "$(printf '%s' "${_json}" | _hp_json_value '.error.code')" = pane_not_found ]; then
-                rm -f "${_file}" || return 1
-                ux_warning "Pending pane ${_pane} no longer exists; ${_repo}#${_number} may be retried."
-            fi
-            continue
-        fi
+        _json=$(herdr agent get "${_pane}" 2>/dev/null) || continue
         _status=$(printf '%s' "${_json}" | jq -er --arg pane "${_pane}" \
             '.result.agent | select(.pane_id == $pane and .agent == "claude") | .agent_status' 2>/dev/null) || continue
         [ "${_status}" = idle ] || continue
@@ -2228,9 +2224,14 @@ _iw_resume_pending_starts() {
         # tick cannot know whether it landed and must not send it twice.
         # The tick lock can be unavailable. Claim this record atomically and
         # re-read it after the claim so two ticks cannot submit the same work.
+        _snapshot="${_repo}${_IW_TAB}${_number}${_IW_TAB}${_pane}${_IW_TAB}${_tab}${_IW_TAB}${_phase}${_IW_TAB}${_flow}"
         _claim="${_file}.resume"
-        mkdir "${_claim}" 2>/dev/null || continue
-        if ! IFS="${_IW_TAB}" read -r _repo _number _pane _tab _phase _flow <"${_file}" || [ "${_phase}" != starting ]; then
+        if ! mkdir "${_claim}" 2>/dev/null; then
+            ux_warning "Recovery for ${_repo}#${_number} is already claimed (${_claim}). If no tick is running, inspect pane ${_pane} before removing the empty claim directory."
+            continue
+        fi
+        if ! IFS="${_IW_TAB}" read -r _repo _number _pane _tab _phase _flow <"${_file}" ||
+            [ "${_repo}${_IW_TAB}${_number}${_IW_TAB}${_pane}${_IW_TAB}${_tab}${_IW_TAB}${_phase}${_IW_TAB}${_flow}" != "${_snapshot}" ]; then
             rmdir "${_claim}" 2>/dev/null || true
             continue
         fi
