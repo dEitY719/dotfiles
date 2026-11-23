@@ -60,7 +60,8 @@ fi
 LOG_FILE=""
 LOG_KEEP=10
 # 실행 전체 출력을 로그 파일에 덧붙인다(색 없음). 로그가 없으면 no-op.
-to_log() { [[ -z "$LOG_FILE" ]] || printf '%s\n' "$1" >>"$LOG_FILE"; }
+# 쓰기 실패(디스크 가득·권한)는 삼킨다 — 로그는 부가 기능이라 set -e 로 동기화를 끊으면 안 된다.
+to_log() { [[ -z "$LOG_FILE" ]] || printf '%s\n' "$1" 2>/dev/null >>"$LOG_FILE" || true; }
 
 log_start() {
     printf '%s▶ %s%s\n' "$BOLD" "$1" "$RESET"
@@ -97,7 +98,7 @@ show_output() {
     s=$(printf '%s\n' "$out" | grep -E '[0-9]+ files? changed' | tail -n 1 || true)
     [[ -n "$s" ]] || s=$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n 1 || true)
     s="${s#"${s%%[![:space:]]*}"}"
-    if [[ -n "$s" ]]; then printf '%s    %s%s\n' "$DIM" "$s" "$RESET"; fi
+    if [[ -n "$s" ]]; then printf '%s    %s%s\n' "$DIM" "$s" "$RESET" >&"$fd"; fi
 }
 
 # <fd> <git 명령...> — fetch·push 용. 비-quiet 는 출력을 실시간으로 흘리며(훅·느린 네트워크 진행이
@@ -108,7 +109,8 @@ git_run() {
     shift
     if ((QUIET == 0)); then
         "$@" 2>&1 | tee -a "${LOG_FILE:-/dev/null}" >&"$fd"
-        return # pipefail 이라 git 실패가 그대로 반환된다
+        # tee(로그 쓰기) 실패가 성공한 git 을 실패로 둔갑시키지 않도록 git 의 상태만 본다.
+        return "${PIPESTATUS[0]}"
     fi
     if out=$("$@" 2>&1); then
         show_output "$out" "$fd"
@@ -132,7 +134,8 @@ init_log() {
     dir="$gd/git-sync-logs"
     mkdir -p "$dir" 2>/dev/null || return 0
     LOG_FILE="$dir/$(date +%Y%m%d-%H%M%S)-$$.log"
-    : >"$LOG_FILE" 2>/dev/null || {
+    # 0600: fetch·push 출력에 리모트 URL 이 담기므로 다른 사용자가 읽지 못하게 한다.
+    (umask 077 && : >"$LOG_FILE") 2>/dev/null || {
         LOG_FILE=""
         return 0
     }
