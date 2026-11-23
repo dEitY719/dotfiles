@@ -37,21 +37,103 @@
 #   - tests/bats/git/test_git_sync.bats 가 log_step 줄('  $ git merge --no-edit <ref>')
 #     을 sed 로 파싱해 merge 순서를 단언한다 — 형식이 테스트 계약이다.
 #   - ux_info 는 아이콘을 앞에 붙여 log_info 의 들여쓴 재개 안내 목록 형태를 깨뜨린다.
+#
+# 출력 정책 (#2421, agent-toolbox#3843 와 같은 형태):
+#   - TTY(그리고 NO_COLOR 미설정): 완료 ✓ 는 green, 실패 ✗ 는 red. fetch·merge·push 의
+#     부가 출력(diffstat 등)은 dim 한 줄 요약만 화면에 남기고, 실패 시 전체 출력 + 로그 경로.
+#   - non-TTY(파이프·CI·bats) 또는 NO_COLOR: 색 없이 종전처럼 전체 출력을 그대로 흘린다.
+#   - 실행마다 전체 출력을 <git-dir>/git-sync-logs/<timestamp>-<pid>.log 에 남기고
+#     최근 10개만 보존한다(git-dir 기준이라 worktree 별로 독립).
 set -euo pipefail
 
 BOLD=$'\033[1m'
 DIM=$'\033[2m'
+GREEN=$'\033[32m'
+RED=$'\033[31m'
 RESET=$'\033[0m'
-[[ -t 1 ]] || {
-    BOLD=""
-    DIM=""
-    RESET=""
+QUIET=1 # 1 = 부가 출력을 dim 요약으로 접는다
+if [[ ! -t 1 || -n "${NO_COLOR-}" ]]; then
+    BOLD="" DIM="" GREEN="" RED="" RESET=""
+    QUIET=0
+fi
+
+LOG_FILE=""
+LOG_KEEP=10
+# 실행 전체 출력을 로그 파일에 덧붙인다(색 없음). 로그가 없으면 no-op.
+to_log() { [[ -z "$LOG_FILE" ]] || printf '%s\n' "$1" >>"$LOG_FILE"; }
+
+log_start() {
+    printf '%s▶ %s%s\n' "$BOLD" "$1" "$RESET"
+    to_log "▶ $1"
 }
-log_start() { printf '%s▶ %s%s\n' "$BOLD" "$1" "$RESET"; }
-log_step() { printf '%s  $ %s%s\n' "$DIM" "$1" "$RESET"; }
-log_info() { printf '  %s\n' "$1"; }
-log_done() { printf '%s✓ %s%s\n' "$BOLD" "$1" "$RESET"; }
-log_fail() { printf '%s✗ %s%s\n' "$BOLD" "$1" "$RESET" >&2; }
+log_step() {
+    printf '%s  $ %s%s\n' "$DIM" "$1" "$RESET"
+    to_log "  \$ $1"
+}
+log_info() {
+    printf '  %s\n' "$1"
+    to_log "  $1"
+}
+log_done() {
+    printf '%s%s✓ %s%s\n' "$BOLD" "$GREEN" "$1" "$RESET"
+    to_log "✓ $1"
+}
+log_fail() {
+    printf '%s%s✗ %s%s\n' "$BOLD" "$RED" "$1" "$RESET" >&2
+    to_log "✗ $1"
+}
+
+# <git 출력> [fd] — 명령 출력을 로그에 남기고 화면에는 TTY 면 dim 한 줄 요약,
+# 아니면 종전처럼 전체를 fd(기본 1)로 흘린다.
+# 요약 = 'N files changed' 줄이 있으면 그것, 없으면 마지막 비어있지 않은 줄.
+show_output() {
+    local out="$1" fd="${2:-1}" s
+    [[ -n "$out" ]] || return 0
+    to_log "$out"
+    if ((QUIET == 0)); then
+        printf '%s\n' "$out" >&"$fd"
+        return 0
+    fi
+    s=$(printf '%s\n' "$out" | grep -E '[0-9]+ files? changed' | tail -n 1 || true)
+    [[ -n "$s" ]] || s=$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n 1 || true)
+    s="${s#"${s%%[![:space:]]*}"}"
+    if [[ -n "$s" ]]; then printf '%s    %s%s\n' "$DIM" "$s" "$RESET"; fi
+}
+
+# 실패 출력은 요약하지 않는다 — 원인 판단에 전체가 필요하다.
+show_full() {
+    printf '%s\n' "$1" >&"${2:-1}"
+    to_log "$1"
+}
+
+# <git-dir>/git-sync-logs 에 이번 실행 로그를 만들고 최근 $LOG_KEEP 개만 남긴다.
+# 저장소 밖이거나 쓸 수 없으면 로그 없이 진행한다(로그는 부가 기능).
+init_log() {
+    local gd dir old
+    gd=$(git rev-parse --absolute-git-dir 2>/dev/null) || return 0
+    dir="$gd/git-sync-logs"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    LOG_FILE="$dir/$(date +%Y%m%d-%H%M%S)-$$.log"
+    : >"$LOG_FILE" 2>/dev/null || {
+        LOG_FILE=""
+        return 0
+    }
+    # 파일명이 타임스탬프로 시작하므로 역순 정렬 = 최신순.
+    # (find -printf 는 GNU 전용이라 macOS 를 위해 ls 를 쓴다 — 파일명은 이 스크립트가 만든 것.)
+    ls -1 "$dir" | { grep '\.log$' || true; } | sort -r |
+        tail -n +"$((LOG_KEEP + 1))" | while IFS= read -r old; do
+        rm -f -- "${dir:?}/$old"
+    done
+}
+
+# TTY 에서 실패로 끝나면 전체 로그 위치를 알린다(non-TTY 는 이미 전체 출력을 흘렸다).
+on_exit() {
+    local rc=$?
+    if ((rc != 0 && QUIET == 1)) && [[ -n "$LOG_FILE" ]]; then
+        printf '  전체 로그: %s\n' "$LOG_FILE" >&2
+    fi
+}
+trap on_exit EXIT
 
 usage() {
     cat <<'EOF'
@@ -91,6 +173,8 @@ case "${1-}" in
     ;;
 esac
 
+init_log
+
 EXT_REF="${EXTERNAL_REMOTE}/${BRANCH}"
 INT_REF="${INTERNAL_REMOTE}/${BRANCH}"
 
@@ -109,7 +193,7 @@ has_unresolved_conflicts() {
 
 # 충돌 파일 목록을 들여쓰기해 출력
 print_conflicted_files() {
-    git diff --name-only --diff-filter=U | sed 's/^/    - /'
+    show_full "$(git diff --name-only --diff-filter=U | sed 's/^/    - /')"
 }
 
 # 3/4단계 공용 merge — 충돌 시 abort 하지 않고 안내 후 중단(멱등 재개 핵심).
@@ -122,7 +206,7 @@ merge_or_guide() {
     local ref="$1" point="$2" out
     log_step "git merge --no-edit $ref"
     if out=$(git merge --no-edit "$ref" 2>&1); then
-        [[ -n "$out" ]] && printf '%s\n' "$out"
+        show_output "$out"
         return 0
     fi
 
@@ -130,7 +214,7 @@ merge_or_guide() {
     # .git/MERGE_HEAD 가 남는다. "시작도 못함" 안내대로 작업 트리를 비우면 병합
     # 결과를 잃으므로 먼저 이 경우를 가른다 (#2041).
     if [[ -z "$(git ls-files --unmerged)" ]] && git rev-parse -q --verify MERGE_HEAD >/dev/null; then
-        printf '%s\n' "$out"
+        show_full "$out"
         log_fail "merge 커밋 거부 (지점 $point) — '$ref' 병합은 충돌 없이 끝났지만 커밋이 훅에 거부됐습니다."
         log_info "해결 후 재개:"
         log_info "  1) 위 훅 메시지를 확인하고 원인을 해결"
@@ -142,7 +226,7 @@ merge_or_guide() {
     if [[ -z "$(git ls-files --unmerged)" ]]; then
         log_fail "merge 실패 (지점 $point) — '$ref' 병합이 시작되지도 못했습니다."
         log_info "git 출력:"
-        printf '%s\n' "$out" | sed 's/^/    /'
+        show_full "$(printf '%s\n' "$out" | sed 's/^/    /')"
         log_info ""
         log_info "해결 후 재개:"
         log_info "  1) 위 메시지가 지목한 파일을 삭제·이동하거나 커밋해 작업 트리를 비우기"
@@ -150,7 +234,7 @@ merge_or_guide() {
         exit 1
     fi
 
-    printf '%s\n' "$out"
+    show_full "$out"
     log_fail "merge conflict (지점 $point) — '$ref' 병합 중 충돌이 발생했습니다."
     log_info "충돌 파일:"
     print_conflicted_files
@@ -214,10 +298,14 @@ log_start "git sync — ${INT_REF} + ${EXT_REF} → 로컬 ${BRANCH}, 이후 ${I
 # 두 명령 사이 창을 최소화한다(그만큼 남의 최신 push 를 놓칠 확률이 낮아진다).
 for remote in "$EXTERNAL_REMOTE" "$INTERNAL_REMOTE"; do
     log_step "git fetch $remote $BRANCH"
-    git fetch "$remote" "$BRANCH" || {
+    # git 은 fetch·push 결과를 stderr 로 쓰므로 passthrough 도 fd 2 로 흘린다(종전과 같은 스트림).
+    if out=$(git fetch "$remote" "$BRANCH" 2>&1); then
+        show_output "$out" 2
+    else
+        show_full "$out" 2
         log_fail "$remote fetch 실패."
         exit 1
-    }
+    fi
 done
 
 # ── 3. origin/main merge (지점 A) ──
@@ -227,9 +315,11 @@ merge_or_guide "$EXT_REF" "B"
 
 # ── 5. origin/main push (지점 C) ──
 log_step "git push $INTERNAL_REMOTE $BRANCH"
-if git push "$INTERNAL_REMOTE" "$BRANCH"; then
+if out=$(git push "$INTERNAL_REMOTE" "$BRANCH" 2>&1); then
+    show_output "$out" 2
     log_done "git sync 완료 — 로컬 ${BRANCH} 동기화 + ${INTERNAL_REMOTE}/${BRANCH} push 성공."
 else
+    show_full "$out" 2
     log_fail "push 거부 (지점 C) — ${INTERNAL_REMOTE}/${BRANCH} push 가 거부되었습니다."
     log_info "원인 1) ${INTERNAL_REMOTE}/${BRANCH} 이 그새 앞서감(non-fast-forward) → git sync 재실행 시"
     log_info "        최신분을 흡수한 뒤 재푸시합니다."
