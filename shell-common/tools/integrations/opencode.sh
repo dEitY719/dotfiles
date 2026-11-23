@@ -160,6 +160,8 @@ uninstall_opencode() {
     if command -v npm >/dev/null 2>&1; then
         ux_info "Removing legacy npm opencode-ai packages..."
         bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh" remove-stale-npm || true
+        # Pre-opencode-ai unscoped package name (kept from the old uninstall).
+        npm uninstall -g opencode >/dev/null 2>&1 || true
     else
         ux_warning "npm not found - skipping npm uninstall"
     fi
