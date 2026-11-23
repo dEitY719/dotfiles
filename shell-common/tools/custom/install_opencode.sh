@@ -154,9 +154,12 @@ verify_opencode_binary() {
 # `npm install -g --prefix ~/.local opencode-ai` puts it in ~/.local/bin).
 remove_stale_npm_opencode() {
     command -v npm >/dev/null 2>&1 || return 0
-    local prefix
+    local prefix root
     for prefix in "" "$HOME/.local"; do
-        npm ls -g --depth=0 ${prefix:+--prefix "$prefix"} opencode-ai >/dev/null 2>&1 || continue
+        # Presence by directory, not `npm ls`: ls exits non-zero on a tree with
+        # dependency problems, which would skip a broken (placeholder) install.
+        root=$(npm root -g ${prefix:+--prefix "$prefix"} 2>/dev/null) || continue
+        [ -d "$root/opencode-ai" ] || continue
         ux_info "Removing legacy npm opencode-ai package${prefix:+ from $prefix} (superseded by ~/.opencode/bin)..."
         npm uninstall -g ${prefix:+--prefix "$prefix"} opencode-ai >/dev/null 2>&1 ||
             ux_warning "Could not remove npm opencode-ai${prefix:+ from $prefix}; keep ~/.opencode/bin first in PATH"
@@ -179,7 +182,10 @@ update_main() {
         return 1
     fi
 
-    opencode_bin=$(opencode_binary_path "$install_method")
+    if ! opencode_bin=$(opencode_binary_path "$install_method"); then
+        ux_error "Cannot resolve the $install_method install location"
+        return 1
+    fi
     before=$(verify_opencode_binary "$opencode_bin" 2>/dev/null) || before="(not installed)"
     ux_info "Current version: $before"
 
@@ -216,9 +222,10 @@ update_main() {
     fi
 
     resolved=$(command -v opencode 2>/dev/null) || resolved=""
-    if [ "$resolved" != "$opencode_bin" ]; then
+    if [ -z "$resolved" ] || [ ! "$resolved" -ef "$opencode_bin" ]; then
         ux_warning "'opencode' on PATH is ${resolved:-not found}, not $opencode_bin"
         ux_info "$(dirname "$opencode_bin") must come first in PATH (open a new terminal or run 'rehash' in zsh)"
+        [ -z "$resolved" ] || ux_info "Or remove the other copy: $resolved"
     fi
     ux_success "OpenCode update complete: $after"
 }

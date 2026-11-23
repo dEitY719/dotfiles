@@ -158,7 +158,7 @@ uninstall_opencode() {
     # Legacy npm installs (global and ~/.local prefix): same cleanup as
     # install/update-opencode, run through the installer script (#2419).
     if command -v npm >/dev/null 2>&1; then
-        ux_info "Removing legacy npm opencode-ai packages..."
+        ux_info "Checking for npm opencode-ai packages (global and ~/.local)..."
         bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh" remove-stale-npm || true
         # Pre-opencode-ai unscoped package name (kept from the old uninstall).
         npm uninstall -g opencode >/dev/null 2>&1 || true

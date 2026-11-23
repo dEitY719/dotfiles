@@ -245,7 +245,7 @@ _update() {
             case \"\$1\" in
                 prefix) echo '$HOME/npm' ;;
                 install) _fake_bin '$HOME/npm/bin/opencode' \"\${NEW_VERSION:-1.2.0}\" ;;
-                ls) return 1 ;;
+                root) return 1 ;;
             esac
         }
         export PATH='$HOME/.opencode/bin:$HOME/npm/bin':\"\$PATH\"
@@ -328,6 +328,23 @@ _update() {
     assert_success
     assert_output --partial "'opencode' on PATH is $HOME/shadow/opencode"
     assert_output --partial "$HOME/.opencode/bin must come first in PATH"
+    assert_output --partial "Or remove the other copy: $HOME/shadow/opencode"
+}
+
+@test "update_main: internal npm update warns when an old ~/.opencode/bin copy shadows it" {
+    _update internal '
+        _fake_bin "$HOME/.opencode/bin/opencode" 0.9.0
+        update_main
+    '
+    assert_success
+    assert_output --partial "'opencode' on PATH is $HOME/.opencode/bin/opencode, not $HOME/npm/bin/opencode"
+    assert_output --partial "Or remove the other copy: $HOME/.opencode/bin/opencode"
+}
+
+@test "update_main: no PATH warning when PATH reaches the same binary via another spelling" {
+    _update external 'export PATH="$HOME/.opencode/bin/:$PATH"; update_main'
+    assert_success
+    refute_output --partial "on PATH is"
 }
 
 @test "update_main: no PATH warning when ~/.opencode/bin wins" {
@@ -345,22 +362,40 @@ _update() {
 
 # --- remove_stale_npm_opencode: global and ~/.local prefixes (#2419) -----------
 
+# npm stub: `root -g [--prefix p]` prints <p or $HOME/g>/lib/node_modules.
+_npm_root_stub='npm() {
+    printf "%s\n" "$*" >> "$HOME/calls"
+    case "$1" in
+        root) [ "$3" = --prefix ] && echo "$4/lib/node_modules" || echo "$HOME/g/lib/node_modules" ;;
+        uninstall) [ -z "${NPM_UNINSTALL_FAIL-}" ] ;;
+    esac
+}'
+
 @test "remove_stale_npm_opencode: checks and removes both global and ~/.local prefixes" {
-    run_opencode_tool "
-        npm() { printf '%s\n' \"\$*\" >> '$HOME/calls'; }
-        remove_stale_npm_opencode
-    "
+    mkdir -p "$HOME/g/lib/node_modules/opencode-ai" "$HOME/.local/lib/node_modules/opencode-ai"
+    run_opencode_tool "$_npm_root_stub; remove_stale_npm_opencode"
     assert_success
     run cat "$HOME/calls"
-    assert_line "ls -g --depth=0 opencode-ai"
+    assert_line "root -g"
     assert_line "uninstall -g opencode-ai"
-    assert_line "ls -g --depth=0 --prefix $HOME/.local opencode-ai"
+    assert_line "root -g --prefix $HOME/.local"
+    assert_line "uninstall -g --prefix $HOME/.local opencode-ai"
+}
+
+@test "remove_stale_npm_opencode: skips prefixes without opencode-ai" {
+    mkdir -p "$HOME/.local/lib/node_modules/opencode-ai"
+    run_opencode_tool "$_npm_root_stub; remove_stale_npm_opencode"
+    assert_success
+    run cat "$HOME/calls"
+    refute_line "uninstall -g opencode-ai"
     assert_line "uninstall -g --prefix $HOME/.local opencode-ai"
 }
 
 @test "remove_stale_npm_opencode: uninstall failure only warns and continues" {
+    mkdir -p "$HOME/g/lib/node_modules/opencode-ai" "$HOME/.local/lib/node_modules/opencode-ai"
     run_opencode_tool "
-        npm() { printf '%s\n' \"\$*\" >> '$HOME/calls'; [ \"\$1\" != uninstall ]; }
+        export NPM_UNINSTALL_FAIL=1
+        $_npm_root_stub
         remove_stale_npm_opencode
     "
     assert_success
@@ -384,7 +419,8 @@ _opencode_integration() {
 
 _npm_stub_on_path() {
     mkdir -p "$HOME/stub"
-    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/calls"\n' "$HOME" > "$HOME/stub/npm"
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/calls"\n[ "$1" = root ] && echo "%s/stubroot"\nexit 0\n' "$HOME" "$HOME" > "$HOME/stub/npm"
+    mkdir -p "$HOME/stubroot/opencode-ai"
     chmod +x "$HOME/stub/npm"
 }
 
