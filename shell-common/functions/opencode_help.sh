@@ -7,13 +7,13 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 _opencode_help_summary() {
     ux_info "Usage: opencode-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "setup: install-opencode | opencode-verify | uninstall-opencode"
+    ux_bullet_sub "setup: install-opencode | update-opencode | opencode-verify | uninstall-opencode"
     ux_bullet_sub "utils: bunx oh-my-opencode install | install-bun | bun-help"
     ux_bullet_sub "env: home/public | external | internal"
     ux_bullet_sub "config: \$OPENCODE_CONFIG_FILE | opencode-edit"
     ux_bullet_sub "models: Home | External | Internal"
     ux_bullet_sub "usage: opencode | opencode --help | opencode --version"
-    ux_bullet_sub "trouble: install-opencode | opencode-verify | uninstall-opencode"
+    ux_bullet_sub "trouble: install-opencode | update-opencode | opencode-verify | uninstall-opencode"
     ux_bullet_sub "details: opencode-help <section>  (example: opencode-help models)"
 }
 
@@ -30,6 +30,7 @@ _opencode_help_list_sections() {
 
 _opencode_help_rows_setup() {
     ux_bullet "${UX_PRIMARY}install-opencode${UX_RESET}             : Interactive OpenCode installer"
+    ux_bullet "${UX_PRIMARY}update-opencode${UX_RESET}              : Update OpenCode to the latest version"
     ux_bullet "${UX_PRIMARY}opencode-verify${UX_RESET}              : Verify installation & configuration"
     ux_bullet "${UX_PRIMARY}uninstall-opencode${UX_RESET}           : Remove OpenCode and configuration"
 }
@@ -64,6 +65,7 @@ _opencode_help_rows_usage() {
 
 _opencode_help_rows_trouble() {
     ux_bullet "Not installed?          : Run ${UX_PRIMARY}install-opencode${UX_RESET}"
+    ux_bullet "Outdated?               : Run ${UX_PRIMARY}update-opencode${UX_RESET}"
     ux_bullet "LLM not working?        : Run ${UX_PRIMARY}opencode-verify${UX_RESET}"
     ux_bullet "Want to remove?         : Run ${UX_PRIMARY}uninstall-opencode${UX_RESET}"
 }
