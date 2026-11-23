@@ -141,6 +141,7 @@ init_log() {
     }
     # 파일명이 타임스탬프로 시작하므로 glob 정렬 = 오래된 순. 방금 만든 로그가 있어 비지 않는다.
     logs=("$dir"/*.log)
+    [[ -e "${logs[0]}" ]] || logs=() # nullglob 없이도 매칭 0건을 빈 배열로
     n=$((${#logs[@]} - LOG_KEEP))
     if ((n > 0)); then rm -f -- "${logs[@]:0:n}"; fi
 }
@@ -333,7 +334,14 @@ merge_or_guide "$EXT_REF" "B"
 
 # ── 5. origin/main push (지점 C) ──
 log_step "git push $INTERNAL_REMOTE $BRANCH"
-if git_run 2 git push "$INTERNAL_REMOTE" "$BRANCH"; then
+# pre-push 훅은 확인 프롬프트를 띄우거나 오래 돌 수 있다 — 캡처하면 프롬프트가 안 보인 채
+# 멈추므로, 훅이 있으면 TTY 에서도 접지 않고 실시간으로 흘린다(로그에는 그대로 남는다).
+quiet_saved=$QUIET
+if [[ -x "$(git rev-parse --git-path hooks/pre-push)" ]]; then QUIET=0; fi
+push_ok=1
+git_run 2 git push "$INTERNAL_REMOTE" "$BRANCH" || push_ok=0
+QUIET=$quiet_saved
+if ((push_ok)); then
     log_done "git sync 완료 — 로컬 ${BRANCH} 동기화 + ${INTERNAL_REMOTE}/${BRANCH} push 성공."
 else
     log_fail "push 거부 (지점 C) — ${INTERNAL_REMOTE}/${BRANCH} push 가 거부되었습니다."
