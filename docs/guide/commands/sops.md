@@ -20,7 +20,7 @@
     - overview: 공개키=자물쇠 | 개인키=열쇠 | .env -> .enc.env 커밋
     - setup: install-sops-age | age-keygen | sops-status
     - newproject: senv init | senv enc | 커밋
-    - usage: senv init|enc|dec|edit|run|check|key|set|get|push|keys + senv 가 실행하는 sops 명령
+    - usage: senv init|enc|dec|edit|run|check|key|set|get|push|keys|vault-push + senv 가 실행하는 sops 명령
     - newpc: senv key export -> senv key import -> senv check
     - risks: 분실=복구 불가 | 유출=원본 비밀값 교체
     - trouble: unmarshal 오류 | no master key | 권한
@@ -54,6 +54,7 @@
     - senv init   # .sops.yaml(공개키) 생성 + .gitignore 에 .env 추가
     - senv enc    # .env -> .enc.env
     - git add .sops.yaml .gitignore .enc.env && git commit
+    - senv vault-push   # (선택) .enc.env + .sops.yaml 을 vault secrets/<디렉터리명>/ 에 commit+push
 - 개인키 내보내기: senv key export  (~/senv-key.age, sops-help newpc)
 - 새 PC: cd ~/para/project/vault && git pull -> senv key import ~/para/project/vault/secrets/senv-key.age -> senv dec -f (기존 .env 덮어씀) -> senv check  (파일 없이: senv run make run)
 - senv init 이 만드는 .sops.yaml (공개키만 들어가므로 커밋 OK)
@@ -75,6 +76,7 @@
 - **senv keys** — dotfiles .enc.env 의 키 이름만 한 줄씩 — 값은 미출력, 인자 없음
 - **senv push** — 수동 .env 편집을 .enc.env 로 commit+push — 변경 없으면 no-op, 기본 브랜치에서만
 - **senv create-pr** — enc -> 브랜치 -> 커밋 -> push -> PR — 기본 브랜치에서만, .enc.env 만 add, 머지 안 함
+- **senv vault-push [-n NAME] [-d SUBDIR] [-v VAULT] [-m MSG] [--no-push] [--no-sops]** — .enc.env + .sops.yaml -> vault secrets/<NAME>/ -> commit -> push — NAME 기본값=디렉터리 이름, vault 기본값 $SENV_VAULT_DIR 또는 ~/para/project/vault, 평문 .env 는 복사 안 함, 변경 없으면 no-op
 - **senv key show** — 공개키 + .sops.yaml 일치 여부 — 비밀 출력 없음
 - **senv key export [-o f] [-f]** — 개인키를 비밀번호로 잠금 (~/senv-key.age) — git 작업트리 안 거절, 되풀어 검증
 - **senv key import [f] [-f]** — 잠금 파일 -> keys.txt (600) — 기존 keys.txt 는 -f 없이 안 덮어씀
