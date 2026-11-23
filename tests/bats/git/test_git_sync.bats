@@ -340,3 +340,18 @@ _commit_local() {
     [[ "$output" == *$'\033[31m'*"'upstream' 리모트가 없습니다"* ]]
     [[ "$output" == *"전체 로그: ${WORK_DIR}/repo/.git/git-sync-logs/"* ]]
 }
+
+@test "git-sync.sh: TTY 에서도 pre-push 훅이 있으면 push 출력을 접지 않는다" {
+    command -v script >/dev/null 2>&1 || skip "script(1) 없음"
+    script -qec true /dev/null >/dev/null 2>&1 || skip "util-linux script 아님"
+    _seed_remotes
+    _commit_local l.txt local-side
+    # 확인 프롬프트를 흉내 내는 훅 — 캡처되면 화면에 보이지 않는다.
+    printf '#!/bin/sh\necho "hook-prompt: continue?" >&2\nexit 0\n' >"${WORK_DIR}/no-hooks/pre-push"
+    chmod +x "${WORK_DIR}/no-hooks/pre-push"
+
+    run script -qec "env -u NO_COLOR DOTFILES_ROOT='$REAL_ROOT' git -C '${WORK_DIR}/repo' sync" /dev/null
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"hook-prompt: continue?"* ]]
+    [[ "$output" == *"git sync 완료"* ]]
+}

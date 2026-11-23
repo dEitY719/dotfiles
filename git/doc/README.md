@@ -92,7 +92,8 @@ git sync -h     # 도움말 (git 이 `--help` 를 alias 정의 출력으로 가�
 alias 를 자동으로 덮으므로, 자체 `git sync` 를 가진 프로젝트와 충돌하지 않는다.
 
 출력·로그 (issue #2421): TTY 에서는 완료 `✓` 를 green, 실패 `✗` 를 red 로 표시하고
-fetch·merge·push 의 부가 출력은 dim 한 줄 요약만 보인다(실패 시 전체 출력 + 로그 경로).
+fetch·merge·push 의 부가 출력은 dim 한 줄 요약만 보인다(실패 시 전체 출력 + 로그 경로,
+pre-push 훅이 있으면 프롬프트가 가려지지 않도록 push 는 접지 않는다).
 non-TTY(파이프·CI)나 `NO_COLOR` 에서는 색 없이 종전처럼 전체를 흘린다. 실행마다 전체 출력이
 `<git-dir>/git-sync-logs/` 에 남고 최근 10개만 보존된다(worktree 별 독립).
 
