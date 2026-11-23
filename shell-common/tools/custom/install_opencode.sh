@@ -125,7 +125,7 @@ install_opencode_via_curl() {
 # postinstall is what replaces bin/opencode.exe (a placeholder that exits 1)
 # with the platform binary, so it must be allowed explicitly.
 install_opencode_via_npm() {
-    npm install -g --allow-scripts=opencode-ai opencode-ai
+    npm install -g --allow-scripts=opencode-ai opencode-ai@latest
 }
 
 # Where the given install method puts the opencode binary.
@@ -185,11 +185,10 @@ update_main() {
 
     if [ "$install_method" = "npm" ]; then
         ux_info "Updating via npm registry (corporate proxy settings auto-applied)..."
-        npm install -g --allow-scripts=opencode-ai opencode-ai@latest || rc=$?
     else
         ux_info "Updating via the official installer: $OPENCODE_INSTALL_URL"
-        install_opencode_via_curl || rc=$?
     fi
+    "install_opencode_via_$install_method" || rc=$?
     if [ "$rc" -ne 0 ]; then
         ux_error "OpenCode update failed (exit $rc)"
         if [ "$install_method" = "npm" ]; then
