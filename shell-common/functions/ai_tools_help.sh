@@ -346,7 +346,7 @@ _codex_help_summary() {
     ux_info "Usage: codex-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "basic: codex | codex-help | official help | codex-version | codex-yolo"
-    ux_bullet_sub "setup: codex-install | codex-uninstall | codex-status | codex-skills-sync | auto sync"
+    ux_bullet_sub "setup: codex-install | codex-update | codex-uninstall | codex-status | codex-skills-sync | auto sync"
     ux_bullet_sub "interactive: codex | codex prompt"
     ux_bullet_sub "tips: config dir | auth | auto sync env vars"
     ux_bullet_sub "details: codex-help <section>  (example: codex-help setup)"
@@ -370,10 +370,12 @@ _codex_help_rows_basic() {
 
 _codex_help_rows_setup() {
     ux_table_row "codex-install" "Official standalone installer" "Install or update (curl + sh)"
+    ux_table_row "codex-update" "Standalone refresh / npm migration" "Update; confirm then move npm to standalone (-y)"
+    ux_table_row "Pin a version" "codex-install/update --release VER" "Install that exact release"
     ux_table_row "Installer URL" "https://chatgpt.com/codex/install.sh" "Download with curl; run with sh"
     ux_table_row "codex-uninstall" "Standalone + legacy npm" "Remove CLI; keep config, auth, sessions, skills"
-    ux_table_row "Preview changes" "codex-install/uninstall --dry-run" "Show actions without changes"
-    ux_table_row "codex-status" "Status Check" "Show installation status"
+    ux_table_row "Preview changes" "codex-install/update/uninstall --dry-run" "Show actions without changes"
+    ux_table_row "codex-status" "Status Check" "Show version, location, install method"
     ux_table_row "codex-skills-sync" "Skills Sync" "Sync skills symlinks"
     ux_table_row "Auto skill sync" "Enabled by default" "Before codex command"
 }

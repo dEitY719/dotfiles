@@ -26,6 +26,7 @@ alias codex-version='codex --version' # Show version
 alias codex-yolo='codex --dangerously-bypass-approvals-and-sandbox'
 alias codex-skills-sync='codex_skills_sync' # Sync skills symlinks
 alias codex-install='codex_install' # Install Codex CLI
+alias codex-update='codex_update'   # Update Codex CLI (npm -> standalone migration)
 alias codex-uninstall='codex_uninstall' # Uninstall Codex CLI
 alias codex-status='codex_status'   # Check Codex status
 
@@ -381,6 +382,14 @@ codex_install() {
 }
 
 # ═══════════════════════════════════════════════════════════════
+# Codex Update (standalone refresh, npm -> standalone migration)
+# ═══════════════════════════════════════════════════════════════
+
+codex_update() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/update_codex.sh" "$@"
+}
+
+# ═══════════════════════════════════════════════════════════════
 # Codex Uninstallation
 # ═══════════════════════════════════════════════════════════════
 
@@ -394,14 +403,19 @@ codex_uninstall() {
 
 codex_status() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local codex_bin
+    local codex_bin codex_lib method
     codex_bin="$(unset -f codex; command -v codex || true)"
+    codex_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/lib/codex_standalone.sh"
     ux_header "Codex Status"
 
     if [ -n "$codex_bin" ]; then
         ux_success "Codex installed"
         ux_table_row "Version" "$("$codex_bin" --version 2>/dev/null || echo 'unknown')" ""
         ux_table_row "Location" "$codex_bin" ""
+        # Detection SSOT is the bash-only lib; --no-npm keeps status npm-free.
+        method="$(bash -c '. "$1" && _codex_install_method --no-npm' _ "$codex_lib" 2>/dev/null || true)"
+        ux_table_row "Install method" "${method:-unknown}" ""
+        [ "$method" = npm ] && ux_info "Migrate to standalone: codex-update"
     else
         ux_warning "Codex not found"
         ux_info "To install: codex-install"

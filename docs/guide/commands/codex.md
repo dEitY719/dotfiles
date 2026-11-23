@@ -14,7 +14,7 @@
 - Usage: codex-help [section|--list|--all]
 - sections
     - basic: codex | codex-help | official help | codex-version | codex-yolo
-    - setup: codex-install | codex-uninstall | codex-status | codex-skills-sync | auto sync
+    - setup: codex-install | codex-update | codex-uninstall | codex-status | codex-skills-sync | auto sync
     - interactive: codex | codex prompt
     - tips: config dir | auth | auto sync env vars
     - details: codex-help <section>  (example: codex-help setup)
@@ -32,10 +32,12 @@
 ### setup
 
 - **codex-install** — Official standalone installer — Install or update (curl + sh)
+- **codex-update** — Standalone refresh / npm migration — Update; confirm then move npm to standalone (-y)
+- **Pin a version** — codex-install/update --release VER — Install that exact release
 - **Installer URL** — https://chatgpt.com/codex/install.sh — Download with curl; run with sh
 - **codex-uninstall** — Standalone + legacy npm — Remove CLI; keep config, auth, sessions, skills
-- **Preview changes** — codex-install/uninstall --dry-run — Show actions without changes
-- **codex-status** — Status Check — Show installation status
+- **Preview changes** — codex-install/update/uninstall --dry-run — Show actions without changes
+- **codex-status** — Status Check — Show version, location, install method
 - **codex-skills-sync** — Skills Sync — Sync skills symlinks
 - **Auto skill sync** — Enabled by default — Before codex command
 
