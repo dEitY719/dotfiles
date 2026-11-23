@@ -126,14 +126,14 @@ _codex_migrate_from_npm() {
 # _codex_warn_path_shadow -- warn when the shell would not run the standalone
 # binary (e.g. ~/.npm-global/bin ahead of ~/.local/bin with a stale copy).
 _codex_warn_path_shadow() {
-    local codex_bin resolved
-    codex_bin="$(_codex_bin_dir)/codex"
+    local bin_dir resolved
+    bin_dir="$(_codex_bin_dir)"
     hash -r
     resolved="$(type -P codex 2>/dev/null || true)"
     if [ -z "$resolved" ]; then
-        ux_warning "$(_codex_bin_dir) is not on PATH; add it to run codex."
-    elif [ "$resolved" != "$codex_bin" ]; then
+        ux_warning "$bin_dir is not on PATH; add it to run codex."
+    elif [ "$resolved" != "$bin_dir/codex" ]; then
         ux_warning "Another Codex executable comes first on PATH: $resolved"
-        ux_info "Remove it with its package manager or put $(_codex_bin_dir) earlier in PATH."
+        ux_info "Remove it with its package manager or put $bin_dir earlier in PATH."
     fi
 }
