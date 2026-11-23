@@ -107,7 +107,8 @@ git_run() {
     local fd="$1" out
     shift
     if ((QUIET == 0)); then
-        if "$@" 2>&1 | tee -a "${LOG_FILE:-/dev/null}" >&"$fd"; then return 0; else return 1; fi
+        "$@" 2>&1 | tee -a "${LOG_FILE:-/dev/null}" >&"$fd"
+        return # pipefail 이라 git 실패가 그대로 반환된다
     fi
     if out=$("$@" 2>&1); then
         show_output "$out" "$fd"
@@ -126,7 +127,7 @@ show_full() {
 # <git-dir>/git-sync-logs 에 이번 실행 로그를 만들고 최근 $LOG_KEEP 개만 남긴다.
 # 저장소 밖이거나 쓸 수 없으면 로그 없이 진행한다(로그는 부가 기능).
 init_log() {
-    local gd dir old
+    local gd dir logs n
     gd=$(git rev-parse --absolute-git-dir 2>/dev/null) || return 0
     dir="$gd/git-sync-logs"
     mkdir -p "$dir" 2>/dev/null || return 0
@@ -135,12 +136,10 @@ init_log() {
         LOG_FILE=""
         return 0
     }
-    # 파일명이 타임스탬프로 시작하므로 역순 정렬 = 최신순.
-    # (find -printf 는 GNU 전용이라 macOS 를 위해 ls 를 쓴다 — 파일명은 이 스크립트가 만든 것.)
-    ls -1 "$dir" | { grep '\.log$' || true; } | sort -r |
-        tail -n +"$((LOG_KEEP + 1))" | while IFS= read -r old; do
-        rm -f -- "${dir:?}/$old"
-    done
+    # 파일명이 타임스탬프로 시작하므로 glob 정렬 = 오래된 순. 방금 만든 로그가 있어 비지 않는다.
+    logs=("$dir"/*.log)
+    n=$((${#logs[@]} - LOG_KEEP))
+    if ((n > 0)); then rm -f -- "${logs[@]:0:n}"; fi
 }
 
 # TTY 에서 실패로 끝나면 전체 로그 위치를 알린다(non-TTY 는 이미 전체 출력을 흘렸다).
