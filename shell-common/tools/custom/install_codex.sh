@@ -5,34 +5,48 @@ set -e
 
 source "$(dirname "$0")/init.sh" || exit 1
 . "$(dirname "$0")/lib/install_helpers.sh" || exit 1
+. "$(dirname "$0")/lib/codex_standalone.sh" || exit 1
 
 codex_install_help() {
-    ux_info "Usage: codex-install [-h|--help|help] [--dry-run]"
-    ux_bullet "Install or update using https://chatgpt.com/codex/install.sh (curl + sh)."
+    ux_info "Usage: codex-install [-h|--help|help] [--release VER] [--dry-run]"
+    ux_bullet "Install or update using $CODEX_INSTALLER_URL (curl + sh)."
+    ux_bullet "--release VER: install that exact version (pin or downgrade)."
     ux_bullet "Binary: CODEX_INSTALL_DIR (default: ~/.local/bin)."
     ux_bullet "Packages: CODEX_HOME/packages/standalone (CODEX_HOME defaults to ~/.codex)."
-    ux_bullet "Remove an existing npm installation with codex-uninstall first."
+    ux_bullet "An existing npm installation is refused; migrate it with codex-update."
     ux_bullet "--dry-run: show actions without downloading or installing."
 }
 
 main() {
-    local dry_run=0 bin_dir codex_bin existing codex_version
+    local dry_run=0 release="" bin_dir codex_bin existing
+    local -a installer_args=()
     while [ "$#" -gt 0 ]; do
         case "$1" in
             help|-h|--help) codex_install_help; return 0 ;;
             --dry-run) dry_run=1 ;;
+            --release)
+                if [ -z "${2:-}" ] || [ "${2#-}" != "$2" ]; then
+                    ux_error "--release requires a version (e.g. --release 0.170.0)"
+                    codex_install_help
+                    return 2
+                fi
+                release="$2"
+                shift
+                ;;
             *) ux_error "Unknown argument: $1"; codex_install_help; return 2 ;;
         esac
         shift
     done
+    [ -n "$release" ] && installer_args=(--release "$release")
 
-    bin_dir="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
+    bin_dir="$(_codex_bin_dir)"
     codex_bin="$bin_dir/codex"
     ux_header "Codex CLI Standalone Installer"
-    ux_info "Installer: https://chatgpt.com/codex/install.sh (curl + sh)"
+    ux_info "Installer: $CODEX_INSTALLER_URL (curl + sh)"
     ux_info "Binary: $codex_bin"
+    ux_info "Release: ${release:-latest}"
     if [ "$dry_run" = 1 ]; then
-        ux_info "[dry-run] Download the official installer, run with sh, then verify $codex_bin --version."
+        ux_info "[dry-run] Download the official installer, run with sh ${installer_args[*]}, then verify $codex_bin --version."
         return 0
     fi
     ux_require curl || return 1
@@ -42,7 +56,8 @@ main() {
     existing="$(PATH="$bin_dir:$PATH" type -P codex || true)"
     if [ -n "$existing" ] && [ "$existing" != "$codex_bin" ]; then
         ux_error "Another Codex installation exists: $existing"
-        ux_info "Run codex-uninstall first (use its package manager for Homebrew/Bun installs)."
+        ux_info "npm install: run codex-update to migrate it to standalone."
+        ux_info "Otherwise: Run codex-uninstall first (use its package manager for Homebrew/Bun installs)."
         return 1
     fi
     if ! ux_confirm "Install or update standalone Codex CLI?" "y"; then
@@ -50,21 +65,8 @@ main() {
         return 0
     fi
 
-    _codex_installer_temp="$(mktemp)" || return 1
-    trap 'rm -f "$_codex_installer_temp"' EXIT
-    if ! curl -fsSL https://chatgpt.com/codex/install.sh -o "$_codex_installer_temp"; then
-        ux_error "Failed to download the official Codex installer."
-        return 1
-    fi
-    if ! PATH="$bin_dir:$PATH" sh "$_codex_installer_temp"; then
-        ux_error "Codex CLI installation failed."
-        return 1
-    fi
-    if ! codex_version="$(verify_installed_binary "$codex_bin" 2>&1)"; then
-        ux_error "Codex CLI binary is not runnable: $codex_bin ($codex_version)"
-        return 1
-    fi
-    ux_success "Codex CLI is working: $codex_version ($codex_bin)"
+    _codex_standalone_install "${installer_args[@]}" || return 1
+    ux_success "Codex CLI is working: $CODEX_INSTALLED_VERSION ($codex_bin)"
     ux_info "Reload your shell, then run codex-version or codex-help."
 }
 
