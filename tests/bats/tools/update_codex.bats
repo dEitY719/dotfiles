@@ -70,6 +70,8 @@ make_npm_install() {
     printf '#!/bin/sh\nprintf "codex-cli 0.171.0\\n"\n' > "$HOME/npm/node_modules/@openai/codex/bin/codex.js"
     chmod +x "$HOME/npm/node_modules/@openai/codex/bin/codex.js"
     ln -s "$HOME/npm/node_modules/@openai/codex/bin/codex.js" "$HOME/npm/bin/codex"
+    # After $HOME/bin, before any host codex (e.g. /usr/bin/codex).
+    export PATH="$HOME/bin:$HOME/npm/bin:$PATH"
 }
 
 
@@ -310,4 +312,75 @@ make_npm_install() {
     assert_output --partial 'codex-cli 0.170.0 -> codex-cli 0.172.0'
     assert_output --partial 'legacy npm @openai/codex is still installed'
     [ "$(grep -c uninstall "$HOME/npm.calls")" = 0 ]
+}
+
+@test "codex-update leaves an active non-npm codex alone even when an npm package exists" {
+    make_npm_install
+    printf '#!/bin/sh\necho "codex-cli brew"\n' > "$HOME/bin/codex"
+    chmod +x "$HOME/bin/codex"
+    run_update '
+        curl() { exit 99; }
+        main -y
+    '
+    assert_failure 1
+    assert_output --partial 'Install method: other'
+    [ "$(grep -c uninstall "$HOME/npm.calls")" = 0 ]
+    [ -d "$HOME/npm/node_modules/@openai/codex" ]
+}
+
+@test "codex-update npm migration downloads before uninstalling npm" {
+    make_npm_install
+    run_update '
+        curl() { return 22; }
+        main -y
+    '
+    assert_failure 1
+    assert_output --partial 'Failed to download the official Codex installer.'
+    [ "$(grep -c uninstall "$HOME/npm.calls")" = 0 ]
+    [ -d "$HOME/npm/node_modules/@openai/codex" ]
+    [ -z "$(ls -A "$HOME/tmp")" ]
+}
+
+@test "codex-update refuses an npm migration when the npm root needs sudo" {
+    make_npm_install
+    chmod a-w "$HOME/npm/node_modules"
+    run_update '
+        curl() { exit 99; }
+        ux_confirm() { exit 99; }
+        main
+    '
+    chmod u+w "$HOME/npm/node_modules"
+    assert_failure 1
+    assert_output --partial 'npm global root is not writable'
+    assert_output --partial 'sudo npm uninstall -g @openai/codex'
+    [ "$(grep -c uninstall "$HOME/npm.calls")" = 0 ]
+}
+
+@test "codex-update treats a relative link into a symlinked CODEX_HOME as standalone" {
+    mkdir -p "$HOME/real-codex/packages/standalone/current/bin" "$HOME/.local/bin"
+    printf '#!/bin/sh\necho "codex-cli 0.170.0"\n' > "$HOME/real-codex/packages/standalone/current/bin/codex"
+    chmod +x "$HOME/real-codex/packages/standalone/current/bin/codex"
+    ln -s "$HOME/real-codex" "$HOME/.codex"
+    ln -s ../../.codex/packages/standalone/current/bin/codex "$HOME/.local/bin/codex"
+    run_update 'main --dry-run'
+    assert_success
+    assert_output --partial 'Install method: standalone'
+}
+
+@test "codex status classifies the binary it shows and hints at migration for npm" {
+    make_npm_install
+    for shell in bash zsh; do
+        run "$shell" -c '
+            export DOTFILES_FORCE_INIT=1 CODEX_SKILLS_AUTO_SYNC=0
+            export SHELL_COMMON="$1/shell-common"
+            export PATH="$HOME/npm/bin:$PATH"
+            . "$SHELL_COMMON/tools/ux_lib/ux_lib.sh"
+            . "$SHELL_COMMON/tools/integrations/codex.sh"
+            codex_status
+        ' _ "$DOTFILES_ROOT"
+        assert_success
+        assert_output --partial 'Migrate to standalone: codex-update'
+        refute_output --partial 'Standalone Installation'
+    done
+    [ ! -e "$HOME/npm.calls" ]
 }

@@ -412,8 +412,8 @@ codex_status() {
         ux_success "Codex installed"
         ux_table_row "Version" "$("$codex_bin" --version 2>/dev/null || echo 'unknown')" ""
         ux_table_row "Location" "$codex_bin" ""
-        # Detection SSOT is the bash-only lib; --no-npm keeps status npm-free.
-        method="$(bash -c '. "$1" && _codex_install_method --no-npm' _ "$codex_lib" 2>/dev/null || true)"
+        # Classify the binary shown above via the bash-only lib (no npm call).
+        method="$(bash -c '. "$1" && _codex_classify_bin "$2"' _ "$codex_lib" "$codex_bin" 2>/dev/null || true)"
         ux_table_row "Install method" "${method:-unknown}" ""
         [ "$method" = npm ] && ux_info "Migrate to standalone: codex-update"
     else
@@ -422,7 +422,7 @@ codex_status() {
         return 1
     fi
 
-    [ "$method" = standalone ] || return 0
+    case "$method" in npm|other) return 0 ;; esac
     ux_info ""
     ux_section "Standalone Installation"
     ux_info "Binary directory: ${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
