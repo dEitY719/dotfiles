@@ -91,6 +91,13 @@ main() {
     ux_require curl || return 1
 
     if [ "$method" = npm ]; then
+        if ! _codex_npm_root_writable; then
+            ux_error "The npm global root is not writable: $CODEX_NPM_ROOT"
+            ux_info "Remove the package with sudo, then install standalone:"
+            ux_bullet "sudo npm uninstall -g $CODEX_NPM_PACKAGE"
+            ux_bullet "codex-install${release:+ --release $release}"
+            return 1
+        fi
         if [ "$assume_yes" = 0 ] &&
             ! ux_confirm "Migrate the npm Codex CLI to the official standalone install?" "y"; then
             ux_info "Migration cancelled; nothing was changed."
@@ -100,8 +107,10 @@ main() {
         if [ -n "$CODEX_EXISTING_BIN" ]; then
             before="$("$CODEX_EXISTING_BIN" --version 2>/dev/null || printf 'unknown')"
         fi
+        # Download first: a network failure must not leave the user without codex.
+        _codex_fetch_installer || return 1
         _codex_migrate_from_npm || return 1
-        if ! _codex_standalone_install "${installer_args[@]}"; then
+        if ! _codex_run_installer "${installer_args[@]}"; then
             ux_error "The npm package was removed, so no Codex CLI is installed right now."
             ux_info "Retry: codex-install${release:+ --release $release}"
             return 1

@@ -30,44 +30,56 @@ _codex_resolve_path() {
     readlink -f "$1" 2>/dev/null || readlink "$1" 2>/dev/null || printf '%s\n' "$1"
 }
 
+# _codex_classify_bin <path> -> standalone | npm | other
+# standalone: an installer link into $CODEX_HOME/packages/standalone/current/,
+# or any path that resolves under the standalone root (relative links and a
+# symlinked CODEX_HOME included). npm: resolves into node_modules/@openai/codex.
+_codex_classify_bin() {
+    local bin="$1" root real_root target resolved
+    root="$(_codex_standalone_root)"
+    if [ -L "$bin" ]; then
+        target="$(readlink "$bin" 2>/dev/null || true)"
+        case "$target" in "$root/current/"*) printf 'standalone\n'; return 0 ;; esac
+    fi
+    resolved="$(_codex_resolve_path "$bin")"
+    real_root="$(cd -P "$root" 2>/dev/null && pwd)" || real_root="$root"
+    case "$resolved" in
+        "$root/"* | "$real_root/"*) printf 'standalone\n' ;;
+        */node_modules/"$CODEX_NPM_PACKAGE"/*) printf 'npm\n' ;;
+        *) printf 'other\n' ;;
+    esac
+}
+
 # _codex_detect_install [--no-npm]
 # Sets CODEX_INSTALL_METHOD (standalone | npm | none | other),
-# CODEX_EXISTING_BIN (the codex found on PATH, if any) and CODEX_NPM_PRESENT
-# (1 when the global npm package exists, even next to standalone). --no-npm never runs
-# npm (dry-run, codex_status): npm is then recognised only by a codex on PATH
-# that resolves into node_modules/@openai/codex.
+# CODEX_EXISTING_BIN (the codex found on PATH, if any), CODEX_NPM_PRESENT (1
+# when the global npm package exists, even next to standalone) and
+# CODEX_NPM_ROOT. Precedence: a standalone install in BIN_DIR, then the codex
+# that PATH actually runs (so an active Homebrew/Bun/manual binary is never
+# "migrated" because an unused npm package also exists), then a global npm
+# package with no codex on PATH. --no-npm never runs npm (dry-run,
+# codex_status): npm is then recognised only from the codex on PATH.
 _codex_detect_install() {
-    local query_npm=1 bin_dir standalone_root link target npm_root resolved
+    local query_npm=1 bin_dir
     [ "${1:-}" = "--no-npm" ] && query_npm=0
     bin_dir="$(_codex_bin_dir)"
-    standalone_root="$(_codex_standalone_root)"
     CODEX_INSTALL_METHOD=none
     CODEX_NPM_PRESENT=0
+    CODEX_NPM_ROOT=""
     CODEX_EXISTING_BIN="$(PATH="$bin_dir:$PATH" type -P codex 2>/dev/null || true)"
     if [ "$query_npm" = 1 ] && command -v npm >/dev/null 2>&1; then
-        npm_root="$(npm root -g 2>/dev/null || true)"
-        if [ -n "$npm_root" ] && [ -d "$npm_root/$CODEX_NPM_PACKAGE" ]; then
+        CODEX_NPM_ROOT="$(npm root -g 2>/dev/null || true)"
+        if [ -n "$CODEX_NPM_ROOT" ] && [ -d "$CODEX_NPM_ROOT/$CODEX_NPM_PACKAGE" ]; then
             CODEX_NPM_PRESENT=1
         fi
     fi
 
-    link="$bin_dir/codex"
-    if [ -L "$link" ]; then
-        target="$(readlink "$link" 2>/dev/null || true)"
-        case "$target" in
-            "$standalone_root/current/"*) CODEX_INSTALL_METHOD=standalone; return 0 ;;
-        esac
-    fi
-    if [ "$CODEX_NPM_PRESENT" = 1 ]; then
+    if [ -L "$bin_dir/codex" ] && [ "$(_codex_classify_bin "$bin_dir/codex")" = standalone ]; then
+        CODEX_INSTALL_METHOD=standalone
+    elif [ -n "$CODEX_EXISTING_BIN" ]; then
+        CODEX_INSTALL_METHOD="$(_codex_classify_bin "$CODEX_EXISTING_BIN")"
+    elif [ "$CODEX_NPM_PRESENT" = 1 ]; then
         CODEX_INSTALL_METHOD=npm
-        return 0
-    fi
-    if [ -n "$CODEX_EXISTING_BIN" ]; then
-        resolved="$(_codex_resolve_path "$CODEX_EXISTING_BIN")"
-        case "$resolved" in
-            */node_modules/"$CODEX_NPM_PACKAGE"/*) CODEX_INSTALL_METHOD=npm ;;
-            *) CODEX_INSTALL_METHOD=other ;;
-        esac
     fi
     return 0
 }
@@ -78,26 +90,42 @@ _codex_install_method() {
     printf '%s\n' "$CODEX_INSTALL_METHOD"
 }
 
-# _codex_standalone_install [installer-args...]   (e.g. --release 0.170.0)
-# Download the official installer to a temp file (never `curl | sh`, #1801),
-# run it with BIN_DIR prepended to PATH (so upstream does not edit symlinked
-# rc files, #1802) and CODEX_NON_INTERACTIVE=1 (conflicts are handled here,
-# never by an upstream prompt), then verify the installed binary itself.
-# Sets CODEX_INSTALLED_VERSION on success; each failing stage (download,
-# installer, verify) prints its own error and returns 1.
-_codex_standalone_install() {
-    local bin_dir codex_bin installer rc=0
-    bin_dir="$(_codex_bin_dir)"
-    codex_bin="$bin_dir/codex"
-    CODEX_INSTALLED_VERSION=""
-    installer="$(mktemp)" || { ux_error "Cannot create a temp file for the installer."; return 1; }
-    if ! curl -fsSL "$CODEX_INSTALLER_URL" -o "$installer"; then
-        rm -f "$installer"
+_codex_cleanup_installer() {
+    [ -z "${CODEX_INSTALLER_FILE:-}" ] || rm -f "$CODEX_INSTALLER_FILE"
+    CODEX_INSTALLER_FILE=""
+}
+
+# _codex_fetch_installer -- download the official installer to a temp file
+# (never `curl | sh`, #1801) into CODEX_INSTALLER_FILE. The file is removed on
+# exit and on Ctrl-C / SIGTERM as well as after the run.
+_codex_fetch_installer() {
+    CODEX_INSTALLER_FILE="$(mktemp)" || {
+        CODEX_INSTALLER_FILE=""
+        ux_error "Cannot create a temp file for the installer."
+        return 1
+    }
+    trap _codex_cleanup_installer EXIT
+    trap '_codex_cleanup_installer; exit 130' INT TERM
+    if ! curl -fsSL "$CODEX_INSTALLER_URL" -o "$CODEX_INSTALLER_FILE"; then
+        _codex_cleanup_installer
         ux_error "Failed to download the official Codex installer."
         return 1
     fi
-    PATH="$bin_dir:$PATH" CODEX_NON_INTERACTIVE=1 sh "$installer" "$@" || rc=$?
-    rm -f "$installer"
+}
+
+# _codex_run_installer [installer-args...]   (e.g. --release 0.170.0)
+# Run the fetched installer with BIN_DIR prepended to PATH (so upstream does
+# not edit symlinked rc files, #1802) and CODEX_NON_INTERACTIVE=1 (conflicts
+# are handled here, never by an upstream prompt), then verify the installed
+# binary itself. Sets CODEX_INSTALLED_VERSION on success; installer and verify
+# failures print their own error and return 1.
+_codex_run_installer() {
+    local bin_dir codex_bin rc=0
+    bin_dir="$(_codex_bin_dir)"
+    codex_bin="$bin_dir/codex"
+    CODEX_INSTALLED_VERSION=""
+    PATH="$bin_dir:$PATH" CODEX_NON_INTERACTIVE=1 sh "$CODEX_INSTALLER_FILE" "$@" || rc=$?
+    _codex_cleanup_installer
     if [ "$rc" -ne 0 ]; then
         ux_error "The official Codex installer failed (exit $rc)."
         return 1
@@ -106,7 +134,17 @@ _codex_standalone_install() {
         ux_error "Codex CLI binary is not runnable after install: $codex_bin ($CODEX_INSTALLED_VERSION)"
         return 1
     fi
-    return 0
+}
+
+# _codex_standalone_install [installer-args...] -- fetch, run, verify.
+_codex_standalone_install() {
+    _codex_fetch_installer && _codex_run_installer "$@"
+}
+
+# _codex_npm_root_writable -- 0 unless the detected npm global root exists and
+# is not writable (root-owned prefix: npm uninstall would need sudo).
+_codex_npm_root_writable() {
+    [ -z "$CODEX_NPM_ROOT" ] || [ -w "$CODEX_NPM_ROOT" ]
 }
 
 # _codex_migrate_from_npm -- remove the global npm package (one call). On
