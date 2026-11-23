@@ -330,3 +330,13 @@ _commit_local() {
     [[ "$output" != *"o.txt |"* ]]
     [[ "$output" == *"file changed"* ]]
 }
+
+@test "git-sync.sh: TTY 에서 실패하면 전체 로그 경로를 안내한다" {
+    command -v script >/dev/null 2>&1 || skip "script(1) 없음"
+    script -qec true /dev/null >/dev/null 2>&1 || skip "util-linux script 아님"
+
+    # upstream 이 없어 사전 가드에서 실패한다.
+    run script -qec "env -u NO_COLOR DOTFILES_ROOT='$REAL_ROOT' git -C '${WORK_DIR}/repo' sync" /dev/null
+    [[ "$output" == *$'\033[31m'*"'upstream' 리모트가 없습니다"* ]]
+    [[ "$output" == *"전체 로그: ${WORK_DIR}/repo/.git/git-sync-logs/"* ]]
+}
