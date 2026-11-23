@@ -31,8 +31,9 @@ _codex_resolve_path() {
 }
 
 # _codex_detect_install [--no-npm]
-# Sets CODEX_INSTALL_METHOD (standalone | npm | none | other) and
-# CODEX_EXISTING_BIN (the codex found on PATH, if any). --no-npm never runs
+# Sets CODEX_INSTALL_METHOD (standalone | npm | none | other),
+# CODEX_EXISTING_BIN (the codex found on PATH, if any) and CODEX_NPM_PRESENT
+# (1 when the global npm package exists, even next to standalone). --no-npm never runs
 # npm (dry-run, codex_status): npm is then recognised only by a codex on PATH
 # that resolves into node_modules/@openai/codex.
 _codex_detect_install() {
@@ -41,7 +42,14 @@ _codex_detect_install() {
     bin_dir="$(_codex_bin_dir)"
     standalone_root="$(_codex_standalone_root)"
     CODEX_INSTALL_METHOD=none
+    CODEX_NPM_PRESENT=0
     CODEX_EXISTING_BIN="$(PATH="$bin_dir:$PATH" type -P codex 2>/dev/null || true)"
+    if [ "$query_npm" = 1 ] && command -v npm >/dev/null 2>&1; then
+        npm_root="$(npm root -g 2>/dev/null || true)"
+        if [ -n "$npm_root" ] && [ -d "$npm_root/$CODEX_NPM_PACKAGE" ]; then
+            CODEX_NPM_PRESENT=1
+        fi
+    fi
 
     link="$bin_dir/codex"
     if [ -L "$link" ]; then
@@ -50,12 +58,9 @@ _codex_detect_install() {
             "$standalone_root/current/"*) CODEX_INSTALL_METHOD=standalone; return 0 ;;
         esac
     fi
-    if [ "$query_npm" = 1 ] && command -v npm >/dev/null 2>&1; then
-        npm_root="$(npm root -g 2>/dev/null || true)"
-        if [ -n "$npm_root" ] && [ -d "$npm_root/$CODEX_NPM_PACKAGE" ]; then
-            CODEX_INSTALL_METHOD=npm
-            return 0
-        fi
+    if [ "$CODEX_NPM_PRESENT" = 1 ]; then
+        CODEX_INSTALL_METHOD=npm
+        return 0
     fi
     if [ -n "$CODEX_EXISTING_BIN" ]; then
         resolved="$(_codex_resolve_path "$CODEX_EXISTING_BIN")"

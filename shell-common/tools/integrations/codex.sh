@@ -422,6 +422,7 @@ codex_status() {
         return 1
     fi
 
+    [ "$method" = standalone ] || return 0
     ux_info ""
     ux_section "Standalone Installation"
     ux_info "Binary directory: ${CODEX_INSTALL_DIR:-$HOME/.local/bin}"

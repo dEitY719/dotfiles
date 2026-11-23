@@ -80,6 +80,7 @@ main() {
     ux_info "Install method: $method"
     ux_info "Binary: $codex_bin"
     ux_info "Release: ${release:-latest}"
+    [ "$dry_run" = 1 ] && ux_info "[dry-run] npm was not queried; detection used the codex on PATH."
     case "$method" in
         none|other) _codex_update_refuse "$method"; return 1 ;;
     esac
@@ -114,6 +115,10 @@ main() {
             ux_success "Codex CLI already up to date ($after)"
         else
             ux_success "Codex CLI updated: $before -> $after"
+        fi
+        if [ "$CODEX_NPM_PRESENT" = 1 ]; then
+            ux_warning "A legacy npm $CODEX_NPM_PACKAGE is still installed next to standalone."
+            ux_info "Remove it: npm uninstall -g $CODEX_NPM_PACKAGE"
         fi
     fi
     _codex_warn_path_shadow
