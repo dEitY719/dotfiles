@@ -91,6 +91,11 @@ git sync -h     # 도움말 (git 이 `--help` 를 alias 정의 출력으로 가�
 저장소-로컬 alias(`git config --local alias.sync`)는 git 우선순위상 이 전역
 alias 를 자동으로 덮으므로, 자체 `git sync` 를 가진 프로젝트와 충돌하지 않는다.
 
+출력·로그 (issue #2421): TTY 에서는 완료 `✓` 를 green, 실패 `✗` 를 red 로 표시하고
+fetch·merge·push 의 부가 출력은 dim 한 줄 요약만 보인다(실패 시 전체 출력 + 로그 경로).
+non-TTY(파이프·CI)나 `NO_COLOR` 에서는 색 없이 종전처럼 전체를 흘린다. 실행마다 전체 출력이
+`<git-dir>/git-sync-logs/` 에 남고 최근 10개만 보존된다(worktree 별 독립).
+
 회귀 테스트: `tests/bats/git/test_git_sync.bats`
 
 ### 충돌 예방 원칙 (issue #2325)

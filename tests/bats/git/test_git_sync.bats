@@ -264,3 +264,69 @@ _commit_local() {
     [ "$status" -eq 0 ]
     [[ "$output" != *"리모트가 없습니다"* ]]
 }
+
+# ── 출력 정책: 실행별 full log · non-TTY passthrough (#2421) ──
+@test "git-sync.sh: 실행마다 git-dir/git-sync-logs 에 전체 로그를 남긴다" {
+    _seed_remotes
+    _commit_to_remote "${WORK_DIR}/origin.git" o.txt origin-side
+
+    run _git_in_repo sync
+    [ "$status" -eq 0 ]
+
+    local logs=("${WORK_DIR}/repo/.git/git-sync-logs/"*.log)
+    [ "${#logs[@]}" -eq 1 ]
+    grep -q '  \$ git merge --no-edit origin/main' "${logs[0]}"
+    grep -q 'file changed' "${logs[0]}"
+    grep -q 'git sync 완료' "${logs[0]}"
+    # 로그에는 색 코드가 들어가지 않는다.
+    ! grep -q $'\033' "${logs[0]}"
+}
+
+@test "git-sync.sh: 로그는 최근 10개만 보존한다" {
+    local dir="${WORK_DIR}/repo/.git/git-sync-logs" i
+    mkdir -p "$dir"
+    for i in 01 02 03 04 05 06 07 08 09 10 11 12; do
+        : >"${dir}/20000101-0000${i}-1.log"
+    done
+
+    # upstream 이 없어 사전 가드에서 끝나도 로그는 만들고 정리한다.
+    run _git_in_repo sync
+    [ "$status" -eq 1 ]
+
+    local logs=("${dir}/"*.log)
+    [ "${#logs[@]}" -eq 10 ]
+    # 가장 오래된 3개가 지워지고 이번 실행 로그가 남았다.
+    [ ! -e "${dir}/20000101-000001-1.log" ]
+    [ ! -e "${dir}/20000101-000003-1.log" ]
+    [ -e "${dir}/20000101-000004-1.log" ]
+    grep -q "'upstream' 리모트가 없습니다" "${logs[9]}"
+}
+
+@test "git-sync.sh: non-TTY 에서는 색 없이 전체 출력을 그대로 흘린다" {
+    _seed_remotes
+    _commit_to_remote "${WORK_DIR}/origin.git" o.txt origin-side
+
+    run _git_in_repo sync
+    [ "$status" -eq 0 ]
+    # merge diffstat·fetch 출력이 요약되지 않고 그대로 나온다.
+    [[ "$output" == *"o.txt"* ]]
+    [[ "$output" == *"FETCH_HEAD"* ]]
+    [[ "$output" != *$'\033'* ]]
+    # 성공 시 로그 경로 안내는 없다.
+    [[ "$output" != *"전체 로그:"* ]]
+}
+
+@test "git-sync.sh: TTY 에서는 부가 출력을 dim 한 줄 요약으로 접는다" {
+    command -v script >/dev/null 2>&1 || skip "script(1) 없음"
+    script -qec true /dev/null >/dev/null 2>&1 || skip "util-linux script 아님"
+    _seed_remotes
+    _commit_to_remote "${WORK_DIR}/origin.git" o.txt origin-side
+    _commit_local l.txt local-side
+
+    run script -qec "env DOTFILES_ROOT='$REAL_ROOT' git -C '${WORK_DIR}/repo' sync" /dev/null
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\033[32m'*"git sync 완료"* ]]
+    # diffstat 개별 파일 줄(' o.txt | 1 +')은 화면에 흐르지 않고 요약만 남는다.
+    [[ "$output" != *"o.txt |"* ]]
+    [[ "$output" == *"file changed"* ]]
+}
