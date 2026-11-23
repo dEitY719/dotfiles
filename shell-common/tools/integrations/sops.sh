@@ -81,16 +81,18 @@ alias sops-status='sops_age_status'
 # `senv key export|import` move the private key between PCs as an age
 # passphrase file. age asks for the passphrase on the tty itself; senv never
 # reads, pipes or passes it.
+#
+# `senv vault-push` copies .enc.env (+ .sops.yaml) into the private vault repo
+# and commits/pushes only those paths; plaintext .env never leaves $PWD.
 # ---------------------------------------------------------------------------
 
 _senv_usage() {
     ux_info "Usage: senv <command> [args]   (acts on the current directory)"
     ux_bullet "workflow"
-    ux_bullet_sub "키가 있는 PC: senv init -> senv enc -> git commit"
+    ux_bullet_sub "키가 있는 PC: senv init -> senv enc -> git commit (vault 보관: senv vault-push)"
     ux_bullet_sub "시크릿 저장·추출 (dotfiles .enc.env): senv set KEY -> 자동 commit+push, senv get KEY / senv keys"
     ux_bullet_sub "키 백업: senv key export -> cp ~/senv-key.age ~/para/project/vault/secrets/ -> vault 에서 git commit && git push"
     ux_bullet_sub "새 PC: cd ~/para/project/vault && git pull -> senv key import ~/para/project/vault/secrets/senv-key.age -> senv dec -f (기존 .env 덮어씀) -> senv check"
-    ux_bullet_sub "점검: senv check"
     ux_bullet "init              write .sops.yaml (your age public key) + ignore .env"
     ux_bullet "enc [file]        encrypt .env -> .enc.env ([file] -> [file].enc)"
     ux_bullet "dec [-f] [file]   decrypt .enc.env (or legacy .env.enc) -> .env (-f overwrites)"
@@ -100,6 +102,7 @@ _senv_usage() {
     ux_bullet "set KEY [--stdin]  dotfiles .enc.env 에 키 저장: enc -> commit -> push (값은 숨김 입력)"
     ux_bullet "get KEY|keys|push  dotfiles 에서 pull+복호화해 값/키 이름만 출력, push 는 수동 편집 반영"
     ux_bullet "create-pr         enc -> branch -> commit -> push -> PR (default branch only, .enc.env only)"
+    ux_bullet "vault-push [opts]  .enc.env + .sops.yaml -> vault secrets/<dir name>/ -> commit -> push (sops-help usage)"
     ux_bullet "key show          your public key + whether .sops.yaml lists it"
     ux_bullet "key export [-o file] [-f]   lock the private key with a passphrase (~/senv-key.age)"
     ux_bullet "key import [file] [-f]      unlock it into the sops key file (mode 600)"
@@ -677,10 +680,11 @@ _senv_dotfiles_root() {
 # Git preflight shared by `senv set` / `senv push` ($1 = dotfiles root): a
 # work tree, on the default branch, nothing staged except .enc.env — the same
 # invariants create-pr enforces. This path pushes main directly (no PR), so
-# the guard runs before the secret is even read.
+# the guard runs before the secret is even read. $2 (optional) is the ERE of
+# root-relative staged paths that are allowed (default: only .enc.env).
 _senv_git_guard() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local root="$1" base cur staged
+    local root="$1" allow="${2:-\.enc\.env}" base cur staged
     if ! git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
         ux_error "not a git work tree: ${root}"
         return 1
@@ -698,7 +702,7 @@ _senv_git_guard() {
         ux_info "Next: git -C ${root} switch ${base}"
         return 1
     fi
-    staged=$(git -C "$root" diff --cached --name-only | grep -vx '\.enc\.env' || true)
+    staged=$(git -C "$root" diff --cached --name-only | grep -Evx "$allow" || true)
     if [ -n "$staged" ]; then
         ux_error "other staged changes would be mixed into the commit:"
         printf '%s\n' "$staged" | while IFS= read -r f; do ux_bullet_sub "$f"; done
@@ -968,6 +972,130 @@ _senv_push() {
     )
 }
 
+# ---------------------------------------------------------------------------
+# senv vault-push: copy the CWD project's .enc.env (+ .sops.yaml) into the
+# private vault repo (${SENV_VAULT_DIR:-~/para/project/vault}) under
+# secrets/<NAME>/, then commit only those paths and push the default branch.
+# Plaintext .env is never copied; if it differs from .enc.env it is
+# re-encrypted first. The commit carries no Co-Authored-By trailer.
+# ---------------------------------------------------------------------------
+
+_senv_vault_usage() {
+    ux_info "Usage: senv vault-push [-n NAME] [-d SUBDIR] [-v VAULT] [-m MSG] [--no-push] [--no-sops]"
+}
+
+# A vault-relative path must be non-empty, relative and free of `..`.
+_senv_vault_safe_path() {
+    case "$1" in
+        "" | /* | *..*) return 1 ;;
+    esac
+}
+
+_senv_vault_push() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    local name dest="" dest_set=0 vault="${SENV_VAULT_DIR:-$HOME/para/project/vault}"
+    local msg="" do_push=1 do_sops=1 esc branch
+    name=$(basename "$(pwd)")
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -n | --name | -d | --dest | -v | --vault | -m | --message)
+                if [ $# -lt 2 ]; then
+                    ux_error "$1 needs a value"
+                    _senv_vault_usage
+                    return 2
+                fi
+                case "$1" in
+                    -n | --name) name="$2" ;;
+                    -d | --dest) dest="$2" dest_set=1 ;;
+                    -v | --vault) vault="$2" ;;
+                    *) msg="$2" ;;
+                esac
+                shift
+                ;;
+            --no-push) do_push=0 ;;
+            --no-sops) do_sops=0 ;;
+            *)
+                ux_error "unknown option: $1"
+                _senv_vault_usage
+                return 2
+                ;;
+        esac
+        shift
+    done
+    [ "$dest_set" -eq 1 ] || dest="secrets/${name}"
+    dest="${dest%/}"
+    if ! _senv_vault_safe_path "$name" || ! _senv_vault_safe_path "$dest"; then
+        ux_error "unsafe name/dest (empty, absolute or contains ..): name='${name}' dest='${dest}'"
+        return 2
+    fi
+    if [ ! -f .enc.env ]; then
+        ux_error ".enc.env not found in $(pwd)"
+        ux_info "Next: senv enc"
+        return 1
+    fi
+    if [ ! -d "$vault" ]; then
+        ux_error "vault not found: ${vault}"
+        ux_info "Next: git clone git@github.com:dEitY719/vault.git ${vault}"
+        return 1
+    fi
+    esc=$(printf '%s' "$dest" | sed 's/[][\.*^$+?(){}|]/\\&/g')
+    _senv_git_guard "$vault" "${esc}/(\.enc\.env|\.sops\.yaml)" || return 1
+
+    # sops output is non-deterministic, so compare plaintext. sops drops blank
+    # lines in dotenv, so ignore them on both sides (else .env with blank lines
+    # always looks changed and every run re-encrypts).
+    if [ -f .env ] && [ "$(sops -d --input-type dotenv --output-type dotenv .enc.env 2>/dev/null | grep -v '^[[:space:]]*$')" != "$(grep -v '^[[:space:]]*$' .env)" ]; then
+        ux_info ".env differs from .enc.env; re-encrypting first"
+        _senv_enc || return 1
+    fi
+    if [ "$do_sops" -eq 1 ] && [ ! -f .sops.yaml ]; then
+        ux_warning ".sops.yaml not found in $(pwd); copying .enc.env only"
+        do_sops=0
+    fi
+    if [ -z "$msg" ]; then
+        if [ -n "$(git -C "$vault" ls-files -- "$dest")" ]; then
+            msg="chore: update ${name} .enc.env"
+        else
+            msg="chore: add ${name} .enc.env"
+        fi
+    fi
+
+    set -- "$dest/.enc.env"
+    [ "$do_sops" -eq 1 ] && set -- "$@" "$dest/.sops.yaml"
+    if ! { mkdir -p "$vault/$dest" && command cp -f .enc.env "$vault/$dest/.enc.env"; }; then
+        ux_error "copy failed: ${vault}/${dest}/.enc.env"
+        return 1
+    fi
+    if [ "$do_sops" -eq 1 ] && ! command cp -f .sops.yaml "$vault/$dest/.sops.yaml"; then
+        ux_error "copy failed: ${vault}/${dest}/.sops.yaml"
+        return 1
+    fi
+    git -C "$vault" add -- "$@" || {
+        ux_error "git add failed in ${vault}"
+        return 1
+    }
+    if git -C "$vault" diff --cached --quiet -- "$@"; then
+        ux_info "no change: ${vault}/${dest} already holds this .enc.env; nothing to do"
+        return 0
+    fi
+    if ! git -C "$vault" commit -m "$msg" -- "$@" >/dev/null; then
+        ux_error "commit failed (files stay staged in ${vault})"
+        return 1
+    fi
+    ux_success "committed: ${msg}"
+    if [ "$do_push" -eq 0 ]; then
+        ux_info "not pushed (--no-push). Next: git -C ${vault} push origin HEAD"
+        return 0
+    fi
+    branch=$(git -C "$vault" symbolic-ref -q --short HEAD 2>/dev/null)
+    if ! git -C "$vault" push origin HEAD; then
+        ux_error "push failed (the commit stays local on ${branch:-HEAD})"
+        ux_info "Next: git -C ${vault} pull --rebase && git -C ${vault} push origin HEAD"
+        return 1
+    fi
+    ux_success "pushed ${branch:-HEAD} to origin"
+}
+
 # GH_HOST for gh: shared resolver (internal vs external PC), else empty so gh
 # falls back to its own default host. lib/ is never auto-sourced (#2154, #2225).
 _senv_gh_host() {
@@ -986,7 +1114,7 @@ senv() {
             _senv_usage
             return 0
             ;;
-        init | enc | dec | edit | run | check | key | create-pr | set | get | push | keys) ;;
+        init | enc | dec | edit | run | check | key | create-pr | set | get | push | keys | vault-push) ;;
         *)
             ux_error "unknown senv command: ${cmd}"
             _senv_usage
@@ -996,6 +1124,7 @@ senv() {
     shift
     _senv_need_sops || return 1
     [ "$cmd" = "create-pr" ] && cmd="create_pr"
+    [ "$cmd" = "vault-push" ] && cmd="vault_push"
     "_senv_${cmd}" "$@"
 }
 
