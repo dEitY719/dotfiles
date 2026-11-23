@@ -323,7 +323,7 @@ _commit_local() {
     _commit_to_remote "${WORK_DIR}/origin.git" o.txt origin-side
     _commit_local l.txt local-side
 
-    run script -qec "env DOTFILES_ROOT='$REAL_ROOT' git -C '${WORK_DIR}/repo' sync" /dev/null
+    run script -qec "env -u NO_COLOR DOTFILES_ROOT='$REAL_ROOT' git -C '${WORK_DIR}/repo' sync" /dev/null
     [ "$status" -eq 0 ]
     [[ "$output" == *$'\033[32m'*"git sync 완료"* ]]
     # diffstat 개별 파일 줄(' o.txt | 1 +')은 화면에 흐르지 않고 요약만 남는다.

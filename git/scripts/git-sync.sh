@@ -100,6 +100,23 @@ show_output() {
     if [[ -n "$s" ]]; then printf '%s    %s%s\n' "$DIM" "$s" "$RESET"; fi
 }
 
+# <fd> <git 명령...> — fetch·push 용. 비-quiet 는 출력을 실시간으로 흘리며(훅·느린 네트워크 진행이
+# 끝까지 안 보이면 안 된다) 로그에도 남기고, quiet 는 캡처해 성공이면 dim 요약, 실패면 전체를 보인다.
+# 반환값 = git 종료 상태.
+git_run() {
+    local fd="$1" out
+    shift
+    if ((QUIET == 0)); then
+        if "$@" 2>&1 | tee -a "${LOG_FILE:-/dev/null}" >&"$fd"; then return 0; else return 1; fi
+    fi
+    if out=$("$@" 2>&1); then
+        show_output "$out" "$fd"
+        return 0
+    fi
+    show_full "$out" "$fd"
+    return 1
+}
+
 # 실패 출력은 요약하지 않는다 — 원인 판단에 전체가 필요하다.
 show_full() {
     printf '%s\n' "$1" >&"${2:-1}"
@@ -193,7 +210,9 @@ has_unresolved_conflicts() {
 
 # 충돌 파일 목록을 들여쓰기해 출력
 print_conflicted_files() {
-    show_full "$(git diff --name-only --diff-filter=U | sed 's/^/    - /')"
+    local files
+    files=$(git diff --name-only --diff-filter=U | sed 's/^/    - /')
+    [[ -z "$files" ]] || show_full "$files"
 }
 
 # 3/4단계 공용 merge — 충돌 시 abort 하지 않고 안내 후 중단(멱등 재개 핵심).
@@ -299,13 +318,10 @@ log_start "git sync — ${INT_REF} + ${EXT_REF} → 로컬 ${BRANCH}, 이후 ${I
 for remote in "$EXTERNAL_REMOTE" "$INTERNAL_REMOTE"; do
     log_step "git fetch $remote $BRANCH"
     # git 은 fetch·push 결과를 stderr 로 쓰므로 passthrough 도 fd 2 로 흘린다(종전과 같은 스트림).
-    if out=$(git fetch "$remote" "$BRANCH" 2>&1); then
-        show_output "$out" 2
-    else
-        show_full "$out" 2
+    git_run 2 git fetch "$remote" "$BRANCH" || {
         log_fail "$remote fetch 실패."
         exit 1
-    fi
+    }
 done
 
 # ── 3. origin/main merge (지점 A) ──
@@ -315,11 +331,9 @@ merge_or_guide "$EXT_REF" "B"
 
 # ── 5. origin/main push (지점 C) ──
 log_step "git push $INTERNAL_REMOTE $BRANCH"
-if out=$(git push "$INTERNAL_REMOTE" "$BRANCH" 2>&1); then
-    show_output "$out" 2
+if git_run 2 git push "$INTERNAL_REMOTE" "$BRANCH"; then
     log_done "git sync 완료 — 로컬 ${BRANCH} 동기화 + ${INTERNAL_REMOTE}/${BRANCH} push 성공."
 else
-    show_full "$out" 2
     log_fail "push 거부 (지점 C) — ${INTERNAL_REMOTE}/${BRANCH} push 가 거부되었습니다."
     log_info "원인 1) ${INTERNAL_REMOTE}/${BRANCH} 이 그새 앞서감(non-fast-forward) → git sync 재실행 시"
     log_info "        최신분을 흡수한 뒤 재푸시합니다."
