@@ -298,3 +298,16 @@ make_npm_install() {
     done
     [ ! -e "$HOME/npm.calls" ]
 }
+
+@test "codex-update warns when a legacy npm package remains next to standalone" {
+    make_standalone 0.170.0
+    make_npm_install
+    run_update '
+        export NEW_VERSION=0.172.0
+        main
+    '
+    assert_success
+    assert_output --partial 'codex-cli 0.170.0 -> codex-cli 0.172.0'
+    assert_output --partial 'legacy npm @openai/codex is still installed'
+    [ "$(grep -c uninstall "$HOME/npm.calls")" = 0 ]
+}
