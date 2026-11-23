@@ -13,13 +13,13 @@
 
 - Usage: opencode-help [section|--list|--all]
 - sections
-    - setup: install-opencode | opencode-verify | uninstall-opencode
+    - setup: install-opencode | update-opencode | opencode-verify | uninstall-opencode
     - utils: bunx oh-my-opencode install | install-bun | bun-help
     - env: home/public | external | internal
     - config: $OPENCODE_CONFIG_FILE | opencode-edit
     - models: Home | External | Internal
     - usage: opencode | opencode --help | opencode --version
-    - trouble: install-opencode | opencode-verify | uninstall-opencode
+    - trouble: install-opencode | update-opencode | opencode-verify | uninstall-opencode
     - details: opencode-help <section>  (example: opencode-help models)
 
 ## 섹션
@@ -27,6 +27,7 @@
 ### setup
 
 - install-opencode             : Interactive OpenCode installer
+- update-opencode              : Update OpenCode to the latest version
 - opencode-verify              : Verify installation & configuration
 - uninstall-opencode           : Remove OpenCode and configuration
 
@@ -61,6 +62,7 @@
 ### trouble
 
 - Not installed?          : Run install-opencode
+- Outdated?               : Run update-opencode
 - LLM not working?        : Run opencode-verify
 - Want to remove?         : Run uninstall-opencode
 

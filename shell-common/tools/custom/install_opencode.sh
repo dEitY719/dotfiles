@@ -150,12 +150,78 @@ verify_opencode_binary() {
 
 # A leftover npm install would shadow ~/.opencode/bin wherever it comes
 # first in PATH, and after npm 12 it is likely the broken placeholder.
+# Checks the default global prefix and the ~/.local prefix (#2419: a manual
+# `npm install -g --prefix ~/.local opencode-ai` puts it in ~/.local/bin).
 remove_stale_npm_opencode() {
     command -v npm >/dev/null 2>&1 || return 0
-    npm ls -g --depth=0 opencode-ai >/dev/null 2>&1 || return 0
-    ux_info "Removing legacy npm opencode-ai package (superseded by ~/.opencode/bin)..."
-    npm uninstall -g opencode-ai >/dev/null 2>&1 ||
-        ux_warning "Could not remove npm opencode-ai; keep ~/.opencode/bin first in PATH"
+    local prefix
+    for prefix in "" "$HOME/.local"; do
+        npm ls -g --depth=0 ${prefix:+--prefix "$prefix"} opencode-ai >/dev/null 2>&1 || continue
+        ux_info "Removing legacy npm opencode-ai package${prefix:+ from $prefix} (superseded by ~/.opencode/bin)..."
+        npm uninstall -g ${prefix:+--prefix "$prefix"} opencode-ai >/dev/null 2>&1 ||
+            ux_warning "Could not remove npm opencode-ai${prefix:+ from $prefix}; keep ~/.opencode/bin first in PATH"
+    done
+}
+
+# update-opencode (#2419): rerun the same installer as install-opencode, with
+# the method taken from the setup mode instead of a menu (no prompts).
+update_main() {
+    if [ $# -gt 0 ]; then
+        ux_usage "update-opencode" "" "Update OpenCode to the latest version (takes no arguments)"
+        return 1
+    fi
+
+    local install_method opencode_bin before after resolved rc=0
+    install_method=$(opencode_install_method "$(_dotfiles_setup_mode)")
+    ux_header "OpenCode CLI Update"
+    if ! ux_require "$install_method"; then
+        ux_error "$install_method is required to update OpenCode"
+        return 1
+    fi
+
+    opencode_bin=$(opencode_binary_path "$install_method")
+    before=$(verify_opencode_binary "$opencode_bin" 2>/dev/null) || before="(not installed)"
+    ux_info "Current version: $before"
+
+    if [ "$install_method" = "npm" ]; then
+        ux_info "Updating via npm registry (corporate proxy settings auto-applied)..."
+        npm install -g --allow-scripts=opencode-ai opencode-ai@latest || rc=$?
+    else
+        ux_info "Updating via the official installer: $OPENCODE_INSTALL_URL"
+        install_opencode_via_curl || rc=$?
+    fi
+    if [ "$rc" -ne 0 ]; then
+        ux_error "OpenCode update failed (exit $rc)"
+        if [ "$install_method" = "npm" ]; then
+            ux_info "Check proxy settings: npm-config; registry: npm info opencode-ai"
+        else
+            ux_info "Check access: curl -fsSI $OPENCODE_INSTALL_URL"
+            ux_info "opencode.ai blocked? Check ~/.dotfiles-setup-mode (only internal uses npm)"
+        fi
+        return "$rc"
+    fi
+
+    if ! after=$(verify_opencode_binary "$opencode_bin" 2>&1); then
+        ux_error "OpenCode binary is not runnable after update: $opencode_bin"
+        [ -z "$after" ] || ux_info "$after"
+        return 1
+    fi
+    if [ "$after" = "$before" ]; then
+        ux_info "OpenCode $after (already latest)"
+    else
+        ux_info "OpenCode updated: $before -> $after"
+    fi
+
+    if [ "$install_method" = "curl" ]; then
+        remove_stale_npm_opencode
+    fi
+
+    resolved=$(command -v opencode 2>/dev/null) || resolved=""
+    if [ "$resolved" != "$opencode_bin" ]; then
+        ux_warning "'opencode' on PATH is ${resolved:-not found}, not $opencode_bin"
+        ux_info "$(dirname "$opencode_bin") must come first in PATH (open a new terminal or run 'rehash' in zsh)"
+    fi
+    ux_success "OpenCode update complete: $after"
 }
 
 # Create OpenCode config directory
@@ -237,6 +303,11 @@ generate_internal_config() {
 # ═══════════════════════════════════════════════════════════════
 
 main() {
+    case "${1-}" in
+        update) shift; update_main "$@"; return ;;
+        # uninstall-opencode reuses the npm cleanup without sourcing this file.
+        remove-stale-npm) remove_stale_npm_opencode; return ;;
+    esac
     clear
     ux_header "OpenCode CLI Installer"
     ux_info "This script installs the OpenCode CLI (official installer, or npm on internal PCs)"
@@ -379,6 +450,7 @@ main() {
 
     ux_section "Useful Commands"
     ux_bullet "install-opencode     : Run the installer again"
+    ux_bullet "update-opencode      : Update OpenCode to the latest version"
     ux_bullet "opencode-help        : Show OpenCode help and commands"
     ux_bullet "opencode-verify      : Verify installation & configuration"
     ux_bullet "opencode-edit        : Edit configuration file"

@@ -19,6 +19,11 @@ install_opencode() {
     bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh"
 }
 
+update_opencode() {
+    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh" update "$@"
+}
+
 opencode_verify() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
     ux_header "OpenCode Configuration Verification"
@@ -150,10 +155,11 @@ uninstall_opencode() {
 
     ux_section "Uninstalling OpenCode..."
 
+    # Legacy npm installs (global and ~/.local prefix): same cleanup as
+    # install/update-opencode, run through the installer script (#2419).
     if command -v npm >/dev/null 2>&1; then
-        ux_info "Removing OpenCode npm package..."
-        npm uninstall -g opencode-ai 2>/dev/null || npm uninstall -g opencode 2>/dev/null || true
-        ux_success "OpenCode package removed"
+        ux_info "Removing legacy npm opencode-ai packages..."
+        bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh" remove-stale-npm || true
     else
         ux_warning "npm not found - skipping npm uninstall"
     fi
@@ -187,6 +193,7 @@ uninstall_opencode() {
 }
 
 alias install-opencode='install_opencode'
+alias update-opencode='update_opencode'
 alias opencode-verify='opencode_verify'
 alias opencode-edit='opencode_edit'
 alias uninstall-opencode='uninstall_opencode'

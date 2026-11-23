@@ -220,3 +220,207 @@ _select_env() {
     assert_success
     assert_output "public"
 }
+
+# --- update-opencode (#2419) ----------------------------------------------------
+# update_main reruns the install path chosen by the setup mode (no menu).
+# run_remote_installer is stubbed to record its args and drop a fake binary
+# that prints $NEW_VERSION; npm is stubbed the same way for internal.
+
+_update() {
+    local mode="$1" body="$2"
+    run_opencode_tool "
+        export DOTFILES_SETUP_MODE='$mode'
+        log='$HOME/calls'
+        _fake_bin() {
+            mkdir -p \"\$(dirname \"\$1\")\"
+            printf '#!/bin/sh\necho %s\n' \"\$2\" > \"\$1\"
+            chmod +x \"\$1\"
+        }
+        run_remote_installer() {
+            printf 'installer %s\n' \"\$*\" >> \"\$log\"
+            _fake_bin '$HOME/.opencode/bin/opencode' \"\${NEW_VERSION:-1.2.0}\"
+        }
+        npm() {
+            printf 'npm %s\n' \"\$*\" >> \"\$log\"
+            case \"\$1\" in
+                prefix) echo '$HOME/npm' ;;
+                install) _fake_bin '$HOME/npm/bin/opencode' \"\${NEW_VERSION:-1.2.0}\" ;;
+                ls) return 1 ;;
+            esac
+        }
+        export PATH='$HOME/.opencode/bin:$HOME/npm/bin':\"\$PATH\"
+        $body
+    "
+}
+
+@test "update_main: curl modes rerun the official installer with --no-modify-path" {
+    for mode in external public ""; do
+        rm -f "$HOME/calls"
+        _update "$mode" 'update_main'
+        assert_success
+        run cat "$HOME/calls"
+        assert_line "installer https://opencode.ai/install --no-modify-path"
+        refute_output --partial "npm install"
+    done
+}
+
+@test "update_main: internal uses npm opencode-ai@latest and never curl" {
+    _update internal 'update_main'
+    assert_success
+    run cat "$HOME/calls"
+    assert_line "npm install -g --allow-scripts=opencode-ai opencode-ai@latest"
+    refute_output --partial "installer"
+}
+
+@test "update_main: prints old and new versions, or already latest" {
+    _update external '_fake_bin "$HOME/.opencode/bin/opencode" 1.1.0; update_main'
+    assert_success
+    assert_output --partial "Current version: 1.1.0"
+    assert_output --partial "OpenCode updated: 1.1.0 -> 1.2.0"
+
+    _update external '_fake_bin "$HOME/.opencode/bin/opencode" 1.2.0; update_main'
+    assert_success
+    assert_output --partial "OpenCode 1.2.0 (already latest)"
+}
+
+@test "update_main: no prior install reports (not installed) and installs" {
+    _update external 'update_main'
+    assert_success
+    assert_output --partial "Current version: (not installed)"
+    assert_output --partial "OpenCode updated: (not installed) -> 1.2.0"
+}
+
+@test "update_main: unrunnable binary after update fails without success message" {
+    _update external '
+        run_remote_installer() {
+            mkdir -p "$HOME/.opencode/bin"
+            printf "#!/bin/sh\nexit 1\n" > "$HOME/.opencode/bin/opencode"
+            chmod +x "$HOME/.opencode/bin/opencode"
+        }
+        update_main
+    '
+    assert_failure 1
+    assert_output --partial "not runnable after update"
+    refute_output --partial "update complete"
+}
+
+@test "update_main: installer failure keeps its exit code and prints access hint" {
+    _update external 'run_remote_installer() { return 22; }; update_main'
+    assert_failure 22
+    assert_output --partial "curl -fsSI https://opencode.ai/install"
+    refute_output --partial "update complete"
+}
+
+@test "update_main: arguments are rejected with usage" {
+    _update external 'update_main 1.2.3'
+    assert_failure 1
+    assert_output --partial "update-opencode"
+    refute_output --partial "installer"
+    [ ! -f "$HOME/calls" ]
+}
+
+@test "update_main: warns with the real path when PATH resolves another opencode" {
+    _update external '
+        _fake_bin "$HOME/shadow/opencode" 0.9.0
+        export PATH="$HOME/shadow:$PATH"
+        update_main
+    '
+    assert_success
+    assert_output --partial "'opencode' on PATH is $HOME/shadow/opencode"
+    assert_output --partial "$HOME/.opencode/bin must come first in PATH"
+}
+
+@test "update_main: no PATH warning when ~/.opencode/bin wins" {
+    _update external 'update_main'
+    assert_success
+    refute_output --partial "on PATH is"
+}
+
+@test "main update dispatches to update_main without the environment menu" {
+    _update external 'main update'
+    assert_success
+    refute_output --partial "Available Environments"
+    assert_output --partial "OpenCode CLI Update"
+}
+
+# --- remove_stale_npm_opencode: global and ~/.local prefixes (#2419) -----------
+
+@test "remove_stale_npm_opencode: checks and removes both global and ~/.local prefixes" {
+    run_opencode_tool "
+        npm() { printf '%s\n' \"\$*\" >> '$HOME/calls'; }
+        remove_stale_npm_opencode
+    "
+    assert_success
+    run cat "$HOME/calls"
+    assert_line "ls -g --depth=0 opencode-ai"
+    assert_line "uninstall -g opencode-ai"
+    assert_line "ls -g --depth=0 --prefix $HOME/.local opencode-ai"
+    assert_line "uninstall -g --prefix $HOME/.local opencode-ai"
+}
+
+@test "remove_stale_npm_opencode: uninstall failure only warns and continues" {
+    run_opencode_tool "
+        npm() { printf '%s\n' \"\$*\" >> '$HOME/calls'; [ \"\$1\" != uninstall ]; }
+        remove_stale_npm_opencode
+    "
+    assert_success
+    assert_output --partial "Could not remove npm opencode-ai"
+    run grep -c '^uninstall' "$HOME/calls"
+    assert_output "2"
+}
+
+# --- integrations/opencode.sh: uninstall + alias (#2419) -----------------------
+
+_opencode_integration() {
+    local shell="$1" body="$2"
+    run "$shell" -c "
+        export HOME='$HOME' TERM=dumb DOTFILES_FORCE_INIT=1
+        export DOTFILES_ROOT='$DOTFILES_ROOT' SHELL_COMMON='$DOTFILES_ROOT/shell-common'
+        . '$DOTFILES_ROOT/shell-common/tools/ux_lib/ux_lib.sh'
+        . '$DOTFILES_ROOT/shell-common/tools/integrations/opencode.sh'
+        $body
+    "
+}
+
+_npm_stub_on_path() {
+    mkdir -p "$HOME/stub"
+    printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/calls"\n' "$HOME" > "$HOME/stub/npm"
+    chmod +x "$HOME/stub/npm"
+}
+
+@test "uninstall_opencode: removes ~/.opencode and npm leftovers in both prefixes" {
+    _npm_stub_on_path
+    mkdir -p "$HOME/.opencode/bin"
+    _opencode_integration bash "export PATH='$HOME/stub':\"\$PATH\"; printf 'y\n' | uninstall_opencode"
+    assert_success
+    [ ! -d "$HOME/.opencode" ]
+    run cat "$HOME/calls"
+    assert_line "uninstall -g opencode-ai"
+    assert_line "uninstall -g --prefix $HOME/.local opencode-ai"
+}
+
+@test "uninstall_opencode: continues without npm" {
+    mkdir -p "$HOME/.opencode/bin" "$HOME/nonpm"
+    ln -s "$(command -v dirname)" "$HOME/nonpm/dirname"
+    ln -s "$(command -v readlink)" "$HOME/nonpm/readlink"
+    ln -s "$(command -v rm)" "$HOME/nonpm/rm"
+    _opencode_integration bash "export PATH='$HOME/nonpm'; printf 'y\n' | uninstall_opencode"
+    assert_success
+    assert_output --partial "npm not found"
+    assert_output --partial "OpenCode Uninstallation Complete"
+    [ ! -d "$HOME/.opencode" ]
+}
+
+@test "update-opencode alias loads and runs update mode in bash and zsh" {
+    command -v zsh >/dev/null 2>&1 || skip "zsh not installed"
+    for sh in bash zsh; do
+        _opencode_integration "$sh" "
+            alias update-opencode
+            bash() { printf 'bash-args:%s\n' \"\$*\"; }
+            update_opencode
+        "
+        assert_success
+        assert_output --partial "update-opencode="
+        assert_output --partial "tools/custom/install_opencode.sh update"
+    done
+}
