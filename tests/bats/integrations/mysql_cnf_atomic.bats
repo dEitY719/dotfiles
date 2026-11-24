@@ -34,13 +34,15 @@ teardown() {
 # _race <shell...>: source mysql.sh in 20 concurrent processes, wait for all,
 # then print every non-empty stderr. Output must be empty.
 _race() {
-    local i
+    local i pids=()
     mkdir -p "$HOME/err"
     for i in $(seq 1 20); do
         DOTFILES_FORCE_INIT=1 "$@" -c ". \"$MYSQL_SH\"" \
             >/dev/null 2>"$HOME/err/$i" &
+        pids+=("$!")
     done
-    wait
+    # Explicit PIDs: a bare wait also blocks on bats' timeout watchdog (#2054).
+    wait "${pids[@]}"
     for i in $(seq 1 20); do
         [ -s "$HOME/err/$i" ] && cat "$HOME/err/$i"
     done
