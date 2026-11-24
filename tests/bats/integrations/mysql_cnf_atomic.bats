@@ -60,10 +60,10 @@ _check_result() {
 _idempotent() {
     local before after
     "$@" -c ". \"$MYSQL_SH\""
-    before=$(stat -c '%i %Y.%y' "$HOME/.my.cnf")
+    before=$(stat -c '%i %y' "$HOME/.my.cnf")
     sleep 1 # mtime has 1s resolution on some filesystems
     "$@" -c ". \"$MYSQL_SH\""
-    after=$(stat -c '%i %Y.%y' "$HOME/.my.cnf")
+    after=$(stat -c '%i %y' "$HOME/.my.cnf")
     [ "$before" = "$after" ]
 }
 
