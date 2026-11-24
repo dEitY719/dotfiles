@@ -53,6 +53,14 @@ class TestMytoolHelpLists:
             assert tool.lower() in output, f"{shell}: {tool} not found in mytool-help output"
 
     @pytest.mark.parametrize("shell", ["bash", "zsh"])
+    def test_mytool_help_tools_has_no_total_counter(self, shell_runner, shell):
+        """No counter row: it lands in the generated mytool.md and conflicts on sync (#2432)."""
+        result = shell_runner(shell, "mytool_help tools")
+        assert result.exit_code == 0
+        assert "Location:" in result.stdout, f"{shell}: tools row not rendered"
+        assert "Total:" not in result.stdout, f"{shell}: Total counter is back in mytool-help tools"
+
+    @pytest.mark.parametrize("shell", ["bash", "zsh"])
     def test_mytool_help_aliases(self, shell_runner, shell):
         """Test alternative mytool-help aliases."""
         result = shell_runner(shell, "alias mthelp")
