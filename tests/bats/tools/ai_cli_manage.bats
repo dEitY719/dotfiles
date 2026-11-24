@@ -50,6 +50,7 @@ CURL
     run bash "$SCRIPT" opencode uninstall -y
     assert_success
     [ ! -e "$HOME/.opencode/bin/opencode" ]
+    [ ! -d "$HOME/.opencode/bin" ]
     [ "$(cat "$HOME/.config/opencode/opencode.json")" = keep ]
 }
 
@@ -265,4 +266,47 @@ GIT
     [ ! -e "$HOME/custom-config/opencode.json" ]
     [ "$(cat "$HOME/config-source")" = keep ]
     [ -d "$HOME/custom-config" ]
+}
+
+@test "Hermes direct install restores TLS workaround without exported dotfiles paths" {
+    mkdir -p "$HOME/.hermes/tools/python-test/lib/python3.13"
+    cat > "$HOME/bin/curl" <<'CURL'
+#!/bin/sh
+while [ "$1" != -o ]; do shift; done
+cat > "$2" <<'INSTALLER'
+mkdir -p "$HOME/.local/bin"
+printf '#!/bin/sh\necho Hermes-test\n' > "$HOME/.local/bin/hermes"
+chmod +x "$HOME/.local/bin/hermes"
+INSTALLER
+CURL
+    chmod +x "$HOME/bin/curl"
+    run env -u DOTFILES_ROOT -u SHELL_COMMON -u _CUSTOM_TOOLS_INITIALIZED \
+        SSL_CERT_FILE="$HOME/corp-ca.pem" bash "$SCRIPT" hermes install -y
+    assert_success
+    assert_output --partial 'Hermes Agent installed'
+    cmp "$DOTFILES_ROOT/hermes/sitecustomize.py" "$HOME/.hermes/tools/python-test/lib/python3.13/sitecustomize.py"
+}
+
+@test "Claude uninstall removes managed versions and preserves user data" {
+    mkdir -p "$HOME/.local/share/claude/versions" "$HOME/.claude/projects"
+    printf '#!/bin/sh\necho 1.0\n' > "$HOME/.local/share/claude/versions/1.0"
+    chmod +x "$HOME/.local/share/claude/versions/1.0"
+    ln -s "$HOME/.local/share/claude/versions/1.0" "$HOME/.local/bin/claude"
+    printf 'keep\n' > "$HOME/.claude/projects/session"
+    run bash "$SCRIPT" claude uninstall -y
+    assert_success
+    [ ! -e "$HOME/.local/bin/claude" ]
+    [ ! -e "$HOME/.local/share/claude/versions" ]
+    [ "$(cat "$HOME/.claude/projects/session")" = keep ]
+}
+
+@test "OpenCode uninstall preserves unknown files in binary directory" {
+    mkdir -p "$HOME/.opencode/bin"
+    printf '#!/bin/sh\necho 1.0\n' > "$HOME/.opencode/bin/opencode"
+    chmod +x "$HOME/.opencode/bin/opencode"
+    printf 'keep\n' > "$HOME/.opencode/bin/unrelated"
+    run bash "$SCRIPT" opencode uninstall -y
+    assert_success
+    [ ! -e "$HOME/.opencode/bin/opencode" ]
+    [ "$(cat "$HOME/.opencode/bin/unrelated")" = keep ]
 }

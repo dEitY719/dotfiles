@@ -274,7 +274,7 @@ case "$action" in
         fi
         case "$tool" in
             claude) ux_info "Remove versioned binaries: $root/versions" ;;
-            opencode) ;;
+            opencode) [ "$have_bin" = 0 ] || ux_info "Remove installation directory if empty: $root" ;;
             hermes)
                 case "$root" in "$HOME/"*) ;; *) ux_error "Hermes installation is outside the home directory: $root"; exit 1 ;; esac
                 if [ -L "${HERMES_HOME:-$HOME/.hermes}" ] || [ -L "$root" ] || [ -L "$root/.git" ] || [ ! -d "$root/.git" ]; then
@@ -303,6 +303,10 @@ case "$action" in
         [ "$dry" = 1 ] && exit 0
         confirm "Remove the displayed $label installation?" || exit 1
         [ "$have_bin" = 0 ] || rm -f -- "$bin"
+        if [ "$tool" = opencode ] && [ "$have_bin" = 1 ] && [ ! -L "$root" ]; then
+            # Only remove an empty installer directory; unknown files stay.
+            rmdir -- "$root" 2>/dev/null || :
+        fi
         if [ "$tool" = hermes ]; then
             rm -rf -- "$root"
         fi
