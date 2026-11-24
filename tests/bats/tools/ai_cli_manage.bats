@@ -191,3 +191,52 @@ NPM
     assert_failure 2
     assert_output --partial "Usage: ai_cli_manage.sh"
 }
+
+@test "Hermes uninstall preserves shell rc files and user data" {
+    mkdir -p "$HOME/.hermes/hermes-agent/.git" "$HOME/.hermes/hermes-agent/.hermes/bin"
+    printf '#!/bin/sh\nexit 99\n' > "$HOME/.hermes/hermes-agent/.hermes/bin/hermes"
+    chmod +x "$HOME/.hermes/hermes-agent/.hermes/bin/hermes"
+    printf '#!/bin/sh\nexec %s/.hermes/hermes-agent/.hermes/bin/hermes "$@"\n' "$HOME" > "$HOME/.local/bin/hermes"
+    chmod +x "$HOME/.local/bin/hermes"
+    printf 'keep\n' > "$HOME/.hermes/config.yaml"
+    printf 'shell rc\n' > "$HOME/managed_rc"
+    ln -s "$HOME/managed_rc" "$HOME/.bashrc"
+    cat > "$HOME/bin/git" <<'GIT'
+#!/bin/sh
+case "$*" in
+  *'remote get-url origin') echo 'https://github.com/NousResearch/hermes-agent.git' ;;
+  *'status --porcelain --untracked-files=normal') : ;;
+  *) exit 1 ;;
+esac
+GIT
+    chmod +x "$HOME/bin/git"
+    run bash "$SCRIPT" hermes uninstall -y
+    assert_success
+    [ ! -e "$HOME/.local/bin/hermes" ]
+    [ ! -e "$HOME/.hermes/hermes-agent" ]
+    [ -f "$HOME/.hermes/config.yaml" ]
+    [ -L "$HOME/.bashrc" ]
+    [ "$(cat "$HOME/managed_rc")" = 'shell rc' ]
+}
+
+@test "Hermes uninstall refuses locally modified source" {
+    mkdir -p "$HOME/.hermes/hermes-agent/.git" "$HOME/.hermes/hermes-agent/.hermes/bin"
+    printf '#!/bin/sh\nexit 99\n' > "$HOME/.hermes/hermes-agent/.hermes/bin/hermes"
+    chmod +x "$HOME/.hermes/hermes-agent/.hermes/bin/hermes"
+    printf '#!/bin/sh\nexec %s/.hermes/hermes-agent/.hermes/bin/hermes "$@"\n' "$HOME" > "$HOME/.local/bin/hermes"
+    chmod +x "$HOME/.local/bin/hermes"
+    cat > "$HOME/bin/git" <<'GIT'
+#!/bin/sh
+case "$*" in
+  *'remote get-url origin') echo 'https://github.com/NousResearch/hermes-agent.git' ;;
+  *'status --porcelain --untracked-files=normal') echo ' M user-file' ;;
+  *) exit 1 ;;
+esac
+GIT
+    chmod +x "$HOME/bin/git"
+    run bash "$SCRIPT" hermes uninstall -y
+    assert_failure
+    assert_output --partial 'source has local changes'
+    [ -f "$HOME/.local/bin/hermes" ]
+    [ -d "$HOME/.hermes/hermes-agent" ]
+}

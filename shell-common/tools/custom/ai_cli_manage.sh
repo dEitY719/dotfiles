@@ -263,15 +263,37 @@ case "$action" in
         case "$tool" in
             claude) ux_info "Remove versioned binaries: $root/versions" ;;
             opencode) ;;
-            hermes) ux_info "Hermes will remove its source/runtime while retaining user data." ;;
+            hermes)
+                case "$root" in "$HOME/"*) ;; *) ux_error "Hermes installation is outside the home directory: $root"; exit 1 ;; esac
+                if [ -L "${HERMES_HOME:-$HOME/.hermes}" ] || [ -L "$root" ] || [ -L "$root/.git" ] || [ ! -d "$root/.git" ]; then
+                    ux_error "Cannot verify ownership of Hermes source directory: $root"
+                    exit 1
+                fi
+                remote=$(GIT_DIR="$root/.git" GIT_WORK_TREE="$root" GIT_OPTIONAL_LOCKS=0 git -C "$root" remote get-url origin 2>/dev/null | tr '[:upper:]' '[:lower:]') || {
+                    ux_error "Cannot verify Hermes source remote."
+                    exit 1
+                }
+                case "$remote" in
+                    https://github.com/nousresearch/hermes-agent|https://github.com/nousresearch/hermes-agent.git|git@github.com:nousresearch/hermes-agent|git@github.com:nousresearch/hermes-agent.git) ;;
+                    *) ux_error "Unrecognized Hermes source remote; remove it manually."; exit 1 ;;
+                esac
+                changes=$(GIT_DIR="$root/.git" GIT_WORK_TREE="$root" GIT_OPTIONAL_LOCKS=0 git -C "$root" status --porcelain --untracked-files=normal 2>/dev/null) || {
+                    ux_error "Cannot inspect Hermes source changes."
+                    exit 1
+                }
+                if [ -n "$changes" ]; then
+                    ux_error "Hermes source has local changes; preserve or remove them manually."
+                    exit 1
+                fi
+                ux_info "Remove verified Hermes source and runtime: $root"
+                ;;
         esac
         [ "$dry" = 1 ] && exit 0
         confirm "Remove the displayed $label installation?" || exit 1
-        if [ "$tool" = hermes ]; then
-            "$bin" uninstall --yes
-            exit $?
-        fi
         [ "$have_bin" = 0 ] || rm -f -- "$bin"
+        if [ "$tool" = hermes ]; then
+            rm -rf -- "$root"
+        fi
         if [ "$purge_config" = 1 ] && { [ -e "$config_dir" ] || [ -L "$config_dir" ]; }; then
             rm -rf -- "$config_dir"
         fi
