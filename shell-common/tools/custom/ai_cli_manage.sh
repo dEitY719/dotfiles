@@ -261,13 +261,16 @@ case "$action" in
             exit 1
         fi
         [ "$have_bin" = 0 ] || ux_info "Remove executable: $bin"
-        config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+        config_dir="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
+        config_file="${OPENCODE_CONFIG_FILE:-$config_dir/opencode.json}"
+        config_target="$config_dir"
+        [ ! -L "$config_file" ] || config_target="$config_file"
         if [ "$purge_config" = 1 ]; then
-            if [ -L "${XDG_CONFIG_HOME:-$HOME/.config}" ]; then
+            if [ -L "$(dirname "$config_target")" ]; then
                 ux_error "Refusing to remove configuration through a symlinked directory."
                 exit 1
             fi
-            ux_warning "Remove OpenCode configuration: $config_dir"
+            ux_warning "Remove OpenCode configuration: $config_target"
         fi
         case "$tool" in
             claude) ux_info "Remove versioned binaries: $root/versions" ;;
@@ -303,8 +306,8 @@ case "$action" in
         if [ "$tool" = hermes ]; then
             rm -rf -- "$root"
         fi
-        if [ "$purge_config" = 1 ] && { [ -e "$config_dir" ] || [ -L "$config_dir" ]; }; then
-            rm -rf -- "$config_dir"
+        if [ "$purge_config" = 1 ] && { [ -e "$config_target" ] || [ -L "$config_target" ]; }; then
+            rm -rf -- "$config_target"
         fi
         if [ "$tool" = claude ] && [ -d "$root/versions" ] && [ ! -L "$root/versions" ]; then
             rm -rf -- "$root/versions"

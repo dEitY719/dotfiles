@@ -145,10 +145,10 @@ opentest() {
 }
 
 opencode_uninstall() {
-    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode uninstall "$@"
+    OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" OPENCODE_CONFIG_FILE="$OPENCODE_CONFIG_FILE" bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode uninstall "$@"
 }
 
-uninstall_opencode() { bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode uninstall "$@"; }
+uninstall_opencode() { OPENCODE_CONFIG_DIR="$OPENCODE_CONFIG_DIR" OPENCODE_CONFIG_FILE="$OPENCODE_CONFIG_FILE" bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode uninstall "$@"; }
 
 alias opencode-install='opencode_install'
 alias opencode-update='opencode_update'

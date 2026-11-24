@@ -253,3 +253,16 @@ GIT
     assert_success
     assert_output --partial 'npm'
 }
+
+@test "OpenCode config purge removes the configured link, not its target" {
+    mkdir -p "$HOME/custom-config"
+    printf 'keep\n' > "$HOME/config-source"
+    ln -s "$HOME/config-source" "$HOME/custom-config/opencode.json"
+    export OPENCODE_CONFIG_DIR="$HOME/custom-config"
+    export OPENCODE_CONFIG_FILE="$HOME/custom-config/opencode.json"
+    run bash "$SCRIPT" opencode uninstall --purge-config -y
+    assert_success
+    [ ! -e "$HOME/custom-config/opencode.json" ]
+    [ "$(cat "$HOME/config-source")" = keep ]
+    [ -d "$HOME/custom-config" ]
+}
