@@ -171,7 +171,8 @@ EOF
         rm -f "$tmp"
         return 1
     fi
-    chmod 600 "$MYSQL_CNF_FILE" 2>/dev/null
+    # Best-effort: the cmp branch keeps an old 644 file. Never fail shell start.
+    chmod 600 "$MYSQL_CNF_FILE" 2>/dev/null || :
 }
 
 # -------------------------------

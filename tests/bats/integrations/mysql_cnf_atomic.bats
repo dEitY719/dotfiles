@@ -31,8 +31,13 @@ teardown() {
     teardown_isolated_home
 }
 
+# _stat <gnu-fmt> <bsd-fmt> <file>: GNU stat -c first, BSD/macOS stat -f.
+_stat() {
+    stat -c "$1" "$3" 2>/dev/null || stat -f "$2" "$3"
+}
+
 # _race <shell...>: source mysql.sh in 20 concurrent processes, wait for all,
-# then print every non-empty stderr. Output must be empty.
+# then print every non-zero exit and non-empty stderr. Output must be empty.
 _race() {
     local i pids=()
     mkdir -p "$HOME/err"
@@ -42,7 +47,10 @@ _race() {
         pids+=("$!")
     done
     # Explicit PIDs: a bare wait also blocks on bats' timeout watchdog (#2054).
-    wait "${pids[@]}"
+    # One wait per PID: a multi-PID wait reports only the last status.
+    for i in "${pids[@]}"; do
+        wait "$i" || echo "pid $i exited $?"
+    done
     for i in $(seq 1 20); do
         [ -s "$HOME/err/$i" ] && cat "$HOME/err/$i"
     done
@@ -50,7 +58,7 @@ _race() {
 }
 
 _check_result() {
-    [ "$(stat -c %a "$HOME/.my.cnf")" = "600" ]
+    [ "$(_stat %a %Lp "$HOME/.my.cnf")" = "600" ]
     [ "$(cat "$HOME/.my.cnf")" = "$EXPECTED_CNF" ]
     # $(cat) strips trailing newlines; pin the final byte separately.
     [ "$(tail -c 1 "$HOME/.my.cnf" | od -An -c | tr -d ' ')" = '\n' ]
@@ -60,10 +68,11 @@ _check_result() {
 _idempotent() {
     local before after
     "$@" -c ". \"$MYSQL_SH\""
-    before=$(stat -c '%i %y' "$HOME/.my.cnf")
-    sleep 1 # mtime has 1s resolution on some filesystems
+    # Backdate instead of sleeping: a rewrite would reset mtime to now.
+    touch -t 200001010000 "$HOME/.my.cnf"
+    before=$(_stat '%i %Y' '%i %m' "$HOME/.my.cnf")
     "$@" -c ". \"$MYSQL_SH\""
-    after=$(stat -c '%i %y' "$HOME/.my.cnf")
+    after=$(_stat '%i %Y' '%i %m' "$HOME/.my.cnf")
     [ "$before" = "$after" ]
 }
 
@@ -103,5 +112,14 @@ _idempotent() {
     printf 'old\n' >"$HOME/.my.cnf"
     chmod 644 "$HOME/.my.cnf"
     bash --noprofile --norc -c ". \"$MYSQL_SH\""
+    _check_result
+}
+
+@test "unchanged content with mode 644 is tightened to 600 in place" {
+    bash --noprofile --norc -c ". \"$MYSQL_SH\""
+    chmod 644 "$HOME/.my.cnf"
+    before=$(_stat %i %i "$HOME/.my.cnf")
+    bash --noprofile --norc -c ". \"$MYSQL_SH\""
+    [ "$(_stat %i %i "$HOME/.my.cnf")" = "$before" ]
     _check_result
 }
