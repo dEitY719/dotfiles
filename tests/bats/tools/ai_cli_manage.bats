@@ -240,3 +240,16 @@ GIT
     [ -f "$HOME/.local/bin/hermes" ]
     [ -d "$HOME/.hermes/hermes-agent" ]
 }
+
+@test "status resolves relative npm links without readlink -f" {
+    mkdir -p "$HOME/npm/bin" "$HOME/npm/node_modules/@anthropic-ai/claude-code"
+    printf '#!/bin/sh\necho 1.0\n' > "$HOME/npm/node_modules/@anthropic-ai/claude-code/cli"
+    chmod +x "$HOME/npm/node_modules/@anthropic-ai/claude-code/cli"
+    ln -s ../node_modules/@anthropic-ai/claude-code/cli "$HOME/npm/bin/claude"
+    printf '#!/bin/sh\nexit 1\n' > "$HOME/bin/readlink"
+    chmod +x "$HOME/bin/readlink"
+    export PATH="$HOME/bin:$HOME/npm/bin:/usr/bin:/bin"
+    run bash "$SCRIPT" claude status
+    assert_success
+    assert_output --partial 'npm'
+}

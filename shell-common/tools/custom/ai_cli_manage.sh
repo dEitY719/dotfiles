@@ -60,6 +60,14 @@ while [ "$#" -gt 0 ]; do
     shift
 done
 
+canonical_path() {
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+    else
+        readlink -f "$1" 2>/dev/null || readlink "$1" 2>/dev/null || printf '%s\n' "$1"
+    fi
+}
+
 classify() {
     local path="$1" resolved
     if [ "$tool" = hermes ] && [ "$path" = "$bin" ] && [ ! -L "$path" ] &&
@@ -70,7 +78,7 @@ classify() {
         printf 'official-source\n'
         return
     fi
-    resolved=$(readlink -f "$path" 2>/dev/null || readlink "$path" 2>/dev/null || printf '%s' "$path")
+    resolved=$(canonical_path "$path")
     case "$resolved" in
         */node_modules/@anthropic-ai/claude-code/*) [ "$tool" = claude ] && printf 'npm\n' || printf 'unknown\n' ;;
         */node_modules/opencode-ai/*|*/node_modules/@opencode/cli/*) [ "$tool" = opencode ] && printf 'npm\n' || printf 'unknown\n' ;;
@@ -158,7 +166,7 @@ case "$action" in
                     case "$tool" in
                         claude) npm_package='@anthropic-ai/claude-code' ;;
                         opencode)
-                            case "$(readlink -f "$active" 2>/dev/null)" in
+                            case "$(canonical_path "$active")" in
                                 */node_modules/@opencode/cli/*) npm_package='@opencode/cli' ;;
                                 *) npm_package='opencode-ai' ;;
                             esac ;;
@@ -174,8 +182,9 @@ case "$action" in
                         exit 1
                     fi
                     npm_root=$(npm root -g 2>/dev/null) || { ux_error "Cannot locate npm global root."; exit 1; }
-                    active_resolved=$(readlink -f "$active" 2>/dev/null || true)
-                    package_root=$(readlink -f "$npm_root/$npm_package" 2>/dev/null || true)
+                    active_resolved=$(canonical_path "$active")
+                    [ -d "$npm_root/$npm_package" ] || { ux_error "npm package directory is missing."; exit 1; }
+                    package_root=$(canonical_path "$npm_root/$npm_package")
                     case "$active_resolved" in
                         "$package_root"/*) [ -n "$package_root" ] || exit 1 ;;
                         *) ux_error "The active npm installation is not in the default global root; migrate it manually."; exit 1 ;;
