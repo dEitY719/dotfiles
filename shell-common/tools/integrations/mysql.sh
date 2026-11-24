@@ -134,19 +134,23 @@ MYSQL_CNF_FILE="$HOME/.my.cnf"
 # 0) MySQL Config Update Function
 # -------------------------------
 mysql_update_config() {
-    # 기존 파일 삭제 후 새로 생성
-    rm -f "$MYSQL_CNF_FILE"
-    touch "$MYSQL_CNF_FILE"
-    chmod 600 "$MYSQL_CNF_FILE"
+    local tmp
+    # Atomic replace (#2429): shells starting together raced on rm/touch/chmod.
+    # mktemp creates 0600 (the password file is never 644), and the same
+    # directory keeps mv a rename on one filesystem, so readers always see a
+    # complete old or new file. Never rm -f the target itself.
+    tmp=$(mktemp "${MYSQL_CNF_FILE}.XXXXXX") || return 1
 
-    # 서비스 배열 기반으로 .my.cnf 파일만 생성
-    for entry in "${services[@]}"; do
-        service_name=$(echo "$entry" | awk '{print $1}')
-        db_name=$(echo "$entry" | awk '{print $2}')
-        db_user=$(echo "$entry" | awk '{print $3}')
-        db_pass=$(echo "$entry" | awk '{print $4}')
+    # 서비스 배열 기반으로 .my.cnf 내용을 임시 파일에 생성
+    # Subshell so `exit 1` on a failed write (disk full) stops only the loop.
+    if ! (
+        for entry in "${services[@]}"; do
+            service_name=$(echo "$entry" | awk '{print $1}')
+            db_name=$(echo "$entry" | awk '{print $2}')
+            db_user=$(echo "$entry" | awk '{print $3}')
+            db_pass=$(echo "$entry" | awk '{print $4}')
 
-        cat >>"$MYSQL_CNF_FILE" <<EOF
+            cat <<EOF || exit 1
 
 [client_$service_name]
 user=$db_user
@@ -154,7 +158,20 @@ password=$db_pass
 host=localhost
 database=$db_name
 EOF
-    done
+        done
+    ) >"$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+
+    # 내용이 같으면 건드리지 않는다 (셸마다 재작성하지 않음)
+    if [ -f "$MYSQL_CNF_FILE" ] && cmp -s "$tmp" "$MYSQL_CNF_FILE"; then
+        rm -f "$tmp"
+    elif ! mv -f "$tmp" "$MYSQL_CNF_FILE"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    chmod 600 "$MYSQL_CNF_FILE" 2>/dev/null
 }
 
 # -------------------------------
