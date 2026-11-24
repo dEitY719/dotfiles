@@ -182,3 +182,12 @@ NPM
     [ -x "$HOME/alias-bin/claude" ]
     [ ! -e "$HOME/.local/bin/claude" ]
 }
+
+@test "management entrypoint reports usage without requiring a tool" {
+    run bash "$SCRIPT" --help
+    assert_success
+    assert_output --partial "Usage: ai_cli_manage.sh"
+    run bash "$SCRIPT"
+    assert_failure 2
+    assert_output --partial "Usage: ai_cli_manage.sh"
+}

@@ -6,9 +6,20 @@ set -e
 source "$(dirname "$0")/init.sh" || exit 1
 . "$(dirname "$0")/lib/install_helpers.sh" || exit 1
 
-tool=${1:-}
-action=${2:-}
-shift 2 || exit 2
+if [ "$#" = 1 ]; then
+    case "$1" in
+        -h|--help|help)
+            ux_info "Usage: ai_cli_manage.sh <claude|opencode|hermes> <status|install|update|uninstall> [options]"
+            exit 0 ;;
+    esac
+fi
+if [ "$#" -lt 2 ]; then
+    ux_error "Usage: ai_cli_manage.sh <claude|opencode|hermes> <status|install|update|uninstall> [options]"
+    exit 2
+fi
+tool=$1
+action=$2
+shift 2
 case "$tool" in
     claude)
         label="Claude Code"; bin="$HOME/.local/bin/claude"
