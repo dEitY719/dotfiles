@@ -111,3 +111,15 @@ YML
     [[ "$output" == *"setup 완료"* ]]
     [[ "$output" != *"--insecure-storage"* ]]
 }
+
+@test "gh: internal without a GHES host names the missing setting" {
+    _internal_home
+    unset DOTFILES_GHES_HOST
+    # gh/setup.sh derives SHELL_COMMON itself, so a real gitignored
+    # internal.local.sh would supply the host; this case needs it absent.
+    [ ! -e "${_BATS_REAL_DOTFILES_ROOT}/shell-common/env/internal.local.sh" ] ||
+        skip "internal.local.sh present on this PC"
+    run_module_setup gh internal
+    [[ "$output" == *"DOTFILES_GHES_HOST"* ]]
+    [[ "$output" == *"gh auth login -h github.com --insecure-storage"* ]]
+}
