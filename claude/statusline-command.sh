@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Status line command for Claude Code
-# Format: [한글|영어] HH:MM:SS ┊ model [effort] ┊ project(branch) ┊ usage ┊ git-status
+# Format: [한글|영어] HH:MM:SS ┊ model [effort] ┊ project(branch) ┊ usage ┊ [code mode] ┊ git-status
 # Segments are grouped by meaning and joined with a dim ┊ (#1380); a plain
 # space separates the members *within* one group.
 #
@@ -432,6 +432,10 @@ groups+=("${ORANGE}${model_emoji} ${model_name}${RESET}${effort_info:+ ${effort_
 groups+=("${MAGENTA}${project_branch}${RESET}")
 [ -n "$usage_group" ] && groups+=("$usage_group")
 [ -n "$cost_info" ] && groups+=("$cost_info")
+# Code Mode: the stdin payload has no field for it, so read the env var that
+# claude/settings.json wires in. It shows the *setting*, not proof the session
+# started in Code Mode (a failed start or a non-Code-Mode resume still reads 1).
+[ "${CLAUDE_CODE_EXPERIMENTAL_CODE_MODE:-}" = "1" ] && groups+=("${GREEN}🧪 code${RESET}")
 [ -n "$git_status_info" ] && groups+=("$git_status_info")
 
 out=""
