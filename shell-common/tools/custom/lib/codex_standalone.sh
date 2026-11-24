@@ -13,7 +13,7 @@
 # Official installer contract (https://chatgpt.com/codex/install.sh):
 # `--release VER`, CODEX_NON_INTERACTIVE, CODEX_INSTALL_DIR, CODEX_HOME.
 
-CODEX_INSTALLER_URL="https://chatgpt.com/codex/install.sh"
+CODEX_INSTALLER_URL="${CODEX_INSTALLER_URL:-https://chatgpt.com/codex/install.sh}"
 CODEX_NPM_PACKAGE="@openai/codex"
 
 _codex_bin_dir() {
@@ -152,7 +152,7 @@ _codex_npm_root_writable() {
 _codex_migrate_from_npm() {
     ux_info "Remove npm package: npm uninstall -g $CODEX_NPM_PACKAGE"
     if ! npm uninstall -g "$CODEX_NPM_PACKAGE"; then
-        ux_error "Failed to uninstall the npm package; standalone install was not attempted."
+        ux_error "Failed to uninstall the npm package; the verified standalone installation was retained."
         ux_info "Remove it manually (prefix with sudo if the npm root is root-owned):"
         ux_bullet "npm uninstall -g $CODEX_NPM_PACKAGE"
         return 1

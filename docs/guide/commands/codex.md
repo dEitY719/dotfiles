@@ -35,7 +35,7 @@
 - **codex-update** — Standalone refresh / npm migration — Update; confirm then move npm to standalone (-y)
 - **Pin a version** — codex-install/update --release VER — Install that exact release
 - **Installer URL** — https://chatgpt.com/codex/install.sh — Download with curl; run with sh
-- **codex-uninstall** — Standalone + legacy npm — Remove CLI; keep config, auth, sessions, skills
+- **codex-uninstall** — Standalone — Remove CLI; keep npm installs, config, auth, sessions, skills
 - **Preview changes** — codex-install/update/uninstall --dry-run — Show actions without changes
 - **codex-status** — Status Check — Show version, location, install method
 - **codex-skills-sync** — Skills Sync — Sync skills symlinks

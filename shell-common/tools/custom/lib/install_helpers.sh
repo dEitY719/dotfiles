@@ -13,18 +13,18 @@
 # download because the shell just reads empty input. Env for the installer is
 # passed as a call prefix (UV_NO_MODIFY_PATH=1 run_remote_installer ...).
 # bash, not sh: claude's install.sh uses the bash =~ test; the POSIX ones run too.
-run_remote_installer() {
+run_remote_installer() (
     local url="$1" installer rc=0
     shift
     installer=$(mktemp) || return 1
+    trap 'rm -f -- "$installer"' EXIT
+    trap 'exit 130' INT TERM
     if ! curl -fsSL "$url" -o "$installer"; then
-        rm -f "$installer"
         return 1
     fi
     bash "$installer" "$@" || rc=$?
-    rm -f "$installer"
     return "$rc"
-}
+)
 
 # verify_installed_binary <path> [args...]   (default args: --version)
 # Succeeds (printing the output) only if the binary actually runs. Takes the

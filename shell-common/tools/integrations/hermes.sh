@@ -58,3 +58,20 @@ hermes_skill_install() {
     fi
     HERMES_ALLOW_PRIVATE_URLS=1 SSL_CERT_FILE="$_hsi_bundle" command hermes skills install "$@"
 }
+
+hermes_status() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" hermes status "$@"
+}
+hermes_install() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" hermes install "$@"
+}
+hermes_update() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" hermes update "$@"
+}
+hermes_uninstall() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" hermes uninstall "$@"
+}
+alias hermes-status='hermes_status'
+alias hermes-install='hermes_install'
+alias hermes-update='hermes_update'
+alias hermes-uninstall='hermes_uninstall'

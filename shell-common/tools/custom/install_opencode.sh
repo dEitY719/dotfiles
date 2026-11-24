@@ -467,5 +467,8 @@ main() {
 
 # Direct-exec guard: run main() only if script is executed directly, not sourced
 if [ "${BASH_SOURCE[0]:-$0}" = "$0" ]; then
-    main "$@"
+    case "${1:-}" in
+        update) shift; exec bash "$(dirname "$0")/ai_cli_manage.sh" opencode update "$@" ;;
+        *) exec bash "$(dirname "$0")/ai_cli_manage.sh" opencode install "$@" ;;
+    esac
 fi

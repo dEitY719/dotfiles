@@ -15,13 +15,16 @@ OPENCODE_CONFIG_FILE="${OPENCODE_CONFIG_FILE:-$OPENCODE_CONFIG_DIR/opencode.json
 
 export PATH="$HOME/.opencode/bin:$PATH"
 
-install_opencode() {
-    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh"
+opencode_install() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode install "$@"
 }
-
-update_opencode() {
-    [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh" update "$@"
+opencode_update() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode update "$@"
+}
+install_opencode() { bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode install "$@"; }
+update_opencode() { bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode update "$@"; }
+opencode_status() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode status "$@"
 }
 
 opencode_verify() {
@@ -141,59 +144,16 @@ opentest() {
     opencode -p "$1"
 }
 
-uninstall_opencode() {
-    ux_header "OpenCode CLI Uninstaller"
-    echo ""
-
-    printf "%sAre you sure you want to uninstall OpenCode? (y/N): %s" "$UX_PRIMARY" "$UX_RESET"
-    read -r confirm
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        ux_info "Uninstall cancelled"
-        return 0
-    fi
-    echo ""
-
-    ux_section "Uninstalling OpenCode..."
-
-    # Legacy npm installs (global and ~/.local prefix): same cleanup as
-    # install/update-opencode, run through the installer script (#2419).
-    if command -v npm >/dev/null 2>&1; then
-        ux_info "Checking for npm opencode-ai packages (global and ~/.local)..."
-        bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_opencode.sh" remove-stale-npm || true
-        # Pre-opencode-ai unscoped package name (kept from the old uninstall).
-        npm uninstall -g opencode >/dev/null 2>&1 || true
-    else
-        ux_warning "npm not found - skipping npm uninstall"
-    fi
-    echo ""
-
-    if [ -d "$HOME/.opencode" ]; then
-        ux_info "Removing OpenCode installation directory: $HOME/.opencode"
-        rm -rf "$HOME/.opencode"
-        ux_success "Installation directory removed"
-    else
-        ux_info "No OpenCode installation directory found"
-    fi
-    echo ""
-
-    if [ -L "$OPENCODE_CONFIG_FILE" ]; then
-        ux_info "Removing configuration symlink: $OPENCODE_CONFIG_FILE"
-        rm -f "$OPENCODE_CONFIG_FILE"
-        ux_success "Symlink removed"
-    elif [ -d "$OPENCODE_CONFIG_DIR" ]; then
-        ux_info "Removing configuration directory: $OPENCODE_CONFIG_DIR"
-        rm -rf "$OPENCODE_CONFIG_DIR"
-        ux_success "Configuration removed"
-    else
-        ux_info "No configuration directory found"
-    fi
-    echo ""
-
-    ux_header "OpenCode Uninstallation Complete"
-    ux_info "Run 'install-opencode' to reinstall"
-    echo ""
+opencode_uninstall() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode uninstall "$@"
 }
 
+uninstall_opencode() { bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" opencode uninstall "$@"; }
+
+alias opencode-install='opencode_install'
+alias opencode-update='opencode_update'
+alias opencode-uninstall='opencode_uninstall'
+alias opencode-status='opencode_status'
 alias install-opencode='install_opencode'
 alias update-opencode='update_opencode'
 alias opencode-verify='opencode_verify'

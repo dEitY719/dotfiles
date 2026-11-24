@@ -7,7 +7,7 @@ _hermes_help_summary() {
     ux_info "Usage: hermes-help [section|--list|--all]"
     ux_bullet "sections"
     ux_bullet_sub "concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트"
-    ux_bullet_sub "install: 공식 install.sh | ./hermes/setup.sh 가 하는 6단계"
+    ux_bullet_sub "install: hermes-status | hermes-install | hermes-update | hermes-uninstall | ./hermes/setup.sh"
     ux_bullet_sub "config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT"
     ux_bullet_sub "update: hermes update | 사내 TLS 프록시 UV_SYSTEM_CERTS | sitecustomize 재설치"
     ux_bullet_sub "pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA | Python 3.13 AKI | 사내 GHES 스킬 설치"
@@ -36,6 +36,8 @@ _hermes_help_rows_concept() {
 }
 
 _hermes_help_rows_install() {
+    ux_bullet "hermes-status / hermes-install / hermes-update / hermes-uninstall"
+    ux_bullet "관리 명령은 --help, --dry-run, -y 지원; 삭제 시 사용자 데이터 보존"
     ux_bullet "공식 설치: ${UX_BOLD}curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash${UX_RESET}"
     ux_bullet "dotfiles 경유(권장): ${UX_BOLD}./setup.sh${UX_RESET} 또는 ${UX_BOLD}./hermes/setup.sh${UX_RESET} — 멱등, 이미 설치돼 있으면 스킵"
     ux_bullet "확인: ${UX_BOLD}hermes --version${UX_RESET} · ${UX_BOLD}hermes doctor${UX_RESET} (alias ${UX_BOLD}hermes-doctor${UX_RESET})"

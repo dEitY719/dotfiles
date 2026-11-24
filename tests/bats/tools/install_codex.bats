@@ -46,16 +46,16 @@ run_codex_script() {
         main --help
     '
     assert_success
-    assert_output --partial 'Preserve configuration, authentication, sessions, and skills'
+    assert_output --partial 'keep configuration, authentication, sessions and skills'
 }
 
-@test "codex uninstall preview finds npm even when its executable is absent" {
+@test "codex uninstall preview preserves npm without querying it" {
     run_codex_script uninstall_codex.sh '
         ux_confirm() { exit 99; }
         main --dry-run
     '
     assert_success
-    assert_output --partial 'npm uninstall -g @openai/codex'
+    assert_output --partial 'npm and other package-manager installations are retained'
     [ -d "$HOME/npm/@openai/codex" ]
 }
 
@@ -105,7 +105,7 @@ run_codex_script() {
         ux_confirm() { return 0; }
         curl() { return 22; }
         sh() { exit 99; }
-        main
+        main -y
     '
     assert_failure 1
     assert_output --partial 'Failed to download'

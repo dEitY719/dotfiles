@@ -29,13 +29,12 @@ ensure_jq() {
 
 # NOTE: Do not auto-install dependencies at shell init time.
 # If jq is required for a specific workflow, call `ensure_jq` explicitly.
-
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Installation
 # ═══════════════════════════════════════════════════════════════
 
 claude_install() {
-    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/install_claude.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" claude install "$@"
 }
 alias claude-install='claude_install'
 alias clinstall='claude_install' # legacy name (#2148)
@@ -45,8 +44,20 @@ alias clinstall='claude_install' # legacy name (#2148)
 # ═══════════════════════════════════════════════════════════════
 
 delete_claude() {
-    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/delete_claude.sh"
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" claude uninstall "$@"
 }
+claude_status() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" claude status "$@"
+}
+claude_update() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" claude update "$@"
+}
+claude_uninstall() {
+    bash "${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/ai_cli_manage.sh" claude uninstall "$@"
+}
+alias claude-status='claude_status'
+alias claude-update='claude_update'
+alias claude-uninstall='claude_uninstall'
 
 # ═══════════════════════════════════════════════════════════════
 # Claude Code Configuration Initialization

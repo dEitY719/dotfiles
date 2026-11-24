@@ -403,26 +403,37 @@ codex_uninstall() {
 
 codex_status() {
     [ -n "${ZSH_VERSION-}" ] && emulate -L sh
-    local codex_bin codex_lib method
+    local codex_bin codex_lib method version candidate
     codex_bin="$(unset -f codex; command -v codex || true)"
     codex_lib="${SHELL_COMMON:-${DOTFILES_ROOT:-$HOME/dotfiles}/shell-common}/tools/custom/lib/codex_standalone.sh"
     ux_header "Codex Status"
 
     if [ -n "$codex_bin" ]; then
-        ux_success "Codex installed"
-        ux_table_row "Version" "$("$codex_bin" --version 2>/dev/null || echo 'unknown')" ""
+        if version=$("$codex_bin" --version 2>/dev/null); then
+            ux_success "Codex installed"
+            ux_table_row "Version" "$version" ""
+        else
+            ux_warning "Codex executable is not runnable"
+        fi
         ux_table_row "Location" "$codex_bin" ""
         # Classify the binary shown above via the bash-only lib (no npm call).
         method="$(bash -c '. "$1" && _codex_classify_bin "$2"' _ "$codex_lib" "$codex_bin" 2>/dev/null || true)"
+        [ "$method" != other ] || method=unknown
         ux_table_row "Install method" "${method:-unknown}" ""
         [ "$method" = npm ] && ux_info "Migrate to standalone: codex-update"
+        bash -c 'type -aP codex' 2>/dev/null | while IFS= read -r candidate; do
+            [ "$candidate" = "$codex_bin" ] || ux_warning "Additional PATH installation: $candidate"
+        done
     else
         ux_warning "Codex not found"
+        if [ -e "${CODEX_INSTALL_DIR:-$HOME/.local/bin}/codex" ] || [ -L "${CODEX_INSTALL_DIR:-$HOME/.local/bin}/codex" ]; then
+            ux_warning "Managed executable is missing, not executable, or not on PATH: ${CODEX_INSTALL_DIR:-$HOME/.local/bin}/codex"
+        fi
         ux_info "To install: codex-install"
         return 1
     fi
 
-    case "$method" in npm|other) return 0 ;; esac
+    case "$method" in npm|unknown) return 0 ;; esac
     ux_info ""
     ux_section "Standalone Installation"
     ux_info "Binary directory: ${CODEX_INSTALL_DIR:-$HOME/.local/bin}"

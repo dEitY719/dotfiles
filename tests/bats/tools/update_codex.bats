@@ -16,6 +16,7 @@ setup() {
 printf '%s\n' "$*" >> "$HOME/npm.calls"
 case "$*" in
     'root -g') printf '%s\n' "$HOME/npm/node_modules" ;;
+    'prefix -g') printf '%s\n' "$HOME/npm" ;;
     'uninstall -g @openai/codex') rm -rf "$HOME/npm/node_modules/@openai/codex" "$HOME/npm/bin/codex" ;;
     *) exit 99 ;;
 esac
@@ -143,21 +144,21 @@ make_npm_install() {
         export NEW_VERSION=0.170.0
         type() { return 1; }
         ux_confirm() { return 0; }
-        main --release 0.170.0
+        main -y --release 0.170.0
     '
     assert_success
     [ "$(cat "$HOME/installer.args")" = '--release 0.170.0' ]
     assert_output --partial 'Codex CLI is working: codex-cli 0.170.0'
 }
 
-@test "codex-update npm migration declined changes nothing" {
+@test "codex-update npm migration requires confirmation without a terminal" {
     make_npm_install
     run_update '
         ux_confirm() { return 1; }
         main
     '
-    assert_success
-    assert_output --partial 'nothing was changed'
+    assert_failure 1
+    assert_output --partial 'Migration requires a terminal confirmation'
     [ -d "$HOME/npm/node_modules/@openai/codex" ]
     [ ! -e "$HOME/installer.args" ]
     run grep -c uninstall "$HOME/npm.calls"
@@ -181,12 +182,13 @@ make_npm_install() {
 @test "codex-update npm migration stops when npm uninstall fails" {
     make_npm_install
     run_update '
-        npm() { [ "$1" = root ] && { printf "%s\n" "$HOME/npm/node_modules"; return 0; }; return 1; }
+        npm() { [ "$1" = root ] && { printf "%s\n" "$HOME/npm/node_modules"; return 0; }; [ "$1" = prefix ] && { printf "%s\n" "$HOME/npm"; return 0; }; return 1; }
         main -y
     '
     assert_failure 1
-    assert_output --partial 'standalone install was not attempted'
-    [ ! -e "$HOME/installer.args" ]
+    assert_output --partial 'Failed to uninstall the npm package'
+    [ -e "$HOME/installer.args" ]
+    [ -d "$HOME/npm/node_modules/@openai/codex" ]
 }
 
 @test "codex-update npm migration install failure points at codex-install" {
@@ -197,8 +199,8 @@ make_npm_install() {
     '
     assert_failure 1
     assert_output --partial 'official Codex installer failed (exit 3)'
-    assert_output --partial 'no Codex CLI is installed right now'
-    assert_output --partial 'codex-install --release 0.170.0'
+    [ -d "$HOME/npm/node_modules/@openai/codex" ]
+    [ -x "$HOME/npm/bin/codex" ]
 }
 
 @test "codex-update none state points at codex-install and exits 1" {

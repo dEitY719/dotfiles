@@ -14,7 +14,7 @@
 - Usage: hermes-help [section|--list|--all]
 - sections
     - concept: 코딩 에이전트 | 커스텀 OpenAI-compatible 엔드포인트
-    - install: 공식 install.sh | ./hermes/setup.sh 가 하는 6단계
+    - install: hermes-status | hermes-install | hermes-update | hermes-uninstall | ./hermes/setup.sh
     - config: llm_endpoint.local.sh | hermes config set | 1회 복사 SSOT
     - update: hermes update | 사내 TLS 프록시 UV_SYSTEM_CERTS | sitecustomize 재설치
     - pitfalls: api_key 위치 | agent-browser workspace | TLS 인터셉션 CA | Python 3.13 AKI | 사내 GHES 스킬 설치
@@ -33,6 +33,8 @@
 
 ### install
 
+- hermes-status / hermes-install / hermes-update / hermes-uninstall
+- 관리 명령은 --help, --dry-run, -y 지원; 삭제 시 사용자 데이터 보존
 - 공식 설치: curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 - dotfiles 경유(권장): ./setup.sh 또는 ./hermes/setup.sh — 멱등, 이미 설치돼 있으면 스킵
 - 확인: hermes --version · hermes doctor (alias hermes-doctor)

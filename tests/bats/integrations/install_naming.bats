@@ -10,7 +10,7 @@ setup() {
     setup_isolated_home
     FAKE_SC="$TEST_TEMP_HOME/sc"
     mkdir -p "$FAKE_SC/tools/custom"
-    for s in install_claude install_docker uninstall_docker install_postgresql install_npm uninstall_npm; do
+    for s in ai_cli_manage install_docker uninstall_docker install_postgresql install_npm uninstall_npm; do
         printf '#!/bin/sh\necho "ran %s"\n' "$s" >"$FAKE_SC/tools/custom/$s.sh"
     done
 }
@@ -44,8 +44,8 @@ _call() {
             [ "$status" -eq 0 ] || { echo "$sh $legacy: $output"; false; }
             [ "$output" = "ran $script" ] || { echo "$sh $legacy: $output"; false; }
         done <<'EOF'
-claude.sh claude_install clinstall install_claude
-claude.sh claude-install clinstall install_claude
+claude.sh claude_install clinstall ai_cli_manage
+claude.sh claude-install clinstall ai_cli_manage
 docker.sh docker_install dinstall install_docker
 docker.sh docker-install dinstall install_docker
 docker.sh docker_uninstall duninstall uninstall_docker
