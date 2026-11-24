@@ -110,7 +110,6 @@ _mytool_help_rows_tools() {
 
     ux_table_header "Tool" "Description"
 
-    local count=0
     while IFS= read -r script; do
         [ -n "$script" ] || continue
 
@@ -121,12 +120,10 @@ _mytool_help_rows_tools() {
         desc=$(_extract_tool_description "$script" "$tool_name")
 
         ux_table_row "$tool_name" "$desc"
-        count=$((count + 1))
     done <<EOF
 $scripts
 EOF
 
-    ux_info "Total: $count custom tools available"
     ux_info "Location: ${custom_dir}"
 }
 
