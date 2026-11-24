@@ -13,23 +13,25 @@
 
 - Usage: opencode-help [section|--list|--all]
 - sections
-    - setup: install-opencode | update-opencode | opencode-verify | uninstall-opencode
+    - setup: opencode-status | opencode-install | opencode-update | opencode-uninstall | opencode-verify
     - utils: bunx oh-my-opencode install | install-bun | bun-help
     - env: home/public | external | internal
     - config: $OPENCODE_CONFIG_FILE | opencode-edit
     - models: Home | External | Internal
     - usage: opencode | opencode --help | opencode --version
-    - trouble: install-opencode | update-opencode | opencode-verify | uninstall-opencode
+    - trouble: opencode-status | opencode-verify | opencode-install
     - details: opencode-help <section>  (example: opencode-help models)
 
 ## 섹션
 
 ### setup
 
-- install-opencode             : Interactive OpenCode installer
-- update-opencode              : Update OpenCode to the latest version
-- opencode-verify              : Verify installation & configuration
-- uninstall-opencode           : Remove OpenCode and configuration
+- opencode-status: show installation status
+- opencode-install / opencode-update: use official installer (--dry-run, -y)
+- opencode-uninstall: remove CLI and preserve user data (--dry-run, -y)
+- opencode-uninstall --purge-config: also remove configuration
+- Legacy names: install-opencode, update-opencode, uninstall-opencode
+- opencode-verify: verify installation and configuration
 
 ### utils
 

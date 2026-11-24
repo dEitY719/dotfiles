@@ -15,7 +15,7 @@ _claude_help_summary() {
     ux_bullet "sections"
     ux_bullet_sub "mcp: list | get | add | remove"
     ux_bullet_sub "recommended: Playwright MCP | Sequential Thinking MCP"
-    ux_bullet_sub "setup: clinstall | ensure_jq | claude_init | claude_edit_settings"
+    ux_bullet_sub "setup: claude-status | claude-install | claude-update | claude-uninstall | claude_init"
     ux_bullet_sub "sandbox: /sandbox | Auto-allow | pytest, git, npm"
     ux_bullet_sub "config: settings.json | autoAllow | block paths | block cmds"
     ux_bullet_sub "statusline: time | model | project | context | cost"
@@ -51,7 +51,10 @@ _claude_help_rows_recommended() {
 }
 
 _claude_help_rows_setup() {
-    ux_table_row "clinstall" "Install Claude Code CLI" ""
+    ux_table_row "claude-status" "Show installation status" ""
+    ux_table_row "claude-install / claude-update" "Install or update with the official installer" "--dry-run, -y"
+    ux_table_row "claude-uninstall" "Remove CLI and preserve user data" "--dry-run, -y"
+    ux_table_row "clinstall / delete_claude" "Legacy aliases" ""
     ux_table_row "ensure_jq" "Install jq (required for statusline)" ""
     ux_table_row "claude_init" "Initialize config & skills" ""
     ux_table_row "claude_edit_settings" "Edit settings.json" ""
@@ -373,7 +376,7 @@ _codex_help_rows_setup() {
     ux_table_row "codex-update" "Standalone refresh / npm migration" "Update; confirm then move npm to standalone (-y)"
     ux_table_row "Pin a version" "codex-install/update --release VER" "Install that exact release"
     ux_table_row "Installer URL" "https://chatgpt.com/codex/install.sh" "Download with curl; run with sh"
-    ux_table_row "codex-uninstall" "Standalone + legacy npm" "Remove CLI; keep config, auth, sessions, skills"
+    ux_table_row "codex-uninstall" "Standalone" "Remove CLI; keep npm installs, config, auth, sessions, skills"
     ux_table_row "Preview changes" "codex-install/update/uninstall --dry-run" "Show actions without changes"
     ux_table_row "codex-status" "Status Check" "Show version, location, install method"
     ux_table_row "codex-skills-sync" "Skills Sync" "Sync skills symlinks"

@@ -15,7 +15,7 @@
 - sections
     - mcp: list | get | add | remove
     - recommended: Playwright MCP | Sequential Thinking MCP
-    - setup: clinstall | ensure_jq | claude_init | claude_edit_settings
+    - setup: claude-status | claude-install | claude-update | claude-uninstall | claude_init
     - sandbox: /sandbox | Auto-allow | pytest, git, npm
     - config: settings.json | autoAllow | block paths | block cmds
     - statusline: time | model | project | context | cost
@@ -41,7 +41,10 @@
 
 ### setup
 
-- **clinstall** — Install Claude Code CLI
+- **claude-status** — Show installation status
+- **claude-install / claude-update** — Install or update with the official installer — --dry-run, -y
+- **claude-uninstall** — Remove CLI and preserve user data — --dry-run, -y
+- **clinstall / delete_claude** — Legacy aliases
 - **ensure_jq** — Install jq (required for statusline)
 - **claude_init** — Initialize config & skills
 - **claude_edit_settings** — Edit settings.json

@@ -424,27 +424,23 @@ _npm_stub_on_path() {
     chmod +x "$HOME/stub/npm"
 }
 
-@test "uninstall_opencode: removes ~/.opencode and npm leftovers in both prefixes" {
+@test "uninstall_opencode: keeps npm and user configuration" {
     _npm_stub_on_path
-    mkdir -p "$HOME/.opencode/bin"
-    _opencode_integration bash "export PATH='$HOME/stub':\"\$PATH\"; printf 'y\n' | uninstall_opencode"
+    mkdir -p "$HOME/.opencode/bin" "$HOME/.config/opencode"
+    printf '#!/bin/sh\necho 1.0\n' > "$HOME/.opencode/bin/opencode"
+    chmod +x "$HOME/.opencode/bin/opencode"
+    printf 'keep\n' > "$HOME/.config/opencode/opencode.json"
+    _opencode_integration bash "export PATH='$HOME/stub':\"\$PATH\"; uninstall_opencode -y"
     assert_success
-    [ ! -d "$HOME/.opencode" ]
-    run cat "$HOME/calls"
-    assert_line "uninstall -g opencode-ai"
-    assert_line "uninstall -g --prefix $HOME/.local opencode-ai"
+    [ ! -e "$HOME/.opencode/bin/opencode" ]
+    [ -f "$HOME/.config/opencode/opencode.json" ]
+    [ ! -e "$HOME/calls" ]
 }
 
-@test "uninstall_opencode: continues without npm" {
-    mkdir -p "$HOME/.opencode/bin" "$HOME/nonpm"
-    ln -s "$(command -v dirname)" "$HOME/nonpm/dirname"
-    ln -s "$(command -v readlink)" "$HOME/nonpm/readlink"
-    ln -s "$(command -v rm)" "$HOME/nonpm/rm"
-    _opencode_integration bash "export PATH='$HOME/nonpm'; printf 'y\n' | uninstall_opencode"
+@test "uninstall_opencode: absent installation is a safe no-op" {
+    _opencode_integration bash "uninstall_opencode -y"
     assert_success
-    assert_output --partial "npm not found"
-    assert_output --partial "OpenCode Uninstallation Complete"
-    [ ! -d "$HOME/.opencode" ]
+    assert_output --partial "No managed executable"
 }
 
 @test "update-opencode alias loads and runs update mode in bash and zsh" {
@@ -457,6 +453,6 @@ _npm_stub_on_path() {
         "
         assert_success
         assert_output --partial "update-opencode="
-        assert_output --partial "tools/custom/install_opencode.sh update"
+        assert_output --partial "tools/custom/ai_cli_manage.sh opencode update"
     done
 }

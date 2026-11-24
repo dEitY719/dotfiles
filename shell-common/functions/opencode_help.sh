@@ -7,13 +7,13 @@ case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 _opencode_help_summary() {
     ux_info "Usage: opencode-help [section|--list|--all]"
     ux_bullet "sections"
-    ux_bullet_sub "setup: install-opencode | update-opencode | opencode-verify | uninstall-opencode"
+    ux_bullet_sub "setup: opencode-status | opencode-install | opencode-update | opencode-uninstall | opencode-verify"
     ux_bullet_sub "utils: bunx oh-my-opencode install | install-bun | bun-help"
     ux_bullet_sub "env: home/public | external | internal"
     ux_bullet_sub "config: \$OPENCODE_CONFIG_FILE | opencode-edit"
     ux_bullet_sub "models: Home | External | Internal"
     ux_bullet_sub "usage: opencode | opencode --help | opencode --version"
-    ux_bullet_sub "trouble: install-opencode | update-opencode | opencode-verify | uninstall-opencode"
+    ux_bullet_sub "trouble: opencode-status | opencode-verify | opencode-install"
     ux_bullet_sub "details: opencode-help <section>  (example: opencode-help models)"
 }
 
@@ -29,10 +29,12 @@ _opencode_help_list_sections() {
 }
 
 _opencode_help_rows_setup() {
-    ux_bullet "${UX_PRIMARY}install-opencode${UX_RESET}             : Interactive OpenCode installer"
-    ux_bullet "${UX_PRIMARY}update-opencode${UX_RESET}              : Update OpenCode to the latest version"
-    ux_bullet "${UX_PRIMARY}opencode-verify${UX_RESET}              : Verify installation & configuration"
-    ux_bullet "${UX_PRIMARY}uninstall-opencode${UX_RESET}           : Remove OpenCode and configuration"
+    ux_bullet "opencode-status: show installation status"
+    ux_bullet "opencode-install / opencode-update: use official installer (--dry-run, -y)"
+    ux_bullet "opencode-uninstall: remove CLI and preserve user data (--dry-run, -y)"
+    ux_bullet "opencode-uninstall --purge-config: also remove configuration"
+    ux_bullet "Legacy names: install-opencode, update-opencode, uninstall-opencode"
+    ux_bullet "opencode-verify: verify installation and configuration"
 }
 
 _opencode_help_rows_utils() {

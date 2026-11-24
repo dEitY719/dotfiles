@@ -11,7 +11,7 @@ source "$(dirname "$0")/init.sh" || exit 1
 codex_update_help() {
     ux_info "Usage: codex-update [-h|--help|help] [--release VER] [--dry-run] [-y|--yes]"
     ux_bullet "standalone: re-run $CODEX_INSTALLER_URL and report the version change."
-    ux_bullet "npm: confirm, npm uninstall -g $CODEX_NPM_PACKAGE, then install standalone."
+    ux_bullet "npm: confirm, install and verify standalone, then remove the npm package."
     ux_bullet "Homebrew/Bun/manual installs are never changed; remove them yourself."
     ux_bullet "--release VER: install that exact version (pin or downgrade)."
     ux_bullet "-y, --yes: skip the npm migration confirmation."
@@ -26,7 +26,7 @@ _codex_update_plan() {
             ux_info "[dry-run] Record codex --version, run the official installer${release:+ --release $release}, verify, report the change."
             ;;
         npm)
-            ux_info "[dry-run] Confirm, run npm uninstall -g $CODEX_NPM_PACKAGE, then install standalone${release:+ --release $release} and verify."
+            ux_info "[dry-run] Confirm, install and verify standalone${release:+ --release $release}, then run npm uninstall -g $CODEX_NPM_PACKAGE."
             ;;
     esac
 }
@@ -98,6 +98,10 @@ main() {
             ux_bullet "codex-install${release:+ --release $release}"
             return 1
         fi
+        if [ "$assume_yes" = 0 ] && [ ! -t 0 ]; then
+            ux_error "Migration requires a terminal confirmation; use -y to accept the displayed action."
+            return 1
+        fi
         if [ "$assume_yes" = 0 ] &&
             ! ux_confirm "Migrate the npm Codex CLI to the official standalone install?" "y"; then
             ux_info "Migration cancelled; nothing was changed."
@@ -107,14 +111,18 @@ main() {
         if [ -n "$CODEX_EXISTING_BIN" ]; then
             before="$("$CODEX_EXISTING_BIN" --version 2>/dev/null || printf 'unknown')"
         fi
-        # Download first: a network failure must not leave the user without codex.
-        _codex_fetch_installer || return 1
-        _codex_migrate_from_npm || return 1
-        if ! _codex_run_installer "${installer_args[@]}"; then
-            ux_error "The npm package was removed, so no Codex CLI is installed right now."
-            ux_info "Retry: codex-install${release:+ --release $release}"
+        # npm uninstall may unlink the prefix's bin even when PATH resolved a
+        # different symlink to the same package. Never replace that link.
+        npm_prefix=$(npm prefix -g 2>/dev/null) || {
+            ux_error "Cannot locate the npm global prefix."
+            return 1
+        }
+        if [ "$CODEX_EXISTING_BIN" = "$codex_bin" ] || [ "$npm_prefix/bin/codex" = "$codex_bin" ]; then
+            ux_error "The npm executable occupies $codex_bin; migrate it manually to avoid overwriting it."
             return 1
         fi
+        _codex_standalone_install "${installer_args[@]}" || return 1
+        _codex_migrate_from_npm || return 1
         ux_success "Migrated npm -> standalone: $before -> $CODEX_INSTALLED_VERSION ($codex_bin)"
     else
         before="$("$codex_bin" --version 2>/dev/null || printf 'unknown')"
