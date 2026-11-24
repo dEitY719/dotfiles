@@ -27,7 +27,11 @@ _codex_standalone_root() {
 # Resolve a path through symlinks; plain readlink output is enough to spot a
 # node_modules target when readlink -f is unavailable.
 _codex_resolve_path() {
-    readlink -f "$1" 2>/dev/null || readlink "$1" 2>/dev/null || printf '%s\n' "$1"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$1"
+    else
+        readlink -f "$1" 2>/dev/null || readlink "$1" 2>/dev/null || printf '%s\n' "$1"
+    fi
 }
 
 # _codex_classify_bin <path> -> standalone | npm | other
