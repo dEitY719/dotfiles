@@ -79,8 +79,12 @@ _gh_hosts_has_token() {
 . "${SHELL_COMMON}/lib/gh_host.sh"
 if [ "$(_dotfiles_setup_mode)" = internal ] && command -v gh >/dev/null 2>&1; then
     for _gh_host in "$(_gh_ghes_host)" github.com; do
-        # GHES name comes from the gitignored internal.local.sh (#1965).
-        [ -n "$_gh_host" ] || _gh_host="<GHES host>"
+        # GHES name comes from the gitignored internal.local.sh (#1965); when
+        # it is unset, name the missing setting instead of guessing a host.
+        if [ -z "$_gh_host" ]; then
+            ux_warning "GHES 호스트 미설정 (shell-common/env/internal.local.sh 의 DOTFILES_GHES_HOST) — 설정 후 1회 실행: gh auth login -h <GHES host> --insecure-storage"
+            continue
+        fi
         _gh_hosts_has_token "$_gh_host" && continue
         ux_warning "${_gh_host} 토큰이 hosts.yml 에 없음 (keyring 은 재부팅 후 Unlock Keyring 팝업) — 1회 실행: gh auth login -h ${_gh_host} --insecure-storage (토큰은 ${GH_CONFIG_DIR}/hosts.yml 에 0600 평문 저장)"
     done
