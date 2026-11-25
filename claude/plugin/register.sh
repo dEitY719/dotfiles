@@ -67,9 +67,28 @@ _norm_url() {
 	printf '%s\n' "${u%.git}"
 }
 
-# _is_url <arg> — a git URL (scheme://… or user@host:path), not a bare name.
+# _is_url <arg> — a git URL on a known transport (https/http/ssh/git/file, or
+# scp-like user@host:path), never a bare name or a helper form like ext::.
 _is_url() {
-	case "$1" in *://* | *@*:*) return 0 ;; esac
+	case "$1" in
+	https://* | http://* | ssh://* | git://* | file://*) return 0 ;;
+	-*) return 1 ;;
+	*@*:*)
+		case "${1%%:*}" in */* | *" "*) return 1 ;; *@*) return 0 ;; esac
+		;;
+	esac
+	return 1
+}
+
+# _has_credentials <url> — user:secret@ in the authority would be published
+# verbatim (manifest, commit subject, PR), so it is refused.
+_has_credentials() {
+	local auth
+	case "$1" in *://*) ;; *) return 1 ;; esac
+	auth="${1#*://}"
+	auth="${auth%%/*}"
+	case "$auth" in *@*) ;; *) return 1 ;; esac
+	case "${auth%@*}" in *:*) return 0 ;; esac
 	return 1
 }
 
@@ -99,7 +118,7 @@ _read_marketplace() {
 		fi
 	done
 	tmp=$(mktemp -d "${TMPDIR:-/tmp}/skills-register.XXXXXX") || return 1
-	if git clone --quiet --depth 1 "$url" "$tmp/repo" >/dev/null 2>&1; then
+	if git clone --quiet --depth 1 -- "$url" "$tmp/repo" >/dev/null 2>&1; then
 		out=$(cat "$tmp/repo/.claude-plugin/marketplace.json" 2>/dev/null)
 		rc=$?
 	else
@@ -149,11 +168,48 @@ command -v jq >/dev/null 2>&1 || {
 	ux_error "jq 가 필요합니다"
 	exit 1
 }
-if _is_url "$target"; then _refuse_github_com "$target"; fi
+if _is_url "$target"; then
+	if _has_credentials "$target"; then
+		ux_error "URL 에 자격증명(user:secret@)이 있습니다 — 그대로 manifest/PR 에 게시되므로 거부합니다"
+		exit 2
+	fi
+	_refuse_github_com "$target"
+fi
 if [ ! -d "$COMPANY_DIR/.git" ]; then
 	ux_error "company/ repo 가 없습니다 ($COMPANY_DIR) — 사내(internal) PC 에서만 등록할 수 있습니다"
 	exit 1
 fi
+MANIFESTS=(marketplaces.json plugins.json)
+# publish-sync.sh publishes the whole local file over origin/main, so editing a
+# stale checkout would drop entries another PC registered since.
+if [ "$dry_run" = 0 ]; then
+	if ! git -C "$COMPANY_DIR" fetch --quiet origin; then
+		ux_error "company/ origin fetch 실패 — 최신 상태를 확인할 수 없어 중단합니다"
+		exit 1
+	fi
+	if ! git -C "$COMPANY_DIR" merge-base --is-ancestor origin/main HEAD; then
+		ux_error "company/ 가 origin/main 보다 뒤처져 있습니다 — git -C $COMPANY_DIR pull --rebase 후 다시 실행하세요"
+		exit 1
+	fi
+fi
+
+_publish() {
+	if ! "$SCRIPT_DIR/publish-sync.sh"; then
+		ux_error "publish-sync.sh 실패 — 위 출력의 PR URL/원인을 확인하세요 (커밋은 company/ 로컬에 남음, 재실행하면 다시 게시)"
+		exit 1
+	fi
+}
+
+# _noop <msg> — nothing to change; still publish a commit an earlier run left
+# unpublished (publish-sync failed), so a re-run is the retry.
+_noop() {
+	ux_info "$1"
+	if [ "$dry_run" = 0 ] && ! git -C "$COMPANY_DIR" diff --quiet origin/main -- "${MANIFESTS[@]}"; then
+		ux_warning "company/ 에 미게시 manifest 변경이 있어 publish-sync.sh 로 게시합니다"
+		_publish
+	fi
+	exit 0
+}
 
 MP_FILE="$COMPANY_DIR/marketplaces.json"
 PL_FILE="$COMPANY_DIR/plugins.json"
@@ -172,8 +228,7 @@ if [ "$remove" = 1 ]; then
 	# A plugin entry left without its key still counts, so --remove can clean it up.
 	if [ -z "$mp" ] || [ "$(jq -r --arg k "$mp" 'has($k)' <<<"$mp_old")$(jq -r --arg mp "$mp" \
 		'any((.plugins // [])[]; endswith("@" + $mp))' <<<"$pl_old")" = falsefalse ]; then
-		ux_info "등록돼 있지 않음 — 할 일 없음: $target"
-		exit 0
+		_noop "등록돼 있지 않음 — 할 일 없음: $target"
 	fi
 	mp_new=$(jq --arg k "$mp" 'del(.[$k])' <<<"$mp_old") || exit 1
 	pl_new=$(jq --arg mp "$mp" \
@@ -185,8 +240,18 @@ else
 		ux_error ".claude-plugin/marketplace.json 에 .name 이 없습니다: $target"
 		exit 1
 	fi
-	plugins=$(jq -c --arg mp "$mp" '[.plugins[]?.name | select(. != null) | . + "@" + $mp]' <<<"$manifest") || exit 1
-	mp_new=$(jq --arg k "$mp" --arg v "$target" '.[$k] = $v' <<<"$mp_old") || exit 1
+	# An empty or malformed list would silently drop every registered plugin.
+	if ! jq -e '(.plugins | type) == "array" and (.plugins | length) > 0
+		and all(.plugins[]; (.name | type) == "string" and .name != "")' <<<"$manifest" >/dev/null 2>&1; then
+		ux_error ".claude-plugin/marketplace.json 의 .plugins 가 비었거나 .name 이 없는 항목이 있습니다: $target"
+		exit 1
+	fi
+	plugins=$(jq -c --arg mp "$mp" '[.plugins[].name | . + "@" + $mp]' <<<"$manifest") || exit 1
+	# Same repo spelled with/without .git or a trailing slash keeps the stored form.
+	url="$target"
+	old_url=$(jq -r --arg k "$mp" '.[$k] // empty | tostring' <<<"$mp_old")
+	if [ -n "$old_url" ] && [ "$(_norm_url "$old_url")" = "$(_norm_url "$target")" ]; then url="$old_url"; fi
+	mp_new=$(jq --arg k "$mp" --arg v "$url" '.[$k] = $v' <<<"$mp_old") || exit 1
 	pl_new=$(jq --arg mp "$mp" --argjson p "$plugins" \
 		'.plugins = ((.plugins // []) | map(select(endswith("@" + $mp) | not)) + $p | unique)' <<<"$pl_old") || exit 1
 fi
@@ -194,8 +259,7 @@ fi
 # Sorted compare: the add path's `unique` re-sorts plugins, which alone is no change.
 _canon() { jq -cS '.plugins |= ((. // []) | sort)' <<<"$1"; }
 if [ "$(jq -cS . <<<"$mp_old")$(_canon "$pl_old")" = "$(jq -cS . <<<"$mp_new")$(_canon "$pl_new")" ]; then
-	ux_info "이미 등록됨 — 변경 없음: $mp"
-	exit 0
+	_noop "이미 등록됨 — 변경 없음: $mp"
 fi
 
 if [ "$dry_run" = 1 ]; then
@@ -209,18 +273,15 @@ printf '%s\n' "$mp_new" >"$MP_FILE.tmp" && mv "$MP_FILE.tmp" "$MP_FILE" || exit 
 printf '%s\n' "$pl_new" >"$PL_FILE.tmp" && mv "$PL_FILE.tmp" "$PL_FILE" || exit 1
 
 # ALLOW_MAIN_COMMIT: same escape hatch claude/hooks/plugin-sync.sh uses on company/ main.
-if ! git -C "$COMPANY_DIR" add -- marketplaces.json plugins.json ||
+if ! git -C "$COMPANY_DIR" add -- "${MANIFESTS[@]}" ||
 	! ALLOW_MAIN_COMMIT=1 git -C "$COMPANY_DIR" commit --quiet -m "$SYNC_MSG ($target)" \
-		-- marketplaces.json plugins.json; then
+		-- "${MANIFESTS[@]}"; then
 	ux_error "company/ 커밋 실패 — 파일은 수정된 채로 남았습니다: $COMPANY_DIR"
 	exit 1
 fi
 ux_success "company/ 커밋: $SYNC_MSG ($target)"
 
-if ! "$SCRIPT_DIR/publish-sync.sh"; then
-	ux_error "publish-sync.sh 실패 — 위 출력의 PR URL/원인을 확인하세요 (커밋은 company/ 로컬에 남음)"
-	exit 1
-fi
+_publish
 if [ "$remove" = 1 ]; then
 	ux_success "등록 해제 완료: $mp"
 else
