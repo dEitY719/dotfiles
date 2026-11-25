@@ -110,6 +110,30 @@ _commit_local() {
     [[ "$output" != *"git-sync.sh: line"* ]]
 }
 
+# ── issue #2439: 빈 external(ref 없음)은 fetch 전에 안내 후 종료 ──
+@test "git-sync.sh: upstream 에 대상 브랜치가 없으면(빈 repo) fetch 전에 안내 후 종료한다" {
+    git init --bare -q -b main "${WORK_DIR}/origin.git"
+    git init --bare -q -b main "${WORK_DIR}/upstream.git"
+    _repo remote add origin "${WORK_DIR}/origin.git"
+    _repo remote add upstream "${WORK_DIR}/upstream.git"
+    _repo push -q origin main
+
+    run _git_in_repo sync
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"'upstream' 에 'main' 브랜치가 없습니다 (빈 repo — 시드 전)."* ]]
+    [[ "$output" != *"git fetch"* ]]
+}
+
+@test "git-sync.sh: upstream 에 접근할 수 없으면 종전 fetch 실패 경로를 유지한다" {
+    _repo remote add origin "${WORK_DIR}/repo"
+    _repo remote add upstream "${WORK_DIR}/missing.git"
+
+    run _git_in_repo sync
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"upstream fetch 실패."* ]]
+    [[ "$output" != *"빈 repo"* ]]
+}
+
 @test "git-sync.sh: main 이 아닌 브랜치에서는 거부한다" {
     _repo remote add upstream "${WORK_DIR}/repo"
     _repo checkout -q -b feature/x
