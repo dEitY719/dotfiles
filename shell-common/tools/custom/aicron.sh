@@ -122,7 +122,7 @@ aicron_usage() {
     ux_info ""
     ux_section "Examples"
     ux_bullet_sub "aicron list"
-    ux_bullet_sub "aicron add avatar-issue-watcher --schedule '*/4 * * * *'"
+    ux_bullet_sub "aicron add avatar-issue-watcher --schedule '*/1 * * * *'"
     ux_bullet_sub "aicron pause merge-train"
     ux_bullet_sub "aicron status avatar-issue-watcher --json | jq .last_exit"
     return 0

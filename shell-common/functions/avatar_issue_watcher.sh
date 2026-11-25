@@ -60,10 +60,10 @@ _avatar_issue_watcher_help_rows_examples() {
     ux_table_row "avatar-issue-watcher label list" "Label" "Show the excluded labels"
     ux_table_row "avatar-issue-watcher label add 보류" "Label" "Also skip issues labelled 보류"
     ux_table_row "avatar-issue-watcher label remove TODO" "Label" "Dispatch TODO issues again"
-    ux_table_row "aicron add avatar-issue-watcher --schedule '*/4 * * * *'" "Periodic" "Install the shipped aicron job"
+    ux_table_row "aicron add avatar-issue-watcher --schedule '*/1 * * * *'" "Periodic" "Install the shipped aicron job"
     ux_table_row "aicron status avatar-issue-watcher --json | jq .last_exit" "Periodic" "Exit code of the last run"
     ux_table_row "aicron run avatar-issue-watcher --dry-run" "Periodic" "Run the job once by hand"
-    ux_table_row "crontab: */4 * * * * avatar-issue-watcher --cwd ~ >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1" "Periodic" "Plain crontab line"
+    ux_table_row "crontab: */1 * * * * avatar-issue-watcher --cwd ~ >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1" "Periodic" "Plain crontab line"
     ux_bullet "Note: inside a git repo without --cwd it runs in cwd mode (that repo only, no watch list)"
     ux_bullet "Note: from cron, pass --cwd or start in \$HOME so the watch list is used"
 }

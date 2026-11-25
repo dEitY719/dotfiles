@@ -54,10 +54,10 @@
 - **avatar-issue-watcher label list** — Label — Show the excluded labels
 - **avatar-issue-watcher label add 보류** — Label — Also skip issues labelled 보류
 - **avatar-issue-watcher label remove TODO** — Label — Dispatch TODO issues again
-- **aicron add avatar-issue-watcher --schedule '*/4 * * * *'** — Periodic — Install the shipped aicron job
+- **aicron add avatar-issue-watcher --schedule '*/1 * * * *'** — Periodic — Install the shipped aicron job
 - **aicron status avatar-issue-watcher --json | jq .last_exit** — Periodic — Exit code of the last run
 - **aicron run avatar-issue-watcher --dry-run** — Periodic — Run the job once by hand
-- **crontab: */4 * * * * avatar-issue-watcher --cwd ~ >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1** — Periodic — Plain crontab line
+- **crontab: */1 * * * * avatar-issue-watcher --cwd ~ >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1** — Periodic — Plain crontab line
 - Note: inside a git repo without --cwd it runs in cwd mode (that repo only, no watch list)
 - Note: from cron, pass --cwd or start in $HOME so the watch list is used
 
