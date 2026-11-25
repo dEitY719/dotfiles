@@ -236,3 +236,14 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     assert_output --partial "이미 등록됨"
     [ ! -e "$PUB_LOG" ]
 }
+
+@test "a copy outside \$HOME/dotfiles (worktree) is refused: publish-sync would not publish it" {
+    wt="$TEST_TEMP_HOME/dotfiles-wt/claude/plugin"
+    mkdir -p "$wt"
+    cp "$FAKE/register.sh" "$FAKE/publish-sync.sh" "$wt/"
+    run "$wt/register.sh" "$URL"
+    assert_failure 2
+    assert_output --partial "만 게시합니다"
+    run git -C "$CO" status --porcelain
+    assert_output ""
+}
