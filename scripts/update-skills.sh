@@ -374,6 +374,8 @@ _us_company_refresh() {
             ux_success "company/ main 을 origin/main 으로 갱신했습니다"
             return 0
         fi
+        # A conflicted rebase would leave company/*.json half-merged for later steps.
+        git -C "$co" rebase --abort >/dev/null 2>&1 || true
         ux_warning "company/ 갱신 실패 — 낡은 company/*.json 으로 진행합니다 ($CF_FIX)"
         if [ -n "$out" ]; then ux_bullet_sub "$out"; fi
         return 1

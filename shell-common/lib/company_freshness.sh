@@ -31,8 +31,12 @@ _company_freshness() {
     fi
     # Safe to drop the branch only when its committed AND working-tree manifests
     # already equal origin/main: nothing unpublished can be lost.
+    # `switch -C main origin/main` also resets a local main, so refuse when that
+    # branch holds commits origin/main lacks.
     if git -C "$_cf_dir" diff --quiet origin/main HEAD -- marketplaces.json plugins.json 2>/dev/null &&
-        git -C "$_cf_dir" diff --quiet HEAD -- marketplaces.json plugins.json 2>/dev/null; then
+        git -C "$_cf_dir" diff --quiet HEAD -- marketplaces.json plugins.json 2>/dev/null &&
+        { ! git -C "$_cf_dir" show-ref --verify --quiet refs/heads/main ||
+            git -C "$_cf_dir" merge-base --is-ancestor main origin/main 2>/dev/null; }; then
         CF_STATE=stale-branch
         CF_FIX="git -C $_cf_dir switch -C main origin/main"
         CF_MSG="company/ 가 main 이 아닌 '$CF_BRANCH' 브랜치입니다 (manifest 는 origin/main 과 같아 main 으로 전환해도 안전)"
