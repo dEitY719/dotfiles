@@ -430,8 +430,10 @@ _us_unregistered_check() {
         if command -v _gh_host_is_github_com >/dev/null 2>&1 && _gh_host_is_github_com "$url"; then
             # skills-register refuses github.com: the public pair is the upstream contract (#1685).
             ux_bullet_sub "등록: claude/plugin/{marketplaces,plugins}.json 에 upstream PR ($url)"
-        else
+        elif [ -d "$pdir/company/.git" ]; then
             ux_bullet_sub "등록: skills-register $url"
+        else
+            ux_bullet_sub "등록: 사내(company/ 가 있는) PC 에서 skills-register $url"
         fi
         ux_bullet_sub "설치: 등록 후 skills-sync --restore"
         n=$((n + 1))

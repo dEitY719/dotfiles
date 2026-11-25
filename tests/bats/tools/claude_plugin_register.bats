@@ -18,12 +18,17 @@ setup() {
     mkdir -p "$CO"
     cp "$REGISTER" "$FAKE/register.sh"
     PUB_LOG="$TEST_TEMP_HOME/publish.log"
-    printf '#!/bin/bash\necho publish >>"%s"\nexit "${PUBLISH_RC:-0}"\n' "$PUB_LOG" >"$FAKE/publish-sync.sh"
+    # Stub publish: log, then fail or "merge" by pushing company/ main to its origin.
+    printf '#!/bin/bash\necho publish >>"%s"\n[ "${PUBLISH_RC:-0}" = 0 ] || exit "$PUBLISH_RC"\ngit -C "%s" push -q origin HEAD:main\n' \
+        "$PUB_LOG" "$CO" >"$FAKE/publish-sync.sh"
     chmod +x "$FAKE/register.sh" "$FAKE/publish-sync.sh"
     git -C "$CO" init -q -b main
     printf '{\n  "corp-skills": "https://ghes.example.invalid/corp/corp-skills"\n}\n' >"$CO/marketplaces.json"
     printf '{\n  "plugins": [\n    "corp@corp-skills"\n  ]\n}\n' >"$CO/plugins.json"
     git -C "$CO" add . && git -C "$CO" commit -qm init
+    git init -q --bare -b main "$TEST_TEMP_HOME/company.git"
+    git -C "$CO" remote add origin "$TEST_TEMP_HOME/company.git"
+    git -C "$CO" push -q origin main
     export SKILLS_DIR="$TEST_TEMP_HOME/ws"
     _ws_repo git-skills git-skills '"git"' "$URL"
 }
@@ -77,6 +82,7 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     new="https://ghes.example.invalid/team/git-skills.git"
     _ws_repo git-skills git-skills '"git","git-extra"' "$new"
     jq '.plugins += ["stale@git-skills"]' "$CO/plugins.json" >"$CO/p.tmp" && mv "$CO/p.tmp" "$CO/plugins.json"
+    git -C "$CO" commit -qam stale && git -C "$CO" push -q origin main
     run "$FAKE/register.sh" "$new"
     assert_success
     run jq -r '."git-skills"' "$CO/marketplaces.json"
@@ -107,12 +113,12 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
 @test "unsorted plugins.json: re-registering is still a no-op; --remove cleans orphan plugins" {
     "$FAKE/register.sh" "$URL"
     jq '.plugins |= reverse' "$CO/plugins.json" >"$CO/p.tmp" && mv "$CO/p.tmp" "$CO/plugins.json"
-    git -C "$CO" commit -qam unsort
+    git -C "$CO" commit -qam unsort && git -C "$CO" push -q origin main
     run "$FAKE/register.sh" "$URL"
     assert_success
     assert_output --partial "이미 등록됨"
     jq 'del(."git-skills")' "$CO/marketplaces.json" >"$CO/m.tmp" && mv "$CO/m.tmp" "$CO/marketplaces.json"
-    git -C "$CO" commit -qam orphan
+    git -C "$CO" commit -qam orphan && git -C "$CO" push -q origin main
     run "$FAKE/register.sh" --remove git-skills
     assert_success
     run jq -c '.plugins' "$CO/plugins.json"
@@ -168,4 +174,65 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     run "$FAKE/register.sh" "https://ghes.example.invalid/corp/x.git"
     assert_failure 1
     assert_output --partial "company/ repo 가 없습니다"
+}
+
+@test "re-run after a failed publish publishes the left-over commit" {
+    export PUBLISH_RC=1
+    run "$FAKE/register.sh" "$URL"
+    assert_failure 1
+    export PUBLISH_RC=0
+    : >"$PUB_LOG"
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    assert_output --partial "이미 등록됨"
+    assert_output --partial "미게시"
+    run cat "$PUB_LOG"
+    assert_output "publish"
+    run git -C "$CO" diff --quiet origin/main -- marketplaces.json plugins.json
+    assert_success
+}
+
+@test "a company/ checkout behind origin/main is refused before any edit" {
+    other="$TEST_TEMP_HOME/other"
+    git clone -q "$TEST_TEMP_HOME/company.git" "$other"
+    jq '."x-skills" = "https://ghes.example.invalid/corp/x"' "$other/marketplaces.json" >"$other/m.tmp"
+    mv "$other/m.tmp" "$other/marketplaces.json"
+    git -C "$other" commit -qam other && git -C "$other" push -q origin main
+    run "$FAKE/register.sh" "$URL"
+    assert_failure 1
+    assert_output --partial "pull --rebase"
+    run git -C "$CO" status --porcelain
+    assert_output ""
+    [ ! -e "$PUB_LOG" ]
+}
+
+@test "a marketplace.json with no plugins or a nameless plugin is refused" {
+    for bad in '{"name":"git-skills"}' '{"name":"git-skills","plugins":[]}' '{"name":"git-skills","plugins":[{"x":1}]}'; do
+        printf '%s\n' "$bad" >"$SKILLS_DIR/git-skills/.claude-plugin/marketplace.json"
+        run "$FAKE/register.sh" "$URL"
+        assert_failure 1
+        assert_output --partial ".plugins"
+    done
+    run git -C "$CO" status --porcelain
+    assert_output ""
+}
+
+@test "credentials in the URL, helper transports and option-like args are refused" {
+    run "$FAKE/register.sh" "https://user:tok@ghes.example.invalid/corp/git-skills.git"
+    assert_failure 2
+    assert_output --partial "자격증명"
+    run "$FAKE/register.sh" "ext::sh -c touch% /tmp/pwn@x:y"
+    assert_failure 2
+    run "$FAKE/register.sh" --remove "ext::sh -c x@h:p"
+    assert_success
+    assert_output --partial "등록돼 있지 않음"
+}
+
+@test "the same repo spelled with .git keeps the stored URL (no-op)" {
+    rm -rf "$SKILLS_DIR/corp-skills"
+    _ws_repo corp-skills corp-skills '"corp"' "https://ghes.example.invalid/corp/corp-skills.git"
+    run "$FAKE/register.sh" "https://ghes.example.invalid/corp/corp-skills.git"
+    assert_success
+    assert_output --partial "이미 등록됨"
+    [ ! -e "$PUB_LOG" ]
 }
