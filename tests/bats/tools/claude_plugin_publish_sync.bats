@@ -641,18 +641,31 @@ _seed_publish_repo() {
     assert_output "1"
 }
 
-@test "(b) no required check + valid manifests: merges without polling and tidies local main" {
+@test "(b) no required check + valid manifests: merges on the first poll and tidies local main" {
     _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
     echo "none" >"$GH_STUB_DIR/required_checks"
+    echo "empty" >"$GH_STUB_DIR/checks_result"
 
     run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
     assert_success
     run grep -c "^pr view" "$GH_STUB_LOG"
-    assert_output "0"
+    assert_output "1"
     run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
     assert_output "1"
     # the diverged local sync commits were rebased away onto the published one
     [ "$(git -C "$REPO" rev-parse main)" = "$(git -C "$REPO" rev-parse origin/main)" ]
+}
+
+@test "no required check but an existing optional check is failing: does not merge" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
+    echo "none" >"$GH_STUB_DIR/required_checks"
+    echo "failed" >"$GH_STUB_DIR/checks_result"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "status check 실패"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
 }
 
 @test "(c) no required check + broken JSON: does not merge, exits non-zero" {

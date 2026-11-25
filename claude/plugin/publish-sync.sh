@@ -317,9 +317,7 @@ _open_and_merge_pr() {
 			ux_error "publish-sync: 병합하지 않고 PR 을 닫았습니다 — manifest 를 고친 뒤 재실행하세요 ($pr_url)"
 			return 1
 		}
-		ux_info "publish-sync: required status check 없음 — 로컬 manifest 검증 통과, 바로 병합합니다"
-		state="success"
-		max_tries=0 # nothing to wait for: skip the poll loop straight to the merge
+		ux_info "publish-sync: required status check 없음 — 로컬 manifest 검증 통과"
 	fi
 
 	# The `--json bucket` flag on the `pr checks` subcommand does not exist
@@ -331,9 +329,10 @@ _open_and_merge_pr() {
 	# `conclusion`); the jq below normalizes both shapes to one aggregate
 	# word, fail-closed on any unrecognized shape. Unlike the old `gh pr
 	# checks` subcommand, `gh pr view --json statusCheckRollup` has no
-	# "no checks reported" signal, so an empty rollup polls as "pending" —
-	# safe now that this loop only runs when main REQUIRES checks (#2448):
-	# the required ones must eventually report, or the window times out.
+	# "no checks reported" signal. With required checks an empty rollup polls
+	# as "pending" until they report (or the window times out); with none
+	# (#2448) the first poll already succeeds on an empty or all-pass rollup,
+	# while a check that does exist and is failing or pending still holds.
 	# The same call reads the PR `state` so a PR merged or closed by hand
 	# mid-poll ends the wait at once instead of running out the window.
 	while [ "$tries" -lt "$max_tries" ]; do
