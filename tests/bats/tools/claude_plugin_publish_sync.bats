@@ -308,7 +308,10 @@ STUB
 #                     `gh api .../branches/main` and `.../rules/branches/main`:
 #                     "required" (classic protection context) | "ruleset"
 #                     (a required_status_checks ruleset rule) | "none" |
-#                     "unreadable" (the api call fails) (default: required)
+#                     "unreadable" (the api call fails) | "no-rulesets-api"
+#                     (rules endpoint 404s, as on a GHES without rulesets) |
+#                     "workflows" (a required-workflows ruleset rule)
+#                     (default: required)
 #
 # The script polls via `gh pr view --json state,statusCheckRollup` piped
 # to jq (real gh 2.45.0 has no `--json` on `gh pr checks` at all — verified
@@ -379,7 +382,12 @@ if [ "\$1" = "api" ]; then
     [ "\$REQ" = "unreadable" ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
     case "\$*" in
     *rules/branches/main*)
-        if [ "\$REQ" = "ruleset" ]; then
+        if [ "\$REQ" = "no-rulesets-api" ]; then
+            echo "gh: Not Found (HTTP 404)" >&2
+            exit 1
+        elif [ "\$REQ" = "workflows" ]; then
+            JSON='[{"type":"workflows","parameters":{"workflows":[]}}]'
+        elif [ "\$REQ" = "ruleset" ]; then
             JSON='[{"type":"pull_request"},{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"CI"}]}}]'
         else
             JSON='[{"type":"pull_request"}]'
@@ -463,6 +471,7 @@ STUB
     _seed_repo_with_origin "$REPO"
     # Set up origin remote as a proper URL format for _repo_target parsing
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "success" >"$GH_STUB_DIR/checks_result"
 
@@ -481,6 +490,7 @@ STUB
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "success" >"$GH_STUB_DIR/checks_result"
     : >"$GH_STUB_DIR/pr_create_noise"
@@ -499,6 +509,7 @@ STUB
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "state-success" >"$GH_STUB_DIR/checks_result"
 
@@ -512,6 +523,7 @@ STUB
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "state-failed" >"$GH_STUB_DIR/checks_result"
 
@@ -526,6 +538,7 @@ STUB
     _seed_repo_with_origin "$REPO"
     # Set up origin remote as a proper URL format for _repo_target parsing
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "failed" >"$GH_STUB_DIR/checks_result"
 
@@ -540,6 +553,7 @@ STUB
     _seed_repo_with_origin "$REPO"
     # Set up origin remote as a proper URL format for _repo_target parsing
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "pending" >"$GH_STUB_DIR/checks_result"
 
@@ -556,6 +570,7 @@ STUB
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "empty" >"$GH_STUB_DIR/checks_result"
 
@@ -579,6 +594,7 @@ STUB
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "empty-then-success" >"$GH_STUB_DIR/checks_result"
 
@@ -611,6 +627,7 @@ _seed_publish_repo() {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "ruleset" >"$GH_STUB_DIR/required_checks"
     echo "empty-then-success" >"$GH_STUB_DIR/checks_result"
@@ -678,6 +695,39 @@ _seed_publish_repo() {
     assert_output "0"
 }
 
+@test "no rulesets API (rules endpoint 404) counts as no rules: validates and merges" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
+    echo "no-rulesets-api" >"$GH_STUB_DIR/required_checks"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
+    assert_output "1"
+}
+
+@test "a required-workflows ruleset rule fails closed: no merge" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
+    echo "workflows" >"$GH_STUB_DIR/required_checks"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "보호 설정을 읽지 못해"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "admin merge pins the validated head commit and retries before giving up" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
+    echo "none" >"$GH_STUB_DIR/required_checks"
+    echo "failed" >"$GH_STUB_DIR/merge_result"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "admin merge 실패"
+    run grep -c "^pr merge 42 .*--match-head-commit [0-9a-f]\{40\}" "$GH_STUB_LOG"
+    assert_output "3"
+}
+
 @test "(e) PR merged by hand mid-poll: stops polling and takes the success path" {
     _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
     echo "pending" >"$GH_STUB_DIR/checks_result"
@@ -701,6 +751,7 @@ _seed_publish_repo() {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "optional-only" >"$GH_STUB_DIR/checks_result"
 
@@ -715,6 +766,7 @@ _seed_publish_repo() {
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    git -C "$REPO" update-ref refs/heads/chore/plugin-sync-publish-public-20260702-000000 HEAD
     _install_gh_stub
     echo "pending" >"$GH_STUB_DIR/checks_result"
     echo "CLOSED" >"$GH_STUB_DIR/pr_state"
