@@ -71,8 +71,8 @@ git sync -h     # 도움말 (git 이 `--help` 를 alias 정의 출력으로 가�
 
 | 단계 | 명령 | 실패 시 |
 |---|---|---|
-| 1 | 사전 가드 (`upstream` 리모트, 현재 브랜치 = `main`) | 안내 후 종료 |
-| 1b | 사전 가드 (`upstream` 에 `main` ref 존재 — 빈 repo 시드 대기, 접근 불가는 2단계 fetch 실패로) | 안내 후 종료 |
+| 1 / 1a | 사전 가드 (`upstream` 리모트 / 현재 브랜치 = `main`) | 안내 후 종료 |
+| 1b | 사전 가드 (`upstream` 에 `main` ref 존재 — 빈 repo 시드 대기, 접근 불가는 2단계 fetch 실패로, 충돌 재개 중에는 생략) | 안내 후 종료 |
 | 2 | `git fetch upstream main` → `git fetch origin main` | 즉시 중단 |
 | 3 | `git merge --no-edit origin/main` | 지점 A — 멈추고 안내 |
 | 4 | `git merge --no-edit upstream/main` | 지점 B — 멈추고 안내 |

@@ -120,8 +120,10 @@ _commit_local() {
 
     run _git_in_repo sync
     [ "$status" -eq 1 ]
-    [[ "$output" == *"'upstream' 에 'main' 브랜치가 없습니다 (빈 repo — 시드 전)."* ]]
+    [[ "$output" == *"'upstream' 에 'main' 브랜치가 없습니다 (빈 repo — 시드 전"* ]]
     [[ "$output" != *"git fetch"* ]]
+    # fetch 전에 멈췄다 = upstream 추적 ref 가 생기지 않았다.
+    ! _repo rev-parse -q --verify refs/remotes/upstream/main
 }
 
 @test "git-sync.sh: upstream 에 접근할 수 없으면 종전 fetch 실패 경로를 유지한다" {
@@ -222,6 +224,25 @@ _commit_local() {
     [ ! -f "${WORK_DIR}/repo/.git/MERGE_HEAD" ]
     [ -f "${WORK_DIR}/repo/u.txt" ]
     [ "$(_repo rev-parse main)" = "$(git -C "${WORK_DIR}/origin.git" rev-parse main)" ]
+}
+
+@test "git-sync.sh: 재개 중이면 upstream ref 가드가 merge 커밋을 막지 않는다" {
+    _seed_remotes
+    _commit_to_remote "${WORK_DIR}/origin.git" c.txt origin-side
+    _commit_local c.txt local-side
+
+    run _git_in_repo sync
+    [ "$status" -eq 1 ]
+    [ -f "${WORK_DIR}/repo/.git/MERGE_HEAD" ]
+
+    printf 'resolved\n' >"${WORK_DIR}/repo/c.txt"
+    _repo add c.txt
+    # 재개 사이에 upstream 의 main 이 사라져도 해결분은 먼저 커밋돼야 한다.
+    git -C "${WORK_DIR}/upstream.git" update-ref -d refs/heads/main
+
+    run _git_in_repo sync
+    [[ "$output" == *"이전 merge 재개 감지"* ]]
+    [ ! -f "${WORK_DIR}/repo/.git/MERGE_HEAD" ]
 }
 
 @test "git-sync.sh: 충돌이 안 풀린 채 재실행하면 거부한다" {
