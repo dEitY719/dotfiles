@@ -340,11 +340,12 @@ _failure_kind() {
 	local o
 	o=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 	case "$o" in
-	*timeout* | *"timed out"* | *auth* | *"repository not found"* | *"permission denied"* | *"connection refused"* | \
+	*timeout* | *"timed out"* | *authenticat* | *unauthorized* | *credential* | *" 401"* | *" 403"* | \
+		*"repository not found"* | *"permission denied"* | *"connection refused"* | \
 		*"could not resolve"* | *network* | *econn* | *enotfound* | *"rate limit"* | *temporar*)
 		echo transient
 		;;
-	*"invalid marketplace schema"* | *"not found"* | *"already exists"* | *conflict* | *collision*)
+	*"invalid marketplace schema"* | *"not found"* | *conflict* | *collision*)
 		echo permanent
 		;;
 	*) echo transient ;;
@@ -504,6 +505,10 @@ _restore_from() {
 			MP_ADDED=$((MP_ADDED + 1))
 		elif [ "$(_failure_kind "$out")" = permanent ]; then
 			fix=$(_mp_fix "$label" "$name" "$repo")
+			# skills-register refuses a name collision, so only removal fixes it.
+			if [ "$label" = "사내 전용" ] && printf '%s' "$out" | grep -Eqi 'conflict|collision'; then
+				fix="skills-register --remove $name"
+			fi
 			_fail_permanent "marketplace add ${name} (${repo})" "$name" "$fix"
 			perm_mps="${perm_mps}${name}"$'\t'"${fix}"$'\n'
 			failed_mps="${failed_mps}${name}"$'\n'
@@ -534,6 +539,10 @@ EOF
 			repo=$(printf '%s' "$mp_json" | jq -r --arg k "${plugin##*@}" '.[$k] // empty')
 			if [ "$label" != "사내 전용" ]; then
 				fix="claude/plugin/plugins.json(.local.json) 의 ${plugin} 수정 — upstream PR"
+			elif printf '%s' "$out" | grep -Eqi 'conflict|collision'; then
+				# A name collision is refused by skills-register too, so re-registering
+				# would loop; dropping the duplicate marketplace is the fix.
+				fix="skills-register --remove ${plugin##*@}"
 			elif [ -n "$repo" ]; then
 				# Re-registering re-reads marketplace.json and rewrites the plugin list;
 				# --remove would drop the whole marketplace for one missing plugin.

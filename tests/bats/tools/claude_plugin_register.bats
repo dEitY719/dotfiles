@@ -278,6 +278,15 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     [ ! -e "$PUB_LOG" ]
 }
 
+@test "#2453: a tombstoned (removed.local.json) same-name plugin is no collision" {
+    _ws_repo sp-dev superpowers-dev '"superpowers"' "https://ghes.example.invalid/corp/sp-dev.git"
+    printf '{"plugins":["superpowers@claude-plugins-official"]}\n' >"$FAKE/plugins.json"
+    printf '{"plugins":["superpowers@claude-plugins-official"]}\n' >"$FAKE/removed.local.json"
+    run "$FAKE/register.sh" --dry-run "https://ghes.example.invalid/corp/sp-dev.git"
+    assert_success
+    assert_output --partial '"superpowers@superpowers-dev"'
+}
+
 @test "a copy outside \$HOME/dotfiles (worktree) is refused: publish-sync would not publish it" {
     wt="$TEST_TEMP_HOME/dotfiles-wt/claude/plugin"
     mkdir -p "$wt"
