@@ -1125,11 +1125,11 @@ _assert_not_hung() {
 
 @test "avatar_issue_watcher: --help documents the crontab registration example" {
     # #1579 codex review: the example must match the shipped cron-jobs.json
-    # cadence (*/4), or a reader following --help literally installs a
+    # cadence (*/1), or a reader following --help literally installs a
     # cron entry running more slowly than the manifest's own default.
     run bash "${SCRIPT}" --help
     assert_success
-    assert_output --partial "*/4 * * * *"
+    assert_output --partial "*/1 * * * *"
     assert_output --partial "avatar_issue_watcher.sh"
     assert_output --partial "cron.log"
 }

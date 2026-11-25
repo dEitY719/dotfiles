@@ -4015,7 +4015,7 @@ _iw_usage() {
     ux_bullet_sub "the resolved directory must already exist — the tick fails fast otherwise"
     ux_bullet_sub "it must also hold a parseable .credentials.json — a logged-out account stalls every prompt"
     ux_bullet "crontab"
-    ux_bullet_sub "*/4 * * * * /path/to/avatar_issue_watcher.sh >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1"
+    ux_bullet_sub "*/1 * * * * /path/to/avatar_issue_watcher.sh >> ~/.local/state/avatar-issue-watcher/cron.log 2>&1"
 }
 
 # The guards a tick and a targeted run both pass before they select: 0 to go
