@@ -209,7 +209,7 @@ fi
 
 _publish() {
 	if ! "$SCRIPT_DIR/publish-sync.sh"; then
-		ux_error "publish-sync.sh 실패 — 위 출력의 PR URL/안내를 확인하세요. PR 이 열려 있으면 병합 후 git -C $COMPANY_DIR pull --rebase --autostash origin main 으로 로컬 main 을 정리하고, PR 이 없거나 닫혔으면 재실행하면 다시 게시합니다"
+		ux_error "publish-sync.sh 실패 — 위 출력의 PR URL/안내를 확인하세요. PR 이 열려 있으면 병합 후 main 체크아웃 상태에서 git -C $COMPANY_DIR pull --rebase --autostash origin main 으로 로컬 main 을 정리하고, PR 이 없거나 닫혔으면 재실행하면 다시 게시합니다"
 		exit 1
 	fi
 }
