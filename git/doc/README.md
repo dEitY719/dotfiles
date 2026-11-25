@@ -118,9 +118,16 @@ git 3-way merge 는 줄 단위다. 두 리모트가 서로 다른 항목을 추�
 3. **꼬리 append 금지** — 새 항목은 관련 항목 옆(같은 접두사 그룹, 예: `avatar_*`)에
    삽입한다. 항목당 한 줄이어도 양측이 같은 지점(목록 끝)에 삽입하면 충돌한다. 이 규칙은
    충돌을 없애지 않고 줄인다(완화) — 양측이 같은 이웃 바로 옆에 넣으면 여전히 충돌한다.
-4. **생성 문서는 재생성으로 해결** — `docs/guide/commands/*.md` 의 `Total: N` 같은
-   카운터 라인 충돌은 생성물을 커밋하는 한 불가피하다. 손으로 병합하지 말고 어느 한
-   쪽을 택한 뒤 `bash shell-common/tools/custom/gen_command_docs.sh --topic <topic> --force`
+   - 반증 사례 (issue #2445): #2432 는 `mytool.md` 의 `Total: N` 집계 라인을 지우며
+     "서로 다른 위치 삽입은 자동 병합된다 — 집계 라인이 충돌 표면의 전부"를 전제했다.
+     2026-11-25 `git sync` merge `c44777846` 에서 같은 파일이 다시 충돌했다. origin 은
+     `af_skills_autoupdate`·`check_ssl`, upstream 은 `ai_cli_manage` 를 추가했는데,
+     셋 다 알파벳순 목록 머리의 같은 앵커 줄(`**Tool** — Description`) 바로 아래에
+     정렬됐다. 정렬된 생성 목록은 삽입 위치를 고를 수 없으므로 이 **같은-앵커 삽입**
+     표면은 집계 라인을 없애도 남는다(한쪽만 고친 줄은 자동 병합된다).
+4. **생성 문서는 재생성으로 해결** — `docs/guide/commands/*.md` 의 같은-앵커 삽입
+   (규칙 3 반증 사례) 같은 충돌은 생성물을 커밋하는 한 불가피하다. 손으로 병합하지
+   말고 어느 한 쪽을 택한 뒤 `bash shell-common/tools/custom/gen_command_docs.sh --topic <topic> --force`
    로 재생성한다(예: `mytool.md` 충돌이면 `--topic mytool`). 파일명과 topic 이름이 다를 수
    있으니(언더스코어 vs 대시) `--list` 로 확인한다. 인덱스 `README.md` 충돌은 `--topic` 없이
    `--force` 전체 재생성으로 해결한다. 생성 문서 구조는 바꾸지 않는다.
