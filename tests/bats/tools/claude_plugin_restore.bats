@@ -535,7 +535,7 @@ _fake_claude() {
     cat >"$FAKEBIN/claude" <<'SH'
 #!/bin/bash
 echo "$*" >>"$CLAUDE_CALLS"
-case " $* " in *" ${CLAUDE_FAIL_ON:-@none@} "*) exit 1 ;; esac
+case " $* " in *" ${CLAUDE_FAIL_ON:-@none@} "*) [ -z "${CLAUDE_FAIL_MSG:-}" ] || echo "$CLAUDE_FAIL_MSG" >&2; exit 1 ;; esac
 exit 0
 SH
     chmod +x "$FAKEBIN/claude"
@@ -638,6 +638,60 @@ JSON
     assert_output --partial 'Failed: 2'
     run cat "$CLAUDE_CALLS"
     assert_output "plugin marketplace add Egonex-AI/Understand-Anything"
+}
+
+# --- #2453: permanent vs transient failure classification --------------------
+
+# _company_https <url> — internal mode with a company/ manifest holding one marketplace.
+_company_https() {
+    echo "internal" >"$TEST_TEMP_HOME/.dotfiles-setup-mode"
+    mkdir -p "$PLUGDIR/company"
+    git -C "$PLUGDIR/company" init -q
+    printf '{"sp-dev": "%s"}\n' "$1" >"$PLUGDIR/company/marketplaces.json"
+    printf '{"plugins": ["superpowers@sp-dev"]}\n' >"$PLUGDIR/company/plugins.json"
+    STORE="$TEST_TEMP_HOME/.claude/plugins"
+    mkdir -p "$STORE"
+    _store understand-anything -- understand-anything@understand-anything
+}
+
+@test "#2453: a schema error is permanent — fix command, no re-run advice, report line" {
+    _fake_claude
+    _company_https "https://ghes.example.invalid/corp/sp-dev"
+    export RESTORE_FAILURE_REPORT="$TEST_TEMP_HOME/report.tsv"
+    CLAUDE_FAIL_ON=https://ghes.example.invalid/corp/sp-dev \
+        CLAUDE_FAIL_MSG='Failed to add marketplace: Invalid marketplace schema from URL: : Invalid input' \
+        run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial '영구 실패: marketplace add sp-dev'
+    assert_output --partial '조치: skills-register https://ghes.example.invalid/corp/sp-dev.git'
+    assert_output --partial '영구 실패: install superpowers@sp-dev'
+    assert_output --partial 'Failed: 2'
+    refute_output --partial '다시 실행하면 남은 항목만 재시도'
+    run cut -f1,2 "$RESTORE_FAILURE_REPORT"
+    assert_output "$(printf 'permanent\tsp-dev\npermanent\tsuperpowers@sp-dev')"
+}
+
+@test "#2453: a permanent failure on a .git URL points at --remove" {
+    _fake_claude
+    _company_https "git@ghes.example.invalid:corp/sp-dev.git"
+    CLAUDE_FAIL_ON=git@ghes.example.invalid:corp/sp-dev.git CLAUDE_FAIL_MSG='Marketplace not found' \
+        run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial '조치: skills-register --remove sp-dev'
+}
+
+@test "#2453: a timeout is transient — keeps the re-run advice, no fix command" {
+    _fake_claude
+    _company_https "https://ghes.example.invalid/corp/sp-dev.git"
+    export RESTORE_FAILURE_REPORT="$TEST_TEMP_HOME/report.tsv"
+    CLAUDE_FAIL_ON=https://ghes.example.invalid/corp/sp-dev.git CLAUDE_FAIL_MSG='git clone: Connection timed out' \
+        run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial '다시 실행하면 남은 항목만 재시도'
+    refute_output --partial '영구 실패'
+    refute_output --partial '조치:'
+    run cut -f1 "$RESTORE_FAILURE_REPORT"
+    assert_output "$(printf 'transient\ntransient')"
 }
 
 @test "restore.sh: a corrupt installed_plugins.json fails with zero claude calls (#2344 F-2)" {

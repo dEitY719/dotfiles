@@ -228,12 +228,53 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     assert_output --partial "등록돼 있지 않음"
 }
 
-@test "the same repo spelled with .git keeps the stored URL (no-op)" {
+@test "#2453: an entry stored without .git is rewritten to .git by re-running register" {
     rm -rf "$SKILLS_DIR/corp-skills"
-    _ws_repo corp-skills corp-skills '"corp"' "https://ghes.example.invalid/corp/corp-skills.git"
+    _ws_repo corp-skills corp-skills '"corp"' "https://ghes.example.invalid/corp/corp-skills"
+    run "$FAKE/register.sh" "https://ghes.example.invalid/corp/corp-skills"
+    assert_success
+    assert_output --partial ".git 을 붙여 저장합니다"
+    run jq -r '."corp-skills"' "$CO/marketplaces.json"
+    assert_output "https://ghes.example.invalid/corp/corp-skills.git"
+    run cat "$PUB_LOG"
+    assert_output "publish"
+    : >"$PUB_LOG"
     run "$FAKE/register.sh" "https://ghes.example.invalid/corp/corp-skills.git"
     assert_success
     assert_output --partial "이미 등록됨"
+    [ ! -s "$PUB_LOG" ]
+}
+
+@test "#2453: an https URL without .git is stored with .git; ssh/scp forms stay as given" {
+    rm -rf "$SKILLS_DIR/git-skills"
+    _ws_repo git-skills git-skills '"git"' "https://ghes.example.invalid/corp/git-skills"
+    run "$FAKE/register.sh" "https://ghes.example.invalid/corp/git-skills/"
+    assert_success
+    run jq -r '."git-skills"' "$CO/marketplaces.json"
+    assert_output "https://ghes.example.invalid/corp/git-skills.git"
+    ssh="git@ghes.example.invalid:corp/ssh-skills"
+    _ws_repo ssh-skills ssh-skills '"sshp"' "$ssh"
+    run "$FAKE/register.sh" "$ssh"
+    assert_success
+    refute_output --partial ".git 을 붙여"
+    run jq -r '."ssh-skills"' "$CO/marketplaces.json"
+    assert_output "$ssh"
+}
+
+@test "#2453: a plugin name already in any manifest under another marketplace is refused" {
+    _ws_repo sp-dev superpowers-dev '"superpowers"' "https://ghes.example.invalid/corp/sp-dev.git"
+    printf '{"plugins":["superpowers@claude-plugins-official"]}\n' >"$FAKE/plugins.json"
+    run "$FAKE/register.sh" "https://ghes.example.invalid/corp/sp-dev.git"
+    assert_failure 2
+    assert_output --partial "superpowers@claude-plugins-official"
+    assert_output --partial "skills-workspace-ignore.local.json"
+    rm "$FAKE/plugins.json"
+    printf '{"plugins":["superpowers@corp-other"]}\n' >"$CO/plugins.local.json"
+    run "$FAKE/register.sh" --dry-run "https://ghes.example.invalid/corp/sp-dev.git"
+    assert_failure 2
+    assert_output --partial "superpowers@corp-other"
+    run git -C "$CO" diff --quiet origin/main -- marketplaces.json plugins.json
+    assert_success
     [ ! -e "$PUB_LOG" ]
 }
 

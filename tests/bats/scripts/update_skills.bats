@@ -661,6 +661,69 @@ _ws_setup() {
     refute_output --partial "skills-register git@github.com"
 }
 
+@test "#2453: the unregistered hint prints an https origin with .git appended" {
+    _ws_setup
+    _ws_repo git-skills git-skills git
+    git -C "$SKILLS_DIR/git-skills" remote set-url origin "https://ghes.example.invalid/corp/git-skills"
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_success
+    assert_output --partial "skills-register https://ghes.example.invalid/corp/git-skills.git"
+}
+
+@test "#2453: a plugin-name collision prints only the ignore hint, never skills-register" {
+    _ws_setup
+    _ws_repo sp-dev superpowers-dev superpowers
+    printf '{"plugins":["superpowers@claude-plugins-official"]}\n' >"$FAKE_ROOT/claude/plugin/plugins.json"
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_success
+    assert_output --partial "미등록 marketplace: superpowers-dev (plugin: superpowers) — superpowers@claude-plugins-official 과 이름이 겹칩니다"
+    assert_output --partial 'skills-workspace-ignore.local.json 에 "superpowers-dev" 추가'
+    refute_output --partial "skills-register"
+}
+
+# _restore_stub <kind> — restore.sh stub: a real run reports one <kind> failure
+# for superpowers@sp-dev via RESTORE_FAILURE_REPORT and exits 1; --check
+# reports that plugin as not installed.
+_restore_stub() {
+    cat >"$FAKE_ROOT/claude/plugin/restore.sh" <<SH
+#!/bin/bash
+echo restore "\$@" >>"\$CALL_LOG"
+if [ "\$1" = --check ]; then echo 'WARN: plugin not installed: superpowers@sp-dev'; exit 1; fi
+if [ "$1" = permanent ]; then
+    printf 'permanent\tsuperpowers@sp-dev\tskills-register https://ghes.example.invalid/corp/sp-dev.git\n' >>"\$RESTORE_FAILURE_REPORT"
+else
+    printf 'transient\tsuperpowers@sp-dev\n' >>"\$RESTORE_FAILURE_REPORT"
+fi
+echo '  실패: install superpowers@sp-dev'
+exit 1
+SH
+    chmod +x "$FAKE_ROOT/claude/plugin/restore.sh"
+}
+
+@test "#2453: a permanent restore failure lists its fix and drops every re-run hint" {
+    _make_fake_root 0
+    _restore_stub permanent
+    run "$FAKE_ROOT/scripts/update-skills.sh" --restore
+    assert_failure 1
+    assert_output --partial "영구 실패 조치: skills-register https://ghes.example.invalid/corp/sp-dev.git"
+    assert_output --partial "재실행으로 해결되지 않는 복원 실패"
+    refute_output --partial "네트워크/인증 확인 후 skills-sync 재실행"
+    refute_output --partial "누락 항목 설치: skills-sync --restore"
+    refute_output --partial "skills-sync --restore 를 실행하세요"
+    run bash -c 'ls "$TMPDIR" | grep -c skills-sync-restore'
+    assert_output 0
+}
+
+@test "#2453: a transient restore failure keeps the re-run hints" {
+    _make_fake_root 0
+    _restore_stub transient
+    run "$FAKE_ROOT/scripts/update-skills.sh" --restore
+    assert_failure 1
+    assert_output --partial "네트워크/인증 확인 후 skills-sync 재실행"
+    assert_output --partial "누락 항목 설치: skills-sync --restore"
+    refute_output --partial "재실행으로 해결되지 않는"
+}
+
 # --- #2446: company/ refresh step before anything reads company/*.json ---
 
 # _make_company — internal-mode fake root whose claude/plugin/company/ tracks a

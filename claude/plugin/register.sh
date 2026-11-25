@@ -15,6 +15,10 @@
 # workspace clone whose origin matches the URL, else from a scratch
 # `git clone --depth 1`. The URL string is never parsed for a name.
 #
+# An http(s) URL is stored with .git appended (claude reads a .git-less one as a
+# raw marketplace.json), and a plugin name another marketplace already lists in
+# any manifest is refused with an ignore-overlay hint (#2453).
+#
 # Never edits the tracked claude/plugin/{marketplaces,plugins}.json: that pair
 # is the upstream-owned registration contract (#1685), so a github.com URL is
 # refused with a pointer to an upstream PR.
@@ -38,6 +42,7 @@ fi
 
 # github.com matching lives only in lib/gh_host.sh (AGENTS.md Correction Rules).
 GH_HOST_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/gh_host.sh"
+CPM_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/claude_plugin_manifest.sh"
 # shellcheck source=../../shell-common/lib/gh_host.sh
 [ -r "$GH_HOST_LIB" ] && . "$GH_HOST_LIB"
 CF_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/company_freshness.sh"
@@ -177,6 +182,21 @@ if _is_url "$target"; then
 	fi
 	_refuse_github_com "$target"
 fi
+# _claude_plugin_git_url (URL form) and _claude_plugin_name_owner (collision
+# guard) are shared with update-skills.sh; fail closed without them (#2453).
+# shellcheck source=../../shell-common/lib/claude_plugin_manifest.sh
+if ! . "$CPM_LIB" 2>/dev/null || ! command -v _claude_plugin_name_owner >/dev/null 2>&1; then
+	ux_error "claude_plugin_manifest.sh 를 읽지 못했습니다 — URL 정규화·이름 충돌 검사 불가로 중단합니다: $CPM_LIB"
+	exit 1
+fi
+if [ "$remove" = 0 ]; then
+	# http(s) without .git is fetched as a raw marketplace.json by claude (#2453).
+	_git_url=$(_claude_plugin_git_url "$target")
+	if [ "$_git_url" != "$target" ]; then
+		ux_info "https URL 끝에 .git 을 붙여 저장합니다: $_git_url"
+		target="$_git_url"
+	fi
+fi
 # From a worktree or other checkout the edit would land in a company/ that
 # publish-sync.sh never publishes, so refuse instead of silently redirecting.
 if [ "$(cd "$PUBLISH_PLUGIN_DIR" 2>/dev/null && pwd -P)" != "$(cd "$SCRIPT_DIR" && pwd -P)" ]; then
@@ -261,11 +281,18 @@ else
 		exit 1
 	fi
 	plugins=$(jq -c --arg mp "$mp" '[.plugins[].name | . + "@" + $mp]' <<<"$manifest") || exit 1
-	# Same repo spelled with/without .git or a trailing slash keeps the stored form.
-	url="$target"
-	old_url=$(jq -r --arg k "$mp" '.[$k] // empty | tostring' <<<"$mp_old")
-	if [ -n "$old_url" ] && [ "$(_norm_url "$old_url")" = "$(_norm_url "$target")" ]; then url="$old_url"; fi
-	mp_new=$(jq --arg k "$mp" --arg v "$url" '.[$k] = $v' <<<"$mp_old") || exit 1
+	# The same plugin name from another marketplace would install its skills twice (#2453).
+	while IFS= read -r _pname; do
+		if _owner=$(_claude_plugin_name_owner "$_pname" "$mp" "$SCRIPT_DIR/plugins.json" \
+			"$SCRIPT_DIR/plugins.local.json" "$COMPANY_DIR/plugins.json" "$COMPANY_DIR/plugins.local.json"); then
+			ux_error "plugin 이름 충돌: $_pname@$mp — $_owner 이 이미 manifest 에 있습니다 (등록하지 않음)"
+			ux_info "개발용 fork 라면 등록 대신 제외: claude/plugin/skills-workspace-ignore.local.json 에 \"$mp\" 추가"
+			exit 2
+		fi
+	done < <(jq -r '.plugins[].name' <<<"$manifest")
+	# The stored raw string is compared as is, so an entry saved without .git
+	# (or with a trailing slash) is rewritten by re-running with the same repo.
+	mp_new=$(jq --arg k "$mp" --arg v "$target" '.[$k] = $v' <<<"$mp_old") || exit 1
 	pl_new=$(jq --arg mp "$mp" --argjson p "$plugins" \
 		'.plugins = ((.plugins // []) | map(select(endswith("@" + $mp) | not)) + $p | unique)' <<<"$pl_old") || exit 1
 fi
