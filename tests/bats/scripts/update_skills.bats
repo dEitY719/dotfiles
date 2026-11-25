@@ -588,3 +588,75 @@ claude-setup"
     assert_success
     assert_output --partial '누락 항목 설치: skills-sync --restore'
 }
+
+# --- #2443: workspace marketplace repos missing from every manifest ----------
+
+# _ws_repo <folder> <marketplace> <plugin> — a workspace clone with an origin.
+_ws_repo() {
+    local d="$SKILLS_DIR/$1"
+    mkdir -p "$d/.claude-plugin"
+    printf '{"name":"%s","plugins":[{"name":"%s"}]}\n' "$2" "$3" >"$d/.claude-plugin/marketplace.json"
+    git -C "$d" init -q
+    git -C "$d" remote add origin "https://ghes.example.invalid/corp/$1.git"
+}
+
+_ws_setup() {
+    _make_fake_root 0
+    export SKILLS_DIR="$TEST_TEMP_HOME/ws"
+    mkdir -p "$SKILLS_DIR" "$FAKE_ROOT/claude/plugin/company"
+    printf '{"pub-skills":"o/pub-skills"}\n' >"$FAKE_ROOT/claude/plugin/marketplaces.json"
+    printf '{"local-skills":"o/local-skills"}\n' >"$FAKE_ROOT/claude/plugin/marketplaces.local.json"
+    printf '{"corp-skills":"https://ghes.example.invalid/corp/corp-skills"}\n' \
+        >"$FAKE_ROOT/claude/plugin/company/marketplaces.json"
+    _ws_repo pub-skills pub-skills pub
+    _ws_repo local-skills local-skills loc
+    _ws_repo corp-skills corp-skills corp
+}
+
+@test "#2443: unregistered workspace marketplace warns with the exact register command" {
+    _ws_setup
+    _ws_repo git-skills git-skills git
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "미등록 marketplace: git-skills (plugin: git)"
+    assert_output --partial "skills-register https://ghes.example.invalid/corp/git-skills.git"
+    assert_output --partial "skills-sync --restore"
+    assert_output --partial "skills-workspace-ignore.local.json"
+    refute_output --partial "미등록 marketplace: pub-skills"
+    refute_output --partial "미등록 marketplace: local-skills"
+    refute_output --partial "미등록 marketplace: corp-skills"
+}
+
+@test "#2443: registered and ignore-overlay marketplaces produce no warning" {
+    _ws_setup
+    _ws_repo jira-skills jira-skills jira
+    printf '{"jira-skills":"Agent Factory catalog"}\n' \
+        >"$FAKE_ROOT/claude/plugin/skills-workspace-ignore.local.json"
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    refute_output --partial "미등록 marketplace"
+    refute_output --partial "skills-register"
+}
+
+@test "#2443: the warning keeps the exit code (success and optional failure alike)" {
+    _ws_setup
+    _ws_repo git-skills git-skills git
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_success
+    assert_output --partial "미등록 marketplace: git-skills"
+    _stub "$FAKE_ROOT/claude/plugin/update-plugins.sh" update-plugins 7
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure 7
+    assert_output --partial "미등록 marketplace: git-skills"
+}
+
+@test "#2443: a github.com origin points at an upstream PR, not skills-register" {
+    _ws_setup
+    _ws_repo gh-skills gh-skills ghp
+    git -C "$SKILLS_DIR/gh-skills" remote set-url origin "git@github.com:o/gh-skills.git"
+    run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
+    assert_success
+    assert_output --partial "미등록 marketplace: gh-skills"
+    assert_output --partial "upstream PR (git@github.com:o/gh-skills.git)"
+    refute_output --partial "skills-register git@github.com"
+}
