@@ -5,7 +5,7 @@
 # manifest PR; internal registrations use company/ and publish-sync.sh.
 # After the registration is merged, `skills-sync --restore` installs it.
 #
-#   skills-register <git-url>                       add, or update an existing entry
+#   skills-register <git-url>                       add, or update an existing entry's URL
 #   skills-register --remove <git-url|marketplace>  drop the marketplace and its plugins
 #   skills-register --dry-run ...                   freshness check + JSON diff, no write
 #
@@ -13,6 +13,11 @@
 # .claude-plugin/marketplace.json (.name, .plugins[].name) — read from the
 # workspace clone whose origin matches the URL, else from a scratch
 # `git clone --depth 1`. The URL string is never parsed for a name.
+#
+# Only a new marketplace gets every plugin of its marketplace.json. Re-running
+# for an existing one updates the URL alone: the *@<mp> selection in plugins.json
+# is the user's, so unlisted repo plugins are only named (INFO) and listed ones
+# the repo dropped are only warned about (#2455).
 #
 # An http(s) URL is stored with .git appended (claude reads a .git-less one as a
 # raw marketplace.json), and a plugin name another marketplace already lists in
@@ -308,8 +313,10 @@ else
 		exit 1
 	fi
 	plugins=$(jq -c --arg mp "$mp" '[.plugins[].name | . + "@" + $mp]' <<<"$manifest") || exit 1
-	# The same plugin name from another marketplace would install its skills twice (#2453).
-	while IFS= read -r _pname; do
+	existing=$(jq -r --arg k "$mp" 'has($k)' <<<"$mp_old")
+	# The same plugin name from another marketplace would install its skills twice
+	# (#2453). An update adds no plugin (#2455), so only a new entry is checked.
+	[ "$existing" = true ] || while IFS= read -r _pname; do
 		if _owner=$(_claude_plugin_name_owner "$_pname" "$mp" "$SCRIPT_DIR/plugins.json" \
 			"$SCRIPT_DIR/plugins.local.json" "$COMPANY_DIR/plugins.json" "$SCRIPT_DIR/company/plugins.json" "$SCRIPT_DIR/company/plugins.local.json"); then
 			ux_error "plugin 이름 충돌: $_pname@$mp — $_owner 이 이미 manifest 에 있습니다 (등록하지 않음)"
@@ -320,8 +327,23 @@ else
 	# The stored raw string is compared as is, so an entry saved without .git
 	# (or with a trailing slash) is rewritten by re-running with the same repo.
 	mp_new=$(jq --arg k "$mp" --arg v "$target" '.[$k] = $v' <<<"$mp_old") || exit 1
-	pl_new=$(jq --arg mp "$mp" --argjson p "$plugins" \
-		'.plugins = ((.plugins // []) | map(select(endswith("@" + $mp) | not)) + $p | unique)' <<<"$pl_old") || exit 1
+	if [ "$existing" = true ]; then
+		pl_new="$pl_old"
+		IFS=$'\t' read -r _n _list < <(jq -r --argjson r "$plugins" \
+			'(.plugins // []) as $h | [$r[] | select(IN($h[]) | not) | sub("@[^@]*$"; "")]
+			| "\(length)\t\(join(", "))"' <<<"$pl_old")
+		if [ "$_n" -gt 0 ]; then
+			ux_info "$mp 에 등록되지 않은 plugin ${_n}개가 있습니다 ($_list) — 추가하지 않음"
+		fi
+		_gone=$(jq -r --arg mp "$mp" --argjson r "$plugins" \
+			'[(.plugins // [])[] | select(endswith("@" + $mp)) | select(IN($r[]) | not)] | join(", ")' <<<"$pl_old")
+		if [ -n "$_gone" ]; then
+			ux_warning "repo 에 없는 등록 plugin: $_gone — 제거하지 않음 (다음 skills-sync --restore 에서 install 이 실패할 수 있습니다)"
+		fi
+	else
+		pl_new=$(jq --arg mp "$mp" --argjson p "$plugins" \
+			'.plugins = ((.plugins // []) | map(select(endswith("@" + $mp) | not)) + $p | unique)' <<<"$pl_old") || exit 1
+	fi
 fi
 
 # Sorted compare: the add path's `unique` re-sorts plugins, which alone is no change.

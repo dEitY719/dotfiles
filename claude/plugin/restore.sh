@@ -544,10 +544,9 @@ EOF
 				# would loop; dropping the duplicate marketplace is the fix.
 				fix="skills-register --remove ${plugin##*@}"
 			elif [ -n "$repo" ]; then
-				# Re-registering re-reads marketplace.json and rewrites the plugin list;
-				# --remove would drop the whole marketplace for one missing plugin.
-				if command -v _claude_plugin_git_url >/dev/null 2>&1; then repo=$(_claude_plugin_git_url "$repo"); fi
-				fix="skills-register $repo"
+				# Re-registering keeps the plugin selection (#2455) and --remove would
+				# drop the whole marketplace, so the one entry is dropped by hand.
+				fix="claude/plugin/company/plugins.json 에서 ${plugin} 삭제 — publish-sync.sh 로 게시"
 			else
 				fix="skills-register --remove ${plugin##*@}"
 			fi

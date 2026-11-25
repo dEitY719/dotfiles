@@ -74,7 +74,8 @@ origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
 사내(non-github.com) marketplace 등록은 `skills-register <git-url>`
 (`claude/plugin/register.sh`, #2443) 한 줄이다 — repo 의
 `.claude-plugin/marketplace.json` 에서 이름·plugin 목록을 읽어 company/ 쌍에
-추가·갱신(`--remove` 삭제, `--dry-run` diff 만)하고 sync 커밋 후
+추가(신규는 plugin 전부)·갱신(기존은 URL 만 — plugin 선택은 그대로 두고 미등록/사라진
+plugin 은 안내만, #2455; `--remove` 삭제, `--dry-run` diff 만)하고 sync 커밋 후
 `publish-sync.sh` 로 게시한다. 설치는 하지 않는다 — 다음 `skills-sync --restore`.
 github.com URL 은 공용 쌍을 별도 브랜치에서 갱신하고 upstream PR 을 생성한다. `skills-sync` 는 어느 manifest 에도
 없는 workspace marketplace 를 경고하며, 의도적 미등록은 gitignored

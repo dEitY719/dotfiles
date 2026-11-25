@@ -692,6 +692,17 @@ _company_https() {
     refute_output --partial '다시 실행하면 남은 항목만 재시도'
 }
 
+@test "#2455: a plugin missing from its company/ repo points at a manual plugins.json edit, not re-register" {
+    _fake_claude
+    _company_https "https://ghes.example.invalid/corp/sp-dev.git"
+    printf '{"understand-anything": {}, "sp-dev": {}}\n' >"$STORE/known_marketplaces.json"
+    CLAUDE_FAIL_ON=superpowers@sp-dev CLAUDE_FAIL_MSG='Plugin superpowers not found in marketplace sp-dev' \
+        run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial '조치: claude/plugin/company/plugins.json 에서 superpowers@sp-dev 삭제'
+    refute_output --partial '조치: skills-register'
+}
+
 @test "#2453: a timeout is transient — keeps the re-run advice, no fix command" {
     _fake_claude
     _company_https "https://ghes.example.invalid/corp/sp-dev.git"
