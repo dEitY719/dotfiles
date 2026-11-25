@@ -11,6 +11,7 @@
 #   5. claude/plugin/restore.sh --check       — 읽기 전용 설치 drift 경고
 #   6. scripts/setup-skills-ssot.sh           — OpenCode/Codex/agy 합성 + Hermes external_dirs (#1829)
 #   --restore 시 4a. restore.sh               — 명시적으로 누락 항목 add/install, update 전에 실행
+#   5단계 뒤: 어느 manifest 에도 없는 workspace marketplace repo 경고 + skills-register 안내 (#2443)
 #
 # 4·5단계가 필요한 이유: Claude Code 는 workspace clone 이 아니라 plugin store
 # (plugins/marketplaces, plugins/cache/<mkt>/<plugin>/<ver>) 에서 스킬을 로드한다.
@@ -404,6 +405,46 @@ if _us_want restore-check; then
     STEP_VERBOSE=$_us_check_verbose
     if [ "$final_rc" = 0 ]; then final_rc=$STEP_LAST_RC; fi
 fi
+# _us_unregistered_check — warn about each workspace marketplace repo that no
+# manifest names, so Claude Code never installs it (#2443). Printed outside the
+# step runner so summary mode shows it too; it never changes the exit code.
+_us_unregistered_check() {
+    local ws="${SKILLS_DIR:-$HOME/para/project/skills}" pdir="${DOTFILES_ROOT}/claude/plugin"
+    local ignore="claude/plugin/skills-workspace-ignore.local.json"
+    local known="" f mf name plugins url n=0
+    [ -d "$ws" ] && command -v jq >/dev/null 2>&1 || return 0
+    # shellcheck source=../shell-common/lib/gh_host.sh
+    . "${SHELL_COMMON:-$DOTFILES_ROOT/shell-common}/lib/gh_host.sh" 2>/dev/null || true
+    for f in marketplaces.json marketplaces.local.json company/marketplaces.json \
+        skills-workspace-ignore.local.json; do
+        if [ -r "$pdir/$f" ]; then known+=$(jq -r 'keys[]' "$pdir/$f" 2>/dev/null || true)$'\n'; fi
+    done
+    for mf in "$ws"/*/.claude-plugin/marketplace.json; do
+        [ -r "$mf" ] || continue
+        name=$(jq -r '.name // empty' "$mf" 2>/dev/null) || name=""
+        if [ -z "$name" ] || grep -Fxq -- "$name" <<<"$known"; then continue; fi
+        plugins=$(jq -r '[.plugins[]?.name // empty] | join(", ")' "$mf" 2>/dev/null) || plugins=""
+        url=$(git -C "${mf%/.claude-plugin/marketplace.json}" remote get-url origin 2>/dev/null) ||
+            url="<$name 의 origin URL>"
+        ux_warning "미등록 marketplace: $name (plugin: ${plugins:-?}) — Claude Code 에 설치되지 않습니다"
+        if command -v _gh_host_is_github_com >/dev/null 2>&1 && _gh_host_is_github_com "$url"; then
+            # skills-register refuses github.com: the public pair is the upstream contract (#1685).
+            ux_bullet_sub "등록: claude/plugin/{marketplaces,plugins}.json 에 upstream PR ($url)"
+        else
+            ux_bullet_sub "등록: skills-register $url"
+        fi
+        ux_bullet_sub "설치: 등록 후 skills-sync --restore"
+        n=$((n + 1))
+    done
+    if [ "$n" -gt 0 ]; then
+        ux_bullet_sub "의도적 미등록(Agent Factory 카탈로그 등)은 $ignore 에 {\"<marketplace>\": \"<사유>\"} 로 제외"
+    fi
+    return 0
+}
+if _us_want restore-check; then
+    _us_unregistered_check
+fi
+
 if _us_want ssot; then
     _us_step setup-skills-ssot critical "${DOTFILES_ROOT}/scripts/setup-skills-ssot.sh"
 elif [ "$dry_run" = 1 ] && [ -z "$only" ]; then

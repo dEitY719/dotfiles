@@ -15,12 +15,14 @@ scripts/update-skills.sh                          (skills-sync: 기본 6단계 +
  ├─ claude/setup.sh ── tools/custom/lib/claude_accounts_skills.sh (_claude_prune_workspace_skills)
  ├─ claude/plugin/update-plugins.sh ── marketplaces.json, plugins.json
  ├─ claude/plugin/restore.sh --check ── lib/claude_plugin_manifest.sh (읽기 전용 drift 점검, #2366)
+ │    + 미등록 workspace marketplace 경고 ── skills-workspace-ignore.local.json (#2443)
  └─ scripts/setup-skills-ssot.sh ── lib/skill_sources.sh ── 워크스페이스 clone
 scripts/update-skills.sh --restore -> claude/plugin/restore.sh --skip-without-claude (명시적 누락 설치, update 전)
 claude/plugin/restore.sh --sync / --all-accounts             (단독 실행: 양방향 sync, 계정별)
 claude/plugin/reconcile.sh ── lib/claude_plugin_manifest.sh, plugin_sync_title.sh   (독립: drift 점검)
 claude/hooks/plugin-sync-session.sh -> plugin-sync.sh ── claude_plugin_manifest.sh, plugin_sync_title.sh
 claude/plugin/publish-sync.sh                     (독립: 게시)
+claude/plugin/register.sh -> publish-sync.sh      (skills-register: company/ 등록·갱신·삭제 + PR, #2443)
 functions/marketplace.sh, claude_plugins_core.sh, claude_plugin_list.sh   (대화형 UI, plugin/*.sh 미참조)
 claude-accounts link/unlink ── tools/custom/lib/claude_accounts_skills.sh ── lib/skill_sources.sh
 ```

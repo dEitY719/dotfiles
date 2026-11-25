@@ -68,6 +68,8 @@ claude/settings.local.json
 /claude/plugin/skills-workspace.local.json
 # git-clone-skills.sh 의 PC별 추가 clone 대상 {"<name>": "<owner>/<repo>"} (#2244).
 /claude/plugin/skills-workspace-repos.local.json
+# skills-sync 미등록 경고 제외 목록 {"<marketplace>": "<사유>"} (#2443)
+/claude/plugin/skills-workspace-ignore.local.json
 
 # VS Code settings (bidirectional sync system, PC-specific)
 .vscode/settings.json

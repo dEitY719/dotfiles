@@ -9,3 +9,5 @@
 case $- in *i*) ;; *) [ -n "${DOTFILES_FORCE_INIT-}" ] || return 0 ;; esac
 
 alias skills-sync='${HOME}/dotfiles/scripts/update-skills.sh'
+# Register an internal marketplace repo in company/ manifest + PR (#2443)
+alias skills-register='${HOME}/dotfiles/claude/plugin/register.sh'

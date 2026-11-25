@@ -70,3 +70,12 @@ origin에 직접 push되지 않는다 — `./claude/plugin/publish-sync.sh`
 게시한다. internal PC는 github.com이 pull-only라 public 단계를 자동으로
 건너뛴다 (company/ GHES 단계만 게시, #1080). 자세한 설계: `docs/feature/superpowers-specs/2026-07-01-claude-plugin-manifest-design.md`,
 `docs/feature/superpowers-specs/2026-07-02-plugin-manifest-batch-publish-design.md`.
+
+사내(non-github.com) marketplace 등록은 `skills-register <git-url>`
+(`claude/plugin/register.sh`, #2443) 한 줄이다 — repo 의
+`.claude-plugin/marketplace.json` 에서 이름·plugin 목록을 읽어 company/ 쌍에
+추가·갱신(`--remove` 삭제, `--dry-run` diff 만)하고 sync 커밋 후
+`publish-sync.sh` 로 게시한다. 설치는 하지 않는다 — 다음 `skills-sync --restore`.
+github.com URL 은 거부한다(공용 쌍은 upstream PR). `skills-sync` 는 어느 manifest 에도
+없는 workspace marketplace 를 경고하며, 의도적 미등록은 gitignored
+`claude/plugin/skills-workspace-ignore.local.json` (`{"<marketplace>": "<사유>"}`) 로 뺀다.
