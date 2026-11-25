@@ -183,13 +183,14 @@ if _is_url "$target"; then
 	_refuse_github_com "$target"
 fi
 # _claude_plugin_git_url (URL form) and _claude_plugin_name_owner (collision
-# guard) are shared with update-skills.sh; fail closed without them (#2453).
-# shellcheck source=../../shell-common/lib/claude_plugin_manifest.sh
-if ! . "$CPM_LIB" 2>/dev/null || ! command -v _claude_plugin_name_owner >/dev/null 2>&1; then
-	ux_error "claude_plugin_manifest.sh 를 읽지 못했습니다 — URL 정규화·이름 충돌 검사 불가로 중단합니다: $CPM_LIB"
-	exit 1
-fi
+# guard) are shared with update-skills.sh; the add path fails closed without
+# them (#2453). --remove needs neither, so a broken lib never blocks cleanup.
 if [ "$remove" = 0 ]; then
+	# shellcheck source=../../shell-common/lib/claude_plugin_manifest.sh
+	if ! . "$CPM_LIB" 2>/dev/null || ! command -v _claude_plugin_name_owner >/dev/null 2>&1; then
+		ux_error "claude_plugin_manifest.sh 를 읽지 못했습니다 — URL 정규화·이름 충돌 검사 불가로 중단합니다: $CPM_LIB"
+		exit 1
+	fi
 	# http(s) without .git is fetched as a raw marketplace.json by claude (#2453).
 	_git_url=$(_claude_plugin_git_url "$target")
 	if [ "$_git_url" != "$target" ]; then
