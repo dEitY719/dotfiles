@@ -755,3 +755,26 @@ _other_publishes() {
     assert_line "skills-ssot"
     assert_equal "$(git -C "$CO" rev-parse HEAD)" "$before"
 }
+
+@test "company/ (b) autostash re-apply conflict is reported, not claimed as success (#2446 review)" {
+    _make_company
+    printf 'theirs\n' >"$OTHER/notes.local.json"
+    git -C "$OTHER" commit -qam notes && git -C "$OTHER" push -q origin main
+    printf 'mine\n' >"$CO/notes.local.json"
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure 1
+    assert_output --partial "미커밋 변경 재적용이 충돌했습니다"
+    refute_output --partial "갱신했습니다"
+    run cat "$CALL_LOG"
+    assert_line "skills-ssot"
+}
+
+@test "company/ (b) a rebase already in progress is left alone (#2446 review)" {
+    _make_company
+    _other_publishes
+    mkdir "$CO/.git/rebase-apply"
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure 1
+    assert_output --partial "진행 중인 rebase/am 이 있어"
+    [ -d "$CO/.git/rebase-apply" ]
+}

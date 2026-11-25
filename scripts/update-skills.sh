@@ -370,7 +370,19 @@ _us_company_refresh() {
             ux_info "--dry-run: $CF_MSG — 실행 시: $CF_FIX"
             return 0
         fi
+        local gd
+        gd=$(git -C "$co" rev-parse --absolute-git-dir)
+        # Never touch a rebase/am the user left running: only abort our own below.
+        if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ]; then
+            ux_warning "company/ 에 진행 중인 rebase/am 이 있어 갱신을 건너뜁니다 — 정리 후: $CF_FIX"
+            return 1
+        fi
         if out=$(git -C "$co" pull --quiet --rebase --autostash origin main 2>&1); then
+            # A conflicting autostash re-apply still exits 0; the changes stay in the stash.
+            if [ -n "$(git -C "$co" ls-files -u)" ] || grep -qi 'autostash.*conflict' <<<"$out"; then
+                ux_warning "company/ 는 갱신했지만 미커밋 변경 재적용이 충돌했습니다 — 변경은 git -C $co stash list 에 보존, 충돌 정리 후 다시 실행하세요"
+                return 1
+            fi
             ux_success "company/ main 을 origin/main 으로 갱신했습니다"
             return 0
         fi
