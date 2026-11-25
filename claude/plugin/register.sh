@@ -306,8 +306,8 @@ else
 		IFS=$'\t' read -r _n _list < <(jq -r --argjson r "$plugins" \
 			'(.plugins // []) as $h | [$r[] | select(IN($h[]) | not) | sub("@[^@]*$"; "")]
 			| "\(length)\t\(join(", "))"' <<<"$pl_old")
-		if [ "$_n" -gt 0 ]; then
-			ux_info "$mp 에 등록되지 않은 plugin ${_n}개가 있습니다 ($_list) — 추가하지 않음"
+		if [ "${_n:-0}" -gt 0 ]; then
+			ux_info "$mp 에 등록되지 않은 plugin ${_n}개가 있습니다 ($_list) — 추가하지 않음 (필요하면 company/plugins.json 에 name@${mp} 를 직접 추가)"
 		fi
 		_gone=$(jq -r --arg mp "$mp" --argjson r "$plugins" \
 			'[(.plugins // [])[] | select(endswith("@" + $mp)) | select(IN($r[]) | not)] | join(", ")' <<<"$pl_old")
