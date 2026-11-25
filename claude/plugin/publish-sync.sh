@@ -196,19 +196,77 @@ _publish_branch() {
 	printf '%s\n' "$branch"
 }
 
-# _open_and_merge_pr <repo_dir> <branch>
+# _required_checks_count <target>
 #
-# Open a PR from branch onto main, wait for status checks to report, then
-# merge with --admin. Self-authored PRs can never be approved by their
+# Print how many status checks main of <target> (host/owner/repo) requires,
+# summed over classic branch protection (readable without admin via the
+# branches endpoint) and rulesets (rules/branches). Returns 1 when either
+# lookup fails — the caller must fail closed, never read that as "none".
+_required_checks_count() {
+	local host="${1%%/*}" slug="${1#*/}" classic rules
+	classic=$(gh api --hostname "$host" "repos/$slug/branches/main" \
+		--jq '(.protection.required_status_checks // {}) | ((.contexts // []) + (.checks // []) | length)' 2>/dev/null) || return 1
+	rules=$(gh api --hostname "$host" "repos/$slug/rules/branches/main" \
+		--jq '[.[] | select(.type == "required_status_checks")] | length' 2>/dev/null) || return 1
+	case "$classic$rules" in '' | *[!0-9]*) return 1 ;; esac
+	printf '%s\n' "$((classic + rules))"
+}
+
+# _validate_manifests <repo_dir> <ref> <file...>
+#
+# Local stand-in for CI on repos that require no status check (#2448): every
+# file must parse as JSON at <ref>; marketplaces values must be strings, and
+# every .plugins[] entry must be "<plugin>@<marketplace>" with <marketplace>
+# a marketplaces key. Prints the reason and returns 1 on the first violation.
+_validate_manifests() {
+	local repo_dir="$1" ref="$2"
+	shift 2
+	local f content mp="" pl="" err
+	for f in "$@"; do
+		content=$(git -C "$repo_dir" show "$ref:$f" 2>/dev/null) || {
+			ux_error "publish-sync: manifest 검증 실패 — $f 가 게시 커밋에 없음"
+			return 1
+		}
+		printf '%s' "$content" | jq -e . >/dev/null 2>&1 || {
+			ux_error "publish-sync: manifest 검증 실패 — $f JSON 파싱 불가"
+			return 1
+		}
+		case "$f" in
+		*marketplaces.json) mp="$content" ;;
+		*plugins.json) pl="$content" ;;
+		esac
+	done
+	err=$(jq -rn --argjson mp "${mp:-null}" --argjson pl "${pl:-null}" '
+		if ($mp | type) != "object" then "marketplaces.json 이 객체가 아님"
+		elif ($mp | all(.[]; type == "string") | not) then "marketplaces.json 값이 문자열이 아님"
+		elif ($pl.plugins | type) != "array" then "plugins.json .plugins 가 배열이 아님"
+		else ([$pl.plugins[] | select((type != "string") or (test("^[^@]+@[^@]+$") | not) or ((split("@")[1]) as $m | $mp | has($m) | not))]
+			| if length > 0 then "잘못된 plugin 항목/미등록 marketplace: " + (map(tostring) | join(", ")) else "" end)
+		end' 2>&1) || err="jq 실행 실패: $err"
+	[ -z "$err" ] && return 0
+	ux_error "publish-sync: manifest 검증 실패 — $err"
+	return 1
+}
+
+# _open_and_merge_pr <repo_dir> <branch> <file...>
+#
+# Open a PR from branch onto main, then merge with --admin once the repo's
+# own policy is met (#2448): when main requires status checks (classic
+# protection or rulesets), wait for them to pass; when it provably requires
+# none, validate the published manifests locally and merge at once (a
+# checkless repo used to poll 5 min and always fail); when protection cannot
+# be read, fail closed. Polling also watches the PR itself — merged by hand
+# is success, closed is failure. Self-authored PRs can never be approved by their
 # own author (GitHub blocks self-approval server-side) — see
 # claude/skills/gh-pr-approve/references/self-pr-handling.md for the same
 # `gh pr merge --admin` pattern this reproduces in plain shell. Never
 # merges on a failing or timed-out check.
 _open_and_merge_pr() {
-	local repo_dir="$1" branch="$2" target pr_url pr_number
+	local repo_dir="$1" branch="$2" target pr_url pr_number required
+	shift 2
 	local interval="${PUBLISH_SYNC_CHECK_INTERVAL:-15}"
 	local max_tries="${PUBLISH_SYNC_CHECK_MAX_TRIES:-20}"
-	local tries=0 state="pending" saw_checks=0
+	local tries=0 state="pending" pr_state
 
 	target=$(_repo_target "$repo_dir") || {
 		ux_error "publish-sync: origin remote를 해석하지 못함 ($repo_dir)"
@@ -234,6 +292,21 @@ _open_and_merge_pr() {
 		return 1
 	fi
 	ux_success "publish-sync: PR 생성됨 — $pr_url"
+	local hint="PR 병합 후 'git -C $repo_dir pull --rebase --autostash origin main' 으로 로컬 main 을 정리하세요"
+
+	if ! required=$(_required_checks_count "$target"); then
+		ux_error "publish-sync: main 브랜치 보호 설정을 읽지 못해 자동 병합하지 않습니다 — $pr_url 를 직접 검토/병합하세요. $hint"
+		return 1
+	fi
+	if [ "$required" -eq 0 ]; then
+		_validate_manifests "$repo_dir" "refs/heads/$branch" "$@" || {
+			ux_error "publish-sync: 병합하지 않습니다 — $pr_url 를 닫고 manifest 를 고친 뒤 재실행하세요"
+			return 1
+		}
+		ux_info "publish-sync: required status check 없음 — 로컬 manifest 검증 통과, 바로 병합합니다"
+		state="success"
+		max_tries=0
+	fi
 
 	# The `--json bucket` flag on the `pr checks` subcommand does not exist
 	# on gh <2.46ish (unknown flag: --json) — verified on gh 2.45.0, which
@@ -243,27 +316,34 @@ _open_and_merge_pr() {
 	# CheckRun (`status` + `conclusion`) or a StatusContext (`state`, no
 	# `conclusion`); the jq below normalizes both shapes to one aggregate
 	# word, fail-closed on any unrecognized shape. Unlike the old `gh pr
-	# checks` subcommand, `gh pr view --json statusCheckRollup` has no "no
-	# checks reported" signal — a genuinely checkless repo just exits 0
-	# with an empty `statusCheckRollup: []`, indistinguishable from checks
-	# that simply haven't registered yet. So an empty rollup polls as
-	# "pending" for the FULL window below (never a premature give-up);
-	# "checkless" is only declared at timeout if checks were never once
-	# observed (see saw_checks below).
+	# checks` subcommand, `gh pr view --json statusCheckRollup` has no
+	# "no checks reported" signal, so an empty rollup polls as "pending" —
+	# safe now that this loop only runs when main REQUIRES checks (#2448):
+	# the required ones must eventually report, or the window times out.
+	# The same call reads the PR `state` so a PR merged or closed by hand
+	# mid-poll ends the wait at once instead of running out the window.
 	while [ "$tries" -lt "$max_tries" ]; do
 		# shellcheck disable=SC2016 # `$v` below is jq's `as $v` binding, not a shell variable — single-quoted on purpose.
 		state=$(gh pr view "$pr_number" --repo "$target" \
-			--json statusCheckRollup \
-			--jq '[ .statusCheckRollup[]? | if (.conclusion != null) then (if (.conclusion == "FAILURE" or .conclusion == "CANCELLED" or .conclusion == "TIMED_OUT" or .conclusion == "ACTION_REQUIRED" or .conclusion == "STARTUP_FAILURE") then "fail" elif (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") then "pass" else "pending" end) elif (.status != null and .status != "COMPLETED") then "pending" elif (.state != null) then (if (.state == "FAILURE" or .state == "ERROR") then "fail" elif (.state == "SUCCESS") then "pass" else "pending" end) else "pending" end ] as $v | if ($v|length)==0 then "empty" elif ($v|any(.=="fail")) then "failed" elif ($v|any(.=="pending")) then "pending" else "success" end' \
+			--json state,statusCheckRollup \
+			--jq '.state as $s | [ .statusCheckRollup[]? | if (.conclusion != null) then (if (.conclusion == "FAILURE" or .conclusion == "CANCELLED" or .conclusion == "TIMED_OUT" or .conclusion == "ACTION_REQUIRED" or .conclusion == "STARTUP_FAILURE") then "fail" elif (.conclusion == "SUCCESS" or .conclusion == "NEUTRAL" or .conclusion == "SKIPPED") then "pass" else "pending" end) elif (.status != null and .status != "COMPLETED") then "pending" elif (.state != null) then (if (.state == "FAILURE" or .state == "ERROR") then "fail" elif (.state == "SUCCESS") then "pass" else "pending" end) else "pending" end ] as $v | $s + " " + (if ($v|length)==0 then "pending" elif ($v|any(.=="fail")) then "failed" elif ($v|any(.=="pending")) then "pending" else "success" end)' \
 			2>/dev/null) || {
 			# gh exits non-zero on auth/network errors — stay "pending" and
 			# retry; a transient error message must not abort the poll loop.
-			state="pending"
+			state="OPEN pending"
 		}
-		# Record whether we've ever seen a non-empty rollup BEFORE folding
-		# "empty" into "pending" for the loop's own break/continue logic.
-		[ "$state" != "empty" ] && saw_checks=1
-		[ "$state" = "empty" ] && state="pending"
+		pr_state="${state%% *}"
+		state="${state#* }"
+		case "$pr_state" in
+		MERGED)
+			ux_success "publish-sync: PR 이 이미 병합됨 — $pr_url"
+			return 0
+			;;
+		CLOSED)
+			ux_error "publish-sync: PR 이 병합 없이 닫힘 — $pr_url (로컬 커밋은 남아 있으니 재실행하면 새 PR 로 다시 게시)"
+			return 1
+			;;
+		esac
 		[ "$state" = "success" ] && break
 		[ "$state" = "failed" ] && break
 		tries=$((tries + 1))
@@ -273,25 +353,17 @@ _open_and_merge_pr() {
 	case "$state" in
 	success) ;;
 	failed)
-		ux_error "publish-sync: status check 실패 — $pr_url 를 직접 확인하세요"
+		ux_error "publish-sync: status check 실패 — $pr_url 를 직접 확인하세요. $hint"
 		return 1
 		;;
 	*)
-		# Loop exhausted without success/failed. If checks were NEVER
-		# observed (rollup was empty on every single poll), treat this as a
-		# genuinely checkless repo; otherwise checks appeared but stayed
-		# pending the whole window.
-		if [ "$saw_checks" -eq 0 ]; then
-			ux_warning "publish-sync: status check가 구성되지 않은 리포 — 자동 병합하지 않습니다. $pr_url 를 직접 검토/병합하세요" >&2
-		else
-			ux_error "publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요"
-		fi
+		ux_error "publish-sync: status check 대기 타임아웃 — $pr_url 를 직접 확인하세요. $hint"
 		return 1
 		;;
 	esac
 
 	gh pr merge "$pr_number" --repo "$target" --admin --rebase --delete-branch 2>&1 || {
-		ux_error "publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요"
+		ux_error "publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요. $hint"
 		return 1
 	}
 	ux_success "publish-sync: 병합 완료 — $pr_url"
@@ -342,7 +414,7 @@ _publish_manifest_diff() {
 		ux_error "[$label] 브랜치 push 실패"
 		return 1
 	}
-	_open_and_merge_pr "$repo_dir" "$branch" || return 1
+	_open_and_merge_pr "$repo_dir" "$branch" "$@" || return 1
 
 	# Publish landed. `gh pr merge --delete-branch` removed the REMOTE branch,
 	# but the local ref we created in $repo_dir via update-ref survives — drop
