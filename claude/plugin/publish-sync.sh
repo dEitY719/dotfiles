@@ -201,15 +201,27 @@ _publish_branch() {
 # Print the status check names main of <target> (host/owner/repo) requires,
 # one per line (none: empty output), from classic branch protection
 # (readable without admin via the branches endpoint) and rulesets
-# (rules/branches). Returns 1 when either lookup fails — the caller must
-# fail closed, never read that as "none".
+# (rules/branches). Returns 1 when the policy cannot be read or cannot be
+# expressed as check names — a `workflows` (required workflows) or
+# `merge_queue` rule — so the caller fails closed, never reads it as "none".
+# A 404 from the rules endpoint alone means a GHES without rulesets (the
+# classic call already proved repo access), so it counts as no rules.
 _required_checks() {
-	local host="${1%%/*}" slug="${1#*/}" classic rules
+	local host="${1%%/*}" slug="${1#*/}" classic rules_json
 	classic=$(gh api --hostname "$host" "repos/$slug/branches/main" \
 		--jq '(.protection.required_status_checks.contexts // [])[]' 2>/dev/null) || return 1
-	rules=$(gh api --hostname "$host" "repos/$slug/rules/branches/main" \
-		--jq '.[] | select(.type == "required_status_checks") | (.parameters.required_status_checks // [])[] | .context' 2>/dev/null) || return 1
-	printf '%s\n%s\n' "$classic" "$rules" | sed '/^$/d' | sort -u
+	rules_json=$(gh api --hostname "$host" "repos/$slug/rules/branches/main" 2>&1) || {
+		case "$rules_json" in
+		*"HTTP 404"*) rules_json='[]' ;;
+		*) return 1 ;;
+		esac
+	}
+	jq -e 'type == "array" and (any(.[]; .type == "workflows" or .type == "merge_queue") | not)' \
+		>/dev/null 2>&1 <<<"$rules_json" || return 1
+	{
+		printf '%s\n' "$classic"
+		jq -r '.[] | select(.type == "required_status_checks") | (.parameters.required_status_checks // [])[] | .context' <<<"$rules_json"
+	} | sed '/^$/d' | sort -u
 }
 
 # _validate_manifests <repo_dir> <ref> <file...>
@@ -307,7 +319,7 @@ _open_and_merge_pr() {
 		}
 		ux_info "publish-sync: required status check 없음 — 로컬 manifest 검증 통과, 바로 병합합니다"
 		state="success"
-		max_tries=0
+		max_tries=0 # nothing to wait for: skip the poll loop straight to the merge
 	fi
 
 	# The `--json bucket` flag on the `pr checks` subcommand does not exist
@@ -371,8 +383,12 @@ _open_and_merge_pr() {
 
 	# A brand-new PR can briefly report "not mergeable" while GitHub computes
 	# mergeability, so retry a couple of times before giving up.
-	local merge_try=1
-	until gh pr merge "$pr_number" --repo "$target" --admin --rebase --delete-branch 2>&1; do
+	# --match-head-commit: merge only the commit this run built and validated,
+	# never a head someone pushed to the PR branch in the meantime.
+	local merge_try=1 head_sha
+	head_sha=$(git -C "$repo_dir" rev-parse "refs/heads/$branch") || return 1
+	until gh pr merge "$pr_number" --repo "$target" --admin --rebase --delete-branch \
+		--match-head-commit "$head_sha" 2>&1; do
 		[ "$merge_try" -ge 3 ] && {
 			ux_error "publish-sync: admin merge 실패 — $pr_url 를 직접 확인하세요. $hint"
 			return 1
