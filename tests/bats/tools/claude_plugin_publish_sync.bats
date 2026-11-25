@@ -310,16 +310,17 @@ STUB
 #                     (a required_status_checks ruleset rule) | "none" |
 #                     "unreadable" (the api call fails) (default: required)
 #
-# The script polls via `gh pr view --json statusCheckRollup --jq ...`
-# (real gh 2.45.0 has no `--json` on `gh pr checks` at all — verified
+# The script polls via `gh pr view --json state,statusCheckRollup` piped
+# to jq (real gh 2.45.0 has no `--json` on `gh pr checks` at all — verified
 # live, see publish-sync.sh comment). The stub's `pr view` branch emits
-# REAL `statusCheckRollup`-shaped JSON so the script's actual `--jq`
-# aggregation expression runs and is exercised end-to-end (rather than a
-# pre-aggregated string):
+# REAL `statusCheckRollup`-shaped JSON so the script's actual jq
+# aggregation expression is exercised end-to-end (rather than a
+# pre-aggregated string). The required check is named "CI":
 #   success -> CheckRun conclusion=SUCCESS   failed -> conclusion=FAILURE
 #   pending -> CheckRun status=IN_PROGRESS, conclusion=null
-#   state-success / state-failed -> StatusContext shape (state=SUCCESS /
-#               state=FAILURE, no conclusion) to exercise that jq branch
+#   state-success / state-failed -> StatusContext shape (context=CI,
+#               state=SUCCESS / state=FAILURE, no conclusion)
+#   optional-only -> only a non-required "lint" CheckRun, passing
 # Two more sentinels exercise the fail-closed edges FIX 1/2 address:
 #   empty              -> {"statusCheckRollup":[]} on every poll (required
 #                          checks that never report — the script has no "no
@@ -379,7 +380,7 @@ if [ "\$1" = "api" ]; then
     case "\$*" in
     *rules/branches/main*)
         if [ "\$REQ" = "ruleset" ]; then
-            JSON='[{"type":"pull_request"},{"type":"required_status_checks"}]'
+            JSON='[{"type":"pull_request"},{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"CI"}]}}]'
         else
             JSON='[{"type":"pull_request"}]'
         fi
@@ -418,8 +419,9 @@ case "\$1 \$2" in
     success) ROLLUP='[{"name":"CI","status":"COMPLETED","conclusion":"SUCCESS","state":null}]' ;;
     failed) ROLLUP='[{"name":"CI","status":"COMPLETED","conclusion":"FAILURE","state":null}]' ;;
     pending) ROLLUP='[{"name":"CI","status":"IN_PROGRESS","conclusion":null,"state":null}]' ;;
-    state-success) ROLLUP='[{"name":"ci/legacy","conclusion":null,"state":"SUCCESS"}]' ;;
-    state-failed) ROLLUP='[{"name":"ci/legacy","conclusion":null,"state":"FAILURE"}]' ;;
+    state-success) ROLLUP='[{"context":"CI","conclusion":null,"state":"SUCCESS"}]' ;;
+    state-failed) ROLLUP='[{"context":"CI","conclusion":null,"state":"FAILURE"}]' ;;
+    optional-only) ROLLUP='[{"name":"lint","status":"COMPLETED","conclusion":"SUCCESS","state":null}]' ;;
     empty) ROLLUP='[]' ;;
     empty-then-success)
         if [ "\$COUNT" -le 2 ]; then
@@ -645,6 +647,11 @@ _seed_publish_repo() {
     assert_output --partial "JSON 파싱 불가"
     run grep -c "^pr merge" "$GH_STUB_LOG"
     assert_output "0"
+    # the invalid PR is closed and no local publish ref is left behind
+    run grep -c "^pr close 42 .*--delete-branch" "$GH_STUB_LOG"
+    assert_output "1"
+    run git -C "$REPO" for-each-ref 'refs/heads/chore/plugin-sync-publish-*'
+    assert_output ""
 }
 
 @test "(c) no required check + plugin referencing an unknown marketplace: does not merge" {
@@ -686,6 +693,22 @@ _seed_publish_repo() {
     run grep -c "^pr merge" "$GH_STUB_LOG"
     assert_output "0"
     [ "$(git -C "$REPO" rev-parse main)" = "$(git -C "$REPO" rev-parse origin/main)" ]
+}
+
+@test "_open_and_merge_pr does not merge when only a non-required check has passed" {
+    # A fast optional check passing must not let --admin skip the required
+    # "CI" that has not registered yet: the window times out instead.
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "optional-only" >"$GH_STUB_DIR/checks_result"
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_failure
+    assert_output --partial "status check 대기 타임아웃"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
 }
 
 @test "(f) PR closed mid-poll: fails at once without merging" {
