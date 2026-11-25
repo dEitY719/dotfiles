@@ -409,7 +409,7 @@ fi
 # manifest names, so Claude Code never installs it (#2443). Printed outside the
 # step runner so summary mode shows it too; it never changes the exit code.
 _us_unregistered_check() {
-    local ws="${SKILLS_DIR:-$HOME/para/project/skills}" pdir="${DOTFILES_ROOT}/claude/plugin"
+    local ws="${SKILLS_DIR:-${WORKSPACE_ROOT:-$HOME/para/project/skills}}" pdir="${DOTFILES_ROOT}/claude/plugin"
     local ignore="claude/plugin/skills-workspace-ignore.local.json"
     local known="" f mf name plugins url n=0
     [ -d "$ws" ] && command -v jq >/dev/null 2>&1 || return 0

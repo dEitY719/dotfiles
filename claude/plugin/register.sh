@@ -42,8 +42,9 @@ GH_HOST_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/gh_host.sh"
 [ -r "$GH_HOST_LIB" ] && . "$GH_HOST_LIB"
 
 SYNC_MSG="chore(claude-plugin): sync manifest" # publish-sync.sh purity rule
-COMPANY_DIR="$SCRIPT_DIR/company"
-WORKSPACE="${SKILLS_DIR:-$HOME/para/project/skills}"
+# Same company/ publish-sync.sh publishes (its MAIN_ROOT), never a worktree copy.
+COMPANY_DIR="$HOME/dotfiles/claude/plugin/company"
+WORKSPACE="${SKILLS_DIR:-${WORKSPACE_ROOT:-$HOME/para/project/skills}}"
 
 _usage() {
 	cat <<USAGE
@@ -165,10 +166,12 @@ if [ "$remove" = 1 ]; then
 	mp="$target"
 	if _is_url "$target"; then
 		mp=$(jq -r --arg u "$(_norm_url "$target")" \
-			'to_entries[] | select((.value | sub("/$"; "") | sub("\\.git$"; "")) == $u) | .key' \
+			'to_entries[] | select((.value | tostring | sub("/$"; "") | sub("\\.git$"; "")) == $u) | .key' \
 			<<<"$mp_old" | head -n 1)
 	fi
-	if [ -z "$mp" ] || [ "$(jq -r --arg k "$mp" 'has($k)' <<<"$mp_old")" != true ]; then
+	# A plugin entry left without its key still counts, so --remove can clean it up.
+	if [ -z "$mp" ] || [ "$(jq -r --arg k "$mp" 'has($k)' <<<"$mp_old")$(jq -r --arg mp "$mp" \
+		'any((.plugins // [])[]; endswith("@" + $mp))' <<<"$pl_old")" = falsefalse ]; then
 		ux_info "등록돼 있지 않음 — 할 일 없음: $target"
 		exit 0
 	fi
@@ -188,7 +191,9 @@ else
 		'.plugins = ((.plugins // []) | map(select(endswith("@" + $mp) | not)) + $p | unique)' <<<"$pl_old") || exit 1
 fi
 
-if [ "$(jq -cS . <<<"$mp_old")$(jq -cS . <<<"$pl_old")" = "$(jq -cS . <<<"$mp_new")$(jq -cS . <<<"$pl_new")" ]; then
+# Sorted compare: the add path's `unique` re-sorts plugins, which alone is no change.
+_canon() { jq -cS '.plugins |= ((. // []) | sort)' <<<"$1"; }
+if [ "$(jq -cS . <<<"$mp_old")$(_canon "$pl_old")" = "$(jq -cS . <<<"$mp_new")$(_canon "$pl_new")" ]; then
 	ux_info "이미 등록됨 — 변경 없음: $mp"
 	exit 0
 fi
