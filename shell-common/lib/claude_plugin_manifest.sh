@@ -137,3 +137,46 @@ _claude_plugin_tombstone_prune() {
         '{marketplaces: (($old.marketplaces // []) - $mp),
           plugins:      (($old.plugins // []) - $pl)}' 2>/dev/null
 }
+
+# _claude_plugin_git_url <url>
+#
+# The URL form a manifest stores (#2453). `claude plugin marketplace add` reads
+# an http(s) URL as a git repo only when it ends in .git; anything else is
+# fetched as a raw marketplace.json, so a bare clone URL fails with "Invalid
+# marketplace schema". http(s) gets the .git appended (a trailing slash is
+# dropped first); ssh/scp-like/other forms pass through untouched.
+_claude_plugin_git_url() {
+    case "$1" in
+    https://* | http://*)
+        _cpgu_u="${1%/}"
+        case "$_cpgu_u" in *.git) ;; *) _cpgu_u="$_cpgu_u.git" ;; esac
+        printf '%s\n' "$_cpgu_u"
+        ;;
+    *) printf '%s\n' "$1" ;;
+    esac
+}
+
+# _claude_plugin_name_owner <plugin-name> <marketplace> <plugins-file>...
+#
+# Print the first "<plugin-name>@<other>" entry (other != <marketplace>) found
+# in the given plugins manifests and return 0; return 1 when none has it. Two
+# marketplaces shipping the same plugin name install the same "<name>:*"
+# skills twice, so skills-register refuses such an entry and skills-sync points
+# a dev fork at the ignore overlay instead (#2453). Unreadable files are skipped.
+_claude_plugin_name_owner() {
+    _cpno_p="$1"
+    _cpno_mp="$2"
+    shift 2
+    for _cpno_f in "$@"; do
+        [ -r "$_cpno_f" ] || continue
+        _cpno_hit=$(jq -r --arg p "$_cpno_p" --arg mp "$_cpno_mp" \
+            'first((.plugins // [])[] | strings
+                | select((split("@") | .[0:-1] | join("@")) == $p and (split("@") | last) != $mp)) // empty' \
+            "$_cpno_f" 2>/dev/null)
+        if [ -n "$_cpno_hit" ]; then
+            printf '%s\n' "$_cpno_hit"
+            return 0
+        fi
+    done
+    return 1
+}

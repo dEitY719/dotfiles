@@ -329,6 +329,66 @@ MP_ADDED=0
 PL_INSTALLED=0
 PRESENT=0
 FAILED=0
+PERM_FAILED=0
+PERM_FIXES=""
+
+# _failure_kind <claude-output> — "permanent" when a re-run cannot fix it (bad
+# schema, missing repo/plugin, name collision), else "transient" (#2453).
+# Transient patterns win, so "auth failed ... not found" stays retryable; an
+# unrecognized message is transient too, keeping the old re-run advice.
+_failure_kind() {
+	local o
+	o=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+	case "$o" in
+	*timeout* | *"timed out"* | *auth* | *"permission denied"* | *"connection refused"* | \
+		*"could not resolve"* | *network* | *econn* | *enotfound* | *"rate limit"* | *temporar*)
+		echo transient
+		;;
+	*"invalid marketplace schema"* | *"not found"* | *"already exists"* | *conflict* | *collision*)
+		echo permanent
+		;;
+	*) echo transient ;;
+	esac
+}
+
+# _fail_permanent <msg> <item> <fix> — print the item and its exact fix command, no
+# re-run advice; RESTORE_FAILURE_REPORT (set by skills-sync) gets a
+# "permanent<TAB>item<TAB>fix" line so the caller can drop its own re-run hint.
+_fail_permanent() {
+	ux_error "  영구 실패: $1 — 재실행으로 해결되지 않음"
+	ux_error "    조치: $3"
+	FAILED=$((FAILED + 1))
+	PERM_FAILED=$((PERM_FAILED + 1))
+	_in_list "$3" "$PERM_FIXES" || PERM_FIXES="${PERM_FIXES}$3"$'\n'
+	if [ -n "${RESTORE_FAILURE_REPORT:-}" ]; then
+		printf 'permanent\t%s\t%s\n' "$2" "$3" >>"$RESTORE_FAILURE_REPORT"
+	fi
+}
+# _fail_transient <msg> <item> — the retryable kind; keeps the re-run advice.
+_fail_transient() {
+	ux_error "  실패: $1"
+	FAILED=$((FAILED + 1))
+	if [ -n "${RESTORE_FAILURE_REPORT:-}" ]; then
+		printf 'transient\t%s\n' "$2" >>"$RESTORE_FAILURE_REPORT"
+	fi
+}
+
+# _mp_fix <scope-label> <name> <repo> — the fix command for a marketplace that
+# can never be added: company/ entries are fixed through skills-register (a
+# .git-less https URL is re-registered with .git), public ones by manifest PR.
+_mp_fix() {
+	local u="$3"
+	if [ "$1" != "사내 전용" ]; then
+		printf 'claude/plugin/marketplaces.json(.local.json) 의 %s (%s) 수정 — upstream PR\n' "$2" "$3"
+		return 0
+	fi
+	if command -v _claude_plugin_git_url >/dev/null 2>&1; then u=$(_claude_plugin_git_url "$3"); fi
+	if [ "$u" != "$3" ]; then
+		printf 'skills-register %s\n' "$u"
+	else
+		printf 'skills-register --remove %s\n' "$2"
+	fi
+}
 
 _in_list() { printf '%s\n' "$2" | grep -Fxq -- "$1"; }
 
@@ -405,10 +465,22 @@ _check_pass() {
 _install_plugin() {
 	if command -v flock >/dev/null 2>&1; then
 		flock "${TMPDIR:-/tmp}/dotfiles-update-plugins.$(id -u).lock" \
-			claude plugin install "$1" </dev/null
+			claude plugin install "$1" </dev/null 2>&1
 	else
-		claude plugin install "$1" </dev/null
+		claude plugin install "$1" </dev/null 2>&1
 	fi
+}
+
+# _claude_run <out-var> <cmd...> — run a claude call, echo its output as
+# before, and keep it in <out-var> for _failure_kind (#2453).
+_claude_run() {
+	local _cr_var="$1" _cr_out _cr_rc
+	shift
+	_cr_out=$("$@" </dev/null 2>&1)
+	_cr_rc=$?
+	if [ -n "$_cr_out" ]; then printf '%s\n' "$_cr_out"; fi
+	printf -v "$_cr_var" '%s' "$_cr_out"
+	return "$_cr_rc"
 }
 
 # $1/$2 are merged manifest CONTENT (from _merged_*), not file paths — an
@@ -416,7 +488,7 @@ _install_plugin() {
 # from the store (_load_store) reach the CLI. Here-docs, not `jq | while`, so
 # the counters survive the loops (a pipe runs them in a subshell).
 _restore_from() {
-	local mp_json="$1" pl_json="$2" label="$3" name repo plugin failed_mps=""
+	local mp_json="$1" pl_json="$2" label="$3" name repo plugin out fix failed_mps="" perm_mps=""
 	if [ -z "$mp_json" ] || [ -z "$pl_json" ]; then
 		ux_info "  (${label} manifest 없음 — 건너뜀)"
 		return 0
@@ -427,12 +499,16 @@ _restore_from() {
 		[ -n "$name" ] || continue
 		if _in_list "$name" "$STORE_MPS"; then
 			PRESENT=$((PRESENT + 1))
-		elif [ "$DRY_RUN" -eq 1 ] || claude plugin marketplace add "$repo" </dev/null; then
+		elif [ "$DRY_RUN" -eq 1 ] || _claude_run out claude plugin marketplace add "$repo"; then
 			ux_success "  add: ${name} (${repo})"
 			MP_ADDED=$((MP_ADDED + 1))
+		elif [ "$(_failure_kind "$out")" = permanent ]; then
+			fix=$(_mp_fix "$label" "$name" "$repo")
+			_fail_permanent "marketplace add ${name} (${repo})" "$name" "$fix"
+			perm_mps="${perm_mps}${name}"$'\t'"${fix}"$'\n'
+			failed_mps="${failed_mps}${name}"$'\n'
 		else
-			ux_error "  실패: marketplace add ${name} (${repo}) — 계속 진행"
-			FAILED=$((FAILED + 1))
+			_fail_transient "marketplace add ${name} (${repo}) — 계속 진행" "$name"
 			failed_mps="${failed_mps}${name}"$'\n'
 		fi
 	done <<EOF
@@ -445,14 +521,27 @@ EOF
 			PRESENT=$((PRESENT + 1))
 		elif _in_list "${plugin##*@}" "$failed_mps"; then
 			# Its marketplace was not added, so the install could only fail too.
-			ux_error "  실패: install ${plugin} (마켓플레이스 추가 실패)"
-			FAILED=$((FAILED + 1))
-		elif [ "$DRY_RUN" -eq 1 ] || _install_plugin "$plugin"; then
+			fix=$(awk -F'\t' -v n="${plugin##*@}" '$1 == n { print $2; exit }' <<<"$perm_mps")
+			if [ -n "$fix" ]; then
+				_fail_permanent "install ${plugin} (마켓플레이스 추가 실패)" "$plugin" "$fix"
+			else
+				_fail_transient "install ${plugin} (마켓플레이스 추가 실패)" "$plugin"
+			fi
+		elif [ "$DRY_RUN" -eq 1 ] || _claude_run out _install_plugin "$plugin"; then
 			ux_success "  install: ${plugin}"
 			PL_INSTALLED=$((PL_INSTALLED + 1))
+		elif [ "$(_failure_kind "$out")" = permanent ]; then
+			repo=$(printf '%s' "$mp_json" | jq -r --arg k "${plugin##*@}" '.[$k] // empty')
+			if [ "$label" != "사내 전용" ]; then
+				fix="claude/plugin/plugins.json(.local.json) 의 ${plugin} 수정 — upstream PR"
+			elif [ -n "$repo" ]; then
+				fix="skills-register $repo"
+			else
+				fix="skills-register --remove ${plugin##*@}"
+			fi
+			_fail_permanent "install ${plugin}" "$plugin" "$fix"
 		else
-			ux_error "  실패: install ${plugin} — 계속 진행"
-			FAILED=$((FAILED + 1))
+			_fail_transient "install ${plugin} — 계속 진행" "$plugin"
 		fi
 	done <<EOF
 $(printf '%s' "$pl_json" | jq -r '(.plugins // [])[]')
@@ -609,8 +698,16 @@ else
 fi
 ux_bullet "Already present: $PRESENT"
 ux_bullet "Failed: $FAILED"
+if [ "$PERM_FAILED" -gt 0 ]; then
+	ux_error "재실행으로 해결되지 않는 영구 실패 ${PERM_FAILED}건 — 아래 조치 후 다시 실행하세요:"
+	while IFS= read -r fix; do
+		[ -n "$fix" ] && ux_error "  조치: $fix"
+	done <<<"$PERM_FIXES"
+fi
+if [ "$FAILED" -gt "$PERM_FAILED" ]; then
+	ux_error "복원 실패 $((FAILED - PERM_FAILED))건 — 네트워크/인증 확인 후 다시 실행하면 남은 항목만 재시도합니다."
+fi
 if [ "$FAILED" -gt 0 ]; then
-	ux_error "복원 실패 ${FAILED}건 — 네트워크/인증 확인 후 다시 실행하면 남은 항목만 재시도합니다."
 	[ "$CHECK" -eq 1 ] && exit 3
 	exit 1
 fi

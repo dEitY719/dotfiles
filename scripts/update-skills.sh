@@ -12,6 +12,7 @@
 #   6. scripts/setup-skills-ssot.sh           — OpenCode/Codex/agy 합성 + Hermes external_dirs (#1829)
 #   --restore 시 4a. restore.sh               — 명시적으로 누락 항목 add/install, update 전에 실행
 #   5단계 뒤: 어느 manifest 에도 없는 workspace marketplace repo 경고 + skills-register 안내 (#2443)
+#            (plugin 이름 충돌이면 ignore overlay 안내만; restore 영구 실패는 재실행 대신 조치 명령, #2453)
 #   1단계 전: internal PC 의 claude/plugin/company/ 를 origin/main 으로 갱신 (#2446)
 #
 # 4·5단계가 필요한 이유: Claude Code 는 workspace clone 이 아니라 plugin store
@@ -284,6 +285,27 @@ _us_mismatch_note() {
     ux_info "$note"
 }
 
+# restore.sh's per-item failure report (#2453): "permanent<TAB>item<TAB>fix" /
+# "transient<TAB>item" lines, written only while the restore-plugins step runs.
+US_RESTORE_REPORT=""
+
+# _us_perm_fixes — unique fix commands of this run's permanent restore failures.
+_us_perm_fixes() {
+    [ -n "$US_RESTORE_REPORT" ] || return 0
+    awk -F'\t' '$1 == "permanent" && !seen[$3]++ { print $3 }' "$US_RESTORE_REPORT" 2>/dev/null || true
+}
+
+# _us_retryable_missing <check-output-file> — the "not installed" items of a
+# restore --check run that are not permanent restore failures; skills-sync
+# --restore is advised only for these (#2453).
+_us_retryable_missing() {
+    local perm=""
+    if [ -n "$US_RESTORE_REPORT" ]; then
+        perm=$(awk -F'\t' '$1 == "permanent" { print $2 }' "$US_RESTORE_REPORT" 2>/dev/null || true)
+    fi
+    sed -En 's/^WARN: .* not installed: (.+)$/\1/p' "$1" | grep -Fxv -- "${perm:-@none@}" || true
+}
+
 # STEP_HINT_FN: per-step fix hint on failure.
 # shellcheck disable=SC2317  # reached only via the STEP_*_FN callbacks
 _us_hint() {
@@ -301,7 +323,13 @@ _us_hint() {
     case "$1" in
     git-clone-skills*) ux_bullet_sub "manifest(claude/plugin/marketplaces.json) 와 네트워크/인증 확인" ;;
     git-pull-skills*) ux_bullet_sub "충돌/분기된 repo 확인 — skills-sync --dry-run 으로 대상 미리보기" ;;
-    restore-plugins*) ux_bullet_sub "네트워크/인증 확인 후 skills-sync 재실행 — 남은 항목만 다시 설치 (이후 단계는 이미 진행됨)" ;;
+    restore-plugins*)
+        # A permanent failure never heals on a re-run: show its fix instead (#2453).
+        _us_perm_fixes | while IFS= read -r fix; do ux_bullet_sub "영구 실패 조치: $fix"; done
+        if [ -z "$(_us_perm_fixes)" ] || grep -q '^transient' "$US_RESTORE_REPORT" 2>/dev/null; then
+            ux_bullet_sub "네트워크/인증 확인 후 skills-sync 재실행 — 남은 항목만 다시 설치 (이후 단계는 이미 진행됨)"
+        fi
+        ;;
     update-plugins*) ux_bullet_sub "네트워크/claude CLI 확인 후 skills-sync 재실행 (6단계는 이미 진행됨)" ;;
     esac
     return 0
@@ -432,9 +460,14 @@ final_rc=0
 if _us_want restore-plugins; then
     restore_args=(--skip-without-claude)
     [ "$dry_run" = 1 ] && restore_args=(--dry-run)
+    US_RESTORE_REPORT=$(mktemp "${TMPDIR:-/tmp}/skills-sync-restore.XXXXXX") || US_RESTORE_REPORT=""
+    # shellcheck disable=SC2064  # expand the path now: the trap must remove this file
+    if [ -n "$US_RESTORE_REPORT" ]; then trap "rm -f '$US_RESTORE_REPORT'" EXIT; fi
+    export RESTORE_FAILURE_REPORT="$US_RESTORE_REPORT"
     _us_step "restore-plugins$sfx" optional \
         "${DOTFILES_ROOT}/claude/plugin/restore.sh" "${restore_args[@]}"
     final_rc=$STEP_LAST_RC
+    unset RESTORE_FAILURE_REPORT
 fi
 if _us_want update-plugins; then
     _us_step "update-plugins$sfx" optional \
@@ -443,12 +476,19 @@ if _us_want update-plugins; then
 fi
 # shellcheck disable=SC2317  # reached only via step_run
 _us_restore_check() {
-    "${DOTFILES_ROOT}/claude/plugin/restore.sh" --check
-    local rc=$?
+    local out rc
+    out=$(mktemp "${TMPDIR:-/tmp}/skills-sync-check.XXXXXX") || out=/dev/null
+    "${DOTFILES_ROOT}/claude/plugin/restore.sh" --check >"$out" 2>&1
+    rc=$?
+    cat "$out"
     if [ "$rc" -eq 1 ]; then
-        ux_warning "누락 항목을 설치하려면 skills-sync --restore 를 실행하세요"
-        return 0
+        # Items that failed permanently this run already got their fix (#2453).
+        if [ -n "$(_us_retryable_missing "$out")" ]; then
+            ux_warning "누락 항목을 설치하려면 skills-sync --restore 를 실행하세요"
+        fi
+        rc=0
     fi
+    if [ "$out" != /dev/null ]; then rm -f "$out"; fi
     return "$rc"
 }
 if _us_want restore-check; then
@@ -458,7 +498,7 @@ if _us_want restore-check; then
     if [ "$STEP_VERBOSE" = 1 ]; then STEP_OUT=$(mktemp); fi
     STEP_VERBOSE=0
     _us_step "restore --check" optional _us_restore_check
-    if grep -q "WARN: .* not installed:" "$STEP_OUT"; then
+    if [ -n "$(_us_retryable_missing "$STEP_OUT")" ]; then
         ux_warning "누락 항목 설치: skills-sync --restore"
     fi
     if [ "$_us_check_verbose" = 1 ]; then
@@ -475,10 +515,12 @@ fi
 _us_unregistered_check() {
     local ws="${SKILLS_DIR:-${WORKSPACE_ROOT:-$HOME/para/project/skills}}" pdir="${DOTFILES_ROOT}/claude/plugin"
     local ignore="claude/plugin/skills-workspace-ignore.local.json"
-    local known="" f mf name plugins url n=0
+    local known="" f mf name plugins url owner p n=0
     [ -d "$ws" ] && command -v jq >/dev/null 2>&1 || return 0
     # shellcheck source=../shell-common/lib/gh_host.sh
     . "${SHELL_COMMON:-$DOTFILES_ROOT/shell-common}/lib/gh_host.sh" 2>/dev/null || true
+    # shellcheck source=../shell-common/lib/claude_plugin_manifest.sh
+    . "${SHELL_COMMON:-$DOTFILES_ROOT/shell-common}/lib/claude_plugin_manifest.sh" 2>/dev/null || true
     for f in marketplaces.json marketplaces.local.json company/marketplaces.json \
         company/marketplaces.local.json skills-workspace-ignore.local.json; do
         if [ -r "$pdir/$f" ]; then known+=$(jq -r 'keys[]' "$pdir/$f" 2>/dev/null || true)$'\n'; fi
@@ -490,6 +532,25 @@ _us_unregistered_check() {
         plugins=$(jq -r '[.plugins[]?.name // empty] | join(", ")' "$mf" 2>/dev/null) || plugins=""
         url=$(git -C "${mf%/.claude-plugin/marketplace.json}" remote get-url origin 2>/dev/null) ||
             url="<$name 의 origin URL>"
+        # Same .git form skills-register stores, so the printed command is final (#2453).
+        if command -v _claude_plugin_git_url >/dev/null 2>&1; then url=$(_claude_plugin_git_url "$url"); fi
+        n=$((n + 1))
+        # A plugin name another marketplace already ships is a dev fork, not a
+        # registration candidate: skills-register would refuse it (#2453).
+        owner=""
+        if command -v _claude_plugin_name_owner >/dev/null 2>&1; then
+            while IFS= read -r p; do
+                [ -n "$p" ] || continue
+                if owner=$(_claude_plugin_name_owner "$p" "$name" "$pdir/plugins.json" "$pdir/plugins.local.json" \
+                    "$pdir/company/plugins.json" "$pdir/company/plugins.local.json"); then break; fi
+                owner=""
+            done < <(jq -r '.plugins[]?.name // empty' "$mf" 2>/dev/null || true)
+        fi
+        if [ -n "$owner" ]; then
+            ux_warning "미등록 marketplace: $name (plugin: ${plugins:-?}) — $owner 과 이름이 겹칩니다"
+            ux_bullet_sub "개발용 fork 라면 제외: $ignore 에 \"$name\" 추가"
+            continue
+        fi
         ux_warning "미등록 marketplace: $name (plugin: ${plugins:-?}) — Claude Code 에 설치되지 않습니다"
         if command -v _gh_host_is_github_com >/dev/null 2>&1 && _gh_host_is_github_com "$url"; then
             # skills-register refuses github.com: the public pair is the upstream contract (#1685).
@@ -500,7 +561,6 @@ _us_unregistered_check() {
             ux_bullet_sub "등록: 사내(company/ 가 있는) PC 에서 skills-register $url"
         fi
         ux_bullet_sub "설치: 등록 후 skills-sync --restore"
-        n=$((n + 1))
     done
     if [ "$n" -gt 0 ]; then
         ux_bullet_sub "의도적 미등록(Agent Factory 카탈로그 등)은 $ignore 에 {\"<marketplace>\": \"<사유>\"} 로 제외"
@@ -518,6 +578,12 @@ elif [ "$dry_run" = 1 ] && [ -z "$only" ]; then
 fi
 
 _us_mismatch_note
+# Re-list permanent restore failures at the end: a re-run never fixes them (#2453).
+_us_fixes=$(_us_perm_fixes)
+if [ -n "$_us_fixes" ]; then
+    ux_warning "재실행으로 해결되지 않는 복원 실패 — 아래 조치 후 skills-sync --restore:"
+    while IFS= read -r _us_fix; do ux_bullet_sub "$_us_fix"; done <<<"$_us_fixes"
+fi
 step_summary "skills-sync$sfx"
 if [ "$final_rc" = 0 ]; then final_rc=$company_rc; fi
 exit "$final_rc"
