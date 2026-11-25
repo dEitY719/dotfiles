@@ -157,8 +157,8 @@ fi
 
 MP_FILE="$COMPANY_DIR/marketplaces.json"
 PL_FILE="$COMPANY_DIR/plugins.json"
-mp_old=$(cat "$MP_FILE" 2>/dev/null) || mp_old='{}'
-pl_old=$(cat "$PL_FILE" 2>/dev/null) || pl_old='{"plugins":[]}'
+mp_old=$(cat "$MP_FILE" 2>/dev/null)
+pl_old=$(cat "$PL_FILE" 2>/dev/null)
 [ -n "$mp_old" ] || mp_old='{}'
 [ -n "$pl_old" ] || pl_old='{"plugins":[]}'
 
