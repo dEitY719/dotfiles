@@ -477,7 +477,16 @@ fi
 # shellcheck disable=SC2317  # reached only via step_run
 _us_restore_check() {
     local out rc
-    out=$(mktemp "${TMPDIR:-/tmp}/skills-sync-check.XXXXXX") || out=/dev/null
+    if ! out=$(mktemp "${TMPDIR:-/tmp}/skills-sync-check.XXXXXX"); then
+        # No scratch file: stream as before and keep the generic restore hint.
+        "${DOTFILES_ROOT}/claude/plugin/restore.sh" --check
+        rc=$?
+        if [ "$rc" -eq 1 ]; then
+            ux_warning "누락 항목을 설치하려면 skills-sync --restore 를 실행하세요"
+            return 0
+        fi
+        return "$rc"
+    fi
     "${DOTFILES_ROOT}/claude/plugin/restore.sh" --check >"$out" 2>&1
     rc=$?
     cat "$out"
@@ -488,7 +497,7 @@ _us_restore_check() {
         fi
         rc=0
     fi
-    if [ "$out" != /dev/null ]; then rm -f "$out"; fi
+    rm -f "$out"
     return "$rc"
 }
 if _us_want restore-check; then
