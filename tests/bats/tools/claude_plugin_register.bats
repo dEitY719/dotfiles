@@ -76,19 +76,86 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     [ ! -s "$PUB_LOG" ]
 }
 
-@test "update: a changed URL and plugin list replace the old entries" {
-    "$FAKE/register.sh" "$URL"
+# _co_set <mp-json> <plugins-json> — commit and publish a company/ manifest pair.
+_co_set() {
+    printf '%s\n' "$1" >"$CO/marketplaces.json"
+    printf '%s\n' "$2" >"$CO/plugins.json"
+    git -C "$CO" commit -qam set && git -C "$CO" push -q origin main
+}
+
+@test "#2455 update, 0 plugins selected: only the URL changes, unregistered plugins are named" {
+    _co_set '{"git-skills":"https://ghes.example.invalid/old/git-skills.git"}' '{"plugins":["corp@corp-skills"]}'
     rm -rf "$SKILLS_DIR/git-skills"
-    new="https://ghes.example.invalid/team/git-skills.git"
-    _ws_repo git-skills git-skills '"git","git-extra"' "$new"
+    _ws_repo git-skills git-skills '"git","git-extra"' "$URL"
+    pl_before=$(cat "$CO/plugins.json")
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    assert_output --partial "git-skills 에 등록되지 않은 plugin 2개가 있습니다 (git, git-extra) — 추가하지 않음"
+    run jq -r '."git-skills"' "$CO/marketplaces.json"
+    assert_output "$URL"
+    assert_equal "$(cat "$CO/plugins.json")" "$pl_before"
+}
+
+@test "#2455 update, partial selection: the selection is kept, the rest only named" {
+    _co_set '{"git-skills":"https://ghes.example.invalid/old/git-skills.git"}' '{"plugins":["git@git-skills"]}'
+    rm -rf "$SKILLS_DIR/git-skills"
+    _ws_repo git-skills git-skills '"git","git-extra"' "$URL"
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    assert_output --partial "plugin 1개가 있습니다 (git-extra)"
+    run jq -c '.plugins' "$CO/plugins.json"
+    assert_output '["git@git-skills"]'
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    assert_output --partial "이미 등록됨"
+}
+
+@test "#2455 update: a registered plugin the repo dropped is warned about, not removed" {
+    "$FAKE/register.sh" "$URL"
     jq '.plugins += ["stale@git-skills"]' "$CO/plugins.json" >"$CO/p.tmp" && mv "$CO/p.tmp" "$CO/plugins.json"
     git -C "$CO" commit -qam stale && git -C "$CO" push -q origin main
+    new="https://ghes.example.invalid/team/git-skills.git"
+    rm -rf "$SKILLS_DIR/git-skills"
+    _ws_repo git-skills git-skills '"git"' "$new"
     run "$FAKE/register.sh" "$new"
     assert_success
+    assert_output --partial "repo 에 없는 등록 plugin: stale@git-skills — 제거하지 않음"
+    refute_output --partial "등록되지 않은 plugin"
     run jq -r '."git-skills"' "$CO/marketplaces.json"
     assert_output "$new"
     run jq -c '.plugins' "$CO/plugins.json"
+    assert_output '["corp@corp-skills","git@git-skills","stale@git-skills"]'
+}
+
+@test "#2455 new marketplace: every plugin of the repo is still added" {
+    rm -rf "$SKILLS_DIR/git-skills"
+    _ws_repo git-skills git-skills '"git","git-extra"' "$URL"
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    refute_output --partial "추가하지 않음"
+    run jq -c '.plugins' "$CO/plugins.json"
     assert_output '["corp@corp-skills","git-extra@git-skills","git@git-skills"]'
+}
+
+@test "#2455 restore hint: re-registering a .git-less entry with .git leaves plugins.json alone" {
+    _co_set '{"corp-skills":"https://ghes.example.invalid/corp/corp-skills"}' '{"plugins":[]}'
+    _ws_repo corp-skills corp-skills '"corp","corp-x"' "https://ghes.example.invalid/corp/corp-skills"
+    pl_before=$(cat "$CO/plugins.json")
+    run "$FAKE/register.sh" "https://ghes.example.invalid/corp/corp-skills.git"
+    assert_success
+    assert_output --partial "plugin 2개가 있습니다 (corp, corp-x)"
+    run jq -r '."corp-skills"' "$CO/marketplaces.json"
+    assert_output "https://ghes.example.invalid/corp/corp-skills.git"
+    assert_equal "$(cat "$CO/plugins.json")" "$pl_before"
+}
+
+@test "#2455 update: a same-name plugin elsewhere does not block a URL-only update" {
+    _co_set '{"git-skills":"https://ghes.example.invalid/old/git-skills.git"}' '{"plugins":[]}'
+    printf '{"plugins":["git@claude-plugins-official"]}\n' >"$FAKE/plugins.json"
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    run jq -r '."git-skills"' "$CO/marketplaces.json"
+    assert_output "$URL"
 }
 
 @test "remove: by name and by URL drop the key and every *@<mp> plugin" {
