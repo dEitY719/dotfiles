@@ -650,15 +650,15 @@ _ws_setup() {
     assert_output --partial "미등록 marketplace: git-skills"
 }
 
-@test "#2443: a github.com origin points at an upstream PR, not skills-register" {
+@test "#2443: a github.com origin prints the public registration command" {
     _ws_setup
     _ws_repo gh-skills gh-skills ghp
     git -C "$SKILLS_DIR/gh-skills" remote set-url origin "git@github.com:o/gh-skills.git"
     run "$FAKE_ROOT/scripts/update-skills.sh" --only restore-check
     assert_success
     assert_output --partial "미등록 marketplace: gh-skills"
-    assert_output --partial "upstream PR (git@github.com:o/gh-skills.git)"
-    refute_output --partial "skills-register git@github.com"
+    assert_output --partial "skills-register git@github.com:o/gh-skills.git"
+    assert_output --partial "공용 manifest PR 생성"
 }
 
 @test "#2453: the unregistered hint prints an https origin with .git appended" {

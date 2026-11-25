@@ -125,16 +125,34 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     assert_output '["corp@corp-skills"]'
 }
 
-@test "github.com URLs are refused (exit 2) with no write" {
-    for u in "https://github.com/o/git-skills.git" "git@github.com:o/git-skills.git" \
-        "ssh://git@SSH.GitHub.com:443/o/git-skills.git"; do
-        run "$FAKE/register.sh" "$u"
-        assert_failure 2
-        assert_output --partial "upstream"
-    done
-    run git -C "$CO" status --porcelain
-    assert_output ""
-    [ ! -e "$PUB_LOG" ]
+@test "github.com registration creates a branch and PR without changing the checkout" {
+    local root="$TEST_TEMP_HOME/dotfiles" public_url="git@github.com:o/git-skills.git"
+    git -C "$root" init -q -b main
+    printf '{}\n' >"$FAKE/marketplaces.json"
+    printf '{"plugins":[]}\n' >"$FAKE/plugins.json"
+    git -C "$root" add claude/plugin/marketplaces.json claude/plugin/plugins.json
+    git -C "$root" commit -qm init
+    git init -q --bare -b main "$TEST_TEMP_HOME/public.git"
+    git -C "$root" remote add origin "$TEST_TEMP_HOME/public.git"
+    git -C "$root" push -q -u origin main
+    git -C "$root" remote set-head origin main
+    git -C "$SKILLS_DIR/git-skills" remote set-url origin "$public_url"
+    mkdir -p "$TEST_TEMP_HOME/bin"
+    printf '#!/bin/bash\nprintf "%%s\n" "$*" >"$HOME/gh-log"\n' >"$TEST_TEMP_HOME/bin/gh"
+    chmod +x "$TEST_TEMP_HOME/bin/gh"
+    export PATH="$TEST_TEMP_HOME/bin:$PATH"
+    run "$FAKE/register.sh" "$public_url"
+    assert_success
+    assert_output --partial "등록 PR 생성 완료"
+    run cat "$HOME/gh-log"
+    assert_output --partial "pr create --base main --head skills-register/"
+    run git -C "$root" diff --exit-code
+    assert_success
+    run jq -r 'keys | length' "$FAKE/marketplaces.json"
+    assert_output 0
+    branch=$(git --git-dir="$TEST_TEMP_HOME/public.git" for-each-ref --format='%(refname)' refs/heads/skills-register/)
+    run git --git-dir="$TEST_TEMP_HOME/public.git" show "$branch:claude/plugin/plugins.json"
+    assert_output --partial 'git@git-skills'
 }
 
 @test "--dry-run prints the diff and changes nothing" {

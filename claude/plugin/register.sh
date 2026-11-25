@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # claude/plugin/register.sh — skills-register (#2443)
 #
-# Register, update or remove one internal (non-github.com) marketplace repo in
-# the private company/ manifest pair from a single git URL, then publish it via
-# publish-sync.sh (branch + PR + admin-merge). Installing is NOT done here: the
-# next `skills-sync --restore` installs what the manifest now lists.
+# Register a marketplace from a git URL. GitHub registrations open a public
+# manifest PR; internal registrations use company/ and publish-sync.sh.
+# After the registration is merged, `skills-sync --restore` installs it.
 #
 #   skills-register <git-url>                       add, or update an existing entry
 #   skills-register --remove <git-url|marketplace>  drop the marketplace and its plugins
@@ -19,9 +18,7 @@
 # raw marketplace.json), and a plugin name another marketplace already lists in
 # any manifest is refused with an ignore-overlay hint (#2453).
 #
-# Never edits the tracked claude/plugin/{marketplaces,plugins}.json: that pair
-# is the upstream-owned registration contract (#1685), so a github.com URL is
-# refused with a pointer to an upstream PR.
+# GitHub registrations use an isolated worktree and open a PR for the public pair.
 #
 # Exit: 0 done / already registered, 1 failure, 2 usage error or refusal.
 # Alias: skills-register (shell-common/aliases/skills_sync.sh)
@@ -58,12 +55,12 @@ _usage() {
 Usage: skills-register [--dry-run] <git-url>
        skills-register [--dry-run] --remove <git-url|marketplace-name>
 
-Add or update an internal (non-github.com) marketplace in
-claude/plugin/company/{marketplaces,plugins}.json, commit it and publish it
-via publish-sync.sh (PR + admin-merge). Install afterwards: skills-sync --restore
+Register GitHub marketplaces via a branch and PR for the public manifests.
+Other marketplaces use company/ and publish-sync.sh. Install after merge:
+skills-sync --restore
 
   --remove    Remove the marketplace key and every <plugin>@<marketplace> entry
-  --dry-run   Check company/ freshness and print the JSON diff; no write, commit or PR
+  --dry-run   Check the latest manifests and print the JSON diff; no commit or PR
   -h, --help  Show this help
 USAGE
 }
@@ -78,11 +75,11 @@ _norm_url() {
 # scp-like user@host:path), never a bare name or a helper form like ext::.
 _is_url() {
 	case "$1" in
-	https://* | http://* | ssh://* | git://* | file://*) return 0 ;;
-	-*) return 1 ;;
-	*@*:*)
-		case "${1%%:*}" in */* | *" "*) return 1 ;; *@*) return 0 ;; esac
-		;;
+		https://* | http://* | ssh://* | git://* | file://*) return 0 ;;
+		-*) return 1 ;;
+		*@*:*)
+			case "${1%%:*}" in */* | *" "*) return 1 ;; *@*) return 0 ;; esac
+			;;
 	esac
 	return 1
 }
@@ -99,16 +96,11 @@ _has_credentials() {
 	return 1
 }
 
-# _refuse_github_com <url> — exit 2 for github.com; fail closed without the predicate.
-_refuse_github_com() {
+# _check_host_policy — fail closed without the shared host predicate.
+_check_host_policy() {
 	if ! command -v _gh_host_is_github_com >/dev/null 2>&1; then
 		ux_error "lib/gh_host.sh 를 읽지 못했습니다 — host 판별 불가로 중단합니다: $GH_HOST_LIB"
 		exit 1
-	fi
-	if _gh_host_is_github_com "$1"; then
-		ux_error "github.com repo 는 공용 manifest(claude/plugin/{marketplaces,plugins}.json) 소관입니다"
-		ux_info "upstream 에 PR 로 등록하세요 — skills-register 는 사내(GHES 등) repo 만 company/ 에 씁니다"
-		exit 2
 	fi
 }
 
@@ -142,24 +134,24 @@ remove=0
 target=""
 for arg in "$@"; do
 	case "$arg" in
-	-h | --help | help)
-		_usage
-		exit 0
-		;;
-	--dry-run) dry_run=1 ;;
-	--remove) remove=1 ;;
-	-*)
-		ux_error "알 수 없는 옵션: $arg"
-		_usage >&2
-		exit 2
-		;;
-	*)
-		if [ -n "$target" ]; then
-			ux_error "인자는 하나만 받습니다: $arg"
+		-h | --help | help)
+			_usage
+			exit 0
+			;;
+		--dry-run) dry_run=1 ;;
+		--remove) remove=1 ;;
+		-*)
+			ux_error "알 수 없는 옵션: $arg"
+			_usage >&2
 			exit 2
-		fi
-		target="$arg"
-		;;
+			;;
+		*)
+			if [ -n "$target" ]; then
+				ux_error "인자는 하나만 받습니다: $arg"
+				exit 2
+			fi
+			target="$arg"
+			;;
 	esac
 done
 if [ -z "$target" ]; then
@@ -175,12 +167,14 @@ command -v jq >/dev/null 2>&1 || {
 	ux_error "jq 가 필요합니다"
 	exit 1
 }
+public=0
 if _is_url "$target"; then
 	if _has_credentials "$target"; then
 		ux_error "URL 에 자격증명(user:secret@)이 있습니다 — 그대로 manifest/PR 에 게시되므로 거부합니다"
 		exit 2
 	fi
-	_refuse_github_com "$target"
+	_check_host_policy
+	if _gh_host_is_github_com "$target"; then public=1; fi
 fi
 # _claude_plugin_git_url (URL form) and _claude_plugin_name_owner (collision
 # guard) are shared with update-skills.sh; the add path fails closed without
@@ -198,34 +192,64 @@ if [ "$remove" = 0 ]; then
 		target="$_git_url"
 	fi
 fi
-# From a worktree or other checkout the edit would land in a company/ that
-# publish-sync.sh never publishes, so refuse instead of silently redirecting.
-if [ "$(cd "$PUBLISH_PLUGIN_DIR" 2>/dev/null && pwd -P)" != "$(cd "$SCRIPT_DIR" && pwd -P)" ]; then
-	ux_error "publish-sync.sh 는 $PUBLISH_PLUGIN_DIR/company 만 게시합니다 — ~/dotfiles 의 skills-register 로 실행하세요 (현재: $SCRIPT_DIR)"
-	exit 2
-fi
-if [ ! -d "$COMPANY_DIR/.git" ]; then
-	ux_error "company/ repo 가 없습니다 ($COMPANY_DIR) — 사내(internal) PC 에서만 등록할 수 있습니다"
-	exit 1
-fi
 MANIFESTS=(marketplaces.json plugins.json)
-# publish-sync.sh publishes the whole local file over origin/main, so editing a
-# stale checkout would drop entries another PC registered since. --dry-run runs
-# the same check so it predicts the real run (#2446).
-# shellcheck source=../../shell-common/lib/company_freshness.sh
-if ! . "$CF_LIB" 2>/dev/null || ! command -v _company_freshness >/dev/null 2>&1; then
-	ux_error "company_freshness.sh 를 읽지 못했습니다 — 최신 상태 판별 불가로 중단합니다: $CF_LIB"
-	exit 1
-fi
-if ! git -C "$COMPANY_DIR" fetch --quiet origin; then
-	ux_error "company/ origin fetch 실패 — 최신 상태를 확인할 수 없어 중단합니다"
-	exit 1
-fi
-_company_freshness "$COMPANY_DIR"
-if [ "$CF_STATE" != fresh ]; then
-	ux_error "$CF_MSG"
-	if [ -n "$CF_FIX" ]; then ux_info "해결: $CF_FIX 후 다시 실행하세요"; fi
-	exit 1
+PUBLIC_WORKTREE=""
+if [ "$public" = 1 ]; then
+	if [ "$remove" = 1 ]; then
+		ux_error "공용 marketplace 제거는 PR 에서 직접 처리하세요"
+		exit 2
+	fi
+	ROOT=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel) || exit 1
+	command -v gh >/dev/null 2>&1 || {
+		ux_error "gh CLI 가 필요합니다"
+		exit 1
+	}
+	if ! git -C "$ROOT" fetch --quiet origin; then
+		ux_error "origin fetch 실패 — 공용 manifest 최신 상태를 확인할 수 없습니다"
+		exit 1
+	fi
+	BASE_REF=$(git -C "$ROOT" symbolic-ref --quiet --short refs/remotes/origin/HEAD) || {
+		ux_error "origin 기본 브랜치를 확인할 수 없습니다"
+		exit 1
+	}
+	PUBLIC_WORKTREE=$(mktemp -d "${TMPDIR:-/tmp}/skills-register-public.XXXXXX") || exit 1
+	rmdir "$PUBLIC_WORKTREE" || exit 1
+	if ! git -C "$ROOT" worktree add --quiet --detach "$PUBLIC_WORKTREE" "$BASE_REF"; then
+		ux_error "임시 worktree 생성 실패"
+		exit 1
+	fi
+	COMPANY_DIR="$PUBLIC_WORKTREE/claude/plugin"
+	trap 'if [ -n "$PUBLIC_WORKTREE" ] && [ -d "$PUBLIC_WORKTREE" ] && [ -z "$(git -C "$PUBLIC_WORKTREE" status --porcelain)" ] && ! git -C "$PUBLIC_WORKTREE" symbolic-ref -q HEAD >/dev/null; then git -C "$ROOT" worktree remove "$PUBLIC_WORKTREE" >/dev/null 2>&1 || true; fi' EXIT
+else
+	# From a worktree or other checkout the edit would land in a company/ that
+	# publish-sync.sh never publishes, so refuse instead of silently redirecting.
+	if [ "$(cd "$PUBLISH_PLUGIN_DIR" 2>/dev/null && pwd -P)" != "$(cd "$SCRIPT_DIR" && pwd -P)" ]; then
+		ux_error "publish-sync.sh 는 $PUBLISH_PLUGIN_DIR/company 만 게시합니다 — ~/dotfiles 의 skills-register 로 실행하세요 (현재: $SCRIPT_DIR)"
+		exit 2
+	fi
+	if [ ! -d "$COMPANY_DIR/.git" ]; then
+		ux_error "company/ repo 가 없습니다 ($COMPANY_DIR) — 사내(internal) PC 에서만 등록할 수 있습니다"
+		exit 1
+	fi
+	MANIFESTS=(marketplaces.json plugins.json)
+	# publish-sync.sh publishes the whole local file over origin/main, so editing a
+	# stale checkout would drop entries another PC registered since. --dry-run runs
+	# the same check so it predicts the real run (#2446).
+	# shellcheck source=../../shell-common/lib/company_freshness.sh
+	if ! . "$CF_LIB" 2>/dev/null || ! command -v _company_freshness >/dev/null 2>&1; then
+		ux_error "company_freshness.sh 를 읽지 못했습니다 — 최신 상태 판별 불가로 중단합니다: $CF_LIB"
+		exit 1
+	fi
+	if ! git -C "$COMPANY_DIR" fetch --quiet origin; then
+		ux_error "company/ origin fetch 실패 — 최신 상태를 확인할 수 없어 중단합니다"
+		exit 1
+	fi
+	_company_freshness "$COMPANY_DIR"
+	if [ "$CF_STATE" != fresh ]; then
+		ux_error "$CF_MSG"
+		if [ -n "$CF_FIX" ]; then ux_info "해결: $CF_FIX 후 다시 실행하세요"; fi
+		exit 1
+	fi
 fi
 
 _publish() {
@@ -239,7 +263,9 @@ _publish() {
 # unpublished (publish-sync failed), so a re-run is the retry.
 _noop() {
 	ux_info "$1"
-	if [ "$dry_run" = 0 ] && ! git -C "$COMPANY_DIR" diff --quiet origin/main -- "${MANIFESTS[@]}"; then
+	if [ "$public" = 1 ]; then
+		git -C "$ROOT" worktree remove "$PUBLIC_WORKTREE" || true
+	elif [ "$dry_run" = 0 ] && ! git -C "$COMPANY_DIR" diff --quiet origin/main -- "${MANIFESTS[@]}"; then
 		ux_warning "company/ 에 미게시 manifest 변경이 있어 publish-sync.sh 로 게시합니다"
 		_publish
 	fi
@@ -285,7 +311,7 @@ else
 	# The same plugin name from another marketplace would install its skills twice (#2453).
 	while IFS= read -r _pname; do
 		if _owner=$(_claude_plugin_name_owner "$_pname" "$mp" "$SCRIPT_DIR/plugins.json" \
-			"$SCRIPT_DIR/plugins.local.json" "$COMPANY_DIR/plugins.json" "$COMPANY_DIR/plugins.local.json"); then
+			"$SCRIPT_DIR/plugins.local.json" "$COMPANY_DIR/plugins.json" "$SCRIPT_DIR/company/plugins.json" "$SCRIPT_DIR/company/plugins.local.json"); then
 			ux_error "plugin 이름 충돌: $_pname@$mp — $_owner 이 이미 manifest 에 있습니다 (등록하지 않음)"
 			ux_info "개발용 fork 라면 등록 대신 제외: claude/plugin/skills-workspace-ignore.local.json 에 \"$mp\" 추가"
 			exit 2
@@ -308,11 +334,35 @@ if [ "$dry_run" = 1 ]; then
 	diff -u --label "a/marketplaces.json" --label "b/marketplaces.json" <(jq . <<<"$mp_old") <(printf '%s\n' "$mp_new")
 	diff -u --label "a/plugins.json" --label "b/plugins.json" <(jq . <<<"$pl_old") <(printf '%s\n' "$pl_new")
 	ux_info "--dry-run: 파일·커밋·PR 변경 없음"
+	if [ "$public" = 1 ]; then git -C "$ROOT" worktree remove "$PUBLIC_WORKTREE" || true; fi
 	exit 0
 fi
 
 printf '%s\n' "$mp_new" >"$MP_FILE.tmp" && mv "$MP_FILE.tmp" "$MP_FILE" || exit 1
 printf '%s\n' "$pl_new" >"$PL_FILE.tmp" && mv "$PL_FILE.tmp" "$PL_FILE" || exit 1
+
+if [ "$public" = 1 ]; then
+	branch="skills-register/$(date +%Y%m%d%H%M%S)-$$"
+	if ! git -C "$PUBLIC_WORKTREE" switch -q -c "$branch" ||
+		! git -C "$PUBLIC_WORKTREE" add -- claude/plugin/marketplaces.json claude/plugin/plugins.json ||
+		! git -C "$PUBLIC_WORKTREE" commit -m "Feat: Register $mp marketplace"; then
+		ux_error "공용 manifest 커밋 실패 — 작업 보존: $PUBLIC_WORKTREE"
+		exit 1
+	fi
+	if ! git -C "$PUBLIC_WORKTREE" push -u origin "$branch"; then
+		ux_error "브랜치 push 실패 — 작업 보존: $PUBLIC_WORKTREE (브랜치: $branch)"
+		exit 1
+	fi
+	if ! (cd "$PUBLIC_WORKTREE" && gh pr create --base "${BASE_REF#origin/}" --head "$branch" \
+		--title "Feat: Register $mp marketplace" --body "Register $mp and its plugins in the public manifests."); then
+		ux_error "PR 생성 실패 — 브랜치와 작업 보존: $branch ($PUBLIC_WORKTREE)"
+		exit 1
+	fi
+	git -C "$ROOT" worktree remove "$PUBLIC_WORKTREE" || ux_warning "임시 worktree 정리 필요: $PUBLIC_WORKTREE"
+	ux_success "등록 PR 생성 완료: $mp"
+	ux_info "PR 병합 후 skills-sync --restore"
+	exit 0
+fi
 
 # ALLOW_MAIN_COMMIT: same escape hatch claude/hooks/plugin-sync.sh uses on company/ main.
 if ! git -C "$COMPANY_DIR" add -- "${MANIFESTS[@]}" ||
