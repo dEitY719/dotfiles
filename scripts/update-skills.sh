@@ -416,7 +416,7 @@ _us_unregistered_check() {
     # shellcheck source=../shell-common/lib/gh_host.sh
     . "${SHELL_COMMON:-$DOTFILES_ROOT/shell-common}/lib/gh_host.sh" 2>/dev/null || true
     for f in marketplaces.json marketplaces.local.json company/marketplaces.json \
-        skills-workspace-ignore.local.json; do
+        company/marketplaces.local.json skills-workspace-ignore.local.json; do
         if [ -r "$pdir/$f" ]; then known+=$(jq -r 'keys[]' "$pdir/$f" 2>/dev/null || true)$'\n'; fi
     done
     for mf in "$ws"/*/.claude-plugin/marketplace.json; do
