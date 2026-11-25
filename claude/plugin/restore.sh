@@ -340,7 +340,7 @@ _failure_kind() {
 	local o
 	o=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
 	case "$o" in
-	*timeout* | *"timed out"* | *auth* | *"permission denied"* | *"connection refused"* | \
+	*timeout* | *"timed out"* | *auth* | *"repository not found"* | *"permission denied"* | *"connection refused"* | \
 		*"could not resolve"* | *network* | *econn* | *enotfound* | *"rate limit"* | *temporar*)
 		echo transient
 		;;
@@ -535,6 +535,9 @@ EOF
 			if [ "$label" != "사내 전용" ]; then
 				fix="claude/plugin/plugins.json(.local.json) 의 ${plugin} 수정 — upstream PR"
 			elif [ -n "$repo" ]; then
+				# Re-registering re-reads marketplace.json and rewrites the plugin list;
+				# --remove would drop the whole marketplace for one missing plugin.
+				if command -v _claude_plugin_git_url >/dev/null 2>&1; then repo=$(_claude_plugin_git_url "$repo"); fi
 				fix="skills-register $repo"
 			else
 				fix="skills-register --remove ${plugin##*@}"
