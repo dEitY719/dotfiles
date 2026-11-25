@@ -546,7 +546,7 @@ EOF
 			elif [ -n "$repo" ]; then
 				# Re-registering keeps the plugin selection (#2455) and --remove would
 				# drop the whole marketplace, so the one entry is dropped by hand.
-				fix="claude/plugin/company/plugins.json 에서 ${plugin} 삭제 — publish-sync.sh 로 게시"
+				fix="claude/plugin/company/plugins.json(.local.json) 에서 ${plugin} 삭제 — publish-sync.sh 로 게시"
 			else
 				fix="skills-register --remove ${plugin##*@}"
 			fi

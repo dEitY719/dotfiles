@@ -137,7 +137,7 @@ _co_set() {
     assert_output '["corp@corp-skills","git-extra@git-skills","git@git-skills"]'
 }
 
-@test "#2455 restore hint: re-registering a .git-less entry with .git leaves plugins.json alone" {
+@test "#2455 update: re-registering a .git-less entry with .git leaves plugins.json alone" {
     _co_set '{"corp-skills":"https://ghes.example.invalid/corp/corp-skills"}' '{"plugins":[]}'
     _ws_repo corp-skills corp-skills '"corp","corp-x"' "https://ghes.example.invalid/corp/corp-skills"
     pl_before=$(cat "$CO/plugins.json")
