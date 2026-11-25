@@ -10,9 +10,9 @@
     {
       "name": "avatar-issue-watcher",
       "script": "shell-common/tools/custom/avatar_issue_watcher.sh",
-      "schedule": "*/4 * * * *",
+      "schedule": "*/1 * * * *",
       "args": ["--cwd", "$HOME/dotfiles"],
-      "env": {},
+      "env": { "IW_MAX_PER_REPO": "5", "IW_MAX_CONCURRENT": "10" },
       "description": "할당 이슈 감시 후 gh-flow:wave 디스패치"
     },
     {
