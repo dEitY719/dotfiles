@@ -79,6 +79,7 @@
 - **claude-accounts link [--apply]** — Fan out all of ~/.claude/skills/* (dry-run unless --apply)
 - **claude-accounts link --list** — Show external skill links per account, BROKEN ones marked
 - **claude-accounts unlink <name>** — Remove that skill symlink from every account (never real dirs)
+- **skills-register <git-url>** — Register an internal marketplace in company/ manifest + PR (--remove, --dry-run)
 - Skills location: ~/.claude/skills/
 
 ### plugin
