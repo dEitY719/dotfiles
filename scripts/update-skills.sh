@@ -380,7 +380,7 @@ _us_company_refresh() {
         if out=$(git -C "$co" pull --quiet --rebase --autostash origin main 2>&1); then
             # A conflicting autostash re-apply still exits 0; the changes stay in the stash.
             if [ -n "$(git -C "$co" ls-files -u)" ] || grep -qi 'autostash.*conflict' <<<"$out"; then
-                ux_warning "company/ 는 갱신했지만 미커밋 변경 재적용이 충돌했습니다 — 변경은 git -C $co stash list 에 보존, 충돌 정리 후 다시 실행하세요"
+                ux_warning "company/ 는 갱신했지만 미커밋 변경 재적용이 충돌했습니다 — 변경은 git -C '$co' stash list 에 보존, 충돌 정리 후 다시 실행하세요"
                 return 1
             fi
             ux_success "company/ main 을 origin/main 으로 갱신했습니다"

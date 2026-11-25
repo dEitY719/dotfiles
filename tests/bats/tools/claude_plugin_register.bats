@@ -268,7 +268,7 @@ _co_ahead_origin() {
         run "$FAKE/register.sh" $dry "$URL"
         assert_failure 1
         assert_output --partial "main 이 origin/main 보다 뒤처져"
-        assert_output --partial "git -C $CO pull --rebase --autostash origin main"
+        assert_output --partial "git -C '$CO' pull --rebase --autostash origin main"
     done
     git -C "$CO" pull -q --rebase --autostash origin main
     run "$FAKE/register.sh" --dry-run "$URL"
@@ -283,7 +283,7 @@ _co_ahead_origin() {
     assert_failure 1
     real=$output
     assert_output --partial "'feat/old' 브랜치"
-    assert_output --partial "git -C $CO switch -C main origin/main"
+    assert_output --partial "git -C '$CO' switch -C main origin/main"
     run "$FAKE/register.sh" --dry-run "$URL"
     assert_failure 1
     assert_equal "$output" "$real"

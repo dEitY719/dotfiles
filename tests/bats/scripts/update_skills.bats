@@ -724,7 +724,7 @@ _other_publishes() {
     run "$FAKE_ROOT/scripts/update-skills.sh"
     assert_success
     assert_output --partial "'feat/old' 브랜치"
-    assert_output --partial "정리: git -C $CO switch -C main origin/main"
+    assert_output --partial "정리: git -C '$CO' switch -C main origin/main"
     assert_equal "$(git -C "$CO" symbolic-ref --short HEAD)" feat/old
 }
 
