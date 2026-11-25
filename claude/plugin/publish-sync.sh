@@ -208,7 +208,8 @@ _required_checks_count() {
 		--jq '(.protection.required_status_checks // {}) | ((.contexts // []) + (.checks // []) | length)' 2>/dev/null) || return 1
 	rules=$(gh api --hostname "$host" "repos/$slug/rules/branches/main" \
 		--jq '[.[] | select(.type == "required_status_checks")] | length' 2>/dev/null) || return 1
-	case "$classic$rules" in '' | *[!0-9]*) return 1 ;; esac
+	case "$classic" in '' | *[!0-9]*) return 1 ;; esac
+	case "$rules" in '' | *[!0-9]*) return 1 ;; esac
 	printf '%s\n' "$((classic + rules))"
 }
 
