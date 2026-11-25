@@ -12,6 +12,7 @@
 #   6. scripts/setup-skills-ssot.sh           — OpenCode/Codex/agy 합성 + Hermes external_dirs (#1829)
 #   --restore 시 4a. restore.sh               — 명시적으로 누락 항목 add/install, update 전에 실행
 #   5단계 뒤: 어느 manifest 에도 없는 workspace marketplace repo 경고 + skills-register 안내 (#2443)
+#   1단계 전: internal PC 의 claude/plugin/company/ 를 origin/main 으로 갱신 (#2446)
 #
 # 4·5단계가 필요한 이유: Claude Code 는 workspace clone 이 아니라 plugin store
 # (plugins/marketplaces, plugins/cache/<mkt>/<plugin>/<ver>) 에서 스킬을 로드한다.
@@ -341,6 +342,55 @@ if [ "$STEP_VERBOSE" != 1 ]; then
     ux_info "skills-sync (요약 모드 — 전체 출력은 skills-sync -v)"
 fi
 
+# _us_company_refresh — bring the private company/ manifest repo (internal PC
+# only) up to origin/main before any step reads company/*.json (#2446). State
+# and fix command come from lib/company_freshness.sh, shared with
+# skills-register. Printed outside the step runner so summary mode shows it;
+# returns 1 only when a fetch/pull failed (the sync goes on either way).
+_us_company_refresh() {
+    local sc="${SHELL_COMMON:-$DOTFILES_ROOT/shell-common}" co="${DOTFILES_ROOT}/claude/plugin/company" out
+    # shellcheck source=../shell-common/util/setup_mode_read.sh
+    . "$sc/util/setup_mode_read.sh" 2>/dev/null || return 0
+    _dotfiles_company_active "${DOTFILES_ROOT}/claude/plugin" || return 0
+    # shellcheck source=../shell-common/lib/company_freshness.sh
+    if ! . "$sc/lib/company_freshness.sh" 2>/dev/null; then
+        ux_warning "company_freshness.sh 를 읽지 못해 company/ 갱신을 건너뜁니다: $sc/lib"
+        return 1
+    fi
+    if ! out=$(git -C "$co" fetch --quiet origin 2>&1); then
+        ux_warning "company/ origin fetch 실패 — 낡은 company/*.json 으로 진행합니다"
+        if [ -n "$out" ]; then ux_bullet_sub "$out"; fi
+        return 1
+    fi
+    _company_freshness "$co"
+    case "$CF_STATE" in
+    fresh) return 0 ;;
+    behind)
+        if [ "$dry_run" = 1 ]; then
+            ux_info "--dry-run: $CF_MSG — 실행 시: $CF_FIX"
+            return 0
+        fi
+        if out=$(git -C "$co" pull --quiet --rebase --autostash origin main 2>&1); then
+            ux_success "company/ main 을 origin/main 으로 갱신했습니다"
+            return 0
+        fi
+        ux_warning "company/ 갱신 실패 — 낡은 company/*.json 으로 진행합니다 ($CF_FIX)"
+        if [ -n "$out" ]; then ux_bullet_sub "$out"; fi
+        return 1
+        ;;
+    *)
+        # Never switched automatically: guidance only (#2446).
+        ux_warning "$CF_MSG"
+        if [ -n "$CF_FIX" ]; then ux_bullet_sub "정리: $CF_FIX"; fi
+        return 0
+        ;;
+    esac
+}
+company_rc=0
+if _us_want restore-plugins || _us_want update-plugins || _us_want restore-check; then
+    _us_company_refresh || company_rc=1
+fi
+
 # --dry-run: clone/pull/update/check preview; synthesis (3/6) is skipped.
 clone_args=()
 plugins_args=()
@@ -455,4 +505,5 @@ fi
 
 _us_mismatch_note
 step_summary "skills-sync$sfx"
+if [ "$final_rc" = 0 ]; then final_rc=$company_rc; fi
 exit "$final_rc"

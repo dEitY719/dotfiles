@@ -247,3 +247,66 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     run git -C "$CO" status --porcelain
     assert_output ""
 }
+
+# --- #2446: freshness states (a)-(d); --dry-run gives the same verdict ---
+
+# _co_ahead_origin — another PC publishes to company.git, so company/ main is behind.
+_co_ahead_origin() {
+    local other="$TEST_TEMP_HOME/other"
+    git clone -q "$TEST_TEMP_HOME/company.git" "$other"
+    jq '."x-skills" = "https://ghes.example.invalid/corp/x"' "$other/marketplaces.json" >"$other/m.tmp"
+    mv "$other/m.tmp" "$other/marketplaces.json"
+    git -C "$other" commit -qam other && git -C "$other" push -q origin main
+}
+
+@test "(b) behind main with uncommitted changes: names pull --rebase --autostash, which fixes it" {
+    _co_ahead_origin
+    printf 'local\n' >"$CO/notes.local.json"
+    git -C "$CO" add notes.local.json && git -C "$CO" commit -qm notes
+    printf 'edited\n' >"$CO/notes.local.json"
+    for dry in "" --dry-run; do
+        run "$FAKE/register.sh" $dry "$URL"
+        assert_failure 1
+        assert_output --partial "main 이 origin/main 보다 뒤처져"
+        assert_output --partial "git -C $CO pull --rebase --autostash origin main"
+    done
+    git -C "$CO" pull -q --rebase --autostash origin main
+    run "$FAKE/register.sh" --dry-run "$URL"
+    assert_success
+    assert_equal "$(cat "$CO/notes.local.json")" edited
+}
+
+@test "(c) stale feature branch with origin/main manifests: names the branch and switch -C" {
+    git -C "$CO" switch -q -c feat/old
+    printf 'x\n' >"$CO/README" && git -C "$CO" add README && git -C "$CO" commit -qm readme
+    run "$FAKE/register.sh" "$URL"
+    assert_failure 1
+    real=$output
+    assert_output --partial "'feat/old' 브랜치"
+    assert_output --partial "git -C $CO switch -C main origin/main"
+    run "$FAKE/register.sh" --dry-run "$URL"
+    assert_failure 1
+    assert_equal "$output" "$real"
+    [ ! -e "$PUB_LOG" ]
+}
+
+@test "(d) feature branch with different manifests: warns of unpublished changes, no switch" {
+    git -C "$CO" switch -q -c feat/new
+    jq '."y-skills" = "https://ghes.example.invalid/corp/y"' "$CO/marketplaces.json" >"$CO/m.tmp"
+    mv "$CO/m.tmp" "$CO/marketplaces.json"
+    git -C "$CO" commit -qam y
+    run "$FAKE/register.sh" "$URL"
+    assert_failure 1
+    real=$output
+    assert_output --partial "'feat/new' 브랜치이고 manifest 가 origin/main 과 다릅니다"
+    refute_output --partial "switch -C"
+    run "$FAKE/register.sh" --dry-run "$URL"
+    assert_failure 1
+    assert_equal "$output" "$real"
+}
+
+@test "(a) up-to-date main: --dry-run passes the freshness check and prints the diff" {
+    run "$FAKE/register.sh" --dry-run "$URL"
+    assert_success
+    assert_output --partial '+  "git-skills"'
+}

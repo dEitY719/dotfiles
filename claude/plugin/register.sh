@@ -8,7 +8,7 @@
 #
 #   skills-register <git-url>                       add, or update an existing entry
 #   skills-register --remove <git-url|marketplace>  drop the marketplace and its plugins
-#   skills-register --dry-run ...                   print the JSON diff only
+#   skills-register --dry-run ...                   freshness check + JSON diff, no write
 #
 # The marketplace name and plugin list come from the repo's own
 # .claude-plugin/marketplace.json (.name, .plugins[].name) — read from the
@@ -40,6 +40,7 @@ fi
 GH_HOST_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/gh_host.sh"
 # shellcheck source=../../shell-common/lib/gh_host.sh
 [ -r "$GH_HOST_LIB" ] && . "$GH_HOST_LIB"
+CF_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/company_freshness.sh"
 
 SYNC_MSG="chore(claude-plugin): sync manifest" # publish-sync.sh purity rule
 COMPANY_DIR="$SCRIPT_DIR/company"
@@ -57,7 +58,7 @@ claude/plugin/company/{marketplaces,plugins}.json, commit it and publish it
 via publish-sync.sh (PR + admin-merge). Install afterwards: skills-sync --restore
 
   --remove    Remove the marketplace key and every <plugin>@<marketplace> entry
-  --dry-run   Print the JSON diff only; no write, commit or PR
+  --dry-run   Check company/ freshness and print the JSON diff; no write, commit or PR
   -h, --help  Show this help
 USAGE
 }
@@ -188,16 +189,22 @@ if [ ! -d "$COMPANY_DIR/.git" ]; then
 fi
 MANIFESTS=(marketplaces.json plugins.json)
 # publish-sync.sh publishes the whole local file over origin/main, so editing a
-# stale checkout would drop entries another PC registered since.
-if [ "$dry_run" = 0 ]; then
-	if ! git -C "$COMPANY_DIR" fetch --quiet origin; then
-		ux_error "company/ origin fetch 실패 — 최신 상태를 확인할 수 없어 중단합니다"
-		exit 1
-	fi
-	if ! git -C "$COMPANY_DIR" merge-base --is-ancestor origin/main HEAD; then
-		ux_error "company/ 가 origin/main 보다 뒤처져 있습니다 — git -C $COMPANY_DIR pull --rebase 후 다시 실행하세요"
-		exit 1
-	fi
+# stale checkout would drop entries another PC registered since. --dry-run runs
+# the same check so it predicts the real run (#2446).
+# shellcheck source=../../shell-common/lib/company_freshness.sh
+if ! . "$CF_LIB" 2>/dev/null || ! command -v _company_freshness >/dev/null 2>&1; then
+	ux_error "company_freshness.sh 를 읽지 못했습니다 — 최신 상태 판별 불가로 중단합니다: $CF_LIB"
+	exit 1
+fi
+if ! git -C "$COMPANY_DIR" fetch --quiet origin; then
+	ux_error "company/ origin fetch 실패 — 최신 상태를 확인할 수 없어 중단합니다"
+	exit 1
+fi
+_company_freshness "$COMPANY_DIR"
+if [ "$CF_STATE" != fresh ]; then
+	ux_error "$CF_MSG"
+	if [ -n "$CF_FIX" ]; then ux_info "해결: $CF_FIX 후 다시 실행하세요"; fi
+	exit 1
 fi
 
 _publish() {

@@ -660,3 +660,98 @@ _ws_setup() {
     assert_output --partial "upstream PR (git@github.com:o/gh-skills.git)"
     refute_output --partial "skills-register git@github.com"
 }
+
+# --- #2446: company/ refresh step before anything reads company/*.json ---
+
+# _make_company — internal-mode fake root whose claude/plugin/company/ tracks a
+# bare origin; OTHER is a second clone standing in for another PC.
+_make_company() {
+    _make_fake_root 0
+    export DOTFILES_SETUP_MODE=internal
+    export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@example.invalid
+    export GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@example.invalid
+    CO="$FAKE_ROOT/claude/plugin/company"
+    OTHER="$TEST_TEMP_HOME/other"
+    git init -q --bare -b main "$TEST_TEMP_HOME/company.git"
+    git init -q -b main "$CO"
+    printf '{}\n' >"$CO/marketplaces.json"
+    printf '{"plugins":[]}\n' >"$CO/plugins.json"
+    printf 'local\n' >"$CO/notes.local.json"
+    git -C "$CO" add . && git -C "$CO" commit -qm init
+    git -C "$CO" remote add origin "$TEST_TEMP_HOME/company.git"
+    git -C "$CO" push -q -u origin main
+    git clone -q "$TEST_TEMP_HOME/company.git" "$OTHER"
+}
+
+# _other_publishes — origin/main gains a manifest change from another PC.
+_other_publishes() {
+    printf '{"x":"https://ghes.example.invalid/corp/x"}\n' >"$OTHER/marketplaces.json"
+    git -C "$OTHER" commit -qam other && git -C "$OTHER" push -q origin main
+}
+
+@test "company/ (a) up-to-date main: no company/ line, exit 0 (#2446)" {
+    _make_company
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    refute_output --partial "company/"
+}
+
+@test "company/ (b) behind main + uncommitted change: pulled with autostash, change kept (#2446)" {
+    _make_company
+    _other_publishes
+    printf 'edited\n' >"$CO/notes.local.json"
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "company/ main 을 origin/main 으로 갱신했습니다"
+    assert_equal "$(git -C "$CO" rev-parse HEAD)" "$(git -C "$OTHER" rev-parse HEAD)"
+    assert_equal "$(cat "$CO/notes.local.json")" edited
+}
+
+@test "company/ (b) --dry-run only reports the pull it would run (#2446)" {
+    _make_company
+    _other_publishes
+    before=$(git -C "$CO" rev-parse HEAD)
+    run "$FAKE_ROOT/scripts/update-skills.sh" --dry-run
+    assert_success
+    assert_output --partial "pull --rebase --autostash origin main"
+    assert_equal "$(git -C "$CO" rev-parse HEAD)" "$before"
+}
+
+@test "company/ (c) stale feature branch: summary-mode warning names branch + switch -C, no switch (#2446)" {
+    _make_company
+    git -C "$CO" switch -q -c feat/old
+    printf 'x\n' >"$CO/README" && git -C "$CO" add README && git -C "$CO" commit -qm readme
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "'feat/old' 브랜치"
+    assert_output --partial "정리: git -C $CO switch -C main origin/main"
+    assert_equal "$(git -C "$CO" symbolic-ref --short HEAD)" feat/old
+}
+
+@test "company/ (d) feature branch with different manifests: warning only, no fix command (#2446)" {
+    _make_company
+    git -C "$CO" switch -q -c feat/new
+    printf '{"y":"https://ghes.example.invalid/corp/y"}\n' >"$CO/marketplaces.json"
+    git -C "$CO" commit -qam y
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    assert_output --partial "미게시 변경이 있을 수 있어"
+    refute_output --partial "switch -C"
+    assert_equal "$(git -C "$CO" symbolic-ref --short HEAD)" feat/new
+}
+
+@test "company/ refresh is skipped outside internal mode and fails soft on a fetch error (#2446)" {
+    _make_company
+    _other_publishes
+    before=$(git -C "$CO" rev-parse HEAD)
+    DOTFILES_SETUP_MODE=external run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_success
+    refute_output --partial "company/"
+    git -C "$CO" remote set-url origin "$TEST_TEMP_HOME/missing.git"
+    run "$FAKE_ROOT/scripts/update-skills.sh"
+    assert_failure 1
+    assert_output --partial "company/ origin fetch 실패"
+    run cat "$CALL_LOG"
+    assert_line "skills-ssot"
+    assert_equal "$(git -C "$CO" rev-parse HEAD)" "$before"
+}
