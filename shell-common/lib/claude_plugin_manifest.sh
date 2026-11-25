@@ -163,15 +163,21 @@ _claude_plugin_git_url() {
 # marketplaces shipping the same plugin name install the same "<name>:*"
 # skills twice, so skills-register refuses such an entry and skills-sync points
 # a dev fork at the ignore overlay instead (#2453). Unreadable files are skipped.
+# Entries are "<name>@<marketplace>" strings split at the LAST "@". An entry
+# tombstoned in the removed.local.json beside its file (plugin id, or its whole
+# marketplace) is not installed, so it is no collision.
 _claude_plugin_name_owner() {
     _cpno_p="$1"
     _cpno_mp="$2"
     shift 2
     for _cpno_f in "$@"; do
         [ -r "$_cpno_f" ] || continue
-        _cpno_hit=$(jq -r --arg p "$_cpno_p" --arg mp "$_cpno_mp" \
+        _cpno_gone=$(_claude_plugin_read_json_or "${_cpno_f%/*}/removed.local.json" '{}')
+        _cpno_hit=$(jq -r --arg p "$_cpno_p" --arg mp "$_cpno_mp" --argjson gone "$_cpno_gone" \
             'first((.plugins // [])[] | strings
-                | select((split("@") | .[0:-1] | join("@")) == $p and (split("@") | last) != $mp)) // empty' \
+                | select((split("@") | .[0:-1] | join("@")) == $p and (split("@") | last) != $mp)
+                | select(. as $id | (($gone.plugins // []) | index($id)) | not)
+                | select((split("@") | last) as $m | (($gone.marketplaces // []) | index($m)) | not)) // empty' \
             "$_cpno_f" 2>/dev/null)
         if [ -n "$_cpno_hit" ]; then
             printf '%s\n' "$_cpno_hit"

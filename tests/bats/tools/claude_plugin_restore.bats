@@ -680,6 +680,18 @@ _company_https() {
     assert_output --partial '조치: skills-register --remove sp-dev'
 }
 
+@test "#2453: an install-only name collision is permanent and points at --remove, not re-register" {
+    _fake_claude
+    _company_https "https://ghes.example.invalid/corp/sp-dev.git"
+    printf '{"understand-anything": {}, "sp-dev": {}}\n' >"$STORE/known_marketplaces.json"
+    CLAUDE_FAIL_ON=superpowers@sp-dev CLAUDE_FAIL_MSG='Plugin name collision: superpowers (by an author tool)' \
+        run "$PLUGDIR/restore.sh"
+    assert_failure 1
+    assert_output --partial '영구 실패: install superpowers@sp-dev'
+    assert_output --partial '조치: skills-register --remove sp-dev'
+    refute_output --partial '다시 실행하면 남은 항목만 재시도'
+}
+
 @test "#2453: a timeout is transient — keeps the re-run advice, no fix command" {
     _fake_claude
     _company_https "https://ghes.example.invalid/corp/sp-dev.git"
