@@ -302,6 +302,13 @@ STUB
 #                     | "empty-then-success" | "state-success" | "state-failed"
 #                     (default: success)
 #   merge_result    - "success" | "failed" (default: success)
+#   pr_state        - PR state `pr view` reports: OPEN | MERGED | CLOSED
+#                     (default: OPEN)
+#   required_checks - what main's protection requires (#2448), answered by
+#                     `gh api .../branches/main` and `.../rules/branches/main`:
+#                     "required" (classic protection context) | "ruleset"
+#                     (a required_status_checks ruleset rule) | "none" |
+#                     "unreadable" (the api call fails) (default: required)
 #
 # The script polls via `gh pr view --json statusCheckRollup --jq ...`
 # (real gh 2.45.0 has no `--json` on `gh pr checks` at all — verified
@@ -314,11 +321,10 @@ STUB
 #   state-success / state-failed -> StatusContext shape (state=SUCCESS /
 #               state=FAILURE, no conclusion) to exercise that jq branch
 # Two more sentinels exercise the fail-closed edges FIX 1/2 address:
-#   empty              -> {"statusCheckRollup":[]} on every poll (a
-#                          genuinely checkless repo — the script has no "no
+#   empty              -> {"statusCheckRollup":[]} on every poll (required
+#                          checks that never report — the script has no "no
 #                          checks reported" signal to short-circuit on, so
-#                          this must poll the FULL window before declaring
-#                          the repo checkless)
+#                          this must poll the FULL window, then time out)
 #   empty-then-success -> empty on the first 2 polls (checks not yet
 #                          registered), then a real SUCCESS CheckRun from
 #                          the 3rd poll onward — proves the script does NOT
@@ -332,11 +338,64 @@ _install_gh_stub() {
     : >"$GH_STUB_LOG"
     echo "success" >"$GH_STUB_DIR/checks_result"
     echo "success" >"$GH_STUB_DIR/merge_result"
+    echo "OPEN" >"$GH_STUB_DIR/pr_state"
+    echo "required" >"$GH_STUB_DIR/required_checks"
 
     # Generate stub; use double quotes to expand paths, escape runtime vars
     cat >"$GH_STUB_DIR/bin/gh" <<STUB
 #!/usr/bin/env bash
 echo "\$*" >> "$GH_STUB_LOG"
+# Run the caller's --jq filter for real via the system jq, so the script's
+# actual expressions are exercised instead of re-implemented here.
+_emit() {
+    JQ_FILTER=""
+    PREV=""
+    for ARG in "\$@"; do
+        if [ "\$PREV" = "--jq" ]; then
+            JQ_FILTER="\$ARG"
+            break
+        fi
+        PREV="\$ARG"
+    done
+    if [ -n "\$JQ_FILTER" ]; then
+        echo "\$JSON" | jq -r "\$JQ_FILTER"
+    else
+        echo "\$JSON"
+    fi
+}
+# Simulate a merge by updating the bare repo's main to the latest
+# chore/plugin-sync-publish-* branch commit (the one just pushed).
+_sim_merge() {
+    [ -n "\${GH_STUB_BARE_REPO:-}" ] || return 0
+    BRANCH=\$(git -C "\$GH_STUB_BARE_REPO" for-each-ref --format='%(refname:short)' 'refs/heads/chore/plugin-sync-publish-*' --sort=-creatordate | head -1)
+    if [ -n "\$BRANCH" ]; then
+        COMMIT=\$(git -C "\$GH_STUB_BARE_REPO" rev-parse "\$BRANCH")
+        git -C "\$GH_STUB_BARE_REPO" update-ref refs/heads/main "\$COMMIT"
+    fi
+}
+if [ "\$1" = "api" ]; then
+    REQ=\$(cat "$GH_STUB_DIR/required_checks")
+    [ "\$REQ" = "unreadable" ] && { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+    case "\$*" in
+    *rules/branches/main*)
+        if [ "\$REQ" = "ruleset" ]; then
+            JSON='[{"type":"pull_request"},{"type":"required_status_checks"}]'
+        else
+            JSON='[{"type":"pull_request"}]'
+        fi
+        ;;
+    *branches/main*)
+        if [ "\$REQ" = "required" ]; then
+            JSON='{"protection":{"enabled":true,"required_status_checks":{"enforcement_level":"everyone","contexts":["CI"],"checks":[{"context":"CI"}]}}}'
+        else
+            JSON='{"protection":{"enabled":true,"required_status_checks":{"enforcement_level":"off","contexts":[],"checks":[]}}}'
+        fi
+        ;;
+    *) exit 1 ;;
+    esac
+    _emit "\$@"
+    exit 0
+fi
 case "\$1 \$2" in
 "pr create")
     # When pr_create_noise is set, emit a warning to stderr (which the script
@@ -371,37 +430,14 @@ case "\$1 \$2" in
         ;;
     *) ROLLUP="\$RESULT" ;;
     esac
-    JSON="{\\"statusCheckRollup\\":\$ROLLUP}"
-    # Pull out the --jq filter the caller passed and run it for real via
-    # the system jq, so the script's actual aggregation expression is
-    # exercised end-to-end instead of re-implemented here.
-    JQ_FILTER=""
-    PREV=""
-    for ARG in "\$@"; do
-        if [ "\$PREV" = "--jq" ]; then
-            JQ_FILTER="\$ARG"
-            break
-        fi
-        PREV="\$ARG"
-    done
-    if [ -n "\$JQ_FILTER" ]; then
-        echo "\$JSON" | jq -r "\$JQ_FILTER"
-    else
-        echo "\$JSON"
-    fi
+    [ "\$(cat "$GH_STUB_DIR/pr_state")" = "MERGED" ] && _sim_merge
+    JSON="{\\"state\\":\\"\$(cat "$GH_STUB_DIR/pr_state")\\",\\"statusCheckRollup\\":\$ROLLUP}"
+    _emit "\$@"
     exit 0
     ;;
 "pr merge")
     if [ "\$(cat "$GH_STUB_DIR/merge_result")" = "success" ]; then
-        # Simulate the merge by updating the bare repo's main to the latest
-        # chore/plugin-sync-publish-* branch commit (the one just pushed).
-        if [ -n "\${GH_STUB_BARE_REPO:-}" ]; then
-            BRANCH=\$(git -C "\$GH_STUB_BARE_REPO" for-each-ref --format='%(refname:short)' 'refs/heads/chore/plugin-sync-publish-*' --sort=-creatordate | head -1)
-            if [ -n "\$BRANCH" ]; then
-                COMMIT=\$(git -C "\$GH_STUB_BARE_REPO" rev-parse "\$BRANCH")
-                git -C "\$GH_STUB_BARE_REPO" update-ref refs/heads/main "\$COMMIT"
-            fi
-        fi
+        _sim_merge
         exit 0
     fi
     echo "merge blocked" >&2
@@ -511,25 +547,20 @@ STUB
     assert_output "0"
 }
 
-@test "_open_and_merge_pr hits the terminal checkless state and does not merge when the rollup stays empty for the full window" {
-    # FIX 2 (codex BLOCKER): `gh pr view --json statusCheckRollup` has no
-    # "no checks reported" signal to short-circuit on — a genuinely
-    # checkless repo just returns an empty rollup on every single poll.
-    # The script must poll the FULL max_tries window (never give up early
-    # on an empty rollup) and only THEN, having never observed a real
-    # check, report the repo as checkless. Never a merge either way.
+@test "_open_and_merge_pr times out without merging when required checks never report" {
+    # main REQUIRES a check (default stub) but the rollup stays empty: the
+    # script polls the FULL window (never a premature give-up) and then
+    # times out with the manual-merge cleanup hint. Never a merge.
     REPO="$TEST_TEMP_HOME/repo"
     _seed_repo_with_origin "$REPO"
     git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
     _install_gh_stub
     echo "empty" >"$GH_STUB_DIR/checks_result"
-    PUBLISH_SYNC_CHECK_INTERVAL=0
-    PUBLISH_SYNC_CHECK_MAX_TRIES=3
-    export PUBLISH_SYNC_CHECK_INTERVAL PUBLISH_SYNC_CHECK_MAX_TRIES
 
     run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
     assert_failure
-    assert_output --partial "status check가 구성되지 않은 리포"
+    assert_output --partial "status check 대기 타임아웃"
+    assert_output --partial "pull --rebase --autostash origin main"
     run grep -c "^pr view" "$GH_STUB_LOG"
     assert_output "3"
     run grep -c "^pr merge" "$GH_STUB_LOG"
@@ -553,6 +584,125 @@ STUB
     assert_success
     run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
     assert_output "1"
+}
+
+# --- #2448: merge gate follows main's protection policy ---
+
+_seed_publish_repo() {
+    # $1 = marketplaces.json content, $2 = plugins.json content. Seeds REPO
+    # with an offline origin + gh stub wired to merge into the bare repo, and
+    # commits the manifests as a pure sync change (a diff to publish).
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    BARE=$(git -C "$REPO" remote get-url origin)
+    GH_STUB_BARE_REPO="$BARE"
+    export GH_STUB_BARE_REPO
+    _install_gh_stub
+    _route_origin_offline "$REPO" "https://ghes.example.invalid/owner/company.git" "$BARE"
+    printf '%s\n' "$1" >"$REPO/claude/plugin/marketplaces.json"
+    git -C "$REPO" add claude/plugin/marketplaces.json
+    _commit_pure_sync_change "$REPO" claude/plugin/plugins.json "$2"
+    DRY_RUN=0
+}
+
+@test "(a) _open_and_merge_pr waits for a ruleset-required check and merges once it passes" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "ruleset" >"$GH_STUB_DIR/required_checks"
+    echo "empty-then-success" >"$GH_STUB_DIR/checks_result"
+    PUBLISH_SYNC_CHECK_MAX_TRIES=5
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_success
+    run grep -c "^pr view" "$GH_STUB_LOG"
+    assert_output "3"
+    run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
+    assert_output "1"
+}
+
+@test "(b) no required check + valid manifests: merges without polling and tidies local main" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
+    echo "none" >"$GH_STUB_DIR/required_checks"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    run grep -c "^pr view" "$GH_STUB_LOG"
+    assert_output "0"
+    run grep -c "^pr merge.*--admin" "$GH_STUB_LOG"
+    assert_output "1"
+    # the diverged local sync commits were rebased away onto the published one
+    [ "$(git -C "$REPO" rev-parse main)" = "$(git -C "$REPO" rev-parse origin/main)" ]
+}
+
+@test "(c) no required check + broken JSON: does not merge, exits non-zero" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk",'
+    echo "none" >"$GH_STUB_DIR/required_checks"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "JSON 파싱 불가"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "(c) no required check + plugin referencing an unknown marketplace: does not merge" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk", "q@ghost"]}'
+    echo "none" >"$GH_STUB_DIR/required_checks"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "q@ghost"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "(d) protection unreadable: fails closed, no polling, no merge" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
+    echo "unreadable" >"$GH_STUB_DIR/required_checks"
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_failure
+    assert_output --partial "보호 설정을 읽지 못해"
+    run grep -c "^pr view" "$GH_STUB_LOG"
+    assert_output "0"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+}
+
+@test "(e) PR merged by hand mid-poll: stops polling and takes the success path" {
+    _seed_publish_repo '{"mk": "owner/mk"}' '{"plugins": ["p@mk"]}'
+    echo "pending" >"$GH_STUB_DIR/checks_result"
+    echo "MERGED" >"$GH_STUB_DIR/pr_state"
+    # MERGED makes the stub's `pr view` also land the branch on the bare
+    # main, as a human merge in the browser would.
+
+    run _publish_manifest_diff "$REPO" "company" claude/plugin/marketplaces.json claude/plugin/plugins.json
+    assert_success
+    assert_output --partial "이미 병합됨"
+    run grep -c "^pr view" "$GH_STUB_LOG"
+    assert_output "1"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
+    [ "$(git -C "$REPO" rev-parse main)" = "$(git -C "$REPO" rev-parse origin/main)" ]
+}
+
+@test "(f) PR closed mid-poll: fails at once without merging" {
+    REPO="$TEST_TEMP_HOME/repo"
+    _seed_repo_with_origin "$REPO"
+    git -C "$REPO" remote set-url origin "https://github.com/owner/repo.git"
+    _install_gh_stub
+    echo "pending" >"$GH_STUB_DIR/checks_result"
+    echo "CLOSED" >"$GH_STUB_DIR/pr_state"
+
+    run _open_and_merge_pr "$REPO" "chore/plugin-sync-publish-public-20260702-000000"
+    assert_failure
+    assert_output --partial "병합 없이 닫힘"
+    run grep -c "^pr view" "$GH_STUB_LOG"
+    assert_output "1"
+    run grep -c "^pr merge" "$GH_STUB_LOG"
+    assert_output "0"
 }
 
 @test "_publish_manifest_diff no-ops when there is nothing to publish" {
