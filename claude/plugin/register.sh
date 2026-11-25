@@ -290,7 +290,7 @@ else
 			ux_info "개발용 fork 라면 등록 대신 제외: claude/plugin/skills-workspace-ignore.local.json 에 \"$mp\" 추가"
 			exit 2
 		fi
-	done < <(jq -r '.plugins[].name' <<<"$manifest")
+	done < <(jq -r '.plugins[]?.name // empty' <<<"$manifest")
 	# The stored raw string is compared as is, so an entry saved without .git
 	# (or with a trailing slash) is rewritten by re-running with the same repo.
 	mp_new=$(jq --arg k "$mp" --arg v "$target" '.[$k] = $v' <<<"$mp_old") || exit 1
