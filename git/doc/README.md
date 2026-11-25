@@ -120,11 +120,12 @@ git 3-way merge 는 줄 단위다. 두 리모트가 서로 다른 항목을 추�
    충돌을 없애지 않고 줄인다(완화) — 양측이 같은 이웃 바로 옆에 넣으면 여전히 충돌한다.
    - 반증 사례 (issue #2445): #2432 는 `mytool.md` 의 `Total: N` 집계 라인을 지우며
      "서로 다른 위치 삽입은 자동 병합된다 — 집계 라인이 충돌 표면의 전부"를 전제했다.
-     2026-11-25 `git sync` merge `c44777846` 에서 같은 파일이 다시 충돌했다. origin 은
-     `af_skills_autoupdate`·`check_ssl`, upstream 은 `ai_cli_manage` 를 추가했는데,
-     셋 다 알파벳순 목록 머리의 같은 앵커 줄(`**Tool** — Description`) 바로 아래에
-     정렬됐다. 정렬된 생성 목록은 삽입 위치를 고를 수 없으므로 이 **같은-앵커 삽입**
-     표면은 집계 라인을 없애도 남는다(한쪽만 고친 줄은 자동 병합된다).
+     2026-11-25 `git sync` merge `c44777846`(GHES mirror 쪽 clone 의 merge 라 이
+     저장소에는 없다)에서 같은 파일이 다시 충돌했다. origin 은 `af_skills_autoupdate`·
+     `check_ssl`, upstream 은 `ai_cli_manage` 를 추가했는데, `af_skills_autoupdate` 와
+     `ai_cli_manage` 가 알파벳순 목록 머리의 같은 앵커 줄(`**Tool** — Description`)
+     바로 아래에 정렬돼 맞닿았다. 정렬된 생성 목록은 삽입 위치를 고를 수 없으므로 이
+     **같은-앵커 삽입** 표면은 집계 라인을 없애도 남는다(한쪽만 고친 줄은 자동 병합된다).
 4. **생성 문서는 재생성으로 해결** — `docs/guide/commands/*.md` 의 같은-앵커 삽입
    (규칙 3 반증 사례) 같은 충돌은 생성물을 커밋하는 한 불가피하다. 손으로 병합하지
    말고 어느 한 쪽을 택한 뒤 `bash shell-common/tools/custom/gen_command_docs.sh --topic <topic> --force`
