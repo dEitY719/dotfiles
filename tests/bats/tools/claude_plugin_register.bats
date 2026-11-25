@@ -104,6 +104,21 @@ _head_subject() { git -C "$CO" log -1 --format=%s; }
     assert_output --partial "등록돼 있지 않음"
 }
 
+@test "unsorted plugins.json: re-registering is still a no-op; --remove cleans orphan plugins" {
+    "$FAKE/register.sh" "$URL"
+    jq '.plugins |= reverse' "$CO/plugins.json" >"$CO/p.tmp" && mv "$CO/p.tmp" "$CO/plugins.json"
+    git -C "$CO" commit -qam unsort
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    assert_output --partial "이미 등록됨"
+    jq 'del(."git-skills")' "$CO/marketplaces.json" >"$CO/m.tmp" && mv "$CO/m.tmp" "$CO/marketplaces.json"
+    git -C "$CO" commit -qam orphan
+    run "$FAKE/register.sh" --remove git-skills
+    assert_success
+    run jq -c '.plugins' "$CO/plugins.json"
+    assert_output '["corp@corp-skills"]'
+}
+
 @test "github.com URLs are refused (exit 2) with no write" {
     for u in "https://github.com/o/git-skills.git" "git@github.com:o/git-skills.git" \
         "ssh://git@SSH.GitHub.com:443/o/git-skills.git"; do

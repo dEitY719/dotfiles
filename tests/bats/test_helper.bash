@@ -70,6 +70,9 @@ setup_isolated_home() {
     # A test may exercise the Codex guard explicitly; the invoking agent must
     # not cause unrelated interactive-shell tests to skip initialization.
     unset CODEX_CLI CODEX_MANAGED_BY_NPM CODEX_SANDBOX_NETWORK_DISABLED
+    # A real skills workspace root would let skills-sync's unregistered-marketplace
+    # scan (#2443) read the developer's clones instead of the isolated $HOME.
+    unset SKILLS_DIR WORKSPACE_ROOT
     export ZDOTDIR="$TEST_TEMP_HOME"
     export XDG_CONFIG_HOME="$TEST_TEMP_HOME"
     export XDG_CACHE_HOME="$TEST_TEMP_HOME"
