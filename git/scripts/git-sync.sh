@@ -293,9 +293,12 @@ fi
 # ── 1b. 사전 가드: external 리모트에 대상 브랜치 ref 가 있는가 (빈 repo 시드 대기, #2439) ──
 # 이 가드는 "접근 가능한데 ref 없음"만 담당한다. ls-remote 자체가 실패하면(네트워크 불통 등)
 # 그대로 통과시켜 아래 fetch 단계의 종전 실패 경로가 원인을 보고하게 한다.
-if ext_refs=$(git ls-remote "$EXTERNAL_REMOTE" "refs/heads/$BRANCH" 2>/dev/null) && [[ -z "$ext_refs" ]]; then
-    log_fail "'$EXTERNAL_REMOTE' 에 '$BRANCH' 브랜치가 없습니다 (빈 repo — 시드 전)."
-    log_info "릴레이/외부 흐름이 upstream 을 채울 때까지 기다리거나, 시드 work order 를 수행하세요."
+# 충돌 재개(MERGE_HEAD) 중에는 건너뛴다 — 해결분 커밋이 upstream 상태에 막히면 안 된다.
+if ! git rev-parse -q --verify MERGE_HEAD >/dev/null &&
+    ext_refs=$(git ls-remote "$EXTERNAL_REMOTE" "refs/heads/$BRANCH" 2>/dev/null) && [[ -z "$ext_refs" ]]; then
+    log_fail "'$EXTERNAL_REMOTE' 에 '$BRANCH' 브랜치가 없습니다 (빈 repo — 시드 전, 또는 브랜치명 불일치)."
+    log_info "릴레이/외부 흐름이 $EXTERNAL_REMOTE 을 채울 때까지 기다리거나, '$BRANCH' 를 먼저 push 해 시드하세요."
+    log_info "브랜치 이름이 다르면 GIT_SYNC_BRANCH 로 지정할 수 있습니다."
     log_info "이 상태에서는 git sync 를 계속 진행하지 않습니다 (external 없이 sync 하지 않는다)."
     exit 1
 fi
