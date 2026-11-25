@@ -42,8 +42,9 @@ GH_HOST_LIB="${SHELL_COMMON:-$SCRIPT_DIR/../../shell-common}/lib/gh_host.sh"
 [ -r "$GH_HOST_LIB" ] && . "$GH_HOST_LIB"
 
 SYNC_MSG="chore(claude-plugin): sync manifest" # publish-sync.sh purity rule
-# Same company/ publish-sync.sh publishes (its MAIN_ROOT), never a worktree copy.
-COMPANY_DIR="$HOME/dotfiles/claude/plugin/company"
+COMPANY_DIR="$SCRIPT_DIR/company"
+# publish-sync.sh publishes only $HOME/dotfiles's company/ (its MAIN_ROOT).
+PUBLISH_PLUGIN_DIR="$HOME/dotfiles/claude/plugin"
 WORKSPACE="${SKILLS_DIR:-${WORKSPACE_ROOT:-$HOME/para/project/skills}}"
 
 _usage() {
@@ -174,6 +175,12 @@ if _is_url "$target"; then
 		exit 2
 	fi
 	_refuse_github_com "$target"
+fi
+# From a worktree or other checkout the edit would land in a company/ that
+# publish-sync.sh never publishes, so refuse instead of silently redirecting.
+if [ "$(cd "$PUBLISH_PLUGIN_DIR" 2>/dev/null && pwd -P)" != "$(cd "$SCRIPT_DIR" && pwd -P)" ]; then
+	ux_error "publish-sync.sh 는 $PUBLISH_PLUGIN_DIR/company 만 게시합니다 — ~/dotfiles 의 skills-register 로 실행하세요 (현재: $SCRIPT_DIR)"
+	exit 2
 fi
 if [ ! -d "$COMPANY_DIR/.git" ]; then
 	ux_error "company/ repo 가 없습니다 ($COMPANY_DIR) — 사내(internal) PC 에서만 등록할 수 있습니다"
