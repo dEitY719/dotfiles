@@ -42,14 +42,17 @@ async function engine($: any, args: string[], withStore = false): Promise<Run> {
   }
 }
 
-const failure = (r: Run) => (r.stderr || r.stdout).trim() || `exit ${r.exitCode}`
+// stdout on success, else the engine's error text.
+const output = (r: Run) =>
+  r.exitCode === 0 ? r.stdout.trim() : (r.stderr || r.stdout).trim() || `exit ${r.exitCode}`
+const tokensLine = (v: SkillsView) => `tokens ~${v.tokens.current} now, ~${v.tokens.recommended} recommended`
 
 async function load($: any): Promise<SkillsView> {
   const [list, rec] = await Promise.all([engine($, ['list', '--json'], true), engine($, ['recommend'], true)])
-  if (list.exitCode !== 0) return { ...EMPTY, error: failure(list) }
+  if (list.exitCode !== 0) return { ...EMPTY, error: output(list) }
   try {
     const j = JSON.parse(list.stdout)
-    return { skills: j.skills, tokens: j.tokens, recommend: rec.exitCode === 0 ? rec.stdout.trim() : failure(rec), error: '' }
+    return { skills: j.skills, tokens: j.tokens, recommend: output(rec), error: '' }
   } catch {
     return { ...EMPTY, error: 'engine printed no JSON' }
   }
@@ -67,7 +70,7 @@ export function report(v: SkillsView, columns: number): string {
   const rows = v.skills.map(
     s => `${cut(s.name, w)} ${cut(show(s.state), 9)} ${String(s.uses).padStart(5)} ${String(s.tokens).padStart(7)}`,
   )
-  return [head, ...rows, '', `tokens ~${v.tokens.current} now, ~${v.tokens.recommended} recommended`, NOTE].join('\n')
+  return [head, ...rows, '', tokensLine(v), NOTE].join('\n')
 }
 
 export const register: Register = on => {
@@ -94,7 +97,7 @@ export const register: Register = on => {
     if (verb !== undefined) {
       if (!VERBS.has(verb)) return { text: `usage: /skills-map [${[...VERBS].join('|')} ...]`, isTextDisplayOnly: true }
       const r = await engine($, args, ['list', 'recommend', 'apply'].includes(verb))
-      return { text: r.exitCode === 0 ? r.stdout.trim() : failure(r), isTextDisplayOnly: true }
+      return { text: output(r), isTextDisplayOnly: true }
     }
     const v = await load($)
     await update($, view, () => v)
@@ -114,7 +117,7 @@ export const register: Register = on => {
     const v = await read($, view)
     const toggle = (s: SkillRow, state: string) => async () => {
       const r = await engine($, ['set', s.name, state])
-      await $.ui.toast(r.exitCode === 0 ? r.stdout.trim() : failure(r))
+      await $.ui.toast(output(r))
       const next = await load($)
       await update($, view, () => next)
     }
@@ -133,7 +136,7 @@ export const register: Register = on => {
         ))}
         <Text bold>Recommended</Text>
         <Text dimColor>{v.recommend || '(none)'}</Text>
-        <Text>tokens ~{v.tokens.current} now, ~{v.tokens.recommended} recommended</Text>
+        <Text>{tokensLine(v)}</Text>
         <Text dimColor>{NOTE}</Text>
       </Box>
     )
