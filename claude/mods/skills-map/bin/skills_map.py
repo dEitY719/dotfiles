@@ -164,11 +164,12 @@ def inventory() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]] | None]
         warn("claude CLI unavailable: plugin skills not listed, plugin commands disabled")
     else:
         plugins = {}
+        plist = [p for p in plist if isinstance(p, dict)]
+        bases = [str(p.get("id", "")).split("@")[0] for p in plist]
         for p in plist:
-            if not isinstance(p, dict):
-                continue
             pid = str(p.get("id", ""))
             name = pid.split("@")[0]
+            name = name if bases.count(name) == 1 else pid  # same name from two marketplaces: key by full id
             plugins[name] = {"id": pid, "enabled": bool(p.get("enabled")), "path": str(p.get("installPath") or "")}
             if not plugins[name]["path"]:
                 continue
@@ -228,6 +229,7 @@ def scan_usage(days: int) -> tuple[dict[str, dict[str, Any]], float, bool]:
         return counts, now, False
     seen: set[str] = set()
     skipped = 0
+    read = 0  # transcripts actually read in the window: an empty dir is no evidence
     for f in root.rglob("*.jsonl"):
         try:
             if f.stat().st_mtime < cutoff:  # pre-filter only; the window is the record timestamp
@@ -235,6 +237,7 @@ def scan_usage(days: int) -> tuple[dict[str, dict[str, Any]], float, bool]:
             fh = f.open(encoding="utf-8", errors="replace")
         except OSError:
             continue
+        read += 1
         with fh:
             for line in fh:
                 if '"Skill"' not in line and "<command-name>" not in line:
@@ -263,7 +266,7 @@ def scan_usage(days: int) -> tuple[dict[str, dict[str, Any]], float, bool]:
                     bump(counts, name, ts)
     if skipped:
         warn(f"{skipped} skill record(s) without a readable timestamp were not counted")
-    return counts, now, True
+    return counts, now, read > 0
 
 
 def usage(days: int, refresh: bool) -> tuple[dict[str, dict[str, Any]], float, bool]:
@@ -659,7 +662,7 @@ def cmd_plugin(a: argparse.Namespace) -> int:
     w = World()
     if w.plugins is None:
         raise Refused("claude CLI unavailable: plugin commands disabled")
-    name = a.name.split("@")[0]
+    name = a.name if a.name in w.plugins else a.name.split("@")[0]
     p = w.plugins.get(name)
     if p is None:
         raise unknown("plugin", name, list(w.plugins))
@@ -683,7 +686,7 @@ def cmd_plugin(a: argparse.Namespace) -> int:
 
 
 def cmd_recommend(a: argparse.Namespace, write: bool = False) -> int:
-    w = World(a.days, a.refresh, a.with_store)
+    w = World(a.days, a.refresh or write, a.with_store)  # apply never acts on a stale cache
     if not w.found:
         raise Refused("no transcripts: no usage evidence to recommend from")
     rec = recommend(w, a.top, a.min_uses)
