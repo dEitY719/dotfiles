@@ -369,13 +369,27 @@ def atomic_write(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
+_held = [0]  # re-entrancy depth: a second flock on a new fd in this process would deadlock
+
+
 @contextlib.contextmanager
 def locked() -> Iterator[None]:
+    if _held[0]:
+        _held[0] += 1
+        try:
+            yield
+        finally:
+            _held[0] -= 1
+        return
     d = state_path().parent
     d.mkdir(parents=True, exist_ok=True)
     with (d / ".lock").open("w") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
-        yield
+        _held[0] = 1
+        try:
+            yield
+        finally:
+            _held[0] = 0
 
 
 def real_settings() -> Path:
@@ -789,6 +803,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             a = ap.parse_args(["list"])
     try:
+        if a.cmd in ("set", "plugin", "apply", "sync"):  # whole state read-modify-write under one lock
+            with locked():
+                return int(a.fn(a))
         return int(a.fn(a))
     except Refused as e:
         warn(str(e))
