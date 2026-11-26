@@ -724,15 +724,13 @@ _phase_verify() {
         log_warning "jq 미설치 — mods 로드 설정 확인 건너뜀"
     else
         _cw_want=$(jq -r '.env.CLAUDE_CODE_PLUGIN_DIRS // empty' "$CLAUDE_SETTINGS_SOURCE" 2>/dev/null)
-        _cw_old_ifs=$IFS
-        IFS=:
-        for _cw_mod_dir in $_cw_want; do
+        IFS=: read -r -a _cw_dirs <<<"$_cw_want"
+        for _cw_mod_dir in "${_cw_dirs[@]}"; do
             # 경로는 '~/' 로 시작한다 — 문자열 치환으로만 펼친다 (eval 금지).
             _cw_path="${HOME}/${_cw_mod_dir#\~/}"
             [ -d "$_cw_path/.claude-plugin" ] ||
                 log_warning "mod 디렉토리 없음: $_cw_path — ~/dotfiles 가 이 체크아웃이 아니면 mod 가 로드되지 않는다"
         done
-        IFS=$_cw_old_ifs
         for acct in $ENABLED_ACCOUNTS; do
             _cw_live="$(_claude_resolve_account "$acct")/settings.json"
             if [ -n "$_cw_want" ] && [ "$(jq -r '.env.CLAUDE_CODE_PLUGIN_DIRS // empty' "$_cw_live" 2>/dev/null)" = "$_cw_want" ]; then
@@ -742,7 +740,7 @@ _phase_verify() {
             fi
         done
     fi
-    unset _cw_want _cw_old_ifs _cw_mod_dir _cw_path _cw_live
+    unset _cw_want _cw_dirs _cw_mod_dir _cw_path _cw_live
 
     # OpenCode / Codex / Gemini / agy / Hermes entry-level 합성은
     # scripts/setup-skills-ssot.sh 가 책임짐 (#791, #1376, #1731) — 플러그인 기반이
