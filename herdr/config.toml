@@ -66,3 +66,12 @@ command = "lazygit"
 description = "run lazygit"
 width = "80%"
 height = "80%"
+
+# skills-map (#2461): PATH link from shell-common/config/symlinks.conf.
+[[keys.command]]
+key = "prefix+ctrl+s"
+type = "popup"
+command = "skills-map"
+description = "skills map (toggle skill exposure)"
+width = "80%"
+height = "80%"

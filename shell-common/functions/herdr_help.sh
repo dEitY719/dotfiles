@@ -87,6 +87,7 @@ _herdr_help_rows_plugin() {
     ux_table_row "prefix+ctrl+r" "reviewr 토글"
     ux_table_row "prefix+ctrl+p" "플러그인 매니저 열기"
     ux_table_row "prefix+ctrl+g" "lazygit 팝업 (플러그인 아님 — tools.conf 로 설치)"
+    ux_table_row "prefix+ctrl+s" "skills-map 팝업 (스킬 노출 토글, #2461)"
 
     ux_section "herdr plugin CLI"
     ux_bullet "herdr plugin install <owner>/<repo>              # 부트스트랩 실패분 수동 재시도"

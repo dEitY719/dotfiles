@@ -38,7 +38,7 @@ marketplace repo 로 분리됐다. 등록은 `claude/plugin/{marketplaces,plugin
 - 매 세션 로드되는 전역 지침은 `claude/CLAUDE.md` 뿐이다(이 `AGENTS.md` 는 계정 dir 에 링크되지 않는다).
   Claude Code 전용(Codex/Gemini/Hermes 는 읽지 않음). session:close C-5 원장 작성자 규약도 거기 둔다 (#2387).
 - 훅(SessionStart drift 자동복구, statusline override, plugin path normalize, PostToolUse 디스패처,
-  PreToolUse 가드 3종, Stop 가드 공용 헬퍼)과 `mods/cache-watch`, `claude-accounts link`.
+  PreToolUse 가드 3종, Stop 가드 공용 헬퍼)과 `mods/cache-watch`, `mods/skills-map`(스킬 노출 CLI 엔진, #2461), `claude-accounts link`.
 
 **PreToolUse 가드(`claude/hooks/bash_*.py`)의 규칙을 넓히지 말 것** — 오탐은 `tests/integration/test_bash_*_guard.py` 의 ALLOWED 표에 추가하고 규칙을 좁힌다.
 

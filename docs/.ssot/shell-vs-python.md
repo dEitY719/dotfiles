@@ -32,6 +32,15 @@ jq 11곳)을 막기 위한 규칙이다.
 - 테스트: `tests/py/test_<영역>_*.py`, fixture 는 `tests/py/fixtures/<영역>/`.
   `pyproject.toml` `testpaths` 와 `./tests/test` 의 pytest 단계가 `tests/py` 를 포함한다.
 
+### 예외 — plugin 단독 엔진 `claude/mods/skills-map/bin/skills_map.py` (#2461)
+
+skills-map 엔진은 `tools/py/dotfiles_tools/` 밖, plugin 의 `bin/` 에 둔다. plugin 만 복사한
+다른 PC·동료 환경(dotfiles 셸 스택·uv venv 없음)에서도 `python3 -I` 단일 파일로 돌아야 하기
+때문이다. 규칙은 그대로 적용된다: stdlib 만, python3 >= 3.10, `uv run mypy .` (strict)·ruff 가
+저장소 전체를 검사하므로 이 파일도 별도 설정 없이 검사 대상이다(`pyproject.toml` 의 mypy
+`files = ["./"]`). 테스트는 `tests/py/test_skills_map.py`. 셸 thin entrypoint 대신
+`shell-common/config/symlinks.conf` 의 `~/.local/bin/skills-map` PATH 링크가 진입점이다.
+
 ## 호출 규약
 
 ```sh
