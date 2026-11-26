@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import difflib
 import fcntl
 import hashlib
@@ -209,6 +210,12 @@ def events(rec: dict[str, Any]) -> Iterator[str]:
                     yield name
 
 
+def bump(counts: dict[str, dict[str, Any]], name: str, ts: float) -> None:
+    c = counts.setdefault(name, {"uses": 0, "last": 0.0})
+    c["uses"] += 1
+    c["last"] = max(c["last"], ts)
+
+
 def scan_usage(days: int) -> tuple[dict[str, dict[str, Any]], float, bool]:
     """Count skill events in the last days by record timestamp. Returns (counts, scanned_at, found_dir)."""
     root = cfg_dir() / "projects"
@@ -252,9 +259,7 @@ def scan_usage(days: int) -> tuple[dict[str, dict[str, Any]], float, bool]:
                         continue
                     seen.add(uid)
                 for name in names:
-                    c = counts.setdefault(name, {"uses": 0, "last": 0.0})
-                    c["uses"] += 1
-                    c["last"] = max(c["last"], ts)
+                    bump(counts, name, ts)
     if skipped:
         warn(f"{skipped} skill record(s) without a readable timestamp were not counted")
     return counts, now, True
@@ -297,9 +302,7 @@ def merge_store(counts: dict[str, dict[str, Any]], store: Path, scanned_at: floa
         if key in seen:
             continue
         seen.add(key)
-        c = counts.setdefault(skill, {"uses": 0, "last": 0.0})
-        c["uses"] += 1
-        c["last"] = max(c["last"], ts)
+        bump(counts, skill, ts)
 
 
 # --- pins (F-8) --------------------------------------------------------------
@@ -589,6 +592,11 @@ def diff_lines(w: World, rec: dict[str, str]) -> list[str]:
     return out
 
 
+def unknown(kind: str, name: str, known: list[str]) -> Refused:
+    near = difflib.get_close_matches(name, known, n=3)
+    return Refused(f"unknown {kind} {name}" + (f" (did you mean: {', '.join(near)})" if near else ""), 2)
+
+
 def confirm(question: str, yes: bool) -> bool:
     if yes:
         return True
@@ -617,11 +625,10 @@ def cmd_set(a: argparse.Namespace) -> int:
     w = World()
     s = w.by_name.get(a.name)
     if s is None or s["plugin"]:
-        near = difflib.get_close_matches(a.name, [x["name"] for x in w.flat()], n=3)
-        raise Refused(f"unknown skill {a.name}" + (f" (did you mean: {', '.join(near)})" if near else ""), 2)
+        raise unknown("skill", a.name, [x["name"] for x in w.flat()])
     if RANK[state] >= 2 and s["pinned_by"] and not a.force:
         raise Refused(f"{a.name} is pinned by {', '.join(s['pinned_by'])}; --force to override")
-    old = json.loads(json.dumps(w.state))
+    old = copy.deepcopy(w.state)
     w.state["overrides"][a.name] = state
     commit(w.state, old)
     print(f"{a.name}: {SHOW.get(state, state)} (takes effect in a new session)")
@@ -635,8 +642,7 @@ def cmd_plugin(a: argparse.Namespace) -> int:
     name = a.name.split("@")[0]
     p = w.plugins.get(name)
     if p is None:
-        near = difflib.get_close_matches(name, list(w.plugins), n=3)
-        raise Refused(f"unknown plugin {name}" + (f" (did you mean: {', '.join(near)})" if near else ""), 2)
+        raise unknown("plugin", name, list(w.plugins))
     if a.state == "off":
         members = [s for s in w.skills if s["plugin"] == name]
         outside = sorted({who for s in members for who in s["pinned_by"] if not who.startswith(f"{name}:")})
@@ -673,7 +679,7 @@ def cmd_recommend(a: argparse.Namespace, write: bool = False) -> int:
         return 0
     if not confirm("apply?", a.yes):
         raise Refused("aborted")
-    old = json.loads(json.dumps(w.state))
+    old = copy.deepcopy(w.state)
     w.state["overrides"].update({n: v for n, v in rec.items() if w.by_name[n]["state"] != v})
     commit(w.state, old)
     print("applied (takes effect in a new session)")
