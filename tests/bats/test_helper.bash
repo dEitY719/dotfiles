@@ -35,6 +35,7 @@ export SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 # stale override from the previous test cannot leak.
 _BATS_REAL_DOTFILES_ROOT="$DOTFILES_ROOT"
 _BATS_REAL_SHELL_COMMON="$SHELL_COMMON"
+_BATS_REAL_HOME="$HOME"
 
 # Test isolation
 export DOTFILES_TEST_MODE=1
@@ -73,6 +74,15 @@ setup_isolated_home() {
     # A real skills workspace root would let skills-sync's unregistered-marketplace
     # scan (#2443) read the developer's clones instead of the isolated $HOME.
     unset SKILLS_DIR WORKSPACE_ROOT
+    # A caller's exported GH_HOST (gh-flow sessions pin github.com) overrides
+    # the host the code under test would resolve from the setup mode (#2469).
+    unset GH_HOST
+    # The developer's real ~/.opencode/bin on PATH makes ai_cli_manage.sh see
+    # a second opencode install once HOME is isolated (#2469).
+    PATH=":$PATH:"
+    PATH="${PATH//":$_BATS_REAL_HOME/.opencode/bin:"/:}"
+    PATH="${PATH#:}"
+    export PATH="${PATH%:}"
     export ZDOTDIR="$TEST_TEMP_HOME"
     export XDG_CONFIG_HOME="$TEST_TEMP_HOME"
     export XDG_CACHE_HOME="$TEST_TEMP_HOME"
