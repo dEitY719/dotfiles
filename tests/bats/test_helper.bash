@@ -80,7 +80,10 @@ setup_isolated_home() {
     # The developer's real ~/.opencode/bin on PATH makes ai_cli_manage.sh see
     # a second opencode install once HOME is isolated (#2469).
     PATH=":$PATH:"
-    PATH="${PATH//":$_BATS_REAL_HOME/.opencode/bin:"/:}"
+    # Loop: one pass leaves the 2nd of two adjacent duplicates (shared colon).
+    while [[ "$PATH" == *":$_BATS_REAL_HOME/.opencode/bin:"* ]]; do
+        PATH="${PATH//":$_BATS_REAL_HOME/.opencode/bin:"/:}"
+    done
     PATH="${PATH#:}"
     export PATH="${PATH%:}"
     export ZDOTDIR="$TEST_TEMP_HOME"
