@@ -78,8 +78,9 @@ export function visible(skills: SkillRow[], f: PaneFilter): SkillRow[] {
   return skills
     .filter(s => {
       // The FLAT label is display-only: matching it would make "skills"/"flat" hit every flat skill.
-      const hay = `${s.name} ${group(s) === FLAT ? '' : group(s)}`.toLowerCase()
-      return terms.every(t => hay.includes(t)) && (!f.plugin || group(s) === f.plugin)
+      const g = group(s)
+      const hay = `${s.name} ${g === FLAT ? '' : g}`.toLowerCase()
+      return terms.every(t => hay.includes(t)) && (!f.plugin || g === f.plugin)
     })
     .sort(byUse)
 }
@@ -89,7 +90,8 @@ type Group = { name: string; skills: number; uses: number; tokens: number; pinne
 export function groups(skills: SkillRow[]): Group[] {
   const m = new Map<string, Group>()
   for (const s of skills) {
-    const g = m.get(group(s)) ?? { name: group(s), skills: 0, uses: 0, tokens: 0, pinned: 0 }
+    const name = group(s)
+    const g = m.get(name) ?? { name, skills: 0, uses: 0, tokens: 0, pinned: 0 }
     g.skills += 1
     g.uses += s.uses
     g.tokens += s.tokens
