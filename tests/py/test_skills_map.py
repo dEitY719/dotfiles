@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -386,3 +387,86 @@ def test_concurrent_writer_wins_with_exit_3(e: Env, monkeypatch: pytest.MonkeyPa
     assert exc.value.code == 3
     assert n["i"] == 3  # first try + 2 retries
     assert json.loads(e.local.read_text()) == {"model": "changed-3"}
+
+
+# --- account resolution without CLAUDE_CONFIG_DIR (#2467) -----------------------
+
+
+def accounts(home: Path, *names: str) -> None:
+    for n in names:
+        (home / n).mkdir(parents=True, exist_ok=True)
+        (home / n / "settings.json").write_text("{}\n")
+
+
+def no_cfg_env(e: Env) -> dict[str, str]:
+    env = e.env()
+    del env["CLAUDE_CONFIG_DIR"]
+    return env
+
+
+def test_account_candidates_skip_shared_backups_and_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    accounts(tmp_path, ".claude", ".claude-work", ".claude-shared", ".claude-backups")
+    (tmp_path / ".claude-nosettings").mkdir()  # no settings.json: not an account
+    (tmp_path / ".claude.json").write_text("{}")
+    (tmp_path / ".claude.json.backup").write_text("{}")
+    sm = load_engine()
+    assert sm.account_candidates() == [tmp_path / ".claude", tmp_path / ".claude-work"]
+
+
+def test_default_account_has_the_newest_transcript(tmp_path: Path) -> None:
+    accounts(tmp_path, ".claude", ".claude-personal", ".claude-work")
+    for n, age in ((".claude", 300), (".claude-work", 10), (".claude-personal", 100)):
+        f = tmp_path / n / "projects/p/s.jsonl"
+        f.parent.mkdir(parents=True)
+        f.write_text("{}\n")
+        os.utime(f, (time.time() - age, time.time() - age))
+    sm = load_engine()
+    cands = sorted(tmp_path.glob(".claude*"))
+    assert sm.default_account(cands) == tmp_path / ".claude-work"
+    assert sm.default_account([tmp_path / ".claude-personal", tmp_path / ".claude"]) == tmp_path / ".claude-personal"
+
+
+def test_picker_enter_takes_default_and_number_picks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    accounts(tmp_path, ".claude", ".claude-work")
+    f = tmp_path / ".claude-work/projects/p/s.jsonl"
+    f.parent.mkdir(parents=True)
+    f.write_text("{}\n")
+    sm = load_engine()
+    cands = [tmp_path / ".claude", tmp_path / ".claude-work"]
+    answers = iter(["", "9", "1"])
+    monkeypatch.setattr("builtins.input", lambda _="": next(answers))
+    assert sm.pick_account(cands) == tmp_path / ".claude-work"
+    assert sm.pick_account(cands) == tmp_path / ".claude"  # out-of-range "9" re-asks, then "1"
+
+
+def test_non_tty_multi_account_warns_once_and_reads_default_claude(e: Env) -> None:
+    accounts(e.home, ".claude", ".claude-work", ".claude-shared")
+    r = subprocess.run(
+        [sys.executable, "-I", str(ENGINE), "list", "--json", "--refresh"],
+        capture_output=True, text=True, env=no_cfg_env(e), cwd=e.tmp, stdin=subprocess.DEVNULL, check=False,
+    )  # fmt: skip
+    assert r.returncode == 0, r.stderr
+    warns = [ln for ln in r.stderr.splitlines() if "CLAUDE_CONFIG_DIR" in ln]  # other lines: e.g. "no transcript"
+    assert len(warns) == 1 and ".claude-work" in warns[0]
+    names = {s["name"] for s in json.loads(r.stdout)["skills"]}
+    assert "decoy" in names and "foo" not in names
+
+
+def test_single_candidate_is_used_silently(e: Env) -> None:
+    shutil.rmtree(e.home / ".claude")
+    accounts(e.home, ".claude-work")
+    skill(e.home / ".claude-work/skills/solo", "solo", "only account")
+    r = subprocess.run(
+        [sys.executable, "-I", str(ENGINE), "list"],
+        capture_output=True, text=True, env=no_cfg_env(e), cwd=e.tmp, stdin=subprocess.DEVNULL, check=False,
+    )  # fmt: skip
+    assert r.returncode == 0, r.stderr
+    assert "CLAUDE_CONFIG_DIR" not in r.stderr
+    assert "solo" in r.stdout
+
+
+def test_table_header_names_the_account(e: Env) -> None:
+    r = e.run("list")
+    assert r.returncode == 0, r.stderr
+    assert str(e.cfg) in r.stdout.splitlines()[0]
