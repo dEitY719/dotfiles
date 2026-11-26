@@ -716,26 +716,33 @@ _phase_verify() {
         log_error_and_exit "\$HOME/.claude/settings.json 실파일 생성 실패"
     fi
 
-    # cache-watch mod (#2026) 로드 연결 — SSOT settings.json 의 env.CLAUDE_CODE_PLUGIN_DIRS
-    # 가 위 _claude_ensure_settings_copy 로 각 계정에 복사돼 매 세션 mod 를 로드한다
-    # (--plugin-dir 수동 지정 불필요). 경로는 statusLine 과 같은 ~/dotfiles 기준.
-    # soft-fail: 복사 누락이나 mod 디렉토리 부재는 경고만 한다.
-    _cw_mod_dir="${HOME}/dotfiles/claude/mods/cache-watch"
+    # mods (cache-watch #2026, skills-map #2465) 로드 연결 — SSOT settings.json 의
+    # env.CLAUDE_CODE_PLUGIN_DIRS(콜론 구분 다중 경로)가 위 _claude_ensure_settings_copy 로
+    # 각 계정에 복사돼 매 세션 mod 를 로드한다 (--plugin-dir 수동 지정 불필요). 경로는
+    # statusLine 과 같은 ~/dotfiles 기준. soft-fail: 복사 누락이나 mod 디렉토리 부재는 경고만 한다.
     if ! command -v jq >/dev/null 2>&1; then
-        log_warning "jq 미설치 — cache-watch mod 로드 설정 확인 건너뜀"
-    elif [ -d "$_cw_mod_dir/.claude-plugin" ]; then
+        log_warning "jq 미설치 — mods 로드 설정 확인 건너뜀"
+    else
+        _cw_want=$(jq -r '.env.CLAUDE_CODE_PLUGIN_DIRS // empty' "$CLAUDE_SETTINGS_SOURCE" 2>/dev/null)
+        _cw_old_ifs=$IFS
+        IFS=:
+        for _cw_mod_dir in $_cw_want; do
+            # 경로는 '~/' 로 시작한다 — 문자열 치환으로만 펼친다 (eval 금지).
+            _cw_path="${HOME}/${_cw_mod_dir#\~/}"
+            [ -d "$_cw_path/.claude-plugin" ] ||
+                log_warning "mod 디렉토리 없음: $_cw_path — ~/dotfiles 가 이 체크아웃이 아니면 mod 가 로드되지 않는다"
+        done
+        IFS=$_cw_old_ifs
         for acct in $ENABLED_ACCOUNTS; do
             _cw_live="$(_claude_resolve_account "$acct")/settings.json"
-            if jq -e '.env.CLAUDE_CODE_PLUGIN_DIRS // empty' "$_cw_live" >/dev/null 2>&1; then
-                log_dim "✓ ${acct} cache-watch mod 로드 설정 확인됨 (env.CLAUDE_CODE_PLUGIN_DIRS)"
+            if [ -n "$_cw_want" ] && [ "$(jq -r '.env.CLAUDE_CODE_PLUGIN_DIRS // empty' "$_cw_live" 2>/dev/null)" = "$_cw_want" ]; then
+                log_dim "✓ ${acct} mods 로드 설정 확인됨 (env.CLAUDE_CODE_PLUGIN_DIRS)"
             else
-                log_warning "${acct}/settings.json 에 env.CLAUDE_CODE_PLUGIN_DIRS 없음 — cache-watch mod 미로드"
+                log_warning "${acct}/settings.json 의 env.CLAUDE_CODE_PLUGIN_DIRS 가 SSOT 와 다름 — 일부 mod 미로드"
             fi
         done
-    else
-        log_warning "cache-watch mod 디렉토리 없음: $_cw_mod_dir — ~/dotfiles 가 이 체크아웃이 아니면 mod 가 로드되지 않는다"
     fi
-    unset _cw_mod_dir _cw_live
+    unset _cw_want _cw_old_ifs _cw_mod_dir _cw_path _cw_live
 
     # OpenCode / Codex / Gemini / agy / Hermes entry-level 합성은
     # scripts/setup-skills-ssot.sh 가 책임짐 (#791, #1376, #1731) — 플러그인 기반이

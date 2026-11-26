@@ -246,6 +246,27 @@ JSON
     [ "$output" = "absent" ]
 }
 
+@test "settings-drift: internal mode + stale single-mod CLAUDE_CODE_PLUGIN_DIRS → healed to the multi-mod SSOT value (#2465)" {
+    printf 'internal' >"$HOME/.dotfiles-setup-mode"
+    cat >"$SSOT" <<'JSON'
+{ "hooks": { "SessionStart": [ { "hooks": [ { "type": "command", "command": "a.sh" } ] } ] },
+  "env": { "CLAUDE_CODE_PLUGIN_DIRS": "~/dotfiles/claude/mods/cache-watch:~/dotfiles/claude/mods/skills-map" } }
+JSON
+    cat >"$LIVE_DIR/settings.json" <<'JSON'
+{ "env": { "ANTHROPIC_BASE_URL": "https://gateway.internal", "CLAUDE_CODE_PLUGIN_DIRS": "~/dotfiles/claude/mods/cache-watch" },
+  "hooks": { "SessionStart": [ { "hooks": [ { "type": "command", "command": "a.sh" } ] } ] } }
+JSON
+    _run_hook
+    assert_success
+
+    ctx=$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')
+    [[ "$ctx" == *"CLAUDE_CODE_PLUGIN_DIRS"* ]]
+    run jq -r '.env.CLAUDE_CODE_PLUGIN_DIRS' "$LIVE_DIR/settings.json"
+    [ "$output" = "~/dotfiles/claude/mods/cache-watch:~/dotfiles/claude/mods/skills-map" ]
+    run jq -r '.env.ANTHROPIC_BASE_URL' "$LIVE_DIR/settings.json"
+    [ "$output" = "https://gateway.internal" ]
+}
+
 @test "settings-drift: internal mode + .statusLine drift but SSOT defines none → only .hooks healed, message doesn't overclaim" {
     printf 'internal' >"$HOME/.dotfiles-setup-mode"
     # SSOT has NO .statusLine at all — the heal has nothing to put back.
