@@ -271,6 +271,8 @@ def usage(days: int, refresh: bool) -> tuple[dict[str, dict[str, Any]], float, b
         except (OSError, ValueError, KeyError, AttributeError):
             pass
     counts, at, found = scan_usage(days)
+    if not found:
+        return counts, at, found  # never cache "no transcripts": it would stick for a day
     with contextlib.suppress(OSError):
         cp.parent.mkdir(parents=True, exist_ok=True)
         atomic_write(cp, json.dumps({"days": days, "scanned_at": at, "found": found, "counts": counts}))
@@ -362,6 +364,8 @@ def compute_pins(skills: list[dict[str, Any]], plugins: dict[str, dict[str, Any]
 def atomic_write(path: Path, text: str) -> None:
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     tmp.write_text(text, encoding="utf-8")
+    with contextlib.suppress(OSError):
+        shutil.copymode(path, tmp)  # keep e.g. 0600 on settings.local.json (may hold secrets)
     os.replace(tmp, path)
 
 
@@ -481,9 +485,13 @@ class World:
         if store:
             merge_store(self.counts, Path(store), self.scanned_at)
         flat = {s["name"] for s in self.skills if not s["plugin"]}
+        base_n: dict[str, int] = {}
+        for s in self.skills:
+            if s["plugin"]:
+                base_n[s["base"]] = base_n.get(s["base"], 0) + 1
         for s in self.skills:
             c = dict(self.counts.get(s["name"], {"uses": 0, "last": 0.0}))
-            if s["plugin"] and s["base"] not in flat and s["base"] in self.counts:
+            if s["plugin"] and s["base"] not in flat and base_n[s["base"]] == 1 and s["base"] in self.counts:
                 c["uses"] += self.counts[s["base"]]["uses"]
                 c["last"] = max(c["last"], self.counts[s["base"]]["last"])
             s["uses"], s["last"] = c["uses"], c["last"]
@@ -718,8 +726,9 @@ def cmd_tui(a: argparse.Namespace) -> int:
             subprocess.run([sys.executable, "-I", me, "recommend"])
             input("enter to continue")
         elif key in keys:
-            for n in picked:
-                subprocess.run([sys.executable, "-I", me, "set", n, keys[key]])
+            failed = [n for n in picked if subprocess.run([sys.executable, "-I", me, "set", n, keys[key]]).returncode]
+            if failed:
+                input("refused (see above); enter to continue")
 
 
 def cmd_info(a: argparse.Namespace) -> int:
