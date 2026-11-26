@@ -27,8 +27,8 @@
 # dotfiles-owned keys back in place, every session, automatically.
 #
 # Scope of the write is deliberately tiny — ONLY `.hooks`, `.statusLine` and
-# the single sub-key `.env.CLAUDE_CODE_PLUGIN_DIRS` (#2029, cache-watch mod
-# load; internal PCs get no other path for it) are assigned, via jq, into the existing document. Every other key's VALUE
+# the single sub-key `.env.CLAUDE_CODE_PLUGIN_DIRS` (#2029, dotfiles mods
+# load: cache-watch + skills-map, colon-separated, #2465; internal PCs get no other path for it) are assigned, via jq, into the existing document. Every other key's VALUE
 # is left alone: gateway-cli's (apiKeyHelper, credential keys,
 # cleanupPeriodDays, env, model, availableModels), Claude
 # Code's own (enabledPlugins, extraKnownMarketplaces), and anything a user or
@@ -104,7 +104,7 @@ ssot_hooks=$(jq -S -c '.hooks // {}' "$SSOT" 2>/dev/null) || exit 0
 live_hooks=$(jq -S -c '.hooks // {}' "$LIVE" 2>/dev/null) || exit 0
 ssot_statusline=$(jq -S -c '.statusLine // null' "$SSOT" 2>/dev/null) || exit 0
 live_statusline=$(jq -S -c '.statusLine // null' "$LIVE" 2>/dev/null) || exit 0
-# `.env.CLAUDE_CODE_PLUGIN_DIRS` (cache-watch mod load, #2029): the one env
+# `.env.CLAUDE_CODE_PLUGIN_DIRS` (mods load, #2029/#2465): the one env
 # sub-key dotfiles owns. gateway-cli owns the rest of `.env`, so only this
 # single key is compared/healed, never the `.env` object.
 ssot_plugdirs=$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS // null' "$SSOT" 2>/dev/null) || exit 0
