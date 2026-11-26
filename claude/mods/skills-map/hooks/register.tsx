@@ -36,7 +36,8 @@ async function engine($: any, args: string[], withStore = false): Promise<Run> {
     if (recs && recs.length) {
       return await $.process.run([...argv, '--with-store', '/dev/stdin'], { stdin: JSON.stringify(recs), timeoutMs: 120_000 })
     }
-    return await $.process.run(argv, { timeoutMs: 120_000 })
+    // stdin '' keeps the engine off any inherited TTY: confirm() refuses instead of hanging.
+    return await $.process.run(argv, { stdin: '', timeoutMs: 120_000 })
   } catch (err) {
     return { exitCode: 1, stdout: '', stderr: String(err) }
   }
@@ -73,6 +74,10 @@ export function report(v: SkillsView, columns: number): string {
   return [head, ...rows, '', tokensLine(v), NOTE].join('\n')
 }
 
+// skill.prompt does a read-modify-write on the store; chaining keeps two
+// near-simultaneous prompts (subagents) from dropping a record.
+let pending: Promise<unknown> = Promise.resolve()
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'skills-map', description: 'Skill exposure map: usage, token cost, on/off toggles' })
@@ -80,14 +85,15 @@ export const register: Register = on => {
   })
 
   on('skill.prompt', async ($, e, next) => {
-    try {
-      const skill = e.pluginName && !e.skill.includes(':') ? `${e.pluginName}:${e.skill}` : e.skill
-      const ts = new Date(await $.clock.now()).toISOString()
-      const recs = (await records($)) ?? []
-      await $.store.set('records', [...recs, { skill, source: String(e.source), ts }].slice(-MAX_RECORDS))
-    } catch {
-      // never block a skill on usage bookkeeping
-    }
+    const skill = e.pluginName && !e.skill.includes(':') ? `${e.pluginName}:${e.skill}` : e.skill
+    pending = pending
+      .then(async () => {
+        const ts = new Date(await $.clock.now()).toISOString()
+        const recs = (await records($)) ?? []
+        await $.store.set('records', [...recs, { skill, source: String(e.source), ts }].slice(-MAX_RECORDS))
+      })
+      .catch(() => undefined) // never block a skill on usage bookkeeping
+    await pending
     return next(e)
   })
 
@@ -122,22 +128,26 @@ export const register: Register = on => {
       await update($, view, () => next)
     }
     if (v.error) return <Text color="error">skills-map: {v.error}</Text>
+    // Totals and the recommendation sit above the rows so a long list never pushes them out of view.
     return (
       <Box flexDirection="column">
+        <Text>{tokensLine(v)}</Text>
+        <Text dimColor>{NOTE}</Text>
+        <Text bold>Recommended</Text>
+        <Text dimColor>{v.recommend || '(none)'}</Text>
+        <Text bold>Skills</Text>
         {v.skills.map(s => (
           <Box flexDirection="row" key={`row:${s.name}`}>
             <Text>
               {s.name} <Text dimColor>[{show(s.state)}] {s.uses}u ~{s.tokens}t{s.pinned_by.length ? ' pinned' : ''}</Text>
             </Text>
-            {s.name.includes(':')
+            {s.source.startsWith('plugin:')
               ? <Text dimColor> plugin</Text>
-              : STATES.map(st => <Button key={`${s.name}:${st}`} label={st} onPress={toggle(s, st)} />)}
+              : STATES.map(st => (
+                  <Button key={`${s.name}:${st}`} label={st === show(s.state) ? `*${st}` : st} onPress={toggle(s, st)} />
+                ))}
           </Box>
         ))}
-        <Text bold>Recommended</Text>
-        <Text dimColor>{v.recommend || '(none)'}</Text>
-        <Text>{tokensLine(v)}</Text>
-        <Text dimColor>{NOTE}</Text>
       </Box>
     )
   })
