@@ -500,13 +500,15 @@ JSON
 # Every test above feeds restore.sh a synthetic manifest pair, which proves
 # the parser but never the shipped `claude/plugin/{marketplaces,plugins}.json`.
 # A marketplace registered in the SSOT with a slug restore.sh cannot resolve
-# would pass all of them. This one runs the real script against the real
-# manifests so a registration is only "done" once restore.sh actually emits
-# the add + install lines for it.
+# would pass all of them. Run the real script copy against tracked manifests
+# in the isolated fixture, excluding machine-local overlays and company data.
+# A registration is only "done" once restore.sh emits add + install lines.
 
 # 새 phase 가 나면 아래 테이블에 한 줄만 추가한다 — 테스트를 더 늘리지 않는다.
 @test "restore.sh --dry-run installs each split-out plugin from the real SSOT (#1410)" {
-    run "${_BATS_REAL_DOTFILES_ROOT}/claude/plugin/restore.sh" --dry-run
+    git -C "$_BATS_REAL_DOTFILES_ROOT" show HEAD:claude/plugin/marketplaces.json >"$PLUGDIR/marketplaces.json"
+    git -C "$_BATS_REAL_DOTFILES_ROOT" show HEAD:claude/plugin/plugins.json >"$PLUGDIR/plugins.json"
+    run "$PLUGDIR/restore.sh" --dry-run
     assert_success
     while IFS='|' read -r mp_key repo plugin; do
         assert_output --partial "add: ${mp_key} (${repo})"
