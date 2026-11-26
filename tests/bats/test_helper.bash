@@ -35,7 +35,8 @@ export SHELL_COMMON="${DOTFILES_ROOT}/shell-common"
 # stale override from the previous test cannot leak.
 _BATS_REAL_DOTFILES_ROOT="$DOTFILES_ROOT"
 _BATS_REAL_SHELL_COMMON="$SHELL_COMMON"
-_BATS_REAL_HOME="$HOME"
+# Keep the first capture: a re-load after the HOME swap must not record the temp dir.
+: "${_BATS_REAL_HOME:=$HOME}"
 
 # Test isolation
 export DOTFILES_TEST_MODE=1
@@ -81,8 +82,11 @@ setup_isolated_home() {
     # a second opencode install once HOME is isolated (#2469).
     PATH=":$PATH:"
     # Loop: one pass leaves the 2nd of two adjacent duplicates (shared colon).
-    while [[ "$PATH" == *":$_BATS_REAL_HOME/.opencode/bin:"* ]]; do
-        PATH="${PATH//":$_BATS_REAL_HOME/.opencode/bin:"/:}"
+    local _oc
+    for _oc in "$_BATS_REAL_HOME/.opencode/bin" "$_BATS_REAL_HOME/.opencode/bin/"; do
+        while [[ "$PATH" == *":$_oc:"* ]]; do
+            PATH="${PATH//":$_oc:"/:}"
+        done
     done
     PATH="${PATH#:}"
     export PATH="${PATH%:}"
