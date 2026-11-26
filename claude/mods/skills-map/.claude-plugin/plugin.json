@@ -1,0 +1,5 @@
+{
+  "name": "skills-map",
+  "version": "0.1.0",
+  "description": "Usage-aware skill exposure map; CLI engine in bin/skills_map.py (#2461)."
+}

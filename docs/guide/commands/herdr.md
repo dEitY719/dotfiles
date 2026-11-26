@@ -83,6 +83,7 @@
 - **prefix+ctrl+r** — reviewr 토글
 - **prefix+ctrl+p** — 플러그인 매니저 열기
 - **prefix+ctrl+g** — lazygit 팝업 (플러그인 아님 — tools.conf 로 설치)
+- **prefix+ctrl+s** — skills-map 팝업 (스킬 노출 토글, #2461)
 **herdr plugin CLI**
 
 - herdr plugin install <owner>/<repo>              # 부트스트랩 실패분 수동 재시도
