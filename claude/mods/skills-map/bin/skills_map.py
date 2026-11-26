@@ -4,7 +4,9 @@
 stdlib only, so the plugin works outside the dotfiles stack. One JSON
 interface ('--json') feeds every UI (CLI, herdr popup, a future mods pane).
 
-Paths derive from CLAUDE_CONFIG_DIR (default ~/.claude):
+Paths derive from CLAUDE_CONFIG_DIR. Unset (#2467): the one $HOME/.claude* account
+with a settings.json, a picker when several exist and stdin+stdout are a TTY,
+else ~/.claude with a one-line stderr warning. The pick lasts this run only:
   inventory  <cfg>/skills/*/SKILL.md + 'claude plugin list --json'
   usage      <cfg>/projects/**/*.jsonl, windowed by record timestamp
   state      $XDG_CONFIG_HOME/skills-map/state-<hash>.json  (SSOT, default ~/.config)
@@ -73,6 +75,59 @@ def warn(msg: str) -> None:
 def cfg_dir() -> Path:
     raw = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
     return Path(raw).expanduser()
+
+
+# Account dirs are $HOME/.claude* holding a settings.json. .claude-shared and
+# .claude-backups are shared/backup trees, never accounts; .claude.json* are
+# files and drop out on is_dir().
+NOT_ACCOUNTS = frozenset({".claude-shared", ".claude-backups"})
+
+
+def account_candidates() -> list[Path]:
+    return sorted(
+        p
+        for p in Path.home().glob(".claude*")
+        if p.name not in NOT_ACCOUNTS and p.is_dir() and (p / "settings.json").is_file()
+    )
+
+
+def last_activity(d: Path) -> float:
+    return max((p.stat().st_mtime for p in (d / "projects").glob("**/*.jsonl")), default=0.0)
+
+
+def default_account(cands: list[Path]) -> Path:
+    return max(cands, key=last_activity)  # ties keep the first (sorted) candidate
+
+
+def pick_account(cands: list[Path]) -> Path:
+    best = default_account(cands)
+    print("CLAUDE_CONFIG_DIR is unset; pick the account for this run:")
+    for i, c in enumerate(cands, 1):
+        print(f"  {i}) {c}" + ("  (latest transcript)" if c == best else ""))
+    while True:
+        try:
+            raw = input(f"account [{cands.index(best) + 1}]: ").strip()
+        except EOFError:
+            return best
+        except KeyboardInterrupt:
+            raise Refused("no account picked") from None
+        if not raw:
+            return best
+        if raw.isdigit() and 1 <= int(raw) <= len(cands):
+            return cands[int(raw) - 1]
+
+
+def resolve_account() -> None:
+    """Pin CLAUDE_CONFIG_DIR for this process only; fzf preview / set children inherit it."""
+    if os.environ.get("CLAUDE_CONFIG_DIR"):
+        return
+    cands = account_candidates()
+    if len(cands) == 1:
+        os.environ["CLAUDE_CONFIG_DIR"] = str(cands[0])
+    elif len(cands) > 1 and sys.stdin.isatty() and sys.stdout.isatty():
+        os.environ["CLAUDE_CONFIG_DIR"] = str(pick_account(cands))
+    elif cands:
+        warn(f"CLAUDE_CONFIG_DIR unset, {len(cands)} accounts ({' '.join(c.name for c in cands)}); using ~/.claude")
 
 
 def cfg_hash() -> str:
@@ -595,7 +650,7 @@ def rows(w: World) -> list[dict[str, Any]]:
 
 def table(w: World) -> str:
     cur, after = totals(w)
-    lines = [f"# per-turn listing ~{cur} tokens now / ~{after} with recommend applied"]
+    lines = [f"# account {cfg_dir()} | per-turn listing ~{cur} tokens now / ~{after} with recommend applied"]
     fmt = "{:<10} {:<34} {:<24} {:>6} {:<10} {:>5}  {}"
     lines.append(fmt.format("STATE", "NAME", "SOURCE", "USES30", "LAST", "~TOK", "PINNED"))
     for r in rows(w):
@@ -838,6 +893,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             a = ap.parse_args(["list"])
     try:
+        resolve_account()
         if a.cmd in ("set", "plugin", "apply", "sync"):  # whole state read-modify-write under one lock
             with locked():
                 return int(a.fn(a))
