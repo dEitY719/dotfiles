@@ -107,12 +107,12 @@ class Env:
             "SKILLS_MAP_PIN_SOURCES": str(self.tmp / "none.json"),
         }
 
-    def run(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run(self, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, "-I", str(ENGINE), *args],
             capture_output=True,
             text=True,
-            env=self.env(),
+            env=env or self.env(),
             cwd=self.tmp,
             stdin=subprocess.DEVNULL,
             check=False,
@@ -442,10 +442,7 @@ def test_picker_enter_takes_default_and_number_picks(tmp_path: Path, monkeypatch
 
 def test_non_tty_multi_account_warns_once_and_reads_default_claude(e: Env) -> None:
     accounts(e.home, ".claude", ".claude-work", ".claude-shared")
-    r = subprocess.run(
-        [sys.executable, "-I", str(ENGINE), "list", "--json", "--refresh"],
-        capture_output=True, text=True, env=no_cfg_env(e), cwd=e.tmp, stdin=subprocess.DEVNULL, check=False,
-    )  # fmt: skip
+    r = e.run("list", "--json", "--refresh", env=no_cfg_env(e))
     assert r.returncode == 0, r.stderr
     warns = [ln for ln in r.stderr.splitlines() if "CLAUDE_CONFIG_DIR" in ln]  # other lines: e.g. "no transcript"
     assert len(warns) == 1 and ".claude-work" in warns[0]
@@ -457,10 +454,7 @@ def test_single_candidate_is_used_silently(e: Env) -> None:
     shutil.rmtree(e.home / ".claude")
     accounts(e.home, ".claude-work")
     skill(e.home / ".claude-work/skills/solo", "solo", "only account")
-    r = subprocess.run(
-        [sys.executable, "-I", str(ENGINE), "list"],
-        capture_output=True, text=True, env=no_cfg_env(e), cwd=e.tmp, stdin=subprocess.DEVNULL, check=False,
-    )  # fmt: skip
+    r = e.run("list", env=no_cfg_env(e))
     assert r.returncode == 0, r.stderr
     assert "CLAUDE_CONFIG_DIR" not in r.stderr
     assert "solo" in r.stdout
