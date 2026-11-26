@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -326,7 +327,7 @@ def pin_sources(skills: list[dict[str, Any]], plugins: dict[str, dict[str, Any]]
     """(a) bodies of model-visible skills, (b) agents, (c) unattended job manifests."""
     out: list[tuple[str, Path]] = []
     for s in skills:
-        if s["state"] in ("on", "name-only"):
+        if s["state"] != "off":  # a user-only skill still runs its body when invoked by /name
             d = Path(s["dir"])
             out += [(s["name"], p) for p in [d / "SKILL.md", *sorted(d.glob("references/**/*.md"))] if p.is_file()]
     agent_dirs = [cfg_dir() / "agents", Path.cwd() / ".claude" / "agents"]
@@ -364,11 +365,18 @@ def compute_pins(skills: list[dict[str, Any]], plugins: dict[str, dict[str, Any]
 # --- state & settings --------------------------------------------------------
 
 
+def private_write(path: Path, text: str, like: Path | None = None) -> None:
+    """Write text created 0600 (settings may hold secrets), then copy the mode of like if it exists."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    if like is not None and like.exists():
+        shutil.copymode(like, path)
+
+
 def atomic_write(path: Path, text: str) -> None:
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(text, encoding="utf-8")
-    with contextlib.suppress(OSError):
-        shutil.copymode(path, tmp)  # keep e.g. 0600 on settings.local.json (may hold secrets)
+    private_write(tmp, text, like=path)
     os.replace(tmp, path)
 
 
@@ -438,7 +446,7 @@ def write_overrides(overrides: dict[str, str]) -> None:
             if now != raw:
                 continue  # someone else wrote the file since we read it
             if raw:
-                (p.parent / f"{p.name}.skills-map.bak").write_text(raw, encoding="utf-8")
+                private_write(p.parent / f"{p.name}.skills-map.bak", raw, like=p)
             atomic_write(p, json.dumps(obj, indent=2, ensure_ascii=False) + "\n")
             return
     raise Refused(f"{p} kept changing while writing; nothing overwritten", 3)
@@ -451,6 +459,11 @@ def save_state(st: dict[str, Any]) -> None:
 
 
 def load_state(plugins: dict[str, dict[str, Any]] | None) -> dict[str, Any]:
+    with locked():  # a first-run import must not race a concurrent set/apply
+        return _load_state(plugins)
+
+
+def _load_state(plugins: dict[str, dict[str, Any]] | None) -> dict[str, Any]:
     sp = state_path()
     if sp.exists():
         try:
@@ -521,6 +534,13 @@ class World:
 
     def flat(self) -> list[dict[str, Any]]:
         return [s for s in self.skills if not s["plugin"]]
+
+
+def plugin_pins(w: World, name: str) -> list[str]:
+    """Referrers outside the plugin that pin any of its skills."""
+    return sorted(
+        {who for s in w.skills if s["plugin"] == name for who in s["pinned_by"] if not who.startswith(f"{name}:")}
+    )
 
 
 def turn_tokens(s: dict[str, Any], state: str) -> int:
@@ -645,7 +665,7 @@ def cmd_plugin(a: argparse.Namespace) -> int:
         raise unknown("plugin", name, list(w.plugins))
     if a.state == "off":
         members = [s for s in w.skills if s["plugin"] == name]
-        outside = sorted({who for s in members for who in s["pinned_by"] if not who.startswith(f"{name}:")})
+        outside = plugin_pins(w, name)
         for s in members:
             print(f"  {s['name']}: {s['uses']} use(s) in window")
         if outside and not a.force:
@@ -716,6 +736,10 @@ def cmd_sync(a: argparse.Namespace) -> int:
     for n, en in w.state["plugins"].items():
         if w.plugins and n in w.plugins and w.plugins[n]["enabled"] != en:
             verb = "enable" if en else "disable"
+            outside = plugin_pins(w, n)
+            if not en and outside:
+                warn(f"not disabling plugin {n}: pinned by {', '.join(outside)} ('skills-map plugin {n} off --force')")
+                continue
             if subprocess.run([claude_bin(), "plugin", verb, w.plugins[n]["id"]], capture_output=True).returncode:
                 warn(f"claude plugin {verb} {n} failed")
     left = drift(World())
@@ -728,6 +752,8 @@ def cmd_tui(a: argparse.Namespace) -> int:
         print(table(World()))
         print("\nfzf not found: install it (apt install fzf | brew install fzf) for the TUI,")
         print("or toggle directly: skills-map set <name> on|name-only|user-only|off")
+        if sys.stdin.isatty():
+            input("enter to close")  # the herdr popup would otherwise close before this is read
         return 1
     keys = {"ctrl-o": "on", "ctrl-n": "name-only", "ctrl-u": "user-only", "ctrl-x": "off"}
     me = os.path.realpath(sys.argv[0])
@@ -735,7 +761,7 @@ def cmd_tui(a: argparse.Namespace) -> int:
     while True:
         proc = subprocess.run(
             ["fzf", "--multi", "--header-lines=2", "--expect=" + ",".join([*keys, "ctrl-r"]), "--header=" + head,
-             "--preview", f"{sys.executable} -I {me} _info {{2}}"],
+             "--preview", f"{shlex.quote(sys.executable)} -I {shlex.quote(me)} _info {{2}}"],
             input=table(World()), capture_output=False, stdout=subprocess.PIPE, text=True,
         )  # fmt: skip
         out = proc.stdout.splitlines()
