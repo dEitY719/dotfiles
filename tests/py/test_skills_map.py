@@ -196,6 +196,29 @@ def test_plugin_referenced_by_another_plugin_refuses_off(e: Env) -> None:
     assert json.loads(e.db.read_text())[1]["enabled"] is False
 
 
+def test_settings_and_backup_keep_private_mode(e: Env) -> None:
+    e.local.chmod(0o600)
+    assert e.run("set", "foo", "name-only").returncode == 0
+    assert stat.S_IMODE(e.local.stat().st_mode) == 0o600
+    assert stat.S_IMODE((e.cfg / "settings.local.json.skills-map.bak").stat().st_mode) == 0o600
+
+
+def test_user_only_skill_still_pins_its_callees(e: Env) -> None:
+    assert e.run("set", "alpha", "user-only").returncode == 0
+    assert e.listing()["beta"]["pinned_by"] == ["alpha"]
+
+
+def test_sync_does_not_disable_a_pinned_plugin(e: Env) -> None:
+    e.listing()
+    state = next((e.tmp / "xdg-config/skills-map").glob("state-*.json"))
+    st = json.loads(state.read_text())
+    st["plugins"]["p1"] = False
+    state.write_text(json.dumps(st))
+    r = e.run("sync")
+    assert r.returncode == 1 and "pinned by p2:y" in r.stderr
+    assert json.loads(e.db.read_text())[0]["enabled"] is True
+
+
 def test_plugin_off_with_usage_needs_yes_when_non_interactive(e: Env) -> None:
     r = e.run("plugin", "p1", "off", "--force")
     assert r.returncode == 1 and "--yes" in r.stderr
