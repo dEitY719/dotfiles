@@ -39,7 +39,8 @@ function world(on: any, placed: boolean, list: typeof MANY = LIST) {
     runs.push({ argv: e.argv, stdin: e.init?.stdin })
     const verb = e.argv[3]
     // set flips the fake engine's state, so the next list reflects the toggle.
-    if (verb === 'set') skills.find(s => s.name === e.argv[4])!.state = e.argv[5]
+    // and bumps its uses, as a skill run elsewhere would between two loads.
+    if (verb === 'set') Object.assign(skills.find(s => s.name === e.argv[4])!, { state: e.argv[5], uses: 99 })
     const stdout = verb === 'list' ? JSON.stringify({ ...list, skills }) : verb === 'recommend' ? '# per-turn listing ~60 -> ~40 tokens' : 'commit: off (takes effect in a new session)'
     return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
@@ -179,6 +180,20 @@ test('plugins mode lists one row per plugin and drills down behind a chip', asyn
   await ui.press({ key: 'mode:plugins' })
   await ui.press({ key: 'mode:skills' })
   expect(await ui.find({ key: 'chip:all' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('flat skills drill down as one group; plugin sums follow the search', async ($, on) => {
+  const { ui } = await pane($, on)
+  await ui.press({ key: 'mode:plugins' })
+  await ui.press({ key: 'group:(flat skills)' })
+  expect(await order(ui)).toEqual(['row:commit', 'row:review', 'row:tidy'])
+  await ui.press({ key: 'mode:plugins' })
+  await ui.input({ key: 'q', text: 'gh pr', kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /totals over skills matching: gh pr/ })).toBeDefined()
+  const gh = await ui.find({ key: 'group:gh' })
+  expect(gh?.text).toContain('1 skills 0u ~20t 0 pinned')
+  expect(await ui.find({ key: 'group:(flat skills)' })).toBeUndefined()
   await ui.unmount()
 })
 

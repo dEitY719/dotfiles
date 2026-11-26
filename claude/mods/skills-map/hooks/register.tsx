@@ -67,13 +67,14 @@ async function load($: any): Promise<SkillsView> {
 
 const show = (s: string) => (s === 'user-invocable-only' ? 'user-only' : s)
 const group = (s: SkillRow) => (s.source.startsWith('plugin:') ? s.source.slice(7) : FLAT)
-// F-4: pane order is (uses desc, name), never STATE, so a toggle leaves the row in place.
+// F-4: pane order is (uses desc, name), never STATE, taken once at pane open; a toggle's
+// reload keeps that order, so a row stays in place even if its use count moved meanwhile.
 const byUse = (a: { name: string; uses: number }, b: { name: string; uses: number }) =>
   b.uses - a.uses || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
 
 // F-2/F-3: case-insensitive substring per whitespace-separated term (AND) over
 // the skill name and its plugin name, then the plugin drill-down (AND).
-export function visible(skills: SkillRow[], f: PaneFilter): SkillRow[] {
+function visible(skills: SkillRow[], f: PaneFilter): SkillRow[] {
   const terms = f.q.toLowerCase().split(/\s+/).filter(Boolean)
   return skills
     .filter(s => {
@@ -82,12 +83,11 @@ export function visible(skills: SkillRow[], f: PaneFilter): SkillRow[] {
       const hay = `${s.name} ${g === FLAT ? '' : g}`.toLowerCase()
       return terms.every(t => hay.includes(t)) && (!f.plugin || g === f.plugin)
     })
-    .sort(byUse)
 }
 
 type Group = { name: string; skills: number; uses: number; tokens: number; pinned: number }
 // F-3: one row per plugin (flat skills as one), summed over the skills passing the search.
-export function groups(skills: SkillRow[]): Group[] {
+function groups(skills: SkillRow[]): Group[] {
   const m = new Map<string, Group>()
   for (const s of skills) {
     const name = group(s)
@@ -147,7 +147,7 @@ export const register: Register = on => {
       return { text: output(r), isTextDisplayOnly: true }
     }
     const v = await load($)
-    await update($, view, () => v)
+    await update($, view, () => ({ ...v, skills: [...v.skills].sort(byUse) }))
     await update($, filter, () => FILTER0)
     let placed = false
     try {
@@ -170,6 +170,9 @@ export const register: Register = on => {
       const r = await engine($, ['set', s.name, state])
       await $.ui.toast(output(r))
       const next = await load($)
+      const at = new Map(v.skills.map((x, i) => [x.name, i]))
+      // Rows known before keep their slot; a new one (NaN gap) falls back to byUse.
+      next.skills.sort((a, b) => (at.get(a.name) ?? Infinity) - (at.get(b.name) ?? Infinity) || byUse(a, b))
       await update($, view, () => next)
     }
     if (v.error) return <Text color="error">skills-map: {v.error}</Text>
@@ -197,6 +200,7 @@ export const register: Register = on => {
         <Text bold>Recommended</Text>
         <Text dimColor>{v.recommend || '(none)'}</Text>
         <Text bold>{f.mode === 'plugins' ? 'Plugins' : 'Skills'}</Text>
+        {f.mode === 'plugins' && f.q.trim() ? <Text dimColor>totals over skills matching: {f.q}</Text> : null}
         {rows.length === 0 && f.q.trim() ? <Text dimColor>no match: {f.q}</Text> : null}
         {f.mode === 'plugins'
           ? groups(rows).map(g => (
