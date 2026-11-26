@@ -324,6 +324,22 @@ def test_store_merge_dedupes_and_skips_scanned_window(e: Env) -> None:
     assert rows["baz"]["uses"] == 1
 
 
+def test_store_from_dev_stdin_as_the_mods_pane_passes_it(e: Env) -> None:
+    # The mods pane (#2465) hands its $.store records over stdin, not a file.
+    rec = {"skill": "baz", "source": "userSettings", "ts": (time.time() + 60) * 1000}
+    r = subprocess.run(
+        [sys.executable, "-I", str(ENGINE), "list", "--json", "--refresh", "--with-store", "/dev/stdin"],
+        input=json.dumps([rec]),
+        capture_output=True,
+        text=True,
+        env=e.env(),
+        cwd=e.tmp,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr
+    assert {s["name"]: s for s in json.loads(r.stdout)["skills"]}["baz"]["uses"] == 1
+
+
 def test_frontmatter_skips_comments_and_folds_blocks() -> None:
     sm = load_engine()
     fm = sm.frontmatter("---\nname: wave  # trailing\n# note: x\ndescription: >-\n  one\n  two\n---\nbody")

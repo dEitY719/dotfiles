@@ -28,7 +28,9 @@
 #
 # Scope of the write is deliberately tiny — ONLY `.hooks`, `.statusLine` and
 # the single sub-key `.env.CLAUDE_CODE_PLUGIN_DIRS` (#2029, dotfiles mods
-# load: cache-watch + skills-map, colon-separated, #2465; internal PCs get no other path for it) are assigned, via jq, into the existing document. Every other key's VALUE
+# load: cache-watch + skills-map, colon-separated, #2465; internal PCs get
+# no other path for it) are assigned, via jq, into the existing document.
+# Every other key's VALUE
 # is left alone: gateway-cli's (apiKeyHelper, credential keys,
 # cleanupPeriodDays, env, model, availableModels), Claude
 # Code's own (enabledPlugins, extraKnownMarketplaces), and anything a user or

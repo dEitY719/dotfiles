@@ -2,8 +2,8 @@ import { expect, mock, test } from 'claude-code/testing'
 
 const LIST = {
   skills: [
-    { name: 'commit', state: 'on', source: 'user', uses: 3, last_used: null, tokens: 40, pinned_by: [], description: 'd' },
-    { name: 'gh:pr', state: 'on', source: 'plugin', uses: 0, last_used: null, tokens: 20, pinned_by: [], description: 'd' },
+    { name: 'commit', state: 'on', source: 'skill', uses: 3, last_used: null, tokens: 40, pinned_by: [], description: 'd' },
+    { name: 'gh:pr', state: 'on', source: 'plugin:gh', uses: 0, last_used: null, tokens: 20, pinned_by: [], description: 'd' },
   ],
   tokens: { current: 60, recommended: 40 },
 }
@@ -58,6 +58,17 @@ test('skill.prompt records reach the engine through --with-store /dev/stdin', as
   expect(JSON.parse(list.stdin!)).toEqual([{ skill: 'gh:pr', source: 'plugin', ts: '2023-11-14T22:13:20.000Z' }])
 })
 
+test('two concurrent skill.prompt records both land', async ($, on) => {
+  const runs = world(on, false)
+  mock.store(on)
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const p = (skill: string) => $.skill.prompt({ skill, text: 't', frontmatter: {}, source: 'userSettings' } as any)
+  await Promise.all([p('a'), p('b')])
+  await run($)
+  const list = runs.find(r => r.argv[3] === 'list')!
+  expect(JSON.parse(list.stdin!).map((r: any) => r.skill).sort()).toEqual(['a', 'b'])
+})
+
 test('a failing store leaves transcript counts only', async ($, on) => {
   const runs = world(on, false)
   on('store.get', () => ({ deny: 'EIO' }))
@@ -71,6 +82,7 @@ test('/skills-map set passes through to the engine, display-only', async ($, on)
   mock.store(on)
   const r = await run($, 'set commit off')
   expect(runs.map(x => x.argv.slice(3))).toEqual([['set', 'commit', 'off']])
+  expect(runs[0]?.stdin).toBe('') // never an inherited TTY for confirm()
   expect(r).toEqual({ text: 'commit: off (takes effect in a new session)', isTextDisplayOnly: true })
 })
 
@@ -89,6 +101,7 @@ test('the pane lists skills and a toggle runs the engine set', async ($, on) => 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /tokens ~60 now/ })).toBeDefined()
   expect(await ui.find({ key: 'gh:pr:off' })).toBeUndefined()
+  expect((await ui.find({ key: 'commit:on' }))?.text).toContain('*on')
   await ui.press({ key: 'commit:off' })
   expect(runs.some(x => x.argv.slice(3).join(' ') === 'set commit off')).toBe(true)
   await ui.unmount()
