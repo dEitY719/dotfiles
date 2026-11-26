@@ -12,7 +12,7 @@ teardown() {
 @test "setup_isolated_home unsets GH_HOST and strips the real ~/.opencode/bin from PATH" {
     export GH_HOST=github.com
     local oc="$_BATS_REAL_HOME/.opencode/bin"
-    export PATH="$oc:/usr/bin:$oc:$oc/sub:/bin:$oc"
+    export PATH="$oc:/usr/bin:$oc:$oc:$oc/sub:/bin:$oc"
     setup_isolated_home
     [ -z "${GH_HOST+x}" ]
     [ "$PATH" = "/usr/bin:$oc/sub:/bin" ]
