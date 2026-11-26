@@ -77,7 +77,8 @@ export function visible(skills: SkillRow[], f: PaneFilter): SkillRow[] {
   const terms = f.q.toLowerCase().split(/\s+/).filter(Boolean)
   return skills
     .filter(s => {
-      const hay = `${s.name} ${group(s)}`.toLowerCase()
+      // The FLAT label is display-only: matching it would make "skills"/"flat" hit every flat skill.
+      const hay = `${s.name} ${group(s) === FLAT ? '' : group(s)}`.toLowerCase()
       return terms.every(t => hay.includes(t)) && (!f.plugin || group(s) === f.plugin)
     })
     .sort(byUse)
@@ -194,7 +195,7 @@ export const register: Register = on => {
         <Text bold>Recommended</Text>
         <Text dimColor>{v.recommend || '(none)'}</Text>
         <Text bold>{f.mode === 'plugins' ? 'Plugins' : 'Skills'}</Text>
-        {rows.length === 0 ? <Text dimColor>no match: {f.q}</Text> : null}
+        {rows.length === 0 && f.q.trim() ? <Text dimColor>no match: {f.q}</Text> : null}
         {f.mode === 'plugins'
           ? groups(rows).map(g => (
               <Button key={`group:${g.name}`} onPress={set({ mode: 'skills', plugin: g.name })}>
