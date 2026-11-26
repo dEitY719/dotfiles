@@ -89,7 +89,13 @@ def account_candidates() -> list[Path]:
         for p in Path.home().glob(".claude*")
         if p.name not in NOT_ACCOUNTS and p.is_dir() and (p / "settings.json").is_file()
     )
-    return list({p.resolve(): p for p in reversed(found)}.values())[::-1]  # symlink aliases of one dir count once
+    seen: set[Path] = set()
+    out = []
+    for p in found:  # a symlink alias of an account (.claude -> .claude-work) counts once, first name wins
+        if p.resolve() not in seen:
+            seen.add(p.resolve())
+            out.append(p)
+    return out
 
 
 def last_activity(d: Path) -> float:
@@ -102,21 +108,23 @@ def last_activity(d: Path) -> float:
     return max((mtime(p) for p in (d / "projects").glob("**/*.jsonl")), default=0.0)
 
 
-def default_account(cands: list[Path]) -> Path:
-    return max(cands, key=last_activity)  # ties keep the first (sorted) candidate
+def default_account(cands: list[Path], acts: dict[Path, float] | None = None) -> Path:
+    acts = acts or {c: last_activity(c) for c in cands}
+    return max(cands, key=acts.__getitem__)  # ties (no transcripts anywhere) keep the first candidate
 
 
 def pick_account(cands: list[Path]) -> Path:
-    best = default_account(cands)
-    print("CLAUDE_CONFIG_DIR is unset; pick the account for this run:")
+    acts = {c: last_activity(c) for c in cands}  # one transcript walk per account
+    best = default_account(cands, acts)
+    # menu and prompt on stderr: stdout stays clean for 'list --json' on a TTY
+    print("CLAUDE_CONFIG_DIR is unset; pick the account for this run:", file=sys.stderr)
     for i, c in enumerate(cands, 1):
-        print(f"  {i}) {c}" + ("  (latest transcript)" if c == best and last_activity(c) else ""))
+        print(f"  {i}) {c}" + ("  (latest transcript)" if c == best and acts[c] else ""), file=sys.stderr)
     while True:
+        print(f"account [{cands.index(best) + 1}]: ", end="", file=sys.stderr, flush=True)
         try:
-            raw = input(f"account [{cands.index(best) + 1}]: ").strip()
-        except EOFError:
-            return best
-        except KeyboardInterrupt:
+            raw = input().strip()
+        except (EOFError, KeyboardInterrupt):  # Ctrl-D/Ctrl-C: no silent default for a write
             raise Refused("no account picked") from None
         if not raw:
             return best
@@ -124,7 +132,7 @@ def pick_account(cands: list[Path]) -> Path:
             return cands[int(raw) - 1]
 
 
-def resolve_account() -> None:
+def resolve_account(write: bool = False) -> None:
     """Pin CLAUDE_CONFIG_DIR for this process only; fzf preview / set children inherit it."""
     if os.environ.get("CLAUDE_CONFIG_DIR"):
         return
@@ -134,7 +142,15 @@ def resolve_account() -> None:
     elif len(cands) > 1 and sys.stdin.isatty() and sys.stdout.isatty():
         os.environ["CLAUDE_CONFIG_DIR"] = str(pick_account(cands))
     elif cands:
-        warn(f"CLAUDE_CONFIG_DIR unset, {len(cands)} accounts ({' '.join(c.name for c in cands)}); using ~/.claude")
+        default = Path.home() / ".claude"
+        names = " ".join(c.name for c in cands)
+        if default.resolve() not in {c.resolve() for c in cands}:
+            if write:  # never write into a dir that is not an account
+                raise Refused(f"CLAUDE_CONFIG_DIR unset, {len(cands)} accounts ({names}) and ~/.claude is none: set it")
+            warn(f"CLAUDE_CONFIG_DIR unset, {len(cands)} accounts ({names}); using ~/.claude (not an account)")
+        else:
+            warn(f"CLAUDE_CONFIG_DIR unset, {len(cands)} accounts ({names}); using ~/.claude")
+        os.environ["CLAUDE_CONFIG_DIR"] = str(default)
 
 
 def cfg_hash() -> str:
@@ -900,7 +916,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             a = ap.parse_args(["list"])
     try:
-        resolve_account()
+        resolve_account(write=a.cmd in ("set", "plugin", "apply", "sync"))
         if a.cmd in ("set", "plugin", "apply", "sync"):  # whole state read-modify-write under one lock
             with locked():
                 return int(a.fn(a))

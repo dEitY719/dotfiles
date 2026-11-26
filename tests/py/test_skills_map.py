@@ -440,6 +440,48 @@ def test_picker_enter_takes_default_and_number_picks(tmp_path: Path, monkeypatch
     assert sm.pick_account(cands) == tmp_path / ".claude"  # out-of-range "9" re-asks, then "1"
 
 
+def test_picker_eof_refuses_instead_of_defaulting(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    accounts(tmp_path, ".claude", ".claude-work")
+    sm = load_engine()
+
+    def eof(_: str = "") -> str:
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", eof)
+    with pytest.raises(sm.Refused):
+        sm.pick_account([tmp_path / ".claude", tmp_path / ".claude-work"])
+
+
+def test_default_account_without_any_transcript_is_the_first(tmp_path: Path) -> None:
+    accounts(tmp_path, ".claude", ".claude-work")
+    sm = load_engine()
+    assert sm.default_account([tmp_path / ".claude", tmp_path / ".claude-work"]) == tmp_path / ".claude"
+
+
+def test_symlinked_alias_counts_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    accounts(tmp_path, ".claude-work")
+    (tmp_path / ".claude").symlink_to(tmp_path / ".claude-work")
+    sm = load_engine()
+    assert sm.account_candidates() == [tmp_path / ".claude"]
+
+
+def test_tty_picks_account_and_keeps_stdout_clean(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    accounts(tmp_path, ".claude", ".claude-work")
+    sm = load_engine()
+    monkeypatch.setattr(sm.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(sm.sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _="": "2")
+    sm.resolve_account()
+    assert os.environ["CLAUDE_CONFIG_DIR"] == str(tmp_path / ".claude-work")
+    out = capsys.readouterr()
+    assert out.out == "" and ".claude-work" in out.err
+
+
 def test_non_tty_multi_account_warns_once_and_reads_default_claude(e: Env) -> None:
     accounts(e.home, ".claude", ".claude-work", ".claude-shared")
     r = e.run("list", "--json", "--refresh", env=no_cfg_env(e))
@@ -448,6 +490,16 @@ def test_non_tty_multi_account_warns_once_and_reads_default_claude(e: Env) -> No
     assert len(warns) == 1 and ".claude-work" in warns[0]
     names = {s["name"] for s in json.loads(r.stdout)["skills"]}
     assert "decoy" in names and "foo" not in names
+
+
+def test_non_tty_write_refuses_when_default_claude_is_not_an_account(e: Env) -> None:
+    accounts(e.home, ".claude-work", ".claude-personal")  # ~/.claude has no settings.json
+    before = digest(*sorted(p for p in e.home.rglob("*") if p.is_file()))
+    r = e.run("set", "decoy", "off", env=no_cfg_env(e))
+    assert r.returncode == 1 and "set it" in r.stderr
+    assert digest(*sorted(p for p in e.home.rglob("*") if p.is_file())) == before
+    r = e.run("list", env=no_cfg_env(e))  # reads still fall back, with the warning
+    assert r.returncode == 0 and "not an account" in r.stderr
 
 
 def test_single_candidate_is_used_silently(e: Env) -> None:
