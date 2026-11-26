@@ -289,6 +289,24 @@ def test_no_transcripts_refuses_recommend(e: Env) -> None:
     assert r.returncode == 1 and "no usage evidence" in r.stderr
 
 
+def test_empty_transcript_dir_is_no_evidence(e: Env) -> None:
+    for f in (e.cfg / "projects/p").iterdir():
+        f.unlink()
+    r = e.run("apply", "--yes")
+    assert r.returncode == 1 and "no usage evidence" in r.stderr
+    assert "skillOverrides" not in json.loads(e.local.read_text())
+
+
+def test_same_plugin_name_from_two_marketplaces_stays_distinct(e: Env) -> None:
+    db = json.loads(e.db.read_text())
+    db.append({"id": "p1@other", "enabled": True, "installPath": db[0]["installPath"]})
+    e.db.write_text(json.dumps(db))
+    rows = e.listing()
+    assert {"p1@m:x", "p1@other:x"} <= set(rows)
+    assert e.run("plugin", "p1@other", "off", "--yes", "--force").returncode == 0
+    assert [p["enabled"] for p in json.loads(e.db.read_text())] == [True, True, False]
+
+
 def test_missing_claude_cli_keeps_flat_skills(e: Env) -> None:
     e.claude.unlink()
     rows = e.listing()
@@ -318,6 +336,22 @@ def load_engine() -> ModuleType:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def test_failed_projection_rolls_state_back(e: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    for k, v in e.env().items():
+        monkeypatch.setenv(k, v)
+    sm = load_engine()
+    old = {"version": 1, "overrides": {"foo": "on"}, "plugins": {}}
+    sm.save_state(old)
+
+    def boom(_: object) -> None:
+        raise sm.Refused("disk full")
+
+    monkeypatch.setattr(sm, "write_overrides", boom)
+    with pytest.raises(sm.Refused):
+        sm.commit({"version": 1, "overrides": {"foo": "off"}, "plugins": {}}, old)
+    assert json.loads(sm.state_path().read_text()) == old
 
 
 def test_concurrent_writer_wins_with_exit_3(e: Env, monkeypatch: pytest.MonkeyPatch) -> None:
