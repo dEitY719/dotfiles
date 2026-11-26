@@ -303,14 +303,17 @@ else
 	mp_new=$(jq --arg k "$mp" --arg v "$target" '.[$k] = $v' <<<"$mp_old") || exit 1
 	if [ "$existing" = true ]; then
 		pl_new="$pl_old"
-		IFS=$'\t' read -r _n _list < <(jq -r --argjson r "$plugins" \
-			'(.plugins // []) as $h | [$r[] | select(IN($h[]) | not) | sub("@[^@]*$"; "")]
-			| "\(length)\t\(join(", "))"' <<<"$pl_old")
-		if [ "${_n:-0}" -gt 0 ]; then
-			ux_info "$mp 에 등록되지 않은 plugin ${_n}개가 있습니다 ($_list) — 추가하지 않음 (필요하면 company/plugins.json 에 name@${mp} 를 직접 추가)"
+		# The selection spans company/plugins.json and its local overlay.
+		_sel=$(jq -c '.plugins // []' <<<"$pl_old") || exit 1
+		if _l=$(jq -c --argjson s "$_sel" '$s + (.plugins // [])' "$COMPANY_DIR/plugins.local.json" 2>/dev/null); then
+			_sel="$_l"
+		fi
+		_unreg=$(jq -c --argjson h "$_sel" '[.[] | select(IN($h[]) | not) | sub("@[^@]*$"; "")]' <<<"$plugins") || exit 1
+		if [ "$(jq length <<<"$_unreg")" -gt 0 ]; then
+			ux_info "$mp 에 등록되지 않은 plugin $(jq length <<<"$_unreg")개가 있습니다 ($(jq -r 'join(", ")' <<<"$_unreg")) — 추가하지 않음 (필요하면 company/plugins.json 에 name@${mp} 를 직접 추가)"
 		fi
 		_gone=$(jq -r --arg mp "$mp" --argjson r "$plugins" \
-			'[(.plugins // [])[] | select(endswith("@" + $mp)) | select(IN($r[]) | not)] | join(", ")' <<<"$pl_old")
+			'[.[] | select(endswith("@" + $mp)) | select(IN($r[]) | not)] | join(", ")' <<<"$_sel") || exit 1
 		if [ -n "$_gone" ]; then
 			ux_warning "repo 에 없는 등록 plugin: $_gone — 제거하지 않음 (다음 skills-sync --restore 에서 install 이 실패할 수 있습니다)"
 		fi

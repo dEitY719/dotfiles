@@ -89,7 +89,7 @@ _claude_help_rows_skills() {
     ux_table_row "claude-accounts link [--apply]" "Fan out all of ~/.claude/skills/* (dry-run unless --apply)" ""
     ux_table_row "claude-accounts link --list" "Show external skill links per account, BROKEN ones marked" ""
     ux_table_row "claude-accounts unlink <name>" "Remove that skill symlink from every account (never real dirs)" ""
-    ux_table_row "skills-register <git-url>" "Register a non-github.com marketplace in company/ manifest + PR; install via skills-sync --restore (--remove, --dry-run)" ""
+    ux_table_row "skills-register <git-url>" "Register a non-github.com marketplace (all its plugins) in company/ manifest + PR; re-run updates the URL only; install via skills-sync --restore (--remove, --dry-run)" ""
     ux_info "Skills location: ${CLAUDE_SKILLS_PATH:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills}/"
 }
 

@@ -127,6 +127,32 @@ _co_set() {
     assert_output '["corp@corp-skills","git@git-skills","stale@git-skills"]'
 }
 
+@test "#2455 update: a plugins.local.json selection counts as registered; --dry-run writes nothing" {
+    _co_set '{"git-skills":"https://ghes.example.invalid/old/git-skills.git"}' '{"plugins":[]}'
+    rm -rf "$SKILLS_DIR/git-skills"
+    _ws_repo git-skills git-skills '"git","git-extra"' "$URL"
+    printf '{"plugins":["git@git-skills"]}\n' >"$CO/plugins.local.json"
+    before=$(git -C "$CO" rev-parse HEAD)
+    run "$FAKE/register.sh" --dry-run "$URL"
+    assert_success
+    assert_output --partial "plugin 1개가 있습니다 (git-extra)"
+    assert_output --partial '+  "git-skills": "'"$URL"'"'
+    assert_equal "$(git -C "$CO" rev-parse HEAD)" "$before"
+    run git -C "$CO" diff --quiet -- marketplaces.json plugins.json
+    assert_success
+}
+
+@test "#2455 --remove then re-register is a new entry again: every plugin is added" {
+    "$FAKE/register.sh" "$URL"
+    "$FAKE/register.sh" --remove git-skills
+    rm -rf "$SKILLS_DIR/git-skills"
+    _ws_repo git-skills git-skills '"git","git-extra"' "$URL"
+    run "$FAKE/register.sh" "$URL"
+    assert_success
+    run jq -c '.plugins' "$CO/plugins.json"
+    assert_output '["corp@corp-skills","git-extra@git-skills","git@git-skills"]'
+}
+
 @test "#2455 new marketplace: every plugin of the repo is still added" {
     rm -rf "$SKILLS_DIR/git-skills"
     _ws_repo git-skills git-skills '"git","git-extra"' "$URL"

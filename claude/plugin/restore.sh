@@ -543,10 +543,14 @@ EOF
 				# A name collision is refused by skills-register too, so re-registering
 				# would loop; dropping the duplicate marketplace is the fix.
 				fix="skills-register --remove ${plugin##*@}"
-			elif [ -n "$repo" ]; then
+			elif [ -n "$repo" ] && printf '%s' "$out" | grep -Eqi 'plugin.*not found|not found in marketplace'; then
 				# Re-registering keeps the plugin selection (#2455) and --remove would
-				# drop the whole marketplace, so the one entry is dropped by hand.
-				fix="claude/plugin/company/plugins.json(.local.json) 에서 ${plugin} 삭제 — publish-sync.sh 로 게시"
+				# drop the whole marketplace, so the one gone entry is dropped by hand.
+				fix="claude/plugin/company/plugins.json 에서 ${plugin} 삭제 후 publish-sync.sh (plugins.local.json 항목이면 그 파일에서 삭제, 게시 불필요)"
+			elif [ -n "$repo" ]; then
+				# Any other permanent error (schema, ...) is fixed in the repo, not by
+				# dropping a valid plugin from the shared manifest.
+				fix="$repo 의 .claude-plugin/marketplace.json 확인·수정 후 skills-sync --restore"
 			else
 				fix="skills-register --remove ${plugin##*@}"
 			fi
