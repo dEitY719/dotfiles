@@ -506,8 +506,8 @@ JSON
 
 # 새 phase 가 나면 아래 테이블에 한 줄만 추가한다 — 테스트를 더 늘리지 않는다.
 @test "restore.sh --dry-run installs each split-out plugin from the real SSOT (#1410)" {
-    git -C "$_BATS_REAL_DOTFILES_ROOT" show HEAD:claude/plugin/marketplaces.json >"$PLUGDIR/marketplaces.json"
-    git -C "$_BATS_REAL_DOTFILES_ROOT" show HEAD:claude/plugin/plugins.json >"$PLUGDIR/plugins.json"
+    cp "$_BATS_REAL_DOTFILES_ROOT/claude/plugin/marketplaces.json" "$PLUGDIR/marketplaces.json"
+    cp "$_BATS_REAL_DOTFILES_ROOT/claude/plugin/plugins.json" "$PLUGDIR/plugins.json"
     run "$PLUGDIR/restore.sh" --dry-run
     assert_success
     while IFS='|' read -r mp_key repo plugin; do
