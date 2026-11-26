@@ -84,15 +84,22 @@ NOT_ACCOUNTS = frozenset({".claude-shared", ".claude-backups"})
 
 
 def account_candidates() -> list[Path]:
-    return sorted(
+    found = sorted(
         p
         for p in Path.home().glob(".claude*")
         if p.name not in NOT_ACCOUNTS and p.is_dir() and (p / "settings.json").is_file()
     )
+    return list({p.resolve(): p for p in reversed(found)}.values())[::-1]  # symlink aliases of one dir count once
 
 
 def last_activity(d: Path) -> float:
-    return max((p.stat().st_mtime for p in (d / "projects").glob("**/*.jsonl")), default=0.0)
+    def mtime(p: Path) -> float:
+        try:
+            return p.stat().st_mtime
+        except OSError:  # transcript deleted/rotated mid-scan
+            return 0.0
+
+    return max((mtime(p) for p in (d / "projects").glob("**/*.jsonl")), default=0.0)
 
 
 def default_account(cands: list[Path]) -> Path:
@@ -103,7 +110,7 @@ def pick_account(cands: list[Path]) -> Path:
     best = default_account(cands)
     print("CLAUDE_CONFIG_DIR is unset; pick the account for this run:")
     for i, c in enumerate(cands, 1):
-        print(f"  {i}) {c}" + ("  (latest transcript)" if c == best else ""))
+        print(f"  {i}) {c}" + ("  (latest transcript)" if c == best and last_activity(c) else ""))
     while True:
         try:
             raw = input(f"account [{cands.index(best) + 1}]: ").strip()
