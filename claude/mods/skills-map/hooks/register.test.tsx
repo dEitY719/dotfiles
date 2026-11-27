@@ -291,6 +291,8 @@ test('R-4 trend: down, up, equal and zero; commas and one decimal', () => {
   })
   expect(trend(40, 40)).toMatchObject({ change: 'no change', color: undefined, filled: 0, changed: false })
   expect(trend(0, 0)).toMatchObject({ change: 'no change', filled: 0, ofNow: '', changed: false })
+  // Growth from nothing: an increase with no percentage, never a division by zero.
+  expect(trend(0, 500)).toMatchObject({ change: '\u25b2 500  adds context every turn', color: 'error', filled: 20, ofNow: '', changed: true })
 })
 
 test('R-4 the pane draws the summary, the bar and the yellow note only on a change', async ($, on) => {
@@ -515,7 +517,7 @@ test('R-8 (flat skills) sets every flat skill, skipping pinned ones for user-onl
   expect(await style(ui, 'flat:on')).toEqual(SEL)
   await ui.press({ key: 'flat:user-only' })
   expect(runs.filter(r => r.argv[3] === 'set').map(r => r.argv.slice(4))).toEqual([['commit', 'user-only'], ['tidy', 'user-only']])
-  expect(JSON.stringify(runs.toasts.at(-1))).toContain('2 set, 1 skipped (pinned or failed)')
+  expect(JSON.stringify(runs.toasts.at(-1))).toContain('2 set, 1 skipped (pinned)')
   for (const st of ['on', 'name-only', 'user-only', 'off']) expect(await style(ui, `flat:${st}`)).toEqual(OFF)
   await ui.unmount()
 })
