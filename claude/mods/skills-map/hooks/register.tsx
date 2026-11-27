@@ -89,9 +89,10 @@ const stats = (uses: number, tokens: number) => `${count(uses, 'use')}  ~${count
 // R-4: the pane's per-turn summary; report() keeps tokensLine. Colors: blue down, red up (KR stock style).
 export function trend(now: number, rec: number) {
   const head = `Skill list per turn   ~${commas(now)} -> ~${commas(rec)}`
-  const ofNow = now ? `${(Math.round((rec / now) * 1000) / 10).toFixed(1)}% of now` : ''
+  const pctOf = (n: number) => (Math.round((n / now) * 1000) / 10).toFixed(1)
+  const ofNow = now ? `${pctOf(rec)}% of now` : ''
   if (!now || now === rec) return { head, change: 'no change', color: undefined, filled: 0, ofNow, changed: false }
-  const pct = (Math.round((Math.abs(now - rec) / now) * 1000) / 10).toFixed(1)
+  const pct = pctOf(Math.abs(now - rec))
   const diff = commas(Math.abs(now - rec))
   return rec < now
     ? { head, change: `\u25bc ${diff} (-${pct}%)  saves context every turn`, color: 'suggestion' as const, filled: Math.min(BAR - 1, Math.ceil((rec / now) * BAR)), ofNow, changed: true }
@@ -238,8 +239,8 @@ export const register: Register = on => {
     const setFlat = (state: string) => async () => {
       let done = 0
       let skipped = 0
+      const hide = state === 'user-only' || state === 'off'
       for (const s of v.skills.filter(x => group(x) === FLAT)) {
-        const hide = state === 'user-only' || state === 'off'
         if ((hide && s.pinned_by.length) || (await engine($, ['set', s.name, state])).exitCode !== 0) skipped += 1
         else done += 1
       }
@@ -255,17 +256,18 @@ export const register: Register = on => {
       ) : (
         <Button key={key} label={label} dimColor onPress={onPress} />
       )
+    const noop = () => undefined
     if (v.error) return <Text color="error">skills-map: {v.error}</Text>
     const rows = visible(v.skills, f.mode === 'plugins' ? { ...f, plugin: '' } : f)
     const all = f.mode === 'skills' && f.plugin ? v.skills.filter(s => group(s) === f.plugin) : v.skills
-    const counter = f.mode === 'plugins' ? `${groups(rows).length} / ${groups(v.skills).length}` : `${rows.length} / ${all.length}`
+    const full = new Map(groups(v.skills).map(g => [g.name, g]))
+    const counter = f.mode === 'plugins' ? `${groups(rows).length} / ${full.size}` : `${rows.length} / ${all.length}`
     const tr = trend(v.tokens.current, v.tokens.recommended)
     const zero = idle(v.skills)
     const packed = pack(zero, e.props.bodyColumns || 80)
     const more = packed.length > 3 && !f.more
     const shown = more ? packed.slice(0, 3) : packed
     const hidden = packed.slice(shown.length).flat().length
-    const full = new Map(groups(v.skills).map(g => [g.name, g]))
     const recommend = v.recommend
       .split('\n')
       .filter(l => !l.startsWith('# plugins with 0 uses'))
@@ -332,7 +334,6 @@ export const register: Register = on => {
               // Engine plugin_pins: only referrers outside the plugin lock it.
               const outside = [...new Set(mine.flatMap(s => s.pinned_by).filter(who => !who.startsWith(`${g.name}:`)))].sort()
               const locked = g.name !== FLAT && outside.length > 0 && cur !== 'off'
-              const noop = () => undefined
               return [
                 <Box flexDirection="row" key={`prow:${g.name}`}>
                   <Button key={`group:${g.name}`} onPress={set({ mode: 'skills', plugin: g.name })}>
