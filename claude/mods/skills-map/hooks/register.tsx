@@ -243,7 +243,7 @@ export const register: Register = on => {
         if ((hide && s.pinned_by.length) || (await engine($, ['set', s.name, state])).exitCode !== 0) skipped += 1
         else done += 1
       }
-      await $.ui.toast(`${done} set, ${skipped} skipped (pinned)`)
+      await $.ui.toast(`${done} set, ${skipped} skipped (pinned or failed)`)
       await reload()
     }
     // R-1/R-2/R-8: the selected choice gets MARK + bold, the others dim.
@@ -329,7 +329,9 @@ export const register: Register = on => {
               const mine = v.skills.filter(s => group(s) === g.name)
               const cur = common(mine)
               const whole = full.get(g.name) ?? g
-              const locked = g.name !== FLAT && whole.pinned > 0 && cur !== 'off'
+              // Engine plugin_pins: only referrers outside the plugin lock it.
+              const outside = [...new Set(mine.flatMap(s => s.pinned_by).filter(who => !who.startsWith(`${g.name}:`)))].sort()
+              const locked = g.name !== FLAT && outside.length > 0 && cur !== 'off'
               const noop = () => undefined
               return [
                 <Box flexDirection="row" key={`prow:${g.name}`}>
@@ -354,7 +356,7 @@ export const register: Register = on => {
                   </Box>
                 ) : null,
                 locked && f.open === `pin:${g.name}` ? (
-                  <Text key={`pinned:${g.name}`}>{`    Referenced by: ${[...new Set(mine.flatMap(s => s.pinned_by))].sort().join(', ')}`}</Text>
+                  <Text key={`pinned:${g.name}`}>{`    Referenced by: ${outside.join(', ')}`}</Text>
                 ) : null,
                 f.open === `off:${g.name}` ? (
                   <Box key={`confirm:${g.name}`} flexDirection="column" paddingLeft={2}>

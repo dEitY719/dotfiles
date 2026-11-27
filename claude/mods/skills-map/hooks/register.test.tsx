@@ -487,6 +487,15 @@ test('R-8 a pinned plugin shows off (locked) and no off button', async ($, on) =
   await ui.unmount()
 })
 
+test('R-8 a plugin pinned only by its own skills is not locked', async ($, on) => {
+  const own = { ...PLUGS, skills: [sk('solo:a', 'plugin:solo', { pinned_by: ['solo:b'] }), sk('solo:b', 'plugin:solo')] }
+  const { ui } = await pane($, on, own)
+  await ui.press({ key: 'mode:plugins' })
+  expect(await ui.find({ key: 'off:solo' })).toBeDefined()
+  expect(await texts(ui)).not.toContain(' off (locked)')
+  await ui.unmount()
+})
+
 test('R-8 (flat skills) sets every flat skill, skipping pinned ones for user-only', async ($, on) => {
   const { runs, ui } = await pane($, on, PLUGS)
   await ui.press({ key: 'mode:plugins' })
@@ -497,7 +506,7 @@ test('R-8 (flat skills) sets every flat skill, skipping pinned ones for user-onl
   expect(await style(ui, 'flat:on')).toEqual(SEL)
   await ui.press({ key: 'flat:user-only' })
   expect(runs.filter(r => r.argv[3] === 'set').map(r => r.argv.slice(4))).toEqual([['commit', 'user-only'], ['tidy', 'user-only']])
-  expect(JSON.stringify(runs.toasts.at(-1))).toContain('2 set, 1 skipped (pinned)')
+  expect(JSON.stringify(runs.toasts.at(-1))).toContain('2 set, 1 skipped (pinned or failed)')
   for (const st of ['on', 'name-only', 'user-only', 'off']) expect(await style(ui, `flat:${st}`)).toEqual(OFF)
   await ui.unmount()
 })
