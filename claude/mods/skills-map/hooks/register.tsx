@@ -14,11 +14,28 @@ const MAX_RECORDS = 500
 const EMPTY: SkillsView = { skills: [], tokens: { current: 0, recommended: 0 }, recommend: '', error: '' }
 const view = atom({ plugin: 'skills-map', key: 'view' } as const, EMPTY, { shape: 'view-1' })
 // #2471: search text, view mode and plugin drill-down; reset on every pane open, never saved.
-const FILTER0: PaneFilter = { q: '', mode: 'skills', plugin: '' }
-const filter = atom({ plugin: 'skills-map', key: 'filter' } as const, FILTER0, { shape: 'filter-1' })
+// #2474: help/more/open (the one expanded [?] or off-confirm row) live here too, so a pane open folds them.
+const FILTER0: PaneFilter = { q: '', mode: 'skills', plugin: '', help: false, more: false, open: '' }
+const filter = atom({ plugin: 'skills-map', key: 'filter' } as const, FILTER0, { shape: 'filter-2' })
 const FLAT = '(flat skills)'
 // F-1: state badge colors (ThemeKey); name-only stays neutral, not dim.
 const BADGE: Record<string, 'success' | 'warning' | 'error' | undefined> = { on: 'success', 'user-only': 'warning', off: 'error' }
+// #2474 R-1: the one selection marker (U+2714) for mode, state and plugin buttons.
+const MARK = '\u2714'
+// R-5: one entry per STATES item, same order.
+export const STATE_HELP = [
+  "on         Claude reads this skill's name and description every turn and can call it by itself. Costs tokens.",
+  'name-only  Only the name is listed. Claude can still call it; cheaper than on.',
+  'user-only  Hidden from Claude. You can still run it with /name. Saves tokens.',
+  'off        Disabled. Neither you nor Claude can run it.',
+] as const
+const PIN_HELP = [
+  'Pinned: other skills call this one, so it is kept visible to Claude.',
+  'Hiding it (user-only) would break them. Use --force in the CLI to override.',
+]
+const IDLE_NOTE =
+  'Plugins that work through hooks, statusline or MCP (caveman, ponytail, claude-hud, playwright ...) show 0 even when in use. Check before turning one off.'
+const BAR = 20
 
 type Rec = { skill: string; source: string; ts: string }
 type Run = { exitCode: number; stdout: string; stderr: string }
@@ -65,6 +82,34 @@ async function load($: any): Promise<SkillsView> {
   }
 }
 
+const commas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const stats = (uses: number, tokens: number) => `${count(uses, 'use')}  ~${count(tokens, 'token')}`
+
+// R-4: the pane's per-turn summary; report() keeps tokensLine. Colors: blue down, red up (KR stock style).
+export function trend(now: number, rec: number) {
+  const head = `Skill list per turn   ~${commas(now)} -> ~${commas(rec)}`
+  const ofNow = now ? `${(Math.round((rec / now) * 1000) / 10).toFixed(1)}% of now` : ''
+  if (!now || now === rec) return { head, change: 'no change', color: undefined, filled: 0, ofNow, changed: false }
+  const pct = (Math.round((Math.abs(now - rec) / now) * 1000) / 10).toFixed(1)
+  const diff = commas(Math.abs(now - rec))
+  return rec < now
+    ? { head, change: `\u25bc ${diff} (-${pct}%)  saves context every turn`, color: 'suggestion' as const, filled: Math.min(BAR - 1, Math.ceil((rec / now) * BAR)), ofNow, changed: true }
+    : { head, change: `\u25b2 ${diff} (+${pct}%)  adds context every turn`, color: 'error' as const, filled: BAR, ofNow, changed: true }
+}
+
+// R-6: names greedily packed into lines that, drawn as 'a, b,', fit width columns.
+export function pack(names: string[], width: number): string[][] {
+  const lines: string[][] = []
+  for (const n of names) {
+    const last = lines.at(-1)
+    // +3: the ', ' joiner and the ',' a wrapped line ends with.
+    if (last && last.join(', ').length + n.length + 3 <= width) last.push(n)
+    else lines.push([n])
+  }
+  return lines
+}
+
 const show = (s: string) => (s === 'user-invocable-only' ? 'user-only' : s)
 const group = (s: SkillRow) => (s.source.startsWith('plugin:') ? s.source.slice(7) : FLAT)
 // F-4: pane order is (uses desc, name), never STATE, taken once at pane open; a toggle's
@@ -100,6 +145,15 @@ function groups(skills: SkillRow[]): Group[] {
   }
   return [...m.values()].sort(byUse)
 }
+
+// R-6: enabled plugins (skills on) whose skills were never called; recommend's own line is dropped for this.
+function idle(skills: SkillRow[]): string[] {
+  return groups(skills)
+    .filter(g => g.name !== FLAT && g.uses === 0 && skills.every(s => group(s) !== g.name || s.state === 'on'))
+    .map(g => g.name)
+    .sort()
+}
+const common = (xs: SkillRow[]) => (new Set(xs.map(x => show(x.state))).size === 1 ? show(xs[0]?.state ?? '') : '')
 
 const cut = (s: string, n: number) => (s.length > n ? s.slice(0, Math.max(1, n - 1)) + '~' : s.padEnd(n))
 
@@ -164,29 +218,67 @@ export const register: Register = on => {
     const { Box, Text, Button, Input } = $.ui.resolve(e)
     const v = await read($, view)
     const f = await read($, filter)
-    const set = (patch: Partial<PaneFilter>) => () => update($, filter, x => ({ ...x, ...patch }))
-    const search = (q: string) => update($, filter, x => ({ ...x, q }))
-    const toggle = (s: SkillRow, state: string) => async () => {
-      const r = await engine($, ['set', s.name, state])
-      await $.ui.toast(output(r))
+    // A filter change folds the open [?]/confirm row (R-7/R-8): it may no longer be listed.
+    const set = (patch: Partial<PaneFilter>) => () => update($, filter, x => ({ ...x, open: '', ...patch }))
+    const search = (q: string) => update($, filter, x => ({ ...x, q, open: x.q === q ? x.open : '' }))
+    const flip = (open: string) => () => update($, filter, x => ({ ...x, open: x.open === open ? '' : open }))
+    const reload = async () => {
       const next = await load($)
       const at = new Map(v.skills.map((x, i) => [x.name, i]))
       // Rows known before keep their slot; a new one (NaN gap) falls back to byUse.
       next.skills.sort((a, b) => (at.get(a.name) ?? Infinity) - (at.get(b.name) ?? Infinity) || byUse(a, b))
       await update($, view, () => next)
     }
+    const act = (args: string[]) => async () => {
+      await $.ui.toast(output(await engine($, args)))
+      await update($, filter, x => ({ ...x, open: '' }))
+      await reload()
+    }
+    // R-8 (flat skills): one set per flat skill; a pinned one is skipped for user-only/off, as the engine refuses it.
+    const setFlat = (state: string) => async () => {
+      let done = 0
+      let skipped = 0
+      for (const s of v.skills.filter(x => group(x) === FLAT)) {
+        const hide = state === 'user-only' || state === 'off'
+        if ((hide && s.pinned_by.length) || (await engine($, ['set', s.name, state])).exitCode !== 0) skipped += 1
+        else done += 1
+      }
+      await $.ui.toast(`${done} set, ${skipped} skipped (pinned)`)
+      await reload()
+    }
+    // R-1/R-2/R-8: the selected choice gets MARK + bold, the others dim.
+    const choice = (key: string, cur: boolean, label: string, onPress: () => unknown) =>
+      cur ? (
+        <Button key={key} label={label} onPress={onPress}>
+          <Text weight="bold">{`${MARK} ${label}`}</Text>
+        </Button>
+      ) : (
+        <Button key={key} label={label} dimColor onPress={onPress} />
+      )
     if (v.error) return <Text color="error">skills-map: {v.error}</Text>
     const rows = visible(v.skills, f.mode === 'plugins' ? { ...f, plugin: '' } : f)
-    // Current state/mode: primary + ASCII marker; the others dim (no emoji or shape glyphs).
-    const pick = (cur: boolean, label: string) => (cur ? { variant: 'primary' as const, label: `>${label}<` } : { dimColor: true, label })
+    const all = f.mode === 'skills' && f.plugin ? v.skills.filter(s => group(s) === f.plugin) : v.skills
+    const counter = f.mode === 'plugins' ? `${groups(rows).length} / ${groups(v.skills).length}` : `${rows.length} / ${all.length}`
+    const tr = trend(v.tokens.current, v.tokens.recommended)
+    const zero = idle(v.skills)
+    const packed = pack(zero, e.props.bodyColumns || 80)
+    const more = packed.length > 3 && !f.more
+    const shown = more ? packed.slice(0, 3) : packed
+    const hidden = packed.slice(shown.length).flat().length
+    const full = new Map(groups(v.skills).map(g => [g.name, g]))
+    const recommend = v.recommend
+      .split('\n')
+      .filter(l => !l.startsWith('# plugins with 0 uses'))
+      .join('\n')
     // Totals and the recommendation sit above the rows so a long list never pushes them out of view.
     return (
       <Box flexDirection="column">
-        <Input key="q" placeholder="search skills or plugins" autoFocus value={f.q} onInput={search} onSubmit={search} />
+        <Box borderStyle="round" flexDirection="row" justifyContent="space-between">
+          <Input key="q" label="Search" placeholder="type a skill or plugin name" submitLabel="done" autoFocus value={f.q} onInput={search} onSubmit={search} />
+          <Text dimColor>{counter}</Text>
+        </Box>
         <Box flexDirection="row">
-          {(['skills', 'plugins'] as const).map(m => (
-            <Button key={`mode:${m}`} {...pick(f.mode === m, m)} onPress={set(m === 'plugins' ? { mode: m, plugin: '' } : { mode: m })} />
-          ))}
+          {(['skills', 'plugins'] as const).map(m => choice(`mode:${m}`, f.mode === m, m, set(m === 'plugins' ? { mode: m, plugin: '' } : { mode: m })))}
         </Box>
         {f.mode === 'skills' && f.plugin ? (
           <Box flexDirection="row">
@@ -195,32 +287,106 @@ export const register: Register = on => {
             <Button key="chip:all" label="all" dimColor onPress={set({ plugin: '' })} />
           </Box>
         ) : null}
-        <Text>{tokensLine(v)}</Text>
-        <Text dimColor>{NOTE}</Text>
-        <Text bold>Recommended</Text>
-        <Text dimColor>{v.recommend || '(none)'}</Text>
-        <Text bold>{f.mode === 'plugins' ? 'Plugins' : 'Skills'}</Text>
+        <Box flexDirection="row">
+          <Text>
+            {tr.head}   <Text color={tr.color} dimColor={!tr.changed}>{tr.change}</Text>{' '}
+          </Text>
+          <Button key="help" label="?" onPress={() => update($, filter, x => ({ ...x, help: !x.help }))} />
+        </Box>
+        <Text>
+          <Text color={tr.color}>{'\u2588'.repeat(tr.filled)}</Text>
+          <Text dimColor>{'\u2591'.repeat(BAR - tr.filled)}</Text>
+          {tr.ofNow ? `   ${tr.ofNow}` : ''}
+        </Text>
+        {tr.changed ? <Text color="warning">Applies from the next new session.</Text> : null}
+        {f.help ? (
+          <Box key="help-box" borderStyle="round" flexDirection="column">
+            <Text weight="bold">What do the states mean?</Text>
+            {STATE_HELP.map(line => (
+              <Text key={`help:${line.split(' ')[0]}`}>{line}</Text>
+            ))}
+          </Box>
+        ) : null}
+        <Text weight="bold">Recommended</Text>
+        <Text dimColor>{recommend || '(none)'}</Text>
+        {zero.length ? (
+          <Box flexDirection="column">
+            <Text>{count(zero.length, 'plugin')} with no skill calls in 30d</Text>
+            <Text dimColor>{IDLE_NOTE}</Text>
+            {shown.map((l, i) => (
+              <Text key={`idle:${i}`}>{l.join(', ') + (i < packed.length - 1 ? ',' : '')}</Text>
+            ))}
+            {packed.length > 3 ? (
+              <Button key="idle:more" label={more ? `... +${hidden}` : 'less'} dimColor onPress={() => update($, filter, x => ({ ...x, more: !x.more }))} />
+            ) : null}
+          </Box>
+        ) : null}
+        <Text weight="bold">{f.mode === 'plugins' ? 'Plugins' : 'Skills'}</Text>
         {f.mode === 'plugins' && f.q.trim() ? <Text dimColor>totals over skills matching: {f.q}</Text> : null}
         {rows.length === 0 && f.q.trim() ? <Text dimColor>no match: {f.q}</Text> : null}
         {f.mode === 'plugins'
-          ? groups(rows).map(g => (
-              <Button key={`group:${g.name}`} onPress={set({ mode: 'skills', plugin: g.name })}>
-                {g.name} <Text dimColor>{g.skills} skills {g.uses}u ~{g.tokens}t {g.pinned} pinned</Text>
-              </Button>
-            ))
-          : rows.map(s => (
+          ? groups(rows).flatMap(g => {
+              const mine = v.skills.filter(s => group(s) === g.name)
+              const cur = common(mine)
+              const whole = full.get(g.name) ?? g
+              const locked = g.name !== FLAT && whole.pinned > 0 && cur !== 'off'
+              const noop = () => undefined
+              return [
+                <Box flexDirection="row" key={`prow:${g.name}`}>
+                  <Button key={`group:${g.name}`} onPress={set({ mode: 'skills', plugin: g.name })}>
+                    {g.name}{'  '}<Text dimColor>{`${count(g.skills, 'skill')}  ${stats(g.uses, g.tokens)}  ${g.pinned} pinned`}</Text>
+                  </Button>
+                  {g.name === FLAT
+                    ? STATES.map(st => choice(`flat:${st}`, cur === st, st, setFlat(st)))
+                    : [
+                        choice(`on:${g.name}`, cur === 'on', 'on', cur === 'on' ? noop : act(['plugin', g.name, 'on'])),
+                        locked ? (
+                          <Text key={`locked:${g.name}`} dimColor> off (locked)</Text>
+                        ) : (
+                          choice(`off:${g.name}`, cur === 'off', 'off', cur === 'off' ? noop : flip(`off:${g.name}`))
+                        ),
+                      ]}
+                </Box>,
+                locked ? (
+                  <Box key={`lock:${g.name}`} flexDirection="row">
+                    <Text dimColor>  Pinned by other skills. Use the CLI with --force. </Text>
+                    <Button key={`pin:${g.name}`} label="?" onPress={flip(`pin:${g.name}`)} />
+                  </Box>
+                ) : null,
+                locked && f.open === `pin:${g.name}` ? (
+                  <Text key={`pinned:${g.name}`}>{`    Referenced by: ${[...new Set(mine.flatMap(s => s.pinned_by))].sort().join(', ')}`}</Text>
+                ) : null,
+                f.open === `off:${g.name}` ? (
+                  <Box key={`confirm:${g.name}`} flexDirection="column" paddingLeft={2}>
+                    <Text>{`Turn off "${g.name}"? ${count(whole.skills, 'skill')} ${whole.skills === 1 ? 'leaves' : 'leave'} the / menu. ${count(whole.uses, 'use')} in 30d.`}</Text>
+                    <Box flexDirection="row">
+                      <Button key={`confirm-off:${g.name}`} label="Confirm off" onPress={act(['plugin', g.name, 'off', '--yes'])} />
+                      <Button key={`cancel:${g.name}`} label="Cancel" dimColor onPress={flip(`off:${g.name}`)} />
+                    </Box>
+                  </Box>
+                ) : null,
+              ]
+            })
+          : rows.flatMap(s => [
               <Box flexDirection="row" key={`row:${s.name}`}>
                 <Text>
-                  {s.name} <Text color={BADGE[show(s.state)]}>[{show(s.state)}]</Text>{' '}
-                  <Text dimColor>{s.uses}u ~{s.tokens}t{s.pinned_by.length ? ' pinned' : ''}</Text>
+                  {s.name}  <Text color={BADGE[show(s.state)]}>[{show(s.state)}]</Text>{'  '}
+                  <Text dimColor>{stats(s.uses, s.tokens) + (s.pinned_by.length ? `  pinned x${s.pinned_by.length} ` : '')}</Text>
                 </Text>
+                {s.pinned_by.length ? <Button key={`pin:${s.name}`} label="?" onPress={flip(`pin:${s.name}`)} /> : null}
                 {s.source.startsWith('plugin:')
-                  ? <Text dimColor> plugin</Text>
-                  : STATES.map(st => (
-                      <Button key={`${s.name}:${st}`} {...pick(st === show(s.state), st)} onPress={toggle(s, st)} />
-                    ))}
-              </Box>
-            ))}
+                  ? <Text dimColor>  plugin</Text>
+                  : STATES.map(st => choice(`${s.name}:${st}`, st === show(s.state), st, act(['set', s.name, st])))}
+              </Box>,
+              f.open === `pin:${s.name}` ? (
+                <Box key={`pinned:${s.name}`} flexDirection="column" paddingLeft={2}>
+                  {PIN_HELP.map((line, i) => (
+                    <Text key={`pinhelp:${i}`}>{line}</Text>
+                  ))}
+                  <Text>{`Referenced by (${s.pinned_by.length}): ${s.pinned_by.join(', ')}`}</Text>
+                </Box>
+              ) : null,
+            ])}
       </Box>
     )
   })
