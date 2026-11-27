@@ -2,7 +2,6 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { STATE_HELP, pack, trend } from './register'
 
-const MARK = '\u2714'
 
 const LIST = {
   skills: [
@@ -122,7 +121,7 @@ test('the pane lists skills and a toggle runs the engine set', async ($, on) => 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /Skill list per turn {3}~60 -> ~40/ })).toBeDefined()
   expect(await ui.find({ key: 'gh:pr:off' })).toBeUndefined()
-  expect((await ui.find({ key: 'commit:on' }))?.text).toBe(`${MARK} on`)
+  expect((await ui.find({ key: 'commit:on' }))?.text).toBe(' on ')
   await ui.press({ key: 'commit:off' })
   expect(runs.some(x => x.argv.slice(3).join(' ') === 'set commit off')).toBe(true)
   await ui.unmount()
@@ -134,13 +133,23 @@ async function pane($: any, on: any, list: { skills: any[]; tokens: typeof LIST.
   await run($)
   return { runs, ui: await $.ui.mount({ ...PANE, surface: 'terminal' }) }
 }
-// R-1/R-2: the selected button reads MARK + label in a bold Text and is not dim; the others are plain and dim.
+// R-1/R-2: the selected button is a bold inverse Text tab and is not dim; the others are plain and dim.
 async function style(ui: any, key: string) {
   const b = await ui.find({ key })
   return {
-    marked: b.text.includes(MARK) && b.children.some((c: any) => c?.props?.weight === 'bold'),
+    marked: b.children.some((c: any) => c?.props?.weight === 'bold' && c?.props?.inverse === true),
     dim: b.props.dimColor === true,
     arrows: /[<>]/.test(b.text),
+  }
+}
+// The mode tabs: a round-bordered Box around a plain Button; the selected one has a claude border and bold text.
+async function tab(ui: any, mode: string) {
+  const box = await ui.find({ key: `tab:${mode}` })
+  const b = await ui.find({ key: `mode:${mode}` })
+  return {
+    marked: box.props.borderColor === 'claude' && b.children.some((c: any) => c?.props?.weight === 'bold'),
+    dim: b.props.dimColor === true,
+    arrows: false,
   }
 }
 const SEL = { marked: true, dim: false, arrows: false }
@@ -196,11 +205,13 @@ test('a clear button appears with a query and empties the search', async ($, on)
 
 test('plugins mode lists one row per plugin and drills down behind a chip', async ($, on) => {
   const { ui } = await pane($, on)
-  expect(await style(ui, 'mode:skills')).toEqual(SEL)
+  expect(await tab(ui, 'skills')).toEqual(SEL)
   await ui.press({ key: 'mode:plugins' })
   const rows = (await ui.findAll({ type: 'Button' })).filter((b: any) => b.key?.startsWith('group:'))
   expect(rows.map((b: any) => b.key)).toEqual(['group:(flat skills)', 'group:gh'])
-  expect(rows[1].text).toContain('gh  2 skills  5 uses  ~45 tokens  1 pinned')
+  expect(await texts(ui)).toContain('  2 skills  5 uses  ~45 tokens  ')
+  expect(await texts(ui)).toContain('1 skill pinned ')
+  expect(rows[1].text).toBe(' skills > ')
   await ui.press({ key: 'group:gh' })
   expect(await order(ui)).toEqual(['row:gh:issue', 'row:gh:pr'])
   expect(await ui.find({ type: 'Text', text: /plugin: gh/ })).toBeDefined()
@@ -226,7 +237,9 @@ test('flat skills drill down as one group; plugin sums follow the search', async
   await ui.input({ key: 'q', text: 'gh pr', kind: 'change' })
   expect(await ui.find({ type: 'Text', text: /totals over skills matching: gh pr/ })).toBeDefined()
   const gh = await ui.find({ key: 'group:gh' })
-  expect(gh?.text).toContain('gh  1 skill  0 uses  ~20 tokens  0 pinned')
+  expect(gh?.text).toBe(' skills > ')
+  expect(await texts(ui)).toContain('  1 skill  0 uses  ~20 tokens  ')
+  expect(await texts(ui)).toContain('0 skills pinned ')
   expect(await ui.find({ key: 'group:(flat skills)' })).toBeUndefined()
   await ui.unmount()
 })
@@ -247,13 +260,13 @@ test('a toggle keeps the row order and the search text', async ($, on) => {
 
 test('R-1 mode buttons: the selected one is marked and bold, the other dim; re-pressing keeps it', async ($, on) => {
   const { ui } = await pane($, on)
-  expect(await style(ui, 'mode:skills')).toEqual(SEL)
-  expect(await style(ui, 'mode:plugins')).toEqual(OFF)
+  expect(await tab(ui, 'skills')).toEqual(SEL)
+  expect(await tab(ui, 'plugins')).toEqual(OFF)
   await ui.press({ key: 'mode:skills' })
-  expect(await style(ui, 'mode:skills')).toEqual(SEL)
+  expect(await tab(ui, 'skills')).toEqual(SEL)
   await ui.press({ key: 'mode:plugins' })
-  expect(await style(ui, 'mode:plugins')).toEqual(SEL)
-  expect(await style(ui, 'mode:skills')).toEqual(OFF)
+  expect(await tab(ui, 'plugins')).toEqual(SEL)
+  expect(await tab(ui, 'skills')).toEqual(OFF)
   await ui.unmount()
 })
 
@@ -272,8 +285,8 @@ test('R-3 the search box wraps the Input and counts visible over total', async (
   expect(input?.props.submitLabel).toBe('done')
   expect(input?.props.label).toBe('Search')
   expect(input?.props.placeholder).toBe('type a skill or plugin name')
-  const box = (await ui.findAll({ type: 'Box' })).find((b: any) => b.props.borderStyle === 'round')
-  expect(box.children.some((c: any) => c?.type === 'Input')).toBe(true)
+  const box = (await ui.findAll({ type: 'Box' })).find((b: any) => b.children.some((c: any) => c?.type === 'Input'))
+  expect(box.props.borderStyle).toBe('round')
   const counter = async () => (await ui.find({ type: 'Text', text: /^\d+ \/ \d+$/ }))?.text
   expect(await counter()).toBe('5 / 5')
   await ui.input({ key: 'q', text: 'gh', kind: 'change' })
@@ -345,11 +358,11 @@ test('R-5 one ? on the summary line toggles the state help; a pane open folds it
   const shown = await texts(ui)
   expect(shown).toContain('What do the states mean?')
   expect(shown).toContain('Recommended')
-  expect((await ui.find({ key: 'help' }))?.text).toBe('접기')
+  expect((await ui.find({ key: 'help' }))?.text).toBe(' 접기 ')
   for (const h of STATE_HELP) expect(shown).toContain(h)
   expect(STATE_HELP.map(h => h.split(' ')[0])).toEqual(['on', 'name-only', 'user-only', 'off'])
   expect(await order(ui)).toEqual(before)
-  expect(await style(ui, 'mode:skills')).toEqual(SEL)
+  expect(await tab(ui, 'skills')).toEqual(SEL)
   await ui.press({ key: 'help' })
   expect(await ui.find({ key: 'help-box' })).toBeUndefined()
   await ui.press({ key: 'help' })
@@ -389,10 +402,10 @@ test('R-6 idle plugins fold to one line behind ... +N, and less folds them back'
   const lines = async () => (await texts(ui)).filter((t: string) => /^plugin-\d\d, /.test(t))
   expect(await lines()).toHaveLength(1)
   const first = (await lines())[0].split(',').filter((s: string) => s.trim()).length
-  expect((await ui.find({ key: 'idle:more' }))?.text).toBe(`... +${35 - first}`)
+  expect((await ui.find({ key: 'idle:more' }))?.text).toBe(`+${35 - first} 더보기 ▾`)
   await ui.press({ key: 'idle:more' })
   expect(await lines()).toHaveLength(5)
-  expect((await ui.find({ key: 'idle:more' }))?.text).toBe('less')
+  expect((await ui.find({ key: 'idle:more' }))?.text).toBe('접기 ▴')
   await ui.press({ key: 'idle:more' })
   expect(await lines()).toHaveLength(1)
   await ui.unmount()
@@ -417,10 +430,11 @@ const PINS = {
 test('R-7 rows spell out uses and tokens; only pinned rows get pinned xN [?]', async ($, on) => {
   const { ui } = await pane($, on, PINS)
   const shown = await texts(ui)
-  expect(shown).toContain('1 use  ~10 tokens  pinned x3 ')
+  expect(shown).toContain('1 use  ~10 tokens')
+  expect(shown).toContain('  pinned x3 ')
   expect(shown).toContain('2 uses  ~1 token')
   expect(shown.some((t: string) => /\d+[ut]\b/.test(t))).toBe(false)
-  expect((await ui.find({ key: 'pin:alpha' }))?.text).toBe('?')
+  expect((await ui.find({ key: 'pin:alpha' }))?.text).toBe(' ? ')
   expect(await ui.find({ key: 'pin:gamma' })).toBeUndefined()
   await ui.unmount()
 })
@@ -429,10 +443,10 @@ test('R-7 [?] is an accordion that a filter change or a pane open folds', async 
   const { ui } = await pane($, on, PINS)
   await ui.press({ key: 'pin:alpha' })
   const shown = await texts(ui)
-  expect(shown).toContain('* Pinned: other skills call this one, so it is kept visible to Claude.')
-  expect(shown).toContain('* Referenced by (3):')
+  expect(shown).toContain('Pinned: other skills call this one, so it is kept visible to Claude.')
+  expect(shown).toContain('Referenced by (3 skills):')
   expect(shown).toContain('    p1, p2, p3')
-  expect((await ui.find({ key: 'pin:alpha' }))?.text).toBe('접기')
+  expect((await ui.find({ key: 'pin:alpha' }))?.text).toBe(' 접기 ')
   await ui.press({ key: 'pin:beta' })
   expect(await ui.find({ key: 'pinned:alpha' })).toBeUndefined()
   expect(await texts(ui)).toContain('    q')
@@ -468,14 +482,16 @@ const plugRuns = (runs: any[]) => runs.filter(r => r.argv[3] === 'plugin').map(r
 test('R-8 plugin rows spell out counts and carry on/off with the current one marked', async ($, on) => {
   const { ui } = await pane($, on, PLUGS)
   await ui.press({ key: 'mode:plugins' })
-  expect((await ui.find({ key: 'group:tools' }))?.text).toBe('tools  1 skill  0 uses  ~20 tokens  0 pinned')
-  expect((await ui.find({ key: 'group:more' }))?.text).toBe('more  2 skills  1 use  ~40 tokens  0 pinned')
+  expect(await texts(ui)).toContain('  1 skill  0 uses  ~20 tokens  ')
+  expect(await texts(ui)).toContain('  2 skills  1 use  ~40 tokens  ')
+  expect(await texts(ui)).toContain('  [on]')
+  expect(await texts(ui)).toContain('  [off]')
   const row = (await ui.findAll({ type: 'Box' })).find((b: any) => b.key === 'prow:tools')
-  expect(row.children.filter((c: any) => c?.type === 'Button').map((c: any) => c.props.key)).toEqual(['group:tools', 'on:tools', 'off:tools'])
-  expect(await style(ui, 'on:tools')).toEqual(SEL)
+  expect(row.children.filter((c: any) => c?.type === 'Button').map((c: any) => c.props.key)).toEqual(['off:tools', 'group:tools'])
   expect(await style(ui, 'off:tools')).toEqual(OFF)
-  expect(await style(ui, 'off:old')).toEqual(SEL)
+  expect(await ui.find({ key: 'on:tools' })).toBeUndefined()
   expect(await style(ui, 'on:old')).toEqual(OFF)
+  expect(await ui.find({ key: 'off:old' })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -509,9 +525,11 @@ test('R-8 a pinned plugin shows off (locked) and no off button', async ($, on) =
   expect(shown).toContain('  Pinned by other skills. Use the CLI with --force. ')
   // The row's [?] lists who pins it (R-8 -> R-7).
   await ui.press({ key: 'pin:gh' })
-  expect(await texts(ui)).toContain('    Referenced by: x')
+  expect((await ui.find({ key: 'pinned:gh' }))?.props.borderStyle).toBe('round')
+  expect(await texts(ui)).toContain('Referenced by (1 skill outside):')
+  expect(await texts(ui)).toContain('    x')
   await ui.press({ key: 'pin:gh' })
-  expect(await texts(ui)).not.toContain('    Referenced by: x')
+  expect(await ui.find({ key: 'pinned:gh' })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -538,7 +556,7 @@ test('R-8 (flat skills) sets every flat skill, skipping pinned ones for user-onl
   await ui.press({ key: 'mode:plugins' })
   const row = (await ui.findAll({ type: 'Box' })).find((b: any) => b.key === 'prow:(flat skills)')
   expect(row.children.filter((c: any) => c?.type === 'Button').map((c: any) => c.props.key)).toEqual([
-    'group:(flat skills)', 'flat:on', 'flat:name-only', 'flat:user-only', 'flat:off',
+    'flat:on', 'flat:name-only', 'flat:user-only', 'flat:off', 'group:(flat skills)',
   ])
   expect(await style(ui, 'flat:on')).toEqual(SEL)
   await ui.press({ key: 'flat:user-only' })

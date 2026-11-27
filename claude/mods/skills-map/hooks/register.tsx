@@ -21,7 +21,6 @@ const FLAT = '(flat skills)'
 // F-1: state badge colors (ThemeKey); name-only stays neutral, not dim.
 const BADGE: Record<string, 'success' | 'warning' | 'error' | undefined> = { on: 'success', 'user-only': 'warning', off: 'error' }
 // #2474 R-1: the one selection marker (U+2714) for mode, state and plugin buttons.
-const MARK = '\u2714'
 // R-5: one entry per STATES item, same order.
 export const STATE_HELP = [
   "on         Claude reads this skill's name and description every turn and can call it by itself. Costs tokens.",
@@ -30,9 +29,9 @@ export const STATE_HELP = [
   'off        Disabled. Neither you nor Claude can run it.',
 ] as const
 const PIN_HELP = [
-  '* Pinned: other skills call this one, so it is kept visible to Claude.',
-  '* Hiding it (user-only) would break them.',
-  '* Use --force in the CLI to override.',
+  'Pinned: other skills call this one, so it is kept visible to Claude.',
+  'Hiding it (user-only) would break them.',
+  'Use --force in the CLI to override.',
 ]
 const IDLE_NOTE =
   'Plugins that work through hooks, statusline or MCP (caveman, ponytail, claude-hud, playwright ...) show 0 even when in use. Check before turning one off.'
@@ -233,7 +232,7 @@ export const register: Register = on => {
     await update($, filter, () => FILTER0)
     let placed = false
     try {
-      placed = (await $.ui.open({ id: PANE, title: 'Skills map' })).isPlaced
+      placed = (await $.ui.open({ id: PANE, title: 'Skills Map' })).isPlaced
     } catch {
       // no surface (claude -p): text report below
     }
@@ -277,16 +276,35 @@ export const register: Register = on => {
       await $.ui.toast(`${done} set, ${skipped} skipped (pinned)${failed ? `, ${failed} failed` : ''}`)
       await reload()
     }
-    // R-1/R-2/R-8: the selected choice gets MARK + bold, the others dim.
+    // R-1/R-2/R-8: the selected choice is a bold inverse tab (state color when it has one), the others dim.
     const choice = (key: string, cur: boolean, label: string, onPress: () => unknown) =>
       cur ? (
         <Button key={key} label={label} onPress={onPress}>
-          <Text weight="bold">{`${MARK} ${label}`}</Text>
+          <Text weight="bold" inverse color={BADGE[label]}>{` ${label} `}</Text>
         </Button>
       ) : (
-        <Button key={key} label={label} dimColor onPress={onPress} />
+        <Button key={key} label={label} plain dimColor onPress={onPress}>
+          <Text inverse dimColor color={BADGE[label] ?? 'inactive'}>{` ${label} `}</Text>
+        </Button>
       )
     const noop = () => undefined
+    // The fold toggle (no button chrome): a gray inverse " ? " pill closed, a bold suggestion-colored inverse " 접기 " pill open.
+    const fold = (key: string, open: boolean, onPress: () => unknown) =>
+      open ? (
+        <Button key={key} label={FOLD} plain onPress={onPress}>
+          <Text weight="bold" inverse color="suggestion">{` ${FOLD} `}</Text>
+        </Button>
+      ) : (
+        <Button key={key} label="?" plain onPress={onPress}>
+          <Text inverse color="inactive">{' ? '}</Text>
+        </Button>
+      )
+    // The idle list's expander: plain suggestion-colored text with an arrow.
+    const expander = (label: string) => (
+      <Button key="idle:more" label={label} plain onPress={() => update($, filter, x => ({ ...x, more: !x.more }))}>
+        <Text color="suggestion">{label}</Text>
+      </Button>
+    )
     if (v.error) return <Text color="error">skills-map: {v.error}</Text>
     const rows = visible(v.skills, f.mode === 'plugins' ? { ...f, plugin: '' } : f)
     const all = f.mode === 'skills' && f.plugin ? v.skills.filter(s => group(s) === f.plugin) : v.skills
@@ -307,13 +325,22 @@ export const register: Register = on => {
     // Totals and the recommendation sit above the rows so a long list never pushes them out of view.
     return (
       <Box flexDirection="column">
-        <Box borderStyle="round" flexDirection="row" justifyContent="space-between">
-          <Input key="q" label="Search" placeholder="type a skill or plugin name" submitLabel="done" autoFocus value={f.q} onInput={search} onSubmit={search} />
-          {f.q ? <Button key="q:clear" label="clear" onPress={set({ q: '' })} /> : null}
-          <Text dimColor>{counter}</Text>
-        </Box>
         <Box flexDirection="row">
-          {(['skills', 'plugins'] as const).map(m => choice(`mode:${m}`, f.mode === m, m, set(m === 'plugins' ? { mode: m, plugin: '' } : { mode: m })))}
+          {(['skills', 'plugins'] as const).map(m => {
+            const cur = f.mode === m
+            return (
+              <Box key={`tab:${m}`} borderStyle="round" borderColor={cur ? 'claude' : undefined} paddingX={1}>
+                <Button key={`mode:${m}`} label={m} plain dimColor={!cur} onPress={set(m === 'plugins' ? { mode: m, plugin: '' } : { mode: m })}>
+                  <Text weight={cur ? 'bold' : undefined} color={cur ? 'claude' : undefined} dimColor={!cur}>{m}</Text>
+                </Button>
+              </Box>
+            )
+          })}
+          <Box borderStyle="round" flexDirection="row" flexGrow={1} justifyContent="space-between">
+            <Input key="q" label="Search" placeholder="type a skill or plugin name" submitLabel="done" autoFocus value={f.q} onInput={search} onSubmit={search} />
+            {f.q ? <Button key="q:clear" label="clear" onPress={set({ q: '' })} /> : null}
+            <Text dimColor>{counter}</Text>
+          </Box>
         </Box>
         {f.mode === 'skills' && f.plugin ? (
           <Box flexDirection="row">
@@ -326,7 +353,7 @@ export const register: Register = on => {
           <Text>
             {tr.head}   <Text color={tr.color} dimColor={!tr.changed}>{tr.change}</Text>{' '}
           </Text>
-          <Button key="help" label={f.help ? FOLD : '?'} onPress={() => update($, filter, x => ({ ...x, help: !x.help }))} />
+          {fold('help', f.help, () => update($, filter, x => ({ ...x, help: !x.help })))}
         </Box>
         <Text>
           <Text color={tr.color}>{'\u2588'.repeat(tr.filled)}</Text>
@@ -340,18 +367,18 @@ export const register: Register = on => {
             {STATE_HELP.map(line => (
               <Text key={`help:${line.split(' ')[0]}`}>{line}</Text>
             ))}
-            <Text weight="bold">Recommended</Text>
+            <Text weight="bold" color="suggestion">Recommended</Text>
             <Text dimColor>{recommend || '(none)'}</Text>
           </Box>
         ) : null}
         {zero.length ? (
           <Box flexDirection="column">
-            <Text>{count(zero.length, 'plugin')} with no skill calls in 30d</Text>
+            <Text weight="bold" color="permission">{count(zero.length, 'plugin')} with no skill calls in 30d</Text>
             <Text dimColor>{IDLE_NOTE}</Text>
             {more ? (
               <Box flexDirection="row">
                 <Text>{packed[0].join(', ') + ','} </Text>
-                <Button key="idle:more" label={`... +${hidden}`} dimColor onPress={() => update($, filter, x => ({ ...x, more: !x.more }))} />
+                {expander(`+${hidden} 더보기 ▾`)}
               </Box>
             ) : (
               packed.map((l, i) => (
@@ -359,11 +386,11 @@ export const register: Register = on => {
               ))
             )}
             {!more && head.length > 1 ? (
-              <Button key="idle:more" label="less" dimColor onPress={() => update($, filter, x => ({ ...x, more: !x.more }))} />
+              expander(`${FOLD} ▴`)
             ) : null}
           </Box>
         ) : null}
-        <Text weight="bold">{f.mode === 'plugins' ? 'Plugins' : 'Skills'}</Text>
+        <Text weight="bold" color="claude">{f.mode === 'plugins' ? 'Plugins' : 'Skills'}</Text>
         {f.mode === 'plugins' && f.q.trim() ? <Text dimColor>totals over skills matching: {f.q}</Text> : null}
         {rows.length === 0 && f.q.trim() ? <Text dimColor>no match: {f.q}</Text> : null}
         {f.mode === 'plugins'
@@ -376,28 +403,37 @@ export const register: Register = on => {
               const locked = g.name !== FLAT && outside.length > 0 && cur !== 'off'
               return [
                 <Box flexDirection="row" key={`prow:${g.name}`}>
-                  <Button key={`group:${g.name}`} onPress={set({ mode: 'skills', plugin: g.name })}>
-                    {g.name}{'  '}<Text dimColor>{`${count(g.skills, 'skill')}  ${stats(g.uses, g.tokens)}  ${g.pinned} pinned`}</Text>
-                  </Button>
+                  <Text weight="bold">{g.name}</Text>
+                  {g.name === FLAT ? null : <Text color={BADGE[show(cur)]}>{`  [${show(cur)}]`}</Text>}
+                  <Text dimColor>{`  ${count(g.skills, 'skill')}  ${stats(g.uses, g.tokens)}  `}</Text>
+                  <Text color={g.pinned ? 'warning' : undefined} dimColor={!g.pinned}>{`${count(g.pinned, 'skill')} pinned `}</Text>
                   {g.name === FLAT
                     ? STATES.map(st => choice(`flat:${st}`, cur === st, st, setFlat(st)))
                     : [
-                        choice(`on:${g.name}`, cur === 'on', 'on', cur === 'on' ? noop : act(['plugin', g.name, 'on'])),
+                        cur === 'on' ? null : choice(`on:${g.name}`, false, 'on', act(['plugin', g.name, 'on'])),
                         locked ? (
-                          <Text key={`locked:${g.name}`} dimColor> off (locked)</Text>
-                        ) : (
-                          choice(`off:${g.name}`, cur === 'off', 'off', cur === 'off' ? noop : flip(`off:${g.name}`))
+                          <Text key={`locked:${g.name}`} color="warning"> off (locked)</Text>
+                        ) : cur === 'off' ? null : (
+                          choice(`off:${g.name}`, false, 'off', flip(`off:${g.name}`))
                         ),
                       ]}
+                  <Button key={`group:${g.name}`} label="skills >" plain onPress={set({ mode: 'skills', plugin: g.name })}>
+                    <Text inverse color="suggestion">{' skills > '}</Text>
+                  </Button>
                 </Box>,
                 locked ? (
                   <Box key={`lock:${g.name}`} flexDirection="row">
                     <Text dimColor>  Pinned by other skills. Use the CLI with --force. </Text>
-                    <Button key={`pin:${g.name}`} label={f.open === `pin:${g.name}` ? FOLD : '?'} onPress={flip(`pin:${g.name}`)} />
+                    {fold(`pin:${g.name}`, f.open === `pin:${g.name}`, flip(`pin:${g.name}`))}
                   </Box>
                 ) : null,
                 locked && f.open === `pin:${g.name}` ? (
-                  <Text key={`pinned:${g.name}`}>{`    Referenced by: ${outside.join(', ')}`}</Text>
+                  <Box key={`pinned:${g.name}`} borderStyle="round" flexDirection="column">
+                    <Text>{`Referenced by (${count(outside.length, 'skill')} outside):`}</Text>
+                    {pack(outside, width - 10).map((l, i, all) => (
+                      <Text key={`ref:${i}`}>{`    ${l.join(', ')}${i < all.length - 1 ? ',' : ''}`}</Text>
+                    ))}
+                  </Box>
                 ) : null,
                 f.open === `off:${g.name}` ? (
                   <Box key={`confirm:${g.name}`} flexDirection="column" paddingLeft={2}>
@@ -413,21 +449,23 @@ export const register: Register = on => {
           : rows.flatMap(s => [
               <Box flexDirection="row" key={`row:${s.name}`}>
                 <Text>
-                  {s.name}  <Text color={BADGE[show(s.state)]}>[{show(s.state)}]</Text>{'  '}
-                  <Text dimColor>{stats(s.uses, s.tokens) + (s.pinned_by.length ? `  pinned x${s.pinned_by.length} ` : '')}</Text>
+                  <Text weight="bold">{s.name}</Text>  <Text color={BADGE[show(s.state)]}>[{show(s.state)}]</Text>{'  '}
+                  <Text dimColor>{stats(s.uses, s.tokens)}</Text>{s.pinned_by.length ? <Text color="warning">{`  pinned x${s.pinned_by.length} `}</Text> : null}
                 </Text>
-                {s.pinned_by.length ? <Button key={`pin:${s.name}`} label={f.open === `pin:${s.name}` ? FOLD : '?'} onPress={flip(`pin:${s.name}`)} /> : null}
+                {s.pinned_by.length ? fold(`pin:${s.name}`, f.open === `pin:${s.name}`, flip(`pin:${s.name}`)) : null}
                 {s.source.startsWith('plugin:')
                   ? <Text dimColor>  plugin</Text>
                   : STATES.map(st => choice(`${s.name}:${st}`, st === show(s.state), st, act(['set', s.name, st])))}
               </Box>,
               f.open === `pin:${s.name}` ? (
-                <Box key={`pinned:${s.name}`} flexDirection="column" paddingLeft={2}>
+                <Box key={`pinned:${s.name}`} borderStyle="round" flexDirection="column">
                   {PIN_HELP.map((line, i) => (
                     <Text key={`pinhelp:${i}`}>{line}</Text>
                   ))}
-                  <Text>{`* Referenced by (${s.pinned_by.length}):`}</Text>
-                  <Text>{`    ${s.pinned_by.join(', ')}`}</Text>
+                  <Text>{`Referenced by (${count(s.pinned_by.length, 'skill')}):`}</Text>
+                  {pack(s.pinned_by, width - 10).map((l, i, all) => (
+                    <Text key={`ref:${i}`}>{`    ${l.join(', ')}${i < all.length - 1 ? ',' : ''}`}</Text>
+                  ))}
                 </Box>
               ) : null,
             ])}
