@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { STATE_HELP, pack, trend } from './register'
+import { STATE_HELP, clip, pack, trend } from './register'
 
 
 const LIST = {
@@ -161,10 +161,11 @@ test('the current state gets a colored badge and the marked bold button', async 
   const { ui } = await pane($, on)
   expect(await style(ui, 'commit:on')).toEqual(SEL)
   expect(await style(ui, 'commit:off')).toEqual(OFF)
-  const badges = async (t: string) => (await ui.findAll({ type: 'Text', text: new RegExp(`^\\[${t}\\]$`) })).map((x: any) => x.props.color)
-  expect(await badges('off')).toEqual(['error'])
-  expect(await badges('name-only')).toEqual([undefined])
-  expect(await badges('on')).toEqual(['success', 'success', 'success'])
+  const badges = async (t: string) => (await ui.findAll({ type: 'Text', text: new RegExp(`^\\[${t}\\]\\s*$`) })).map((x: any) => x.props.color)
+  // the marked button already shows a file skill's state; only plugin skills (no buttons) keep a badge
+  expect(await badges('off')).toEqual([])
+  expect(await badges('name-only')).toEqual([])
+  expect(await badges('on')).toEqual(['success', 'success'])
   await ui.unmount()
 })
 
@@ -209,8 +210,8 @@ test('plugins mode lists one row per plugin and drills down behind a chip', asyn
   await ui.press({ key: 'mode:plugins' })
   const rows = (await ui.findAll({ type: 'Button' })).filter((b: any) => b.key?.startsWith('group:'))
   expect(rows.map((b: any) => b.key)).toEqual(['group:(flat skills)', 'group:gh'])
-  expect(await texts(ui)).toContain('  2 skills  5 uses  ~45 tokens  ')
-  expect(await texts(ui)).toContain('1 skill pinned ')
+  expect(await texts(ui)).toContain('  5 uses  ~45 tokens')
+  expect((await texts(ui)).some((t: string) => /^\s*pinned x1\s*$/.test(t))).toBe(true)
   expect(rows[1].text).toBe(' skills > ')
   await ui.press({ key: 'group:gh' })
   expect(await order(ui)).toEqual(['row:gh:issue', 'row:gh:pr'])
@@ -238,8 +239,8 @@ test('flat skills drill down as one group; plugin sums follow the search', async
   expect(await ui.find({ type: 'Text', text: /totals over skills matching: gh pr/ })).toBeDefined()
   const gh = await ui.find({ key: 'group:gh' })
   expect(gh?.text).toBe(' skills > ')
-  expect(await texts(ui)).toContain('  1 skill  0 uses  ~20 tokens  ')
-  expect(await texts(ui)).toContain('0 skills pinned ')
+  expect(await texts(ui)).toContain('  0 uses  ~20 tokens')
+  expect((await texts(ui)).some((t: string) => /pinned/.test(t))).toBe(false)
   expect(await ui.find({ key: 'group:(flat skills)' })).toBeUndefined()
   await ui.unmount()
 })
@@ -302,6 +303,12 @@ test('R-3 the search box wraps the Input and counts visible over total', async (
   await ui.input({ key: 'q', text: 'pr', kind: 'change' })
   expect(await counter()).toBe('1 / 2')
   await ui.unmount()
+})
+
+test('plugin names clip to 16 columns: 15 chars plus *', () => {
+  expect(clip('gh-pr')).toBe('gh-pr')
+  expect(clip('a'.repeat(16))).toBe('a'.repeat(16))
+  expect(clip('a'.repeat(17))).toBe('a'.repeat(15) + '*')
 })
 
 test('R-4 trend: down, up, equal and zero; commas and one decimal', () => {
@@ -430,9 +437,9 @@ const PINS = {
 test('R-7 rows spell out uses and tokens; only pinned rows get pinned xN [?]', async ($, on) => {
   const { ui } = await pane($, on, PINS)
   const shown = await texts(ui)
-  expect(shown).toContain('1 use  ~10 tokens')
+  expect(shown.some((t: string) => /1 uses\s+~10 tokens/.test(t))).toBe(true)
   expect(shown).toContain('  pinned x3 ')
-  expect(shown).toContain('2 uses  ~1 token')
+  expect(shown.some((t: string) => /2 uses\s+~1 tokens\b/.test(t))).toBe(true)
   expect(shown.some((t: string) => /\d+[ut]\b/.test(t))).toBe(false)
   expect((await ui.find({ key: 'pin:alpha' }))?.text).toBe(' ? ')
   expect(await ui.find({ key: 'pin:gamma' })).toBeUndefined()
@@ -482,9 +489,9 @@ const plugRuns = (runs: any[]) => runs.filter(r => r.argv[3] === 'plugin').map(r
 test('R-8 plugin rows spell out counts and carry on/off with the current one marked', async ($, on) => {
   const { ui } = await pane($, on, PLUGS)
   await ui.press({ key: 'mode:plugins' })
-  expect(await texts(ui)).toContain('  1 skill  0 uses  ~20 tokens  ')
-  expect(await texts(ui)).toContain('  2 skills  1 use  ~40 tokens  ')
-  expect(await texts(ui)).toContain('  [on]')
+  expect(await texts(ui)).toContain('  0 uses  ~20 tokens')
+  expect(await texts(ui)).toContain('  1 uses  ~40 tokens')
+  expect(await texts(ui)).toContain('  [on] ')
   expect(await texts(ui)).toContain('  [off]')
   const row = (await ui.findAll({ type: 'Box' })).find((b: any) => b.key === 'prow:tools')
   expect(row.children.filter((c: any) => c?.type === 'Button').map((c: any) => c.props.key)).toEqual(['off:tools', 'group:tools'])

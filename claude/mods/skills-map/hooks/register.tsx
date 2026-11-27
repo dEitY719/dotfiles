@@ -85,6 +85,21 @@ async function load($: any): Promise<SkillsView> {
 
 const commas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const NAME_W = 16
+// Table cells: names clip to 15 chars + '*' so the columns after them line up.
+export const clip = (n: string, w = NAME_W) => (n.length > w ? n.slice(0, w - 1) + '*' : n)
+const SKILL_W = 25
+// Table cells keep the plural form so rows of 0, 1 and many line up.
+const usesOf = (n: number) => `${n} uses`
+const tokOf = (n: number) => `~${n} tokens`
+const cols = (gs: { skills: number; uses: number; tokens: number; pinned: number }[]) => {
+  const w = (f: (g: (typeof gs)[number]) => string) => Math.max(0, ...gs.map(g => f(g).length))
+  return {
+    us: w(g => usesOf(g.uses)),
+    tk: w(g => tokOf(g.tokens)),
+    pn: w(g => (g.pinned ? `pinned x${g.pinned}` : '')),
+  }
+}
 const stats = (uses: number, tokens: number) => `${count(uses, 'use')}  ~${count(tokens, 'token')}`
 
 // R-4: the pane's per-turn summary; report() keeps tokensLine. Colors: blue down, red up (KR stock style).
@@ -398,15 +413,16 @@ export const register: Register = on => {
               const mine = v.skills.filter(s => group(s) === g.name)
               const cur = common(mine)
               const whole = full.get(g.name) ?? g
+              const C = cols(groups(rows))
               // Engine plugin_pins: only referrers outside the plugin lock it.
               const outside = [...new Set(mine.flatMap(s => s.pinned_by).filter(who => !who.startsWith(`${g.name}:`)))].sort()
               const locked = g.name !== FLAT && outside.length > 0 && cur !== 'off'
               return [
                 <Box flexDirection="row" key={`prow:${g.name}`}>
-                  <Text weight="bold">{g.name}</Text>
-                  {g.name === FLAT ? null : <Text color={BADGE[show(cur)]}>{`  [${show(cur)}]`}</Text>}
-                  <Text dimColor>{`  ${count(g.skills, 'skill')}  ${stats(g.uses, g.tokens)}  `}</Text>
-                  <Text color={g.pinned ? 'warning' : undefined} dimColor={!g.pinned}>{`${count(g.pinned, 'skill')} pinned `}</Text>
+                  <Text weight="bold">{clip(g.name).padEnd(NAME_W)}</Text>
+                  {g.name === FLAT ? <Text>{' '.repeat(7)}</Text> : <Text color={BADGE[show(cur)]}>{`  ${`[${show(cur)}]`.padEnd(5)}`}</Text>}
+                  <Text dimColor>{`  ${usesOf(g.uses).padStart(C.us)}  ${tokOf(g.tokens).padStart(C.tk)}`}</Text>
+                  <Text color="warning">{`  ${(g.pinned ? `pinned x${g.pinned}` : '').padEnd(C.pn)} `}</Text>
                   {g.name === FLAT
                     ? STATES.map(st => choice(`flat:${st}`, cur === st, st, setFlat(st)))
                     : [
@@ -446,15 +462,22 @@ export const register: Register = on => {
                 ) : null,
               ]
             })
-          : rows.flatMap(s => [
+          : (() => {
+            const SC = {
+              us: Math.max(0, ...rows.map(s => usesOf(s.uses).length)),
+              tk: Math.max(0, ...rows.map(s => tokOf(s.tokens).length)),
+              pn: Math.max(0, ...rows.map(s => (s.pinned_by.length ? `pinned x${s.pinned_by.length}`.length : 0))),
+            }
+            return rows.flatMap(s => [
               <Box flexDirection="row" key={`row:${s.name}`}>
                 <Text>
-                  <Text weight="bold">{s.name}</Text>  <Text color={BADGE[show(s.state)]}>[{show(s.state)}]</Text>{'  '}
-                  <Text dimColor>{stats(s.uses, s.tokens)}</Text>{s.pinned_by.length ? <Text color="warning">{`  pinned x${s.pinned_by.length} `}</Text> : null}
+                  <Text weight="bold">{clip(s.name, SKILL_W).padEnd(SKILL_W)}</Text>{'  '}
+                  <Text dimColor>{`${usesOf(s.uses).padStart(SC.us)}  ${tokOf(s.tokens).padStart(SC.tk)}`}</Text>
+                  {s.pinned_by.length ? <Text color="warning">{`  ${`pinned x${s.pinned_by.length}`.padEnd(SC.pn)} `}</Text> : <Text>{' '.repeat(SC.pn + 6)}</Text>}
                 </Text>
                 {s.pinned_by.length ? fold(`pin:${s.name}`, f.open === `pin:${s.name}`, flip(`pin:${s.name}`)) : null}
                 {s.source.startsWith('plugin:')
-                  ? <Text dimColor>  plugin</Text>
+                  ? <Text><Text dimColor>  plugin </Text><Text color={BADGE[show(s.state)]}>{`[${show(s.state)}]`}</Text></Text>
                   : STATES.map(st => choice(`${s.name}:${st}`, st === show(s.state), st, act(['set', s.name, st])))}
               </Box>,
               f.open === `pin:${s.name}` ? (
@@ -468,7 +491,8 @@ export const register: Register = on => {
                   ))}
                 </Box>
               ) : null,
-            ])}
+            ])
+          })()}
       </Box>
     )
   })
