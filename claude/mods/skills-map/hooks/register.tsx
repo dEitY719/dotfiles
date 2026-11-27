@@ -294,24 +294,24 @@ export const register: Register = on => {
     // R-1/R-2/R-8: the selected choice is a bold inverse tab (state color when it has one), the others dim.
     const choice = (key: string, cur: boolean, label: string, onPress: () => unknown) =>
       cur ? (
-        <Button key={key} label={label} onPress={onPress}>
+        <Button key={key} label={label} plain onPress={onPress}>
           <Text weight="bold" inverse color={BADGE[label]}>{` ${label} `}</Text>
         </Button>
       ) : (
         <Button key={key} label={label} plain dimColor onPress={onPress}>
-          <Text inverse dimColor color={BADGE[label] ?? 'inactive'}>{` ${label} `}</Text>
+          <Text dimColor>{` ${label} `}</Text>
         </Button>
       )
     const noop = () => undefined
-    // The fold toggle (no button chrome): a gray inverse " ? " pill closed, a bold suggestion-colored inverse " 접기 " pill open.
+    // The fold toggle (no button chrome): a gray inverse " ▾ " pill closed, a bold suggestion-colored inverse " ▴ " pill open.
     const fold = (key: string, open: boolean, onPress: () => unknown) =>
       open ? (
         <Button key={key} label={FOLD} plain onPress={onPress}>
-          <Text weight="bold" inverse color="suggestion">{` ${FOLD} `}</Text>
+          <Text weight="bold" inverse color="suggestion">{' ▴ '}</Text>
         </Button>
       ) : (
         <Button key={key} label="?" plain onPress={onPress}>
-          <Text inverse color="inactive">{' ? '}</Text>
+          <Text inverse color="inactive">{' ▾ '}</Text>
         </Button>
       )
     // The idle list's expander: plain suggestion-colored text with an arrow.
@@ -360,8 +360,13 @@ export const register: Register = on => {
         {f.mode === 'skills' && f.plugin ? (
           <Box flexDirection="row">
             <Text>plugin: {f.plugin} </Text>
-            <Button key="chip:x" label="x" onPress={set({ plugin: '' })} />
-            <Button key="chip:all" label="all" dimColor onPress={set({ plugin: '' })} />
+            <Button key="chip:x" label="x" plain onPress={set({ plugin: '' })}>
+              <Text weight="bold" inverse color="error">{' x '}</Text>
+            </Button>
+            <Text> </Text>
+            <Button key="chip:all" label="all" plain onPress={set({ plugin: '' })}>
+              <Text weight="bold" inverse color="success">{' all '}</Text>
+            </Button>
           </Box>
         ) : null}
         <Box flexDirection="row">
@@ -419,36 +424,38 @@ export const register: Register = on => {
               const locked = g.name !== FLAT && outside.length > 0 && cur !== 'off'
               return [
                 <Box flexDirection="row" key={`prow:${g.name}`}>
-                  <Text weight="bold">{clip(g.name).padEnd(NAME_W)}</Text>
-                  {g.name === FLAT ? <Text>{' '.repeat(7)}</Text> : <Text color={BADGE[show(cur)]}>{`  ${`[${show(cur)}]`.padEnd(5)}`}</Text>}
-                  <Text dimColor>{`  ${usesOf(g.uses).padStart(C.us)}  ${tokOf(g.tokens).padStart(C.tk)}`}</Text>
-                  <Text color="warning">{`  ${(g.pinned ? `pinned x${g.pinned}` : '').padEnd(C.pn)} `}</Text>
+                  <Box flexShrink={0} flexDirection="row">
+                    <Text weight="bold">{clip(g.name).padEnd(NAME_W)}</Text>
+                    <Text dimColor>{`  ${usesOf(g.uses).padStart(C.us)}  ${tokOf(g.tokens).padStart(C.tk)}`}</Text>
+                    <Text color="warning">{`  ${(g.pinned ? `pinned x${g.pinned}` : '').padEnd(C.pn)} `}</Text>
+                  </Box>
+                  {fold(`pin:${g.name}`, f.open === `pin:${g.name}`, flip(`pin:${g.name}`))}
+                  <Text>{'  '}</Text>
                   {g.name === FLAT
                     ? STATES.map(st => choice(`flat:${st}`, cur === st, st, setFlat(st)))
                     : [
-                        cur === 'on' ? null : choice(`on:${g.name}`, false, 'on', act(['plugin', g.name, 'on'])),
+                        choice(`on:${g.name}`, cur === 'on', 'on', cur === 'on' ? () => undefined : act(['plugin', g.name, 'on'])),
                         locked ? (
-                          <Text key={`locked:${g.name}`} color="warning"> off (locked)</Text>
-                        ) : cur === 'off' ? null : (
-                          choice(`off:${g.name}`, false, 'off', flip(`off:${g.name}`))
+                          <Text key={`locked:${g.name}`} color="warning" dimColor> off (locked)</Text>
+                        ) : (
+                          choice(`off:${g.name}`, cur === 'off', 'off', cur === 'off' ? () => undefined : flip(`off:${g.name}`))
                         ),
                       ]}
-                  <Button key={`group:${g.name}`} label="skills >" plain onPress={set({ mode: 'skills', plugin: g.name })}>
-                    <Text inverse color="suggestion">{' skills > '}</Text>
-                  </Button>
                 </Box>,
-                locked ? (
-                  <Box key={`lock:${g.name}`} flexDirection="row">
-                    <Text dimColor>  Pinned by other skills. Use the CLI with --force. </Text>
-                    {fold(`pin:${g.name}`, f.open === `pin:${g.name}`, flip(`pin:${g.name}`))}
-                  </Box>
-                ) : null,
-                locked && f.open === `pin:${g.name}` ? (
+                f.open === `pin:${g.name}` ? (
                   <Box key={`pinned:${g.name}`} borderStyle="round" flexDirection="column">
-                    <Text>{`Referenced by (${count(outside.length, 'skill')} outside):`}</Text>
-                    {pack(outside, width - 10).map((l, i, all) => (
-                      <Text key={`ref:${i}`}>{`    ${l.join(', ')}${i < all.length - 1 ? ',' : ''}`}</Text>
-                    ))}
+                    <Box flexDirection="row">
+                      {locked ? <Text>Locked: other plugins' skills depend on this one. Use the CLI with --force.  </Text> : null}
+                      <Button key={`group:${g.name}`} label="skills" plain onPress={set({ mode: 'skills', plugin: g.name })}>
+                        <Text inverse color="suggestion">{' skills ▸ '}</Text>
+                      </Button>
+                    </Box>
+                    {locked ? <Text>{`Locked by ${count(outside.length, 'skill')} outside this plugin:`}</Text> : null}
+                    {locked
+                      ? pack(outside, width - 10).map((l, i, all) => (
+                          <Text key={`ref:${i}`}>{`    ${l.join(', ')}${i < all.length - 1 ? ',' : ''}`}</Text>
+                        ))
+                      : null}
                   </Box>
                 ) : null,
                 f.open === `off:${g.name}` ? (
@@ -473,9 +480,9 @@ export const register: Register = on => {
                 <Text>
                   <Text weight="bold">{clip(s.name, SKILL_W).padEnd(SKILL_W)}</Text>{'  '}
                   <Text dimColor>{`${usesOf(s.uses).padStart(SC.us)}  ${tokOf(s.tokens).padStart(SC.tk)}`}</Text>
-                  {s.pinned_by.length ? <Text color="warning">{`  ${`pinned x${s.pinned_by.length}`.padEnd(SC.pn)} `}</Text> : <Text>{' '.repeat(SC.pn + 6)}</Text>}
+                  {s.pinned_by.length ? <Text color="warning">{`  ${`pinned x${s.pinned_by.length}`.padEnd(SC.pn)} `}</Text> : <Text>{' '.repeat(SC.pn + 8)}</Text>}
                 </Text>
-                {s.pinned_by.length ? fold(`pin:${s.name}`, f.open === `pin:${s.name}`, flip(`pin:${s.name}`)) : null}
+                {s.pinned_by.length ? [fold(`pin:${s.name}`, f.open === `pin:${s.name}`, flip(`pin:${s.name}`)), <Text key={`gap:${s.name}`}>{'  '}</Text>] : null}
                 {s.source.startsWith('plugin:')
                   ? <Text><Text dimColor>  plugin </Text><Text color={BADGE[show(s.state)]}>{`[${show(s.state)}]`}</Text></Text>
                   : STATES.map(st => choice(`${s.name}:${st}`, st === show(s.state), st, act(['set', s.name, st])))}
