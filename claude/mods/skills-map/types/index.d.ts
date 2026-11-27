@@ -19,7 +19,8 @@ export type SkillsView = {
 }
 
 // The pane's search text, view mode and plugin drill-down (#2471); never saved.
-export type PaneFilter = { q: string; mode: 'skills' | 'plugins'; plugin: string }
+// #2474: help box (R-5), idle list expanded (R-6), the one open [?] or off-confirm row (R-7/R-8).
+export type PaneFilter = { q: string; mode: 'skills' | 'plugins'; plugin: string; help: boolean; more: boolean; open: string }
 
 declare module 'claude-code' {
   interface PluginState {
