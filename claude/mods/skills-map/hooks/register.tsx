@@ -91,12 +91,13 @@ export function trend(now: number, rec: number) {
   const head = `Skill list per turn   ~${commas(now)} -> ~${commas(rec)}`
   const pctOf = (n: number) => (Math.round((n / now) * 1000) / 10).toFixed(1)
   const ofNow = now ? `${pctOf(rec)}% of now` : ''
-  if (!now || now === rec) return { head, change: 'no change', color: undefined, filled: 0, ofNow, changed: false }
-  const pct = pctOf(Math.abs(now - rec))
+  if (now === rec) return { head, change: 'no change', color: undefined, filled: 0, ofNow, changed: false }
+  // now 0: no percentage to take, but a growth from nothing is still an increase.
+  const pct = now ? ` (${rec < now ? '-' : '+'}${pctOf(Math.abs(now - rec))}%)` : ''
   const diff = commas(Math.abs(now - rec))
   return rec < now
-    ? { head, change: `\u25bc ${diff} (-${pct}%)  saves context every turn`, color: 'suggestion' as const, filled: Math.min(BAR - 1, Math.ceil((rec / now) * BAR)), ofNow, changed: true }
-    : { head, change: `\u25b2 ${diff} (+${pct}%)  adds context every turn`, color: 'error' as const, filled: BAR, ofNow, changed: true }
+    ? { head, change: `\u25bc ${diff}${pct}  saves context every turn`, color: 'suggestion' as const, filled: Math.min(BAR - 1, Math.ceil((rec / now) * BAR)), ofNow, changed: true }
+    : { head, change: `\u25b2 ${diff}${pct}  adds context every turn`, color: 'error' as const, filled: BAR, ofNow, changed: true }
 }
 
 // R-6: names greedily packed into lines that, drawn as 'a, b,', fit width columns.
@@ -239,12 +240,15 @@ export const register: Register = on => {
     const setFlat = (state: string) => async () => {
       let done = 0
       let skipped = 0
+      let failed = 0
       const hide = state === 'user-only' || state === 'off'
       for (const s of rows.filter(x => group(x) === FLAT)) {
-        if ((hide && s.pinned_by.length) || (await engine($, ['set', s.name, state])).exitCode !== 0) skipped += 1
+        if (hide && s.pinned_by.length) skipped += 1
+        else if ((await engine($, ['set', s.name, state])).exitCode !== 0) failed += 1
         else done += 1
       }
-      await $.ui.toast(`${done} set, ${skipped} skipped (pinned or failed)`)
+      // No engine bulk verb: a failure leaves the others applied; the toast names it and the reload shows the truth.
+      await $.ui.toast(`${done} set, ${skipped} skipped (pinned)${failed ? `, ${failed} failed` : ''}`)
       await reload()
     }
     // R-1/R-2/R-8: the selected choice gets MARK + bold, the others dim.
