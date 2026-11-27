@@ -235,12 +235,12 @@ export const register: Register = on => {
       await update($, filter, x => ({ ...x, open: '' }))
       await reload()
     }
-    // R-8 (flat skills): one set per flat skill; a pinned one is skipped for user-only/off, as the engine refuses it.
+    // R-8 (flat skills): one set per listed flat skill (the search narrows it, as it does the row); a pinned one is skipped for user-only/off, as the engine refuses it.
     const setFlat = (state: string) => async () => {
       let done = 0
       let skipped = 0
       const hide = state === 'user-only' || state === 'off'
-      for (const s of v.skills.filter(x => group(x) === FLAT)) {
+      for (const s of rows.filter(x => group(x) === FLAT)) {
         if ((hide && s.pinned_by.length) || (await engine($, ['set', s.name, state])).exitCode !== 0) skipped += 1
         else done += 1
       }

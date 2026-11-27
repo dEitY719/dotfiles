@@ -496,6 +496,15 @@ test('R-8 a plugin pinned only by its own skills is not locked', async ($, on) =
   await ui.unmount()
 })
 
+test('R-8 (flat skills) under a search sets only the listed flat skills', async ($, on) => {
+  const { runs, ui } = await pane($, on, PLUGS)
+  await ui.press({ key: 'mode:plugins' })
+  await ui.input({ key: 'q', text: 'tidy', kind: 'change' })
+  await ui.press({ key: 'flat:off' })
+  expect(runs.filter(r => r.argv[3] === 'set').map(r => r.argv.slice(4))).toEqual([['tidy', 'off']])
+  await ui.unmount()
+})
+
 test('R-8 (flat skills) sets every flat skill, skipping pinned ones for user-only', async ($, on) => {
   const { runs, ui } = await pane($, on, PLUGS)
   await ui.press({ key: 'mode:plugins' })
