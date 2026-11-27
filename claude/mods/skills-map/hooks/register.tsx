@@ -30,11 +30,13 @@ export const STATE_HELP = [
   'off        Disabled. Neither you nor Claude can run it.',
 ] as const
 const PIN_HELP = [
-  'Pinned: other skills call this one, so it is kept visible to Claude.',
-  'Hiding it (user-only) would break them. Use --force in the CLI to override.',
+  '* Pinned: other skills call this one, so it is kept visible to Claude.',
+  '* Hiding it (user-only) would break them.',
+  '* Use --force in the CLI to override.',
 ]
 const IDLE_NOTE =
   'Plugins that work through hooks, statusline or MCP (caveman, ponytail, claude-hud, playwright ...) show 0 even when in use. Check before turning one off.'
+const FOLD = '접기'
 const BAR = 20
 
 type Rec = { skill: string; source: string; ts: string }
@@ -119,17 +121,41 @@ const group = (s: SkillRow) => (s.source.startsWith('plugin:') ? s.source.slice(
 const byUse = (a: { name: string; uses: number }, b: { name: string; uses: number }) =>
   b.uses - a.uses || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
 
-// F-2/F-3: case-insensitive substring per whitespace-separated term (AND) over
+// F-2/F-3: case-insensitive fuzzy match per whitespace-separated term (AND) over
 // the skill name and its plugin name, then the plugin drill-down (AND).
+// fzf-style: a term matches as a substring (rank = its offset) or, failing that, as an
+// in-order subsequence (rank = 1000 + span), so "grl" finds grill-me. -1 = no match.
+function fuzzy(hay: string, t: string): number {
+  const at = hay.indexOf(t)
+  if (at >= 0) return at
+  let first = -1
+  let i = 0
+  for (let j = 0; j < hay.length && i < t.length; j++) {
+    if (hay[j] !== t[i]) continue
+    if (first < 0) first = j
+    i++
+  }
+  return i < t.length ? -1 : 1000 + (hay.lastIndexOf(t[t.length - 1]) >= 0 ? hay.length - first : 0)
+}
+
 function visible(skills: SkillRow[], f: PaneFilter): SkillRow[] {
   const terms = f.q.toLowerCase().split(/\s+/).filter(Boolean)
-  return skills
-    .filter(s => {
-      // The FLAT label is display-only: matching it would make "skills"/"flat" hit every flat skill.
-      const g = group(s)
-      const hay = `${s.name} ${g === FLAT ? '' : g}`.toLowerCase()
-      return terms.every(t => hay.includes(t)) && (!f.plugin || g === f.plugin)
-    })
+  const scored: [number, SkillRow][] = []
+  for (const s of skills) {
+    // The FLAT label is display-only: matching it would make "skills"/"flat" hit every flat skill.
+    const g = group(s)
+    if (f.plugin && g !== f.plugin) continue
+    const hay = `${s.name} ${g === FLAT ? '' : g}`.toLowerCase()
+    let score = 0
+    for (const t of terms) {
+      const r = fuzzy(hay, t)
+      if (r < 0) { score = -1; break }
+      score += r
+    }
+    if (score >= 0) scored.push([score, s])
+  }
+  // Array.sort is stable: with no query every score is 0 and the F-4 pane order stays.
+  return scored.sort((a, b) => a[0] - b[0]).map(x => x[1])
 }
 
 type Group = { name: string; skills: number; uses: number; tokens: number; pinned: number }
@@ -268,10 +294,12 @@ export const register: Register = on => {
     const counter = f.mode === 'plugins' ? `${groups(rows).length} / ${full.size}` : `${rows.length} / ${all.length}`
     const tr = trend(v.tokens.current, v.tokens.recommended)
     const zero = idle(v.skills)
-    const packed = pack(zero, e.props.bodyColumns || 80)
-    const more = packed.length > 3 && !f.more
-    const shown = more ? packed.slice(0, 3) : packed
-    const hidden = packed.slice(shown.length).flat().length
+    const width = e.props.bodyColumns || 80
+    // Folded: one line, narrowed so the "... +N" button fits beside it; the rest is N plugins.
+    const head = pack(zero, width - 10)
+    const more = head.length > 1 && !f.more
+    const packed = more ? head.slice(0, 1) : pack(zero, width)
+    const hidden = zero.length - head[0]?.length
     const recommend = v.recommend
       .split('\n')
       .filter(l => !l.startsWith('# plugins with 0 uses'))
@@ -281,6 +309,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Box borderStyle="round" flexDirection="row" justifyContent="space-between">
           <Input key="q" label="Search" placeholder="type a skill or plugin name" submitLabel="done" autoFocus value={f.q} onInput={search} onSubmit={search} />
+          {f.q ? <Button key="q:clear" label="clear" onPress={set({ q: '' })} /> : null}
           <Text dimColor>{counter}</Text>
         </Box>
         <Box flexDirection="row">
@@ -297,7 +326,7 @@ export const register: Register = on => {
           <Text>
             {tr.head}   <Text color={tr.color} dimColor={!tr.changed}>{tr.change}</Text>{' '}
           </Text>
-          <Button key="help" label="?" onPress={() => update($, filter, x => ({ ...x, help: !x.help }))} />
+          <Button key="help" label={f.help ? FOLD : '?'} onPress={() => update($, filter, x => ({ ...x, help: !x.help }))} />
         </Box>
         <Text>
           <Text color={tr.color}>{'\u2588'.repeat(tr.filled)}</Text>
@@ -311,19 +340,26 @@ export const register: Register = on => {
             {STATE_HELP.map(line => (
               <Text key={`help:${line.split(' ')[0]}`}>{line}</Text>
             ))}
+            <Text weight="bold">Recommended</Text>
+            <Text dimColor>{recommend || '(none)'}</Text>
           </Box>
         ) : null}
-        <Text weight="bold">Recommended</Text>
-        <Text dimColor>{recommend || '(none)'}</Text>
         {zero.length ? (
           <Box flexDirection="column">
             <Text>{count(zero.length, 'plugin')} with no skill calls in 30d</Text>
             <Text dimColor>{IDLE_NOTE}</Text>
-            {shown.map((l, i) => (
-              <Text key={`idle:${i}`}>{l.join(', ') + (i < packed.length - 1 ? ',' : '')}</Text>
-            ))}
-            {packed.length > 3 ? (
-              <Button key="idle:more" label={more ? `... +${hidden}` : 'less'} dimColor onPress={() => update($, filter, x => ({ ...x, more: !x.more }))} />
+            {more ? (
+              <Box flexDirection="row">
+                <Text>{packed[0].join(', ') + ','} </Text>
+                <Button key="idle:more" label={`... +${hidden}`} dimColor onPress={() => update($, filter, x => ({ ...x, more: !x.more }))} />
+              </Box>
+            ) : (
+              packed.map((l, i) => (
+                <Text key={`idle:${i}`}>{l.join(', ') + (i < packed.length - 1 ? ',' : '')}</Text>
+              ))
+            )}
+            {!more && head.length > 1 ? (
+              <Button key="idle:more" label="less" dimColor onPress={() => update($, filter, x => ({ ...x, more: !x.more }))} />
             ) : null}
           </Box>
         ) : null}
@@ -357,7 +393,7 @@ export const register: Register = on => {
                 locked ? (
                   <Box key={`lock:${g.name}`} flexDirection="row">
                     <Text dimColor>  Pinned by other skills. Use the CLI with --force. </Text>
-                    <Button key={`pin:${g.name}`} label="?" onPress={flip(`pin:${g.name}`)} />
+                    <Button key={`pin:${g.name}`} label={f.open === `pin:${g.name}` ? FOLD : '?'} onPress={flip(`pin:${g.name}`)} />
                   </Box>
                 ) : null,
                 locked && f.open === `pin:${g.name}` ? (
@@ -380,7 +416,7 @@ export const register: Register = on => {
                   {s.name}  <Text color={BADGE[show(s.state)]}>[{show(s.state)}]</Text>{'  '}
                   <Text dimColor>{stats(s.uses, s.tokens) + (s.pinned_by.length ? `  pinned x${s.pinned_by.length} ` : '')}</Text>
                 </Text>
-                {s.pinned_by.length ? <Button key={`pin:${s.name}`} label="?" onPress={flip(`pin:${s.name}`)} /> : null}
+                {s.pinned_by.length ? <Button key={`pin:${s.name}`} label={f.open === `pin:${s.name}` ? FOLD : '?'} onPress={flip(`pin:${s.name}`)} /> : null}
                 {s.source.startsWith('plugin:')
                   ? <Text dimColor>  plugin</Text>
                   : STATES.map(st => choice(`${s.name}:${st}`, st === show(s.state), st, act(['set', s.name, st])))}
@@ -390,7 +426,8 @@ export const register: Register = on => {
                   {PIN_HELP.map((line, i) => (
                     <Text key={`pinhelp:${i}`}>{line}</Text>
                   ))}
-                  <Text>{`Referenced by (${s.pinned_by.length}): ${s.pinned_by.join(', ')}`}</Text>
+                  <Text>{`* Referenced by (${s.pinned_by.length}):`}</Text>
+                  <Text>{`    ${s.pinned_by.join(', ')}`}</Text>
                 </Box>
               ) : null,
             ])}
